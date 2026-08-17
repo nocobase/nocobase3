@@ -24,6 +24,14 @@ interface DatabaseManager {
 }
 ```
 
+未来 Repository 实现后，`DatabaseManager` 会增加应用层数据访问入口：
+
+```ts
+interface DatabaseManager {
+  repository(collectionName: string, connectionName?: string): Repository;
+}
+```
+
 ## DatabaseConnection
 
 ```ts
@@ -46,6 +54,14 @@ interface DatabaseConnection {
   transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T>;
+}
+```
+
+未来 Repository 实现后，`DatabaseConnection` 会提供：
+
+```ts
+interface DatabaseConnection {
+  repository(collectionName: string): Repository;
 }
 ```
 
@@ -78,9 +94,12 @@ await db.transaction(async (connection) => {
     collection.string('status');
   });
 
-  await connection.query.table('orders').insert({
-    status: 'paid',
-  });
+  await connection.query
+    .insertInto('orders')
+    .values({
+      status: 'paid',
+    })
+    .execute();
 });
 ```
 
@@ -90,4 +109,4 @@ await db.transaction(async (connection) => {
 - 需要底层 driver 能力时才使用 `db.client()`。
 - transaction 内应使用回调参数里的 `connection`，不要回到外层 `db`。
 - 完成测试或脚本后调用 `db.destroy()`。
-
+- Repository 是规划接口，当前尚未实现；筛选设计见 [Filter Builder](../repository/filter-builder.md)。

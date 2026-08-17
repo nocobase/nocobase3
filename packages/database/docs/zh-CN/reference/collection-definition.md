@@ -143,4 +143,4 @@ Collection 级命名配置，会覆盖 connection 级 `naming`：
 - 不要把 `title` 和 `description` 当数据库 comment。
 - `constraints` 和 `indexes` 要分开建模。
 - `tableName` 是物理名状态，不是 rename 操作意图；重命名物理表应使用 `renameTableTo`。
-- 命名规则详见 [命名映射](../builder/naming.md)。
+- 命名规则详见 [命名概念](../concepts/naming.md) 和 [Builder 命名映射](../builder/naming.md)。

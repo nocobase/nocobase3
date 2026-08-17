@@ -58,7 +58,13 @@ CollectionBuilder -> SchemaAdapter -> KnexSchemaAdapter -> Knex
 
 ## QueryAdapter
 
-`QueryAdapter` 当前只是一个薄封装，用于基础查询验证。它不是 Repository，也不是 ORM。它工作在数据库物理名层，只做 `underscored` 归一化，不读取 Collection metadata。
+`QueryAdapter` 是数据库层 Query Builder。它不是 Repository，也不是 ORM。它工作在数据库物理名层，可以做 `underscored` 归一化，但不读取 Collection metadata。
+
+## Repository
+
+`Repository` 是计划中的 Collection-aware 数据访问层，当前尚未实现。它会读取 Collection metadata，用 Collection / Field 逻辑名做常规 CRUD，并通过 Filter Builder / Filter AST 表达应用层筛选条件。
+
+详细设计见 [Repository 概览](../repository/overview.md)、[Filter Builder](../repository/filter-builder.md) 和 [Filter AST](../repository/filter-ast.md)。
 
 ## Agent 注意事项
 

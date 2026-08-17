@@ -22,7 +22,7 @@ npm run test:integration
 npm run test:coverage
 ```
 
-覆盖率统计只包含 `src/**/*.ts` 中有运行时行为的源码，不包含 `src/index.ts`、`src/types.ts`、`dist` 和测试文件。
+覆盖率统计只包含 `src/**/*.ts` 中有运行时行为的源码，不包含入口 barrel、纯类型文件、`dist` 和测试文件。
 
 ## 启动真实数据库
 
@@ -75,7 +75,35 @@ npm run test:db:down
 
 Integration helper 会为每个测试生成唯一表名前缀，避免并行测试互相影响。测试结束后会清理该前缀下的表和视图。
 
-真实测试覆盖：
+真实数据库测试目录按能力拆分：
+
+```text
+test/integration/
+  helpers.ts
+  builder/
+    create-collection.test.ts
+    alter-collection.test.ts
+    relations.test.ts
+    constraints-indexes.test.ts
+    view-collection.test.ts
+    metadata-only.test.ts
+    apply-dry-run.test.ts
+    rename-collection.test.ts
+    naming.test.ts
+    capabilities.test.ts
+  query/
+    select.test.ts
+    where.test.ts
+    joins.test.ts
+    subquery.test.ts
+    aggregates.test.ts
+    mutations.test.ts
+    transactions.test.ts
+    naming.test.ts
+    compile.test.ts
+```
+
+Builder 真实测试覆盖：
 
 - create collection
 - alter collection
@@ -85,6 +113,18 @@ Integration helper 会为每个测试生成唯一表名前缀，避免并行测�
 - metadata-only updates
 - apply and dryRun
 - rename collection
+
+Query 真实测试覆盖：
+
+- select / value / pluck / exists
+- where expression builder
+- join
+- subquery
+- aggregate / groupBy / having
+- insert / update / delete
+- transaction
+- naming / underscored / alias
+- compile
 
 ## Agent 注意事项
 

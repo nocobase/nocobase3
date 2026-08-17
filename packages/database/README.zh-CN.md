@@ -15,7 +15,7 @@
 ## 快速开始
 
 ```ts
-import { createDatabaseManager } from './src/database.js';
+import { createDatabaseManager } from '@nocobase/collection-builder-prototype';
 
 const db = createDatabaseManager({
   default: 'main',
@@ -46,10 +46,16 @@ await db.destroy();
 - [整体概览](./docs/zh-CN/overview.md)
 - [Collection 概念](./docs/zh-CN/concepts/collection.md)
 - [Metadata 概念](./docs/zh-CN/concepts/metadata.md)
+- [命名概念](./docs/zh-CN/concepts/naming.md)
 - [Builder API 总览](./docs/zh-CN/builder/overview.md)
-- [命名映射](./docs/zh-CN/builder/naming.md)
-- [数据库连接](./docs/zh-CN/database/connections.md)
+- [QueryAdapter 概览](./docs/zh-CN/query/overview.md)
+- [Repository 规划](./docs/zh-CN/repository/overview.md)
+- [Repository Filter Builder 规划](./docs/zh-CN/repository/filter-builder.md)
+- [Repository Filter AST 规划](./docs/zh-CN/repository/filter-ast.md)
+- [数据库概览](./docs/zh-CN/database/overview.md)
 - [真实数据库集成测试](./docs/zh-CN/testing/integration.md)
+- [源码与测试目录结构](./docs/zh-CN/development/source-layout.md)
+- [Agent 开发指南](./docs/zh-CN/development/agent-guide.md)
 - [API 索引](./docs/zh-CN/reference/api-index.md)
 - [术语表](./docs/zh-CN/reference/glossary.md)
 
@@ -65,6 +71,7 @@ docs/
       collection.md
       metadata.md
       database-abstraction.md
+      naming.md
     builder/
       overview.md
       create-collection.md
@@ -78,13 +85,32 @@ docs/
       apply-operations.md
       dialect-capabilities.md
     database/
+      overview.md
       connections.md
       manager-and-connection.md
-      query-adapter.md
+      transactions.md
+    query/
+      overview.md
+      select.md
+      where.md
+      joins.md
+      aggregates.md
+      mutations.md
+      naming.md
+      compile.md
+    repository/
+      overview.md
+      filter-builder.md
+      filter-ast.md
     testing/
       integration.md
+    development/
+      source-layout.md
+      agent-guide.md
     reference/
       api-index.md
+      database-config.md
+      query-api.md
       collection-definition.md
       field-definition.md
       collection-operation.md
@@ -129,7 +155,7 @@ npm run test:db:down
 ## 当前边界
 
 - 当前只实现了 Collection Builder，没有实现 Collection Generator。
-- 当前没有 Repository、Model、Transformer。
+- 当前没有 Repository、Repository Filter Builder、Repository Filter AST、Model、Transformer。
 - Schema Adapter 第一版基于 Knex。
 - `check` constraint 已建模，但还没有完整编译到 SQL。
 - `dropConstraint` 当前实现仍较基础，后续需要按 constraint 类型增强。

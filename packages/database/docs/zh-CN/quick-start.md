@@ -16,7 +16,7 @@
 ## 创建 DatabaseManager
 
 ```ts
-import { createDatabaseManager } from './src/database.js';
+import { createDatabaseManager } from '@nocobase/collection-builder-prototype';
 
 const db = createDatabaseManager({
   default: 'main',
@@ -93,38 +93,71 @@ await db.builder().createCollection('orderItems', (collection) => {
 
 ```ts
 await db.query()
-  .table('orders')
-  .insert({
+  .insertInto('orders')
+  .values({
     orderNo: 'SO-001',
     amount: 99.5,
     status: 'paid',
     createdAt: new Date(),
-  });
+  })
+  .execute();
 
 const rows = await db.query()
-  .table('orders')
-  .select('id', 'orderNo', 'createdAt')
-  .where('status', 'paid')
+  .selectFrom('orders')
+  .select(['id', 'orderNo', 'createdAt'])
+  .where('status', '=', 'paid')
   .orderBy('createdAt', 'desc')
   .limit(20)
-  .all();
+  .execute();
 ```
 
 查询终止方法推荐保持语义明确：
 
 ```ts
 const rows = await db.query()
-  .table('orders')
-  .where('status', 'paid')
-  .all();
+  .selectFrom('orders')
+  .where('status', '=', 'paid')
+  .execute();
 
 const row = await db.query()
-  .table('orders')
-  .where('orderNo', 'SO-001')
-  .first();
+  .selectFrom('orders')
+  .where('orderNo', '=', 'SO-001')
+  .executeTakeFirst();
 ```
 
-`all()` 返回当前查询匹配的所有行；`first()` 返回当前查询匹配的第一行。
+`execute()` 返回当前查询匹配的所有行；`executeTakeFirst()` 返回当前查询匹配的第一行。
+
+也可以使用便捷终止方法：
+
+```ts
+const status = await db.query()
+  .selectFrom('orders')
+  .where('orderNo', '=', 'SO-001')
+  .value<string>('status');
+
+const orderNos = await db.query()
+  .selectFrom('orders')
+  .where('status', '=', 'paid')
+  .pluck<string>('orderNo');
+```
+
+复杂条件使用 Kysely 风格的 `eb`：
+
+```ts
+const rows = await db.query()
+  .selectFrom('orders')
+  .where(({ eb, and, or, not }) =>
+    and([
+      eb('tenantId', '=', tenantId),
+      or([
+        eb('status', '=', 'paid'),
+        eb('status', '=', 'completed'),
+      ]),
+      not(eb.between('amount', 500, 700)),
+    ])
+  )
+  .execute();
+```
 
 在 `underscored: true` 下，`db.query()` 会对 table 和 column query identifier 做轻量归一化：
 
@@ -137,9 +170,9 @@ createdAt -> created_at
 
 ```ts
 const row = await db.query()
-  .table('orders')
+  .selectFrom('orders')
   .select('createdAt')
-  .first();
+  .executeTakeFirst();
 ```
 
 SQL 中查询的是 `created_at`，结果 key 是：
@@ -154,9 +187,9 @@ SQL 中查询的是 `created_at`，结果 key 是：
 
 ```ts
 const row = await db.query()
-  .table('orders')
+  .selectFrom('orders')
   .select('created_at')
-  .first();
+  .executeTakeFirst();
 ```
 
 结果 key 就是：
@@ -166,6 +199,24 @@ const row = await db.query()
   created_at: '...'
 }
 ```
+
+显式 alias 也按同样规则：
+
+```ts
+const rows = await db.query()
+  .selectFrom('orderItems as oi')
+  .leftJoin('orders as o', 'oi.orderId', 'o.id')
+  .select([
+    'oi.id as item_id',
+    'oi.orderNo as order_no',
+    'oi.createdAt as created_at',
+    'o.status as order_status',
+  ])
+  .where('oi.createdAt', '>=', start)
+  .execute();
+```
+
+这里显式 alias 写的是小写下划线，所以结果 key 也是 `item_id`、`order_no`、`created_at`、`order_status`，不会再自动变成驼峰。
 
 `db.query()` 不会读取 `tableName`、`columnName` metadata。例如：
 
@@ -180,10 +231,10 @@ await db.builder().createCollection('orderItems', (collection) => {
 
 ```ts
 await db.query()
-  .table('tbl_order_item')
+  .selectFrom('tbl_order_item')
   .select('order_number')
-  .where('order_number', 'SO-001')
-  .all();
+  .where('order_number', '=', 'SO-001')
+  .execute();
 ```
 
 不要期望 `db.query()` 自动理解：
@@ -204,9 +255,7 @@ orderNo -> order_number
 ```ts
 const records = await db.repository('orderItems').findMany({
   fields: ['orderNo', 'createdAt'],
-  filter: {
-    orderNo: 'SO-001',
-  },
+  filter: (filter) => filter.string('orderNo').eq('SO-001'),
 });
 ```
 
@@ -228,6 +277,21 @@ field.name: createdAt -> naming -> created_at
   },
 ]
 ```
+
+Repository 的筛选条件计划使用 Filter Builder，而不是旧的 object shorthand：
+
+```ts
+await db.repository('orders').findMany({
+  filter: (filter) =>
+    filter.and([
+      filter.string('status').eq('paid'),
+      filter.number('amount').gte(100),
+      filter.date('createdAt').notBefore('2026-01-01'),
+    ]),
+});
+```
+
+这部分接口当前尚未实现，详细设计见 [Repository 概览](./repository/overview.md)、[Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
 
 所以三层职责可以这样看：
 
@@ -251,12 +315,13 @@ await db.transaction(async (connection) => {
   });
 
   await connection.query
-    .table('payments')
-    .insert({
+    .insertInto('payments')
+    .values({
       orderNo: 'SO-001',
       amount: 99.5,
       status: 'paid',
-    });
+    })
+    .execute();
 });
 ```
 
@@ -275,9 +340,7 @@ await db.transaction(async (connection) => {
 
   // 规划接口
   await connection.repository('orders').update({
-    filter: {
-      orderNo: 'SO-001',
-    },
+    filter: (filter) => filter.string('orderNo').eq('SO-001'),
     values: {
       status: 'completed',
     },
@@ -326,8 +389,9 @@ await db.builder().createCollection('orders', (collection) => {
 });
 
 await db.query()
-  .table('orders')
-  .insert({ status: 'paid' });
+  .insertInto('orders')
+  .values({ status: 'paid' })
+  .execute();
 ```
 
 命名连接有两种写法。
@@ -341,9 +405,9 @@ await db.builder('analytics').createCollection('events', (collection) => {
 });
 
 const events = await db.query('analytics')
-  .table('events')
-  .select('id', 'name')
-  .all();
+  .selectFrom('events')
+  .select(['id', 'name'])
+  .execute();
 ```
 
 较长代码更推荐先取 connection，再在同一个 connection 上操作：
@@ -357,9 +421,9 @@ await analytics.builder.createCollection('events', (collection) => {
 });
 
 const events = await analytics.query
-  .table('events')
-  .select('id', 'name')
-  .all();
+  .selectFrom('events')
+  .select(['id', 'name'])
+  .execute();
 ```
 
 未来 Repository 在多连接下也建议保持同样心智：
@@ -398,12 +462,20 @@ const connection = db.connection('analytics');
 await db.destroy();
 ```
 
+## 深入阅读
+
+- Database 连接管理见 [Database 概览](./database/overview.md)。
+- Builder 细节见 [Builder API 总览](./builder/overview.md)。
+- Query 细节见 [QueryAdapter 概览](./query/overview.md)。
+- 命名规则见 [命名概念](./concepts/naming.md)。
+- 开发维护说明见 [Agent 开发指南](./development/agent-guide.md)。
+
 ## 一句话总结
 
 ```text
 createDatabaseManager()
   -> db.builder()      // Collection schema / metadata
-  -> db.query()        // database table query
+  -> db.query()        // database query builder
   -> db.repository()   // Collection-aware data access, planned
   -> db.transaction()  // run builder/query/repository in one connection transaction
 ```

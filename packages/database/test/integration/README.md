@@ -1,9 +1,20 @@
 # Integration Tests
 
-These tests exercise the Collection Builder against real database connections.
-They are intentionally organized under `test/integration` rather than by one
-database backend because the same Collection Builder behavior should work across
-all supported databases.
+These tests exercise Builder and Query behavior against real database
+connections. They are intentionally organized under `test/integration` rather
+than by one database backend because the same behavior should work across all
+supported databases.
+
+The suite is split by public capability:
+
+```text
+test/integration/
+  builder/
+  query/
+```
+
+`builder/` covers Collection Builder DDL and metadata behavior. `query/` covers
+the QueryAdapter API against real SQL execution.
 
 By default, the integration suite uses an in-memory SQLite database:
 

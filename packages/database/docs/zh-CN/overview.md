@@ -38,16 +38,22 @@ Collection 提供一层稳定的应用抽象：
 - `SchemaAdapter`：底层数据库 schema 操作接口。
 - `KnexSchemaAdapter`：第一版 Knex 实现。
 - `DatabaseManager`：管理多数据库连接。
-- `QueryAdapter`：当前很薄的查询适配器，Repository 尚未实现。
+- `QueryAdapter`：数据库层 Query Builder，Repository 尚未实现。
+- `Repository`：计划中的 Collection-aware 数据访问层，当前未实现。
+- `Repository Filter Builder`：计划中的应用层筛选条件 DSL，当前未实现。
 - `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
 
 ## 文档地图
 
 - 快速理解主线见 [快速开始](./quick-start.md)。
 - Builder 用法见 [Builder API 总览](./builder/overview.md)。
-- 命名策略见 [命名映射](./builder/naming.md)。
-- 数据库连接见 [数据库连接](./database/connections.md)。
+- Query 用法见 [QueryAdapter 概览](./query/overview.md)。
+- Repository 规划见 [Repository 概览](./repository/overview.md)。
+- Repository filter 设计见 [Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
+- 命名策略见 [命名概念](./concepts/naming.md)。
+- 数据库连接见 [Database 概览](./database/overview.md)。
 - 真实数据库测试见 [集成测试](./testing/integration.md)。
+- 开发维护说明见 [源码与测试目录结构](./development/source-layout.md) 和 [Agent 开发指南](./development/agent-guide.md)。
 - 类型参考见 [Reference](./reference/api-index.md)。
 - 术语统一见 [术语表](./reference/glossary.md)。
 
@@ -59,6 +65,8 @@ Agent 的推荐 DSL 取决于输出载体：
 - 调用 HTTP API、CLI，或生成 `collection.json` 这类可序列化配置时，优先使用 Object DSL。
 - 做 file sync、snapshot diff、执行计划审计或批量 apply 时，优先使用 `CollectionOperation[]`。
 - `db.query()` 只做物理查询名的轻量归一化，不读取 Collection metadata。
+- 未来写 Repository 数据访问代码时，筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder。
+- 当前 Repository 和 Filter Builder 还没有实现，不要把规划接口当作可运行代码。
 
 对 destructive 操作，例如 `dropField`、`dropCollection`，应先使用：
 

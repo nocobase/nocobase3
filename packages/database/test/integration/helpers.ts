@@ -1,9 +1,9 @@
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
-import { CollectionBuilder } from '../../src/builder.js';
-import { createDatabaseManager, type DatabaseManager } from '../../src/database.js';
-import { InMemoryCollectionMetadataStore } from '../../src/metadata.js';
-import { DefaultNamingStrategy, snakeCase, truncateIdentifier } from '../../src/naming.js';
+import { CollectionBuilder } from '../../src/index.js';
+import { createDatabaseManager, type DatabaseManager } from '../../src/index.js';
+import { InMemoryCollectionMetadataStore } from '../../src/index.js';
+import { DefaultNamingStrategy, snakeCase, truncateIdentifier } from '../../src/index.js';
 
 export type IntegrationDialect = 'sqlite' | 'postgres' | 'mysql';
 

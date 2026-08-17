@@ -25,8 +25,13 @@
 | KnexSchemaAdapter | 当前基于 Knex 的 SchemaAdapter 实现。 |
 | DatabaseManager | 管理默认连接和命名连接的入口。 |
 | DatabaseConnection | 一个具体数据库连接。 |
-| QueryAdapter | 当前的基础查询适配器，不是 Repository。 |
-| Repository | 计划中的常规数据访问封装，当前未实现。 |
+| QueryAdapter | 数据库层 Query Builder，不是 Repository。 |
+| Repository | 计划中的 Collection-aware 常规数据访问封装，当前未实现。 |
+| Repository Filter Builder | 计划中的 Repository 筛选条件代码 DSL，当前未实现。 |
+| Filter AST | 计划中的 Repository 筛选条件结构化表示，当前未实现。 |
+| Filter operator group | 字段类型对应的筛选操作符分组，例如 string、number、date、select、relation。 |
+| `context` | Repository operation 中用于解析 filter 变量的运行时上下文。 |
+| `filter.variable()` | 计划中的变量值表达式入口，例如 `filter.variable('$user.id')`。 |
 | Model | 计划中的模型封装，当前未实现。 |
 | Transformer | 计划中的数据转换层，当前未实现。 |
 
@@ -45,3 +50,9 @@
 Agent 生成代码或解释 API 时，应优先使用英文 API 名和类型名，中文只用于解释含义。
 
 涉及命名映射时，应明确区分逻辑名和物理名。
+
+涉及 Repository filter 时，应明确区分：
+
+- Filter Builder：TypeScript 代码中的 callback DSL。
+- Filter AST：HTTP、CLI、file sync 和持久化配置可以使用的结构化数据。
+- NocoBase 既有 object filter：兼容层或序列化目标之一，不作为未来 Repository 代码 API 的首选形态。

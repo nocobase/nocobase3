@@ -1,4 +1,4 @@
-# 命名映射
+# Builder 命名映射
 
 Collection Builder 同时维护两类名称：
 
@@ -6,6 +6,8 @@ Collection Builder 同时维护两类名称：
 - 物理名：`collection.tableName`、`field.columnName`，面向数据库表、视图和列。
 
 如果没有显式物理名，Builder 会根据当前连接或 Collection 的 `naming` 配置推导物理名。
+
+跨模块的命名概念见 [命名概念](../concepts/naming.md)。本页只聚焦 Builder 编译 Collection DSL 时的命名规则。
 
 ## 基本规则
 
@@ -231,54 +233,11 @@ await builder.renameCollection('orderItems', 'orderLines', {
 
 不要使用 `{ tableName: ... }` 表达 rename 操作。`tableName` 是 Collection 的状态，`renameTableTo` 是操作意图。
 
-## QueryAdapter 的命名边界
+## 和 QueryAdapter 的边界
 
-`db.query()` 是数据库查询层，不是 Repository，也不读取 Collection metadata。
+`db.query()` 是数据库查询层，不是 Repository，也不读取 Collection metadata。它只做轻量 identifier 归一化，不会做 `field.name -> columnName` 的元数据映射。
 
-在 `underscored: true` 时，它允许用 camelCase 写数据库表名和列名，并把它们归一化为小写下划线：
-
-```ts
-await db.query()
-  .table('tblOrderItems')
-  .where('orderNumber', 'SO-001');
-```
-
-等价于：
-
-```ts
-await db.query()
-  .table('tbl_order_items')
-  .where('order_number', 'SO-001');
-```
-
-`select` 会按调用方传入的字段 key 返回结果：
-
-```ts
-await db.query()
-  .table('tblOrderItems')
-  .select('createdAt');
-```
-
-SQL 中会查询 `created_at`，结果集 key 是 `createdAt`。如果写 `select('created_at')`，结果集 key 就是 `created_at`。
-
-但 `db.query()` 不会做 `field.name -> columnName` 的元数据映射：
-
-```ts
-collection.string('orderNo').columnName('order_number');
-
-await db.query().table('orders').where('orderNo', 'SO-001');
-```
-
-上面的 query 会把 `orderNo` 归一化为 `order_no`，不会知道它应该映射到显式 `columnName: 'order_number'`。这种元数据感知查询以后应由 Repository 提供。
-
-`db.query()` 也不会自动应用 `tablePrefix`。需要查询带前缀的表时，应传入实际表名，或传入能被 underscored 归一化到实际表名的写法：
-
-```ts
-db.query().table('tblOrderItems');
-db.query().table('tbl_order_items');
-```
-
-两者都会查询 `tbl_order_items`。
+Query 的结果 key、alias、`selectAll()` 和 `tablePrefix` 边界详见 [Query 命名归一化](../query/naming.md)。
 
 ## Agent 注意事项
 

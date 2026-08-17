@@ -118,7 +118,7 @@ createdAt -> created_at
 
 Collection 可以用 `collection.naming(...)` 覆盖 connection 级配置，也可以用 `tableName`、`columnName` 显式指定物理名。
 
-更完整的规则见 [命名映射](../builder/naming.md)。
+更完整的概念见 [命名概念](../concepts/naming.md)，Builder 编译规则见 [Builder 命名映射](../builder/naming.md)。
 
 ## defineDatabase
 
