@@ -22,12 +22,12 @@ cd crm
 
 这个目录就是 App 源码目录，可以放在任意位置。
 
-```text
+```bash
 crm/
-  package.json
-  src/
+  .nb/
+  client/
   server/
-  .nocobase-app.json
+  package.json
 ```
 
 ## 3. 本地开发
