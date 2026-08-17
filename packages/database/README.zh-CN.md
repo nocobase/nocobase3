@@ -1,0 +1,136 @@
+# Collection Builder Prototype
+
+这是一个用于验证 Collection Builder、数据库连接管理和真实数据库兼容性的 TypeScript 原型。
+
+当前原型的重点是：保留 `Collection` 作为应用层数据模型抽象，通过 `CollectionBuilder` 把 Collection DSL 编译并应用到底层数据库 Schema。底层第一版使用 Knex，后续如有需要可以再增加其他适配器。
+
+## 核心目标
+
+- 用 Collection DSL 屏蔽数据库方言差异。
+- 用 Collection Builder 管理建表、改表、字段、约束、索引和视图。
+- 用 metadata-only API 补充应用层元信息，而不修改数据库结构。
+- 用 `CollectionOperation[]` 表达可解释、可 dry-run、适合 Agent apply/diff 的变更计划。
+- 用真实数据库集成测试验证 SQLite、PostgreSQL、MySQL 的行为。
+
+## 快速开始
+
+```ts
+import { createDatabaseManager } from './src/database.js';
+
+const db = createDatabaseManager({
+  default: 'main',
+  connections: {
+    main: {
+      driver: 'knex',
+      client: 'better-sqlite3',
+      connection: {
+        filename: ':memory:',
+      },
+      useNullAsDefault: true,
+    },
+  },
+});
+
+await db.builder().createCollection('orders', (collection) => {
+  collection.increments('id');
+  collection.belongsTo('customer', 'customers');
+  collection.decimal('amount', { precision: 12, scale: 2 });
+});
+
+await db.destroy();
+```
+
+## 文档入口
+
+- [快速开始](./docs/zh-CN/quick-start.md)
+- [整体概览](./docs/zh-CN/overview.md)
+- [Collection 概念](./docs/zh-CN/concepts/collection.md)
+- [Metadata 概念](./docs/zh-CN/concepts/metadata.md)
+- [Builder API 总览](./docs/zh-CN/builder/overview.md)
+- [命名映射](./docs/zh-CN/builder/naming.md)
+- [数据库连接](./docs/zh-CN/database/connections.md)
+- [真实数据库集成测试](./docs/zh-CN/testing/integration.md)
+- [API 索引](./docs/zh-CN/reference/api-index.md)
+- [术语表](./docs/zh-CN/reference/glossary.md)
+
+## 文档目录结构
+
+```text
+README.zh-CN.md
+docs/
+  zh-CN/
+    quick-start.md
+    overview.md
+    concepts/
+      collection.md
+      metadata.md
+      database-abstraction.md
+    builder/
+      overview.md
+      create-collection.md
+      alter-collection.md
+      naming.md
+      fields.md
+      relations.md
+      constraints-and-indexes.md
+      view-collections.md
+      metadata-only.md
+      apply-operations.md
+      dialect-capabilities.md
+    database/
+      connections.md
+      manager-and-connection.md
+      query-adapter.md
+    testing/
+      integration.md
+    reference/
+      api-index.md
+      collection-definition.md
+      field-definition.md
+      collection-operation.md
+      builder-options.md
+      builder-result.md
+      glossary.md
+```
+
+## 常用命令
+
+```bash
+npm run typecheck
+npm test
+npm run test:coverage
+npm run build
+```
+
+默认集成测试使用内存 SQLite：
+
+```bash
+npm run test:integration
+```
+
+启动 PostgreSQL 和 MySQL：
+
+```bash
+npm run test:db:up
+```
+
+跑完整真实数据库矩阵：
+
+```bash
+npm run test:integration:all
+```
+
+停止并清理测试数据库：
+
+```bash
+npm run test:db:down
+```
+
+## 当前边界
+
+- 当前只实现了 Collection Builder，没有实现 Collection Generator。
+- 当前没有 Repository、Model、Transformer。
+- Schema Adapter 第一版基于 Knex。
+- `check` constraint 已建模，但还没有完整编译到 SQL。
+- `dropConstraint` 当前实现仍较基础，后续需要按 constraint 类型增强。
+- `BuilderExecOptions` 中部分字段是预留扩展，当前主要验证 `dryRun`、`previewSql` 和 `syncMetadata`。

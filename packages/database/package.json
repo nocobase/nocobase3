@@ -1,0 +1,30 @@
+{
+  "name": "@nocobase/collection-builder-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:db:up": "docker compose up -d postgres mysql",
+    "test:db:down": "docker compose down -v",
+    "test:integration": "vitest run test/integration",
+    "test:integration:all": "INTEGRATION_DB_CONNECTIONS=all vitest run test/integration",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "knex": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@vitest/coverage-v8": "^3.2.7",
+    "better-sqlite3": "^13.0.3",
+    "mysql2": "^3.23.3",
+    "pg": "^8.23.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
