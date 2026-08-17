@@ -8,14 +8,14 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 const registryRoot = fileURLToPath(new URL("./registry", import.meta.url));
 const extensionsRoot = fs.existsSync(registryRoot)
   ? registryRoot
-  : fileURLToPath(new URL("./src/extensions", import.meta.url));
+  : fileURLToPath(new URL("./client/extensions", import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
       "@/extensions": extensionsRoot,
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@": fileURLToPath(new URL("./client", import.meta.url)),
     },
   },
   test: {

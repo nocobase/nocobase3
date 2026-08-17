@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { assetUrl } from "../../src/lib/utils";
+import { assetUrl } from "../../client/lib/utils";
 
 const originalWindow = globalThis.window;
 

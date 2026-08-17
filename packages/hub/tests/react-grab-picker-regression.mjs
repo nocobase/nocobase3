@@ -17,7 +17,7 @@ try {
     configureReactGrabPicker,
     hideDisabledReactGrabToolbarActions,
   } = await server.ssrLoadModule(
-    "/src/components/development/react-grab-picker-customization.ts"
+    "/client/components/development/react-grab-picker-customization.ts"
   );
 
   assert.deepEqual([...REACT_GRAB_DISABLED_ACTIONS], ["comment", "edit"]);
@@ -81,14 +81,14 @@ try {
         _debugStack: {
           stack: [
             "Error: react-stack-top-frame",
-            "    at PortalRuntimeGate (http://localhost:5173/x/admin/src/components/app-shell/portal-runtime-gate.tsx?t=1:101:9)",
+            "    at PortalRuntimeGate (http://localhost:5173/x/admin/client/components/app-shell/portal-runtime-gate.tsx?t=1:101:9)",
           ].join("\n"),
         },
         _debugOwner: {
           _debugStack: {
             stack: [
               "Error: react-stack-top-frame",
-              "    at App (http://localhost:5173/x/admin/src/App.tsx?t=1:42:5)",
+              "    at App (http://localhost:5173/x/admin/client/App.tsx?t=1:42:5)",
             ].join("\n"),
           },
         },
@@ -103,7 +103,7 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<div /> in NocoBaseRuntimeStatus (at ${sourceRoot}/registry/nocobase-error-boundary/runtime-status.tsx:501:7) in PortalRuntimeGate (at ${sourceRoot}/src/components/app-shell/portal-runtime-gate.tsx:101:9) in App (at ${sourceRoot}/src/App.tsx:42:5)]`
+    `[<div /> in NocoBaseRuntimeStatus (at ${sourceRoot}/registry/nocobase-error-boundary/runtime-status.tsx:501:7) in PortalRuntimeGate (at ${sourceRoot}/client/components/app-shell/portal-runtime-gate.tsx:101:9) in App (at ${sourceRoot}/client/App.tsx:42:5)]`
   );
 
   const ambiguousContext = {
@@ -126,12 +126,12 @@ try {
     fiber: {
       _debugStack: {
         stack:
-          "    at FirstCard (http://localhost:5173/x/admin/src/first/index.tsx:10:2)",
+          "    at FirstCard (http://localhost:5173/x/admin/client/first/index.tsx:10:2)",
       },
       _debugOwner: {
         _debugStack: {
           stack:
-            "    at SecondCard (http://localhost:5173/x/admin/src/second/index.tsx:20:4)",
+            "    at SecondCard (http://localhost:5173/x/admin/client/second/index.tsx:20:4)",
         },
       },
     },
@@ -153,13 +153,13 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<div /> in NocoBaseRuntimeStatus (at ${sourceRoot}/registry/nocobase-error-boundary/runtime-status.tsx:501:7) in PortalRuntimeGate (at ${sourceRoot}/src/components/app-shell/portal-runtime-gate.tsx) in App (at ${sourceRoot}/src/App.tsx)]`
+    `[<div /> in NocoBaseRuntimeStatus (at ${sourceRoot}/registry/nocobase-error-boundary/runtime-status.tsx:501:7) in PortalRuntimeGate (at ${sourceRoot}/client/components/app-shell/portal-runtime-gate.tsx) in App (at ${sourceRoot}/client/App.tsx)]`
   );
 
   const sharedFileFiber = {
     _debugStack: {
       stack:
-        "    at Visible (http://localhost:5173/x/admin/src/shared.tsx:99:9)",
+        "    at Visible (http://localhost:5173/x/admin/client/shared.tsx:99:9)",
     },
   };
   assert.equal(
@@ -182,7 +182,7 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<div /> in Visible (at ${sourceRoot}/src/shared.tsx:20:4)]`
+    `[<div /> in Visible (at ${sourceRoot}/client/shared.tsx:20:4)]`
   );
 
   assert.equal(
@@ -235,7 +235,7 @@ try {
       {
         functionName: "FirstCard",
         fileName:
-          "http://localhost:5173/x/admin/src/first/index.tsx?t=1",
+          "http://localhost:5173/x/admin/client/first/index.tsx?t=1",
         lineNumber: 10,
         columnNumber: 2,
       },
@@ -250,7 +250,7 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<div /> in SecondCard (at ${sourceRoot}/src/second/index.tsx:20:4) in FirstCard (at ${sourceRoot}/src/first/index.tsx:10:2)]`
+    `[<div /> in SecondCard (at ${sourceRoot}/client/second/index.tsx:20:4) in FirstCard (at ${sourceRoot}/client/first/index.tsx:10:2)]`
   );
 
   const previewStackContent =
@@ -266,7 +266,7 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<div>in App (at App.tsx)</div> in App (at ${sourceRoot}/src/App.tsx:42:5)]`
+    `[<div>in App (at App.tsx)</div> in App (at ${sourceRoot}/client/App.tsx:42:5)]`
   );
 
   assert.equal(
@@ -277,7 +277,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at ForwardRef(Button) (http://localhost:5173/x/admin/src/button.tsx:12:3)",
+              "    at ForwardRef(Button) (http://localhost:5173/x/admin/client/button.tsx:12:3)",
           },
         },
         stackString: "\n  in ForwardRef(Button) (at button.tsx)",
@@ -293,7 +293,7 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<button /> in ForwardRef(Button) (at ${sourceRoot}/src/button.tsx:12:3)]`
+    `[<button /> in ForwardRef(Button) (at ${sourceRoot}/client/button.tsx:12:3)]`
   );
 
   assert.equal(
@@ -307,7 +307,7 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<div /> in Wrapper in App (at ${sourceRoot}/src/App.tsx:42:5)]`
+    `[<div /> in Wrapper in App (at ${sourceRoot}/client/App.tsx:42:5)]`
   );
 
   const repeatedStackKeyContent =
@@ -323,7 +323,7 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<div /> in App (at ${sourceRoot}/src/App.tsx:42:5) key: " in App (at App.tsx)"]`
+    `[<div /> in App (at ${sourceRoot}/client/App.tsx:42:5) key: " in App (at App.tsx)"]`
   );
 
   assert.equal(
@@ -334,7 +334,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/@fs/Users/Apple/shared-ui/src/Button.tsx:10:2)",
+              "    at Button (http://localhost:5173/@fs/Users/Apple/shared-ui/client/Button.tsx:10:2)",
           },
         },
         stackString: "\n  in Button (at Button.tsx)",
@@ -370,7 +370,7 @@ try {
       sourceRoot,
       "/x/admin/"
     ),
-    `[<div /> in App (at ${sourceRoot}/src/App.tsx:42:5)]`
+    `[<div /> in App (at ${sourceRoot}/client/App.tsx:42:5)]`
   );
 
   const externalAndLocalButtonContent =
@@ -383,12 +383,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at ExternalButton (http://localhost:5173/@fs/Users/Apple/shared-ui/src/Button.tsx:10:2)",
+              "    at ExternalButton (http://localhost:5173/@fs/Users/Apple/shared-ui/client/Button.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at LocalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at LocalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -412,7 +412,7 @@ try {
       sourceRoot,
       "/"
     ),
-    `[<button /> in ExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/src/Button.tsx:20:4)]`
+    `[<button /> in ExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/client/Button.tsx:20:4)]`
   );
 
   assert.equal(
@@ -423,7 +423,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at ExternalButton (https://cdn.example/src/Button.tsx:10:2)",
+              "    at ExternalButton (https://cdn.example/client/Button.tsx:10:2)",
           },
         },
         stackString: "\n  in ExternalButton (at Button.tsx)",
@@ -451,12 +451,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "ExternalButton@http://localhost:5173/@fs/Users/Apple/shared-ui/src/Button.tsx:10:2",
+              "ExternalButton@http://localhost:5173/@fs/Users/Apple/shared-ui/client/Button.tsx:10:2",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "LocalButton@http://localhost:5173/src/Button.tsx:20:4",
+                "LocalButton@http://localhost:5173/client/Button.tsx:20:4",
             },
           },
         },
@@ -477,7 +477,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in ExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in ExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
@@ -487,12 +487,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/@fs/Users/Apple/shared-ui/src/Button.tsx:10:2)",
+              "    at InternalButton (http://localhost:5173/@fs/Users/Apple/shared-ui/client/Button.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at LocalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at LocalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -513,7 +513,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in FancyExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in FancyExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content: "[<button /> in ExternalButton (at Button.tsx)]",
@@ -529,7 +529,7 @@ try {
         stack: [
           {
             functionName: "ExternalButton",
-            fileName: "/src/Button.tsx",
+            fileName: "/client/Button.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
@@ -545,7 +545,7 @@ try {
           _debugStack: {
             stack: [
               "    at render (http://localhost:5173/@fs/Users/Apple/shared-ui/Button.tsx:10:2)",
-              "    at Button (http://localhost:5173/src/Button.tsx:99:9)",
+              "    at Button (http://localhost:5173/client/Button.tsx:99:9)",
             ].join("\n"),
           },
         },
@@ -569,12 +569,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at http://localhost:5173/@fs/Users/Apple/shared-ui/src/Button.tsx:10:2",
+              "    at http://localhost:5173/@fs/Users/Apple/shared-ui/client/Button.tsx:10:2",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at LocalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at LocalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -583,7 +583,7 @@ try {
         stack: [
           {
             functionName: "FancyExternalButton",
-            fileName: "/src/Button.tsx",
+            fileName: "/client/Button.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
@@ -595,7 +595,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in FancyExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in FancyExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content: "[<button /> in FancyButton (at Button.tsx)]",
@@ -604,7 +604,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
         stackString: "\n  in FancyButton (at Button.tsx)",
@@ -617,7 +617,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in FancyButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in FancyButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
@@ -628,7 +628,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at LocalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at LocalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -637,7 +637,7 @@ try {
         stack: [
           {
             functionName: "ExternalButton",
-            fileName: "/src/Button.tsx",
+            fileName: "/client/Button.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
@@ -649,7 +649,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in ExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in ExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
@@ -659,12 +659,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Child (http://localhost:5173/src/shared.tsx:10:2)",
+              "    at Child (http://localhost:5173/client/shared.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Parent (http://localhost:5173/src/shared.tsx:20:4)",
+                "    at Parent (http://localhost:5173/client/shared.tsx:20:4)",
             },
           },
         },
@@ -679,7 +679,7 @@ try {
           },
         ],
       },
-      expected: `[<div /> in Child (at ${sourceRoot}/src/shared.tsx:10:2) in Parent (at ${sourceRoot}/src/shared.tsx)]`,
+      expected: `[<div /> in Child (at ${sourceRoot}/client/shared.tsx:10:2) in Parent (at ${sourceRoot}/client/shared.tsx)]`,
     },
     {
       content: "[<button /> in FancyButton (at Button.tsx)]",
@@ -688,7 +688,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at FancyButton (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at FancyButton (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
         stackString: "\n  in FancyButton (at Button.tsx)",
@@ -701,7 +701,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in FancyButton (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<button /> in FancyButton (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
       content: "[<button /> in Button (at Button.tsx)]",
@@ -711,7 +711,7 @@ try {
           _debugStack: {
             stack: [
               "    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js:12100:20)",
-              "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
             ].join("\n"),
           },
         },
@@ -725,7 +725,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
@@ -735,14 +735,14 @@ try {
         fiber: {
           _debugStack: {
             stack: [
-              "    at async http://localhost:5173/@fs/Users/Apple/shared-ui/src/Button.tsx:10:2",
-              "    at LocalCaller (http://localhost:5173/src/Button.tsx:99:9)",
+              "    at async http://localhost:5173/@fs/Users/Apple/shared-ui/client/Button.tsx:10:2",
+              "    at LocalCaller (http://localhost:5173/client/Button.tsx:99:9)",
             ].join("\n"),
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at LocalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at LocalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -751,7 +751,7 @@ try {
         stack: [
           {
             functionName: "FancyExternalButton",
-            fileName: "/src/Button.tsx",
+            fileName: "/client/Button.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
@@ -763,7 +763,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in FancyExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in FancyExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
@@ -773,12 +773,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:10:2)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at LocalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at LocalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -793,7 +793,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in FancyButton (at ${sourceRoot}/src/Button.tsx) in LocalButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in FancyButton (at ${sourceRoot}/client/Button.tsx) in LocalButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
@@ -803,12 +803,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Wrapper (http://localhost:5173/src/Wrapper.tsx:10:2)",
+              "    at Wrapper (http://localhost:5173/client/Wrapper.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Wrapper (http://localhost:5173/src/Wrapper.tsx:20:4)",
+                "    at Wrapper (http://localhost:5173/client/Wrapper.tsx:20:4)",
             },
           },
         },
@@ -823,7 +823,7 @@ try {
           },
         ],
       },
-      expected: `[<div /> in Wrapper (at ${sourceRoot}/src/Wrapper.tsx) in Wrapper (at ${sourceRoot}/src/Wrapper.tsx)]`,
+      expected: `[<div /> in Wrapper (at ${sourceRoot}/client/Wrapper.tsx) in Wrapper (at ${sourceRoot}/client/Wrapper.tsx)]`,
     },
     {
       content: "[<button /> in FancyButton (at Button.tsx)]",
@@ -832,12 +832,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at HiddenHelper (http://localhost:5173/src/Button.tsx:5:1)",
+                "    at HiddenHelper (http://localhost:5173/client/Button.tsx:5:1)",
             },
           },
         },
@@ -861,7 +861,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at LocalButton (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at LocalButton (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
         stackString:
@@ -869,7 +869,7 @@ try {
         stack: [
           {
             functionName: "ExternalButton",
-            fileName: "/src/Button.tsx",
+            fileName: "/client/Button.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
@@ -881,7 +881,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in ExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in ExternalButton (at Button.tsx) in LocalButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content: "[<button /> in Button (at Button.tsx)]",
@@ -890,20 +890,20 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
         stackString: "\n  in Button (at Button.tsx)",
         stack: [
           {
             functionName: "Button",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
       content: "[<button /> in FancyButton (at Button.tsx:20:4)]",
@@ -912,7 +912,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:5:1)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:5:1)",
           },
         },
         stackString: "\n  in FancyButton (at Button.tsx:20:4)",
@@ -925,7 +925,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in FancyButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in FancyButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content: "[<button /> in Button (at Button.tsx)]",
@@ -934,20 +934,20 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/local/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/local/Button.tsx:20:4)",
           },
         },
         stackString: "\n  in Button (at Button.tsx)",
         stack: [
           {
             functionName: "Button",
-            fileName: "src/other/Button.tsx",
+            fileName: "client/other/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/local/Button.tsx)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/local/Button.tsx)]`,
     },
     {
       content: "[<button /> in Button (at Button.tsx)]",
@@ -956,7 +956,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
         stackString: "\n  in Button (at Button.tsx)",
@@ -969,29 +969,29 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
-      content: "[<button /> in FancyButton (at /src/Button.tsx:999:7)]",
+      content: "[<button /> in FancyButton (at /client/Button.tsx:999:7)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
-        stackString: "\n  in FancyButton (at /src/Button.tsx:999:7)",
+        stackString: "\n  in FancyButton (at /client/Button.tsx:999:7)",
         stack: [
           {
             functionName: "FancyButton",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: "[<button /> in FancyButton (at /src/Button.tsx:999:7)]",
+      expected: "[<button /> in FancyButton (at /client/Button.tsx:999:7)]",
     },
     {
       content: "[<button /> in FancyExternal (at Button.tsx)]",
@@ -1000,12 +1000,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalExternal (http://localhost:5173/@fs/Users/Apple/shared-ui/src/Button.tsx:10:2)",
+              "    at InternalExternal (http://localhost:5173/@fs/Users/Apple/shared-ui/client/Button.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at HiddenLocal (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at HiddenLocal (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -1022,63 +1022,63 @@ try {
       expected: "[<button /> in FancyExternal (at Button.tsx)]",
     },
     {
-      content: "[<button /> in FancyButton (at /src/Button.tsx:999:7)]",
+      content: "[<button /> in FancyButton (at /client/Button.tsx:999:7)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
           },
           _debugOwner: {},
         },
-        stackString: "\n  in FancyButton (at /src/Button.tsx:999:7)",
+        stackString: "\n  in FancyButton (at /client/Button.tsx:999:7)",
         stack: [
           {
             functionName: "FancyButton",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: "[<button /> in FancyButton (at /src/Button.tsx:999:7)]",
+      expected: "[<button /> in FancyButton (at /client/Button.tsx:999:7)]",
     },
     {
-      content: "[<button /> in Button (at /src/Button.tsx#view:20:4)]",
+      content: "[<button /> in Button (at /client/Button.tsx#view:20:4)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx#view:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx#view:20:4)",
           },
         },
-        stackString: "\n  in Button (at /src/Button.tsx#view:20:4)",
+        stackString: "\n  in Button (at /client/Button.tsx#view:20:4)",
         stack: [
           {
             functionName: "Button",
-            fileName: "http://localhost:5173/src/Button.tsx#view",
+            fileName: "http://localhost:5173/client/Button.tsx#view",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
-        "[<button /> in Button (at https://cdn.example/src/Button.tsx:999:7)]",
+        "[<button /> in Button (at https://cdn.example/client/Button.tsx:999:7)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
         stackString:
-          "\n  in Button (at https://cdn.example/src/Button.tsx:999:7)",
+          "\n  in Button (at https://cdn.example/client/Button.tsx:999:7)",
         stack: [
           {
             functionName: "Button",
@@ -1089,7 +1089,7 @@ try {
         ],
       },
       expected:
-        "[<button /> in Button (at https://cdn.example/src/Button.tsx:999:7)]",
+        "[<button /> in Button (at https://cdn.example/client/Button.tsx:999:7)]",
     },
     {
       content: "[<button /> in ExternalButton (at Button.tsx)]",
@@ -1098,7 +1098,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at ExternalButton (https://cdn.example/loader.js?target=http://localhost:5173/src/Button.tsx:10:2)",
+              "    at ExternalButton (https://cdn.example/loader.js?target=http://localhost:5173/client/Button.tsx:10:2)",
           },
         },
         stackString: "\n  in ExternalButton (at Button.tsx)",
@@ -1115,52 +1115,52 @@ try {
     },
     {
       content:
-        "[<button /> in Button (at /src/Button.tsx?source=/generated:20:4)]",
+        "[<button /> in Button (at /client/Button.tsx?source=/generated:20:4)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx?source=/generated:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx?source=/generated:20:4)",
           },
         },
         stackString:
-          "\n  in Button (at /src/Button.tsx?source=/generated:20:4)",
+          "\n  in Button (at /client/Button.tsx?source=/generated:20:4)",
         stack: [
           {
             functionName: "Button",
             fileName:
-              "http://localhost:5173/src/Button.tsx?source=/generated",
+              "http://localhost:5173/client/Button.tsx?source=/generated",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
-        "[<button /> in Button (at /src/Button.tsx#route/sub:20:4)]",
+        "[<button /> in Button (at /client/Button.tsx#route/sub:20:4)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx#route/sub:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx#route/sub:20:4)",
           },
         },
         stackString:
-          "\n  in Button (at /src/Button.tsx#route/sub:20:4)",
+          "\n  in Button (at /client/Button.tsx#route/sub:20:4)",
         stack: [
           {
             functionName: "Button",
-            fileName: "http://localhost:5173/src/Button.tsx#route/sub",
+            fileName: "http://localhost:5173/client/Button.tsx#route/sub",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content: "[<button /> in FancyButton (at Button.tsx)]",
@@ -1170,7 +1170,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -1198,7 +1198,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at HiddenLocal (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at HiddenLocal (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -1221,7 +1221,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at http://localhost:5173/src/Button.tsx:20:4",
+              "    at http://localhost:5173/client/Button.tsx:20:4",
           },
         },
         stackString: "\n  in Button (at Button.tsx)",
@@ -1234,31 +1234,31 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
-      content: "[<button /> in Button (at /src/Button.tsx:999:7)]",
+      content: "[<button /> in Button (at /client/Button.tsx:999:7)]",
       context: {
         ...elementContext,
         fiber: {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
-        stackString: "\n  in Button (at /src/Button.tsx:999:7)",
+        stackString: "\n  in Button (at /client/Button.tsx:999:7)",
         stack: [
           {
             functionName: "Button",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: "[<button /> in Button (at /src/Button.tsx:999:7)]",
+      expected: "[<button /> in Button (at /client/Button.tsx:999:7)]",
     },
     {
       content: "[<button /> in FancyButton (at Button.tsx)]",
@@ -1267,12 +1267,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/one/Button.tsx:10:2)",
+              "    at InternalButton (http://localhost:5173/client/one/Button.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at http://localhost:5173/src/two/Button.tsx:20:4",
+                "    at http://localhost:5173/client/two/Button.tsx:20:4",
             },
           },
         },
@@ -1295,7 +1295,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at http://localhost:5173/src/Button.tsx:20:4",
+              "    at http://localhost:5173/client/Button.tsx:20:4",
           },
         },
         stackString: "\n  in ExternalButton (at Button.tsx)",
@@ -1324,7 +1324,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
         stackString:
@@ -1341,12 +1341,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at http://localhost:5173/src/Button.tsx:30:6",
+                "    at http://localhost:5173/client/Button.tsx:30:6",
             },
           },
         },
@@ -1360,7 +1360,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in FancyButton (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<button /> in FancyButton (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
       content:
@@ -1370,7 +1370,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at http://localhost:5173/src/Button.tsx:20:4",
+              "    at http://localhost:5173/client/Button.tsx:20:4",
           },
         },
         stackString:
@@ -1401,12 +1401,12 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:10:2)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -1427,100 +1427,100 @@ try {
           },
         ],
       },
-      expected: `[<button /> in InternalButton (at ${sourceRoot}/src/Button.tsx:10:2) in FancyButton (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in InternalButton (at ${sourceRoot}/client/Button.tsx:10:2) in FancyButton (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
-        "[<div /> in InternalButton (at https://cdn.example/src/Button.tsx) in FancyButton (at Button.tsx)]",
+        "[<div /> in InternalButton (at https://cdn.example/client/Button.tsx) in FancyButton (at Button.tsx)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalButton (http://localhost:5173/src/Button.tsx:10:2)",
+              "    at InternalButton (http://localhost:5173/client/Button.tsx:10:2)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at InternalButton (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
         stackString:
-          "\n  in InternalButton (at https://cdn.example/src/Button.tsx)\n  in FancyButton (at Button.tsx)",
+          "\n  in InternalButton (at https://cdn.example/client/Button.tsx)\n  in FancyButton (at Button.tsx)",
         stack: [],
       },
       expected:
-        "[<div /> in InternalButton (at https://cdn.example/src/Button.tsx) in FancyButton (at Button.tsx)]",
+        "[<div /> in InternalButton (at https://cdn.example/client/Button.tsx) in FancyButton (at Button.tsx)]",
     },
     {
       content:
-        "[<button /> in Button (at /src/Button.tsx:20:4) in Button (at /src/Button.tsx:999:7)]",
+        "[<button /> in Button (at /client/Button.tsx:20:4) in Button (at /client/Button.tsx:999:7)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack: [
-              "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
-              "    at Button (https://cdn.example/src/Button.tsx:999:7)",
+              "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
+              "    at Button (https://cdn.example/client/Button.tsx:999:7)",
             ].join("\n"),
           },
         },
         stackString:
-          "\n  in Button (at /src/Button.tsx:20:4)\n  in Button (at /src/Button.tsx:999:7)",
+          "\n  in Button (at /client/Button.tsx:20:4)\n  in Button (at /client/Button.tsx:999:7)",
         stack: [
           {
             functionName: "Button",
-            fileName: "http://localhost:5173/src/Button.tsx",
+            fileName: "http://localhost:5173/client/Button.tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
           {
             functionName: "Button",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
       expected:
-        "[<button /> in Button (at /src/Button.tsx:20:4) in Button (at /src/Button.tsx:999:7)]",
+        "[<button /> in Button (at /client/Button.tsx:20:4) in Button (at /client/Button.tsx:999:7)]",
     },
     {
       content:
-        "[<button /> in Button (at /src/Button.tsx:20:4) in Button (at /src/Button.tsx:999:7)]",
+        "[<button /> in Button (at /client/Button.tsx:20:4) in Button (at /client/Button.tsx:999:7)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Button.tsx:30:6)",
+                "    at Button (http://localhost:5173/client/Button.tsx:30:6)",
             },
           },
         },
         stackString:
-          "\n  in Button (at /src/Button.tsx:20:4)\n  in Button (at /src/Button.tsx:999:7)",
+          "\n  in Button (at /client/Button.tsx:20:4)\n  in Button (at /client/Button.tsx:999:7)",
         stack: [
           {
             functionName: "Button",
-            fileName: "http://localhost:5173/src/Button.tsx",
+            fileName: "http://localhost:5173/client/Button.tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
           {
             functionName: "Button",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx) in Button (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx) in Button (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
       content: "[<button /> in Button (at Button.tsx)]",
@@ -1534,7 +1534,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -1551,26 +1551,26 @@ try {
       expected: "[<button /> in Button (at Button.tsx)]",
     },
     {
-      content: "[<button /> in Button (at /src/Button.tsx:999:7)]",
+      content: "[<button /> in Button (at /client/Button.tsx:999:7)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
           },
         },
-        stackString: "\n  in Button (at /src/Button.tsx:999:7)",
+        stackString: "\n  in Button (at /client/Button.tsx:999:7)",
         stack: [
           {
             functionName: "Button",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
       content: "[<button /> in Button (at Button.tsx)]",
@@ -1584,7 +1584,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
@@ -1602,7 +1602,7 @@ try {
     },
     {
       content:
-        "[<button /> in Button (at /Other.tsx:10:2) in Button (at /src/Button.tsx:20:4)]",
+        "[<button /> in Button (at /Other.tsx:10:2) in Button (at /client/Button.tsx:20:4)]",
       context: {
         ...elementContext,
         fiber: {
@@ -1613,12 +1613,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
         stackString:
-          "\n  in Button (at /Other.tsx:10:2)\n  in Button (at /src/Button.tsx:20:4)",
+          "\n  in Button (at /Other.tsx:10:2)\n  in Button (at /client/Button.tsx:20:4)",
         stack: [
           {
             functionName: "Button",
@@ -1628,17 +1628,17 @@ try {
           },
           {
             functionName: "Button",
-            fileName: "http://localhost:5173/src/Button.tsx",
+            fileName: "http://localhost:5173/client/Button.tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Button (at /Other.tsx:10:2) in Button (at ${sourceRoot}/src/Button.tsx:20:4)]`,
+      expected: `[<button /> in Button (at /Other.tsx:10:2) in Button (at ${sourceRoot}/client/Button.tsx:20:4)]`,
     },
     {
       content:
-        "[<div /> in External (at Other.tsx) in Button (at /src/Button.tsx:20:4)]",
+        "[<div /> in External (at Other.tsx) in Button (at /client/Button.tsx:20:4)]",
       context: {
         ...elementContext,
         fiber: {
@@ -1649,12 +1649,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
             },
           },
         },
         stackString:
-          "\n  in External (at Other.tsx)\n  in Button (at /src/Button.tsx:20:4)",
+          "\n  in External (at Other.tsx)\n  in Button (at /client/Button.tsx:20:4)",
         stack: [
           {
             functionName: "External",
@@ -1664,13 +1664,13 @@ try {
           },
           {
             functionName: "Button",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: `[<div /> in External (at Other.tsx) in Button (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<div /> in External (at Other.tsx) in Button (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
       content:
@@ -1685,12 +1685,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Other.tsx:15:3)",
+                "    at Button (http://localhost:5173/client/Other.tsx:15:3)",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+                  "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
               },
             },
           },
@@ -1727,12 +1727,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at http://localhost:5173/src/Button.tsx:15:3",
+                "    at http://localhost:5173/client/Button.tsx:15:3",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at LocalButton (http://localhost:5173/src/Button.tsx:20:4)",
+                  "    at LocalButton (http://localhost:5173/client/Button.tsx:20:4)",
               },
             },
           },
@@ -1764,7 +1764,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/My%20Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/My%20Button.tsx:20:4)",
           },
         },
         stackString: "\n  in Button (at My%20Button.tsx)",
@@ -1772,13 +1772,13 @@ try {
           {
             functionName: "Button",
             fileName:
-              "http://localhost:5173/src/My%20Button.tsx",
+              "http://localhost:5173/client/My%20Button.tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/My Button.tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/My Button.tsx:20:4)]`,
     },
     {
       content: "[<button /> in Button (at Button..tsx)]",
@@ -1787,7 +1787,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button..tsx:20:4)",
+              "    at Button (http://localhost:5173/client/Button..tsx:20:4)",
           },
         },
         stackString: "\n  in Button (at Button..tsx)",
@@ -1800,7 +1800,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button..tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button..tsx:20:4)]`,
     },
     {
       content: "[<button /> in Button (at Outside.tsx)]",
@@ -1809,7 +1809,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/%2e%2e/Outside.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/%2e%2e/Outside.tsx:20:4)",
           },
         },
         stackString: "\n  in Button (at Outside.tsx)",
@@ -1831,7 +1831,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/My(Button).tsx:20:4)",
+              "    at Button (http://localhost:5173/client/My(Button).tsx:20:4)",
           },
         },
         stackString: "\n  in Button (at My(Button).tsx)",
@@ -1844,7 +1844,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/My(Button).tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/My(Button).tsx:20:4)]`,
     },
     {
       content: "[<button /> in Button (at Button.tsx:999:7)]",
@@ -1853,7 +1853,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/Button.tsx:20:4)",
           },
           _debugOwner: {
             _debugStack: {
@@ -1866,13 +1866,13 @@ try {
         stack: [
           {
             functionName: "Button",
-            fileName: "https://cdn.example/src/Button.tsx",
+            fileName: "https://cdn.example/client/Button.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
       content:
@@ -1886,12 +1886,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/Button.tsx:15:3)",
+                "    at InternalButton (http://localhost:5173/client/Button.tsx:15:3)",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                  "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
               },
             },
           },
@@ -1901,7 +1901,7 @@ try {
         stack: [
           {
             functionName: "InternalButton",
-            fileName: "http://localhost:5173/src/Button.tsx",
+            fileName: "http://localhost:5173/client/Button.tsx",
             lineNumber: 15,
             columnNumber: 3,
           },
@@ -1918,27 +1918,27 @@ try {
     },
     {
       content:
-        "[<button /> in Button (at src/My%20Button.tsx:20:4)]",
+        "[<button /> in Button (at client/My%20Button.tsx:20:4)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/My%20Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/My%20Button.tsx:20:4)",
           },
         },
         stackString:
-          "\n  in Button (at src/My%20Button.tsx:20:4)",
+          "\n  in Button (at client/My%20Button.tsx:20:4)",
         stack: [
           {
             functionName: "Button",
-            fileName: "src/My%20Button.tsx",
+            fileName: "client/My%20Button.tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/My Button.tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/My Button.tsx:20:4)]`,
     },
     {
       content:
@@ -1948,7 +1948,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/actual/Button.tsx:20:4)",
+              "    at Button (http://localhost:5173/client/actual/Button.tsx:20:4)",
           },
         },
         stackString:
@@ -1957,7 +1957,7 @@ try {
           {
             functionName: "Button",
             fileName:
-              "http://localhost:5173/src/actual/Button.tsx",
+              "http://localhost:5173/client/actual/Button.tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
@@ -1978,17 +1978,17 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/a/Button.tsx:12:2)",
+                "    at InternalButton (http://localhost:5173/client/a/Button.tsx:12:2)",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at InternalButton (http://localhost:5173/src/b/Button.tsx:14:3)",
+                  "    at InternalButton (http://localhost:5173/client/b/Button.tsx:14:3)",
               },
               _debugOwner: {
                 _debugStack: {
                   stack:
-                    "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                    "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
                 },
               },
             },
@@ -1999,13 +1999,13 @@ try {
         stack: [
           {
             functionName: "InternalButton",
-            fileName: "http://localhost:5173/src/a/Button.tsx",
+            fileName: "http://localhost:5173/client/a/Button.tsx",
             lineNumber: 12,
             columnNumber: 2,
           },
           {
             functionName: "InternalButton",
-            fileName: "http://localhost:5173/src/b/Button.tsx",
+            fileName: "http://localhost:5173/client/b/Button.tsx",
             lineNumber: 14,
             columnNumber: 3,
           },
@@ -2028,7 +2028,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "Widget (at Factory)@http://localhost:5173/src/Widget.tsx:20:4",
+              "Widget (at Factory)@http://localhost:5173/client/Widget.tsx:20:4",
           },
         },
         stackString:
@@ -2042,7 +2042,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Widget (at Factory) (at ${sourceRoot}/src/Widget.tsx:20:4)]`,
+      expected: `[<button /> in Widget (at Factory) (at ${sourceRoot}/client/Widget.tsx:20:4)]`,
     },
     {
       content:
@@ -2052,7 +2052,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (at Factory) (http://localhost:5173/src/Widget.tsx:20:4)",
+              "    at Widget (at Factory) (http://localhost:5173/client/Widget.tsx:20:4)",
           },
         },
         stackString:
@@ -2066,7 +2066,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Widget (at Factory) (at ${sourceRoot}/src/Widget.tsx:20:4)]`,
+      expected: `[<button /> in Widget (at Factory) (at ${sourceRoot}/client/Widget.tsx:20:4)]`,
     },
     {
       content:
@@ -2076,7 +2076,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (http://localhost:5173/src/file%20(at%20copy).tsx:20:4)",
+              "    at Button (http://localhost:5173/client/file%20(at%20copy).tsx:20:4)",
           },
         },
         stackString:
@@ -2090,7 +2090,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/file (at copy).tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/file (at copy).tsx:20:4)]`,
     },
     {
       content:
@@ -2100,7 +2100,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Button (/src/file (copy).tsx:20:4)",
+              "    at Button (/client/file (copy).tsx:20:4)",
           },
         },
         stackString:
@@ -2108,13 +2108,13 @@ try {
         stack: [
           {
             functionName: "Button",
-            fileName: "/src/file (copy).tsx",
+            fileName: "/client/file (copy).tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Button (at ${sourceRoot}/src/file (copy).tsx:20:4)]`,
+      expected: `[<button /> in Button (at ${sourceRoot}/client/file (copy).tsx:20:4)]`,
     },
     {
       content:
@@ -2124,7 +2124,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "Widget (at Factory)@http://localhost:5173/src/Widget.tsx:20:4",
+              "Widget (at Factory)@http://localhost:5173/client/Widget.tsx:20:4",
           },
         },
         stackString:
@@ -2144,7 +2144,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in Widget (at Factory) (at ${sourceRoot}/src/Widget.tsx:20:4)]`,
+      expected: `[<button /> in Widget (at Factory) (at ${sourceRoot}/client/Widget.tsx:20:4)]`,
     },
     {
       content:
@@ -2164,7 +2164,7 @@ try {
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                  "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
               },
             },
           },
@@ -2208,7 +2208,7 @@ try {
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                  "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
               },
             },
           },
@@ -2231,7 +2231,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in InternalButton (at Button.tsx) in FancyButton (at Button.tsx) in LocalCard (at ${sourceRoot}/src/Card.tsx:20:4)]`,
+      expected: `[<button /> in InternalButton (at Button.tsx) in FancyButton (at Button.tsx) in LocalCard (at ${sourceRoot}/client/Card.tsx:20:4)]`,
     },
     {
       content:
@@ -2246,17 +2246,17 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/a/Button.tsx:12:2)",
+                "    at InternalButton (http://localhost:5173/client/a/Button.tsx:12:2)",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at InternalButton (http://localhost:5173/src/b/Button.tsx:14:3)",
+                  "    at InternalButton (http://localhost:5173/client/b/Button.tsx:14:3)",
               },
               _debugOwner: {
                 _debugStack: {
                   stack:
-                    "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                    "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
                 },
               },
             },
@@ -2267,13 +2267,13 @@ try {
         stack: [
           {
             functionName: "InternalButton",
-            fileName: "http://localhost:5173/src/a/Button.tsx",
+            fileName: "http://localhost:5173/client/a/Button.tsx",
             lineNumber: 12,
             columnNumber: 2,
           },
           {
             functionName: "InternalButton",
-            fileName: "http://localhost:5173/src/b/Button.tsx",
+            fileName: "http://localhost:5173/client/b/Button.tsx",
             lineNumber: 14,
             columnNumber: 3,
           },
@@ -2285,7 +2285,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in InternalButton (at Button.tsx) in InternalButton (at Button.tsx) in FancyButton (at Button.tsx) in LocalCard (at ${sourceRoot}/src/Card.tsx:20:4)]`,
+      expected: `[<button /> in InternalButton (at Button.tsx) in InternalButton (at Button.tsx) in FancyButton (at Button.tsx) in LocalCard (at ${sourceRoot}/client/Card.tsx:20:4)]`,
     },
     {
       content:
@@ -2300,7 +2300,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "Widget@http://localhost:5173/src/Factory)%20(at%20Widget.tsx:30:5",
+                "Widget@http://localhost:5173/client/Factory)%20(at%20Widget.tsx:30:5",
             },
           },
         },
@@ -2326,7 +2326,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at InternalWidget (http://localhost:5173/src/Widget.tsx:20:4)",
+              "    at InternalWidget (http://localhost:5173/client/Widget.tsx:20:4)",
           },
           _debugOwner: {
             _debugStack: {
@@ -2336,7 +2336,7 @@ try {
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at Widget (http://localhost:5173/src/Local.tsx:40:8)",
+                  "    at Widget (http://localhost:5173/client/Local.tsx:40:8)",
               },
             },
           },
@@ -2363,55 +2363,55 @@ try {
     },
     {
       content:
-        "[<button /> in Widget (at /src/dir (/Widget.tsx)]",
+        "[<button /> in Widget (at /client/dir (/Widget.tsx)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (/src/dir (/Widget.tsx:20:4)",
+              "    at Widget (/client/dir (/Widget.tsx:20:4)",
           },
         },
         stackString:
-          "\n  in Widget (at /src/dir (/Widget.tsx)",
+          "\n  in Widget (at /client/dir (/Widget.tsx)",
         stack: [
           {
             functionName: "Widget",
-            fileName: "/src/dir (/Widget.tsx",
+            fileName: "/client/dir (/Widget.tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Widget (at ${sourceRoot}/src/dir (/Widget.tsx:20:4)]`,
+      expected: `[<button /> in Widget (at ${sourceRoot}/client/dir (/Widget.tsx:20:4)]`,
     },
     {
       content:
-        "[<button /> in Widget (at /src/dir (/Widget.tsx)]",
+        "[<button /> in Widget (at /client/dir (/Widget.tsx)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (/src/dir (/Widget.tsx:20:4)",
+              "    at Widget (/client/dir (/Widget.tsx:20:4)",
           },
         },
         stackString:
-          "\n  in Widget (at /src/dir (/Widget.tsx)",
+          "\n  in Widget (at /client/dir (/Widget.tsx)",
         stack: [
           {
-            functionName: "Widget (/src/dir",
+            functionName: "Widget (/client/dir",
             fileName: "/Widget.tsx",
             lineNumber: 999,
             columnNumber: 7,
           },
         ],
       },
-      expected: `[<button /> in Widget (at ${sourceRoot}/src/dir (/Widget.tsx)]`,
+      expected: `[<button /> in Widget (at ${sourceRoot}/client/dir (/Widget.tsx)]`,
     },
     {
       content:
-        "[<button /> in Button (at https://cdn.example/Button.tsx) in Button (at /src/Button.tsx)]",
+        "[<button /> in Button (at https://cdn.example/Button.tsx) in Button (at /client/Button.tsx)]",
       context: {
         ...elementContext,
         fiber: {
@@ -2422,12 +2422,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "Button@http://localhost:5173/src/Button.tsx:20:4",
+                "Button@http://localhost:5173/client/Button.tsx:20:4",
             },
           },
         },
         stackString:
-          "\n  in Button (at https://cdn.example/Button.tsx)\n  in Button (at /src/Button.tsx)",
+          "\n  in Button (at https://cdn.example/Button.tsx)\n  in Button (at /client/Button.tsx)",
         stack: [
           {
             functionName: "Button",
@@ -2437,13 +2437,13 @@ try {
           },
           {
             functionName: "Button",
-            fileName: "http://localhost:5173/src/Button.tsx",
+            fileName: "http://localhost:5173/client/Button.tsx",
             lineNumber: 20,
             columnNumber: 4,
           },
         ],
       },
-      expected: `[<button /> in Button (at https://cdn.example/Button.tsx) in Button (at ${sourceRoot}/src/Button.tsx)]`,
+      expected: `[<button /> in Button (at https://cdn.example/Button.tsx) in Button (at ${sourceRoot}/client/Button.tsx)]`,
     },
     {
       content:
@@ -2458,12 +2458,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/Button.tsx:12:2)",
+                "    at InternalButton (http://localhost:5173/client/Button.tsx:12:2)",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                  "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
               },
             },
           },
@@ -2490,7 +2490,7 @@ try {
     },
     {
       content:
-        "[<button /> in InternalButton (at /src/Button.tsx) in FancyButton (at D:\\outside\\Button.tsx) in LocalCard (at Card.tsx)]",
+        "[<button /> in InternalButton (at /client/Button.tsx) in FancyButton (at D:\\outside\\Button.tsx) in LocalCard (at Card.tsx)]",
       context: {
         ...elementContext,
         fiber: {
@@ -2501,22 +2501,22 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/Button.tsx:12:2)",
+                "    at InternalButton (http://localhost:5173/client/Button.tsx:12:2)",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                  "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
               },
             },
           },
         },
         stackString:
-          "\n  in InternalButton (at /src/Button.tsx)\n  in FancyButton (at D:\\outside\\Button.tsx)\n  in LocalCard (at Card.tsx)",
+          "\n  in InternalButton (at /client/Button.tsx)\n  in FancyButton (at D:\\outside\\Button.tsx)\n  in LocalCard (at Card.tsx)",
         stack: [
           {
             functionName: "InternalButton",
-            fileName: "/src/Button.tsx",
+            fileName: "/client/Button.tsx",
             lineNumber: 12,
             columnNumber: 2,
           },
@@ -2529,27 +2529,27 @@ try {
         ],
       },
       expected:
-        "[<button /> in InternalButton (at /src/Button.tsx) in FancyButton (at D:\\outside\\Button.tsx) in LocalCard (at Card.tsx)]",
+        "[<button /> in InternalButton (at /client/Button.tsx) in FancyButton (at D:\\outside\\Button.tsx) in LocalCard (at Card.tsx)]",
     },
     {
       content:
-        "[<button /> in External (at file:///src/Button.tsx) in LocalCard (at Card.tsx)]",
+        "[<button /> in External (at file:///client/Button.tsx) in LocalCard (at Card.tsx)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at webpack:///src/Button.tsx:10:2",
+              "    at webpack:///client/Button.tsx:10:2",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
             },
           },
         },
         stackString:
-          "\n  in External (at file:///src/Button.tsx)\n  in LocalCard (at Card.tsx)",
+          "\n  in External (at file:///client/Button.tsx)\n  in LocalCard (at Card.tsx)",
         stack: [
           {
             functionName: "LocalCard",
@@ -2560,7 +2560,7 @@ try {
         ],
       },
       expected:
-        "[<button /> in External (at file:///src/Button.tsx) in LocalCard (at Card.tsx)]",
+        "[<button /> in External (at file:///client/Button.tsx) in LocalCard (at Card.tsx)]",
     },
     {
       content: "[<div /> in Widget (at Real.tsx)]",
@@ -2569,7 +2569,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (/src/Fake.tsx) (https://cdn.example/Real.tsx:10:2)",
+              "    at Widget (/client/Fake.tsx) (https://cdn.example/Real.tsx:10:2)",
           },
         },
         stackString: "\n  in Widget (at Real.tsx)",
@@ -2597,12 +2597,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at HiddenLocal (http://localhost:5173/src/Button.tsx:12:2)",
+                "    at HiddenLocal (http://localhost:5173/client/Button.tsx:12:2)",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                  "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
               },
             },
           },
@@ -2618,7 +2618,7 @@ try {
           },
         ],
       },
-      expected: `[<button /> in External (at https://cdn.example/anonymous/Button.tsx) in LocalCard (at ${sourceRoot}/src/Card.tsx:20:4)]`,
+      expected: `[<button /> in External (at https://cdn.example/anonymous/Button.tsx) in LocalCard (at ${sourceRoot}/client/Card.tsx:20:4)]`,
     },
     {
       content: "[<div /> in Widget (at Fake.tsx)]",
@@ -2627,7 +2627,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (/src/Fake.tsx?t=1) (https://cdn.example/Real.tsx:10:2)",
+              "    at Widget (/client/Fake.tsx?t=1) (https://cdn.example/Real.tsx:10:2)",
           },
         },
         stackString: "\n  in Widget (at Fake.tsx)",
@@ -2644,47 +2644,47 @@ try {
     },
     {
       content:
-        "[<div /> in Widget (at src/Foo)%20(/Bar.tsx)]",
+        "[<div /> in Widget (at client/Foo)%20(/Bar.tsx)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (http://localhost:5173/src/Foo)%20(/Bar.tsx:10:2)",
+              "    at Widget (http://localhost:5173/client/Foo)%20(/Bar.tsx:10:2)",
           },
         },
         stackString:
-          "\n  in Widget (at src/Foo)%20(/Bar.tsx)",
+          "\n  in Widget (at client/Foo)%20(/Bar.tsx)",
         stack: [
           {
             functionName: "Widget",
-            fileName: "src/Foo)%20(/Bar.tsx",
+            fileName: "client/Foo)%20(/Bar.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
         ],
       },
-      expected: `[<div /> in Widget (at ${sourceRoot}/src/Foo) (/Bar.tsx:10:2)]`,
+      expected: `[<div /> in Widget (at ${sourceRoot}/client/Foo) (/Bar.tsx:10:2)]`,
     },
     {
       content:
-        "[<div /> in External (at webpack:src/Button.tsx) in LocalCard (at Card.tsx)]",
+        "[<div /> in External (at webpack:client/Button.tsx) in LocalCard (at Card.tsx)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at webpack://src/Button.tsx:10:2",
+              "    at webpack://client/Button.tsx:10:2",
           },
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at LocalCard (http://localhost:5173/src/Card.tsx:20:4)",
+                "    at LocalCard (http://localhost:5173/client/Card.tsx:20:4)",
             },
           },
         },
         stackString:
-          "\n  in External (at webpack:src/Button.tsx)\n  in LocalCard (at Card.tsx)",
+          "\n  in External (at webpack:client/Button.tsx)\n  in LocalCard (at Card.tsx)",
         stack: [
           {
             functionName: "LocalCard",
@@ -2695,7 +2695,7 @@ try {
         ],
       },
       expected:
-        "[<div /> in External (at webpack:src/Button.tsx) in LocalCard (at Card.tsx)]",
+        "[<div /> in External (at webpack:client/Button.tsx) in LocalCard (at Card.tsx)]",
     },
     {
       content: "[<div /> in Widget (at Real.tsx)]",
@@ -2704,7 +2704,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "Widget@/src/Fake.tsx@https://cdn.example/Real.tsx:10:2",
+              "Widget@/client/Fake.tsx@https://cdn.example/Real.tsx:10:2",
           },
         },
         stackString: "\n  in Widget (at Real.tsx)",
@@ -2721,21 +2721,21 @@ try {
     },
     {
       content:
-        "[<div /> in Widget (/src/Fake.tsx (at Real.tsx)]",
+        "[<div /> in Widget (/client/Fake.tsx (at Real.tsx)]",
       context: {
         ...elementContext,
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (/src/Fake.tsx (https://cdn.example/Real.tsx:10:2)",
+              "    at Widget (/client/Fake.tsx (https://cdn.example/Real.tsx:10:2)",
           },
         },
         stackString:
-          "\n  in Widget (/src/Fake.tsx (at Real.tsx)",
+          "\n  in Widget (/client/Fake.tsx (at Real.tsx)",
         stack: [],
       },
       expected:
-        "[<div /> in Widget (/src/Fake.tsx (at Real.tsx)]",
+        "[<div /> in Widget (/client/Fake.tsx (at Real.tsx)]",
     },
     {
       content: "[<div /> in Widget (at Real.tsx)]",
@@ -2744,7 +2744,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (/src/Fake.tsx) (https://cdn.example/Real.tsx:10:2)",
+              "    at Widget (/client/Fake.tsx) (https://cdn.example/Real.tsx:10:2)",
           },
         },
         stackString: "\n  in Widget (at Real.tsx)",
@@ -2752,7 +2752,7 @@ try {
           {
             functionName: "Widget",
             fileName:
-              "/src/Fake.tsx) (https://cdn.example/Real.tsx",
+              "/client/Fake.tsx) (https://cdn.example/Real.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
@@ -2773,7 +2773,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Local.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Local.tsx:20:4)",
             },
           },
         },
@@ -2804,12 +2804,12 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Other.tsx:12:3)",
+                "    at Button (http://localhost:5173/client/Other.tsx:12:3)",
             },
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at Button (http://localhost:5173/src/Local.tsx:20:4)",
+                  "    at Button (http://localhost:5173/client/Local.tsx:20:4)",
               },
             },
           },
@@ -2825,7 +2825,7 @@ try {
           },
         ],
       },
-      expected: `[<div /> in Button (at https://cdn-a.example/pkg/Other.tsx) in Button (at ${sourceRoot}/src/Local.tsx:20:4)]`,
+      expected: `[<div /> in Button (at https://cdn-a.example/pkg/Other.tsx) in Button (at ${sourceRoot}/client/Local.tsx:20:4)]`,
     },
     {
       content: "[<div /> in Widget (at Real.tsx)]",
@@ -2834,14 +2834,14 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (/src/Fake.tsx) (webpack:src/Real.tsx:10:2)",
+              "    at Widget (/client/Fake.tsx) (webpack:client/Real.tsx:10:2)",
           },
         },
         stackString: "\n  in Widget (at Real.tsx)",
         stack: [
           {
             functionName: "Widget",
-            fileName: "webpack:src/Real.tsx",
+            fileName: "webpack:client/Real.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
@@ -2856,14 +2856,14 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "Widget@/src/Fake.tsx@webpack:src/Real.tsx:10:2",
+              "Widget@/client/Fake.tsx@webpack:client/Real.tsx:10:2",
           },
         },
         stackString: "\n  in Widget (at Real.tsx)",
         stack: [
           {
             functionName: "Widget",
-            fileName: "webpack:src/Real.tsx",
+            fileName: "webpack:client/Real.tsx",
             lineNumber: 10,
             columnNumber: 2,
           },
@@ -2884,7 +2884,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Local.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Local.tsx:20:4)",
             },
           },
         },
@@ -2915,7 +2915,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Local.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Local.tsx:20:4)",
             },
           },
         },
@@ -2930,7 +2930,7 @@ try {
           },
         ],
       },
-      expected: `[<div /> in Button (at /pkg/My%20Button.tsx) in Button (at ${sourceRoot}/src/Local.tsx:20:4)]`,
+      expected: `[<div /> in Button (at /pkg/My%20Button.tsx) in Button (at ${sourceRoot}/client/Local.tsx:20:4)]`,
     },
     {
       content:
@@ -2945,7 +2945,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Local.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Local.tsx:20:4)",
             },
           },
         },
@@ -2960,7 +2960,7 @@ try {
           },
         ],
       },
-      expected: `[<div /> in Button (at /pkg%2FButton.tsx) in Button (at ${sourceRoot}/src/Local.tsx:20:4)]`,
+      expected: `[<div /> in Button (at /pkg%2FButton.tsx) in Button (at ${sourceRoot}/client/Local.tsx:20:4)]`,
     },
     {
       content:
@@ -2975,7 +2975,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at Button (http://localhost:5173/src/Local.tsx:20:4)",
+                "    at Button (http://localhost:5173/client/Local.tsx:20:4)",
             },
           },
         },
@@ -2990,7 +2990,7 @@ try {
           },
         ],
       },
-      expected: `[<div /> in Button (at https://cdn.example/pkg/Button.tsx) in Button (at ${sourceRoot}/src/Local.tsx:20:4)]`,
+      expected: `[<div /> in Button (at https://cdn.example/pkg/Button.tsx) in Button (at ${sourceRoot}/client/Local.tsx:20:4)]`,
     },
     {
       content: "[<div /> in FancyButton (at Real.tsx)]",
@@ -3004,7 +3004,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at FancyButton (http://localhost:5173/src/Real.tsx:20:4)",
+                "    at FancyButton (http://localhost:5173/client/Real.tsx:20:4)",
             },
           },
         },
@@ -3033,7 +3033,7 @@ try {
           _debugOwner: {
             _debugStack: {
               stack:
-                "    at InternalButton (http://localhost:5173/src/Local.tsx:20:4)",
+                "    at InternalButton (http://localhost:5173/client/Local.tsx:20:4)",
             },
           },
         },
@@ -3054,7 +3054,7 @@ try {
           },
         ],
       },
-      expected: `[<div /> in FancyButton (at https://cdn.example/Real.tsx) in InternalButton (at ${sourceRoot}/src/Local.tsx:20:4)]`,
+      expected: `[<div /> in FancyButton (at https://cdn.example/Real.tsx) in InternalButton (at ${sourceRoot}/client/Local.tsx:20:4)]`,
     },
     {
       content:
@@ -3074,12 +3074,12 @@ try {
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at AliasA (http://localhost:5173/src/LocalA.tsx:30:6)",
+                  "    at AliasA (http://localhost:5173/client/LocalA.tsx:30:6)",
               },
               _debugOwner: {
                 _debugStack: {
                   stack:
-                    "    at AliasB (http://localhost:5173/src/LocalB.tsx:40:8)",
+                    "    at AliasB (http://localhost:5173/client/LocalB.tsx:40:8)",
                 },
               },
             },
@@ -3120,8 +3120,8 @@ try {
         ],
       },
       expected:
-        `[<div /> in AliasA (at https://cdn.example/Shared.tsx) in AliasA (at ${sourceRoot}/src/LocalA.tsx:30:6)` +
-        ` in AliasB (at https://cdn.example/Shared.tsx) in AliasB (at ${sourceRoot}/src/LocalB.tsx:40:8)]`,
+        `[<div /> in AliasA (at https://cdn.example/Shared.tsx) in AliasA (at ${sourceRoot}/client/LocalA.tsx:30:6)` +
+        ` in AliasB (at https://cdn.example/Shared.tsx) in AliasB (at ${sourceRoot}/client/LocalB.tsx:40:8)]`,
     },
     {
       content:
@@ -3141,12 +3141,12 @@ try {
             _debugOwner: {
               _debugStack: {
                 stack:
-                  "    at AliasA (http://localhost:5173/src/LocalA.tsx:30:6)",
+                  "    at AliasA (http://localhost:5173/client/LocalA.tsx:30:6)",
               },
               _debugOwner: {
                 _debugStack: {
                   stack:
-                    "    at AliasB (http://localhost:5173/src/LocalB.tsx:40:8)",
+                    "    at AliasB (http://localhost:5173/client/LocalB.tsx:40:8)",
                 },
               },
             },
@@ -3191,7 +3191,7 @@ try {
         fiber: {
           _debugStack: {
             stack:
-              "    at Widget (/src/Fake.tsx) (\\\\server\\share\\Real.tsx:10:2)",
+              "    at Widget (/client/Fake.tsx) (\\\\server\\share\\Real.tsx:10:2)",
           },
         },
         stackString: "\n  in Widget (at Real.tsx)",
@@ -3291,7 +3291,7 @@ try {
   )}]`;
   let largeExplicitFiber = {
     _debugStack: {
-      stack: "    at Button (http://localhost:5173/src/Local.tsx:20:4)",
+      stack: "    at Button (http://localhost:5173/client/Local.tsx:20:4)",
     },
   };
   for (let index = 0; index < largeExplicitOccurrenceCount; index += 1) {
@@ -3330,7 +3330,7 @@ try {
   );
   const largeExplicitDuration = performance.now() - largeExplicitStart;
   const largeExplicitExpectedTail =
-    ` in Button (at ${sourceRoot}/src/Local.tsx:20:4)]`;
+    ` in Button (at ${sourceRoot}/client/Local.tsx:20:4)]`;
 
   assert.ok(
     largeExplicitDuration < 500 &&
@@ -3349,7 +3349,7 @@ try {
     const content = `[<div />${stackString.replace(/\r?\n\s+/g, " ")}]`;
     let fiber = {
       _debugStack: {
-        stack: "    at Button (http://localhost:5173/src/Local.tsx:20:4)",
+        stack: "    at Button (http://localhost:5173/client/Local.tsx:20:4)",
       },
     };
     for (let index = 0; index < occurrenceCount; index += 1) {
@@ -3388,7 +3388,7 @@ try {
     );
   };
   const originlessExplicitExpectedTail =
-    ` in Button (at ${sourceRoot}/src/Local.tsx:20:4)]`;
+    ` in Button (at ${sourceRoot}/client/Local.tsx:20:4)]`;
 
   const runAlternativeExplicitOccurrenceCase = (occurrenceCount) => {
     const componentNames = Array.from(
@@ -3405,7 +3405,7 @@ try {
     const content = `[<div />${stackString.replace(/\r?\n\s+/g, " ")}]`;
     let fiber = {
       _debugStack: {
-        stack: "    at Alias (http://localhost:5173/src/Local.tsx:20:4)",
+        stack: "    at Alias (http://localhost:5173/client/Local.tsx:20:4)",
       },
     };
     for (let index = occurrenceCount - 1; index >= 0; index -= 1) {
@@ -3443,7 +3443,7 @@ try {
     );
   };
   const alternativeExplicitExpectedTail =
-    ` in Alias (at ${sourceRoot}/src/Local.tsx:20:4)]`;
+    ` in Alias (at ${sourceRoot}/client/Local.tsx:20:4)]`;
 
   for (const occurrenceCount of [128, 129]) {
     const result = runAlternativeExplicitOccurrenceCase(occurrenceCount);
@@ -3472,7 +3472,7 @@ try {
   let distinctIdentityFiber = {
     _debugStack: {
       stack:
-        "    at LocalButton (http://localhost:5173/src/Local.tsx:20:4)",
+        "    at LocalButton (http://localhost:5173/client/Local.tsx:20:4)",
     },
   };
   for (let index = distinctIdentityCount - 1; index >= 0; index -= 1) {
@@ -3510,7 +3510,7 @@ try {
   );
   const distinctIdentityDuration = performance.now() - distinctIdentityStart;
   const distinctIdentityExpectedTail =
-    ` in LocalButton (at ${sourceRoot}/src/Local.tsx:20:4)]`;
+    ` in LocalButton (at ${sourceRoot}/client/Local.tsx:20:4)]`;
 
   assert.ok(
     distinctIdentityDuration < 500 &&
@@ -3546,7 +3546,7 @@ try {
   )}]`;
   let sparseAlternativeFiber = {
     _debugStack: {
-      stack: `    at K${sparseAlternativeChainSize} (http://localhost:5173/src/Local.tsx:20:4)`,
+      stack: `    at K${sparseAlternativeChainSize} (http://localhost:5173/client/Local.tsx:20:4)`,
     },
   };
   for (
@@ -3782,7 +3782,7 @@ try {
   }
 
   const appSource = await readFile(
-    new URL("../src/App.tsx", import.meta.url),
+    new URL("../client/App.tsx", import.meta.url),
     "utf8"
   );
   assert.match(appSource, /import\.meta\.env\.DEV/);
@@ -3790,7 +3790,7 @@ try {
 
   const pickerSource = await readFile(
     new URL(
-      "../src/components/development/react-grab-picker.tsx",
+      "../client/components/development/react-grab-picker.tsx",
       import.meta.url
     ),
     "utf8"
@@ -3806,7 +3806,7 @@ try {
   await assert.rejects(
     access(
       new URL(
-        "../src/components/development/react-grab-picker-content.ts",
+        "../client/components/development/react-grab-picker-content.ts",
         import.meta.url
       )
     ),

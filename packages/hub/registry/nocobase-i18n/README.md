@@ -20,7 +20,7 @@ language and all local translations normally. It does not request
 settings and requests only registered server namespaces. `lm-collections` is
 registered by default for collection and field metadata.
 
-Application-owned React translations belong in `src/locales`, outside the
+Application-owned React translations belong in `client/locales`, outside the
 installed Registry directory:
 
 ```ts

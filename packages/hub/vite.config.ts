@@ -33,7 +33,7 @@ export default defineConfig(({ command, mode }) => {
   const registrySourceRoot = path.resolve(__dirname, "./registry");
   const extensionsRoot = fs.existsSync(registrySourceRoot)
     ? registrySourceRoot
-    : path.resolve(__dirname, "./src/extensions");
+    : path.resolve(__dirname, "./client/extensions");
 
   return {
     base: viteBase,
@@ -53,7 +53,7 @@ export default defineConfig(({ command, mode }) => {
     resolve: {
       alias: {
         "@/extensions": extensionsRoot,
-        "@": path.resolve(__dirname, "./src"),
+        "@": path.resolve(__dirname, "./client"),
       },
     },
     build: {

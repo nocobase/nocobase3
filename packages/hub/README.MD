@@ -54,13 +54,13 @@ pnpm build
 pnpm start
 ```
 
-Application pages and resources live under `src`. The included Users page is a
+Application pages and resources live under `client`. The included Users page is a
 working example based on the standard NocoBase `users` collection.
 
-Application translations live in `src/locales`. Default locale, available
+Application translations live in `client/locales`. Default locale, available
 locale labels, i18next options, and post-switch behavior remain customizable in
-`src/providers/i18n/runtime.ts`. Shared UI components live in
-`src/components/ui` and follow the shadcn Base UI conventions.
+`client/providers/i18n/runtime.ts`. Shared UI components live in
+`client/components/ui` and follow the shadcn Base UI conventions.
 
 Stable NocoBase runtime behavior is provided by `@nocobase/portal-sdk`.
 The template records its inherited base version in
@@ -70,7 +70,7 @@ range. Application composition and visual source remain owned by this project.
 
 ## Extensions
 
-Installed extensions live in `src/extensions` and are ordinary
+Installed extensions live in `client/extensions` and are ordinary
 application-owned source files. Their providers, resources, routes, login
 adapters, and user-menu items are discovered automatically.
 
@@ -78,7 +78,7 @@ Routes declared with `defineAppRoutes` can use `lazy: () => import(...)` to
 keep page modules out of the initial bundle while preserving synchronous menu,
 resource, and access metadata.
 
-Set `registryRoutesEnabled` to `false` in `src/routes.tsx` when replacing the
+Set `registryRoutesEnabled` to `false` in `client/routes.tsx` when replacing the
 bundled example navigation with application-owned routes. Installed extension
 providers, login adapters, and the `/dev` component showcases remain available.
 
@@ -94,7 +94,7 @@ compatible SDK version in `registry.config.json`.
 
 In this Registry source repository, canonical extension source lives in
 `registry` and is loaded directly by `pnpm dev` and `pnpm build`. The published
-npm template contains the default extensions under `src/extensions` instead.
+npm template contains the default extensions under `client/extensions` instead.
 
 ## Authentication
 
@@ -102,7 +102,7 @@ Basic username or email and password login is built in. The default login page
 also renders enabled NocoBase authentication methods when their frontend
 Registry adapters are installed.
 
-Customize `src/pages/login/index.tsx` to replace the whole login page, or use
+Customize `client/pages/login/index.tsx` to replace the whole login page, or use
 `DefaultSignInPage` to keep dynamic authentication while overriding individual
 authenticator UI.
 
