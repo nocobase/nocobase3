@@ -161,7 +161,7 @@ function getPortalSourcePaths(
   const sourcePattern = new RegExp(
     `^(?:(https?:\\/\\/[^/()\\s]+))?` +
       `${escapeRegExp(normalizedBase)}` +
-      `((?:registry|src)/[^?#\\r\\n]+?\\.[cm]?[jt]sx?)` +
+      `((?:registry|client)/[^?#\\r\\n]+?\\.[cm]?[jt]sx?)` +
       `(?:[?#][^\\r\\n]*)?(?::\\d+){0,2}$`,
     "i"
   );
@@ -335,7 +335,7 @@ function getComparableSourcePath(
     sourceWithoutPosition.replace(/[?#].*$/, "")
   );
   const normalizedRelativeSource = normalizedSource.replace(/^(?:\.\/)+/, "");
-  if (/^(?:registry|src)\//i.test(normalizedRelativeSource)) {
+  if (/^(?:registry|client)\//i.test(normalizedRelativeSource)) {
     return `portal:${normalizedRelativeSource}`;
   }
   if (!normalizedSource.includes("/")) return null;

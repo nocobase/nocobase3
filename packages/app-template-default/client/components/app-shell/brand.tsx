@@ -13,12 +13,12 @@ export function BrandLogo({ className }: BrandLogoProps) {
       )}
     >
       <img
-        src={assetUrl("/logo-mark.png")}
+        src={assetUrl("logo-mark.png")}
         alt=""
         className="size-full object-contain dark:hidden"
       />
       <img
-        src={assetUrl("/logo-mark-dark.png")}
+        src={assetUrl("logo-mark-dark.png")}
         alt=""
         className="hidden size-full object-contain dark:block"
       />
@@ -35,12 +35,12 @@ export function BrandWordmark({ className }: BrandLogoProps) {
       )}
     >
       <img
-        src={assetUrl("/logo.png")}
+        src={assetUrl("logo.png")}
         alt="NocoBase"
         className="h-full w-auto object-contain dark:hidden"
       />
       <img
-        src={assetUrl("/logo-dark.png")}
+        src={assetUrl("logo-dark.png")}
         alt="NocoBase"
         className="hidden h-full w-auto object-contain dark:block"
       />

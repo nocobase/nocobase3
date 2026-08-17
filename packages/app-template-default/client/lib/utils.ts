@@ -10,7 +10,13 @@ export function assetUrl(path: string) {
   if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(path)) return path
 
   const base = getPortalBase().replace(/\/+$/, "")
-  const assetPath = `/${path.replace(/^\/+/, "")}`
+  if (base && (path === base || path.startsWith(`${base}/`))) return path
+
+  const normalizedPath = path.replace(/^\/+/, "")
+  const assetPath =
+    normalizedPath === "assets" || normalizedPath.startsWith("assets/")
+      ? `/${normalizedPath}`
+      : `/assets/${normalizedPath}`
 
   if (base && (assetPath === base || assetPath.startsWith(`${base}/`))) {
     return assetPath

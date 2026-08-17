@@ -1,7 +1,7 @@
 # Default Template migrations
 
 This guide describes source changes that derived Portal applications must merge
-from new releases of `@nocobase/portal-template-default`. Updating
+from new releases of `@nocobase/app-template-default`. Updating
 `nocobase.defaultTemplateVersion` records a completed source upgrade; changing
 the value alone does not apply template changes.
 
@@ -28,7 +28,7 @@ extensions or other code that consumes SDK routing APIs.
 
 Migrate application-owned page routes as part of the Template 3 source merge,
 not only Registry extension routes. Keep route, resource, menu, and access
-metadata synchronous in `src/routes.tsx`, but remove eager business-page imports
+metadata synchronous in `client/routes.tsx`, but remove eager business-page imports
 and load their renderers through `lazy`:
 
 ```tsx
@@ -45,7 +45,7 @@ and load their renderers through `lazy`:
 
 When a route needs resource/action ACL, route params, or contextual composition,
 put that boundary in a small default-exported route component and lazy-load the
-component. Do not keep the business page eagerly imported in `src/routes.tsx`
+component. Do not keep the business page eagerly imported in `client/routes.tsx`
 only to wrap it. `element` and `lazy` are mutually exclusive. Lightweight
 redirects, outlets, and inline layouts may continue to use `element`.
 

@@ -64,7 +64,7 @@ const sourceItems = config.items.map((item) => {
     throw new Error(`Registry item ${item.name} is missing its source mapping`);
   }
   assertSafePath(source.root, "registry/", "source");
-  assertSafePath(source.target, "src/extensions/", "target");
+  assertSafePath(source.target, "client/extensions/", "target");
 
   const sourceRoot = path.join(projectRoot, source.root);
   if (!fs.existsSync(sourceRoot)) {

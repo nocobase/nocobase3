@@ -16,11 +16,10 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "baseUrl": ".",
     "paths": {
-      "@/extensions/*": ["./registry/*", "./src/extensions/*"],
-      "@/*": ["./src/*"]
+      "@/extensions/*": ["./registry/*", "./client/extensions/*"],
+      "@/*": ["./client/*"]
     }
   },
-  "include": ["src", "registry"]
+  "include": ["client", "registry"]
 }

@@ -17,7 +17,7 @@
       "docs": "Uses react-error-boundary for render containment and provides runtime status UI for original NocoBase gateway and account error codes. It contributes only a development showcase at /dev/error-boundary, with no production routes, providers, or menu entries.",
       "source": {
         "root": "registry/nocobase-error-boundary",
-        "target": "src/extensions/nocobase-error-boundary",
+        "target": "client/extensions/nocobase-error-boundary",
         "include": ["."]
       }
     },
@@ -46,7 +46,7 @@
       "docs": "Provides presentation containers plus an integrated Demo and Prompt generator. Route definitions, ACL guards, data fetching, and business content remain application-owned.",
       "source": {
         "root": "registry/nocobase-route-surfaces",
-        "target": "src/extensions/nocobase-route-surfaces",
+        "target": "client/extensions/nocobase-route-surfaces",
         "include": ["."]
       }
     },
@@ -64,7 +64,7 @@
       "docs": "Provides dependency-light client components without NocoBase resource or Refine coupling. RemoteSelect delegates data access to a caller-provided loadOptions function and contributes only a development showcase under /dev/client/remote-select.",
       "source": {
         "root": "registry/nocobase-client",
-        "target": "src/extensions/nocobase-client",
+        "target": "client/extensions/nocobase-client",
         "include": [
           "README.md",
           "demo",
@@ -105,7 +105,7 @@
       "docs": "Requires the compatible Portal Starter resource components, data table, NocoBase data provider, and ACL provider. AI page-element and form registration is enabled automatically when @nocobase/ai is also installed.",
       "source": {
         "root": "registry/nocobase-users-example",
-        "target": "src/extensions/nocobase-users-example",
+        "target": "client/extensions/nocobase-users-example",
         "include": ["."]
       }
     },
@@ -133,7 +133,7 @@
       "docs": "Requires a compatible Portal SDK i18n and System Settings runtime plus the template's AppExtension Provider/UserMenuItems host fields. The Registry reuses cached systemSettings:get data and calls app:getLang only for registered dynamic namespaces such as lm-collections.",
       "source": {
         "root": "registry/nocobase-i18n",
-        "target": "src/extensions/nocobase-i18n",
+        "target": "client/extensions/nocobase-i18n",
         "include": ["."]
       }
     },
@@ -150,7 +150,7 @@
       "docs": "Requires the Starter authentication runtime and an enabled OIDC authenticator in NocoBase. The default UI is discovered automatically and can be replaced per authentication type or authenticator instance from the application login page.",
       "source": {
         "root": "registry/nocobase-auth-oidc",
-        "target": "src/extensions/nocobase-auth-oidc",
+        "target": "client/extensions/nocobase-auth-oidc",
         "include": ["."]
       }
     },
@@ -167,7 +167,7 @@
       "docs": "Requires the Starter authentication runtime and an enabled SAML authenticator in NocoBase.",
       "source": {
         "root": "registry/nocobase-auth-saml",
-        "target": "src/extensions/nocobase-auth-saml",
+        "target": "client/extensions/nocobase-auth-saml",
         "include": ["."]
       }
     },
@@ -184,7 +184,7 @@
       "docs": "Requires the Starter authentication runtime and an enabled CAS authenticator in NocoBase.",
       "source": {
         "root": "registry/nocobase-auth-cas",
-        "target": "src/extensions/nocobase-auth-cas",
+        "target": "client/extensions/nocobase-auth-cas",
         "include": ["."]
       }
     },
@@ -197,7 +197,7 @@
       "docs": "Requires the Starter authentication runtime and an enabled LDAP authenticator in NocoBase.",
       "source": {
         "root": "registry/nocobase-auth-ldap",
-        "target": "src/extensions/nocobase-auth-ldap",
+        "target": "client/extensions/nocobase-auth-ldap",
         "include": ["."]
       }
     },
@@ -210,7 +210,7 @@
       "docs": "Requires the Starter authentication runtime, an enabled SMS authenticator, and a configured public SMS verifier in NocoBase.",
       "source": {
         "root": "registry/nocobase-auth-sms",
-        "target": "src/extensions/nocobase-auth-sms",
+        "target": "client/extensions/nocobase-auth-sms",
         "include": ["."]
       }
     },
@@ -227,7 +227,7 @@
       "docs": "Requires the Starter authentication runtime and an enabled WeCom authenticator in NocoBase.",
       "source": {
         "root": "registry/nocobase-auth-wecom",
-        "target": "src/extensions/nocobase-auth-wecom",
+        "target": "client/extensions/nocobase-auth-wecom",
         "include": ["."]
       }
     },
@@ -245,7 +245,7 @@
       "docs": "Requires the Starter authentication runtime and an enabled DingTalk authenticator in NocoBase. DingTalk JSAPI is loaded lazily for internal micro-app login.",
       "source": {
         "root": "registry/nocobase-auth-dingtalk",
-        "target": "src/extensions/nocobase-auth-dingtalk",
+        "target": "client/extensions/nocobase-auth-dingtalk",
         "include": ["."]
       }
     },
@@ -264,7 +264,7 @@
       ],
       "source": {
         "root": "registry/nocobase-ai",
-        "target": "src/extensions/nocobase-ai",
+        "target": "client/extensions/nocobase-ai",
         "include": ["providers", "services"]
       }
     },
@@ -303,7 +303,7 @@
       ],
       "source": {
         "root": "registry/nocobase-ai",
-        "target": "src/extensions/nocobase-ai",
+        "target": "client/extensions/nocobase-ai",
         "include": ["components", "locales", "assets", "index.ts", "README.md"]
       }
     },
@@ -316,7 +316,7 @@
       "registryDependencies": ["@nocobase/ai-chat"],
       "source": {
         "root": "registry/nocobase-ai",
-        "target": "src/extensions/nocobase-ai",
+        "target": "client/extensions/nocobase-ai",
         "include": ["adapters/react-hook-form.ts"]
       }
     },
@@ -343,10 +343,10 @@
         "table",
         "textarea"
       ],
-      "docs": "This item includes the AI extension integration and Demo pages. It is designed for a compatible starter with the AppExtension host enabled. After installation, src/extensions/nocobase-ai/extension.tsx is discovered automatically and contributes its application resources and routes without AI-specific App.tsx edits.",
+      "docs": "This item includes the AI extension integration and Demo pages. It is designed for a compatible starter with the AppExtension host enabled. After installation, client/extensions/nocobase-ai/extension.tsx is discovered automatically and contributes its application resources and routes without AI-specific App.tsx edits.",
       "source": {
         "root": "registry/nocobase-ai",
-        "target": "src/extensions/nocobase-ai",
+        "target": "client/extensions/nocobase-ai",
         "include": ["demo", "extension.tsx", "global-ai-chat.tsx"]
       }
     },
@@ -373,7 +373,7 @@
       "docs": "Requires a compatible Portal SDK client and a field targeting a file-template collection. The extension contributes a development-only file manager at /dev/files; its public-URL preview gallery does not require attachments:list.",
       "source": {
         "root": "registry/nocobase-file-upload",
-        "target": "src/extensions/nocobase-file-upload",
+        "target": "client/extensions/nocobase-file-upload",
         "include": ["."]
       }
     },
@@ -418,7 +418,7 @@
       "docs": "Requires a compatible Portal SDK and a NocoBase server with the mail plugin enabled. The mail API adapter uses the authenticated SDK client.",
       "source": {
         "root": "registry/nocobase-mail",
-        "target": "src/extensions/nocobase-mail",
+        "target": "client/extensions/nocobase-mail",
         "include": ["."]
       }
     },
@@ -436,7 +436,7 @@
       "docs": "Requires a compatible NocoBase Starter with the built-in accessControlProvider and ACL store.",
       "source": {
         "root": "registry/nocobase-acl",
-        "target": "src/extensions/nocobase-acl",
+        "target": "client/extensions/nocobase-acl",
         "include": ["components", "index.ts", "README.md"]
       }
     },
@@ -462,7 +462,7 @@
       ],
       "source": {
         "root": "registry/nocobase-acl",
-        "target": "src/extensions/nocobase-acl",
+        "target": "client/extensions/nocobase-acl",
         "include": ["demo", "extension.tsx"]
       }
     }

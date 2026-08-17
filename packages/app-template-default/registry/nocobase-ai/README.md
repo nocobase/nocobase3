@@ -52,7 +52,7 @@ Nested scopes replace the parent scope by default. Use `mode="append"` to compos
 
 Register forms with `useAIForm`. Sending a registered form Context automatically enables the fixed `formFiller` Tool; tasks do not need to add it to `skillSettings.tools`.
 
-The runtime applies only declared, editable, type-compatible fields. It never submits or saves the form. React Hook Form users can install `@nocobase/ai-react-hook-form` and import `applyReactHookFormValues` from `src/extensions/nocobase-ai/adapters/react-hook-form`.
+The runtime applies only declared, editable, type-compatible fields. It never submits or saves the form. React Hook Form users can install `@nocobase/ai-react-hook-form` and import `applyReactHookFormValues` from `client/extensions/nocobase-ai/adapters/react-hook-form`.
 
 ## Frontend Tools
 
@@ -82,6 +82,6 @@ Use one `AIChatWindow` inside `ChatSurface` when a global conversation can switc
 
 - In the Registry source repository, edit `registry/nocobase-ai` directly. The normal `pnpm dev` and `pnpm build` commands load canonical Registry source without a preview copy.
 - Keep relative imports inside this Registry root. Use the host application's `@/` alias for application services and shared components.
-- During publication, the release pipeline materializes default Registry items into the npm template's `src/extensions` directory.
+- During publication, the release pipeline materializes default Registry items into the npm template's `client/extensions` directory.
 
-Once installed in an application, `src/extensions/nocobase-ai` is application-owned source and can be edited and committed normally.
+Once installed in an application, `client/extensions/nocobase-ai` is application-owned source and can be edited and committed normally.

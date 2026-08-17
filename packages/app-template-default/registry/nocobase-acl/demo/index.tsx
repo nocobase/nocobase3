@@ -184,7 +184,7 @@ export function AclPatternsPage() {
           defaultScene: "User and role administration",
           defaultTarget:
             "Allow administrators to open Users, but remove it from navigation and block its direct URL for other roles.",
-          requirements: `- Define application-owned navigation once through defineAppRoutes in src/routes.tsx.
+          requirements: `- Define application-owned navigation once through defineAppRoutes in client/routes.tsx.
 - Put role constraints in the route access.roles field using anyOf, allOf, or noneOf.
 - Let the route runtime generate the Refine resource, filter the sidebar item, and wrap the direct route with CanAccess.
 - Do not repeat the same role list in Resource meta or a manually written route guard.
