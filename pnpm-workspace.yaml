@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+  - examples/*
+  - examples/*/apps/*
+  - examples/*/packages/*
+
+allowBuilds:
+  '@nocobase/portal-sdk': true
+  esbuild: true

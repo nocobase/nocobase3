@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+.DS_Store
+.env.local
+.env.*.local
+
+!packages/app-host/fixtures/app-dist/**/dist/
+!packages/app-host/fixtures/app-dist/**/dist/**
+!packages/app-host/fixtures/app-dist/**/dist/node_modules/
+!packages/app-host/fixtures/app-dist/**/dist/node_modules/**
+
+packages/app-host/fixtures/app-dist/hub/dist/
+packages/app-host/fixtures/app-dist/hub/dist/**

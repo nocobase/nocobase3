@@ -1,0 +1,52 @@
+{
+  "name": "@nocobase/app-host",
+  "version": "0.0.0",
+  "description": "Standalone runtime host for NocoBase apps.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./supervisor": {
+      "types": "./dist/supervisor.d.ts",
+      "import": "./dist/supervisor.js"
+    },
+    "./catalog": {
+      "types": "./dist/app-catalog.d.ts",
+      "import": "./dist/app-catalog.js"
+    },
+    "./registry": {
+      "types": "./dist/app-registry.d.ts",
+      "import": "./dist/app-registry.js"
+    },
+    "./types": {
+      "types": "./dist/app-types.d.ts",
+      "import": "./dist/app-types.js"
+    }
+  },
+  "bin": {
+    "app-host": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "fixtures",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "dev": "pnpm build && node ./dist/cli.js",
+    "start": "node ./dist/cli.js",
+    "prepack": "pnpm build",
+    "pretest": "pnpm build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10"
+  }
+}
