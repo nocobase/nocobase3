@@ -8,6 +8,13 @@ import type {
 
 export type RouteSurfaceBeforeClose = () => boolean | Promise<boolean>;
 
+export type RouteSurfaceState = {
+  open: boolean;
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  close: RouteSurfaceClose;
+  navigateAfterClose: () => void;
+};
+
 export function useRouteSurfaceState({
   closeTo,
   beforeClose,
@@ -16,7 +23,7 @@ export function useRouteSurfaceState({
   closeTo: string;
   beforeClose?: RouteSurfaceBeforeClose;
   animated: boolean;
-}) {
+}): RouteSurfaceState {
   const navigate = useNavigate();
   const [open, setOpen] = useState(!animated);
   const closingRef = useRef(false);

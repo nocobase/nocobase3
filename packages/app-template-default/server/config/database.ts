@@ -1,6 +1,7 @@
-import { defineDatabaseConfig } from '@nocobase/app-server/config';
+import { defineDatabaseConfig, type ConfigFactory } from '@nocobase/app-server/config';
+import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 
-export default defineDatabaseConfig(({ env, paths }) => ({
+const databaseConfig: ConfigFactory<AppDatabaseConfig> = defineDatabaseConfig(({ env, paths }): AppDatabaseConfig => ({
   default: env.string('DB_CONNECTION', 'sqlite'),
 
   connections: {
@@ -41,3 +42,5 @@ export default defineDatabaseConfig(({ env, paths }) => ({
     lockTableName: env.string('DB_MIGRATIONS_LOCK_TABLE'),
   },
 }));
+
+export default databaseConfig;

@@ -14,7 +14,7 @@ interface MigrationHistoryRow {
 
 export async function ensureMigrationTable(
   connection: MigrationConnection,
-  tableName = DEFAULT_MIGRATION_TABLE,
+  tableName: string = DEFAULT_MIGRATION_TABLE,
 ): Promise<void> {
   const knex = await connection.client<Knex>();
   const exists = await knex.schema.hasTable(tableName);
@@ -23,7 +23,7 @@ export async function ensureMigrationTable(
   }
 
   try {
-    await knex.schema.createTable(tableName, (table) => {
+    await knex.schema.createTable(tableName, (table: Knex.CreateTableBuilder) => {
       table.increments('id').primary();
       table.string('name', 191).notNullable().unique();
       table.integer('batch').notNullable();
@@ -41,14 +41,14 @@ export async function ensureMigrationTable(
 
 export async function readMigrationHistory(
   connection: MigrationConnection,
-  tableName = DEFAULT_MIGRATION_TABLE,
+  tableName: string = DEFAULT_MIGRATION_TABLE,
 ): Promise<MigrationHistoryRecord[]> {
   const knex = await connection.client<Knex>();
   const rows = await knex<MigrationHistoryRow>(tableName)
     .select(['id', 'name', 'batch', 'checksum', 'executed_at', 'duration_ms'])
     .orderBy('id', 'asc');
 
-  return rows.map((row) => ({
+  return rows.map((row: MigrationHistoryRow) => ({
     id: Number(row.id),
     name: String(row.name),
     batch: Number(row.batch),

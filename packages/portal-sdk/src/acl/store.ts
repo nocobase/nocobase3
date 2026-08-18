@@ -69,14 +69,14 @@ const normalizePermissions = (
   };
 };
 
-export const getAclState = () => state;
+export const getAclState = (): AclState => state;
 
-export const subscribeAcl = (listener: () => void) => {
+export const subscribeAcl = (listener: () => void): (() => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
 
-export const clearAcl = () => {
+export const clearAcl = (): void => {
   requestId += 1;
   activeRequest = undefined;
   loadedSessionKey = undefined;
@@ -140,11 +140,11 @@ const load = async ({ force = false } = {}) => {
   return promise;
 };
 
-export const loadAcl = () => load();
+export const loadAcl = (): Promise<AclState> => load();
 
-export const retryAcl = () => load({ force: true });
+export const retryAcl = (): Promise<AclState> => load({ force: true });
 
-export const switchRole = async (roleName: string) => {
+export const switchRole = async (roleName: string): Promise<void> => {
   const previousRole = nocobaseClient.getRole();
   nocobaseClient.setRole(roleName);
 

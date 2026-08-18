@@ -1,7 +1,8 @@
-import { defineConfig } from '@nocobase/app-server/config';
+import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
 import { joinBasePath, normalizeBasePath, resolveAppNameFromBasePath } from '@nocobase/app-server/support';
+import type { AppRoutingConfig } from './types.js';
 
-export default defineConfig(({ env }) => {
+const appConfig: ConfigFactory<AppRoutingConfig> = defineConfig(({ env }): AppRoutingConfig => {
   const publicBasePath = normalizeBasePath(env.string('APP_BASE_PATH', '/app-template-default'));
   const internalApiProxyPath = '/v2/api';
 
@@ -14,3 +15,5 @@ export default defineConfig(({ env }) => {
     nocoBaseApiUrl: env.string('NOCOBASE_API_PROXY_TARGET'),
   };
 });
+
+export default appConfig;

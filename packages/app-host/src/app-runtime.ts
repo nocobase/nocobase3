@@ -49,7 +49,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   readonly codeVersion: string;
   readonly isolation: AppDefinition['isolation'];
   readonly tier: AppDefinition['tier'];
-  readonly events = new AppEventBus();
+  readonly events: AppEventBus = new AppEventBus();
   app!: FetchApp;
 
   private readonly globalEvents: AppEventBus;

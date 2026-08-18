@@ -12,10 +12,10 @@ export type SystemSettingsContextValue = {
   refresh: () => Promise<SystemSettings | undefined>;
 };
 
-export const SystemSettingsContext =
+export const SystemSettingsContext: React.Context<SystemSettingsContextValue | null> =
   createContext<SystemSettingsContextValue | null>(null);
 
-export function useSystemSettings() {
+export function useSystemSettings(): SystemSettingsContextValue {
   const value = useContext(SystemSettingsContext);
   if (!value) {
     throw new Error(

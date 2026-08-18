@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
 
-import { defineConfig } from '@nocobase/app-server/config';
+import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
 import type { ConfigPaths } from '@nocobase/app-server/config';
+import type { AppSpaConfig } from './types.js';
 
-export default defineConfig(({ env, paths }) => ({
+const spaConfig: ConfigFactory<AppSpaConfig> = defineConfig(({ env, paths }): AppSpaConfig => ({
   indexPath: resolveSpaIndexPath(paths),
 
   runtime: {
@@ -12,6 +13,8 @@ export default defineConfig(({ env, paths }) => ({
     shareToken: env.boolean('API_CLIENT_SHARE_TOKEN', false),
   },
 }));
+
+export default spaConfig;
 
 function resolveSpaIndexPath(paths: ConfigPaths): string {
   const deploymentIndexPath = paths.root('client/index.html');

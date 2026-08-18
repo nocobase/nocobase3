@@ -11,18 +11,18 @@ const listeners = new Set<() => void>();
 const getKey = (dataSourceKey: string, resource: string) =>
   `${dataSourceKey}:${resource}`;
 
-export const clearRecordPermissions = () => {
+export const clearRecordPermissions = (): void => {
   if (!permissions.size) return;
   permissions = new Map();
   listeners.forEach((listener) => listener());
 };
 
-export const subscribeRecordPermissions = (listener: () => void) => {
+export const subscribeRecordPermissions = (listener: () => void): (() => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
 
-export const getRecordPermissions = () => permissions;
+export const getRecordPermissions = (): Map<string, RecordPermissionEntry> => permissions;
 
 export const updateRecordPermissions = ({
   dataSourceKey = "main",
@@ -34,7 +34,7 @@ export const updateRecordPermissions = ({
   resource: string;
   recordIds: BaseKey[];
   allowedActions?: Record<string, BaseKey[]>;
-}) => {
+}): boolean => {
   if (!allowedActions) return false;
 
   const key = getKey(dataSourceKey, resource);

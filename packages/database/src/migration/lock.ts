@@ -40,7 +40,7 @@ export async function withMigrationLock<T>(
 
 export async function ensureMigrationLockTable(
   connection: MigrationConnection,
-  tableName = DEFAULT_MIGRATION_LOCK_TABLE,
+  tableName: string = DEFAULT_MIGRATION_LOCK_TABLE,
 ): Promise<void> {
   const knex = await connection.client<Knex>();
   const exists = await knex.schema.hasTable(tableName);
@@ -49,7 +49,7 @@ export async function ensureMigrationLockTable(
   }
 
   try {
-    await knex.schema.createTable(tableName, (table) => {
+    await knex.schema.createTable(tableName, (table: Knex.CreateTableBuilder) => {
       table.integer('id').primary();
       table.string('locked_by', 191).notNullable();
       table.dateTime('locked_at').notNullable();

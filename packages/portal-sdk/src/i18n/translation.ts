@@ -100,7 +100,9 @@ export function parseTranslationExpression(
   };
 }
 
-export function setTranslationResolver(resolver?: TranslationResolver) {
+export function setTranslationResolver(
+  resolver?: TranslationResolver
+): () => void {
   translationResolver = resolver;
   return () => {
     if (translationResolver === resolver) translationResolver = undefined;
@@ -110,7 +112,7 @@ export function setTranslationResolver(resolver?: TranslationResolver) {
 export function registerTranslationResources(
   namespace: string,
   resources: TranslationResourceBundle
-) {
+): void {
   const current = translationResources.get(namespace) ?? {};
   const merged = Object.fromEntries(
     [...new Set([...Object.keys(current), ...Object.keys(resources)])].map(
@@ -130,13 +132,15 @@ export function registerTranslationResources(
   );
 }
 
-export function getTranslationResources() {
+export function getTranslationResources(): Array<
+  [string, TranslationResourceBundle]
+> {
   return [...translationResources.entries()];
 }
 
 export function subscribeTranslationResources(
   listener: TranslationResourceListener
-) {
+): () => void {
   translationResourceListeners.add(listener);
   return () => translationResourceListeners.delete(listener);
 }

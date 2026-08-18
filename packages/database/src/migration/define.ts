@@ -1,6 +1,6 @@
 import type { MigrationDefinition } from './types.js';
 
-export const MIGRATION_DEFINITION_SYMBOL = Symbol.for('@nocobase/database.migration');
+export const MIGRATION_DEFINITION_SYMBOL: symbol = Symbol.for('@nocobase/database.migration');
 
 export function defineMigration<T extends MigrationDefinition>(definition: T): T {
   Object.defineProperty(definition, MIGRATION_DEFINITION_SYMBOL, {

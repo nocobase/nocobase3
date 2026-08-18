@@ -5,7 +5,7 @@ let cachedSettings: SystemSettings | undefined;
 let settingsRequest: Promise<SystemSettings> | undefined;
 let settingsGeneration = 0;
 
-export function loadSystemSettings(force = false) {
+export function loadSystemSettings(force: boolean = false): Promise<SystemSettings> {
   if (!force && cachedSettings) return Promise.resolve(cachedSettings);
   if (!force && settingsRequest) return settingsRequest;
 
@@ -31,7 +31,7 @@ export function loadSystemSettings(force = false) {
   return request;
 }
 
-export function clearSystemSettingsCache() {
+export function clearSystemSettingsCache(): void {
   settingsGeneration += 1;
   cachedSettings = undefined;
   settingsRequest = undefined;
