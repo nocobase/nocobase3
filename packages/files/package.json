@@ -1,0 +1,40 @@
+{
+  "name": "@nocobase/files",
+  "version": "0.1.0",
+  "description": "Headless Files Kernel contracts and module boundary.",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist", "README.md", "AGENTS.md"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./contracts": { "types": "./dist/contracts/index.d.ts", "import": "./dist/contracts/index.js" }
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+      "./contracts": { "types": "./dist/contracts/index.d.ts", "import": "./dist/contracts/index.js" }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.879.0",
+    "@aws-sdk/s3-request-presigner": "^3.879.0",
+    "@hono/zod-openapi": "^1.1.3",
+    "hono": "^4.13.2",
+    "kysely": "^0.28.5",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10"
+  }
+}
