@@ -221,12 +221,31 @@ export type ViewCollectionInput =
 export type MaterializedViewCollectionInput = ViewCollectionInput;
 
 export interface BuilderExecOptions {
+  /** Compile operations without executing schema changes or syncing metadata. */
   dryRun?: boolean;
+  /** Return adapter SQL when supported. Best used together with dryRun. */
   previewSql?: boolean;
+  /** Defaults to true. Set false to skip Collection metadata writes. */
   syncMetadata?: boolean;
+  /**
+   * Reserved for future idempotent execution.
+   * Currently not a runtime guarantee and does not prevent duplicate-object errors.
+   */
   ifNotExists?: boolean;
+  /**
+   * Reserved for future idempotent execution.
+   * Currently not a runtime guarantee and does not prevent missing-object errors.
+   */
   ifExists?: boolean;
+  /**
+   * Fails on capability warnings during real execution.
+   * This is not a destructive-operation confirmation mechanism; inspect impact.
+   */
   strict?: boolean;
+  /**
+   * Reserved for future Builder-managed transactions.
+   * Use DatabaseManager.transaction() or DatabaseConnection.transaction() today.
+   */
   transaction?: boolean;
 }
 
@@ -264,6 +283,7 @@ export interface BuilderResult {
   operations: CollectionOperation[];
   schemaOperations?: SchemaOperation[];
   sql?: string[];
+  /** Reserved change summary; current Builder implementation does not populate it yet. */
   metadata?: MetadataChangeSet;
   warnings?: BuilderWarning[];
   impact?: BuilderImpact[];

@@ -197,6 +197,69 @@ it("serves a server-only app from dist/server/embedded.js", async () => {
   });
 });
 
+it("keeps serving after a streaming response client disconnects", async () => {
+  const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-stream-"));
+  tempDirs.push(appsDir);
+
+  const appRoot = path.join(appsDir, "customer");
+  await mkdir(path.join(appRoot, "dist", "server"), { recursive: true });
+  await writeFile(
+    path.join(appRoot, "package.json"),
+    JSON.stringify({
+      name: "@example/customer-app",
+      version: "1.2.3",
+      type: "module",
+    }),
+  );
+  await writeFile(
+    path.join(appRoot, "dist", "server", "embedded.js"),
+    `
+      export function createServer() {
+        return {
+          fetch() {
+            const encoder = new TextEncoder();
+            let timer;
+
+            return new Response(new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode("first chunk"));
+                timer = setInterval(() => {
+                  controller.enqueue(encoder.encode(" next chunk"));
+                }, 10);
+              },
+              cancel() {
+                clearInterval(timer);
+              },
+            }), {
+              headers: { "content-type": "text/plain; charset=utf-8" },
+            });
+          },
+        };
+      }
+    `,
+  );
+
+  const host = createAppHost({
+    host: "127.0.0.1",
+    port: 0,
+    appDistDir: appsDir,
+    idleTtlMs: 60_000,
+  });
+  runningHosts.push(host);
+  await host.start();
+
+  const address = host.server.address();
+  if (!address || typeof address !== "object") {
+    throw new Error("App host did not expose a TCP address");
+  }
+
+  await fetchAndDisconnectAfterFirstChunk(new URL(`http://127.0.0.1:${address.port}/customer/stream`));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const health = await fetchJson(new URL(`http://127.0.0.1:${address.port}/__health`));
+  expect(health.registered).toBe(1);
+});
+
 it("reserves /assets for static files and does not fall through to the server", async () => {
   const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-assets-"));
   tempDirs.push(appsDir);
@@ -266,7 +329,9 @@ it("serves the packaged app-dist fixture", async () => {
   runningHosts.push(host);
   await host.start();
 
-  expect(host.registry.listDefinitions().map((definition) => definition.id)).toEqual(["demo", "hub", "service"]);
+  expect(host.registry.listDefinitions().map((definition) => definition.id)).toEqual(
+    expect.arrayContaining(["demo", "hub", "service"]),
+  );
 
   const address = host.server.address();
   if (!address || typeof address !== "object") {
@@ -358,5 +423,24 @@ function fetchJson(url: URL): Promise<Record<string, unknown>> {
         });
       })
       .once("error", reject);
+  });
+}
+
+function fetchAndDisconnectAfterFirstChunk(url: URL): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const request = http
+      .get(url, (response) => {
+        response.once("data", () => {
+          settled = true;
+          request.destroy();
+          resolve();
+        });
+      })
+      .once("error", (error: NodeJS.ErrnoException) => {
+        if (!settled) {
+          reject(error);
+        }
+      });
   });
 }

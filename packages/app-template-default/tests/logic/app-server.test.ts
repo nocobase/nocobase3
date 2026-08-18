@@ -6,10 +6,12 @@ import { createServer as createHttpServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
+import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
 
 import {
   createApp,
   createServer as createEmbeddedServer,
+  createStandaloneRuntime,
   createStandaloneServer,
 } from '../../server/index.ts';
 
@@ -57,7 +59,7 @@ describe('app server', () => {
     });
   });
 
-  it('serves embedded production client routes from the stripped app-host path', async () => {
+  it('serves embedded production SPA routes from the stripped app-host path', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-embedded-client-'));
     tempDirs.push(root);
     writeFileSync(
@@ -124,7 +126,7 @@ describe('app server', () => {
     expect(html).toContain('window.__nocobase_api_client_share_token__ = true;');
   });
 
-  it('proxies /<app>/v2/api requests to the configured NocoBase API URL', async () => {
+  it('proxies app-local /v2/api requests to the configured NocoBase API URL', async () => {
     const nocoBaseApiUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'application/json; charset=utf-8');
       response.end(
@@ -141,11 +143,11 @@ describe('app server', () => {
       );
     });
     const app = createApp({
-      basePath: '/app-template-default',
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request('http://localhost/app-template-default/v2/api/systemSettings:get?locale=zh-CN', {
+    const response = await app.request('http://localhost/v2/api/systemSettings:get?locale=zh-CN', {
       headers: {
         host: '127.0.0.1:13000',
         origin: 'http://127.0.0.1:13000',
@@ -161,7 +163,7 @@ describe('app server', () => {
       origin: nocoBaseApiUrl,
       referer: `${nocoBaseApiUrl}/nocobase/app-template-default/login`,
       forwardedHost: '127.0.0.1:13000',
-      forwardedPrefix: '/app-template-default/v2/api',
+      forwardedPrefix: '/v2/api',
       forwardedProto: 'http',
     });
   });
@@ -172,16 +174,55 @@ describe('app server', () => {
     writeFileSync(path.join(root, 'index.html'), '<main>app-template-default app</main>');
 
     const app = createApp({
-      basePath: '/app-template-default',
-      clientIndexPath: path.join(root, 'index.html'),
+      publicBasePath: '/app-template-default',
+      spa: {
+        indexPath: path.join(root, 'index.html'),
+      },
     });
 
-    const response = await app.request('http://localhost/app-template-default/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F');
+    const response = await app.request('http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F');
 
     expect(response.status).toBe(503);
     expect(response.headers.get('content-type')).toContain('application/json');
     await expect(response.json()).resolves.toEqual({
       error: 'NocoBase API proxy target is not configured.',
+    });
+  });
+
+  it('returns a JSON error when app settings are requested without a database', async () => {
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    const response = await app.request('http://localhost/api/app-settings');
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Database is not configured.',
+    });
+  });
+
+  it('reads app settings from the configured database', async () => {
+    const rows = [
+      {
+        key: 'site.title',
+        value: 'NocoBase',
+        createdAt: '2026-08-18T00:00:00.000Z',
+        updatedAt: '2026-08-18T00:00:00.000Z',
+      },
+    ];
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      database: createMockDatabase(rows),
+    });
+
+    const response = await app.request('http://localhost/api/app-settings');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      settings: rows,
     });
   });
 
@@ -196,11 +237,11 @@ describe('app server', () => {
       response.end(compressedPayload);
     });
     const app = createApp({
-      basePath: '/app-template-default',
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request('http://localhost/app-template-default/v2/api/systemSettings:get');
+    const response = await app.request('http://localhost/v2/api/systemSettings:get');
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-encoding')).toBeNull();
@@ -208,40 +249,66 @@ describe('app server', () => {
     await expect(response.text()).resolves.toBe(payload);
   });
 
-  it('keeps template API routes on the template server when Vite dev proxy is enabled', async () => {
+  it('keeps app-local API routes on the standalone server when Vite dev proxy is enabled', async () => {
     let viteRequestCount = 0;
     const viteDevUrl = await startHttpStub(() => {
       viteRequestCount += 1;
     });
+    const runtime = createStandaloneRuntime();
     const app = createStandaloneServer({ viteDevUrl });
+    const publicBasePath = runtime.config.app.publicBasePath;
 
-    const response = await app.request('http://localhost/app-template-default/api/healthz');
+    const response = await app.request(`http://localhost${publicBasePath}/api/healthz`);
 
     await expect(response.json()).resolves.toEqual({
       ok: true,
       app: {
-        name: 'app-template-default',
-        basePath: '/app-template-default',
+        name: runtime.config.app.name,
+        basePath: runtime.config.app.publicBasePath,
       },
-      basePath: '/app-template-default',
+      basePath: runtime.config.app.publicBasePath,
     });
     expect(viteRequestCount).toBe(0);
   });
 
-  it('proxies template client routes to Vite dev server', async () => {
+  it('mounts standalone app-local routes behind the public base path', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = createStandaloneServer({ viteDevUrl: false });
+    const publicBasePath = runtime.config.app.publicBasePath;
+    const expectedHealth = {
+      ok: true,
+      app: {
+        name: runtime.config.app.name,
+        basePath: publicBasePath,
+      },
+    };
+
+    const rootHealth = await app.request('http://localhost/healthz');
+    const appHealth = await app.request(`http://localhost${publicBasePath}/healthz`);
+    const bareLocalApi = await app.request('http://localhost/api/healthz');
+
+    await expect(rootHealth.json()).resolves.toEqual(expectedHealth);
+    await expect(appHealth.json()).resolves.toEqual(expectedHealth);
+    expect(bareLocalApi.status).toBe(404);
+  });
+
+  it('proxies standalone SPA routes to Vite dev server with the public base path restored', async () => {
     const viteDevUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'text/plain; charset=utf-8');
       response.end(`vite:${_request.method}:${_request.url}`);
     });
+    const runtime = createStandaloneRuntime();
     const app = createStandaloneServer({ viteDevUrl });
+    const publicBasePath = runtime.config.app.publicBasePath;
+    const requestPath = `${publicBasePath}/settings?tab=apps`;
 
-    const response = await app.request('http://localhost/app-template-default/settings?tab=apps');
+    const response = await app.request(`http://localhost${requestPath}`);
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('vite:GET:/app-template-default/settings?tab=apps');
+    await expect(response.text()).resolves.toBe(`vite:GET:${requestPath}`);
   });
 
-  it('injects browser runtime config when serving the production client index', async () => {
+  it('injects browser runtime config when serving the production SPA index', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-client-'));
     tempDirs.push(root);
     const indexPath = path.join(root, 'index.html');
@@ -259,13 +326,14 @@ describe('app server', () => {
     );
 
     const app = createApp({
-      basePath: '/app-template-default',
-      apiProxyPath: '/v2/api',
-      clientIndexPath: indexPath,
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
+      spa: {
+        indexPath,
+      },
     });
 
-    const response = await app.request('http://localhost/app-template-default/settings');
+    const response = await app.request('http://localhost/settings');
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -274,7 +342,7 @@ describe('app server', () => {
     expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(html.indexOf('<script type="module"'));
   });
 
-  it('serves production client assets before the SPA fallback', async () => {
+  it('serves production SPA assets before the SPA fallback', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-client-'));
     tempDirs.push(root);
     mkdirSync(path.join(root, 'assets'));
@@ -282,12 +350,14 @@ describe('app server', () => {
     writeFileSync(path.join(root, 'assets/index.js'), 'console.log("app-template-default asset");');
 
     const app = createApp({
-      basePath: '/app-template-default',
-      clientIndexPath: path.join(root, 'index.html'),
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
+      spa: {
+        indexPath: path.join(root, 'index.html'),
+      },
     });
 
-    const response = await app.request('http://localhost/app-template-default/assets/index.js');
+    const response = await app.request('http://localhost/assets/index.js');
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
@@ -295,19 +365,21 @@ describe('app server', () => {
     await expect(response.text()).resolves.toBe('console.log("app-template-default asset");');
   });
 
-  it('does not return the SPA index for missing production client assets', async () => {
+  it('does not return the SPA index for missing production SPA assets', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-client-'));
     tempDirs.push(root);
     mkdirSync(path.join(root, 'assets'));
     writeFileSync(path.join(root, 'index.html'), '<main>app-template-default app</main>');
 
     const app = createApp({
-      basePath: '/app-template-default',
-      clientIndexPath: path.join(root, 'index.html'),
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
+      spa: {
+        indexPath: path.join(root, 'index.html'),
+      },
     });
 
-    const response = await app.request('http://localhost/app-template-default/assets/missing.js');
+    const response = await app.request('http://localhost/assets/missing.js');
 
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
@@ -335,4 +407,42 @@ function startHttpStub(
       resolve(`http://127.0.0.1:${address.port}`);
     });
   });
+}
+
+function createMockDatabase(rows: unknown[]): DatabaseManager {
+  return {
+    connection: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['connection'],
+    builder: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['builder'],
+    query: (() => createMockQuery(rows)) as DatabaseManager['query'],
+    connect: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['connect'],
+    transaction: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['transaction'],
+    disconnect: (() => Promise.resolve()) as DatabaseManager['disconnect'],
+    reconnect: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['reconnect'],
+    destroy: (() => Promise.resolve()) as DatabaseManager['destroy'],
+  };
+}
+
+function createMockQuery(rows: unknown[]): QueryAdapter {
+  const selectQuery = {
+    select: () => selectQuery,
+    orderBy: () => selectQuery,
+    execute: () => Promise.resolve(rows),
+  };
+
+  return {
+    selectFrom: () => selectQuery,
+    insertInto: () => {
+      throw new Error('Not implemented.');
+    },
+    updateTable: () => {
+      throw new Error('Not implemented.');
+    },
+    deleteFrom: () => {
+      throw new Error('Not implemented.');
+    },
+  } as unknown as QueryAdapter;
 }

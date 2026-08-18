@@ -21,6 +21,10 @@ interface BuilderResult {
 result.operations;
 ```
 
+## metadata
+
+`metadata` 是预留的变更摘要字段，当前实现暂未填充。Agent、CLI 或 UI 需要审计时，应优先读取 `operations`、`schemaOperations`、`warnings` 和 `impact`。
+
 ## schemaOperations
 
 编译后的数据库 schema operation。

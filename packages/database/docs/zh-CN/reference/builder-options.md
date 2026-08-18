@@ -7,9 +7,12 @@ interface BuilderExecOptions {
   dryRun?: boolean;
   previewSql?: boolean;
   syncMetadata?: boolean;
+  // reserved; currently not a runtime guarantee
   ifNotExists?: boolean;
+  // reserved; currently not a runtime guarantee
   ifExists?: boolean;
   strict?: boolean;
+  // reserved; currently not a runtime guarantee
   transaction?: boolean;
 }
 ```
@@ -44,8 +47,7 @@ const builder = new CollectionBuilder({
 createDatabaseManager({
   connections: {
     main: {
-      driver: 'knex',
-      client: 'pg',
+      dialect: 'postgres',
       naming: {
         underscored: true,
         tablePrefix: 'tbl_',
@@ -110,6 +112,8 @@ await builder.apply(operations, {
 
 `strict: true` 用于 migration、CI 和生产发布。只要执行计划里出现 capability warning，实际 apply 会抛出 `UnsupportedCapabilityError`。
 
+`strict: true` 不是 destructive 操作确认机制。`dropCollection()`、`dropField()` 等危险操作会体现在 `BuilderResult.impact` 中，调用方需要显式检查。
+
 `dryRun: true` 会优先返回 warnings，不会因为 `strict: true` 直接抛错：
 
 ```ts
@@ -127,9 +131,9 @@ console.log(result.warnings);
 
 以下选项已经出现在类型里，但当前原型还没有完整执行语义：
 
-- `ifNotExists`
-- `ifExists`
-- `transaction`
+- `ifNotExists`：当前不会阻止重复创建错误。
+- `ifExists`：当前不会阻止缺失对象错误。
+- `transaction`：当前不会自动包裹 Builder 操作；需要事务时使用 `db.transaction()` 或 `connection.transaction()`。
 
 后续可以把它们接入 capability 校验、幂等执行、严格模式和事务包裹。
 

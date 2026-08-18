@@ -6,6 +6,29 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = path.join(rootDir, "dist");
 const envOutputPath = path.join(distDir, ".env");
+const serverEnvKeys = new Set([
+  "APP_BASE_PATH",
+  "APP_SERVER_HOST",
+  "APP_SERVER_PORT",
+  "APP_SERVER_START_LOG",
+  "NOCOBASE_API_PROXY_TARGET",
+  "API_CLIENT_STORAGE_PREFIX",
+  "API_CLIENT_STORAGE_TYPE",
+  "API_CLIENT_SHARE_TOKEN",
+  "DB_CONNECTION",
+  "DB_DATABASE",
+  "DB_DEBUG",
+  "DB_HOST",
+  "DB_PORT",
+  "DB_USERNAME",
+  "DB_PASSWORD",
+  "DB_CHARSET",
+  "DB_SSL",
+  "DB_SCHEMA",
+  "DB_MIGRATIONS_AUTO_RUN",
+  "DB_MIGRATIONS_TABLE",
+  "DB_MIGRATIONS_LOCK_TABLE",
+]);
 
 const parseEnv = (content) => {
   const parsed = {};
@@ -72,11 +95,11 @@ const formatEnvValue = (value) => {
 const writeDistEnv = () => {
   const envFiles = [path.join(rootDir, ".env"), path.join(rootDir, ".env.local")];
   const env = readEnvFiles(envFiles, process.env);
-  const entries = Object.entries(env);
+  const entries = Object.entries(env).filter(([key]) => serverEnvKeys.has(key));
 
   if (entries.length === 0) {
     console.log("\n> Extract environment");
-    console.log("No .env or .env.local file found; skipped dist/.env");
+    console.log("No supported server environment entries found; skipped dist/.env");
     return;
   }
 
@@ -118,6 +141,13 @@ fs.rmSync(distDir, { recursive: true, force: true });
 run("Typecheck client", "pnpm", ["exec", "tsc"]);
 run("Typecheck tooling", "pnpm", ["exec", "tsc", "-p", "tsconfig.node.json"]);
 run("Build client", "pnpm", ["exec", "refine", "build"]);
+run("Build server workspace dependencies", "pnpm", [
+  "--filter",
+  "@nocobase/database",
+  "--filter",
+  "@nocobase/app-server",
+  "build",
+]);
 run("Build server", "pnpm", ["exec", "tsc", "-p", "tsconfig.server.json"]);
 writeDistEnv();
 run("Generate server package", "node", ["./scripts/build-server-dist-package.mjs"]);
@@ -130,4 +160,4 @@ run("Install server production dependencies", "npm", [
 ]);
 run("Clean server dependency bins", "node", ["./scripts/clean-dist-bin.mjs"]);
 
-console.log("\nBuild complete: dist/client, dist/server, dist/.env, and dist/package.json");
+console.log("\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json");

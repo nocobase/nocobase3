@@ -119,7 +119,7 @@ export class CollectionCompiler {
     context: CollectionCompilerContext,
   ): TableSchemaDefinition {
     const tableName = this.effectiveTableName(name, definition);
-    const normalized = this.normalizeCollectionDefinition(name, definition);
+    const normalized = this.normalizeCollectionDefinition(definition);
 
     return {
       name: tableName,
@@ -280,7 +280,7 @@ export class CollectionCompiler {
     return { type: 'alterTable', tableName, operations };
   }
 
-  private normalizeCollectionDefinition(name: string, definition: CollectionDefinition): Required<Pick<CollectionDefinition, 'fields' | 'indexes' | 'constraints'>> {
+  private normalizeCollectionDefinition(definition: CollectionDefinition): Required<Pick<CollectionDefinition, 'fields' | 'indexes' | 'constraints'>> {
     const fields = [...(definition.fields ?? [])];
     const indexes = [...(definition.indexes ?? [])];
     const constraints = [...(definition.constraints ?? [])].filter((constraint) => {

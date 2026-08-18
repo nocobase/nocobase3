@@ -11,12 +11,12 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "rootDir": "server",
-    "outDir": "dist/server",
+    "rootDir": ".",
+    "outDir": "dist",
     "noEmit": false,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["server/**/*.ts"]
+  "include": ["server/**/*.ts", "scripts/migrate.ts"]
 }

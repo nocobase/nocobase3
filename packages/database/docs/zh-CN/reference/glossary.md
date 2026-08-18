@@ -25,7 +25,14 @@
 | KnexSchemaAdapter | 当前基于 Knex 的 SchemaAdapter 实现。 |
 | DatabaseManager | 管理默认连接和命名连接的入口。 |
 | DatabaseConnection | 一个具体数据库连接。 |
+| Dialect | 用户配置中的数据库类型，例如 `sqlite`、`postgres`、`mysql`。 |
+| Database driver | 用户配置中的底层 Node.js 数据库驱动，例如 `better-sqlite3`、`pg`、`mysql2`。 |
+| Adapter client | 内部 adapter 暴露的底层 client。默认 Knex adapter 下，`connection.client()` 返回 Knex 实例。 |
 | QueryAdapter | 数据库层 Query Builder，不是 Repository。 |
+| Migration | 版本化数据库变更文件。 |
+| Migration Runner | migration 执行器，负责加载文件、执行 pending migration、写 history、控制事务和 lock。 |
+| Migration History | 记录已执行 migration 的数据库表。 |
+| Migration Lock | 避免多个进程同时执行 migration 的锁。 |
 | Repository | 计划中的 Collection-aware 常规数据访问封装，当前未实现。 |
 | Repository Filter Builder | 计划中的 Repository 筛选条件代码 DSL，当前未实现。 |
 | Filter AST | 计划中的 Repository 筛选条件结构化表示，当前未实现。 |

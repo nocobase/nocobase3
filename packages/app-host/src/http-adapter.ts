@@ -78,7 +78,25 @@ export async function applyFetchResponse(res: ServerResponse, response: Response
     return;
   }
 
-  await pipeline(Readable.fromWeb(response.body as unknown as import('node:stream/web').ReadableStream), res);
+  const body = Readable.fromWeb(response.body as unknown as import('node:stream/web').ReadableStream);
+  try {
+    await pipeline(body, res);
+  } catch (error) {
+    if (isClientResponseClose(error, res)) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
+export function isClientResponseClose(error: unknown, res: ServerResponse): boolean {
+  if (!isPrematureCloseError(error)) {
+    return false;
+  }
+
+  const maybeClosed = res as ServerResponse & { closed?: boolean };
+  return res.destroyed || res.writableEnded || res.writableFinished || maybeClosed.closed === true;
 }
 
 export function requestPath(req: IncomingMessage): string {
@@ -119,4 +137,11 @@ function combineAbortSignals(...signals: AbortSignal[]): AbortSignal {
   }
 
   return controller.signal;
+}
+
+function isPrematureCloseError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === 'AbortError' || (error as NodeJS.ErrnoException).code === 'ERR_STREAM_PREMATURE_CLOSE')
+  );
 }

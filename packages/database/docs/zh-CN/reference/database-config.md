@@ -17,12 +17,8 @@ const db = createDatabaseManager({
   default: 'main',
   connections: {
     main: {
-      driver: 'knex',
-      client: 'better-sqlite3',
-      connection: {
-        filename: ':memory:',
-      },
-      useNullAsDefault: true,
+      dialect: 'sqlite',
+      filename: ':memory:',
     },
   },
 });
@@ -32,33 +28,102 @@ const db = createDatabaseManager({
 
 ## ConnectionConfig
 
-当前 V1 只实现 Knex driver：
+用户配置只描述数据库类型和连接参数，不暴露内部 adapter 配置：
 
 ```ts
-interface KnexConnectionConfig extends BaseConnectionConfig {
-  driver: 'knex';
-  client: string;
-  connection?: unknown;
-  pool?: unknown;
-  useNullAsDefault?: boolean;
-  searchPath?: string[];
-}
+type ConnectionConfig =
+  | SqliteConnectionConfig
+  | PostgresConnectionConfig
+  | MysqlConnectionConfig;
 ```
 
 公共配置：
 
 ```ts
 interface BaseConnectionConfig {
-  driver: string;
-  schema?: string;
   naming?: NamingOptions;
   namingStrategy?: NamingStrategy;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore;
   managed?: boolean;
   debug?: boolean;
+  pool?: unknown;
+  driverOptions?: Record<string, unknown>;
 }
 ```
+
+`dialect` 是必填字段。`driver` 是底层 Node.js 数据库驱动，通常不写，由 `dialect` 自动推导：
+
+| dialect | 默认 driver |
+| --- | --- |
+| `sqlite` | `better-sqlite3` |
+| `postgres` | `pg` |
+| `mysql` | `mysql2` |
+
+`driver` 如果显式填写，必须和 `dialect` 匹配。
+
+SQLite：
+
+```ts
+interface SqliteConnectionConfig extends BaseConnectionConfig {
+  dialect: 'sqlite';
+  driver?: 'better-sqlite3';
+  filename: string;
+}
+```
+
+PostgreSQL：
+
+```ts
+type PostgresConnectionConfig = BaseConnectionConfig & {
+  dialect: 'postgres';
+  driver?: 'pg';
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  password?: string;
+  schema?: string | readonly string[];
+  ssl?: boolean | Record<string, unknown>;
+};
+```
+
+MySQL：
+
+```ts
+type MysqlConnectionConfig = BaseConnectionConfig & {
+  dialect: 'mysql';
+  driver?: 'mysql2';
+  charset?: string;
+  timezone?: string;
+  ssl?: boolean | Record<string, unknown>;
+} & (
+  | {
+      socketPath: string;
+      host?: never;
+      port?: never;
+      database?: string;
+      username?: string;
+      password?: string;
+    }
+  | {
+      host?: string;
+      port?: number;
+      database?: string;
+      username?: string;
+      password?: string;
+      socketPath?: never;
+    }
+);
+```
+
+用户配置使用 `username`，内部会转换成底层 driver 需要的 `user`。
+
+MySQL 的 `socketPath` 是另一种连接目标，可以和 `database`、`username`、`password` 一起使用，但不要和 `host`、`port` 混用。
+
+`driverOptions` 只放当前类型未覆盖的底层 driver 参数。常用连接参数必须平铺，不要放进 `driverOptions`。当前不提供连接 URL 配置方式，也不要在 `driverOptions` 里写 `connectionString` 或 `uri`。
+
+用户配置中不要写 `adapter`、`client` 或 `connection`。默认 adapter 是 Knex，内部会把用户配置归一化成 Knex 需要的 `client` 和 `connection`。
 
 ## naming
 
@@ -82,9 +147,12 @@ const db = createDatabaseManager({
   metadataStore,
   connections: {
     main: {
-      driver: 'knex',
-      client: 'pg',
-      connection: process.env.DATABASE_URL,
+      dialect: 'postgres',
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT ?? 5432),
+      database: process.env.DB_DATABASE,
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
     },
   },
 });
@@ -101,10 +169,8 @@ const config = defineDatabase({
   default: 'main',
   connections: {
     main: {
-      driver: 'knex',
-      client: 'better-sqlite3',
-      connection: { filename: ':memory:' },
-      useNullAsDefault: true,
+      dialect: 'sqlite',
+      filename: ':memory:',
     },
   },
 });

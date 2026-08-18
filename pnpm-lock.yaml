@@ -20,6 +20,25 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@20.19.43)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/app-server:
+    dependencies:
+      '@nocobase/database':
+        specifier: workspace:^
+        version: link:../database
+      hono:
+        specifier: ^4.13.2
+        version: 4.13.2
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@20.19.43)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/app-template-default:
     devDependencies:
       '@ai-sdk/react':
@@ -46,6 +65,12 @@ importers:
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../app-server
+      '@nocobase/database':
+        specifier: workspace:^
+        version: link:../database
       '@nocobase/portal-sdk':
         specifier: workspace:^
         version: link:../portal-sdk
@@ -199,6 +224,9 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
+      knex:
+        specifier: ^3.1.0
+        version: 3.3.0(better-sqlite3@13.0.3)(mysql2@3.23.3(@types/node@22.20.1))(pg@8.23.0)
       lucide-react:
         specifier: ^0.487.0
         version: 0.487.0(react@19.1.0)

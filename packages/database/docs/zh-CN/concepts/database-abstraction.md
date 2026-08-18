@@ -25,10 +25,8 @@ const db = createDatabaseManager({
   default: 'main',
   connections: {
     main: {
-      driver: 'knex',
-      client: 'better-sqlite3',
-      connection: { filename: ':memory:' },
-      useNullAsDefault: true,
+      dialect: 'sqlite',
+      filename: ':memory:',
     },
   },
 });

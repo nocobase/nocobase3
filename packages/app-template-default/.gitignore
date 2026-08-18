@@ -20,6 +20,7 @@ dist-ssr
 /playwright-report/
 /test-results/
 /.pnpm-store/
+/storage/
 
 # Environment variables
 .env

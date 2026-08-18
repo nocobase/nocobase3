@@ -4,15 +4,16 @@ import type { QueryAdapter } from '../query/index.js';
 import type { DatabaseConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
-import { KnexConnectionDriver } from './drivers/knex/index.js';
+import { KnexConnectionAdapter } from './drivers/knex/index.js';
 
 export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;
+  /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder(name?: string): CollectionBuilder;
+  /** Database-layer query builder. Does not read Collection metadata or columnName mappings. */
   query(name?: string): QueryAdapter;
 
   connect(name?: string): Promise<DatabaseConnection>;
-  client<T = unknown>(name?: string): Promise<T>;
 
   transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
@@ -26,7 +27,7 @@ export interface DatabaseManager {
 
 export function createDatabaseManager(config: DatabaseConfig): DatabaseManager {
   return new DefaultDatabaseManager(config, new DefaultConnectionFactory({
-    knex: new KnexConnectionDriver(),
+    knex: new KnexConnectionAdapter(),
   }));
 }
 
@@ -68,10 +69,6 @@ export class DefaultDatabaseManager implements DatabaseManager {
 
   async connect(name?: string): Promise<DatabaseConnection> {
     return this.connection(name).connect();
-  }
-
-  async client<T = unknown>(name?: string): Promise<T> {
-    return this.connection(name).client<T>();
   }
 
   async transaction<T>(
