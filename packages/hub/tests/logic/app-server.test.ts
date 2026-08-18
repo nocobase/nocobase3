@@ -12,6 +12,7 @@ import {
   createServer as createEmbeddedServer,
   createStandaloneServer,
 } from '../../server/index.ts';
+import { createNocoBaseApiProxyHeaders } from '../../server/app.ts';
 
 const servers: Server[] = [];
 const tempDirs: string[] = [];
@@ -396,3 +397,92 @@ function startHttpStub(
     });
   });
 }
+
+/**
+ * Header handling when the upstream is a *different site* -- the usual local-development setup,
+ * where `NOCOBASE_API_PROXY_TARGET` points at a shared remote NocoBase.
+ *
+ * **This group is what makes `pnpm dev` able to sign in.** Relaying the browser's hop faithfully
+ * (correct for the loopback topology covered above) is guaranteed to fail here: the browser's origin
+ * is `http://127.0.0.1:3000`, but the remote site's reverse proxy rewrites `x-forwarded-host` to its
+ * own hostname, so the upstream derives `https://remote-site` and the check fails with
+ * `403 Invalid sign-in origin`.
+ *
+ * These call the header builder directly rather than going through `createApp`: the cross-site
+ * branch requires a non-loopback upstream, and a stub HTTP server can only bind loopback.
+ */
+describe('forwarded headers for a cross-site upstream', () => {
+  const upstream = new URL('https://remote.example.com/api');
+
+  const forwardedFromLocalhost = (extra: Record<string, string>) =>
+    createNocoBaseApiProxyHeaders(
+      new Request('http://127.0.0.1:3000/hub/v2/api/auth:signIn', {
+        method: 'POST',
+        headers: { host: '127.0.0.1:3000', ...extra },
+      }),
+      '/hub/v2/api',
+      upstream,
+    );
+
+  it('aligns origin and x-forwarded-* on the upstream site', () => {
+    const headers = forwardedFromLocalhost({
+      origin: 'http://127.0.0.1:3000',
+      referer: 'http://127.0.0.1:3000/hub/login',
+    });
+
+    expect(headers.get('origin')).toBe(upstream.origin);
+    expect(headers.get('x-forwarded-host')).toBe(upstream.host);
+    expect(headers.get('x-forwarded-proto')).toBe('https');
+    // The point of the three assertions above: the requestOrigin the upstream derives has to equal,
+    // verbatim, the origin it receives.
+    expect(`${headers.get('x-forwarded-proto')}://${headers.get('x-forwarded-host')}`).toBe(
+      headers.get('origin'),
+    );
+  });
+
+  it('aligns referer too, since the upstream falls back to it without an origin', () => {
+    const headers = forwardedFromLocalhost({
+      referer: 'http://127.0.0.1:3000/hub/login',
+    });
+
+    expect(new URL(headers.get('referer') ?? '').origin).toBe(upstream.origin);
+  });
+
+  it('does not invent an origin the browser never sent', () => {
+    // Requests without an origin (curl, server-side calls) do not trigger the origin check at all.
+    // Adding one would turn "no origin declared" into "claims to come from the site itself".
+    const headers = forwardedFromLocalhost({});
+
+    expect(headers.has('origin')).toBe(false);
+    expect(headers.has('referer')).toBe(false);
+    // The forwarded pair still has to be aligned: it decides who the upstream thinks it is,
+    // independently of whether an origin was sent.
+    expect(headers.get('x-forwarded-host')).toBe(upstream.host);
+  });
+
+  it('still reports the proxy mount point', () => {
+    expect(forwardedFromLocalhost({}).get('x-forwarded-prefix')).toBe('/hub/v2/api');
+  });
+
+  it('leaves a loopback upstream on the faithful-relay path', () => {
+    // The counterpart of the group above: production proxies over loopback, where the browser's hop
+    // must reach the upstream unchanged.
+    const headers = createNocoBaseApiProxyHeaders(
+      new Request('http://site.example.com/hub/v2/api/auth:signIn', {
+        method: 'POST',
+        headers: {
+          host: 'site.example.com',
+          origin: 'https://site.example.com',
+          'x-forwarded-host': 'site.example.com',
+          'x-forwarded-proto': 'https',
+        },
+      }),
+      '/hub/v2/api',
+      new URL('http://127.0.0.1:13000/api'),
+    );
+
+    expect(headers.get('origin')).toBe('https://site.example.com');
+    expect(headers.get('x-forwarded-host')).toBe('site.example.com');
+    expect(headers.get('x-forwarded-proto')).toBe('https');
+  });
+});
