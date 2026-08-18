@@ -354,13 +354,10 @@
       "name": "file-upload",
       "type": "registry:block",
       "title": "NocoBase File Upload",
-      "description": "Controlled shadcn/ui file upload field for NocoBase file collections.",
+      "description": "Editable Files Kernel upload field that stores FileObject/fileId values.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
-        "@tanstack/react-query@^5.81.5",
-        "lucide-react@^0.487.0",
-        "react-markdown@^10.1.0",
-        "remark-gfm@^4.0.1"
+        "@nocobase/portal-sdk@^2.1.0",
+        "lucide-react@^0.487.0"
       ],
       "registryDependencies": [
         "alert",
@@ -370,7 +367,7 @@
         "input",
         "tooltip"
       ],
-      "docs": "Requires a compatible Portal SDK client and a field targeting a file-template collection. The extension contributes a development-only file manager at /dev/files; its public-URL preview gallery does not require attachments:list.",
+      "docs": "Requires @nocobase/portal-sdk/files and a Files Kernel files/v1 endpoint. Uses the attachment policy by convention, stores stable fileId/FileObject values, keeps temporary URLs in memory, and does not delete Kernel files when App values are removed unless deleteOnRemove is explicitly enabled. Source is copied into the App and remains editable.",
       "source": {
         "root": "registry/nocobase-file-upload",
         "target": "client/extensions/nocobase-file-upload",
