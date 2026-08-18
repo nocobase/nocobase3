@@ -107,9 +107,26 @@ export type SelectionFactory = (eb: ExpressionBuilder) => readonly SelectionExpr
 export type JoinCallback = (join: JoinBuilder) => JoinBuilder;
 
 export interface QueryAdapter {
+  /**
+   * Database-layer query builder.
+   * It accepts table/column query identifiers and does not read Collection metadata,
+   * so collection.tableName() and field.columnName() mappings are not applied.
+   */
   selectFrom<TRecord extends Row = Row>(table: string): SelectQuery<TRecord, Row>;
+  /**
+   * Database-layer insert builder.
+   * It accepts table/column query identifiers and does not read Collection metadata.
+   */
   insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord>;
+  /**
+   * Database-layer update builder.
+   * It accepts table/column query identifiers and does not read Collection metadata.
+   */
   updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord>;
+  /**
+   * Database-layer delete builder.
+   * It accepts table/column query identifiers and does not read Collection metadata.
+   */
   deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord>;
 }
 

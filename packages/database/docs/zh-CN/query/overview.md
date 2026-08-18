@@ -80,15 +80,7 @@ await db.query()
 
 上面的 `orderNo` 会被归一化为 `order_no`，不会映射成显式 `columnName: 'order_number'`。
 
-Repository 规划使用 Filter Builder 表达应用层条件：
-
-```ts
-await db.repository('orders').findMany({
-  filter: (filter) => filter.string('orderNo').eq('SO-001'),
-});
-```
-
-这部分当前尚未实现，详见 [Repository 概览](../repository/overview.md) 和 [Filter Builder](../repository/filter-builder.md)。
+Repository 规划使用 Filter Builder 表达应用层条件。`db.repository()` 当前尚未实现，不要把 Repository 规划示例复制到运行时代码；详见 [Repository 概览](../repository/overview.md) 和 [Filter Builder](../repository/filter-builder.md)。
 
 ## 当前边界
 

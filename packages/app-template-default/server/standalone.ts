@@ -1,186 +1,94 @@
 import { serve } from '@hono/node-server';
+import type { Hono } from 'hono';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createApp, joinBasePath, normalizeBasePath } from './app.js';
-import { type EnvMap, getEnvBoolean, getEnvString, readEnvFiles } from './env.js';
+import { createAppRuntime, type AppRuntime } from '@nocobase/app-server/runtime';
+
+import type { AppConfig } from './config/index.js';
+import type { ClosableApp } from './app.js';
+import { createAppFromRuntime, loadStandaloneAppConfig, mountAppAtPublicBasePath, prepareAppRuntime } from './runtime/index.js';
 
 export interface StandaloneServerOptions {
   viteDevUrl?: string | false;
 }
 
-export function createStandaloneServer(options: StandaloneServerOptions = {}): ReturnType<typeof createApp> {
-  const env = loadServerEnv();
+export interface StandaloneServer extends Hono {
+  close(): Promise<void>;
+}
 
-  const viteDevUrl = resolveViteDevUrl(options.viteDevUrl, env);
-  const packageRoot = getPackageRoot();
-  const appName = getEnvString(env, 'APP_NAME') ?? 'app-template-default';
-  const basePath = normalizeBasePath(getEnvString(env, 'APP_BASE_PATH') ?? `/${appName}`);
-  const browserBasePath = normalizeBasePath(getEnvString(env, 'APP_BROWSER_BASE_PATH') ?? basePath);
-  const apiProxyPath = resolveApiProxyPathFromEnv(env, basePath);
-
-  return createApp({
-    appName,
-    basePath,
-    browserBasePath,
-    apiProxyPath,
-    browserApiUrl: apiProxyPath,
-    clientHandler: viteDevUrl ? (request) => proxyToViteDevServer(request, viteDevUrl) : undefined,
-    clientIndexPath: getEnvString(env, 'APP_CLIENT_INDEX') ?? path.join(packageRoot, 'dist/client/index.html'),
-    nocoBaseApiUrl: getEnvString(env, 'NOCOBASE_API_PROXY_TARGET'),
-    apiClientStoragePrefix: getEnvString(env, 'API_CLIENT_STORAGE_PREFIX'),
-    apiClientStorageType: getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
-    apiClientShareToken: getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
-  });
+export function createStandaloneServer(options: StandaloneServerOptions = {}): StandaloneServer {
+  const runtime = createStandaloneRuntime();
+  return createStandaloneAppFromRuntime(runtime, options);
 }
 
 export function startServer(): void {
-  const env = loadServerEnv();
-  const app = createStandaloneServer();
-  const host = getEnvString(env, 'APP_SERVER_HOST') ?? '127.0.0.1';
-  const port = numberFromEnv(env, 'APP_SERVER_PORT') ?? 13000;
+  void startServerAsync().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
 
-  serve(
+async function startServerAsync(): Promise<void> {
+  const runtime = createStandaloneRuntime();
+  await prepareAppRuntime(runtime);
+  const app = createStandaloneAppFromRuntime(runtime);
+  const { config } = runtime;
+
+  const server = serve(
     {
       fetch: app.fetch,
-      hostname: host,
-      port,
+      hostname: config.server.host,
+      port: config.server.port,
     },
     (info) => {
-      if (getEnvString(env, 'APP_SERVER_START_LOG') !== 'false') {
+      if (config.server.startLog) {
         console.log(`App server listening on http://${info.address}:${info.port}`);
       }
     },
   );
+
+  registerShutdownHandlers(app, server);
 }
 
-function resolveViteDevUrl(value: string | false | undefined, env: EnvMap): URL | undefined {
-  if (value === false || getEnvString(env, 'NODE_ENV') === 'production') {
-    return undefined;
-  }
-
-  const raw = value ?? getEnvString(env, 'APP_VITE_DEV_URL') ?? resolveViteDevUrlFromEnv(env);
-  if (!raw) {
-    return undefined;
-  }
-
-  const normalized = raw.trim();
-  if (!normalized || normalized === 'false' || normalized === '0') {
-    return undefined;
-  }
-
-  return new URL(normalized);
+export function createStandaloneRuntime(): AppRuntime<AppConfig> {
+  return createAppRuntime(loadStandaloneAppConfig(import.meta.url));
 }
 
-function resolveViteDevUrlFromEnv(env: EnvMap): string | undefined {
-  const host = getEnvString(env, 'APP_VITE_DEV_HOST');
-  const port = getEnvString(env, 'APP_VITE_DEV_PORT');
-  if (!host && !port) {
-    return undefined;
-  }
+function createStandaloneAppFromRuntime(
+  runtime: AppRuntime<AppConfig>,
+  options: StandaloneServerOptions = {},
+): StandaloneServer {
+  const app = createAppFromRuntime(runtime, options);
+  const mounted = mountAppAtPublicBasePath(app, runtime.config.app.publicBasePath);
+  const closeApp = mounted.close;
+  const close = onceAsync(async () => {
+    await Promise.all([
+      closeApp(),
+      runtime.dispose(),
+    ]);
+  });
 
-  return `http://${host ?? '127.0.0.1'}:${port ?? '5173'}`;
+  return Object.assign(mounted, { close });
 }
 
-async function proxyToViteDevServer(request: Request, viteDevUrl: URL): Promise<Response> {
-  const requestUrl = new URL(request.url);
-  const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, viteDevUrl);
-  const headers = new Headers(request.headers);
-  headers.set('host', targetUrl.host);
-  headers.set('accept-encoding', 'identity');
-  removeHopByHopHeaders(headers);
-
-  try {
-    const response = await fetch(targetUrl, {
-      method: request.method,
-      headers,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-      redirect: 'manual',
-      duplex: 'half',
-    } as RequestInit & { duplex: 'half' });
-
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: createProxyResponseHeaders(response.headers),
-    });
-  } catch (error) {
-    return Response.json(
-      {
-        error: 'Vite dev server is unavailable.',
-        target: viteDevUrl.origin,
-        message: error instanceof Error ? error.message : String(error),
-      },
-      {
-        status: 502,
-      },
-    );
-  }
-}
-
-function createProxyResponseHeaders(headers: Headers): Headers {
-  const nextHeaders = new Headers(headers);
-  removeHopByHopHeaders(nextHeaders);
-  nextHeaders.delete('content-encoding');
-  nextHeaders.delete('content-length');
-  return nextHeaders;
-}
-
-function removeHopByHopHeaders(headers: Headers): void {
-  for (const header of [
-    'connection',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'te',
-    'trailer',
-    'transfer-encoding',
-    'upgrade',
-  ]) {
-    headers.delete(header);
-  }
-}
-
-function loadServerEnv(): EnvMap {
-  const root = getPackageRoot();
-  const envFiles = [path.join(root, '.env'), path.join(root, '.env.local')];
-  return {
-    ...readEnvFiles(envFiles, process.env),
-    ...process.env,
+function registerShutdownHandlers(app: ClosableApp, server: ReturnType<typeof serve>): void {
+  const shutdown = async (): Promise<void> => {
+    await app.close();
+    server.close();
   };
+
+  process.once('SIGINT', () => void shutdown());
+  process.once('SIGTERM', () => void shutdown());
 }
 
-function getPackageRoot(): string {
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  if (path.basename(path.dirname(moduleDir)) === 'dist') {
-    return path.resolve(moduleDir, '../..');
-  }
+function onceAsync(dispose: () => void | Promise<void>): () => Promise<void> {
+  let promise: Promise<void> | undefined;
 
-  return path.resolve(moduleDir, '..');
-}
-
-function numberFromEnv(env: EnvMap, name: string): number | undefined {
-  const value = getEnvString(env, name);
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function resolveApiProxyPathFromEnv(env: EnvMap, basePath: string): string {
-  const raw = getEnvString(env, 'NOCOBASE_API_URL') ?? getEnvString(env, 'NOCOBASE_API_PROXY_PATH');
-  if (!raw) {
-    return joinBasePath(basePath, '/v2/api');
-  }
-
-  try {
-    const url = new URL(raw);
-    return normalizeBasePath(url.pathname);
-  } catch {
-    return normalizeBasePath(raw);
-  }
+  return () => {
+    promise ??= Promise.resolve().then(dispose);
+    return promise;
+  };
 }
 
 if (isEntrypoint()) {
@@ -188,6 +96,12 @@ if (isEntrypoint()) {
 }
 
 function isEntrypoint(): boolean {
+  const modulePath = fileURLToPath(import.meta.url);
   const entry = process.argv[1];
-  return Boolean(entry && path.resolve(entry) === fileURLToPath(import.meta.url));
+  const pm2Entry = process.env.pm_exec_path;
+
+  return Boolean(
+    (entry && path.resolve(entry) === modulePath) ||
+      (pm2Entry && path.resolve(pm2Entry) === modulePath),
+  );
 }

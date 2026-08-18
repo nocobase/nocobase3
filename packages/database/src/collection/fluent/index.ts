@@ -4,7 +4,6 @@ import type {
   CollectionAlterDefinition,
   CollectionDefinition,
   CollectionDefinitionBuilder,
-  ConstraintDefinition,
   DbOptions,
   FieldAlterInput,
   FieldDefinition,

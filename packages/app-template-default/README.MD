@@ -21,25 +21,24 @@ Vite runs behind the Hub server at `http://127.0.0.1:5173`.
 The minimum local configuration is:
 
 ```env
-APP_NAME=app-template-default
 APP_BASE_PATH=/app-template-default
-NOCOBASE_API_URL=/v2/api
 NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api
 ```
 
-- `APP_NAME` is the runtime app name. The default template uses `app-template-default`.
 - `APP_BASE_PATH` is the public mount path for the app server. The default template uses `/app-template-default`.
-- `NOCOBASE_API_URL` is the browser-facing NocoBase REST API root. The app server
-  uses `/v2/api` by default and proxies that path.
 - `NOCOBASE_API_PROXY_TARGET` is the upstream NocoBase REST API root and must
   include `/api`. This value is read by the app server and is not exposed through
   Vite.
-- `NOCOBASE_API_TOKEN` can provide a temporary development token. Never commit
-  real tokens.
+
+The browser-facing API route is derived from `APP_BASE_PATH`. For example,
+`APP_BASE_PATH=/app-template-default` exposes the proxy at
+`/app-template-default/v2/api`.
 
 The Portal uses the same authentication storage convention as NocoBase. If the
 server customizes it, keep `API_CLIENT_STORAGE_PREFIX`,
 `API_CLIENT_STORAGE_TYPE`, and `API_CLIENT_SHARE_TOKEN` aligned with the server.
+These values are copied to `dist/.env` and injected by the app server at request
+time; they are not Vite client build-time variables.
 
 ## Development
 
@@ -131,7 +130,7 @@ Copy `.env.e2e.example` to `.env.e2e` and provide a dedicated test account.
 Playwright always starts an isolated Portal dev server at
 `http://127.0.0.1:4173` (configurable with `NOCOBASE_E2E_PORT`) and stops it when
 the run finishes. Set `NOCOBASE_E2E_API_URL` to the real NocoBase backend and
-`NOCOBASE_PORTAL_BASE` to the Portal path under test. The default command never
+`APP_BASE_PATH` to the Portal path under test. The default command never
 reuses a manually started frontend.
 
 ```bash

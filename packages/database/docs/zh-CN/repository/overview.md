@@ -35,7 +35,7 @@ Repository
 
 ## 规划接口
 
-第一版 Repository 可以先保持克制，聚焦常规数据访问：
+Repository 可以先保持克制，聚焦常规数据访问：
 
 ```ts
 interface DatabaseManager {

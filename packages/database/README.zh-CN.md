@@ -2,7 +2,7 @@
 
 这是一个用于验证 Collection Builder、数据库连接管理和真实数据库兼容性的 TypeScript 原型。
 
-当前原型的重点是：保留 `Collection` 作为应用层数据模型抽象，通过 `CollectionBuilder` 把 Collection DSL 编译并应用到底层数据库 Schema。底层第一版使用 Knex，后续如有需要可以再增加其他适配器。
+当前原型的重点是：保留 `Collection` 作为应用层数据模型抽象，通过 `CollectionBuilder` 把 Collection DSL 编译并应用到底层数据库 Schema。默认底层适配器基于 Knex，如有需要可以增加其他适配器。
 
 ## 核心目标
 
@@ -15,18 +15,14 @@
 ## 快速开始
 
 ```ts
-import { createDatabaseManager } from '@nocobase/collection-builder-prototype';
+import { createDatabaseManager } from '@nocobase/database';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
     main: {
-      driver: 'knex',
-      client: 'better-sqlite3',
-      connection: {
-        filename: ':memory:',
-      },
-      useNullAsDefault: true,
+      dialect: 'sqlite',
+      filename: ':memory:',
     },
   },
 });
@@ -156,7 +152,7 @@ npm run test:db:down
 
 - 当前只实现了 Collection Builder，没有实现 Collection Generator。
 - 当前没有 Repository、Repository Filter Builder、Repository Filter AST、Model、Transformer。
-- Schema Adapter 第一版基于 Knex。
+- Schema Adapter 默认基于 Knex。
 - `check` constraint 已建模，但还没有完整编译到 SQL。
 - `dropConstraint` 当前实现仍较基础，后续需要按 constraint 类型增强。
-- `BuilderExecOptions` 中部分字段是预留扩展，当前主要验证 `dryRun`、`previewSql` 和 `syncMetadata`。
+- `BuilderExecOptions` 中 `ifNotExists`、`ifExists`、`transaction` 是预留扩展，当前不要把它们当成运行时保证；当前主要验证 `dryRun`、`previewSql`、`syncMetadata` 和 `strict`。

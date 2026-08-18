@@ -13,10 +13,24 @@ const extensionsRoot = fs.existsSync(registryRoot)
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: {
-      "@/extensions": extensionsRoot,
-      "@": fileURLToPath(new URL("./client", import.meta.url)),
-    },
+    alias: [
+      {
+        find: "@/jobs",
+        replacement: fileURLToPath(new URL("./server/jobs", import.meta.url)),
+      },
+      {
+        find: "@/services",
+        replacement: fileURLToPath(new URL("./server/services", import.meta.url)),
+      },
+      {
+        find: "@/extensions",
+        replacement: extensionsRoot,
+      },
+      {
+        find: "@",
+        replacement: fileURLToPath(new URL("./client", import.meta.url)),
+      },
+    ],
   },
   test: {
     root,

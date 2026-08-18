@@ -57,14 +57,19 @@ export class CollectionCompiler {
   private compileOperation(operation: CollectionOperation, context: CollectionCompilerContext): SchemaOperation[] {
     switch (operation.type) {
       case 'createCollection':
-        return [{ type: 'createTable', table: this.compileTable(operation.name, operation.definition, context) }];
+        return [pruneUndefined({
+          type: 'createTable',
+          table: this.compileTable(operation.name, operation.definition, context),
+          ifNotExists: operation.ifNotExists,
+        })];
       case 'alterCollection':
         return [this.compileAlterTable(operation.collection, operation.changes, context)];
       case 'dropCollection':
-        return [{
+        return [pruneUndefined({
           type: 'dropTable',
           tableName: this.effectiveTableName(operation.collection, context.collections?.[operation.collection]),
-        }];
+          ifExists: operation.ifExists,
+        })];
       case 'renameCollection':
         if (!operation.renameTable && !operation.renameTableTo) {
           return [];
@@ -119,7 +124,7 @@ export class CollectionCompiler {
     context: CollectionCompilerContext,
   ): TableSchemaDefinition {
     const tableName = this.effectiveTableName(name, definition);
-    const normalized = this.normalizeCollectionDefinition(name, definition);
+    const normalized = this.normalizeCollectionDefinition(definition);
 
     return {
       name: tableName,
@@ -280,7 +285,7 @@ export class CollectionCompiler {
     return { type: 'alterTable', tableName, operations };
   }
 
-  private normalizeCollectionDefinition(name: string, definition: CollectionDefinition): Required<Pick<CollectionDefinition, 'fields' | 'indexes' | 'constraints'>> {
+  private normalizeCollectionDefinition(definition: CollectionDefinition): Required<Pick<CollectionDefinition, 'fields' | 'indexes' | 'constraints'>> {
     const fields = [...(definition.fields ?? [])];
     const indexes = [...(definition.indexes ?? [])];
     const constraints = [...(definition.constraints ?? [])].filter((constraint) => {
@@ -564,6 +569,15 @@ function isRelationType(type: string): boolean {
     || type === 'hasOne'
     || type === 'hasMany'
     || type === 'belongsToMany';
+}
+
+function pruneUndefined<T extends Record<string, unknown>>(value: T): T {
+  for (const key of Object.keys(value)) {
+    if (value[key] === undefined) {
+      delete value[key];
+    }
+  }
+  return value;
 }
 
 function assertNever(value: never): never {

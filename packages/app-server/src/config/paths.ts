@@ -1,0 +1,28 @@
+import path from 'node:path';
+
+import type { ConfigPaths } from './types.js';
+
+export interface CreateConfigPathsOptions {
+  rootDir: string;
+  serverDir?: string;
+  configDir?: string;
+  storageDir?: string;
+}
+
+export function createConfigPaths(options: CreateConfigPathsOptions): ConfigPaths {
+  const rootDir = path.resolve(options.rootDir);
+  const serverDir = path.resolve(options.serverDir ?? path.join(rootDir, 'server'));
+  const configDir = path.resolve(options.configDir ?? path.join(serverDir, 'config'));
+  const storageDir = path.resolve(options.storageDir ?? path.join(rootDir, 'storage'));
+
+  return {
+    root: (pathInside = '') => resolveInside(rootDir, pathInside),
+    server: (pathInside = '') => resolveInside(serverDir, pathInside),
+    config: (pathInside = '') => resolveInside(configDir, pathInside),
+    storage: (pathInside = '') => resolveInside(storageDir, pathInside),
+  };
+}
+
+function resolveInside(rootDir: string, pathInside: string): string {
+  return path.resolve(rootDir, pathInside);
+}

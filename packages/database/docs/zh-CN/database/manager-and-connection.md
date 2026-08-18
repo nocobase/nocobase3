@@ -11,7 +11,6 @@ interface DatabaseManager {
   query(name?: string): QueryAdapter;
 
   connect(name?: string): Promise<DatabaseConnection>;
-  client<T = unknown>(name?: string): Promise<T>;
 
   transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
@@ -24,21 +23,15 @@ interface DatabaseManager {
 }
 ```
 
-未来 Repository 实现后，`DatabaseManager` 会增加应用层数据访问入口：
-
-```ts
-interface DatabaseManager {
-  repository(collectionName: string, connectionName?: string): Repository;
-}
-```
+`DatabaseManager` 当前没有 Repository 入口。Repository 是规划接口，当前不要在运行时代码中调用 `db.repository()`。
 
 ## DatabaseConnection
 
 ```ts
 interface DatabaseConnection {
   name: string;
-  driver: string;
-  dialect: string;
+  driver: 'better-sqlite3' | 'pg' | 'mysql2';
+  dialect: 'sqlite' | 'postgres' | 'mysql';
   capabilities: DatabaseCapabilities;
 
   builder: CollectionBuilder;
@@ -57,13 +50,7 @@ interface DatabaseConnection {
 }
 ```
 
-未来 Repository 实现后，`DatabaseConnection` 会提供：
-
-```ts
-interface DatabaseConnection {
-  repository(collectionName: string): Repository;
-}
-```
+`DatabaseConnection` 当前没有 Repository 入口。Repository 是规划接口，当前不要在运行时代码中调用 `connection.repository()`。
 
 ## lazy handle
 
@@ -79,10 +66,10 @@ const query = db.query();
 
 ## async escape hatch
 
-`client()` 返回底层数据库客户端，因此是 async：
+`client()` 返回当前 adapter 的底层 client，因此是 async。默认 Knex adapter 下，它返回 Knex 实例，不是 `pg`、`mysql2` 或 `better-sqlite3` 的原生实例：
 
 ```ts
-const knex = await db.client();
+const knex = await db.connection().client();
 ```
 
 ## transaction
@@ -106,7 +93,7 @@ await db.transaction(async (connection) => {
 ## Agent 注意事项
 
 - 普通 schema 变更使用 `db.builder()`。
-- 需要底层 driver 能力时才使用 `db.client()`。
+- 需要底层 adapter client 能力时才使用 `db.connection().client()`。
 - transaction 内应使用回调参数里的 `connection`，不要回到外层 `db`。
 - 完成测试或脚本后调用 `db.destroy()`。
 - Repository 是规划接口，当前尚未实现；筛选设计见 [Filter Builder](../repository/filter-builder.md)。

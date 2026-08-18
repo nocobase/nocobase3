@@ -13,7 +13,6 @@ import type {
   BuilderExecOptions,
   BuilderImpact,
   BuilderResult,
-  BuilderWarning,
   CollectionAlterDefinition,
   CollectionAlterInput,
   CollectionDefinition,
@@ -22,7 +21,6 @@ import type {
   CollectionOperation,
   ConstraintDefinition,
   FieldAlterInput,
-  FieldDefinition,
   FieldMetadataPatch,
   IndexDefinition,
   MaterializedViewCollectionInput,
@@ -209,9 +207,10 @@ export class CollectionBuilder {
     operations: CollectionOperation[],
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    assertNoRelationColumnNameOperations(operations);
-    const compilerContext = await this.createCompilerContext(operations);
-    const compiledSchemaOperations = this.compiler.compile(operations, compilerContext);
+    const effectiveOperations = applyExecOptions(operations, options);
+    assertNoRelationColumnNameOperations(effectiveOperations);
+    const compilerContext = await this.createCompilerContext(effectiveOperations);
+    const compiledSchemaOperations = this.compiler.compile(effectiveOperations, compilerContext);
     const capabilityPlan = planCapabilities(compiledSchemaOperations, {
       capabilities: this.schemaAdapter.capabilities,
       dialect: this.schemaAdapter.dialect,
@@ -225,20 +224,20 @@ export class CollectionBuilder {
     const sql = options.previewSql && this.schemaAdapter.compile
       ? await this.schemaAdapter.compile(schemaOperations)
       : undefined;
-    const impact = [...createImpact(operations), ...capabilityPlan.impact];
+    const impact = [...createImpact(effectiveOperations), ...capabilityPlan.impact];
 
     if (!options.dryRun) {
       await this.schemaAdapter.execute(schemaOperations);
       if (options.syncMetadata !== false) {
         await this.applyMetadataChanges(
-          filterMetadataOperations(this.compiler, operations, schemaOperations, compilerContext),
+          filterMetadataOperations(this.compiler, effectiveOperations, schemaOperations, compilerContext),
           compilerContext,
         );
       }
     }
 
     return {
-      operations,
+      operations: effectiveOperations,
       schemaOperations,
       sql,
       impact,
@@ -506,6 +505,38 @@ function normalizeViewInput(input: ViewCollectionInput): CollectionDefinition {
     return builder.toDefinition();
   }
   return input;
+}
+
+function applyExecOptions(
+  operations: CollectionOperation[],
+  options: Pick<BuilderExecOptions, 'ifNotExists' | 'ifExists'>,
+): CollectionOperation[] {
+  return operations.map((operation) => {
+    switch (operation.type) {
+      case 'createCollection': {
+        const ifNotExists = operation.ifNotExists ?? options.ifNotExists;
+        if (ifNotExists === undefined) {
+          return operation;
+        }
+        return {
+          ...operation,
+          ifNotExists,
+        };
+      }
+      case 'dropCollection': {
+        const ifExists = operation.ifExists ?? options.ifExists;
+        if (ifExists === undefined) {
+          return operation;
+        }
+        return {
+          ...operation,
+          ifExists,
+        };
+      }
+      default:
+        return operation;
+    }
+  });
 }
 
 function createImpact(operations: CollectionOperation[]): BuilderImpact[] {

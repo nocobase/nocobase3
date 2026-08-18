@@ -36,9 +36,10 @@ Collection 提供一层稳定的应用抽象：
 - `CollectionBuilder`：创建、修改、删除 Collection 和字段。
 - `CollectionOperation[]`：可解释的变更计划，适合 Agent 和 file sync diff。
 - `SchemaAdapter`：底层数据库 schema 操作接口。
-- `KnexSchemaAdapter`：第一版 Knex 实现。
+- `KnexSchemaAdapter`：基于 Knex 的 SchemaAdapter。
 - `DatabaseManager`：管理多数据库连接。
 - `QueryAdapter`：数据库层 Query Builder，Repository 尚未实现。
+- `Migration`：版本化数据库变更 runner，负责加载 migration、执行 pending、写 history、控制事务和 lock。
 - `Repository`：计划中的 Collection-aware 数据访问层，当前未实现。
 - `Repository Filter Builder`：计划中的应用层筛选条件 DSL，当前未实现。
 - `InMemoryCollectionMetadataStore`：当前原型使用的内存元数据存储。
@@ -48,6 +49,7 @@ Collection 提供一层稳定的应用抽象：
 - 快速理解主线见 [快速开始](./quick-start.md)。
 - Builder 用法见 [Builder API 总览](./builder/overview.md)。
 - Query 用法见 [QueryAdapter 概览](./query/overview.md)。
+- Migration 用法和维护清单见 [Migration](./migration/overview.md) 和 [Migration 维护清单](./migration/maintenance.md)。
 - Repository 规划见 [Repository 概览](./repository/overview.md)。
 - Repository filter 设计见 [Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
 - 命名策略见 [命名概念](./concepts/naming.md)。
@@ -62,6 +64,8 @@ Collection 提供一层稳定的应用抽象：
 Agent 的推荐 DSL 取决于输出载体：
 
 - 写 migration 文件、插件代码或其他 TypeScript 代码时，优先使用 Fluent DSL。
+- Migration 文件固定使用 `export default defineMigration({})`。
+- Migration context 顶层只有 `builder`、`query`、`connection`；不公开 `schema`，adapter client 只通过 `connection.client()` 兜底。
 - 调用 HTTP API、CLI，或生成 `collection.json` 这类可序列化配置时，优先使用 Object DSL。
 - 做 file sync、snapshot diff、执行计划审计或批量 apply 时，优先使用 `CollectionOperation[]`。
 - `db.query()` 只做物理查询名的轻量归一化，不读取 Collection metadata。
