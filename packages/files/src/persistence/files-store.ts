@@ -13,7 +13,7 @@ export interface FilesStore {
   failUpload(workspaceId: string, uploadId: string, reasonMetadata?: JsonObject): Promise<UploadRecord>;
   listExpiredPendingUploads(now: Date, limit: number): Promise<UploadRecord[]>;
   expireUpload(workspaceId: string, uploadId: string, now: Date): Promise<UploadRecord>;
-  markFileDeleted(workspaceId: string, fileId: string, actorId: string, now: Date): Promise<FileRecord>;
+  markFileDeleted(workspaceId: string, fileId: string, actorId: string, now: Date): Promise<{ file: FileRecord; newlyDeleted: boolean }>;
   listFilesPendingPhysicalDelete(limit: number): Promise<FileRecord[]>;
   markPhysicalDeleteCompleted(workspaceId: string, fileId: string, now: Date): Promise<FileRecord>;
 }
