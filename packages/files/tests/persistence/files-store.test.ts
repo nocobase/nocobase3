@@ -22,6 +22,8 @@ describe("persistence boundaries", () => {
     const ready = await store.completeUpload("a", "u1", { contentType: "text/plain", size: 1 });
     expect(ready.status).toBe("ready");
     expect((await store.completeUpload("a", "u1", { contentType: "wrong", size: 99 })).id).toBe("f1");
+    const deletion = await Promise.all([store.markFileDeleted("a", "f1", "u1", new Date()), store.markFileDeleted("a", "f1", "u1", new Date())]);
+    expect(deletion.filter(result => result.newlyDeleted)).toHaveLength(1);
     await db.destroy();
   });
 });

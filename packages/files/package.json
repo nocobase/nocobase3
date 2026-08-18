@@ -4,7 +4,7 @@
   "description": "Headless Files Kernel contracts and module boundary.",
   "type": "module",
   "sideEffects": false,
-  "files": ["dist", "README.md", "AGENTS.md"],
+  "files": ["dist", "README.md", "INTEGRATION.md", "SECURITY.md", "AGENTS.md"],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -22,6 +22,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "openapi:generate": "pnpm build && node dist/openapi/generate.js",
     "prepack": "pnpm build"
   },
   "dependencies": {

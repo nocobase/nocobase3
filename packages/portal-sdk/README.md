@@ -13,6 +13,7 @@ Use documented package exports only. Imports from `src/` are not public API.
 - `@nocobase/portal-sdk/auth` — Refine authentication provider, callback capture, authenticator types, and headless hooks.
 - `@nocobase/portal-sdk/data` — NocoBase Refine data provider.
 - `@nocobase/portal-sdk/acl` — ACL store, evaluator, record permissions, hooks, and access-control provider.
+- `@nocobase/portal-sdk/files` — headless authenticated Files API client and upload orchestration.
 - `@nocobase/portal-sdk/routing` — application route definitions, Refine resource compilation, and route-surface lifecycle state.
 - `@nocobase/portal-sdk/extensions` — stable `AppExtension` ABI and pure contribution collection.
 - `@nocobase/portal-sdk/i18n` — translation registration, configurable i18next runtime, locale state, and Refine adapter.
@@ -72,3 +73,26 @@ The SDK intentionally excludes shadcn components, Tailwind styling, App Shell,
 branding, business routes and pages, login UI, visual Registry components,
 application locale configuration, and translation content. Those remain source
 assets owned by each Portal project.
+
+## Headless Files client
+
+```ts
+import { createFilesClient } from "@nocobase/portal-sdk/files";
+import { nocobaseClient } from "@nocobase/portal-sdk/client";
+
+const files = createFilesClient({ client: nocobaseClient });
+const file = await files.upload(blob, { originalName: "report.pdf", idempotencyKey: "upload-123" });
+const metadata = await files.get(file.id);
+const preview = await files.createUrl(file.id);
+const download = await files.createUrl(file.id, { disposition: "attachment" });
+await files.remove(file.id);
+```
+
+Persist only `file.id`, never a temporary URL. Reuse the same idempotency key
+when retrying an upload. The client performs prepare, raw Blob transfer, and
+complete against the Files API; presigned targets receive only their signed
+headers and content type, never Portal Authorization, cookies, or workspace
+headers. UI and progress presentation belong to Registry code, not this
+headless SDK. Temporary URLs expire and must be requested again.
+
+The returned object `id` is the stable `fileId`. Removing an App-owned relation is not the same as `files.remove()`: call Kernel deletion only after the App knows the file is unreferenced. Folders, relations, tags, versions, and cleanup policy remain App-owned. Registry components installed into an App are editable App source; this SDK remains the immutable transport boundary.

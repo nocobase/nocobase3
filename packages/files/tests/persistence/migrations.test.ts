@@ -12,6 +12,8 @@ describe("files migrations", () => {
     expect((await migrator.migrateToLatest()).error).toBeUndefined();
     expect((await db.introspection.getTables()).map(t => t.name)).toContain("files");
     expect((await migrator.migrateDown()).error).toBeUndefined();
+    expect((await db.introspection.getTables()).find(t => t.name === "file_uploads")?.columns.map(c => c.name)).not.toContain("cleanup_status");
+    expect((await migrator.migrateDown()).error).toBeUndefined();
     expect((await db.introspection.getTables()).map(t => t.name)).not.toContain("files");
     expect((await migrator.migrateToLatest()).error).toBeUndefined();
   });
