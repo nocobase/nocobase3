@@ -1,5 +1,7 @@
 import type { DatabaseManager, Row } from '@nocobase/database';
 
+import { ServiceUnavailableError } from './errors.js';
+
 const appSettingsTable = 'appSettings';
 const appSettingsColumns = ['key', 'value', 'createdAt', 'updatedAt'] as const;
 
@@ -10,6 +12,10 @@ export interface AppSetting {
   updatedAt: unknown;
 }
 
+export interface AppSettings {
+  all(): Promise<AppSetting[]>;
+}
+
 interface AppSettingRecord extends Row {
   key: string;
   value: unknown;
@@ -17,7 +23,7 @@ interface AppSettingRecord extends Row {
   updatedAt: unknown;
 }
 
-export class AppSettingsService {
+export class AppSettingsService implements AppSettings {
   constructor(private readonly database: DatabaseManager) {}
 
   async all(): Promise<AppSetting[]> {
@@ -27,5 +33,11 @@ export class AppSettingsService {
       .select(appSettingsColumns)
       .orderBy('key')
       .execute<AppSetting>();
+  }
+}
+
+export class UnavailableAppSettingsService implements AppSettings {
+  async all(): Promise<AppSetting[]> {
+    throw new ServiceUnavailableError('Database is not configured.');
   }
 }

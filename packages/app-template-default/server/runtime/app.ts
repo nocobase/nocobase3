@@ -5,7 +5,7 @@ import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { SpaHandler } from '@nocobase/app-server/spa';
 import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
-import { createApp } from '../app.js';
+import { createApp, type ClosableApp } from '../app.js';
 import type { AppConfig } from '../config/index.js';
 
 export interface CreateAppFromRuntimeOptions {
@@ -29,7 +29,12 @@ export function createAppFromRuntime(
     publicBasePath: config.app.publicBasePath,
     internalApiProxyPath: config.app.internalApiProxyPath,
     publicApiUrl: config.app.publicApiUrl,
+    cache: config.cache,
     database: runtime.database,
+    drive: config.drive,
+    logger: config.logger,
+    queue: config.queue,
+    session: config.session,
     nocoBaseApiUrl: config.app.nocoBaseApiUrl,
     spa: {
       handler: viteDevUrl
@@ -41,6 +46,8 @@ export function createAppFromRuntime(
   });
 }
 
+export function mountAppAtPublicBasePath(app: ClosableApp, publicBasePath: string): ClosableApp;
+export function mountAppAtPublicBasePath(app: Hono, publicBasePath: string): Hono;
 export function mountAppAtPublicBasePath(app: Hono, publicBasePath: string): Hono {
   const basePath = normalizeBasePath(publicBasePath);
   if (!basePath) {
@@ -52,6 +59,12 @@ export function mountAppAtPublicBasePath(app: Hono, publicBasePath: string): Hon
   mounted.all('/healthz', (context) => app.fetch(context.req.raw));
   mounted.all(basePath, (context) => dispatchMountedApp(app, context.req.raw, basePath));
   mounted.all(`${basePath}/*`, (context) => dispatchMountedApp(app, context.req.raw, basePath));
+
+  if (isClosableApp(app)) {
+    return Object.assign(mounted, {
+      close: () => app.close(),
+    });
+  }
 
   return mounted;
 }
@@ -83,6 +96,10 @@ function dispatchMountedApp(app: Hono, request: Request, publicBasePath: string)
   }
 
   return app.fetch(strippedRequest);
+}
+
+function isClosableApp(app: Hono): app is ClosableApp {
+  return typeof (app as Partial<ClosableApp>).close === 'function';
 }
 
 function createPublicBasePathOriginProxyHandler(targetOrigin: URL, publicBasePath: string): SpaHandler {

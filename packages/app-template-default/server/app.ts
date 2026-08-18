@@ -10,6 +10,7 @@ import {
   resolveAppName,
   resolveAppNameFromBasePath,
 } from '@nocobase/app-server/support';
+import { createSessionMiddleware } from '@nocobase/session';
 import { createApiRoutes } from './routes/api.js';
 import { createAppServices } from './services/index.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
@@ -17,7 +18,11 @@ import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
 export type { CreateAppOptions, SpaHandler } from './app-options.js';
 export { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
-export function createApp(options: CreateAppOptions = {}): Hono {
+export interface ClosableApp extends Hono {
+  close(): Promise<void>;
+}
+
+export function createApp(options: CreateAppOptions = {}): ClosableApp {
   const publicBasePath = normalizeBasePath(options.publicBasePath ?? '/app-template-default');
   const internalBasePath = normalizeBasePath(options.internalBasePath ?? '');
   const appName = resolveAppName(options.appName ?? resolveAppNameFromBasePath(publicBasePath, 'app-template-default'));
@@ -27,9 +32,16 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   const spaIndexPath = options.spa?.indexPath ?? path.resolve(process.cwd(), 'index.html');
   const spaRuntime = options.spa?.runtime ?? {};
   const services = createAppServices({
+    cache: options.cache,
     database: options.database,
+    drive: options.drive,
+    logger: options.logger,
+    queue: options.queue,
+    session: options.session,
   });
   const app = new Hono();
+
+  app.use('*', createSessionMiddleware(services.sessionManager));
 
   app.get('/healthz', (c) => {
     return c.json({
@@ -68,5 +80,16 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     }),
   });
 
-  return app;
+  return Object.assign(app, {
+    close: onceAsync(() => services.dispose()),
+  });
+}
+
+function onceAsync(dispose: () => void | Promise<void>): () => Promise<void> {
+  let promise: Promise<void> | undefined;
+
+  return () => {
+    promise ??= Promise.resolve().then(dispose);
+    return promise;
+  };
 }

@@ -20,10 +20,30 @@ const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url).
 
 const config = loadStandaloneAppConfig(standaloneModuleUrl);
 
+const activeLoggerName = config.logger.default;
+const loggerChannels: Record<string, unknown> = config.logger.channels;
+const activeLogger =
+  activeLoggerName ? loggerChannels[activeLoggerName] : undefined;
+const activeCacheName = config.cache.default;
+const cacheStores: Record<string, unknown> = config.cache.stores;
+const activeCache =
+  activeCacheName ? cacheStores[activeCacheName] : undefined;
 const activeDatabaseName = config.database.default;
 const databaseConnections: Record<string, unknown> = config.database.connections;
 const activeDatabase =
   activeDatabaseName ? databaseConnections[activeDatabaseName] : undefined;
+const activeDriveName = config.drive.default;
+const driveDisks: Record<string, unknown> = config.drive.disks;
+const activeDrive =
+  activeDriveName ? driveDisks[activeDriveName] : undefined;
+const activeQueueName = config.queue.default;
+const queueConnections: Record<string, unknown> = config.queue.connections;
+const activeQueue =
+  activeQueueName ? queueConnections[activeQueueName] : undefined;
+const activeSessionName = config.session.default;
+const sessionStores: Record<string, unknown> = config.session.stores;
+const activeSession =
+  activeSessionName ? sessionStores[activeSessionName] : undefined;
 const report = {
   mode: 'standalone',
   envFiles: envFiles.map((file) => ({
@@ -49,6 +69,14 @@ const report = {
     indexExists: existsSync(config.spa.indexPath),
     runtime: config.spa.runtime,
   },
+  logger: {
+    default: activeLoggerName || '(none)',
+    active: summarizeLoggerChannel(activeLogger),
+  },
+  cache: {
+    default: activeCacheName || '(none)',
+    active: summarizeCacheStore(activeCache),
+  },
   database: {
     default: activeDatabaseName || '(none)',
     active: summarizeDatabaseConnection(activeDatabase),
@@ -59,6 +87,50 @@ const report = {
       tableName: config.database.migrations.tableName ?? '(default)',
       lockTableName: config.database.migrations.lockTableName ?? '(default)',
     },
+  },
+  drive: {
+    default: activeDriveName || '(none)',
+    active: summarizeDriveDisk(activeDrive),
+    links: config.drive.links,
+  },
+  queue: {
+    default: activeQueueName || '(none)',
+    active: summarizeQueueConnection(activeQueue),
+    worker: {
+      connection: config.queue.worker?.connection ?? '(default)',
+      queues: config.queue.worker?.queues ?? [],
+      concurrency: config.queue.worker?.concurrency ?? 1,
+      idleDelay: String(config.queue.worker?.idleDelay ?? '2s'),
+      timeout: config.queue.worker?.timeout ? String(config.queue.worker.timeout) : '(none)',
+    },
+    jobs: {
+      locations: config.queue.jobs?.locations ?? [],
+      autoLoad: config.queue.jobs?.autoLoad ?? true,
+      hotReload: config.queue.jobs?.hotReload ?? false,
+    },
+  },
+  session: {
+    enabled: config.session.enabled ?? true,
+    default: activeSessionName || '(none)',
+    active: summarizeSessionStore(activeSession),
+    cookie: {
+      name: config.session.cookie.name,
+      path: config.session.cookie.path ?? '/',
+      domain: config.session.cookie.domain ?? '(current host)',
+      secure: config.session.cookie.secure ?? false,
+      httpOnly: config.session.cookie.httpOnly ?? true,
+      sameSite: config.session.cookie.sameSite ?? 'lax',
+      partitioned: config.session.cookie.partitioned ?? false,
+      expireOnClose: config.session.cookie.expireOnClose ?? false,
+    },
+    lifetime: {
+      absolute: String(config.session.lifetime.absolute),
+      inactivity: config.session.lifetime.inactivity ? String(config.session.lifetime.inactivity) : '(none)',
+      rolling: config.session.lifetime.rolling ?? true,
+    },
+    secret: config.session.secret ? '<configured>' : '(missing)',
+    previousSecrets: config.session.previousSecrets?.length ?? 0,
+    gcLottery: config.session.gcLottery ?? [2, 100],
   },
 };
 
@@ -96,6 +168,174 @@ function summarizeDatabaseConnection(connection: unknown): JsonValue {
   return summary;
 }
 
+function summarizeLoggerChannel(channel: unknown): JsonValue {
+  if (!isObject(channel)) {
+    return null;
+  }
+
+  const driver = stringValue(channel.driver) ?? 'unknown';
+  const summary: Record<string, JsonValue> = {
+    driver,
+  };
+
+  for (const key of ['name', 'level']) {
+    const value = stringValue(channel[key]);
+    if (value) {
+      summary[key] = value;
+    }
+  }
+
+  const pretty = booleanValue(channel.pretty);
+  if (pretty !== undefined) {
+    summary.pretty = pretty;
+  }
+
+  if (isObject(channel.base)) {
+    summary.base = jsonObject(channel.base);
+  }
+
+  if (Array.isArray(channel.redact)) {
+    summary.redactPaths = channel.redact.length;
+  }
+
+  return summary;
+}
+
+function summarizeCacheStore(store: unknown): JsonValue {
+  if (!isObject(store)) {
+    return null;
+  }
+
+  const driver = stringValue(store.driver) ?? 'unknown';
+  const summary: Record<string, JsonValue> = {
+    driver,
+  };
+
+  for (const key of ['ttl', 'maxTtl', 'namespace']) {
+    const value = store[key];
+    if (typeof value === 'string' || typeof value === 'number') {
+      summary[key] = value;
+    }
+  }
+
+  for (const key of ['lruSize', 'checkInterval']) {
+    const value = numberValue(store[key]);
+    if (value !== undefined) {
+      summary[key] = value;
+    }
+  }
+
+  for (const key of ['useClone', 'stats', 'tags']) {
+    const value = booleanValue(store[key]);
+    if (value !== undefined) {
+      summary[key] = value;
+    }
+  }
+
+  return summary;
+}
+
+function summarizeDriveDisk(disk: unknown): JsonValue {
+  if (!isObject(disk)) {
+    return null;
+  }
+
+  const driver = stringValue(disk.driver) ?? 'unknown';
+  const summary: Record<string, JsonValue> = {
+    driver,
+    visibility: stringValue(disk.visibility) ?? 'private',
+  };
+
+  for (const key of ['location', 'bucket', 'region', 'endpoint', 'url', 'cdnUrl', 'encryption']) {
+    const value = disk[key];
+    if (typeof value === 'string' && value) {
+      summary[key] = value;
+    }
+  }
+
+  for (const key of ['forcePathStyle', 'supportsACL']) {
+    const value = booleanValue(disk[key]);
+    if (value !== undefined) {
+      summary[key] = value;
+    }
+  }
+
+  if (isObject(disk.credentials)) {
+    summary.credentials = {
+      accessKeyId: stringValue(disk.credentials.accessKeyId) ? '<configured>' : '(missing)',
+      secretAccessKey: stringValue(disk.credentials.secretAccessKey) ? '<configured>' : '(missing)',
+    };
+  }
+
+  return summary;
+}
+
+function summarizeQueueConnection(connection: unknown): JsonValue {
+  if (!isObject(connection)) {
+    return null;
+  }
+
+  const driver = stringValue(connection.driver) ?? 'unknown';
+  const summary: Record<string, JsonValue> = {
+    driver,
+  };
+
+  for (const key of ['host', 'port', 'db', 'keyPrefix', 'connection', 'table', 'schedulesTable']) {
+    const value = connection[key];
+    if (typeof value === 'string' || typeof value === 'number') {
+      summary[key] = value;
+    }
+  }
+
+  const tls = booleanValue(connection.tls);
+  if (tls !== undefined) {
+    summary.tls = tls;
+  }
+
+  for (const key of ['username', 'password']) {
+    const value = stringValue(connection[key]);
+    if (value) {
+      summary[key] = '<configured>';
+    }
+  }
+
+  return summary;
+}
+
+function summarizeSessionStore(store: unknown): JsonValue {
+  if (!isObject(store)) {
+    return null;
+  }
+
+  const driver = stringValue(store.driver) ?? 'unknown';
+  const summary: Record<string, JsonValue> = {
+    driver,
+  };
+
+  for (const key of ['base', 'url', 'host', 'port', 'db', 'keyPrefix', 'ttl']) {
+    const value = store[key];
+    if (typeof value === 'string') {
+      summary[key] = key === 'url' ? formatOptionalUrl(value) : value;
+    } else if (typeof value === 'number') {
+      summary[key] = value;
+    }
+  }
+
+  const tls = booleanValue(store.tls);
+  if (tls !== undefined) {
+    summary.tls = tls;
+  }
+
+  for (const key of ['username', 'password']) {
+    const value = stringValue(store[key]);
+    if (value) {
+      summary[key] = '<configured>';
+    }
+  }
+
+  return summary;
+}
+
 function printReport(value: typeof report): void {
   printSection('Server mode');
   printPair('Mode', value.mode);
@@ -124,6 +364,14 @@ function printReport(value: typeof report): void {
   printPair('Storage type', value.spa.runtime.storageType);
   printPair('Share token', String(value.spa.runtime.shareToken));
 
+  printSection('Logger');
+  printPair('Default channel', value.logger.default);
+  printJson('Active channel', value.logger.active);
+
+  printSection('Cache');
+  printPair('Default store', value.cache.default);
+  printJson('Active store', value.cache.active);
+
   printSection('Database');
   printPair('Default connection', value.database.default);
   printJson('Active connection', value.database.active);
@@ -134,6 +382,42 @@ function printReport(value: typeof report): void {
   printPair('Auto-run migrations', String(value.database.migrations.autoRun));
   printPair('Migration table', value.database.migrations.tableName);
   printPair('Migration lock table', value.database.migrations.lockTableName);
+
+  printSection('Drive');
+  printPair('Default disk', value.drive.default);
+  printJson('Active disk', value.drive.active);
+  printJson('Links', value.drive.links);
+
+  printSection('Queue');
+  printPair('Default connection', value.queue.default);
+  printJson('Active connection', value.queue.active);
+  printPair('Worker connection', value.queue.worker.connection);
+  printPair('Worker queues', value.queue.worker.queues.join(', ') || '(none)');
+  printPair('Worker concurrency', String(value.queue.worker.concurrency));
+  printPair('Worker idle delay', value.queue.worker.idleDelay);
+  printPair('Worker timeout', value.queue.worker.timeout);
+  printJson('Job locations', value.queue.jobs.locations);
+  printPair('Auto-load jobs', String(value.queue.jobs.autoLoad));
+  printPair('Hot reload jobs', String(value.queue.jobs.hotReload));
+
+  printSection('Session');
+  printPair('Enabled', String(value.session.enabled));
+  printPair('Default store', value.session.default);
+  printJson('Active store', value.session.active);
+  printPair('Cookie name', value.session.cookie.name);
+  printPair('Cookie path', value.session.cookie.path);
+  printPair('Cookie domain', value.session.cookie.domain);
+  printPair('Cookie secure', String(value.session.cookie.secure));
+  printPair('Cookie httpOnly', String(value.session.cookie.httpOnly));
+  printPair('Cookie sameSite', value.session.cookie.sameSite);
+  printPair('Cookie partitioned', String(value.session.cookie.partitioned));
+  printPair('Expire on close', String(value.session.cookie.expireOnClose));
+  printPair('Absolute lifetime', value.session.lifetime.absolute);
+  printPair('Inactivity timeout', value.session.lifetime.inactivity);
+  printPair('Rolling inactivity', String(value.session.lifetime.rolling));
+  printPair('Secret', value.session.secret);
+  printPair('Previous secrets', String(value.session.previousSecrets));
+  printPair('GC lottery', value.session.gcLottery.join('/'));
 
   printSection('Useful checks');
   printPair('Server-focused tests', 'pnpm test -- tests/logic/app-server.test.ts tests/logic/database-config.test.ts');
@@ -177,4 +461,26 @@ function stringValue(value: unknown): string | undefined {
 
 function booleanValue(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+function jsonObject(value: ObjectValue): Record<string, JsonValue> {
+  const result: Record<string, JsonValue> = {};
+
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      item === null ||
+      typeof item === 'string' ||
+      typeof item === 'number' ||
+      typeof item === 'boolean' ||
+      Array.isArray(item)
+    ) {
+      result[key] = item as JsonValue;
+    }
+  }
+
+  return result;
 }

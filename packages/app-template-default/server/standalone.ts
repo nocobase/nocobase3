@@ -6,13 +6,18 @@ import { fileURLToPath } from 'node:url';
 import { createAppRuntime, type AppRuntime } from '@nocobase/app-server/runtime';
 
 import type { AppConfig } from './config/index.js';
+import type { ClosableApp } from './app.js';
 import { createAppFromRuntime, loadStandaloneAppConfig, mountAppAtPublicBasePath, prepareAppRuntime } from './runtime/index.js';
 
 export interface StandaloneServerOptions {
   viteDevUrl?: string | false;
 }
 
-export function createStandaloneServer(options: StandaloneServerOptions = {}): Hono {
+export interface StandaloneServer extends Hono {
+  close(): Promise<void>;
+}
+
+export function createStandaloneServer(options: StandaloneServerOptions = {}): StandaloneServer {
   const runtime = createStandaloneRuntime();
   return createStandaloneAppFromRuntime(runtime, options);
 }
@@ -43,7 +48,7 @@ async function startServerAsync(): Promise<void> {
     },
   );
 
-  registerShutdownHandlers(runtime, server);
+  registerShutdownHandlers(app, server);
 }
 
 export function createStandaloneRuntime(): AppRuntime<AppConfig> {
@@ -53,19 +58,37 @@ export function createStandaloneRuntime(): AppRuntime<AppConfig> {
 function createStandaloneAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
   options: StandaloneServerOptions = {},
-): Hono {
+): StandaloneServer {
   const app = createAppFromRuntime(runtime, options);
-  return mountAppAtPublicBasePath(app, runtime.config.app.publicBasePath);
+  const mounted = mountAppAtPublicBasePath(app, runtime.config.app.publicBasePath);
+  const closeApp = mounted.close;
+  const close = onceAsync(async () => {
+    await Promise.all([
+      closeApp(),
+      runtime.dispose(),
+    ]);
+  });
+
+  return Object.assign(mounted, { close });
 }
 
-function registerShutdownHandlers(runtime: AppRuntime<AppConfig>, server: ReturnType<typeof serve>): void {
+function registerShutdownHandlers(app: ClosableApp, server: ReturnType<typeof serve>): void {
   const shutdown = async (): Promise<void> => {
-    await runtime.dispose();
+    await app.close();
     server.close();
   };
 
   process.once('SIGINT', () => void shutdown());
   process.once('SIGTERM', () => void shutdown());
+}
+
+function onceAsync(dispose: () => void | Promise<void>): () => Promise<void> {
+  let promise: Promise<void> | undefined;
+
+  return () => {
+    promise ??= Promise.resolve().then(dispose);
+    return promise;
+  };
 }
 
 if (isEntrypoint()) {

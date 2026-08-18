@@ -13,6 +13,7 @@ export type AppDisposer = () => void | Promise<void>;
 
 export interface FetchApp {
   fetch(request: Request, env?: unknown, executionCtx?: unknown): Response | Promise<Response>;
+  close?(): void | Promise<void>;
 }
 
 export interface AppScope {

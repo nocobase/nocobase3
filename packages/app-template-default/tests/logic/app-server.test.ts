@@ -1,18 +1,22 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
+import type { AppCacheConfig } from '@nocobase/cache';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
+import type { AppDriveConfig } from '@nocobase/drive';
+import type { AppSessionConfig } from '@nocobase/session';
 
 import {
   createApp,
   createServer as createEmbeddedServer,
   createStandaloneRuntime,
   createStandaloneServer,
+  queueDemoExecutions,
 } from '../../server/index.ts';
 
 const servers: Server[] = [];
@@ -57,6 +61,32 @@ describe('app server', () => {
       },
       basePath: '/embedded-app-template-default',
     });
+  });
+
+  it('returns a closable embedded app and registers the same close handler with the scope', async () => {
+    const registeredDisposers: Array<{
+      name: string;
+      dispose: () => void | Promise<void>;
+    }> = [];
+    const app = await createEmbeddedServer({
+      id: 'app-template-default',
+      basePath: '/embedded-app-template-default',
+      registerDisposer(name, dispose) {
+        registeredDisposers.push({ name, dispose });
+      },
+    });
+
+    expect(typeof app.close).toBe('function');
+    expect(registeredDisposers).toEqual([
+      {
+        name: 'app',
+        dispose: app.close,
+      },
+    ]);
+
+    await expect(app.close()).resolves.toBeUndefined();
+    await expect(app.close()).resolves.toBeUndefined();
+    await expect(registeredDisposers[0].dispose()).resolves.toBeUndefined();
   });
 
   it('serves embedded production SPA routes from the stripped app-host path', async () => {
@@ -226,6 +256,280 @@ describe('app server', () => {
     });
   });
 
+  it('serves a cache API example with cacheable getOrSet', async () => {
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      cache: createTestCache(),
+    });
+
+    const firstResponse = await app.request('http://localhost/api/cache/demo');
+    const firstPayload = await firstResponse.json();
+    const secondResponse = await app.request('http://localhost/api/cache/demo');
+    const secondPayload = await secondResponse.json();
+
+    expect(firstResponse.status).toBe(200);
+    expect(firstPayload).toMatchObject({
+      key: 'examples:cache:demo',
+      ttl: '30s',
+      cached: false,
+      value: {
+        generatedAt: expect.any(String),
+        id: expect.any(String),
+      },
+    });
+    expect(secondResponse.status).toBe(200);
+    expect(secondPayload).toEqual({
+      ...firstPayload,
+      cached: true,
+    });
+
+    const deleteResponse = await app.request('http://localhost/api/cache/demo', {
+      method: 'DELETE',
+    });
+
+    expect(deleteResponse.status).toBe(200);
+    await expect(deleteResponse.json()).resolves.toEqual({
+      key: 'examples:cache:demo',
+      deleted: true,
+    });
+
+    const thirdResponse = await app.request('http://localhost/api/cache/demo');
+    const thirdPayload = await thirdResponse.json();
+
+    expect(thirdResponse.status).toBe(200);
+    expect(thirdPayload.cached).toBe(false);
+    expect(thirdPayload.value.id).not.toBe(firstPayload.value.id);
+  });
+
+  it('serves a session API example with cookie-backed persistence', async () => {
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      session: createTestSession(),
+    });
+
+    const emptyResponse = await app.request('http://localhost/api/session');
+    await expect(emptyResponse.json()).resolves.toEqual({
+      enabled: true,
+      id: null,
+      data: null,
+    });
+
+    const touchResponse = await app.request('http://localhost/api/session/touch', {
+      method: 'POST',
+    });
+    const cookie = firstCookie(touchResponse);
+    const touchPayload = await touchResponse.json();
+
+    expect(touchResponse.status).toBe(200);
+    expect(cookie).toContain('nocobase_session=');
+    expect(touchPayload).toMatchObject({
+      enabled: true,
+      id: expect.any(String),
+      data: {
+        visits: 1,
+        touchedAt: expect.any(String),
+      },
+    });
+
+    const secondTouchResponse = await app.request('http://localhost/api/session/touch', {
+      method: 'POST',
+      headers: {
+        cookie,
+      },
+    });
+    const updatedCookie = firstCookie(secondTouchResponse);
+    const infoResponse = await app.request('http://localhost/api/session', {
+      headers: {
+        cookie: updatedCookie,
+      },
+    });
+
+    await expect(infoResponse.json()).resolves.toMatchObject({
+      enabled: true,
+      id: touchPayload.id,
+      data: {
+        visits: 2,
+        touchedAt: expect.any(String),
+      },
+    });
+
+    const deleteResponse = await app.request('http://localhost/api/session', {
+      method: 'DELETE',
+      headers: {
+        cookie: updatedCookie,
+      },
+    });
+
+    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.headers.get('set-cookie')).toContain('Max-Age=0');
+    await expect(deleteResponse.json()).resolves.toEqual({
+      destroyed: true,
+    });
+  });
+
+  it('serves a queue API example with the sync connection', async () => {
+    queueDemoExecutions.length = 0;
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      queue: {
+        default: 'sync',
+        connections: {
+          sync: {
+            driver: 'sync',
+          },
+        },
+        jobs: {
+          locations: [],
+          autoLoad: false,
+        },
+      },
+    });
+
+    const response = await app.request('http://localhost/api/queue/demo', {
+      method: 'POST',
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      jobId: expect.any(String),
+      job: 'QueueDemo',
+      queue: 'default',
+      syncExecutions: 1,
+    });
+    expect(queueDemoExecutions).toHaveLength(1);
+    expect(queueDemoExecutions[0]).toMatchObject({
+      message: 'Hello from NocoBase queue',
+      requestedAt: expect.any(String),
+      executedAt: expect.any(String),
+    });
+
+    await app.close();
+  });
+
+  it('writes a queue demo database log when database is configured', async () => {
+    queueDemoExecutions.length = 0;
+    const insertedRows: unknown[] = [];
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      database: createMockDatabase([], insertedRows),
+      queue: {
+        default: 'sync',
+        connections: {
+          sync: {
+            driver: 'sync',
+          },
+        },
+        jobs: {
+          locations: [],
+          autoLoad: false,
+        },
+      },
+    });
+
+    const response = await app.request('http://localhost/api/queue/demo', {
+      method: 'POST',
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      jobId: expect.any(String),
+      job: 'QueueDemo',
+      queue: 'default',
+      syncExecutions: 1,
+    });
+    expect(insertedRows).toHaveLength(1);
+    expect(insertedRows[0]).toMatchObject({
+      key: `queue.demo.${payload.jobId}`,
+      value: expect.any(String),
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+
+    const value = JSON.parse((insertedRows[0] as { value: string }).value) as Record<string, unknown>;
+    expect(value).toMatchObject({
+      message: 'Hello from NocoBase queue',
+      requestedAt: expect.any(String),
+      executedAt: expect.any(String),
+    });
+
+    await app.close();
+  });
+
+  it('returns a JSON error when upload is requested without file drive', async () => {
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+    const body = new FormData();
+    body.set('file', new File(['Hello world'], 'hello.txt', { type: 'text/plain' }));
+
+    const response = await app.request('http://localhost/api/upload', {
+      method: 'POST',
+      body,
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'File drive is not configured.',
+    });
+  });
+
+  it('requires a file for uploads', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-upload-'));
+    tempDirs.push(root);
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      drive: createTestDrive(root),
+    });
+    const body = new FormData();
+    body.set('file', 'not-a-file');
+
+    const response = await app.request('http://localhost/api/upload', {
+      method: 'POST',
+      body,
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'File is required',
+    });
+  });
+
+  it('uploads files with the configured file drive', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-upload-'));
+    tempDirs.push(root);
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      drive: createTestDrive(root),
+    });
+    const body = new FormData();
+    body.set('file', new File(['Hello world'], 'hello world.txt', { type: 'text/plain' }));
+
+    const response = await app.request('http://localhost/api/upload', {
+      method: 'POST',
+      body,
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      name: 'hello world.txt',
+      size: 11,
+      type: 'text/plain',
+    });
+    expect(payload.key).toMatch(/^uploads\/[0-9a-f-]+-hello-world\.txt$/);
+    expect(payload.url).toBe(`/storage/${payload.key}`);
+    expect(readFileSync(path.join(root, 'storage/app/public', payload.key), 'utf8')).toBe('Hello world');
+  });
+
   it('strips compressed upstream response headers before returning proxied API responses', async () => {
     const payload = JSON.stringify({ ok: true });
     const compressedPayload = gzipSync(payload);
@@ -290,6 +594,15 @@ describe('app server', () => {
     await expect(rootHealth.json()).resolves.toEqual(expectedHealth);
     await expect(appHealth.json()).resolves.toEqual(expectedHealth);
     expect(bareLocalApi.status).toBe(404);
+    await app.close();
+  });
+
+  it('returns a closable standalone app', async () => {
+    const app = createStandaloneServer({ viteDevUrl: false });
+
+    expect(typeof app.close).toBe('function');
+    await expect(app.close()).resolves.toBeUndefined();
+    await expect(app.close()).resolves.toBeUndefined();
   });
 
   it('proxies standalone SPA routes to Vite dev server with the public base path restored', async () => {
@@ -306,6 +619,7 @@ describe('app server', () => {
 
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe(`vite:GET:${requestPath}`);
+    await app.close();
   });
 
   it('injects browser runtime config when serving the production SPA index', async () => {
@@ -409,7 +723,71 @@ function startHttpStub(
   });
 }
 
-function createMockDatabase(rows: unknown[]): DatabaseManager {
+function createTestDrive(root: string): AppDriveConfig {
+  return {
+    default: 'public',
+    disks: {
+      public: {
+        driver: 'fs',
+        location: path.join(root, 'storage/app/public'),
+        visibility: 'public',
+        url: '/storage',
+      },
+    },
+    links: {
+      [path.join(root, 'public/storage')]: path.join(root, 'storage/app/public'),
+    },
+  };
+}
+
+function createTestCache(): AppCacheConfig {
+  return {
+    default: 'memory',
+    stores: {
+      memory: {
+        driver: 'memory',
+        ttl: '1m',
+        namespace: 'tests',
+      },
+      null: {
+        driver: 'null',
+      },
+    },
+  };
+}
+
+function createTestSession(): AppSessionConfig {
+  return {
+    enabled: true,
+    default: 'memory',
+    stores: {
+      memory: {
+        driver: 'memory',
+        base: 'tests:app-session:',
+      },
+    },
+    cookie: {
+      name: 'nocobase_session',
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+    },
+    lifetime: {
+      absolute: '2h',
+      rolling: true,
+    },
+    secret: 'test-app-session-secret',
+    gcLottery: [0, 100],
+  };
+}
+
+function firstCookie(response: Response): string {
+  const setCookie = response.headers.get('set-cookie');
+  expect(setCookie).toBeTruthy();
+  return setCookie?.split(';')[0] ?? '';
+}
+
+function createMockDatabase(rows: unknown[], insertedRows: unknown[] = []): DatabaseManager {
   return {
     connection: (() => {
       throw new Error('Not implemented.');
@@ -417,7 +795,7 @@ function createMockDatabase(rows: unknown[]): DatabaseManager {
     builder: (() => {
       throw new Error('Not implemented.');
     }) as DatabaseManager['builder'],
-    query: (() => createMockQuery(rows)) as DatabaseManager['query'],
+    query: (() => createMockQuery(rows, insertedRows)) as DatabaseManager['query'],
     connect: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['connect'],
     transaction: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['transaction'],
     disconnect: (() => Promise.resolve()) as DatabaseManager['disconnect'],
@@ -426,18 +804,29 @@ function createMockDatabase(rows: unknown[]): DatabaseManager {
   };
 }
 
-function createMockQuery(rows: unknown[]): QueryAdapter {
+function createMockQuery(rows: unknown[], insertedRows: unknown[]): QueryAdapter {
   const selectQuery = {
     select: () => selectQuery,
     orderBy: () => selectQuery,
     execute: () => Promise.resolve(rows),
   };
+  const insertQuery = {
+    values: (data: unknown | readonly unknown[]) => {
+      if (Array.isArray(data)) {
+        insertedRows.push(...data);
+      } else {
+        insertedRows.push(data);
+      }
+
+      return insertQuery;
+    },
+    execute: () => Promise.resolve({ insertedCount: insertedRows.length }),
+    compile: () => ({ sql: '', parameters: [] }),
+  };
 
   return {
     selectFrom: () => selectQuery,
-    insertInto: () => {
-      throw new Error('Not implemented.');
-    },
+    insertInto: () => insertQuery,
     updateTable: () => {
       throw new Error('Not implemented.');
     },

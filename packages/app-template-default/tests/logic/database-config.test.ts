@@ -11,8 +11,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createConfigEnv, createConfigPaths, loadConfig } from '@nocobase/app-server/config';
 
 import app from '../../server/config/app.ts';
+import cache from '../../server/config/cache.ts';
 import configFactories from '../../server/config/index.ts';
 import database from '../../server/config/database.ts';
+import drive from '../../server/config/drive.ts';
+import logger from '../../server/config/logger.ts';
+import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
 import spa from '../../server/config/spa.ts';
 import { createStandaloneRuntime } from '../../server/index.ts';
@@ -36,7 +40,11 @@ describe('template config registry', () => {
     });
 
     expect(config.app.name).toBe('app-template-default');
+    expect(config.cache.default).toBe('memory');
     expect(config.database.default).toBe('sqlite');
+    expect(config.drive.default).toBe('local');
+    expect(config.logger.default).toBe('app');
+    expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
     expect(config.spa.indexPath).toBe('/tmp/app-template-default/dist/client/index.html');
   });
@@ -107,8 +115,254 @@ describe('app config', () => {
       publicApiUrl: '/main/v2/api',
     });
     expect(config.spa.indexPath).toBe(path.join(clientDir, 'index.html'));
+    expect(config.cache.stores.memory).toMatchObject({
+      namespace: 'nocobase',
+    });
     expect(config.database.connections.sqlite).toMatchObject({
       filename: path.join(dataDir, 'database.sqlite'),
+    });
+    expect(config.drive.disks.local).toMatchObject({
+      location: path.join(dataDir, 'app/private'),
+    });
+    expect(config.drive.links).toEqual({
+      [path.join(root, 'public/storage')]: path.join(dataDir, 'app/public'),
+    });
+    expect(config.logger.channels.app).toMatchObject({
+      name: 'app-template-default',
+    });
+    expect(config.queue.jobs?.locations).toEqual([
+      path.join(root, 'dist/server/jobs/**/*.{ts,js}'),
+    ]);
+  });
+});
+
+describe('cache config', () => {
+  it('declares memory and null stores for cacheable', () => {
+    const config = cache({
+      env: createConfigEnv({}),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config).toEqual({
+      default: 'memory',
+      stores: {
+        memory: {
+          driver: 'memory',
+          ttl: '5m',
+          maxTtl: undefined,
+          namespace: 'nocobase',
+          lruSize: 0,
+          checkInterval: 0,
+          useClone: true,
+          stats: false,
+          tags: false,
+        },
+        null: {
+          driver: 'null',
+        },
+      },
+    });
+  });
+
+  it('maps cache env values into the memory store', () => {
+    const config = cache({
+      env: createConfigEnv({
+        CACHE_STORE: 'null',
+        CACHE_TTL: '30s',
+        CACHE_MAX_TTL: '1h',
+        CACHE_PREFIX: 'portal',
+        CACHE_MEMORY_LRU_SIZE: '100',
+        CACHE_MEMORY_CHECK_INTERVAL: '5000',
+        CACHE_MEMORY_USE_CLONE: 'false',
+        CACHE_STATS: 'true',
+        CACHE_TAGS: 'true',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.default).toBe('null');
+    expect(config.stores.memory).toEqual({
+      driver: 'memory',
+      ttl: '30s',
+      maxTtl: '1h',
+      namespace: 'portal',
+      lruSize: 100,
+      checkInterval: 5000,
+      useClone: false,
+      stats: true,
+      tags: true,
+    });
+  });
+});
+
+describe('logger config', () => {
+  it('declares app and silent channels for pino', () => {
+    const config = logger({
+      env: createConfigEnv({}),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.default).toBe('app');
+    expect(config.channels.app).toMatchObject({
+      driver: 'console',
+      name: 'app-template-default',
+      level: 'info',
+      pretty: false,
+      base: {
+        service: 'app-template-default',
+      },
+    });
+    expect(config.channels.app.driver === 'console' ? config.channels.app.redact : []).toContain(
+      'headers.authorization',
+    );
+    expect(config.channels.silent).toEqual({
+      driver: 'silent',
+    });
+  });
+
+  it('maps logger env values into the app channel', () => {
+    const config = logger({
+      env: createConfigEnv({
+        LOG_CHANNEL: 'silent',
+        LOG_LEVEL: 'debug',
+        LOG_NAME: 'portal',
+        LOG_PRETTY: 'true',
+        LOG_SERVICE: 'portal-service',
+        LOG_REDACT: 'password,headers.authorization,credentials.secret',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.default).toBe('silent');
+    expect(config.channels.app).toEqual({
+      driver: 'console',
+      name: 'portal',
+      level: 'debug',
+      pretty: true,
+      base: {
+        service: 'portal-service',
+      },
+      redact: ['password', 'headers.authorization', 'credentials.secret'],
+    });
+  });
+
+  it('falls back to info for unsupported logger levels', () => {
+    const config = logger({
+      env: createConfigEnv({
+        LOG_LEVEL: 'verbose',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.channels.app.driver === 'console' ? config.channels.app.level : undefined).toBe('info');
+  });
+});
+
+describe('queue config', () => {
+  it('declares sync, redis, and database connections for queue jobs', () => {
+    const config = queue({
+      env: createConfigEnv({}),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.default).toBe('sync');
+    expect(config.connections.sync).toEqual({
+      driver: 'sync',
+    });
+    expect(config.connections.redis).toMatchObject({
+      driver: 'redis',
+      host: '127.0.0.1',
+      port: 6379,
+      db: 0,
+      keyPrefix: 'nocobase:queue:',
+      tls: false,
+    });
+    expect(config.connections.database).toEqual({
+      driver: 'database',
+      connection: undefined,
+      table: 'queue_jobs',
+      schedulesTable: 'queue_schedules',
+    });
+    expect(config.worker).toEqual({
+      connection: undefined,
+      queues: ['default'],
+      concurrency: 1,
+      idleDelay: '2s',
+      timeout: undefined,
+    });
+    expect(config.jobs).toEqual({
+      locations: ['/tmp/app-template-default/server/jobs/**/*.{ts,js}'],
+      autoLoad: true,
+      hotReload: false,
+    });
+  });
+
+  it('maps queue env values into connections and worker options', () => {
+    const config = queue({
+      env: createConfigEnv({
+        QUEUE_CONNECTION: 'redis',
+        QUEUE_REDIS_PREFIX: 'portal:queue:',
+        QUEUE_DB_CONNECTION: 'postgres',
+        QUEUE_TABLE: 'jobs',
+        QUEUE_SCHEDULES_TABLE: 'job_schedules',
+        QUEUE_WORKER_CONNECTION: 'redis',
+        QUEUE_WORKER_QUEUES: 'default,emails',
+        QUEUE_WORKER_CONCURRENCY: '5',
+        QUEUE_WORKER_IDLE_DELAY: '500ms',
+        QUEUE_WORKER_TIMEOUT: '30s',
+        QUEUE_JOBS_AUTO_LOAD: 'false',
+        QUEUE_JOBS_HOT_RELOAD: 'true',
+        REDIS_HOST: 'redis.internal',
+        REDIS_PORT: '6380',
+        REDIS_USERNAME: 'default',
+        REDIS_PASSWORD: 'secret',
+        REDIS_DB: '2',
+        REDIS_TLS: 'true',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.default).toBe('redis');
+    expect(config.connections.redis).toEqual({
+      driver: 'redis',
+      host: 'redis.internal',
+      port: 6380,
+      username: 'default',
+      password: 'secret',
+      db: 2,
+      keyPrefix: 'portal:queue:',
+      tls: true,
+    });
+    expect(config.connections.database).toEqual({
+      driver: 'database',
+      connection: 'postgres',
+      table: 'jobs',
+      schedulesTable: 'job_schedules',
+    });
+    expect(config.worker).toEqual({
+      connection: 'redis',
+      queues: ['default', 'emails'],
+      concurrency: 5,
+      idleDelay: '500ms',
+      timeout: '30s',
+    });
+    expect(config.jobs).toMatchObject({
+      autoLoad: false,
+      hotReload: true,
     });
   });
 });
@@ -251,6 +505,96 @@ describe('database config', () => {
       schema: ['public', 'tenant'],
     });
     expect(config.connections.postgres).not.toHaveProperty('url');
+  });
+});
+
+describe('drive config', () => {
+  it('declares Laravel-style local, public, and S3 disks for Flydrive adapters', () => {
+    const config = drive({
+      env: createConfigEnv({}),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.default).toBe('local');
+    expect(config.disks.local).toEqual({
+      driver: 'fs',
+      location: '/tmp/app-template-default/storage/app/private',
+      visibility: 'private',
+    });
+    expect(config.disks.public).toEqual({
+      driver: 'fs',
+      location: '/tmp/app-template-default/storage/app/public',
+      visibility: 'public',
+      url: '/storage',
+    });
+    expect(config.disks.s3).toMatchObject({
+      driver: 's3',
+      bucket: '',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      supportsACL: true,
+      credentials: {
+        accessKeyId: undefined,
+        secretAccessKey: undefined,
+      },
+      visibility: 'private',
+    });
+    expect(config.links).toEqual({
+      '/tmp/app-template-default/public/storage': '/tmp/app-template-default/storage/app/public',
+    });
+  });
+
+  it('maps drive env values into the S3 disk', () => {
+    const config = drive({
+      env: createConfigEnv({
+        DRIVE_DISK: 's3',
+        AWS_BUCKET: 'portal-assets',
+        AWS_DEFAULT_REGION: 'ap-southeast-1',
+        AWS_ACCESS_KEY_ID: 'access-key',
+        AWS_SECRET_ACCESS_KEY: 'secret-key',
+        AWS_ENDPOINT: 'https://s3.example.com',
+        AWS_URL: 'https://cdn.example.com',
+        AWS_USE_PATH_STYLE_ENDPOINT: 'true',
+        AWS_SUPPORTS_ACL: 'false',
+        AWS_SERVER_SIDE_ENCRYPTION: 'AES256',
+        AWS_VISIBILITY: 'public',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.default).toBe('s3');
+    expect(config.disks.s3).toEqual({
+      driver: 's3',
+      bucket: 'portal-assets',
+      region: 'ap-southeast-1',
+      endpoint: 'https://s3.example.com',
+      cdnUrl: 'https://cdn.example.com',
+      forcePathStyle: true,
+      supportsACL: false,
+      encryption: 'AES256',
+      credentials: {
+        accessKeyId: 'access-key',
+        secretAccessKey: 'secret-key',
+      },
+      visibility: 'public',
+    });
+  });
+
+  it('falls back to private visibility for unsupported S3 visibility values', () => {
+    const config = drive({
+      env: createConfigEnv({
+        AWS_VISIBILITY: 'team',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.disks.s3.visibility).toBe('private');
   });
 });
 

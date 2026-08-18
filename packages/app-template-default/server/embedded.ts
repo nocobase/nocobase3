@@ -1,8 +1,7 @@
 import type { Hono } from 'hono';
 
-import { createAppRuntime, type AppRuntime } from '@nocobase/app-server/runtime';
+import { createAppRuntime } from '@nocobase/app-server/runtime';
 
-import type { AppConfig } from './config/index.js';
 import {
   createAppFromRuntime,
   loadEmbeddedAppConfig,
@@ -13,28 +12,46 @@ import {
 
 export type { AppDisposer, AppScope };
 
-export async function createServer(scope: AppScope): Promise<Hono> {
+export interface EmbeddedServer extends Hono {
+  close(): Promise<void>;
+}
+
+export async function createServer(scope: AppScope): Promise<EmbeddedServer> {
   const runtime = createAppRuntime(loadEmbeddedAppConfig(scope, import.meta.url));
 
   await prepareAppRuntime(runtime);
-  registerRuntimeDisposer(scope, runtime);
-
-  return createAppFromRuntime(runtime, {
+  const app = createAppFromRuntime(runtime, {
     viteDevUrl: false,
   });
+  const closeApp = app.close;
+  const close = onceAsync(async () => {
+    await Promise.all([
+      closeApp(),
+      runtime.dispose(),
+    ]);
+  });
+
+  registerRuntimeDisposer(scope, close);
+
+  return Object.assign(app, { close });
 }
 
 export default createServer;
 
-function registerRuntimeDisposer(scope: AppScope, runtime: AppRuntime<AppConfig>): void {
-  if (!runtime.database) {
-    return;
-  }
-
+function registerRuntimeDisposer(scope: AppScope, dispose: AppDisposer): void {
   if (scope.registerDisposer) {
-    scope.registerDisposer('database', () => runtime.dispose());
+    scope.registerDisposer('app', dispose);
     return;
   }
 
-  scope.onBeforeDestroy?.(() => runtime.dispose());
+  scope.onBeforeDestroy?.(dispose);
+}
+
+function onceAsync(dispose: () => void | Promise<void>): () => Promise<void> {
+  let promise: Promise<void> | undefined;
+
+  return () => {
+    promise ??= Promise.resolve().then(dispose);
+    return promise;
+  };
 }

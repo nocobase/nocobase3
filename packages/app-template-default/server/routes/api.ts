@@ -1,6 +1,14 @@
 import { Hono } from 'hono';
 
 import type { AppServices } from '../services/index.js';
+import { createAppSettingsRoutes } from './app-settings.js';
+import { createAppsHandler } from './apps.js';
+import { createCacheRoutes } from './cache.js';
+import { createApiErrorHandler } from './errors.js';
+import { createHealthzHandler } from './healthz.js';
+import { createQueueRoutes } from './queue.js';
+import { createSessionRoutes } from './session.js';
+import { createUploadRoutes } from './upload.js';
 
 export interface ApiRouteOptions {
   appName: string;
@@ -8,42 +16,25 @@ export interface ApiRouteOptions {
   services: AppServices;
 }
 
-export function createApiRoutes(options: ApiRouteOptions): Hono {
+export function createApiRoutes({
+  appName,
+  publicBasePath,
+  services,
+}: ApiRouteOptions): Hono {
   const api = new Hono();
 
-  api.get('/healthz', (c) => {
-    return c.json({
-      ok: true,
-      app: {
-        name: options.appName,
-        basePath: options.publicBasePath,
-      },
-      basePath: options.publicBasePath,
-    });
-  });
-
-  api.get('/apps', (c) => {
-    return c.json({
-      apps: [],
-    });
-  });
-
-  api.get('/app-settings', async (c) => {
-    const appSettings = options.services.appSettings;
-
-    if (!appSettings) {
-      return c.json(
-        {
-          error: 'Database is not configured.',
-        },
-        503,
-      );
-    }
-
-    return c.json({
-      settings: await appSettings.all(),
-    });
-  });
+  api.onError(
+    createApiErrorHandler({
+      logger: services.loggerManager.use().child({ module: 'api' }),
+    }),
+  );
+  api.get('/healthz', createHealthzHandler({ appName, publicBasePath }));
+  api.get('/apps', createAppsHandler());
+  api.route('/cache', createCacheRoutes({ cacheManager: services.cacheManager }));
+  api.route('/queue', createQueueRoutes({ queueManager: services.queueManager }));
+  api.route('/session', createSessionRoutes());
+  api.route('/app-settings', createAppSettingsRoutes({ appSettings: services.appSettings }));
+  api.route('/upload', createUploadRoutes({ fileUploads: services.fileUploads }));
 
   return api;
 }

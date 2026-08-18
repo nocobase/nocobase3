@@ -91,6 +91,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
 
     try {
       runtime.app = await options.createApp(runtime);
+      runtime.registerAppCloseDisposer();
       return runtime;
     } catch (error) {
       runtime.transitionTo('failed');
@@ -133,6 +134,19 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     }
 
     this.disposers.push({ name, dispose });
+  }
+
+  private registerAppCloseDisposer(): void {
+    const close = this.app.close;
+    if (typeof close !== 'function') {
+      return;
+    }
+
+    if (this.disposers.some((disposer) => disposer.dispose === close)) {
+      return;
+    }
+
+    this.registerDisposer('app', () => close.call(this.app));
   }
 
   snapshot(): AppSnapshot {
