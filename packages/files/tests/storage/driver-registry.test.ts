@@ -1,0 +1,3 @@
+import { describe, expect, it } from "vitest";
+import { InMemoryStorageDriverRegistry } from "../../src/storage/driver-registry.ts";
+describe("registry", () => { it("discovers capabilities and rejects unknown", () => { const d = { type: "x", capabilities: () => ({ uploadModes: ["proxy"] as ["proxy"], externalReadTarget: false }), prepareUpload: async () => ({ mode: "proxy" as const }), statObject: async () => null, deleteObject: async () => undefined }; const r = new InMemoryStorageDriverRegistry({ local: d }); expect(r.listCapabilities()[0].backendKey).toBe("local"); expect(() => r.get("nope")).toThrow(); }); });
