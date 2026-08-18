@@ -16,9 +16,10 @@ export type AclStore = {
   };
 };
 
-export const AclStoreContext = createContext<AclStore | undefined>(undefined);
+export const AclStoreContext: React.Context<AclStore | undefined> =
+  createContext<AclStore | undefined>(undefined);
 
-export const useAclStore = () => {
+export const useAclStore = (): AclStore => {
   const store = useContext(AclStoreContext);
   if (!store) {
     throw new Error("useAclStore must be used within an AclStoreProvider");
@@ -26,7 +27,7 @@ export const useAclStore = () => {
   return store;
 };
 
-export const useAclState = () => {
+export const useAclState = (): AclState => {
   const store = useAclStore();
   return useSyncExternalStore(store.subscribe, store.getState, store.getState);
 };

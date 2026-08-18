@@ -79,7 +79,7 @@ export const resolveAuthSessionStorageKey = (
     storagePrefix = DEFAULT_STORAGE_PREFIX,
   }: AuthSessionStorageKeyOptions,
   field: AuthSessionField
-) => {
+): string => {
   const sharedSubAppToken =
     field === "token" && appName !== "main" && shareToken;
   const appPrefix =
@@ -120,15 +120,15 @@ export class AuthSession {
     this.storage = options.storage ?? getStorage(this.storageType);
   }
 
-  getStorageKey(field: AuthSessionField) {
+  getStorageKey(field: AuthSessionField): string {
     return resolveAuthSessionStorageKey(this, field);
   }
 
-  get(field: AuthSessionField) {
+  get(field: AuthSessionField): string | undefined {
     return this.storage.getItem(this.getStorageKey(field)) || undefined;
   }
 
-  set(field: AuthSessionField, value?: string | null) {
+  set(field: AuthSessionField, value?: string | null): void {
     const key = this.getStorageKey(field);
     const previous = this.get(field);
     if (value) this.storage.setItem(key, value);
@@ -139,21 +139,21 @@ export class AuthSession {
     }
   }
 
-  subscribe(listener: AuthSessionListener) {
+  subscribe(listener: AuthSessionListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  clearAuthentication() {
+  clearAuthentication(): void {
     this.set("token", null);
     this.set("auth", null);
     this.set("role", null);
   }
 
-  getCookie(type: "role" | "csrfToken") {
+  getCookie(type: "role" | "csrfToken"): string | undefined {
     const prefix = type === "role" ? "nb_role" : "nb_csrf_token";
     return getCookie(`${prefix}_${this.appName}`);
   }
 }
 
-export const authSession = new AuthSession();
+export const authSession: AuthSession = new AuthSession();

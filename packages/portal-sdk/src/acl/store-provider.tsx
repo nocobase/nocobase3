@@ -5,7 +5,7 @@ import { AclStoreContext, type AclStore } from "./context.ts";
 export function AclStoreProvider({
   children,
   store,
-}: PropsWithChildren<{ store: AclStore }>) {
+}: PropsWithChildren<{ store: AclStore }>): React.ReactElement {
   return (
     <AclStoreContext.Provider value={store}>
       {children}

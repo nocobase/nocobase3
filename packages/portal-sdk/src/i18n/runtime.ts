@@ -1,5 +1,10 @@
 import type { I18nProvider } from "@refinedev/core";
-import { createInstance, type InitOptions, type TOptions } from "i18next";
+import {
+  createInstance,
+  type i18n as I18nInstance,
+  type InitOptions,
+  type TOptions,
+} from "i18next";
 
 import { nocobaseClient } from "../client/index.ts";
 import {
@@ -43,9 +48,12 @@ let localePersistence: LocalePersistence | undefined;
 let onLocaleChanged: PortalI18nConfiguration["onLocaleChanged"];
 let i18nBindingsConfigured = false;
 
-export const i18n = createInstance();
+export const i18n: I18nInstance = createInstance();
 
-function addLocaleResources(namespace: string, resources: LocaleResources) {
+function addLocaleResources(
+  namespace: string,
+  resources: LocaleResources
+): void {
   if (!i18n.isInitialized) return;
 
   for (const [locale, resource] of Object.entries(resources)) {
@@ -70,7 +78,7 @@ export async function configurePortalI18n({
   locales,
   initOptions,
   onLocaleChanged: nextOnLocaleChanged,
-}: PortalI18nConfiguration) {
+}: PortalI18nConfiguration): Promise<void> {
   configurePortalLocales({ defaultLocale, locales });
   onLocaleChanged = nextOnLocaleChanged;
   configureI18nBindings();
@@ -94,7 +102,7 @@ export async function configurePortalI18n({
   applyDocumentLocale();
 }
 
-export function getCurrentLocale() {
+export function getCurrentLocale(): string {
   return resolveSupportedLocale(
     i18n.resolvedLanguage ?? i18n.language ?? nocobaseClient.getLocale()
   );
@@ -104,7 +112,7 @@ export function translate(
   key: string,
   options?: TranslationOptions | string,
   defaultMessage?: string
-) {
+): string {
   const normalizedOptions = typeof options === "string" ? undefined : options;
   const normalizedDefault =
     typeof options === "string" ? options : defaultMessage;
@@ -120,7 +128,7 @@ export function translate(
   return typeof value === "string" ? value : String(value);
 }
 
-export function applyDocumentLocale(locale = getCurrentLocale()) {
+export function applyDocumentLocale(locale: string = getCurrentLocale()): void {
   if (typeof document === "undefined") return;
   const direction =
     getLocaleDefinition(locale)?.direction ?? getLocaleDirection(locale);
@@ -146,7 +154,9 @@ function resolveSystemLocale(settings?: LocaleSystemSettings) {
   return resolveSupportedLocale(defaultLocale);
 }
 
-export async function applySystemLocale(settings?: LocaleSystemSettings) {
+export async function applySystemLocale(
+  settings?: LocaleSystemSettings
+): Promise<string> {
   const enabledLanguages = Array.isArray(settings?.enabledLanguages)
     ? settings.enabledLanguages.filter(Boolean)
     : [];
@@ -168,14 +178,16 @@ export async function applySystemLocale(settings?: LocaleSystemSettings) {
   return locale;
 }
 
-export function setLocalePersistence(persistence?: LocalePersistence) {
+export function setLocalePersistence(
+  persistence?: LocalePersistence
+): () => void {
   localePersistence = persistence;
   return () => {
     if (localePersistence === persistence) localePersistence = undefined;
   };
 }
 
-export async function changeLocale(locale: string) {
+export async function changeLocale(locale: string): Promise<void> {
   const nextLocale = resolveSupportedLocale(locale);
 
   try {

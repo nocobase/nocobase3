@@ -90,21 +90,21 @@ export class NocoBaseClient {
   private runtimeLocale?: string;
 
   constructor(
-    private readonly apiUrl = API_URL,
-    apiOrigin = getUrlOrigin(apiUrl) ?? API_ORIGIN
+    private readonly apiUrl: string = API_URL,
+    apiOrigin: string | undefined = getUrlOrigin(apiUrl) ?? API_ORIGIN
   ) {
     this.apiOrigin = apiOrigin;
   }
 
-  getApiUrl() {
+  getApiUrl(): string {
     return this.apiUrl;
   }
 
-  getAppName() {
+  getAppName(): string {
     return authSession.appName;
   }
 
-  resolveUrl(value: string) {
+  resolveUrl(value: string): string {
     if (!value || /^[a-z][a-z\d+.-]*:/i.test(value)) return value;
     const base =
       this.apiOrigin ??
@@ -117,55 +117,55 @@ export class NocoBaseClient {
     }
   }
 
-  getToken() {
+  getToken(): string | undefined {
     return authSession.get("token") ?? import.meta.env?.NOCOBASE_API_TOKEN;
   }
 
-  getStoredAuthenticator() {
+  getStoredAuthenticator(): string | undefined {
     return authSession.get("auth");
   }
 
-  getAuthenticator() {
+  getAuthenticator(): string {
     return this.getStoredAuthenticator() ?? NOCOBASE_AUTHENTICATOR;
   }
 
-  setAuthenticator(authenticator?: string | null) {
+  setAuthenticator(authenticator?: string | null): void {
     authSession.set("auth", authenticator);
   }
 
-  setToken(token?: string | null) {
+  setToken(token?: string | null): void {
     authSession.set("token", token);
   }
 
-  getRole() {
+  getRole(): string | undefined {
     return authSession.get("role") ?? authSession.getCookie("role");
   }
 
-  setRole(role?: string | null) {
+  setRole(role?: string | null): void {
     authSession.set("role", role);
   }
 
-  getStoredLocale() {
+  getStoredLocale(): string | undefined {
     return authSession.get("locale");
   }
 
-  getLocale() {
+  getLocale(): string | undefined {
     return this.getStoredLocale() ?? this.runtimeLocale ?? getBrowserLocale();
   }
 
-  setLocale(locale?: string | null) {
+  setLocale(locale?: string | null): void {
     authSession.set("locale", locale);
   }
 
-  clearAuthentication() {
+  clearAuthentication(): void {
     authSession.clearAuthentication();
   }
 
-  setRuntimeLocale(locale?: string | null) {
+  setRuntimeLocale(locale?: string | null): void {
     this.runtimeLocale = locale || undefined;
   }
 
-  buildUrl(endpoint: string, query?: Record<string, QueryValue>) {
+  buildUrl(endpoint: string, query?: Record<string, QueryValue>): URL {
     const base = `${this.apiUrl.replace(/\/$/, "")}/${endpoint.replace(
       /^\//,
       ""
@@ -284,7 +284,7 @@ export class NocoBaseClient {
     resource: string,
     action: string,
     options: Omit<NocoBaseRequestOptions, "accept"> = {}
-  ) {
+  ): Promise<T> {
     const method =
       options.method ?? (["get", "list"].includes(action) ? "GET" : "POST");
     return this.request<T>(`${resource}:${action}`, { ...options, method });
@@ -293,7 +293,7 @@ export class NocoBaseClient {
   async stream(
     endpoint: string,
     options: Omit<NocoBaseRequestOptions, "accept" | "unwrap"> = {}
-  ) {
+  ): Promise<ReadableStream<Uint8Array>> {
     const method = options.method ?? "POST";
     const headers = this.getHeaders({
       ...options,
@@ -344,7 +344,7 @@ const getUrlOrigin = (value: string) => {
   }
 };
 
-export const nocobaseClient = new NocoBaseClient();
+export const nocobaseClient: NocoBaseClient = new NocoBaseClient();
 
 export * from "./auth-session.ts";
 export * from "./error.ts";

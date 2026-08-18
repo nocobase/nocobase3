@@ -55,7 +55,7 @@ export const accessControlProvider: AccessControlProvider = {
   },
 };
 
-export const canAccessCurrentAcl = (request: AclAccessRequest) => {
+export const canAccessCurrentAcl = (request: AclAccessRequest): boolean => {
   const state = getAclState();
   return (
     state.status === "ready" &&

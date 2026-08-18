@@ -4,6 +4,8 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "declaration": true,
+    "isolatedDeclarations": true,
+    "isolatedModules": true,
     "outDir": "dist",
     "rootDir": ".",
     "strict": true,

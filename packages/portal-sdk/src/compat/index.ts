@@ -12,7 +12,7 @@ export const formatPortalTemplateCompatibilityError = ({
   defaultTemplateVersion: string;
   sdkVersion: string;
   supportedDefaultTemplateRange: string;
-}) =>
+}): string =>
   [
     "Incompatible NocoBase Portal SDK.",
     `Current Default Template: ${defaultTemplateVersion}`,
