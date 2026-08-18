@@ -190,12 +190,72 @@ describe('app server', () => {
       method: 'GET',
       url: '/nocobase/api/systemSettings:get?locale=zh-CN',
       host: new URL(nocoBaseApiUrl).host,
-      origin: nocoBaseApiUrl,
-      referer: `${nocoBaseApiUrl}/nocobase/app-template-default/login`,
+      // The browser's own origin and referer are relayed untouched. Rewriting them to the upstream
+      // address is what makes `auth:signIn` answer 403 Invalid sign-in origin.
+      origin: 'http://127.0.0.1:13000',
+      referer: 'http://127.0.0.1:13000/app-template-default/login',
       forwardedHost: '127.0.0.1:13000',
       forwardedPrefix: '/v2/api',
       forwardedProto: 'http',
     });
+  });
+
+  /**
+   * Pins the header contract that `auth:signIn` validates against.
+   *
+   * The upstream derives requestOrigin as `x-forwarded-proto || protocol` + `://` +
+   * `x-forwarded-host || host`, then demands that `origin` equal it verbatim. A mismatch is answered
+   * with 403 Invalid sign-in origin -- which surfaces to users as "I cannot log in", several layers
+   * away from the cause.
+   *
+   * This case is worth its own test because it cannot be caught by hand: when the proxy target is the
+   * public site, the request crosses that site's reverse proxy on the way out and any bad
+   * `x-forwarded-*` gets corrected there, while a rewritten origin coincidentally matches the site.
+   * Both faults cancel. Only a deployment that proxies straight to the upstream reveals them.
+   */
+  it('relays the browser origin and protocol so the upstream sign-in origin check passes', async () => {
+    const nocoBaseApiUrl = await startHttpStub((_request, response) => {
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({
+          origin: _request.headers.origin,
+          referer: _request.headers.referer,
+          forwardedHost: _request.headers['x-forwarded-host'],
+          forwardedProto: _request.headers['x-forwarded-proto'],
+        }),
+      );
+    });
+    const app = createApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
+    });
+
+    // A TLS-terminating proxy in front of this process: the site is https, but this hop is cleartext
+    // and its x-forwarded-* headers carry the browser's real context.
+    const response = await app.request('http://localhost/v2/api/auth:signIn', {
+      method: 'POST',
+      headers: {
+        host: 'apps.example.com',
+        origin: 'https://apps.example.com',
+        referer: 'https://apps.example.com/app-template-default/login',
+        'x-forwarded-host': 'apps.example.com',
+        'x-forwarded-proto': 'https',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const forwarded = (await response.json()) as Record<string, string>;
+
+    // Existing x-forwarded-* must survive. Overwriting them with this connection's details would
+    // report the https site as http, and the origin comparison below would fail on the scheme alone.
+    expect(forwarded.forwardedProto).toBe('https');
+    expect(forwarded.forwardedHost).toBe('apps.example.com');
+    expect(forwarded.origin).toBe('https://apps.example.com');
+    expect(forwarded.referer).toBe('https://apps.example.com/app-template-default/login');
+
+    // The check the upstream actually performs.
+    const requestOrigin = `${forwarded.forwardedProto}://${forwarded.forwardedHost}`;
+    expect(forwarded.origin).toBe(requestOrigin);
   });
 
   it('returns a JSON error when the API proxy target is not configured', async () => {

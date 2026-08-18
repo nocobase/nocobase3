@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  createNocoBaseApiProxyHeaders,
   createOriginProxyHandler,
   proxyRequest,
   registerNocoBaseApiProxyRoutes,
@@ -102,8 +103,8 @@ describe('NocoBase API proxy', () => {
       method: 'GET',
       url: '/nocobase/api/systemSettings:get?locale=zh-CN',
       host: new URL(upstreamUrl).host,
-      origin: upstreamUrl,
-      referer: `${upstreamUrl}/nocobase/main/test/login`,
+      origin: 'http://127.0.0.1:15000',
+      referer: 'http://127.0.0.1:15000/main/test/login',
       forwardedHost: '127.0.0.1:15000',
       forwardedPrefix: '/main/test/v2/api',
       forwardedProto: 'http',
@@ -123,6 +124,74 @@ describe('NocoBase API proxy', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'NocoBase API proxy target is not configured.',
     });
+  });
+});
+
+describe('NocoBase API proxy headers for a cross-site upstream', () => {
+  const upstream = new URL('https://remote.example.com/api');
+
+  const forwardedFromLocalhost = (extra: Record<string, string>) =>
+    createNocoBaseApiProxyHeaders(
+      new Request('http://127.0.0.1:3000/main/test/v2/api/auth:signIn', {
+        method: 'POST',
+        headers: { host: '127.0.0.1:3000', ...extra },
+      }),
+      '/main/test/v2/api',
+      upstream,
+    );
+
+  it('aligns origin and x-forwarded-* on the upstream site', () => {
+    const headers = forwardedFromLocalhost({
+      origin: 'http://127.0.0.1:3000',
+      referer: 'http://127.0.0.1:3000/main/test/login',
+    });
+
+    expect(headers.get('origin')).toBe(upstream.origin);
+    expect(headers.get('x-forwarded-host')).toBe(upstream.host);
+    expect(headers.get('x-forwarded-proto')).toBe('https');
+    expect(`${headers.get('x-forwarded-proto')}://${headers.get('x-forwarded-host')}`).toBe(
+      headers.get('origin'),
+    );
+  });
+
+  it('aligns referer too, since the upstream falls back to it without an origin', () => {
+    const headers = forwardedFromLocalhost({
+      referer: 'http://127.0.0.1:3000/main/test/login',
+    });
+
+    expect(new URL(headers.get('referer') ?? '').origin).toBe(upstream.origin);
+  });
+
+  it('does not invent an origin the browser never sent', () => {
+    const headers = forwardedFromLocalhost({});
+
+    expect(headers.has('origin')).toBe(false);
+    expect(headers.has('referer')).toBe(false);
+    expect(headers.get('x-forwarded-host')).toBe(upstream.host);
+  });
+
+  it('still reports the proxy mount point', () => {
+    expect(forwardedFromLocalhost({}).get('x-forwarded-prefix')).toBe('/main/test/v2/api');
+  });
+
+  it('leaves a loopback upstream on the faithful-relay path', () => {
+    const headers = createNocoBaseApiProxyHeaders(
+      new Request('http://site.example.com/main/test/v2/api/auth:signIn', {
+        method: 'POST',
+        headers: {
+          host: 'site.example.com',
+          origin: 'https://site.example.com',
+          'x-forwarded-host': 'site.example.com',
+          'x-forwarded-proto': 'https',
+        },
+      }),
+      '/main/test/v2/api',
+      new URL('http://127.0.0.1:13000/api'),
+    );
+
+    expect(headers.get('origin')).toBe('https://site.example.com');
+    expect(headers.get('x-forwarded-host')).toBe('site.example.com');
+    expect(headers.get('x-forwarded-proto')).toBe('https');
   });
 });
 

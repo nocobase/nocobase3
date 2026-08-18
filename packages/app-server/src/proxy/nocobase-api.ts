@@ -51,7 +51,7 @@ export async function proxyToNocoBaseApi(request: Request, options: NocoBaseApiP
   const targetUrl = createNocoBaseApiTargetUrl(request, options.apiProxyPath, options.nocoBaseApiUrl);
 
   return proxyRequest(request, targetUrl, {
-    headers: createNocoBaseApiProxyHeaders(request, targetUrl, options.nocoBaseApiUrl, options.apiProxyPath),
+    headers: createNocoBaseApiProxyHeaders(request, options.apiProxyPath, options.nocoBaseApiUrl),
     unavailableMessage: 'NocoBase API server is unavailable.',
   });
 }
@@ -70,49 +70,38 @@ export function createNocoBaseApiTargetUrl(request: Request, apiProxyPath: strin
 
 export function createNocoBaseApiProxyHeaders(
   request: Request,
-  targetUrl: URL,
-  nocoBaseApiUrl: URL,
   apiProxyPath: string,
+  nocoBaseApiUrl: URL,
 ): Headers {
   const headers = new Headers(request.headers);
   const sourceUrl = new URL(request.url);
-  const sourceProtocol = sourceUrl.protocol.replace(/:$/, '');
-  const originalHost = headers.get('host') ?? sourceUrl.host;
-  const upstreamServerBaseUrl = getNocoBaseServerBaseUrl(nocoBaseApiUrl);
 
-  headers.set('x-forwarded-host', originalHost);
-  headers.set('x-forwarded-proto', sourceProtocol);
+  if (isCrossSiteUpstream(nocoBaseApiUrl)) {
+    headers.set('x-forwarded-host', nocoBaseApiUrl.host);
+    headers.set('x-forwarded-proto', nocoBaseApiUrl.protocol.replace(/:$/, ''));
+
+    if (headers.has('origin')) {
+      headers.set('origin', nocoBaseApiUrl.origin);
+    }
+
+    if (headers.has('referer')) {
+      headers.set('referer', `${nocoBaseApiUrl.origin}/`);
+    }
+  } else {
+    if (!headers.has('x-forwarded-host')) {
+      headers.set('x-forwarded-host', headers.get('host') ?? sourceUrl.host);
+    }
+
+    if (!headers.has('x-forwarded-proto')) {
+      headers.set('x-forwarded-proto', sourceUrl.protocol.replace(/:$/, ''));
+    }
+  }
+
   headers.set('x-forwarded-prefix', normalizeBasePath(apiProxyPath));
-
-  if (headers.has('origin')) {
-    headers.set('origin', targetUrl.origin);
-  }
-
-  if (headers.has('referer')) {
-    headers.set('referer', rewriteReferer(headers.get('referer'), upstreamServerBaseUrl));
-  }
 
   return headers;
 }
 
-function getNocoBaseServerBaseUrl(nocoBaseApiUrl: URL): URL {
-  const serverBaseUrl = new URL(nocoBaseApiUrl);
-  const apiIndex = serverBaseUrl.pathname.match(/\/api(?:\/|$)/)?.index;
-  serverBaseUrl.pathname = apiIndex === undefined ? '/' : serverBaseUrl.pathname.slice(0, apiIndex + 1);
-  serverBaseUrl.search = '';
-  serverBaseUrl.hash = '';
-  return serverBaseUrl;
-}
-
-function rewriteReferer(value: string | null, upstreamServerBaseUrl: URL): string {
-  if (!value) {
-    return upstreamServerBaseUrl.toString();
-  }
-
-  try {
-    const refererUrl = new URL(value);
-    return new URL(refererUrl.pathname.replace(/^\/+/, ''), upstreamServerBaseUrl).toString();
-  } catch {
-    return upstreamServerBaseUrl.toString();
-  }
+function isCrossSiteUpstream(nocoBaseApiUrl: URL): boolean {
+  return !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(nocoBaseApiUrl.hostname);
 }
