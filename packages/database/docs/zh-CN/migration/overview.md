@@ -34,16 +34,20 @@ export default defineMigration({
   name: '202608180001_create_users',
 
   async up({ builder }) {
-    await builder.createCollection('users', (collection) => {
-      collection.increments('id');
-      collection.string('name');
-      collection.string('email').unique();
-      collection.datetime('createdAt');
-    });
+    await builder.createCollection(
+      'users',
+      (collection) => {
+        collection.increments('id');
+        collection.string('name');
+        collection.string('email').unique();
+        collection.datetime('createdAt');
+      },
+      { ifNotExists: true },
+    );
   },
 
   async down({ builder }) {
-    await builder.dropCollection('users');
+    await builder.dropCollection('users', { ifExists: true });
   },
 });
 ```
@@ -150,17 +154,21 @@ export default defineMigration({
   name: '202608180004_create_orders',
 
   async up({ builder }) {
-    await builder.createCollection('orders', (collection) => {
-      collection.increments('id');
-      collection.string('orderNo').unique({ name: 'uk_orders_order_no' });
-      collection.decimal('amount', { precision: 12, scale: 2 });
-      collection.string('status').defaultTo('draft');
-      collection.datetime('createdAt');
-    });
+    await builder.createCollection(
+      'orders',
+      (collection) => {
+        collection.increments('id');
+        collection.string('orderNo').unique({ name: 'uk_orders_order_no' });
+        collection.decimal('amount', { precision: 12, scale: 2 });
+        collection.string('status').defaultTo('draft');
+        collection.datetime('createdAt');
+      },
+      { ifNotExists: true },
+    );
   },
 
   async down({ builder }) {
-    await builder.dropCollection('orders');
+    await builder.dropCollection('orders', { ifExists: true });
   },
 });
 ```

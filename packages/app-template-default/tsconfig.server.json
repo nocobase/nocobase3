@@ -20,5 +20,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["server/**/*.ts", "scripts/migrate.ts"]
+  "include": ["server/**/*.ts", "scripts/migrate.ts"],
+  "exclude": ["server/migrations/**/*.ts"]
 }

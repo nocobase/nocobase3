@@ -107,7 +107,7 @@
     "server:config": "tsx ./scripts/server-config.ts",
     "build": "node ./scripts/build.mjs",
     "migrate": "tsx ./scripts/migrate.ts",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

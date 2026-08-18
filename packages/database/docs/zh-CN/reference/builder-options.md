@@ -7,9 +7,7 @@ interface BuilderExecOptions {
   dryRun?: boolean;
   previewSql?: boolean;
   syncMetadata?: boolean;
-  // reserved; currently not a runtime guarantee
   ifNotExists?: boolean;
-  // reserved; currently not a runtime guarantee
   ifExists?: boolean;
   strict?: boolean;
   // reserved; currently not a runtime guarantee
@@ -127,20 +125,40 @@ console.log(result.warnings);
 
 这样 Agent、CLI 或 UI 可以先展示风险，再决定是否继续。
 
+### ifNotExists
+
+```ts
+await builder.createCollection('orders', definition, {
+  ifNotExists: true,
+});
+```
+
+`ifNotExists: true` 用于创建类操作。当前支持 `createCollection()`：当底层表已经存在时跳过建表，避免重复创建错误。
+
+这个选项只表示“对象不存在才创建”，不会对已经存在的表做字段、索引或约束对齐。需要调整结构时，应继续写新的 migration，并使用 `alterCollection()`、`addField()`、`addIndex()` 等明确操作。
+
+### ifExists
+
+```ts
+await builder.dropCollection('orders', {
+  ifExists: true,
+});
+```
+
+`ifExists: true` 用于删除类操作。当前支持 `dropCollection()`：当底层表不存在时跳过删除，避免缺失对象错误。
+
 ## 预留选项
 
-以下选项已经出现在类型里，但当前原型还没有完整执行语义：
+以下选项已经出现在类型里，但当前还没有完整执行语义：
 
-- `ifNotExists`：当前不会阻止重复创建错误。
-- `ifExists`：当前不会阻止缺失对象错误。
 - `transaction`：当前不会自动包裹 Builder 操作；需要事务时使用 `db.transaction()` 或 `connection.transaction()`。
 
-后续可以把它们接入 capability 校验、幂等执行、严格模式和事务包裹。
+后续可以把 `transaction` 接入 Builder 执行流程。
 
 ## Agent 注意事项
 
 - 自动执行前优先使用 `dryRun: true`。
 - 需要给用户展示执行计划时，同时打开 `previewSql: true`。
 - migration、CI 和生产发布建议使用 `strict: true`。
-- 不要把预留选项当成已经生效的运行时保证。
+- 创建 collection 的 migration 建议使用 `{ ifNotExists: true }`，删除 collection 的回滚建议使用 `{ ifExists: true }`。
 - destructive 操作不能只依赖选项兜底，应检查 `BuilderResult.impact`。

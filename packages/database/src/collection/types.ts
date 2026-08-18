@@ -227,15 +227,9 @@ export interface BuilderExecOptions {
   previewSql?: boolean;
   /** Defaults to true. Set false to skip Collection metadata writes. */
   syncMetadata?: boolean;
-  /**
-   * Reserved for future idempotent execution.
-   * Currently not a runtime guarantee and does not prevent duplicate-object errors.
-   */
+  /** Skip supported create operations when the backing database object already exists. */
   ifNotExists?: boolean;
-  /**
-   * Reserved for future idempotent execution.
-   * Currently not a runtime guarantee and does not prevent missing-object errors.
-   */
+  /** Skip supported drop operations when the backing database object does not exist. */
   ifExists?: boolean;
   /**
    * Fails on capability warnings during real execution.
@@ -290,9 +284,9 @@ export interface BuilderResult {
 }
 
 export type CollectionOperation =
-  | { type: 'createCollection'; name: string; definition: CollectionDefinition }
+  | { type: 'createCollection'; name: string; definition: CollectionDefinition; ifNotExists?: boolean }
   | { type: 'alterCollection'; collection: string; changes: CollectionAlterDefinition }
-  | { type: 'dropCollection'; collection: string }
+  | { type: 'dropCollection'; collection: string; ifExists?: boolean }
   | { type: 'renameCollection'; from: string; to: string; renameTable?: boolean; renameTableTo?: string }
   | { type: 'createViewCollection'; name: string; definition: CollectionDefinition }
   | { type: 'replaceViewCollection'; name: string; definition: CollectionDefinition }
@@ -309,9 +303,9 @@ export type CollectionOperation =
   | { type: 'updateFieldMetadata'; collection: string; field: string; patch: FieldMetadataPatch };
 
 export type SchemaOperation =
-  | { type: 'createTable'; table: TableSchemaDefinition }
+  | { type: 'createTable'; table: TableSchemaDefinition; ifNotExists?: boolean }
   | { type: 'alterTable'; tableName: string; db?: DbOptions; operations: TableAlterSchemaOperation[] }
-  | { type: 'dropTable'; tableName: string; db?: DbOptions }
+  | { type: 'dropTable'; tableName: string; db?: DbOptions; ifExists?: boolean }
   | { type: 'renameTable'; from: string; to: string; db?: DbOptions }
   | { type: 'createView'; view: ViewSchemaDefinition; orReplace?: boolean; materialized?: boolean }
   | { type: 'refreshMaterializedView'; viewName: string; db?: DbOptions; concurrently?: boolean };
