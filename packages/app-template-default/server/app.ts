@@ -166,7 +166,7 @@ async function proxyToNocoBaseApi(
   const targetUrl = createApiTargetUrl(request, apiProxyPath, nocoBaseApiUrl);
 
   return proxyRequest(request, targetUrl, {
-    headers: createNocoBaseApiProxyHeaders(request, targetUrl, nocoBaseApiUrl, apiProxyPath),
+    headers: createNocoBaseApiProxyHeaders(request, apiProxyPath),
     unavailableMessage: 'NocoBase API server is unavailable.',
   });
 }
@@ -249,53 +249,55 @@ function removeHopByHopHeaders(headers: Headers): void {
   }
 }
 
-function createNocoBaseApiProxyHeaders(
-  request: Request,
-  targetUrl: URL,
-  nocoBaseApiUrl: URL,
-  apiProxyPath: string,
-): Headers {
+/**
+ * Build the headers forwarded to the upstream NocoBase API.
+ *
+ * The guiding rule: **relay the browser's hop faithfully; do not replace it with this process's own
+ * hop to the upstream.** That distinction is what separates a reverse proxy from a client. The
+ * upstream reconstructs "which address is the user actually looking at" from these headers, and that
+ * address is the site's public origin -- not 127.0.0.1:13000.
+ *
+ * Sign-in is where this bites. `auth:signIn` validates the request's origin
+ * (`assertTrustedSignInOrigin` in core/auth): the `origin` header must equal, verbatim, the
+ * requestOrigin the upstream derives as `x-forwarded-proto || protocol` + `x-forwarded-host || host`
+ * (core/utils' cors.ts). So all three of the following must point at the site itself; getting any one
+ * of them wrong yields `403 Invalid sign-in origin`:
+ *
+ *   - `origin`            -- forwarded untouched
+ *   - `x-forwarded-host`  -- the host the browser addressed
+ *   - `x-forwarded-proto` -- the protocol the browser used
+ *
+ * **Local development cannot reproduce a failure here, so do not validate this against it.** When the
+ * proxy target is the public site, the request traverses the site's own reverse proxy on the way out,
+ * which overwrites whatever `x-forwarded-*` this function got wrong; meanwhile a rewritten `origin`
+ * happens to equal the site's origin anyway. The two errors cancel and everything looks green. Only a
+ * deployment that proxies straight to the upstream (no intermediary to correct the headers) exposes
+ * it -- which is why this behaviour is pinned by tests rather than by manual checks.
+ */
+function createNocoBaseApiProxyHeaders(request: Request, apiProxyPath: string): Headers {
   const headers = new Headers(request.headers);
   const sourceUrl = new URL(request.url);
-  const sourceProtocol = sourceUrl.protocol.replace(/:$/, '');
-  const originalHost = headers.get('host') ?? sourceUrl.host;
-  const upstreamServerBaseUrl = getNocoBaseServerBaseUrl(nocoBaseApiUrl);
 
-  headers.set('x-forwarded-host', originalHost);
-  headers.set('x-forwarded-proto', sourceProtocol);
+  // This process may itself sit behind a reverse proxy that terminates TLS and connects onward in
+  // cleartext. In that case these two headers already carry the browser's real hop and must be left
+  // alone -- overwriting them with this connection's details reports an https site as http, which
+  // fails the sign-in origin check. Only fill them in when nothing upstream has.
+  //
+  // Note the protocol cannot come from `request.url`: the scheme there is derived from whether this
+  // socket is encrypted, and behind a TLS-terminating proxy that is always plain http.
+  if (!headers.has('x-forwarded-host')) {
+    headers.set('x-forwarded-host', headers.get('host') ?? sourceUrl.host);
+  }
+
+  if (!headers.has('x-forwarded-proto')) {
+    headers.set('x-forwarded-proto', sourceUrl.protocol.replace(/:$/, ''));
+  }
+
   headers.set('x-forwarded-prefix', apiProxyPath);
 
-  if (headers.has('origin')) {
-    headers.set('origin', targetUrl.origin);
-  }
-
-  if (headers.has('referer')) {
-    headers.set('referer', rewriteReferer(headers.get('referer'), upstreamServerBaseUrl));
-  }
+  // `origin` and `referer` are forwarded as-is, deliberately.
 
   return headers;
-}
-
-function getNocoBaseServerBaseUrl(nocoBaseApiUrl: URL): URL {
-  const serverBaseUrl = new URL(nocoBaseApiUrl);
-  const apiIndex = serverBaseUrl.pathname.match(/\/api(?:\/|$)/)?.index;
-  serverBaseUrl.pathname = apiIndex === undefined ? '/' : serverBaseUrl.pathname.slice(0, apiIndex + 1);
-  serverBaseUrl.search = '';
-  serverBaseUrl.hash = '';
-  return serverBaseUrl;
-}
-
-function rewriteReferer(value: string | null, upstreamServerBaseUrl: URL): string {
-  if (!value) {
-    return upstreamServerBaseUrl.toString();
-  }
-
-  try {
-    const refererUrl = new URL(value);
-    return new URL(refererUrl.pathname.replace(/^\/+/, ''), upstreamServerBaseUrl).toString();
-  } catch {
-    return upstreamServerBaseUrl.toString();
-  }
 }
 
 interface ClientRuntimeConfig {
