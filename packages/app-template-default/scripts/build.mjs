@@ -175,7 +175,19 @@ run("Build server workspace dependencies", "pnpm", [
   "build",
 ]);
 run("Build server", "pnpm", ["exec", "tsc", "-p", "tsconfig.server.json"]);
+run("Rewrite server path aliases", "pnpm", [
+  "exec",
+  "tsc-alias",
+  "-p",
+  "tsconfig.server.json",
+]);
 run("Build migrations", "pnpm", ["exec", "tsc", "-p", "tsconfig.migrations.json"]);
+run("Rewrite migration path aliases", "pnpm", [
+  "exec",
+  "tsc-alias",
+  "-p",
+  "tsconfig.migrations.json",
+]);
 writeDistEnv();
 run("Generate server package", "node", ["./scripts/build-server-dist-package.mjs"]);
 run("Install server production dependencies", "npm", [

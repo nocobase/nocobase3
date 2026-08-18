@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 
-import type { AppServices } from '../services/index.js';
+import type { AppServices } from '@/services/index.js';
 import { createAppSettingsRoutes } from './app-settings.js';
 import { createAppsHandler } from './apps.js';
 import { createCacheRoutes } from './cache.js';
@@ -33,8 +33,8 @@ export function createApiRoutes({
   api.route('/cache', createCacheRoutes({ cacheManager: services.cacheManager }));
   api.route('/queue', createQueueRoutes({ queueManager: services.queueManager }));
   api.route('/session', createSessionRoutes());
-  api.route('/app-settings', createAppSettingsRoutes({ appSettings: services.appSettings }));
-  api.route('/upload', createUploadRoutes({ fileUploads: services.fileUploads }));
+  api.route('/app-settings', createAppSettingsRoutes({ appSettingsStore: services.appSettingsStore }));
+  api.route('/upload', createUploadRoutes({ publicFileStorage: services.publicFileStorage }));
 
   return api;
 }

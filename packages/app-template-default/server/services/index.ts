@@ -25,14 +25,14 @@ import {
   type NocoBaseSessionManager,
 } from '@nocobase/session';
 
-import { createAppJobFactory } from '../jobs/dependencies.js';
-import { AppSettingsService, UnavailableAppSettingsService, type AppSettings } from './app-settings.js';
-import { FileUploadsService, UnavailableFileUploadsService, type FileUploads } from './file-uploads.js';
+import { createAppJobFactory } from '@/jobs/dependencies.js';
+import { AppSettingsService, UnavailableAppSettingsService, type AppSettings } from './app-settings-store.js';
+import { FileUploadsService, UnavailableFileUploadsService, type FileUploads } from './public-file-storage.js';
 
 export interface AppServices {
-  appSettings: AppSettings;
+  appSettingsStore: AppSettings;
   cacheManager: NocoBaseCacheManager;
-  fileUploads: FileUploads;
+  publicFileStorage: FileUploads;
   loggerManager: NocoBaseLoggerManager;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
@@ -64,9 +64,9 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
   });
 
   const services: AppServices = {
-    appSettings: options.database ? new AppSettingsService(options.database) : new UnavailableAppSettingsService(),
+    appSettingsStore: options.database ? new AppSettingsService(options.database) : new UnavailableAppSettingsService(),
     cacheManager,
-    fileUploads:
+    publicFileStorage:
       driveManager && options.drive?.disks.public
         ? new FileUploadsService(driveManager)
         : new UnavailableFileUploadsService(resolveFileUploadsUnavailableMessage(options.drive)),
@@ -98,6 +98,6 @@ function resolveFileUploadsUnavailableMessage(drive: AppDriveConfig | undefined)
   return 'Upload drive disk "public" is not configured.';
 }
 
-export { AppSettingsService, type AppSetting, type AppSettings } from './app-settings.js';
-export { FileUploadsService, type FileUploads, type UploadResult } from './file-uploads.js';
+export { AppSettingsService, type AppSetting, type AppSettings } from './app-settings-store.js';
+export { FileUploadsService, type FileUploads, type UploadResult } from './public-file-storage.js';
 export { AppServiceError, BadRequestError, ServiceUnavailableError } from './errors.js';

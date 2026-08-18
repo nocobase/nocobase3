@@ -207,9 +207,7 @@ console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);
 console.log(`  Proxy API: ${appServerUrl}${proxyApiPath}\n`);
 
-spawnDevProcess("client", "pnpm", [
-  "exec",
-  "vite",
+spawnDevProcess("client", "vite", [
   "--host",
   viteDevHost,
   "--port",
@@ -217,10 +215,10 @@ spawnDevProcess("client", "pnpm", [
   "--strictPort",
 ], nextEnv, { filterViteStartup: true });
 
-spawnDevProcess("server", "pnpm", [
-  "exec",
-  "tsx",
+spawnDevProcess("server", "tsx", [
   "watch",
+  "--tsconfig",
+  "tsconfig.server.json",
   "--clear-screen=false",
   "server/standalone.ts",
 ], {

@@ -11,7 +11,7 @@ import {
   resolveAppNameFromBasePath,
 } from '@nocobase/app-server/support';
 import { createSessionMiddleware } from '@nocobase/session';
-import { createApiRoutes } from './routes/api.js';
+import { createApiRoutes } from './routes/api/index.js';
 import { createAppServices } from './services/index.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
 

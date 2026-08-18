@@ -15,6 +15,12 @@
     "sourceMap": true,
     "rootDir": ".",
     "outDir": "dist",
+    "paths": {
+      "@/jobs/*.js": ["./server/jobs/*.ts"],
+      "@/jobs/*": ["./server/jobs/*"],
+      "@/services/*.js": ["./server/services/*.ts"],
+      "@/services/*": ["./server/services/*"]
+    },
     "noEmit": false,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

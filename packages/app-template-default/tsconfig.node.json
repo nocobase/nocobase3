@@ -17,7 +17,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "paths": {
+      "@/jobs/*.js": ["./server/jobs/*.ts"],
+      "@/jobs/*": ["./server/jobs/*"],
+      "@/services/*.js": ["./server/services/*.ts"],
+      "@/services/*": ["./server/services/*"]
+    }
   },
   "include": ["vite.config.ts", "scripts/*.ts"]
 }
