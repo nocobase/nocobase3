@@ -17,7 +17,11 @@ Registry -> Portal SDK -> /api/files/v1 -> @nocobase/files
 | POST | `/api/files/v1/files/:fileId/url` | `filesCreateUrl` |
 | DELETE | `/api/files/v1/files/:fileId` | `filesDeleteFile` |
 
-Applications persist only the stable `fileId`; they never persist temporary URLs, provider URLs, physical keys, or user paths. Local storage is available through a capability-token proxy upload; S3 upload is intentionally not implemented yet.
+Applications persist only the stable `fileId`; they never persist temporary URLs, provider URLs, physical keys, or user paths. Local storage is available through a capability-token proxy upload; S3-compatible storage (AWS S3, R2, and MinIO) uses short-lived presigned PUT/GET URLs.
+
+An S3 backend is server-only: `{ driver: "s3", region, container, endpoint?, rootPrefix?, forcePathStyle?, credentials? }`. `endpoint` is useful for R2 or MinIO and `forcePathStyle` is typically enabled for MinIO. Configure bucket CORS for browser PUTs at the provider. Credentials, bucket names, object keys, and provider state are never part of public config or API responses, and signed URLs must not be logged. Multipart, TUS, listing, copying, moving, and public-bucket management are intentionally unsupported.
+
+Optional SHA-256 values are sent as `x-amz-meta-nocobase-sha256` and checked again during HEAD/complete. This is a client-declared transfer-consistency aid; unless the provider exposes a verified checksum, it is not a cryptographic server-side integrity assertion. Upload size is always strictly checked from HEAD.
 
 ```ts
 const files = createFilesModule({ db, config, requestContext, authorizer, drivers });

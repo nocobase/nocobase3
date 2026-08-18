@@ -1,13 +1,17 @@
 import { z } from "zod";
 import type { PublicFilesConfig } from "../contracts/config.ts";
+import type { S3CredentialProvider } from "../storage/s3/s3-config.ts";
 
 const KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const MIME = /^(\*\/\*|[A-Za-z0-9!#$&^_.+-]+\/([A-Za-z0-9!#$&^_.+-]+|\*))$/;
 const TTL_MAX = 31_536_000;
 
+const s3Endpoint = z.string().url().refine(value => { const protocol = new URL(value).protocol; return protocol === "http:" || protocol === "https:"; }, "endpoint must use http or https");
+const s3Prefix = z.string().transform(value => value.replace(/^\/+|\/+$/g, "")).refine(value => !value.split("/").some(part => !part || part === "." || part === "..") && !value.includes("\\"), "invalid rootPrefix");
+const s3Credentials = z.union([z.object({ accessKeyId: z.string().min(1), secretAccessKey: z.string().min(1), sessionToken: z.string().min(1).optional(), expiration: z.date().optional() }).strict(), z.custom<S3CredentialProvider>(value => typeof value === "function")]);
 const BackendSchema = z.discriminatedUnion("driver", [
   z.object({ driver: z.literal("local"), root: z.string().trim().min(1), signingSecret: z.string().min(32) }).strict(),
-  z.object({ driver: z.literal("s3"), endpoint: z.string().url().optional(), region: z.string().trim().min(1), container: z.string().trim().min(1), rootPrefix: z.string().optional(), forcePathStyle: z.boolean().optional(), credentials: z.unknown() }).strict(),
+  z.object({ driver: z.literal("s3"), endpoint: s3Endpoint.optional(), region: z.string().trim().min(1), container: z.string().trim().min(1), rootPrefix: s3Prefix.optional(), forcePathStyle: z.boolean().optional(), credentials: s3Credentials.optional() }).strict(),
 ]);
 const PolicySchema = z.object({
   backend: z.string().regex(KEY), description: z.string().trim().min(1).max(500), maxSize: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
