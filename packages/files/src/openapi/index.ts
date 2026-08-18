@@ -1,0 +1,2 @@
+import type { OpenAPIHono } from "@hono/zod-openapi";
+export function createFilesOpenAPIDocument(app: OpenAPIHono): Record<string, unknown> { const doc = app.getOpenAPIDocument({ openapi: "3.1.0", info: { title: "NocoBase Files API", version: "1.0.0" }, servers: [{ url: "/" }] }) as unknown as Record<string, unknown>; const paths = (doc.paths ?? {}) as Record<string, unknown>; doc.paths = Object.fromEntries(Object.entries(paths).map(([path, value]) => [`/api/files/v1${path}`, value])); return doc; }

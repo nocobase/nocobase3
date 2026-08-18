@@ -1,0 +1,5 @@
+import { describe, expect, it } from "vitest";
+import { createFilesOpenAPIApp } from "../src/http/index.ts";
+import { parseFilesConfig } from "../src/config/index.ts";
+const config = parseFilesConfig({ defaultPolicy: "p", backends: { b: { driver: "local", root: "/x", signingSecret: "s".repeat(32) } }, policies: { p: { backend: "b", description: "P", maxSize: 1, allowedContentTypes: ["*/*"], uploadUrlTtlSeconds: 1, defaultReadUrlTtlSeconds: 1, maxReadUrlTtlSeconds: 2 } } });
+describe("G04 HTTP", () => { it("returns config and rejects missing context", async () => { const app = createFilesOpenAPIApp({ config, requestContext: { getActor: () => ({ id: "a" }), getWorkspaceId: () => "w" }, getDriverCapabilities: () => [{ uploadModes: ["proxy"] }] }); expect((await app.request("/config")).status).toBe(200); const denied = createFilesOpenAPIApp({ config, requestContext: { getActor: () => ({ id: "" }), getWorkspaceId: () => "" }, getDriverCapabilities: () => [{ uploadModes: ["proxy"] }] }); expect((await denied.request("/config")).status).toBe(403); }); });

@@ -1,0 +1,149 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NocoBase Files API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "components": {
+    "schemas": {},
+    "parameters": {}
+  },
+  "paths": {
+    "/api/files/v1/config": {
+      "get": {
+        "operationId": "filesGetConfig",
+        "responses": {
+          "200": {
+            "description": "Public files configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "apiVersion": {
+                          "type": "string",
+                          "enum": [
+                            "files/v1"
+                          ]
+                        },
+                        "defaultPolicy": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "policies": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "description": {
+                                "type": "string"
+                              },
+                              "maxSize": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "allowedContentTypes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "url": {
+                                "type": "object",
+                                "properties": {
+                                  "defaultTtlSeconds": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true
+                                  },
+                                  "maxTtlSeconds": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true
+                                  }
+                                },
+                                "required": [
+                                  "defaultTtlSeconds",
+                                  "maxTtlSeconds"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "description",
+                              "maxSize",
+                              "allowedContentTypes",
+                              "url"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "capabilities": {
+                          "type": "object",
+                          "properties": {
+                            "uploadModes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "proxy",
+                                  "presigned-put"
+                                ]
+                              },
+                              "minItems": 1
+                            },
+                            "temporaryUrls": {
+                              "type": "boolean",
+                              "enum": [
+                                true
+                              ]
+                            }
+                          },
+                          "required": [
+                            "uploadModes",
+                            "temporaryUrls"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "apiVersion",
+                        "defaultPolicy",
+                        "policies",
+                        "capabilities"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    }
+  }
+}
