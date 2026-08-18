@@ -375,6 +375,36 @@
       }
     },
     {
+      "name": "file-preview",
+      "type": "registry:lib",
+      "title": "NocoBase File Preview",
+      "description": "Editable safe preview with lazy temporary URLs for files/v1.",
+      "dependencies": ["@nocobase/portal-sdk@^2.1.0", "lucide-react@^0.487.0"],
+      "registryDependencies": ["button"],
+      "docs": "Stores fileId only. Raster images render inline; audio/video are opened on demand; PDF, SVG, HTML, text, and unknown MIME types use safe open/download actions.",
+      "source": { "root": "registry/nocobase-file-preview", "target": "client/extensions/nocobase-file-preview", "include": ["."] }
+    },
+    {
+      "name": "attachment-field",
+      "type": "registry:field",
+      "title": "NocoBase Attachment Field",
+      "description": "Controlled business field that persists fileId[] and composes upload and preview.",
+      "dependencies": ["@nocobase/portal-sdk@^2.1.0", "lucide-react@^0.487.0"],
+      "registryDependencies": ["@nocobase/file-upload", "@nocobase/file-preview", "button"],
+      "docs": "Hydrates fileId[] metadata, preserves order, and never deletes Kernel files by default. App owns relations and authorization.",
+      "source": { "root": "registry/nocobase-attachment-field", "target": "client/extensions/nocobase-attachment-field", "include": ["."] }
+    },
+    {
+      "name": "files-example",
+      "type": "registry:block",
+      "title": "NocoBase Files Examples",
+      "description": "Editable avatar, record attachment, and document library examples.",
+      "dependencies": ["@nocobase/portal-sdk@^2.1.0"],
+      "registryDependencies": ["@nocobase/file-upload", "@nocobase/file-preview", "@nocobase/attachment-field"],
+      "docs": "A runnable local-state demo. App tables own avatar references, attachment relations, folders, tags, and versions; Files Kernel owns file metadata only.",
+      "source": { "root": "registry/nocobase-files-example", "target": "client/extensions/nocobase-files-example", "include": ["."] }
+    },
+    {
       "name": "mail",
       "type": "registry:block",
       "title": "NocoBase Mail",
