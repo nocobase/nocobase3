@@ -8,6 +8,7 @@ export * from "./openapi/index.ts";
 export * from "./application/presenter.ts";
 export * from "./application/upload-service.ts";
 export * from "./application/file-service.ts";
+export * from "./maintenance/index.ts";
 export * from "./persistence/index.ts";
 export * from "./storage/index.ts";
 import { randomUUID } from "node:crypto";
@@ -17,6 +18,7 @@ import { KyselyFilesStore } from "./persistence/kysely-files-store.ts";
 import { InMemoryStorageDriverRegistry } from "./storage/driver-registry.ts";
 import { UploadService } from "./application/upload-service.ts";
 import { FileService } from "./application/file-service.ts";
+import { DefaultFilesMaintenanceService } from "./maintenance/files-maintenance-service.ts";
 export function createFilesModule(options: import("./module-types.ts").FilesModuleOptions): import("./module-types.ts").FilesModule {
   const config = parseFilesConfig(options.config);
   const store = new KyselyFilesStore(options.db, options.now);
@@ -24,6 +26,7 @@ export function createFilesModule(options: import("./module-types.ts").FilesModu
   for (const [key, backend] of Object.entries(config.backends)) if (!registry.has(key) || registry.get(key).type !== backend.driver) throw new Error(`Invalid storage driver: ${key}`);
   const uploads = new UploadService({ config, store, registry, requestContext: options.requestContext, authorizer: options.authorizer, now: options.now ?? (() => new Date()), generateId: options.generateId ?? randomUUID });
   const files = new FileService({ config, store, registry, authorizer: options.authorizer, now: options.now ?? (() => new Date()), logger: options.logger });
+  const maintenance = new DefaultFilesMaintenanceService(store, registry, options.now, options.logger);
   const router = createFilesOpenAPIApp({ config, requestContext: options.requestContext, getDriverCapabilities: () => registry.listCapabilities(), uploads, files, logger: options.logger });
-  return { router, store };
+  return { router, store, maintenance };
 }

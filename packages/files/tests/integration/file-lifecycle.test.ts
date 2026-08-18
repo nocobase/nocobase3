@@ -36,6 +36,7 @@ describe("G06 Local read URL and deletion lifecycle", () => {
     root = await mkdtemp(path.join(tmpdir(), "files-g06-"));
     db = createTestDatabase();
     await filesMigrations["001-create-files-tables"].up!(db);
+    await filesMigrations["002-add-upload-cleanup-status"].up!(db);
     driver = new ObservedLocalDriver({ root });
     now = new Date("2026-08-18T00:00:00.000Z");
     authorizations = [];

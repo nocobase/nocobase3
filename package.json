@@ -19,6 +19,8 @@
     "hub:start": "pnpm --filter @nocobase/hub start",
     "app-host:dev": "APP_DIST_DIR=\"$PWD/packages/app-host/fixtures/app-dist\" pnpm --filter @nocobase/app-host dev",
     "app-host:build": "pnpm --filter @nocobase/app-host build",
-    "sdk:test": "pnpm --filter @nocobase/portal-sdk test"
+    "sdk:test": "pnpm --filter @nocobase/portal-sdk test",
+    "files:generate-contracts": "pnpm --filter @nocobase/files openapi:generate && pnpm --filter @nocobase/portal-sdk files:generate",
+    "files:check-contracts": "node packages/portal-sdk/scripts/check-files-contracts.mjs"
   }
 }

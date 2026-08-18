@@ -1,11 +1,66 @@
 # @nocobase/files
 
-The Files Kernel is a thin, headless contract and service boundary. It owns file policy, metadata, upload sessions, temporary URLs, deletion, authorization, and reliability primitives. It does not own folders, tags, search, business attachments, versions, sharing, UI, legacy NocoBase storage APIs, or a complete S3 API.
+`@nocobase/files` is a thin, headless Files Kernel. It owns upload sessions, immutable file metadata, temporary delivery URLs, explicit deletion, authorization ports, and host-invoked maintenance. Applications own business relations and editable UI.
+
+It does not provide folders, tags, search, versions, sharing, copy/move/rename, Multipart, TUS, a file manager, legacy NocoBase compatibility, or automatic deletion of referenced ready files.
 
 ```text
-Registry -> Portal SDK -> /api/files/v1 -> @nocobase/files
-                                      -> injected DB, Authorizer, drivers
+App-owned Registry source
+          |
+          v
+@nocobase/portal-sdk/files
+          |
+          v
+/api/files/v1 -> Hono router -> services -> Authorizer
+                                      |-> injected Kysely
+                                      `-> Local or S3 driver
 ```
+
+## Configuration
+
+Private configuration stays in the Core Host. Values below are placeholders.
+
+```ts
+const config = {
+  defaultPolicy: "attachment",
+  backends: {
+    local: { driver: "local", root: "./var/files", signingSecret: "replace-with-at-least-32-random-characters" },
+    objectStore: {
+      driver: "s3", endpoint: "https://objects.example.invalid", region: "us-east-1",
+      container: "private-files", rootPrefix: "production", forcePathStyle: false,
+      credentials: async () => ({ accessKeyId: "example", secretAccessKey: "example" }),
+    },
+  },
+  policies: {
+    attachment: { backend: "local", description: "Attachments", maxSize: 10_000_000, allowedContentTypes: ["image/*", "application/pdf"], uploadUrlTtlSeconds: 300, defaultReadUrlTtlSeconds: 60, maxReadUrlTtlSeconds: 300 },
+  },
+};
+```
+
+`GET /config` returns only policy limits and capabilities. It never returns roots, endpoints, regions, containers, prefixes, credentials, signing secrets, storage keys, provider state, actors, or workspaces.
+
+## Mounting
+
+```ts
+const files = createFilesModule({ db, config, requestContext, authorizer, drivers });
+app.route("/api/files/v1", files.router);
+```
+
+The request-context resolver must obtain the authenticated actor and workspace from trusted host state. The injected Authorizer is called for every upload, metadata read, URL creation, and delete. Body and query identity fields are not trusted.
+
+## Upload sequence
+
+```text
+POST /uploads + Idempotency-Key
+        -> uploadId, fileId, short-lived PUT target
+PUT target with exactly the returned headers
+POST /uploads/:uploadId/complete
+        -> ready FileObject
+```
+
+Retry the same logical upload with the same Idempotency-Key. Persist only `fileId`; never persist a target URL, temporary read URL, physical key, or provider URL. File content is immutable: replacement creates a new `fileId`.
+
+## API
 
 | Method | Path | operationId |
 | --- | --- | --- |
@@ -17,21 +72,20 @@ Registry -> Portal SDK -> /api/files/v1 -> @nocobase/files
 | POST | `/api/files/v1/files/:fileId/url` | `filesCreateUrl` |
 | DELETE | `/api/files/v1/files/:fileId` | `filesDeleteFile` |
 
-Applications persist only the stable `fileId`; they never persist temporary URLs, provider URLs, physical keys, or user paths. Local storage is available through a capability-token proxy upload; S3-compatible storage (AWS S3, R2, and MinIO) uses short-lived presigned PUT/GET URLs.
+Local delivery uses an internal capability route. Temporary URLs expire, are bound to one file/workspace/action, and stop working after deletion.
 
-An S3 backend is server-only: `{ driver: "s3", region, container, endpoint?, rootPrefix?, forcePathStyle?, credentials? }`. `endpoint` is useful for R2 or MinIO and `forcePathStyle` is typically enabled for MinIO. Configure bucket CORS for browser PUTs at the provider. Credentials, bucket names, object keys, and provider state are never part of public config or API responses, and signed URLs must not be logged. Multipart, TUS, listing, copying, moving, and public-bucket management are intentionally unsupported.
+Errors use `FILES_*` codes, including `FILES_INVALID_REQUEST`, `FILES_FORBIDDEN`, `FILES_FILE_NOT_FOUND`, `FILES_UPLOAD_NOT_FOUND`, `FILES_UPLOAD_EXPIRED`, `FILES_UPLOAD_INCOMPLETE`, `FILES_FILE_TOO_LARGE`, `FILES_CONTENT_TYPE_NOT_ALLOWED`, `FILES_FILE_SIZE_MISMATCH`, `FILES_CHECKSUM_MISMATCH`, `FILES_IDEMPOTENCY_KEY_REUSED`, `FILES_CONFLICT`, and retryable `FILES_STORAGE_UNAVAILABLE`.
 
-Optional SHA-256 values are sent as `x-amz-meta-nocobase-sha256` and checked again during HEAD/complete. This is a client-declared transfer-consistency aid; unless the provider exposes a verified checksum, it is not a cryptographic server-side integrity assertion. Upload size is always strictly checked from HEAD.
+## Maintenance
+
+The package never starts a timer. A Core Host scheduler calls the two distinguishable phases:
 
 ```ts
-const files = createFilesModule({ db, config, requestContext, authorizer, drivers });
-app.route("/api/files/v1", files.router);
+const expired = await files.maintenance.expireUploads({ now: new Date(), limit: 100 });
+const deleted = await files.maintenance.deletePendingObjects({ limit: 100 });
+// or: const { expiredUploads, deletedObjects } = await files.maintenance.runOnce({ expireLimit: 100, deleteLimit: 100 });
 ```
 
-Create an upload with `POST /api/files/v1/uploads` and a required `Idempotency-Key`, stream bytes to the returned `PUT` target, then call `POST /api/files/v1/uploads/:uploadId/complete`. Create and complete are idempotent; callers receive only public file metadata, never storage keys, provider state, roots, or signing secrets.
+Both phases return `scanned`, `succeeded`, `retried`, `failed`, and `skipped`. Cleanup uses database records and CAS claims, calls `deleteObject` for an exact key, treats not-found as success, and is idempotent. It never lists a bucket or selects a ready file. The host owns cron frequency, leader election, job infrastructure, metrics, shutdown, and log routing.
 
-Use the stable `fileId` with `GET /files/:fileId`. `POST /files/:fileId/url` returns a short-lived, single-file read capability for inline display or attachment download; do not persist or log that URL. Local capabilities deliver through `/api/files/v1/delivery/:fileId` and stop working when they expire or the file is deleted.
-
-`DELETE /files/:fileId` immediately tombstones the file, then best-effort removes Local bytes. A storage failure leaves cleanup pending for a reconciler while the file remains inaccessible; repeated deletes are idempotent. Removing a `fileId` from an attachment list is not Kernel deletion. Call `DELETE` only when the application knows no other business record references the file; Registry remove behavior must not automatically delete physical files.
-
-Portal Host/Proxy is not the Core API Composition Root. Security configuration, credentials, endpoints, bucket names, and provider state must never be returned to browsers.
+See [INTEGRATION.md](./INTEGRATION.md) and [SECURITY.md](./SECURITY.md).

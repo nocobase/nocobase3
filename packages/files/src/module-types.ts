@@ -10,4 +10,4 @@ export interface FileAuthorizationInput { action: FileAction; actor: ActorContex
 export interface FileRequestContextResolver { getActor(context: unknown): Promise<ActorContext> | ActorContext; getWorkspaceId(context: unknown): Promise<string> | string }
 export interface FileAuthorizer { authorize(input: FileAuthorizationInput): Promise<void> }
 export interface FilesModuleOptions { db: Kysely<FilesDatabase>; config: unknown; requestContext: FileRequestContextResolver; authorizer: FileAuthorizer; drivers: Record<string, StorageDriver>; logger?: { error(error: unknown): void }; now?: () => Date; generateId?: () => string }
-export interface FilesModule { router: import("@hono/zod-openapi").OpenAPIHono; store: import("./persistence/files-store.ts").FilesStore }
+export interface FilesModule { router: import("@hono/zod-openapi").OpenAPIHono; store: import("./persistence/files-store.ts").FilesStore; maintenance: import("./maintenance/files-maintenance-service.ts").FilesMaintenanceService }

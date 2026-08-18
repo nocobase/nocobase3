@@ -112,13 +112,16 @@ export class FileService {
     if (!file) throw new FilesError("FILES_FILE_NOT_FOUND", "File not found");
     await this.authorize("files.delete", actor, workspaceId, file);
     if (file.status === "deleted") return;
-    const { file: deleted, newlyDeleted } = await this.o.store.markFileDeleted(workspaceId, fileId, actor.id, this.o.now());
+    const { newlyDeleted } = await this.o.store.markFileDeleted(workspaceId, fileId, actor.id, this.o.now());
     if (!newlyDeleted) return;
+    const claimed = await this.o.store.claimFilePendingPhysicalDelete(workspaceId, fileId);
+    if (!claimed) return;
     try {
-      await this.o.registry.get(deleted.backendKey).deleteObject({ key: deleted.storageKey });
+      await this.o.registry.get(claimed.backendKey).deleteObject({ key: claimed.storageKey });
       await this.o.store.markPhysicalDeleteCompleted(workspaceId, fileId, this.o.now());
     } catch (error) {
-      this.o.logger?.error(error);
+      await this.o.store.releaseFilePhysicalDeleteClaim(workspaceId, fileId).catch(() => undefined);
+      this.o.logger?.error(new Error("Files storage deletion failed"));
     }
   }
 }

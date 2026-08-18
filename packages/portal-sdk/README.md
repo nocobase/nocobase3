@@ -94,3 +94,5 @@ complete against the Files API; presigned targets receive only their signed
 headers and content type, never Portal Authorization, cookies, or workspace
 headers. UI and progress presentation belong to Registry code, not this
 headless SDK. Temporary URLs expire and must be requested again.
+
+The returned object `id` is the stable `fileId`. Removing an App-owned relation is not the same as `files.remove()`: call Kernel deletion only after the App knows the file is unreferenced. Folders, relations, tags, versions, and cleanup policy remain App-owned. Registry components installed into an App are editable App source; this SDK remains the immutable transport boundary.
