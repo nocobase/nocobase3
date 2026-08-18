@@ -7,7 +7,7 @@ type DataSourceMeta = {
 
 export const resolveAclDataSourceKey = (
   ...candidates: Array<DataSourceMeta | null | undefined>
-) => {
+): string | undefined => {
   for (const candidate of candidates) {
     if (typeof candidate?.dataSourceKey === "string") {
       return candidate.dataSourceKey;

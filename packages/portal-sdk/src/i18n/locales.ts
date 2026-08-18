@@ -54,7 +54,7 @@ export function getLocaleDirection(locale: string): LocaleDirection {
   return /^(ar|fa|he|ku|ur)(-|$)/i.test(locale) ? "rtl" : "ltr";
 }
 
-export function getLocaleLabel(locale: string) {
+export function getLocaleLabel(locale: string): string {
   const existing = localeDefinitions.get(locale)?.label;
   if (existing && existing !== locale) return existing;
 
@@ -67,7 +67,7 @@ export function getLocaleLabel(locale: string) {
   }
 }
 
-export function registerLocale(definition: LocaleDefinition) {
+export function registerLocale(definition: LocaleDefinition): void {
   const current = localeDefinitions.get(definition.locale);
   const currentLabel =
     current?.label && current.label !== definition.locale
@@ -91,7 +91,7 @@ export function registerLocale(definition: LocaleDefinition) {
 export function configurePortalLocales({
   defaultLocale: nextDefaultLocale,
   locales,
-}: PortalLocaleConfiguration) {
+}: PortalLocaleConfiguration): void {
   defaultLocale = nextDefaultLocale;
   localeDefinitions.clear();
 
@@ -103,11 +103,11 @@ export function configurePortalLocales({
   setEnabledLocales(locales.map((definition) => definition.locale));
 }
 
-export function getDefaultLocale() {
+export function getDefaultLocale(): string {
   return defaultLocale;
 }
 
-export function setEnabledLocales(locales: string[]) {
+export function setEnabledLocales(locales: string[]): void {
   enabledLocaleCodes = [...new Set(locales.filter(Boolean))];
   for (const locale of enabledLocaleCodes) {
     if (!localeDefinitions.has(locale)) {
@@ -121,11 +121,11 @@ export function setEnabledLocales(locales: string[]) {
   refreshSnapshot();
 }
 
-export function getLocaleDefinitions() {
+export function getLocaleDefinitions(): LocaleDefinition[] {
   return enabledLocaleSnapshot;
 }
 
-export function useEnabledLocales() {
+export function useEnabledLocales(): LocaleDefinition[] {
   return useSyncExternalStore(
     subscribe,
     getLocaleDefinitions,
@@ -133,7 +133,7 @@ export function useEnabledLocales() {
   );
 }
 
-export function resolveSupportedLocale(locale?: string) {
+export function resolveSupportedLocale(locale?: string): string {
   if (!locale) return defaultLocale;
 
   const exact = [...localeDefinitions.keys()].find(
@@ -149,6 +149,6 @@ export function resolveSupportedLocale(locale?: string) {
   );
 }
 
-export function getLocaleDefinition(locale: string) {
+export function getLocaleDefinition(locale: string): LocaleDefinition | undefined {
   return localeDefinitions.get(locale);
 }

@@ -85,7 +85,7 @@ export type AppRouteDefinition =
 
 export function defineAppRoutes<const Routes extends AppRouteDefinition[]>(
   routes: Routes
-) {
+): Routes {
   return routes;
 }
 

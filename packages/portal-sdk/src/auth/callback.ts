@@ -1,7 +1,7 @@
 import { clearAcl } from "../acl/index.ts";
 import { nocobaseClient } from "../client/index.ts";
 
-export function captureAuthenticationCallback() {
+export function captureAuthenticationCallback(): boolean {
   if (typeof window === "undefined") return false;
 
   const url = new URL(window.location.href);

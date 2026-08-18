@@ -1,44 +1,44 @@
-const getWindowValue = (key: "NOCOBASE_PORTAL_BASE" | "NOCOBASE_API_URL") => {
+const getWindowValue = (key: "NOCOBASE_PORTAL_BASE" | "NOCOBASE_API_URL"): string | undefined => {
   if (typeof window === "undefined") return undefined;
   const value = window[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 };
 
-export const normalizePortalBase = (base?: string) => {
+export const normalizePortalBase = (base?: string): string => {
   const normalized = String(base || "/").trim();
   if (!normalized || normalized === "/") return "/";
   return `/${normalized.replace(/^\/+|\/+$/g, "")}/`;
 };
 
-export const getPortalBase = () =>
+export const getPortalBase = (): string =>
   normalizePortalBase(
     getWindowValue("NOCOBASE_PORTAL_BASE") ?? import.meta.env?.BASE_URL
   );
 
-export const getRuntimeApiUrl = () =>
+export const getRuntimeApiUrl = (): string | undefined =>
   getWindowValue("NOCOBASE_API_URL") ?? import.meta.env?.NOCOBASE_API_URL;
 
-export const resolveNocoBasePortalName = (portalBase: string) =>
+export const resolveNocoBasePortalName = (portalBase: string): string | undefined =>
   portalBase.match(/\/x\/(?:apps\/[^/]+\/)?([^/?#]+)(?:[/?#]|$)/)?.[1];
 
-export const getNocoBasePortalName = () =>
+export const getNocoBasePortalName = (): string | undefined =>
   resolveNocoBasePortalName(getPortalBase());
 
-const getAppNameFromPortalBase = (base: string) =>
+const getAppNameFromPortalBase = (base: string): string | undefined =>
   base.match(/\/x\/apps\/([^/]+)(?:\/|$)/)?.[1];
 
-const getAppNameFromApiUrl = (apiUrl?: string) =>
+const getAppNameFromApiUrl = (apiUrl?: string): string | undefined =>
   apiUrl?.match(/\/api\/__app\/([^/?#]+)(?:[/?#]|$)/)?.[1];
 
-export const resolveNocoBaseAppName = (portalBase: string, apiUrl?: string) =>
+export const resolveNocoBaseAppName = (portalBase: string, apiUrl?: string): string =>
   getAppNameFromPortalBase(portalBase) ??
   getAppNameFromApiUrl(apiUrl) ??
   "main";
 
-export const getNocoBaseAppName = () =>
+export const getNocoBaseAppName = (): string =>
   resolveNocoBaseAppName(getPortalBase(), getRuntimeApiUrl());
 
-export const resolveNocoBaseServerUrl = (path = "/") => {
+export const resolveNocoBaseServerUrl = (path: string = "/"): string => {
   if (typeof window === "undefined") return path;
 
   const apiUrl = new URL(
@@ -56,7 +56,7 @@ export const resolveNocoBaseServerUrl = (path = "/") => {
   ).toString();
 };
 
-export const resolveNocoBaseSettingsUrl = () => {
+export const resolveNocoBaseSettingsUrl = (): string => {
   const appName = getNocoBaseAppName();
   const settingsPath =
     appName === "main"
@@ -66,7 +66,7 @@ export const resolveNocoBaseSettingsUrl = () => {
   return resolveNocoBaseServerUrl(settingsPath);
 };
 
-export const resolvePortalUrl = (path = "/") => {
+export const resolvePortalUrl = (path: string = "/"): string => {
   if (typeof window === "undefined") return path;
   if (/^[a-z][a-z\d+.-]*:/i.test(path)) return path;
 

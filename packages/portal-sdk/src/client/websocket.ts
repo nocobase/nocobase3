@@ -39,7 +39,7 @@ const getRuntimeWebSocketUrl = () => {
   );
 };
 
-const getRuntimeWebSocketPath = () => {
+const getRuntimeWebSocketPath = (): string | undefined => {
   const runtime = getRuntimeWindow();
   return (
     runtime?.NOCOBASE_WS_PATH ??
@@ -50,7 +50,7 @@ const getRuntimeWebSocketPath = () => {
 
 export function resolveNocoBaseWebSocketUrl(
   options: NocoBaseWebSocketOptions = {}
-) {
+): string | undefined {
   if (typeof window === "undefined") return undefined;
 
   const configuredUrl = options.url ?? getRuntimeWebSocketUrl();
@@ -79,25 +79,25 @@ export class NocoBaseWebSocketClient {
 
   constructor(private readonly options: NocoBaseWebSocketOptions = {}) {}
 
-  get connected() {
+  get connected(): boolean {
     return this.socket?.readyState === 1;
   }
 
-  getURL() {
+  getURL(): string | undefined {
     return resolveNocoBaseWebSocketUrl(this.options);
   }
 
-  subscribe(listener: MessageListener) {
+  subscribe(listener: MessageListener): () => void {
     this.messageListeners.add(listener);
     return () => this.messageListeners.delete(listener);
   }
 
-  onOpen(listener: OpenListener) {
+  onOpen(listener: OpenListener): () => void {
     this.openListeners.add(listener);
     return () => this.openListeners.delete(listener);
   }
 
-  connect() {
+  connect(): void {
     if (typeof WebSocket === "undefined") return;
     if (this.socket?.readyState === 0 || this.socket?.readyState === 1) return;
     const url = this.getURL();
@@ -148,7 +148,7 @@ export class NocoBaseWebSocketClient {
     }
   }
 
-  reconnect() {
+  reconnect(): void {
     this.manuallyClosed = false;
     this.reconnectCount = 0;
     this.socket?.close();
@@ -156,7 +156,7 @@ export class NocoBaseWebSocketClient {
     this.connect();
   }
 
-  close() {
+  close(): void {
     this.manuallyClosed = true;
     this.clearReconnectTimer();
     this.stopPing();
@@ -166,7 +166,7 @@ export class NocoBaseWebSocketClient {
     this.socket = undefined;
   }
 
-  send(message: string | Record<string, unknown>) {
+  send(message: string | Record<string, unknown>): boolean {
     if (!this.connected) return false;
     this.socket?.send(
       typeof message === "string" ? message : JSON.stringify(message)
@@ -174,7 +174,7 @@ export class NocoBaseWebSocketClient {
     return true;
   }
 
-  authenticate() {
+  authenticate(): boolean {
     return this.send({
       type: "auth:token",
       payload: {
@@ -214,4 +214,5 @@ export class NocoBaseWebSocketClient {
   }
 }
 
-export const nocobaseWebSocket = new NocoBaseWebSocketClient();
+export const nocobaseWebSocket: NocoBaseWebSocketClient =
+  new NocoBaseWebSocketClient();
