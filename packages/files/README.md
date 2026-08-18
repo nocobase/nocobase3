@@ -17,6 +17,13 @@ Registry -> Portal SDK -> /api/files/v1 -> @nocobase/files
 | POST | `/api/files/v1/files/:fileId/url` | `filesCreateUrl` |
 | DELETE | `/api/files/v1/files/:fileId` | `filesDeleteFile` |
 
-Applications persist only the stable `fileId`; they never persist temporary URLs, provider URLs, physical keys, or user paths. Local and S3-compatible storage are drivers behind the same injected boundary, so the App does not know the provider. The host mounts the eventual Hono router with its request context, database, authorizer, and driver registry; this package currently exposes contracts and injection types only.
+Applications persist only the stable `fileId`; they never persist temporary URLs, provider URLs, physical keys, or user paths. Local storage is available through a capability-token proxy upload; S3 upload is intentionally not implemented yet.
+
+```ts
+const files = createFilesModule({ db, config, requestContext, authorizer, drivers });
+app.route("/api/files/v1", files.router);
+```
+
+Create an upload with `POST /api/files/v1/uploads` and a required `Idempotency-Key`, stream bytes to the returned `PUT` target, then call `POST /api/files/v1/uploads/:uploadId/complete`. Create and complete are idempotent; callers receive only public file metadata, never storage keys, provider state, roots, or signing secrets.
 
 Portal Host/Proxy is not the Core API Composition Root. Security configuration, credentials, endpoints, bucket names, and provider state must never be returned to browsers.

@@ -144,6 +144,1783 @@
           }
         }
       }
+    },
+    "/api/files/v1/uploads": {
+      "post": {
+        "operationId": "filesCreateUpload",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "originalName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "checksum": {
+                    "type": "object",
+                    "properties": {
+                      "algorithm": {
+                        "type": "string",
+                        "enum": [
+                          "sha256"
+                        ]
+                      },
+                      "value": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "algorithm",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "context": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": [
+                  "originalName",
+                  "contentType",
+                  "size"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Upload created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "uploadId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "fileId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "proxy",
+                                "presigned-put"
+                              ]
+                            },
+                            "method": {
+                              "type": "string",
+                              "enum": [
+                                "PUT"
+                              ]
+                            },
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "headers": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "expiresAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "method",
+                            "url",
+                            "headers",
+                            "expiresAt"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "uploadId",
+                        "fileId",
+                        "expiresAt",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/v1/uploads/{uploadId}/content": {
+      "put": {
+        "operationId": "filesUploadProxyContent",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "uploadId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "token",
+            "in": "query"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Content stored"
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/v1/uploads/{uploadId}/complete": {
+      "post": {
+        "operationId": "filesCompleteUpload",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "uploadId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Upload completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "file": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "policy": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "originalName": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "contentType": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "size": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "checksum": {
+                              "type": "object",
+                              "properties": {
+                                "algorithm": {
+                                  "type": "string",
+                                  "enum": [
+                                    "sha256"
+                                  ]
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "algorithm",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "ready",
+                                "failed",
+                                "deleted"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "allowedActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "read",
+                                  "delete"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "policy",
+                            "originalName",
+                            "contentType",
+                            "size",
+                            "status",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "file"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "FILES_INVALID_REQUEST",
+                            "FILES_POLICY_NOT_FOUND",
+                            "FILES_FILE_NOT_FOUND",
+                            "FILES_UPLOAD_NOT_FOUND",
+                            "FILES_FORBIDDEN",
+                            "FILES_FILE_TOO_LARGE",
+                            "FILES_CONTENT_TYPE_NOT_ALLOWED",
+                            "FILES_UPLOAD_EXPIRED",
+                            "FILES_UPLOAD_INCOMPLETE",
+                            "FILES_FILE_SIZE_MISMATCH",
+                            "FILES_CHECKSUM_MISMATCH",
+                            "FILES_IDEMPOTENCY_KEY_REUSED",
+                            "FILES_STORAGE_UNAVAILABLE",
+                            "FILES_CONFLICT",
+                            "FILES_INTERNAL_ERROR"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "properties": {},
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
