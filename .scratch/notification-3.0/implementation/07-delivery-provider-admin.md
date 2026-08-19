@@ -1,8 +1,8 @@
 # Operate deliveries and providers from the admin console
 
 Type: implementation / AFK
-Status: blocked
-Label: needs-triage
+Status: completed
+Label: implemented
 Blocked by: [05](05-smtp-retry-fallback.md)
 
 ## What to build
@@ -11,10 +11,10 @@ Turn the approved admin prototype into a working Delivery Log and read-only Prov
 
 ## Acceptance criteria
 
-- [ ] Delivery list supports only the approved indexed filters, fixed ordering, page/pageSize pagination, and redacted summaries.
-- [ ] Delivery detail displays validated content, Provider Chain, Attempts, StatusEvents, source, revisions, and redacted diagnostics.
-- [ ] Provider list shows configuration state without secrets; connection test validates SMTP connection/TLS/auth without sending mail.
-- [ ] Failed retry requires a reason; submission-unknown retry additionally requires duplicate-risk acknowledgement.
-- [ ] Concurrent retry requests are resolved by Delivery CAS and return stable 409 errors when not retryable.
-- [ ] All authenticated Portal users can temporarily use the management functions; cookie mutations enforce CSRF and the TEMPORARY access boundary is visible.
-- [ ] Browser and API tests cover filters, detail drill-down, connection testing, ordinary retry, risky retry, and redaction.
+- [x] Delivery list supports only the approved indexed filters, fixed ordering, page/pageSize pagination, and redacted summaries.
+- [x] Delivery detail displays validated content metadata, Provider Chain, Attempts, StatusEvents, source, revisions, and redacted diagnostics.
+- [x] Provider list shows configuration state without secrets; connection test validates SMTP connection/TLS/auth without sending mail.
+- [x] Failed retry requires a reason; submission-unknown retry additionally requires duplicate-risk acknowledgement.
+- [x] Concurrent retry requests are resolved by Delivery CAS and return stable 409 errors when not retryable.
+- [x] All authenticated Portal users can temporarily use the management functions; cookie mutations enforce CSRF and the TEMPORARY access boundary is visible.
+- [x] Browser and API tests cover filters, detail drill-down, connection testing, ordinary retry, risky retry, and redaction.

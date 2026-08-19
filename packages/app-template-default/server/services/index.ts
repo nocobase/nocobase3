@@ -87,7 +87,10 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
         database: options.database,
         logger: loggerManager.use().child({ module: 'notification' }),
         queueManager,
-        templates: options.notificationTemplates,
+        emailProviders: options.notifications.emailProviders,
+        emailProviderDefinitions: options.notifications.emailProviderDefinitions,
+        resolveUserEmail: options.notifications.resolveUserEmail,
+        templates: options.notifications.templates ?? options.notificationTemplates,
         live: portalLive && options.appId
           ? { publisher: portalLive.publisher, appId: options.appId }
           : undefined,

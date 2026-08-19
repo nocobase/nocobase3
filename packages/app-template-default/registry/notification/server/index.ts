@@ -6,6 +6,7 @@ import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { Hono } from 'hono';
 import { Job } from '@nocobase/queue';
 import type { EmailProviderRegistry } from '../providers/index.js';
+import type { EmailProviderDefinition } from '../config/providers.js';
 import type { NotificationTemplateRegistry, RenderedNotificationTemplate } from '../templates/index.js';
 import {
   createDatabaseNotificationStore,
@@ -16,8 +17,11 @@ import {
 } from './domain.js';
 import { dispatchEmailDelivery } from './email-dispatcher.js';
 import { createLivePublishingNotificationStore, type NotificationLiveTarget } from './live.js';
+import { createNotificationAdminRouter } from './admin.js';
 
 export * from './domain.js';
+export * from './queries.js';
+export type { ProviderConnectionTestDto, ProviderSummaryDto } from './admin.js';
 export type { InboxLiveEventType, NotificationLiveTarget } from './live.js';
 
 export type NotificationHealthStatus = 'ok' | 'degraded' | 'unavailable';
@@ -87,6 +91,7 @@ export interface CreateNotificationModuleOptions {
   readonly allowNonPersistentStore?: boolean;
   readonly live?: NotificationLiveTarget;
   readonly emailProviders?: EmailProviderRegistry;
+  readonly emailProviderDefinitions?: readonly EmailProviderDefinition[];
   readonly resolveUserEmail?: (userId: string) => Promise<string | undefined>;
   readonly templates?: NotificationTemplateRegistry;
 }
@@ -94,6 +99,10 @@ export interface CreateNotificationModuleOptions {
 export interface NotificationModuleConfig {
   readonly enabled?: boolean;
   readonly allowNonPersistentStore?: boolean;
+  readonly emailProviders?: EmailProviderRegistry;
+  readonly emailProviderDefinitions?: readonly EmailProviderDefinition[];
+  readonly resolveUserEmail?: (userId: string) => Promise<string | undefined>;
+  readonly templates?: NotificationTemplateRegistry;
 }
 
 export class NotificationModuleError extends Error {
@@ -133,6 +142,14 @@ export function createNotificationModule(options: CreateNotificationModuleOption
       await dispatchNotificationDelivery(store, this.payload.deliveryId);
     }
   }
+  router.route('/admin', createNotificationAdminRouter({
+    store,
+    providers: options.emailProviders,
+    providerDefinitions: options.emailProviderDefinitions,
+    dispatchDelivery: async (deliveryId: string): Promise<void> => {
+      await options.queueManager.dispatch(NotificationDeliveryJob, { deliveryId });
+    },
+  }));
   service = {
     store,
     async trigger(input: NotificationTriggerInput): Promise<NotificationTriggerResult> {

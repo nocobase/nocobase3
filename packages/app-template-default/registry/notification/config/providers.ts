@@ -44,14 +44,14 @@ export async function createConfiguredEmailProviders(options: CreateConfiguredEm
     if (!definition.enabled) continue;
     if (definition.type === 'fake') {
       if (options.production) throw new Error(`Fake provider "${definition.id}" is not allowed in production.`);
-      const provider = createFakeEmailProvider({ instanceId: definition.id, configRevision: revision(definition) });
+      const provider = createFakeEmailProvider({ instanceId: definition.id, configRevision: getEmailProviderConfigRevision(definition) });
       instances.push({ id: definition.id, enabled: true, provider });
       continue;
     }
     const username = definition.usernameSecret ? await options.resolveSecret(definition.usernameSecret) : undefined;
     const password = definition.passwordSecret ? await options.resolveSecret(definition.passwordSecret) : undefined;
     if ((definition.usernameSecret && !username) || (definition.passwordSecret && !password)) throw new Error(`Required SMTP Secret for "${definition.id}" is unavailable.`);
-    const provider = createSmtpProvider({ instanceId: definition.id, configRevision: revision(definition), client: options.createSmtpClient({ host: definition.host, port: definition.port, secure: definition.secure, username, password }) });
+    const provider = createSmtpProvider({ instanceId: definition.id, configRevision: getEmailProviderConfigRevision(definition), client: options.createSmtpClient({ host: definition.host, port: definition.port, secure: definition.secure, username, password }) });
     instances.push({ id: definition.id, enabled: true, provider });
   }
   return createEmailProviderRegistry(instances);
@@ -63,7 +63,7 @@ function validateDefinition(definition: EmailProviderDefinition, ids: Set<string
   if (definition.type === 'smtp' && (!definition.host || !Number.isInteger(definition.port) || definition.port < 1 || definition.port > 65535)) throw new Error(`SMTP provider "${definition.id}" has invalid connection settings.`);
 }
 
-function revision(definition: EmailProviderDefinition): string {
+export function getEmailProviderConfigRevision(definition: EmailProviderDefinition): string {
   const publicConfig = definition.type === 'smtp'
     ? { id: definition.id, type: definition.type, enabled: definition.enabled, host: definition.host, port: definition.port, secure: definition.secure, usernameSecret: definition.usernameSecret, passwordSecret: definition.passwordSecret }
     : definition;

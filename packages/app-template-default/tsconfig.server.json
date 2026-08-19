@@ -27,5 +27,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["server/**/*.ts", "registry/notification/**/*.ts", "scripts/migrate.ts"],
-  "exclude": ["server/migrations/**/*.ts"]
+  "exclude": ["server/migrations/**/*.ts", "registry/notification/admin/**/*.ts"]
 }

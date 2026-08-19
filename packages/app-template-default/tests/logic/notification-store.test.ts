@@ -85,6 +85,20 @@ describe('NotificationStore contract', () => {
     await close();
   });
 
+  it.each([
+    ['memory', async () => ({ store: createMemoryNotificationStore(), close: async () => undefined })],
+    ['database', createDatabaseStore],
+  ])('lists deliveries with fixed filters, ordering, count, and pagination through the %s adapter', async (_name, setup) => {
+    const { store, close } = await setup();
+    await store.createNotificationBundle({ notification: createNotification(), deliveries: [createDelivery()] });
+    await store.createNotificationBundle({ notification: { ...createNotification(), id: 'notification-2', updatedAt: '2026-08-19T00:00:02.000Z' }, deliveries: [{ ...createDelivery(), id: 'delivery-2', notificationId: 'notification-2', recipientKey: 'user:user-2', status: 'failed', updatedAt: '2026-08-19T00:00:02.000Z' }] });
+
+    await expect(store.listDeliveries({ page: 1, pageSize: 1 })).resolves.toMatchObject([{ id: 'delivery-2' }]);
+    await expect(store.listDeliveries({ status: 'queued', search: 'user-1', page: 1, pageSize: 25 })).resolves.toMatchObject([{ id: 'delivery-1' }]);
+    await expect(store.countDeliveries({ channel: 'in-app' })).resolves.toBe(2);
+    await close();
+  });
+
   it('keeps notification and delivery snapshots isolated from caller mutation', async () => {
     const store = createMemoryNotificationStore();
     const notification = createNotification();

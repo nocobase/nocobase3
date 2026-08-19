@@ -109,6 +109,8 @@ export interface NotificationCommandStore {
 export interface NotificationQueryStore {
   getNotification(id: string): Promise<NotificationRecord | undefined>;
   getDelivery(id: string): Promise<DeliveryRecord | undefined>;
+  listDeliveries(input: DeliveryListQuery): Promise<readonly DeliveryRecord[]>;
+  countDeliveries(input: Omit<DeliveryListQuery, 'page' | 'pageSize'>): Promise<number>;
   listDeliveryStatusEvents(deliveryId: string): Promise<readonly DeliveryStatusEventRecord[]>;
   listDeliveryAttempts(deliveryId: string): Promise<readonly DeliveryAttemptRecord[]>;
   listUserNotificationItemsByDelivery(deliveryId: string): Promise<readonly UserNotificationItemRecord[]>;
@@ -139,6 +141,14 @@ export interface NotificationBundle {
 export interface DueDeliveryQuery {
   now: string;
   limit: number;
+}
+
+export interface DeliveryListQuery {
+  status?: NotificationStatus;
+  channel?: NotificationChannel;
+  search?: string;
+  page: number;
+  pageSize: number;
 }
 
 export interface DeliveryClaim {
@@ -177,6 +187,7 @@ export interface DeliveryTransition {
   statusChangedAt: string;
   leaseToken?: string;
   lastError?: Record<string, unknown>;
+  clearLastError?: boolean;
   event?: DeliveryStatusEventRecord;
   attempt?: DeliveryAttemptRecord;
   nextRunAt?: string;
@@ -229,6 +240,23 @@ export function createMemoryNotificationStore(): NotificationStore {
       const record = deliveries.get(id);
       return record ? structuredClone(record) : undefined;
     },
+    async listDeliveries(input): Promise<readonly DeliveryRecord[]> {
+      const search = input.search?.trim().toLowerCase();
+      return [...deliveries.values()]
+        .filter((delivery) => input.status === undefined || delivery.status === input.status)
+        .filter((delivery) => input.channel === undefined || delivery.channel === input.channel)
+        .filter((delivery) => !search || delivery.id.toLowerCase().startsWith(search) || delivery.notificationId.toLowerCase().startsWith(search) || recipientSearchMatches(delivery.recipientKey, search))
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id))
+        .slice((input.page - 1) * input.pageSize, input.page * input.pageSize)
+        .map((delivery) => structuredClone(delivery));
+    },
+    async countDeliveries(input): Promise<number> {
+      const search = input.search?.trim().toLowerCase();
+      return [...deliveries.values()]
+        .filter((delivery) => input.status === undefined || delivery.status === input.status)
+        .filter((delivery) => input.channel === undefined || delivery.channel === input.channel)
+        .filter((delivery) => !search || delivery.id.toLowerCase().startsWith(search) || delivery.notificationId.toLowerCase().startsWith(search) || recipientSearchMatches(delivery.recipientKey, search)).length;
+    },
     async transitionDelivery(input): Promise<DeliveryRecord | undefined> {
       const current = deliveries.get(input.deliveryId);
       if (
@@ -244,7 +272,7 @@ export function createMemoryNotificationStore(): NotificationStore {
         ...current,
         status: input.toStatus,
         statusChangedAt: input.statusChangedAt,
-        lastError: input.lastError,
+        lastError: input.clearLastError ? undefined : input.lastError ?? current.lastError,
         nextRunAt: input.clearNextRunAt ? undefined : input.nextRunAt ?? current.nextRunAt,
         providerCursor: input.providerCursor ?? current.providerCursor,
         currentAttempt: input.currentAttempt ?? current.currentAttempt,
@@ -398,6 +426,30 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
         .executeTakeFirst<DeliveryRow>();
       return row ? fromDeliveryRow(row) : undefined;
     },
+    async listDeliveries(input): Promise<readonly DeliveryRecord[]> {
+      let query = database.query().selectFrom<DeliveryRow>('notificationDeliveries').selectAll();
+      if (input.status !== undefined) query = query.where('status', '=', input.status);
+      if (input.channel !== undefined) query = query.where('channel', '=', input.channel);
+      if (input.search?.trim()) {
+        const search = input.search.trim().toLowerCase();
+        const pattern = `${search}%`;
+        query = query.where(({ eb, or }) => or([eb('id', 'like', pattern), eb('notificationId', 'like', pattern), eb('recipientKey', 'like', pattern), eb('recipientKey', 'like', `user:${pattern}`), eb('recipientKey', 'like', `email:${pattern}`)]));
+      }
+      const rows = await query.orderBy('updatedAt', 'desc').orderBy('id', 'desc').offset((input.page - 1) * input.pageSize).limit(input.pageSize).execute<DeliveryRow>();
+      return rows.map(fromDeliveryRow);
+    },
+    async countDeliveries(input): Promise<number> {
+      let query = database.query().selectFrom<DeliveryRow>('notificationDeliveries').select((eb) => [eb.fn.countAll<number>().as('total')]);
+      if (input.status !== undefined) query = query.where('status', '=', input.status);
+      if (input.channel !== undefined) query = query.where('channel', '=', input.channel);
+      if (input.search?.trim()) {
+        const search = input.search.trim().toLowerCase();
+        const pattern = `${search}%`;
+        query = query.where(({ eb, or }) => or([eb('id', 'like', pattern), eb('notificationId', 'like', pattern), eb('recipientKey', 'like', pattern), eb('recipientKey', 'like', `user:${pattern}`), eb('recipientKey', 'like', `email:${pattern}`)]));
+      }
+      const row = await query.executeTakeFirst<{ total: number | string }>();
+      return Number(row?.total ?? 0);
+    },
     async transitionDelivery(input): Promise<DeliveryRecord | undefined> {
       return database.transaction(async (connection) => {
         let update = connection.query
@@ -405,7 +457,7 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
           .set({
             status: input.toStatus,
             statusChangedAt: input.statusChangedAt,
-            lastError: input.lastError === undefined ? undefined : JSON.stringify(input.lastError),
+            lastError: input.clearLastError ? null : input.lastError === undefined ? undefined : JSON.stringify(input.lastError),
             nextRunAt: input.clearNextRunAt ? null : input.nextRunAt,
             providerCursor: input.providerCursor,
             currentAttempt: input.currentAttempt,
@@ -678,6 +730,11 @@ function fromDeliveryStatusEventRow(row: DeliveryStatusEventRow): DeliveryStatus
 
 function hasDuplicateIds(records: readonly { id: string }[]): boolean {
   return new Set(records.map((record) => record.id)).size !== records.length;
+}
+
+function recipientSearchMatches(recipientKey: string, search: string): boolean {
+  const normalized = recipientKey.toLowerCase();
+  return normalized.startsWith(search) || normalized.startsWith(`user:${search}`) || normalized.startsWith(`email:${search}`);
 }
 
 function makeUserItemVisible(items: Map<string, UserNotificationItemRecord>, delivery: DeliveryRecord, changedAt: string): void {

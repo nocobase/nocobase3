@@ -642,6 +642,10 @@ describe('database migrations', () => {
         name: '202608190001_create_notification_tables',
         fileName: '202608190001_create_notification_tables.ts',
       }),
+      expect.objectContaining({
+        name: '202608190002_add_notification_admin_indexes',
+        fileName: '202608190002_add_notification_admin_indexes.ts',
+      }),
     ]);
   });
 });
