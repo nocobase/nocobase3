@@ -97,11 +97,7 @@ describe('capability warnings [sqlite materialized view]', () => {
   const context = useIntegrationDatabase({
     name: 'sqlite',
     dialect: 'sqlite',
-    client: 'better-sqlite3',
-    connection: {
-      filename: ':memory:',
-    },
-    useNullAsDefault: true,
+    filename: ':memory:',
   });
 
   it('warns and skips unsupported materialized views without throwing', async () => {

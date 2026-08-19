@@ -95,4 +95,29 @@ describeIntegrationDatabases('collection creation', (context) => {
 
     expect(await getColumnType(context, auditLogsTable, 'ip_address')).toContain('text');
   });
+
+  it('skips duplicate create and missing drop when idempotent options are enabled', async () => {
+    await context.builder.createCollection(
+      'appSettings',
+      (collection) => {
+        collection.increments('id');
+        collection.string('key', { length: 191, nullable: false, unique: true });
+      },
+      { ifNotExists: true },
+    );
+
+    await expect(context.builder.createCollection(
+      'appSettings',
+      (collection) => {
+        collection.increments('id');
+        collection.string('key', { length: 191, nullable: false, unique: true });
+      },
+      { ifNotExists: true },
+    )).resolves.toBeDefined();
+    expect(await context.db.schema.hasTable(context.table('appSettings'))).toBe(true);
+
+    await expect(context.builder.dropCollection('appSettings', { ifExists: true })).resolves.toBeDefined();
+    expect(await context.db.schema.hasTable(context.table('appSettings'))).toBe(false);
+    await expect(context.builder.dropCollection('appSettings', { ifExists: true })).resolves.toBeDefined();
+  });
 });

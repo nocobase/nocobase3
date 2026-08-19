@@ -1,23 +1,58 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { serve } from '@hono/node-server';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { createNullCacheConfig, type AppCacheConfig } from '@nocobase/cache';
+import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppWebSocket, AppWebSocketReadyState } from '@nocobase/app-server/websocket';
+import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
+import type { AppDriveConfig } from '@nocobase/drive';
+import { createSilentLoggerConfig } from '@nocobase/logger';
+import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
+import { createNullSessionConfig, type AppSessionConfig } from '@nocobase/session';
+import { joinBasePath, normalizeBasePath, resolveAppNameFromBasePath } from '@nocobase/app-server/support';
 
 import {
   createApp,
+  type AppDisposer,
+  type AppScope,
   createServer as createEmbeddedServer,
+  createStandaloneRuntime,
   createStandaloneServer,
+  queueDemoExecutions,
+  type StandaloneServer,
 } from '../../server/index.ts';
-import { createNocoBaseApiProxyHeaders } from '../../server/app.ts';
+import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalone.ts';
+import type { AppConfig } from '../../server/config/index.ts';
+import { CLOCK_TOPIC } from '../../server/realtime/publishers/clock.ts';
+import { createRealtimeService } from '../../server/realtime/service.ts';
+import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
+import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 
+interface CloseableResource {
+  close(): Promise<void>;
+}
+
+type TestApp = ReturnType<typeof createApp> & CloseableResource;
+
+interface RegisteredTestDisposer {
+  name: string;
+  dispose: AppDisposer;
+}
+
+const apps: CloseableResource[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  await Promise.all(apps.splice(0).map((app) => app.close()));
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -41,12 +76,13 @@ afterEach(async () => {
 
 describe('app server', () => {
   it('creates embedded apps from a scope', async () => {
-    const app = await createEmbeddedServer({
+    const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/embedded-app-template-default',
-    });
+    }));
 
     const response = await app.request('http://localhost/api/healthz');
+    const websocketEvents = await app.websocket?.(new Request('http://localhost/ws'));
 
     await expect(response.json()).resolves.toEqual({
       ok: true,
@@ -56,9 +92,132 @@ describe('app server', () => {
       },
       basePath: '/embedded-app-template-default',
     });
+    expect(websocketEvents).toMatchObject({
+      onMessage: expect.any(Function),
+    });
   });
 
-  it('serves embedded production client routes from the stripped app-host path', async () => {
+  it('serves an app-local HTML route outside the API namespace', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    const response = await app.request('http://localhost/hello');
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('<h1>Hello from NocoBase</h1>');
+    expect(html).toContain('This page is rendered by an app-local server route.');
+  });
+
+  it('exposes an app-local WebSocket handler outside the API namespace', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    const response = await app.request('http://localhost/ws');
+    const websocketEvents = await app.websocket?.(new Request('http://localhost/ws'));
+    const missingEvents = await app.websocket?.(new Request('http://localhost/missing-ws'));
+
+    expect(response.status).toBe(426);
+    expect(response.headers.get('upgrade')).toBe('websocket');
+    await expect(response.json()).resolves.toEqual({
+      error: 'WebSocket upgrade required',
+    });
+    expect(websocketEvents).toMatchObject({
+      onMessage: expect.any(Function),
+    });
+    expect(missingEvents).toBeNull();
+  });
+
+  it('serves an app-local realtime demo page', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    const response = await app.request('http://localhost/realtime');
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('id="now-time"');
+    expect(html).toContain('/app-template-default/ws');
+    expect(html).toContain(CLOCK_TOPIC);
+    expect(html).toContain("type: 'subscribe'");
+  });
+
+  it('subscribes, publishes, and unsubscribes realtime messages', () => {
+    const realtime = createRealtimeService();
+    const websocket = createTestWebSocket();
+    const connection = realtime.connect(websocket);
+
+    realtime.handleClientMessage(connection, JSON.stringify({
+      type: 'subscribe',
+      id: 'subscribe-clock',
+      topic: CLOCK_TOPIC,
+    }));
+    const subscribed = websocket.messages[0];
+
+    expect(subscribed).toMatchObject({
+      type: 'subscribed',
+      id: 'subscribe-clock',
+      topic: CLOCK_TOPIC,
+      subscriptionId: expect.any(String),
+    });
+
+    realtime.publish(CLOCK_TOPIC, 'tick');
+
+    expect(websocket.messages[1]).toMatchObject({
+      type: 'event',
+      topic: CLOCK_TOPIC,
+      payload: 'tick',
+      publishedAt: expect.any(String),
+    });
+
+    realtime.handleClientMessage(connection, JSON.stringify({
+      type: 'unsubscribe',
+      id: 'unsubscribe-clock',
+      subscriptionId: (subscribed as { subscriptionId: string }).subscriptionId,
+    }));
+    realtime.publish(CLOCK_TOPIC, 'after unsubscribe');
+
+    expect(websocket.messages[2]).toMatchObject({
+      type: 'unsubscribed',
+      id: 'unsubscribe-clock',
+      subscriptionId: (subscribed as { subscriptionId: string }).subscriptionId,
+      topic: CLOCK_TOPIC,
+    });
+    expect(websocket.messages).toHaveLength(3);
+
+    realtime.close();
+  });
+
+  it('registers embedded app resources with the scope', async () => {
+    const registeredDisposers: RegisteredTestDisposer[] = [];
+    const app = await createEmbeddedServer(createEmbeddedTestScope({
+      id: 'app-template-default',
+      basePath: '/embedded-app-template-default',
+    }, registeredDisposers));
+
+    expect(typeof (app as { close?: unknown }).close).toBe('undefined');
+    expect(registeredDisposers.map((disposer) => disposer.name)).toEqual([
+      'runtime',
+      'app-deps',
+      'realtime-service',
+      'clock-publisher',
+    ]);
+
+    for (const disposer of [...registeredDisposers].reverse()) {
+      await expect(disposer.dispose()).resolves.toBeUndefined();
+      await expect(disposer.dispose()).resolves.toBeUndefined();
+    }
+  });
+
+  it('serves embedded production SPA routes from the stripped app-host path', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-embedded-client-'));
     tempDirs.push(root);
     writeFileSync(
@@ -66,11 +225,11 @@ describe('app server', () => {
       '<div id="root"></div><script type="module" src="/app-template-default/assets/index.js"></script>',
     );
 
-    const app = await createEmbeddedServer({
+    const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/app-template-default',
       clientDir: root,
-    });
+    }));
 
     const response = await app.request('http://localhost/');
     const html = await response.text();
@@ -105,12 +264,12 @@ describe('app server', () => {
     );
     writeFileSync(path.join(clientDir, 'index.html'), '<script type="module" src="/app-template-default/assets/index.js"></script>');
 
-    const app = await createEmbeddedServer({
+    const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/app-template-default',
       rootDir: appRoot,
       clientDir,
-    });
+    }));
 
     const api = await app.request('http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F');
     await expect(api.json()).resolves.toEqual({
@@ -125,7 +284,7 @@ describe('app server', () => {
     expect(html).toContain('window.__nocobase_api_client_share_token__ = true;');
   });
 
-  it('proxies /<app>/v2/api requests to the configured NocoBase API URL', async () => {
+  it('proxies app-local /v2/api requests to the configured NocoBase API URL', async () => {
     const nocoBaseApiUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'application/json; charset=utf-8');
       response.end(
@@ -141,12 +300,12 @@ describe('app server', () => {
         }),
       );
     });
-    const app = createApp({
-      basePath: '/app-template-default',
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request('http://localhost/app-template-default/v2/api/systemSettings:get?locale=zh-CN', {
+    const response = await app.request('http://localhost/v2/api/systemSettings:get?locale=zh-CN', {
       headers: {
         host: '127.0.0.1:13000',
         origin: 'http://127.0.0.1:13000',
@@ -164,7 +323,7 @@ describe('app server', () => {
       origin: 'http://127.0.0.1:13000',
       referer: 'http://127.0.0.1:13000/app-template-default/login',
       forwardedHost: '127.0.0.1:13000',
-      forwardedPrefix: '/app-template-default/v2/api',
+      forwardedPrefix: '/v2/api',
       forwardedProto: 'http',
     });
   });
@@ -194,14 +353,14 @@ describe('app server', () => {
         }),
       );
     });
-    const app = createApp({
-      basePath: '/app-template-default',
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
     // A TLS-terminating proxy in front of this process: the site is https, but this hop is cleartext
     // and its x-forwarded-* headers carry the browser's real context.
-    const response = await app.request('http://localhost/app-template-default/v2/api/auth:signIn', {
+    const response = await app.request('http://localhost/v2/api/auth:signIn', {
       method: 'POST',
       headers: {
         host: 'apps.example.com',
@@ -232,18 +391,331 @@ describe('app server', () => {
     tempDirs.push(root);
     writeFileSync(path.join(root, 'index.html'), '<main>app-template-default app</main>');
 
-    const app = createApp({
-      basePath: '/app-template-default',
-      clientIndexPath: path.join(root, 'index.html'),
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      spa: {
+        indexPath: path.join(root, 'index.html'),
+      },
     });
 
-    const response = await app.request('http://localhost/app-template-default/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F');
+    const response = await app.request('http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F');
 
     expect(response.status).toBe(503);
     expect(response.headers.get('content-type')).toContain('application/json');
     await expect(response.json()).resolves.toEqual({
       error: 'NocoBase API proxy target is not configured.',
     });
+  });
+
+  it('returns a JSON error when app settings are requested without a database', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    const response = await app.request('http://localhost/api/app-settings');
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Database is not configured.',
+    });
+  });
+
+  it('reads app settings from the configured database', async () => {
+    const rows = [
+      {
+        key: 'site.title',
+        value: 'NocoBase',
+        createdAt: '2026-08-18T00:00:00.000Z',
+        updatedAt: '2026-08-18T00:00:00.000Z',
+      },
+    ];
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      database: createMockDatabase(rows),
+    });
+
+    const response = await app.request('http://localhost/api/app-settings');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      settings: rows,
+    });
+  });
+
+  it('serves a cache API example with cacheable getOrSet', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      cache: createTestCache(),
+    });
+
+    const firstResponse = await app.request('http://localhost/api/cache/demo');
+    const firstPayload = await firstResponse.json();
+    const secondResponse = await app.request('http://localhost/api/cache/demo');
+    const secondPayload = await secondResponse.json();
+
+    expect(firstResponse.status).toBe(200);
+    expect(firstPayload).toMatchObject({
+      key: 'examples:cache:demo',
+      ttl: '30s',
+      cached: false,
+      value: {
+        generatedAt: expect.any(String),
+        id: expect.any(String),
+      },
+    });
+    expect(secondResponse.status).toBe(200);
+    expect(secondPayload).toEqual({
+      ...firstPayload,
+      cached: true,
+    });
+
+    const deleteResponse = await app.request('http://localhost/api/cache/demo', {
+      method: 'DELETE',
+    });
+
+    expect(deleteResponse.status).toBe(200);
+    await expect(deleteResponse.json()).resolves.toEqual({
+      key: 'examples:cache:demo',
+      deleted: true,
+    });
+
+    const thirdResponse = await app.request('http://localhost/api/cache/demo');
+    const thirdPayload = await thirdResponse.json();
+
+    expect(thirdResponse.status).toBe(200);
+    expect(thirdPayload.cached).toBe(false);
+    expect(thirdPayload.value.id).not.toBe(firstPayload.value.id);
+  });
+
+  it('serves a session API example with cookie-backed persistence', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      session: createTestSession(),
+    });
+
+    const emptyResponse = await app.request('http://localhost/api/session');
+    await expect(emptyResponse.json()).resolves.toEqual({
+      enabled: true,
+      id: null,
+      data: null,
+    });
+
+    const touchResponse = await app.request('http://localhost/api/session/touch', {
+      method: 'POST',
+    });
+    const cookie = firstCookie(touchResponse);
+    const touchPayload = await touchResponse.json();
+
+    expect(touchResponse.status).toBe(200);
+    expect(cookie).toContain('nocobase_session=');
+    expect(touchPayload).toMatchObject({
+      enabled: true,
+      id: expect.any(String),
+      data: {
+        visits: 1,
+        touchedAt: expect.any(String),
+      },
+    });
+
+    const secondTouchResponse = await app.request('http://localhost/api/session/touch', {
+      method: 'POST',
+      headers: {
+        cookie,
+      },
+    });
+    const updatedCookie = firstCookie(secondTouchResponse);
+    const infoResponse = await app.request('http://localhost/api/session', {
+      headers: {
+        cookie: updatedCookie,
+      },
+    });
+
+    await expect(infoResponse.json()).resolves.toMatchObject({
+      enabled: true,
+      id: touchPayload.id,
+      data: {
+        visits: 2,
+        touchedAt: expect.any(String),
+      },
+    });
+
+    const deleteResponse = await app.request('http://localhost/api/session', {
+      method: 'DELETE',
+      headers: {
+        cookie: updatedCookie,
+      },
+    });
+
+    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.headers.get('set-cookie')).toContain('Max-Age=0');
+    await expect(deleteResponse.json()).resolves.toEqual({
+      destroyed: true,
+    });
+  });
+
+  it('serves a queue API example with the sync connection', async () => {
+    queueDemoExecutions.length = 0;
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      queue: {
+        default: 'sync',
+        connections: {
+          sync: {
+            driver: 'sync',
+          },
+        },
+        jobs: {
+          locations: [],
+          autoLoad: false,
+        },
+      },
+    });
+
+    const response = await app.request('http://localhost/api/queue/demo', {
+      method: 'POST',
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      jobId: expect.any(String),
+      job: 'QueueDemo',
+      queue: 'default',
+      syncExecutions: 1,
+    });
+    expect(queueDemoExecutions).toHaveLength(1);
+    expect(queueDemoExecutions[0]).toMatchObject({
+      message: 'Hello from NocoBase queue',
+      requestedAt: expect.any(String),
+      executedAt: expect.any(String),
+    });
+
+    await app.close();
+  });
+
+  it('writes a queue demo database log when database is configured', async () => {
+    queueDemoExecutions.length = 0;
+    const insertedRows: unknown[] = [];
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      database: createMockDatabase([], insertedRows),
+      queue: {
+        default: 'sync',
+        connections: {
+          sync: {
+            driver: 'sync',
+          },
+        },
+        jobs: {
+          locations: [],
+          autoLoad: false,
+        },
+      },
+    });
+
+    const response = await app.request('http://localhost/api/queue/demo', {
+      method: 'POST',
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      jobId: expect.any(String),
+      job: 'QueueDemo',
+      queue: 'default',
+      syncExecutions: 1,
+    });
+    expect(insertedRows).toHaveLength(1);
+    expect(insertedRows[0]).toMatchObject({
+      key: `queue.demo.${payload.jobId}`,
+      value: expect.any(String),
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+
+    const value = JSON.parse((insertedRows[0] as { value: string }).value) as Record<string, unknown>;
+    expect(value).toMatchObject({
+      message: 'Hello from NocoBase queue',
+      requestedAt: expect.any(String),
+      executedAt: expect.any(String),
+    });
+
+    await app.close();
+  });
+
+  it('returns a JSON error when upload is requested without file drive', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+    const body = new FormData();
+    body.set('file', new File(['Hello world'], 'hello.txt', { type: 'text/plain' }));
+
+    const response = await app.request('http://localhost/api/upload', {
+      method: 'POST',
+      body,
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'File drive is not configured.',
+    });
+  });
+
+  it('requires a file for uploads', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-upload-'));
+    tempDirs.push(root);
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      drive: createTestDrive(root),
+    });
+    const body = new FormData();
+    body.set('file', 'not-a-file');
+
+    const response = await app.request('http://localhost/api/upload', {
+      method: 'POST',
+      body,
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'File is required',
+    });
+  });
+
+  it('uploads files with the configured file drive', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-upload-'));
+    tempDirs.push(root);
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      drive: createTestDrive(root),
+    });
+    const body = new FormData();
+    body.set('file', new File(['Hello world'], 'hello world.txt', { type: 'text/plain' }));
+
+    const response = await app.request('http://localhost/api/upload', {
+      method: 'POST',
+      body,
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      name: 'hello world.txt',
+      size: 11,
+      type: 'text/plain',
+    });
+    expect(payload.key).toMatch(/^uploads\/[0-9a-f-]+-hello-world\.txt$/);
+    expect(payload.url).toBe(`/storage/${payload.key}`);
+    expect(readFileSync(path.join(root, 'storage/app/public', payload.key), 'utf8')).toBe('Hello world');
   });
 
   it('strips compressed upstream response headers before returning proxied API responses', async () => {
@@ -256,12 +728,12 @@ describe('app server', () => {
       response.setHeader('content-length', String(compressedPayload.byteLength));
       response.end(compressedPayload);
     });
-    const app = createApp({
-      basePath: '/app-template-default',
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request('http://localhost/app-template-default/v2/api/systemSettings:get');
+    const response = await app.request('http://localhost/v2/api/systemSettings:get');
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-encoding')).toBeNull();
@@ -269,40 +741,145 @@ describe('app server', () => {
     await expect(response.text()).resolves.toBe(payload);
   });
 
-  it('keeps template API routes on the template server when Vite dev proxy is enabled', async () => {
+  it('keeps app-local API routes on the standalone server when Vite dev proxy is enabled', async () => {
     let viteRequestCount = 0;
     const viteDevUrl = await startHttpStub(() => {
       viteRequestCount += 1;
     });
-    const app = createStandaloneServer({ viteDevUrl });
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
+    const publicBasePath = runtime.config.app.publicBasePath;
 
-    const response = await app.request('http://localhost/app-template-default/api/healthz');
+    const response = await app.request(`http://localhost${publicBasePath}/api/healthz`);
 
     await expect(response.json()).resolves.toEqual({
       ok: true,
       app: {
-        name: 'app-template-default',
-        basePath: '/app-template-default',
+        name: runtime.config.app.name,
+        basePath: runtime.config.app.publicBasePath,
       },
-      basePath: '/app-template-default',
+      basePath: runtime.config.app.publicBasePath,
     });
     expect(viteRequestCount).toBe(0);
   });
 
-  it('proxies template client routes to Vite dev server', async () => {
+  it('mounts standalone app-local routes behind the public base path', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
+    const publicBasePath = runtime.config.app.publicBasePath;
+    const expectedHealth = {
+      ok: true,
+      app: {
+        name: runtime.config.app.name,
+        basePath: publicBasePath,
+      },
+      basePath: publicBasePath,
+    };
+
+    const rootHealth = await app.request('http://localhost/healthz');
+    const appHealth = await app.request(`http://localhost${publicBasePath}/api/healthz`);
+    const bareLocalApi = await app.request('http://localhost/api/healthz');
+
+    await expect(appHealth.json()).resolves.toEqual(expectedHealth);
+    expect(rootHealth.status).toBe(404);
+    expect(bareLocalApi.status).toBe(404);
+    await app.close();
+  });
+
+  it('mounts standalone WebSocket handlers behind the public base path', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
+    const publicBasePath = runtime.config.app.publicBasePath;
+
+    const bareResult = await app.websocket?.(new Request('http://localhost/ws'));
+    const mountedResult = await app.websocket?.(new Request(`http://localhost${publicBasePath}/ws`));
+
+    expect(bareResult).toBeNull();
+    expect(mountedResult).toMatchObject({
+      onMessage: expect.any(Function),
+    });
+  });
+
+  it('accepts standalone WebSocket upgrades through the public base path', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
+    const serverUrl = await startStandaloneTestServer(app);
+    const websocket = new WebSocket(`${serverUrl}${runtime.config.app.publicBasePath}/ws`);
+
+    await waitForWebSocketOpen(websocket);
+    const subscribed = waitForWebSocketJsonMessage(websocket, (message) => message.type === 'subscribed');
+    const event = waitForWebSocketJsonMessage(
+      websocket,
+      (message) => message.type === 'event' && message.topic === CLOCK_TOPIC,
+    );
+
+    websocket.send(JSON.stringify({
+      type: 'subscribe',
+      id: 'clock',
+      topic: CLOCK_TOPIC,
+    }));
+
+    await expect(subscribed).resolves.toMatchObject({
+      type: 'subscribed',
+      id: 'clock',
+      topic: CLOCK_TOPIC,
+      subscriptionId: expect.any(String),
+    });
+    await expect(event).resolves.toMatchObject({
+      type: 'event',
+      topic: CLOCK_TOPIC,
+      payload: expect.any(String),
+      publishedAt: expect.any(String),
+    });
+
+    const close = waitForWebSocketClose(websocket);
+    websocket.close();
+    await close;
+  });
+
+  it('closes standalone WebSocket connections when the app closes', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
+    const serverUrl = await startStandaloneTestServer(app);
+    const websocket = new WebSocket(`${serverUrl}${runtime.config.app.publicBasePath}/ws`);
+
+    await waitForWebSocketOpen(websocket);
+    const close = waitForWebSocketClose(websocket);
+
+    await app.close();
+
+    await expect(close).resolves.toMatchObject({
+      code: 1001,
+      reason: 'app runtime closed',
+    });
+  });
+
+  it('returns a closable standalone app', async () => {
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
+
+    expect(typeof app.close).toBe('function');
+    await expect(app.close()).resolves.toBeUndefined();
+    await expect(app.close()).resolves.toBeUndefined();
+  });
+
+  it('proxies standalone SPA routes to Vite dev server with the public base path restored', async () => {
     const viteDevUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'text/plain; charset=utf-8');
       response.end(`vite:${_request.method}:${_request.url}`);
     });
-    const app = createStandaloneServer({ viteDevUrl });
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
+    const publicBasePath = runtime.config.app.publicBasePath;
+    const requestPath = `${publicBasePath}/settings?tab=apps`;
 
-    const response = await app.request('http://localhost/app-template-default/settings?tab=apps');
+    const response = await app.request(`http://localhost${requestPath}`);
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('vite:GET:/app-template-default/settings?tab=apps');
+    await expect(response.text()).resolves.toBe(`vite:GET:${requestPath}`);
+    await app.close();
   });
 
-  it('injects browser runtime config when serving the production client index', async () => {
+  it('injects browser runtime config when serving the production SPA index', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-client-'));
     tempDirs.push(root);
     const indexPath = path.join(root, 'index.html');
@@ -319,14 +896,15 @@ describe('app server', () => {
       ].join(''),
     );
 
-    const app = createApp({
-      basePath: '/app-template-default',
-      apiProxyPath: '/v2/api',
-      clientIndexPath: indexPath,
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
+      spa: {
+        indexPath,
+      },
     });
 
-    const response = await app.request('http://localhost/app-template-default/settings');
+    const response = await app.request('http://localhost/settings');
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -335,20 +913,22 @@ describe('app server', () => {
     expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(html.indexOf('<script type="module"'));
   });
 
-  it('serves production client assets before the SPA fallback', async () => {
+  it('serves production SPA assets before the SPA fallback', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-client-'));
     tempDirs.push(root);
     mkdirSync(path.join(root, 'assets'));
     writeFileSync(path.join(root, 'index.html'), '<script type="module" src="/app-template-default/assets/index.js"></script>');
     writeFileSync(path.join(root, 'assets/index.js'), 'console.log("app-template-default asset");');
 
-    const app = createApp({
-      basePath: '/app-template-default',
-      clientIndexPath: path.join(root, 'index.html'),
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
+      spa: {
+        indexPath: path.join(root, 'index.html'),
+      },
     });
 
-    const response = await app.request('http://localhost/app-template-default/assets/index.js');
+    const response = await app.request('http://localhost/assets/index.js');
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
@@ -356,19 +936,21 @@ describe('app server', () => {
     await expect(response.text()).resolves.toBe('console.log("app-template-default asset");');
   });
 
-  it('does not return the SPA index for missing production client assets', async () => {
+  it('does not return the SPA index for missing production SPA assets', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-client-'));
     tempDirs.push(root);
     mkdirSync(path.join(root, 'assets'));
     writeFileSync(path.join(root, 'index.html'), '<main>app-template-default app</main>');
 
-    const app = createApp({
-      basePath: '/app-template-default',
-      clientIndexPath: path.join(root, 'index.html'),
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
+      spa: {
+        indexPath: path.join(root, 'index.html'),
+      },
     });
 
-    const response = await app.request('http://localhost/app-template-default/assets/missing.js');
+    const response = await app.request('http://localhost/assets/missing.js');
 
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
@@ -377,6 +959,116 @@ describe('app server', () => {
     });
   });
 });
+
+function startStandaloneTestServer(app: StandaloneServer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const server = serve(
+      {
+        fetch: app.fetch,
+        hostname: '127.0.0.1',
+        port: 0,
+      },
+      (info) => {
+        resolve(`ws://${normalizeListenAddress(info)}:${info.port}`);
+      },
+    ) as Server;
+
+    server.once('error', reject);
+    registerStandaloneWebSocketUpgradeHandler(app, server);
+    servers.push(server);
+  });
+}
+
+function normalizeListenAddress(info: AddressInfo): string {
+  return info.address === '::' ? '127.0.0.1' : info.address;
+}
+
+function waitForWebSocketOpen(websocket: WebSocket): Promise<void> {
+  if (websocket.readyState === WebSocket.OPEN) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      websocket.removeEventListener('open', handleOpen);
+      websocket.removeEventListener('error', handleError);
+    };
+    const handleOpen = (): void => {
+      cleanup();
+      resolve();
+    };
+    const handleError = (): void => {
+      cleanup();
+      reject(new Error('WebSocket failed to open.'));
+    };
+
+    websocket.addEventListener('open', handleOpen);
+    websocket.addEventListener('error', handleError);
+  });
+}
+
+function waitForWebSocketJsonMessage(
+  websocket: WebSocket,
+  predicate: (message: RealtimeServerMessage) => boolean,
+): Promise<RealtimeServerMessage> {
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      websocket.removeEventListener('message', handleMessage);
+      websocket.removeEventListener('error', handleError);
+    };
+    const handleMessage = (event: MessageEvent): void => {
+      try {
+        const message = JSON.parse(String(event.data)) as RealtimeServerMessage;
+        if (!predicate(message)) {
+          return;
+        }
+
+        cleanup();
+        resolve(message);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    };
+    const handleError = (): void => {
+      cleanup();
+      reject(new Error('WebSocket message failed.'));
+    };
+
+    websocket.addEventListener('message', handleMessage);
+    websocket.addEventListener('error', handleError);
+  });
+}
+
+function waitForWebSocketClose(websocket: WebSocket): Promise<CloseEvent> {
+  return new Promise((resolve) => {
+    websocket.addEventListener('close', (event) => resolve(event), { once: true });
+  });
+}
+
+interface TestWebSocket extends AppWebSocket {
+  readonly messages: RealtimeServerMessage[];
+}
+
+function createTestWebSocket(): TestWebSocket {
+  let readyState: AppWebSocketReadyState = 1;
+  const messages: RealtimeServerMessage[] = [];
+
+  return {
+    url: new URL('ws://localhost/ws'),
+    protocol: null,
+    messages,
+    get readyState() {
+      return readyState;
+    },
+    send(data) {
+      messages.push(JSON.parse(String(data)) as RealtimeServerMessage);
+    },
+    close() {
+      readyState = 3;
+    },
+  };
+}
 
 function startHttpStub(
   handler?: Parameters<typeof createHttpServer>[0],
@@ -398,91 +1090,206 @@ function startHttpStub(
   });
 }
 
-/**
- * Header handling when the upstream is a *different site* -- the usual local-development setup,
- * where `NOCOBASE_API_PROXY_TARGET` points at a shared remote NocoBase.
- *
- * **This group is what makes `pnpm dev` able to sign in.** Relaying the browser's hop faithfully
- * (correct for the loopback topology covered above) is guaranteed to fail here: the browser's origin
- * is `http://127.0.0.1:3000`, but the remote site's reverse proxy rewrites `x-forwarded-host` to its
- * own hostname, so the upstream derives `https://remote-site` and the check fails with
- * `403 Invalid sign-in origin`.
- *
- * These call the header builder directly rather than going through `createApp`: the cross-site
- * branch requires a non-loopback upstream, and a stub HTTP server can only bind loopback.
- */
-describe('forwarded headers for a cross-site upstream', () => {
-  const upstream = new URL('https://remote.example.com/api');
+function createTestDrive(root: string): AppDriveConfig {
+  return {
+    default: 'public',
+    disks: {
+      public: {
+        driver: 'fs',
+        location: path.join(root, 'storage/app/public'),
+        visibility: 'public',
+        url: '/storage',
+      },
+    },
+    links: {
+      [path.join(root, 'public/storage')]: path.join(root, 'storage/app/public'),
+    },
+  };
+}
 
-  const forwardedFromLocalhost = (extra: Record<string, string>) =>
-    createNocoBaseApiProxyHeaders(
-      new Request('http://127.0.0.1:3000/app-template-default/v2/api/auth:signIn', {
-        method: 'POST',
-        headers: { host: '127.0.0.1:3000', ...extra },
-      }),
-      '/app-template-default/v2/api',
-      upstream,
-    );
+function createTestCache(): AppCacheConfig {
+  return {
+    default: 'memory',
+    stores: {
+      memory: {
+        driver: 'memory',
+        ttl: '1m',
+        namespace: 'tests',
+      },
+      null: {
+        driver: 'null',
+      },
+    },
+  };
+}
 
-  it('aligns origin and x-forwarded-* on the upstream site', () => {
-    const headers = forwardedFromLocalhost({
-      origin: 'http://127.0.0.1:3000',
-      referer: 'http://127.0.0.1:3000/app-template-default/login',
-    });
+function createTestSession(): AppSessionConfig {
+  return {
+    enabled: true,
+    default: 'memory',
+    stores: {
+      memory: {
+        driver: 'memory',
+        base: 'tests:app-session:',
+      },
+    },
+    cookie: {
+      name: 'nocobase_session',
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+    },
+    lifetime: {
+      absolute: '2h',
+      rolling: true,
+    },
+    secret: 'test-app-session-secret',
+    gcLottery: [0, 100],
+  };
+}
 
-    expect(headers.get('origin')).toBe(upstream.origin);
-    expect(headers.get('x-forwarded-host')).toBe(upstream.host);
-    expect(headers.get('x-forwarded-proto')).toBe('https');
-    // The point of the three assertions above: the requestOrigin the upstream derives has to equal,
-    // verbatim, the origin it receives.
-    expect(`${headers.get('x-forwarded-proto')}://${headers.get('x-forwarded-host')}`).toBe(
-      headers.get('origin'),
-    );
+interface CreateTestAppOptions {
+  publicBasePath?: string;
+  nocoBaseApiUrl?: string | false;
+  database?: DatabaseManager;
+  cache?: AppCacheConfig;
+  drive?: AppDriveConfig;
+  queue?: AppQueueConfig;
+  session?: AppSessionConfig;
+  spa?: {
+    indexPath?: string;
+    runtime?: AppConfig['spa']['runtime'];
+  };
+}
+
+function createTestApp(options: CreateTestAppOptions = {}): TestApp {
+  const publicBasePath = normalizeBasePath(options.publicBasePath ?? '/app-template-default');
+  const internalApiProxyPath = '/v2/api';
+  const config = {
+    app: {
+      name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
+      publicBasePath,
+      internalBasePath: '',
+      internalApiProxyPath,
+      publicApiUrl: joinBasePath(publicBasePath, internalApiProxyPath),
+      nocoBaseApiUrl: options.nocoBaseApiUrl === false ? undefined : options.nocoBaseApiUrl,
+    },
+    cache: options.cache ?? createNullCacheConfig(),
+    database: {
+      default: 'sqlite',
+      connections: {},
+      migrations: {
+        directory: '',
+        autoRun: false,
+      },
+    },
+    drive: options.drive,
+    logger: createSilentLoggerConfig(),
+    queue: options.queue ?? createSyncQueueConfig(),
+    session: options.session ?? createNullSessionConfig(),
+    server: {
+      host: '127.0.0.1',
+      port: 0,
+      startLog: false,
+      viteDevUrl: undefined,
+    },
+    spa: {
+      indexPath: options.spa?.indexPath ?? path.resolve(process.cwd(), 'index.html'),
+      runtime: options.spa?.runtime ?? {
+        storagePrefix: 'NOCOBASE_',
+        storageType: 'localStorage',
+        shareToken: false,
+      },
+    },
+  } as AppConfig;
+  const runtime: AppRuntime<AppConfig> = {
+    config,
+    database: options.database,
+    runMigrations: () => Promise.resolve(undefined),
+    dispose: () => Promise.resolve(),
+  };
+  const lifecycle = createAppDisposerRegistry();
+  const app = Object.assign(createApp(runtime, { lifecycle }), {
+    close: () => lifecycle.disposeAll(),
   });
 
-  it('aligns referer too, since the upstream falls back to it without an origin', () => {
-    const headers = forwardedFromLocalhost({
-      referer: 'http://127.0.0.1:3000/app-template-default/login',
-    });
+  return trackCloseable(app);
+}
 
-    expect(new URL(headers.get('referer') ?? '').origin).toBe(upstream.origin);
+function createEmbeddedTestScope(
+  options: Omit<AppScope, 'registerDisposer'>,
+  registeredDisposers: RegisteredTestDisposer[] = [],
+): AppScope {
+  const lifecycle = createAppDisposerRegistry();
+  apps.push({
+    close: () => lifecycle.disposeAll(),
   });
 
-  it('does not invent an origin the browser never sent', () => {
-    // Requests without an origin (curl, server-side calls) do not trigger the origin check at all.
-    // Adding one would turn "no origin declared" into "claims to come from the site itself".
-    const headers = forwardedFromLocalhost({});
+  return {
+    ...options,
+    registerDisposer(name, dispose) {
+      registeredDisposers.push({ name, dispose });
+      lifecycle.registerDisposer(name, dispose);
+    },
+  };
+}
 
-    expect(headers.has('origin')).toBe(false);
-    expect(headers.has('referer')).toBe(false);
-    // The forwarded pair still has to be aligned: it decides who the upstream thinks it is,
-    // independently of whether an origin was sent.
-    expect(headers.get('x-forwarded-host')).toBe(upstream.host);
-  });
+function trackCloseable<T extends CloseableResource>(resource: T): T {
+  apps.push(resource);
+  return resource;
+}
 
-  it('still reports the proxy mount point', () => {
-    expect(forwardedFromLocalhost({}).get('x-forwarded-prefix')).toBe('/app-template-default/v2/api');
-  });
+function firstCookie(response: Response): string {
+  const setCookie = response.headers.get('set-cookie');
+  expect(setCookie).toBeTruthy();
+  return setCookie?.split(';')[0] ?? '';
+}
 
-  it('leaves a loopback upstream on the faithful-relay path', () => {
-    // The counterpart of the group above: production proxies over loopback, where the browser's hop
-    // must reach the upstream unchanged.
-    const headers = createNocoBaseApiProxyHeaders(
-      new Request('http://site.example.com/app-template-default/v2/api/auth:signIn', {
-        method: 'POST',
-        headers: {
-          host: 'site.example.com',
-          origin: 'https://site.example.com',
-          'x-forwarded-host': 'site.example.com',
-          'x-forwarded-proto': 'https',
-        },
-      }),
-      '/app-template-default/v2/api',
-      new URL('http://127.0.0.1:13000/api'),
-    );
+function createMockDatabase(rows: unknown[], insertedRows: unknown[] = []): DatabaseManager {
+  return {
+    connection: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['connection'],
+    builder: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['builder'],
+    query: (() => createMockQuery(rows, insertedRows)) as DatabaseManager['query'],
+    connect: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['connect'],
+    transaction: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['transaction'],
+    disconnect: (() => Promise.resolve()) as DatabaseManager['disconnect'],
+    reconnect: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['reconnect'],
+    destroy: (() => Promise.resolve()) as DatabaseManager['destroy'],
+  };
+}
 
-    expect(headers.get('origin')).toBe('https://site.example.com');
-    expect(headers.get('x-forwarded-host')).toBe('site.example.com');
-    expect(headers.get('x-forwarded-proto')).toBe('https');
-  });
-});
+function createMockQuery(rows: unknown[], insertedRows: unknown[]): QueryAdapter {
+  const selectQuery = {
+    select: () => selectQuery,
+    orderBy: () => selectQuery,
+    execute: () => Promise.resolve(rows),
+  };
+  const insertQuery = {
+    values: (data: unknown | readonly unknown[]) => {
+      if (Array.isArray(data)) {
+        insertedRows.push(...data);
+      } else {
+        insertedRows.push(data);
+      }
+
+      return insertQuery;
+    },
+    execute: () => Promise.resolve({ insertedCount: insertedRows.length }),
+    compile: () => ({ sql: '', parameters: [] }),
+  };
+
+  return {
+    selectFrom: () => selectQuery,
+    insertInto: () => insertQuery,
+    updateTable: () => {
+      throw new Error('Not implemented.');
+    },
+    deleteFrom: () => {
+      throw new Error('Not implemented.');
+    },
+  } as unknown as QueryAdapter;
+}

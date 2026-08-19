@@ -18,6 +18,7 @@ import type {
   AppRequestMetadata,
   AppScope,
   AppSnapshot,
+  AppWebSocketAcceptResult,
 } from './app-types.ts';
 
 export interface AppRuntimeOptions {
@@ -216,6 +217,85 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
         durationMs: Date.now() - startedAt,
         error,
         activeRequests: this.activeRequests,
+      });
+      throw error;
+    } finally {
+      this.activeRequests -= 1;
+      if (this.activeRequests === 0) {
+        this.resolveIdleWaiters();
+      }
+    }
+  }
+
+  async acceptWebSocket(request: Request, metadata: AppRequestMetadata = {}): Promise<AppWebSocketAcceptResult> {
+    if (this.state !== 'active') {
+      return new Response(
+        JSON.stringify({
+          error: `App ${this.id} is ${this.state}`,
+        }),
+        {
+          status: this.state === 'draining' || this.state === 'destroying' ? 503 : 410,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      );
+    }
+
+    if (typeof this.app.websocket !== 'function') {
+      return null;
+    }
+
+    const requestId = `${this.id}-ws-${++this.requestSequence}`;
+    const startedAt = Date.now();
+    this.activeRequests += 1;
+    this.lastAccessedAt = new Date();
+    this.touch();
+    this.emit('app:requestStart', {
+      requestId,
+      method: metadata.method ?? request.method,
+      path: metadata.path ?? new URL(request.url).pathname,
+      activeRequests: this.activeRequests,
+      metadata: {
+        transport: 'websocket',
+      },
+    });
+
+    try {
+      const result = await this.app.websocket(request, {
+        appId: this.id,
+        appVersion: this.version,
+        appBasePath: this.basePath,
+        appAssetsBasePath: this.assetsBasePath,
+        appClientDir: this.clientDir,
+        appApiBasePath: this.apiBasePath,
+        signal: this.abortSignal,
+      });
+
+      this.emit('app:requestEnd', {
+        requestId,
+        method: metadata.method ?? request.method,
+        path: metadata.path ?? new URL(request.url).pathname,
+        status: result instanceof Response ? result.status : result ? 101 : 404,
+        durationMs: Date.now() - startedAt,
+        activeRequests: this.activeRequests,
+        metadata: {
+          transport: 'websocket',
+        },
+      });
+      return result;
+    } catch (error) {
+      this.lastError = error instanceof Error ? error.message : String(error);
+      this.emit('app:requestError', {
+        requestId,
+        method: metadata.method ?? request.method,
+        path: metadata.path ?? new URL(request.url).pathname,
+        durationMs: Date.now() - startedAt,
+        error,
+        activeRequests: this.activeRequests,
+        metadata: {
+          transport: 'websocket',
+        },
       });
       throw error;
     } finally {

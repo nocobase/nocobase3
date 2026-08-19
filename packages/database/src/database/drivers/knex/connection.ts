@@ -6,29 +6,33 @@ import { KnexQueryAdapter, type QueryAdapter } from '../../../query/index.js';
 import { KnexSchemaAdapter } from '../../../schema/adapters/knex/index.js';
 import type { DatabaseCapabilities, SchemaAdapter } from '../../../schema/index.js';
 import { resolveDatabaseCapabilities } from '../../capabilities.js';
+import type { ConnectionConfig, DatabaseDialect, DatabaseDriver } from '../../config.js';
 import type { DatabaseConnection } from '../../connection.js';
-import { createKnexClient, normalizeKnexDialect } from './client.js';
-import type { KnexConnectionConfig } from './config.js';
+import { createKnexClient } from './client.js';
+import { resolveKnexConnectionConfig, type KnexConnectionConfig } from './config.js';
 
 export class KnexDatabaseConnection implements DatabaseConnection {
-  readonly driver = 'knex';
-  readonly dialect: string;
+  readonly driver: DatabaseDriver;
+  readonly dialect: DatabaseDialect;
   readonly capabilities: DatabaseCapabilities;
   readonly schema: SchemaAdapter;
   readonly builder: CollectionBuilder;
   readonly query: QueryAdapter;
 
   private knexInstance?: Knex;
+  private readonly config: KnexConnectionConfig;
 
   constructor(
     readonly name: string,
-    private readonly config: KnexConnectionConfig,
+    private readonly sourceConfig: ConnectionConfig,
     private readonly metadataStore: CollectionMetadataStore,
     knexInstance?: Knex,
   ) {
     this.knexInstance = knexInstance;
-    this.dialect = normalizeKnexDialect(config.client);
-    this.capabilities = resolveDatabaseCapabilities(this.dialect, config.capabilities);
+    this.config = resolveKnexConnectionConfig(sourceConfig);
+    this.driver = this.config.driver;
+    this.dialect = this.config.dialect;
+    this.capabilities = resolveDatabaseCapabilities(this.dialect, this.config.capabilities);
     this.schema = new LazySchemaAdapter(
       () => this.resolveClient(),
       (client) => new KnexSchemaAdapter(client, {
@@ -41,15 +45,15 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     this.query = new KnexQueryAdapter(
       () => this.getClient(),
       new DefaultNamingStrategy({
-        underscored: config.naming?.underscored,
+        underscored: this.config.naming?.underscored,
         tablePrefix: '',
       }),
     );
     this.builder = new CollectionBuilder({
       schemaAdapter: this.schema,
       metadataStore,
-      naming: config.naming,
-      namingStrategy: config.namingStrategy,
+      naming: this.config.naming,
+      namingStrategy: this.config.namingStrategy,
     });
   }
 
@@ -80,7 +84,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   async transaction<T>(fn: (connection: DatabaseConnection) => Promise<T>): Promise<T> {
     const client = await this.resolveClient();
     return client.transaction(async (trx) => {
-      const connection = new KnexDatabaseConnection(this.name, this.config, this.metadataStore, trx);
+      const connection = new KnexDatabaseConnection(this.name, this.sourceConfig, this.metadataStore, trx);
       return fn(connection);
     });
   }

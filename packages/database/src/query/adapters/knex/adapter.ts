@@ -1528,7 +1528,7 @@ function applyJoinBinaryExpression(
 
 function applyJoinValueComparison(
   clause: Knex.JoinClause,
-  context: ExpressionCompileContext,
+  _context: ExpressionCompileContext,
   bool: 'and' | 'or',
   lhs: string | Knex.Raw,
   op: ComparisonOperator,

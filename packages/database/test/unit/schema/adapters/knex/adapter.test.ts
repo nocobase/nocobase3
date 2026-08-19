@@ -183,6 +183,34 @@ describe('KnexSchemaAdapter', () => {
     expect(output).not.toContain('constraintName');
   });
 
+  it('compiles idempotent create and drop table operations', async () => {
+    const adapter = new KnexSchemaAdapter(createClient());
+
+    const sql = await adapter.compile([
+      {
+        type: 'createTable',
+        ifNotExists: true,
+        table: {
+          name: 'app_settings',
+          columns: [
+            { name: 'id', type: 'integer', autoIncrement: true },
+          ],
+          indexes: [],
+          constraints: [],
+        },
+      },
+      {
+        type: 'dropTable',
+        tableName: 'app_settings',
+        ifExists: true,
+      },
+    ]);
+
+    const output = sql.join('\n').toLowerCase();
+    expect(output).toContain('create table if not exists');
+    expect(output).toContain('drop table if exists');
+  });
+
   it('compiles standard alter table operations for PostgreSQL', async () => {
     const adapter = new KnexSchemaAdapter(createClient('pg'));
 

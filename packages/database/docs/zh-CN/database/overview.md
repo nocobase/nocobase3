@@ -17,7 +17,6 @@ DatabaseManager
   -> DatabaseConnection
        -> builder
        -> query
-       -> repository (planned)
        -> schema
        -> client()
        -> transaction()
@@ -29,7 +28,6 @@ Manager 级快捷方法：
 db.connection();
 db.builder();
 db.query();
-db.client();
 db.transaction();
 ```
 
@@ -38,7 +36,6 @@ db.transaction();
 ```ts
 db.connection().builder;
 db.connection().query;
-db.connection().repository('orders'); // planned
 db.connection().client();
 db.connection().transaction();
 ```
@@ -48,8 +45,7 @@ db.connection().transaction();
 ```ts
 db.builder('analytics');
 db.query('analytics');
-db.repository('orders', 'analytics'); // planned
-db.client('analytics');
+db.connection('analytics').client();
 db.transaction(fn, 'analytics');
 ```
 
@@ -81,6 +77,6 @@ const events = await analytics.query
 - `createDatabaseManager()` 是运行时入口。
 - `defineDatabase()` 只是配置类型辅助函数，不创建连接。
 - `db.connection()`、`db.builder()`、`db.query()` 是 lazy handle，不需要 `await`。
-- `db.client()` 需要 `await`，因为它返回底层 driver client。
+- `db.connection().client()` 需要 `await`。默认 Knex adapter 下，它返回 Knex 实例。
 - transaction 内应使用回调参数里的 `connection`，不要回到外层 `db`。
 - `db.repository()` 是规划接口，当前尚未实现。

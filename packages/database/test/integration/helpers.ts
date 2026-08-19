@@ -1,6 +1,6 @@
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
-import { CollectionBuilder } from '../../src/index.js';
+import { CollectionBuilder, type ConnectionConfig } from '../../src/index.js';
 import { createDatabaseManager, type DatabaseManager } from '../../src/index.js';
 import { InMemoryCollectionMetadataStore } from '../../src/index.js';
 import { DefaultNamingStrategy, snakeCase, truncateIdentifier } from '../../src/index.js';
@@ -10,9 +10,14 @@ export type IntegrationDialect = 'sqlite' | 'postgres' | 'mysql';
 export interface IntegrationDatabaseSpec {
   name: string;
   dialect: IntegrationDialect;
-  client: string;
-  connection: unknown;
-  useNullAsDefault?: boolean;
+  driver?: ConnectionConfig['driver'];
+  filename?: string;
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  password?: string;
+  charset?: string;
   pool?: unknown;
 }
 
@@ -58,10 +63,7 @@ export function useIntegrationDatabase(spec: IntegrationDatabaseSpec): Integrati
       metadataStore: context.metadataStore,
       connections: {
         [spec.name]: {
-          driver: 'knex',
-          client: spec.client,
-          connection: spec.connection,
-          useNullAsDefault: spec.useNullAsDefault,
+          ...createConnectionConfig(spec),
           pool: spec.pool,
           naming: {
             underscored: true,
@@ -72,7 +74,7 @@ export function useIntegrationDatabase(spec: IntegrationDatabaseSpec): Integrati
     });
     const connection = context.database.connection(spec.name);
     context.builder = connection.builder;
-    context.db = await context.database.client<Knex>(spec.name);
+    context.db = await connection.client<Knex>();
     await setupConnection(context);
   });
 
@@ -235,43 +237,67 @@ function createIntegrationDatabaseSpec(name: string): IntegrationDatabaseSpec {
       return {
         name: 'sqlite',
         dialect: 'sqlite',
-        client: process.env.SQLITE_CLIENT ?? 'better-sqlite3',
-        connection: {
-          filename: process.env.SQLITE_FILENAME ?? ':memory:',
-        },
-        useNullAsDefault: true,
+        driver: 'better-sqlite3',
+        filename: process.env.SQLITE_FILENAME ?? ':memory:',
       };
     case 'postgres':
       return {
         name: 'postgres',
         dialect: 'postgres',
-        client: process.env.POSTGRES_CLIENT ?? process.env.PG_CLIENT ?? 'pg',
-        connection: process.env.POSTGRES_URL
-          ?? process.env.PG_URL
-          ?? {
-            host: process.env.POSTGRES_HOST ?? process.env.PGHOST ?? '127.0.0.1',
-            port: Number(process.env.POSTGRES_PORT ?? process.env.PGPORT ?? 15432),
-            user: process.env.POSTGRES_USER ?? process.env.PGUSER ?? 'nocobase',
-            password: process.env.POSTGRES_PASSWORD ?? process.env.PGPASSWORD ?? 'nocobase',
-            database: process.env.POSTGRES_DATABASE ?? process.env.PGDATABASE ?? 'nocobase_collection_builder',
-          },
+        driver: 'pg',
+        host: process.env.POSTGRES_HOST ?? process.env.PGHOST ?? '127.0.0.1',
+        port: Number(process.env.POSTGRES_PORT ?? process.env.PGPORT ?? 15432),
+        username: process.env.POSTGRES_USER ?? process.env.PGUSER ?? 'nocobase',
+        password: process.env.POSTGRES_PASSWORD ?? process.env.PGPASSWORD ?? 'nocobase',
+        database: process.env.POSTGRES_DATABASE ?? process.env.PGDATABASE ?? 'nocobase_collection_builder',
       };
     case 'mysql':
       return {
         name: 'mysql',
         dialect: 'mysql',
-        client: process.env.MYSQL_CLIENT ?? 'mysql2',
-        connection: process.env.MYSQL_URL
-          ?? {
-            host: process.env.MYSQL_HOST ?? '127.0.0.1',
-            port: Number(process.env.MYSQL_PORT ?? 13306),
-            user: process.env.MYSQL_USER ?? 'nocobase',
-            password: process.env.MYSQL_PASSWORD ?? 'nocobase',
-            database: process.env.MYSQL_DATABASE ?? 'nocobase_collection_builder',
-          },
+        driver: 'mysql2',
+        host: process.env.MYSQL_HOST ?? '127.0.0.1',
+        port: Number(process.env.MYSQL_PORT ?? 13306),
+        username: process.env.MYSQL_USER ?? 'nocobase',
+        password: process.env.MYSQL_PASSWORD ?? 'nocobase',
+        database: process.env.MYSQL_DATABASE ?? 'nocobase_collection_builder',
       };
     default:
       throw new Error(`Unsupported integration database connection "${name}".`);
+  }
+}
+
+function createConnectionConfig(spec: IntegrationDatabaseSpec): ConnectionConfig {
+  switch (spec.dialect) {
+    case 'sqlite':
+      return {
+        dialect: 'sqlite',
+        driver: 'better-sqlite3',
+        filename: spec.filename ?? ':memory:',
+      };
+    case 'postgres':
+      return {
+        dialect: 'postgres',
+        driver: 'pg',
+        host: spec.host,
+        port: spec.port,
+        database: spec.database,
+        username: spec.username,
+        password: spec.password,
+      };
+    case 'mysql':
+      return {
+        dialect: 'mysql',
+        driver: 'mysql2',
+        host: spec.host,
+        port: spec.port,
+        database: spec.database,
+        username: spec.username,
+        password: spec.password,
+        charset: spec.charset,
+      };
+    default:
+      return assertNever(spec.dialect);
   }
 }
 

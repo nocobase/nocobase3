@@ -59,8 +59,7 @@ createdAt -> created_at
 const db = createDatabaseManager({
   connections: {
     main: {
-      driver: 'knex',
-      client: 'pg',
+      dialect: 'postgres',
       naming: {
         underscored: true,
         tablePrefix: 'tbl_',
