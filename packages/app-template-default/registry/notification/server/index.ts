@@ -4,9 +4,11 @@ import type { DatabaseManager } from '@nocobase/database';
 import type { NocoBaseLogger } from '@nocobase/logger';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { Hono } from 'hono';
+import { Job } from '@nocobase/queue';
 import {
   createDatabaseNotificationStore,
   createMemoryNotificationStore,
+  type NotificationChannel,
   type NotificationStore,
 } from './domain.js';
 
@@ -33,6 +35,20 @@ export interface NotificationHealth {
 
 export interface NotificationService {
   readonly store: NotificationStore;
+  trigger(input: NotificationTriggerInput): Promise<NotificationTriggerResult>;
+}
+
+export interface NotificationTriggerInput {
+  readonly principalService: string;
+  readonly source: { readonly type: string; readonly referenceId?: string };
+  readonly targets: readonly { readonly userId: string; readonly channels: readonly ['in-app'] }[];
+  readonly content: { readonly title: string; readonly body: string; readonly actionUrl?: string };
+}
+
+export interface NotificationTriggerResult {
+  readonly notificationId: string;
+  readonly status: 'queued';
+  readonly deliveries: readonly { readonly id: string; readonly channel: NotificationChannel; readonly status: 'queued' }[];
 }
 
 export interface NotificationModule {
@@ -74,10 +90,41 @@ export function createNotificationModule(options: CreateNotificationModuleOption
   }
 
   const router = createNotificationRouter();
-  const service: NotificationService = {
-    store: options.database
+  const store = options.database
       ? createDatabaseNotificationStore(options.database)
-      : createMemoryNotificationStore(),
+      : createMemoryNotificationStore();
+  let service: NotificationService;
+  class NotificationDeliveryJob extends Job<{ deliveryId: string }> {
+    static options = { name: 'NotificationDelivery', queue: 'default' };
+    async execute(): Promise<void> {
+      await dispatchNotificationDelivery(store, this.payload.deliveryId);
+    }
+  }
+  service = {
+    store,
+    async trigger(input: NotificationTriggerInput): Promise<NotificationTriggerResult> {
+      validateTrigger(input);
+      const now = new Date().toISOString();
+      const notificationId = randomUUID();
+      const deliveries = input.targets.map((target) => ({
+        id: randomUUID(), notificationId, channel: 'in-app' as const, recipientKey: `user:${target.userId}`,
+        recipientSnapshot: { kind: 'user', userId: target.userId }, recipientSchemaVersion: 1,
+        contentSnapshot: { title: input.content.title, body: input.content.body, actionUrl: input.content.actionUrl }, contentSchemaVersion: 1,
+        providerChainSnapshot: ['in-app-db'], providerChainSchemaVersion: 1, providerCursor: 0, currentAttempt: 0,
+        status: 'queued' as const, statusChangedAt: now, version: 1, createdAt: now, updatedAt: now,
+      }));
+      const items = deliveries.map((delivery, index) => ({
+        id: randomUUID(), deliveryId: delivery.id, notificationId, userId: input.targets[index].userId, channel: 'in-app' as const,
+        createdAt: now, updatedAt: now, version: 1,
+      }));
+      await store.createNotificationBundle({
+        notification: { id: notificationId, sourceType: input.source.type, sourceReferenceId: input.source.referenceId,
+          principalService: input.principalService, triggeredAt: now, messageMode: 'direct', summaryStatus: 'queued', version: 1, createdAt: now, updatedAt: now },
+        deliveries, userNotificationItems: items,
+      });
+      for (const delivery of deliveries) await options.queueManager.dispatch(NotificationDeliveryJob, { deliveryId: delivery.id });
+      return { notificationId, status: 'queued', deliveries: deliveries.map(({ id, channel }) => ({ id, channel, status: 'queued' as const })) };
+    },
   };
   let started = false;
   let closed = false;
@@ -122,6 +169,29 @@ export function createNotificationModule(options: CreateNotificationModuleOption
       return closePromise;
     },
   };
+}
+
+export async function dispatchNotificationDelivery(store: NotificationStore, deliveryId: string): Promise<void> {
+  const delivery = await store.getDelivery(deliveryId);
+  if (!delivery || delivery.status !== 'queued') return;
+  const now = new Date().toISOString();
+  const sending = await store.claimDelivery({ deliveryId, expectedVersion: delivery.version, leaseToken: randomUUID(), leaseOwner: 'notification-worker', leaseExpiresAt: new Date(Date.now() + 30_000).toISOString(), claimedAt: now,
+    attempt: { id: randomUUID(), deliveryId, attemptSequence: delivery.currentAttempt + 1, providerInstance: 'in-app-db', providerType: 'in-app', status: 'sending', startedAt: now, invocationStartedAt: now, metadataSchemaVersion: 1, createdAt: now, updatedAt: now },
+    event: { id: randomUUID(), deliveryId, sequence: 1, fromStatus: 'queued', toStatus: 'sending', occurredAt: now, metadataSchemaVersion: 1 }, });
+  if (!sending) return;
+  await store.transitionDelivery({ deliveryId, expectedVersion: sending.version, fromStatus: 'sending', toStatus: 'delivered', statusChangedAt: new Date().toISOString(), leaseToken: sending.leaseToken,
+    event: { id: randomUUID(), deliveryId, sequence: 2, fromStatus: 'sending', toStatus: 'delivered', occurredAt: new Date().toISOString(), metadataSchemaVersion: 1 }, });
+}
+
+function validateTrigger(input: NotificationTriggerInput): void {
+  if (!input.principalService || !input.source.type || input.targets.length === 0 || input.targets.length > 1000) throw new NotificationModuleError('NOTIFICATION_TRIGGER_INVALID', 'Trigger requires a service, source, and 1-1000 targets.');
+  if (!input.content.title || !input.content.body || input.content.title.length > 200 || input.content.body.length > 10_000) throw new NotificationModuleError('NOTIFICATION_CONTENT_INVALID', 'In-app title and body are required and bounded.');
+  const seen = new Set<string>();
+  for (const target of input.targets) {
+    if (!target.userId || target.channels.length !== 1 || target.channels[0] !== 'in-app' || seen.has(target.userId)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Targets must contain unique explicit user IDs and the in-app channel.');
+    seen.add(target.userId);
+  }
+  if (input.content.actionUrl && (!input.content.actionUrl.startsWith('/') || input.content.actionUrl.startsWith('//'))) throw new NotificationModuleError('NOTIFICATION_ACTION_URL_INVALID', 'In-app actionUrl must be a relative Portal path.');
 }
 
 function createNotificationRouter(): Hono {
