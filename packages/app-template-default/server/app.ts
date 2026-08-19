@@ -12,6 +12,7 @@ import {
 import { createSessionMiddleware } from '@nocobase/session';
 import type { AppConfig } from './config/index.js';
 import { createApiRoutes } from './routes/api/index.js';
+import { createHelloPageHandler } from './routes/hello.js';
 import { createAppDeps, disposeAppDeps } from './runtime/deps.js';
 import { createAppServices } from './services/index.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
@@ -46,6 +47,7 @@ export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOpti
       },
     });
   });
+  app.get('/hello', createHelloPageHandler());
 
   registerNocoBaseApiProxyRoutes(app, {
     apiProxyPath: internalApiProxyPath,

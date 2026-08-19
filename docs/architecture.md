@@ -10,8 +10,8 @@ description: NocoBase V3 应用架构：HTTP server 与 CLI 入口、embedded / 
 ```text
 ┌──────────────────────────────────────────────┐
 │               Runtime Entry                  │
-│  HTTP Server: embedded / standalone         │
-│  CLI: boot / migrate / seed                 │
+│  HTTP Server: embedded / standalone          │
+│  CLI: boot / migrate / seed                  │
 └───────────────┬──────────────────────────────┘
                 │
                 ▼
@@ -20,7 +20,7 @@ description: NocoBase V3 应用架构：HTTP server 与 CLI 入口、embedded / 
 │  config / deps / lifecycle   │
 └───────────────┬──────────────┘
                 │
-                ├──────────────► ┌──────────────────────┐
+                ├──────────────►  ┌──────────────────────┐
                 │                 │   Migration / Seed   │
                 │                 │ Migration: CLI/AUTO  │
                 │                 │ Seed: CLI            │

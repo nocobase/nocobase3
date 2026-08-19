@@ -72,6 +72,21 @@ describe('app server', () => {
     });
   });
 
+  it('serves an app-local HTML route outside the API namespace', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    const response = await app.request('http://localhost/hello');
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('<h1>Hello from NocoBase</h1>');
+    expect(html).toContain('This page is rendered by an app-local server route.');
+  });
+
   it('returns a closable embedded app and registers the same close handler with the scope', async () => {
     const registeredDisposers: Array<{
       name: string;
