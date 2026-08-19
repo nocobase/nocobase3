@@ -31,10 +31,10 @@ src/
       index.ts
       knex/
         index.ts
+        adapter.ts
         config.ts
         client.ts
         connection.ts
-        driver.ts
 
   metadata/
     index.ts
@@ -55,6 +55,16 @@ src/
         index.ts
         adapter.ts
 
+  migration/
+    index.ts
+    types.ts
+    define.ts
+    context.ts
+    loader.ts
+    history.ts
+    lock.ts
+    migrator.ts
+
   schema/
     index.ts
     adapter.ts
@@ -71,9 +81,11 @@ src/
 
 `schema/` 是数据库 schema operation 层。`CollectionBuilder` 编译出的操作最终交给这里的 adapter 执行。
 
-`database/` 是连接管理层，负责多 connection、driver 实例化、事务、client 生命周期，以及把 `builder`、`query`、`schema` 绑定到具体连接。
+`database/` 是连接管理层，负责多 connection、adapter 实例化、事务、client 生命周期，以及把 `builder`、`query`、`schema` 绑定到具体连接。用户配置里的 `driver` 表示底层 Node.js 数据库驱动，不表示内部 adapter。
 
 `query/` 是数据库层 QueryAdapter。V1 的公开类型放在 `query/types.ts`，Knex 实现放在 `query/adapters/knex/`。
+
+`migration/` 是版本化数据库变更层。它负责 `defineMigration()`、文件加载、history、lock、事务执行和 rollback。Migration context 只暴露 `builder`、`query`、`connection`，不在顶层暴露 `schema`。
 
 `metadata/` 是 Collection metadata 存储接口与默认内存实现。
 
@@ -86,6 +98,7 @@ test/
   unit/
     builder/
     database/
+    migration/
     metadata/
     naming/
     schema/
@@ -118,6 +131,11 @@ test/
       transactions.test.ts
       naming.test.ts
       compile.test.ts
+    migration/
+      latest.test.ts
+      rollback.test.ts
+      transactions.test.ts
+      checksum.test.ts
 ```
 
 ## 测试分层说明
@@ -130,9 +148,14 @@ test/
 
 `test/integration/query/` 覆盖 QueryAdapter 到真实 SQL 执行的行为。Query 测试按能力拆分，例如 select、where、join、subquery、aggregate、mutation，而不是按内部实现类拆分。
 
+`test/integration/migration/` 覆盖 migration runner 到真实数据库的行为，重点验证 history、事务、rollback、checksum 和 lock。
+
+`test/unit/migration/` 覆盖 `defineMigration()`、loader、validator 等不需要真实数据库的行为。
+
 ## Agent 注意事项
 
 - 新增 public API 时，优先在对应分层的 `index.ts` 暴露，避免让调用方依赖深层实现文件。
 - 新增 Builder 行为时，通常需要同时补 `test/unit/builder/` 和 `test/integration/builder/`。
 - 新增 Query 行为时，优先补 `test/integration/query/`，因为 QueryAdapter 的价值在真实数据库行为。
+- 新增 Migration 行为时，优先补 `test/unit/migration/` 和 `test/integration/migration/`，并验证 context 来自事务连接。
 - 不要在 `db.query()` 测试中假设它会读取 Collection metadata；这属于未来 Repository 的职责。

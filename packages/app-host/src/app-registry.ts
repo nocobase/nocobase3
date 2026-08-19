@@ -83,7 +83,7 @@ export interface RegistryMetrics {
 }
 
 export class AppRuntimeRegistry {
-  readonly events = new AppEventBus();
+  readonly events: AppEventBus = new AppEventBus();
 
   private readonly definitions = new Map<string, AppDefinition>();
   private readonly runtimes = new Map<string, ActiveAppHandle>();
@@ -170,7 +170,7 @@ export class AppRuntimeRegistry {
     return this.evictWithSource(id, options, 'manual');
   }
 
-  async evictIdle(now = Date.now()): Promise<AppSnapshot[]> {
+  async evictIdle(now: number = Date.now()): Promise<AppSnapshot[]> {
     const candidates = this.getEvictableSnapshots()
       .filter((snapshot) => this.isIdle(snapshot, now))
       .sort(sortByLastAccessed);

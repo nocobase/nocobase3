@@ -36,21 +36,30 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     for (const operation of operations) {
       const builder = this.toKnexBuilder(operation);
       const commands = await builder.generateDdlCommands();
-      sql.push(...extractSql(commands));
+      sql.push(...applyIdempotentSql(operation, extractSql(commands)));
     }
     return sql;
   }
 
   private async executeOperation(operation: SchemaOperation): Promise<void> {
+    if (operation.type === 'createTable' && operation.ifNotExists) {
+      if (await this.hasTable(operation.table.name, operation.table.db?.schema)) {
+        return;
+      }
+      await this.createTable(operation.table);
+      return;
+    }
+    if (operation.type === 'dropTable' && operation.ifExists) {
+      await this.withSchema(operation.db?.schema).dropTableIfExists(operation.tableName);
+      return;
+    }
     await this.toKnexBuilder(operation);
   }
 
   private toKnexBuilder(operation: SchemaOperation): any {
     switch (operation.type) {
       case 'createTable':
-        return this.withSchema(operation.table.db?.schema).createTable(operation.table.name, (table) => {
-          this.buildTable(table, operation.table);
-        });
+        return this.createTable(operation.table);
       case 'alterTable':
         return this.withSchema(operation.db?.schema).alterTable(operation.tableName, (table) => {
           for (const tableOperation of operation.operations) {
@@ -58,7 +67,9 @@ export class KnexSchemaAdapter implements SchemaAdapter {
           }
         });
       case 'dropTable':
-        return this.withSchema(operation.db?.schema).dropTable(operation.tableName);
+        return operation.ifExists
+          ? this.withSchema(operation.db?.schema).dropTableIfExists(operation.tableName)
+          : this.withSchema(operation.db?.schema).dropTable(operation.tableName);
       case 'renameTable':
         return this.withSchema(operation.db?.schema).renameTable(operation.from, operation.to);
       case 'createView':
@@ -75,6 +86,17 @@ export class KnexSchemaAdapter implements SchemaAdapter {
 
   private withSchema(schema?: string): Knex.SchemaBuilder {
     return schema ? this.knex.schema.withSchema(schema) : this.knex.schema;
+  }
+
+  private async hasTable(tableName: string, schema?: string): Promise<boolean> {
+    return this.withSchema(schema).hasTable(tableName);
+  }
+
+  private createTable(definition: TableSchemaDefinition): Knex.SchemaBuilder {
+    const schema = this.withSchema(definition.db?.schema);
+    return schema.createTable(definition.name, (table) => {
+      this.buildTable(table, definition);
+    });
   }
 
   private buildTable(table: Knex.CreateTableBuilder, definition: TableSchemaDefinition): void {
@@ -413,6 +435,21 @@ function applyFilter(builder: Knex.QueryBuilder, filter: FilterExpression): void
       builder.where(field, expression as any);
     }
   }
+}
+
+function applyIdempotentSql(operation: SchemaOperation, sql: string[]): string[] {
+  if (operation.type !== 'createTable' || !operation.ifNotExists) {
+    return sql;
+  }
+
+  let patched = false;
+  return sql.map((statement) => {
+    if (patched || !/^\s*create\s+table\s+/i.test(statement)) {
+      return statement;
+    }
+    patched = true;
+    return statement.replace(/^(\s*create\s+table\s+)/i, '$1if not exists ');
+  });
 }
 
 function assertNever(value: never): never {

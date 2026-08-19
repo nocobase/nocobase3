@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
 
 import { nocobaseClient } from "../client/index.ts";
 import type { Authenticator } from "./types.ts";
@@ -8,7 +9,7 @@ export const publicAuthenticatorsQueryKey = [
   "public-authenticators",
 ] as const;
 
-export function usePublicAuthenticators() {
+export function usePublicAuthenticators(): UseQueryResult<Authenticator[], Error> {
   return useQuery({
     queryKey: publicAuthenticatorsQueryKey,
     queryFn: ({ signal }) =>

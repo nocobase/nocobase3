@@ -9,7 +9,7 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AppRegistryError } from './errors.ts';
-import { applyFetchResponse, requestPath, toFetchRequest } from './http-adapter.ts';
+import { applyFetchResponse, isClientResponseClose, requestPath, toFetchRequest } from './http-adapter.ts';
 import { DirectoryAppCatalog } from './app-catalog.ts';
 import { AppRuntimeRegistry } from './app-registry.ts';
 import { writeAppSystemLog } from './app-system-log.ts';
@@ -89,7 +89,21 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
 
       await applyFetchResponse(res, notFoundResponse());
     } catch (error) {
-      await handleError(error, res);
+      if (isClientResponseClose(error, res)) {
+        return;
+      }
+
+      try {
+        await handleError(error, res);
+      } catch (handleErrorError) {
+        if (!isClientResponseClose(handleErrorError, res)) {
+          console.error(handleErrorError);
+        }
+
+        if (!res.destroyed) {
+          res.destroy(handleErrorError instanceof Error ? handleErrorError : new Error(String(handleErrorError)));
+        }
+      }
     }
   });
 

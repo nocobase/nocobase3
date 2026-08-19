@@ -221,12 +221,25 @@ export type ViewCollectionInput =
 export type MaterializedViewCollectionInput = ViewCollectionInput;
 
 export interface BuilderExecOptions {
+  /** Compile operations without executing schema changes or syncing metadata. */
   dryRun?: boolean;
+  /** Return adapter SQL when supported. Best used together with dryRun. */
   previewSql?: boolean;
+  /** Defaults to true. Set false to skip Collection metadata writes. */
   syncMetadata?: boolean;
+  /** Skip supported create operations when the backing database object already exists. */
   ifNotExists?: boolean;
+  /** Skip supported drop operations when the backing database object does not exist. */
   ifExists?: boolean;
+  /**
+   * Fails on capability warnings during real execution.
+   * This is not a destructive-operation confirmation mechanism; inspect impact.
+   */
   strict?: boolean;
+  /**
+   * Reserved for future Builder-managed transactions.
+   * Use DatabaseManager.transaction() or DatabaseConnection.transaction() today.
+   */
   transaction?: boolean;
 }
 
@@ -264,15 +277,16 @@ export interface BuilderResult {
   operations: CollectionOperation[];
   schemaOperations?: SchemaOperation[];
   sql?: string[];
+  /** Reserved change summary; current Builder implementation does not populate it yet. */
   metadata?: MetadataChangeSet;
   warnings?: BuilderWarning[];
   impact?: BuilderImpact[];
 }
 
 export type CollectionOperation =
-  | { type: 'createCollection'; name: string; definition: CollectionDefinition }
+  | { type: 'createCollection'; name: string; definition: CollectionDefinition; ifNotExists?: boolean }
   | { type: 'alterCollection'; collection: string; changes: CollectionAlterDefinition }
-  | { type: 'dropCollection'; collection: string }
+  | { type: 'dropCollection'; collection: string; ifExists?: boolean }
   | { type: 'renameCollection'; from: string; to: string; renameTable?: boolean; renameTableTo?: string }
   | { type: 'createViewCollection'; name: string; definition: CollectionDefinition }
   | { type: 'replaceViewCollection'; name: string; definition: CollectionDefinition }
@@ -289,9 +303,9 @@ export type CollectionOperation =
   | { type: 'updateFieldMetadata'; collection: string; field: string; patch: FieldMetadataPatch };
 
 export type SchemaOperation =
-  | { type: 'createTable'; table: TableSchemaDefinition }
+  | { type: 'createTable'; table: TableSchemaDefinition; ifNotExists?: boolean }
   | { type: 'alterTable'; tableName: string; db?: DbOptions; operations: TableAlterSchemaOperation[] }
-  | { type: 'dropTable'; tableName: string; db?: DbOptions }
+  | { type: 'dropTable'; tableName: string; db?: DbOptions; ifExists?: boolean }
   | { type: 'renameTable'; from: string; to: string; db?: DbOptions }
   | { type: 'createView'; view: ViewSchemaDefinition; orReplace?: boolean; materialized?: boolean }
   | { type: 'refreshMaterializedView'; viewName: string; db?: DbOptions; concurrently?: boolean };

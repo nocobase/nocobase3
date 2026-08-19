@@ -197,20 +197,17 @@ const nextEnv = {
 const appServerHost = nextEnv.APP_SERVER_HOST || "127.0.0.1";
 const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13000);
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;
-const appBasePath = String(nextEnv.APP_BASE_PATH || `/${nextEnv.APP_NAME || "app-template-default"}`)
+const appBasePath = String(nextEnv.APP_BASE_PATH || "/app-template-default")
   .trim()
   .replace(/^\/+|\/+$/g, "");
 const appUrl = appBasePath ? `${appServerUrl}/${appBasePath}/` : `${appServerUrl}/`;
-const proxyApiPath =
-  nextEnv.NOCOBASE_API_URL || `/${[appBasePath, "v2/api"].filter(Boolean).join("/")}`;
+const proxyApiPath = `/${[appBasePath, "v2/api"].filter(Boolean).join("/")}`;
 
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);
 console.log(`  Proxy API: ${appServerUrl}${proxyApiPath}\n`);
 
-spawnDevProcess("client", "pnpm", [
-  "exec",
-  "vite",
+spawnDevProcess("client", "vite", [
   "--host",
   viteDevHost,
   "--port",
@@ -218,10 +215,10 @@ spawnDevProcess("client", "pnpm", [
   "--strictPort",
 ], nextEnv, { filterViteStartup: true });
 
-spawnDevProcess("server", "pnpm", [
-  "exec",
-  "tsx",
+spawnDevProcess("server", "tsx", [
   "watch",
+  "--tsconfig",
+  "tsconfig.server.json",
   "--clear-screen=false",
   "server/standalone.ts",
 ], {

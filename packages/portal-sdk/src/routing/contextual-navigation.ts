@@ -32,7 +32,7 @@ export function createRouteSurfaceNavigationState(
 export function resolveRouteSurfaceCloseTo(
   state: unknown,
   fallback: RouteLocation
-) {
+): string {
   const returnTo =
     state && typeof state === "object" && !Array.isArray(state)
       ? (state as Record<string, unknown>).routeSurfaceReturnTo

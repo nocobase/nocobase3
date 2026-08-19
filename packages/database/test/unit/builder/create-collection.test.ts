@@ -125,4 +125,40 @@ describe('CollectionBuilder createCollection', () => {
       ],
     });
   });
+
+  it('passes idempotent create and drop options to schema operations', async () => {
+    const builder = new CollectionBuilder();
+
+    const create = await builder.createCollection(
+      'appSettings',
+      (collection) => {
+        collection.increments('id');
+      },
+      {
+        dryRun: true,
+        ifNotExists: true,
+      },
+    );
+    const drop = await builder.dropCollection('appSettings', {
+      dryRun: true,
+      ifExists: true,
+    });
+
+    expect(create.operations[0]).toMatchObject({
+      type: 'createCollection',
+      ifNotExists: true,
+    });
+    expect(create.schemaOperations?.[0]).toMatchObject({
+      type: 'createTable',
+      ifNotExists: true,
+    });
+    expect(drop.operations[0]).toMatchObject({
+      type: 'dropCollection',
+      ifExists: true,
+    });
+    expect(drop.schemaOperations?.[0]).toMatchObject({
+      type: 'dropTable',
+      ifExists: true,
+    });
+  });
 });

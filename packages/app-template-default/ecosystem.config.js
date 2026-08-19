@@ -1,7 +1,7 @@
 export const apps = [
   {
     name: "nocobase-app-template-default",
-    script: "./scripts/start.mjs",
+    script: "./dist/server/standalone.js",
     interpreter: "node",
     env: {
       NODE_ENV: "production",

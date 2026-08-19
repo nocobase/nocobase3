@@ -4,7 +4,15 @@ import { useAclState, useAclStore } from "./context.ts";
 import { evaluateAccess } from "./evaluator.ts";
 import type { AclAccessRequest } from "./types.ts";
 
-export const useAclEvaluator = () => {
+export type UseGetRolesResult = {
+  data: string[] | undefined;
+  error: Error | undefined;
+  isError: boolean;
+  isLoading: boolean;
+  isPending: boolean;
+};
+
+export const useAclEvaluator = (): ((request: AclAccessRequest) => boolean) => {
   const store = useAclStore();
   const state = useAclState();
   useSyncExternalStore(
@@ -22,10 +30,10 @@ export const useAclEvaluator = () => {
     );
 };
 
-export const useCanAccess = (request: AclAccessRequest) =>
+export const useCanAccess = (request: AclAccessRequest): boolean =>
   useAclEvaluator()(request);
 
-export const useGetRoles = () => {
+export const useGetRoles = (): UseGetRolesResult => {
   const state = useAclState();
   const isLoading = state.status === "idle" || state.status === "loading";
   const isError = state.status === "error";

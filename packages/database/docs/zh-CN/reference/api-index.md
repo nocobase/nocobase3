@@ -1,6 +1,6 @@
 # API 索引
 
-本页列出当前原型中主要 public API。详细类型见同目录下的 reference 文档。
+本页列出当前可用的主要 public API。详细类型见同目录下的 reference 文档。
 
 ## Database
 
@@ -24,9 +24,11 @@
 - `exists()`
 - `compile()`
 
-## Repository（规划中）
+## Repository（规划中，当前不可调用）
 
-Repository 当前尚未实现。规划中的入口：
+Repository 当前尚未实现。当前 `DatabaseManager` 没有 `db.repository()`，`DatabaseConnection` 也没有 `connection.repository()`；不要把规划接口复制到运行时代码。
+
+规划中的入口：
 
 - `db.repository(collectionName, connectionName?)`
 - `connection.repository(collectionName)`
@@ -40,6 +42,20 @@ Repository 当前尚未实现。规划中的入口：
 - `delete({ filter })`
 
 规划中的筛选条件优先使用 `filter: (filter) => ...` 的 Filter Builder；HTTP、CLI 和持久化配置可以使用 Filter AST。详见 [Repository 概览](../repository/overview.md)、[Filter Builder](../repository/filter-builder.md) 和 [Filter AST](../repository/filter-ast.md)。
+
+## Migration
+
+Migration 入口：
+
+- `defineMigration(definition)`：唯一合法的 migration 文件定义方式。
+- `createMigrator(options)`：创建 migration runner。
+- `migrator.latest()`：执行所有 pending migrations。
+- `migrator.rollback()`：回滚最近一批 migrations。
+- `validateMigrations(options)`：校验 migration 文件格式和名称一致性。
+
+Migration context 顶层只暴露 `builder`、`query` 和 `connection`。不在顶层公开 `schema`；底层 adapter client 兜底通过 `connection.client()`。
+
+详见 [Migration](../migration/overview.md) 和 [Migration 维护清单](../migration/maintenance.md)。
 
 ## Builder
 
@@ -77,6 +93,8 @@ Repository 当前尚未实现。规划中的入口：
 
 - [DatabaseConfig](./database-config.md)
 - [Query API](./query-api.md)
+- [Migration](../migration/overview.md)
+- [Migration 维护清单](../migration/maintenance.md)
 - [Repository 概览（规划中）](../repository/overview.md)
 - [Repository Filter Builder（规划中）](../repository/filter-builder.md)
 - [Repository Filter AST（规划中）](../repository/filter-ast.md)

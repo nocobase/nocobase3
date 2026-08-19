@@ -181,12 +181,4 @@ const orders = await db.query()
 
 本页描述的是 `db.query()` 的数据库层 `where`。它面向 table / column query identifier，不读取 Collection metadata。
 
-未来 Repository 会提供 Collection-aware 的 Filter Builder：
-
-```ts
-await db.repository('orders').findMany({
-  filter: (filter) => filter.date('createdAt').notBefore('2026-01-01'),
-});
-```
-
-Repository Filter Builder 会根据 Collection metadata 校验字段类型和 operator group，详细设计见 [Filter Builder](../repository/filter-builder.md)。
+未来 Repository 会提供 Collection-aware 的 Filter Builder，根据 Collection metadata 校验字段类型和 operator group。`db.repository()` 当前尚未实现，不要把 Repository 规划示例复制到运行时代码；详细设计见 [Filter Builder](../repository/filter-builder.md)。

@@ -20,10 +20,10 @@ const REFINE_ACTION_MAP: Record<string, string> = {
   clone: "create",
 };
 
-const getResourceAcl = (request: AclAccessRequest) =>
+const getResourceAcl = (request: AclAccessRequest): ResourceAcl | undefined =>
   request.resourceItem?.meta?.acl as ResourceAcl | undefined;
 
-export const mapRefineAction = (action: string) =>
+export const mapRefineAction = (action: string): string =>
   REFINE_ACTION_MAP[action] ?? action;
 
 export const getPermissionsForDataSource = (
@@ -69,16 +69,16 @@ export const resolveActionPermission = ({
   return strategyAllowed ? {} : null;
 };
 
-const matchesSnippet = (snippets: string[], target: string) =>
+const matchesSnippet = (snippets: string[], target: string): boolean =>
   !target || target === "*" || ignore().add(snippets).ignores(target);
 
-export const getEffectiveRoles = (permissions: AclPermissionSet) =>
+export const getEffectiveRoles = (permissions: AclPermissionSet): string[] =>
   permissions.roles;
 
 export const matchesRoleConstraint = (
   permissions: AclPermissionSet,
   constraint?: RoleConstraint
-) => {
+): boolean => {
   if (!constraint || permissions.allowAll) return true;
 
   const roles = new Set(getEffectiveRoles(permissions));
@@ -99,7 +99,7 @@ export const evaluateAccess = (
   permissions: AclPermissionSet,
   request: AclAccessRequest,
   getRecordPermission: RecordPermissionResolver = getRecordActionPermission
-) => {
+): boolean => {
   const resourceAcl = getResourceAcl(request);
   if (
     !matchesRoleConstraint(

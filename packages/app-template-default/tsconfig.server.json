@@ -10,13 +10,22 @@
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
+    "isolatedDeclarations": true,
+    "isolatedModules": true,
     "sourceMap": true,
-    "rootDir": "server",
-    "outDir": "dist/server",
+    "rootDir": ".",
+    "outDir": "dist",
+    "paths": {
+      "@/jobs/*.js": ["./server/jobs/*.ts"],
+      "@/jobs/*": ["./server/jobs/*"],
+      "@/services/*.js": ["./server/services/*.ts"],
+      "@/services/*": ["./server/services/*"]
+    },
     "noEmit": false,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["server/**/*.ts"]
+  "include": ["server/**/*.ts", "scripts/migrate.ts"],
+  "exclude": ["server/migrations/**/*.ts"]
 }

@@ -4,15 +4,16 @@ import type { QueryAdapter } from '../query/index.js';
 import type { DatabaseConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
-import { KnexConnectionDriver } from './drivers/knex/index.js';
+import { KnexConnectionAdapter } from './drivers/knex/index.js';
 
 export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;
+  /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder(name?: string): CollectionBuilder;
+  /** Database-layer query builder. Does not read Collection metadata or columnName mappings. */
   query(name?: string): QueryAdapter;
 
   connect(name?: string): Promise<DatabaseConnection>;
-  client<T = unknown>(name?: string): Promise<T>;
 
   transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
@@ -26,7 +27,7 @@ export interface DatabaseManager {
 
 export function createDatabaseManager(config: DatabaseConfig): DatabaseManager {
   return new DefaultDatabaseManager(config, new DefaultConnectionFactory({
-    knex: new KnexConnectionDriver(),
+    knex: new KnexConnectionAdapter(),
   }));
 }
 
@@ -38,7 +39,7 @@ export class DefaultDatabaseManager implements DatabaseManager {
     private readonly factory: ConnectionFactory,
   ) {}
 
-  connection(name = this.getDefaultConnectionName()): DatabaseConnection {
+  connection(name: string = this.getDefaultConnectionName()): DatabaseConnection {
     const existing = this.connections.get(name);
     if (existing) {
       return existing;
@@ -70,10 +71,6 @@ export class DefaultDatabaseManager implements DatabaseManager {
     return this.connection(name).connect();
   }
 
-  async client<T = unknown>(name?: string): Promise<T> {
-    return this.connection(name).client<T>();
-  }
-
   async transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
     name?: string,
@@ -81,7 +78,7 @@ export class DefaultDatabaseManager implements DatabaseManager {
     return this.connection(name).transaction(fn);
   }
 
-  async disconnect(name = this.getDefaultConnectionName()): Promise<void> {
+  async disconnect(name: string = this.getDefaultConnectionName()): Promise<void> {
     const connection = this.connections.get(name);
     if (!connection) {
       return;
@@ -89,7 +86,7 @@ export class DefaultDatabaseManager implements DatabaseManager {
     await connection.disconnect();
   }
 
-  async reconnect(name = this.getDefaultConnectionName()): Promise<DatabaseConnection> {
+  async reconnect(name: string = this.getDefaultConnectionName()): Promise<DatabaseConnection> {
     const connection = this.connection(name);
     return connection.reconnect();
   }

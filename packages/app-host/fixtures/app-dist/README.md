@@ -14,6 +14,12 @@ demo/
 service/
   package.json
   dist/server/embedded.js
+
+lifecycle/
+  package.json
+  dist/client/index.html
+  dist/client/assets/...
+  dist/server/embedded.js
 ```
 
 `dist/server/embedded.js` is required. `dist/client/assets/**` is optional and
@@ -50,4 +56,18 @@ http://127.0.0.1:3000/demo/assets/demo.js
 http://127.0.0.1:3000/demo/api/info
 http://127.0.0.1:3000/demo/healthz
 http://127.0.0.1:3000/service/healthz
+http://127.0.0.1:3000/lifecycle/
+http://127.0.0.1:3000/lifecycle/api/lifecycle
+http://127.0.0.1:3000/lifecycle/healthz
 ```
+
+`lifecycle/dist/server/embedded.js` is the most complete example in the fixture
+set. It:
+
+- registers a `beforeDestroy` hook with `scope.onBeforeDestroy(...)`
+- registers a runtime disposer with `scope.registerDisposer(...)`
+- implements a composite `dispose()` function and returns it as `app.close`
+- exposes the current runtime snapshot at `/api/lifecycle`
+
+That makes it a good starting point when you want to see the destroy order in
+one place.

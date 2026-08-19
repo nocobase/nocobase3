@@ -1,33 +1,31 @@
 # 快速开始
 
-这篇文档用一条主线介绍数据库入口的整体设计：从 `createDatabaseManager()` 创建多连接管理器，到通过 `db.builder()` 管理 Collection，通过 `db.query()` 做数据库层查询，通过未来的 `db.repository()` 做 Collection-aware 数据访问，并在事务和多连接场景中保持同一套心智。
+这篇文档用一条当前可运行的主线介绍数据库入口：从 `createDatabaseManager()` 创建多连接管理器，到通过 `db.builder()` 管理 Collection，通过 `db.query()` 做数据库层查询，并在事务和多连接场景中保持同一套心智。
 
-当前原型已经实现：
+当前可用入口包括：
 
 - `createDatabaseManager()`
 - `db.connection()`
 - `db.builder()`
 - `db.query()`
 - `db.transaction()`
-- `db.client()`
+- `db.connection().client()`
+- `defineMigration()`
+- `createMigrator()`
 
-`db.repository()` 还没有实现，本篇只介绍它在整体设计中的位置。
+`db.repository()` 还没有实现，不属于本篇的可复制代码路径。Repository 的规划见 [Repository 概览](./repository/overview.md)，Migration 的详细约束见 [Migration](./migration/overview.md)。
 
 ## 创建 DatabaseManager
 
 ```ts
-import { createDatabaseManager } from '@nocobase/collection-builder-prototype';
+import { createDatabaseManager } from '@nocobase/database';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
     main: {
-      driver: 'knex',
-      client: 'better-sqlite3',
-      connection: {
-        filename: ':memory:',
-      },
-      useNullAsDefault: true,
+      dialect: 'sqlite',
+      filename: ':memory:',
       naming: {
         underscored: true,
       },
@@ -42,7 +40,7 @@ const db = createDatabaseManager({
 const connection = db.connection();
 ```
 
-`db.connection()` 返回默认连接。它是 lazy handle，只有实际执行数据库操作时才会创建底层 driver client。
+`db.connection()` 返回默认连接。它是 lazy handle，只有实际执行数据库操作时才会创建底层 adapter client。
 
 ## 使用 db.builder()
 
@@ -244,22 +242,9 @@ orderItems -> tbl_order_item
 orderNo -> order_number
 ```
 
-这部分属于未来 Repository。
+这部分属于未来 Repository。当前代码中没有 `db.repository()` 或 `connection.repository()`，不要把 Repository 规划示例复制到运行时代码。
 
-## 未来的 db.repository()
-
-`db.repository()` 规划为 Collection-aware 的应用层数据访问入口。它和 `db.query()` 的区别不是链式还是对象式，而是是否读取 Collection metadata。
-
-未来期望：
-
-```ts
-const records = await db.repository('orderItems').findMany({
-  fields: ['orderNo', 'createdAt'],
-  filter: (filter) => filter.string('orderNo').eq('SO-001'),
-});
-```
-
-Repository 会理解：
+Repository 实现后会理解：
 
 ```text
 collection.name: orderItems -> tableName: tbl_order_item
@@ -278,20 +263,7 @@ field.name: createdAt -> naming -> created_at
 ]
 ```
 
-Repository 的筛选条件计划使用 Filter Builder，而不是旧的 object shorthand：
-
-```ts
-await db.repository('orders').findMany({
-  filter: (filter) =>
-    filter.and([
-      filter.string('status').eq('paid'),
-      filter.number('amount').gte(100),
-      filter.date('createdAt').notBefore('2026-01-01'),
-    ]),
-});
-```
-
-这部分接口当前尚未实现，详细设计见 [Repository 概览](./repository/overview.md)、[Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
+Repository 的筛选条件计划使用 Filter Builder，而不是旧的 object shorthand。详细设计见 [Repository 概览](./repository/overview.md)、[Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
 
 所以三层职责可以这样看：
 
@@ -325,30 +297,7 @@ await db.transaction(async (connection) => {
 });
 ```
 
-未来 Repository 实现后，事务内也应使用回调参数里的 `connection.repository('orders')`，这样 Repository 读写和同一事务里的 Builder、Query 操作共享同一个连接上下文：
-
-```ts
-await db.transaction(async (connection) => {
-  // 规划接口
-  await connection.repository('orders').create({
-    values: {
-      orderNo: 'SO-001',
-      amount: 99.5,
-      status: 'paid',
-    },
-  });
-
-  // 规划接口
-  await connection.repository('orders').update({
-    filter: (filter) => filter.string('orderNo').eq('SO-001'),
-    values: {
-      status: 'completed',
-    },
-  });
-});
-```
-
-当前原型中，`DatabaseConnection` 上的 `builder`、`query`、`schema` 是属性；`DatabaseManager` 上的 `db.builder()`、`db.query()` 是快捷方法。
+当前原型中，`DatabaseConnection` 上的 `builder`、`query`、`schema` 是属性；`DatabaseManager` 上的 `db.builder()`、`db.query()` 是快捷方法。底层 adapter client 只通过 `DatabaseConnection.client()` 暴露。
 
 ## 多连接
 
@@ -359,20 +308,12 @@ const db = createDatabaseManager({
   default: 'main',
   connections: {
     main: {
-      driver: 'knex',
-      client: 'better-sqlite3',
-      connection: {
-        filename: ':memory:',
-      },
-      useNullAsDefault: true,
+      dialect: 'sqlite',
+      filename: ':memory:',
     },
     analytics: {
-      driver: 'knex',
-      client: 'better-sqlite3',
-      connection: {
-        filename: ':memory:',
-      },
-      useNullAsDefault: true,
+      dialect: 'sqlite',
+      filename: ':memory:',
       naming: {
         underscored: true,
       },
@@ -426,27 +367,7 @@ const events = await analytics.query
   .execute();
 ```
 
-未来 Repository 在多连接下也建议保持同样心智：
-
-```ts
-// 规划接口
-const records = await db.connection('analytics')
-  .repository('events')
-  .findMany({
-    fields: ['id', 'name'],
-  });
-```
-
-也可以提供 manager 级快捷写法：
-
-```ts
-// 规划接口
-const records = await db.repository('events', 'analytics').findMany({
-  fields: ['id', 'name'],
-});
-```
-
-但介绍多连接时，推荐优先使用：
+多连接代码里，推荐优先使用：
 
 ```ts
 const connection = db.connection('analytics');
@@ -467,6 +388,7 @@ await db.destroy();
 - Database 连接管理见 [Database 概览](./database/overview.md)。
 - Builder 细节见 [Builder API 总览](./builder/overview.md)。
 - Query 细节见 [QueryAdapter 概览](./query/overview.md)。
+- Migration 用法见 [Migration](./migration/overview.md)。
 - 命名规则见 [命名概念](./concepts/naming.md)。
 - 开发维护说明见 [Agent 开发指南](./development/agent-guide.md)。
 
@@ -476,8 +398,7 @@ await db.destroy();
 createDatabaseManager()
   -> db.builder()      // Collection schema / metadata
   -> db.query()        // database query builder
-  -> db.repository()   // Collection-aware data access, planned
-  -> db.transaction()  // run builder/query/repository in one connection transaction
+  -> db.transaction()  // run builder/query in one connection transaction
 ```
 
 默认连接用 `db.builder()`、`db.query()`；命名连接优先用 `db.connection('name')` 取得上下文，再调用这个连接上的能力。

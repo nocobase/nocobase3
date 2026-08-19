@@ -48,12 +48,12 @@ export type NocoBaseRuntimeError = NocoBaseErrorDetail & {
   source: NocoBaseRuntimeErrorSource;
 };
 
-export const isNocoBaseLifecycleError = (error: NocoBaseErrorDetail) =>
+export const isNocoBaseLifecycleError = (error: NocoBaseErrorDetail): boolean =>
   error.maintaining === true ||
   error.code?.startsWith("APP_") === true ||
   error.code?.startsWith("COMMAND_") === true;
 
-export const isNocoBaseServiceError = (error: NocoBaseErrorDetail) =>
+export const isNocoBaseServiceError = (error: NocoBaseErrorDetail): boolean =>
   isNocoBaseLifecycleError(error) ||
   (error.status !== undefined && [502, 503, 504].includes(error.status));
 
@@ -141,10 +141,13 @@ export function normalizeNocoBaseRuntimeError(
   };
 }
 
-export const getNocoBaseErrorCode = (error: unknown) =>
+export const getNocoBaseErrorCode = (error: unknown): string | undefined =>
   normalizeNocoBaseRuntimeError(error).code;
 
-export const getNocoBaseErrorMessage = (payload: unknown, fallback: string) => {
+export const getNocoBaseErrorMessage = (
+  payload: unknown,
+  fallback: string
+): string => {
   if (typeof payload === "string") return payload || fallback;
   if (!payload || typeof payload !== "object") return fallback;
   const value = payload as {

@@ -10,6 +10,8 @@
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
+    "isolatedDeclarations": true,
+    "isolatedModules": true,
     "sourceMap": true,
     "rootDir": "server",
     "outDir": "dist/server",

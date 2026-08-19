@@ -19,7 +19,22 @@ export type AppExtension = {
   authAdapters?: AuthenticatorAdapter[];
 };
 
-export const sortAppExtensions = (extensions: AppExtension[]) =>
+export type AppExtensionUserMenuItem = {
+  id: string;
+  Component: ComponentType;
+};
+
+export type AppExtensionContributions = {
+  extensions: AppExtension[];
+  routeDefinitions: AppRouteDefinition[];
+  resources: ResourceProps[];
+  userMenuItems: AppExtensionUserMenuItem[];
+  authAdapters: AuthenticatorAdapter[];
+  providerExtensions: AppExtension[];
+  authRuntimeExtensions: AppExtension[];
+};
+
+export const sortAppExtensions = (extensions: AppExtension[]): AppExtension[] =>
   [...extensions].sort(
     (left, right) =>
       (left.priority ?? 100) - (right.priority ?? 100) ||
@@ -34,7 +49,7 @@ export const collectAppExtensionContributions = ({
   extensions: AppExtension[];
   appRoutes?: AppRouteDefinition[];
   registryRoutesEnabled?: boolean;
-}) => {
+}): AppExtensionContributions => {
   const sortedExtensions = sortAppExtensions(extensions);
   const routeExtensions = registryRoutesEnabled ? sortedExtensions : [];
 
