@@ -1,16 +1,22 @@
-import type { CacheProvider } from '@nocobase/caching';
+import type { Caching } from '@nocobase/caching';
 import type { BetterAuthOptions } from 'better-auth';
 
 type SecondaryStorage = NonNullable<BetterAuthOptions['secondaryStorage']>;
 
-/** Adapts a NocoBase cache provider to Better Auth secondary storage. */
+/** Adapts NocoBase caching to Better Auth secondary storage. */
 export function createAuthStorage(
-  provider: CacheProvider,
-  options: { namespace?: string } = {},
+  caching: Caching,
+  options: { namespace?: string; provider?: string } = {},
 ): SecondaryStorage {
   const namespace = options.namespace ?? 'nocobase-auth';
-  const cache = provider.createCache({ namespace });
-  const counter = provider.createCounter({ namespace: `${namespace}:rate-limit` });
+  const cache = caching.getCache({
+    namespace,
+    provider: options.provider,
+  });
+  const counter = caching.getCounter({
+    namespace: `${namespace}:rate-limit`,
+    provider: options.provider,
+  });
 
   return {
     async get(key) {

@@ -14,7 +14,9 @@ export class KeyedLock {
       return await operation();
     } finally {
       release();
-      if (this.tails.get(key) === current) this.tails.delete(key);
+      if (this.tails.get(key) === current) {
+        this.tails.delete(key);
+      }
     }
   }
 }

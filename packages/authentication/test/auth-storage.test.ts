@@ -1,31 +1,31 @@
-import { MemoryCacheProvider } from '@nocobase/caching';
+import { createCaching, type Caching } from '@nocobase/caching';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAuthStorage } from '../src/auth-storage.js';
 
 describe('createAuthStorage', () => {
-  const providers: MemoryCacheProvider[] = [];
+  const instances: Caching[] = [];
 
   afterEach(async () => {
     vi.useRealTimers();
-    await Promise.all(providers.splice(0).map((provider) => provider.disconnect()));
+    await Promise.all(instances.splice(0).map((caching) => caching.dispose()));
   });
 
   function createStorage(namespace?: string) {
-    const provider = new MemoryCacheProvider();
-    providers.push(provider);
+    const caching = createCaching();
+    instances.push(caching);
     return {
-      provider,
-      storage: createAuthStorage(provider, namespace ? { namespace } : undefined),
+      caching,
+      storage: createAuthStorage(caching, namespace ? { namespace } : undefined),
     };
   }
 
   it('uses the nocobase-auth namespace by default and converts TTL seconds', async () => {
     vi.useFakeTimers();
-    const { provider, storage } = createStorage();
+    const { caching, storage } = createStorage();
 
     await storage.set('session', 'value', 1);
     await expect(storage.get('session')).resolves.toBe('value');
-    await expect(provider.createCache({ namespace: 'nocobase-auth' }).get('session'))
+    await expect(caching.getCache({ namespace: 'nocobase-auth' }).get('session'))
       .resolves.toBe('value');
 
     await vi.advanceTimersByTimeAsync(1_001);

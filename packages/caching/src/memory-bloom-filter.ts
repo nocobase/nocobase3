@@ -47,7 +47,9 @@ export class MemoryBloomFilter implements BloomFilter {
 
   async addMany(key: string, values: string[]): Promise<void> {
     const filter = this.getFilter(key);
-    for (const value of values) filter.add(value);
+    for (const value of values) {
+      filter.add(value);
+    }
   }
 
   async has(key: string, value: string): Promise<boolean> {
@@ -64,7 +66,9 @@ export class MemoryBloomFilter implements BloomFilter {
 
   private getFilter(key: string): BloomFilterImpl {
     const entry = this.filters.get(key);
-    if (!entry) throw new Error(`Bloom filter "${key}" has not been reserved.`);
+    if (!entry) {
+      throw new Error(`Bloom filter "${key}" has not been reserved.`);
+    }
     return entry.filter;
   }
 }

@@ -1,4 +1,4 @@
-import type { AppCacheConfig } from '@nocobase/cache';
+import type { CachingConfig } from '@nocobase/caching';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import type { LoggingConfig } from '@nocobase/logging';
@@ -32,7 +32,7 @@ export interface AppSpaConfig {
 
 export interface AppConfig {
   app: AppRoutingConfig;
-  cache: AppCacheConfig;
+  caching: CachingConfig;
   database: AppDatabaseConfig;
   drive: AppDriveConfig;
   logging: LoggingConfig;

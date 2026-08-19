@@ -1,12 +1,112 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MemoryCacheProvider } from '../src/index.js';
+import {
+  createCaching,
+  MemoryCacheProvider,
+  registerCachingDriver,
+} from '../src/index.js';
+
+describe('createCaching', () => {
+  it('lazily creates the default provider and returns stable namespaced capabilities', async () => {
+    const caching = createCaching();
+
+    const cache = caching.getCache({ namespace: 'app' });
+    expect(caching.getCache({ namespace: 'app' })).toBe(cache);
+    expect(caching.getCounter({ namespace: 'rate-limit' }))
+      .toBe(caching.getCounter({ namespace: 'rate-limit' }));
+    expect(caching.getBloomFilter({ namespace: 'blocked' }))
+      .toBe(caching.getBloomFilter({ namespace: 'blocked' }));
+
+    await caching.dispose();
+  });
+
+  it('parses readable provider and cache TTL configuration', async () => {
+    vi.useFakeTimers();
+    const caching = createCaching({
+      default: 'memory',
+      providers: {
+        memory: {
+          driver: 'memory',
+          defaultTtl: '30s',
+        },
+      },
+    });
+    const cache = caching.getCache({
+      namespace: 'app',
+      defaultTtl: '30s',
+    });
+
+    await cache.set('key', 'value');
+    await vi.advanceTimersByTimeAsync(30_001);
+
+    await expect(cache.get('key')).resolves.toBeUndefined();
+    await caching.dispose();
+    vi.useRealTimers();
+  });
+
+  it('rejects missing defaults and unknown drivers', () => {
+    expect(() => createCaching({ default: 'missing', providers: {} }))
+      .toThrow('Default cache provider "missing" is not configured.');
+    expect(() => createCaching({
+      default: 'redis',
+      providers: {
+        redis: { driver: 'redis' },
+      },
+    })).toThrow('Cache provider driver "redis" is not registered.');
+  });
+
+  it('supplements static provider config when the provider is first used', async () => {
+    const client = {};
+    const provider = new MemoryCacheProvider();
+    const dispose = vi.spyOn(provider, 'dispose');
+    let receivedConfig: Record<string, unknown> | undefined;
+    const unregister = registerCachingDriver({
+      name: 'test',
+      createProvider(config) {
+        receivedConfig = config;
+        return provider;
+      },
+    });
+    const caching = createCaching({
+      default: 'remote',
+      providers: {
+        remote: {
+          driver: 'test',
+          keyPrefix: 'nocobase',
+        },
+      },
+    });
+
+    expect(receivedConfig).toBeUndefined();
+
+    const cache = caching.getCache({
+      namespace: 'app',
+      client,
+    });
+    await cache.set('key', 'value');
+
+    expect(receivedConfig).toMatchObject({
+      driver: 'test',
+      keyPrefix: 'nocobase',
+      client,
+    });
+    await expect(caching.getCache({ namespace: 'app' }).get('key')).resolves.toBe('value');
+    expect(() => caching.getCache({ namespace: 'other', client: {} }))
+      .toThrow('already initialized with a different "client" option');
+    expect(() => caching.getCache({ namespace: 'other', keyPrefix: 'other' }))
+      .toThrow('already initialized with a different "keyPrefix" option');
+
+    await caching.dispose();
+    expect(dispose).toHaveBeenCalledOnce();
+    unregister();
+  });
+});
 
 describe('MemoryCacheProvider', () => {
   const providers: MemoryCacheProvider[] = [];
 
   afterEach(async () => {
     vi.useRealTimers();
-    await Promise.all(providers.splice(0).map((provider) => provider.disconnect()));
+    await Promise.all(providers.splice(0).map((provider) => provider.dispose()));
   });
 
   function createProvider(options?: ConstructorParameters<typeof MemoryCacheProvider>[0]) {
@@ -45,6 +145,20 @@ describe('MemoryCacheProvider', () => {
 
     expect(values.filter((value) => value === 'secret')).toHaveLength(1);
     expect(await cache.get('token')).toBeUndefined();
+  });
+
+  it('supports portable bulk cache operations', async () => {
+    const cache = createProvider().createCache({ namespace: 'bulk' });
+
+    await cache.setMany([
+      { key: 'one', value: 1 },
+      { key: 'two', value: 2 },
+    ]);
+
+    await expect(cache.getMany<number>(['one', 'missing', 'two']))
+      .resolves.toEqual([1, undefined, 2]);
+    await expect(cache.has('one')).resolves.toBe(true);
+    await expect(cache.deleteMany(['one', 'missing', 'two'])).resolves.toBe(2);
   });
 
   it('coalesces concurrent wrap loaders and caches falsy values', async () => {

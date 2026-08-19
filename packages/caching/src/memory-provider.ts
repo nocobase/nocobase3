@@ -15,6 +15,8 @@ import { assertMaxSize, assertNamespace, assertTtl } from './internal/validation
 export class MemoryCacheProvider implements CacheProvider {
   private readonly maxSize: number;
   private readonly defaultTtl?: number;
+  private readonly maxTtl?: number;
+  private readonly checkInterval?: number;
   private readonly useClone: boolean;
   private readonly caches = new Map<string, { cache: MemoryCache; defaultTtl?: number }>();
   private readonly counters = new Map<string, MemoryCounter>();
@@ -23,13 +25,13 @@ export class MemoryCacheProvider implements CacheProvider {
   constructor(options: MemoryCacheProviderOptions = {}) {
     this.maxSize = options.maxSize ?? 2_000;
     this.defaultTtl = options.defaultTtl;
+    this.maxTtl = options.maxTtl;
+    this.checkInterval = options.checkInterval;
     this.useClone = options.useClone ?? true;
     assertMaxSize(this.maxSize);
     assertTtl(this.defaultTtl);
-  }
-
-  async connect(): Promise<void> {
-    // Memory storage has no external connection.
+    assertTtl(this.maxTtl);
+    assertTtl(this.checkInterval);
   }
 
   createCache(options: CacheOptions): Cache {
@@ -48,6 +50,8 @@ export class MemoryCacheProvider implements CacheProvider {
       namespace: options.namespace,
       maxSize: this.maxSize,
       defaultTtl,
+      maxTtl: this.maxTtl,
+      checkInterval: this.checkInterval,
       useClone: this.useClone,
     });
     this.caches.set(options.namespace, { cache, defaultTtl });
@@ -57,7 +61,9 @@ export class MemoryCacheProvider implements CacheProvider {
   createCounter(options: NamespacedOptions): Counter {
     assertNamespace(options.namespace);
     const existing = this.counters.get(options.namespace);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
     const counter = new MemoryCounter({ namespace: options.namespace, maxSize: this.maxSize });
     this.counters.set(options.namespace, counter);
     return counter;
@@ -66,16 +72,22 @@ export class MemoryCacheProvider implements CacheProvider {
   createBloomFilter(options: NamespacedOptions): BloomFilter {
     assertNamespace(options.namespace);
     const existing = this.bloomFilters.get(options.namespace);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
     const filter = new MemoryBloomFilter(options.namespace);
     this.bloomFilters.set(options.namespace, filter);
     return filter;
   }
 
-  async disconnect(): Promise<void> {
+  async dispose(): Promise<void> {
     await Promise.all([...this.caches.values()].map(({ cache }) => cache.disconnect()));
-    for (const counter of this.counters.values()) counter.clear();
-    for (const filter of this.bloomFilters.values()) filter.clear();
+    for (const counter of this.counters.values()) {
+      counter.clear();
+    }
+    for (const filter of this.bloomFilters.values()) {
+      filter.clear();
+    }
     this.caches.clear();
     this.counters.clear();
     this.bloomFilters.clear();

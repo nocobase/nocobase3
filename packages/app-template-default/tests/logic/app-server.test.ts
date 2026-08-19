@@ -6,7 +6,7 @@ import { createServer as createHttpServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { createNullCacheConfig, type AppCacheConfig } from '@nocobase/cache';
+import { createDefaultCachingConfig, type CachingConfig } from '@nocobase/caching';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
 import type { AppDriveConfig } from '@nocobase/drive';
@@ -344,7 +344,7 @@ describe('app server', () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
-      cache: createTestCache(),
+      caching: createTestCaching(),
     });
 
     const firstResponse = await app.request('http://localhost/api/cache/demo');
@@ -354,8 +354,8 @@ describe('app server', () => {
 
     expect(firstResponse.status).toBe(200);
     expect(firstPayload).toMatchObject({
-      key: 'examples:cache:demo',
-      ttl: '30s',
+      key: 'demo',
+      ttl: 30_000,
       cached: false,
       value: {
         generatedAt: expect.any(String),
@@ -374,7 +374,7 @@ describe('app server', () => {
 
     expect(deleteResponse.status).toBe(200);
     await expect(deleteResponse.json()).resolves.toEqual({
-      key: 'examples:cache:demo',
+      key: 'demo',
       deleted: true,
     });
 
@@ -824,17 +824,13 @@ function createTestDrive(root: string): AppDriveConfig {
   };
 }
 
-function createTestCache(): AppCacheConfig {
+function createTestCaching(): CachingConfig {
   return {
     default: 'memory',
-    stores: {
+    providers: {
       memory: {
         driver: 'memory',
-        ttl: '1m',
-        namespace: 'tests',
-      },
-      null: {
-        driver: 'null',
+        defaultTtl: '1m',
       },
     },
   };
@@ -869,7 +865,7 @@ interface CreateTestAppOptions {
   publicBasePath?: string;
   nocoBaseApiUrl?: string | false;
   database?: DatabaseManager;
-  cache?: AppCacheConfig;
+  caching?: CachingConfig;
   drive?: AppDriveConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
@@ -891,7 +887,7 @@ function createTestApp(options: CreateTestAppOptions = {}): ClosableApp {
       publicApiUrl: joinBasePath(publicBasePath, internalApiProxyPath),
       nocoBaseApiUrl: options.nocoBaseApiUrl === false ? undefined : options.nocoBaseApiUrl,
     },
-    cache: options.cache ?? createNullCacheConfig(),
+    caching: options.caching ?? createDefaultCachingConfig(),
     database: {
       default: 'sqlite',
       connections: {},

@@ -1,5 +1,7 @@
 export function assertNamespace(namespace: string): void {
-  if (!namespace.trim()) throw new Error('Cache namespace must not be empty.');
+  if (!namespace.trim()) {
+    throw new Error('Cache namespace must not be empty.');
+  }
 }
 
 export function assertMaxSize(maxSize: number): void {

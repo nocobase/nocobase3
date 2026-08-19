@@ -33,7 +33,7 @@ export function createApiRoutes({
   );
   api.get('/healthz', createHealthzHandler({ appName, publicBasePath }));
   api.get('/apps', createAppsHandler());
-  api.route('/cache', createCacheRoutes({ cacheManager: deps.cacheManager }));
+  api.route('/cache', createCacheRoutes({ caching: deps.caching }));
   api.route('/queue', createQueueRoutes({ queueManager: deps.queueManager }));
   api.route('/session', createSessionRoutes());
   api.route('/app-settings', createAppSettingsRoutes({ appSettingsStore: services.appSettingsStore }));

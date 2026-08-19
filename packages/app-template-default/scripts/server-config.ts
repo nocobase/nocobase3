@@ -24,10 +24,10 @@ const activeLoggerName = config.logging.default;
 const configuredLoggers: Record<string, unknown> = config.logging.loggers;
 const activeLogger =
   activeLoggerName ? configuredLoggers[activeLoggerName] : undefined;
-const activeCacheName = config.cache.default;
-const cacheStores: Record<string, unknown> = config.cache.stores;
-const activeCache =
-  activeCacheName ? cacheStores[activeCacheName] : undefined;
+const activeCachingProviderName = config.caching.default;
+const cachingProviders: Record<string, unknown> = config.caching.providers;
+const activeCachingProvider =
+  activeCachingProviderName ? cachingProviders[activeCachingProviderName] : undefined;
 const activeDatabaseName = config.database.default;
 const databaseConnections: Record<string, unknown> = config.database.connections;
 const activeDatabase =
@@ -73,9 +73,9 @@ const report = {
     default: activeLoggerName || '(none)',
     active: summarizeLogger(activeLogger),
   },
-  cache: {
-    default: activeCacheName || '(none)',
-    active: summarizeCacheStore(activeCache),
+  caching: {
+    default: activeCachingProviderName || '(none)',
+    active: summarizeCachingProvider(activeCachingProvider),
   },
   database: {
     default: activeDatabaseName || '(none)',
@@ -202,32 +202,25 @@ function summarizeLogger(logger: unknown): JsonValue {
   return summary;
 }
 
-function summarizeCacheStore(store: unknown): JsonValue {
-  if (!isObject(store)) {
+function summarizeCachingProvider(provider: unknown): JsonValue {
+  if (!isObject(provider)) {
     return null;
   }
 
-  const driver = stringValue(store.driver) ?? 'unknown';
+  const driver = stringValue(provider.driver) ?? 'unknown';
   const summary: Record<string, JsonValue> = {
     driver,
   };
 
-  for (const key of ['ttl', 'maxTtl', 'namespace']) {
-    const value = store[key];
+  for (const key of ['defaultTtl', 'maxTtl', 'maxSize', 'checkInterval']) {
+    const value = provider[key];
     if (typeof value === 'string' || typeof value === 'number') {
       summary[key] = value;
     }
   }
 
-  for (const key of ['lruSize', 'checkInterval']) {
-    const value = numberValue(store[key]);
-    if (value !== undefined) {
-      summary[key] = value;
-    }
-  }
-
-  for (const key of ['useClone', 'stats', 'tags']) {
-    const value = booleanValue(store[key]);
+  for (const key of ['useClone']) {
+    const value = booleanValue(provider[key]);
     if (value !== undefined) {
       summary[key] = value;
     }
@@ -369,9 +362,9 @@ function printReport(value: typeof report): void {
   printPair('Default logger', value.logging.default);
   printJson('Active logger', value.logging.active);
 
-  printSection('Cache');
-  printPair('Default store', value.cache.default);
-  printJson('Active store', value.cache.active);
+  printSection('Caching');
+  printPair('Default provider', value.caching.default);
+  printJson('Active provider', value.caching.active);
 
   printSection('Database');
   printPair('Default connection', value.database.default);
@@ -462,10 +455,6 @@ function stringValue(value: unknown): string | undefined {
 
 function booleanValue(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
-}
-
-function numberValue(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
 }
 
 function jsonObject(value: ObjectValue): Record<string, JsonValue> {

@@ -1,5 +1,5 @@
 import app from './app.js';
-import cache from './cache.js';
+import caching from './caching.js';
 import database from './database.js';
 import drive from './drive.js';
 import logging from './logging.js';
@@ -11,7 +11,7 @@ import type { AppConfig } from './types.js';
 
 const config: {
   app: typeof app;
-  cache: typeof cache;
+  caching: typeof caching;
   database: typeof database;
   drive: typeof drive;
   logging: typeof logging;
@@ -21,7 +21,7 @@ const config: {
   spa: typeof spa;
 } = {
   app: app,
-  cache: cache,
+  caching: caching,
   database: database,
   drive: drive,
   logging: logging,

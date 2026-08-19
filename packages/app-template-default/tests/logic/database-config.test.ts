@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createConfigEnv, createConfigPaths, loadConfig } from '@nocobase/app-server/config';
 
 import app from '../../server/config/app.ts';
-import cache from '../../server/config/cache.ts';
+import caching from '../../server/config/caching.ts';
 import configFactories from '../../server/config/index.ts';
 import database from '../../server/config/database.ts';
 import drive from '../../server/config/drive.ts';
@@ -40,7 +40,7 @@ describe('template config registry', () => {
     });
 
     expect(config.app.name).toBe('app-template-default');
-    expect(config.cache.default).toBe('memory');
+    expect(config.caching.default).toBe('memory');
     expect(config.database.default).toBe('sqlite');
     expect(config.drive.default).toBe('local');
     expect(config.logging.default).toBe('system');
@@ -115,8 +115,8 @@ describe('app config', () => {
       publicApiUrl: '/main/v2/api',
     });
     expect(config.spa.indexPath).toBe(path.join(clientDir, 'index.html'));
-    expect(config.cache.stores.memory).toMatchObject({
-      namespace: 'nocobase',
+    expect(config.caching.providers.memory).toMatchObject({
+      driver: 'memory',
     });
     expect(config.database.connections.sqlite).toMatchObject({
       filename: path.join(dataDir, 'database.sqlite'),
@@ -136,9 +136,9 @@ describe('app config', () => {
   });
 });
 
-describe('cache config', () => {
-  it('declares memory and null stores for cacheable', () => {
-    const config = cache({
+describe('caching config', () => {
+  it('declares the memory provider', () => {
+    const config = caching({
       env: createConfigEnv({}),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
@@ -147,54 +147,42 @@ describe('cache config', () => {
 
     expect(config).toEqual({
       default: 'memory',
-      stores: {
+      providers: {
         memory: {
           driver: 'memory',
-          ttl: '5m',
+          defaultTtl: '5m',
           maxTtl: undefined,
-          namespace: 'nocobase',
-          lruSize: 0,
-          checkInterval: 0,
+          maxSize: 2_000,
+          checkInterval: undefined,
           useClone: true,
-          stats: false,
-          tags: false,
-        },
-        null: {
-          driver: 'null',
         },
       },
     });
   });
 
-  it('maps cache env values into the memory store', () => {
-    const config = cache({
+  it('maps caching env values into the memory provider', () => {
+    const config = caching({
       env: createConfigEnv({
-        CACHE_STORE: 'null',
-        CACHE_TTL: '30s',
-        CACHE_MAX_TTL: '1h',
-        CACHE_PREFIX: 'portal',
-        CACHE_MEMORY_LRU_SIZE: '100',
-        CACHE_MEMORY_CHECK_INTERVAL: '5000',
-        CACHE_MEMORY_USE_CLONE: 'false',
-        CACHE_STATS: 'true',
-        CACHE_TAGS: 'true',
+        CACHING_DEFAULT: 'memory',
+        CACHING_MEMORY_DEFAULT_TTL: '30s',
+        CACHING_MEMORY_MAX_TTL: '1h',
+        CACHING_MEMORY_MAX_SIZE: '100',
+        CACHING_MEMORY_CHECK_INTERVAL: '5s',
+        CACHING_MEMORY_USE_CLONE: 'false',
       }),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
       }),
     });
 
-    expect(config.default).toBe('null');
-    expect(config.stores.memory).toEqual({
+    expect(config.default).toBe('memory');
+    expect(config.providers.memory).toEqual({
       driver: 'memory',
-      ttl: '30s',
+      defaultTtl: '30s',
       maxTtl: '1h',
-      namespace: 'portal',
-      lruSize: 100,
-      checkInterval: 5000,
+      maxSize: 100,
+      checkInterval: '5s',
       useClone: false,
-      stats: true,
-      tags: true,
     });
   });
 });

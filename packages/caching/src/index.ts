@@ -1,3 +1,6 @@
+export * from './caching.js';
+export * from './config.js';
+export * from './drivers.js';
 export * from './types.js';
 export * from './memory-cache.js';
 export * from './memory-counter.js';

@@ -1,8 +1,4 @@
-import {
-  createCacheManager,
-  createNullCacheConfig,
-  type NocoBaseCacheManager,
-} from '@nocobase/cache';
+import { createCaching, type Caching } from '@nocobase/caching';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import {
   createLogging,
@@ -24,7 +20,7 @@ import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
 
 export interface AppDeps {
-  cacheManager: NocoBaseCacheManager;
+  caching: Caching;
   driveManager?: NocoBaseDriveManager;
   logging: Logging;
   queueManager: NocoBaseQueueManager;
@@ -33,7 +29,7 @@ export interface AppDeps {
 
 export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   const { config } = runtime;
-  const cacheManager = createCacheManager(config.cache ?? createNullCacheConfig());
+  const caching = createCaching(config.caching);
   const driveManager = config.drive ? createDriveManager(config.drive) : undefined;
   const logging = createLogging(config.logging);
   const sessionManager = createSessionManager(config.session ?? createNullSessionConfig());
@@ -48,7 +44,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   });
 
   return {
-    cacheManager,
+    caching,
     driveManager,
     logging,
     queueManager,
@@ -59,7 +55,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
 export async function disposeAppDeps(deps: AppDeps): Promise<void> {
   await deps.queueManager.close();
   await Promise.all([
-    deps.cacheManager.disconnectAll(),
+    deps.caching.dispose(),
     deps.logging.flush(),
     deps.sessionManager.dispose(),
   ]);

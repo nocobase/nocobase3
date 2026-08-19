@@ -29,7 +29,9 @@ export class MemoryCounter implements Counter {
   }
 
   async increment(key: string, amount = 1, ttl?: number): Promise<number> {
-    if (!Number.isFinite(amount)) throw new Error('Counter amount must be a finite number.');
+    if (!Number.isFinite(amount)) {
+      throw new Error('Counter amount must be a finite number.');
+    }
     assertTtl(ttl);
 
     const current = this.store.get(key) as CounterEntry | undefined;
