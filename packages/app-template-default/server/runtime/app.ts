@@ -35,6 +35,7 @@ export function createAppFromRuntime(
     logger: config.logger,
     queue: config.queue,
     session: config.session,
+    notifications: config.notification,
     nocoBaseApiUrl: config.app.nocoBaseApiUrl,
     spa: {
       handler: viteDevUrl
@@ -62,6 +63,7 @@ export function mountAppAtPublicBasePath(app: Hono, publicBasePath: string): Hon
 
   if (isClosableApp(app)) {
     return Object.assign(mounted, {
+      start: () => app.start(),
       close: () => app.close(),
     });
   }
@@ -99,7 +101,8 @@ function dispatchMountedApp(app: Hono, request: Request, publicBasePath: string)
 }
 
 function isClosableApp(app: Hono): app is ClosableApp {
-  return typeof (app as Partial<ClosableApp>).close === 'function';
+  const candidate = app as Partial<ClosableApp>;
+  return typeof candidate.start === 'function' && typeof candidate.close === 'function';
 }
 
 function createPublicBasePathOriginProxyHandler(targetOrigin: URL, publicBasePath: string): SpaHandler {

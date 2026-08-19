@@ -26,6 +26,11 @@ import {
 } from '@nocobase/session';
 
 import { createAppJobFactory } from '@/jobs/dependencies.js';
+import {
+  createNotificationModule,
+  type NotificationModule,
+  type NotificationModuleConfig,
+} from '../../registry/notification/server/index.js';
 import { AppSettingsService, UnavailableAppSettingsService, type AppSettings } from './app-settings-store.js';
 import { FileUploadsService, UnavailableFileUploadsService, type FileUploads } from './public-file-storage.js';
 
@@ -36,6 +41,8 @@ export interface AppServices {
   loggerManager: NocoBaseLoggerManager;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
+  notificationModule?: NotificationModule;
+  start(): Promise<void>;
   dispose(): Promise<void>;
 }
 
@@ -46,6 +53,7 @@ export interface CreateAppServicesOptions {
   logger?: AppLoggerConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
+  notifications?: NotificationModuleConfig;
 }
 
 export function createAppServices(options: CreateAppServicesOptions = {}): AppServices {
@@ -62,6 +70,14 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
       logger: queueLogger,
     }),
   });
+  const notificationModule = options.notifications?.enabled
+    ? createNotificationModule({
+        allowNonPersistentStore: options.notifications.allowNonPersistentStore,
+        database: options.database,
+        logger: loggerManager.use().child({ module: 'notification' }),
+        queueManager,
+      })
+    : undefined;
 
   const services: AppServices = {
     appSettingsStore: options.database ? new AppSettingsService(options.database) : new UnavailableAppSettingsService(),
@@ -73,15 +89,25 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
     loggerManager,
     queueManager,
     sessionManager,
-    dispose: () => disposeAppServices({ cacheManager, loggerManager, queueManager, sessionManager }),
+    notificationModule,
+    start: () => notificationModule?.start() ?? Promise.resolve(),
+    dispose: () =>
+      disposeAppServices({
+        cacheManager,
+        loggerManager,
+        notificationModule,
+        queueManager,
+        sessionManager,
+      }),
   };
 
   return services;
 }
 
 export async function disposeAppServices(
-  services: Pick<AppServices, 'cacheManager' | 'loggerManager' | 'queueManager' | 'sessionManager'>,
+  services: Pick<AppServices, 'cacheManager' | 'loggerManager' | 'notificationModule' | 'queueManager' | 'sessionManager'>,
 ): Promise<void> {
+  await services.notificationModule?.close({ deadlineAt: Date.now() + 10_000 });
   await services.queueManager.close();
   await Promise.all([
     services.cacheManager.disconnectAll(),

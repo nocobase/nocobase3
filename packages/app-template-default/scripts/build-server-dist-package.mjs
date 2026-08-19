@@ -8,7 +8,7 @@ const rootPackagePath = path.join(rootDir, "package.json");
 const distPackagePath = path.join(distDir, "package.json");
 const workspacePackagesDir = path.resolve(rootDir, "..");
 const vendorDir = path.join(distDir, "vendor");
-const serverRuntimeDirs = ["server", "scripts"];
+const serverRuntimeDirs = ["server", "registry/notification", "scripts"];
 const databaseRuntimeDrivers = ["better-sqlite3", "pg", "mysql2"];
 
 const toPosix = (value) => value.split(path.sep).join("/");

@@ -18,17 +18,22 @@ export interface EmbeddedServer extends Hono {
 
 export async function createServer(scope: AppScope): Promise<EmbeddedServer> {
   const runtime = createAppRuntime(loadEmbeddedAppConfig(scope, import.meta.url));
-
-  await prepareAppRuntime(runtime);
-  const app = createAppFromRuntime(runtime, {
-    viteDevUrl: false,
-  });
+  let app: ReturnType<typeof createAppFromRuntime> | undefined;
+  try {
+    await prepareAppRuntime(runtime);
+    app = createAppFromRuntime(runtime, {
+      viteDevUrl: false,
+    });
+    await app.start();
+  } catch (error: unknown) {
+    await app?.close();
+    await runtime.dispose();
+    throw error;
+  }
   const closeApp = app.close;
   const close = onceAsync(async () => {
-    await Promise.all([
-      closeApp(),
-      runtime.dispose(),
-    ]);
+    await closeApp();
+    await runtime.dispose();
   });
 
   registerRuntimeDisposer(scope, close);

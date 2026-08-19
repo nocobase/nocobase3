@@ -4,6 +4,7 @@ import type { AppDriveConfig } from '@nocobase/drive';
 import type { AppLoggerConfig } from '@nocobase/logger';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
+import type { NotificationModuleConfig } from '../../registry/notification/server/index.js';
 
 export interface AppRoutingConfig {
   name: string;
@@ -38,6 +39,7 @@ export interface AppConfig {
   logger: AppLoggerConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
+  notification: NotificationModuleConfig;
   server: AppServerConfig;
   spa: AppSpaConfig;
 }

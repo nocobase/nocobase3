@@ -15,10 +15,11 @@ import { createApiRoutes } from './routes/api/index.js';
 import { createAppServices } from './services/index.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
 
-export type { CreateAppOptions, SpaHandler } from './app-options.js';
+export type { CreateAppNotificationsOptions, CreateAppOptions, SpaHandler } from './app-options.js';
 export { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
 export interface ClosableApp extends Hono {
+  start(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -38,6 +39,7 @@ export function createApp(options: CreateAppOptions = {}): ClosableApp {
     logger: options.logger,
     queue: options.queue,
     session: options.session,
+    notifications: options.notifications,
   });
   const app = new Hono();
 
@@ -67,6 +69,10 @@ export function createApp(options: CreateAppOptions = {}): ClosableApp {
     }),
   );
 
+  if (services.notificationModule) {
+    app.route(joinBasePath(internalBasePath, '/api/notifications'), services.notificationModule.router);
+  }
+
   registerSpaRoutes(app, {
     basePath: internalBasePath,
     handler: options.spa?.handler,
@@ -81,6 +87,7 @@ export function createApp(options: CreateAppOptions = {}): ClosableApp {
   });
 
   return Object.assign(app, {
+    start: onceAsync(() => services.start()),
     close: onceAsync(() => services.dispose()),
   });
 }

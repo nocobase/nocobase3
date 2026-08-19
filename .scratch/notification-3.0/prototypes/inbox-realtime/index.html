@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>通知 Inbox 与实时恢复原型</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f7f8;
+        --surface: #fff;
+        --surface-soft: #f8fafb;
+        --text: #172026;
+        --muted: #69767d;
+        --border: #dce3e7;
+        --border-strong: #c8d2d8;
+        --brand: #176b5b;
+        --brand-deep: #123d35;
+        --brand-soft: #e7f5f1;
+        --info: #2859a5;
+        --info-soft: #edf4ff;
+        --warning: #98610c;
+        --warning-soft: #fff5de;
+        --danger: #b42318;
+        --danger-soft: #fff0ed;
+        --shadow: 0 18px 48px rgba(21, 38, 34, .16);
+        --radius: 13px;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 320px; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 14px; }
+      button, select { font: inherit; }
+      button { cursor: pointer; }
+      button:focus-visible, select:focus-visible { outline: 3px solid rgba(23,107,91,.25); outline-offset: 2px; }
+      [hidden] { display: none !important; }
+
+      .app { min-height: 100vh; }
+      .header { position: sticky; top: 0; z-index: 20; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 24px; background: rgba(255,255,255,.92); border-bottom: 1px solid var(--border); backdrop-filter: blur(18px); }
+      .header-left, .header-actions { display: flex; align-items: center; gap: 10px; }
+      .menu-button, .header-button, .bell-button, .avatar { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: #45545b; }
+      .menu-button { font-size: 20px; }
+      .workspace-name { padding-left: 12px; border-left: 1px solid var(--border); color: var(--muted); font-weight: 600; }
+      .avatar { border: 0; border-radius: 50%; background: #d6eee7; color: var(--brand-deep); font-weight: 800; }
+      .bell-wrap { position: relative; }
+      .bell-button { position: relative; font-size: 19px; }
+      .bell-button.active { background: var(--brand-soft); border-color: #b9dcd3; color: var(--brand); }
+      .badge { position: absolute; top: -5px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border: 2px solid white; border-radius: 999px; background: var(--danger); color: white; font-size: 10px; font-weight: 800; line-height: 1; }
+
+      .layout { display: grid; grid-template-columns: 230px minmax(0,1fr); min-height: calc(100vh - 64px); }
+      .sidebar { padding: 20px 14px; border-right: 1px solid var(--border); background: #eef2f3; }
+      .brand { display: flex; align-items: center; gap: 10px; padding: 2px 10px 20px; font-weight: 750; }
+      .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--brand-deep); color: white; }
+      .nav { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; color: #425159; text-align: left; }
+      .nav.active { background: var(--surface); color: var(--brand); box-shadow: 0 1px 4px rgba(0,0,0,.05); font-weight: 700; }
+      main { min-width: 0; padding: 28px; }
+      .content { max-width: 1120px; margin: 0 auto; }
+      h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; }
+      .subtitle { margin: 7px 0 0; color: var(--muted); line-height: 1.5; }
+
+      .workspace-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: 18px; margin-top: 22px; }
+      .hero, .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+      .hero { min-height: 270px; padding: 30px; display: flex; flex-direction: column; justify-content: center; background: linear-gradient(135deg, #fff 20%, #e9f6f2); }
+      .eyebrow { color: var(--brand); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+      .hero h2 { max-width: 580px; margin: 11px 0 10px; font-size: 28px; line-height: 1.25; }
+      .hero p { max-width: 600px; margin: 0; color: var(--muted); line-height: 1.65; }
+      .hero-action { margin-top: 20px; align-self: flex-start; }
+      .card { padding: 20px; }
+      .card h3 { margin: 0 0 12px; }
+      .check-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 11px; color: #506068; }
+      .check-list li::before { content: "✓"; display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 9px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 800; }
+
+      .button { border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 13px; background: var(--surface); color: #39484f; font-weight: 650; }
+      .button:hover { background: var(--surface-soft); }
+      .button.primary { border-color: var(--brand); background: var(--brand); color: white; }
+      .button.ghost { border-color: transparent; background: transparent; color: var(--brand); }
+      .button.danger { border-color: #e3b2ab; background: var(--danger-soft); color: var(--danger); }
+      .button.small { padding: 6px 9px; font-size: 12px; }
+      .icon-button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
+      .icon-button:hover { background: var(--surface-soft); color: var(--text); }
+
+      .popover { position: absolute; top: 48px; right: 0; width: 400px; max-height: min(650px, calc(100vh - 82px)); display: none; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); z-index: 35; }
+      .popover.open { display: flex; }
+      .popover-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 17px 12px; }
+      .popover-header h2 { margin: 0; font-size: 17px; }
+      .popover-header span { color: var(--muted); font-size: 12px; }
+      .live-strip { min-height: 34px; display: flex; align-items: center; gap: 8px; padding: 8px 17px; border-top: 1px solid #edf0f2; border-bottom: 1px solid #edf0f2; background: var(--surface-soft); color: var(--muted); font-size: 12px; }
+      .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #1d8b59; box-shadow: 0 0 0 3px #e1f4e9; }
+      .live-strip.reconnecting { color: var(--warning); background: var(--warning-soft); }
+      .live-strip.reconnecting .live-dot { background: var(--warning); box-shadow: 0 0 0 3px #f9e8bf; animation: pulse 1.2s infinite; }
+      .live-strip.syncing { color: var(--info); background: var(--info-soft); }
+      .live-strip.syncing .live-dot { background: var(--info); box-shadow: 0 0 0 3px #dce9fb; animation: pulse .8s infinite; }
+      @keyframes pulse { 50% { opacity: .35; } }
+      .recent-list { overflow: auto; }
+      .recent-item { position: relative; display: grid; grid-template-columns: 38px minmax(0,1fr) 28px; gap: 11px; padding: 13px 14px; border-bottom: 1px solid #edf0f2; background: var(--surface); }
+      .recent-item.unread { background: #f7fbfa; }
+      .recent-item.unread::before { content: ""; position: absolute; left: 4px; top: 20px; width: 5px; height: 5px; border-radius: 50%; background: var(--brand); }
+      .notice-main { min-width: 0; border: 0; background: transparent; padding: 0; text-align: left; color: inherit; }
+      .notice-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; background: var(--brand-soft); color: var(--brand); font-weight: 800; }
+      .notice-title { display: flex; align-items: center; gap: 7px; font-weight: 700; line-height: 1.35; }
+      .unread-label { color: var(--brand); font-size: 10px; font-weight: 800; }
+      .notice-body { margin-top: 4px; color: #5c6a71; font-size: 12px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .notice-time { margin-top: 6px; color: #879299; font-size: 11px; }
+      .channel-badges { display: inline-flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+      .channel-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 2px 7px; border-radius: 999px; background: #edf1f3; color: #58666d; font-size: 10px; font-weight: 750; }
+      .channel-badge.inApp { background: var(--brand-soft); color: var(--brand); }
+      .channel-badge.email { background: var(--info-soft); color: var(--info); }
+      .popover-empty { padding: 46px 20px; text-align: center; color: var(--muted); }
+      .popover-footer { padding: 11px; border-top: 1px solid var(--border); background: var(--surface); }
+      .popover-footer .button { width: 100%; }
+
+      .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+      .page-actions { display: flex; align-items: center; gap: 9px; }
+      .inbox-panel { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+      .inbox-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+      .tabs { display: inline-flex; padding: 3px; border-radius: 9px; background: #edf1f3; }
+      .tab { border: 0; border-radius: 7px; padding: 7px 13px; background: transparent; color: var(--muted); }
+      .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); font-weight: 700; }
+      .inbox-list { min-height: 430px; }
+      .inbox-item { display: grid; grid-template-columns: 44px minmax(0,1fr) 155px 42px; gap: 14px; align-items: start; padding: 17px 18px; border-bottom: 1px solid #edf0f2; transition: background .18s; }
+      .inbox-item.unread { background: #f7fbfa; }
+      .inbox-item.highlight { animation: highlight 1.8s ease; }
+      @keyframes highlight { 0% { background: #dff4ed; } 100% { background: #f7fbfa; } }
+      .inbox-main { min-width: 0; }
+      .inbox-title { display: flex; align-items: center; gap: 8px; font-weight: 750; }
+      .inbox-body { margin-top: 5px; color: #5e6b72; line-height: 1.5; }
+      .inbox-meta { margin-top: 8px; color: #89949a; font-size: 11px; }
+      .inbox-time { color: var(--muted); font-size: 12px; text-align: right; white-space: nowrap; }
+      .row-menu { position: relative; }
+      .row-menu-panel { position: absolute; right: 0; top: 34px; z-index: 8; width: 155px; display: none; padding: 5px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); box-shadow: 0 10px 28px rgba(22,38,34,.12); }
+      .row-menu.open .row-menu-panel { display: block; }
+      .menu-action { width: 100%; border: 0; border-radius: 6px; padding: 8px 9px; background: transparent; text-align: left; color: #47565d; }
+      .menu-action:hover { background: var(--surface-soft); }
+      .menu-action.delete { color: var(--danger); }
+      .inbox-empty { min-height: 420px; display: grid; place-items: center; text-align: center; color: var(--muted); }
+      .empty-icon { width: 52px; height: 52px; display: grid; place-items: center; margin: 0 auto 12px; border-radius: 15px; background: var(--surface-soft); font-size: 24px; }
+      .pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--surface-soft); color: var(--muted); font-size: 12px; }
+      .page-buttons { display: flex; align-items: center; gap: 7px; }
+
+      .prototype-controls { position: fixed; left: 18px; bottom: 18px; z-index: 15; width: 208px; padding: 12px; border: 1px solid #b9cec8; border-radius: 12px; background: rgba(240,248,246,.96); box-shadow: 0 12px 30px rgba(22,52,46,.12); }
+      .prototype-controls strong { display: block; margin-bottom: 4px; font-size: 12px; }
+      .prototype-controls p { margin: 0 0 9px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+      .control-stack { display: grid; gap: 6px; }
+      .control-stack button { padding: 7px 8px; border: 1px solid #c5d8d3; border-radius: 7px; background: white; color: #315149; font-size: 11px; text-align: left; }
+
+      .scrim { position: fixed; inset: 0; z-index: 30; display: none; background: rgba(13,28,25,.28); }
+      .scrim.visible { display: block; }
+      .modal { position: fixed; left: 50%; top: 50%; z-index: 40; width: min(430px,92vw); opacity: 0; pointer-events: none; transform: translate(-50%,-46%) scale(.98); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); transition: .16s; }
+      .modal.open { opacity: 1; pointer-events: auto; transform: translate(-50%,-50%) scale(1); }
+      .modal-header, .modal-body, .modal-actions { padding: 18px 20px; }
+      .modal-header { border-bottom: 1px solid var(--border); }
+      .modal-header h2 { margin: 0; font-size: 17px; }
+      .modal-body { color: #526169; line-height: 1.6; }
+      .modal-actions { display: flex; justify-content: flex-end; gap: 9px; border-top: 1px solid var(--border); }
+      .toast { position: fixed; right: 22px; bottom: 22px; z-index: 60; max-width: min(380px,90vw); padding: 12px 15px; border-radius: 10px; background: #183f37; color: white; box-shadow: var(--shadow); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .18s; }
+      .toast.visible { opacity: 1; transform: translateY(0); }
+
+      @media (max-width: 980px) {
+        .layout { grid-template-columns: 76px minmax(0,1fr); }
+        .sidebar { padding: 18px 8px; }
+        .brand span, .nav span:last-child { display: none; }
+        .brand, .nav { justify-content: center; }
+        .workspace-grid { grid-template-columns: 1fr; }
+        .prototype-controls { width: 170px; }
+      }
+      @media (max-width: 680px) {
+        .header { padding: 0 12px; }
+        .workspace-name, .header-button { display: none; }
+        .layout { display: block; }
+        .sidebar { display: none; }
+        main { padding: 18px 13px 90px; }
+        .popover { position: fixed; top: 64px; right: 0; bottom: 0; width: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; }
+        .popover-header { padding: 18px 16px 14px; }
+        .recent-list { flex: 1; }
+        .workspace-grid { margin-top: 18px; }
+        .hero { min-height: 240px; padding: 22px; }
+        .hero h2 { font-size: 23px; }
+        .page-header { display: block; }
+        .page-actions { margin-top: 13px; }
+        .inbox-toolbar { align-items: flex-start; }
+        .inbox-item { grid-template-columns: 40px minmax(0,1fr) 34px; padding: 15px 13px; gap: 10px; }
+        .inbox-time { grid-column: 2; grid-row: 2; text-align: left; margin-top: -6px; font-size: 11px; }
+        .row-menu { grid-column: 3; grid-row: 1 / span 2; }
+        .prototype-controls { left: 12px; right: 12px; bottom: 12px; width: auto; padding: 9px; }
+        .prototype-controls p { display: none; }
+        .control-stack { grid-template-columns: repeat(3,1fr); }
+        .control-stack button { text-align: center; }
+        .pagination { gap: 10px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header-left"><button class="menu-button" aria-label="打开导航">☰</button><span class="workspace-name">AI application workspace</span></div>
+        <div class="header-actions">
+          <button class="header-button" aria-label="设置">⚙</button>
+          <button class="header-button" aria-label="切换主题">☼</button>
+          <div class="bell-wrap">
+            <button id="bellButton" class="bell-button" aria-haspopup="dialog" aria-expanded="false"><span aria-hidden="true">♢</span><span id="bellBadge" class="badge"></span></button>
+            <section id="bellPopover" class="popover" role="dialog" aria-labelledby="bellTitle">
+              <div class="popover-header"><div><h2 id="bellTitle">通知</h2><span id="popoverCount"></span></div><button id="markAllPopover" class="button ghost small">全部已读</button></div>
+              <div id="popoverLive" class="live-strip" hidden><span class="live-dot"></span><span class="live-copy"></span></div>
+              <div id="recentList" class="recent-list"></div>
+              <div class="popover-footer"><button id="viewAllButton" class="button">查看全部通知</button></div>
+            </section>
+          </div>
+          <button class="avatar" aria-label="用户菜单">H</button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar"><div class="brand"><div class="brand-mark">N</div><span>NocoBase</span></div><button id="workspaceNav" class="nav active"><span>⌂</span><span>工作台</span></button><button id="inboxNav" class="nav"><span>♢</span><span>我的通知</span></button></aside>
+        <main>
+          <div class="content">
+            <section id="workspaceView">
+              <h1>工作台</h1><p class="subtitle">通知铃铛位于桌面和移动 Header；打开浮层不会自动改变已读状态。</p>
+              <div class="workspace-grid">
+                <article class="hero"><span class="eyebrow">Inbox prototype</span><h2>重要变化及时出现，连接波动不打断当前工作</h2><p>实时事件只负责提醒客户端重新查询。即使短暂断线，已经加载的通知仍然可读，并会在重连后通过 HTTP 与数据库重新对账。</p><button id="heroBell" class="button primary hero-action">打开通知铃铛</button></article>
+                <article class="card"><h3>体验契约</h3><ul class="check-list"><li>铃铛与 Inbox 共用未读数</li><li>显式操作才改变已读状态</li><li>删除不影响投递记录</li><li>序号缺口触发 HTTP 对账</li></ul></article>
+              </div>
+            </section>
+
+            <section id="inboxView" hidden>
+              <div class="page-header"><div><h1>我的通知</h1><p class="subtitle">查看站内通知；Delivery 和 Email 状态不会暴露在用户 Inbox 中。</p></div><div class="page-actions"><button id="refreshInbox" class="button">刷新</button><button id="markAllPage" class="button primary">全部已读</button></div></div>
+              <div id="pageLive" class="live-strip" hidden><span class="live-dot"></span><span class="live-copy"></span></div>
+              <div class="inbox-panel">
+                <div class="inbox-toolbar"><div class="tabs" role="tablist"><button class="tab active" data-filter="all">全部</button><button class="tab" data-filter="unread">未读</button></div><div><select id="channelFilter" class="button" aria-label="按通知 Channel 筛选"><option value="all">所有类型</option><option value="inApp">站内信</option><option value="email">邮件</option></select> <span id="pageCount" class="subtitle"></span></div></div>
+                <div id="inboxList" class="inbox-list"></div>
+                <div class="pagination"><span id="pageSummary"></span><div class="page-buttons"><button id="prevPage" class="button small">上一页</button><span id="pageNumber"></span><button id="nextPage" class="button small">下一页</button></div></div>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <aside class="prototype-controls" aria-label="原型实时状态控制">
+      <strong>原型控制</strong><p>模拟 Live Event 与 HTTP 对账，不会连接服务器。</p>
+      <div class="control-stack"><button id="simulateEvent">＋ 新通知事件</button><button id="simulateDisconnect">↻ 模拟断线</button><button id="simulateGap">⇄ 序号缺口</button></div>
+    </aside>
+
+    <div id="scrim" class="scrim"></div>
+    <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-header"><h2 id="modalTitle">删除通知？</h2></div><div id="modalBody" class="modal-body"></div><div class="modal-actions"><button id="cancelModal" class="button">取消</button><button id="confirmDelete" class="button danger">删除</button></div></div>
+    <div id="toast" class="toast" role="status"></div>
+
+    <script>
+      let items = [
+        { id: "inb_101", icon: "✓", title: "采购申请已通过", body: "你的采购申请 PR-2026-0818 已完成审批。", time: "2 分钟前", read: false, source: "审批流程", channels: ["inApp", "email"], actionUrl: "/approvals/PR-2026-0818" },
+        { id: "inb_102", icon: "!", title: "库存低于安全阈值", body: "华东仓库的零件 A-184 当前库存为 12，请及时补货。", time: "18 分钟前", read: false, source: "库存监控", channels: ["inApp"], actionUrl: "/inventory/A-184" },
+        { id: "inb_103", icon: "↗", title: "客户合同等待签署", body: "合同 CT-2048 已由法务确认，正在等待你的签署。", time: "1 小时前", read: false, source: "合同工作流", channels: ["email"], actionUrl: "/contracts/CT-2048" },
+        { id: "inb_104", icon: "✓", title: "数据导入完成", body: "本次导入已创建 1,284 条记录，跳过 3 条重复数据。", time: "3 小时前", read: true, source: "数据管理", channels: ["inApp"], actionUrl: "/imports/job-882" },
+        { id: "inb_105", icon: "i", title: "系统维护窗口", body: "本周六 02:00–03:00 将进行例行维护。", time: "昨天", read: true, source: "系统", channels: ["inApp", "email"], actionUrl: null },
+        { id: "inb_106", icon: "✓", title: "报销单已付款", body: "报销单 ER-9281 已完成付款。", time: "昨天", read: true, source: "财务流程", channels: ["email"], actionUrl: "/expenses/ER-9281" },
+        { id: "inb_107", icon: "↗", title: "任务即将到期", body: "任务“确认第三季度预算”将在明天 18:00 到期。", time: "2 天前", read: true, source: "任务", channels: ["inApp"], actionUrl: "/tasks/7782" },
+        { id: "inb_108", icon: "i", title: "权限申请已提交", body: "你的数据导出权限申请正在等待管理员处理。", time: "2 天前", read: true, source: "权限", channels: ["inApp"], actionUrl: "/requests/acl-332" },
+        { id: "inb_109", icon: "✓", title: "月度报告已生成", body: "七月运营报告已经生成，可以下载查看。", time: "3 天前", read: true, source: "报告", channels: ["email"], actionUrl: "/reports/monthly-2026-07" }
+      ];
+      const state = { view: "workspace", bellOpen: false, filter: "all", channel: "all", page: 1, perPage: 5, live: "connected", deleteId: null, highlightedId: null };
+      const $ = (id) => document.getElementById(id);
+      const unreadCount = () => items.filter((item) => !item.read).length;
+
+      function liveText() {
+        if (state.live === "reconnecting") return "实时连接已断开，正在重连；当前内容仍可使用";
+        if (state.live === "syncing") return "检测到事件缺口，正在通过 HTTP 同步最新通知";
+        return "实时更新已连接";
+      }
+
+      function renderLive() {
+        [$("popoverLive"), $("pageLive")].forEach((element) => {
+          element.hidden = state.live === "connected";
+          element.className = `live-strip ${state.live === "connected" ? "" : state.live}`;
+          element.querySelector(".live-copy").textContent = liveText();
+        });
+      }
+
+      function channelBadges(item) {
+        return `<span class="channel-badges">${item.channels.map((channel) => `<span class="channel-badge ${channel}">${channel === "inApp" ? "站内信" : "邮件"}</span>`).join("")}</span>`;
+      }
+
+      function renderBadge() {
+        const count = unreadCount();
+        $("bellBadge").hidden = count === 0;
+        $("bellBadge").textContent = count > 99 ? "99+" : String(count);
+        $("bellButton").setAttribute("aria-label", count ? `${count} 条未读通知` : "没有未读通知");
+        $("popoverCount").textContent = count ? `${count} 条未读` : "全部已读";
+        $("markAllPopover").disabled = count === 0;
+        $("markAllPage").disabled = count === 0;
+      }
+
+      function itemMarkup(item, compact = false) {
+        if (compact) return `<article class="recent-item ${item.read ? "" : "unread"}" data-id="${item.id}"><div class="notice-icon">${item.icon}</div><button class="notice-main open-notice" data-id="${item.id}"><div class="notice-title">${item.title}${item.read ? "" : `<span class="unread-label">未读</span>`}</div><div class="notice-body">${item.body}</div>${channelBadges(item)}<div class="notice-time">${item.time} · ${item.source}</div></button><button class="icon-button item-menu-button" data-id="${item.id}" aria-label="通知操作">•••</button></article>`;
+        return `<article class="inbox-item ${item.read ? "" : "unread"} ${state.highlightedId === item.id ? "highlight" : ""}" data-id="${item.id}"><div class="notice-icon">${item.icon}</div><button class="notice-main inbox-main open-notice" data-id="${item.id}"><div class="inbox-title">${item.title}${item.read ? "" : `<span class="unread-label">未读</span>`}</div><div class="inbox-body">${item.body}</div>${channelBadges(item)}<div class="inbox-meta">${item.source}${item.actionUrl ? " · 点击查看详情" : ""}</div></button><div class="inbox-time">${item.time}</div><div class="row-menu"><button class="icon-button row-menu-trigger" aria-label="通知操作">•••</button><div class="row-menu-panel"><button class="menu-action toggle-read" data-id="${item.id}">${item.read ? "标为未读" : "标为已读"}</button><button class="menu-action delete" data-id="${item.id}">删除</button></div></div></article>`;
+      }
+
+      function bindCommonActions(root) {
+        root.querySelectorAll(".open-notice").forEach((button) => button.addEventListener("click", () => openNotice(button.dataset.id)));
+        root.querySelectorAll(".item-menu-button").forEach((button) => button.addEventListener("click", (event) => {
+          event.stopPropagation(); const item = items.find((value) => value.id === button.dataset.id); toggleRead(item.id); showToast(item.read ? "已标为已读" : "已标为未读");
+        }));
+      }
+
+      function renderRecent() {
+        const recent = items.slice(0, 5);
+        $("recentList").innerHTML = recent.length ? recent.map((item) => itemMarkup(item, true)).join("") : `<div class="popover-empty"><div class="empty-icon">♢</div>暂时没有通知</div>`;
+        bindCommonActions($("recentList"));
+      }
+
+      function renderInbox() {
+        const filtered = items.filter((item) => (state.filter === "all" || !item.read) && (state.channel === "all" || item.channels.includes(state.channel)));
+        const maxPage = Math.max(1, Math.ceil(filtered.length / state.perPage));
+        state.page = Math.min(state.page, maxPage);
+        const pageItems = filtered.slice((state.page - 1) * state.perPage, state.page * state.perPage);
+        $("inboxList").innerHTML = pageItems.length ? pageItems.map((item) => itemMarkup(item)).join("") : `<div class="inbox-empty"><div><div class="empty-icon">✓</div><strong>${state.filter === "unread" ? "没有未读通知" : "暂时没有通知"}</strong><p>${state.filter === "unread" ? "新的未读通知会出现在这里。" : "收到站内通知后会在这里显示。"}</p></div></div>`;
+        $("pageCount").textContent = `${items.length} 条通知 · ${unreadCount()} 条未读`;
+        $("pageSummary").textContent = `显示 ${pageItems.length} / ${filtered.length} 条`;
+        $("pageNumber").textContent = `${state.page} / ${maxPage}`;
+        $("prevPage").disabled = state.page === 1;
+        $("nextPage").disabled = state.page === maxPage;
+        document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.filter === state.filter));
+        bindCommonActions($("inboxList"));
+        $("inboxList").querySelectorAll(".row-menu-trigger").forEach((button) => button.addEventListener("click", (event) => { event.stopPropagation(); const menu = button.closest(".row-menu"); document.querySelectorAll(".row-menu.open").forEach((other) => { if (other !== menu) other.classList.remove("open"); }); menu.classList.toggle("open"); }));
+        $("inboxList").querySelectorAll(".toggle-read").forEach((button) => button.addEventListener("click", () => { toggleRead(button.dataset.id); showToast("已更新通知状态"); }));
+        $("inboxList").querySelectorAll(".delete").forEach((button) => button.addEventListener("click", () => openDelete(button.dataset.id)));
+      }
+
+      function renderAll() { renderBadge(); renderRecent(); renderInbox(); renderLive(); }
+
+      function setBell(open) {
+        state.bellOpen = open;
+        $("bellPopover").classList.toggle("open", open);
+        $("bellButton").classList.toggle("active", open);
+        $("bellButton").setAttribute("aria-expanded", String(open));
+        if (open) $("markAllPopover").focus();
+      }
+
+      function setView(view) {
+        state.view = view;
+        $("workspaceView").hidden = view !== "workspace";
+        $("inboxView").hidden = view !== "inbox";
+        $("workspaceNav").classList.toggle("active", view === "workspace");
+        $("inboxNav").classList.toggle("active", view === "inbox");
+        setBell(false);
+        if (view === "inbox") renderInbox();
+      }
+
+      function toggleRead(id, force) {
+        const item = items.find((value) => value.id === id);
+        if (!item) return;
+        item.read = force === undefined ? !item.read : force;
+        renderAll();
+      }
+
+      function openNotice(id) {
+        const item = items.find((value) => value.id === id);
+        if (!item) return;
+        if (!item.read) item.read = true;
+        renderAll();
+        setBell(false);
+        showToast(item.actionUrl ? `已读；将导航到 ${item.actionUrl}` : "已标为已读");
+      }
+
+      function markAllRead() {
+        items.forEach((item) => { item.read = true; });
+        renderAll();
+        showToast("所有通知已标为已读");
+      }
+
+      function openDelete(id) {
+        const item = items.find((value) => value.id === id);
+        state.deleteId = id;
+        $("modalBody").innerHTML = `“<strong>${item.title}</strong>”将从你的 Inbox 中删除。该操作不会取消或删除后台投递记录。`;
+        $("modal").classList.add("open");
+        $("scrim").classList.add("visible");
+        $("confirmDelete").focus();
+      }
+
+      function closeModal() { state.deleteId = null; $("modal").classList.remove("open"); $("scrim").classList.remove("visible"); }
+      function showToast(message) { $("toast").textContent = message; $("toast").classList.add("visible"); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => $("toast").classList.remove("visible"), 2600); }
+
+      function simulateIncoming() {
+        if (state.live !== "connected") { showToast("实时连接未就绪；等待 HTTP 对账"); return; }
+        state.live = "syncing"; renderLive();
+        setTimeout(() => {
+          const next = { id: `inb_${Date.now()}`, icon: "+", title: "你有一个新的待办任务", body: "任务“核对供应商报价”已分配给你。", time: "刚刚", read: false, source: "任务", channels: ["inApp"], actionUrl: "/tasks/new" };
+          items.unshift(next); state.highlightedId = next.id; state.page = 1; state.live = "connected"; renderAll(); showToast("已通过 HTTP 获取 1 条新通知"); setTimeout(() => { state.highlightedId = null; renderInbox(); }, 1900);
+        }, 650);
+      }
+
+      function simulateDisconnect() {
+        state.live = "reconnecting"; renderLive(); showToast("连接中断，缓存内容仍然可用");
+        setTimeout(() => { state.live = "connected"; renderLive(); showToast("实时更新已恢复，短期事件已重放"); }, 1600);
+      }
+
+      function simulateGap() {
+        state.live = "syncing"; renderLive(); showToast("收到 resync_required，正在 HTTP 对账");
+        setTimeout(() => {
+          if (!items.some((item) => item.id === "inb_gap")) items.unshift({ id: "inb_gap", icon: "i", title: "对账发现一条遗漏通知", body: "这条通知模拟 WebSocket 断线期间已写入数据库的用户通知记录。", time: "刚刚", read: false, source: "HTTP 对账", channels: ["email"], actionUrl: null });
+          state.live = "connected"; state.page = 1; renderAll(); showToast("同步完成，未读数和列表已更新");
+        }, 1300);
+      }
+
+      $("bellButton").addEventListener("click", () => setBell(!state.bellOpen));
+      $("heroBell").addEventListener("click", () => setBell(true));
+      $("viewAllButton").addEventListener("click", () => setView("inbox"));
+      $("workspaceNav").addEventListener("click", () => setView("workspace"));
+      $("inboxNav").addEventListener("click", () => setView("inbox"));
+      $("markAllPopover").addEventListener("click", markAllRead);
+      $("markAllPage").addEventListener("click", markAllRead);
+      $("refreshInbox").addEventListener("click", () => { state.live = "syncing"; renderLive(); setTimeout(() => { state.live = "connected"; renderLive(); showToast("已通过 HTTP 刷新通知"); }, 700); });
+      document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click", () => { state.filter = tab.dataset.filter; state.page = 1; renderInbox(); }));
+      $("channelFilter").addEventListener("change", (event) => { state.channel = event.target.value; state.page = 1; renderInbox(); });
+      $("prevPage").addEventListener("click", () => { state.page -= 1; renderInbox(); });
+      $("nextPage").addEventListener("click", () => { state.page += 1; renderInbox(); });
+      $("cancelModal").addEventListener("click", closeModal);
+      $("scrim").addEventListener("click", closeModal);
+      $("confirmDelete").addEventListener("click", () => { items = items.filter((item) => item.id !== state.deleteId); closeModal(); renderAll(); showToast("通知已从 Inbox 删除"); });
+      $("simulateEvent").addEventListener("click", simulateIncoming);
+      $("simulateDisconnect").addEventListener("click", simulateDisconnect);
+      $("simulateGap").addEventListener("click", simulateGap);
+      document.addEventListener("click", (event) => { if (!event.target.closest(".row-menu")) document.querySelectorAll(".row-menu.open").forEach((menu) => menu.classList.remove("open")); if (state.bellOpen && !event.target.closest(".bell-wrap") && event.target !== $("heroBell")) setBell(false); });
+      document.addEventListener("keydown", (event) => { if (event.key === "Escape") { setBell(false); closeModal(); } });
+
+      renderAll();
+    </script>
+  </body>
+</html>

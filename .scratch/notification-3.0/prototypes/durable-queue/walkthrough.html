@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE — 通知队列恢复模型</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #17213a;
+        --muted: #667085;
+        --line: #d8deea;
+        --paper: #ffffff;
+        --wash: #f3f6fb;
+        --accent: #3459d6;
+        --accent-soft: #e9eeff;
+        --danger: #b42318;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--wash);
+        color: var(--ink);
+        font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { width: min(1120px, calc(100% - 32px)); margin: 40px auto 80px; }
+      h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 42px); letter-spacing: -0.035em; }
+      h2 { margin: 0 0 16px; font-size: 18px; }
+      p { margin: 0; }
+      .intro { max-width: 820px; color: var(--muted); }
+      .warning { margin-top: 16px; color: var(--danger); font-weight: 650; }
+      .card { margin-top: 24px; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+      .state-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+      .field { min-height: 78px; padding: 12px; border-radius: 10px; background: var(--wash); }
+      .field span { display: block; color: var(--muted); font-size: 12px; }
+      .field strong { display: block; margin-top: 5px; overflow-wrap: anywhere; }
+      .notice { margin: 14px 0 0; padding: 11px 13px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { padding: 9px 7px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-weight: 600; }
+      .empty { color: var(--muted); padding: 14px 0; }
+      .actions { display: flex; flex-wrap: wrap; gap: 9px; }
+      button { padding: 9px 13px; border: 1px solid #bdc7da; border-radius: 9px; background: white; color: var(--ink); cursor: pointer; font: inherit; }
+      button:hover { border-color: var(--accent); color: var(--accent); }
+      button.primary { border-color: var(--accent); background: var(--accent); color: white; }
+      button:disabled { opacity: .45; cursor: default; }
+      .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+      .tabs button[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+      .scenario-description { color: var(--muted); margin-bottom: 14px; }
+      .step { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+      .step:last-child { border-bottom: 0; }
+      .step-number { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--wash); color: var(--muted); font-size: 12px; }
+      .step.done .step-number { background: var(--accent); color: white; }
+      .step.future { opacity: .5; }
+      @media (max-width: 780px) {
+        .state-grid, .split { grid-template-columns: 1fr 1fr; }
+      }
+      @media (max-width: 520px) {
+        .state-grid, .split { grid-template-columns: 1fr; }
+        .step { grid-template-columns: 28px 1fr; }
+        .step button { grid-column: 2; justify-self: start; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>通知队列恢复模型</h1>
+      <p class="intro">这个一次性原型用来确认：任务领取和真正发送分开后，系统能安全恢复“还没调用 SMTP”的崩溃，同时把“可能已经提交”的崩溃停在人工处理状态。</p>
+      <p class="warning">PROTOTYPE：这是决策演示，不是生产界面或实现。</p>
+
+      <section class="card">
+        <h2>当前 Delivery</h2>
+        <div class="state-grid" id="state"></div>
+        <p class="notice" id="notice"></p>
+        <div class="split">
+          <div>
+            <h2>DeliveryAttempt</h2>
+            <div id="attempts"></div>
+          </div>
+          <div>
+            <h2>状态事件</h2>
+            <div id="events"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>自由操作</h2>
+        <div class="actions" id="free-actions"></div>
+      </section>
+
+      <section class="card">
+        <h2>引导场景</h2>
+        <div class="tabs" id="tabs"></div>
+        <p class="scenario-description" id="scenario-description"></p>
+        <div id="steps"></div>
+      </section>
+    </main>
+
+    <script>
+      // Portable pure state machine. The DOM shell below only dispatches actions and renders snapshots.
+      const QueueModel = (() => {
+        const chain = ['生产 SMTP', '备用 SMTP'];
+        const retryDelay = [30, 120];
+
+        function initial() {
+          return {
+            status: 'queued',
+            providerIndex: 0,
+            attemptsOnProvider: 0,
+            now: 0,
+            nextRunAt: 0,
+            leaseOwner: null,
+            leaseUntil: null,
+            attempts: [],
+            events: [],
+            notice: 'Delivery 已持久化，等待 Worker 领取。',
+          };
+        }
+
+        function event(state, from, to, reason) {
+          state.events.push({ from, to, reason, at: state.now });
+        }
+
+        function illegal(state, message) {
+          state.notice = `操作被拒绝：${message}`;
+          return state;
+        }
+
+        function reduce(previous, action) {
+          const state = structuredClone(previous);
+          if (action.type === 'reset') return initial();
+
+          if (action.type === 'claim') {
+            if (state.status !== 'queued') return illegal(state, '只有 queued 可以领取。');
+            if (state.now < state.nextRunAt) return illegal(state, '重试等待时间尚未到达。');
+            if (state.leaseOwner && state.leaseUntil > state.now) return illegal(state, '已有 Worker 持有有效租约。');
+            state.leaseOwner = action.worker ?? 'worker-a';
+            state.leaseUntil = state.now + 30;
+            state.notice = `${state.leaseOwner} 已领取任务，但还没有创建 Attempt 或调用 SMTP。`;
+            return state;
+          }
+
+          if (action.type === 'renew') {
+            if (!state.leaseOwner || state.leaseUntil <= state.now) return illegal(state, '没有可续租的有效租约。');
+            state.leaseUntil = state.now + 30;
+            state.notice = '当前 Worker 已续租 30 秒。';
+            return state;
+          }
+
+          if (action.type === 'begin') {
+            if (state.status !== 'queued' || !state.leaseOwner || state.leaseUntil <= state.now) {
+              return illegal(state, '必须由持有有效租约的 Worker 开始 Attempt。');
+            }
+            state.status = 'sending';
+            state.attemptsOnProvider += 1;
+            state.attempts.push({
+              number: state.attempts.length + 1,
+              provider: chain[state.providerIndex],
+              status: 'sending',
+            });
+            event(state, 'queued', 'sending', 'attempt_started');
+            state.notice = '已进入可能调用 SMTP 的区域；从现在起崩溃不能自动重发。';
+            return state;
+          }
+
+          if (action.type === 'fail') {
+            if (state.status !== 'sending') return illegal(state, '没有执行中的 Attempt。');
+            state.attempts.at(-1).status = 'failed(network)';
+            const from = state.status;
+            state.leaseOwner = null;
+            state.leaseUntil = null;
+            if (state.attemptsOnProvider < 3) {
+              const delay = retryDelay[state.attemptsOnProvider - 1];
+              state.status = 'queued';
+              state.nextRunAt = state.now + delay;
+              event(state, from, 'queued', `retry_in_${delay}s`);
+              state.notice = `当前 Provider 明确失败，${delay} 秒后可重试。`;
+            } else if (state.providerIndex + 1 < chain.length) {
+              state.status = 'queued';
+              state.providerIndex += 1;
+              state.attemptsOnProvider = 0;
+              state.nextRunAt = state.now;
+              event(state, from, 'queued', 'provider_fallback');
+              state.notice = `当前 Provider 三次失败，切换到 ${chain[state.providerIndex]}。`;
+            } else {
+              state.status = 'failed';
+              event(state, from, 'failed', 'provider_chain_exhausted');
+              state.notice = '所有 Provider 均已耗尽。';
+            }
+            return state;
+          }
+
+          if (action.type === 'accept') {
+            if (state.status !== 'sending') return illegal(state, '没有执行中的 Attempt。');
+            state.attempts.at(-1).status = 'accepted';
+            state.status = 'accepted';
+            state.leaseOwner = null;
+            state.leaseUntil = null;
+            event(state, 'sending', 'accepted', 'smtp_final_response');
+            state.notice = 'SMTP 返回最终成功响应；状态是 accepted，不是 delivered。';
+            return state;
+          }
+
+          if (action.type === 'advance') {
+            state.now = Math.max(state.now, state.nextRunAt);
+            state.notice = `数据库时间推进到 ${state.now} 秒。`;
+            return state;
+          }
+
+          if (action.type === 'crashAndRecover') {
+            if (!state.leaseOwner) return illegal(state, '当前没有 Worker 租约。');
+            state.now = state.leaseUntil;
+            state.leaseOwner = null;
+            state.leaseUntil = null;
+            if (state.status === 'queued') {
+              event(state, 'queued', 'queued', 'lease_expired_before_attempt');
+              state.notice = 'Worker 在创建 Attempt 前崩溃；租约清除，Delivery 可安全重新领取。';
+            } else if (state.status === 'sending') {
+              state.status = 'submission_unknown';
+              state.attempts.at(-1).status = 'submission_unknown';
+              event(state, 'sending', 'submission_unknown', 'sending_lease_expired');
+              state.notice = '可能已经调用 SMTP；系统停止自动重试和 Fallback。';
+            } else {
+              return illegal(state, '当前状态不参与租约恢复。');
+            }
+            return state;
+          }
+
+          if (action.type === 'manualRetry') {
+            if (!['submission_unknown', 'failed'].includes(state.status)) {
+              return illegal(state, '只有 failed 或 submission_unknown 可人工重投。');
+            }
+            const from = state.status;
+            state.status = 'queued';
+            state.nextRunAt = state.now;
+            event(state, from, 'queued', 'manual_retry_confirmed');
+            state.notice = '管理员已确认重复发送风险，Delivery 重新排队。';
+            return state;
+          }
+          return illegal(state, '未知操作。');
+        }
+
+        return { initial, reduce, chain };
+      })();
+
+      const actionLabels = {
+        claim: 'Worker 领取',
+        renew: '续租',
+        begin: '创建 Attempt / 开始发送',
+        fail: '明确网络失败',
+        accept: 'SMTP 最终接受',
+        advance: '推进到可重试时间',
+        crashAndRecover: '模拟崩溃并回收',
+        manualRetry: '确认风险并人工重投',
+        reset: '重置',
+      };
+
+      const scenarios = [
+        {
+          name: '正常接受',
+          description: '观察领取本身不创建 Attempt；只有开始发送后才进入 sending，SMTP 最终响应将其推进到 accepted。',
+          actions: ['claim', 'begin', 'accept'],
+        },
+        {
+          name: '三次失败后 Fallback',
+          description: '同一 SMTP 最多三次 Attempt，等待 30 秒和 2 分钟；第三次失败后切换备用 SMTP。',
+          actions: ['claim', 'begin', 'fail', 'advance', 'claim', 'begin', 'fail', 'advance', 'claim', 'begin', 'fail', 'claim', 'begin', 'accept'],
+        },
+        {
+          name: '发送前崩溃',
+          description: 'Worker 已领取但尚未创建 Attempt，租约过期后可以安全恢复为 queued。',
+          actions: ['claim', 'crashAndRecover', 'claim'],
+        },
+        {
+          name: '发送中崩溃',
+          description: 'Attempt 已创建后无法证明 SMTP 是否收到数据，因此恢复到 submission_unknown，而不是自动重发。',
+          actions: ['claim', 'begin', 'crashAndRecover', 'manualRetry'],
+        },
+      ];
+
+      let state = QueueModel.initial();
+      let activeScenario = 0;
+      let scenarioStep = 0;
+
+      function dispatch(type) {
+        state = QueueModel.reduce(state, { type });
+        render();
+      }
+
+      function selectScenario(index) {
+        activeScenario = index;
+        scenarioStep = 0;
+        state = QueueModel.initial();
+        state.notice = `场景“${scenarios[index].name}”已重置。`;
+        render();
+      }
+
+      function runScenarioStep(index) {
+        if (index !== scenarioStep) return;
+        dispatch(scenarios[activeScenario].actions[index]);
+        scenarioStep += 1;
+        render();
+      }
+
+      function field(label, value) {
+        return `<div class="field"><span>${label}</span><strong>${value}</strong></div>`;
+      }
+
+      function renderTable(rows, columns) {
+        if (!rows.length) return '<p class="empty">暂无记录</p>';
+        return `<table><thead><tr>${columns.map((column) => `<th>${column.label}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td>${row[column.key]}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      }
+
+      function render() {
+        document.querySelector('#state').innerHTML = [
+          field('Delivery 状态', state.status),
+          field('当前 Provider', QueueModel.chain[state.providerIndex] ?? '无'),
+          field('当前 Provider Attempt', `${state.attemptsOnProvider} / 3`),
+          field('数据库时间', `${state.now} 秒`),
+          field('租约持有者', state.leaseOwner ?? '无'),
+          field('租约到期', state.leaseUntil == null ? '无' : `${state.leaseUntil} 秒`),
+          field('下次可领取', `${state.nextRunAt} 秒`),
+          field('Provider Chain', QueueModel.chain.join(' → ')),
+        ].join('');
+        document.querySelector('#notice').textContent = state.notice;
+        document.querySelector('#attempts').innerHTML = renderTable(state.attempts, [
+          { key: 'number', label: '#' }, { key: 'provider', label: 'Provider' }, { key: 'status', label: '结果' },
+        ]);
+        document.querySelector('#events').innerHTML = renderTable(state.events, [
+          { key: 'at', label: '时间' }, { key: 'from', label: '从' }, { key: 'to', label: '到' }, { key: 'reason', label: '原因' },
+        ]);
+
+        document.querySelector('#free-actions').innerHTML = Object.keys(actionLabels).map((type) =>
+          `<button data-action="${type}" class="${type === 'reset' ? 'primary' : ''}">${actionLabels[type]}</button>`,
+        ).join('');
+        document.querySelectorAll('[data-action]').forEach((button) => {
+          button.addEventListener('click', () => dispatch(button.dataset.action));
+        });
+
+        document.querySelector('#tabs').innerHTML = scenarios.map((scenario, index) =>
+          `<button data-scenario="${index}" aria-selected="${index === activeScenario}">${scenario.name}</button>`,
+        ).join('');
+        document.querySelectorAll('[data-scenario]').forEach((button) => {
+          button.addEventListener('click', () => selectScenario(Number(button.dataset.scenario)));
+        });
+
+        const scenario = scenarios[activeScenario];
+        document.querySelector('#scenario-description').textContent = scenario.description;
+        document.querySelector('#steps').innerHTML = scenario.actions.map((action, index) => {
+          const status = index < scenarioStep ? 'done' : index > scenarioStep ? 'future' : '';
+          return `<div class="step ${status}"><span class="step-number">${index + 1}</span><span>${actionLabels[action]}</span><button data-step="${index}" ${index !== scenarioStep ? 'disabled' : ''}>执行</button></div>`;
+        }).join('');
+        document.querySelectorAll('[data-step]').forEach((button) => {
+          button.addEventListener('click', () => runScenarioStep(Number(button.dataset.step)));
+        });
+      }
+
+      render();
+    </script>
+  </body>
+</html>

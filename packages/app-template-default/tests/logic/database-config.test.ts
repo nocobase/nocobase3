@@ -17,6 +17,7 @@ import database from '../../server/config/database.ts';
 import drive from '../../server/config/drive.ts';
 import logger from '../../server/config/logger.ts';
 import queue from '../../server/config/queue.ts';
+import notification from '../../registry/notification/config/server.ts';
 import server from '../../server/config/server.ts';
 import spa from '../../server/config/spa.ts';
 import { createStandaloneRuntime } from '../../server/index.ts';
@@ -45,8 +46,38 @@ describe('template config registry', () => {
     expect(config.drive.default).toBe('local');
     expect(config.logger.default).toBe('app');
     expect(config.queue.default).toBe('sync');
+    expect(config.notification.enabled).toBe(true);
     expect(config.server.host).toBe('127.0.0.1');
     expect(config.spa.indexPath).toBe('/tmp/app-template-default/dist/client/index.html');
+  });
+});
+
+describe('notification config', () => {
+  it('enables persistent notifications by default and requires an explicit development override', () => {
+    const config = notification({
+      env: createConfigEnv({}),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config).toEqual({
+      enabled: true,
+      allowNonPersistentStore: false,
+    });
+  });
+
+  it('maps notification activation env values', () => {
+    const config = notification({
+      env: createConfigEnv({
+        NOTIFICATION_ENABLED: 'false',
+        NOTIFICATION_ALLOW_NON_PERSISTENT_STORE: 'true',
+      }),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config).toEqual({
+      enabled: false,
+      allowNonPersistentStore: true,
+    });
   });
 });
 
@@ -606,6 +637,10 @@ describe('database migrations', () => {
       expect.objectContaining({
         name: '202608180001_create_app_settings_table',
         fileName: '202608180001_create_app_settings_table.ts',
+      }),
+      expect.objectContaining({
+        name: '202608190001_create_notification_tables',
+        fileName: '202608190001_create_notification_tables.ts',
       }),
     ]);
   });

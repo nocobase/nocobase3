@@ -14,6 +14,7 @@ export interface StandaloneServerOptions {
 }
 
 export interface StandaloneServer extends Hono {
+  start(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -31,8 +32,19 @@ export function startServer(): void {
 
 async function startServerAsync(): Promise<void> {
   const runtime = createStandaloneRuntime();
-  await prepareAppRuntime(runtime);
-  const app = createStandaloneAppFromRuntime(runtime);
+  let app: StandaloneServer | undefined;
+  try {
+    await prepareAppRuntime(runtime);
+    app = createStandaloneAppFromRuntime(runtime);
+    await app.start();
+  } catch (error: unknown) {
+    if (app) {
+      await app.close();
+    } else {
+      await runtime.dispose();
+    }
+    throw error;
+  }
   const { config } = runtime;
 
   const server = serve(
@@ -63,10 +75,8 @@ function createStandaloneAppFromRuntime(
   const mounted = mountAppAtPublicBasePath(app, runtime.config.app.publicBasePath);
   const closeApp = mounted.close;
   const close = onceAsync(async () => {
-    await Promise.all([
-      closeApp(),
-      runtime.dispose(),
-    ]);
+    await closeApp();
+    await runtime.dispose();
   });
 
   return Object.assign(mounted, { close });

@@ -12,6 +12,8 @@ const serverEnvKeys = new Set([
   "APP_SERVER_PORT",
   "APP_SERVER_START_LOG",
   "NOCOBASE_API_PROXY_TARGET",
+  "NOTIFICATION_ENABLED",
+  "NOTIFICATION_ALLOW_NON_PERSISTENT_STORE",
   "API_CLIENT_STORAGE_PREFIX",
   "API_CLIENT_STORAGE_TYPE",
   "API_CLIENT_SHARE_TOKEN",
@@ -172,6 +174,8 @@ run("Build server workspace dependencies", "pnpm", [
   "@nocobase/logger",
   "--filter",
   "@nocobase/queue",
+  "--filter",
+  "@nocobase/session",
   "build",
 ]);
 run("Build server", "pnpm", ["exec", "tsc", "-p", "tsconfig.server.json"]);
