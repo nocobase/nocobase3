@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createLoggerManager, createSilentLoggerConfig } from '@nocobase/logger';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
 import { createNotificationModule } from '../../registry/notification/server/index.ts';
+import { createEmailProviderRegistry, createFakeEmailProvider } from '../../registry/notification/providers/index.ts';
 
 describe('notification in-app trigger', () => {
   it('persists and synchronously delivers explicit in-app targets through the queue seam', async () => {
@@ -41,5 +42,27 @@ describe('notification in-app trigger', () => {
     await module.close({ deadlineAt: Date.now() + 1000 });
     await queueManager.close();
     await loggerManager.flushAll();
+  });
+
+  it('delivers user Email and direct Email targets while only user deliveries enter the Inbox', async () => {
+    const queueManager = createQueueManager(createSyncQueueConfig());
+    const loggerManager = createLoggerManager(createSilentLoggerConfig());
+    const provider = createFakeEmailProvider({ instanceId: 'email/fake/primary' });
+    const module = createNotificationModule({ allowNonPersistentStore: true, queueManager, logger: loggerManager.use(),
+      emailProviders: createEmailProviderRegistry([{ id: provider.instanceId, enabled: true, provider }]),
+      resolveUserEmail: async (userId) => userId === 'user-1' ? 'User@One.Example' : undefined,
+    });
+
+    const result = await module.service.trigger({ principalService: 'tests', source: { type: 'test.email' },
+      targets: [{ userId: 'user-1', channels: ['email'] }, { kind: 'email', address: 'direct@example.test' }],
+      content: { email: { subject: 'Hello', text: 'World' } },
+    });
+
+    expect(result.deliveries.map((delivery) => delivery.channel)).toEqual(['email', 'email']);
+    await expect(module.service.store.getDelivery(result.deliveries[0].id)).resolves.toMatchObject({ status: 'accepted', recipientSnapshot: { email: 'user@one.example' } });
+    await expect(module.service.store.listInbox({ userId: 'user-1' })).resolves.toHaveLength(1);
+    expect(provider.messages).toHaveLength(2);
+
+    await module.close({ deadlineAt: Date.now() + 1000 }); await queueManager.close(); await loggerManager.flushAll();
   });
 });

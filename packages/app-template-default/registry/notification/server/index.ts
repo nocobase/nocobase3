@@ -5,12 +5,15 @@ import type { NocoBaseLogger } from '@nocobase/logger';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { Hono } from 'hono';
 import { Job } from '@nocobase/queue';
+import type { EmailProviderRegistry } from '../providers/index.js';
 import {
   createDatabaseNotificationStore,
   createMemoryNotificationStore,
+  type DeliveryRecord,
   type NotificationChannel,
   type NotificationStore,
 } from './domain.js';
+import { dispatchEmailDelivery } from './email-dispatcher.js';
 import { createLivePublishingNotificationStore, type NotificationLiveTarget } from './live.js';
 
 export * from './domain.js';
@@ -43,8 +46,19 @@ export interface NotificationService {
 export interface NotificationTriggerInput {
   readonly principalService: string;
   readonly source: { readonly type: string; readonly referenceId?: string };
-  readonly targets: readonly { readonly userId: string; readonly channels: readonly ['in-app'] }[];
-  readonly content: { readonly title: string; readonly body: string; readonly actionUrl?: string };
+  readonly targets: readonly NotificationTarget[];
+  readonly content: NotificationDirectContent;
+}
+
+export type NotificationTarget =
+  | { readonly kind?: 'user'; readonly userId: string; readonly channels: readonly NotificationChannel[] }
+  | { readonly kind: 'email'; readonly address: string };
+
+export interface NotificationDirectContent {
+  readonly title?: string;
+  readonly body?: string;
+  readonly actionUrl?: string;
+  readonly email?: { readonly subject: string; readonly text: string; readonly html?: string };
 }
 
 export interface NotificationTriggerResult {
@@ -67,6 +81,8 @@ export interface CreateNotificationModuleOptions {
   readonly logger: NocoBaseLogger;
   readonly allowNonPersistentStore?: boolean;
   readonly live?: NotificationLiveTarget;
+  readonly emailProviders?: EmailProviderRegistry;
+  readonly resolveUserEmail?: (userId: string) => Promise<string | undefined>;
 }
 
 export interface NotificationModuleConfig {
@@ -103,6 +119,11 @@ export function createNotificationModule(options: CreateNotificationModuleOption
   class NotificationDeliveryJob extends Job<{ deliveryId: string }> {
     static options = { name: 'NotificationDelivery', queue: 'default' };
     async execute(): Promise<void> {
+      const delivery = await store.getDelivery(this.payload.deliveryId);
+      if (delivery?.channel === 'email' && options.emailProviders) {
+        await dispatchEmailDelivery({ store, providers: options.emailProviders, deliveryId: delivery.id, workerId: 'notification-worker' });
+        return;
+      }
       await dispatchNotificationDelivery(store, this.payload.deliveryId);
     }
   }
@@ -112,17 +133,9 @@ export function createNotificationModule(options: CreateNotificationModuleOption
       validateTrigger(input);
       const now = new Date().toISOString();
       const notificationId = randomUUID();
-      const deliveries = input.targets.map((target) => ({
-        id: randomUUID(), notificationId, channel: 'in-app' as const, recipientKey: `user:${target.userId}`,
-        recipientSnapshot: { kind: 'user', userId: target.userId }, recipientSchemaVersion: 1,
-        contentSnapshot: { title: input.content.title, body: input.content.body, actionUrl: input.content.actionUrl }, contentSchemaVersion: 1,
-        providerChainSnapshot: ['in-app-db'], providerChainSchemaVersion: 1, providerCursor: 0, currentAttempt: 0,
-        status: 'queued' as const, statusChangedAt: now, version: 1, createdAt: now, updatedAt: now,
-      }));
-      const items = deliveries.map((delivery, index) => ({
-        id: randomUUID(), deliveryId: delivery.id, notificationId, userId: input.targets[index].userId, channel: 'in-app' as const,
-        createdAt: now, updatedAt: now, version: 1,
-      }));
+      const expanded = await expandTargets(input, options, notificationId, now);
+      const deliveries = expanded.map((item) => item.delivery);
+      const items = expanded.flatMap((item) => item.userId ? [{ id: randomUUID(), deliveryId: item.delivery.id, notificationId, userId: item.userId, channel: item.delivery.channel, createdAt: now, updatedAt: now, version: 1 }] : []);
       await store.createNotificationBundle({
         notification: { id: notificationId, sourceType: input.source.type, sourceReferenceId: input.source.referenceId,
           principalService: input.principalService, triggeredAt: now, messageMode: 'direct', summaryStatus: 'queued', version: 1, createdAt: now, updatedAt: now },
@@ -191,13 +204,78 @@ export async function dispatchNotificationDelivery(store: NotificationStore, del
 
 function validateTrigger(input: NotificationTriggerInput): void {
   if (!input.principalService || !input.source.type || input.targets.length === 0 || input.targets.length > 1000) throw new NotificationModuleError('NOTIFICATION_TRIGGER_INVALID', 'Trigger requires a service, source, and 1-1000 targets.');
-  if (!input.content.title || !input.content.body || input.content.title.length > 200 || input.content.body.length > 10_000) throw new NotificationModuleError('NOTIFICATION_CONTENT_INVALID', 'In-app title and body are required and bounded.');
   const seen = new Set<string>();
   for (const target of input.targets) {
-    if (!target.userId || target.channels.length !== 1 || target.channels[0] !== 'in-app' || seen.has(target.userId)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Targets must contain unique explicit user IDs and the in-app channel.');
-    seen.add(target.userId);
+    if (target.kind === 'email') {
+      const address = normalizeEmail(target.address);
+      if (!address || seen.has(`email:${address}`)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Direct Email targets must contain unique valid addresses.');
+      seen.add(`email:${address}`);
+      validateEmailContent(input.content);
+      continue;
+    }
+    if (!target.userId || target.channels.length === 0 || new Set(target.channels).size !== target.channels.length) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'User targets require an explicit user ID and unique channels.');
+    for (const channel of target.channels) {
+      const key = `user:${target.userId}:${channel}`;
+      if ((channel !== 'in-app' && channel !== 'email') || seen.has(key)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Expanded user targets must be unique.');
+      seen.add(key);
+      if (channel === 'email') validateEmailContent(input.content);
+    }
+    if (target.channels.includes('in-app') && (!input.content.title || !input.content.body || input.content.title.length > 200 || input.content.body.length > 10_000)) throw new NotificationModuleError('NOTIFICATION_CONTENT_INVALID', 'In-app title and body are required and bounded.');
   }
   if (input.content.actionUrl && (!input.content.actionUrl.startsWith('/') || input.content.actionUrl.startsWith('//'))) throw new NotificationModuleError('NOTIFICATION_ACTION_URL_INVALID', 'In-app actionUrl must be a relative Portal path.');
+}
+
+interface ExpandedTarget {
+  readonly delivery: DeliveryRecord;
+  readonly userId?: string;
+}
+
+async function expandTargets(input: NotificationTriggerInput, options: CreateNotificationModuleOptions, notificationId: string, now: string): Promise<readonly ExpandedTarget[]> {
+  const expanded: ExpandedTarget[] = [];
+  const emailRecipients = new Set<string>();
+  const emailProviderChain = options.emailProviders?.list().filter((instance) => instance.enabled).map((instance) => instance.id) ?? [];
+  for (const target of input.targets) {
+    if (target.kind === 'email') {
+      const address = normalizeEmail(target.address)!;
+      if (emailRecipients.has(address)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Expanded Email recipients must be unique.');
+      emailRecipients.add(address);
+      expanded.push({ delivery: createEmailDelivery(notificationId, address, input.content, emailProviderChain, now) });
+      continue;
+    }
+    for (const channel of target.channels) {
+      if (channel === 'in-app') {
+        expanded.push({ userId: target.userId, delivery: createInAppDelivery(notificationId, target.userId, input.content, now) });
+        continue;
+      }
+      const email = await options.resolveUserEmail?.(target.userId);
+      const normalized = normalizeEmail(email ?? '');
+      if (!normalized) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', `No valid Email address is available for user "${target.userId}".`);
+      if (emailRecipients.has(normalized)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Expanded Email recipients must be unique.');
+      emailRecipients.add(normalized);
+      expanded.push({ userId: target.userId, delivery: createEmailDelivery(notificationId, normalized, input.content, emailProviderChain, now, target.userId) });
+    }
+  }
+  if (expanded.some((item) => item.delivery.channel === 'email') && emailProviderChain.length === 0) throw new NotificationModuleError('NOTIFICATION_EMAIL_PROVIDER_UNAVAILABLE', 'No enabled Email provider is configured.');
+  if (expanded.length > 2000) throw new NotificationModuleError('NOTIFICATION_TRIGGER_INVALID', 'A trigger may expand to at most 2000 deliveries.');
+  return expanded;
+}
+
+function createInAppDelivery(notificationId: string, userId: string, content: NotificationDirectContent, now: string): DeliveryRecord {
+  return { id: randomUUID(), notificationId, channel: 'in-app', recipientKey: `user:${userId}`, recipientSnapshot: { kind: 'user', userId }, recipientSchemaVersion: 1, contentSnapshot: { title: content.title, body: content.body, actionUrl: content.actionUrl }, contentSchemaVersion: 1, providerChainSnapshot: ['in-app-db'], providerChainSchemaVersion: 1, providerCursor: 0, currentAttempt: 0, status: 'queued', statusChangedAt: now, version: 1, createdAt: now, updatedAt: now };
+}
+
+function createEmailDelivery(notificationId: string, address: string, content: NotificationDirectContent, providerChainSnapshot: readonly string[], now: string, userId?: string): DeliveryRecord {
+  const id = randomUUID();
+  return { id, notificationId, channel: 'email', recipientKey: userId ? `user:${userId}` : `email:${address}`, recipientSnapshot: userId ? { kind: 'user', userId, email: address } : { kind: 'email', email: address }, recipientSchemaVersion: 1, contentSnapshot: { ...content.email, messageId: `<${id}@notification.local>` }, contentSchemaVersion: 1, providerChainSnapshot, providerChainSchemaVersion: 1, providerCursor: 0, currentAttempt: 0, status: 'queued', statusChangedAt: now, version: 1, createdAt: now, updatedAt: now };
+}
+
+function validateEmailContent(content: NotificationDirectContent): void {
+  if (!content.email?.subject || !content.email.text || /[\r\n]/.test(content.email.subject) || content.email.subject.length > 998 || content.email.text.length > 100_000 || (content.email.html?.length ?? 0) > 1_048_576) throw new NotificationModuleError('NOTIFICATION_CONTENT_INVALID', 'Email subject and text are required and bounded.');
+}
+
+function normalizeEmail(address: string): string | undefined {
+  const normalized = address.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : undefined;
 }
 
 function createNotificationRouter(): Hono {

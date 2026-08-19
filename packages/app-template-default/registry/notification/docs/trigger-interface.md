@@ -8,15 +8,23 @@
 interface NotificationTriggerInput {
   readonly principalService: string;
   readonly source: { readonly type: string; readonly referenceId?: string };
-  readonly targets: readonly { readonly userId: string; readonly channels: readonly ['in-app'] }[];
-  readonly content: { readonly title: string; readonly body: string; readonly actionUrl?: string };
+  readonly targets: readonly (
+    | { readonly kind?: 'user'; readonly userId: string; readonly channels: readonly ('in-app' | 'email')[] }
+    | { readonly kind: 'email'; readonly address: string }
+  )[];
+  readonly content: {
+    readonly title?: string;
+    readonly body?: string;
+    readonly actionUrl?: string;
+    readonly email?: { readonly subject: string; readonly text: string; readonly html?: string };
+  };
 }
 ```
 
 - `principalService`: trusted in-process caller identity, required. The host integration supplies it; browser callers cannot choose it.
 - `source.type`: business event type, required. It should carry the triggering service namespace, e.g. `workflow.order.created`; `source.referenceId` is the business reference (order number). Together they answer "which service, for which business event" and are the audit attribution dimension.
-- `targets`: 1-1000 receivers, unique `userId`, `channels` is currently exactly `['in-app']`.
-- `content`: `title` ≤ 200 chars, `body` ≤ 10,000 chars, `actionUrl` optional relative Portal path.
+- `targets`: 1-1000 explicit receivers and at most 2000 expanded Deliveries. User targets choose unique In-app/Email Channels; the host resolves user Email addresses before persistence. Direct Email targets never create Inbox items.
+- `content`: In-app `title` ≤ 200 chars, `body` ≤ 10,000 chars, and optional relative `actionUrl`; Email requires a single-line `subject` and `text`, with optional bounded `html`.
 
 ## Result
 
@@ -24,7 +32,7 @@ interface NotificationTriggerInput {
 interface NotificationTriggerResult {
   readonly notificationId: string;
   readonly status: 'queued';
-  readonly deliveries: readonly { readonly id: string; readonly channel: 'in-app'; readonly status: 'queued' }[];
+  readonly deliveries: readonly { readonly id: string; readonly channel: 'in-app' | 'email'; readonly status: 'queued' }[];
 }
 ```
 
@@ -40,7 +48,8 @@ Validation failures throw `NotificationModuleError` with an error code:
 | --- | --- |
 | `NOTIFICATION_TRIGGER_INVALID` | `source.type` missing; targets empty or more than 1000. |
 | `NOTIFICATION_CONTENT_INVALID` | `title` / `body` missing; `title` > 200 chars; `body` > 10,000 chars. |
-| `NOTIFICATION_RECIPIENT_INVALID` | `target.userId` missing or duplicate; `channels` not exactly `['in-app']`. |
+| `NOTIFICATION_RECIPIENT_INVALID` | Missing/duplicate user/channel, invalid or duplicate normalized Email address, or unresolved user Email. |
+| `NOTIFICATION_EMAIL_PROVIDER_UNAVAILABLE` | Email was requested but no enabled Provider Instance is configured. |
 | `NOTIFICATION_ACTION_URL_INVALID` | `actionUrl` not a relative Portal path (must start with `/` and not with `//`). |
 
 ## Example
