@@ -32,6 +32,7 @@ import {
   type NotificationModuleConfig,
 } from '../../registry/notification/server/index.js';
 import { createPortalLiveService, type PortalLiveService } from './portal-live.js';
+import type { NotificationTemplateRegistry } from '../../registry/notification/templates/index.js';
 import { AppSettingsService, UnavailableAppSettingsService, type AppSettings } from './app-settings-store.js';
 import { FileUploadsService, UnavailableFileUploadsService, type FileUploads } from './public-file-storage.js';
 
@@ -57,6 +58,7 @@ export interface CreateAppServicesOptions {
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
   notifications?: NotificationModuleConfig;
+  notificationTemplates?: NotificationTemplateRegistry;
 }
 
 export function createAppServices(options: CreateAppServicesOptions = {}): AppServices {
@@ -85,6 +87,7 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
         database: options.database,
         logger: loggerManager.use().child({ module: 'notification' }),
         queueManager,
+        templates: options.notificationTemplates,
         live: portalLive && options.appId
           ? { publisher: portalLive.publisher, appId: options.appId }
           : undefined,

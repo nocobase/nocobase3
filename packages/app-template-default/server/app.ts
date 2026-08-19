@@ -52,6 +52,7 @@ export function createApp(options: CreateAppOptions = {}): ClosableApp {
     queue: options.queue,
     session: options.session,
     notifications: options.notifications,
+    notificationTemplates: options.notificationTemplates,
   });
   const app = new Hono();
   const websocketServer = new WebSocketServer({ noServer: true });

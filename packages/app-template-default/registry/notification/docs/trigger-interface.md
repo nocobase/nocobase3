@@ -9,22 +9,26 @@ interface NotificationTriggerInput {
   readonly principalService: string;
   readonly source: { readonly type: string; readonly referenceId?: string };
   readonly targets: readonly (
-    | { readonly kind?: 'user'; readonly userId: string; readonly channels: readonly ('in-app' | 'email')[] }
-    | { readonly kind: 'email'; readonly address: string }
+    | { readonly kind?: 'user'; readonly userId: string; readonly channels: readonly ('in-app' | 'email')[]; readonly variables?: Record<string, unknown> }
+    | { readonly kind: 'email'; readonly address: string; readonly variables?: Record<string, unknown> }
   )[];
-  readonly content: {
-    readonly title?: string;
-    readonly body?: string;
-    readonly actionUrl?: string;
-    readonly email?: { readonly subject: string; readonly text: string; readonly html?: string };
-  };
+  readonly message:
+    | { readonly kind: 'content'; readonly content: {
+        readonly title?: string; readonly body?: string; readonly actionUrl?: string;
+        readonly email?: { readonly subject: string; readonly text: string; readonly html?: string };
+      } }
+    | { readonly kind: 'template'; readonly templateKey: string; readonly variables?: Record<string, unknown> };
 }
 ```
 
 - `principalService`: trusted in-process caller identity, required. The host integration supplies it; browser callers cannot choose it.
 - `source.type`: business event type, required. It should carry the triggering service namespace, e.g. `workflow.order.created`; `source.referenceId` is the business reference (order number). Together they answer "which service, for which business event" and are the audit attribution dimension.
 - `targets`: 1-1000 explicit receivers and at most 2000 expanded Deliveries. User targets choose unique In-app/Email Channels; the host resolves user Email addresses before persistence. Direct Email targets never create Inbox items.
-- `content`: In-app `title` ≤ 200 chars, `body` ≤ 10,000 chars, and optional relative `actionUrl`; Email requires a single-line `subject` and `text`, with optional bounded `html`.
+- `message`: direct content and a developer-owned template are mutually exclusive. Template `variables` are common to the notification; target `variables` are validated and rendered per recipient. Every recipient is rendered before persistence, so one invalid recipient rejects the whole trigger.
+- Direct In-app content has `title` ≤ 200 chars, `body` ≤ 10,000 chars, and an optional relative `actionUrl`; Email requires a single-line `subject` and `text`, with optional bounded `html`.
+- Templates are registered in code. Their key/version and SHA-256 content hash are copied into each immutable Delivery snapshot; workers and retries never rerender.
+
+Register the resulting `NotificationTemplateRegistry` through `createApp({ notificationTemplates })` or pass it directly to `createNotificationModule({ templates })`. There is intentionally no template database or CRUD API.
 
 ## Result
 
@@ -51,6 +55,7 @@ Validation failures throw `NotificationModuleError` with an error code:
 | `NOTIFICATION_RECIPIENT_INVALID` | Missing/duplicate user/channel, invalid or duplicate normalized Email address, or unresolved user Email. |
 | `NOTIFICATION_EMAIL_PROVIDER_UNAVAILABLE` | Email was requested but no enabled Provider Instance is configured. |
 | `NOTIFICATION_ACTION_URL_INVALID` | `actionUrl` not a relative Portal path (must start with `/` and not with `//`). |
+| `NOTIFICATION_TEMPLATE_INVALID` | The requested developer template is not registered. |
 
 ## Example
 
@@ -59,7 +64,7 @@ const result = await notificationService.trigger({
   principalService: 'workflow',
   source: { type: 'workflow.order.created', referenceId: '1001' },
   targets: [{ userId: 'u_001', channels: ['in-app'] }],
-  content: { title: '订单已创建', body: '您的订单 1001 已创建', actionUrl: '/orders/1001' },
+  message: { kind: 'content', content: { title: '订单已创建', body: '您的订单 1001 已创建', actionUrl: '/orders/1001' } },
 });
 ```
 

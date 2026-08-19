@@ -6,6 +6,7 @@ import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 import type { SpaHandler } from '@nocobase/app-server/spa';
 import type { NotificationModuleConfig } from '../registry/notification/server/index.js';
+import type { NotificationTemplateRegistry } from '../registry/notification/templates/index.js';
 
 export interface CreateAppOptions {
   appName?: string;
@@ -20,6 +21,7 @@ export interface CreateAppOptions {
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
   notifications?: CreateAppNotificationsOptions;
+  notificationTemplates?: NotificationTemplateRegistry;
   spa?: CreateAppSpaOptions;
   nocoBaseApiUrl?: string | false;
 }

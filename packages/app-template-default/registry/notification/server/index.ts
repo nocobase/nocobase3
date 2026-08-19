@@ -6,6 +6,7 @@ import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { Hono } from 'hono';
 import { Job } from '@nocobase/queue';
 import type { EmailProviderRegistry } from '../providers/index.js';
+import type { NotificationTemplateRegistry, RenderedNotificationTemplate } from '../templates/index.js';
 import {
   createDatabaseNotificationStore,
   createMemoryNotificationStore,
@@ -47,12 +48,16 @@ export interface NotificationTriggerInput {
   readonly principalService: string;
   readonly source: { readonly type: string; readonly referenceId?: string };
   readonly targets: readonly NotificationTarget[];
-  readonly content: NotificationDirectContent;
+  readonly message: NotificationMessageInput;
 }
 
+export type NotificationMessageInput =
+  | { readonly kind: 'content'; readonly content: NotificationDirectContent }
+  | { readonly kind: 'template'; readonly templateKey: string; readonly variables?: Record<string, unknown> };
+
 export type NotificationTarget =
-  | { readonly kind?: 'user'; readonly userId: string; readonly channels: readonly NotificationChannel[] }
-  | { readonly kind: 'email'; readonly address: string };
+  | { readonly kind?: 'user'; readonly userId: string; readonly channels: readonly NotificationChannel[]; readonly variables?: Record<string, unknown> }
+  | { readonly kind: 'email'; readonly address: string; readonly variables?: Record<string, unknown> };
 
 export interface NotificationDirectContent {
   readonly title?: string;
@@ -83,6 +88,7 @@ export interface CreateNotificationModuleOptions {
   readonly live?: NotificationLiveTarget;
   readonly emailProviders?: EmailProviderRegistry;
   readonly resolveUserEmail?: (userId: string) => Promise<string | undefined>;
+  readonly templates?: NotificationTemplateRegistry;
 }
 
 export interface NotificationModuleConfig {
@@ -130,7 +136,7 @@ export function createNotificationModule(options: CreateNotificationModuleOption
   service = {
     store,
     async trigger(input: NotificationTriggerInput): Promise<NotificationTriggerResult> {
-      validateTrigger(input);
+      validateTrigger(input, options);
       const now = new Date().toISOString();
       const notificationId = randomUUID();
       const expanded = await expandTargets(input, options, notificationId, now);
@@ -138,7 +144,9 @@ export function createNotificationModule(options: CreateNotificationModuleOption
       const items = expanded.flatMap((item) => item.userId ? [{ id: randomUUID(), deliveryId: item.delivery.id, notificationId, userId: item.userId, channel: item.delivery.channel, createdAt: now, updatedAt: now, version: 1 }] : []);
       await store.createNotificationBundle({
         notification: { id: notificationId, sourceType: input.source.type, sourceReferenceId: input.source.referenceId,
-          principalService: input.principalService, triggeredAt: now, messageMode: 'direct', summaryStatus: 'queued', version: 1, createdAt: now, updatedAt: now },
+          principalService: input.principalService, triggeredAt: now, messageMode: input.message.kind === 'template' ? 'template' : 'direct',
+          templateName: expanded[0].template?.key, templateVersion: expanded[0].template?.version,
+          summaryStatus: 'queued', version: 1, createdAt: now, updatedAt: now },
         deliveries, userNotificationItems: items,
       });
       for (const delivery of deliveries) await options.queueManager.dispatch(NotificationDeliveryJob, { deliveryId: delivery.id });
@@ -202,15 +210,16 @@ export async function dispatchNotificationDelivery(store: NotificationStore, del
     event: { id: randomUUID(), deliveryId, sequence: 2, fromStatus: 'sending', toStatus: 'delivered', occurredAt: new Date().toISOString(), metadataSchemaVersion: 1 }, });
 }
 
-function validateTrigger(input: NotificationTriggerInput): void {
+function validateTrigger(input: NotificationTriggerInput, options: CreateNotificationModuleOptions): void {
   if (!input.principalService || !input.source.type || input.targets.length === 0 || input.targets.length > 1000) throw new NotificationModuleError('NOTIFICATION_TRIGGER_INVALID', 'Trigger requires a service, source, and 1-1000 targets.');
+  if (input.message.kind === 'template' && (!input.message.templateKey || !options.templates?.has(input.message.templateKey))) throw new NotificationModuleError('NOTIFICATION_TEMPLATE_INVALID', `Notification template "${input.message.templateKey}" does not exist.`);
   const seen = new Set<string>();
   for (const target of input.targets) {
     if (target.kind === 'email') {
       const address = normalizeEmail(target.address);
       if (!address || seen.has(`email:${address}`)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Direct Email targets must contain unique valid addresses.');
       seen.add(`email:${address}`);
-      validateEmailContent(input.content);
+      if (input.message.kind === 'content') validateEmailContent(input.message.content);
       continue;
     }
     if (!target.userId || target.channels.length === 0 || new Set(target.channels).size !== target.channels.length) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'User targets require an explicit user ID and unique channels.');
@@ -218,16 +227,23 @@ function validateTrigger(input: NotificationTriggerInput): void {
       const key = `user:${target.userId}:${channel}`;
       if ((channel !== 'in-app' && channel !== 'email') || seen.has(key)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Expanded user targets must be unique.');
       seen.add(key);
-      if (channel === 'email') validateEmailContent(input.content);
+      if (channel === 'email' && input.message.kind === 'content') validateEmailContent(input.message.content);
     }
-    if (target.channels.includes('in-app') && (!input.content.title || !input.content.body || input.content.title.length > 200 || input.content.body.length > 10_000)) throw new NotificationModuleError('NOTIFICATION_CONTENT_INVALID', 'In-app title and body are required and bounded.');
+    if (input.message.kind === 'content' && target.channels.includes('in-app') && (!input.message.content.title || !input.message.content.body || input.message.content.title.length > 200 || input.message.content.body.length > 10_000)) throw new NotificationModuleError('NOTIFICATION_CONTENT_INVALID', 'In-app title and body are required and bounded.');
   }
-  if (input.content.actionUrl && (!input.content.actionUrl.startsWith('/') || input.content.actionUrl.startsWith('//'))) throw new NotificationModuleError('NOTIFICATION_ACTION_URL_INVALID', 'In-app actionUrl must be a relative Portal path.');
+  if (input.message.kind === 'content' && input.message.content.actionUrl && (!input.message.content.actionUrl.startsWith('/') || input.message.content.actionUrl.startsWith('//'))) throw new NotificationModuleError('NOTIFICATION_ACTION_URL_INVALID', 'In-app actionUrl must be a relative Portal path.');
+}
+
+interface TemplateSnapshotIdentity {
+  readonly key: string;
+  readonly version: string;
+  readonly contentHash: string;
 }
 
 interface ExpandedTarget {
   readonly delivery: DeliveryRecord;
   readonly userId?: string;
+  readonly template?: TemplateSnapshotIdentity;
 }
 
 async function expandTargets(input: NotificationTriggerInput, options: CreateNotificationModuleOptions, notificationId: string, now: string): Promise<readonly ExpandedTarget[]> {
@@ -239,20 +255,24 @@ async function expandTargets(input: NotificationTriggerInput, options: CreateNot
       const address = normalizeEmail(target.address)!;
       if (emailRecipients.has(address)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Expanded Email recipients must be unique.');
       emailRecipients.add(address);
-      expanded.push({ delivery: createEmailDelivery(notificationId, address, input.content, emailProviderChain, now) });
+      const rendered = await resolveTargetContent(input, options, ['email'], { email: address }, target.variables);
+      expanded.push({ delivery: createEmailDelivery(notificationId, address, rendered.content, emailProviderChain, now, undefined, rendered.template), template: rendered.template });
       continue;
     }
+    let email: string | undefined;
+    if (target.channels.includes('email')) {
+      email = normalizeEmail(await options.resolveUserEmail?.(target.userId) ?? '');
+      if (!email) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', `No valid Email address is available for user "${target.userId}".`);
+      if (emailRecipients.has(email)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Expanded Email recipients must be unique.');
+      emailRecipients.add(email);
+    }
+    const rendered = await resolveTargetContent(input, options, target.channels, { userId: target.userId, email }, target.variables);
     for (const channel of target.channels) {
       if (channel === 'in-app') {
-        expanded.push({ userId: target.userId, delivery: createInAppDelivery(notificationId, target.userId, input.content, now) });
+        expanded.push({ userId: target.userId, delivery: createInAppDelivery(notificationId, target.userId, rendered.content, now, rendered.template), template: rendered.template });
         continue;
       }
-      const email = await options.resolveUserEmail?.(target.userId);
-      const normalized = normalizeEmail(email ?? '');
-      if (!normalized) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', `No valid Email address is available for user "${target.userId}".`);
-      if (emailRecipients.has(normalized)) throw new NotificationModuleError('NOTIFICATION_RECIPIENT_INVALID', 'Expanded Email recipients must be unique.');
-      emailRecipients.add(normalized);
-      expanded.push({ userId: target.userId, delivery: createEmailDelivery(notificationId, normalized, input.content, emailProviderChain, now, target.userId) });
+      expanded.push({ userId: target.userId, delivery: createEmailDelivery(notificationId, email!, rendered.content, emailProviderChain, now, target.userId, rendered.template), template: rendered.template });
     }
   }
   if (expanded.some((item) => item.delivery.channel === 'email') && emailProviderChain.length === 0) throw new NotificationModuleError('NOTIFICATION_EMAIL_PROVIDER_UNAVAILABLE', 'No enabled Email provider is configured.');
@@ -260,13 +280,28 @@ async function expandTargets(input: NotificationTriggerInput, options: CreateNot
   return expanded;
 }
 
-function createInAppDelivery(notificationId: string, userId: string, content: NotificationDirectContent, now: string): DeliveryRecord {
-  return { id: randomUUID(), notificationId, channel: 'in-app', recipientKey: `user:${userId}`, recipientSnapshot: { kind: 'user', userId }, recipientSchemaVersion: 1, contentSnapshot: { title: content.title, body: content.body, actionUrl: content.actionUrl }, contentSchemaVersion: 1, providerChainSnapshot: ['in-app-db'], providerChainSchemaVersion: 1, providerCursor: 0, currentAttempt: 0, status: 'queued', statusChangedAt: now, version: 1, createdAt: now, updatedAt: now };
+interface ResolvedTargetContent {
+  readonly content: NotificationDirectContent;
+  readonly template?: TemplateSnapshotIdentity;
 }
 
-function createEmailDelivery(notificationId: string, address: string, content: NotificationDirectContent, providerChainSnapshot: readonly string[], now: string, userId?: string): DeliveryRecord {
+async function resolveTargetContent(input: NotificationTriggerInput, options: CreateNotificationModuleOptions, channels: readonly NotificationChannel[], identity: { readonly userId?: string; readonly email?: string }, recipientVariables?: Record<string, unknown>): Promise<ResolvedTargetContent> {
+  if (input.message.kind === 'content') return { content: input.message.content };
+  const rendered: RenderedNotificationTemplate = await options.templates!.render({ key: input.message.templateKey, common: input.message.variables, recipient: recipientVariables, identity, channels });
+  return { content: { title: rendered.inApp?.title, body: rendered.inApp?.body, actionUrl: rendered.inApp?.actionUrl, email: rendered.email }, template: { key: rendered.key, version: rendered.version, contentHash: rendered.contentHash } };
+}
+
+function templateSnapshot(template?: TemplateSnapshotIdentity): Record<string, unknown> {
+  return template ? { templateKey: template.key, templateVersion: template.version, templateContentHash: template.contentHash } : {};
+}
+
+function createInAppDelivery(notificationId: string, userId: string, content: NotificationDirectContent, now: string, template?: TemplateSnapshotIdentity): DeliveryRecord {
+  return { id: randomUUID(), notificationId, channel: 'in-app', recipientKey: `user:${userId}`, recipientSnapshot: { kind: 'user', userId }, recipientSchemaVersion: 1, contentSnapshot: { title: content.title, body: content.body, actionUrl: content.actionUrl, ...templateSnapshot(template) }, contentSchemaVersion: 1, providerChainSnapshot: ['in-app-db'], providerChainSchemaVersion: 1, providerCursor: 0, currentAttempt: 0, status: 'queued', statusChangedAt: now, version: 1, createdAt: now, updatedAt: now };
+}
+
+function createEmailDelivery(notificationId: string, address: string, content: NotificationDirectContent, providerChainSnapshot: readonly string[], now: string, userId?: string, template?: TemplateSnapshotIdentity): DeliveryRecord {
   const id = randomUUID();
-  return { id, notificationId, channel: 'email', recipientKey: userId ? `user:${userId}` : `email:${address}`, recipientSnapshot: userId ? { kind: 'user', userId, email: address } : { kind: 'email', email: address }, recipientSchemaVersion: 1, contentSnapshot: { ...content.email, messageId: `<${id}@notification.local>` }, contentSchemaVersion: 1, providerChainSnapshot, providerChainSchemaVersion: 1, providerCursor: 0, currentAttempt: 0, status: 'queued', statusChangedAt: now, version: 1, createdAt: now, updatedAt: now };
+  return { id, notificationId, channel: 'email', recipientKey: userId ? `user:${userId}` : `email:${address}`, recipientSnapshot: userId ? { kind: 'user', userId, email: address } : { kind: 'email', email: address }, recipientSchemaVersion: 1, contentSnapshot: { ...content.email, messageId: `<${id}@notification.local>`, ...templateSnapshot(template) }, contentSchemaVersion: 1, providerChainSnapshot, providerChainSchemaVersion: 1, providerCursor: 0, currentAttempt: 0, status: 'queued', statusChangedAt: now, version: 1, createdAt: now, updatedAt: now };
 }
 
 function validateEmailContent(content: NotificationDirectContent): void {
