@@ -10,7 +10,7 @@ import { createNullCacheConfig, type AppCacheConfig } from '@nocobase/cache';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
 import type { AppDriveConfig } from '@nocobase/drive';
-import { createSilentLoggerConfig } from '@nocobase/logger';
+import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import { createNullSessionConfig, type AppSessionConfig } from '@nocobase/session';
 import { joinBasePath, normalizeBasePath, resolveAppNameFromBasePath } from '@nocobase/app-server/support';
@@ -901,7 +901,7 @@ function createTestApp(options: CreateTestAppOptions = {}): ClosableApp {
       },
     },
     drive: options.drive,
-    logger: createSilentLoggerConfig(),
+    logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
     server: {

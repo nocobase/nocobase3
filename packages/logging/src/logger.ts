@@ -1,25 +1,48 @@
-import pino, { stdTimeFunctions, type DestinationStream, type StreamEntry } from 'pino';
-import pretty from 'pino-pretty';
-import type { Logger, LoggerOptions, RedactOptions } from './types.js';
+import pino, { stdTimeFunctions, type DestinationStream } from 'pino';
 
-const defaultRedactPaths = [
+import type { Logger, LoggerConfig } from './types.js';
+
+export const defaultRedactPaths = [
   'password',
   '*.password',
+  'password_confirmation',
+  '*.password_confirmation',
   'token',
   '*.token',
+  'accessToken',
+  '*.accessToken',
+  'refreshToken',
+  '*.refreshToken',
   'apiKey',
   '*.apiKey',
+  'secret',
+  '*.secret',
+  'authorization',
+  'Authorization',
+  'cookie',
+  'Cookie',
   'headers.authorization',
+  'headers.Authorization',
   'headers.cookie',
+  'headers.Cookie',
   'req.headers.authorization',
+  'req.headers.Authorization',
   'req.headers.cookie',
-];
+  'req.headers.Cookie',
+] as const;
 
-function resolveRedact(redact: LoggerOptions['redact']): RedactOptions | undefined {
-  if (redact === false) return undefined;
-  if (!redact) return { paths: defaultRedactPaths, censor: '[REDACTED]' };
+function resolveRedact(redact: LoggerConfig['redact']): Exclude<LoggerConfig['redact'], false | undefined> | undefined {
+  if (redact === false) {
+    return undefined;
+  }
+  if (!redact) {
+    return { paths: [...defaultRedactPaths], censor: '[REDACTED]' };
+  }
   if (Array.isArray(redact)) {
-    return { paths: [...new Set([...defaultRedactPaths, ...redact])], censor: '[REDACTED]' };
+    return {
+      paths: [...new Set([...defaultRedactPaths, ...redact])],
+      censor: '[REDACTED]',
+    };
   }
   return {
     ...redact,
@@ -28,45 +51,18 @@ function resolveRedact(redact: LoggerOptions['redact']): RedactOptions | undefin
   };
 }
 
-function createConsoleStream(options: LoggerOptions): DestinationStream {
-  const config = options.console ?? {};
-  if ((config.format ?? 'pretty') === 'json') return process.stdout;
-  return pretty({
-    colorize: config.colorize ?? process.stdout.isTTY,
-    singleLine: config.singleLine ?? true,
-    translateTime: config.translateTime ?? 'SYS:yyyy-mm-dd HH:MM:ss.l',
-  });
-}
-
-function createFileStream(options: LoggerOptions): DestinationStream {
-  if (!options.file?.path) {
-    throw new Error('logger.file.path is required when file output is enabled.');
+export function createLogger(config: LoggerConfig = {}, destination?: DestinationStream): Logger {
+  if (config.transport && destination) {
+    throw new Error('A logger cannot use both transport and destination.');
   }
-  return pino.destination({
-    dest: options.file.path,
-    mkdir: options.file.mkdir ?? true,
-    sync: options.file.sync ?? false,
-  });
-}
 
-export function createLogger(options: LoggerOptions = {}): Logger {
-  const outputs = [...new Set(options.outputs ?? ['console'])];
-  if (!outputs.length) throw new Error('At least one logger output is required.');
-
-  const streams: StreamEntry[] = outputs.map((output) => ({
-    stream: output === 'console' ? createConsoleStream(options) : createFileStream(options),
-  }));
-  const redact = resolveRedact(options.redact);
+  const { redact: configuredRedact, ...options } = config;
+  const redact = resolveRedact(configuredRedact);
   const loggerOptions: pino.LoggerOptions = {
-    level: options.level ?? 'info',
-    name: options.name,
-    base: options.base,
-    timestamp: stdTimeFunctions.isoTime,
+    ...options,
+    timestamp: options.timestamp ?? stdTimeFunctions.isoTime,
     ...(redact ? { redact } : {}),
   };
 
-  return pino(
-    loggerOptions,
-    streams.length === 1 ? streams[0]!.stream : pino.multistream(streams),
-  );
+  return destination ? pino(loggerOptions, destination) : pino(loggerOptions);
 }

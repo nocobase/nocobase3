@@ -15,7 +15,7 @@ import cache from '../../server/config/cache.ts';
 import configFactories from '../../server/config/index.ts';
 import database from '../../server/config/database.ts';
 import drive from '../../server/config/drive.ts';
-import logger from '../../server/config/logger.ts';
+import logging from '../../server/config/logging.ts';
 import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
 import spa from '../../server/config/spa.ts';
@@ -43,7 +43,7 @@ describe('template config registry', () => {
     expect(config.cache.default).toBe('memory');
     expect(config.database.default).toBe('sqlite');
     expect(config.drive.default).toBe('local');
-    expect(config.logger.default).toBe('app');
+    expect(config.logging.default).toBe('system');
     expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
     expect(config.spa.indexPath).toBe('/tmp/app-template-default/dist/client/index.html');
@@ -127,7 +127,7 @@ describe('app config', () => {
     expect(config.drive.links).toEqual({
       [path.join(root, 'public/storage')]: path.join(dataDir, 'app/public'),
     });
-    expect(config.logger.channels.app).toMatchObject({
+    expect(config.logging.loggers.system).toMatchObject({
       name: 'app-template-default',
     });
     expect(config.queue.jobs?.locations).toEqual([
@@ -199,37 +199,31 @@ describe('cache config', () => {
   });
 });
 
-describe('logger config', () => {
-  it('declares app and silent channels for pino', () => {
-    const config = logger({
+describe('logging config', () => {
+  it('declares the system logger for pino', () => {
+    const config = logging({
       env: createConfigEnv({}),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
       }),
     });
 
-    expect(config.default).toBe('app');
-    expect(config.channels.app).toMatchObject({
-      driver: 'console',
+    expect(config.default).toBe('system');
+    expect(config.loggers.system).toMatchObject({
       name: 'app-template-default',
       level: 'info',
-      pretty: false,
       base: {
         service: 'app-template-default',
       },
+      transport: undefined,
     });
-    expect(config.channels.app.driver === 'console' ? config.channels.app.redact : []).toContain(
-      'headers.authorization',
-    );
-    expect(config.channels.silent).toEqual({
-      driver: 'silent',
-    });
+    expect(config.loggers.system.redact).toContain('headers.authorization');
   });
 
-  it('maps logger env values into the app channel', () => {
-    const config = logger({
+  it('maps logger env values into the system logger', () => {
+    const config = logging({
       env: createConfigEnv({
-        LOG_CHANNEL: 'silent',
+        LOG_DEFAULT: 'system',
         LOG_LEVEL: 'debug',
         LOG_NAME: 'portal',
         LOG_PRETTY: 'true',
@@ -241,21 +235,27 @@ describe('logger config', () => {
       }),
     });
 
-    expect(config.default).toBe('silent');
-    expect(config.channels.app).toEqual({
-      driver: 'console',
+    expect(config.default).toBe('system');
+    expect(config.loggers.system).toEqual({
       name: 'portal',
       level: 'debug',
-      pretty: true,
       base: {
         service: 'portal-service',
       },
       redact: ['password', 'headers.authorization', 'credentials.secret'],
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname',
+        },
+      },
     });
   });
 
   it('falls back to info for unsupported logger levels', () => {
-    const config = logger({
+    const config = logging({
       env: createConfigEnv({
         LOG_LEVEL: 'verbose',
       }),
@@ -264,7 +264,7 @@ describe('logger config', () => {
       }),
     });
 
-    expect(config.channels.app.driver === 'console' ? config.channels.app.level : undefined).toBe('info');
+    expect(config.loggers.system.level).toBe('info');
   });
 });
 

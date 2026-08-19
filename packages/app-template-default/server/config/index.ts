@@ -2,7 +2,7 @@ import app from './app.js';
 import cache from './cache.js';
 import database from './database.js';
 import drive from './drive.js';
-import logger from './logger.js';
+import logging from './logging.js';
 import queue from './queue.js';
 import session from './session.js';
 import server from './server.js';
@@ -14,7 +14,7 @@ const config: {
   cache: typeof cache;
   database: typeof database;
   drive: typeof drive;
-  logger: typeof logger;
+  logging: typeof logging;
   queue: typeof queue;
   session: typeof session;
   server: typeof server;
@@ -24,7 +24,7 @@ const config: {
   cache: cache,
   database: database,
   drive: drive,
-  logger: logger,
+  logging: logging,
   queue: queue,
   session: session,
   server: server,

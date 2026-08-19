@@ -1,61 +1,82 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { DestinationStream } from 'pino';
+import { describe, expect, it } from 'vitest';
+
 import { createLogger } from '../src/index.js';
 
-const temporaryDirectories: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) =>
-    rm(directory, { recursive: true, force: true })));
-});
-
 describe('createLogger', () => {
-  it('writes structured JSON to a file and supports child bindings', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'nocobase-logger-'));
-    temporaryDirectories.push(directory);
-    const path = join(directory, 'app.log');
-    const logger = createLogger({
-      level: 'debug',
-      outputs: ['file'],
-      file: { path, sync: true },
-      base: { app: 'test' },
-    });
+  it('creates structured loggers and supports child bindings', () => {
+    const output = createMemoryDestination();
+    const logger = createLogger({ level: 'debug', base: { app: 'test' } }, output);
 
-    logger.child({ plugin: 'authentication' }).debug({ requestId: 'req-1' }, 'signed in');
-    logger.flush();
+    logger.child({ module: 'authentication' }).debug({ requestId: 'req-1' }, 'signed in');
 
-    const entry = JSON.parse((await readFile(path, 'utf8')).trim());
-    expect(entry).toMatchObject({
-      level: 20,
-      app: 'test',
-      plugin: 'authentication',
-      requestId: 'req-1',
-      msg: 'signed in',
-    });
+    expect(output.records()).toEqual([
+      expect.objectContaining({
+        level: 20,
+        app: 'test',
+        module: 'authentication',
+        requestId: 'req-1',
+        msg: 'signed in',
+      }),
+    ]);
   });
 
-  it('redacts common credentials by default', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'nocobase-logger-'));
-    temporaryDirectories.push(directory);
-    const path = join(directory, 'app.log');
-    const logger = createLogger({
-      outputs: ['file'],
-      file: { path, sync: true },
-    });
+  it('redacts common credentials by default', () => {
+    const output = createMemoryDestination();
+    const logger = createLogger({}, output);
 
     logger.info({ password: 'secret', token: 'session-token' }, 'credentials');
-    logger.flush();
 
-    const entry = JSON.parse((await readFile(path, 'utf8')).trim());
-    expect(entry).toMatchObject({
+    expect(output.records()[0]).toMatchObject({
       password: '[REDACTED]',
       token: '[REDACTED]',
     });
   });
 
-  it('requires file configuration when file output is enabled', () => {
-    expect(() => createLogger({ outputs: ['file'] })).toThrow('logger.file.path is required');
+  it('allows default redaction to be disabled explicitly', () => {
+    const output = createMemoryDestination();
+    const logger = createLogger({ redact: false }, output);
+
+    logger.info({ password: 'secret' }, 'credentials');
+
+    expect(output.records()[0]).toMatchObject({ password: 'secret' });
+  });
+
+  it('merges custom and default redaction paths', () => {
+    const output = createMemoryDestination();
+    const logger = createLogger({ redact: ['credentials.secret'] }, output);
+
+    logger.info({ password: 'secret', credentials: { secret: 'secret' } }, 'credentials');
+
+    expect(output.records()[0]).toMatchObject({
+      password: '[REDACTED]',
+      credentials: { secret: '[REDACTED]' },
+    });
+  });
+
+  it('rejects transport and destination together', () => {
+    expect(() => createLogger({
+      transport: { target: 'pino-pretty' },
+    }, createMemoryDestination())).toThrow('both transport and destination');
   });
 });
+
+type MemoryDestination = DestinationStream & {
+  records(): Array<Record<string, unknown>>;
+};
+
+function createMemoryDestination(): MemoryDestination {
+  const lines: string[] = [];
+  return {
+    write(message: string): void {
+      lines.push(message);
+    },
+    records(): Array<Record<string, unknown>> {
+      return lines
+        .join('')
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+    },
+  };
+}

@@ -5,10 +5,9 @@ import {
 } from '@nocobase/cache';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import {
-  createLoggerManager,
-  createSilentLoggerConfig,
-  type NocoBaseLoggerManager,
-} from '@nocobase/logger';
+  createDefaultLoggingConfig,
+  Logging,
+} from '@nocobase/logging';
 import {
   createQueueManager,
   createSyncQueueConfig,
@@ -27,7 +26,7 @@ import type { AppConfig } from '../config/index.js';
 export interface AppDeps {
   cacheManager: NocoBaseCacheManager;
   driveManager?: NocoBaseDriveManager;
-  loggerManager: NocoBaseLoggerManager;
+  logging: Logging;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
 }
@@ -36,9 +35,9 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   const { config } = runtime;
   const cacheManager = createCacheManager(config.cache ?? createNullCacheConfig());
   const driveManager = config.drive ? createDriveManager(config.drive) : undefined;
-  const loggerManager = createLoggerManager(config.logger ?? createSilentLoggerConfig());
+  const logging = new Logging(config.logging ?? createDefaultLoggingConfig());
   const sessionManager = createSessionManager(config.session ?? createNullSessionConfig());
-  const queueLogger = loggerManager.use().child({ module: 'queue' });
+  const queueLogger = logging.getLogger().child({ module: 'queue' });
   const queueManager = createQueueManager(config.queue ?? createSyncQueueConfig(), {
     database: runtime.database,
     logger: queueLogger,
@@ -51,7 +50,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   return {
     cacheManager,
     driveManager,
-    loggerManager,
+    logging,
     queueManager,
     sessionManager,
   };
@@ -61,7 +60,7 @@ export async function disposeAppDeps(deps: AppDeps): Promise<void> {
   await deps.queueManager.close();
   await Promise.all([
     deps.cacheManager.disconnectAll(),
-    deps.loggerManager.flushAll(),
+    deps.logging.flush(),
     deps.sessionManager.dispose(),
   ]);
 }

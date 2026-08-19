@@ -28,7 +28,7 @@ export function createApiRoutes({
 
   api.onError(
     createApiErrorHandler({
-      logger: deps.loggerManager.use().child({ module: 'api' }),
+      logger: deps.logging.getLogger().child({ module: 'api' }),
     }),
   );
   api.get('/healthz', createHealthzHandler({ appName, publicBasePath }));

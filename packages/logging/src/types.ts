@@ -1,44 +1,21 @@
-import type { Logger as PinoLogger } from 'pino';
+import type {
+  DestinationStream,
+  Logger as PinoLogger,
+  LoggerOptions as PinoLoggerOptions,
+} from 'pino';
 
 export type Logger = PinoLogger;
 
-export type LogLevel =
-  | 'trace'
-  | 'debug'
-  | 'info'
-  | 'warn'
-  | 'error'
-  | 'fatal'
-  | 'silent';
+export type LoggerLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
 
-export type LogOutput = 'console' | 'file';
-export type ConsoleFormat = 'pretty' | 'json';
-
-export interface ConsoleOutputOptions {
-  format?: ConsoleFormat;
-  colorize?: boolean;
-  singleLine?: boolean;
-  translateTime?: string | boolean;
+export interface LoggerConfig extends Omit<PinoLoggerOptions, 'redact'> {
+  /** Uses the secure NocoBase defaults when omitted and disables them when false. */
+  redact?: false | PinoLoggerOptions['redact'];
 }
 
-export interface FileOutputOptions {
-  path: string;
-  mkdir?: boolean;
-  sync?: boolean;
+export interface LoggingConfig {
+  default: string;
+  loggers: Readonly<Record<string, LoggerConfig>>;
 }
 
-export interface RedactOptions {
-  paths: string[];
-  censor?: string;
-  remove?: boolean;
-}
-
-export interface LoggerOptions {
-  level?: LogLevel;
-  name?: string;
-  base?: Record<string, unknown> | null;
-  outputs?: LogOutput[];
-  console?: ConsoleOutputOptions;
-  file?: FileOutputOptions;
-  redact?: false | string[] | RedactOptions;
-}
+export type { DestinationStream, PinoLoggerOptions };

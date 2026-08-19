@@ -20,10 +20,10 @@ const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url).
 
 const config = loadStandaloneAppConfig(standaloneModuleUrl);
 
-const activeLoggerName = config.logger.default;
-const loggerChannels: Record<string, unknown> = config.logger.channels;
+const activeLoggerName = config.logging.default;
+const configuredLoggers: Record<string, unknown> = config.logging.loggers;
 const activeLogger =
-  activeLoggerName ? loggerChannels[activeLoggerName] : undefined;
+  activeLoggerName ? configuredLoggers[activeLoggerName] : undefined;
 const activeCacheName = config.cache.default;
 const cacheStores: Record<string, unknown> = config.cache.stores;
 const activeCache =
@@ -69,9 +69,9 @@ const report = {
     indexExists: existsSync(config.spa.indexPath),
     runtime: config.spa.runtime,
   },
-  logger: {
+  logging: {
     default: activeLoggerName || '(none)',
-    active: summarizeLoggerChannel(activeLogger),
+    active: summarizeLogger(activeLogger),
   },
   cache: {
     default: activeCacheName || '(none)',
@@ -168,34 +168,35 @@ function summarizeDatabaseConnection(connection: unknown): JsonValue {
   return summary;
 }
 
-function summarizeLoggerChannel(channel: unknown): JsonValue {
-  if (!isObject(channel)) {
+function summarizeLogger(logger: unknown): JsonValue {
+  if (!isObject(logger)) {
     return null;
   }
 
-  const driver = stringValue(channel.driver) ?? 'unknown';
-  const summary: Record<string, JsonValue> = {
-    driver,
-  };
+  const summary: Record<string, JsonValue> = {};
 
   for (const key of ['name', 'level']) {
-    const value = stringValue(channel[key]);
+    const value = stringValue(logger[key]);
     if (value) {
       summary[key] = value;
     }
   }
 
-  const pretty = booleanValue(channel.pretty);
-  if (pretty !== undefined) {
-    summary.pretty = pretty;
+  const enabled = booleanValue(logger.enabled);
+  if (enabled !== undefined) {
+    summary.enabled = enabled;
   }
 
-  if (isObject(channel.base)) {
-    summary.base = jsonObject(channel.base);
+  if (isObject(logger.base)) {
+    summary.base = jsonObject(logger.base);
   }
 
-  if (Array.isArray(channel.redact)) {
-    summary.redactPaths = channel.redact.length;
+  if (Array.isArray(logger.redact)) {
+    summary.redactPaths = logger.redact.length;
+  }
+
+  if (isObject(logger.transport)) {
+    summary.transport = jsonObject(logger.transport);
   }
 
   return summary;
@@ -365,8 +366,8 @@ function printReport(value: typeof report): void {
   printPair('Share token', String(value.spa.runtime.shareToken));
 
   printSection('Logger');
-  printPair('Default channel', value.logger.default);
-  printJson('Active channel', value.logger.active);
+  printPair('Default logger', value.logging.default);
+  printJson('Active logger', value.logging.active);
 
   printSection('Cache');
   printPair('Default store', value.cache.default);

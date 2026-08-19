@@ -19,7 +19,7 @@
     "@nocobase/cache": "workspace:^",
     "@nocobase/database": "workspace:^",
     "@nocobase/drive": "workspace:^",
-    "@nocobase/logger": "workspace:^",
+    "@nocobase/logging": "workspace:^",
     "@nocobase/portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",

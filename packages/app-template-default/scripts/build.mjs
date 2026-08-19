@@ -169,7 +169,7 @@ run("Build server workspace dependencies", "pnpm", [
   "--filter",
   "@nocobase/drive",
   "--filter",
-  "@nocobase/logger",
+  "@nocobase/logging",
   "--filter",
   "@nocobase/queue",
   "build",

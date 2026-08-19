@@ -1,7 +1,7 @@
 import type { AppCacheConfig } from '@nocobase/cache';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 import type { AppDriveConfig } from '@nocobase/drive';
-import type { AppLoggerConfig } from '@nocobase/logger';
+import type { LoggingConfig } from '@nocobase/logging';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 
@@ -35,7 +35,7 @@ export interface AppConfig {
   cache: AppCacheConfig;
   database: AppDatabaseConfig;
   drive: AppDriveConfig;
-  logger: AppLoggerConfig;
+  logging: LoggingConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
   server: AppServerConfig;
