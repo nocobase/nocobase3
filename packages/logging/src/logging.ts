@@ -1,34 +1,38 @@
-import { createLogger } from './logger.js';
 import { createDefaultLoggingConfig } from './config.js';
-import type { Logger, LoggingConfig } from './types.js';
+import { createLogger } from './logger.js';
+import type { Logger, LoggerConfig, LoggingConfig } from './types.js';
 
 export class Logging {
+  private readonly defaultLogger: string;
+  private readonly defaultConfig: LoggerConfig;
+  private readonly loggerConfigs: Readonly<Record<string, LoggerConfig>>;
   private readonly loggers = new Map<string, Logger>();
 
-  constructor(private readonly config: LoggingConfig) {
-    if (!config.loggers[config.default]) {
-      throw new Error(`Default logger "${config.default}" is not configured.`);
-    }
+  constructor(config: LoggingConfig = createDefaultLoggingConfig()) {
+    const {
+      default: defaultLogger = 'system',
+      loggers = {},
+      ...defaultConfig
+    } = config;
+    this.defaultLogger = defaultLogger;
+    this.defaultConfig = defaultConfig;
+    this.loggerConfigs = loggers;
   }
 
-  getLogger(name = this.config.default): Logger {
+  getLogger(name = this.defaultLogger): Logger {
     const existing = this.loggers.get(name);
     if (existing) {
       return existing;
     }
 
-    const config = this.config.loggers[name];
-    if (!config) {
-      throw new Error(`Logger "${name}" is not configured.`);
-    }
-
-    const logger = createLogger(config);
+    const config = resolveLoggerConfig(
+      this.defaultConfig,
+      this.loggerConfigs[name],
+      name,
+    );
+    const logger = createLogger(config).child({ logger: name });
     this.loggers.set(name, logger);
     return logger;
-  }
-
-  hasLogger(name: string): boolean {
-    return Boolean(this.config.loggers[name]);
   }
 
   async flush(): Promise<void> {
@@ -50,4 +54,86 @@ export class Logging {
 
 export function createLogging(config: LoggingConfig = createDefaultLoggingConfig()): Logging {
   return new Logging(config);
+}
+
+function resolveLoggerConfig(
+  defaultConfig: LoggerConfig,
+  override: LoggerConfig | undefined,
+  loggerName: string,
+): LoggerConfig {
+  const config = mergeLoggerConfig(defaultConfig, override);
+  return {
+    ...config,
+    transport: resolveTransportTemplate(config.transport, loggerName),
+  };
+}
+
+function mergeLoggerConfig(defaultConfig: LoggerConfig, override: LoggerConfig | undefined): LoggerConfig {
+  if (!override) {
+    return { ...defaultConfig };
+  }
+
+  return {
+    ...defaultConfig,
+    ...override,
+    base: mergeObjectConfig(defaultConfig.base, override.base),
+    transport: mergeTransportConfig(defaultConfig.transport, override.transport),
+  };
+}
+
+function mergeObjectConfig<T>(base: T | undefined, override: T | undefined): T | undefined {
+  if (override === undefined) {
+    return base;
+  }
+  if (!isRecord(base) || !isRecord(override)) {
+    return override;
+  }
+  return {
+    ...base,
+    ...override,
+  } as T;
+}
+
+function mergeTransportConfig(
+  base: LoggerConfig['transport'],
+  override: LoggerConfig['transport'],
+): LoggerConfig['transport'] {
+  if (override === undefined) {
+    return base;
+  }
+  if (!isRecord(base) || !isRecord(override)) {
+    return override;
+  }
+
+  return {
+    ...base,
+    ...override,
+    options: mergeObjectConfig(base.options, override.options),
+  } as LoggerConfig['transport'];
+}
+
+function resolveTransportTemplate(
+  transport: LoggerConfig['transport'],
+  loggerName: string,
+): LoggerConfig['transport'] {
+  if (!isRecord(transport) || !isRecord(transport.options)) {
+    return transport;
+  }
+
+  const destination = transport.options.destination;
+  if (typeof destination !== 'string' || !destination.includes('{logger}')) {
+    return transport;
+  }
+
+  return {
+    ...transport,
+    options: {
+      ...transport.options,
+      destination: destination.replaceAll('{logger}', loggerName),
+    },
+  } as LoggerConfig['transport'];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

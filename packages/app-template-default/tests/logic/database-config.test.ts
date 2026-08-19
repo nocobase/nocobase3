@@ -127,7 +127,8 @@ describe('app config', () => {
     expect(config.drive.links).toEqual({
       [path.join(root, 'public/storage')]: path.join(dataDir, 'app/public'),
     });
-    expect(config.logging.loggers.system).toMatchObject({
+    expect(config.logging).toMatchObject({
+      default: 'system',
       name: 'app-template-default',
     });
     expect(config.queue.jobs?.locations).toEqual([
@@ -197,7 +198,7 @@ describe('logging config', () => {
     });
 
     expect(config.default).toBe('system');
-    expect(config.loggers.system).toMatchObject({
+    expect(config).toMatchObject({
       name: 'app-template-default',
       level: 'info',
       base: {
@@ -205,7 +206,7 @@ describe('logging config', () => {
       },
       transport: undefined,
     });
-    expect(config.loggers.system.redact).toContain('headers.authorization');
+    expect(config.redact).toContain('headers.authorization');
   });
 
   it('maps logger env values into the system logger', () => {
@@ -224,7 +225,8 @@ describe('logging config', () => {
     });
 
     expect(config.default).toBe('system');
-    expect(config.loggers.system).toEqual({
+    expect(config).toEqual({
+      default: 'system',
       name: 'portal',
       level: 'debug',
       base: {
@@ -252,7 +254,7 @@ describe('logging config', () => {
       }),
     });
 
-    expect(config.loggers.system.level).toBe('info');
+    expect(config.level).toBe('info');
   });
 });
 

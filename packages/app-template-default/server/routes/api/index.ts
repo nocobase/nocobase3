@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { requestLogger } from '@nocobase/logging';
 
 import type { AppServices } from '@/services/index.js';
 import type { AppDeps } from '../../runtime/deps.js';
@@ -25,6 +26,15 @@ export function createApiRoutes({
   services,
 }: ApiRouteOptions): Hono {
   const api = new Hono();
+
+  api.use(
+    '*',
+    requestLogger({
+      logger: deps.logging.getLogger('request'),
+      app: appName,
+      skip: (context) => context.req.path.endsWith('/api/healthz'),
+    }),
+  );
 
   api.onError(
     createApiErrorHandler({

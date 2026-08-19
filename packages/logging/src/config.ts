@@ -4,11 +4,7 @@ import type { LoggingConfig } from './types.js';
 export function createDefaultLoggingConfig(): LoggingConfig {
   return {
     default: 'system',
-    loggers: {
-      system: {
-        level: 'info',
-      },
-    },
+    level: 'info',
   };
 }
 
@@ -16,11 +12,7 @@ export function createDefaultLoggingConfig(): LoggingConfig {
 export function createSilentLoggingConfig(): LoggingConfig {
   return {
     default: 'system',
-    loggers: {
-      system: {
-        enabled: false,
-        level: 'silent',
-      },
-    },
+    enabled: false,
+    level: 'silent',
   };
 }

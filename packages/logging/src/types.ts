@@ -13,9 +13,9 @@ export interface LoggerConfig extends Omit<PinoLoggerOptions, 'redact'> {
   redact?: false | PinoLoggerOptions['redact'];
 }
 
-export interface LoggingConfig {
-  default: string;
-  loggers: Readonly<Record<string, LoggerConfig>>;
+export interface LoggingConfig extends LoggerConfig {
+  default?: string;
+  loggers?: Readonly<Record<string, LoggerConfig>>;
 }
 
 export type { DestinationStream, PinoLoggerOptions };

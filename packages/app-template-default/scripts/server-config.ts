@@ -21,9 +21,14 @@ const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url).
 const config = loadStandaloneAppConfig(standaloneModuleUrl);
 
 const activeLoggerName = config.logging.default;
-const configuredLoggers: Record<string, unknown> = config.logging.loggers;
-const activeLogger =
-  activeLoggerName ? configuredLoggers[activeLoggerName] : undefined;
+const configuredLogger = activeLoggerName
+  ? config.logging.loggers?.[activeLoggerName]
+  : undefined;
+const activeLogger = {
+  ...config.logging,
+  ...configuredLogger,
+  base: mergeObject(config.logging.base, configuredLogger?.base),
+};
 const activeCachingProviderName = config.caching.default;
 const cachingProviders: Record<string, unknown> = config.caching.providers;
 const activeCachingProvider =
@@ -200,6 +205,22 @@ function summarizeLogger(logger: unknown): JsonValue {
   }
 
   return summary;
+}
+
+function mergeObject(
+  base: Readonly<Record<string, unknown>> | null | undefined,
+  override: Readonly<Record<string, unknown>> | null | undefined,
+): Record<string, unknown> | null | undefined {
+  if (override === undefined) {
+    return base;
+  }
+  if (!isObject(base) || !isObject(override)) {
+    return override;
+  }
+  return {
+    ...base,
+    ...override,
+  };
 }
 
 function summarizeCachingProvider(provider: unknown): JsonValue {

@@ -16,22 +16,38 @@ describe('Logging', () => {
   it('supports configured named loggers', () => {
     const logging = createLogging({
       default: 'system',
+      level: 'info',
       loggers: {
-        system: { level: 'info' },
         audit: { level: 'warn' },
       },
     });
 
-    expect(logging.hasLogger('audit')).toBe(true);
     expect(logging.getLogger('audit').level).toBe('warn');
+    expect(logging.getLogger('audit').bindings()).toMatchObject({ logger: 'audit' });
   });
 
-  it('rejects missing default and requested loggers', () => {
-    expect(() => createLogging({ default: 'missing', loggers: {} }))
-      .toThrow('Default logger "missing" is not configured.');
+  it('uses the top-level config for unconfigured logger names', () => {
+    const logging = createLogging({ default: 'system', level: 'debug' });
+    const request = logging.getLogger('request');
 
-    const logging = createLogging({ default: 'system', loggers: { system: {} } });
-    expect(() => logging.getLogger('missing')).toThrow('Logger "missing" is not configured.');
+    expect(request.level).toBe('debug');
+    expect(request.bindings()).toMatchObject({ logger: 'request' });
+  });
+
+  it('merges named logger bindings with the top-level defaults', () => {
+    const logging = createLogging({
+      base: { service: 'nocobase', environment: 'test' },
+      loggers: {
+        audit: { base: { module: 'audit' } },
+      },
+    });
+
+    expect(logging.getLogger('audit').bindings()).toMatchObject({
+      service: 'nocobase',
+      environment: 'test',
+      module: 'audit',
+      logger: 'audit',
+    });
   });
 
   it('provides a silent fallback and flushes instantiated loggers', async () => {

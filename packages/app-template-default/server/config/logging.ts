@@ -38,18 +38,13 @@ const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(
 
     return {
       default: env.string('LOG_DEFAULT', 'system'),
-
-      loggers: {
-        system: {
-          name: env.string('LOG_NAME', 'app-template-default'),
-          level: resolveLevel(env.string('LOG_LEVEL'), 'info'),
-          base: {
-            service: env.string('LOG_SERVICE', 'app-template-default'),
-          },
-          redact: env.list('LOG_REDACT', defaultRedactPaths),
-          transport,
-        },
+      name: env.string('LOG_NAME', 'app-template-default'),
+      level: resolveLevel(env.string('LOG_LEVEL'), 'info'),
+      base: {
+        service: env.string('LOG_SERVICE', 'app-template-default'),
       },
+      redact: env.list('LOG_REDACT', defaultRedactPaths),
+      transport,
     };
   },
 );
