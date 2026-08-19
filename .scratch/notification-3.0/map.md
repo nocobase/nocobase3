@@ -40,6 +40,7 @@ Label: wayfinder:map
 - [原型验证数据库队列、租约与恢复行为](issues/09-durable-queue-prototype.md) — Delivery 保持唯一持久化事实；2026-08-19 起工作唤醒复用共享 `@nocobase/queue` 的 sync/fake/redis/database Driver，不再实现通知专用 EventQueue，低频 Reconciler 继续保证最终恢复。
 - [确定身份转译、ACL 与 Worker 服务身份契约](issues/10-identity-acl-service-auth.md) — 用户 API 通过 IdentityProvider 复用 NocoBase 会话；内部系统主体触发通知，受限 Resolver 只在 Trigger 阶段读取地址，Worker 不持有用户凭证；首期管理 API 临时允许所有已认证 Portal 用户访问，HTTP Trigger 仍禁用。
 - [确定独立 Live Provider 与实时事件协议](issues/11-websocket-event-protocol.md) — `registry/portal-live` 通过 AppHost 最小 Upgrade seam 提供按应用和用户隔离的 Refine LiveProvider；短期内存重放配合 cursor、resync_required 与 HTTP 对账，通知事件只作为最小失效提示。
+- [简化 Portal Live 一期协议](issues/11-websocket-event-protocol.md) — 一期稳定契约仅保留同源 Upgrade、应用/用户隔离、单一 Inbox Channel、最小失效事件、有限 cursor 重放与 HTTP 对账；心跳、认证期限、应用 lease、跨实例和强 draining 不再作为发布门槛。
 - [原型化通知管理后台信息架构](issues/12-admin-console-prototype.md) — 管理端只保留 Delivery Log 与只读 Providers；首屏用于筛选和定位，Attempt/快照/配置版本按需下钻，submission_unknown 使用独立风险确认；首期以临时已认证访问策略保证功能可用。
 - [原型化顶部铃铛、Inbox 与实时恢复体验](issues/13-inbox-realtime-prototype.md) — Header 铃铛与完整通知中心共享缓存和未读数；服务端按 Channel 筛选，每个 userId Delivery 显示独立条目，显式操作才改变 Portal readAt，Live Event 只触发合并 HTTP 失效，健康连接状态保持静默。
 - [确定审计、数据保留、脱敏与运维策略](issues/14-audit-retention-operations.md) — 本期不建通用审计、不做应用层字段加密且数据库默认不清理；Notification 保存系统发送来源，Delivery/Attempt/Event 构成投递账本，输出仍统一脱敏，并保留健康、核心指标和显式启用的批量清理 seam。

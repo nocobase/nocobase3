@@ -1,5 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
+import type { PortalLiveCursor } from './session.js';
+
+export type { PortalLiveAuthenticator, PortalLiveCursor, PortalLivePrincipal, PortalLiveSessionFrame, PortalLiveSessionResult } from './session.js';
+export { createPortalLiveSession } from './session.js';
+export type { PortalLiveConnection, PortalLiveConnectionOptions, PortalLiveErrorCode, PortalLiveFrame, PortalLiveSocket } from './connection.js';
+export { createPortalLiveConnection } from './connection.js';
+export type { PortalLiveRawSocket } from './socket.js';
+export { adaptPortalLiveSocket } from './socket.js';
+
 export interface PortalLiveEvent {
   readonly version: 1;
   readonly streamId: string;
@@ -18,11 +27,6 @@ export interface PortalLivePublishInput {
   readonly type: string;
   readonly payload: { readonly ids?: readonly string[] };
   readonly occurredAt?: string;
-}
-
-export interface PortalLiveCursor {
-  readonly streamId: string;
-  readonly sequence: number;
 }
 
 export interface PortalLivePublisher {

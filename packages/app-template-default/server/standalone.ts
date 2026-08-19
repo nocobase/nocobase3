@@ -1,5 +1,4 @@
 import { serve } from '@hono/node-server';
-import type { Hono } from 'hono';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,10 +12,7 @@ export interface StandaloneServerOptions {
   viteDevUrl?: string | false;
 }
 
-export interface StandaloneServer extends Hono {
-  start(): Promise<void>;
-  close(): Promise<void>;
-}
+export interface StandaloneServer extends ClosableApp {}
 
 export function createStandaloneServer(options: StandaloneServerOptions = {}): StandaloneServer {
   const runtime = createStandaloneRuntime();
@@ -52,6 +48,9 @@ async function startServerAsync(): Promise<void> {
       fetch: app.fetch,
       hostname: config.server.host,
       port: config.server.port,
+      websocket: {
+        server: app.websocketServer,
+      },
     },
     (info) => {
       if (config.server.startLog) {

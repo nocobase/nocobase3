@@ -11,8 +11,10 @@ import {
   type NotificationChannel,
   type NotificationStore,
 } from './domain.js';
+import { createLivePublishingNotificationStore, type NotificationLiveTarget } from './live.js';
 
 export * from './domain.js';
+export type { InboxLiveEventType, NotificationLiveTarget } from './live.js';
 
 export type NotificationHealthStatus = 'ok' | 'degraded' | 'unavailable';
 
@@ -64,6 +66,7 @@ export interface CreateNotificationModuleOptions {
   readonly queueManager: NocoBaseQueueManager;
   readonly logger: NocoBaseLogger;
   readonly allowNonPersistentStore?: boolean;
+  readonly live?: NotificationLiveTarget;
 }
 
 export interface NotificationModuleConfig {
@@ -90,9 +93,12 @@ export function createNotificationModule(options: CreateNotificationModuleOption
   }
 
   const router = createNotificationRouter();
-  const store = options.database
+  const baseStore = options.database
       ? createDatabaseNotificationStore(options.database)
       : createMemoryNotificationStore();
+  const store = options.live
+    ? createLivePublishingNotificationStore(baseStore, options.live, options.logger)
+    : baseStore;
   let service: NotificationService;
   class NotificationDeliveryJob extends Job<{ deliveryId: string }> {
     static options = { name: 'NotificationDelivery', queue: 'default' };

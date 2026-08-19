@@ -29,7 +29,7 @@ Direct calls to `createApp()` keep notifications disabled unless `options.notifi
 
 The app-local mount is `/api/notifications/*`. AppHost strips the public application prefix before dispatch, so an embedded application named `main` exposes the route as `/main/api/notifications/*`; standalone uses its configured public base path.
 
-The current `POST /api/notifications/trigger` endpoint intentionally returns `403 HTTP_TRIGGER_DISABLED`. System callers will use the TypeScript trigger interface until the future identity/ACL module enables HTTP triggering.
+The current `POST /api/notifications/trigger` endpoint intentionally returns `403 HTTP_TRIGGER_DISABLED`. HTTP triggering is out of the current module scope; internal system callers use the TypeScript trigger interface (see [trigger-interface.md](trigger-interface.md)), and an external HTTP surface will be revisited once the identity/ACL module lands.
 
 ## Lifecycle ownership
 

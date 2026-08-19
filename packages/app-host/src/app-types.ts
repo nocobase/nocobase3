@@ -7,13 +7,28 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
+
 import type { AppState } from './events.ts';
 
 export type AppDisposer = () => void | Promise<void>;
 
+export interface AppUpgradeContext {
+  readonly request: IncomingMessage;
+  readonly socket: Duplex;
+  readonly head: Buffer;
+}
+
 export interface FetchApp {
   fetch(request: Request, env?: unknown, executionCtx?: unknown): Response | Promise<Response>;
   close?(): void | Promise<void>;
+  /**
+   * Optional WebSocket upgrade handler. When present, the host routes
+   * `server.on('upgrade')` requests for this app to this method with the raw
+   * Node upgrade context; the app owns the socket lifecycle afterwards.
+   */
+  handleUpgrade?(request: IncomingMessage, socket: Duplex, head: Buffer): void | Promise<void>;
 }
 
 export interface AppScope {
@@ -178,6 +193,7 @@ export interface ActiveAppHandle {
   readonly signal: AbortSignal;
   readonly state: AppState;
   dispatch(request: Request, metadata?: AppRequestMetadata): Promise<Response>;
+  handleUpgrade?(request: IncomingMessage, socket: Duplex, head: Buffer): Promise<void>;
   destroy(options?: string | AppDestroyOptions): Promise<void>;
   snapshot(): AppSnapshot;
 }

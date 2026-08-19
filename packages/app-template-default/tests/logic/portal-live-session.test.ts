@@ -8,13 +8,13 @@ describe('Portal Live session protocol', () => {
     const subscribed: string[] = [];
     const session = createPortalLiveSession({
       authenticator: { authenticate: async (token) => token === 'secret' ? { appId: 'main', userId: 'user-1' } : undefined },
-      onSubscribe: (principal) => subscribed.push(`${principal.appId}:${principal.userId}`),
+      onSubscribe: (principal, subscriptionId) => subscribed.push(`${principal.appId}:${principal.userId}:${subscriptionId}`),
       onUnsubscribe: () => undefined,
     });
     await expect(session.handle({ version: 1, type: 'subscribe', subscriptionId: 's1', channel: 'notifications/inbox' })).resolves.toEqual({ type: 'error', code: 'AUTH_REQUIRED' });
     await expect(session.handle({ version: 1, type: 'auth', token: 'secret' })).resolves.toMatchObject({ type: 'auth_ok' });
     await expect(session.handle({ version: 1, type: 'subscribe', subscriptionId: 's1', channel: 'notifications/inbox' })).resolves.toEqual({ type: 'subscribed', subscriptionId: 's1' });
-    expect(subscribed).toEqual(['main:user-1']);
+    expect(subscribed).toEqual(['main:user-1:s1']);
   });
 
   it('enforces channel and subscription limits', async () => {

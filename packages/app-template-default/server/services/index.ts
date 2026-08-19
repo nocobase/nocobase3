@@ -31,6 +31,7 @@ import {
   type NotificationModule,
   type NotificationModuleConfig,
 } from '../../registry/notification/server/index.js';
+import { createPortalLiveService, type PortalLiveService } from './portal-live.js';
 import { AppSettingsService, UnavailableAppSettingsService, type AppSettings } from './app-settings-store.js';
 import { FileUploadsService, UnavailableFileUploadsService, type FileUploads } from './public-file-storage.js';
 
@@ -41,12 +42,14 @@ export interface AppServices {
   loggerManager: NocoBaseLoggerManager;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
+  portalLive?: PortalLiveService;
   notificationModule?: NotificationModule;
   start(): Promise<void>;
   dispose(): Promise<void>;
 }
 
 export interface CreateAppServicesOptions {
+  appId?: string;
   cache?: AppCacheConfig;
   database?: DatabaseManager;
   drive?: AppDriveConfig;
@@ -70,12 +73,21 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
       logger: queueLogger,
     }),
   });
+  const portalLive = options.appId
+    ? createPortalLiveService({
+        appId: options.appId,
+        sessionManager,
+      })
+    : undefined;
   const notificationModule = options.notifications?.enabled
     ? createNotificationModule({
         allowNonPersistentStore: options.notifications.allowNonPersistentStore,
         database: options.database,
         logger: loggerManager.use().child({ module: 'notification' }),
         queueManager,
+        live: portalLive && options.appId
+          ? { publisher: portalLive.publisher, appId: options.appId }
+          : undefined,
       })
     : undefined;
 
@@ -89,6 +101,7 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
     loggerManager,
     queueManager,
     sessionManager,
+    portalLive,
     notificationModule,
     start: () => notificationModule?.start() ?? Promise.resolve(),
     dispose: () =>
@@ -96,6 +109,7 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
         cacheManager,
         loggerManager,
         notificationModule,
+        portalLive,
         queueManager,
         sessionManager,
       }),
@@ -105,8 +119,9 @@ export function createAppServices(options: CreateAppServicesOptions = {}): AppSe
 }
 
 export async function disposeAppServices(
-  services: Pick<AppServices, 'cacheManager' | 'loggerManager' | 'notificationModule' | 'queueManager' | 'sessionManager'>,
+  services: Pick<AppServices, 'cacheManager' | 'loggerManager' | 'notificationModule' | 'portalLive' | 'queueManager' | 'sessionManager'>,
 ): Promise<void> {
+  services.portalLive?.drain();
   await services.notificationModule?.close({ deadlineAt: Date.now() + 10_000 });
   await services.queueManager.close();
   await Promise.all([

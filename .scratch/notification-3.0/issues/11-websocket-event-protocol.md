@@ -11,6 +11,8 @@ Blocked by: 05, 10
 
 ## Answer
 
+> 2026-08-19 scope simplification: phase one adopts a lightweight Portal Live protocol. The stable contract is limited to same-origin Upgrade routing, application/user binding through the available Portal session or token seam, the `notifications/inbox` Channel, minimal invalidation events, bounded in-memory cursor replay, `resync_required`, reconnect, unsubscribe, and unavailable client publish. Earlier requirements for heartbeats, a five-second authentication deadline, effective-role semantics, application leases, backpressure behavior, five-minute retention, cross-instance delivery, and a guaranteed draining frame are no longer phase-one acceptance requirements. HTTP remains the only source-of-truth and reconciliation path.
+
 ### 独立模块与传输所有权
 
 - 实时能力位于独立的 `registry/portal-live`，拥有服务端 `LivePublisher`、连接与订阅管理、客户端 Refine `LiveProvider`、协议类型和可替换 Live Bus Adapter。通知模块只依赖 `LivePublisher`，不创建 WebSocket、不维护连接，也不感知具体 Pub/Sub。
@@ -62,3 +64,7 @@ type LiveEvent = {
 
 - 应用进入 draining 后拒绝新 Upgrade 和订阅，向已有连接发送 `server_draining`，停止 Live Bus 新消费，并在 AppScope 的统一绝对关闭期限内尝试排空发送缓冲。
 - 每个 WebSocket 从 Upgrade 成功到 close 都持有应用 lease。期限耗尽后强制关闭该应用全部 socket，释放 lease，再继续其他 disposer；连接不得存活到应用数据库和通知 Worker 已关闭之后。
+
+## Superseded phase-one requirements
+
+The scope-simplification note above supersedes the stricter phase-one requirements in the authentication timeout, heartbeat, five-minute retention, application lease, backpressure, and guaranteed `server_draining` paragraphs. Those paragraphs remain design guidance for a future hardened Portal Live protocol, not current release gates.

@@ -7,6 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
+
 import { AppEventBus, type AppEvent, type AppEventPayload, type AppState } from './events.ts';
 import type {
   ActiveAppHandle,
@@ -238,6 +241,14 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
         this.resolveIdleWaiters();
       }
     }
+  }
+
+  async handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
+    if (this.state !== 'active' || typeof this.app.handleUpgrade !== 'function') {
+      socket.destroy();
+      return;
+    }
+    await this.app.handleUpgrade(request, socket, head);
   }
 
   async destroy(options: string | AppDestroyOptions = {}): Promise<void> {

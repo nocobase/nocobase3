@@ -109,6 +109,7 @@ export interface NotificationQueryStore {
   getDelivery(id: string): Promise<DeliveryRecord | undefined>;
   listDeliveryStatusEvents(deliveryId: string): Promise<readonly DeliveryStatusEventRecord[]>;
   listDeliveryAttempts(deliveryId: string): Promise<readonly DeliveryAttemptRecord[]>;
+  listUserNotificationItemsByDelivery(deliveryId: string): Promise<readonly UserNotificationItemRecord[]>;
   listInbox(input: InboxQuery): Promise<readonly UserNotificationItemRecord[]>;
   countUnread(input: InboxQuery): Promise<number>;
 }
@@ -251,6 +252,9 @@ export function createMemoryNotificationStore(): NotificationStore {
     },
     async listDeliveryAttempts(deliveryId): Promise<readonly DeliveryAttemptRecord[]> {
       return [...attempts.values()].filter((attempt) => attempt.deliveryId === deliveryId).sort((a, b) => a.attemptSequence - b.attemptSequence).map((attempt) => structuredClone(attempt));
+    },
+    async listUserNotificationItemsByDelivery(deliveryId): Promise<readonly UserNotificationItemRecord[]> {
+      return [...userItems.values()].filter((item) => item.deliveryId === deliveryId).map((item) => structuredClone(item));
     },
     async listDueDeliveries(input): Promise<readonly DeliveryRecord[]> {
       return [...deliveries.values()]
@@ -411,6 +415,10 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
     async listDeliveryAttempts(deliveryId): Promise<readonly DeliveryAttemptRecord[]> {
       const rows = await database.query().selectFrom<DeliveryAttemptRow>('notificationDeliveryAttempts').selectAll().where('deliveryId', '=', deliveryId).orderBy('attemptSequence', 'asc').execute<DeliveryAttemptRow>();
       return rows.map(fromDeliveryAttemptRow);
+    },
+    async listUserNotificationItemsByDelivery(deliveryId): Promise<readonly UserNotificationItemRecord[]> {
+      const rows = await database.query().selectFrom<UserNotificationItemRow>('userNotificationItems').selectAll().where('deliveryId', '=', deliveryId).execute<UserNotificationItemRow>();
+      return rows.map(fromUserNotificationItemRow);
     },
     async listDueDeliveries(input): Promise<readonly DeliveryRecord[]> {
       const rows = await database.query().selectFrom<DeliveryRow>('notificationDeliveries').selectAll()

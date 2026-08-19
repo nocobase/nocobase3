@@ -63,6 +63,8 @@ export function mountAppAtPublicBasePath(app: Hono, publicBasePath: string): Hon
 
   if (isClosableApp(app)) {
     return Object.assign(mounted, {
+      websocketServer: app.websocketServer,
+      handleUpgrade: app.handleUpgrade,
       start: () => app.start(),
       close: () => app.close(),
     });

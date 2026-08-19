@@ -107,6 +107,30 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     }
   });
 
+  server.on('upgrade', async (req, socket, head) => {
+    try {
+      const path = requestPath(req);
+      const appId = resolveAppId(path, registry);
+      if (!appId) {
+        socket.destroy();
+        return;
+      }
+
+      const definition = registry.definition(appId);
+      if (!definition?.server || isAppAssetPath(getPathInsideApp(definition, path))) {
+        socket.destroy();
+        return;
+      }
+
+      await registry.handleUpgrade(appId, req, socket, head);
+    } catch (error) {
+      if (!(error instanceof AppRegistryError) || error.status >= 500) {
+        console.error(error);
+      }
+      socket.destroy();
+    }
+  });
+
   return {
     appCatalog,
     registry,
@@ -130,6 +154,8 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       );
     },
     async close(reason = 'host shutdown') {
+      await registry.destroyAll(reason);
+
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error) {
@@ -144,8 +170,6 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
           throw error;
         }
       });
-
-      await registry.destroyAll(reason);
     },
   };
 }
