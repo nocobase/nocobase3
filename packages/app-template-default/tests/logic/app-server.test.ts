@@ -17,15 +17,28 @@ import { joinBasePath, normalizeBasePath, resolveAppNameFromBasePath } from '@no
 
 import {
   createApp,
-  type ClosableApp,
+  type AppDisposer,
+  type AppScope,
   createServer as createEmbeddedServer,
   createStandaloneRuntime,
   createStandaloneServer,
   queueDemoExecutions,
 } from '../../server/index.ts';
 import type { AppConfig } from '../../server/config/index.ts';
+import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 
-const apps: ClosableApp[] = [];
+interface CloseableResource {
+  close(): Promise<void>;
+}
+
+type TestApp = ReturnType<typeof createApp> & CloseableResource;
+
+interface RegisteredTestDisposer {
+  name: string;
+  dispose: AppDisposer;
+}
+
+const apps: CloseableResource[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
 
@@ -55,10 +68,10 @@ afterEach(async () => {
 
 describe('app server', () => {
   it('creates embedded apps from a scope', async () => {
-    const app = await createEmbeddedServer({
+    const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/embedded-app-template-default',
-    });
+    }));
 
     const response = await app.request('http://localhost/api/healthz');
 
@@ -87,29 +100,19 @@ describe('app server', () => {
     expect(html).toContain('This page is rendered by an app-local server route.');
   });
 
-  it('returns a closable embedded app and registers the same close handler with the scope', async () => {
-    const registeredDisposers: Array<{
-      name: string;
-      dispose: () => void | Promise<void>;
-    }> = [];
-    const app = await createEmbeddedServer({
+  it('registers embedded app resources with the scope', async () => {
+    const registeredDisposers: RegisteredTestDisposer[] = [];
+    const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/embedded-app-template-default',
-      registerDisposer(name, dispose) {
-        registeredDisposers.push({ name, dispose });
-      },
-    });
+    }, registeredDisposers));
 
-    expect(typeof app.close).toBe('function');
-    expect(registeredDisposers).toEqual([
-      {
-        name: 'app',
-        dispose: app.close,
-      },
-    ]);
+    expect(typeof (app as { close?: unknown }).close).toBe('undefined');
+    expect(registeredDisposers.map((disposer) => disposer.name)).toEqual(['runtime', 'app-deps']);
 
-    await expect(app.close()).resolves.toBeUndefined();
-    await expect(app.close()).resolves.toBeUndefined();
+    await expect(registeredDisposers[1].dispose()).resolves.toBeUndefined();
+    await expect(registeredDisposers[1].dispose()).resolves.toBeUndefined();
+    await expect(registeredDisposers[0].dispose()).resolves.toBeUndefined();
     await expect(registeredDisposers[0].dispose()).resolves.toBeUndefined();
   });
 
@@ -121,11 +124,11 @@ describe('app server', () => {
       '<div id="root"></div><script type="module" src="/app-template-default/assets/index.js"></script>',
     );
 
-    const app = await createEmbeddedServer({
+    const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/app-template-default',
       clientDir: root,
-    });
+    }));
 
     const response = await app.request('http://localhost/');
     const html = await response.text();
@@ -160,12 +163,12 @@ describe('app server', () => {
     );
     writeFileSync(path.join(clientDir, 'index.html'), '<script type="module" src="/app-template-default/assets/index.js"></script>');
 
-    const app = await createEmbeddedServer({
+    const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/app-template-default',
       rootDir: appRoot,
       clientDir,
-    });
+    }));
 
     const api = await app.request('http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F');
     await expect(api.json()).resolves.toEqual({
@@ -643,7 +646,7 @@ describe('app server', () => {
       viteRequestCount += 1;
     });
     const runtime = createStandaloneRuntime();
-    const app = createStandaloneServer({ viteDevUrl });
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
     const publicBasePath = runtime.config.app.publicBasePath;
 
     const response = await app.request(`http://localhost${publicBasePath}/api/healthz`);
@@ -661,7 +664,7 @@ describe('app server', () => {
 
   it('mounts standalone app-local routes behind the public base path', async () => {
     const runtime = createStandaloneRuntime();
-    const app = createStandaloneServer({ viteDevUrl: false });
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
     const publicBasePath = runtime.config.app.publicBasePath;
     const expectedHealth = {
       ok: true,
@@ -682,7 +685,7 @@ describe('app server', () => {
   });
 
   it('returns a closable standalone app', async () => {
-    const app = createStandaloneServer({ viteDevUrl: false });
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
 
     expect(typeof app.close).toBe('function');
     await expect(app.close()).resolves.toBeUndefined();
@@ -695,7 +698,7 @@ describe('app server', () => {
       response.end(`vite:${_request.method}:${_request.url}`);
     });
     const runtime = createStandaloneRuntime();
-    const app = createStandaloneServer({ viteDevUrl });
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
     const publicBasePath = runtime.config.app.publicBasePath;
     const requestPath = `${publicBasePath}/settings?tab=apps`;
 
@@ -879,7 +882,7 @@ interface CreateTestAppOptions {
   };
 }
 
-function createTestApp(options: CreateTestAppOptions = {}): ClosableApp {
+function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   const publicBasePath = normalizeBasePath(options.publicBasePath ?? '/app-template-default');
   const internalApiProxyPath = '/v2/api';
   const config = {
@@ -925,10 +928,35 @@ function createTestApp(options: CreateTestAppOptions = {}): ClosableApp {
     runMigrations: () => Promise.resolve(undefined),
     dispose: () => Promise.resolve(),
   };
-  const app = createApp(runtime);
+  const lifecycle = createAppDisposerRegistry();
+  const app = Object.assign(createApp(runtime, { lifecycle }), {
+    close: () => lifecycle.disposeAll(),
+  });
 
-  apps.push(app);
-  return app;
+  return trackCloseable(app);
+}
+
+function createEmbeddedTestScope(
+  options: Omit<AppScope, 'registerDisposer'>,
+  registeredDisposers: RegisteredTestDisposer[] = [],
+): AppScope {
+  const lifecycle = createAppDisposerRegistry();
+  apps.push({
+    close: () => lifecycle.disposeAll(),
+  });
+
+  return {
+    ...options,
+    registerDisposer(name, dispose) {
+      registeredDisposers.push({ name, dispose });
+      lifecycle.registerDisposer(name, dispose);
+    },
+  };
+}
+
+function trackCloseable<T extends CloseableResource>(resource: T): T {
+  apps.push(resource);
+  return resource;
 }
 
 function firstCookie(response: Response): string {

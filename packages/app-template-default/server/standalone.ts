@@ -6,20 +6,54 @@ import { fileURLToPath } from 'node:url';
 import { createAppRuntime, type AppRuntime } from '@nocobase/app-server/runtime';
 
 import type { AppConfig } from './config/index.js';
-import type { ClosableApp } from './app.js';
-import { createAppFromRuntime, loadStandaloneAppConfig, mountAppAtPublicBasePath, prepareAppRuntime } from './runtime/index.js';
+import {
+  createAppDisposerRegistry,
+  createAppFromRuntime,
+  createPublicBasePathAdapter,
+  loadStandaloneAppConfig,
+  onceAsync,
+  prepareAppRuntime,
+  type AppDisposerRegistry,
+} from './runtime/index.js';
+
+const HTTP_DRAIN_TIMEOUT_MS = 30_000;
+const FORCE_EXIT_TIMEOUT_MS = 35_000;
+
+interface NodeHttpConnectionControls {
+  closeAllConnections?(): void;
+  closeIdleConnections?(): void;
+}
 
 export interface StandaloneServerOptions {
   viteDevUrl?: string | false;
 }
 
+export interface StandaloneServerListenOptions {
+  readonly hostname: string;
+  readonly port: number;
+  readonly startLog: boolean;
+}
+
 export interface StandaloneServer extends Hono {
+  readonly listenOptions: StandaloneServerListenOptions;
   close(): Promise<void>;
 }
 
-export function createStandaloneServer(options: StandaloneServerOptions = {}): StandaloneServer {
-  const runtime = createStandaloneRuntime();
-  return createStandaloneAppFromRuntime(runtime, options);
+export async function createStandaloneServer(
+  options: StandaloneServerOptions = {},
+): Promise<StandaloneServer> {
+  const lifecycle = createAppDisposerRegistry();
+
+  try {
+    const runtime = createStandaloneRuntime();
+
+    lifecycle.registerDisposer('runtime', onceAsync(() => runtime.dispose()));
+    await prepareAppRuntime(runtime);
+
+    return createStandaloneAppFromRuntime(runtime, lifecycle, options);
+  } catch (error) {
+    return disposeAfterStartupFailure(lifecycle.disposeAll, error);
+  }
 }
 
 export function startServer(): void {
@@ -30,25 +64,26 @@ export function startServer(): void {
 }
 
 async function startServerAsync(): Promise<void> {
-  const runtime = createStandaloneRuntime();
-  await prepareAppRuntime(runtime);
-  const app = createStandaloneAppFromRuntime(runtime);
-  const { config } = runtime;
+  const app = await createStandaloneServer();
 
-  const server = serve(
-    {
-      fetch: app.fetch,
-      hostname: config.server.host,
-      port: config.server.port,
-    },
-    (info) => {
-      if (config.server.startLog) {
-        console.log(`App server listening on http://${info.address}:${info.port}`);
-      }
-    },
-  );
+  try {
+    const server = serve(
+      {
+        fetch: app.fetch,
+        hostname: app.listenOptions.hostname,
+        port: app.listenOptions.port,
+      },
+      (info) => {
+        if (app.listenOptions.startLog) {
+          console.log(`App server listening on http://${info.address}:${info.port}`);
+        }
+      },
+    );
 
-  registerShutdownHandlers(app, server);
+    registerShutdownHandlers(app, server);
+  } catch (error) {
+    await disposeAfterStartupFailure(app.close, error);
+  }
 }
 
 export function createStandaloneRuntime(): AppRuntime<AppConfig> {
@@ -57,38 +92,136 @@ export function createStandaloneRuntime(): AppRuntime<AppConfig> {
 
 function createStandaloneAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
+  lifecycle: AppDisposerRegistry,
   options: StandaloneServerOptions = {},
 ): StandaloneServer {
-  const app = createAppFromRuntime(runtime, options);
-  const mounted = mountAppAtPublicBasePath(app, runtime.config.app.publicBasePath);
-  const closeApp = mounted.close;
-  const close = onceAsync(async () => {
-    await Promise.all([
-      closeApp(),
-      runtime.dispose(),
-    ]);
+  const app = createAppFromRuntime(runtime, {
+    ...options,
+    lifecycle,
+  });
+  const mounted = createPublicBasePathAdapter(app, runtime.config.app.publicBasePath);
+
+  return Object.assign(mounted, {
+    listenOptions: {
+      hostname: runtime.config.server.host,
+      port: runtime.config.server.port,
+      startLog: runtime.config.server.startLog,
+    },
+    close: () => lifecycle.disposeAll(),
+  });
+}
+
+function registerShutdownHandlers(app: StandaloneServer, server: ReturnType<typeof serve>): void {
+  let shuttingDown = false;
+  let shutdownPromise: Promise<void> | undefined;
+
+  const handleShutdown = (signal: NodeJS.Signals): void => {
+    if (shuttingDown) {
+      console.error(`Received ${signal} during app server shutdown; forcing exit.`);
+      closeAllConnections(server);
+      process.exit(1);
+    }
+
+    shuttingDown = true;
+    shutdownPromise ??= shutdownAppServer(app, server, signal);
+    void shutdownPromise.catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+  };
+
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+}
+
+async function shutdownAppServer(
+  app: StandaloneServer,
+  server: ReturnType<typeof serve>,
+  signal: NodeJS.Signals,
+): Promise<void> {
+  const forceExitTimer = setTimeout(() => {
+    console.error(`App server shutdown after ${signal} exceeded ${FORCE_EXIT_TIMEOUT_MS}ms; forcing exit.`);
+    closeAllConnections(server);
+    process.exit(1);
+  }, FORCE_EXIT_TIMEOUT_MS);
+  forceExitTimer.unref();
+
+  try {
+    await closeServerWithGracePeriod(server, HTTP_DRAIN_TIMEOUT_MS);
+  } finally {
+    try {
+      await app.close();
+    } finally {
+      clearTimeout(forceExitTimer);
+    }
+  }
+}
+
+async function closeServerWithGracePeriod(server: ReturnType<typeof serve>, timeoutMs: number): Promise<void> {
+  const closePromise = closeServer(server);
+  let timeout: NodeJS.Timeout | undefined;
+  let timedOut = false;
+
+  closeIdleConnections(server);
+
+  const timeoutPromise = new Promise<void>((resolve) => {
+    timeout = setTimeout(() => {
+      timedOut = true;
+      console.error(`HTTP server did not drain within ${timeoutMs}ms; closing active connections.`);
+      closeAllConnections(server);
+      resolve();
+    }, timeoutMs);
+    timeout.unref();
   });
 
-  return Object.assign(mounted, { close });
+  try {
+    await Promise.race([closePromise, timeoutPromise]);
+
+    if (timedOut) {
+      closePromise.catch((error) => {
+        console.error('HTTP server close failed after the drain timeout.', error);
+      });
+    }
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
-function registerShutdownHandlers(app: ClosableApp, server: ReturnType<typeof serve>): void {
-  const shutdown = async (): Promise<void> => {
-    await app.close();
-    server.close();
-  };
-
-  process.once('SIGINT', () => void shutdown());
-  process.once('SIGTERM', () => void shutdown());
+function closeIdleConnections(server: ReturnType<typeof serve>): void {
+  getNodeHttpConnectionControls(server).closeIdleConnections?.();
 }
 
-function onceAsync(dispose: () => void | Promise<void>): () => Promise<void> {
-  let promise: Promise<void> | undefined;
+function closeAllConnections(server: ReturnType<typeof serve>): void {
+  getNodeHttpConnectionControls(server).closeAllConnections?.();
+}
 
-  return () => {
-    promise ??= Promise.resolve().then(dispose);
-    return promise;
-  };
+function getNodeHttpConnectionControls(server: ReturnType<typeof serve>): NodeHttpConnectionControls {
+  return server as unknown as NodeHttpConnectionControls;
+}
+
+function closeServer(server: ReturnType<typeof serve>): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+async function disposeAfterStartupFailure(dispose: () => Promise<void>, startupError: unknown): Promise<never> {
+  try {
+    await dispose();
+  } catch (disposeError) {
+    throw new AggregateError([startupError, disposeError], 'Failed to start server and dispose resources');
+  }
+
+  throw startupError;
 }
 
 if (isEntrypoint()) {

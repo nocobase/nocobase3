@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { CreateAppOptions } from './app-options.js';
+import { onceAsync } from './runtime/disposers.js';
 import { registerNocoBaseApiProxyRoutes, resolveNocoBaseApiUrl } from '@nocobase/app-server/proxy';
 import { registerSpaRoutes } from '@nocobase/app-server/spa';
 import {
@@ -17,14 +18,10 @@ import { createAppDeps, disposeAppDeps } from './runtime/deps.js';
 import { createAppServices } from './services/index.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
 
-export type { CreateAppOptions, SpaHandler } from './app-options.js';
+export type { AppDisposer, AppLifecycle, CreateAppOptions, SpaHandler } from './app-options.js';
 export { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
-export interface ClosableApp extends Hono {
-  close(): Promise<void>;
-}
-
-export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOptions = {}): ClosableApp {
+export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOptions): Hono {
   const { config } = runtime;
   const publicBasePath = normalizeBasePath(config.app.publicBasePath);
   const internalBasePath = normalizeBasePath(config.app.internalBasePath);
@@ -33,6 +30,7 @@ export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOpti
   const publicApiUrl = config.app.publicApiUrl;
   const nocoBaseApiUrl = resolveNocoBaseApiUrl(config.app.nocoBaseApiUrl);
   const deps = createAppDeps(runtime);
+  options.lifecycle.registerDisposer('app-deps', onceAsync(() => disposeAppDeps(deps)));
   const services = createAppServices(runtime, deps);
   const app = new Hono();
 
@@ -77,16 +75,5 @@ export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOpti
     }),
   });
 
-  return Object.assign(app, {
-    close: onceAsync(() => disposeAppDeps(deps)),
-  });
-}
-
-function onceAsync(dispose: () => void | Promise<void>): () => Promise<void> {
-  let promise: Promise<void> | undefined;
-
-  return () => {
-    promise ??= Promise.resolve().then(dispose);
-    return promise;
-  };
+  return app;
 }
