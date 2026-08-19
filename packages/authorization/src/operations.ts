@@ -23,11 +23,19 @@ export type AuthorizationOperation =
   | { type: 'removeRestrictionRule'; key: string };
 
 function equal(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-  if (left instanceof Date && right instanceof Date) return left.getTime() === right.getTime();
-  if (typeof left !== typeof right || left == null || right == null) return false;
+  if (Object.is(left, right)) {
+    return true;
+  }
+  if (left instanceof Date && right instanceof Date) {
+    return left.getTime() === right.getTime();
+  }
+  if (typeof left !== typeof right || left == null || right == null) {
+    return false;
+  }
   if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
     return left.every((item, index) => equal(item, right[index]));
   }
   if (typeof left === 'object' && typeof right === 'object') {
@@ -56,10 +64,14 @@ function diffKeyed<T>(
   const desiredMap = keyed(desired, key);
   const operations: AuthorizationOperation[] = [];
   for (const [itemKey, value] of desiredMap) {
-    if (!currentMap.has(itemKey) || !equal(currentMap.get(itemKey), value)) operations.push(upsert(itemKey, value));
+    if (!currentMap.has(itemKey) || !equal(currentMap.get(itemKey), value)) {
+      operations.push(upsert(itemKey, value));
+    }
   }
   for (const itemKey of currentMap.keys()) {
-    if (!desiredMap.has(itemKey)) operations.push(remove(itemKey));
+    if (!desiredMap.has(itemKey)) {
+      operations.push(remove(itemKey));
+    }
   }
   return operations;
 }
@@ -90,7 +102,9 @@ export function diffAuthorization(
     }
   }
   for (const resource of Object.keys(currentDefaults)) {
-    if (!(resource in desiredDefaults)) operations.push({ type: 'removeOrganizationWideDefault', resource });
+    if (!(resource in desiredDefaults)) {
+      operations.push({ type: 'removeOrganizationWideDefault', resource });
+    }
   }
   operations.push(...diffKeyed(current.sharingRules, desired.sharingRules, (item) => item.key,
     (key, value) => ({ type: 'upsertSharingRule', key, value }),

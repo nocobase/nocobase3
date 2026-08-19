@@ -4,7 +4,9 @@ class Registry<T extends { key: string }> {
   private readonly items = new Map<string, T>();
 
   register(item: T): void {
-    if (this.items.has(item.key)) throw new Error(`Duplicate registration: ${item.key}`);
+    if (this.items.has(item.key)) {
+      throw new Error(`Duplicate registration: ${item.key}`);
+    }
     this.items.set(item.key, item);
   }
 
@@ -21,9 +23,13 @@ export class ResourceRegistry {
   private readonly registry = new Registry<ResourceDefinition & { key: string }>();
 
   register(resource: ResourceDefinition): void {
-    if (new Set(resource.actions).size !== resource.actions.length) throw new Error(`Resource "${resource.name}" has duplicate actions`);
+    if (new Set(resource.actions).size !== resource.actions.length) {
+      throw new Error(`Resource "${resource.name}" has duplicate actions`);
+    }
     for (const [name, field] of Object.entries(resource.fields)) {
-      if (!name) throw new Error(`Resource "${resource.name}" has an empty field name`);
+      if (!name) {
+        throw new Error(`Resource "${resource.name}" has an empty field name`);
+      }
       if (field.type === 'relation' && (!field.target || !['one', 'many'].includes(field.cardinality))) {
         throw new Error(`Resource "${resource.name}" has an invalid relation field "${name}"`);
       }

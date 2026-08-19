@@ -40,8 +40,12 @@ export class MemoryAuthorizationStore implements AuthorizationStore {
   private readonly restrictionRules: RestrictionRule[];
 
   constructor(options: MemoryAuthorizationStoreOptions = {}) {
-    for (const item of options.permissionSets ?? []) this.permissionSets.set(item.key, item);
-    for (const item of options.permissionSetGroups ?? []) this.permissionSetGroups.set(item.key, item);
+    for (const item of options.permissionSets ?? []) {
+      this.permissionSets.set(item.key, item);
+    }
+    for (const item of options.permissionSetGroups ?? []) {
+      this.permissionSetGroups.set(item.key, item);
+    }
     this.assignments = [...(options.assignments ?? [])];
     this.defaults = options.organizationWideDefaults ?? {};
     this.sharingRules = [...(options.sharingRules ?? [])];
@@ -51,9 +55,15 @@ export class MemoryAuthorizationStore implements AuthorizationStore {
   async findAssignments(subjects: readonly AssignmentSubject[], now: Date): Promise<Assignment[]> {
     const keys = new Set(subjects.map((subject) => `${subject.type}:${subject.id}`));
     return this.assignments.filter((assignment) => {
-      if (!keys.has(`${assignment.subject.type}:${assignment.subject.id}`)) return false;
-      if (assignment.startsAt && assignment.startsAt > now) return false;
-      if (assignment.expiresAt && assignment.expiresAt <= now) return false;
+      if (!keys.has(`${assignment.subject.type}:${assignment.subject.id}`)) {
+        return false;
+      }
+      if (assignment.startsAt && assignment.startsAt > now) {
+        return false;
+      }
+      if (assignment.expiresAt && assignment.expiresAt <= now) {
+        return false;
+      }
       return true;
     });
   }
@@ -89,7 +99,9 @@ export class MemoryAuthorizationStore implements AuthorizationStore {
     collection: string,
     identifier: string,
   ): Promise<FilterAst | undefined> {
-    if (rule.records.type !== 'records' || !rule.records.ids.length) return undefined;
+    if (rule.records.type !== 'records' || !rule.records.ids.length) {
+      return undefined;
+    }
     return filter(collection, condition(identifier, '$in', rule.records.ids));
   }
 

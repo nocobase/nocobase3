@@ -83,9 +83,13 @@ function validateAction(
   }
   const fields = new Set(Object.keys(resource.fields));
   const validateFields = (fieldType: 'inputFields' | 'outputFields', values: '*' | readonly string[] | undefined) => {
-    if (values === '*' || values == null) return;
+    if (values === '*' || values == null) {
+      return;
+    }
     for (const [fieldIndex, field] of values.entries()) {
-      if (!fields.has(field)) add({ severity: 'error', code: 'UNKNOWN_FIELD', path: [...actionPath, fieldType, fieldIndex], message: `Unknown field "${field}" on resource "${resource.name}"` });
+      if (!fields.has(field)) {
+        add({ severity: 'error', code: 'UNKNOWN_FIELD', path: [...actionPath, fieldType, fieldIndex], message: `Unknown field "${field}" on resource "${resource.name}"` });
+      }
     }
   };
   validateFields('inputFields', action.inputFields);
@@ -101,7 +105,9 @@ function validateRuleActions(
   resource: ResourceDefinition,
   add: (diagnostic: AuthorizationDiagnostic) => void,
 ): void {
-  if (!actions.length) add({ severity: 'error', code: 'EMPTY_VALUE', path, message: 'At least one action is required' });
+  if (!actions.length) {
+    add({ severity: 'error', code: 'EMPTY_VALUE', path, message: 'At least one action is required' });
+  }
   actions.forEach((action, index) => {
     if (!resource.actions.includes(action)) {
       add({ severity: 'error', code: 'UNKNOWN_ACTION', path: [...path, index], message: `Unknown action "${action}" on resource "${resource.name}"` });
@@ -133,10 +139,14 @@ export function validateAuthorization(
         return;
       }
       const sameResource = set.permissions.findIndex((item) => item.resource === permission.resource);
-      if (sameResource !== permissionIndex) add({ severity: 'error', code: 'DUPLICATE_PERMISSION', path: [...permissionPath, 'resource'], message: `Permission set "${set.key}" declares resource "${permission.resource}" more than once` });
+      if (sameResource !== permissionIndex) {
+        add({ severity: 'error', code: 'DUPLICATE_PERMISSION', path: [...permissionPath, 'resource'], message: `Permission set "${set.key}" declares resource "${permission.resource}" more than once` });
+      }
       const seenActions = new Set<string>();
       permission.actions.forEach((action, actionIndex) => {
-        if (seenActions.has(action.action)) add({ severity: 'error', code: 'DUPLICATE_ACTION', path: [...permissionPath, 'actions', actionIndex], message: `Permission set "${set.key}" declares action "${action.action}" more than once` });
+        if (seenActions.has(action.action)) {
+          add({ severity: 'error', code: 'DUPLICATE_ACTION', path: [...permissionPath, 'actions', actionIndex], message: `Permission set "${set.key}" declares action "${action.action}" more than once` });
+        }
         seenActions.add(action.action);
         validateAction(action, actionIndex, permissionPath, resource, policies, add);
       });
@@ -147,17 +157,23 @@ export function validateAuthorization(
   definition.permissionSetGroups.forEach((group, groupIndex) => {
     permissionSetGroups.set(group.key, groupIndex);
     group.permissionSets.forEach((key, itemIndex) => {
-      if (!permissionSets.has(key)) add({ severity: 'error', code: 'UNKNOWN_PERMISSION_SET', path: ['permissionSetGroups', groupIndex, 'permissionSets', itemIndex], message: `Unknown Permission Set "${key}"` });
+      if (!permissionSets.has(key)) {
+        add({ severity: 'error', code: 'UNKNOWN_PERMISSION_SET', path: ['permissionSetGroups', groupIndex, 'permissionSets', itemIndex], message: `Unknown Permission Set "${key}"` });
+      }
     });
   });
   const assignmentIds = new Set<string>();
   definition.assignments.forEach((assignment, assignmentIndex) => {
-    if (assignmentIds.has(assignment.id)) add({ severity: 'error', code: 'DUPLICATE_KEY', path: ['assignments', assignmentIndex, 'id'], message: `Duplicate assignment id "${assignment.id}"` });
+    if (assignmentIds.has(assignment.id)) {
+      add({ severity: 'error', code: 'DUPLICATE_KEY', path: ['assignments', assignmentIndex, 'id'], message: `Duplicate assignment id "${assignment.id}"` });
+    }
     assignmentIds.add(assignment.id);
     const targetPath = ['assignments', assignmentIndex, 'target', 'key'];
     const targetMap = assignment.target.type === 'permissionSet' ? permissionSets : permissionSetGroups;
     const targetCode = assignment.target.type === 'permissionSet' ? 'UNKNOWN_PERMISSION_SET' : 'UNKNOWN_PERMISSION_SET_GROUP';
-    if (!targetMap.has(assignment.target.key)) add({ severity: 'error', code: targetCode, path: targetPath, message: `Unknown ${assignment.target.type} "${assignment.target.key}"` });
+    if (!targetMap.has(assignment.target.key)) {
+      add({ severity: 'error', code: targetCode, path: targetPath, message: `Unknown ${assignment.target.type} "${assignment.target.key}"` });
+    }
   });
   for (const resource of Object.keys(definition.organizationWideDefaults)) {
     const resourceDefinition = resources.get(resource);
@@ -175,9 +191,13 @@ export function validateAuthorization(
     } else {
       validateRuleActions(rule.actions, [...rulePath, 'actions'], resourceDefinition, add);
     }
-    if (!rule.subjects.length) add({ severity: 'error', code: 'EMPTY_VALUE', path: [...rulePath, 'subjects'], message: 'At least one sharing recipient is required' });
+    if (!rule.subjects.length) {
+      add({ severity: 'error', code: 'EMPTY_VALUE', path: [...rulePath, 'subjects'], message: 'At least one sharing recipient is required' });
+    }
     if (rule.records.type === 'criteria') {
-      if (!rule.records.scopes.length) add({ severity: 'error', code: 'EMPTY_VALUE', path: [...rulePath, 'records', 'scopes'], message: 'At least one sharing record scope is required' });
+      if (!rule.records.scopes.length) {
+        add({ severity: 'error', code: 'EMPTY_VALUE', path: [...rulePath, 'records', 'scopes'], message: 'At least one sharing record scope is required' });
+      }
       rule.records.scopes.forEach((scope, scopeIndex) => {
         validateScope(scope, [...rulePath, 'records', 'scopes', scopeIndex], 'sharingRule', policies, add);
       });
@@ -195,8 +215,12 @@ export function validateAuthorization(
     } else {
       validateRuleActions(rule.actions, [...rulePath, 'actions'], resourceDefinition, add);
     }
-    if (!rule.subjects.length) add({ severity: 'error', code: 'EMPTY_VALUE', path: [...rulePath, 'subjects'], message: 'At least one restricted subject is required' });
-    if (!rule.scopes.length) add({ severity: 'error', code: 'EMPTY_VALUE', path: [...rulePath, 'scopes'], message: 'At least one restriction scope is required' });
+    if (!rule.subjects.length) {
+      add({ severity: 'error', code: 'EMPTY_VALUE', path: [...rulePath, 'subjects'], message: 'At least one restricted subject is required' });
+    }
+    if (!rule.scopes.length) {
+      add({ severity: 'error', code: 'EMPTY_VALUE', path: [...rulePath, 'scopes'], message: 'At least one restriction scope is required' });
+    }
     rule.scopes.forEach((scope, scopeIndex) => {
       validateScope(scope, [...rulePath, 'scopes', scopeIndex], 'restrictionRule', policies, add);
     });

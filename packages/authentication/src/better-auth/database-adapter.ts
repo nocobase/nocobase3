@@ -40,14 +40,18 @@ function conditionExpression(eb: ExpressionBuilder, condition: CleanWhere): Expr
     gt: '>',
     gte: '>=',
   }[operator] as ComparisonOperator | undefined;
-  if (!sqlOperator) throw new Error(`Unsupported Better Auth operator: ${operator}`);
+  if (!sqlOperator) {
+    throw new Error(`Unsupported Better Auth operator: ${operator}`);
+  }
   return eb(field, sqlOperator, value);
 }
 
 function whereExpression(eb: ExpressionBuilder, where: CleanWhere[]): Expression<SqlBool> {
   const branches: Array<Array<Expression<SqlBool>>> = [[]];
   for (const condition of where) {
-    if (condition.connector === 'OR' && branches.at(-1)!.length) branches.push([]);
+    if (condition.connector === 'OR' && branches.at(-1)!.length) {
+      branches.push([]);
+    }
     branches.at(-1)!.push(conditionExpression(eb, condition));
   }
   const expressions = branches
@@ -83,7 +87,9 @@ async function resolveInsensitiveWhere(
   const knex = await connection.client<Knex>();
   return Promise.all(where.map(async (condition) => {
     const { field, value, operator, mode } = condition;
-    if (mode !== 'insensitive' || typeof value !== 'string') return condition;
+    if (mode !== 'insensitive' || typeof value !== 'string') {
+      return condition;
+    }
 
     // Let the Database Query API resolve logical model/field names first. The
     // stable lowercase aliases keep this small raw fallback independent of the
@@ -102,12 +108,14 @@ async function resolveInsensitiveWhere(
     } else {
       const sqlOperator = operator === 'eq' ? '='
         : operator === 'ne' ? '<>'
-        : operator === 'lt' ? '<'
-        : operator === 'lte' ? '<='
-        : operator === 'gt' ? '>'
-        : operator === 'gte' ? '>='
-        : undefined;
-      if (!sqlOperator) return condition;
+          : operator === 'lt' ? '<'
+            : operator === 'lte' ? '<='
+              : operator === 'gt' ? '>'
+                : operator === 'gte' ? '>='
+                  : undefined;
+      if (!sqlOperator) {
+        return condition;
+      }
       query.whereRaw(`lower(??) ${sqlOperator} lower(?)`, ['authcomparevalue', value]);
     }
     const ids = (await query).map((row) => row.id);
@@ -129,30 +137,45 @@ function buildCustomAdapter(
         .executeTakeFirst() as typeof data;
     },
     async findOne({ model, where, select, join }) {
-      if (join) throw new Error('Better Auth joins are not enabled by the NocoBase database adapter');
+      if (join) {
+        throw new Error('Better Auth joins are not enabled by the NocoBase database adapter');
+      }
       const normalized = await resolveInsensitiveWhere(connection, model, where);
       return (await applySelectWhere(connection.query.selectFrom(model), normalized)
         .select(select?.length ? select : fieldsForModel(model))
         .executeTakeFirst()) ?? null;
     },
     async findMany({ model, where, limit, select, sortBy, offset, join }) {
-      if (join) throw new Error('Better Auth joins are not enabled by the NocoBase database adapter');
+      if (join) {
+        throw new Error('Better Auth joins are not enabled by the NocoBase database adapter');
+      }
       const normalized = await resolveInsensitiveWhere(connection, model, where);
       let query = applySelectWhere(connection.query.selectFrom(model), normalized)
         .select(select?.length ? select : fieldsForModel(model));
-      if (sortBy) query = query.orderBy(mapField(model, sortBy.field), sortBy.direction);
-      else if (offset != null) query = query.orderBy('id');
-      if (limit != null) query = query.limit(limit);
-      if (offset != null) query = query.offset(offset);
+      if (sortBy) {
+        query = query.orderBy(mapField(model, sortBy.field), sortBy.direction);
+      } else if (offset != null) {
+        query = query.orderBy('id');
+      }
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+      if (offset != null) {
+        query = query.offset(offset);
+      }
       return query.execute();
     },
     async update({ model, where, update }) {
-      if (!where.length) return null;
+      if (!where.length) {
+        return null;
+      }
       const normalized = await resolveInsensitiveWhere(connection, model, where);
       const existing = await applySelectWhere(connection.query.selectFrom(model), normalized)
         .select('id')
         .executeTakeFirst();
-      if (!existing) return null;
+      if (!existing) {
+        return null;
+      }
       await connection.query.updateTable(model)
         .set(update as Record<string, unknown>)
         .where('id', '=', existing.id)
@@ -171,7 +194,9 @@ function buildCustomAdapter(
       return result.updatedCount ?? 0;
     },
     async delete({ model, where }) {
-      if (!where.length) return;
+      if (!where.length) {
+        return;
+      }
       const normalized = await resolveInsensitiveWhere(connection, model, where);
       await applyDeleteWhere(connection.query.deleteFrom(model), normalized).execute();
     },
@@ -206,7 +231,9 @@ export function databaseAdapter(
         supportsBooleans: true,
         supportsNumericIds: false,
         transaction: async (callback) => {
-          if (!betterAuthOptions) throw new Error('Better Auth adapter is not initialized');
+          if (!betterAuthOptions) {
+            throw new Error('Better Auth adapter is not initialized');
+          }
           return currentConnection.transaction(async (transaction) => callback(factory(transaction)(betterAuthOptions!)));
         },
       },

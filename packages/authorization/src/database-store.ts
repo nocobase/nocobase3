@@ -18,13 +18,19 @@ import type {
 } from './types.js';
 
 function jsonValue<T>(value: unknown, fallback: T): T {
-  if (value == null) return fallback;
-  if (typeof value === 'string') return JSON.parse(value) as T;
+  if (value == null) {
+    return fallback;
+  }
+  if (typeof value === 'string') {
+    return JSON.parse(value) as T;
+  }
   return value as T;
 }
 
 function optionalDate(value: unknown): Date | undefined {
-  if (value == null) return undefined;
+  if (value == null) {
+    return undefined;
+  }
   return value instanceof Date ? value : new Date(value as string | number);
 }
 
@@ -32,7 +38,9 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
   constructor(private readonly connection: DatabaseConnection) {}
 
   async findAssignments(subjects: readonly AssignmentSubject[], now: Date): Promise<Assignment[]> {
-    if (!subjects.length) return [];
+    if (!subjects.length) {
+      return [];
+    }
     const rows = await this.connection.query.selectFrom('authzAssignments')
       .select(['id', 'subjectType', 'subjectId', 'targetType', 'targetId', 'startsAt', 'expiresAt'])
       .where((eb) => eb.or(subjects.map((subject) => eb.and({
@@ -45,14 +53,18 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
     for (const row of rows) {
       const startsAt = optionalDate(row.startsAt);
       const expiresAt = optionalDate(row.expiresAt);
-      if ((startsAt && startsAt > now) || (expiresAt && expiresAt <= now)) continue;
+      if ((startsAt && startsAt > now) || (expiresAt && expiresAt <= now)) {
+        continue;
+      }
       const targetType = row.targetType as 'permissionSet' | 'permissionSetGroup';
       const collection = targetType === 'permissionSet' ? 'authzPermissionSets' : 'authzPermissionSetGroups';
       const target = await this.connection.query.selectFrom(collection)
         .select('key')
         .where('id', '=', row.targetId)
         .executeTakeFirst();
-      if (!target) throw new Error(`Unknown ${targetType} assignment target: ${String(row.targetId)}`);
+      if (!target) {
+        throw new Error(`Unknown ${targetType} assignment target: ${String(row.targetId)}`);
+      }
       assignments.push({
         id: String(row.id),
         subject: { type: row.subjectType as AssignmentSubjectType, id: String(row.subjectId) },
@@ -69,7 +81,9 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
       .select(['id', 'key', 'title'])
       .where('key', '=', key)
       .executeTakeFirst();
-    if (!set) return undefined;
+    if (!set) {
+      return undefined;
+    }
     const rows = await this.connection.query.selectFrom('authzObjectPermissions')
       .select(['resource', 'actions'])
       .where('permissionSetId', '=', set.id)
@@ -87,7 +101,9 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
       .select(['id', 'key', 'title'])
       .where('key', '=', key)
       .executeTakeFirst();
-    if (!group) return undefined;
+    if (!group) {
+      return undefined;
+    }
     const items = await this.connection.query.selectFrom('authzPermissionSetGroupItems')
       .select('permissionSetId')
       .where('permissionSetGroupId', '=', group.id)
@@ -98,7 +114,9 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
         .select('key')
         .where('id', '=', item.permissionSetId)
         .executeTakeFirst();
-      if (!set) throw new Error(`Unknown Permission Set Group item: ${String(item.permissionSetId)}`);
+      if (!set) {
+        throw new Error(`Unknown Permission Set Group item: ${String(item.permissionSetId)}`);
+      }
       keys.push(String(set.key));
     }
     return {
@@ -114,7 +132,9 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
       .select('access')
       .where('resource', '=', resource)
       .executeTakeFirst();
-    if (!row) return undefined;
+    if (!row) {
+      return undefined;
+    }
     return {
       access: row.access as OrganizationWideAccess,
     };
@@ -139,7 +159,9 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
       if (!actions.includes(action)
         || !ruleSubjects.some((subject) => subjectKeys.has(`${subject.type}:${subject.id}`))
         || (startsAt && startsAt > now)
-        || (expiresAt && expiresAt <= now)) return [];
+        || (expiresAt && expiresAt <= now)) {
+        return [];
+      }
       return [{ row, actions, ruleSubjects, startsAt, expiresAt }];
     });
     return candidates.map(({ row, actions, ruleSubjects, startsAt, expiresAt }) => {
@@ -171,8 +193,12 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
     collection: string,
     identifier: string,
   ): Promise<FilterAst | undefined> {
-    if (rule.records.type !== 'records') return undefined;
-    if (!rule.id) throw new Error(`Explicit Sharing Rule "${rule.key}" has no persistent id`);
+    if (rule.records.type !== 'records') {
+      return undefined;
+    }
+    if (!rule.id) {
+      throw new Error(`Explicit Sharing Rule "${rule.key}" has no persistent id`);
+    }
     return filter(collection, membership(identifier, {
       collection: 'authzSharingRuleRecords',
       field: 'recordId',
@@ -181,12 +207,16 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
   }
 
   async matchesFilterMembership(node: FilterMembershipNode, value: unknown): Promise<boolean> {
-    if (value == null) return false;
+    if (value == null) {
+      return false;
+    }
     if (node.source.collection !== 'authzSharingRuleRecords' || node.source.field !== 'recordId') {
       throw new Error(`Unsupported authorization membership source: ${node.source.collection}.${node.source.field}`);
     }
     const sharingRuleId = node.source.where.sharingRuleId;
-    if (typeof sharingRuleId !== 'string') throw new Error('Sharing membership requires sharingRuleId');
+    if (typeof sharingRuleId !== 'string') {
+      throw new Error('Sharing membership requires sharingRuleId');
+    }
     const row = await this.connection.query.selectFrom('authzSharingRuleRecords')
       .select('id')
       .where('sharingRuleId', '=', sharingRuleId)
@@ -209,7 +239,9 @@ export class DatabaseAuthorizationStore implements AuthorizationStore {
       const actions = jsonValue<string[]>(row.actions, []);
       const ruleSubjects = jsonValue<AssignmentSubject[]>(row.subjects, []);
       if (!actions.includes(action)
-        || !ruleSubjects.some((subject) => subjectKeys.has(`${subject.type}:${subject.id}`))) return [];
+        || !ruleSubjects.some((subject) => subjectKeys.has(`${subject.type}:${subject.id}`))) {
+        return [];
+      }
       return [{
         id: String(row.id),
         key: String(row.key),

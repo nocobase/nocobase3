@@ -55,7 +55,9 @@ export interface AuthorizationActionPlansRequest {
 export type AuthorizationActionPlans = Readonly<Record<string, AuthorizationPlan>>;
 
 function unionFields(values: readonly ('*' | readonly string[] | undefined)[]): '*' | string[] {
-  if (values.includes('*')) return '*';
+  if (values.includes('*')) {
+    return '*';
+  }
   return [...new Set(values.flatMap((value) => value ?? []))];
 }
 
@@ -70,8 +72,12 @@ export class Authorization {
 
   constructor(options: AuthorizationOptions) {
     this.store = options.store;
-    for (const policy of standardPolicies()) this.policies.register(policy);
-    for (const policy of options.policies ?? []) this.policies.register(policy);
+    for (const policy of standardPolicies()) {
+      this.policies.register(policy);
+    }
+    for (const policy of options.policies ?? []) {
+      this.policies.register(policy);
+    }
   }
 
   define(input?: AuthorizationDefinitionInput): AuthorizationDefinition;
@@ -216,7 +222,9 @@ export class Authorization {
           (node, value) => this.store.matchesFilterMembership(node, value),
         )
         : true;
-      if (!allowed) reasons.push({ type: 'recordAccess', key: 'recordMismatch', message: 'The record does not match the effective Record Access filter' });
+      if (!allowed) {
+        reasons.push({ type: 'recordAccess', key: 'recordMismatch', message: 'The record does not match the effective Record Access filter' });
+      }
       return { allowed, filter: effectiveFilter, fields: { input, output }, reasons };
     } catch (error) {
       return this.denied(reasons, 'AUTHORIZATION_RESOLUTION_FAILED', this.errorMessage(error));
@@ -227,13 +235,17 @@ export class Authorization {
     const reasons: AuthorizationReason[] = [];
     try {
       const source = this.resources.get(request.resource);
-      if (!source) return this.deniedRelation(reasons, 'UNKNOWN_RESOURCE', `Unknown resource: ${request.resource}`);
+      if (!source) {
+        return this.deniedRelation(reasons, 'UNKNOWN_RESOURCE', `Unknown resource: ${request.resource}`);
+      }
       const field = source.fields[request.field];
       if (!field || field.type !== 'relation') {
         return this.deniedRelation(reasons, 'UNKNOWN_RELATION', `Unknown relation: ${request.resource}.${request.field}`);
       }
       const target = this.resources.get(field.target);
-      if (!target) return this.deniedRelation(reasons, 'UNKNOWN_TARGET_RESOURCE', `Unknown relation target: ${field.target}`);
+      if (!target) {
+        return this.deniedRelation(reasons, 'UNKNOWN_TARGET_RESOURCE', `Unknown relation target: ${field.target}`);
+      }
 
       const sourceAction = request.action === 'traverse' ? 'read' : 'update';
       const sourceFields: AuthorizationFieldRequest = request.action === 'traverse'
@@ -247,7 +259,9 @@ export class Authorization {
         now: request.now,
       });
       reasons.push(...sourcePlan.reasons);
-      if (!sourcePlan.allowed) return { allowed: false, sourceFilter: sourcePlan.filter, reasons };
+      if (!sourcePlan.allowed) {
+        return { allowed: false, sourceFilter: sourcePlan.filter, reasons };
+      }
 
       // Relation operations derive their source permission from the ordinary
       // Action and relation field security: read for traversal, update for
@@ -312,14 +326,20 @@ export class Authorization {
         keys.add(assignment.target.key);
       } else {
         const group = await this.store.getPermissionSetGroup(assignment.target.key);
-        if (!group) throw new Error(`Unknown Permission Set Group: ${assignment.target.key}`);
-        for (const key of group.permissionSets) keys.add(key);
+        if (!group) {
+          throw new Error(`Unknown Permission Set Group: ${assignment.target.key}`);
+        }
+        for (const key of group.permissionSets) {
+          keys.add(key);
+        }
       }
     }
     const requestedKeys = [...keys];
     const sets = await Promise.all(requestedKeys.map((key) => this.store.getPermissionSet(key)));
     const missing = sets.findIndex((set) => !set);
-    if (missing >= 0) throw new Error(`Unknown Permission Set: ${requestedKeys[missing]}`);
+    if (missing >= 0) {
+      throw new Error(`Unknown Permission Set: ${requestedKeys[missing]}`);
+    }
     return sets as PermissionSet[];
   }
 
@@ -334,7 +354,9 @@ export class Authorization {
     const filters: FilterAst[] = [];
     for (const scope of scopes) {
       const policy = this.policies.get(scope.policy);
-      if (!policy || !policy.appliesTo.includes(usage)) throw new Error(`Unknown ${usage} Policy: ${scope.policy}`);
+      if (!policy || !policy.appliesTo.includes(usage)) {
+        throw new Error(`Unknown ${usage} Policy: ${scope.policy}`);
+      }
       const compiled = await policy.compile({ principal, resource, action, params: scope.params });
       assertFilterCollection(compiled, resource.name);
       filters.push(compiled);
@@ -356,7 +378,9 @@ export class Authorization {
     for (const rule of rules) {
       if (rule.records.type === 'criteria') {
         const compiled = await this.compileScopes(principal, resource, action, rule.records.scopes, 'sharingRule', reasons);
-        if (!compiled.length) throw new Error(`Sharing Rule "${rule.key}" has no record scope`);
+        if (!compiled.length) {
+          throw new Error(`Sharing Rule "${rule.key}" has no record scope`);
+        }
         filters.push(orFilters(resource.name, compiled));
       } else {
         const identifier = resource.attributes?.identifier ?? 'id';
@@ -364,7 +388,9 @@ export class Authorization {
           throw new Error(`Resource "${resource.name}" does not declare a scalar identifier field`);
         }
         const explicitFilter = await this.store.createExplicitSharingFilter(rule, resource.name, identifier);
-        if (explicitFilter) filters.push(explicitFilter);
+        if (explicitFilter) {
+          filters.push(explicitFilter);
+        }
       }
       reasons.push({ type: 'sharingRule', key: rule.key, message: `${rule.key} shares a record range` });
     }
@@ -381,7 +407,9 @@ export class Authorization {
     const filters: FilterAst[] = [];
     for (const rule of rules) {
       const compiled = await this.compileScopes(principal, resource, action, rule.scopes, 'restrictionRule', reasons);
-      if (!compiled.length) throw new Error(`Restriction Rule "${rule.key}" has no record scope`);
+      if (!compiled.length) {
+        throw new Error(`Restriction Rule "${rule.key}" has no record scope`);
+      }
       filters.push(orFilters(resource.name, compiled));
       reasons.push({ type: 'restrictionRule', key: rule.key, message: `${rule.key} restricts the final record range` });
     }
@@ -409,7 +437,9 @@ export class Authorization {
     const ownerAlreadyGranted = explicitScopes.some((scope) => scope.policy === 'recordsIOwn' || scope.policy === 'allRecords');
     if (ownerField && !ownerAlreadyGranted && ['read', 'update', 'delete'].includes(action)) {
       const policy = this.policies.get('recordsIOwn');
-      if (!policy) throw new Error('recordsIOwn policy is not registered');
+      if (!policy) {
+        throw new Error('recordsIOwn policy is not registered');
+      }
       filters.push(await policy.compile({ principal, resource, action, params: undefined }));
       reasons.push({ type: 'ownerAccess', key: 'recordOwner', message: 'Record ownership grants access' });
     }
@@ -420,7 +450,9 @@ export class Authorization {
     input: '*' | readonly string[],
     output: '*' | readonly string[],
   ): boolean {
-    if (!requested) return true;
+    if (!requested) {
+      return true;
+    }
     return fieldsAllowed(requested.input, input)
       && fieldsAllowed(requested.output, output)
       && fieldsAllowed(requested.filter, output)
@@ -435,7 +467,9 @@ export class Authorization {
         ...(action.inputFields === '*' ? [] : action.inputFields ?? []),
         ...(action.outputFields === '*' ? [] : action.outputFields ?? []),
       ]) {
-        if (!fields.has(field)) throw new Error(`Unknown field "${field}" in ${resource.name}.${action.action}`);
+        if (!fields.has(field)) {
+          throw new Error(`Unknown field "${field}" in ${resource.name}.${action.action}`);
+        }
       }
     }
   }

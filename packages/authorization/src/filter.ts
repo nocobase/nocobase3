@@ -54,7 +54,9 @@ export function allRecords(collection: string): FilterAst {
 }
 
 export function orFilters(collection: string, filters: readonly FilterAst[]): FilterAst {
-  if (filters.some((item) => item.root.items.length === 0)) return allRecords(collection);
+  if (filters.some((item) => item.root.items.length === 0)) {
+    return allRecords(collection);
+  }
   return {
     kind: 'filter',
     version: 1,
@@ -65,7 +67,9 @@ export function orFilters(collection: string, filters: readonly FilterAst[]): Fi
 
 export function andFilters(collection: string, filters: readonly FilterAst[]): FilterAst {
   const effective = filters.filter((item) => item.root.items.length > 0);
-  if (!effective.length) return allRecords(collection);
+  if (!effective.length) {
+    return allRecords(collection);
+  }
   return {
     kind: 'filter',
     version: 1,
@@ -81,17 +85,27 @@ function assertPath(path: unknown): asserts path is readonly string[] {
 }
 
 function assertNode(node: unknown): asserts node is FilterNode {
-  if (!node || typeof node !== 'object') throw new Error('Invalid Filter AST node');
+  if (!node || typeof node !== 'object') {
+    throw new Error('Invalid Filter AST node');
+  }
   const candidate = node as Record<string, unknown>;
   if (candidate.kind === 'condition') {
     assertPath(candidate.path);
-    if (!operators.has(candidate.operator as FilterOperator)) throw new Error('Invalid Filter AST operator');
+    if (!operators.has(candidate.operator as FilterOperator)) {
+      throw new Error('Invalid Filter AST operator');
+    }
     return;
   }
   if (candidate.kind === 'group') {
-    if (candidate.logic !== 'and' && candidate.logic !== 'or') throw new Error('Invalid Filter AST group logic');
-    if (!Array.isArray(candidate.items)) throw new Error('Invalid Filter AST group items');
-    for (const item of candidate.items) assertNode(item);
+    if (candidate.logic !== 'and' && candidate.logic !== 'or') {
+      throw new Error('Invalid Filter AST group logic');
+    }
+    if (!Array.isArray(candidate.items)) {
+      throw new Error('Invalid Filter AST group items');
+    }
+    for (const item of candidate.items) {
+      assertNode(item);
+    }
     return;
   }
   if (candidate.kind === 'relation') {
@@ -99,7 +113,9 @@ function assertNode(node: unknown): asserts node is FilterNode {
     if (!['exists', 'notExists', 'some', 'none', 'empty', 'notEmpty'].includes(candidate.quantifier as string)) {
       throw new Error('Invalid Filter AST relation quantifier');
     }
-    if (candidate.filter !== undefined) assertNode(candidate.filter);
+    if (candidate.filter !== undefined) {
+      assertNode(candidate.filter);
+    }
     return;
   }
   if (candidate.kind === 'membership') {
@@ -122,9 +138,13 @@ function assertNode(node: unknown): asserts node is FilterNode {
 }
 
 export function assertValidFilter(ast: unknown): asserts ast is FilterAst {
-  if (!ast || typeof ast !== 'object') throw new Error('Invalid Filter AST');
+  if (!ast || typeof ast !== 'object') {
+    throw new Error('Invalid Filter AST');
+  }
   const candidate = ast as Record<string, unknown>;
-  if (candidate.kind !== 'filter' || candidate.version !== 1) throw new Error('Invalid Filter AST envelope');
+  if (candidate.kind !== 'filter' || candidate.version !== 1) {
+    throw new Error('Invalid Filter AST envelope');
+  }
   if (candidate.collection !== undefined && typeof candidate.collection !== 'string') {
     throw new Error('Invalid Filter AST collection');
   }
@@ -141,7 +161,9 @@ export function assertFilterCollection(ast: FilterAst, collection: string): void
 function getPath(record: Readonly<Record<string, unknown>>, path: readonly string[]): unknown {
   let current: unknown = record;
   for (const part of path) {
-    if (!current || typeof current !== 'object') return undefined;
+    if (!current || typeof current !== 'object') {
+      return undefined;
+    }
     current = (current as Record<string, unknown>)[part];
   }
   return current;
@@ -167,9 +189,15 @@ function compare(actual: unknown, node: FilterConditionNode): boolean {
 }
 
 function matchesNode(node: FilterNode, record: Readonly<Record<string, unknown>>): boolean {
-  if (node.kind === 'condition') return compare(getPath(record, node.path), node);
-  if (node.kind === 'relation') throw new Error('Record evaluation does not support relation filters');
-  if (node.kind === 'membership') throw new Error('Record evaluation requires a membership resolver');
+  if (node.kind === 'condition') {
+    return compare(getPath(record, node.path), node);
+  }
+  if (node.kind === 'relation') {
+    throw new Error('Record evaluation does not support relation filters');
+  }
+  if (node.kind === 'membership') {
+    throw new Error('Record evaluation requires a membership resolver');
+  }
   const results = node.items.map((item) => matchesNode(item, record));
   return node.logic === 'and' ? results.every(Boolean) : results.some(Boolean);
 }
@@ -184,13 +212,23 @@ async function matchesNodeAsync(
   record: Readonly<Record<string, unknown>>,
   resolveMembership: FilterMembershipResolver,
 ): Promise<boolean> {
-  if (node.kind === 'condition') return compare(getPath(record, node.path), node);
-  if (node.kind === 'relation') throw new Error('Record evaluation does not support relation filters');
-  if (node.kind === 'membership') return resolveMembership(node, getPath(record, node.path));
+  if (node.kind === 'condition') {
+    return compare(getPath(record, node.path), node);
+  }
+  if (node.kind === 'relation') {
+    throw new Error('Record evaluation does not support relation filters');
+  }
+  if (node.kind === 'membership') {
+    return resolveMembership(node, getPath(record, node.path));
+  }
   for (const item of node.items) {
     const matched = await matchesNodeAsync(item, record, resolveMembership);
-    if (node.logic === 'and' && !matched) return false;
-    if (node.logic === 'or' && matched) return true;
+    if (node.logic === 'and' && !matched) {
+      return false;
+    }
+    if (node.logic === 'or' && matched) {
+      return true;
+    }
   }
   return node.logic === 'and';
 }

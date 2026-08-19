@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "lint": "eslint .",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "app:dev": "pnpm --filter @nocobase/app-template-default dev",
@@ -20,5 +21,14 @@
     "app-host:dev": "APP_DIST_DIR=\"$PWD/packages/app-host/fixtures/app-dist\" pnpm --filter @nocobase/app-host dev",
     "app-host:build": "pnpm --filter @nocobase/app-host build",
     "sdk:test": "pnpm --filter @nocobase/portal-sdk test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-promise": "^7.2.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.67.0"
   }
 }

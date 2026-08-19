@@ -5,7 +5,9 @@ const recordScopeUsages = ['recordScope', 'sharingRule', 'restrictionRule'] as c
 
 function requiredAttribute(resource: { attributes?: Readonly<Record<string, string>> }, key: string): string {
   const field = resource.attributes?.[key];
-  if (!field) throw new Error(`Resource does not declare the "${key}" attribute`);
+  if (!field) {
+    throw new Error(`Resource does not declare the "${key}" attribute`);
+  }
   return field;
 }
 
