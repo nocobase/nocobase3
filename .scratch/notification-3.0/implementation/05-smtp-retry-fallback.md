@@ -1,7 +1,7 @@
 # Deliver email through SMTP with retry and fallback
 
 Type: implementation / AFK
-Status: in_progress
+Status: completed
 Label: needs-triage
 Blocked by: [01](01-module-shell-mount-lifecycle.md), [02](02-notification-store-schema-contract.md)
 
@@ -17,5 +17,5 @@ Add the Provider extension boundary, config-owned SMTP and Fake Provider Instanc
 - [x] Transient, permanent, disabled, misconfigured, and uncertain errors follow the approved retry/fallback matrix.
 - [x] Attempts persist Provider identity/revision, invocation boundary, external message ID when available, and redacted results.
 - [x] Email user targets produce independent Email UserNotificationItems at accepted; direct Email targets remain outside every Inbox.
-- [ ] Local SMTP and Fake tests cover success, three-attempt retry, fallback, timeout, crash before invocation, and submission unknown.
+- [x] Local SMTP and Fake tests cover success, three-attempt retry, fallback, timeout, crash before invocation, and submission unknown.
 - [x] Notification and Delivery detail/query DTOs expose only the approved redacted projections.

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/database';
 
 export type NotificationChannel = 'in-app' | 'email';
@@ -117,6 +119,7 @@ export interface NotificationQueryStore {
 export interface NotificationMaintenanceStore {
   listDueDeliveries(input: DueDeliveryQuery): Promise<readonly DeliveryRecord[]>;
   claimDelivery(input: DeliveryClaim): Promise<DeliveryRecord | undefined>;
+  recoverExpiredDeliveries(now: string): Promise<readonly DeliveryRecord[]>;
 }
 
 export interface NotificationMigrationStore {
@@ -190,7 +193,7 @@ export function createMemoryNotificationStore(): NotificationStore {
   const attempts = new Map<string, DeliveryAttemptRecord>();
   const events = new Map<string, DeliveryStatusEventRecord>();
 
-  return {
+  const store: NotificationStore = {
     schemaVersion: 1,
     async createNotificationBundle(input): Promise<void> {
       if (notifications.has(input.notification.id) || hasDuplicateIds(input.deliveries) || input.deliveries.some((item) => deliveries.has(item.id))) {
@@ -298,6 +301,21 @@ export function createMemoryNotificationStore(): NotificationStore {
       recomputeMemoryNotification(notifications, deliveries, next.notificationId, input.claimedAt);
       return structuredClone(next);
     },
+    async recoverExpiredDeliveries(now): Promise<readonly DeliveryRecord[]> {
+      const recovered: DeliveryRecord[] = [];
+      for (const delivery of deliveries.values()) {
+        if (delivery.status !== 'sending' || !delivery.leaseExpiresAt || delivery.leaseExpiresAt > now) continue;
+        const attempt = [...attempts.values()].filter((item) => item.deliveryId === delivery.id).sort((a, b) => b.attemptSequence - a.attemptSequence)[0];
+        const invoked = attempt?.invocationStartedAt !== undefined;
+        const eventsForDelivery = [...events.values()].filter((event) => event.deliveryId === delivery.id);
+        const result = await store.transitionDelivery({ deliveryId: delivery.id, expectedVersion: delivery.version, fromStatus: 'sending', toStatus: invoked ? 'submission_unknown' : 'queued', statusChangedAt: now, leaseToken: delivery.leaseToken, clearLease: true, nextRunAt: invoked ? undefined : now,
+          lastError: { code: invoked ? 'WORKER_CRASH_AFTER_INVOCATION' : 'WORKER_CRASH_BEFORE_INVOCATION' },
+          attempt: attempt ? { ...attempt, status: invoked ? 'submission_unknown' : 'failed', finishedAt: now, errorPhase: invoked ? 'submission' : 'before_invocation', errorCode: invoked ? 'WORKER_CRASH_AFTER_INVOCATION' : 'WORKER_CRASH_BEFORE_INVOCATION', updatedAt: now } : undefined,
+          event: { id: randomUUID(), deliveryId: delivery.id, sequence: eventsForDelivery.length + 1, fromStatus: 'sending', toStatus: invoked ? 'submission_unknown' : 'queued', occurredAt: now, reason: 'lease_expired', metadataSchemaVersion: 1 }, });
+        if (result) recovered.push(result);
+      }
+      return recovered;
+    },
     async createUserNotificationItem(record): Promise<void> {
       if (userItems.has(record.id)) throw new Error(`User notification item "${record.id}" already exists.`);
       userItems.set(record.id, structuredClone(record));
@@ -336,10 +354,11 @@ export function createMemoryNotificationStore(): NotificationStore {
       return structuredClone(next);
     },
   };
+  return store;
 }
 
 export function createDatabaseNotificationStore(database: DatabaseManager): NotificationStore {
-  return {
+  const store: NotificationStore = {
     schemaVersion: 1,
     async createNotificationBundle(input): Promise<void> {
       await database.transaction(async (connection) => {
@@ -386,7 +405,7 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
           .set({
             status: input.toStatus,
             statusChangedAt: input.statusChangedAt,
-            lastError: input.lastError,
+            lastError: input.lastError === undefined ? undefined : JSON.stringify(input.lastError),
             nextRunAt: input.clearNextRunAt ? null : input.nextRunAt,
             providerCursor: input.providerCursor,
             currentAttempt: input.currentAttempt,
@@ -465,6 +484,23 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
         return fromDeliveryRow(row);
       });
     },
+    async recoverExpiredDeliveries(now): Promise<readonly DeliveryRecord[]> {
+      const rows = await database.query().selectFrom<DeliveryRow>('notificationDeliveries').selectAll().where('status', '=', 'sending').where('leaseExpiresAt', '<=', now).execute<DeliveryRow>();
+      const recovered: DeliveryRecord[] = [];
+      for (const row of rows) {
+        const delivery = fromDeliveryRow(row);
+        const attemptsForDelivery = await store.listDeliveryAttempts(delivery.id);
+        const attempt = attemptsForDelivery.at(-1);
+        const invoked = attempt?.invocationStartedAt !== undefined;
+        const eventsForDelivery = await store.listDeliveryStatusEvents(delivery.id);
+        const result = await store.transitionDelivery({ deliveryId: delivery.id, expectedVersion: delivery.version, fromStatus: 'sending', toStatus: invoked ? 'submission_unknown' : 'queued', statusChangedAt: now, leaseToken: delivery.leaseToken, clearLease: true, nextRunAt: invoked ? undefined : now,
+          lastError: { code: invoked ? 'WORKER_CRASH_AFTER_INVOCATION' : 'WORKER_CRASH_BEFORE_INVOCATION' },
+          attempt: attempt ? { ...attempt, status: invoked ? 'submission_unknown' : 'failed', finishedAt: now, errorPhase: invoked ? 'submission' : 'before_invocation', errorCode: invoked ? 'WORKER_CRASH_AFTER_INVOCATION' : 'WORKER_CRASH_BEFORE_INVOCATION', updatedAt: now } : undefined,
+          event: { id: randomUUID(), deliveryId: delivery.id, sequence: eventsForDelivery.length + 1, fromStatus: 'sending', toStatus: invoked ? 'submission_unknown' : 'queued', occurredAt: now, reason: 'lease_expired', metadataSchemaVersion: 1 }, });
+        if (result) recovered.push(result);
+      }
+      return recovered;
+    },
     async createUserNotificationItem(record): Promise<void> {
       await database.query().insertInto<UserNotificationItemRow>('userNotificationItems').values(toUserNotificationItemRow(record)).execute();
     },
@@ -499,6 +535,7 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
       });
     },
   };
+  return store;
 }
 
 interface NotificationRow extends Row {
@@ -617,7 +654,18 @@ function toDeliveryAttemptRow(record: DeliveryAttemptRecord): DeliveryAttemptRow
 }
 
 function fromDeliveryAttemptRow(row: DeliveryAttemptRow): DeliveryAttemptRecord {
-  return { ...row, metadata: row.metadata === undefined ? undefined : parseJsonObject(row.metadata) };
+  return {
+    ...row,
+    configRevision: row.configRevision ?? undefined,
+    invocationStartedAt: row.invocationStartedAt ?? undefined,
+    finishedAt: row.finishedAt ?? undefined,
+    providerMessageId: row.providerMessageId ?? undefined,
+    errorPhase: row.errorPhase ?? undefined,
+    errorCategory: row.errorCategory ?? undefined,
+    errorCode: row.errorCode ?? undefined,
+    errorMessage: row.errorMessage ?? undefined,
+    metadata: row.metadata === undefined || row.metadata === null ? undefined : parseJsonObject(row.metadata),
+  };
 }
 
 function toDeliveryStatusEventRow(record: DeliveryStatusEventRecord): DeliveryStatusEventRow {

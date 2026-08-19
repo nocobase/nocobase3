@@ -66,6 +66,25 @@ describe('NotificationStore contract', () => {
     await close();
   });
 
+  it.each([
+    ['memory', async () => ({ store: createMemoryNotificationStore(), close: async () => undefined })],
+    ['database', createDatabaseStore],
+  ])('recovers expired work conservatively through the %s adapter', async (_name, setup) => {
+    const { store, close } = await setup();
+    await store.createNotificationBundle({ notification: createNotification(), deliveries: [createDelivery()] });
+    await store.claimDelivery({ deliveryId: 'delivery-1', expectedVersion: 1, leaseToken: 'lease-1', leaseOwner: 'worker-1', leaseExpiresAt: '2026-08-19T00:00:01.000Z', claimedAt: '2026-08-19T00:00:00.000Z',
+      attempt: { id: 'attempt-1', deliveryId: 'delivery-1', attemptSequence: 1, providerInstance: 'email/smtp/primary', providerType: 'smtp', status: 'sending', startedAt: '2026-08-19T00:00:00.000Z', metadataSchemaVersion: 1, createdAt: '2026-08-19T00:00:00.000Z', updatedAt: '2026-08-19T00:00:00.000Z' },
+    });
+    await expect(store.recoverExpiredDeliveries('2026-08-19T00:00:02.000Z')).resolves.toMatchObject([{ status: 'queued', leaseToken: undefined }]);
+
+    const queued = await store.getDelivery('delivery-1');
+    await store.claimDelivery({ deliveryId: 'delivery-1', expectedVersion: queued!.version, leaseToken: 'lease-2', leaseOwner: 'worker-2', leaseExpiresAt: '2026-08-19T00:00:03.000Z', claimedAt: '2026-08-19T00:00:02.000Z',
+      attempt: { id: 'attempt-2', deliveryId: 'delivery-1', attemptSequence: 2, providerInstance: 'email/smtp/primary', providerType: 'smtp', status: 'sending', startedAt: '2026-08-19T00:00:02.000Z', invocationStartedAt: '2026-08-19T00:00:02.500Z', metadataSchemaVersion: 1, createdAt: '2026-08-19T00:00:02.000Z', updatedAt: '2026-08-19T00:00:02.500Z' },
+    });
+    await expect(store.recoverExpiredDeliveries('2026-08-19T00:00:04.000Z')).resolves.toMatchObject([{ status: 'submission_unknown' }]);
+    await close();
+  });
+
   it('keeps notification and delivery snapshots isolated from caller mutation', async () => {
     const store = createMemoryNotificationStore();
     const notification = createNotification();
