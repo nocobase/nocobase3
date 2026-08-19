@@ -1,5 +1,8 @@
+import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/database';
+
 export type NotificationChannel = 'in-app' | 'email';
 export type NotificationStatus = 'queued' | 'sending' | 'accepted' | 'delivered' | 'failed' | 'submission_unknown';
+export type NotificationSummaryStatus = 'queued' | 'processing' | 'succeeded' | 'partially_succeeded' | 'failed' | 'attention_required';
 
 export interface NotificationRecord {
   id: string;
@@ -10,7 +13,7 @@ export interface NotificationRecord {
   messageMode: 'direct' | 'template';
   templateName?: string;
   templateVersion?: string;
-  summaryStatus: NotificationStatus;
+  summaryStatus: NotificationSummaryStatus;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +56,29 @@ export interface DeliveryStatusEventRecord {
   actor?: string;
   occurredAt: string;
   metadata?: Record<string, unknown>;
+  metadataSchemaVersion: number;
+}
+
+export interface DeliveryAttemptRecord {
+  id: string;
+  deliveryId: string;
+  attemptSequence: number;
+  providerInstance: string;
+  providerType: string;
+  configRevision?: string;
+  status: NotificationStatus;
+  startedAt: string;
+  invocationStartedAt?: string;
+  finishedAt?: string;
+  providerMessageId?: string;
+  errorPhase?: string;
+  errorCategory?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  metadata?: Record<string, unknown>;
+  metadataSchemaVersion: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserNotificationItemRecord {
@@ -69,12 +95,74 @@ export interface UserNotificationItemRecord {
   version: number;
 }
 
-export interface NotificationStore {
+export interface NotificationCommandStore {
+  createNotificationBundle(input: NotificationBundle): Promise<void>;
   createNotification(record: NotificationRecord): Promise<void>;
-  getNotification(id: string): Promise<NotificationRecord | undefined>;
   createDelivery(record: DeliveryRecord): Promise<void>;
-  getDelivery(id: string): Promise<DeliveryRecord | undefined>;
   transitionDelivery(input: DeliveryTransition): Promise<DeliveryRecord | undefined>;
+  createUserNotificationItem(record: UserNotificationItemRecord): Promise<void>;
+  updateInboxItem(input: InboxMutation): Promise<UserNotificationItemRecord | undefined>;
+}
+
+export interface NotificationQueryStore {
+  getNotification(id: string): Promise<NotificationRecord | undefined>;
+  getDelivery(id: string): Promise<DeliveryRecord | undefined>;
+  listDeliveryStatusEvents(deliveryId: string): Promise<readonly DeliveryStatusEventRecord[]>;
+  listDeliveryAttempts(deliveryId: string): Promise<readonly DeliveryAttemptRecord[]>;
+  listInbox(input: InboxQuery): Promise<readonly UserNotificationItemRecord[]>;
+  countUnread(input: InboxQuery): Promise<number>;
+}
+
+export interface NotificationMaintenanceStore {
+  listDueDeliveries(input: DueDeliveryQuery): Promise<readonly DeliveryRecord[]>;
+  claimDelivery(input: DeliveryClaim): Promise<DeliveryRecord | undefined>;
+}
+
+export interface NotificationMigrationStore {
+  readonly schemaVersion: 1;
+}
+
+export interface NotificationStore extends NotificationCommandStore, NotificationQueryStore, NotificationMaintenanceStore, NotificationMigrationStore {
+}
+
+export interface NotificationBundle {
+  notification: NotificationRecord;
+  deliveries: readonly DeliveryRecord[];
+  statusEvents?: readonly DeliveryStatusEventRecord[];
+  userNotificationItems?: readonly UserNotificationItemRecord[];
+}
+
+export interface DueDeliveryQuery {
+  now: string;
+  limit: number;
+}
+
+export interface DeliveryClaim {
+  deliveryId: string;
+  expectedVersion: number;
+  leaseToken: string;
+  leaseOwner: string;
+  leaseExpiresAt: string;
+  claimedAt: string;
+  attempt?: DeliveryAttemptRecord;
+  event?: DeliveryStatusEventRecord;
+}
+
+export interface InboxQuery {
+  userId: string;
+  channel?: NotificationChannel;
+  includeDeleted?: boolean;
+  unreadOnly?: boolean;
+  limit?: number;
+  beforeCreatedAt?: string;
+}
+
+export interface InboxMutation {
+  itemId: string;
+  userId: string;
+  action: 'read' | 'unread' | 'delete';
+  changedAt: string;
+  expectedVersion: number;
 }
 
 export interface DeliveryTransition {
@@ -85,13 +173,33 @@ export interface DeliveryTransition {
   statusChangedAt: string;
   leaseToken?: string;
   lastError?: Record<string, unknown>;
+  event?: DeliveryStatusEventRecord;
+  attempt?: DeliveryAttemptRecord;
 }
 
 export function createMemoryNotificationStore(): NotificationStore {
   const notifications = new Map<string, NotificationRecord>();
   const deliveries = new Map<string, DeliveryRecord>();
+  const userItems = new Map<string, UserNotificationItemRecord>();
+  const attempts = new Map<string, DeliveryAttemptRecord>();
+  const events = new Map<string, DeliveryStatusEventRecord>();
 
   return {
+    schemaVersion: 1,
+    async createNotificationBundle(input): Promise<void> {
+      if (notifications.has(input.notification.id) || hasDuplicateIds(input.deliveries) || input.deliveries.some((item) => deliveries.has(item.id))) {
+        throw new Error(`Notification bundle "${input.notification.id}" already exists.`);
+      }
+      const duplicateItem = hasDuplicateIds(input.userNotificationItems ?? []) || input.userNotificationItems?.some((item) => userItems.has(item.id));
+      if (duplicateItem) throw new Error('User notification item already exists.');
+      if (hasDuplicateIds(input.statusEvents ?? []) || input.statusEvents?.some((event) => events.has(event.id))) {
+        throw new Error('Delivery status event already exists.');
+      }
+      notifications.set(input.notification.id, structuredClone(input.notification));
+      for (const delivery of input.deliveries) deliveries.set(delivery.id, structuredClone(delivery));
+      for (const item of input.userNotificationItems ?? []) userItems.set(item.id, structuredClone(item));
+      for (const event of input.statusEvents ?? []) events.set(event.id, structuredClone(event));
+    },
     async createNotification(record): Promise<void> {
       if (notifications.has(record.id)) {
         throw new Error(`Notification "${record.id}" already exists.`);
@@ -132,6 +240,83 @@ export function createMemoryNotificationStore(): NotificationStore {
         updatedAt: input.statusChangedAt,
       };
       deliveries.set(next.id, next);
+      if (input.attempt) attempts.set(input.attempt.id, structuredClone(input.attempt));
+      if (input.event) events.set(input.event.id, structuredClone(input.event));
+      makeUserItemVisible(userItems, next, input.statusChangedAt);
+      recomputeMemoryNotification(notifications, deliveries, next.notificationId, input.statusChangedAt);
+      return structuredClone(next);
+    },
+    async listDeliveryStatusEvents(deliveryId): Promise<readonly DeliveryStatusEventRecord[]> {
+      return [...events.values()].filter((event) => event.deliveryId === deliveryId).sort((a, b) => a.sequence - b.sequence).map((event) => structuredClone(event));
+    },
+    async listDeliveryAttempts(deliveryId): Promise<readonly DeliveryAttemptRecord[]> {
+      return [...attempts.values()].filter((attempt) => attempt.deliveryId === deliveryId).sort((a, b) => a.attemptSequence - b.attemptSequence).map((attempt) => structuredClone(attempt));
+    },
+    async listDueDeliveries(input): Promise<readonly DeliveryRecord[]> {
+      return [...deliveries.values()]
+        .filter((delivery) =>
+          delivery.status === 'queued' &&
+          (!delivery.nextRunAt || delivery.nextRunAt <= input.now) &&
+          (!delivery.leaseExpiresAt || delivery.leaseExpiresAt <= input.now),
+        )
+        .sort((left, right) => left.nextRunAt?.localeCompare(right.nextRunAt ?? '') ?? 0)
+        .slice(0, input.limit)
+        .map((delivery) => structuredClone(delivery));
+    },
+    async claimDelivery(input): Promise<DeliveryRecord | undefined> {
+      const current = deliveries.get(input.deliveryId);
+      if (!current || current.version !== input.expectedVersion || current.status !== 'queued') return undefined;
+      const next: DeliveryRecord = {
+        ...current,
+        status: 'sending',
+        statusChangedAt: input.claimedAt,
+        leaseToken: input.leaseToken,
+        leaseOwner: input.leaseOwner,
+        leaseExpiresAt: input.leaseExpiresAt,
+        version: current.version + 1,
+        updatedAt: input.claimedAt,
+      };
+      deliveries.set(next.id, next);
+      if (input.attempt) attempts.set(input.attempt.id, structuredClone(input.attempt));
+      if (input.event) events.set(input.event.id, structuredClone(input.event));
+      recomputeMemoryNotification(notifications, deliveries, next.notificationId, input.claimedAt);
+      return structuredClone(next);
+    },
+    async createUserNotificationItem(record): Promise<void> {
+      if (userItems.has(record.id)) throw new Error(`User notification item "${record.id}" already exists.`);
+      userItems.set(record.id, structuredClone(record));
+    },
+    async listInbox(input): Promise<readonly UserNotificationItemRecord[]> {
+      return [...userItems.values()]
+        .filter((item) => item.userId === input.userId)
+        .filter((item) => item.availableAt !== undefined)
+        .filter((item) => input.channel === undefined || item.channel === input.channel)
+        .filter((item) => input.includeDeleted || item.deletedAt === undefined)
+        .filter((item) => !input.unreadOnly || item.readAt === undefined)
+        .filter((item) => !input.beforeCreatedAt || item.createdAt < input.beforeCreatedAt)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .slice(0, input.limit ?? 50)
+        .map((item) => structuredClone(item));
+    },
+    async countUnread(input): Promise<number> {
+      return (await this.listInbox({ ...input, unreadOnly: true, limit: Number.MAX_SAFE_INTEGER })).length;
+    },
+    async updateInboxItem(input): Promise<UserNotificationItemRecord | undefined> {
+      const current = userItems.get(input.itemId);
+      if (!current || current.userId !== input.userId || (input.expectedVersion !== undefined && current.version !== input.expectedVersion)) {
+        return undefined;
+      }
+      if ((input.action === 'read' && current.readAt) || (input.action === 'unread' && !current.readAt) || (input.action === 'delete' && current.deletedAt)) {
+        return structuredClone(current);
+      }
+      const next: UserNotificationItemRecord = {
+        ...current,
+        readAt: input.action === 'read' ? input.changedAt : input.action === 'unread' ? undefined : current.readAt,
+        deletedAt: input.action === 'delete' ? input.changedAt : current.deletedAt,
+        version: current.version + 1,
+        updatedAt: input.changedAt,
+      };
+      userItems.set(next.id, next);
       return structuredClone(next);
     },
   };
@@ -139,6 +324,21 @@ export function createMemoryNotificationStore(): NotificationStore {
 
 export function createDatabaseNotificationStore(database: DatabaseManager): NotificationStore {
   return {
+    schemaVersion: 1,
+    async createNotificationBundle(input): Promise<void> {
+      await database.transaction(async (connection) => {
+        await connection.query.insertInto<NotificationRow>('notifications').values(toNotificationRow(input.notification)).execute();
+        if (input.deliveries.length) {
+          await connection.query.insertInto<DeliveryRow>('notificationDeliveries').values(input.deliveries.map(toDeliveryRow)).execute();
+        }
+        if (input.userNotificationItems?.length) {
+          await connection.query.insertInto<UserNotificationItemRow>('userNotificationItems').values(input.userNotificationItems.map(toUserNotificationItemRow)).execute();
+        }
+        if (input.statusEvents?.length) {
+          await connection.query.insertInto<DeliveryStatusEventRow>('notificationDeliveryStatusEvents').values(input.statusEvents.map(toDeliveryStatusEventRow)).execute();
+        }
+      });
+    },
     async createNotification(record): Promise<void> {
       await database.query().insertInto<NotificationRow>('notifications').values(toNotificationRow(record)).execute();
     },
@@ -184,12 +384,89 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
         if (result.updatedCount !== 1) {
           return undefined;
         }
+        if (input.attempt) {
+          await connection.query.insertInto<DeliveryAttemptRow>('notificationDeliveryAttempts').values(toDeliveryAttemptRow(input.attempt)).execute();
+        }
+        if (input.event) {
+          await connection.query.insertInto<DeliveryStatusEventRow>('notificationDeliveryStatusEvents').values(toDeliveryStatusEventRow(input.event)).execute();
+        }
+        if (input.toStatus === 'delivered' || input.toStatus === 'accepted') {
+          await connection.query.updateTable<UserNotificationItemRow>('userNotificationItems').set({ availableAt: input.statusChangedAt, updatedAt: input.statusChangedAt })
+            .where('deliveryId', '=', input.deliveryId).where('availableAt', 'is', null).execute();
+        }
         const row = await connection.query
           .selectFrom<DeliveryRow>('notificationDeliveries')
           .selectAll()
           .where('id', '=', input.deliveryId)
           .executeTakeFirst<DeliveryRow>();
-        return row ? fromDeliveryRow(row) : undefined;
+        if (!row) return undefined;
+        await recomputeDatabaseNotification(connection.query, row.notificationId, input.statusChangedAt);
+        return fromDeliveryRow(row);
+      });
+    },
+    async listDeliveryStatusEvents(deliveryId): Promise<readonly DeliveryStatusEventRecord[]> {
+      const rows = await database.query().selectFrom<DeliveryStatusEventRow>('notificationDeliveryStatusEvents').selectAll().where('deliveryId', '=', deliveryId).orderBy('sequence', 'asc').execute<DeliveryStatusEventRow>();
+      return rows.map(fromDeliveryStatusEventRow);
+    },
+    async listDeliveryAttempts(deliveryId): Promise<readonly DeliveryAttemptRecord[]> {
+      const rows = await database.query().selectFrom<DeliveryAttemptRow>('notificationDeliveryAttempts').selectAll().where('deliveryId', '=', deliveryId).orderBy('attemptSequence', 'asc').execute<DeliveryAttemptRow>();
+      return rows.map(fromDeliveryAttemptRow);
+    },
+    async listDueDeliveries(input): Promise<readonly DeliveryRecord[]> {
+      const rows = await database.query().selectFrom<DeliveryRow>('notificationDeliveries').selectAll()
+        .where('status', '=', 'queued')
+        .where(({ eb, or }) => or([eb('nextRunAt', 'is', null), eb('nextRunAt', '<=', input.now)]))
+        .where(({ eb, or }) => or([eb('leaseExpiresAt', 'is', null), eb('leaseExpiresAt', '<=', input.now)]))
+        .orderBy('nextRunAt', 'asc').limit(input.limit).execute<DeliveryRow>();
+      return rows.map(fromDeliveryRow);
+    },
+    async claimDelivery(input): Promise<DeliveryRecord | undefined> {
+      return database.transaction(async (connection) => {
+        const result = await connection.query.updateTable<DeliveryRow>('notificationDeliveries').set({
+          status: 'sending', statusChangedAt: input.claimedAt, leaseToken: input.leaseToken,
+          leaseOwner: input.leaseOwner, leaseExpiresAt: input.leaseExpiresAt, version: input.expectedVersion + 1,
+          updatedAt: input.claimedAt,
+        }).where('id', '=', input.deliveryId).where('version', '=', input.expectedVersion).where('status', '=', 'queued').execute();
+        if (result.updatedCount !== 1) return undefined;
+        if (input.attempt) await connection.query.insertInto<DeliveryAttemptRow>('notificationDeliveryAttempts').values(toDeliveryAttemptRow(input.attempt)).execute();
+        if (input.event) await connection.query.insertInto<DeliveryStatusEventRow>('notificationDeliveryStatusEvents').values(toDeliveryStatusEventRow(input.event)).execute();
+        const row = await connection.query.selectFrom<DeliveryRow>('notificationDeliveries').selectAll().where('id', '=', input.deliveryId).executeTakeFirst<DeliveryRow>();
+        if (!row) return undefined;
+        await recomputeDatabaseNotification(connection.query, row.notificationId, input.claimedAt);
+        return fromDeliveryRow(row);
+      });
+    },
+    async createUserNotificationItem(record): Promise<void> {
+      await database.query().insertInto<UserNotificationItemRow>('userNotificationItems').values(toUserNotificationItemRow(record)).execute();
+    },
+    async listInbox(input): Promise<readonly UserNotificationItemRecord[]> {
+      let query = database.query().selectFrom<UserNotificationItemRow>('userNotificationItems').selectAll().where('userId', '=', input.userId);
+      if (input.channel !== undefined) query = query.where('channel', '=', input.channel);
+      query = query.where('availableAt', 'is not', null);
+      if (!input.includeDeleted) query = query.where('deletedAt', 'is', null);
+      if (input.unreadOnly) query = query.where('readAt', 'is', null);
+      if (input.beforeCreatedAt) query = query.where('createdAt', '<', input.beforeCreatedAt);
+      const rows = await query.orderBy('createdAt', 'desc').limit(input.limit ?? 50).execute<UserNotificationItemRow>();
+      return rows.map(fromUserNotificationItemRow);
+    },
+    async countUnread(input): Promise<number> {
+      return (await this.listInbox({ ...input, unreadOnly: true, limit: Number.MAX_SAFE_INTEGER })).length;
+    },
+    async updateInboxItem(input): Promise<UserNotificationItemRecord | undefined> {
+      return database.transaction(async (connection) => {
+        const current = await connection.query.selectFrom<UserNotificationItemRow>('userNotificationItems').selectAll().where('id', '=', input.itemId).where('userId', '=', input.userId).executeTakeFirst<UserNotificationItemRow>();
+        if (!current || current.version !== input.expectedVersion) return undefined;
+        if ((input.action === 'read' && current.readAt) || (input.action === 'unread' && !current.readAt) || (input.action === 'delete' && current.deletedAt)) return fromUserNotificationItemRow(current);
+        const values: Partial<UserNotificationItemRow> = { version: current.version + 1, updatedAt: input.changedAt };
+        if (input.action === 'read') values.readAt = input.changedAt;
+        if (input.action === 'unread') values.readAt = null;
+        if (input.action === 'delete') values.deletedAt = input.changedAt;
+        let update = connection.query.updateTable<UserNotificationItemRow>('userNotificationItems').set(values).where('id', '=', input.itemId).where('userId', '=', input.userId);
+        update = update.where('version', '=', input.expectedVersion);
+        const result = await update.execute();
+        if (result.updatedCount !== 1) return undefined;
+        const row = await connection.query.selectFrom<UserNotificationItemRow>('userNotificationItems').selectAll().where('id', '=', input.itemId).executeTakeFirst<UserNotificationItemRow>();
+        return row ? fromUserNotificationItemRow(row) : undefined;
       });
     },
   };
@@ -204,7 +481,7 @@ interface NotificationRow extends Row {
   messageMode: NotificationRecord['messageMode'];
   templateName?: string;
   templateVersion?: string;
-  summaryStatus: NotificationStatus;
+  summaryStatus: NotificationSummaryStatus;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -234,6 +511,23 @@ interface DeliveryRow extends Row {
   lastError?: unknown;
   createdAt: string;
   updatedAt: string;
+}
+
+interface UserNotificationItemRow extends Row {
+  id: string; deliveryId: string; notificationId: string; userId: string; channel: NotificationChannel;
+  availableAt?: string | null; readAt?: string | null; deletedAt?: string | null; createdAt: string; updatedAt: string; version: number;
+}
+
+interface DeliveryAttemptRow extends Row {
+  id: string; deliveryId: string; attemptSequence: number; providerInstance: string; providerType: string; configRevision?: string;
+  status: NotificationStatus; startedAt: string; invocationStartedAt?: string; finishedAt?: string; providerMessageId?: string;
+  errorPhase?: string; errorCategory?: string; errorCode?: string; errorMessage?: string; metadata?: unknown; metadataSchemaVersion: number;
+  createdAt: string; updatedAt: string;
+}
+
+interface DeliveryStatusEventRow extends Row {
+  id: string; deliveryId: string; sequence: number; fromStatus?: NotificationStatus; toStatus: NotificationStatus;
+  attemptId?: string; reason?: string; actor?: string; occurredAt: string; metadata?: unknown; metadataSchemaVersion: number;
 }
 
 function toNotificationRow(record: NotificationRecord): NotificationRow {
@@ -277,6 +571,63 @@ function fromDeliveryRow(row: DeliveryRow): DeliveryRecord {
   };
 }
 
+function toUserNotificationItemRow(record: UserNotificationItemRecord): UserNotificationItemRow {
+  return { ...record };
+}
+
+function fromUserNotificationItemRow(row: UserNotificationItemRow): UserNotificationItemRecord {
+  return { ...row, availableAt: row.availableAt ?? undefined, readAt: row.readAt ?? undefined, deletedAt: row.deletedAt ?? undefined };
+}
+
+function toDeliveryAttemptRow(record: DeliveryAttemptRecord): DeliveryAttemptRow {
+  return { ...record, metadata: record.metadata === undefined ? undefined : JSON.stringify(record.metadata) };
+}
+
+function fromDeliveryAttemptRow(row: DeliveryAttemptRow): DeliveryAttemptRecord {
+  return { ...row, metadata: row.metadata === undefined ? undefined : parseJsonObject(row.metadata) };
+}
+
+function toDeliveryStatusEventRow(record: DeliveryStatusEventRecord): DeliveryStatusEventRow {
+  return { ...record, metadata: record.metadata === undefined ? undefined : JSON.stringify(record.metadata) };
+}
+
+function fromDeliveryStatusEventRow(row: DeliveryStatusEventRow): DeliveryStatusEventRecord {
+  return { ...row, metadata: row.metadata === undefined ? undefined : parseJsonObject(row.metadata) };
+}
+
+function hasDuplicateIds(records: readonly { id: string }[]): boolean {
+  return new Set(records.map((record) => record.id)).size !== records.length;
+}
+
+function makeUserItemVisible(items: Map<string, UserNotificationItemRecord>, delivery: DeliveryRecord, changedAt: string): void {
+  if (delivery.status !== 'delivered' && delivery.status !== 'accepted') return;
+  for (const [id, item] of items) if (item.deliveryId === delivery.id && item.availableAt === undefined) items.set(id, { ...item, availableAt: changedAt, updatedAt: changedAt, version: item.version + 1 });
+}
+
+function recomputeMemoryNotification(notifications: Map<string, NotificationRecord>, deliveries: Map<string, DeliveryRecord>, notificationId: string, changedAt: string): void {
+  const notification = notifications.get(notificationId);
+  if (!notification) return;
+  const statuses = [...deliveries.values()].filter((delivery) => delivery.notificationId === notificationId).map((delivery) => delivery.status);
+  const nextStatus: NotificationSummaryStatus = summarizeDeliveryStatuses(statuses);
+  notifications.set(notificationId, { ...notification, summaryStatus: nextStatus, version: notification.version + 1, updatedAt: changedAt });
+}
+
+async function recomputeDatabaseNotification(query: QueryAdapter, notificationId: string, changedAt: string): Promise<void> {
+  const rows = await query.selectFrom<DeliveryRow>('notificationDeliveries').select(['status']).where('notificationId', '=', notificationId).execute<Pick<DeliveryRow, 'status'>>();
+  const statuses = rows.map((row) => row.status);
+  const nextStatus: NotificationSummaryStatus = summarizeDeliveryStatuses(statuses);
+  await query.updateTable<NotificationRow>('notifications').set({ summaryStatus: nextStatus, updatedAt: changedAt }).where('id', '=', notificationId).execute();
+}
+
+function summarizeDeliveryStatuses(statuses: readonly NotificationStatus[]): NotificationSummaryStatus {
+  if (statuses.some((status) => status === 'submission_unknown')) return 'attention_required';
+  if (statuses.every((status) => status === 'queued')) return 'queued';
+  if (statuses.some((status) => status === 'queued' || status === 'sending')) return 'processing';
+  const successful = statuses.filter((status) => status === 'accepted' || status === 'delivered').length;
+  if (successful === statuses.length) return 'succeeded';
+  return successful > 0 ? 'partially_succeeded' : 'failed';
+}
+
 function parseJsonObject(value: unknown): Record<string, unknown> {
   if (typeof value === 'string') {
     return JSON.parse(value) as Record<string, unknown>;
@@ -290,4 +641,3 @@ function parseJsonArray(value: unknown): readonly string[] {
   }
   return (value ?? []) as readonly string[];
 }
-import type { DatabaseManager, Row } from '@nocobase/database';

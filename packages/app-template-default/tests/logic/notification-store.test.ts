@@ -13,6 +13,59 @@ import {
 } from '../../registry/notification/server/domain.ts';
 
 describe('NotificationStore contract', () => {
+  it.each([
+    ['memory', async () => ({ store: createMemoryNotificationStore(), close: async () => undefined })],
+    ['database', createDatabaseStore],
+  ])('creates a notification bundle atomically through the %s adapter', async (_name, setup) => {
+    const { store, close } = await setup();
+    const notification = createNotification();
+    const delivery = createDelivery();
+    const item = createUserItem();
+
+    await store.createNotificationBundle({ notification, deliveries: [delivery], userNotificationItems: [item] });
+
+    await expect(store.getNotification(notification.id)).resolves.toMatchObject({ id: notification.id });
+    await expect(store.getDelivery(delivery.id)).resolves.toMatchObject({ id: delivery.id });
+    await expect(store.listInbox({ userId: 'user-1' })).resolves.toEqual([]);
+    await close();
+  });
+
+  it.each([
+    ['memory', async () => ({ store: createMemoryNotificationStore(), close: async () => undefined })],
+    ['database', createDatabaseStore],
+  ])('claims only due queued work once through the %s adapter', async (_name, setup) => {
+    const { store, close } = await setup();
+    await store.createNotificationBundle({ notification: createNotification(), deliveries: [createDelivery()] });
+
+    await expect(store.listDueDeliveries({ now: '2026-08-19T00:00:01.000Z', limit: 10 })).resolves.toHaveLength(1);
+    await expect(store.claimDelivery({
+      deliveryId: 'delivery-1', expectedVersion: 1, leaseToken: 'lease-1', leaseOwner: 'worker-1',
+      leaseExpiresAt: '2026-08-19T00:01:00.000Z', claimedAt: '2026-08-19T00:00:01.000Z',
+    })).resolves.toMatchObject({ status: 'sending', leaseToken: 'lease-1', version: 2 });
+    await expect(store.claimDelivery({
+      deliveryId: 'delivery-1', expectedVersion: 1, leaseToken: 'lease-2', leaseOwner: 'worker-2',
+      leaseExpiresAt: '2026-08-19T00:01:00.000Z', claimedAt: '2026-08-19T00:00:01.000Z',
+    })).resolves.toBeUndefined();
+    await close();
+  });
+
+  it.each([
+    ['memory', async () => ({ store: createMemoryNotificationStore(), close: async () => undefined })],
+    ['database', createDatabaseStore],
+  ])('exposes only visible owned inbox items and applies optimistic mutations through the %s adapter', async (_name, setup) => {
+    const { store, close } = await setup();
+    await store.createNotificationBundle({
+      notification: createNotification(), deliveries: [createDelivery()],
+      userNotificationItems: [{ ...createUserItem(), availableAt: '2026-08-19T00:00:01.000Z' }],
+    });
+
+    await expect(store.listInbox({ userId: 'other-user' })).resolves.toEqual([]);
+    await expect(store.countUnread({ userId: 'user-1' })).resolves.toBe(1);
+    await expect(store.updateInboxItem({ itemId: 'item-1', userId: 'user-1', action: 'read', changedAt: '2026-08-19T00:00:02.000Z', expectedVersion: 1 })).resolves.toMatchObject({ readAt: '2026-08-19T00:00:02.000Z', version: 2 });
+    await expect(store.countUnread({ userId: 'user-1' })).resolves.toBe(0);
+    await close();
+  });
+
   it('keeps notification and delivery snapshots isolated from caller mutation', async () => {
     const store = createMemoryNotificationStore();
     const notification = createNotification();
@@ -100,6 +153,13 @@ describe('NotificationStore contract', () => {
   });
 });
 
+async function createDatabaseStore() {
+  const database = createDatabaseManager({ default: 'sqlite', connections: { sqlite: { dialect: 'sqlite', filename: ':memory:' } } });
+  const directory = fileURLToPath(new URL('../../server/migrations', import.meta.url));
+  await createMigrator({ database, directory }).latest();
+  return { store: createDatabaseNotificationStore(database), close: () => database.destroy() };
+}
+
 function createNotification(): NotificationRecord {
   return {
     id: 'notification-1',
@@ -133,5 +193,12 @@ function createDelivery(): DeliveryRecord {
     version: 1,
     createdAt: '2026-08-19T00:00:00.000Z',
     updatedAt: '2026-08-19T00:00:00.000Z',
+  };
+}
+
+function createUserItem() {
+  return {
+    id: 'item-1', deliveryId: 'delivery-1', notificationId: 'notification-1', userId: 'user-1', channel: 'in-app' as const,
+    createdAt: '2026-08-19T00:00:00.000Z', updatedAt: '2026-08-19T00:00:00.000Z', version: 1,
   };
 }
