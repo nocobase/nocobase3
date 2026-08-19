@@ -18,4 +18,4 @@ Add the Provider extension boundary, config-owned SMTP and Fake Provider Instanc
 - [x] Attempts persist Provider identity/revision, invocation boundary, external message ID when available, and redacted results.
 - [x] Email user targets produce independent Email UserNotificationItems at accepted; direct Email targets remain outside every Inbox.
 - [ ] Local SMTP and Fake tests cover success, three-attempt retry, fallback, timeout, crash before invocation, and submission unknown.
-- [ ] Notification and Delivery detail/query DTOs expose only the approved redacted projections.
+- [x] Notification and Delivery detail/query DTOs expose only the approved redacted projections.
