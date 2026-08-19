@@ -176,6 +176,11 @@ export interface DeliveryTransition {
   lastError?: Record<string, unknown>;
   event?: DeliveryStatusEventRecord;
   attempt?: DeliveryAttemptRecord;
+  nextRunAt?: string;
+  clearNextRunAt?: boolean;
+  providerCursor?: number;
+  currentAttempt?: number;
+  clearLease?: boolean;
 }
 
 export function createMemoryNotificationStore(): NotificationStore {
@@ -237,6 +242,13 @@ export function createMemoryNotificationStore(): NotificationStore {
         status: input.toStatus,
         statusChangedAt: input.statusChangedAt,
         lastError: input.lastError,
+        nextRunAt: input.clearNextRunAt ? undefined : input.nextRunAt ?? current.nextRunAt,
+        providerCursor: input.providerCursor ?? current.providerCursor,
+        currentAttempt: input.currentAttempt ?? current.currentAttempt,
+        leaseToken: input.clearLease ? undefined : current.leaseToken,
+        leaseOwner: input.clearLease ? undefined : current.leaseOwner,
+        leaseExpiresAt: input.clearLease ? undefined : current.leaseExpiresAt,
+        lastAttemptId: input.attempt?.id ?? current.lastAttemptId,
         version: current.version + 1,
         updatedAt: input.statusChangedAt,
       };
@@ -375,6 +387,13 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
             status: input.toStatus,
             statusChangedAt: input.statusChangedAt,
             lastError: input.lastError,
+            nextRunAt: input.clearNextRunAt ? null : input.nextRunAt,
+            providerCursor: input.providerCursor,
+            currentAttempt: input.currentAttempt,
+            leaseToken: input.clearLease ? null : undefined,
+            leaseOwner: input.clearLease ? null : undefined,
+            leaseExpiresAt: input.clearLease ? null : undefined,
+            lastAttemptId: input.attempt?.id,
             version: input.expectedVersion + 1,
             updatedAt: input.statusChangedAt,
           })
@@ -389,7 +408,9 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
           return undefined;
         }
         if (input.attempt) {
-          await connection.query.insertInto<DeliveryAttemptRow>('notificationDeliveryAttempts').values(toDeliveryAttemptRow(input.attempt)).execute();
+          const attempt = toDeliveryAttemptRow(input.attempt);
+          const updated = await connection.query.updateTable<DeliveryAttemptRow>('notificationDeliveryAttempts').set(attempt).where('id', '=', attempt.id).execute();
+          if (updated.updatedCount !== 1) await connection.query.insertInto<DeliveryAttemptRow>('notificationDeliveryAttempts').values(attempt).execute();
         }
         if (input.event) {
           await connection.query.insertInto<DeliveryStatusEventRow>('notificationDeliveryStatusEvents').values(toDeliveryStatusEventRow(input.event)).execute();
@@ -510,10 +531,10 @@ interface DeliveryRow extends Row {
   currentAttempt: number;
   status: NotificationStatus;
   statusChangedAt: string;
-  nextRunAt?: string;
-  leaseToken?: string;
-  leaseOwner?: string;
-  leaseExpiresAt?: string;
+  nextRunAt?: string | null;
+  leaseToken?: string | null;
+  leaseOwner?: string | null;
+  leaseExpiresAt?: string | null;
   version: number;
   lastAttemptId?: string;
   lastError?: unknown;
@@ -575,7 +596,11 @@ function fromDeliveryRow(row: DeliveryRow): DeliveryRecord {
     recipientSnapshot: parseJsonObject(row.recipientSnapshot),
     contentSnapshot: parseJsonObject(row.contentSnapshot),
     providerChainSnapshot: parseJsonArray(row.providerChainSnapshot),
-    lastError: row.lastError === undefined ? undefined : parseJsonObject(row.lastError),
+    nextRunAt: row.nextRunAt ?? undefined,
+    leaseToken: row.leaseToken ?? undefined,
+    leaseOwner: row.leaseOwner ?? undefined,
+    leaseExpiresAt: row.leaseExpiresAt ?? undefined,
+    lastError: row.lastError === undefined || row.lastError === null ? undefined : parseJsonObject(row.lastError),
   };
 }
 
