@@ -33,12 +33,12 @@ export type PortalLiveFrame =
 export interface PortalLiveProvider {
   subscribe(options: PortalLiveSubscriptionOptions): PortalLiveSubscription;
   unsubscribe(subscription: PortalLiveSubscription): void;
+  close(): void;
   publish(): never;
 }
 
 export function createPortalLiveProvider(options: { readonly connect: () => PortalLiveSocket; readonly token?: string; readonly onResyncRequired?: () => void }): PortalLiveProvider {
   let socket = options.connect();
-  let streamId: string | undefined;
   let cursor: PortalLiveCursor | undefined;
   let drained = false;
   const subscriptions = new Map<string, PortalLiveSubscriptionOptions>();
@@ -54,7 +54,6 @@ export function createPortalLiveProvider(options: { readonly connect: () => Port
     if (options.token) socket.send({ version: 1, type: 'auth', token: options.token });
   };
   const handleFrame = (frame: PortalLiveFrame): void => {
-    if (frame.type === 'auth_ok') streamId = frame.streamId;
     if (frame.type === 'event') {
       cursor = { streamId: frame.event.streamId, sequence: frame.event.sequence };
       subscriptions.get(frame.subscriptionId)?.callback(frame.event);
@@ -77,6 +76,13 @@ export function createPortalLiveProvider(options: { readonly connect: () => Port
       return { id, unsubscribe: () => { subscriptions.delete(id); socket.send({ version: 1, type: 'unsubscribe', subscriptionId: id }); } };
     },
     unsubscribe(subscription): void { subscription.unsubscribe(); },
+    close(): void {
+      drained = true;
+      for (const removeListener of listeners.values()) removeListener();
+      listeners.clear();
+      subscriptions.clear();
+      socket.close();
+    },
     publish(): never { throw new Error('Portal Live client publishing is unavailable.'); },
   };
 }

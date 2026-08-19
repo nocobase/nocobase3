@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createMemoryNotificationStore,
   createDatabaseNotificationStore,
+  NotificationStoreCompatibilityError,
   type DeliveryRecord,
   type NotificationRecord,
 } from '../../registry/notification/server/domain.ts';
@@ -27,6 +28,39 @@ describe('NotificationStore contract', () => {
     await expect(store.getNotification(notification.id)).resolves.toMatchObject({ id: notification.id });
     await expect(store.getDelivery(delivery.id)).resolves.toMatchObject({ id: delivery.id });
     await expect(store.listInbox({ userId: 'user-1' })).resolves.toEqual([]);
+    const clock = Date.parse(await store.now());
+    expect(Math.abs(clock - Date.now())).toBeLessThan(5_000);
+    await close();
+  });
+
+  it.each([
+    ['memory', async () => ({ store: createMemoryNotificationStore(), close: async () => undefined })],
+    ['database', createDatabaseStore],
+  ])('uses a stable Inbox cursor when timestamps tie through the %s adapter', async (_name, setup) => {
+    const { store, close } = await setup();
+    const timestamp = '2026-08-19T00:00:01.000Z';
+    await store.createNotificationBundle({
+      notification: createNotification(),
+      deliveries: [createDelivery()],
+      userNotificationItems: [{ ...createUserItem(), availableAt: timestamp }],
+    });
+    await store.createNotificationBundle({
+      notification: { ...createNotification(), id: 'notification-2' },
+      deliveries: [{ ...createDelivery(), id: 'delivery-2', notificationId: 'notification-2' }],
+      userNotificationItems: [
+        { ...createUserItem(), id: 'item-2', deliveryId: 'delivery-2', notificationId: 'notification-2', availableAt: timestamp },
+      ],
+    });
+    const first = await store.listInbox({ userId: 'user-1', limit: 1 });
+    const second = await store.listInbox({
+      userId: 'user-1',
+      limit: 1,
+      beforeCreatedAt: first[0].createdAt,
+      beforeId: first[0].id,
+    });
+    expect(first).toHaveLength(1);
+    expect(second).toHaveLength(1);
+    expect(second[0].id).not.toBe(first[0].id);
     await close();
   });
 
@@ -62,6 +96,9 @@ describe('NotificationStore contract', () => {
     await expect(store.listInbox({ userId: 'other-user' })).resolves.toEqual([]);
     await expect(store.countUnread({ userId: 'user-1' })).resolves.toBe(1);
     await expect(store.updateInboxItem({ itemId: 'item-1', userId: 'user-1', action: 'read', changedAt: '2026-08-19T00:00:02.000Z', expectedVersion: 1 })).resolves.toMatchObject({ readAt: '2026-08-19T00:00:02.000Z', version: 2 });
+    await expect(store.countUnread({ userId: 'user-1' })).resolves.toBe(0);
+    await expect(store.updateInboxItem({ itemId: 'item-1', userId: 'user-1', action: 'unread', changedAt: '2026-08-19T00:00:03.000Z', expectedVersion: 2 })).resolves.toMatchObject({ readAt: undefined, version: 3 });
+    await expect(store.markInboxRead({ userId: 'user-1', changedAt: '2026-08-19T00:00:04.000Z' })).resolves.toBe(1);
     await expect(store.countUnread({ userId: 'user-1' })).resolves.toBe(0);
     await close();
   });
@@ -113,6 +150,16 @@ describe('NotificationStore contract', () => {
     await expect(store.getDelivery(delivery.id)).resolves.toMatchObject({
       contentSnapshot: { subject: 'Hello' },
     });
+  });
+
+  it('rejects unknown persisted snapshot schema versions explicitly', async () => {
+    const store = createMemoryNotificationStore();
+    await expect(
+      store.createNotificationBundle({
+        notification: createNotification(),
+        deliveries: [{ ...createDelivery(), contentSchemaVersion: 2 }],
+      }),
+    ).rejects.toBeInstanceOf(NotificationStoreCompatibilityError);
   });
 
   it('persists the same snapshot and CAS contract through DatabaseManager', async () => {

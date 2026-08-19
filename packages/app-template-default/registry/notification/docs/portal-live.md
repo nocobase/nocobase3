@@ -2,7 +2,7 @@
 
 Portal Live is the lightweight same-origin real-time delivery channel for Portal apps. It pushes minimal Inbox invalidation events over an application/user-bound WebSocket so the Inbox can refresh without polling and without making WebSocket state a source of truth. A bounded in-memory buffer supports cursor replay; clients fall back to a full HTTP refetch when replay is unavailable.
 
-The phase-one compatibility contract is deliberately small: same-origin Upgrade, application/user isolation, the `notifications/inbox` channel, minimal invalidation events, cursor replay or `resync_required`, reconnect, and unavailable client publish. Heartbeat timing, authentication deadlines, role semantics, application leases, cross-instance delivery, time-based retention, backpressure, and draining frames are implementation details rather than integration guarantees.
+The phase-one compatibility contract is deliberately small: authenticated same-origin Upgrade, application/user isolation, the `notifications/inbox` channel, minimal invalidation events with `eventId`, bounded duplicate suppression, reconnect, and HTTP refetch after a gap. Cursor replay and `resync_required` are supported by the current implementation but are not required of future lightweight-compatible transports. Heartbeat timing, authentication deadlines, role semantics, application leases, cross-instance delivery, time-based retention, acknowledgements, backpressure, and draining frames are not integration guarantees.
 
 ## Protocol
 
@@ -58,7 +58,7 @@ App Services constructs Portal Live only when an `appId` is present, and wires i
 
 ## Client
 
-`createPortalLiveProvider()` (`portal-live/client/index.ts`) exposes `subscribe`/`unsubscribe` with automatic reconnect. On reconnect it resubscribes with the last cursor; a `resync_required` frame tells the caller to refetch via HTTP. Client publishing throws because domain events only originate from trusted server publishers.
+`createPortalLiveProvider()` (`portal-live/client/index.ts`) exposes `subscribe`/`unsubscribe`/`close` with automatic reconnect. On reconnect it resubscribes with the last cursor; a `resync_required` frame tells the caller to refetch via HTTP. The Notification Inbox also bounds its remembered `eventId` values and ignores duplicates. Client publishing throws because domain events only originate from trusted server publishers.
 
 ## HTTP upgrade wiring
 

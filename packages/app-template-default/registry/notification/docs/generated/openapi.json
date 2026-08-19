@@ -1,0 +1,686 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NocoBase Notification HTTP API",
+    "version": "3.0-phase-1"
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "nocobase_session"
+      }
+    }
+  },
+  "paths": {
+    "/api/notifications/trigger": {
+      "post": {
+        "operationId": "disabledNotificationTrigger",
+        "summary": "Disabled external notification trigger",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "HTTP_TRIGGER_DISABLED"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "HTTP triggering is intentionally unavailable in phase one.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "HTTP_TRIGGER_DISABLED"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/inbox/csrf": {
+      "get": {
+        "operationId": "issueInboxCsrf",
+        "summary": "Issue an Inbox CSRF token",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "token": "8a72e20e-…"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_INBOX_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/inbox": {
+      "get": {
+        "operationId": "listInbox",
+        "summary": "List the current user Inbox",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "description": "Optional in-app or email filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unreadOnly",
+            "in": "query",
+            "required": false,
+            "description": "Return unread items only.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size from 1 to 100.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque stable cursor from nextCursor.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "itemId": "item-1",
+                  "itemTitle": "Order ready",
+                  "nextCursor": "eyJjcmVhdGVkQXQiOi…"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A filter, page size, or cursor is invalid.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_INBOX_QUERY_INVALID"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_INBOX_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/inbox/unread-count": {
+      "get": {
+        "operationId": "countUnreadInbox",
+        "summary": "Count unread Inbox items",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "description": "Optional in-app or email filter.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "count": 3
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_INBOX_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/inbox/{itemId}": {
+      "post": {
+        "operationId": "mutateInboxItem",
+        "summary": "Read, unread, or delete one Inbox item",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "description": "Inbox item ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "read, unread, or delete."
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "description": "Optimistic concurrency version."
+                  }
+                },
+                "required": [
+                  "action",
+                  "expectedVersion"
+                ]
+              },
+              "example": {
+                "action": "read",
+                "expectedVersion": 2
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "item-1",
+                  "version": 3
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_INBOX_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The same-origin double-submit CSRF token is absent or invalid.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_CSRF_INVALID"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The item is absent or belongs to another user.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_INBOX_ITEM_NOT_FOUND"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The item version changed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_INBOX_CONFLICT"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/inbox/read-all": {
+      "post": {
+        "operationId": "markInboxRead",
+        "summary": "Mark the current Inbox read",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "channel": {
+                    "type": "string",
+                    "description": "Optional in-app or email filter."
+                  }
+                },
+                "required": []
+              },
+              "example": {
+                "channel": "in-app"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "updated": 12
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_INBOX_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The same-origin double-submit CSRF token is absent or invalid.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_CSRF_INVALID"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/admin/deliveries": {
+      "get": {
+        "operationId": "listNotificationDeliveries",
+        "summary": "List redacted Delivery summaries",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Delivery status filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "description": "Delivery channel filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Prefix search, at most 200 characters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "One-based page.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "Page size from 1 to 100.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "deliveryId": "delivery-1",
+                  "status": "failed",
+                  "total": 1
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_ADMIN_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/admin/deliveries/{deliveryId}/retry": {
+      "post": {
+        "operationId": "retryNotificationDelivery",
+        "summary": "Manually retry a terminal Delivery",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "description": "Delivery ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "description": "Optimistic concurrency version."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "Operator audit reason."
+                  },
+                  "acknowledgeDuplicateRisk": {
+                    "type": "boolean",
+                    "description": "Required for submission_unknown."
+                  }
+                },
+                "required": [
+                  "expectedVersion",
+                  "reason"
+                ]
+              },
+              "example": {
+                "expectedVersion": 4,
+                "reason": "Provider recovered",
+                "acknowledgeDuplicateRisk": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "delivery-1",
+                  "status": "queued",
+                  "version": 5
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_ADMIN_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The same-origin double-submit CSRF token is absent or invalid.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_CSRF_INVALID"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The status or version changed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_DELIVERY_CONFLICT"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/admin/providers": {
+      "get": {
+        "operationId": "listNotificationProviders",
+        "summary": "List redacted provider configuration",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "providerId": "email/smtp/primary",
+                  "enabled": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_ADMIN_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/admin/providers/{providerId}/test": {
+      "post": {
+        "operationId": "testNotificationProvider",
+        "summary": "Test provider connectivity without sending",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "providerId",
+            "in": "path",
+            "required": true,
+            "description": "Provider instance ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "providerId": "email/smtp/primary",
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request has no authenticated Portal session.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_ADMIN_UNAUTHENTICATED"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The same-origin double-submit CSRF token is absent or invalid.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "NOTIFICATION_CSRF_INVALID"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

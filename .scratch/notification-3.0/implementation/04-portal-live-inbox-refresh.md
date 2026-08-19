@@ -1,7 +1,7 @@
 # Refresh the Inbox through Portal Live
 
 Type: implementation / AFK
-Status: in_progress
+Status: completed
 Label: needs-triage
 Blocked by: [01](01-module-shell-mount-lifecycle.md), [03](03-in-app-end-to-end.md)
 

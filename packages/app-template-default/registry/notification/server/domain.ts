@@ -1,10 +1,19 @@
 import { randomUUID } from 'node:crypto';
 
-import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/database';
+import type { DatabaseConnection, DatabaseManager, QueryAdapter, Row } from '@nocobase/database';
 
 export type NotificationChannel = 'in-app' | 'email';
 export type NotificationStatus = 'queued' | 'sending' | 'accepted' | 'delivered' | 'failed' | 'submission_unknown';
 export type NotificationSummaryStatus = 'queued' | 'processing' | 'succeeded' | 'partially_succeeded' | 'failed' | 'attention_required';
+
+export class NotificationStoreCompatibilityError extends Error {
+  readonly code = 'NOTIFICATION_SCHEMA_VERSION_UNSUPPORTED' as const;
+
+  constructor(readonly snapshot: string, readonly version: number) {
+    super(`Unsupported ${snapshot} schema version: ${version}.`);
+    this.name = 'NotificationStoreCompatibilityError';
+  }
+}
 
 export interface NotificationRecord {
   id: string;
@@ -104,6 +113,7 @@ export interface NotificationCommandStore {
   transitionDelivery(input: DeliveryTransition): Promise<DeliveryRecord | undefined>;
   createUserNotificationItem(record: UserNotificationItemRecord): Promise<void>;
   updateInboxItem(input: InboxMutation): Promise<UserNotificationItemRecord | undefined>;
+  markInboxRead(input: InboxReadAllMutation): Promise<number>;
 }
 
 export interface NotificationQueryStore {
@@ -114,6 +124,7 @@ export interface NotificationQueryStore {
   listDeliveryStatusEvents(deliveryId: string): Promise<readonly DeliveryStatusEventRecord[]>;
   listDeliveryAttempts(deliveryId: string): Promise<readonly DeliveryAttemptRecord[]>;
   listUserNotificationItemsByDelivery(deliveryId: string): Promise<readonly UserNotificationItemRecord[]>;
+  getInboxItem(itemId: string, userId: string): Promise<UserNotificationItemRecord | undefined>;
   listInbox(input: InboxQuery): Promise<readonly UserNotificationItemRecord[]>;
   countUnread(input: InboxQuery): Promise<number>;
 }
@@ -128,7 +139,11 @@ export interface NotificationMigrationStore {
   readonly schemaVersion: 1;
 }
 
-export interface NotificationStore extends NotificationCommandStore, NotificationQueryStore, NotificationMaintenanceStore, NotificationMigrationStore {
+export interface NotificationClockStore {
+  now(): Promise<string>;
+}
+
+export interface NotificationStore extends NotificationCommandStore, NotificationQueryStore, NotificationMaintenanceStore, NotificationMigrationStore, NotificationClockStore {
 }
 
 export interface NotificationBundle {
@@ -169,6 +184,7 @@ export interface InboxQuery {
   unreadOnly?: boolean;
   limit?: number;
   beforeCreatedAt?: string;
+  beforeId?: string;
 }
 
 export interface InboxMutation {
@@ -177,6 +193,12 @@ export interface InboxMutation {
   action: 'read' | 'unread' | 'delete';
   changedAt: string;
   expectedVersion: number;
+}
+
+export interface InboxReadAllMutation {
+  userId: string;
+  channel?: NotificationChannel;
+  changedAt: string;
 }
 
 export interface DeliveryTransition {
@@ -206,13 +228,23 @@ export function createMemoryNotificationStore(): NotificationStore {
 
   const store: NotificationStore = {
     schemaVersion: 1,
+    async now(): Promise<string> {
+      return new Date().toISOString();
+    },
     async createNotificationBundle(input): Promise<void> {
+      validateBundleSchemaVersions(input);
       if (notifications.has(input.notification.id) || hasDuplicateIds(input.deliveries) || input.deliveries.some((item) => deliveries.has(item.id))) {
         throw new Error(`Notification bundle "${input.notification.id}" already exists.`);
       }
       const duplicateItem = hasDuplicateIds(input.userNotificationItems ?? []) || input.userNotificationItems?.some((item) => userItems.has(item.id));
       if (duplicateItem) throw new Error('User notification item already exists.');
-      if (hasDuplicateIds(input.statusEvents ?? []) || input.statusEvents?.some((event) => events.has(event.id))) {
+      if (
+        hasDuplicateIds(input.statusEvents ?? []) ||
+        hasDuplicateEventSequences(input.statusEvents ?? []) ||
+        input.statusEvents?.some((event) =>
+          events.has(event.id) || [...events.values()].some((existing) => existing.deliveryId === event.deliveryId && existing.sequence === event.sequence),
+        )
+      ) {
         throw new Error('Delivery status event already exists.');
       }
       notifications.set(input.notification.id, structuredClone(input.notification));
@@ -258,6 +290,7 @@ export function createMemoryNotificationStore(): NotificationStore {
         .filter((delivery) => !search || delivery.id.toLowerCase().startsWith(search) || delivery.notificationId.toLowerCase().startsWith(search) || recipientSearchMatches(delivery.recipientKey, search)).length;
     },
     async transitionDelivery(input): Promise<DeliveryRecord | undefined> {
+      validateAttemptAndEventVersions(input.attempt, input.event);
       const current = deliveries.get(input.deliveryId);
       if (
         !current ||
@@ -267,6 +300,7 @@ export function createMemoryNotificationStore(): NotificationStore {
       ) {
         return undefined;
       }
+      assertMemoryHistoryAvailable(attempts, events, input.attempt, input.event, true);
 
       const next: DeliveryRecord = {
         ...current,
@@ -311,8 +345,10 @@ export function createMemoryNotificationStore(): NotificationStore {
         .map((delivery) => structuredClone(delivery));
     },
     async claimDelivery(input): Promise<DeliveryRecord | undefined> {
+      validateAttemptAndEventVersions(input.attempt, input.event);
       const current = deliveries.get(input.deliveryId);
       if (!current || current.version !== input.expectedVersion || current.status !== 'queued') return undefined;
+      assertMemoryHistoryAvailable(attempts, events, input.attempt, input.event, false);
       const next: DeliveryRecord = {
         ...current,
         status: 'sending',
@@ -355,10 +391,20 @@ export function createMemoryNotificationStore(): NotificationStore {
         .filter((item) => input.channel === undefined || item.channel === input.channel)
         .filter((item) => input.includeDeleted || item.deletedAt === undefined)
         .filter((item) => !input.unreadOnly || item.readAt === undefined)
-        .filter((item) => !input.beforeCreatedAt || item.createdAt < input.beforeCreatedAt)
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .filter((item) =>
+          !input.beforeCreatedAt ||
+          item.createdAt < input.beforeCreatedAt ||
+          (item.createdAt === input.beforeCreatedAt && input.beforeId !== undefined && item.id < input.beforeId),
+        )
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))
         .slice(0, input.limit ?? 50)
         .map((item) => structuredClone(item));
+    },
+    async getInboxItem(itemId, userId): Promise<UserNotificationItemRecord | undefined> {
+      const item = userItems.get(itemId);
+      return item && item.userId === userId && item.availableAt !== undefined && item.deletedAt === undefined
+        ? structuredClone(item)
+        : undefined;
     },
     async countUnread(input): Promise<number> {
       return (await this.listInbox({ ...input, unreadOnly: true, limit: Number.MAX_SAFE_INTEGER })).length;
@@ -381,6 +427,29 @@ export function createMemoryNotificationStore(): NotificationStore {
       userItems.set(next.id, next);
       return structuredClone(next);
     },
+    async markInboxRead(input): Promise<number> {
+      let updated = 0;
+      for (const [id, current] of userItems) {
+        if (
+          current.userId !== input.userId ||
+          current.availableAt === undefined ||
+          current.deletedAt !== undefined ||
+          current.readAt !== undefined ||
+          current.createdAt > input.changedAt ||
+          (input.channel !== undefined && current.channel !== input.channel)
+        ) {
+          continue;
+        }
+        userItems.set(id, {
+          ...current,
+          readAt: input.changedAt,
+          updatedAt: input.changedAt,
+          version: current.version + 1,
+        });
+        updated += 1;
+      }
+      return updated;
+    },
   };
   return store;
 }
@@ -388,7 +457,11 @@ export function createMemoryNotificationStore(): NotificationStore {
 export function createDatabaseNotificationStore(database: DatabaseManager): NotificationStore {
   const store: NotificationStore = {
     schemaVersion: 1,
+    async now(): Promise<string> {
+      return databaseCurrentTime(database.connection());
+    },
     async createNotificationBundle(input): Promise<void> {
+      validateBundleSchemaVersions(input);
       await database.transaction(async (connection) => {
         await connection.query.insertInto<NotificationRow>('notifications').values(toNotificationRow(input.notification)).execute();
         if (input.deliveries.length) {
@@ -451,6 +524,7 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
       return Number(row?.total ?? 0);
     },
     async transitionDelivery(input): Promise<DeliveryRecord | undefined> {
+      validateAttemptAndEventVersions(input.attempt, input.event);
       return database.transaction(async (connection) => {
         let update = connection.query
           .updateTable<DeliveryRow>('notificationDeliveries')
@@ -521,6 +595,7 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
       return rows.map(fromDeliveryRow);
     },
     async claimDelivery(input): Promise<DeliveryRecord | undefined> {
+      validateAttemptAndEventVersions(input.attempt, input.event);
       return database.transaction(async (connection) => {
         const result = await connection.query.updateTable<DeliveryRow>('notificationDeliveries').set({
           status: 'sending', statusChangedAt: input.claimedAt, leaseToken: input.leaseToken,
@@ -562,12 +637,47 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
       query = query.where('availableAt', 'is not', null);
       if (!input.includeDeleted) query = query.where('deletedAt', 'is', null);
       if (input.unreadOnly) query = query.where('readAt', 'is', null);
-      if (input.beforeCreatedAt) query = query.where('createdAt', '<', input.beforeCreatedAt);
-      const rows = await query.orderBy('createdAt', 'desc').limit(input.limit ?? 50).execute<UserNotificationItemRow>();
+      if (input.beforeCreatedAt) {
+        query = input.beforeId
+          ? query.where(({ and, eb, or }) =>
+              or([
+                eb('createdAt', '<', input.beforeCreatedAt!),
+                and([eb('createdAt', '=', input.beforeCreatedAt!), eb('id', '<', input.beforeId!)]),
+              ]),
+            )
+          : query.where('createdAt', '<', input.beforeCreatedAt);
+      }
+      const rows = await query
+        .orderBy('createdAt', 'desc')
+        .orderBy('id', 'desc')
+        .limit(input.limit ?? 50)
+        .execute<UserNotificationItemRow>();
       return rows.map(fromUserNotificationItemRow);
     },
+    async getInboxItem(itemId, userId): Promise<UserNotificationItemRecord | undefined> {
+      const row = await database
+        .query()
+        .selectFrom<UserNotificationItemRow>('userNotificationItems')
+        .selectAll()
+        .where('id', '=', itemId)
+        .where('userId', '=', userId)
+        .where('availableAt', 'is not', null)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirst<UserNotificationItemRow>();
+      return row ? fromUserNotificationItemRow(row) : undefined;
+    },
     async countUnread(input): Promise<number> {
-      return (await this.listInbox({ ...input, unreadOnly: true, limit: Number.MAX_SAFE_INTEGER })).length;
+      let query = database
+        .query()
+        .selectFrom<UserNotificationItemRow>('userNotificationItems')
+        .select((eb) => [eb.fn.countAll<number>().as('total')])
+        .where('userId', '=', input.userId)
+        .where('availableAt', 'is not', null)
+        .where('deletedAt', 'is', null)
+        .where('readAt', 'is', null);
+      if (input.channel !== undefined) query = query.where('channel', '=', input.channel);
+      const row = await query.executeTakeFirst<{ total: number | string | bigint }>();
+      return Number(row?.total ?? 0);
     },
     async updateInboxItem(input): Promise<UserNotificationItemRecord | undefined> {
       return database.transaction(async (connection) => {
@@ -584,6 +694,32 @@ export function createDatabaseNotificationStore(database: DatabaseManager): Noti
         if (result.updatedCount !== 1) return undefined;
         const row = await connection.query.selectFrom<UserNotificationItemRow>('userNotificationItems').selectAll().where('id', '=', input.itemId).executeTakeFirst<UserNotificationItemRow>();
         return row ? fromUserNotificationItemRow(row) : undefined;
+      });
+    },
+    async markInboxRead(input): Promise<number> {
+      return database.transaction(async (connection) => {
+        let select = connection.query
+          .selectFrom<UserNotificationItemRow>('userNotificationItems')
+          .select(['id', 'version'])
+          .where('userId', '=', input.userId)
+          .where('availableAt', 'is not', null)
+          .where('deletedAt', 'is', null)
+          .where('readAt', 'is', null)
+          .where('createdAt', '<=', input.changedAt);
+        if (input.channel !== undefined) select = select.where('channel', '=', input.channel);
+        const rows = await select.execute<Pick<UserNotificationItemRow, 'id' | 'version'>>();
+        let updated = 0;
+        for (const row of rows) {
+          const result = await connection.query
+            .updateTable<UserNotificationItemRow>('userNotificationItems')
+            .set({ readAt: input.changedAt, updatedAt: input.changedAt, version: row.version + 1 })
+            .where('id', '=', row.id)
+            .where('version', '=', row.version)
+            .where('readAt', 'is', null)
+            .execute();
+          updated += result.updatedCount ?? 0;
+        }
+        return updated;
       });
     },
   };
@@ -680,6 +816,9 @@ function toDeliveryRow(record: DeliveryRecord): DeliveryRow {
 }
 
 function fromDeliveryRow(row: DeliveryRow): DeliveryRecord {
+  assertSchemaVersion('recipient snapshot', row.recipientSchemaVersion);
+  assertSchemaVersion('content snapshot', row.contentSchemaVersion);
+  assertSchemaVersion('provider chain snapshot', row.providerChainSchemaVersion);
   return {
     ...row,
     recipientSnapshot: parseJsonObject(row.recipientSnapshot),
@@ -706,6 +845,7 @@ function toDeliveryAttemptRow(record: DeliveryAttemptRecord): DeliveryAttemptRow
 }
 
 function fromDeliveryAttemptRow(row: DeliveryAttemptRow): DeliveryAttemptRecord {
+  assertSchemaVersion('attempt metadata', row.metadataSchemaVersion);
   return {
     ...row,
     configRevision: row.configRevision ?? undefined,
@@ -725,11 +865,109 @@ function toDeliveryStatusEventRow(record: DeliveryStatusEventRecord): DeliverySt
 }
 
 function fromDeliveryStatusEventRow(row: DeliveryStatusEventRow): DeliveryStatusEventRecord {
+  assertSchemaVersion('status event metadata', row.metadataSchemaVersion);
   return { ...row, metadata: row.metadata === undefined ? undefined : parseJsonObject(row.metadata) };
 }
 
 function hasDuplicateIds(records: readonly { id: string }[]): boolean {
   return new Set(records.map((record) => record.id)).size !== records.length;
+}
+
+function hasDuplicateEventSequences(events: readonly DeliveryStatusEventRecord[]): boolean {
+  const keys = events.map((event) => `${event.deliveryId}:${event.sequence}`);
+  return new Set(keys).size !== keys.length;
+}
+
+function assertMemoryHistoryAvailable(
+  attempts: ReadonlyMap<string, DeliveryAttemptRecord>,
+  events: ReadonlyMap<string, DeliveryStatusEventRecord>,
+  attempt: DeliveryAttemptRecord | undefined,
+  event: DeliveryStatusEventRecord | undefined,
+  allowExistingAttempt: boolean,
+): void {
+  if (
+    attempt &&
+    ((!allowExistingAttempt && attempts.has(attempt.id)) ||
+      [...attempts.values()].some(
+        (existing) =>
+          existing.id !== attempt.id &&
+          existing.deliveryId === attempt.deliveryId &&
+          existing.attemptSequence === attempt.attemptSequence,
+      ))
+  ) {
+    throw new Error('Delivery attempt already exists.');
+  }
+  if (
+    event &&
+    (events.has(event.id) ||
+      [...events.values()].some(
+        (existing) => existing.deliveryId === event.deliveryId && existing.sequence === event.sequence,
+      ))
+  ) {
+    throw new Error('Delivery status event already exists.');
+  }
+}
+
+function validateBundleSchemaVersions(input: NotificationBundle): void {
+  for (const delivery of input.deliveries) {
+    assertSchemaVersion('recipient snapshot', delivery.recipientSchemaVersion);
+    assertSchemaVersion('content snapshot', delivery.contentSchemaVersion);
+    assertSchemaVersion('provider chain snapshot', delivery.providerChainSchemaVersion);
+  }
+  for (const event of input.statusEvents ?? []) {
+    assertSchemaVersion('status event metadata', event.metadataSchemaVersion);
+  }
+}
+
+function validateAttemptAndEventVersions(
+  attempt: DeliveryAttemptRecord | undefined,
+  event: DeliveryStatusEventRecord | undefined,
+): void {
+  if (attempt) assertSchemaVersion('attempt metadata', attempt.metadataSchemaVersion);
+  if (event) assertSchemaVersion('status event metadata', event.metadataSchemaVersion);
+}
+
+function assertSchemaVersion(snapshot: string, version: number): void {
+  if (version !== 1) throw new NotificationStoreCompatibilityError(snapshot, version);
+}
+
+interface DatabaseRawClient {
+  raw(statement: string): Promise<unknown>;
+}
+
+async function databaseCurrentTime(connection: DatabaseConnection): Promise<string> {
+  const client = await connection.client<DatabaseRawClient>();
+  const statement = connection.dialect === 'sqlite'
+    ? "select strftime('%Y-%m-%dT%H:%M:%fZ', 'now') as currentTime"
+    : 'select CURRENT_TIMESTAMP as currentTime';
+  const result = await client.raw(statement);
+  const currentTime = findDatabaseTime(result);
+  if (!currentTime) throw new Error('Database did not return a valid current timestamp.');
+  return currentTime;
+}
+
+function findDatabaseTime(value: unknown): string | undefined {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string' || typeof value === 'number') {
+    const timestamp = new Date(value);
+    return Number.isNaN(timestamp.getTime()) ? undefined : timestamp.toISOString();
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findDatabaseTime(item);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (value && typeof value === 'object') {
+    for (const key of ['currentTime', 'currenttime', 'current_time', 'rows']) {
+      if (key in value) {
+        const found = findDatabaseTime(value[key as keyof typeof value]);
+        if (found) return found;
+      }
+    }
+  }
+  return undefined;
 }
 
 function recipientSearchMatches(recipientKey: string, search: string): boolean {

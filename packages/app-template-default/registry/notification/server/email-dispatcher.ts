@@ -14,11 +14,11 @@ export interface EmailDispatchOptions {
 export async function dispatchEmailDelivery(options: EmailDispatchOptions): Promise<DeliveryRecord | undefined> {
   const delivery = await options.store.getDelivery(options.deliveryId);
   if (!delivery || delivery.channel !== 'email' || delivery.status !== 'queued') return delivery;
-  const now = options.now ?? (() => new Date());
-  if (delivery.nextRunAt && delivery.nextRunAt > now().toISOString()) return delivery;
+  const startedAt = await resolveDispatchTime(options);
+  if (delivery.nextRunAt && delivery.nextRunAt > startedAt.toISOString()) return delivery;
   const selected = selectProvider(delivery, options.providers);
-  if (!selected) return finishWithoutProvider(options.store, delivery, now());
-  const occurredAt = now().toISOString();
+  if (!selected) return finishWithoutProvider(options.store, delivery, startedAt);
+  const occurredAt = startedAt.toISOString();
   const events = await options.store.listDeliveryStatusEvents(delivery.id);
   const attemptId = randomUUID();
   const attemptSequence = (await options.store.listDeliveryAttempts(delivery.id)).length + 1;
@@ -29,12 +29,16 @@ export async function dispatchEmailDelivery(options: EmailDispatchOptions): Prom
   };
   const sending = await options.store.claimDelivery({
     deliveryId: delivery.id, expectedVersion: delivery.version, leaseToken: randomUUID(), leaseOwner: options.workerId,
-    leaseExpiresAt: new Date(now().getTime() + 30_000).toISOString(), claimedAt: occurredAt, attempt,
+    leaseExpiresAt: new Date(startedAt.getTime() + 30_000).toISOString(), claimedAt: occurredAt, attempt,
     event: statusEvent(delivery, events.length + 1, 'sending', occurredAt, attemptId),
   });
   if (!sending) return undefined;
   const result = await selected.provider.send(toEmailMessage(delivery));
-  return applyProviderResult(options.store, sending, attempt, result, selected.cursor, options.providers, events.length + 2, now());
+  return applyProviderResult(options.store, sending, attempt, result, selected.cursor, options.providers, events.length + 2, await resolveDispatchTime(options));
+}
+
+async function resolveDispatchTime(options: EmailDispatchOptions): Promise<Date> {
+  return options.now?.() ?? new Date(await options.store.now());
 }
 
 function selectProvider(delivery: DeliveryRecord, providers: EmailProviderRegistry) {

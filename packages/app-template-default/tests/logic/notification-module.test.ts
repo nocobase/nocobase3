@@ -54,7 +54,7 @@ describe('notification module lifecycle', () => {
     await loggerManager.flushAll();
   });
 
-  it('closes the notification module before shared queue infrastructure', async () => {
+  it('stops notification scheduling, drains the shared queue, then closes notification resources', async () => {
     const calls: string[] = [];
     const queueManager = createQueueManagerStub();
     const loggerManager = createLoggerManager(createSilentLoggerConfig());
@@ -64,8 +64,11 @@ describe('notification module lifecycle', () => {
       queueManager,
       logger: loggerManager.use(),
     });
+    vi.spyOn(notificationModule, 'beginShutdown').mockImplementation(() => {
+      calls.push('notification-stop');
+    });
     vi.spyOn(notificationModule, 'close').mockImplementation(async () => {
-      calls.push('notification');
+      calls.push('notification-close');
       return { status: 'closed', errors: [] };
     });
     queueManager.close.mockImplementation(async () => {
@@ -80,7 +83,7 @@ describe('notification module lifecycle', () => {
       sessionManager: createSessionManager(createNullSessionConfig()),
     });
 
-    expect(calls).toEqual(['notification', 'queue']);
+    expect(calls).toEqual(['notification-stop', 'queue', 'notification-close']);
     await database.destroy();
   });
 });

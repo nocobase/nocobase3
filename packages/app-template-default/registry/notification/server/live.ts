@@ -55,5 +55,10 @@ export function createLivePublishingNotificationStore(
       publish(input.userId, 'unread-count-changed');
       return result;
     },
+    async markInboxRead(input) {
+      const updated = await store.markInboxRead(input);
+      if (updated > 0) publish(input.userId, 'unread-count-changed');
+      return updated;
+    },
   };
 }

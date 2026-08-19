@@ -1,10 +1,22 @@
 import type { AppExtension } from "@nocobase/portal-sdk/extensions";
 import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
-import { MailWarning, ScrollText, Server } from "lucide-react";
+import { Bell, MailWarning, ScrollText, Server } from "lucide-react";
+import { NotificationInboxBell, NotificationInboxProvider } from './inbox/runtime';
 
 const notificationExtension: AppExtension = {
   id: "notification-operations",
+  Provider: NotificationInboxProvider,
+  HeaderItems: NotificationInboxBell,
   resources: [
+    {
+      name: 'notification-inbox',
+      list: 'inbox',
+      meta: {
+        label: 'My notifications',
+        icon: <Bell />,
+        acl: { type: 'authenticated' },
+      },
+    },
     {
       name: "notification-operations",
       meta: {
@@ -36,6 +48,15 @@ const notificationExtension: AppExtension = {
     },
   ],
   routes: defineAppRoutes([
+    {
+      name: 'notification-inbox',
+      path: 'inbox',
+      meta: { acl: { type: 'authenticated' } },
+      lazy: () =>
+        import('./inbox/page').then((module) => ({
+          default: module.NotificationInboxPage,
+        })),
+    },
     {
       name: "notifications",
       path: "notifications",

@@ -128,8 +128,9 @@ export async function disposeAppServices(
   services: Pick<AppServices, 'cacheManager' | 'loggerManager' | 'notificationModule' | 'portalLive' | 'queueManager' | 'sessionManager'>,
 ): Promise<void> {
   services.portalLive?.drain();
-  await services.notificationModule?.close({ deadlineAt: Date.now() + 10_000 });
+  services.notificationModule?.beginShutdown();
   await services.queueManager.close();
+  await services.notificationModule?.close({ deadlineAt: Date.now() + 10_000 });
   await Promise.all([
     services.cacheManager.disconnectAll(),
     services.loggerManager.flushAll(),

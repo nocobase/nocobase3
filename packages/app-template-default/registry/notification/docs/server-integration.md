@@ -38,12 +38,12 @@ Startup and shutdown are idempotent.
 1. App Runtime prepares the database and runs configured migrations.
 2. App Services constructs the shared QueueManager and notification module.
 3. Embedded and production standalone startup await the notification module start operation.
-4. Shutdown closes notification-owned resources first.
-5. App Services closes the shared QueueManager and other shared services.
+4. Shutdown drains Portal Live and stops Notification scheduling.
+5. App Services drains the shared QueueManager, then closes notification providers/Reconciler under the deadline.
 6. App Runtime destroys the shared DatabaseManager last.
 
 `createNotificationModule().close()` never calls `queueManager.close()` or `database.destroy()`. Startup failure follows the same ownership order and disposes the prepared Runtime before returning the error.
 
-## Current slice boundary
+## Current boundary
 
-This shell only establishes configuration, dependency injection, route mounting, health state, and lifecycle. NotificationStore schema/migrations, queue jobs, Delivery processing, Inbox behavior, SMTP providers, and admin interfaces are implemented by the following slices.
+The phase-one module includes Store migrations, Queue jobs, recovery, Inbox and Live refresh, SMTP/fake providers, developer templates, and operational administration. Remaining exclusions and their removal conditions are listed in [config.md](config.md).

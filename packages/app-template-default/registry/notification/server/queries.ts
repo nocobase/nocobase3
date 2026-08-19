@@ -237,7 +237,7 @@ export async function retryDelivery(
       "Retrying an uncertain submission requires duplicate-risk acknowledgement."
     );
   const events = await store.listDeliveryStatusEvents(delivery.id);
-  const changedAt = input.changedAt ?? new Date().toISOString();
+  const changedAt = input.changedAt ?? await store.now();
   const result = await store.transitionDelivery({
     deliveryId: delivery.id,
     expectedVersion: input.expectedVersion,

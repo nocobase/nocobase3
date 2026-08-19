@@ -6,7 +6,6 @@
 
 ```ts
 interface NotificationTriggerInput {
-  readonly principalService: string;
   readonly source: { readonly type: string; readonly referenceId?: string };
   readonly targets: readonly (
     | { readonly kind?: 'user'; readonly userId: string; readonly channels: readonly ('in-app' | 'email')[]; readonly variables?: Record<string, unknown> }
@@ -19,9 +18,14 @@ interface NotificationTriggerInput {
       } }
     | { readonly kind: 'template'; readonly templateKey: string; readonly variables?: Record<string, unknown> };
 }
+
+interface NotificationSystemPrincipal {
+  readonly kind: 'service';
+  readonly serviceId: string;
+}
 ```
 
-- `principalService`: trusted in-process caller identity, required. The host integration supplies it; browser callers cannot choose it.
+- `principal`: trusted in-process caller identity, required as a separate first argument. The Host creates it; browser callers and business input cannot choose it.
 - `source.type`: business event type, required. It should carry the triggering service namespace, e.g. `workflow.order.created`; `source.referenceId` is the business reference (order number). Together they answer "which service, for which business event" and are the audit attribution dimension.
 - `targets`: 1-1000 explicit receivers and at most 2000 expanded Deliveries. User targets choose unique In-app/Email Channels; the host resolves user Email addresses before persistence. Direct Email targets never create Inbox items.
 - `message`: direct content and a developer-owned template are mutually exclusive. Template `variables` are common to the notification; target `variables` are validated and rendered per recipient. Every recipient is rendered before persistence, so one invalid recipient rejects the whole trigger.
@@ -50,6 +54,7 @@ Validation failures throw `NotificationModuleError` with an error code:
 
 | Code | Meaning |
 | --- | --- |
+| `NOTIFICATION_PRINCIPAL_INVALID` | The Host-created service principal is absent or invalid. |
 | `NOTIFICATION_TRIGGER_INVALID` | `source.type` missing; targets empty or more than 1000. |
 | `NOTIFICATION_CONTENT_INVALID` | `title` / `body` missing; `title` > 200 chars; `body` > 10,000 chars. |
 | `NOTIFICATION_RECIPIENT_INVALID` | Missing/duplicate user/channel, invalid or duplicate normalized Email address, or unresolved user Email. |
@@ -61,7 +66,9 @@ Validation failures throw `NotificationModuleError` with an error code:
 
 ```ts
 const result = await notificationService.trigger({
-  principalService: 'workflow',
+  kind: 'service',
+  serviceId: 'workflow',
+}, {
   source: { type: 'workflow.order.created', referenceId: '1001' },
   targets: [{ userId: 'u_001', channels: ['in-app'] }],
   message: { kind: 'content', content: { title: '订单已创建', body: '您的订单 1001 已创建', actionUrl: '/orders/1001' } },

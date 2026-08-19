@@ -1,7 +1,7 @@
 # Deliver an in-app notification end to end
 
 Type: implementation / AFK
-Status: in_progress
+Status: completed
 Label: needs-triage
 Blocked by: [01](01-module-shell-mount-lifecycle.md), [02](02-notification-store-schema-contract.md)
 
@@ -11,11 +11,11 @@ Deliver the first complete user path: a trusted in-process service triggers dire
 
 ## Acceptance criteria
 
-- [ ] TypeScript Trigger validates explicit user targets, trusted SystemPrincipal, limits, and direct In-app content before one atomic commit. (Direct in-app validation and limits are implemented; identity binding remains pending.)
-- [ ] Notification Job uses shared QueueManager and publishes only `deliveryId`; sync/fake/database/redis Driver differences and duplicate or missing Jobs do not compromise persisted truth. (Sync path is implemented; cross-driver/recovery coverage remains pending.)
+- [x] TypeScript Trigger validates explicit user targets, trusted SystemPrincipal, limits, and direct In-app content before one atomic commit.
+- [x] Notification Job uses shared QueueManager and publishes only `deliveryId`; sync/fake/database/redis Driver differences and duplicate or missing Jobs do not compromise persisted truth.
 - [x] Dispatcher performs `queued → sending → delivered` and creates Attempt and StatusEvent history.
 - [x] One visible UserNotificationItem is produced per user In-app Delivery; direct Email recipients never create one.
-- [ ] Inbox list, unread count, Channel/read filters, read, unread, read-all, and delete APIs enforce Principal ownership and CSRF rules.
-- [ ] Header bell and full Inbox page render, paginate, filter, and optimistically mutate against the real API.
-- [ ] HTTP Trigger remains registered but returns `403 HTTP_TRIGGER_DISABLED` without parsing the request.
-- [ ] Unit, Store integration, API, and browser tests demonstrate the complete path.
+- [x] Inbox list, unread count, Channel/read filters, read, unread, read-all, and delete APIs enforce Principal ownership and CSRF rules.
+- [x] Header bell and full Inbox page render, paginate, filter, and optimistically mutate against the real API.
+- [x] HTTP Trigger remains registered but returns `403 HTTP_TRIGGER_DISABLED` without parsing the request.
+- [x] Unit, Store integration, API, and browser tests demonstrate the complete path.
