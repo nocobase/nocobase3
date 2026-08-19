@@ -20,6 +20,12 @@ lifecycle/
   dist/client/index.html
   dist/client/assets/...
   dist/server/embedded.js
+
+ws-demo/
+  package.json
+  dist/client/index.html
+  dist/client/assets/...
+  dist/server/embedded.js
 ```
 
 `dist/server/embedded.js` is required. `dist/client/assets/**` is optional and
@@ -35,6 +41,8 @@ reading and returning it. The host does not provide SPA fallback routing.
 
 The server artifact should export `createServer(scope)`. For example,
 `/<app>/api/info` is available to the server as `/api/info`.
+The returned app object should expose `fetch(request)` and may expose
+`websocket(request)`. Register cleanup with `scope.registerDisposer(...)`.
 
 Run it from the repository root:
 
@@ -59,6 +67,10 @@ http://127.0.0.1:3000/service/healthz
 http://127.0.0.1:3000/lifecycle/
 http://127.0.0.1:3000/lifecycle/api/lifecycle
 http://127.0.0.1:3000/lifecycle/healthz
+http://127.0.0.1:3000/ws-demo/
+http://127.0.0.1:3000/ws-demo/api/info
+http://127.0.0.1:3000/ws-demo/healthz
+ws://<host>/ws-demo/ws
 ```
 
 `lifecycle/dist/server/embedded.js` is the most complete example in the fixture
@@ -66,8 +78,12 @@ set. It:
 
 - registers a `beforeDestroy` hook with `scope.onBeforeDestroy(...)`
 - registers a runtime disposer with `scope.registerDisposer(...)`
-- implements a composite `dispose()` function and returns it as `app.close`
+- implements a composite `dispose()` function
 - exposes the current runtime snapshot at `/api/lifecycle`
 
 That makes it a good starting point when you want to see the destroy order in
 one place.
+
+`ws-demo/dist/server/embedded.js` exposes `/ws` as the app-local WebSocket
+route. The fixture page derives `ws://<host>/ws-demo/ws` from the current page
+origin and displays the current server time from that socket.

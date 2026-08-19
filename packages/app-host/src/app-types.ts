@@ -11,9 +11,60 @@ import type { AppState } from './events.ts';
 
 export type AppDisposer = () => void | Promise<void>;
 
+export type AppWebSocketReadyState = 0 | 1 | 2 | 3;
+
+export type AppWebSocketMessageData = string | ArrayBuffer;
+
+export interface AppWebSocketSendOptions {
+  compress?: boolean;
+}
+
+export interface AppWebSocket {
+  readonly url: URL;
+  readonly protocol: string | null;
+  readonly readyState: AppWebSocketReadyState;
+  send(data: string | ArrayBuffer | Uint8Array, options?: AppWebSocketSendOptions): void;
+  close(code?: number, reason?: string): void;
+}
+
+export interface AppWebSocketOpenEvent {
+  readonly type: 'open';
+}
+
+export interface AppWebSocketMessageEvent {
+  readonly type: 'message';
+  readonly data: AppWebSocketMessageData;
+}
+
+export interface AppWebSocketCloseEvent {
+  readonly type: 'close';
+  readonly code: number;
+  readonly reason: string;
+  readonly wasClean: boolean;
+}
+
+export interface AppWebSocketErrorEvent {
+  readonly type: 'error';
+  readonly error: unknown;
+}
+
+export interface AppWebSocketEvents {
+  onOpen?: (event: AppWebSocketOpenEvent, ws: AppWebSocket) => void | Promise<void>;
+  onMessage?: (event: AppWebSocketMessageEvent, ws: AppWebSocket) => void | Promise<void>;
+  onClose?: (event: AppWebSocketCloseEvent, ws: AppWebSocket) => void | Promise<void>;
+  onError?: (event: AppWebSocketErrorEvent, ws: AppWebSocket) => void | Promise<void>;
+}
+
+export type AppWebSocketAcceptResult = AppWebSocketEvents | Response | null | undefined;
+
+export type AppWebSocketHandler = (
+  request: Request,
+  env?: unknown,
+) => AppWebSocketAcceptResult | Promise<AppWebSocketAcceptResult>;
+
 export interface FetchApp {
   fetch(request: Request, env?: unknown, executionCtx?: unknown): Response | Promise<Response>;
-  close?(): void | Promise<void>;
+  websocket?: AppWebSocketHandler;
 }
 
 export interface AppScope {
@@ -178,6 +229,7 @@ export interface ActiveAppHandle {
   readonly signal: AbortSignal;
   readonly state: AppState;
   dispatch(request: Request, metadata?: AppRequestMetadata): Promise<Response>;
+  acceptWebSocket(request: Request, metadata?: AppRequestMetadata): Promise<AppWebSocketAcceptResult>;
   destroy(options?: string | AppDestroyOptions): Promise<void>;
   snapshot(): AppSnapshot;
 }
