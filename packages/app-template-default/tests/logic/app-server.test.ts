@@ -1,13 +1,16 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { serve } from '@hono/node-server';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { createNullCacheConfig, type AppCacheConfig } from '@nocobase/cache';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppWebSocket, AppWebSocketReadyState } from '@nocobase/app-server/websocket';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggerConfig } from '@nocobase/logger';
@@ -23,8 +26,13 @@ import {
   createStandaloneRuntime,
   createStandaloneServer,
   queueDemoExecutions,
+  type StandaloneServer,
 } from '../../server/index.ts';
+import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalone.ts';
 import type { AppConfig } from '../../server/config/index.ts';
+import { CLOCK_TOPIC } from '../../server/realtime/publishers/clock.ts';
+import { createRealtimeService } from '../../server/realtime/service.ts';
+import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 
 interface CloseableResource {
@@ -74,6 +82,7 @@ describe('app server', () => {
     }));
 
     const response = await app.request('http://localhost/api/healthz');
+    const websocketEvents = await app.websocket?.(new Request('http://localhost/ws'));
 
     await expect(response.json()).resolves.toEqual({
       ok: true,
@@ -82,6 +91,9 @@ describe('app server', () => {
         basePath: '/embedded-app-template-default',
       },
       basePath: '/embedded-app-template-default',
+    });
+    expect(websocketEvents).toMatchObject({
+      onMessage: expect.any(Function),
     });
   });
 
@@ -100,6 +112,90 @@ describe('app server', () => {
     expect(html).toContain('This page is rendered by an app-local server route.');
   });
 
+  it('exposes an app-local WebSocket handler outside the API namespace', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    const response = await app.request('http://localhost/ws');
+    const websocketEvents = await app.websocket?.(new Request('http://localhost/ws'));
+    const missingEvents = await app.websocket?.(new Request('http://localhost/missing-ws'));
+
+    expect(response.status).toBe(426);
+    expect(response.headers.get('upgrade')).toBe('websocket');
+    await expect(response.json()).resolves.toEqual({
+      error: 'WebSocket upgrade required',
+    });
+    expect(websocketEvents).toMatchObject({
+      onMessage: expect.any(Function),
+    });
+    expect(missingEvents).toBeNull();
+  });
+
+  it('serves an app-local realtime demo page', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    const response = await app.request('http://localhost/realtime');
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('id="now-time"');
+    expect(html).toContain('/app-template-default/ws');
+    expect(html).toContain(CLOCK_TOPIC);
+    expect(html).toContain("type: 'subscribe'");
+  });
+
+  it('subscribes, publishes, and unsubscribes realtime messages', () => {
+    const realtime = createRealtimeService();
+    const websocket = createTestWebSocket();
+    const connection = realtime.connect(websocket);
+
+    realtime.handleClientMessage(connection, JSON.stringify({
+      type: 'subscribe',
+      id: 'subscribe-clock',
+      topic: CLOCK_TOPIC,
+    }));
+    const subscribed = websocket.messages[0];
+
+    expect(subscribed).toMatchObject({
+      type: 'subscribed',
+      id: 'subscribe-clock',
+      topic: CLOCK_TOPIC,
+      subscriptionId: expect.any(String),
+    });
+
+    realtime.publish(CLOCK_TOPIC, 'tick');
+
+    expect(websocket.messages[1]).toMatchObject({
+      type: 'event',
+      topic: CLOCK_TOPIC,
+      payload: 'tick',
+      publishedAt: expect.any(String),
+    });
+
+    realtime.handleClientMessage(connection, JSON.stringify({
+      type: 'unsubscribe',
+      id: 'unsubscribe-clock',
+      subscriptionId: (subscribed as { subscriptionId: string }).subscriptionId,
+    }));
+    realtime.publish(CLOCK_TOPIC, 'after unsubscribe');
+
+    expect(websocket.messages[2]).toMatchObject({
+      type: 'unsubscribed',
+      id: 'unsubscribe-clock',
+      subscriptionId: (subscribed as { subscriptionId: string }).subscriptionId,
+      topic: CLOCK_TOPIC,
+    });
+    expect(websocket.messages).toHaveLength(3);
+
+    realtime.close();
+  });
+
   it('registers embedded app resources with the scope', async () => {
     const registeredDisposers: RegisteredTestDisposer[] = [];
     const app = await createEmbeddedServer(createEmbeddedTestScope({
@@ -108,12 +204,17 @@ describe('app server', () => {
     }, registeredDisposers));
 
     expect(typeof (app as { close?: unknown }).close).toBe('undefined');
-    expect(registeredDisposers.map((disposer) => disposer.name)).toEqual(['runtime', 'app-deps']);
+    expect(registeredDisposers.map((disposer) => disposer.name)).toEqual([
+      'runtime',
+      'app-deps',
+      'realtime-service',
+      'clock-publisher',
+    ]);
 
-    await expect(registeredDisposers[1].dispose()).resolves.toBeUndefined();
-    await expect(registeredDisposers[1].dispose()).resolves.toBeUndefined();
-    await expect(registeredDisposers[0].dispose()).resolves.toBeUndefined();
-    await expect(registeredDisposers[0].dispose()).resolves.toBeUndefined();
+    for (const disposer of [...registeredDisposers].reverse()) {
+      await expect(disposer.dispose()).resolves.toBeUndefined();
+      await expect(disposer.dispose()).resolves.toBeUndefined();
+    }
   });
 
   it('serves embedded production SPA routes from the stripped app-host path', async () => {
@@ -672,16 +773,85 @@ describe('app server', () => {
         name: runtime.config.app.name,
         basePath: publicBasePath,
       },
+      basePath: publicBasePath,
     };
 
     const rootHealth = await app.request('http://localhost/healthz');
-    const appHealth = await app.request(`http://localhost${publicBasePath}/healthz`);
+    const appHealth = await app.request(`http://localhost${publicBasePath}/api/healthz`);
     const bareLocalApi = await app.request('http://localhost/api/healthz');
 
-    await expect(rootHealth.json()).resolves.toEqual(expectedHealth);
     await expect(appHealth.json()).resolves.toEqual(expectedHealth);
+    expect(rootHealth.status).toBe(404);
     expect(bareLocalApi.status).toBe(404);
     await app.close();
+  });
+
+  it('mounts standalone WebSocket handlers behind the public base path', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
+    const publicBasePath = runtime.config.app.publicBasePath;
+
+    const bareResult = await app.websocket?.(new Request('http://localhost/ws'));
+    const mountedResult = await app.websocket?.(new Request(`http://localhost${publicBasePath}/ws`));
+
+    expect(bareResult).toBeNull();
+    expect(mountedResult).toMatchObject({
+      onMessage: expect.any(Function),
+    });
+  });
+
+  it('accepts standalone WebSocket upgrades through the public base path', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
+    const serverUrl = await startStandaloneTestServer(app);
+    const websocket = new WebSocket(`${serverUrl}${runtime.config.app.publicBasePath}/ws`);
+
+    await waitForWebSocketOpen(websocket);
+    const subscribed = waitForWebSocketJsonMessage(websocket, (message) => message.type === 'subscribed');
+    const event = waitForWebSocketJsonMessage(
+      websocket,
+      (message) => message.type === 'event' && message.topic === CLOCK_TOPIC,
+    );
+
+    websocket.send(JSON.stringify({
+      type: 'subscribe',
+      id: 'clock',
+      topic: CLOCK_TOPIC,
+    }));
+
+    await expect(subscribed).resolves.toMatchObject({
+      type: 'subscribed',
+      id: 'clock',
+      topic: CLOCK_TOPIC,
+      subscriptionId: expect.any(String),
+    });
+    await expect(event).resolves.toMatchObject({
+      type: 'event',
+      topic: CLOCK_TOPIC,
+      payload: expect.any(String),
+      publishedAt: expect.any(String),
+    });
+
+    const close = waitForWebSocketClose(websocket);
+    websocket.close();
+    await close;
+  });
+
+  it('closes standalone WebSocket connections when the app closes', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl: false }));
+    const serverUrl = await startStandaloneTestServer(app);
+    const websocket = new WebSocket(`${serverUrl}${runtime.config.app.publicBasePath}/ws`);
+
+    await waitForWebSocketOpen(websocket);
+    const close = waitForWebSocketClose(websocket);
+
+    await app.close();
+
+    await expect(close).resolves.toMatchObject({
+      code: 1001,
+      reason: 'app runtime closed',
+    });
   });
 
   it('returns a closable standalone app', async () => {
@@ -789,6 +959,116 @@ describe('app server', () => {
     });
   });
 });
+
+function startStandaloneTestServer(app: StandaloneServer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const server = serve(
+      {
+        fetch: app.fetch,
+        hostname: '127.0.0.1',
+        port: 0,
+      },
+      (info) => {
+        resolve(`ws://${normalizeListenAddress(info)}:${info.port}`);
+      },
+    ) as Server;
+
+    server.once('error', reject);
+    registerStandaloneWebSocketUpgradeHandler(app, server);
+    servers.push(server);
+  });
+}
+
+function normalizeListenAddress(info: AddressInfo): string {
+  return info.address === '::' ? '127.0.0.1' : info.address;
+}
+
+function waitForWebSocketOpen(websocket: WebSocket): Promise<void> {
+  if (websocket.readyState === WebSocket.OPEN) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      websocket.removeEventListener('open', handleOpen);
+      websocket.removeEventListener('error', handleError);
+    };
+    const handleOpen = (): void => {
+      cleanup();
+      resolve();
+    };
+    const handleError = (): void => {
+      cleanup();
+      reject(new Error('WebSocket failed to open.'));
+    };
+
+    websocket.addEventListener('open', handleOpen);
+    websocket.addEventListener('error', handleError);
+  });
+}
+
+function waitForWebSocketJsonMessage(
+  websocket: WebSocket,
+  predicate: (message: RealtimeServerMessage) => boolean,
+): Promise<RealtimeServerMessage> {
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      websocket.removeEventListener('message', handleMessage);
+      websocket.removeEventListener('error', handleError);
+    };
+    const handleMessage = (event: MessageEvent): void => {
+      try {
+        const message = JSON.parse(String(event.data)) as RealtimeServerMessage;
+        if (!predicate(message)) {
+          return;
+        }
+
+        cleanup();
+        resolve(message);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    };
+    const handleError = (): void => {
+      cleanup();
+      reject(new Error('WebSocket message failed.'));
+    };
+
+    websocket.addEventListener('message', handleMessage);
+    websocket.addEventListener('error', handleError);
+  });
+}
+
+function waitForWebSocketClose(websocket: WebSocket): Promise<CloseEvent> {
+  return new Promise((resolve) => {
+    websocket.addEventListener('close', (event) => resolve(event), { once: true });
+  });
+}
+
+interface TestWebSocket extends AppWebSocket {
+  readonly messages: RealtimeServerMessage[];
+}
+
+function createTestWebSocket(): TestWebSocket {
+  let readyState: AppWebSocketReadyState = 1;
+  const messages: RealtimeServerMessage[] = [];
+
+  return {
+    url: new URL('ws://localhost/ws'),
+    protocol: null,
+    messages,
+    get readyState() {
+      return readyState;
+    },
+    send(data) {
+      messages.push(JSON.parse(String(data)) as RealtimeServerMessage);
+    },
+    close() {
+      readyState = 3;
+    },
+  };
+}
 
 function startHttpStub(
   handler?: Parameters<typeof createHttpServer>[0],

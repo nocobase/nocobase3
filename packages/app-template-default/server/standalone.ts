@@ -1,10 +1,18 @@
 import { serve } from '@hono/node-server';
-import type { Hono } from 'hono';
+import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
+import type { Duplex } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import { createAppRuntime, type AppRuntime } from '@nocobase/app-server/runtime';
+import {
+  acceptWebSocketUpgrade,
+  createWebSocketUpgradeRequest,
+  isWebSocketUpgrade,
+  rejectWebSocketUpgrade,
+} from '@nocobase/app-server/websocket';
 
+import type { AppServer } from './app.js';
 import type { AppConfig } from './config/index.js';
 import {
   createAppDisposerRegistry,
@@ -34,8 +42,9 @@ export interface StandaloneServerListenOptions {
   readonly startLog: boolean;
 }
 
-export interface StandaloneServer extends Hono {
+export interface StandaloneServer extends AppServer {
   readonly listenOptions: StandaloneServerListenOptions;
+  readonly signal: AbortSignal;
   close(): Promise<void>;
 }
 
@@ -46,11 +55,17 @@ export async function createStandaloneServer(
 
   try {
     const runtime = createStandaloneRuntime();
+    const websocketAbortController = new AbortController();
 
     lifecycle.registerDisposer('runtime', onceAsync(() => runtime.dispose()));
     await prepareAppRuntime(runtime);
 
-    return createStandaloneAppFromRuntime(runtime, lifecycle, options);
+    const app = createStandaloneAppFromRuntime(runtime, lifecycle, websocketAbortController.signal, options);
+    lifecycle.registerDisposer('websocket-connections', () => {
+      websocketAbortController.abort(new Error('app server closed'));
+    });
+
+    return app;
   } catch (error) {
     return disposeAfterStartupFailure(lifecycle.disposeAll, error);
   }
@@ -80,6 +95,7 @@ async function startServerAsync(): Promise<void> {
       },
     );
 
+    registerStandaloneWebSocketUpgradeHandler(app, server);
     registerShutdownHandlers(app, server);
   } catch (error) {
     await disposeAfterStartupFailure(app.close, error);
@@ -93,6 +109,7 @@ export function createStandaloneRuntime(): AppRuntime<AppConfig> {
 function createStandaloneAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
   lifecycle: AppDisposerRegistry,
+  signal: AbortSignal,
   options: StandaloneServerOptions = {},
 ): StandaloneServer {
   const app = createAppFromRuntime(runtime, {
@@ -107,7 +124,62 @@ function createStandaloneAppFromRuntime(
       port: runtime.config.server.port,
       startLog: runtime.config.server.startLog,
     },
+    signal,
     close: () => lifecycle.disposeAll(),
+  });
+}
+
+export function registerStandaloneWebSocketUpgradeHandler(
+  app: StandaloneServer,
+  server: ReturnType<typeof serve>,
+): void {
+  server.on('upgrade', (req, socket, head) => {
+    void dispatchStandaloneWebSocket(req, socket, head, app).catch((error) => {
+      console.error(error);
+      rejectWebSocketUpgrade(socket, 500);
+    });
+  });
+}
+
+async function dispatchStandaloneWebSocket(
+  req: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+  app: StandaloneServer,
+): Promise<void> {
+  if (!isWebSocketUpgrade(req)) {
+    rejectWebSocketUpgrade(socket, 400);
+    return;
+  }
+
+  const websocket = app.websocket;
+  if (!websocket) {
+    rejectWebSocketUpgrade(socket, 404);
+    return;
+  }
+
+  const request = createWebSocketUpgradeRequest(req, {
+    signal: app.signal,
+  });
+  const result = await websocket(request, {
+    signal: app.signal,
+  });
+
+  if (result instanceof Response) {
+    rejectWebSocketUpgrade(socket, result.status, result.headers);
+    return;
+  }
+
+  if (!result) {
+    rejectWebSocketUpgrade(socket, 404);
+    return;
+  }
+
+  acceptWebSocketUpgrade(req, socket, {
+    request,
+    events: result,
+    head,
+    signal: app.signal,
   });
 }
 

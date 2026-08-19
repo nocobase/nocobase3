@@ -5,7 +5,7 @@ import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { SpaHandler } from '@nocobase/app-server/spa';
 import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
-import { createApp } from '../app.js';
+import { createApp, type AppServer } from '../app.js';
 import type { AppLifecycle } from '../app-options.js';
 import type { AppConfig } from '../config/index.js';
 
@@ -21,7 +21,7 @@ interface RequestInitWithDuplex extends RequestInit {
 export function createAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
   options: CreateAppFromRuntimeOptions,
-): ReturnType<typeof createApp> {
+): AppServer {
   const { config } = runtime;
   const viteDevUrl = resolveViteDevUrlOption(options.viteDevUrl, config.server.viteDevUrl);
 
@@ -35,17 +35,28 @@ export function createAppFromRuntime(
   });
 }
 
-export function createPublicBasePathAdapter(app: Hono, publicBasePath: string): Hono {
+export function createPublicBasePathAdapter(app: AppServer, publicBasePath: string): AppServer {
   const basePath = normalizeBasePath(publicBasePath);
   if (!basePath) {
     return app;
   }
 
-  const mounted = new Hono();
+  const mounted = new Hono() as AppServer;
 
-  mounted.all('/healthz', (context) => app.fetch(context.req.raw));
   mounted.all(basePath, (context) => dispatchMountedApp(app, context.req.raw, basePath));
   mounted.all(`${basePath}/*`, (context) => dispatchMountedApp(app, context.req.raw, basePath));
+
+  const websocket = app.websocket;
+  if (websocket) {
+    mounted.websocket = (request, env) => {
+      const strippedRequest = stripPublicBasePathFromRequest(request, basePath);
+      if (!strippedRequest) {
+        return null;
+      }
+
+      return websocket(strippedRequest, env);
+    };
+  }
 
   return mounted;
 }
@@ -70,7 +81,7 @@ export function stripPublicBasePathFromRequest(request: Request, publicBasePath:
   return cloneRequestWithUrl(request, url);
 }
 
-function dispatchMountedApp(app: Hono, request: Request, publicBasePath: string): Response | Promise<Response> {
+function dispatchMountedApp(app: AppServer, request: Request, publicBasePath: string): Response | Promise<Response> {
   const strippedRequest = stripPublicBasePathFromRequest(request, publicBasePath);
   if (!strippedRequest) {
     return Response.json({ error: 'Not found' }, { status: 404 });

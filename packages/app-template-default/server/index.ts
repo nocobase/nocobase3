@@ -1,4 +1,4 @@
-export { createApp, type AppLifecycle, type CreateAppOptions, type SpaHandler } from './app.js';
+export { createApp, type AppLifecycle, type AppServer, type CreateAppOptions, type SpaHandler } from './app.js';
 export { createServer, default, type AppDisposer, type AppScope, type EmbeddedServer } from './embedded.js';
 export {
   createStandaloneRuntime,

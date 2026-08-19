@@ -34,6 +34,10 @@
     "./support": {
       "types": "./src/support/index.ts",
       "import": "./src/support/index.ts"
+    },
+    "./websocket": {
+      "types": "./src/websocket.ts",
+      "import": "./src/websocket.ts"
     }
   },
   "publishConfig": {
@@ -65,6 +69,10 @@
       "./support": {
         "types": "./dist/support/index.d.ts",
         "import": "./dist/support/index.js"
+      },
+      "./websocket": {
+        "types": "./dist/websocket.d.ts",
+        "import": "./dist/websocket.js"
       }
     }
   },
