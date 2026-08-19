@@ -6,23 +6,32 @@ import { createServer as createHttpServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
-import type { AppCacheConfig } from '@nocobase/cache';
+import { createNullCacheConfig, type AppCacheConfig } from '@nocobase/cache';
+import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
 import type { AppDriveConfig } from '@nocobase/drive';
-import type { AppSessionConfig } from '@nocobase/session';
+import { createSilentLoggerConfig } from '@nocobase/logger';
+import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
+import { createNullSessionConfig, type AppSessionConfig } from '@nocobase/session';
+import { joinBasePath, normalizeBasePath, resolveAppNameFromBasePath } from '@nocobase/app-server/support';
 
 import {
   createApp,
+  type ClosableApp,
   createServer as createEmbeddedServer,
   createStandaloneRuntime,
   createStandaloneServer,
   queueDemoExecutions,
 } from '../../server/index.ts';
+import type { AppConfig } from '../../server/config/index.ts';
 
+const apps: ClosableApp[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  await Promise.all(apps.splice(0).map((app) => app.close()));
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -172,7 +181,7 @@ describe('app server', () => {
         }),
       );
     });
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
@@ -225,7 +234,7 @@ describe('app server', () => {
         }),
       );
     });
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
@@ -263,7 +272,7 @@ describe('app server', () => {
     tempDirs.push(root);
     writeFileSync(path.join(root, 'index.html'), '<main>app-template-default app</main>');
 
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       spa: {
         indexPath: path.join(root, 'index.html'),
@@ -280,7 +289,7 @@ describe('app server', () => {
   });
 
   it('returns a JSON error when app settings are requested without a database', async () => {
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
     });
@@ -302,7 +311,7 @@ describe('app server', () => {
         updatedAt: '2026-08-18T00:00:00.000Z',
       },
     ];
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       database: createMockDatabase(rows),
@@ -317,7 +326,7 @@ describe('app server', () => {
   });
 
   it('serves a cache API example with cacheable getOrSet', async () => {
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       cache: createTestCache(),
@@ -363,7 +372,7 @@ describe('app server', () => {
   });
 
   it('serves a session API example with cookie-backed persistence', async () => {
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       session: createTestSession(),
@@ -431,7 +440,7 @@ describe('app server', () => {
 
   it('serves a queue API example with the sync connection', async () => {
     queueDemoExecutions.length = 0;
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       queue: {
@@ -473,7 +482,7 @@ describe('app server', () => {
   it('writes a queue demo database log when database is configured', async () => {
     queueDemoExecutions.length = 0;
     const insertedRows: unknown[] = [];
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       database: createMockDatabase([], insertedRows),
@@ -522,7 +531,7 @@ describe('app server', () => {
   });
 
   it('returns a JSON error when upload is requested without file drive', async () => {
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
     });
@@ -543,7 +552,7 @@ describe('app server', () => {
   it('requires a file for uploads', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-upload-'));
     tempDirs.push(root);
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       drive: createTestDrive(root),
@@ -565,7 +574,7 @@ describe('app server', () => {
   it('uploads files with the configured file drive', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-upload-'));
     tempDirs.push(root);
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       drive: createTestDrive(root),
@@ -600,7 +609,7 @@ describe('app server', () => {
       response.setHeader('content-length', String(compressedPayload.byteLength));
       response.end(compressedPayload);
     });
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
@@ -699,7 +708,7 @@ describe('app server', () => {
       ].join(''),
     );
 
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       spa: {
@@ -723,7 +732,7 @@ describe('app server', () => {
     writeFileSync(path.join(root, 'index.html'), '<script type="module" src="/app-template-default/assets/index.js"></script>');
     writeFileSync(path.join(root, 'assets/index.js'), 'console.log("app-template-default asset");');
 
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       spa: {
@@ -745,7 +754,7 @@ describe('app server', () => {
     mkdirSync(path.join(root, 'assets'));
     writeFileSync(path.join(root, 'index.html'), '<main>app-template-default app</main>');
 
-    const app = createApp({
+    const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
       spa: {
@@ -839,6 +848,72 @@ function createTestSession(): AppSessionConfig {
     secret: 'test-app-session-secret',
     gcLottery: [0, 100],
   };
+}
+
+interface CreateTestAppOptions {
+  publicBasePath?: string;
+  nocoBaseApiUrl?: string | false;
+  database?: DatabaseManager;
+  cache?: AppCacheConfig;
+  drive?: AppDriveConfig;
+  queue?: AppQueueConfig;
+  session?: AppSessionConfig;
+  spa?: {
+    indexPath?: string;
+    runtime?: AppConfig['spa']['runtime'];
+  };
+}
+
+function createTestApp(options: CreateTestAppOptions = {}): ClosableApp {
+  const publicBasePath = normalizeBasePath(options.publicBasePath ?? '/app-template-default');
+  const internalApiProxyPath = '/v2/api';
+  const config = {
+    app: {
+      name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
+      publicBasePath,
+      internalBasePath: '',
+      internalApiProxyPath,
+      publicApiUrl: joinBasePath(publicBasePath, internalApiProxyPath),
+      nocoBaseApiUrl: options.nocoBaseApiUrl === false ? undefined : options.nocoBaseApiUrl,
+    },
+    cache: options.cache ?? createNullCacheConfig(),
+    database: {
+      default: 'sqlite',
+      connections: {},
+      migrations: {
+        directory: '',
+        autoRun: false,
+      },
+    },
+    drive: options.drive,
+    logger: createSilentLoggerConfig(),
+    queue: options.queue ?? createSyncQueueConfig(),
+    session: options.session ?? createNullSessionConfig(),
+    server: {
+      host: '127.0.0.1',
+      port: 0,
+      startLog: false,
+      viteDevUrl: undefined,
+    },
+    spa: {
+      indexPath: options.spa?.indexPath ?? path.resolve(process.cwd(), 'index.html'),
+      runtime: options.spa?.runtime ?? {
+        storagePrefix: 'NOCOBASE_',
+        storageType: 'localStorage',
+        shareToken: false,
+      },
+    },
+  } as AppConfig;
+  const runtime: AppRuntime<AppConfig> = {
+    config,
+    database: options.database,
+    runMigrations: () => Promise.resolve(undefined),
+    dispose: () => Promise.resolve(),
+  };
+  const app = createApp(runtime);
+
+  apps.push(app);
+  return app;
 }
 
 function firstCookie(response: Response): string {

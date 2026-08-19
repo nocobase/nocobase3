@@ -23,25 +23,11 @@ export function createAppFromRuntime(
   const { config } = runtime;
   const viteDevUrl = resolveViteDevUrlOption(options.viteDevUrl, config.server.viteDevUrl);
 
-  return createApp({
-    appName: config.app.name,
-    internalBasePath: config.app.internalBasePath,
-    publicBasePath: config.app.publicBasePath,
-    internalApiProxyPath: config.app.internalApiProxyPath,
-    publicApiUrl: config.app.publicApiUrl,
-    cache: config.cache,
-    database: runtime.database,
-    drive: config.drive,
-    logger: config.logger,
-    queue: config.queue,
-    session: config.session,
-    nocoBaseApiUrl: config.app.nocoBaseApiUrl,
+  return createApp(runtime, {
     spa: {
       handler: viteDevUrl
         ? createPublicBasePathOriginProxyHandler(viteDevUrl, config.app.publicBasePath)
         : undefined,
-      indexPath: config.spa.indexPath,
-      runtime: config.spa.runtime,
     },
   });
 }

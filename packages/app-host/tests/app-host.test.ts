@@ -384,7 +384,7 @@ it("serves the packaged app-dist fixture", async () => {
   await host.start();
 
   expect(host.registry.listDefinitions().map((definition) => definition.id)).toEqual(
-    expect.arrayContaining(["demo", "hub", "service"]),
+    expect.arrayContaining(["demo", "hub", "lifecycle", "service"]),
   );
 
   const address = host.server.address();
@@ -411,6 +411,22 @@ it("serves the packaged app-dist fixture", async () => {
   await expect(service.json()).resolves.toMatchObject({
     id: "service",
     requestPath: "/healthz",
+  });
+
+  const lifecyclePage = await fetch(`http://127.0.0.1:${address.port}/lifecycle/`);
+  const lifecycleHtml = await lifecyclePage.text();
+  expect(lifecycleHtml).toContain("Lifecycle Demo");
+  expect(lifecycleHtml).toContain("/lifecycle/assets/lifecycle.js");
+
+  const lifecycle = await fetch(`http://127.0.0.1:${address.port}/lifecycle/api/lifecycle`);
+  await expect(lifecycle.json()).resolves.toMatchObject({
+    id: "lifecycle",
+    basePath: "/lifecycle",
+    assetsBasePath: "/lifecycle/assets",
+    beforeDestroyHookRegistered: true,
+    beforeDestroyCount: 0,
+    disposeCount: 0,
+    closed: false,
   });
 });
 

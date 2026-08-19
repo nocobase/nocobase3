@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import path from 'node:path';
 
+import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { CreateAppOptions } from './app-options.js';
 import { registerNocoBaseApiProxyRoutes, resolveNocoBaseApiUrl } from '@nocobase/app-server/proxy';
 import { registerSpaRoutes } from '@nocobase/app-server/spa';
@@ -8,10 +8,11 @@ import {
   joinBasePath,
   normalizeBasePath,
   resolveAppName,
-  resolveAppNameFromBasePath,
 } from '@nocobase/app-server/support';
 import { createSessionMiddleware } from '@nocobase/session';
+import type { AppConfig } from './config/index.js';
 import { createApiRoutes } from './routes/api/index.js';
+import { createAppDeps, disposeAppDeps } from './runtime/deps.js';
 import { createAppServices } from './services/index.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
 
@@ -22,26 +23,19 @@ export interface ClosableApp extends Hono {
   close(): Promise<void>;
 }
 
-export function createApp(options: CreateAppOptions = {}): ClosableApp {
-  const publicBasePath = normalizeBasePath(options.publicBasePath ?? '/app-template-default');
-  const internalBasePath = normalizeBasePath(options.internalBasePath ?? '');
-  const appName = resolveAppName(options.appName ?? resolveAppNameFromBasePath(publicBasePath, 'app-template-default'));
-  const internalApiProxyPath = normalizeBasePath(options.internalApiProxyPath ?? '/v2/api');
-  const publicApiUrl = options.publicApiUrl ?? joinBasePath(publicBasePath, internalApiProxyPath);
-  const nocoBaseApiUrl = resolveNocoBaseApiUrl(options.nocoBaseApiUrl);
-  const spaIndexPath = options.spa?.indexPath ?? path.resolve(process.cwd(), 'index.html');
-  const spaRuntime = options.spa?.runtime ?? {};
-  const services = createAppServices({
-    cache: options.cache,
-    database: options.database,
-    drive: options.drive,
-    logger: options.logger,
-    queue: options.queue,
-    session: options.session,
-  });
+export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOptions = {}): ClosableApp {
+  const { config } = runtime;
+  const publicBasePath = normalizeBasePath(config.app.publicBasePath);
+  const internalBasePath = normalizeBasePath(config.app.internalBasePath);
+  const appName = resolveAppName(config.app.name);
+  const internalApiProxyPath = normalizeBasePath(config.app.internalApiProxyPath);
+  const publicApiUrl = config.app.publicApiUrl;
+  const nocoBaseApiUrl = resolveNocoBaseApiUrl(config.app.nocoBaseApiUrl);
+  const deps = createAppDeps(runtime);
+  const services = createAppServices(runtime, deps);
   const app = new Hono();
 
-  app.use('*', createSessionMiddleware(services.sessionManager));
+  app.use('*', createSessionMiddleware(deps.sessionManager));
 
   app.get('/healthz', (c) => {
     return c.json({
@@ -63,6 +57,7 @@ export function createApp(options: CreateAppOptions = {}): ClosableApp {
     createApiRoutes({
       appName,
       publicBasePath,
+      deps,
       services,
     }),
   );
@@ -70,18 +65,18 @@ export function createApp(options: CreateAppOptions = {}): ClosableApp {
   registerSpaRoutes(app, {
     basePath: internalBasePath,
     handler: options.spa?.handler,
-    indexPath: spaIndexPath,
+    indexPath: config.spa.indexPath,
     runtimeGlobals: createPortalSpaRuntimeGlobals({
       appBasePath: publicBasePath,
       apiUrl: publicApiUrl,
-      storagePrefix: spaRuntime.storagePrefix,
-      storageType: spaRuntime.storageType,
-      shareToken: spaRuntime.shareToken,
+      storagePrefix: config.spa.runtime.storagePrefix,
+      storageType: config.spa.runtime.storageType,
+      shareToken: config.spa.runtime.shareToken,
     }),
   });
 
   return Object.assign(app, {
-    close: onceAsync(() => services.dispose()),
+    close: onceAsync(() => disposeAppDeps(deps)),
   });
 }
 

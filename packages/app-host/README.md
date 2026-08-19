@@ -25,6 +25,12 @@ packages/app-host/fixtures/app-dist/
   service/
     package.json
     dist/server/embedded.js
+
+  lifecycle/
+    package.json
+    dist/client/index.html
+    dist/client/assets/...
+    dist/server/embedded.js
 ```
 
 The public URL is also a single level:
@@ -34,6 +40,8 @@ http://127.0.0.1:3000/demo/
 http://127.0.0.1:3000/demo/assets/demo.js
 http://127.0.0.1:3000/demo/api/info
 http://127.0.0.1:3000/service/healthz
+http://127.0.0.1:3000/lifecycle/
+http://127.0.0.1:3000/lifecycle/api/lifecycle
 ```
 
 `dist/server/embedded.js` is the standard app runtime entrypoint and is required
@@ -59,3 +67,8 @@ routes under the app's own runtime.
 Server artifacts should export `createServer(scope)`. The host still accepts
 `createApp(scope)`, `default(scope)`, `createApp()`, and the old
 `createApi(scope)` export during the v3 transition.
+
+The `lifecycle` fixture is a complete lifecycle example. It registers a
+`scope.onBeforeDestroy(...)` hook, registers a `scope.registerDisposer(...)`
+cleanup function, implements the actual `dispose()` logic, and returns that
+same function as `app.close`.
