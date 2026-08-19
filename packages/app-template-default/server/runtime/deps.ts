@@ -5,8 +5,8 @@ import {
 } from '@nocobase/cache';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import {
-  createDefaultLoggingConfig,
-  Logging,
+  createLogging,
+  type Logging,
 } from '@nocobase/logging';
 import {
   createQueueManager,
@@ -35,7 +35,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   const { config } = runtime;
   const cacheManager = createCacheManager(config.cache ?? createNullCacheConfig());
   const driveManager = config.drive ? createDriveManager(config.drive) : undefined;
-  const logging = new Logging(config.logging ?? createDefaultLoggingConfig());
+  const logging = createLogging(config.logging);
   const sessionManager = createSessionManager(config.session ?? createNullSessionConfig());
   const queueLogger = logging.getLogger().child({ module: 'queue' });
   const queueManager = createQueueManager(config.queue ?? createSyncQueueConfig(), {

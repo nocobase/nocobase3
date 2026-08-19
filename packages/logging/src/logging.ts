@@ -1,4 +1,5 @@
 import { createLogger } from './logger.js';
+import { createDefaultLoggingConfig } from './config.js';
 import type { Logger, LoggingConfig } from './types.js';
 
 export class Logging {
@@ -31,18 +32,22 @@ export class Logging {
   }
 
   async flush(): Promise<void> {
-    await Promise.all([...this.loggers.values()].map((logger) => flushLogger(logger)));
+    await Promise.all([...this.loggers.values()].map((logger) => this.flushLogger(logger)));
+  }
+
+  private flushLogger(logger: Logger): Promise<void> {
+    return new Promise((resolve, reject) => {
+      logger.flush((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
   }
 }
 
-async function flushLogger(logger: Logger): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    logger.flush((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
+export function createLogging(config: LoggingConfig = createDefaultLoggingConfig()): Logging {
+  return new Logging(config);
 }

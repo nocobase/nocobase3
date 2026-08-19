@@ -1,21 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  createDefaultLoggingConfig,
+  createLogging,
   createSilentLoggingConfig,
   isLoggerLevel,
-  Logging,
 } from '../src/index.js';
 
 describe('Logging', () => {
   it('lazily creates and caches the default logger', () => {
-    const logging = new Logging(createDefaultLoggingConfig());
+    const logging = createLogging();
 
     expect(logging.getLogger()).toBe(logging.getLogger('system'));
   });
 
   it('supports configured named loggers', () => {
-    const logging = new Logging({
+    const logging = createLogging({
       default: 'system',
       loggers: {
         system: { level: 'info' },
@@ -28,15 +27,15 @@ describe('Logging', () => {
   });
 
   it('rejects missing default and requested loggers', () => {
-    expect(() => new Logging({ default: 'missing', loggers: {} }))
+    expect(() => createLogging({ default: 'missing', loggers: {} }))
       .toThrow('Default logger "missing" is not configured.');
 
-    const logging = new Logging({ default: 'system', loggers: { system: {} } });
+    const logging = createLogging({ default: 'system', loggers: { system: {} } });
     expect(() => logging.getLogger('missing')).toThrow('Logger "missing" is not configured.');
   });
 
   it('provides a silent fallback and flushes instantiated loggers', async () => {
-    const logging = new Logging(createSilentLoggingConfig());
+    const logging = createLogging(createSilentLoggingConfig());
 
     logging.getLogger().fatal('hidden');
 
