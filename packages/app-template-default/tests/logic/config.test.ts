@@ -46,6 +46,9 @@ describe('config registry', () => {
       enabled: true,
       autoSignIn: false,
     });
+    expect(config.auth.session).toMatchObject({
+      storeSessionInDatabase: true,
+    });
     expect(config.caching.default).toBe('memory');
     expect(config.database.default).toBe('sqlite');
     expect(config.drive.default).toBe('local');

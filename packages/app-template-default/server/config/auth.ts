@@ -17,6 +17,9 @@ const authConfig: ConfigFactory<AppAuthConfig> = defineConfig(
         enabled: true,
         autoSignIn: false,
       },
+      session: {
+        storeSessionInDatabase: true,
+      },
     };
   },
 );
