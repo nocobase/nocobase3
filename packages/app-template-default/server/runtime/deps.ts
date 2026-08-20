@@ -16,10 +16,11 @@ import {
   type NocoBaseSessionManager,
 } from '@nocobase/session';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { Auth } from '@nocobase/authentication';
 
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
-import type { Auth } from '@nocobase/authentication';
+import { createCookiePrefix } from './utils.js';
 
 export interface AppDeps {
   auth: Auth;
@@ -33,9 +34,17 @@ export interface AppDeps {
 export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   const { config } = runtime;
   const caching = createCaching(config.caching);
+  const appName = config.app.name;
   const auth = createAuthentication({
     connection: runtime.database?.connection(),
     secondaryStorage: createAuthStorage(caching),
+    appName,
+    advanced: {
+      cookiePrefix: createCookiePrefix(appName),
+      defaultCookieAttributes: {
+        path: config.app.publicBasePath || '/',
+      },
+    },
     ...config.auth,
   });
   const driveManager = config.drive ? createDriveManager(config.drive) : undefined;
