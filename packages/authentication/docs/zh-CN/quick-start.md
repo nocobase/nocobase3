@@ -1,0 +1,129 @@
+# 快速开始
+
+这篇文档完成一条最小认证链路：准备数据表、创建 `Auth`、挂载 Hono 路由、
+保护业务接口，再把客户端接入 Refine。
+
+## 1. 准备认证表
+
+认证依赖以下 Collection：
+
+- `user`
+- `session`
+- `account`
+- `verification`
+
+包导出了 `authenticationMigration`。应用需要把该 migration 纳入自己的
+migration 管理。默认应用模板采用复制 migration 文件到
+`server/migrations` 的方式，使应用构建产物能够独立完成数据库升级。
+
+详细说明见[数据库与 Migration](./server/database-and-migration.md)。
+
+## 2. 创建认证服务
+
+```ts
+import { createAuthentication } from '@nocobase/authentication';
+
+const secret = process.env.AUTH_SECRET;
+if (!secret) {
+  throw new Error('AUTH_SECRET is required.');
+}
+
+const auth = createAuthentication({
+  connection: database.connection(),
+  baseURL: 'https://example.com/api/auth',
+  secret,
+  appName: 'My NocoBase App',
+  emailAndPassword: {
+    enabled: true,
+    autoSignIn: false,
+  },
+  session: {
+    storeSessionInDatabase: true,
+  },
+});
+```
+
+`connection` 和非空 `secret` 都是必需的。`createAuthentication()` 缺少连接时
+会立即报错，`Auth` 收到空 secret 时也会立即报错。
+
+## 3. 挂载认证协议路由
+
+```ts
+import { Hono } from 'hono';
+
+const app = new Hono();
+
+app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+  auth.handler(context.req.raw),
+);
+```
+
+必须把原始 `Request` 交给 `auth.handler()`。不要自行解析后重建认证请求，避免
+丢失 Cookie、Header 或响应中的 `Set-Cookie`。
+
+常用端点包括：
+
+```text
+POST /api/auth/sign-up/email
+POST /api/auth/sign-in/email
+POST /api/auth/sign-in/username
+POST /api/auth/sign-out
+GET  /api/auth/get-session
+POST /api/auth/request-password-reset
+```
+
+Better Auth 插件可以在同一路径下增加其他端点。
+
+## 4. 保护业务路由
+
+```ts
+import type { AuthEnv } from '@nocobase/authentication';
+import { Hono } from 'hono';
+
+const api = new Hono<AuthEnv>();
+
+api.get('/private', auth.required(), (context) => {
+  const current = context.get('auth');
+  return context.json({ userId: current.user.id });
+});
+```
+
+匿名请求会收到：
+
+```json
+{
+  "code": "UNAUTHORIZED",
+  "message": "Authentication required"
+}
+```
+
+HTTP 状态码为 `401`。
+
+## 5. 创建浏览器客户端
+
+```ts
+import {
+  createAuthClient,
+  createAuthProvider,
+} from '@nocobase/authentication/client';
+import { createAppClient } from '@nocobase/app-sdk';
+
+export const appClient = createAppClient();
+export const authClient = createAuthClient({ client: appClient });
+export const authProvider = createAuthProvider(authClient);
+```
+
+将适配器传给 Refine：
+
+```tsx
+<Refine authProvider={authProvider}>{/* application routes */}</Refine>
+```
+
+应用还需要自行定义 `/login`、`/reset-password` 等页面。可复制的初始密码表单在
+[`ui/password`](../../ui/password)；它们不是运行时包导出。
+
+## 下一步
+
+- 服务端完整配置见[服务端集成](./server/integration.md)。
+- 客户端方法和 Refine 行为见[客户端与 Refine 集成](./client/integration.md)。
+- 上线前检查见[部署与安全](./security/deployment.md)。
