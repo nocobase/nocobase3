@@ -3,7 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const distDir = path.join(rootDir, "dist");
 const envOutputPath = path.join(distDir, ".env");
 const serverEnvKeys = new Set([
@@ -65,7 +68,11 @@ const parseEnv = (content) => {
     const quote = rawValue[0];
     let value = rawValue.trim();
 
-    if ((quote === '"' || quote === "'") && value.endsWith(quote) && value.length >= 2) {
+    if (
+      (quote === '"' || quote === "'") &&
+      value.endsWith(quote) &&
+      value.length >= 2
+    ) {
       value = value.slice(1, -1);
     }
 
@@ -113,13 +120,18 @@ const formatEnvValue = (value) => {
 };
 
 const writeDistEnv = () => {
-  const envFiles = [path.join(rootDir, ".env"), path.join(rootDir, ".env.local")];
+  const envFiles = [
+    path.join(rootDir, ".env"),
+    path.join(rootDir, ".env.local"),
+  ];
   const env = readEnvFiles(envFiles, process.env);
   const entries = Object.entries(env).filter(([key]) => serverEnvKeys.has(key));
 
   if (entries.length === 0) {
     console.log("\n> Extract environment");
-    console.log("No supported server environment entries found; skipped dist/.env");
+    console.log(
+      "No supported server environment entries found; skipped dist/.env",
+    );
     return;
   }
 
@@ -135,7 +147,7 @@ const writeDistEnv = () => {
     `Generated ${path.relative(rootDir, envOutputPath)} from ${envFiles
       .filter((envFile) => fs.existsSync(envFile))
       .map((envFile) => path.basename(envFile))
-      .join(", ")}`
+      .join(", ")}`,
   );
 };
 
@@ -167,11 +179,15 @@ run("Build server workspace dependencies", "pnpm", [
   "--filter",
   "@nocobase/app-server",
   "--filter",
-  "@nocobase/cache",
+  "@nocobase/authentication",
+  "--filter",
+  "@nocobase/caching",
   "--filter",
   "@nocobase/drive",
   "--filter",
-  "@nocobase/logger",
+  "@nocobase/id-generator",
+  "--filter",
+  "@nocobase/logging",
   "--filter",
   "@nocobase/queue",
   "--filter",
@@ -185,7 +201,12 @@ run("Rewrite server path aliases", "pnpm", [
   "-p",
   "tsconfig.server.json",
 ]);
-run("Build migrations", "pnpm", ["exec", "tsc", "-p", "tsconfig.migrations.json"]);
+run("Build migrations", "pnpm", [
+  "exec",
+  "tsc",
+  "-p",
+  "tsconfig.migrations.json",
+]);
 run("Rewrite migration path aliases", "pnpm", [
   "exec",
   "tsc-alias",
@@ -193,7 +214,9 @@ run("Rewrite migration path aliases", "pnpm", [
   "tsconfig.migrations.json",
 ]);
 writeDistEnv();
-run("Generate server package", "node", ["./scripts/build-server-dist-package.mjs"]);
+run("Generate server package", "node", [
+  "./scripts/build-server-dist-package.mjs",
+]);
 run("Install server production dependencies", "npm", [
   "install",
   "--omit=dev",
@@ -203,4 +226,6 @@ run("Install server production dependencies", "npm", [
 ]);
 run("Clean server dependency bins", "node", ["./scripts/clean-dist-bin.mjs"]);
 
-console.log("\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json");
+console.log(
+  "\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json",
+);

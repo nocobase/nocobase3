@@ -57,8 +57,15 @@ type NocoBaseMeta = MetaQuery & {
 
 type NocoBaseFilter = Record<string, unknown>;
 
+const toUnknown = (value: unknown): unknown => value;
+
+const getRecordValue = (
+  record: Record<string, unknown>,
+  key: string,
+): unknown => record[key];
+
 const toNocoBaseFilter = (
-  filters: GetListParams["filters"] = []
+  filters: GetListParams["filters"] = [],
 ): NocoBaseFilter | undefined => {
   const filterItems: NocoBaseFilter[] = filters.flatMap((filter) => {
     if ("field" in filter) {
@@ -82,10 +89,10 @@ const toNocoBaseFilter = (
       };
 
       const operator = operatorMap[filter.operator] ?? "$eq";
-      return [{ [filter.field]: { [operator]: filter.value } }];
+      return [{ [filter.field]: { [operator]: toUnknown(filter.value) } }];
     }
 
-    const value = toNocoBaseFilter(filter.value as GetListParams["filters"]);
+    const value = toNocoBaseFilter(filter.value);
     return value ? [{ [`$${filter.operator}`]: value.$and ?? [value] }] : [];
   });
 
@@ -102,12 +109,12 @@ const request = async <T>(
     body?: unknown;
     meta?: NocoBaseMeta;
     unwrapData?: boolean;
-  } = {}
+  } = {},
 ): Promise<T> => {
   const dataSourceKey = resolveAclDataSourceKey(options.meta);
   const fields = Array.isArray(options.meta?.fields)
     ? options.meta.fields.filter(
-        (field): field is string => typeof field === "string"
+        (field): field is string => typeof field === "string",
       )
     : undefined;
   return nocobaseClient.action<T>(resource, action, {
@@ -130,7 +137,7 @@ const getAllowedActions = (response: NocoBaseListResponse<unknown>) =>
   response.meta?.allowedActions ??
   response.allowedActions ??
   (!Array.isArray(response.data) && response.data
-    ? response.data.meta?.allowedActions ?? response.data.allowedActions
+    ? (response.data.meta?.allowedActions ?? response.data.allowedActions)
     : undefined);
 
 const cacheAllowedActions = <TData extends BaseRecord>({
@@ -147,10 +154,10 @@ const cacheAllowedActions = <TData extends BaseRecord>({
   const idField = meta?.idField ?? "id";
   const dataSourceKey = resolveAclDataSourceKey(meta);
   const recordIds = records
-    .map((record) => record[idField])
+    .map((record) => getRecordValue(record, idField))
     .filter(
       (id): id is string | number =>
-        typeof id === "string" || typeof id === "number"
+        typeof id === "string" || typeof id === "number",
     );
   return updateRecordPermissions({
     dataSourceKey,
@@ -161,7 +168,7 @@ const cacheAllowedActions = <TData extends BaseRecord>({
 };
 
 const getResponseData = <TData extends BaseRecord>(
-  response: NocoBaseGetResponse<TData>
+  response: NocoBaseGetResponse<TData>,
 ) => response.data ?? (response as TData);
 
 export const dataProvider: DataProvider = {
@@ -176,7 +183,7 @@ export const dataProvider: DataProvider = {
     const pageSize = pagination?.pageSize ?? 10;
     const filter = toNocoBaseFilter(filters);
     const sort = sorters?.map(
-      (sorter) => `${sorter.order === "desc" ? "-" : ""}${sorter.field}`
+      (sorter) => `${sorter.order === "desc" ? "-" : ""}${sorter.field}`,
     );
     const response = await request<NocoBaseListResponse<TData>>(
       resource,
@@ -190,12 +197,12 @@ export const dataProvider: DataProvider = {
         },
         meta,
         unwrapData: false,
-      }
+      },
     );
 
     const list = Array.isArray(response.data)
       ? { rows: response.data, count: response.meta?.count }
-      : response.data ?? response;
+      : (response.data ?? response);
     const records = list.rows ?? [];
     cacheAllowedActions({ resource, records, response, meta });
 
@@ -218,7 +225,7 @@ export const dataProvider: DataProvider = {
         query: { filterByTk: id },
         meta,
         unwrapData: false,
-      }
+      },
     );
     const data = getResponseData(response);
     cacheAllowedActions({
@@ -243,8 +250,8 @@ export const dataProvider: DataProvider = {
           query: { filterByTk: id },
           meta,
           unwrapData: false,
-        })
-      )
+        }),
+      ),
     );
     const data = responses.map(getResponseData);
     responses.forEach((response, index) => {
@@ -260,7 +267,7 @@ export const dataProvider: DataProvider = {
 
   async create<
     TData extends BaseRecord = BaseRecord,
-    TVariables = Record<string, unknown>
+    TVariables = Record<string, unknown>,
   >({
     resource,
     variables,
@@ -277,7 +284,7 @@ export const dataProvider: DataProvider = {
 
   async createMany<
     TData extends BaseRecord = BaseRecord,
-    TVariables = Record<string, unknown>
+    TVariables = Record<string, unknown>,
   >({
     resource,
     variables,
@@ -289,15 +296,15 @@ export const dataProvider: DataProvider = {
           method: "POST",
           body: values,
           meta,
-        })
-      )
+        }),
+      ),
     );
     return { data };
   },
 
   async update<
     TData extends BaseRecord = BaseRecord,
-    TVariables = Record<string, unknown>
+    TVariables = Record<string, unknown>,
   >({
     resource,
     id,
@@ -316,7 +323,7 @@ export const dataProvider: DataProvider = {
 
   async updateMany<
     TData extends BaseRecord = BaseRecord,
-    TVariables = Record<string, unknown>
+    TVariables = Record<string, unknown>,
   >({
     resource,
     ids,
@@ -330,15 +337,15 @@ export const dataProvider: DataProvider = {
           query: { filterByTk: id },
           body: variables,
           meta,
-        })
-      )
+        }),
+      ),
     );
     return { data };
   },
 
   async deleteOne<
     TData extends BaseRecord = BaseRecord,
-    TVariables = Record<string, unknown>
+    TVariables = Record<string, unknown>,
   >({
     resource,
     id,
@@ -355,7 +362,7 @@ export const dataProvider: DataProvider = {
 
   async deleteMany<
     TData extends BaseRecord = BaseRecord,
-    TVariables = Record<string, unknown>
+    TVariables = Record<string, unknown>,
   >({
     resource,
     ids,
@@ -367,8 +374,8 @@ export const dataProvider: DataProvider = {
           method: "POST",
           query: { filterByTk: id },
           meta,
-        })
-      )
+        }),
+      ),
     );
     return { data };
   },

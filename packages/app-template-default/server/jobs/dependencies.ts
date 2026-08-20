@@ -1,9 +1,9 @@
 import type { DatabaseManager } from '@nocobase/database';
-import type { NocoBaseLogger } from '@nocobase/logger';
+import type { Logger } from '@nocobase/logging';
 import type { Job, JobClass, JobFactory } from '@nocobase/queue';
 
 export interface AppJobDependencies {
-  logger: NocoBaseLogger;
+  logger: Logger;
   database?: DatabaseManager;
 }
 

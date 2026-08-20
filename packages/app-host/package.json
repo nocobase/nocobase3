@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "description": "Standalone runtime host for NocoBase apps.",
   "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -41,15 +45,26 @@
   },
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
     "dev": "pnpm build && node ./dist/cli.js",
     "start": "node ./dist/cli.js",
     "prepack": "pnpm build",
     "pretest": "pnpm build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-host.tgz\" && pnpm exec publint . && pnpm exec attw \"$PACK_DIR/nocobase-app-host.tgz\" --profile esm-only"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.8.3",
-    "vitest": "^4.1.10"
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

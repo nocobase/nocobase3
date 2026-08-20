@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig/node-tooling.json",
+  "include": [
+    "eslint.config.ts",
+    "prettier.config.ts",
+    "eslint/**/*.ts",
+    "prettier/**/*.ts",
+    "scripts/**/*.ts",
+    "vite/**/*.ts",
+    "vitest/**/*.ts"
+  ]
+}

@@ -8,12 +8,12 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { createNullCacheConfig, type AppCacheConfig } from '@nocobase/cache';
+import { createDefaultCachingConfig, type CachingConfig } from '@nocobase/caching';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { AppWebSocket, AppWebSocketReadyState } from '@nocobase/app-server/websocket';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
 import type { AppDriveConfig } from '@nocobase/drive';
-import { createSilentLoggerConfig } from '@nocobase/logger';
+import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import { createNullSessionConfig, type AppSessionConfig } from '@nocobase/session';
 import { joinBasePath, normalizeBasePath, resolveAppNameFromBasePath } from '@nocobase/app-server/support';
@@ -34,6 +34,8 @@ import { CLOCK_TOPIC } from '../../server/realtime/publishers/clock.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
+
+process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
 interface CloseableResource {
   close(): Promise<void>;
@@ -229,6 +231,7 @@ describe('app server', () => {
     const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/app-template-default',
+      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
       clientDir: root,
     }));
 
@@ -268,6 +271,7 @@ describe('app server', () => {
     const app = await createEmbeddedServer(createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/app-template-default',
+      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
       rootDir: appRoot,
       clientDir,
     }));
@@ -408,18 +412,10 @@ describe('app server', () => {
     });
   });
 
-  it('returns a JSON error when app settings are requested without a database', async () => {
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-    });
-
-    const response = await app.request('http://localhost/api/app-settings');
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Database is not configured.',
-    });
+  it('requires a database for authentication', () => {
+    expect(() => createTestApp({ database: false })).toThrow(
+      'Authentication requires a database connection.',
+    );
   });
 
   it('reads app settings from the configured database', async () => {
@@ -449,7 +445,7 @@ describe('app server', () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
-      cache: createTestCache(),
+      caching: createTestCaching(),
     });
 
     const firstResponse = await app.request('http://localhost/api/cache/demo');
@@ -459,8 +455,8 @@ describe('app server', () => {
 
     expect(firstResponse.status).toBe(200);
     expect(firstPayload).toMatchObject({
-      key: 'examples:cache:demo',
-      ttl: '30s',
+      key: 'demo',
+      ttl: 30_000,
       cached: false,
       value: {
         generatedAt: expect.any(String),
@@ -479,7 +475,7 @@ describe('app server', () => {
 
     expect(deleteResponse.status).toBe(200);
     await expect(deleteResponse.json()).resolves.toEqual({
-      key: 'examples:cache:demo',
+      key: 'demo',
       deleted: true,
     });
 
@@ -1108,17 +1104,13 @@ function createTestDrive(root: string): AppDriveConfig {
   };
 }
 
-function createTestCache(): AppCacheConfig {
+function createTestCaching(): CachingConfig {
   return {
     default: 'memory',
-    stores: {
+    providers: {
       memory: {
         driver: 'memory',
-        ttl: '1m',
-        namespace: 'tests',
-      },
-      null: {
-        driver: 'null',
+        defaultTtl: '1m',
       },
     },
   };
@@ -1152,8 +1144,8 @@ function createTestSession(): AppSessionConfig {
 interface CreateTestAppOptions {
   publicBasePath?: string;
   nocoBaseApiUrl?: string | false;
-  database?: DatabaseManager;
-  cache?: AppCacheConfig;
+  database?: DatabaseManager | false;
+  caching?: CachingConfig;
   drive?: AppDriveConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
@@ -1175,7 +1167,13 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       publicApiUrl: joinBasePath(publicBasePath, internalApiProxyPath),
       nocoBaseApiUrl: options.nocoBaseApiUrl === false ? undefined : options.nocoBaseApiUrl,
     },
-    cache: options.cache ?? createNullCacheConfig(),
+    auth: {
+      secret: 'test-auth-secret-at-least-32-characters',
+      emailAndPassword: {
+        enabled: true,
+      },
+    },
+    caching: options.caching ?? createDefaultCachingConfig(),
     database: {
       default: 'sqlite',
       connections: {},
@@ -1185,7 +1183,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       },
     },
     drive: options.drive,
-    logger: createSilentLoggerConfig(),
+    logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
     server: {
@@ -1205,7 +1203,9 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   } as AppConfig;
   const runtime: AppRuntime<AppConfig> = {
     config,
-    database: options.database,
+    database: options.database === false
+      ? undefined
+      : options.database ?? createMockDatabase([]),
     runMigrations: () => Promise.resolve(undefined),
     dispose: () => Promise.resolve(),
   };
@@ -1228,6 +1228,9 @@ function createEmbeddedTestScope(
 
   return {
     ...options,
+    config: options.config ?? {
+      authSecret: 'test-auth-secret-at-least-32-characters',
+    },
     registerDisposer(name, dispose) {
       registeredDisposers.push({ name, dispose });
       lifecycle.registerDisposer(name, dispose);
@@ -1247,14 +1250,13 @@ function firstCookie(response: Response): string {
 }
 
 function createMockDatabase(rows: unknown[], insertedRows: unknown[] = []): DatabaseManager {
+  const query = createMockQuery(rows, insertedRows);
   return {
-    connection: (() => {
-      throw new Error('Not implemented.');
-    }) as DatabaseManager['connection'],
+    connection: (() => ({ query })) as DatabaseManager['connection'],
     builder: (() => {
       throw new Error('Not implemented.');
     }) as DatabaseManager['builder'],
-    query: (() => createMockQuery(rows, insertedRows)) as DatabaseManager['query'],
+    query: (() => query) as DatabaseManager['query'],
     connect: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['connect'],
     transaction: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['transaction'],
     disconnect: (() => Promise.resolve()) as DatabaseManager['disconnect'],

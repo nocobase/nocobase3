@@ -34,12 +34,12 @@ export const UserCreate = () => {
         title={translate(
           "users.drawer.create.title",
           { ns: "app" },
-          "Create user"
+          "Create user",
         )}
         description={translate(
           "users.drawer.create.description",
           { ns: "app" },
-          "Add a user who can sign in to this NocoBase application."
+          "Add a user who can sign in to this NocoBase application.",
         )}
         closeLabel={translate("buttons.close", "Close")}
         closeTo={userRoutes.list}
@@ -64,7 +64,8 @@ function UserCreateForm() {
       action: "create",
       redirect: false,
       onMutationSuccess: () => {
-        close({ skipBeforeClose: true });
+        const closePromise = close({ skipBeforeClose: true });
+        closePromise.catch(() => undefined);
       },
     },
     defaultValues: {
@@ -74,7 +75,7 @@ function UserCreateForm() {
   });
   const aiFields = useMemo<AIFormField[]>(
     () => getAIUserFormFields(translate),
-    [translate]
+    [translate],
   );
   const aiFormRef = useAIForm({
     id: "users-create-form",
@@ -89,7 +90,7 @@ function UserCreateForm() {
       <form
         ref={aiFormRef}
         onSubmit={form.handleSubmit((values) =>
-          onFinish(normalizeUserFormValues(values))
+          onFinish(normalizeUserFormValues(values)),
         )}
         className="flex min-h-0 flex-1 flex-col"
       >
@@ -115,12 +116,12 @@ function UserCreateForm() {
               ? translate(
                   "users.form.create.submitting",
                   { ns: "app" },
-                  "Creating..."
+                  "Creating...",
                 )
               : translate(
                   "users.form.create.submit",
                   { ns: "app" },
-                  "Create user"
+                  "Create user",
                 )}
           </Button>
         </RouteDrawerFooter>

@@ -1,13 +1,22 @@
-import { NoopSchemaAdapter, type SchemaAdapter } from '../../schema/adapter.js';
-import { planCapabilities, throwIfStrictWarnings } from '../../schema/capabilities.js';
-import { CollectionCompiler, type CollectionCompilerContext } from '../compiler/index.js';
+import { NoopSchemaAdapter, type SchemaAdapter } from "../../schema/adapter.js";
+import {
+  planCapabilities,
+  throwIfStrictWarnings,
+} from "../../schema/capabilities.js";
+import {
+  CollectionCompiler,
+  type CollectionCompilerContext,
+} from "../compiler/index.js";
 import {
   FluentCollectionAlterBuilder,
   FluentCollectionDefinitionBuilder,
   FluentViewCollectionDefinitionBuilder,
-} from '../fluent/index.js';
-import { InMemoryCollectionMetadataStore, type CollectionMetadataStore } from '../../metadata/index.js';
-import type { NamingStrategy } from '../../naming/index.js';
+} from "../fluent/index.js";
+import {
+  InMemoryCollectionMetadataStore,
+  type CollectionMetadataStore,
+} from "../../metadata/index.js";
+import type { NamingStrategy } from "../../naming/index.js";
 import type {
   AnyFieldDefinition,
   BuilderExecOptions,
@@ -29,7 +38,7 @@ import type {
   RefreshMaterializedViewOptions,
   ViewCollectionInput,
   RelationFieldDefinition,
-} from '../types.js';
+} from "../types.js";
 
 export interface CollectionBuilderOptions {
   schemaAdapter?: SchemaAdapter;
@@ -45,8 +54,12 @@ export class CollectionBuilder {
 
   constructor(options: CollectionBuilderOptions = {}) {
     this.schemaAdapter = options.schemaAdapter ?? new NoopSchemaAdapter();
-    this.metadataStore = options.metadataStore ?? new InMemoryCollectionMetadataStore();
-    this.compiler = new CollectionCompiler({ naming: options.naming, namingStrategy: options.namingStrategy });
+    this.metadataStore =
+      options.metadataStore ?? new InMemoryCollectionMetadataStore();
+    this.compiler = new CollectionCompiler({
+      naming: options.naming,
+      namingStrategy: options.namingStrategy,
+    });
   }
 
   async createCollection(
@@ -55,7 +68,10 @@ export class CollectionBuilder {
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
     const definition = normalizeCollectionInput(input);
-    return this.apply([{ type: 'createCollection', name, definition }], options);
+    return this.apply(
+      [{ type: "createCollection", name, definition }],
+      options,
+    );
   }
 
   async alterCollection(
@@ -64,26 +80,37 @@ export class CollectionBuilder {
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
     const changes = normalizeAlterInput(input);
-    return this.apply([{ type: 'alterCollection', collection: name, changes }], options);
+    return this.apply(
+      [{ type: "alterCollection", collection: name, changes }],
+      options,
+    );
   }
 
-  async dropCollection(name: string, options: BuilderExecOptions = {}): Promise<BuilderResult> {
-    return this.apply([{ type: 'dropCollection', collection: name }], options);
+  async dropCollection(
+    name: string,
+    options: BuilderExecOptions = {},
+  ): Promise<BuilderResult> {
+    return this.apply([{ type: "dropCollection", collection: name }], options);
   }
 
   async renameCollection(
     oldName: string,
     newName: string,
-    options: BuilderExecOptions & { renameTable?: boolean; renameTableTo?: string } = {},
+    options: BuilderExecOptions & {
+      renameTable?: boolean;
+      renameTableTo?: string;
+    } = {},
   ): Promise<BuilderResult> {
     return this.apply(
-      [{
-        type: 'renameCollection',
-        from: oldName,
-        to: newName,
-        renameTable: options.renameTable,
-        renameTableTo: options.renameTableTo,
-      }],
+      [
+        {
+          type: "renameCollection",
+          from: oldName,
+          to: newName,
+          renameTable: options.renameTable,
+          renameTableTo: options.renameTableTo,
+        },
+      ],
       options,
     );
   }
@@ -93,8 +120,15 @@ export class CollectionBuilder {
     input: ViewCollectionInput,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    const definition = { ...normalizeViewInput(input), kind: 'view' as const, writable: false };
-    return this.apply([{ type: 'createViewCollection', name, definition }], options);
+    const definition = {
+      ...normalizeViewInput(input),
+      kind: "view" as const,
+      writable: false,
+    };
+    return this.apply(
+      [{ type: "createViewCollection", name, definition }],
+      options,
+    );
   }
 
   async replaceViewCollection(
@@ -102,8 +136,15 @@ export class CollectionBuilder {
     input: ViewCollectionInput,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    const definition = { ...normalizeViewInput(input), kind: 'view' as const, writable: false };
-    return this.apply([{ type: 'replaceViewCollection', name, definition }], options);
+    const definition = {
+      ...normalizeViewInput(input),
+      kind: "view" as const,
+      writable: false,
+    };
+    return this.apply(
+      [{ type: "replaceViewCollection", name, definition }],
+      options,
+    );
   }
 
   async createMaterializedViewCollection(
@@ -113,10 +154,13 @@ export class CollectionBuilder {
   ): Promise<BuilderResult> {
     const definition = {
       ...normalizeViewInput(input),
-      kind: 'materializedView' as const,
+      kind: "materializedView" as const,
       writable: false,
     };
-    return this.apply([{ type: 'createMaterializedViewCollection', name, definition }], options);
+    return this.apply(
+      [{ type: "createMaterializedViewCollection", name, definition }],
+      options,
+    );
   }
 
   async refreshMaterializedViewCollection(
@@ -124,7 +168,13 @@ export class CollectionBuilder {
     options: RefreshMaterializedViewOptions = {},
   ): Promise<BuilderResult> {
     return this.apply(
-      [{ type: 'refreshMaterializedViewCollection', collection: name, concurrently: options.concurrently }],
+      [
+        {
+          type: "refreshMaterializedViewCollection",
+          collection: name,
+          concurrently: options.concurrently,
+        },
+      ],
       options,
     );
   }
@@ -134,7 +184,7 @@ export class CollectionBuilder {
     field: AnyFieldDefinition,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'addField', collection, field }], options);
+    return this.apply([{ type: "addField", collection, field }], options);
   }
 
   async alterField(
@@ -143,7 +193,10 @@ export class CollectionBuilder {
     changes: FieldAlterInput,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'alterField', collection, field, changes }], options);
+    return this.apply(
+      [{ type: "alterField", collection, field, changes }],
+      options,
+    );
   }
 
   async dropField(
@@ -151,7 +204,7 @@ export class CollectionBuilder {
     field: string,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'dropField', collection, field }], options);
+    return this.apply([{ type: "dropField", collection, field }], options);
   }
 
   async addIndex(
@@ -159,7 +212,7 @@ export class CollectionBuilder {
     index: IndexDefinition,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'addIndex', collection, index }], options);
+    return this.apply([{ type: "addIndex", collection, index }], options);
   }
 
   async dropIndex(
@@ -167,7 +220,7 @@ export class CollectionBuilder {
     index: string,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'dropIndex', collection, index }], options);
+    return this.apply([{ type: "dropIndex", collection, index }], options);
   }
 
   async addConstraint(
@@ -175,7 +228,10 @@ export class CollectionBuilder {
     constraint: ConstraintDefinition,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'addConstraint', collection, constraint }], options);
+    return this.apply(
+      [{ type: "addConstraint", collection, constraint }],
+      options,
+    );
   }
 
   async dropConstraint(
@@ -183,7 +239,10 @@ export class CollectionBuilder {
     constraint: string,
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'dropConstraint', collection, constraint }], options);
+    return this.apply(
+      [{ type: "dropConstraint", collection, constraint }],
+      options,
+    );
   }
 
   async updateCollectionMetadata(
@@ -191,7 +250,10 @@ export class CollectionBuilder {
     patch: CollectionMetadataPatch,
     options: MetadataUpdateOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'updateCollectionMetadata', collection, patch }], options);
+    return this.apply(
+      [{ type: "updateCollectionMetadata", collection, patch }],
+      options,
+    );
   }
 
   async updateFieldMetadata(
@@ -200,7 +262,10 @@ export class CollectionBuilder {
     patch: FieldMetadataPatch,
     options: MetadataUpdateOptions = {},
   ): Promise<BuilderResult> {
-    return this.apply([{ type: 'updateFieldMetadata', collection, field, patch }], options);
+    return this.apply(
+      [{ type: "updateFieldMetadata", collection, field, patch }],
+      options,
+    );
   }
 
   async apply(
@@ -209,8 +274,12 @@ export class CollectionBuilder {
   ): Promise<BuilderResult> {
     const effectiveOperations = applyExecOptions(operations, options);
     assertNoRelationColumnNameOperations(effectiveOperations);
-    const compilerContext = await this.createCompilerContext(effectiveOperations);
-    const compiledSchemaOperations = this.compiler.compile(effectiveOperations, compilerContext);
+    const compilerContext =
+      await this.createCompilerContext(effectiveOperations);
+    const compiledSchemaOperations = this.compiler.compile(
+      effectiveOperations,
+      compilerContext,
+    );
     const capabilityPlan = planCapabilities(compiledSchemaOperations, {
       capabilities: this.schemaAdapter.capabilities,
       dialect: this.schemaAdapter.dialect,
@@ -221,16 +290,25 @@ export class CollectionBuilder {
     }
 
     const schemaOperations = capabilityPlan.schemaOperations;
-    const sql = options.previewSql && this.schemaAdapter.compile
-      ? await this.schemaAdapter.compile(schemaOperations)
-      : undefined;
-    const impact = [...createImpact(effectiveOperations), ...capabilityPlan.impact];
+    const sql =
+      options.previewSql && this.schemaAdapter.compile
+        ? await this.schemaAdapter.compile(schemaOperations)
+        : undefined;
+    const impact = [
+      ...createImpact(effectiveOperations),
+      ...capabilityPlan.impact,
+    ];
 
     if (!options.dryRun) {
       await this.schemaAdapter.execute(schemaOperations);
       if (options.syncMetadata !== false) {
         await this.applyMetadataChanges(
-          filterMetadataOperations(this.compiler, effectiveOperations, schemaOperations, compilerContext),
+          filterMetadataOperations(
+            this.compiler,
+            effectiveOperations,
+            schemaOperations,
+            compilerContext,
+          ),
           compilerContext,
         );
       }
@@ -245,44 +323,48 @@ export class CollectionBuilder {
     };
   }
 
-  async transaction<T>(fn: (builder: CollectionBuilder) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    fn: (builder: CollectionBuilder) => Promise<T>,
+  ): Promise<T> {
     return fn(this);
   }
 
-  private async createCompilerContext(operations: CollectionOperation[]): Promise<CollectionCompilerContext> {
+  private async createCompilerContext(
+    operations: CollectionOperation[],
+  ): Promise<CollectionCompilerContext> {
     const names = new Set<string>();
     for (const operation of operations) {
       switch (operation.type) {
-        case 'createCollection':
-        case 'createViewCollection':
-        case 'replaceViewCollection':
-        case 'createMaterializedViewCollection':
+        case "createCollection":
+        case "createViewCollection":
+        case "replaceViewCollection":
+        case "createMaterializedViewCollection":
           names.add(operation.name);
           collectReferencedCollections(names, operation.definition);
           break;
-        case 'alterCollection':
+        case "alterCollection":
           names.add(operation.collection);
           collectAlterReferences(names, operation.changes);
           break;
-        case 'dropCollection':
-        case 'alterField':
-        case 'dropField':
-        case 'addIndex':
-        case 'dropIndex':
-        case 'dropConstraint':
-        case 'updateCollectionMetadata':
-        case 'updateFieldMetadata':
-        case 'refreshMaterializedViewCollection':
+        case "dropCollection":
+        case "alterField":
+        case "dropField":
+        case "addIndex":
+        case "dropIndex":
+        case "dropConstraint":
+        case "updateCollectionMetadata":
+        case "updateFieldMetadata":
+        case "refreshMaterializedViewCollection":
           names.add(operation.collection);
           break;
-        case 'renameCollection':
+        case "renameCollection":
           names.add(operation.from);
           break;
-        case 'addField':
+        case "addField":
           names.add(operation.collection);
           collectFieldReferences(names, operation.field);
           break;
-        case 'addConstraint':
+        case "addConstraint":
           names.add(operation.collection);
           collectConstraintReferences(names, operation.constraint);
           break;
@@ -292,15 +374,17 @@ export class CollectionBuilder {
     }
 
     const collections: Record<string, CollectionDefinition | undefined> = {};
-    await Promise.all([...names].map(async (name) => {
-      collections[name] = await this.metadataStore.getCollection(name);
-    }));
+    await Promise.all(
+      [...names].map(async (name) => {
+        collections[name] = await this.metadataStore.getCollection(name);
+      }),
+    );
     for (const operation of operations) {
       switch (operation.type) {
-        case 'createCollection':
-        case 'createViewCollection':
-        case 'replaceViewCollection':
-        case 'createMaterializedViewCollection':
+        case "createCollection":
+        case "createViewCollection":
+        case "replaceViewCollection":
+        case "createMaterializedViewCollection":
           collections[operation.name] = {
             ...operation.definition,
             name: operation.name,
@@ -319,22 +403,24 @@ export class CollectionBuilder {
   ): Promise<void> {
     for (const operation of operations) {
       switch (operation.type) {
-        case 'createCollection':
-        case 'createViewCollection':
-        case 'replaceViewCollection':
-        case 'createMaterializedViewCollection':
+        case "createCollection":
+        case "createViewCollection":
+        case "replaceViewCollection":
+        case "createMaterializedViewCollection":
           await this.metadataStore.saveCollection(operation.name, {
             ...operation.definition,
             name: operation.name,
           });
           break;
-        case 'dropCollection':
+        case "dropCollection":
           await this.metadataStore.removeCollection(operation.collection);
           break;
-        case 'renameCollection': {
-          const current = context.collections?.[operation.from]
-            ?? await this.metadataStore.getCollection(operation.from)
-            ?? { name: operation.from, fields: [] };
+        case "renameCollection": {
+          const current = context.collections?.[operation.from] ??
+            (await this.metadataStore.getCollection(operation.from)) ?? {
+              name: operation.from,
+              fields: [],
+            };
           const next: CollectionDefinition = {
             ...current,
             name: operation.to,
@@ -344,50 +430,70 @@ export class CollectionBuilder {
           } else if (operation.renameTable) {
             delete next.tableName;
           } else {
-            next.tableName = this.compiler.effectiveTableName(operation.from, current);
+            next.tableName = this.compiler.effectiveTableName(
+              operation.from,
+              current,
+            );
           }
           await this.metadataStore.removeCollection(operation.from);
           await this.metadataStore.saveCollection(operation.to, next);
           break;
         }
-        case 'alterCollection': {
-          const current = await this.metadataStore.getCollection(operation.collection);
+        case "alterCollection": {
+          const current = await this.metadataStore.getCollection(
+            operation.collection,
+          );
           await this.metadataStore.saveCollection(
             operation.collection,
-            applyAlterMetadata(current ?? { name: operation.collection }, operation.changes),
+            applyAlterMetadata(
+              current ?? { name: operation.collection },
+              operation.changes,
+            ),
           );
           break;
         }
-        case 'addField': {
-          const current = await this.metadataStore.getCollection(operation.collection);
+        case "addField": {
+          const current = await this.metadataStore.getCollection(
+            operation.collection,
+          );
           await this.metadataStore.saveCollection(operation.collection, {
             ...(current ?? { name: operation.collection }),
             fields: [...(current?.fields ?? []), operation.field],
           });
           break;
         }
-        case 'alterField': {
-          const current = await this.metadataStore.getCollection(operation.collection);
+        case "alterField": {
+          const current = await this.metadataStore.getCollection(
+            operation.collection,
+          );
           await this.metadataStore.saveCollection(
             operation.collection,
             applyAlterMetadata(current ?? { name: operation.collection }, {
-              alterFields: [{ name: operation.field, changes: operation.changes }],
+              alterFields: [
+                { name: operation.field, changes: operation.changes },
+              ],
             }),
           );
           break;
         }
-        case 'dropField': {
-          const current = await this.metadataStore.getCollection(operation.collection);
+        case "dropField": {
+          const current = await this.metadataStore.getCollection(
+            operation.collection,
+          );
           if (current) {
             await this.metadataStore.saveCollection(operation.collection, {
               ...current,
-              fields: current.fields?.filter((field) => field.name !== operation.field),
+              fields: current.fields?.filter(
+                (field) => field.name !== operation.field,
+              ),
             });
           }
           break;
         }
-        case 'addIndex': {
-          const current = await this.metadataStore.getCollection(operation.collection);
+        case "addIndex": {
+          const current = await this.metadataStore.getCollection(
+            operation.collection,
+          );
           await this.metadataStore.saveCollection(
             operation.collection,
             applyAlterMetadata(current ?? { name: operation.collection }, {
@@ -396,8 +502,10 @@ export class CollectionBuilder {
           );
           break;
         }
-        case 'dropIndex': {
-          const current = await this.metadataStore.getCollection(operation.collection);
+        case "dropIndex": {
+          const current = await this.metadataStore.getCollection(
+            operation.collection,
+          );
           await this.metadataStore.saveCollection(
             operation.collection,
             applyAlterMetadata(current ?? { name: operation.collection }, {
@@ -406,8 +514,10 @@ export class CollectionBuilder {
           );
           break;
         }
-        case 'addConstraint': {
-          const current = await this.metadataStore.getCollection(operation.collection);
+        case "addConstraint": {
+          const current = await this.metadataStore.getCollection(
+            operation.collection,
+          );
           await this.metadataStore.saveCollection(
             operation.collection,
             applyAlterMetadata(current ?? { name: operation.collection }, {
@@ -416,8 +526,10 @@ export class CollectionBuilder {
           );
           break;
         }
-        case 'dropConstraint': {
-          const current = await this.metadataStore.getCollection(operation.collection);
+        case "dropConstraint": {
+          const current = await this.metadataStore.getCollection(
+            operation.collection,
+          );
           await this.metadataStore.saveCollection(
             operation.collection,
             applyAlterMetadata(current ?? { name: operation.collection }, {
@@ -426,11 +538,18 @@ export class CollectionBuilder {
           );
           break;
         }
-        case 'updateCollectionMetadata':
-          await this.metadataStore.patchCollection(operation.collection, operation.patch);
+        case "updateCollectionMetadata":
+          await this.metadataStore.patchCollection(
+            operation.collection,
+            operation.patch,
+          );
           break;
-        case 'updateFieldMetadata':
-          await this.metadataStore.patchField(operation.collection, operation.field, operation.patch);
+        case "updateFieldMetadata":
+          await this.metadataStore.patchField(
+            operation.collection,
+            operation.field,
+            operation.patch,
+          );
           break;
         default:
           break;
@@ -439,9 +558,11 @@ export class CollectionBuilder {
   }
 }
 
-function normalizeCollectionInput(input: CollectionDefinitionInput): CollectionDefinition {
+function normalizeCollectionInput(
+  input: CollectionDefinitionInput,
+): CollectionDefinition {
   const definition = (() => {
-    if (typeof input !== 'function') {
+    if (typeof input !== "function") {
       return input;
     }
     const builder = new FluentCollectionDefinitionBuilder();
@@ -454,25 +575,31 @@ function normalizeCollectionInput(input: CollectionDefinitionInput): CollectionD
 
 function assertNoRelationColumnNames(definition: CollectionDefinition): void {
   for (const field of definition.fields ?? []) {
-    if (isRelationField(field) && 'columnName' in field) {
-      throw new Error(`Relation field "${field.name}" does not support columnName. Define a local foreign key field and reference it with foreignKey().`);
+    if (isRelationField(field) && "columnName" in field) {
+      throw new Error(
+        `Relation field "${field.name}" does not support columnName. Define a local foreign key field and reference it with foreignKey().`,
+      );
     }
   }
 }
 
-function assertNoRelationColumnNameOperations(operations: CollectionOperation[]): void {
+function assertNoRelationColumnNameOperations(
+  operations: CollectionOperation[],
+): void {
   for (const operation of operations) {
     switch (operation.type) {
-      case 'createCollection':
-      case 'createViewCollection':
-      case 'replaceViewCollection':
-      case 'createMaterializedViewCollection':
+      case "createCollection":
+      case "createViewCollection":
+      case "replaceViewCollection":
+      case "createMaterializedViewCollection":
         assertNoRelationColumnNames(operation.definition);
         break;
-      case 'alterCollection':
-        assertNoRelationColumnNames({ fields: operation.changes.addFields ?? [] });
+      case "alterCollection":
+        assertNoRelationColumnNames({
+          fields: operation.changes.addFields ?? [],
+        });
         break;
-      case 'addField':
+      case "addField":
         assertNoRelationColumnNames({ fields: [operation.field] });
         break;
       default:
@@ -481,9 +608,11 @@ function assertNoRelationColumnNameOperations(operations: CollectionOperation[])
   }
 }
 
-function normalizeAlterInput(input: CollectionAlterInput): CollectionAlterDefinition {
+function normalizeAlterInput(
+  input: CollectionAlterInput,
+): CollectionAlterDefinition {
   const changes = (() => {
-    if (typeof input !== 'function') {
+    if (typeof input !== "function") {
       return input;
     }
     const builder = new FluentCollectionAlterBuilder();
@@ -491,15 +620,17 @@ function normalizeAlterInput(input: CollectionAlterInput): CollectionAlterDefini
     return builder.toAlterDefinition();
   })();
   for (const field of changes.addFields ?? []) {
-    if (isRelationField(field) && 'columnName' in field) {
-      throw new Error(`Relation field "${field.name}" does not support columnName. Define a local foreign key field and reference it with foreignKey().`);
+    if (isRelationField(field) && "columnName" in field) {
+      throw new Error(
+        `Relation field "${field.name}" does not support columnName. Define a local foreign key field and reference it with foreignKey().`,
+      );
     }
   }
   return changes;
 }
 
 function normalizeViewInput(input: ViewCollectionInput): CollectionDefinition {
-  if (typeof input === 'function') {
+  if (typeof input === "function") {
     const builder = new FluentViewCollectionDefinitionBuilder();
     input(builder);
     return builder.toDefinition();
@@ -509,11 +640,11 @@ function normalizeViewInput(input: ViewCollectionInput): CollectionDefinition {
 
 function applyExecOptions(
   operations: CollectionOperation[],
-  options: Pick<BuilderExecOptions, 'ifNotExists' | 'ifExists'>,
+  options: Pick<BuilderExecOptions, "ifNotExists" | "ifExists">,
 ): CollectionOperation[] {
   return operations.map((operation) => {
     switch (operation.type) {
-      case 'createCollection': {
+      case "createCollection": {
         const ifNotExists = operation.ifNotExists ?? options.ifNotExists;
         if (ifNotExists === undefined) {
           return operation;
@@ -523,7 +654,7 @@ function applyExecOptions(
           ifNotExists,
         };
       }
-      case 'dropCollection': {
+      case "dropCollection": {
         const ifExists = operation.ifExists ?? options.ifExists;
         if (ifExists === undefined) {
           return operation;
@@ -542,28 +673,28 @@ function applyExecOptions(
 function createImpact(operations: CollectionOperation[]): BuilderImpact[] {
   return operations.map((operation) => {
     switch (operation.type) {
-      case 'dropField':
+      case "dropField":
         return {
-          level: 'destructive',
+          level: "destructive",
           operation: operation.type,
           message: `Dropping field ${operation.collection}.${operation.field} may remove existing data.`,
         };
-      case 'dropCollection':
+      case "dropCollection":
         return {
-          level: 'destructive',
+          level: "destructive",
           operation: operation.type,
           message: `Dropping collection ${operation.collection} may remove the backing database object.`,
         };
-      case 'updateCollectionMetadata':
-      case 'updateFieldMetadata':
+      case "updateCollectionMetadata":
+      case "updateFieldMetadata":
         return {
-          level: 'safe',
+          level: "safe",
           operation: operation.type,
-          message: 'Only collection metadata will be updated.',
+          message: "Only collection metadata will be updated.",
         };
       default:
         return {
-          level: 'safe',
+          level: "safe",
           operation: operation.type,
           message: `Operation ${operation.type} is planned.`,
         };
@@ -571,34 +702,43 @@ function createImpact(operations: CollectionOperation[]): BuilderImpact[] {
   });
 }
 
-export function createCollectionBuilder(options: CollectionBuilderOptions = {}): CollectionBuilder {
+export function createCollectionBuilder(
+  options: CollectionBuilderOptions = {},
+): CollectionBuilder {
   return new CollectionBuilder(options);
 }
 
 function filterMetadataOperations(
   compiler: CollectionCompiler,
   operations: CollectionOperation[],
-  schemaOperations: ReturnType<CollectionCompiler['compile']>,
+  schemaOperations: ReturnType<CollectionCompiler["compile"]>,
   context: CollectionCompilerContext,
 ): CollectionOperation[] {
   const plannedViewNames = new Set(
     schemaOperations
-      .filter((operation) => operation.type === 'createView')
+      .filter((operation) => operation.type === "createView")
       .map((operation) => operation.view.name),
   );
 
-  return operations.filter((operation) =>
-    !isViewMetadataOperation(operation)
-    || compiler.compile([operation], context).every((schemaOperation) =>
-      schemaOperation.type !== 'createView' || plannedViewNames.has(schemaOperation.view.name),
-    ),
+  return operations.filter(
+    (operation) =>
+      !isViewMetadataOperation(operation) ||
+      compiler
+        .compile([operation], context)
+        .every(
+          (schemaOperation) =>
+            schemaOperation.type !== "createView" ||
+            plannedViewNames.has(schemaOperation.view.name),
+        ),
   );
 }
 
 function isViewMetadataOperation(operation: CollectionOperation): boolean {
-  return operation.type === 'createViewCollection'
-    || operation.type === 'replaceViewCollection'
-    || operation.type === 'createMaterializedViewCollection';
+  return (
+    operation.type === "createViewCollection" ||
+    operation.type === "replaceViewCollection" ||
+    operation.type === "createMaterializedViewCollection"
+  );
 }
 
 function applyAlterMetadata(
@@ -610,19 +750,31 @@ function applyAlterMetadata(
   for (const field of changes.alterFields ?? []) {
     const index = fields.findIndex((item) => item.name === field.name);
     if (index >= 0) {
-      fields[index] = { ...fields[index], ...field.changes } as AnyFieldDefinition;
+      fields[index] = {
+        ...fields[index],
+        ...field.changes,
+      } as AnyFieldDefinition;
     } else {
-      fields.push({ name: field.name, type: 'virtual', ...field.changes } as AnyFieldDefinition);
+      fields.push({ name: field.name, type: "virtual", ...field.changes });
     }
   }
-  fields = fields.filter((field) => !(changes.dropFields ?? []).includes(field.name));
+  fields = fields.filter(
+    (field) => !(changes.dropFields ?? []).includes(field.name),
+  );
 
   let indexes = [...(current.indexes ?? []), ...(changes.addIndexes ?? [])];
-  indexes = indexes.filter((index) => !index.name || !(changes.dropIndexes ?? []).includes(index.name));
+  indexes = indexes.filter(
+    (index) => !index.name || !(changes.dropIndexes ?? []).includes(index.name),
+  );
 
-  let constraints = [...(current.constraints ?? []), ...(changes.addConstraints ?? [])];
-  constraints = constraints.filter((constraint) =>
-    !constraint.name || !(changes.dropConstraints ?? []).includes(constraint.name),
+  let constraints = [
+    ...(current.constraints ?? []),
+    ...(changes.addConstraints ?? []),
+  ];
+  constraints = constraints.filter(
+    (constraint) =>
+      !constraint.name ||
+      !(changes.dropConstraints ?? []).includes(constraint.name),
   );
 
   return {
@@ -633,7 +785,10 @@ function applyAlterMetadata(
   };
 }
 
-function collectReferencedCollections(names: Set<string>, definition: CollectionDefinition): void {
+function collectReferencedCollections(
+  names: Set<string>,
+  definition: CollectionDefinition,
+): void {
   for (const field of definition.fields ?? []) {
     collectFieldReferences(names, field);
   }
@@ -645,7 +800,10 @@ function collectReferencedCollections(names: Set<string>, definition: Collection
   }
 }
 
-function collectAlterReferences(names: Set<string>, changes: CollectionAlterDefinition): void {
+function collectAlterReferences(
+  names: Set<string>,
+  changes: CollectionAlterDefinition,
+): void {
   for (const field of changes.addFields ?? []) {
     collectFieldReferences(names, field);
   }
@@ -654,7 +812,10 @@ function collectAlterReferences(names: Set<string>, changes: CollectionAlterDefi
   }
 }
 
-function collectFieldReferences(names: Set<string>, field: AnyFieldDefinition): void {
+function collectFieldReferences(
+  names: Set<string>,
+  field: AnyFieldDefinition,
+): void {
   if (!isRelationField(field)) {
     return;
   }
@@ -665,19 +826,24 @@ function collectFieldReferences(names: Set<string>, field: AnyFieldDefinition): 
   }
 }
 
-function isRelationField(field: AnyFieldDefinition): field is RelationFieldDefinition {
-  return 'target' in field
-    && typeof field.target === 'string'
-    && (
-      field.type === 'belongsTo'
-      || field.type === 'hasOne'
-      || field.type === 'hasMany'
-      || field.type === 'belongsToMany'
-    );
+function isRelationField(
+  field: AnyFieldDefinition,
+): field is RelationFieldDefinition {
+  return (
+    "target" in field &&
+    typeof field.target === "string" &&
+    (field.type === "belongsTo" ||
+      field.type === "hasOne" ||
+      field.type === "hasMany" ||
+      field.type === "belongsToMany")
+  );
 }
 
-function collectConstraintReferences(names: Set<string>, constraint: ConstraintDefinition): void {
-  if (constraint.type === 'foreignKey') {
+function collectConstraintReferences(
+  names: Set<string>,
+  constraint: ConstraintDefinition,
+): void {
+  if (constraint.type === "foreignKey") {
     names.add(constraint.references.collection);
   }
 }

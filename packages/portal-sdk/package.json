@@ -3,6 +3,7 @@
   "version": "2.1.0",
   "description": "Stable runtime and extension APIs for NocoBase Portal applications.",
   "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
   "repository": {
     "type": "git",
@@ -118,14 +119,22 @@
   },
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "preinstall": "node ./scripts/check-template-compatibility.mjs",
     "prepack": "pnpm build",
     "pretest": "pnpm build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-portal-sdk.tgz\" && pnpm exec publint . && pnpm exec attw \"$PACK_DIR/nocobase-portal-sdk.tgz\" --profile esm-only"
   },
   "dependencies": {
-    "ignore": "^7.0.6",
+    "ignore": "catalog:",
     "i18next": "^25.3.2",
     "semver": "^7.8.5"
   },
@@ -142,17 +151,20 @@
     }
   },
   "devDependencies": {
-    "@refinedev/core": "^5.0.8",
-    "@tanstack/react-query": "^5.81.5",
-    "@types/node": "^20.0.0",
-    "@types/react": "^19.1.0",
-    "@types/react-dom": "^19.1.0",
+    "@nocobase/dev-config": "workspace:*",
+    "@refinedev/core": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@types/semver": "^7.7.0",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "react-router": "^7.0.2",
-    "typescript": "^5.8.3",
-    "vite": "^6.3.5",
-    "vitest": "^4.1.10"
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

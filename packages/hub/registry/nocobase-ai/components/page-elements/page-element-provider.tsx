@@ -53,7 +53,7 @@ export type AIPageElementProviderProps = PropsWithChildren<{
 export class AIPageContextResolutionError extends Error {
   constructor(
     message: string,
-    readonly failures: Array<{ item: AIWorkContextItem; reason: unknown }>
+    readonly failures: Array<{ item: AIWorkContextItem; reason: unknown }>,
   ) {
     super(message);
     this.name = "AIPageContextResolutionError";
@@ -77,19 +77,19 @@ type AIPageElementContextValue = {
   register: (
     runtimeId: string,
     element: HTMLElement,
-    getDescriptor: () => AIPageElementRuntimeDescriptor
+    getDescriptor: () => AIPageElementRuntimeDescriptor,
   ) => () => void;
   startPicking: (options: AIPageElementPickerOptions) => void;
   cancelPicking: () => void;
 };
 
 const AIPageElementContext = createContext<AIPageElementContextValue | null>(
-  null
+  null,
 );
 
 const findRegisteredElement = (
   target: EventTarget | null,
-  registry: Map<string, RegisteredPageElement>
+  registry: Map<string, RegisteredPageElement>,
 ) => {
   if (!(target instanceof Element)) return undefined;
   const element = target.closest<HTMLElement>(`[${PAGE_ELEMENT_ATTRIBUTE}]`);
@@ -122,11 +122,11 @@ export function AIPageElementProvider({
       const duplicate = [...registryRef.current.entries()].find(
         ([registeredRuntimeId, entry]) =>
           registeredRuntimeId !== runtimeId &&
-          (entry.getDescriptor().id ?? registeredRuntimeId) === contextId
+          (entry.getDescriptor().id ?? registeredRuntimeId) === contextId,
       );
       if (duplicate) {
         throw new Error(
-          `AI page context id "${contextId}" is already registered`
+          `AI page context id "${contextId}" is already registered`,
         );
       }
       element.setAttribute(PAGE_ELEMENT_ATTRIBUTE, runtimeId);
@@ -147,7 +147,7 @@ export function AIPageElementProvider({
         setRegisteredCount(registryRef.current.size);
       };
     },
-    []
+    [],
   );
 
   const cancelPicking = useCallback(() => {
@@ -180,12 +180,12 @@ export function AIPageElementProvider({
           if (item.type !== "page-element") return item;
           const registeredEntry = [...registryRef.current.entries()].find(
             ([runtimeId, entry]) =>
-              (entry.getDescriptor().id ?? runtimeId) === item.id
+              (entry.getDescriptor().id ?? runtimeId) === item.id,
           );
           if (!registeredEntry) {
             if (item.content !== undefined) return item;
             throw new Error(
-              `Page context "${item.title ?? item.id ?? "unknown"}" is not mounted`
+              `Page context "${item.title ?? item.id ?? "unknown"}" is not mounted`,
             );
           }
           const [runtimeId, entry] = registeredEntry;
@@ -200,12 +200,12 @@ export function AIPageElementProvider({
             content: await descriptor.getContext(),
             ...(frontendTools.length ? { uid: contextId, frontendTools } : {}),
           } satisfies AIWorkContextItem;
-        })
+        }),
       );
       const failures = resolved.flatMap((result, index) =>
         result.status === "rejected"
           ? [{ item: items[index], reason: result.reason }]
-          : []
+          : [],
       );
       if (failures.length && contextFailurePolicy === "throw") {
         const labels = failures.map(({ item, reason }) => {
@@ -216,14 +216,14 @@ export function AIPageElementProvider({
         });
         throw new AIPageContextResolutionError(
           `Unable to read page context: ${labels.join(", ")}`,
-          failures
+          failures,
         );
       }
       return resolved.flatMap((result) =>
-        result.status === "fulfilled" ? [result.value] : []
+        result.status === "fulfilled" ? [result.value] : [],
       );
     },
-    [contextFailurePolicy]
+    [contextFailurePolicy],
   );
 
   useEffect(() => {
@@ -247,7 +247,7 @@ export function AIPageElementProvider({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") cancelPicking();
     };
-    const handleClick = async (event: MouseEvent) => {
+    const resolveClick = async (event: MouseEvent) => {
       const match = findRegisteredElement(event.target, registryRef.current);
       const currentRequest = requestRef.current;
       if (!match || !currentRequest || currentRequest.resolving) return;
@@ -285,14 +285,15 @@ export function AIPageElementProvider({
           error:
             error instanceof Error
               ? error.message
-              : t(
-                  "pageElement.readError",
-                  "Unable to read this page element"
-                ),
+              : t("pageElement.readError", "Unable to read this page element"),
         };
         requestRef.current = failedRequest;
         setRequest(failedRequest);
       }
+    };
+    const handleClick = (event: MouseEvent) => {
+      const resolvePromise = resolveClick(event);
+      resolvePromise.catch(() => undefined);
     };
 
     document.addEventListener("pointermove", updateHoveredElement, true);
@@ -319,7 +320,7 @@ export function AIPageElementProvider({
       startPicking,
       cancelPicking,
     }),
-    [cancelPicking, picking, register, registeredCount, startPicking]
+    [cancelPicking, picking, register, registeredCount, startPicking],
   );
 
   return (
@@ -351,7 +352,7 @@ export function AIPageElementProvider({
                   <MousePointer2
                     className={cn(
                       "size-4 shrink-0",
-                      request.resolving && "animate-pulse"
+                      request.resolving && "animate-pulse",
                     )}
                   />
                   <div className="min-w-0">
@@ -363,13 +364,13 @@ export function AIPageElementProvider({
                     <div
                       className={cn(
                         "truncate text-xs text-muted-foreground",
-                        request.error && "text-destructive"
+                        request.error && "text-destructive",
                       )}
                     >
                       {request.error ??
                         t(
                           "pageElement.hint",
-                          "Hover a highlighted element, then click to add it."
+                          "Hover a highlighted element, then click to add it.",
                         )}
                     </div>
                   </div>
@@ -378,7 +379,7 @@ export function AIPageElementProvider({
                     size="icon-sm"
                     aria-label={t(
                       "pageElement.cancelPicking",
-                      "Cancel picking page element"
+                      "Cancel picking page element",
                     )}
                     disabled={request.resolving}
                     onClick={cancelPicking}
@@ -387,7 +388,7 @@ export function AIPageElementProvider({
                   </Button>
                 </div>
               </>,
-              document.body
+              document.body,
             )
           : null}
       </AIPageElementContext.Provider>
@@ -399,14 +400,14 @@ export function useAIPageElementPicker() {
   const value = useContext(AIPageElementContext);
   if (!value) {
     throw new Error(
-      "useAIPageElementPicker must be used inside AIPageElementProvider"
+      "useAIPageElementPicker must be used inside AIPageElementProvider",
     );
   }
   return value;
 }
 
 export function useAIPageElement(
-  descriptor: AIPageElementDescriptor
+  descriptor: AIPageElementDescriptor,
 ): RefCallback<HTMLElement> {
   const { register } = useAIPageElementPicker();
   const frontendTools = useOptionalAIFrontendToolRegistry();
@@ -421,7 +422,7 @@ export function useAIPageElement(
     if (!frontendTools) {
       if (descriptor.tools?.length) {
         throw new Error(
-          "Page element frontend Tools require AIProvider above AIPageElementProvider"
+          "Page element frontend Tools require AIProvider above AIPageElementProvider",
         );
       }
       toolManifestsRef.current = [];
@@ -454,7 +455,7 @@ export function useAIPageElement(
           }))
         : () => undefined;
     },
-    [register]
+    [register],
   );
 }
 
@@ -464,7 +465,7 @@ export type AIPageElementHandle = {
 };
 
 export function useAIPageElementHandle(
-  descriptor: AIPageElementDescriptor & { id: string }
+  descriptor: AIPageElementDescriptor & { id: string },
 ): AIPageElementHandle {
   const ref = useAIPageElement(descriptor);
   const context = useMemo(
@@ -474,7 +475,7 @@ export function useAIPageElementHandle(
         title: descriptor.title,
         kind: descriptor.kind,
       }),
-    [descriptor.id, descriptor.kind, descriptor.title]
+    [descriptor.id, descriptor.kind, descriptor.title],
   );
   return useMemo(() => ({ ref, context }), [context, ref]);
 }

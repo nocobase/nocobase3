@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+.pack-check/
+*.tgz
+pnpm-lock.yaml
+packages/app-host/fixtures/app-dist/**/dist/
+packages/app-host/fixtures/app-dist/main/

@@ -1,25 +1,12 @@
 {
+  "extends": "@nocobase/dev-config/tsconfig/server-library.json",
   "compilerOptions": {
-    "target": "ES2022",
     "lib": ["ES2022", "DOM"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true,
-    "moduleDetection": "force",
-    "strict": true,
-    "skipLibCheck": true,
-    "declaration": true,
-    "declarationMap": true,
-    "isolatedDeclarations": true,
-    "isolatedModules": true,
-    "sourceMap": true,
+    "types": ["node"],
     "rootDir": "src",
     "outDir": "dist",
-    "noEmit": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true
+    "noUnusedParameters": false
   },
   "include": ["src"]
 }

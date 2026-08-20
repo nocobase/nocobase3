@@ -11,8 +11,12 @@ const tempDirs: string[] = [];
 const runningHosts: AppHost[] = [];
 
 afterEach(async () => {
-  await Promise.all(runningHosts.splice(0).map((host) => host.close("test cleanup")));
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    runningHosts.splice(0).map((host) => host.close("test cleanup")),
+  );
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
 });
 
 it("dispatches non-asset requests to the embedded server with the app mount stripped", async () => {
@@ -20,7 +24,9 @@ it("dispatches non-asset requests to the embedded server with the app mount stri
   tempDirs.push(appsDir);
 
   const appRoot = path.join(appsDir, "customer");
-  await mkdir(path.join(appRoot, "dist", "client", "assets"), { recursive: true });
+  await mkdir(path.join(appRoot, "dist", "client", "assets"), {
+    recursive: true,
+  });
   await mkdir(path.join(appRoot, "dist", "server"), { recursive: true });
   await writeFile(
     path.join(appRoot, "package.json"),
@@ -34,7 +40,10 @@ it("dispatches non-asset requests to the embedded server with the app mount stri
     path.join(appRoot, "dist", "client", "index.html"),
     `<!doctype html><html><body><main>Customer App</main><script type="module" src="/assets/app.js"></script></body></html>`,
   );
-  await writeFile(path.join(appRoot, "dist", "client", "assets", "app.js"), `console.log("customer");`);
+  await writeFile(
+    path.join(appRoot, "dist", "client", "assets", "app.js"),
+    `console.log("customer");`,
+  );
   await writeFile(
     path.join(appRoot, "dist", "server", "embedded.js"),
     `
@@ -80,7 +89,9 @@ it("dispatches non-asset requests to the embedded server with the app mount stri
     throw new Error("App host did not expose a TCP address");
   }
 
-  const response = await fetch(`http://127.0.0.1:${address.port}/customer/api/hello?x=1`);
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/customer/api/hello?x=1`,
+  );
   await expect(response.json()).resolves.toMatchObject({
     id: "customer",
     basePath: "/customer",
@@ -94,17 +105,23 @@ it("dispatches non-asset requests to the embedded server with the app mount stri
   expect(pageHtml).toContain("Customer App");
   expect(pageHtml).toContain("/customer/assets/app.js");
 
-  const asset = await fetch(`http://127.0.0.1:${address.port}/customer/assets/app.js`);
+  const asset = await fetch(
+    `http://127.0.0.1:${address.port}/customer/assets/app.js`,
+  );
   expect(asset.headers.get("cache-control")).toContain("immutable");
   await expect(asset.text()).resolves.toContain("customer");
 });
 
 it("does not discover a client-only app without a server artifact", async () => {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-client-"));
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), "nocobase-app-host-client-"),
+  );
   tempDirs.push(appsDir);
 
   const appRoot = path.join(appsDir, "customer");
-  await mkdir(path.join(appRoot, "dist", "client", "assets"), { recursive: true });
+  await mkdir(path.join(appRoot, "dist", "client", "assets"), {
+    recursive: true,
+  });
   await writeFile(
     path.join(appRoot, "package.json"),
     JSON.stringify({
@@ -113,8 +130,14 @@ it("does not discover a client-only app without a server artifact", async () => 
       type: "module",
     }),
   );
-  await writeFile(path.join(appRoot, "dist", "client", "index.html"), `<!doctype html><main>Client only</main>`);
-  await writeFile(path.join(appRoot, "dist", "client", "assets", "app.js"), `console.log("client-only");`);
+  await writeFile(
+    path.join(appRoot, "dist", "client", "index.html"),
+    `<!doctype html><main>Client only</main>`,
+  );
+  await writeFile(
+    path.join(appRoot, "dist", "client", "assets", "app.js"),
+    `console.log("client-only");`,
+  );
 
   const host = createAppHost({
     host: "127.0.0.1",
@@ -137,7 +160,9 @@ it("does not discover a client-only app without a server artifact", async () => 
 });
 
 it("serves a server-only app from dist/server/embedded.js", async () => {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-server-"));
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), "nocobase-app-host-server-"),
+  );
   tempDirs.push(appsDir);
 
   const appRoot = path.join(appsDir, "customer");
@@ -189,7 +214,9 @@ it("serves a server-only app from dist/server/embedded.js", async () => {
     pathname: "/api/info",
   });
 
-  const page = await fetch(`http://127.0.0.1:${address.port}/customer/dashboard`);
+  const page = await fetch(
+    `http://127.0.0.1:${address.port}/customer/dashboard`,
+  );
   await expect(page.json()).resolves.toEqual({
     id: "customer",
     basePath: "/customer",
@@ -198,7 +225,9 @@ it("serves a server-only app from dist/server/embedded.js", async () => {
 });
 
 it("calls registered app disposers when the app is destroyed", async () => {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-disposer-"));
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), "nocobase-app-host-disposer-"),
+  );
   tempDirs.push(appsDir);
 
   const appRoot = path.join(appsDir, "customer");
@@ -245,15 +274,21 @@ it("calls registered app disposers when the app is destroyed", async () => {
     throw new Error("App host did not expose a TCP address");
   }
 
-  const response = await fetch(`http://127.0.0.1:${address.port}/customer/api/info`);
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/customer/api/info`,
+  );
   await expect(response.json()).resolves.toEqual({ ok: true });
 
   await host.close("test disposer");
-  await expect(readFile(path.join(appRoot, "disposed.txt"), "utf8")).resolves.toBe("disposed");
+  await expect(
+    readFile(path.join(appRoot, "disposed.txt"), "utf8"),
+  ).resolves.toBe("disposed");
 });
 
 it("keeps serving after a streaming response client disconnects", async () => {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-stream-"));
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), "nocobase-app-host-stream-"),
+  );
   tempDirs.push(appsDir);
 
   const appRoot = path.join(appsDir, "customer");
@@ -308,19 +343,27 @@ it("keeps serving after a streaming response client disconnects", async () => {
     throw new Error("App host did not expose a TCP address");
   }
 
-  await fetchAndDisconnectAfterFirstChunk(new URL(`http://127.0.0.1:${address.port}/customer/stream`));
+  await fetchAndDisconnectAfterFirstChunk(
+    new URL(`http://127.0.0.1:${address.port}/customer/stream`),
+  );
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  const health = await fetchJson(new URL(`http://127.0.0.1:${address.port}/__health`));
+  const health = await fetchJson(
+    new URL(`http://127.0.0.1:${address.port}/__health`),
+  );
   expect(health.registered).toBe(1);
 });
 
 it("reserves /assets for static files and does not fall through to the server", async () => {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-assets-"));
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), "nocobase-app-host-assets-"),
+  );
   tempDirs.push(appsDir);
 
   const appRoot = path.join(appsDir, "customer");
-  await mkdir(path.join(appRoot, "dist", "client", "assets"), { recursive: true });
+  await mkdir(path.join(appRoot, "dist", "client", "assets"), {
+    recursive: true,
+  });
   await mkdir(path.join(appRoot, "dist", "server"), { recursive: true });
   await writeFile(
     path.join(appRoot, "package.json"),
@@ -330,7 +373,10 @@ it("reserves /assets for static files and does not fall through to the server", 
       type: "module",
     }),
   );
-  await writeFile(path.join(appRoot, "dist", "client", "assets", "app.js"), `console.log("asset");`);
+  await writeFile(
+    path.join(appRoot, "dist", "client", "assets", "app.js"),
+    `console.log("asset");`,
+  );
   await writeFile(
     path.join(appRoot, "dist", "server", "embedded.js"),
     `
@@ -359,14 +405,23 @@ it("reserves /assets for static files and does not fall through to the server", 
     throw new Error("App host did not expose a TCP address");
   }
 
-  const missingAsset = await fetch(`http://127.0.0.1:${address.port}/customer/assets/missing.js`);
+  const missingAsset = await fetch(
+    `http://127.0.0.1:${address.port}/customer/assets/missing.js`,
+  );
   expect(missingAsset.status).toBe(404);
-  await expect(missingAsset.json()).resolves.toMatchObject({ error: "Not found" });
+  await expect(missingAsset.json()).resolves.toMatchObject({
+    error: "Not found",
+  });
 
-  const postAsset = await fetch(`http://127.0.0.1:${address.port}/customer/assets/app.js`, { method: "POST" });
+  const postAsset = await fetch(
+    `http://127.0.0.1:${address.port}/customer/assets/app.js`,
+    { method: "POST" },
+  );
   expect(postAsset.status).toBe(405);
 
-  const serverRoute = await fetch(`http://127.0.0.1:${address.port}/customer/static/app.js`);
+  const serverRoute = await fetch(
+    `http://127.0.0.1:${address.port}/customer/static/app.js`,
+  );
   await expect(serverRoute.json()).resolves.toEqual({
     handledByServer: true,
     pathname: "/static/app.js",
@@ -374,7 +429,9 @@ it("reserves /assets for static files and does not fall through to the server", 
 });
 
 it("serves the packaged app-dist fixture", async () => {
-  const appsDir = fileURLToPath(new URL("../fixtures/app-dist", import.meta.url));
+  const appsDir = fileURLToPath(
+    new URL("../fixtures/app-dist", import.meta.url),
+  );
   const host = createAppHost({
     host: "127.0.0.1",
     port: 0,
@@ -384,7 +441,9 @@ it("serves the packaged app-dist fixture", async () => {
   runningHosts.push(host);
   await host.start();
 
-  expect(host.registry.listDefinitions().map((definition) => definition.id)).toEqual(
+  expect(
+    host.registry.listDefinitions().map((definition) => definition.id),
+  ).toEqual(
     expect.arrayContaining(["demo", "lifecycle", "service", "ws-demo"]),
   );
 
@@ -398,7 +457,9 @@ it("serves the packaged app-dist fixture", async () => {
   expect(rootHtml).toContain("Demo App");
   expect(rootHtml).toContain("/demo/assets/demo.js");
 
-  const asset = await fetch(`http://127.0.0.1:${address.port}/demo/assets/demo.js`);
+  const asset = await fetch(
+    `http://127.0.0.1:${address.port}/demo/assets/demo.js`,
+  );
   await expect(asset.text()).resolves.toContain("demo fixture");
 
   const api = await fetch(`http://127.0.0.1:${address.port}/demo/api/info`);
@@ -408,18 +469,24 @@ it("serves the packaged app-dist fixture", async () => {
     requestPath: "/api/info",
   });
 
-  const service = await fetch(`http://127.0.0.1:${address.port}/service/healthz`);
+  const service = await fetch(
+    `http://127.0.0.1:${address.port}/service/healthz`,
+  );
   await expect(service.json()).resolves.toMatchObject({
     id: "service",
     requestPath: "/healthz",
   });
 
-  const lifecyclePage = await fetch(`http://127.0.0.1:${address.port}/lifecycle/`);
+  const lifecyclePage = await fetch(
+    `http://127.0.0.1:${address.port}/lifecycle/`,
+  );
   const lifecycleHtml = await lifecyclePage.text();
   expect(lifecycleHtml).toContain("Lifecycle Demo");
   expect(lifecycleHtml).toContain("/lifecycle/assets/lifecycle.js");
 
-  const lifecycle = await fetch(`http://127.0.0.1:${address.port}/lifecycle/api/lifecycle`);
+  const lifecycle = await fetch(
+    `http://127.0.0.1:${address.port}/lifecycle/api/lifecycle`,
+  );
   await expect(lifecycle.json()).resolves.toMatchObject({
     id: "lifecycle",
     basePath: "/lifecycle",
@@ -437,13 +504,17 @@ it("serves the packaged app-dist fixture", async () => {
   expect(wsDemoHtml).toContain('id="websocket-url"');
   expect(wsDemoHtml).not.toContain("127.0.0.1:3000");
 
-  const wsDemoAsset = await fetch(`http://127.0.0.1:${address.port}/ws-demo/assets/ws-demo.js`);
+  const wsDemoAsset = await fetch(
+    `http://127.0.0.1:${address.port}/ws-demo/assets/ws-demo.js`,
+  );
   const wsDemoAssetText = await wsDemoAsset.text();
   expect(wsDemoAssetText).toContain("ws-demo fixture");
   expect(wsDemoAssetText).toContain("targetUrl.protocol");
   expect(wsDemoAssetText).not.toContain("127.0.0.1:3000");
 
-  const wsDemoInfo = await fetch(`http://127.0.0.1:${address.port}/ws-demo/api/info`);
+  const wsDemoInfo = await fetch(
+    `http://127.0.0.1:${address.port}/ws-demo/api/info`,
+  );
   await expect(wsDemoInfo.json()).resolves.toMatchObject({
     id: "ws-demo",
     basePath: "/ws-demo",
@@ -456,7 +527,9 @@ it("serves the packaged app-dist fixture", async () => {
     },
   });
 
-  const wsDemoHealth = await fetch(`http://127.0.0.1:${address.port}/ws-demo/healthz`);
+  const wsDemoHealth = await fetch(
+    `http://127.0.0.1:${address.port}/ws-demo/healthz`,
+  );
   await expect(wsDemoHealth.json()).resolves.toMatchObject({
     ok: true,
     id: "ws-demo",
@@ -464,7 +537,9 @@ it("serves the packaged app-dist fixture", async () => {
     requestPath: "/healthz",
   });
 
-  const wsDemoEndpoint = await fetch(`http://127.0.0.1:${address.port}/ws-demo/ws`);
+  const wsDemoEndpoint = await fetch(
+    `http://127.0.0.1:${address.port}/ws-demo/ws`,
+  );
   expect(wsDemoEndpoint.status).toBe(426);
   await expect(wsDemoEndpoint.json()).resolves.toMatchObject({
     error: "WebSocket upgrade required",
@@ -474,12 +549,16 @@ it("serves the packaged app-dist fixture", async () => {
     },
   });
 
-  const wsDemoMessage = await readFirstWebSocketMessage(`ws://127.0.0.1:${address.port}/ws-demo/ws`);
+  const wsDemoMessage = await readFirstWebSocketMessage(
+    `ws://127.0.0.1:${address.port}/ws-demo/ws`,
+  );
   expect(wsDemoMessage).toMatch(/\d{4}/);
 });
 
 it("serves health information without discovered apps", async () => {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-empty-"));
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), "nocobase-app-host-empty-"),
+  );
   tempDirs.push(appsDir);
 
   const host = createAppHost({
@@ -495,13 +574,17 @@ it("serves health information without discovered apps", async () => {
     throw new Error("App host did not expose a TCP address");
   }
 
-  const response = await fetchJson(new URL(`http://127.0.0.1:${address.port}/__health`));
+  const response = await fetchJson(
+    new URL(`http://127.0.0.1:${address.port}/__health`),
+  );
   expect(response.registered).toBe(0);
   expect(response.activeTotal).toBe(0);
 });
 
 it("exposes app management through /__apps", async () => {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), "nocobase-app-host-management-"));
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), "nocobase-app-host-management-"),
+  );
   tempDirs.push(appsDir);
 
   const host = createAppHost({
@@ -517,7 +600,9 @@ it("exposes app management through /__apps", async () => {
     throw new Error("App host did not expose a TCP address");
   }
 
-  const apps = await fetchJson(new URL(`http://127.0.0.1:${address.port}/__apps`));
+  const apps = await fetchJson(
+    new URL(`http://127.0.0.1:${address.port}/__apps`),
+  );
   expect(apps).toEqual({
     active: [],
     definitions: [],
@@ -534,7 +619,12 @@ function fetchJson(url: URL): Promise<Record<string, unknown>> {
         });
         response.on("end", () => {
           try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
+            resolve(
+              JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<
+                string,
+                unknown
+              >,
+            );
           } catch (error) {
             reject(error);
           }
@@ -557,7 +647,9 @@ function readFirstWebSocketMessage(url: string): Promise<string> {
       (event) => {
         clearTimeout(timeout);
         socket.close();
-        resolve(typeof event.data === "string" ? event.data : String(event.data));
+        resolve(
+          typeof event.data === "string" ? event.data : String(event.data),
+        );
       },
       { once: true },
     );
