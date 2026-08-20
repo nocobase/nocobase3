@@ -1,4 +1,4 @@
-import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
+import { ForgotPasswordForm } from "@/extensions/password/forgot-password-form";
 import React from "react";
 
 export const ForgotPassword = () => {
