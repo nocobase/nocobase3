@@ -1,141 +1,67 @@
-import type { DatabaseManager } from '@nocobase/database';
-import {
-  createCacheManager,
-  createNullCacheConfig,
-  type AppCacheConfig,
-  type NocoBaseCacheManager,
-} from '@nocobase/cache';
-import { createDriveManager, type AppDriveConfig } from '@nocobase/drive';
-import {
-  createLoggerManager,
-  createSilentLoggerConfig,
-  type AppLoggerConfig,
-  type NocoBaseLoggerManager,
-} from '@nocobase/logger';
-import {
-  createQueueManager,
-  createSyncQueueConfig,
-  type AppQueueConfig,
-  type NocoBaseQueueManager,
-} from '@nocobase/queue';
-import {
-  createNullSessionConfig,
-  createSessionManager,
-  type AppSessionConfig,
-  type NocoBaseSessionManager,
-} from '@nocobase/session';
+import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppDriveConfig } from '@nocobase/drive';
 
-import { createAppJobFactory } from '@/jobs/dependencies.js';
+import type { AppConfig } from '../config/index.js';
+import type { AppDeps } from '../runtime/deps.js';
 import {
   createNotificationModule,
   type NotificationModule,
-  type NotificationModuleConfig,
 } from '../../registry/notification/server/index.js';
 import { createPortalLiveService, type PortalLiveService } from './portal-live.js';
-import type { NotificationTemplateRegistry } from '../../registry/notification/templates/index.js';
 import { AppSettingsService, UnavailableAppSettingsService, type AppSettings } from './app-settings-store.js';
 import { FileUploadsService, UnavailableFileUploadsService, type FileUploads } from './public-file-storage.js';
 
 export interface AppServices {
   appSettingsStore: AppSettings;
-  cacheManager: NocoBaseCacheManager;
   publicFileStorage: FileUploads;
-  loggerManager: NocoBaseLoggerManager;
-  queueManager: NocoBaseQueueManager;
-  sessionManager: NocoBaseSessionManager;
-  portalLive?: PortalLiveService;
+  portalLive: PortalLiveService;
   notificationModule?: NotificationModule;
   start(): Promise<void>;
   dispose(): Promise<void>;
 }
 
-export interface CreateAppServicesOptions {
-  appId?: string;
-  cache?: AppCacheConfig;
-  database?: DatabaseManager;
-  drive?: AppDriveConfig;
-  logger?: AppLoggerConfig;
-  queue?: AppQueueConfig;
-  session?: AppSessionConfig;
-  notifications?: NotificationModuleConfig;
-  notificationTemplates?: NotificationTemplateRegistry;
-}
-
-export function createAppServices(options: CreateAppServicesOptions = {}): AppServices {
-  const cacheManager = createCacheManager(options.cache ?? createNullCacheConfig());
-  const driveManager = options.drive ? createDriveManager(options.drive) : undefined;
-  const loggerManager = createLoggerManager(options.logger ?? createSilentLoggerConfig());
-  const sessionManager = createSessionManager(options.session ?? createNullSessionConfig());
-  const queueLogger = loggerManager.use().child({ module: 'queue' });
-  const queueManager = createQueueManager(options.queue ?? createSyncQueueConfig(), {
-    database: options.database,
-    logger: queueLogger,
-    jobFactory: createAppJobFactory({
-      database: options.database,
-      logger: queueLogger,
-    }),
+export function createAppServices(runtime: AppRuntime<AppConfig>, deps: AppDeps): AppServices {
+  const notification = runtime.config.notification;
+  const portalLive = createPortalLiveService({
+    appId: runtime.config.app.name,
+    sessionManager: deps.sessionManager,
   });
-  const portalLive = options.appId
-    ? createPortalLiveService({
-        appId: options.appId,
-        sessionManager,
-      })
-    : undefined;
-  const notificationModule = options.notifications?.enabled
+  const notificationModule = notification?.enabled
     ? createNotificationModule({
-        allowNonPersistentStore: options.notifications.allowNonPersistentStore,
-        database: options.database,
-        logger: loggerManager.use().child({ module: 'notification' }),
-        queueManager,
-        emailProviders: options.notifications.emailProviders,
-        emailProviderDefinitions: options.notifications.emailProviderDefinitions,
-        resolveUserEmail: options.notifications.resolveUserEmail,
-        templates: options.notifications.templates ?? options.notificationTemplates,
-        live: portalLive && options.appId
-          ? { publisher: portalLive.publisher, appId: options.appId }
-          : undefined,
+        allowNonPersistentStore: notification.allowNonPersistentStore,
+        database: runtime.database,
+        logger: deps.loggerManager.use().child({ module: 'notification' }),
+        queueManager: deps.queueManager,
+        emailProviders: notification.emailProviders,
+        emailProviderDefinitions: notification.emailProviderDefinitions,
+        resolveUserEmail: notification.resolveUserEmail,
+        templates: notification.templates,
+        live: {
+          publisher: portalLive.publisher,
+          appId: runtime.config.app.name,
+        },
       })
     : undefined;
 
-  const services: AppServices = {
-    appSettingsStore: options.database ? new AppSettingsService(options.database) : new UnavailableAppSettingsService(),
-    cacheManager,
+  return {
+    appSettingsStore: runtime.database ? new AppSettingsService(runtime.database) : new UnavailableAppSettingsService(),
     publicFileStorage:
-      driveManager && options.drive?.disks.public
-        ? new FileUploadsService(driveManager)
-        : new UnavailableFileUploadsService(resolveFileUploadsUnavailableMessage(options.drive)),
-    loggerManager,
-    queueManager,
-    sessionManager,
+      deps.driveManager && runtime.config.drive?.disks.public
+        ? new FileUploadsService(deps.driveManager)
+        : new UnavailableFileUploadsService(resolveFileUploadsUnavailableMessage(runtime.config.drive)),
     portalLive,
     notificationModule,
-    start: () => notificationModule?.start() ?? Promise.resolve(),
-    dispose: () =>
-      disposeAppServices({
-        cacheManager,
-        loggerManager,
-        notificationModule,
-        portalLive,
-        queueManager,
-        sessionManager,
-      }),
+    start: (): Promise<void> => notificationModule?.start() ?? Promise.resolve(),
+    dispose: (): Promise<void> => disposeAppServices({ notificationModule, portalLive }),
   };
-
-  return services;
 }
 
 export async function disposeAppServices(
-  services: Pick<AppServices, 'cacheManager' | 'loggerManager' | 'notificationModule' | 'portalLive' | 'queueManager' | 'sessionManager'>,
+  services: Pick<AppServices, 'notificationModule' | 'portalLive'>,
 ): Promise<void> {
-  services.portalLive?.drain();
+  services.portalLive.drain();
   services.notificationModule?.beginShutdown();
-  await services.queueManager.close();
   await services.notificationModule?.close({ deadlineAt: Date.now() + 10_000 });
-  await Promise.all([
-    services.cacheManager.disconnectAll(),
-    services.loggerManager.flushAll(),
-    services.sessionManager.dispose(),
-  ]);
 }
 
 function resolveFileUploadsUnavailableMessage(drive: AppDriveConfig | undefined): string {

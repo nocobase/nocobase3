@@ -8,12 +8,14 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import type { Duplex } from 'node:stream';
 import { AppRegistryError } from './errors.ts';
 import { applyFetchResponse, isClientResponseClose, requestPath, toFetchRequest } from './http-adapter.ts';
 import { DirectoryAppCatalog } from './app-catalog.ts';
 import { AppRuntimeRegistry } from './app-registry.ts';
 import { writeAppSystemLog } from './app-system-log.ts';
 import { getPathInsideApp, isAppAssetPath, serveAppAssets } from './static-client.ts';
+import { acceptWebSocketUpgrade, isWebSocketUpgrade, rejectWebSocketUpgrade } from './websocket.ts';
 
 export * from './errors.ts';
 export * from './events.ts';
@@ -24,6 +26,7 @@ export * from './app-registry.ts';
 export * from './app-runtime.ts';
 export * from './app-system-log.ts';
 export * from './static-client.ts';
+export * from './websocket.ts';
 export * from './app-types.ts';
 
 export interface AppHostOptions {
@@ -107,28 +110,11 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     }
   });
 
-  server.on('upgrade', async (req, socket, head) => {
-    try {
-      const path = requestPath(req);
-      const appId = resolveAppId(path, registry);
-      if (!appId) {
-        socket.destroy();
-        return;
-      }
-
-      const definition = registry.definition(appId);
-      if (!definition?.server || isAppAssetPath(getPathInsideApp(definition, path))) {
-        socket.destroy();
-        return;
-      }
-
-      await registry.handleUpgrade(appId, req, socket, head);
-    } catch (error) {
-      if (!(error instanceof AppRegistryError) || error.status >= 500) {
-        console.error(error);
-      }
-      socket.destroy();
-    }
+  server.on('upgrade', (req, socket, head) => {
+    void dispatchAppWebSocket(req, socket, head, registry).catch((error) => {
+      console.error(error);
+      rejectWebSocketUpgrade(socket, error instanceof AppRegistryError ? error.status : 500);
+    });
   });
 
   return {
@@ -154,8 +140,6 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       );
     },
     async close(reason = 'host shutdown') {
-      await registry.destroyAll(reason);
-
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error) {
@@ -170,6 +154,8 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
           throw error;
         }
       });
+
+      await registry.destroyAll(reason);
     },
   };
 }
@@ -188,6 +174,64 @@ async function dispatchAppServer(
   return runtime.dispatch(request, {
     method: req.method,
     path,
+  });
+}
+
+async function dispatchAppWebSocket(
+  req: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+  registry: AppRuntimeRegistry,
+): Promise<void> {
+  if (!isWebSocketUpgrade(req)) {
+    rejectWebSocketUpgrade(socket, 400);
+    return;
+  }
+
+  const path = requestPath(req);
+  const appId = resolveAppId(path, registry);
+  if (!appId) {
+    rejectWebSocketUpgrade(socket, 404);
+    return;
+  }
+
+  const definition = registry.definition(appId);
+  if (!definition?.server) {
+    rejectWebSocketUpgrade(socket, 404);
+    return;
+  }
+
+  const pathInside = getPathInsideApp(definition, path);
+  if (isAppAssetPath(pathInside)) {
+    rejectWebSocketUpgrade(socket, 404);
+    return;
+  }
+
+  const runtime = await registry.ensureActiveHandle(appId);
+  const request = toFetchRequest(req, {
+    basePath: runtime.basePath,
+    signal: runtime.signal,
+  });
+  const result = await runtime.acceptWebSocket(request, {
+    method: req.method,
+    path,
+  });
+
+  if (result instanceof Response) {
+    rejectWebSocketUpgrade(socket, result.status, result.headers);
+    return;
+  }
+
+  if (!result) {
+    rejectWebSocketUpgrade(socket, 404);
+    return;
+  }
+
+  acceptWebSocketUpgrade(req, socket, {
+    request,
+    events: result,
+    head,
+    signal: runtime.signal,
   });
 }
 

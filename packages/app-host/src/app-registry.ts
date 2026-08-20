@@ -7,9 +7,6 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { IncomingMessage } from 'node:http';
-import type { Duplex } from 'node:stream';
-
 import {
   InvalidAppIdError,
   AppCapacityExceededError,
@@ -405,15 +402,6 @@ export class AppRuntimeRegistry {
   async dispatch(id: string, request: Request, metadata: AppRequestMetadata = {}): Promise<Response> {
     const runtime = await this.ensureActiveHandle(id);
     return runtime.dispatch(request, metadata);
-  }
-
-  async handleUpgrade(id: string, request: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
-    const runtime = await this.ensureActiveHandle(id);
-    if (typeof runtime.handleUpgrade !== 'function') {
-      socket.destroy();
-      return;
-    }
-    await runtime.handleUpgrade(request, socket, head);
   }
 
   async ensureActiveHandle(id: string): Promise<ActiveAppHandle> {

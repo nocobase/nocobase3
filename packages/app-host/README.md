@@ -25,6 +25,18 @@ packages/app-host/fixtures/app-dist/
   service/
     package.json
     dist/server/embedded.js
+
+  lifecycle/
+    package.json
+    dist/client/index.html
+    dist/client/assets/...
+    dist/server/embedded.js
+
+  ws-demo/
+    package.json
+    dist/client/index.html
+    dist/client/assets/...
+    dist/server/embedded.js
 ```
 
 The public URL is also a single level:
@@ -34,6 +46,11 @@ http://127.0.0.1:3000/demo/
 http://127.0.0.1:3000/demo/assets/demo.js
 http://127.0.0.1:3000/demo/api/info
 http://127.0.0.1:3000/service/healthz
+http://127.0.0.1:3000/lifecycle/
+http://127.0.0.1:3000/lifecycle/api/lifecycle
+http://127.0.0.1:3000/ws-demo/
+http://127.0.0.1:3000/ws-demo/api/info
+ws://<host>/ws-demo/ws
 ```
 
 `dist/server/embedded.js` is the standard app runtime entrypoint and is required
@@ -59,3 +76,15 @@ routes under the app's own runtime.
 Server artifacts should export `createServer(scope)`. The host still accepts
 `createApp(scope)`, `default(scope)`, `createApp()`, and the old
 `createApi(scope)` export during the v3 transition.
+
+The returned app object should expose `fetch(request)` and may expose
+`websocket(request)`. App-created resources should be released through
+`scope.registerDisposer(name, dispose)`.
+
+The `lifecycle` fixture is a complete lifecycle example. It registers a
+`scope.onBeforeDestroy(...)` hook, registers a `scope.registerDisposer(...)`
+cleanup function, and implements the actual `dispose()` logic.
+
+The `ws-demo` fixture exposes a WebSocket clock stream. Its client derives the
+public URL from the current page origin, so `ws://<host>/ws-demo/ws` maps to
+`/ws` inside the embedded app.

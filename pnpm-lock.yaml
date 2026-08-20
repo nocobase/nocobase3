@@ -9,6 +9,10 @@ importers:
   .: {}
 
   packages/app-host:
+    dependencies:
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../app-server
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

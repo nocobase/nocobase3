@@ -5,10 +5,12 @@ import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { SpaHandler } from '@nocobase/app-server/spa';
 import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
-import { createApp, type ClosableApp } from '../app.js';
+import { createApp, type AppServer } from '../app.js';
+import type { AppLifecycle } from '../app-options.js';
 import type { AppConfig } from '../config/index.js';
 
 export interface CreateAppFromRuntimeOptions {
+  lifecycle: AppLifecycle;
   viteDevUrl?: string | URL | false;
 }
 
@@ -18,56 +20,43 @@ interface RequestInitWithDuplex extends RequestInit {
 
 export function createAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
-  options: CreateAppFromRuntimeOptions = {},
-): ReturnType<typeof createApp> {
+  options: CreateAppFromRuntimeOptions,
+): AppServer {
   const { config } = runtime;
   const viteDevUrl = resolveViteDevUrlOption(options.viteDevUrl, config.server.viteDevUrl);
 
-  return createApp({
-    appName: config.app.name,
-    internalBasePath: config.app.internalBasePath,
-    publicBasePath: config.app.publicBasePath,
-    internalApiProxyPath: config.app.internalApiProxyPath,
-    publicApiUrl: config.app.publicApiUrl,
-    cache: config.cache,
-    database: runtime.database,
-    drive: config.drive,
-    logger: config.logger,
-    queue: config.queue,
-    session: config.session,
-    notifications: config.notification,
-    nocoBaseApiUrl: config.app.nocoBaseApiUrl,
+  return createApp(runtime, {
+    lifecycle: options.lifecycle,
     spa: {
       handler: viteDevUrl
         ? createPublicBasePathOriginProxyHandler(viteDevUrl, config.app.publicBasePath)
         : undefined,
-      indexPath: config.spa.indexPath,
-      runtime: config.spa.runtime,
     },
   });
 }
 
-export function mountAppAtPublicBasePath(app: ClosableApp, publicBasePath: string): ClosableApp;
-export function mountAppAtPublicBasePath(app: Hono, publicBasePath: string): Hono;
-export function mountAppAtPublicBasePath(app: Hono, publicBasePath: string): Hono {
+export function createPublicBasePathAdapter(app: AppServer, publicBasePath: string): AppServer {
   const basePath = normalizeBasePath(publicBasePath);
   if (!basePath) {
     return app;
   }
 
-  const mounted = new Hono();
+  const mounted = new Hono() as AppServer;
+  mounted.start = (): Promise<void> => app.start();
 
-  mounted.all('/healthz', (context) => app.fetch(context.req.raw));
   mounted.all(basePath, (context) => dispatchMountedApp(app, context.req.raw, basePath));
   mounted.all(`${basePath}/*`, (context) => dispatchMountedApp(app, context.req.raw, basePath));
 
-  if (isClosableApp(app)) {
-    return Object.assign(mounted, {
-      websocketServer: app.websocketServer,
-      handleUpgrade: app.handleUpgrade,
-      start: () => app.start(),
-      close: () => app.close(),
-    });
+  const websocket = app.websocket;
+  if (websocket) {
+    mounted.websocket = (request, env) => {
+      const strippedRequest = stripPublicBasePathFromRequest(request, basePath);
+      if (!strippedRequest) {
+        return null;
+      }
+
+      return websocket(strippedRequest, env);
+    };
   }
 
   return mounted;
@@ -93,18 +82,13 @@ export function stripPublicBasePathFromRequest(request: Request, publicBasePath:
   return cloneRequestWithUrl(request, url);
 }
 
-function dispatchMountedApp(app: Hono, request: Request, publicBasePath: string): Response | Promise<Response> {
+function dispatchMountedApp(app: AppServer, request: Request, publicBasePath: string): Response | Promise<Response> {
   const strippedRequest = stripPublicBasePathFromRequest(request, publicBasePath);
   if (!strippedRequest) {
     return Response.json({ error: 'Not found' }, { status: 404 });
   }
 
   return app.fetch(strippedRequest);
-}
-
-function isClosableApp(app: Hono): app is ClosableApp {
-  const candidate = app as Partial<ClosableApp>;
-  return typeof candidate.start === 'function' && typeof candidate.close === 'function';
 }
 
 function createPublicBasePathOriginProxyHandler(targetOrigin: URL, publicBasePath: string): SpaHandler {

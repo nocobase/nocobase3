@@ -94,3 +94,7 @@ nb app deploy
 `nb app create` 创建业务 App 源码。
 
 `nb hub create` 创建应用中心运行环境。
+
+## 架构介绍
+
+- [应用服务分层架构](./architecture.md)

@@ -7,28 +7,33 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { IncomingMessage } from 'node:http';
-import type { Duplex } from 'node:stream';
+import type {
+  AppWebSocketAcceptResult,
+  AppWebSocketHandler,
+} from '@nocobase/app-server/websocket';
 
 import type { AppState } from './events.ts';
 
-export type AppDisposer = () => void | Promise<void>;
+export type {
+  AppWebSocket,
+  AppWebSocketAcceptResult,
+  AppWebSocketCloseEvent,
+  AppWebSocketErrorEvent,
+  AppWebSocketEvents,
+  AppWebSocketHandler,
+  AppWebSocketMessageData,
+  AppWebSocketMessageEvent,
+  AppWebSocketOpenEvent,
+  AppWebSocketPongEvent,
+  AppWebSocketReadyState,
+  AppWebSocketSendOptions,
+} from '@nocobase/app-server/websocket';
 
-export interface AppUpgradeContext {
-  readonly request: IncomingMessage;
-  readonly socket: Duplex;
-  readonly head: Buffer;
-}
+export type AppDisposer = () => void | Promise<void>;
 
 export interface FetchApp {
   fetch(request: Request, env?: unknown, executionCtx?: unknown): Response | Promise<Response>;
-  close?(): void | Promise<void>;
-  /**
-   * Optional WebSocket upgrade handler. When present, the host routes
-   * `server.on('upgrade')` requests for this app to this method with the raw
-   * Node upgrade context; the app owns the socket lifecycle afterwards.
-   */
-  handleUpgrade?(request: IncomingMessage, socket: Duplex, head: Buffer): void | Promise<void>;
+  websocket?: AppWebSocketHandler;
 }
 
 export interface AppScope {
@@ -193,7 +198,7 @@ export interface ActiveAppHandle {
   readonly signal: AbortSignal;
   readonly state: AppState;
   dispatch(request: Request, metadata?: AppRequestMetadata): Promise<Response>;
-  handleUpgrade?(request: IncomingMessage, socket: Duplex, head: Buffer): Promise<void>;
+  acceptWebSocket(request: Request, metadata?: AppRequestMetadata): Promise<AppWebSocketAcceptResult>;
   destroy(options?: string | AppDestroyOptions): Promise<void>;
   snapshot(): AppSnapshot;
 }
