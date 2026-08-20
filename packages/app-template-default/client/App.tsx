@@ -10,7 +10,6 @@ import {
   AclStoreProvider,
   aclStore,
 } from "@nocobase/portal-sdk/acl";
-import { authProvider } from "@nocobase/portal-sdk/auth";
 import { dataProvider } from "@nocobase/portal-sdk/data";
 import { i18nProvider } from "@nocobase/portal-sdk/i18n";
 import { getPortalBase } from "@nocobase/portal-sdk/runtime";
@@ -27,7 +26,8 @@ import {
 import "./App.css";
 import { SystemSettingsProvider } from "./providers/system-settings/provider";
 import { AppRoutes } from "./app/routes";
-import { PortalRuntimeGate } from "./components/app-shell/portal-runtime-gate";
+import { AppRuntimeGate } from "./components/app-shell/app-runtime-gate";
+import { authProvider } from "./extensions/email-password/auth";
 
 const getResourcePriority = (resource: ResourceProps) =>
   typeof resource.meta?.priority === "number" ? resource.meta.priority : 100;
@@ -47,7 +47,7 @@ function App() {
     <BrowserRouter basename={basename || undefined}>
       <ThemeProvider>
         <TooltipProvider>
-          <PortalRuntimeGate>
+          <AppRuntimeGate>
             <AppAuthRuntimeProviders>
               <SystemSettingsProvider>
                 <AclStoreProvider store={aclStore}>
@@ -78,7 +78,7 @@ function App() {
                 </AclStoreProvider>
               </SystemSettingsProvider>
             </AppAuthRuntimeProviders>
-          </PortalRuntimeGate>
+          </AppRuntimeGate>
           {ReactGrabPicker ? (
             <Suspense fallback={null}>
               <ReactGrabPicker />

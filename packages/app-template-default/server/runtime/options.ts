@@ -56,7 +56,6 @@ export function resolveStandaloneRuntimeOptions(moduleUrl: string): ResolvedAppR
   const rootDir = path.resolve(serverDir, '..');
   const env = loadStandaloneEnv(rootDir);
   const publicBasePath = stringFromEnv(env, 'APP_BASE_PATH') ?? '/app-template-default';
-
   return {
     mode: 'standalone',
     env,
@@ -77,7 +76,6 @@ export function resolveEmbeddedRuntimeOptions(scope: AppScope, moduleUrl: string
     ...readEnvFiles([path.join(paths.distRoot, '.env')]),
     ...createScopeEnv(scope),
   };
-
   return {
     mode: 'embedded',
     env,
@@ -148,6 +146,7 @@ function createScopeEnv(scope: AppScope): EnvMap {
     API_CLIENT_STORAGE_PREFIX: getScopeConfigString(scope.config, 'apiClientStoragePrefix'),
     API_CLIENT_STORAGE_TYPE: getScopeConfigString(scope.config, 'apiClientStorageType'),
     API_CLIENT_SHARE_TOKEN: getScopeConfigBoolean(scope.config, 'apiClientShareToken')?.toString(),
+    AUTH_SECRET: getScopeConfigString(scope.config, 'authSecret'),
   });
 }
 

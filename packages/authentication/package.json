@@ -7,16 +7,37 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./index.ts",
+      "import": "./index.ts"
     },
-    "./storage/collections/*": {
-      "types": "./dist/storage/collections/*.d.ts",
-      "import": "./dist/storage/collections/*.js"
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
+    },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    }
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      }
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "ui"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -24,13 +45,16 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/database": "workspace:^",
+    "@refinedev/core": "^5.0.8",
     "better-auth": "^1.6.27",
     "hono": "^4.13.2",
     "knex": "^3.1.0"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "better-sqlite3": "^13.0.3",
     "typescript": "^5.7.3",
     "vitest": "^4.1.0"

@@ -4,6 +4,7 @@ import type { AppDriveConfig } from '@nocobase/drive';
 import type { LoggingConfig } from '@nocobase/logging';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
+import type { AppAuthConfig } from './auth.js';
 
 export interface AppRoutingConfig {
   name: string;
@@ -32,6 +33,7 @@ export interface AppSpaConfig {
 
 export interface AppConfig {
   app: AppRoutingConfig;
+  auth: AppAuthConfig;
   caching: CachingConfig;
   database: AppDatabaseConfig;
   drive: AppDriveConfig;

@@ -22,6 +22,8 @@ import spa from '../../server/config/spa.ts';
 import { createStandaloneRuntime } from '../../server/index.ts';
 import { loadEmbeddedAppConfig } from '../../server/runtime/config.ts';
 
+process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
+
 const tempDirs: string[] = [];
 
 afterEach(() => {
@@ -33,7 +35,7 @@ afterEach(() => {
 describe('template config registry', () => {
   it('loads every registered config section', () => {
     const config = loadConfig(configFactories, {
-      env: createConfigEnv({}),
+      env: createConfigEnv({ AUTH_SECRET: 'test-auth-secret-at-least-32-characters' }),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
       }),
@@ -102,7 +104,8 @@ describe('app config', () => {
         basePath: '/main',
         rootDir: root,
         clientDir,
-        dataDir,
+      dataDir,
+      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
       },
       new URL('../../server/embedded.ts', import.meta.url).href,
     );
@@ -596,6 +599,10 @@ describe('database migrations', () => {
       expect.objectContaining({
         name: '202608180001_create_app_settings_table',
         fileName: '202608180001_create_app_settings_table.ts',
+      }),
+      expect.objectContaining({
+        name: '202608200001_create_authentication_tables',
+        fileName: '202608200001_create_authentication_tables.ts',
       }),
     ]);
   });

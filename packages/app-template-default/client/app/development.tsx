@@ -42,7 +42,7 @@ const coreDevelopmentRoutes = defineAppRoutes([
     name: "development.auth",
     path: "auth",
     lazy: () =>
-      import("@/components/auth/demo").then((module) => ({
+      import("@/extensions/email-password/demo").then((module) => ({
         default: module.AuthDemoPage,
       })),
   },

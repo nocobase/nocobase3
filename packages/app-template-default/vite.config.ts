@@ -11,7 +11,9 @@ const portalTemplate = JSON.parse(
 
 const normalizeBase = (base?: string) => {
   const normalized = String(base || "/").trim();
-  if (!normalized || normalized === "/") return "/";
+  if (!normalized || normalized === "/") {
+    return "/";
+  }
   return `/${normalized.replace(/^\/+|\/+$/g, "")}/`;
 };
 
@@ -22,7 +24,9 @@ const joinBase = (base: string, pathInsideBase: string) => {
 };
 
 const numberFromEnv = (value?: string) => {
-  if (!value) return undefined;
+  if (!value) {
+    return undefined;
+  }
 
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
@@ -53,9 +57,18 @@ export default defineConfig(({ command, mode }) => {
   const viteDevHost = env.APP_VITE_DEV_HOST || "127.0.0.1";
   const viteDevPort = numberFromEnv(env.APP_VITE_DEV_PORT) ?? 5173;
   const registrySourceRoot = path.resolve(__dirname, "./registry");
+  const clientExtensionsRoot = path.resolve(__dirname, "./client/extensions");
   const extensionsRoot = fs.existsSync(registrySourceRoot)
     ? registrySourceRoot
-    : path.resolve(__dirname, "./client/extensions");
+    : clientExtensionsRoot;
+  const localExtensionAliases = fs.existsSync(clientExtensionsRoot)
+    ? fs.readdirSync(clientExtensionsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({
+        find: `@/extensions/${entry.name}`,
+        replacement: path.join(clientExtensionsRoot, entry.name),
+      }))
+    : [];
   const defineEnv: Record<string, string> = {
     __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
       command === "serve" ? path.resolve(__dirname) : ""
@@ -86,10 +99,11 @@ export default defineConfig(({ command, mode }) => {
       tailwindcss(),
     ],
     resolve: {
-      alias: {
-        "@/extensions": extensionsRoot,
-        "@": path.resolve(__dirname, "./client"),
-      },
+      alias: [
+        ...localExtensionAliases,
+        { find: "@/extensions", replacement: extensionsRoot },
+        { find: "@", replacement: path.resolve(__dirname, "./client") },
+      ],
     },
     build: {
       outDir: "dist/client",
@@ -97,11 +111,11 @@ export default defineConfig(({ command, mode }) => {
     server:
       command === "serve"
         ? {
-            hmr: {
-              host: viteDevHost,
-              clientPort: viteDevPort,
-            },
-          }
+          hmr: {
+            host: viteDevHost,
+            clientPort: viteDevPort,
+          },
+        }
         : undefined,
   };
 });

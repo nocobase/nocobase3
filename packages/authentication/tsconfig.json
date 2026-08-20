@@ -7,11 +7,12 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["index.ts", "server/**/*.ts", "client/**/*.ts"],
+  "exclude": ["server/test", "client/test", "ui/test"]
 }

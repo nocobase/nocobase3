@@ -6,14 +6,24 @@ import { defineConfig } from "vitest/config";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const registryRoot = fileURLToPath(new URL("./registry", import.meta.url));
+const clientExtensionsRoot = fileURLToPath(new URL("./client/extensions", import.meta.url));
 const extensionsRoot = fs.existsSync(registryRoot)
   ? registryRoot
-  : fileURLToPath(new URL("./client/extensions", import.meta.url));
+  : clientExtensionsRoot;
+const localExtensionAliases = fs.existsSync(clientExtensionsRoot)
+  ? fs.readdirSync(clientExtensionsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      find: `@/extensions/${entry.name}`,
+      replacement: fileURLToPath(new URL(`./client/extensions/${entry.name}`, import.meta.url)),
+    }))
+  : [];
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: [
+      ...localExtensionAliases,
       {
         find: "@/jobs",
         replacement: fileURLToPath(new URL("./server/jobs", import.meta.url)),

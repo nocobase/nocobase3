@@ -1,4 +1,5 @@
 import { createCaching, type Caching } from '@nocobase/caching';
+import { createAuthStorage, createAuthentication } from '@nocobase/authentication';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import {
   createLogging,
@@ -18,8 +19,10 @@ import type { AppRuntime } from '@nocobase/app-server/runtime';
 
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
+import type { Auth } from '@nocobase/authentication';
 
 export interface AppDeps {
+  auth: Auth;
   caching: Caching;
   driveManager?: NocoBaseDriveManager;
   logging: Logging;
@@ -30,6 +33,11 @@ export interface AppDeps {
 export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   const { config } = runtime;
   const caching = createCaching(config.caching);
+  const auth = createAuthentication({
+    connection: runtime.database?.connection(),
+    secondaryStorage: createAuthStorage(caching),
+    ...config.auth,
+  });
   const driveManager = config.drive ? createDriveManager(config.drive) : undefined;
   const logging = createLogging(config.logging);
   const sessionManager = createSessionManager(config.session ?? createNullSessionConfig());
@@ -45,6 +53,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
 
   return {
     caching,
+    auth,
     driveManager,
     logging,
     queueManager,

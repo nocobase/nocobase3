@@ -25,6 +25,8 @@ import {
 } from '../../server/index.ts';
 import type { AppConfig } from '../../server/config/index.ts';
 
+process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
+
 const apps: ClosableApp[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
@@ -58,6 +60,7 @@ describe('app server', () => {
     const app = await createEmbeddedServer({
       id: 'app-template-default',
       basePath: '/embedded-app-template-default',
+      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
     });
 
     const response = await app.request('http://localhost/api/healthz');
@@ -95,6 +98,7 @@ describe('app server', () => {
     const app = await createEmbeddedServer({
       id: 'app-template-default',
       basePath: '/embedded-app-template-default',
+      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
       registerDisposer(name, dispose) {
         registeredDisposers.push({ name, dispose });
       },
@@ -124,6 +128,7 @@ describe('app server', () => {
     const app = await createEmbeddedServer({
       id: 'app-template-default',
       basePath: '/app-template-default',
+      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
       clientDir: root,
     });
 
@@ -163,6 +168,7 @@ describe('app server', () => {
     const app = await createEmbeddedServer({
       id: 'app-template-default',
       basePath: '/app-template-default',
+      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
       rootDir: appRoot,
       clientDir,
     });
@@ -303,18 +309,10 @@ describe('app server', () => {
     });
   });
 
-  it('returns a JSON error when app settings are requested without a database', async () => {
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-    });
-
-    const response = await app.request('http://localhost/api/app-settings');
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Database is not configured.',
-    });
+  it('requires a database for authentication', () => {
+    expect(() => createTestApp({ database: false })).toThrow(
+      'Authentication requires a database connection.',
+    );
   });
 
   it('reads app settings from the configured database', async () => {
@@ -864,7 +862,7 @@ function createTestSession(): AppSessionConfig {
 interface CreateTestAppOptions {
   publicBasePath?: string;
   nocoBaseApiUrl?: string | false;
-  database?: DatabaseManager;
+  database?: DatabaseManager | false;
   caching?: CachingConfig;
   drive?: AppDriveConfig;
   queue?: AppQueueConfig;
@@ -886,6 +884,12 @@ function createTestApp(options: CreateTestAppOptions = {}): ClosableApp {
       internalApiProxyPath,
       publicApiUrl: joinBasePath(publicBasePath, internalApiProxyPath),
       nocoBaseApiUrl: options.nocoBaseApiUrl === false ? undefined : options.nocoBaseApiUrl,
+    },
+    auth: {
+      secret: 'test-auth-secret-at-least-32-characters',
+      emailAndPassword: {
+        enabled: true,
+      },
     },
     caching: options.caching ?? createDefaultCachingConfig(),
     database: {
@@ -917,7 +921,9 @@ function createTestApp(options: CreateTestAppOptions = {}): ClosableApp {
   } as AppConfig;
   const runtime: AppRuntime<AppConfig> = {
     config,
-    database: options.database,
+    database: options.database === false
+      ? undefined
+      : options.database ?? createMockDatabase([]),
     runMigrations: () => Promise.resolve(undefined),
     dispose: () => Promise.resolve(),
   };
@@ -934,14 +940,13 @@ function firstCookie(response: Response): string {
 }
 
 function createMockDatabase(rows: unknown[], insertedRows: unknown[] = []): DatabaseManager {
+  const query = createMockQuery(rows, insertedRows);
   return {
-    connection: (() => {
-      throw new Error('Not implemented.');
-    }) as DatabaseManager['connection'],
+    connection: (() => ({ query })) as DatabaseManager['connection'],
     builder: (() => {
       throw new Error('Not implemented.');
     }) as DatabaseManager['builder'],
-    query: (() => createMockQuery(rows, insertedRows)) as DatabaseManager['query'],
+    query: (() => query) as DatabaseManager['query'],
     connect: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['connect'],
     transaction: (() => Promise.reject(new Error('Not implemented.'))) as DatabaseManager['transaction'],
     disconnect: (() => Promise.resolve()) as DatabaseManager['disconnect'],
