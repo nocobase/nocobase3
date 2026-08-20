@@ -26,7 +26,7 @@ export function createServer(scope) {
 
   const dispose = onceAsync(async () => {
     if (closed) {
-      record('dispose:app', 'skip duplicate close');
+      record('dispose:app', 'skip duplicate dispose');
       return;
     }
 
@@ -43,11 +43,7 @@ export function createServer(scope) {
     record('onBeforeDestroy', `run ${beforeDestroyCount}`);
   });
 
-  if (typeof scope.registerDisposer === 'function') {
-    scope.registerDisposer('lifecycle-example', dispose);
-  } else {
-    scope.onBeforeDestroy?.(dispose);
-  }
+  scope.registerDisposer('lifecycle-example', dispose);
 
   async function disposeHeartbeat() {
     if (heartbeat) {
@@ -106,7 +102,6 @@ export function createServer(scope) {
         },
       );
     },
-    close: dispose,
   };
 }
 

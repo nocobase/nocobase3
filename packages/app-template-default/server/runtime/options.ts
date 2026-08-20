@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { readEnvFiles, type EnvMap } from '@nocobase/app-server/config';
 import { joinBasePath, normalizeBasePath, resolveAppName, resolveAppNameFromBasePath } from '@nocobase/app-server/support';
 
-export type AppDisposer = () => void | Promise<void>;
+import type { AppDisposer } from '../app-options.js';
+
+export type { AppDisposer } from '../app-options.js';
 
 export interface AppScope {
   readonly id: string;
@@ -21,8 +23,8 @@ export interface AppScope {
   readonly dataDir?: string;
   readonly config?: unknown;
   readonly signal?: AbortSignal;
-  registerDisposer?(name: string, dispose: AppDisposer): void;
-  onBeforeDestroy?(handler: () => void | Promise<void>): () => void;
+  registerDisposer(name: string, dispose: AppDisposer): void;
+  onBeforeDestroy?(handler: AppDisposer): () => void;
 }
 
 export interface AppRoutingOptions {

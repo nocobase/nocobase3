@@ -31,6 +31,10 @@ importers:
         version: 8.67.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
 
   packages/app-host:
+    dependencies:
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../app-server
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

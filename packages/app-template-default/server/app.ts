@@ -1,30 +1,32 @@
 import { Hono } from 'hono';
 
+import type { AppWebSocketHandler } from '@nocobase/app-server/websocket';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { CreateAppOptions } from './app-options.js';
+import { onceAsync } from './runtime/disposers.js';
 import { registerNocoBaseApiProxyRoutes, resolveNocoBaseApiUrl } from '@nocobase/app-server/proxy';
 import { registerSpaRoutes } from '@nocobase/app-server/spa';
 import {
-  joinBasePath,
   normalizeBasePath,
   resolveAppName,
 } from '@nocobase/app-server/support';
-import { createSessionMiddleware } from '@nocobase/session';
 import type { AppConfig } from './config/index.js';
-import { createApiRoutes } from './routes/api/index.js';
-import { createHelloPageHandler } from './routes/hello.js';
+import { startClockPublisher } from './realtime/publishers/clock.js';
+import { createRealtimeService } from './realtime/service.js';
 import { createAppDeps, disposeAppDeps } from './runtime/deps.js';
 import { createAppServices } from './services/index.js';
+import { registerAppRoutes } from './routes/index.js';
+import { createWebSocketHandler, registerWebSocketRoutes } from './routes/websocket.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
 
-export type { CreateAppOptions, SpaHandler } from './app-options.js';
+export type { AppDisposer, AppLifecycle, CreateAppOptions, SpaHandler } from './app-options.js';
 export { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
-export interface ClosableApp extends Hono {
-  close(): Promise<void>;
-}
+export type AppServer = Hono & {
+  websocket?: AppWebSocketHandler;
+};
 
-export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOptions = {}): ClosableApp {
+export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOptions): AppServer {
   const { config } = runtime;
   const publicBasePath = normalizeBasePath(config.app.publicBasePath);
   const internalBasePath = normalizeBasePath(config.app.internalBasePath);
@@ -33,36 +35,27 @@ export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOpti
   const publicApiUrl = config.app.publicApiUrl;
   const nocoBaseApiUrl = resolveNocoBaseApiUrl(config.app.nocoBaseApiUrl);
   const deps = createAppDeps(runtime);
+  options.lifecycle.registerDisposer('app-deps', onceAsync(() => disposeAppDeps(deps)));
   const services = createAppServices(runtime, deps);
+  const realtime = createRealtimeService();
+  options.lifecycle.registerDisposer('realtime-service', onceAsync(() => realtime.close()));
+  const stopClockPublisher = startClockPublisher(realtime);
+  options.lifecycle.registerDisposer('clock-publisher', onceAsync(stopClockPublisher));
   const app = new Hono();
 
-  app.use('*', createSessionMiddleware(deps.sessionManager));
-
-  app.get('/healthz', (c) => {
-    return c.json({
-      ok: true,
-      app: {
-        name: appName,
-        basePath: publicBasePath,
-      },
-    });
+  registerAppRoutes(app, {
+    appName,
+    publicBasePath,
+    deps,
+    services,
   });
-  app.get('/hello', createHelloPageHandler());
 
   registerNocoBaseApiProxyRoutes(app, {
     apiProxyPath: internalApiProxyPath,
     nocoBaseApiUrl,
   });
 
-  app.route(
-    joinBasePath(internalBasePath, '/api'),
-    createApiRoutes({
-      appName,
-      publicBasePath,
-      deps,
-      services,
-    }),
-  );
+  registerWebSocketRoutes(app);
 
   registerSpaRoutes(app, {
     basePath: internalBasePath,
@@ -78,15 +71,6 @@ export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOpti
   });
 
   return Object.assign(app, {
-    close: onceAsync(() => disposeAppDeps(deps)),
+    websocket: createWebSocketHandler({ realtime }),
   });
-}
-
-function onceAsync(dispose: () => void | Promise<void>): () => Promise<void> {
-  let promise: Promise<void> | undefined;
-
-  return () => {
-    promise ??= Promise.resolve().then(dispose);
-    return promise;
-  };
 }

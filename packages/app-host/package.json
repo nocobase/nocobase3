@@ -36,6 +36,9 @@
     "fixtures",
     "README.md"
   ],
+  "dependencies": {
+    "@nocobase/app-server": "workspace:^"
+  },
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "dev": "pnpm build && node ./dist/cli.js",
