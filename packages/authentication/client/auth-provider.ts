@@ -28,7 +28,7 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     login: async (params) => {
       try {
         await client.signIn(
-          String(params?.email ?? params?.username ?? ''),
+          String(params?.identifier ?? params?.email ?? params?.username ?? ''),
           String(params?.password ?? ''),
         );
         clear();
@@ -41,6 +41,7 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
       try {
         await client.signUp(
           String(params?.name ?? ''),
+          String(params?.username ?? ''),
           String(params?.email ?? ''),
           String(params?.password ?? ''),
         );

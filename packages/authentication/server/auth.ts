@@ -1,5 +1,6 @@
 import type { DatabaseConnection } from '@nocobase/database';
 import { betterAuth, type BetterAuthOptions, type Session, type User } from 'better-auth';
+import { username } from 'better-auth/plugins';
 import type { Context, MiddlewareHandler } from 'hono';
 import { databaseAdapter } from './better-auth/database-adapter.js';
 
@@ -29,10 +30,14 @@ export class Auth {
     if (!config.secret || config.secret.trim().length === 0) {
       throw new Error('Authentication secret is required.');
     }
+    const plugins = config.plugins?.some((plugin) => plugin.id === 'username')
+      ? config.plugins
+      : [username({ displayUsername: false }), ...(config.plugins ?? [])];
     this.auth = betterAuth({
       ...config,
       appName: config.appName ?? 'NocoBase3',
       database: databaseAdapter(connection),
+      plugins,
       emailAndPassword: {
         ...config.emailAndPassword,
         enabled: config.emailAndPassword?.enabled ?? true,

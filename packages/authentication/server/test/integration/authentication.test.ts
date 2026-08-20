@@ -2,7 +2,11 @@ import { createDatabaseManager } from '@nocobase/database';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Auth, authenticationMigration, type AuthEnv } from '../../../index.js';
+import {
+  Auth,
+  authenticationMigration,
+  type AuthEnv,
+} from '../../../index.js';
 import { databaseAdapter } from '../../better-auth/database-adapter.js';
 
 async function migrateAuthentication(database: ReturnType<typeof createDatabaseManager>) {
@@ -67,12 +71,13 @@ describe('Authentication', () => {
         email: 'alice@example.com',
         password: 'correct horse battery staple',
         name: 'Alice',
+        username: 'Alice.Admin',
       }),
     });
 
     expect(signedUp.status).toBe(200);
     expect(await signedUp.json()).toMatchObject({
-      user: { email: 'alice@example.com', name: 'Alice' },
+      user: { email: 'alice@example.com', name: 'Alice', username: 'alice.admin' },
     });
     cookie = signedUp.headers.get('set-cookie') ?? '';
     expect(cookie).toContain('nocobase3.session_token');
@@ -81,6 +86,27 @@ describe('Authentication', () => {
     const session = await app.request('/api/auth/get-session', { headers: { cookie } });
     expect(session.status).toBe(200);
     expect(await session.json()).toMatchObject({ user: { email: 'alice@example.com' } });
+  });
+
+  it('signs in with a normalized username without a display username field', async () => {
+    const response = await app.request('/api/auth/sign-in/username', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: 'ALICE.ADMIN',
+        password: 'correct horse battery staple',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      user: { name: 'Alice', username: 'alice.admin' },
+    });
+
+    const knex = await database.connection().client<Knex>();
+    expect(await knex.schema.hasColumn('user', 'username')).toBe(true);
+    expect(await knex.schema.hasColumn('user', 'display_username')).toBe(false);
+    expect(await knex.schema.hasColumn('user', 'displayUsername')).toBe(false);
   });
 
   it('keeps authentication relations free of physical foreign keys', async () => {
@@ -191,15 +217,16 @@ describe('Authentication naming strategy', () => {
           email: 'camel@example.com',
           password: 'correct horse battery staple',
           name: 'Camel Case',
+          username: 'CamelCase',
         }),
       });
       expect(response.status).toBe(200);
       await expect(
         connection.query.selectFrom('user')
-          .select('name')
+          .select(['name', 'username'])
           .where('email', '=', 'camel@example.com')
           .executeTakeFirst(),
-      ).resolves.toEqual({ name: 'Camel Case' });
+      ).resolves.toEqual({ name: 'Camel Case', username: 'camelcase' });
       await expect(
         connection.query.selectFrom('session')
           .select(['userId', 'expiresAt'])

@@ -11,12 +11,14 @@ import { Label } from "@/components/ui/label";
 
 type SignUpVariables = {
   name: string;
+  username: string;
   email: string;
   password: string;
 };
 
 export function SignUpForm() {
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -30,7 +32,7 @@ export function SignUpForm() {
       open?.({ type: "error", message: "Passwords don't match" });
       return;
     }
-    register({ name, email, password });
+    register({ name, username, email, password });
   };
 
   return (
@@ -43,6 +45,16 @@ export function SignUpForm() {
         <div className="space-y-2">
           <Label htmlFor="name">Name</Label>
           <Input id="name" value={name} onChange={(event) => setName(event.target.value)} required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="username">Username</Label>
+          <Input
+            id="username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            autoComplete="username"
+            required
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="register-email">Email</Label>

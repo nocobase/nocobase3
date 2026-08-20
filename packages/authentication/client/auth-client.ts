@@ -7,17 +7,25 @@ export class AuthClient {
     return this.send<AuthSession | null>('get-session');
   }
 
-  async signIn(email: string, password: string): Promise<AuthSession> {
-    return this.send<AuthSession>('sign-in/email', {
+  async signIn(identifier: string, password: string): Promise<AuthSession> {
+    const isEmail = identifier.includes('@');
+    return this.send<AuthSession>(isEmail ? 'sign-in/email' : 'sign-in/username', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(isEmail
+        ? { email: identifier, password }
+        : { username: identifier, password }),
     });
   }
 
-  async signUp(name: string, email: string, password: string): Promise<AuthSession> {
+  async signUp(
+    name: string,
+    username: string,
+    email: string,
+    password: string,
+  ): Promise<AuthSession> {
     return this.send<AuthSession>('sign-up/email', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, username, email, password }),
     });
   }
 

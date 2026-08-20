@@ -49,7 +49,7 @@
     "@nocobase/caching": "workspace:^",
     "@nocobase/database": "workspace:^",
     "@refinedev/core": "^5.0.8",
-    "better-auth": "^1.6.27",
+    "better-auth": "^1.7.1",
     "hono": "^4.13.2",
     "knex": "^3.1.0"
   },

@@ -7,6 +7,7 @@ export interface AuthClientOptions {
 export interface AuthSessionUser {
   id: string;
   name: string;
+  username?: string | null;
   email: string;
   image?: string | null;
 }

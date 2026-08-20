@@ -72,6 +72,16 @@ function applyDeleteWhere(query: DeleteQuery, where: CleanWhere[]): DeleteQuery 
   return where.length ? query.where((eb) => whereExpression(eb, where)) : query;
 }
 
+function equalityCondition(field: string, value: unknown): CleanWhere {
+  return {
+    field,
+    value: value as CleanWhere['value'],
+    operator: 'eq',
+    connector: 'AND',
+    mode: 'sensitive',
+  };
+}
+
 async function resolveInsensitiveWhere(
   connection: DatabaseConnection,
   model: string,
@@ -203,6 +213,66 @@ function buildCustomAdapter(
       const normalized = await resolveInsensitiveWhere(connection, model, where);
       const result = await applyDeleteWhere(connection.query.deleteFrom(model), normalized).execute();
       return result.deletedCount ?? 0;
+    },
+    async consumeOne<T>({
+      model,
+      where,
+    }: { model: string; where: CleanWhere[] }): Promise<T | null> {
+      const normalized = await resolveInsensitiveWhere(connection, model, where);
+      while (true) {
+        const existing = await applySelectWhere(connection.query.selectFrom(model), normalized)
+          .select(fieldsForModel(model))
+          .executeTakeFirst<Record<string, unknown>>();
+        if (!existing) {
+          return null;
+        }
+        const result = await applyDeleteWhere(connection.query.deleteFrom(model), normalized)
+          .where('id', '=', existing.id as CleanWhere['value'])
+          .execute();
+        if (result.deletedCount === 1) {
+          return existing as T;
+        }
+      }
+    },
+    async incrementOne<T>({
+      model,
+      where,
+      increment,
+      set,
+    }: {
+      model: string;
+      where: CleanWhere[];
+      increment: Record<string, number>;
+      set?: Record<string, unknown>;
+    }): Promise<T | null> {
+      const normalized = await resolveInsensitiveWhere(connection, model, where);
+      while (true) {
+        const existing = await applySelectWhere(connection.query.selectFrom(model), normalized)
+          .select(fieldsForModel(model))
+          .executeTakeFirst<Record<string, unknown>>();
+        if (!existing) {
+          return null;
+        }
+        const update = { ...set };
+        const snapshotGuards: CleanWhere[] = [];
+        for (const [field, delta] of Object.entries(increment)) {
+          const current = existing[field];
+          update[field] = Number(current) + delta;
+          snapshotGuards.push(equalityCondition(field, current));
+        }
+        let query = applyUpdateWhere(connection.query.updateTable(model).set(update), normalized)
+          .where('id', '=', existing.id as CleanWhere['value']);
+        for (const guard of snapshotGuards) {
+          query = query.where(guard.field, '=', guard.value);
+        }
+        const result = await query.execute();
+        if (result.updatedCount === 1) {
+          return (await connection.query.selectFrom(model)
+            .select(fieldsForModel(model))
+            .where('id', '=', existing.id as CleanWhere['value'])
+            .executeTakeFirst()) as T;
+        }
+      }
     },
     async count({ model, where }) {
       const normalized = await resolveInsensitiveWhere(connection, model, where);

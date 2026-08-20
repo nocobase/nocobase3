@@ -7,6 +7,7 @@ export default defineMigration({
     await builder.createCollection('user', (collection) => {
       collection.string('id', { length: 64 }).notNull();
       collection.string('name', { length: 255 }).notNull();
+      collection.string('username', { length: 255 }).nullable();
       collection.string('email', { length: 320 }).notNull();
       collection.boolean('emailVerified').notNull().defaultTo(false);
       collection.text('image').nullable();
@@ -14,6 +15,7 @@ export default defineMigration({
       collection.datetime('updatedAt').notNull();
 
       collection.primary('id', { name: 'pk_user' });
+      collection.unique('username', { name: 'uq_user_username' });
       collection.unique('email', { name: 'uq_user_email' });
     });
 
@@ -35,6 +37,7 @@ export default defineMigration({
 
     await builder.createCollection('account', (collection) => {
       collection.string('id', { length: 64 }).notNull();
+      collection.string('issuer', { length: 255 }).notNull();
       collection.string('accountId', { length: 320 }).notNull();
       collection.string('providerId', { length: 128 }).notNull();
       collection.string('userId', { length: 64 }).notNull();
@@ -49,8 +52,8 @@ export default defineMigration({
       collection.datetime('updatedAt').notNull();
 
       collection.primary('id', { name: 'pk_account' });
-      collection.unique(['providerId', 'accountId'], {
-        name: 'uq_account_provider_account',
+      collection.unique(['issuer', 'accountId'], {
+        name: 'uq_account_issuer_account',
       });
       collection.index('userId', { name: 'idx_account_user' });
     });
