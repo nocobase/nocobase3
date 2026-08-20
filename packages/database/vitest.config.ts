@@ -1,20 +1,20 @@
-import { defineConfig } from 'vitest/config';
+import { createNodeVitestConfig } from "@nocobase/dev-config/vitest/node";
 
-export default defineConfig({
+export default createNodeVitestConfig({
   test: {
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      include: ['src/**/*.ts'],
+      provider: "v8",
+      reporter: ["text", "json", "html"],
+      include: ["src/**/*.ts"],
       exclude: [
-        'dist/**',
-        'test/**',
-        'src/**/index.ts',
-        'src/**/types.ts',
-        'src/database/connection.ts',
-        'src/database/drivers/knex/config.ts',
-        'src/metadata/store.ts',
-        'src/naming/strategy.ts',
+        "dist/**",
+        "test/**",
+        "src/**/index.ts",
+        "src/**/types.ts",
+        "src/database/connection.ts",
+        "src/database/drivers/knex/config.ts",
+        "src/metadata/store.ts",
+        "src/naming/strategy.ts",
       ],
     },
   },

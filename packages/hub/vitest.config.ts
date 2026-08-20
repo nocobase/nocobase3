@@ -1,8 +1,7 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { createReactVitestConfig } from "@nocobase/dev-config/vitest/react";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const registryRoot = fileURLToPath(new URL("./registry", import.meta.url));
@@ -10,8 +9,7 @@ const extensionsRoot = fs.existsSync(registryRoot)
   ? registryRoot
   : fileURLToPath(new URL("./client/extensions", import.meta.url));
 
-export default defineConfig({
-  plugins: [react()],
+export default createReactVitestConfig({
   resolve: {
     alias: {
       "@/extensions": extensionsRoot,
@@ -20,8 +18,6 @@ export default defineConfig({
   },
   test: {
     root,
-    environment: "jsdom",
-    setupFiles: ["./tests/setup/vitest.ts"],
     include: [
       "tests/logic/**/*.test.{ts,tsx}",
       "tests/components/**/*.test.{ts,tsx}",

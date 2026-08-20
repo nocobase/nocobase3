@@ -1,8 +1,8 @@
-import { DriveManager } from 'flydrive';
-import { FSDriver } from 'flydrive/drivers/fs';
-import { S3Driver } from 'flydrive/drivers/s3';
-import type { S3DriverOptions } from 'flydrive/drivers/s3/types';
-import type { DriverContract } from 'flydrive/types';
+import { DriveManager } from "flydrive";
+import { FSDriver } from "flydrive/drivers/fs";
+import { S3Driver } from "flydrive/drivers/s3";
+import type { S3DriverOptions } from "flydrive/drivers/s3/types";
+import type { DriverContract } from "flydrive/types";
 
 import type {
   AppDriveConfig,
@@ -11,8 +11,8 @@ import type {
   FsDriveDiskConfig,
   NocoBaseDriveManager,
   S3DriveDiskConfig,
-} from './types.js';
-import { joinDriveUrl } from './url.js';
+} from "./types.js";
+import { joinDriveUrl } from "./url.js";
 
 export function createDriveManager(
   config: AppDriveConfig,
@@ -28,18 +28,20 @@ export function createDriveManager(
         name,
         () => createDriver(disk),
       ]),
-    ) as Record<string, () => DriverContract>,
+    ),
   });
 }
 
 export function assertDefaultDisk(config: AppDriveConfig): void {
   if (!config.disks[config.default]) {
-    throw new Error(`Default drive disk "${config.default}" is not configured.`);
+    throw new Error(
+      `Default drive disk "${config.default}" is not configured.`,
+    );
   }
 }
 
 function createDriver(disk: AppDriveDiskConfig): DriverContract {
-  if (disk.driver === 'fs') {
+  if (disk.driver === "fs") {
     return createFsDriver(disk);
   }
 
@@ -90,7 +92,9 @@ function createS3Credentials(
   };
 }
 
-function compactObject<TValue extends Record<string, unknown>>(value: TValue): TValue {
+function compactObject<TValue extends Record<string, unknown>>(
+  value: TValue,
+): TValue {
   for (const key of Object.keys(value)) {
     if (value[key] === undefined) {
       delete value[key];

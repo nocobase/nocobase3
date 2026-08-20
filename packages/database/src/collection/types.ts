@@ -1,32 +1,33 @@
-export type CollectionKind = 'table' | 'view' | 'materializedView';
+export type CollectionKind = "table" | "view" | "materializedView";
 
 export type FieldType =
-  | 'increments'
-  | 'integer'
-  | 'bigInt'
-  | 'string'
-  | 'text'
-  | 'boolean'
-  | 'decimal'
-  | 'float'
-  | 'double'
-  | 'date'
-  | 'time'
-  | 'datetime'
-  | 'json'
-  | 'uuid'
-  | 'native'
-  | 'belongsTo'
-  | 'hasOne'
-  | 'hasMany'
-  | 'belongsToMany'
+  | "increments"
+  | "integer"
+  | "bigInt"
+  | "string"
+  | "text"
+  | "boolean"
+  | "decimal"
+  | "float"
+  | "double"
+  | "date"
+  | "time"
+  | "datetime"
+  | "json"
+  | "uuid"
+  | "native"
+  | "belongsTo"
+  | "hasOne"
+  | "hasMany"
+  | "belongsToMany"
   | string;
 
-export type Deferrable = boolean | 'immediate' | 'deferred';
-export type ReferentialAction = 'cascade' | 'restrict' | 'set null' | 'no action';
+export type Deferrable = boolean | "immediate" | "deferred";
+export type ReferentialAction =
+  "cascade" | "restrict" | "set null" | "no action";
 export type FilterExpression = Record<string, unknown>;
 export type DialectOptions = Record<string, unknown>;
-export type RelationType = 'belongsTo' | 'hasOne' | 'hasMany' | 'belongsToMany';
+export type RelationType = "belongsTo" | "hasOne" | "hasMany" | "belongsToMany";
 
 export interface NamingOptions {
   underscored?: boolean;
@@ -92,7 +93,7 @@ export type RelationFieldDefinition = FieldBase & {
 export type AnyFieldDefinition = FieldDefinition | RelationFieldDefinition;
 
 export interface PrimaryConstraintDefinition {
-  type: 'primary';
+  type: "primary";
   fields: string[];
   name?: string;
   deferrable?: Deferrable;
@@ -100,10 +101,10 @@ export interface PrimaryConstraintDefinition {
 }
 
 export interface UniqueConstraintDefinition {
-  type: 'unique';
+  type: "unique";
   fields: string[];
   name?: string;
-  mode?: 'auto' | 'constraint' | 'index';
+  mode?: "auto" | "constraint" | "index";
   deferrable?: Deferrable;
   indexType?: string;
   predicate?: FilterExpression;
@@ -111,7 +112,7 @@ export interface UniqueConstraintDefinition {
 }
 
 export interface ForeignKeyConstraintDefinition {
-  type: 'foreignKey';
+  type: "foreignKey";
   fields: string[];
   references: {
     collection: string;
@@ -125,7 +126,7 @@ export interface ForeignKeyConstraintDefinition {
 }
 
 export interface CheckConstraintDefinition {
-  type: 'check';
+  type: "check";
   name?: string;
   expression: FilterExpression | string;
   db?: DialectOptions;
@@ -143,7 +144,7 @@ export interface IndexDefinition {
   name?: string;
   type?: string;
   predicate?: FilterExpression;
-  order?: Record<string, 'asc' | 'desc'>;
+  order?: Record<string, "asc" | "desc">;
   db?: DialectOptions;
 }
 
@@ -162,7 +163,7 @@ export interface ViewOptions {
   as?: QueryViewDefinition;
   asRaw?: RawViewDefinition;
   refresh?: {
-    strategy?: 'manual' | 'scheduled';
+    strategy?: "manual" | "scheduled";
   };
 }
 
@@ -181,7 +182,7 @@ export interface CollectionDefinition {
   view?: ViewOptions;
 }
 
-export interface FieldAlterInput extends Partial<Omit<FieldDefinition, 'name'>> {}
+export type FieldAlterInput = Partial<Omit<FieldDefinition, "name">>;
 
 export interface CollectionAlterDefinition {
   addFields?: AnyFieldDefinition[];
@@ -207,16 +208,13 @@ export interface CollectionMetadataPatch {
 }
 
 export type CollectionDefinitionInput =
-  | CollectionDefinition
-  | ((collection: CollectionDefinitionBuilder) => void);
+  CollectionDefinition | ((collection: CollectionDefinitionBuilder) => void);
 
 export type CollectionAlterInput =
-  | CollectionAlterDefinition
-  | ((collection: CollectionAlterBuilder) => void);
+  CollectionAlterDefinition | ((collection: CollectionAlterBuilder) => void);
 
 export type ViewCollectionInput =
-  | CollectionDefinition
-  | ((view: ViewCollectionDefinitionBuilder) => void);
+  CollectionDefinition | ((view: ViewCollectionDefinitionBuilder) => void);
 
 export type MaterializedViewCollectionInput = ViewCollectionInput;
 
@@ -257,12 +255,12 @@ export interface BuilderWarning {
   path?: Array<string | number>;
   capability?: string;
   dialect?: string;
-  fallback?: 'downgrade' | 'skip' | 'ignore';
-  severity?: 'warning' | 'unsafe';
+  fallback?: "downgrade" | "skip" | "ignore";
+  severity?: "warning" | "unsafe";
 }
 
 export interface BuilderImpact {
-  level: 'safe' | 'warning' | 'destructive';
+  level: "safe" | "warning" | "destructive";
   message: string;
   operation?: string;
 }
@@ -284,31 +282,95 @@ export interface BuilderResult {
 }
 
 export type CollectionOperation =
-  | { type: 'createCollection'; name: string; definition: CollectionDefinition; ifNotExists?: boolean }
-  | { type: 'alterCollection'; collection: string; changes: CollectionAlterDefinition }
-  | { type: 'dropCollection'; collection: string; ifExists?: boolean }
-  | { type: 'renameCollection'; from: string; to: string; renameTable?: boolean; renameTableTo?: string }
-  | { type: 'createViewCollection'; name: string; definition: CollectionDefinition }
-  | { type: 'replaceViewCollection'; name: string; definition: CollectionDefinition }
-  | { type: 'createMaterializedViewCollection'; name: string; definition: CollectionDefinition }
-  | { type: 'refreshMaterializedViewCollection'; collection: string; concurrently?: boolean }
-  | { type: 'addField'; collection: string; field: AnyFieldDefinition }
-  | { type: 'alterField'; collection: string; field: string; changes: FieldAlterInput }
-  | { type: 'dropField'; collection: string; field: string }
-  | { type: 'addIndex'; collection: string; index: IndexDefinition }
-  | { type: 'dropIndex'; collection: string; index: string }
-  | { type: 'addConstraint'; collection: string; constraint: ConstraintDefinition }
-  | { type: 'dropConstraint'; collection: string; constraint: string }
-  | { type: 'updateCollectionMetadata'; collection: string; patch: CollectionMetadataPatch }
-  | { type: 'updateFieldMetadata'; collection: string; field: string; patch: FieldMetadataPatch };
+  | {
+      type: "createCollection";
+      name: string;
+      definition: CollectionDefinition;
+      ifNotExists?: boolean;
+    }
+  | {
+      type: "alterCollection";
+      collection: string;
+      changes: CollectionAlterDefinition;
+    }
+  | { type: "dropCollection"; collection: string; ifExists?: boolean }
+  | {
+      type: "renameCollection";
+      from: string;
+      to: string;
+      renameTable?: boolean;
+      renameTableTo?: string;
+    }
+  | {
+      type: "createViewCollection";
+      name: string;
+      definition: CollectionDefinition;
+    }
+  | {
+      type: "replaceViewCollection";
+      name: string;
+      definition: CollectionDefinition;
+    }
+  | {
+      type: "createMaterializedViewCollection";
+      name: string;
+      definition: CollectionDefinition;
+    }
+  | {
+      type: "refreshMaterializedViewCollection";
+      collection: string;
+      concurrently?: boolean;
+    }
+  | { type: "addField"; collection: string; field: AnyFieldDefinition }
+  | {
+      type: "alterField";
+      collection: string;
+      field: string;
+      changes: FieldAlterInput;
+    }
+  | { type: "dropField"; collection: string; field: string }
+  | { type: "addIndex"; collection: string; index: IndexDefinition }
+  | { type: "dropIndex"; collection: string; index: string }
+  | {
+      type: "addConstraint";
+      collection: string;
+      constraint: ConstraintDefinition;
+    }
+  | { type: "dropConstraint"; collection: string; constraint: string }
+  | {
+      type: "updateCollectionMetadata";
+      collection: string;
+      patch: CollectionMetadataPatch;
+    }
+  | {
+      type: "updateFieldMetadata";
+      collection: string;
+      field: string;
+      patch: FieldMetadataPatch;
+    };
 
 export type SchemaOperation =
-  | { type: 'createTable'; table: TableSchemaDefinition; ifNotExists?: boolean }
-  | { type: 'alterTable'; tableName: string; db?: DbOptions; operations: TableAlterSchemaOperation[] }
-  | { type: 'dropTable'; tableName: string; db?: DbOptions; ifExists?: boolean }
-  | { type: 'renameTable'; from: string; to: string; db?: DbOptions }
-  | { type: 'createView'; view: ViewSchemaDefinition; orReplace?: boolean; materialized?: boolean }
-  | { type: 'refreshMaterializedView'; viewName: string; db?: DbOptions; concurrently?: boolean };
+  | { type: "createTable"; table: TableSchemaDefinition; ifNotExists?: boolean }
+  | {
+      type: "alterTable";
+      tableName: string;
+      db?: DbOptions;
+      operations: TableAlterSchemaOperation[];
+    }
+  | { type: "dropTable"; tableName: string; db?: DbOptions; ifExists?: boolean }
+  | { type: "renameTable"; from: string; to: string; db?: DbOptions }
+  | {
+      type: "createView";
+      view: ViewSchemaDefinition;
+      orReplace?: boolean;
+      materialized?: boolean;
+    }
+  | {
+      type: "refreshMaterializedView";
+      viewName: string;
+      db?: DbOptions;
+      concurrently?: boolean;
+    };
 
 export interface TableSchemaDefinition {
   name: string;
@@ -328,13 +390,17 @@ export interface ViewSchemaDefinition {
 }
 
 export type TableAlterSchemaOperation =
-  | { type: 'addColumn'; column: ColumnSchemaDefinition }
-  | { type: 'alterColumn'; column: string; changes: Partial<ColumnSchemaDefinition> }
-  | { type: 'dropColumn'; column: string }
-  | { type: 'addIndex'; index: PhysicalIndexDefinition }
-  | { type: 'dropIndex'; name: string }
-  | { type: 'addConstraint'; constraint: PhysicalConstraintDefinition }
-  | { type: 'dropConstraint'; name: string };
+  | { type: "addColumn"; column: ColumnSchemaDefinition }
+  | {
+      type: "alterColumn";
+      column: string;
+      changes: Partial<ColumnSchemaDefinition>;
+    }
+  | { type: "dropColumn"; column: string }
+  | { type: "addIndex"; index: PhysicalIndexDefinition }
+  | { type: "dropIndex"; name: string }
+  | { type: "addConstraint"; constraint: PhysicalConstraintDefinition }
+  | { type: "dropConstraint"; name: string };
 
 export interface ColumnSchemaDefinition {
   name: string;
@@ -350,14 +416,17 @@ export interface ColumnSchemaDefinition {
   db?: DbOptions;
 }
 
-export interface PhysicalIndexDefinition extends Omit<IndexDefinition, 'fields'> {
+export interface PhysicalIndexDefinition extends Omit<
+  IndexDefinition,
+  "fields"
+> {
   columns?: string[];
 }
 
 export type PhysicalConstraintDefinition =
-  | (Omit<PrimaryConstraintDefinition, 'fields'> & { columns: string[] })
-  | (Omit<UniqueConstraintDefinition, 'fields'> & { columns: string[] })
-  | (Omit<ForeignKeyConstraintDefinition, 'fields' | 'references'> & {
+  | (Omit<PrimaryConstraintDefinition, "fields"> & { columns: string[] })
+  | (Omit<UniqueConstraintDefinition, "fields"> & { columns: string[] })
+  | (Omit<ForeignKeyConstraintDefinition, "fields" | "references"> & {
       columns: string[];
       references: {
         table: string;
@@ -375,24 +444,83 @@ export interface CollectionDefinitionBuilder {
   description(description: string): this;
   field(field: AnyFieldDefinition): FieldDefinitionBuilder;
   increments(name?: string): FieldDefinitionBuilder;
-  integer(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  bigInt(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  string(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  text(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  boolean(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  decimal(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  datetime(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  json(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  uuid(name: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  native(name: string, nativeType: string, options?: Partial<FieldDefinition>): FieldDefinitionBuilder;
-  belongsTo(name: string, target: string, options?: Partial<RelationFieldDefinition>): RelationFieldBuilder;
-  hasOne(name: string, target: string, options?: Partial<RelationFieldDefinition>): RelationFieldBuilder;
-  hasMany(name: string, target: string, options?: Partial<RelationFieldDefinition>): RelationFieldBuilder;
-  belongsToMany(name: string, target: string, options?: Partial<RelationFieldDefinition>): RelationFieldBuilder;
-  primary(fields: string | string[], options?: Omit<PrimaryConstraintDefinition, 'type' | 'fields'>): this;
-  unique(fields: string | string[], options?: Omit<UniqueConstraintDefinition, 'type' | 'fields'>): this;
-  foreignKey(fields: string | string[], options: Omit<ForeignKeyConstraintDefinition, 'type' | 'fields'>): this;
-  index(fields: string | string[], options?: Omit<IndexDefinition, 'fields'>): this;
+  integer(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  bigInt(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  string(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  text(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  boolean(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  decimal(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  datetime(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  json(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  uuid(
+    name: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  native(
+    name: string,
+    nativeType: string,
+    options?: Partial<FieldDefinition>,
+  ): FieldDefinitionBuilder;
+  belongsTo(
+    name: string,
+    target: string,
+    options?: Partial<RelationFieldDefinition>,
+  ): RelationFieldBuilder;
+  hasOne(
+    name: string,
+    target: string,
+    options?: Partial<RelationFieldDefinition>,
+  ): RelationFieldBuilder;
+  hasMany(
+    name: string,
+    target: string,
+    options?: Partial<RelationFieldDefinition>,
+  ): RelationFieldBuilder;
+  belongsToMany(
+    name: string,
+    target: string,
+    options?: Partial<RelationFieldDefinition>,
+  ): RelationFieldBuilder;
+  primary(
+    fields: string | string[],
+    options?: Omit<PrimaryConstraintDefinition, "type" | "fields">,
+  ): this;
+  unique(
+    fields: string | string[],
+    options?: Omit<UniqueConstraintDefinition, "type" | "fields">,
+  ): this;
+  foreignKey(
+    fields: string | string[],
+    options: Omit<ForeignKeyConstraintDefinition, "type" | "fields">,
+  ): this;
+  index(
+    fields: string | string[],
+    options?: Omit<IndexDefinition, "fields">,
+  ): this;
   toDefinition(): CollectionDefinition;
 }
 
@@ -406,9 +534,12 @@ export interface CollectionAlterBuilder extends CollectionDefinitionBuilder {
 }
 
 export interface ViewCollectionDefinitionBuilder extends CollectionDefinitionBuilder {
-  as(query: QueryViewDefinition | ((query: ViewQueryBuilder) => ViewQueryBuilder)): this;
+  as(
+    query:
+      QueryViewDefinition | ((query: ViewQueryBuilder) => ViewQueryBuilder),
+  ): this;
   asRaw(sql: string, bindings?: unknown[]): this;
-  refresh(options: NonNullable<ViewOptions['refresh']>): this;
+  refresh(options: NonNullable<ViewOptions["refresh"]>): this;
 }
 
 export interface ViewQueryBuilder {
@@ -419,13 +550,13 @@ export interface ViewQueryBuilder {
 }
 
 export interface FieldDefinitionBuilder {
-  primary(options?: Omit<PrimaryConstraintDefinition, 'type' | 'fields'>): this;
+  primary(options?: Omit<PrimaryConstraintDefinition, "type" | "fields">): this;
   autoIncrement(): this;
   notNull(): this;
   nullable(): this;
   defaultTo(value: unknown): this;
-  unique(options?: Omit<UniqueConstraintDefinition, 'type' | 'fields'>): this;
-  index(options?: Omit<IndexDefinition, 'fields'>): this;
+  unique(options?: Omit<UniqueConstraintDefinition, "type" | "fields">): this;
+  index(options?: Omit<IndexDefinition, "fields">): this;
   columnName(name: string): this;
   mapToColumn(name: string): this;
   title(title: string): this;
@@ -433,18 +564,22 @@ export interface FieldDefinitionBuilder {
   dbComment(comment: string): this;
   db(options: DbOptions): this;
   unsigned(): this;
-  references(ref: { collection: string; field?: string; fields?: string[] }): this;
+  references(ref: {
+    collection: string;
+    field?: string;
+    fields?: string[];
+  }): this;
   toDefinition(): AnyFieldDefinition;
 }
 
 export interface RelationFieldBuilder {
-  primary(options?: Omit<PrimaryConstraintDefinition, 'type' | 'fields'>): this;
+  primary(options?: Omit<PrimaryConstraintDefinition, "type" | "fields">): this;
   autoIncrement(): this;
   notNull(): this;
   nullable(): this;
   defaultTo(value: unknown): this;
-  unique(options?: Omit<UniqueConstraintDefinition, 'type' | 'fields'>): this;
-  index(options?: Omit<IndexDefinition, 'fields'>): this;
+  unique(options?: Omit<UniqueConstraintDefinition, "type" | "fields">): this;
+  index(options?: Omit<IndexDefinition, "fields">): this;
   title(title: string): this;
   description(description: string): this;
   dbComment(comment: string): this;

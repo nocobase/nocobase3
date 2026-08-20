@@ -9,19 +9,18 @@ import semver from "semver";
 
 const sdkRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  ".."
+  "..",
 );
-const checker = path.join(
-  sdkRoot,
-  "scripts/check-template-compatibility.mjs"
-);
+const checker = path.join(sdkRoot, "scripts/check-template-compatibility.mjs");
 const sdkPackage = JSON.parse(
-  fs.readFileSync(path.join(sdkRoot, "package.json"), "utf8")
+  fs.readFileSync(path.join(sdkRoot, "package.json"), "utf8"),
 );
 const supportedRange = sdkPackage.nocobase.supportedDefaultTemplateRange;
 const compatibleBaseVersion = semver.minVersion(supportedRange)?.version;
 if (!compatibleBaseVersion) {
-  throw new Error(`Invalid supported Default Template range: ${supportedRange}`);
+  throw new Error(
+    `Invalid supported Default Template range: ${supportedRange}`,
+  );
 }
 const compatibleMajor = semver.major(compatibleBaseVersion);
 const incompatibleBaseVersion =
@@ -33,17 +32,17 @@ if (
   semver.satisfies(incompatibleBaseVersion, supportedRange)
 ) {
   throw new Error(
-    `Unable to derive an incompatible version for: ${supportedRange}`
+    `Unable to derive an incompatible version for: ${supportedRange}`,
   );
 }
 
 const runChecker = (packageJson) => {
   const projectRoot = fs.mkdtempSync(
-    path.join(os.tmpdir(), "portal-sdk-compat-")
+    path.join(os.tmpdir(), "portal-sdk-compat-"),
   );
   fs.writeFileSync(
     path.join(projectRoot, "package.json"),
-    JSON.stringify(packageJson)
+    JSON.stringify(packageJson),
   );
   const result = spawnSync(process.execPath, [checker], {
     cwd: projectRoot,
@@ -60,13 +59,16 @@ const runChecker = (packageJson) => {
 
 const runWorkspaceRootChecker = (packageJson) => {
   const projectRoot = fs.mkdtempSync(
-    path.join(os.tmpdir(), "portal-sdk-compat-workspace-")
+    path.join(os.tmpdir(), "portal-sdk-compat-workspace-"),
   );
   fs.writeFileSync(
     path.join(projectRoot, "package.json"),
-    JSON.stringify(packageJson)
+    JSON.stringify(packageJson),
   );
-  fs.writeFileSync(path.join(projectRoot, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
+  fs.writeFileSync(
+    path.join(projectRoot, "pnpm-workspace.yaml"),
+    "packages:\n  - packages/*\n",
+  );
   const result = spawnSync(process.execPath, [checker], {
     cwd: projectRoot,
     encoding: "utf8",
@@ -87,9 +89,9 @@ it("accepts a derived template with a compatible base version", () => {
     version: "8.4.0",
     nocobase: { defaultTemplateVersion: compatibleBaseVersion },
   });
-  expect(result.status, result.stderr).toBe(0);
+  expect(result.status).toBe(0);
   expect(result.stdout).toContain(
-    `supports Default Template ${compatibleBaseVersion}`
+    `supports Default Template ${compatibleBaseVersion}`,
   );
 });
 
@@ -102,7 +104,7 @@ it("rejects an incompatible base template version with an actionable error", () 
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/Incompatible NocoBase Portal SDK/);
   expect(result.stderr).toContain(
-    `Current Default Template: ${incompatibleBaseVersion}`
+    `Current Default Template: ${incompatibleBaseVersion}`,
   );
   expect(result.stderr).toMatch(/Supported Default Template range/);
 });
@@ -122,6 +124,6 @@ it("skips private workspace roots during package preinstall", () => {
     name: "example-workspace",
     private: true,
   });
-  expect(result.status, result.stderr).toBe(0);
+  expect(result.status).toBe(0);
   expect(result.stdout).toContain("workspace root");
 });

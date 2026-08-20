@@ -3,14 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
   "packageManager": "pnpm@11.7.0",
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "lint": "pnpm -r --if-present lint",
+    "lint:fix": "pnpm -r --if-present lint:fix",
+    "format": "node ./scripts/format-changed.mjs --write",
+    "format:all": "prettier . --write --ignore-path .prettierignore",
+    "format:check": "node ./scripts/format-changed.mjs --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm pack:check",
+    "fix": "pnpm lint:fix && pnpm format",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
+    "pack:check": "PACK_DIR=\"${PACK_DIR:-${TMPDIR:-/tmp}/nocobase-pack-check}\"; export PACK_DIR; mkdir -p \"$PACK_DIR\"; pnpm --filter @nocobase/dev-config pack:check && pnpm --filter @nocobase/app-host pack:check && pnpm --filter @nocobase/app-template-default pack:check && pnpm --filter @nocobase/hub pack:check && pnpm --filter @nocobase/portal-sdk pack:check && for archive in \"$PACK_DIR/nocobase-dev-config.tgz\" \"$PACK_DIR/nocobase-app-host.tgz\" \"$PACK_DIR/nocobase-app-template-default.tgz\" \"$PACK_DIR/nocobase-hub.tgz\" \"$PACK_DIR/nocobase-portal-sdk.tgz\"; do if tar -xOf \"$archive\" package/package.json | grep -Eq '\"[^\"]+\": \"(workspace|catalog):'; then echo \"Unresolved workspace/catalog protocol in $archive\" >&2; exit 1; fi; done",
+    "prepare": "husky",
     "app:dev": "pnpm --filter @nocobase/app-template-default dev",
     "template:dev": "pnpm --filter @nocobase/app-template-default dev",
     "app:build": "pnpm --filter @nocobase/app-template-default build",
@@ -20,5 +30,21 @@
     "app-host:dev": "APP_DIST_DIR=\"$PWD/packages/app-host/fixtures/app-dist\" pnpm --filter @nocobase/app-host dev",
     "app-host:build": "pnpm --filter @nocobase/app-host build",
     "sdk:test": "pnpm --filter @nocobase/portal-sdk test"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
+    "@nocobase/dev-config": "workspace:*",
+    "eslint": "catalog:",
+    "husky": "catalog:",
+    "lint-staged": "catalog:",
+    "prettier": "catalog:",
+    "publint": "catalog:"
+  },
+  "lint-staged": {
+    "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}": [
+      "eslint --fix --no-warn-ignored --max-warnings 0",
+      "prettier --write"
+    ],
+    "*.{json,json5,jsonc,md,mdx,yml,yaml,css,scss,less,html}": "prettier --write"
   }
 }

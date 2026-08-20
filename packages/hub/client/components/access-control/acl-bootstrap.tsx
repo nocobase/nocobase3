@@ -9,7 +9,8 @@ export function AclBootstrap({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (state.status === "idle") {
-      store.load();
+      const loadPromise = store.load();
+      loadPromise.catch(() => undefined);
     }
   }, [state.status, store]);
 

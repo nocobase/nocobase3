@@ -38,10 +38,7 @@ export type NocoBaseErrorDetail = {
   [key: string]: unknown;
 };
 
-export type NocoBaseRuntimeErrorSource =
-  | "http"
-  | "network"
-  | "websocket";
+export type NocoBaseRuntimeErrorSource = "http" | "network" | "websocket";
 
 export type NocoBaseRuntimeError = NocoBaseErrorDetail & {
   payload?: unknown;
@@ -65,11 +62,11 @@ const asRecord = (value: unknown) =>
 const asErrorDetail = (value: unknown): NocoBaseErrorDetail | undefined => {
   const record = asRecord(value);
   if (!record) return undefined;
-  return record as NocoBaseErrorDetail;
+  return record;
 };
 
 export function getNocoBaseErrorDetail(
-  payload: unknown
+  payload: unknown,
 ): NocoBaseErrorDetail | undefined {
   const value = asRecord(payload);
   if (!value) return undefined;
@@ -90,7 +87,7 @@ export function getNocoBaseErrorDetail(
     typeof value.message === "string" ||
     typeof value.maintaining === "boolean"
   ) {
-    return value as NocoBaseErrorDetail;
+    return value;
   }
 
   return undefined;
@@ -98,7 +95,7 @@ export function getNocoBaseErrorDetail(
 
 export function normalizeNocoBaseRuntimeError(
   error: unknown,
-  source: NocoBaseRuntimeErrorSource = "http"
+  source: NocoBaseRuntimeErrorSource = "http",
 ): NocoBaseRuntimeError {
   if (error instanceof NocoBaseHttpError) {
     const detail = getNocoBaseErrorDetail(error.payload);
@@ -133,9 +130,7 @@ export function normalizeNocoBaseRuntimeError(
 
   return {
     message:
-      typeof error === "string" && error
-        ? error
-        : "NocoBase request failed",
+      typeof error === "string" && error ? error : "NocoBase request failed",
     payload: error,
     source,
   };
@@ -146,7 +141,7 @@ export const getNocoBaseErrorCode = (error: unknown): string | undefined =>
 
 export const getNocoBaseErrorMessage = (
   payload: unknown,
-  fallback: string
+  fallback: string,
 ): string => {
   if (typeof payload === "string") return payload || fallback;
   if (!payload || typeof payload !== "object") return fallback;
