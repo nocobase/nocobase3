@@ -172,6 +172,8 @@ run("Build server workspace dependencies", "pnpm", [
   "@nocobase/logger",
   "--filter",
   "@nocobase/queue",
+  "--filter",
+  "@nocobase/workflow",
   "build",
 ]);
 run("Build server", "pnpm", ["exec", "tsc", "-p", "tsconfig.server.json"]);

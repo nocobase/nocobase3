@@ -3,6 +3,33 @@
   "displayName": "Default Template",
   "version": "3.1.1",
   "type": "module",
+  "exports": {
+    "./server": {
+      "source": "./server/index.ts",
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./server/workflow": {
+      "source": "./server/workflow.ts",
+      "types": "./dist/server/workflow.d.ts",
+      "import": "./dist/server/workflow.js"
+    },
+    "./server/workflow-source": {
+      "source": "./server/workflows/dsl.ts",
+      "types": "./dist/server/workflows/dsl.d.ts",
+      "import": "./dist/server/workflows/dsl.js"
+    },
+    "./server/migrations/app-settings": {
+      "source": "./server/migrations/202608180001_create_app_settings_table.ts",
+      "types": "./dist/server/migrations/202608180001_create_app_settings_table.d.ts",
+      "import": "./dist/server/migrations/202608180001_create_app_settings_table.js"
+    },
+    "./server/migrations/workflow": {
+      "source": "./server/migrations/202608200001_create_workflow_collections.ts",
+      "types": "./dist/server/migrations/202608200001_create_workflow_collections.d.ts",
+      "import": "./dist/server/migrations/202608200001_create_workflow_collections.js"
+    }
+  },
   "nocobase": {
     "defaultTemplateVersion": "3.1.1"
   },
@@ -23,6 +50,7 @@
     "@nocobase/portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
+    "@nocobase/workflow": "workspace:^",
     "@playwright/test": "^1.62.1",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "^5.0.8",
@@ -112,6 +140,7 @@
     "dev": "node ./scripts/dev.mjs",
     "server:config": "tsx --tsconfig tsconfig.node.json ./scripts/server-config.ts",
     "build": "node ./scripts/build.mjs",
+    "build:server": "tsc -p tsconfig.server.json && tsc-alias -p tsconfig.server.json && tsc -p tsconfig.migrations.json && tsc-alias -p tsconfig.migrations.json",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",

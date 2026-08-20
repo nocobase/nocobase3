@@ -20,9 +20,13 @@ import {
   type NocoBaseSessionManager,
 } from '@nocobase/session';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
-
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
+import {
+  bindRuntimeWorkflow,
+  createAppWorkflowRuntime,
+  type AppWorkflowRuntime,
+} from '../workflows/runtime.js';
 
 export interface AppDeps {
   cacheManager: NocoBaseCacheManager;
@@ -30,6 +34,7 @@ export interface AppDeps {
   loggerManager: NocoBaseLoggerManager;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
+  workflowRuntime?: AppWorkflowRuntime;
 }
 
 export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
@@ -48,16 +53,28 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
     }),
   });
 
+  const workflowRuntime = runtime.database
+    ? createAppWorkflowRuntime({
+      database: runtime.database,
+      queue: queueManager,
+      app: runtime,
+      sourceRoot: config.workflow.sourceRoot,
+    })
+    : undefined;
+  bindRuntimeWorkflow(runtime, workflowRuntime);
+
   return {
     cacheManager,
     driveManager,
     loggerManager,
     queueManager,
     sessionManager,
+    workflowRuntime,
   };
 }
 
 export async function disposeAppDeps(deps: AppDeps): Promise<void> {
+  await deps.workflowRuntime?.stop();
   await deps.queueManager.close();
   await Promise.all([
     deps.cacheManager.disconnectAll(),

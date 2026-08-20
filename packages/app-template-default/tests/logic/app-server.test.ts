@@ -11,11 +11,17 @@ import { gzipSync } from 'node:zlib';
 import { createNullCacheConfig, type AppCacheConfig } from '@nocobase/cache';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { AppWebSocket, AppWebSocketReadyState } from '@nocobase/app-server/websocket';
-import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
+import { createDatabaseManager, type DatabaseManager, type QueryAdapter } from '@nocobase/database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggerConfig } from '@nocobase/logger';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import { createNullSessionConfig, type AppSessionConfig } from '@nocobase/session';
+import {
+  createWorkflowCollections,
+  EXECUTION_STATUS,
+  WORKFLOW_COLLECTIONS,
+  type WorkflowId,
+} from '@nocobase/workflow';
 import { joinBasePath, normalizeBasePath, resolveAppNameFromBasePath } from '@nocobase/app-server/support';
 
 import {
@@ -34,6 +40,13 @@ import { CLOCK_TOPIC } from '../../server/realtime/publishers/clock.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
+import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
+import { DatabaseWorkflowService } from '../../server/services/workflow.ts';
+import {
+  getRuntimeWorkflow,
+  isAppWorkflowRuntimeStarted,
+  startRuntimeWorkflow,
+} from '../../server/workflows/runtime.ts';
 
 interface CloseableResource {
   close(): Promise<void>;
@@ -76,7 +89,7 @@ afterEach(async () => {
 
 describe('app server', () => {
   it('creates embedded apps from a scope', async () => {
-    const app = await createEmbeddedServer(createEmbeddedTestScope({
+    const app = await createEmbeddedServer(await createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/embedded-app-template-default',
     }));
@@ -95,6 +108,193 @@ describe('app server', () => {
     expect(websocketEvents).toMatchObject({
       onMessage: expect.any(Function),
     });
+  });
+
+  it('starts and stops the workflow runtime and manually triggers through the API', async () => {
+    const database = createDatabaseManager({
+      default: 'sqlite',
+      connections: {
+        sqlite: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+    await createWorkflowCollections(database.builder());
+    await database.query().insertInto(WORKFLOW_COLLECTIONS.workflows).values({
+      key: 'manual-api',
+      title: 'Manual API historical revision',
+      enabled: true,
+      type: 'custom',
+      current: null,
+      config: JSON.stringify({}),
+      inputSchema: JSON.stringify({ threshold: { type: 'number', title: 'Threshold', default: 1000 } }),
+      inputValues: JSON.stringify({}),
+      options: JSON.stringify({}),
+    }).execute();
+    const historicalWorkflowId = await database.query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .where('key', '=', 'manual-api')
+      .where('current', 'is', null)
+      .value<WorkflowId>('id');
+    if (historicalWorkflowId == null) throw new Error('Failed to seed historical workflow revision');
+    await database.query().insertInto(WORKFLOW_COLLECTIONS.workflows).values({
+      key: 'manual-api',
+      title: 'Manual API',
+      enabled: false,
+      type: 'custom',
+      current: true,
+      config: JSON.stringify({}),
+      inputSchema: JSON.stringify({ threshold: { type: 'number', title: 'Threshold', default: 1000 } }),
+      inputValues: JSON.stringify({}),
+      options: JSON.stringify({}),
+    }).execute();
+    const workflowId = await database.query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .where('key', '=', 'manual-api')
+      .where('current', '=', true)
+      .value<WorkflowId>('id');
+    if (workflowId == null) throw new Error('Failed to seed manual workflow');
+    await database.query().insertInto(WORKFLOW_COLLECTIONS.nodes).values({
+      workflowId,
+      key: 'condition',
+      title: 'Condition',
+      type: 'condition',
+      config: JSON.stringify({}),
+      output: JSON.stringify({}),
+    }).execute();
+
+    const { app, runtime } = createTestAppFixture({ database });
+    await startRuntimeWorkflow(runtime);
+    const workflowRuntime = getRuntimeWorkflow(runtime);
+    expect(workflowRuntime && isAppWorkflowRuntimeStarted(workflowRuntime)).toBe(true);
+    const mounted = createPublicBasePathAdapter(app, '/app-template-default');
+
+    const workflowsResponse = await mounted.request('http://localhost/app-template-default/api/workflows');
+    await expect(workflowsResponse.json()).resolves.toEqual({
+      data: [{
+        id: workflowId,
+        key: 'manual-api',
+        title: 'Manual API',
+        enabled: false,
+        type: 'custom',
+        current: true,
+        hasInputs: true,
+        executed: 0,
+      }],
+    });
+    const inputsResponse = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/inputs`,
+    );
+    expect(inputsResponse.status).toBe(200);
+    await expect(inputsResponse.json()).resolves.toEqual({
+      data: {
+        id: workflowId,
+        schema: { threshold: { type: 'number', title: 'Threshold', default: 1000 } },
+        values: {},
+      },
+    });
+    const updateInputsResponse = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/inputs`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ threshold: 1500 }),
+      },
+    );
+    expect(updateInputsResponse.status).toBe(200);
+    await expect(updateInputsResponse.json()).resolves.toMatchObject({
+      data: { id: workflowId, values: { threshold: 1500 } },
+    });
+    const invalidInputsResponse = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/inputs`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ threshold: 'invalid' }),
+      },
+    );
+    expect(invalidInputsResponse.status).toBe(400);
+    const enableHistoricalResponse = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(historicalWorkflowId)}/enable`,
+      { method: 'POST' },
+    );
+    expect(enableHistoricalResponse.status).toBe(200);
+    await expect(enableHistoricalResponse.json()).resolves.toMatchObject({
+      data: { id: historicalWorkflowId, key: 'manual-api', enabled: true, current: true },
+    });
+    await expect(database.query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .select(['id', 'current'])
+      .where('key', '=', 'manual-api')
+      .orderBy('id')
+      .execute()).resolves.toEqual([
+      { id: historicalWorkflowId, current: 1 },
+      { id: workflowId, current: null },
+    ]);
+    const restoreCurrentResponse = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/enable`,
+      { method: 'POST' },
+    );
+    expect(restoreCurrentResponse.status).toBe(200);
+    const disableResponse = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/disable`,
+      { method: 'POST' },
+    );
+    expect(disableResponse.status).toBe(200);
+    await expect(disableResponse.json()).resolves.toMatchObject({
+      data: { id: workflowId, key: 'manual-api', enabled: false, current: true },
+    });
+    const triggerResponse = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/run`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ approved: true }),
+      },
+    );
+    expect(triggerResponse.status).toBe(200);
+    await expect(triggerResponse.json()).resolves.toMatchObject({
+      data: { workflowId, workflowKey: 'manual-api', status: EXECUTION_STATUS.RESOLVED },
+    });
+
+    await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/enable`,
+      { method: 'POST' },
+    );
+    if (!workflowRuntime) throw new Error('Workflow runtime was not created');
+    const workflowService = new DatabaseWorkflowService(database, workflowRuntime);
+    await expect(workflowService.trigger('manual-api', { source: 'business-service' })).resolves.toMatchObject({
+      workflowId,
+      workflowKey: 'manual-api',
+      eventKey: expect.stringMatching(/^custom-/),
+    });
+
+    const runsResponse = await mounted.request('http://localhost/app-template-default/api/workflow-runs');
+    await expect(runsResponse.json()).resolves.toMatchObject({
+      data: [
+        { workflowId, workflowKey: 'manual-api', eventKey: expect.stringMatching(/^custom-/), status: EXECUTION_STATUS.RESOLVED },
+        { workflowId, workflowKey: 'manual-api', eventKey: expect.stringMatching(/^manual-/), status: EXECUTION_STATUS.RESOLVED },
+      ],
+    });
+    const workflowRunsResponse = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/runs`,
+    );
+    expect(workflowRunsResponse.status).toBe(200);
+    await expect(workflowRunsResponse.json()).resolves.toMatchObject({
+      data: [
+        { workflowId, workflowKey: 'manual-api', eventKey: expect.stringMatching(/^custom-/) },
+        { workflowId, workflowKey: 'manual-api', eventKey: expect.stringMatching(/^manual-/) },
+      ],
+    });
+    const refreshedWorkflowsResponse = await mounted.request('http://localhost/app-template-default/api/workflows');
+    await expect(refreshedWorkflowsResponse.json()).resolves.toMatchObject({
+      data: [{ id: workflowId, executed: 2 }],
+    });
+
+    await app.close();
+    expect(isAppWorkflowRuntimeStarted(workflowRuntime)).toBe(false);
+    await database.destroy();
   });
 
   it('serves an app-local HTML route outside the API namespace', async () => {
@@ -198,7 +398,7 @@ describe('app server', () => {
 
   it('registers embedded app resources with the scope', async () => {
     const registeredDisposers: RegisteredTestDisposer[] = [];
-    const app = await createEmbeddedServer(createEmbeddedTestScope({
+    const app = await createEmbeddedServer(await createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/embedded-app-template-default',
     }, registeredDisposers));
@@ -225,7 +425,7 @@ describe('app server', () => {
       '<div id="root"></div><script type="module" src="/app-template-default/assets/index.js"></script>',
     );
 
-    const app = await createEmbeddedServer(createEmbeddedTestScope({
+    const app = await createEmbeddedServer(await createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/app-template-default',
       clientDir: root,
@@ -264,7 +464,7 @@ describe('app server', () => {
     );
     writeFileSync(path.join(clientDir, 'index.html'), '<script type="module" src="/app-template-default/assets/index.js"></script>');
 
-    const app = await createEmbeddedServer(createEmbeddedTestScope({
+    const app = await createEmbeddedServer(await createEmbeddedTestScope({
       id: 'app-template-default',
       basePath: '/app-template-default',
       rootDir: appRoot,
@@ -1163,6 +1363,15 @@ interface CreateTestAppOptions {
 }
 
 function createTestApp(options: CreateTestAppOptions = {}): TestApp {
+  return createTestAppFixture(options).app;
+}
+
+interface TestAppFixture {
+  app: TestApp;
+  runtime: AppRuntime<AppConfig>;
+}
+
+function createTestAppFixture(options: CreateTestAppOptions = {}): TestAppFixture {
   const publicBasePath = normalizeBasePath(options.publicBasePath ?? '/app-template-default');
   const internalApiProxyPath = '/v2/api';
   const config = {
@@ -1187,6 +1396,9 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     logger: createSilentLoggerConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
+    workflow: {
+      sourceRoot: '',
+    },
     server: {
       host: '127.0.0.1',
       port: 0,
@@ -1213,13 +1425,34 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     close: () => lifecycle.disposeAll(),
   });
 
-  return trackCloseable(app);
+  return {
+    app: trackCloseable(app),
+    runtime,
+  };
 }
 
-function createEmbeddedTestScope(
+async function createEmbeddedTestScope(
   options: Omit<AppScope, 'registerDisposer'>,
   registeredDisposers: RegisteredTestDisposer[] = [],
-): AppScope {
+): Promise<AppScope> {
+  const rootDir = options.rootDir ?? mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-embedded-scope-'));
+  if (!options.rootDir) {
+    tempDirs.push(rootDir);
+  }
+  const dataDir = options.dataDir ?? path.join(rootDir, 'data');
+  mkdirSync(dataDir, { recursive: true });
+  const database = createDatabaseManager({
+    default: 'sqlite',
+    connections: {
+      sqlite: {
+        dialect: 'sqlite',
+        filename: path.join(dataDir, 'database.sqlite'),
+      },
+    },
+  });
+  await createWorkflowCollections(database.builder());
+  await database.destroy();
+
   const lifecycle = createAppDisposerRegistry();
   apps.push({
     close: () => lifecycle.disposeAll(),
@@ -1227,6 +1460,8 @@ function createEmbeddedTestScope(
 
   return {
     ...options,
+    rootDir,
+    dataDir,
     registerDisposer(name, dispose) {
       registeredDisposers.push({ name, dispose });
       lifecycle.registerDisposer(name, dispose);

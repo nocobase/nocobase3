@@ -5,6 +5,11 @@ import type { AppLoggerConfig } from '@nocobase/logger';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 
+export interface AppWorkflowConfig {
+  /** Directory containing application-owned workflow source packages. */
+  sourceRoot: string;
+}
+
 export interface AppRoutingConfig {
   name: string;
   publicBasePath: string;
@@ -38,6 +43,7 @@ export interface AppConfig {
   logger: AppLoggerConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
+  workflow: AppWorkflowConfig;
   server: AppServerConfig;
   spa: AppSpaConfig;
 }

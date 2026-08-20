@@ -109,6 +109,9 @@ const report = {
       hotReload: config.queue.jobs?.hotReload ?? false,
     },
   },
+  workflow: {
+    queueName: `workflow:${config.app.name}`,
+  },
   session: {
     enabled: config.session.enabled ?? true,
     default: activeSessionName || '(none)',
@@ -399,6 +402,9 @@ function printReport(value: typeof report): void {
   printJson('Job locations', value.queue.jobs.locations);
   printPair('Auto-load jobs', String(value.queue.jobs.autoLoad));
   printPair('Hot reload jobs', String(value.queue.jobs.hotReload));
+
+  printSection('Workflow');
+  printPair('Queue name', value.workflow.queueName);
 
   printSection('Session');
   printPair('Enabled', String(value.session.enabled));

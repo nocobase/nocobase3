@@ -21,6 +21,7 @@ import {
   loadStandaloneAppConfig,
   onceAsync,
   prepareAppRuntime,
+  startAppWorkflow,
   type AppDisposerRegistry,
 } from './runtime/index.js';
 
@@ -34,6 +35,7 @@ interface NodeHttpConnectionControls {
 
 export interface StandaloneServerOptions {
   viteDevUrl?: string | false;
+  moduleUrl?: string;
 }
 
 export interface StandaloneServerListenOptions {
@@ -54,32 +56,37 @@ export async function createStandaloneServer(
   const lifecycle = createAppDisposerRegistry();
 
   try {
-    const runtime = createStandaloneRuntime();
+    const runtime = createStandaloneRuntime(options.moduleUrl);
     const websocketAbortController = new AbortController();
 
     lifecycle.registerDisposer('runtime', onceAsync(() => runtime.dispose()));
     await prepareAppRuntime(runtime);
 
-    const app = createStandaloneAppFromRuntime(runtime, lifecycle, websocketAbortController.signal, options);
+    const app = createAppFromRuntime(runtime, {
+      ...options,
+      lifecycle,
+    });
+    await startAppWorkflow(runtime);
+    const server = createStandaloneServerAdapter(app, runtime, lifecycle, websocketAbortController.signal);
     lifecycle.registerDisposer('websocket-connections', () => {
       websocketAbortController.abort(new Error('app server closed'));
     });
 
-    return app;
+    return server;
   } catch (error) {
     return disposeAfterStartupFailure(lifecycle.disposeAll, error);
   }
 }
 
-export function startServer(): void {
-  void startServerAsync().catch((error) => {
+export function startServer(options: StandaloneServerOptions = {}): void {
+  void startServerAsync(options).catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });
 }
 
-async function startServerAsync(): Promise<void> {
-  const app = await createStandaloneServer();
+async function startServerAsync(options: StandaloneServerOptions): Promise<void> {
+  const app = await createStandaloneServer(options);
 
   try {
     const server = serve(
@@ -102,20 +109,16 @@ async function startServerAsync(): Promise<void> {
   }
 }
 
-export function createStandaloneRuntime(): AppRuntime<AppConfig> {
-  return createAppRuntime(loadStandaloneAppConfig(import.meta.url));
+export function createStandaloneRuntime(moduleUrl: string = import.meta.url): AppRuntime<AppConfig> {
+  return createAppRuntime(loadStandaloneAppConfig(moduleUrl));
 }
 
-function createStandaloneAppFromRuntime(
+function createStandaloneServerAdapter(
+  app: AppServer,
   runtime: AppRuntime<AppConfig>,
   lifecycle: AppDisposerRegistry,
   signal: AbortSignal,
-  options: StandaloneServerOptions = {},
 ): StandaloneServer {
-  const app = createAppFromRuntime(runtime, {
-    ...options,
-    lifecycle,
-  });
   const mounted = createPublicBasePathAdapter(app, runtime.config.app.publicBasePath);
 
   return Object.assign(mounted, {
@@ -296,17 +299,22 @@ async function disposeAfterStartupFailure(dispose: () => Promise<void>, startupE
   throw startupError;
 }
 
-if (isEntrypoint()) {
-  startServer();
-}
-
-function isEntrypoint(): boolean {
-  const modulePath = fileURLToPath(import.meta.url);
+export function startServerIfEntrypoint(
+  moduleUrl: string,
+  options: StandaloneServerOptions = {},
+): void {
+  const modulePath = fileURLToPath(moduleUrl);
   const entry = process.argv[1];
   const pm2Entry = process.env.pm_exec_path;
 
-  return Boolean(
+  const isEntrypoint = Boolean(
     (entry && path.resolve(entry) === modulePath) ||
       (pm2Entry && path.resolve(pm2Entry) === modulePath),
   );
+
+  if (isEntrypoint) {
+    startServer({ ...options, moduleUrl });
+  }
 }
+
+startServerIfEntrypoint(import.meta.url);

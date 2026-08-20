@@ -8,6 +8,7 @@ import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 import { createApp, type AppServer } from '../app.js';
 import type { AppLifecycle } from '../app-options.js';
 import type { AppConfig } from '../config/index.js';
+import { startRuntimeWorkflow } from '../workflows/runtime.js';
 
 export interface CreateAppFromRuntimeOptions {
   lifecycle: AppLifecycle;
@@ -35,6 +36,10 @@ export function createAppFromRuntime(
   });
 }
 
+export async function startAppWorkflow(runtime: AppRuntime<AppConfig>): Promise<void> {
+  await startRuntimeWorkflow(runtime);
+}
+
 export function createPublicBasePathAdapter(app: AppServer, publicBasePath: string): AppServer {
   const basePath = normalizeBasePath(publicBasePath);
   if (!basePath) {
@@ -42,6 +47,7 @@ export function createPublicBasePathAdapter(app: AppServer, publicBasePath: stri
   }
 
   const mounted = new Hono() as AppServer;
+  mounted.workflowRuntime = app.workflowRuntime;
 
   mounted.all(basePath, (context) => dispatchMountedApp(app, context.req.raw, basePath));
   mounted.all(`${basePath}/*`, (context) => dispatchMountedApp(app, context.req.raw, basePath));

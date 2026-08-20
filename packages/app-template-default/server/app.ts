@@ -18,12 +18,14 @@ import { createAppServices } from './services/index.js';
 import { registerAppRoutes } from './routes/index.js';
 import { createWebSocketHandler, registerWebSocketRoutes } from './routes/websocket.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
+import type { AppWorkflowRuntime } from './workflows/runtime.js';
 
 export type { AppDisposer, AppLifecycle, CreateAppOptions, SpaHandler } from './app-options.js';
 export { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
 export type AppServer = Hono & {
   websocket?: AppWebSocketHandler;
+  workflowRuntime?: AppWorkflowRuntime;
 };
 
 export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOptions): AppServer {
@@ -72,5 +74,6 @@ export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOpti
 
   return Object.assign(app, {
     websocket: createWebSocketHandler({ realtime }),
+    workflowRuntime: deps.workflowRuntime,
   });
 }

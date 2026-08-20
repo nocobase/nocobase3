@@ -50,7 +50,7 @@ export default defineConfig(({ command, mode }) => {
         ? env.NOCOBASE_E2E_API_URL.trim().replace(/\/$/, "")
         : joinBase(appBase, "/v2/api")
       : undefined;
-  const viteDevHost = env.APP_VITE_DEV_HOST || "127.0.0.1";
+  const viteHmrHost = env.APP_VITE_HMR_HOST;
   const viteDevPort = numberFromEnv(env.APP_VITE_DEV_PORT) ?? 5173;
   const registrySourceRoot = path.resolve(__dirname, "./registry");
   const extensionsRoot = fs.existsSync(registrySourceRoot)
@@ -98,7 +98,10 @@ export default defineConfig(({ command, mode }) => {
       command === "serve"
         ? {
             hmr: {
-              host: viteDevHost,
+              // When the dev server listens on 0.0.0.0, let the client reuse
+              // the hostname from the page URL. This keeps HMR working for
+              // both localhost and LAN clients.
+              ...(viteHmrHost ? { host: viteHmrHost } : {}),
               clientPort: viteDevPort,
             },
           }

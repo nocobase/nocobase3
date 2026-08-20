@@ -1,10 +1,4 @@
 {
-  "extends": "./tsconfig.server.json",
-  "compilerOptions": {
-    "declaration": false,
-    "declarationMap": false,
-    "isolatedDeclarations": false
-  },
-  "include": ["server/migrations/**/*.ts"],
-  "exclude": []
+  "extends": ["./tsconfig.server.json", "./tsconfig.migrations.base.json"],
+  "include": ["server/migrations/**/*.ts"]
 }

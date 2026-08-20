@@ -1,0 +1,60 @@
+{
+  "name": "@nocobase/workflow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "workflow": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./collections": {
+      "source": "./src/collections/index.ts",
+      "types": "./dist/collections/index.d.ts",
+      "import": "./dist/collections/index.js"
+    },
+    "./server": {
+      "source": "./src/server/index.ts",
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./workflow-source": {
+      "source": "./src/workflow-source/index.ts",
+      "types": "./dist/workflow-source/index.d.ts",
+      "import": "./dist/workflow-source/index.js"
+    },
+    "./workflow-source/triggers": {
+      "source": "./src/workflow-source/triggers/index.ts",
+      "types": "./dist/workflow-source/triggers/index.d.ts",
+      "import": "./dist/workflow-source/triggers/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nocobase/database": "workspace:*",
+    "@nocobase/queue": "workspace:*",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@boringnode/queue": "^0.7.1",
+    "@types/node": "^22.13.0",
+    "better-sqlite3": "^13.0.3",
+    "knex": "^3.1.0",
+    "vitest": "^3.0.5"
+  }
+}

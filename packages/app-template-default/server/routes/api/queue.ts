@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 
 import type { NocoBaseQueueManager } from '@nocobase/queue';
-import QueueDemoJob, { queueDemoExecutions } from '@/jobs/queue-demo.js';
+import QueueDemoJob, { queueDemoExecutions } from '../../jobs/queue-demo.js';
 
 export interface CreateQueueRoutesOptions {
   queueManager: NocoBaseQueueManager;

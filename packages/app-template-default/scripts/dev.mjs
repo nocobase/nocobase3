@@ -5,7 +5,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const viteDevHost = "127.0.0.1";
 const viteDevPreferredPort = 5173;
 
 const parseEnv = (content) => {
@@ -187,21 +186,29 @@ process.once("SIGINT", () => shutdown(0));
 process.once("SIGTERM", () => shutdown(0));
 
 const env = loadEnv();
+// Bind both development servers to every interface by default. The host can
+// still be overridden through APP_VITE_DEV_HOST / APP_SERVER_HOST.
+const viteDevHost = env.APP_VITE_DEV_HOST || "0.0.0.0";
 const vitePort = await findAvailablePort(viteDevHost, viteDevPreferredPort);
+const appBasePath = String(env.APP_BASE_PATH || `/${env.APP_NAME || "app-template-default"}`)
+  .trim()
+  .replace(/^\/+|\/+$/g, "");
+const proxyApiPath =
+  env.NOCOBASE_API_URL || `/${[appBasePath, "v2/api"].filter(Boolean).join("/")}`;
 const nextEnv = {
   ...env,
+  APP_SERVER_HOST: env.APP_SERVER_HOST || "0.0.0.0",
   APP_VITE_DEV_HOST: viteDevHost,
   APP_VITE_DEV_PORT: String(vitePort),
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
+  // Vite exposes this value to the browser. Keep it relative so LAN clients
+  // access the app server proxy instead of their own 127.0.0.1.
+  NOCOBASE_API_URL: proxyApiPath,
 };
 const appServerHost = nextEnv.APP_SERVER_HOST || "127.0.0.1";
 const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13000);
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;
-const appBasePath = String(nextEnv.APP_BASE_PATH || "/app-template-default")
-  .trim()
-  .replace(/^\/+|\/+$/g, "");
 const appUrl = appBasePath ? `${appServerUrl}/${appBasePath}/` : `${appServerUrl}/`;
-const proxyApiPath = `/${[appBasePath, "v2/api"].filter(Boolean).join("/")}`;
 
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);

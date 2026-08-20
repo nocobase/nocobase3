@@ -19,6 +19,7 @@ import logger from '../../server/config/logger.ts';
 import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
 import spa from '../../server/config/spa.ts';
+import workflow from '../../server/config/workflow.ts';
 import { createStandaloneRuntime } from '../../server/index.ts';
 import { loadEmbeddedAppConfig } from '../../server/runtime/config.ts';
 
@@ -45,6 +46,7 @@ describe('template config registry', () => {
     expect(config.drive.default).toBe('local');
     expect(config.logger.default).toBe('app');
     expect(config.queue.default).toBe('sync');
+    expect(config.workflow.sourceRoot).toBe('/tmp/app-template-default/server/workflows');
     expect(config.server.host).toBe('127.0.0.1');
     expect(config.spa.indexPath).toBe('/tmp/app-template-default/dist/client/index.html');
   });
@@ -133,6 +135,17 @@ describe('app config', () => {
     expect(config.queue.jobs?.locations).toEqual([
       path.join(root, 'dist/server/jobs/**/*.{ts,js}'),
     ]);
+  });
+});
+
+describe('workflow config', () => {
+  it('resolves the application workflow source directory', () => {
+    expect(workflow({
+      env: createConfigEnv({}),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    })).toEqual({
+      sourceRoot: '/tmp/app-template-default/server/workflows',
+    });
   });
 });
 
@@ -606,6 +619,10 @@ describe('database migrations', () => {
       expect.objectContaining({
         name: '202608180001_create_app_settings_table',
         fileName: '202608180001_create_app_settings_table.ts',
+      }),
+      expect.objectContaining({
+        name: '202608200001_create_workflow_collections',
+        fileName: '202608200001_create_workflow_collections.ts',
       }),
     ]);
   });
