@@ -140,17 +140,21 @@ packages/dev-config/
 
 ### 5.4 当前 package 映射
 
-| Package/配置                                  | 上游 preset                | 本地保留内容                                 |
-| --------------------------------------------- | -------------------------- | -------------------------------------------- |
-| `app-template-default/tsconfig.json`          | `client`                   | client/registry include、aliases             |
-| `hub/tsconfig.json`                           | `client`                   | client/registry include、aliases             |
-| `portal-sdk`                                  | `client-library`           | src/test 范围、输出目录                      |
-| `app-host`                                    | `server-library` + DOM lib | Node types、src/fixtures/test 范围、输出目录 |
-| Portal `tsconfig.server.json`                 | `server-library`           | 服务端入口、输出、aliases                    |
-| Portal `tsconfig.node.json`                   | `node-tooling`             | config/scripts 范围、aliases                 |
-| Template migrations                           | 继承本地 server 配置       | 关闭 declaration、单独 include/exclude       |
-| `app-server/cache/drive/logger/queue/session` | `server-library`           | src/test 范围与输出目录                      |
-| `database`                                    | `server-library`           | 特殊 rootDir、test include、输出布局         |
+| Package/配置                                     | 上游 preset                | 本地保留内容                                 |
+| ------------------------------------------------ | -------------------------- | -------------------------------------------- |
+| `app-template-default/tsconfig.json`             | `client`                   | client/registry include、aliases             |
+| `hub/tsconfig.json`                              | `client`                   | client/registry include、aliases             |
+| `portal-sdk`                                     | `client-library`           | src/test 范围、输出目录                      |
+| `app-sdk`                                        | `client-library`           | 浏览器 API、src 范围与输出目录               |
+| `app-host`                                       | `server-library` + DOM lib | Node types、src/fixtures/test 范围、输出目录 |
+| `authentication`                                 | `server-library` + DOM lib | server/client 入口；UI 由消费端检查          |
+| `authorization`                                  | `server-library`           | src 范围与数据库依赖                         |
+| Portal `tsconfig.server.json`                    | `server-library`           | 服务端入口、输出、aliases                    |
+| Portal `tsconfig.node.json`                      | `node-tooling`             | config/scripts 范围、aliases                 |
+| Template migrations                              | 继承本地 server 配置       | 关闭 declaration、单独 include/exclude       |
+| `app-server/caching/drive/logging/queue/session` | `server-library`           | src/test 范围与输出目录                      |
+| `id-generator`                                   | `client-library`           | isomorphic/browser-safe 源码与输出目录       |
+| `database`                                       | `server-library`           | 特殊 rootDir、test include、输出布局         |
 
 ## 6. ESLint 统一方案
 

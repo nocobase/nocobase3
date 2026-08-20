@@ -47,12 +47,16 @@ Every package that emits `.d.ts` files (`declaration: true`) enables both `isola
 | Configuration                                        | Purpose                    |
 | ---------------------------------------------------- | -------------------------- |
 | `packages/portal-sdk/tsconfig.json`                  | Portal SDK                 |
+| `packages/app-sdk/tsconfig.json`                     | Browser app SDK            |
+| `packages/authentication/tsconfig.json`              | Authentication library     |
+| `packages/authorization/tsconfig.json`               | Authorization library      |
 | `packages/database/tsconfig.json`                    | Database package           |
 | `packages/app-host/tsconfig.json`                    | Application host           |
 | `packages/app-server/tsconfig.json`                  | Application server library |
-| `packages/cache/tsconfig.json`                       | Cache library              |
+| `packages/caching/tsconfig.json`                     | Caching library            |
 | `packages/drive/tsconfig.json`                       | File storage library       |
-| `packages/logger/tsconfig.json`                      | Logging library            |
+| `packages/id-generator/tsconfig.json`                | ID generator library       |
+| `packages/logging/tsconfig.json`                     | Logging library            |
 | `packages/queue/tsconfig.json`                       | Queue library              |
 | `packages/session/tsconfig.json`                     | Session library            |
 | `packages/app-template-default/tsconfig.server.json` | Default template server    |

@@ -60,7 +60,7 @@ debugging path, proxy, database, or SPA index issues.
 5. Add a node test under `tests/logic`. Prefer `createApp()` with a small fake
    service or fake `DatabaseManager` for local API behavior.
 6. Run `pnpm test -- tests/logic/app-server.test.ts` for route/proxy/SPA
-   behavior, and add `tests/logic/database-config.test.ts` when config or
+   behavior, and add `tests/logic/config.test.ts` when config or
    migrations changed.
 
 ## Adding Server Config
@@ -100,6 +100,6 @@ debugging path, proxy, database, or SPA index issues.
 ```bash
 pnpm server:config
 pnpm server:config -- --json
-pnpm test -- tests/logic/app-server.test.ts tests/logic/database-config.test.ts
+pnpm test -- tests/logic/app-server.test.ts tests/logic/config.test.ts
 pnpm typecheck
 ```

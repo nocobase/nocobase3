@@ -16,16 +16,18 @@ const rootNodeFiles = [
 ];
 const nodeLibraryRoots = [
   "packages/app-server",
-  "packages/cache",
+  "packages/authorization",
+  "packages/caching",
   "packages/database",
   "packages/drive",
   "packages/app-host",
-  "packages/logger",
+  "packages/id-generator",
+  "packages/logging",
   "packages/queue",
   "packages/session",
 ];
 const devConfigRoots = ["packages/dev-config"];
-const clientLibraryRoots = ["packages/portal-sdk"];
+const clientLibraryRoots = ["packages/app-sdk", "packages/portal-sdk"];
 const portalRoots = ["packages/app-template-default", "packages/hub"];
 const prefixPatterns = (roots, patterns) =>
   roots.flatMap((root) => patterns.map((pattern) => `${root}/${pattern}`));
@@ -76,6 +78,14 @@ export default [
     }),
     clientLibraryRoots,
     "client-libraries",
+  ),
+  ...scopePackageConfigs(
+    createClientLibraryConfig({
+      tsconfigRootDir: import.meta.dirname,
+      ignores: ["ui/**"],
+    }),
+    ["packages/authentication"],
+    "authentication",
   ),
   ...scopePackageConfigs(
     createPortalConfig({

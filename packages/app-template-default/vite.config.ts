@@ -10,7 +10,9 @@ const portalTemplate = JSON.parse(
 
 const normalizeBase = (base?: string) => {
   const normalized = String(base || "/").trim();
-  if (!normalized || normalized === "/") return "/";
+  if (!normalized || normalized === "/") {
+    return "/";
+  }
   return `/${normalized.replace(/^\/+|\/+$/g, "")}/`;
 };
 
@@ -45,9 +47,19 @@ export default createPortalViteConfig(
           : joinBase(appBase, "/v2/api")
         : undefined;
     const registrySourceRoot = path.resolve(__dirname, "./registry");
+    const clientExtensionsRoot = path.resolve(__dirname, "./client/extensions");
     const extensionsRoot = fs.existsSync(registrySourceRoot)
       ? registrySourceRoot
-      : path.resolve(__dirname, "./client/extensions");
+      : clientExtensionsRoot;
+    const localExtensionAliases = fs.existsSync(clientExtensionsRoot)
+      ? fs
+          .readdirSync(clientExtensionsRoot, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => ({
+            find: `@/extensions/${entry.name}`,
+            replacement: path.join(clientExtensionsRoot, entry.name),
+          }))
+      : [];
     const defineEnv: Record<string, string> = {
       __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
         command === "serve" ? path.resolve(__dirname) : "",
@@ -70,14 +82,16 @@ export default createPortalViteConfig(
     optionalDefineEnv(defineEnv, "NOCOBASE_WS_PATH", env.NOCOBASE_WS_PATH);
 
     return {
+      root: __dirname,
       base: viteBase,
       define: defineEnv,
       envPrefix: ["VITE_"],
       resolve: {
-        alias: {
-          "@/extensions": extensionsRoot,
-          "@": path.resolve(__dirname, "./client"),
-        },
+        alias: [
+          ...localExtensionAliases,
+          { find: "@/extensions", replacement: extensionsRoot },
+          { find: "@", replacement: path.resolve(__dirname, "./client") },
+        ],
       },
     };
   },

@@ -46,7 +46,7 @@
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "catalog:",
     "eslint": "catalog:",
     "mysql2": "^3.23.3",
     "pg": "^8.23.0",
