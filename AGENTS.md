@@ -1,36 +1,86 @@
 # AGENTS.md
 
-## 类库开发的 TypeScript 要求
+## Selecting and Using Shared Development Configuration
 
-凡是会产出 `.d.ts` 的包（`declaration: true`），tsconfig 都已开启 `isolatedDeclarations: true` 和 `isolatedModules: true`。当前覆盖：
+All new packages must use `@nocobase/dev-config` by default. Do not copy a complete tsconfig, ESLint, Prettier, Vitest, or Vite configuration from an existing package. See `packages/dev-config/README.md` for the full English documentation; each configuration directory also has its own README.
 
-| 配置 | 说明 |
-| --- | --- |
-| `packages/portal-sdk/tsconfig.json` | SDK 主体 |
-| `packages/database/tsconfig.json` | 数据库包 |
-| `packages/app-host/tsconfig.json` | 应用宿主 |
-| `packages/app-template-default/tsconfig.server.json` | 模板服务端 |
-| `packages/hub/tsconfig.server.json` | Hub 服务端 |
+### Selecting a TypeScript Preset
 
-在这些范围内写代码时，导出的 API 必须能脱离类型推断、单看这一个文件就生成声明，因此要遵守下面几条。
+First determine the runtime environment, then whether the package emits declaration files:
 
-### 所有导出都要显式标注类型
+| Scenario                                                          | `extends`                                           |
+| ----------------------------------------------------------------- | --------------------------------------------------- |
+| Minimal shared strict rules only                                  | `@nocobase/dev-config/tsconfig/base.json`           |
+| Browser or React application with no emit                         | `@nocobase/dev-config/tsconfig/client.json`         |
+| Browser or React library that emits `.d.ts`                       | `@nocobase/dev-config/tsconfig/client-library.json` |
+| Node server application                                           | `@nocobase/dev-config/tsconfig/server.json`         |
+| Node library that emits `.d.ts`                                   | `@nocobase/dev-config/tsconfig/server-library.json` |
+| Node tooling such as Vite, Vitest, or build scripts, with no emit | `@nocobase/dev-config/tsconfig/node-tooling.json`   |
 
-- 导出的函数、方法、getter 一律写明返回类型，包括箭头函数。
-- 有默认值的参数要写类型，`name = getDefault()` 应写成 `name: string = getDefault()`。
-- 导出的 `const` 要写类型，尤其是 `createContext(...)`、`new SomeClass()` 这类由调用结果推断出来的值：`export const client: NocoBaseClient = new NocoBaseClient();`。
-- 返回匿名对象的函数，把返回结构提成具名的导出类型再引用，不要依赖结构推断。项目里的 `RouteSurfaceState`、`AppExtensionContributions`、`UseGetRolesResult` 就是这么来的。
+A hybrid Node/DOM package such as `app-host` should use `server-library` and add the DOM library locally. Keep the package-specific `include`, `exclude`, `paths`, `rootDir`, `outDir`, `tsBuildInfoFile`, and special `types` settings in the consuming package because they depend on its directory layout.
 
-### 不允许用逃逸手段绕过
+### ESLint, Prettier, Vitest, and Vite
 
-不要用 `as any`、`@ts-ignore`、`@ts-expect-error` 来消除 `isolatedDeclarations` 报错，也不要为了让类型通过而放宽成 `any` / `unknown`。报错说明这个导出的类型契约没写清楚，正确做法是补上准确的标注。
+- Use a thin `eslint.config.js`. Node libraries call `createNodeLibraryConfig`, browser libraries call `createClientLibraryConfig`, and Portals call `createPortalConfig`.
+- A package may add precise `ignores` or documented, narrowly scoped rule exceptions. Do not disable type-aware linting across an entire package merely to complete a migration.
+- Inherit Prettier through `"prettier": "@nocobase/dev-config/prettier"` in `package.json`.
+- Prefer `pnpm fix` after editing code. It always runs ESLint `--fix` before Prettier `--write`. `pnpm format:check` is a read-only incremental check.
+- Node tests use `createNodeVitestConfig`. React/jsdom tests use `createReactVitestConfig`. The React preset already installs jest-dom matchers and Testing Library cleanup.
+- Portal Vite configurations use `createPortalViteConfig` and inject the compatibility plugin from `@nocobase/portal-sdk/vite`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
+- Keep Playwright configuration package-local for now; there is no shared Playwright preset.
 
-标注要贴合运行时的真实行为，不能为了让编译通过而写一个更宽或更窄的类型。举两个项目里的实际例子：`resolveAclDataSourceKey` 会走到 `return undefined`，所以类型是 `string | undefined` 而不是 `string`；`NocoBaseClient.stream()` 内部对 `!response.body` 已经 throw，非空收窄成立，所以返回 `Promise<ReadableStream<Uint8Array>>` 而不是带 `| null`。标注错了会直接传导成下游包的编译错误。
+### Dependencies and Runtime
 
-### 改动后的验证
+- Use `catalog:` entries from `pnpm-workspace.yaml` for shared critical dependencies such as TypeScript, ESLint, Prettier, Vitest, Vite, React, Tailwind, and Testing Library.
+- Continue to use `workspace:` for internal NocoBase packages. A peer dependency may retain an explicit version range when it intentionally supports a wider range than the workspace version.
+- After changing dependencies, run `CI=true pnpm install --no-frozen-lockfile` and commit the synchronized lockfile. CI uses a frozen lockfile.
+- Node runtime, server, and tooling packages declare Node `>=24.0.0`. A browser-only runtime must not declare a Node runtime requirement merely because its development tooling uses Node.
 
-至少要跑通对应包的 `pnpm typecheck` 和 `pnpm build`；改 `portal-sdk` 时还要跑 `app-template-default` 和 `hub` 的 typecheck，因为它们的 `exports` 直接指向 SDK 源码，SDK 的类型标注会立刻影响下游。
+### Validation
 
-## 其他
+At minimum, run `lint`, `typecheck`, `test`, and `build` for every package you modify. Root `pnpm check` also performs incremental formatting and publish-ready tarball checks. The Husky + lint-staged pre-commit hook fixes staged files automatically, but it does not replace CI.
 
-- 应用侧的 client 代码（`app-template-default` / `hub` 的 `tsconfig.json`、`tsconfig.node.json`）是 `noEmit`，只开了 `isolatedModules`，不受上面 `isolatedDeclarations` 的约束。
+## TypeScript Requirements for Library Development
+
+Every package that emits `.d.ts` files (`declaration: true`) enables both `isolatedDeclarations: true` and `isolatedModules: true`. This currently covers:
+
+| Configuration                                        | Purpose                    |
+| ---------------------------------------------------- | -------------------------- |
+| `packages/portal-sdk/tsconfig.json`                  | Portal SDK                 |
+| `packages/app-sdk/tsconfig.json`                     | Browser app SDK            |
+| `packages/authentication/tsconfig.json`              | Authentication library     |
+| `packages/authorization/tsconfig.json`               | Authorization library      |
+| `packages/database/tsconfig.json`                    | Database package           |
+| `packages/app-host/tsconfig.json`                    | Application host           |
+| `packages/app-server/tsconfig.json`                  | Application server library |
+| `packages/caching/tsconfig.json`                     | Caching library            |
+| `packages/drive/tsconfig.json`                       | File storage library       |
+| `packages/id-generator/tsconfig.json`                | ID generator library       |
+| `packages/logging/tsconfig.json`                     | Logging library            |
+| `packages/queue/tsconfig.json`                       | Queue library              |
+| `packages/session/tsconfig.json`                     | Session library            |
+| `packages/app-template-default/tsconfig.server.json` | Default template server    |
+| `packages/hub/tsconfig.server.json`                  | Hub server                 |
+
+Within these scopes, every exported API must be declarable from the current file alone, without relying on cross-file type inference.
+
+### Add Explicit Types to Every Export
+
+- Exported functions, methods, getters, and arrow functions must declare their return types.
+- Parameters with defaults must still declare their types. Write `name: string = getDefault()`, not `name = getDefault()`.
+- Exported constants must declare their types, especially values inferred from calls such as `createContext(...)` or `new SomeClass()`. For example: `export const client: NocoBaseClient = new NocoBaseClient();`.
+- When a function returns an anonymous object, extract the structure into a named exported type and use it as the return type. Existing examples include `RouteSurfaceState`, `AppExtensionContributions`, and `UseGetRolesResult`.
+
+### Do Not Bypass Declaration Errors
+
+Do not use `as any`, `@ts-ignore`, or `@ts-expect-error` to suppress `isolatedDeclarations` errors. Do not widen a type to `any` or `unknown` merely to make compilation pass. These errors indicate that the exported contract needs a precise annotation.
+
+Annotations must match runtime behavior. For example, `resolveAclDataSourceKey` can return `undefined`, so its return type is `string | undefined` rather than `string`. `NocoBaseClient.stream()` throws when `response.body` is absent, so its return type is `Promise<ReadableStream<Uint8Array>>` rather than a nullable stream. Incorrect annotations propagate directly into downstream package failures.
+
+### Validation After Changes
+
+Run `pnpm typecheck` and `pnpm build` for the affected package. When changing `portal-sdk`, also run the `app-template-default` and `hub` typechecks because their exports point directly to SDK source and immediately consume its annotations.
+
+## Other Notes
+
+- Client code in `app-template-default` and `hub` (`tsconfig.json` and `tsconfig.node.json`) uses `noEmit` and only requires `isolatedModules`; it is not subject to the `isolatedDeclarations` rules above.

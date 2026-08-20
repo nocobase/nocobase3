@@ -47,7 +47,7 @@ export const UserEdit = ({
         description={translate(
           "users.drawer.edit.description",
           { ns: "app" },
-          "Update this user's identity and contact information."
+          "Update this user's identity and contact information.",
         )}
         closeLabel={translate("buttons.close", "Close")}
         closeTo={closeTo}
@@ -86,7 +86,8 @@ function UserEditForm({ id }: { id?: string }) {
       redirect: false,
       queryOptions: { enabled: false },
       onMutationSuccess: () => {
-        close({ skipBeforeClose: true });
+        const closePromise = close({ skipBeforeClose: true });
+        closePromise.catch(() => undefined);
       },
     },
     defaultValues: getUserFormValues(),
@@ -94,7 +95,7 @@ function UserEditForm({ id }: { id?: string }) {
   useUserFormHydration({ form, id, record });
   const aiFields = useMemo<AIFormField[]>(
     () => getAIUserFormFields(translate),
-    [translate]
+    [translate],
   );
   const aiFormRef = useAIForm({
     id: `users-edit-form-${id ?? "current"}`,
@@ -109,7 +110,7 @@ function UserEditForm({ id }: { id?: string }) {
       <form
         ref={aiFormRef}
         onSubmit={form.handleSubmit((values) =>
-          onFinish(normalizeUserFormValues(values))
+          onFinish(normalizeUserFormValues(values)),
         )}
         className="flex min-h-0 flex-1 flex-col"
       >
@@ -122,19 +123,23 @@ function UserEditForm({ id }: { id?: string }) {
                 {translate(
                   "users.detail.loadError.title",
                   { ns: "app" },
-                  "Unable to load user"
+                  "Unable to load user",
                 )}
               </AlertTitle>
               <AlertDescription>
                 {translate(
                   "users.detail.loadError.description",
                   { ns: "app" },
-                  "The user may no longer exist, or you may not have permission to view it."
+                  "The user may no longer exist, or you may not have permission to view it.",
                 )}
               </AlertDescription>
             </Alert>
           ) : (
-            <UserFormFields form={form} roleAction="edit" translate={translate} />
+            <UserFormFields
+              form={form}
+              roleAction="edit"
+              translate={translate}
+            />
           )}
         </div>
         <RouteDrawerFooter className="flex-row justify-end">
@@ -154,12 +159,12 @@ function UserEditForm({ id }: { id?: string }) {
               ? translate(
                   "users.form.edit.submitting",
                   { ns: "app" },
-                  "Saving..."
+                  "Saving...",
                 )
               : translate(
                   "users.form.edit.submit",
                   { ns: "app" },
-                  "Save changes"
+                  "Save changes",
                 )}
           </Button>
         </RouteDrawerFooter>

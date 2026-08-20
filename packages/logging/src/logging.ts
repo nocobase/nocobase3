@@ -1,6 +1,6 @@
-import { createDefaultLoggingConfig } from './config.js';
-import { createLogger } from './logger.js';
-import type { Logger, LoggerConfig, LoggingConfig } from './types.js';
+import { createDefaultLoggingConfig } from "./config.js";
+import { createLogger } from "./logger.js";
+import type { Logger, LoggerConfig, LoggingConfig } from "./types.js";
 
 export class Logging {
   private readonly defaultLogger: string;
@@ -10,7 +10,7 @@ export class Logging {
 
   constructor(config: LoggingConfig = createDefaultLoggingConfig()) {
     const {
-      default: defaultLogger = 'system',
+      default: defaultLogger = "system",
       loggers = {},
       ...defaultConfig
     } = config;
@@ -19,7 +19,7 @@ export class Logging {
     this.loggerConfigs = loggers;
   }
 
-  getLogger(name = this.defaultLogger): Logger {
+  getLogger(name: string = this.defaultLogger): Logger {
     const existing = this.loggers.get(name);
     if (existing) {
       return existing;
@@ -36,7 +36,9 @@ export class Logging {
   }
 
   async flush(): Promise<void> {
-    await Promise.all([...this.loggers.values()].map((logger) => this.flushLogger(logger)));
+    await Promise.all(
+      [...this.loggers.values()].map((logger) => this.flushLogger(logger)),
+    );
   }
 
   private flushLogger(logger: Logger): Promise<void> {
@@ -52,7 +54,9 @@ export class Logging {
   }
 }
 
-export function createLogging(config: LoggingConfig = createDefaultLoggingConfig()): Logging {
+export function createLogging(
+  config: LoggingConfig = createDefaultLoggingConfig(),
+): Logging {
   return new Logging(config);
 }
 
@@ -68,7 +72,10 @@ function resolveLoggerConfig(
   };
 }
 
-function mergeLoggerConfig(defaultConfig: LoggerConfig, override: LoggerConfig | undefined): LoggerConfig {
+function mergeLoggerConfig(
+  defaultConfig: LoggerConfig,
+  override: LoggerConfig | undefined,
+): LoggerConfig {
   if (!override) {
     return { ...defaultConfig };
   }
@@ -77,11 +84,17 @@ function mergeLoggerConfig(defaultConfig: LoggerConfig, override: LoggerConfig |
     ...defaultConfig,
     ...override,
     base: mergeObjectConfig(defaultConfig.base, override.base),
-    transport: mergeTransportConfig(defaultConfig.transport, override.transport),
+    transport: mergeTransportConfig(
+      defaultConfig.transport,
+      override.transport,
+    ),
   };
 }
 
-function mergeObjectConfig<T>(base: T | undefined, override: T | undefined): T | undefined {
+function mergeObjectConfig<T>(
+  base: T | undefined,
+  override: T | undefined,
+): T | undefined {
   if (override === undefined) {
     return base;
   }
@@ -91,13 +104,13 @@ function mergeObjectConfig<T>(base: T | undefined, override: T | undefined): T |
   return {
     ...base,
     ...override,
-  } as T;
+  };
 }
 
 function mergeTransportConfig(
-  base: LoggerConfig['transport'],
-  override: LoggerConfig['transport'],
-): LoggerConfig['transport'] {
+  base: LoggerConfig["transport"],
+  override: LoggerConfig["transport"],
+): LoggerConfig["transport"] {
   if (override === undefined) {
     return base;
   }
@@ -109,19 +122,19 @@ function mergeTransportConfig(
     ...base,
     ...override,
     options: mergeObjectConfig(base.options, override.options),
-  } as LoggerConfig['transport'];
+  } as LoggerConfig["transport"];
 }
 
 function resolveTransportTemplate(
-  transport: LoggerConfig['transport'],
+  transport: LoggerConfig["transport"],
   loggerName: string,
-): LoggerConfig['transport'] {
+): LoggerConfig["transport"] {
   if (!isRecord(transport) || !isRecord(transport.options)) {
     return transport;
   }
 
   const destination = transport.options.destination;
-  if (typeof destination !== 'string' || !destination.includes('{logger}')) {
+  if (typeof destination !== "string" || !destination.includes("{logger}")) {
     return transport;
   }
 
@@ -129,11 +142,11 @@ function resolveTransportTemplate(
     ...transport,
     options: {
       ...transport.options,
-      destination: destination.replaceAll('{logger}', loggerName),
+      destination: destination.replaceAll("{logger}", loggerName),
     },
-  } as LoggerConfig['transport'];
+  } as LoggerConfig["transport"];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

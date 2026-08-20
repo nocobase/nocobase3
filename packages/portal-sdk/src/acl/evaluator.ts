@@ -28,7 +28,7 @@ export const mapRefineAction = (action: string): string =>
 
 export const getPermissionsForDataSource = (
   permissions: AclPermissionSet,
-  dataSourceKey = "main"
+  dataSourceKey = "main",
 ): AclResourcePermissions => {
   const dataSourcePermissions = permissions.dataSources?.[dataSourceKey];
   return dataSourcePermissions
@@ -64,7 +64,7 @@ export const resolveActionPermission = ({
   }
 
   const strategyAllowed = data.strategy?.actions?.some(
-    (item) => item.split(":")[0] === canonicalAction
+    (item) => item.split(":")[0] === canonicalAction,
   );
   return strategyAllowed ? {} : null;
 };
@@ -77,7 +77,7 @@ export const getEffectiveRoles = (permissions: AclPermissionSet): string[] =>
 
 export const matchesRoleConstraint = (
   permissions: AclPermissionSet,
-  constraint?: RoleConstraint
+  constraint?: RoleConstraint,
 ): boolean => {
   if (!constraint || permissions.allowAll) return true;
 
@@ -98,13 +98,13 @@ export type RecordPermissionResolver = typeof getRecordActionPermission;
 export const evaluateAccess = (
   permissions: AclPermissionSet,
   request: AclAccessRequest,
-  getRecordPermission: RecordPermissionResolver = getRecordActionPermission
+  getRecordPermission: RecordPermissionResolver = getRecordActionPermission,
 ): boolean => {
   const resourceAcl = getResourceAcl(request);
   if (
     !matchesRoleConstraint(
       permissions,
-      resourceAcl === false ? undefined : resourceAcl?.roles
+      resourceAcl === false ? undefined : resourceAcl?.roles,
     ) ||
     !matchesRoleConstraint(permissions, request.roles)
   ) {
@@ -140,12 +140,9 @@ export const evaluateAccess = (
   const dataSourceKey =
     resolveAclDataSourceKey(
       request,
-      request.meta as
-        | { dataSourceKey?: unknown; acl?: ResourceAcl }
-        | undefined,
+      request.meta,
       request.resourceItem?.meta as
-        | { dataSourceKey?: unknown; acl?: ResourceAcl }
-        | undefined
+        { dataSourceKey?: unknown; acl?: ResourceAcl } | undefined,
     ) ?? "main";
   const requestedAction = request.action ?? "list";
   const mappedAction =

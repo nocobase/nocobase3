@@ -7,27 +7,45 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import type { Duplex } from 'node:stream';
-import { AppRegistryError } from './errors.ts';
-import { applyFetchResponse, isClientResponseClose, requestPath, toFetchRequest } from './http-adapter.ts';
-import { DirectoryAppCatalog } from './app-catalog.ts';
-import { AppRuntimeRegistry } from './app-registry.ts';
-import { writeAppSystemLog } from './app-system-log.ts';
-import { getPathInsideApp, isAppAssetPath, serveAppAssets } from './static-client.ts';
-import { acceptWebSocketUpgrade, isWebSocketUpgrade, rejectWebSocketUpgrade } from './websocket.ts';
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import type { Duplex } from "node:stream";
+import { AppRegistryError } from "./errors.ts";
+import {
+  applyFetchResponse,
+  isClientResponseClose,
+  requestPath,
+  toFetchRequest,
+} from "./http-adapter.ts";
+import { DirectoryAppCatalog } from "./app-catalog.ts";
+import { AppRuntimeRegistry } from "./app-registry.ts";
+import { writeAppSystemLog } from "./app-system-log.ts";
+import {
+  getPathInsideApp,
+  isAppAssetPath,
+  serveAppAssets,
+} from "./static-client.ts";
+import {
+  acceptWebSocketUpgrade,
+  isWebSocketUpgrade,
+  rejectWebSocketUpgrade,
+} from "./websocket.ts";
 
-export * from './errors.ts';
-export * from './events.ts';
-export * from './http-adapter.ts';
-export * from './in-process-backend.ts';
-export * from './app-catalog.ts';
-export * from './app-registry.ts';
-export * from './app-runtime.ts';
-export * from './app-system-log.ts';
-export * from './static-client.ts';
-export * from './websocket.ts';
-export * from './app-types.ts';
+export * from "./errors.ts";
+export * from "./events.ts";
+export * from "./http-adapter.ts";
+export * from "./in-process-backend.ts";
+export * from "./app-catalog.ts";
+export * from "./app-registry.ts";
+export * from "./app-runtime.ts";
+export * from "./app-system-log.ts";
+export * from "./static-client.ts";
+export * from "./websocket.ts";
+export * from "./app-types.ts";
 
 export interface AppHostOptions {
   port?: number;
@@ -57,10 +75,18 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     evictionIntervalMs: options.evictionIntervalMs,
   });
 
-  const server = createServer(async (req, res) => {
+  const handleRequest = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> => {
     try {
       const path = requestPath(req);
-      const managementResponse = await managementApi(req, path, registry, appCatalog);
+      const managementResponse = await managementApi(
+        req,
+        path,
+        registry,
+        appCatalog,
+      );
       if (managementResponse) {
         await applyFetchResponse(res, managementResponse);
         return;
@@ -78,7 +104,11 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         const pathInside = getPathInsideApp(definition, path);
 
         if (isAppAssetPath(pathInside)) {
-          const assetResponse = await serveAppAssets(definition, req, pathInside);
+          const assetResponse = await serveAppAssets(
+            definition,
+            req,
+            pathInside,
+          );
           await applyFetchResponse(res, assetResponse ?? notFoundResponse());
           return;
         }
@@ -104,16 +134,34 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         }
 
         if (!res.destroyed) {
-          res.destroy(handleErrorError instanceof Error ? handleErrorError : new Error(String(handleErrorError)));
+          res.destroy(
+            handleErrorError instanceof Error
+              ? handleErrorError
+              : new Error(String(handleErrorError)),
+          );
         }
       }
     }
+  };
+
+  const server = createServer((req, res) => {
+    const requestPromise = handleRequest(req, res);
+    requestPromise.catch((error: unknown) => {
+      console.error(error);
+      if (!res.destroyed) {
+        res.destroy(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
   });
 
-  server.on('upgrade', (req, socket, head) => {
-    void dispatchAppWebSocket(req, socket, head, registry).catch((error) => {
+  server.on("upgrade", (req, socket, head) => {
+    const upgradePromise = dispatchAppWebSocket(req, socket, head, registry);
+    upgradePromise.catch((error: unknown) => {
       console.error(error);
-      rejectWebSocketUpgrade(socket, error instanceof AppRegistryError ? error.status : 500);
+      rejectWebSocketUpgrade(
+        socket,
+        error instanceof AppRegistryError ? error.status : 500,
+      );
     });
   });
 
@@ -126,20 +174,27 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       attachAppEventLogs(registry);
 
       await new Promise<void>((resolve) => {
-        server.listen(options.port ?? 3000, options.host ?? '127.0.0.1', resolve);
+        server.listen(
+          options.port ?? 3000,
+          options.host ?? "127.0.0.1",
+          resolve,
+        );
       });
 
       const address = server.address();
-      const bind = typeof address === 'object' && address ? `${address.address}:${address.port}` : String(address);
+      const bind =
+        typeof address === "object" && address
+          ? `${address.address}:${address.port}`
+          : String(address);
       console.log(`App host listening on http://${bind}`);
       console.log(`App dist directory: ${appCatalog.appsDir}`);
       console.log(
         `Discovered ${discoveredApps.length} app(s): ${
-          discoveredApps.map((app) => app.id).join(', ') || '(none)'
+          discoveredApps.map((app) => app.id).join(", ") || "(none)"
         }`,
       );
     },
-    async close(reason = 'host shutdown') {
+    async close(reason = "host shutdown") {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error) {
@@ -150,7 +205,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
           resolve();
         });
       }).catch((error: NodeJS.ErrnoException) => {
-        if (error.code !== 'ERR_SERVER_NOT_RUNNING') {
+        if (error.code !== "ERR_SERVER_NOT_RUNNING") {
           throw error;
         }
       });
@@ -237,12 +292,12 @@ async function dispatchAppWebSocket(
 
 export async function startAppHostFromEnv(): Promise<AppHost> {
   const host = createAppHost({
-    port: numberFromEnv('PORT') ?? numberFromEnv('APP_HOST_PORT') ?? 3000,
-    host: process.env.APP_HOST_BIND ?? process.env.HOST ?? '127.0.0.1',
+    port: numberFromEnv("PORT") ?? numberFromEnv("APP_HOST_PORT") ?? 3000,
+    host: process.env.APP_HOST_BIND ?? process.env.HOST ?? "127.0.0.1",
     appDistDir: process.env.APP_DIST_DIR,
-    maxActiveApps: numberFromEnv('MAX_ACTIVE_APPS'),
-    idleTtlMs: numberFromEnv('APP_IDLE_TTL_MS'),
-    evictionIntervalMs: numberFromEnv('APP_EVICTION_INTERVAL_MS'),
+    maxActiveApps: numberFromEnv("MAX_ACTIVE_APPS"),
+    idleTtlMs: numberFromEnv("APP_IDLE_TTL_MS"),
+    evictionIntervalMs: numberFromEnv("APP_EVICTION_INTERVAL_MS"),
   });
 
   await host.start();
@@ -250,36 +305,45 @@ export async function startAppHostFromEnv(): Promise<AppHost> {
 }
 
 function attachAppEventLogs(registry: AppRuntimeRegistry): void {
-  registry.events.on('app:createFailed', (event) => {
+  registry.events.on("app:createFailed", (event) => {
     const definition = registry.definition(event.appId);
     writeAppSystemLog({
-      level: 'error',
-      msg: 'Embedded App failed to initialize',
+      level: "error",
+      msg: "Embedded App failed to initialize",
       definition,
       error: event.error,
       fields: {
-        event: 'app:createFailed',
+        event: "app:createFailed",
         version: event.version,
         state: event.state,
         basePath: event.basePath,
       },
     });
-    console.error(`[app] failed to create ${event.appId}@v${event.version} at ${event.basePath}`, event.error);
+    console.error(
+      `[app] failed to create ${event.appId}@v${event.version} at ${event.basePath}`,
+      event.error,
+    );
   });
 
-  registry.events.on('app:created', (event) => {
-    console.log(`[app] created ${event.appId}@v${event.version} at ${event.basePath}`);
+  registry.events.on("app:created", (event) => {
+    console.log(
+      `[app] created ${event.appId}@v${event.version} at ${event.basePath}`,
+    );
   });
 
-  registry.events.on('app:draining', (event) => {
-    console.log(`[app] draining ${event.appId}@v${event.version}; activeRequests=${event.activeRequests}`);
+  registry.events.on("app:draining", (event) => {
+    console.log(
+      `[app] draining ${event.appId}@v${event.version}; activeRequests=${event.activeRequests}`,
+    );
   });
 
-  registry.events.on('app:resourceDisposed', (event) => {
-    console.log(`[app] disposed ${event.appId}@v${event.version}: ${event.resourceName}`);
+  registry.events.on("app:resourceDisposed", (event) => {
+    console.log(
+      `[app] disposed ${event.appId}@v${event.version}: ${event.resourceName}`,
+    );
   });
 
-  registry.events.on('app:destroyed', (event) => {
+  registry.events.on("app:destroyed", (event) => {
     console.log(`[app] destroyed ${event.appId}@v${event.version}`);
   });
 }
@@ -290,44 +354,44 @@ async function managementApi(
   registry: AppRuntimeRegistry,
   appCatalog: DirectoryAppCatalog,
 ): Promise<Response | null> {
-  const method = req.method ?? 'GET';
+  const method = req.method ?? "GET";
 
-  if (method === 'GET' && path === '/') {
+  if (method === "GET" && path === "/") {
     return jsonResponse({
-      message: 'Node HTTP app host with directory-discovered apps',
+      message: "Node HTTP app host with directory-discovered apps",
       packages: {
-        appHost: '@nocobase/app-host',
+        appHost: "@nocobase/app-host",
         appDistDir: appCatalog.appsDir,
       },
       examples: [
-        'add app-dist/acme/dist/server/embedded.js, then call POST /__apps/rescan',
-        'put hashed static files under app-dist/acme/dist/client/assets for /acme/assets/*',
-        'curl -X POST http://localhost:3000/__apps/rescan',
-        'curl -X POST http://localhost:3000/__apps/acme/activate',
-        'curl -X POST http://localhost:3000/__apps/acme/deploy',
-        'curl -X POST http://localhost:3000/__apps/evict-idle',
-        'curl http://localhost:3000/__apps/acme',
-        'curl -X POST http://localhost:3000/__apps/acme/reload',
-        'curl http://localhost:3000/acme/healthz',
-        'curl -X DELETE http://localhost:3000/__apps/acme',
+        "add app-dist/acme/dist/server/embedded.js, then call POST /__apps/rescan",
+        "put hashed static files under app-dist/acme/dist/client/assets for /acme/assets/*",
+        "curl -X POST http://localhost:3000/__apps/rescan",
+        "curl -X POST http://localhost:3000/__apps/acme/activate",
+        "curl -X POST http://localhost:3000/__apps/acme/deploy",
+        "curl -X POST http://localhost:3000/__apps/evict-idle",
+        "curl http://localhost:3000/__apps/acme",
+        "curl -X POST http://localhost:3000/__apps/acme/reload",
+        "curl http://localhost:3000/acme/healthz",
+        "curl -X DELETE http://localhost:3000/__apps/acme",
       ],
     });
   }
 
-  if (method === 'GET' && path === '/__health') {
+  if (method === "GET" && path === "/__health") {
     return jsonResponse(registry.health());
   }
 
-  if (method === 'GET' && path === '/__apps') {
+  if (method === "GET" && path === "/__apps") {
     return jsonResponse({
       active: registry.list(),
       definitions: registry.listDefinitions(),
     });
   }
 
-  if (path === '/__apps/rescan') {
-    if (method !== 'POST') {
-      return methodNotAllowed('POST');
+  if (path === "/__apps/rescan") {
+    if (method !== "POST") {
+      return methodNotAllowed("POST");
     }
 
     const sync = await appCatalog.syncDiscovered(registry);
@@ -338,51 +402,60 @@ async function managementApi(
     });
   }
 
-  if (path === '/__apps/evict-idle') {
-    if (method !== 'POST') {
-      return methodNotAllowed('POST');
+  if (path === "/__apps/evict-idle") {
+    if (method !== "POST") {
+      return methodNotAllowed("POST");
     }
 
     const evicted = await registry.evictIdle();
     return jsonResponse({ evicted });
   }
 
-  const actionMatch = path.match(/^\/__apps\/([^/]+)\/(activate|deploy|evict|reload)$/);
+  const actionMatch = path.match(
+    /^\/__apps\/([^/]+)\/(activate|deploy|evict|reload)$/,
+  );
   if (actionMatch) {
-    if (method !== 'POST') {
-      return methodNotAllowed('POST');
+    if (method !== "POST") {
+      return methodNotAllowed("POST");
     }
 
     const id = decodeURIComponent(actionMatch[1]);
     const action = actionMatch[2];
 
-    if (action === 'activate') {
+    if (action === "activate") {
       return jsonResponse({
         app: await registry.ensureActive(id),
       });
     }
 
-    if (action === 'deploy') {
+    if (action === "deploy") {
       const input = await readJsonBody(req);
       return jsonResponse({
         deployment: await registry.deploy(id, {
-          version: typeof input.version === 'string' ? input.version : undefined,
-          strategy: input.strategy === 'restart' || input.strategy === 'blue-green' ? input.strategy : undefined,
+          version:
+            typeof input.version === "string" ? input.version : undefined,
+          strategy:
+            input.strategy === "restart" || input.strategy === "blue-green"
+              ? input.strategy
+              : undefined,
           destroyTimeoutMs: numberFromValue(input.destroyTimeoutMs),
-          waitForReady: typeof input.waitForReady === 'boolean' ? input.waitForReady : undefined,
-          reason: 'deploy API',
+          waitForReady:
+            typeof input.waitForReady === "boolean"
+              ? input.waitForReady
+              : undefined,
+          reason: "deploy API",
         }),
       });
     }
 
-    if (action === 'evict') {
+    if (action === "evict") {
       return jsonResponse({
-        evicted: await registry.evict(id, { reason: 'evict API' }),
+        evicted: await registry.evict(id, { reason: "evict API" }),
       });
     }
 
     return jsonResponse({
-      app: await registry.reload(id, { reason: 'reload API' }),
+      app: await registry.reload(id, { reason: "reload API" }),
     });
   }
 
@@ -393,34 +466,37 @@ async function managementApi(
 
   const id = decodeURIComponent(match[1]);
 
-  if (method === 'GET') {
+  if (method === "GET") {
     return jsonResponse(registry.status(id));
   }
 
-  if (method === 'POST') {
+  if (method === "POST") {
     return jsonResponse(
       {
         error:
-          'App creation through API is disabled. Add app-dist/<app>/dist/server/embedded.js and call POST /__apps/rescan.',
+          "App creation through API is disabled. Add app-dist/<app>/dist/server/embedded.js and call POST /__apps/rescan.",
       },
       {
         status: 405,
         headers: {
-          allow: 'GET, DELETE',
+          allow: "GET, DELETE",
         },
       },
     );
   }
 
-  if (method === 'DELETE') {
-    const evicted = await registry.evict(id, { reason: 'delete API' });
+  if (method === "DELETE") {
+    const evicted = await registry.evict(id, { reason: "delete API" });
     return jsonResponse({ evicted }, { status: evicted ? 200 : 404 });
   }
 
-  return methodNotAllowed('GET, DELETE');
+  return methodNotAllowed("GET, DELETE");
 }
 
-function resolveAppId(path: string, registry: AppRuntimeRegistry): string | null {
+function resolveAppId(
+  path: string,
+  registry: AppRuntimeRegistry,
+): string | null {
   const match = parseAppPath(path);
   if (!match) {
     return null;
@@ -450,20 +526,20 @@ function parseAppPath(path: string): { candidates: string[] } | null {
 function notFoundResponse(): Response {
   return jsonResponse(
     {
-      error: 'Not found',
+      error: "Not found",
       routes: [
-        'GET /',
-        'GET /__health',
-        'GET /__apps',
-        'POST /__apps/rescan',
-        'POST /__apps/evict-idle',
-        'GET /__apps/:id',
-        'POST /__apps/:id/activate',
-        'POST /__apps/:id/deploy',
-        'POST /__apps/:id/evict',
-        'POST /__apps/:id/reload',
-        'DELETE /__apps/:id',
-        'GET /:app',
+        "GET /",
+        "GET /__health",
+        "GET /__apps",
+        "POST /__apps/rescan",
+        "POST /__apps/evict-idle",
+        "GET /__apps/:id",
+        "POST /__apps/:id/activate",
+        "POST /__apps/:id/deploy",
+        "POST /__apps/:id/evict",
+        "POST /__apps/:id/reload",
+        "DELETE /__apps/:id",
+        "GET /:app",
       ],
     },
     { status: 404 },
@@ -473,7 +549,7 @@ function notFoundResponse(): Response {
 function methodNotAllowed(allow: string): Response {
   return jsonResponse(
     {
-      error: 'Method not allowed',
+      error: "Method not allowed",
     },
     {
       status: 405,
@@ -486,8 +562,8 @@ function methodNotAllowed(allow: string): Response {
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
-  if (!headers.has('content-type')) {
-    headers.set('content-type', 'application/json');
+  if (!headers.has("content-type")) {
+    headers.set("content-type", "application/json");
   }
 
   return new Response(JSON.stringify(body), {
@@ -496,24 +572,35 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJsonBody(
+  req: IncomingMessage,
+): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
 
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  for await (const streamedChunk of req) {
+    const chunk: unknown = streamedChunk;
+    if (Buffer.isBuffer(chunk)) {
+      chunks.push(chunk);
+    } else if (typeof chunk === "string") {
+      chunks.push(Buffer.from(chunk));
+    } else {
+      throw new TypeError("Request body contained an unsupported chunk type");
+    }
   }
 
   if (chunks.length === 0) {
     return {};
   }
 
-  const text = Buffer.concat(chunks).toString('utf8').trim();
+  const text = Buffer.concat(chunks).toString("utf8").trim();
   if (!text) {
     return {};
   }
 
   const value = JSON.parse(text) as unknown;
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 async function handleError(error: unknown, res: ServerResponse): Promise<void> {
@@ -529,7 +616,10 @@ async function handleError(error: unknown, res: ServerResponse): Promise<void> {
   const response = jsonResponse(
     {
       error: error instanceof Error ? error.message : String(error),
-      code: error instanceof AppRegistryError ? error.code : 'INTERNAL_SERVER_ERROR',
+      code:
+        error instanceof AppRegistryError
+          ? error.code
+          : "INTERNAL_SERVER_ERROR",
     },
     {
       status: error instanceof AppRegistryError ? error.status : 500,
@@ -540,7 +630,9 @@ async function handleError(error: unknown, res: ServerResponse): Promise<void> {
 }
 
 function numberFromValue(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function numberFromEnv(name: string): number | undefined {

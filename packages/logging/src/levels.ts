@@ -1,7 +1,17 @@
-import type { LoggerLevel } from './types.js';
+import type { LoggerLevel } from "./types.js";
 
-export const loggerLevels = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
+export const loggerLevels: readonly LoggerLevel[] = [
+  "fatal",
+  "error",
+  "warn",
+  "info",
+  "debug",
+  "trace",
+  "silent",
+];
 
 export function isLoggerLevel(value: unknown): value is LoggerLevel {
-  return typeof value === 'string' && (loggerLevels as readonly string[]).includes(value);
+  return (
+    typeof value === "string" && loggerLevels.some((level) => level === value)
+  );
 }

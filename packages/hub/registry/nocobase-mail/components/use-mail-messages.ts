@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { MailBoxType, MailListParams, MailMessage, MailScope } from "./types";
+import type {
+  MailBoxType,
+  MailListParams,
+  MailMessage,
+  MailScope,
+} from "./types";
 import { mailApi } from "./mail-api";
 
 export interface UseMailMessagesOptions {
@@ -27,7 +32,9 @@ export interface UseMailMessagesResult {
   setMessages: React.Dispatch<React.SetStateAction<MailMessage[]>>;
 }
 
-export function useMailMessages(options: UseMailMessagesOptions = {}): UseMailMessagesResult {
+export function useMailMessages(
+  options: UseMailMessagesOptions = {},
+): UseMailMessagesResult {
   const {
     scope,
     boxType,
@@ -55,7 +62,16 @@ export function useMailMessages(options: UseMailMessagesOptions = {}): UseMailMe
 
   useEffect(() => {
     setPage(1);
-  }, [scope, boxType, debouncedSearch, labelId, isRead, userId, filter, pageSize]);
+  }, [
+    scope,
+    boxType,
+    debouncedSearch,
+    labelId,
+    isRead,
+    userId,
+    filter,
+    pageSize,
+  ]);
 
   const filterKey = useMemo(() => JSON.stringify(filter ?? {}), [filter]);
 
@@ -82,22 +98,36 @@ export function useMailMessages(options: UseMailMessagesOptions = {}): UseMailMe
         setTotal(res.count);
       } catch (error) {
         if (seq !== requestSeq.current) return;
-        toast.error(error instanceof Error ? error.message : "Failed to load messages");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to load messages",
+        );
         setMessages([]);
         setTotal(0);
       } finally {
         if (seq === requestSeq.current) setLoading(false);
       }
     },
-    [scope, boxType, debouncedSearch, labelId, isRead, userId, filterKey, sort, pageSize]
+    [
+      scope,
+      boxType,
+      debouncedSearch,
+      labelId,
+      isRead,
+      userId,
+      filterKey,
+      sort,
+      pageSize,
+    ],
   );
 
   useEffect(() => {
-    load(page);
+    const loadPromise = load(page);
+    loadPromise.catch(() => undefined);
   }, [load, page]);
 
   const refresh = useCallback(() => {
-    load(page);
+    const loadPromise = load(page);
+    loadPromise.catch(() => undefined);
   }, [load, page]);
 
   return {

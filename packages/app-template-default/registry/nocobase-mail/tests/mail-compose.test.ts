@@ -55,16 +55,16 @@ describe("Mail compose", () => {
       html: "<p>Hello</p>",
     });
     expect(
-      canReplyAll(sourceMessage, ["team@example.com", "sales@example.com"])
+      canReplyAll(sourceMessage, ["team@example.com", "sales@example.com"]),
     ).toBe(true);
 
     const serialized = serializeReplyQuote(
       reply.body ?? "",
-      reply.replyBody ?? ""
+      reply.replyBody ?? "",
     );
     expect(serialized).toMatch(/data-role="reply-quote"/);
     expect(serialized).toMatch(/<blockquote type="cite"/);
-    expect(splitReplyQuote(`<p>Thanks<\/p>${serialized}`)).toEqual({
+    expect(splitReplyQuote(`<p>Thanks</p>${serialized}`)).toEqual({
       body: "<p>Thanks</p>",
       replyBody: "<p>Hello</p>",
     });
@@ -74,8 +74,12 @@ describe("Mail compose", () => {
     const bodyHtml =
       '<div><strong>Formatted sender</strong><p style="color:red">Original content</p></div>';
     const reply = buildComposeInitial(
-      { ...sourceMessage, bodyHtml, bodyText: "Formatted sender Original content" },
-      "reply"
+      {
+        ...sourceMessage,
+        bodyHtml,
+        bodyText: "Formatted sender Original content",
+      },
+      "reply",
     );
     expect(reply.replyBody).toBe(bodyHtml);
     expect(reply.reference?.html).toBe(bodyHtml);
@@ -91,8 +95,8 @@ describe("Mail compose", () => {
           mailId: "provider-draft",
           rawId: "raw-draft",
         },
-        "draft"
-      )
+        "draft",
+      ),
     ).toThrow(/read-only/);
   });
 });

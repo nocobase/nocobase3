@@ -35,8 +35,13 @@ export function useRouteSurfaceState({
     return () => cancelAnimationFrame(frame);
   }, [animated]);
 
-  const navigateAfterClose = useCallback(() => {
-    navigate(closeTo, { replace: true });
+  const navigateAfterClose = useCallback((): void => {
+    const navigation = navigate(closeTo, { replace: true });
+    if (navigation instanceof Promise) {
+      // Framework-mode navigation is async, while this callback also serves
+      // synchronous animation hooks. Route failures are surfaced by the router.
+      navigation.catch(() => undefined);
+    }
   }, [closeTo, navigate]);
 
   const close = useCallback<RouteSurfaceClose>(
@@ -60,7 +65,7 @@ export function useRouteSurfaceState({
         closingRef.current = false;
       }
     },
-    [animated, beforeClose, navigateAfterClose]
+    [animated, beforeClose, navigateAfterClose],
   );
 
   return {

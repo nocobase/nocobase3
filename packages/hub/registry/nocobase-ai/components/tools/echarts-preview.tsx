@@ -32,7 +32,11 @@ export default function EChartsPreview({
     };
   }, [options, signature]);
 
-  if (error) throw error;
+  if (error) {
+    throw error instanceof Error
+      ? error
+      : new Error("Unable to prepare the ECharts runtime", { cause: error });
+  }
   if (preparedSignature !== signature) {
     return <LoadingState className="h-[280px]" />;
   }

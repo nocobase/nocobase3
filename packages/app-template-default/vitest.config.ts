@@ -1,26 +1,29 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { createReactVitestConfig } from "@nocobase/dev-config/vitest/react";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const registryRoot = fileURLToPath(new URL("./registry", import.meta.url));
-const clientExtensionsRoot = fileURLToPath(new URL("./client/extensions", import.meta.url));
+const clientExtensionsRoot = fileURLToPath(
+  new URL("./client/extensions", import.meta.url),
+);
 const extensionsRoot = fs.existsSync(registryRoot)
   ? registryRoot
   : clientExtensionsRoot;
 const localExtensionAliases = fs.existsSync(clientExtensionsRoot)
-  ? fs.readdirSync(clientExtensionsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({
-      find: `@/extensions/${entry.name}`,
-      replacement: fileURLToPath(new URL(`./client/extensions/${entry.name}`, import.meta.url)),
-    }))
+  ? fs
+      .readdirSync(clientExtensionsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({
+        find: `@/extensions/${entry.name}`,
+        replacement: fileURLToPath(
+          new URL(`./client/extensions/${entry.name}`, import.meta.url),
+        ),
+      }))
   : [];
 
-export default defineConfig({
-  plugins: [react()],
+export default createReactVitestConfig({
   resolve: {
     alias: [
       ...localExtensionAliases,
@@ -30,7 +33,9 @@ export default defineConfig({
       },
       {
         find: "@/services",
-        replacement: fileURLToPath(new URL("./server/services", import.meta.url)),
+        replacement: fileURLToPath(
+          new URL("./server/services", import.meta.url),
+        ),
       },
       {
         find: "@/extensions",
@@ -44,8 +49,6 @@ export default defineConfig({
   },
   test: {
     root,
-    environment: "jsdom",
-    setupFiles: ["./tests/setup/vitest.ts"],
     include: [
       "tests/logic/**/*.test.{ts,tsx}",
       "tests/components/**/*.test.{ts,tsx}",

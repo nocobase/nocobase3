@@ -1,6 +1,6 @@
-import { CacheableMemory } from '@cacheable/memory';
-import type { Counter } from './types.js';
-import { assertNamespace, assertTtl } from './internal/validation.js';
+import { CacheableMemory } from "@cacheable/memory";
+import type { Counter } from "./types.js";
+import { assertNamespace, assertTtl } from "./internal/validation.js";
 
 interface CounterEntry {
   value: number;
@@ -25,16 +25,16 @@ export class MemoryCounter implements Counter {
   }
 
   async get(key: string): Promise<number> {
-    return (this.store.get(key) as CounterEntry | undefined)?.value ?? 0;
+    return this.store.get<CounterEntry>(key)?.value ?? 0;
   }
 
   async increment(key: string, amount = 1, ttl?: number): Promise<number> {
     if (!Number.isFinite(amount)) {
-      throw new Error('Counter amount must be a finite number.');
+      throw new Error("Counter amount must be a finite number.");
     }
     assertTtl(ttl);
 
-    const current = this.store.get(key) as CounterEntry | undefined;
+    const current = this.store.get<CounterEntry>(key);
     if (current) {
       current.value += amount;
       return current.value;
