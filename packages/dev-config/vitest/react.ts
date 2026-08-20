@@ -1,11 +1,12 @@
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
+import type { ViteUserConfig } from "vitest/config";
 import { mergeConfig } from "vitest/config";
 
-const reactSetupFile = fileURLToPath(
+const reactSetupFile: string = fileURLToPath(
   new URL("./react-setup.js", import.meta.url),
 );
-const reactConfig = {
+const reactConfig: ViteUserConfig = {
   plugins: [react()],
   test: {
     environment: "jsdom",
@@ -14,5 +15,7 @@ const reactConfig = {
   },
 };
 
-export const createReactVitestConfig = (localConfig = {}) =>
+export const createReactVitestConfig: (
+  localConfig?: ViteUserConfig,
+) => ViteUserConfig = (localConfig = {}) =>
   mergeConfig(reactConfig, localConfig);

@@ -66,8 +66,15 @@ package 名称：`@nocobase/dev-config`。
 packages/dev-config/
 ├── package.json
 ├── README.md
+├── tsconfig.json
+├── tsconfig.build.json
 ├── docs/
 │   └── monorepo-unified-config-plan.md
+├── dist/                   # tsc 生成，不提交
+│   ├── eslint/index.js + index.d.ts
+│   ├── prettier/index.js + index.d.ts
+│   ├── vitest/*.js + *.d.ts
+│   └── vite/portal.js + portal.d.ts
 ├── tsconfig/
 │   ├── README.md
 │   ├── base.json
@@ -78,19 +85,25 @@ packages/dev-config/
 │   └── node-tooling.json
 ├── eslint/
 │   ├── README.md
-│   └── index.js
+│   └── index.ts
 ├── prettier/
 │   ├── README.md
-│   └── index.js
+│   └── index.ts
 ├── vitest/
 │   ├── README.md
-│   ├── node.js
-│   ├── react.js
-│   └── react-setup.js
+│   ├── node.ts
+│   ├── react.ts
+│   └── react-setup.ts
 └── vite/
     ├── README.md
-    └── portal.js
+    └── portal.ts
 ```
+
+配置实现使用 TypeScript 维护，并通过 `tsc` 生成发布用的 ESM JavaScript
+和声明文件。npm exports 只指向 `dist`，消费方不需要、也不能依赖 Node
+直接执行 `node_modules` 内的 TypeScript。JSON tsconfig preset 作为数据文件
+继续直接发布。workspace 根目录的 `prepare` 保证安装后的本地工具可用，
+配置包自身的 `prepack` 保证每次打包前重新生成产物。
 
 ## 5. TypeScript 统一方案
 

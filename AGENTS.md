@@ -40,6 +40,11 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 
 At minimum, run `lint`, `typecheck`, `test`, and `build` for every package you modify. Root `pnpm check` also performs incremental formatting and publish-ready tarball checks. The Husky + lint-staged pre-commit hook fixes staged files automatically, but it does not replace CI.
 
+The executable source of `@nocobase/dev-config` is TypeScript, while its npm
+exports resolve to compiled ESM JavaScript and declarations in `dist`. When
+changing `packages/dev-config`, run
+`pnpm --filter @nocobase/dev-config check`; do not hand-edit generated output.
+
 ## TypeScript Requirements for Library Development
 
 Every package that emits `.d.ts` files (`declaration: true`) enables both `isolatedDeclarations: true` and `isolatedModules: true`. This currently covers:

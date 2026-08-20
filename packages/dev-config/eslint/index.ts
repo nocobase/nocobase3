@@ -1,36 +1,37 @@
 import js from "@eslint/js";
 import eslintReact from "@eslint-react/eslint-plugin";
 import vitestPlugin from "@vitest/eslint-plugin";
+import type { ESLint, Linter } from "eslint";
 import eslintConfigPrettier from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const allFiles = ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"];
-const typescriptFiles = ["**/*.{ts,tsx,mts,cts}"];
-const reactFiles = ["**/*.{js,jsx,ts,tsx}"];
-const testFiles = [
+const allFiles: string[] = ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"];
+const typescriptFiles: string[] = ["**/*.{ts,tsx,mts,cts}"];
+const reactFiles: string[] = ["**/*.{js,jsx,ts,tsx}"];
+const testFiles: string[] = [
   "**/*.{test,spec}.{js,jsx,ts,tsx,mts,cts}",
   "**/{test,tests}/**/*.{js,mjs,cjs,ts,tsx,mts,cts}",
   "**/e2e/**/*.{js,mjs,cjs,ts,tsx,mts,cts}",
 ];
-const toolingFiles = [
+const toolingFiles: string[] = [
   "**/*.{config,setup}.{ts,mts,cts}",
   "**/scripts/**/*.{ts,mts,cts}",
 ];
-const portalClientFiles = [
+const portalClientFiles: string[] = [
   "client/**/*.{js,jsx,ts,tsx}",
   "registry/**/*.{js,jsx,ts,tsx}",
   "tests/**/*.{js,jsx,ts,tsx}",
 ];
-const portalNodeFiles = [
+const portalNodeFiles: string[] = [
   "*.{js,mjs,cjs}",
   "server/**/*.{js,mjs,cjs,ts,tsx,mts,cts}",
   "scripts/**/*.{js,mjs,cjs,ts,tsx,mts,cts}",
   "*.config.{js,mjs,cjs,ts,mts,cts}",
 ];
-const defaultIgnores = [
+const defaultIgnores: string[] = [
   "**/dist/**",
   "**/build/**",
   "**/coverage/**",
@@ -39,29 +40,55 @@ const defaultIgnores = [
   "**/test-results/**",
 ];
 
-const scopeConfigs = (configs, files) =>
-  configs.map((config) => ({ ...config, files }));
+const scopeConfigs = (
+  configs: Linter.Config[],
+  files: string[],
+): Linter.Config[] => configs.map((config) => ({ ...config, files }));
 
-const nameConfigs = (configs, namespace, files = allFiles) =>
+const nameConfigs = (
+  configs: Linter.Config[],
+  namespace: string,
+  files: string[] = allFiles,
+): Linter.Config[] =>
   configs.map((config, index) => ({
     ...config,
     name: `${namespace}/${index + 1}`,
     files: config.files ?? files,
   }));
 
-const reactRecommended = eslintReact.configs.recommended;
-const hooksRecommended =
-  reactHooks.configs.flat?.recommended ?? reactHooks.configs.recommended;
-const vitestRecommended = vitestPlugin.configs.recommended;
-const vitestEnvironment = vitestPlugin.configs.env;
+interface ConfigWithLanguageOptions extends Linter.Config {
+  languageOptions?: Linter.LanguageOptions;
+}
 
-export const base = [
+const reactRecommended: ConfigWithLanguageOptions =
+  eslintReact.configs.recommended;
+const hooksRecommended: Linter.Config =
+  reactHooks.configs.flat?.recommended ?? reactHooks.configs.recommended;
+const reactHooksPlugin: ESLint.Plugin = {
+  meta: reactHooks.meta,
+  rules: reactHooks.rules,
+};
+const reactRefreshPlugin: ESLint.Plugin = {
+  rules: reactRefresh.rules,
+};
+const vitestRecommended: ConfigWithLanguageOptions =
+  vitestPlugin.configs.recommended;
+const vitestEnvironment: ConfigWithLanguageOptions = vitestPlugin.configs.env;
+
+export interface SharedConfigOptions {
+  tsconfigRootDir?: string;
+  ignores?: string[];
+  rules?: Linter.Config["rules"];
+  overrides?: Linter.Config[];
+  environment?: Linter.Config[];
+}
+
+export const base: Linter.Config[] = [
   {
     ...js.configs.recommended,
     name: "@nocobase/dev-config/base",
     files: allFiles,
     languageOptions: {
-      ...js.configs.recommended.languageOptions,
       ecmaVersion: "latest",
       sourceType: "module",
       globals: globals.es2024,
@@ -69,13 +96,13 @@ export const base = [
   },
 ];
 
-export const typescript = nameConfigs(
+export const typescript: Linter.Config[] = nameConfigs(
   tseslint.configs.recommended,
   "@nocobase/dev-config/typescript",
   typescriptFiles,
 );
 
-export const typeChecked = [
+export const typeChecked: Linter.Config[] = [
   ...nameConfigs(
     tseslint.configs.recommendedTypeChecked,
     "@nocobase/dev-config/type-checked",
@@ -107,7 +134,7 @@ export const typeChecked = [
   },
 ];
 
-export const node = [
+export const node: Linter.Config[] = [
   {
     name: "@nocobase/dev-config/node",
     files: allFiles,
@@ -120,7 +147,7 @@ export const node = [
   },
 ];
 
-export const react = [
+export const react: Linter.Config[] = [
   {
     ...reactRecommended,
     name: "@nocobase/dev-config/react",
@@ -134,8 +161,8 @@ export const react = [
     },
     plugins: {
       ...reactRecommended.plugins,
-      "react-hooks": reactHooks,
-      "react-refresh": reactRefresh,
+      "react-hooks": reactHooksPlugin,
+      "react-refresh": reactRefreshPlugin,
     },
     rules: {
       ...reactRecommended.rules,
@@ -150,7 +177,7 @@ export const react = [
   },
 ];
 
-export const vitest = [
+export const vitest: Linter.Config[] = [
   {
     ...vitestRecommended,
     name: "@nocobase/dev-config/vitest",
@@ -179,7 +206,7 @@ const createConfig = ({
   environment = [],
   rules = {},
   overrides = [],
-}) => [
+}: SharedConfigOptions): Linter.Config[] => [
   {
     name: "@nocobase/dev-config/ignores",
     ignores: [...defaultIgnores, ...ignores],
@@ -215,13 +242,17 @@ const createConfig = ({
   },
 ];
 
-export const createNodeLibraryConfig = (options = {}) =>
+export const createNodeLibraryConfig: (
+  options?: SharedConfigOptions,
+) => Linter.Config[] = (options = {}) =>
   createConfig({
     ...options,
     environment: [...node, ...(options.environment ?? [])],
   });
 
-export const createClientLibraryConfig = (options = {}) =>
+export const createClientLibraryConfig: (
+  options?: SharedConfigOptions,
+) => Linter.Config[] = (options = {}) =>
   createConfig({
     ...options,
     environment: [
@@ -231,7 +262,9 @@ export const createClientLibraryConfig = (options = {}) =>
     ],
   });
 
-export const createPortalConfig = (options = {}) =>
+export const createPortalConfig: (
+  options?: SharedConfigOptions,
+) => Linter.Config[] = (options = {}) =>
   createConfig({
     ...options,
     environment: [

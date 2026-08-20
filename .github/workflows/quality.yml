@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared development config
+        run: pnpm dev-config:build
+
       - name: Check changed files
         shell: bash
         env:
