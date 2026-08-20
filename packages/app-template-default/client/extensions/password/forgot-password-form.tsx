@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useForgotPassword, useLink } from "@refinedev/core";
 
-import { AuthLayout } from "@/extensions/email-password/auth-layout";
+import { AuthLayout } from "@/extensions/password/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

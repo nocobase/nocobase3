@@ -1,11 +1,11 @@
 {
-  "name": "authentication-email-password",
+  "name": "authentication-password",
   "type": "registry:block",
-  "title": "NocoBase Email and Password Authentication",
-  "description": "Fixed email/password authentication UI for NocoBase applications.",
+  "title": "NocoBase Password Authentication",
+  "description": "Username or email and password authentication UI for NocoBase applications.",
   "source": {
-    "root": "ui/email-password",
-    "target": "client/extensions/email-password",
+    "root": "ui/password",
+    "target": "client/extensions/password",
     "include": ["."]
   }
 }

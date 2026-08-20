@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useLink, useNotification, useRegister } from "@refinedev/core";
 
-import { AuthLayout } from "@/extensions/email-password/auth-layout";
-import { InputPassword } from "@/extensions/email-password/input-password";
+import { AuthLayout } from "@/extensions/password/auth-layout";
+import { InputPassword } from "@/extensions/password/input-password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +38,7 @@ export function SignUpForm() {
   return (
     <AuthLayout
       title="Create an account"
-      description="Register with your email and password."
+      description="Register with a username, email, and password."
       footer={<Link to="/login" className="hover:underline">Already have an account? Sign in</Link>}
     >
       <form onSubmit={handleSignUp} className="space-y-5">

@@ -1,4 +1,4 @@
-import { authProvider } from "@/extensions/email-password/auth";
+import { authProvider } from "@/extensions/password/auth";
 import {
   isNocoBaseServiceError,
   nocobaseClient,

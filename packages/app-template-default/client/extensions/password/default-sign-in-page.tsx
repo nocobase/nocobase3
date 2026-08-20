@@ -1,5 +1,5 @@
-import { AuthLayout } from "@/extensions/email-password/auth-layout";
-import { BasicSignInForm } from "@/extensions/email-password/basic-sign-in-form";
+import { AuthLayout } from "@/extensions/password/auth-layout";
+import { BasicSignInForm } from "@/extensions/password/basic-sign-in-form";
 
 export function DefaultSignInPage() {
   return (

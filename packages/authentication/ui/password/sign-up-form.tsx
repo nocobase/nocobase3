@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function EmailPasswordSignUpForm() {
+export function PasswordSignUpForm() {
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { mutate: register, isPending } = useRegister();
@@ -18,12 +19,22 @@ export function EmailPasswordSignUpForm() {
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
-        register({ name, email, password });
+        register({ name, username, email, password });
       }}
     >
       <div className="space-y-2">
         <Label htmlFor="name">Name</Label>
         <Input id="name" value={name} onChange={(event) => setName(event.target.value)} required />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="username">Username</Label>
+        <Input
+          id="username"
+          autoComplete="username"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          required
+        />
       </div>
       <div className="space-y-2">
         <Label htmlFor="register-email">Email</Label>

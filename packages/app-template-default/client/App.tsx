@@ -27,7 +27,7 @@ import "./App.css";
 import { SystemSettingsProvider } from "./providers/system-settings/provider";
 import { AppRoutes } from "./app/routes";
 import { AppRuntimeGate } from "./components/app-shell/app-runtime-gate";
-import { authProvider } from "./extensions/email-password/auth";
+import { authProvider } from "./extensions/password/auth";
 
 const getResourcePriority = (resource: ResourceProps) =>
   typeof resource.meta?.priority === "number" ? resource.meta.priority : 100;

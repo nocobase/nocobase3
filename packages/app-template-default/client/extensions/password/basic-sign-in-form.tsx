@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLink, useLogin } from "@refinedev/core";
 
-import { InputPassword } from "@/extensions/email-password/input-password";
+import { InputPassword } from "@/extensions/password/input-password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

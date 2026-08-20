@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function EmailPasswordSignInForm() {
-  const [email, setEmail] = useState("");
+export function PasswordSignInForm() {
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const Link = useLink();
   const { mutate: login, isPending } = useLogin();
@@ -18,12 +18,18 @@ export function EmailPasswordSignInForm() {
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
-        login({ email, password });
+        login({ identifier, password });
       }}
     >
       <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+        <Label htmlFor="identifier">Username or email</Label>
+        <Input
+          id="identifier"
+          autoComplete="username"
+          value={identifier}
+          onChange={(event) => setIdentifier(event.target.value)}
+          required
+        />
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
