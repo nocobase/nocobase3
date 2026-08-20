@@ -435,7 +435,7 @@ function printReport(value: typeof report): void {
   printPair('GC lottery', value.session.gcLottery.join('/'));
 
   printSection('Useful checks');
-  printPair('Server-focused tests', 'pnpm test -- tests/logic/app-server.test.ts tests/logic/database-config.test.ts');
+  printPair('Server-focused tests', 'pnpm test -- tests/logic/app-server.test.ts tests/logic/config.test.ts');
   printPair('Typecheck', 'pnpm typecheck');
   printPair('JSON output', 'pnpm server:config -- --json');
 }

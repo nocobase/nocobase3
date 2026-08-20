@@ -25,7 +25,8 @@ const defaultRedactPaths = [
 
 const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(
   ({ env }): LoggingConfig => {
-    const transport: LoggerConfig['transport'] = env.boolean('LOG_PRETTY', false)
+    const isProduction = env.string('NODE_ENV') === 'production';
+    const transport: LoggerConfig['transport'] = env.boolean('LOG_PRETTY', !isProduction)
       ? {
         target: 'pino-pretty',
         options: {

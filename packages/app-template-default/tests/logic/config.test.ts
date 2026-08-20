@@ -32,7 +32,7 @@ afterEach(() => {
   }
 });
 
-describe('template config registry', () => {
+describe('config registry', () => {
   it('loads every registered config section', () => {
     const config = loadConfig(configFactories, {
       env: createConfigEnv({ AUTH_SECRET: 'test-auth-secret-at-least-32-characters' }),
@@ -42,6 +42,10 @@ describe('template config registry', () => {
     });
 
     expect(config.app.name).toBe('app-template-default');
+    expect(config.auth.emailAndPassword).toMatchObject({
+      enabled: true,
+      autoSignIn: false,
+    });
     expect(config.caching.default).toBe('memory');
     expect(config.database.default).toBe('sqlite');
     expect(config.drive.default).toBe('local');
@@ -207,7 +211,14 @@ describe('logging config', () => {
       base: {
         service: 'app-template-default',
       },
-      transport: undefined,
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname',
+        },
+      },
     });
     expect(config.redact).toContain('headers.authorization');
   });
@@ -245,6 +256,19 @@ describe('logging config', () => {
         },
       },
     });
+  });
+
+  it('uses structured output by default in production', () => {
+    const config = logging({
+      env: createConfigEnv({
+        NODE_ENV: 'production',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.transport).toBeUndefined();
   });
 
   it('falls back to info for unsupported logger levels', () => {

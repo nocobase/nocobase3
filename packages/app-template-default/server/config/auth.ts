@@ -11,9 +11,11 @@ const authConfig: ConfigFactory<AppAuthConfig> = defineConfig(
     }
 
     return {
+      baseURL: env.string('NOCOBASE_AUTH_URL'),
       secret,
       emailAndPassword: {
         enabled: true,
+        autoSignIn: false,
       },
     };
   },

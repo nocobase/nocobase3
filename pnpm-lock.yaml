@@ -114,6 +114,9 @@ importers:
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../drive
+      '@nocobase/id-generator':
+        specifier: workspace:^
+        version: link:../id-generator
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging

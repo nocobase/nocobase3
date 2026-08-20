@@ -21,6 +21,7 @@
     "@nocobase/caching": "workspace:^",
     "@nocobase/database": "workspace:^",
     "@nocobase/drive": "workspace:^",
+    "@nocobase/id-generator": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",

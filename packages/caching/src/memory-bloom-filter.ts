@@ -1,9 +1,12 @@
-import { BloomFilter as BloomFilterImpl } from 'bloom-filters';
+import bloomFilters from 'bloom-filters';
 import type { BloomFilter, BloomFilterOptions } from './types.js';
 import { assertNamespace } from './internal/validation.js';
 
+const { BloomFilter: BloomFilterImpl } = bloomFilters;
+type BloomFilterInstance = InstanceType<typeof BloomFilterImpl>;
+
 interface FilterEntry {
-  filter: BloomFilterImpl;
+  filter: BloomFilterInstance;
   options: BloomFilterOptions;
 }
 
@@ -64,7 +67,7 @@ export class MemoryBloomFilter implements BloomFilter {
     this.filters.clear();
   }
 
-  private getFilter(key: string): BloomFilterImpl {
+  private getFilter(key: string): BloomFilterInstance {
     const entry = this.filters.get(key);
     if (!entry) {
       throw new Error(`Bloom filter "${key}" has not been reserved.`);

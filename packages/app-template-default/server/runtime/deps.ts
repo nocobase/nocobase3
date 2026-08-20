@@ -1,6 +1,7 @@
 import { createCaching, type Caching } from '@nocobase/caching';
 import { createAuthStorage, createAuthentication } from '@nocobase/authentication';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
+import { SnowflakeIdGenerator } from '@nocobase/id-generator';
 import {
   createLogging,
   type Logging,
@@ -26,6 +27,7 @@ export interface AppDeps {
   auth: Auth;
   caching: Caching;
   driveManager?: NocoBaseDriveManager;
+  idGenerator: SnowflakeIdGenerator;
   logging: Logging;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
@@ -34,18 +36,25 @@ export interface AppDeps {
 export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   const { config } = runtime;
   const caching = createCaching(config.caching);
-  const appName = config.app.name;
+  const idGenerator = new SnowflakeIdGenerator({ workerId: 0 });
   const auth = createAuthentication({
     connection: runtime.database?.connection(),
     secondaryStorage: createAuthStorage(caching),
-    appName,
+    appName: config.app.name,
+    ...config.auth,
     advanced: {
-      cookiePrefix: createCookiePrefix(appName),
+      cookiePrefix: createCookiePrefix(config.app.name),
+      ...config.auth.advanced,
+      database: {
+        ...config.auth.advanced?.database,
+        generateId: config.auth.advanced?.database?.generateId
+          ?? (() => idGenerator.generateString()),
+      },
       defaultCookieAttributes: {
         path: config.app.publicBasePath || '/',
+        ...config.auth.advanced?.defaultCookieAttributes,
       },
     },
-    ...config.auth,
   });
   const driveManager = config.drive ? createDriveManager(config.drive) : undefined;
   const logging = createLogging(config.logging);
@@ -64,6 +73,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
     caching,
     auth,
     driveManager,
+    idGenerator,
     logging,
     queueManager,
     sessionManager,
