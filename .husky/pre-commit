@@ -1,1 +1,2 @@
+pnpm dev-config:build
 pnpm lint-staged

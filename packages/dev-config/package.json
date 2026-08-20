@@ -4,7 +4,7 @@
   "description": "Shared TypeScript, ESLint, Prettier, Vitest, and Vite configuration for NocoBase packages.",
   "type": "module",
   "sideEffects": [
-    "./vitest/react-setup.js"
+    "./dist/vitest/react-setup.js"
   ],
   "engines": {
     "node": ">=24.0.0"
@@ -17,12 +17,12 @@
   "files": [
     "README.md",
     "docs",
-    "eslint",
-    "prettier",
-    "scripts",
+    "dist",
+    "eslint/README.md",
+    "prettier/README.md",
     "tsconfig",
-    "vite",
-    "vitest"
+    "vite/README.md",
+    "vitest/README.md"
   ],
   "exports": {
     "./package.json": "./package.json",
@@ -33,41 +33,45 @@
     "./tsconfig/server-library.json": "./tsconfig/server-library.json",
     "./tsconfig/node-tooling.json": "./tsconfig/node-tooling.json",
     "./eslint": {
-      "types": "./eslint/index.d.ts",
-      "import": "./eslint/index.js"
+      "types": "./dist/eslint/index.d.ts",
+      "import": "./dist/eslint/index.js"
     },
     "./prettier": {
-      "types": "./prettier/index.d.ts",
-      "import": "./prettier/index.js"
+      "types": "./dist/prettier/index.d.ts",
+      "import": "./dist/prettier/index.js"
     },
     "./vitest/node": {
-      "types": "./vitest/node.d.ts",
-      "import": "./vitest/node.js"
+      "types": "./dist/vitest/node.d.ts",
+      "import": "./dist/vitest/node.js"
     },
     "./vitest/react": {
-      "types": "./vitest/react.d.ts",
-      "import": "./vitest/react.js"
+      "types": "./dist/vitest/react.d.ts",
+      "import": "./dist/vitest/react.js"
     },
     "./vitest/react-setup": {
-      "types": "./vitest/react-setup.d.ts",
-      "import": "./vitest/react-setup.js"
+      "types": "./dist/vitest/react-setup.d.ts",
+      "import": "./dist/vitest/react-setup.js"
     },
     "./vite/portal": {
-      "types": "./vite/portal.d.ts",
-      "import": "./vite/portal.js"
+      "types": "./dist/vite/portal.d.ts",
+      "import": "./dist/vite/portal.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
+    "clean": "node ./scripts/clean-dist.ts",
+    "build": "pnpm clean && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "fix": "pnpm lint:fix && pnpm format",
-    "check": "pnpm lint && pnpm format:check",
-    "pack:check": "node ./scripts/pack-check.mjs"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build",
+    "prepack": "pnpm build",
+    "pack:check": "node ./scripts/pack-check.ts"
   },
   "dependencies": {
     "@eslint/js": "catalog:",
@@ -81,7 +85,19 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",
-    "publint": "catalog:"
+    "@tailwindcss/vite": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/node": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "publint": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "@tailwindcss/vite": "catalog:",

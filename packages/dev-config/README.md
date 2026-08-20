@@ -21,7 +21,19 @@ React Portal using the shared Vitest and Vite factories also needs Vitest,
 Vite, React Testing Library, JSDOM, and the React and Tailwind Vite plugins.
 Portal projects inject the compatibility plugin from `@nocobase/portal-sdk`.
 
-Node.js 24 or newer is required to execute the JavaScript configuration files.
+Node.js 24 or newer is required to run the development tooling.
+
+## Source and published output
+
+All executable configuration source in this package is TypeScript. `pnpm build`
+compiles the public runtime entries to ESM JavaScript and declarations under
+`dist`; package exports always point to that compiled output. Consumers install
+and use the package normally and do not compile TypeScript from `node_modules`.
+
+The JSON TypeScript presets remain directly exported because `tsconfig`
+inheritance reads them as data. The workspace root `prepare` script makes the
+compiled entries available after a monorepo install, and this package's
+`prepack` rebuilds them before creating the npm tarball.
 
 ## Configuration map
 
@@ -73,6 +85,12 @@ export { default } from "@nocobase/dev-config/prettier";
 
 Each configuration area has a dedicated README with its supported overrides
 and examples.
+
+When changing this package, run:
+
+```sh
+pnpm --filter @nocobase/dev-config check
+```
 
 ## Version policy
 
