@@ -145,6 +145,11 @@ export class LocalHostAdapter {
       tier: current?.tier ?? "warm",
       desiredVersion: release.version,
       rootDir: releaseDir,
+      dataDir: path.join(
+        this.releaseRoot ?? path.dirname(releaseDir),
+        ".runtime",
+        application.slug,
+      ),
       client: hasClient
         ? {
             rootDir: clientPath,

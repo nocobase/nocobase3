@@ -34,5 +34,9 @@ export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
       ...config.spa,
       indexPath: options.paths.clientDir ? path.join(options.paths.clientDir, 'index.html') : config.spa.indexPath,
     },
+    drive: {
+      ...config.drive,
+      links: options.mode === 'embedded' ? {} : config.drive.links,
+    },
   };
 }

@@ -134,9 +134,7 @@ describe('app config', () => {
     expect(config.drive.disks.local).toMatchObject({
       location: path.join(dataDir, 'app/private'),
     });
-    expect(config.drive.links).toEqual({
-      [path.join(root, 'public/storage')]: path.join(dataDir, 'app/public'),
-    });
+    expect(config.drive.links).toEqual({});
     expect(config.logging).toMatchObject({
       default: 'system',
       name: 'app-template-default',

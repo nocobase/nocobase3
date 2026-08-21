@@ -123,6 +123,44 @@ describe("release artifact integrity", () => {
     ).rejects.toMatchObject({ code: "RELEASE_CHECKSUM_MISMATCH", status: 422 });
     expect(deploy).not.toHaveBeenCalled();
   });
+
+  it("keeps embedded app data outside the immutable release artifact", async () => {
+    const releaseRoot = await mkdtemp(
+      path.join(tmpdir(), "nocobase-hub-release-root-"),
+    );
+    temporaryDirectories.push(releaseRoot);
+    const application = applicationFixture();
+    const storageKey = `${application.slug}/1.0.0`;
+    const artifact = path.join(releaseRoot, storageKey);
+    await mkdir(path.join(artifact, "dist/server"), { recursive: true });
+    await writeFile(
+      path.join(artifact, "dist/server/embedded.js"),
+      "export {};\n",
+    );
+    const checksum = await computeReleaseArtifactChecksum(artifact);
+    const deploy = vi.fn().mockResolvedValue(undefined);
+    const registry = {
+      snapshot: () => undefined,
+      definition: () => undefined,
+      deploy,
+    } as unknown as AppRuntimeRegistry;
+    const adapter = new LocalHostAdapter({ registry, releaseRoot });
+
+    await adapter.deploy({
+      application,
+      release: releaseFixture(application.id, storageKey, checksum),
+      deployment: deploymentFixture(application.id),
+    });
+
+    expect(deploy).toHaveBeenCalledWith(
+      application.slug,
+      expect.objectContaining({
+        target: expect.objectContaining({
+          dataDir: path.join(releaseRoot, ".runtime", application.slug),
+        }),
+      }),
+    );
+  });
 });
 
 async function createArtifact(root?: string): Promise<string> {
