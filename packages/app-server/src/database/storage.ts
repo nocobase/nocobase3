@@ -3,7 +3,9 @@ import path from 'node:path';
 
 import type { AppDatabaseConfig } from './types.js';
 
-export async function prepareAppDatabaseStorage(config: AppDatabaseConfig): Promise<void> {
+export async function prepareAppDatabaseStorage(
+  config: AppDatabaseConfig,
+): Promise<void> {
   const connection = resolveActiveConnection(config);
   if (!connection || connection.dialect !== 'sqlite') {
     return;
@@ -18,12 +20,16 @@ export async function prepareAppDatabaseStorage(config: AppDatabaseConfig): Prom
   });
 }
 
-function resolveActiveConnection(config: AppDatabaseConfig): AppDatabaseConfig['connections'][string] | undefined {
+function resolveActiveConnection(
+  config: AppDatabaseConfig,
+): AppDatabaseConfig['connections'][string] | undefined {
   if (config.default === 'none') {
     return undefined;
   }
 
-  const defaultConnection = config.default ? config.connections[config.default] : undefined;
+  const defaultConnection = config.default
+    ? config.connections[config.default]
+    : undefined;
   if (defaultConnection) {
     return defaultConnection;
   }

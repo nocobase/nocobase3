@@ -6,7 +6,8 @@ import type {
 
 export type Logger = PinoLogger;
 
-export type LoggerLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
+export type LoggerLevel =
+  'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
 
 export interface LoggerConfig extends Omit<PinoLoggerOptions, 'redact'> {
   /** Uses the secure NocoBase defaults when omitted and disables them when false. */

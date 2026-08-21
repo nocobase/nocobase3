@@ -1,20 +1,20 @@
-import { createAdaptorServer, type ServerType } from "@hono/node-server";
-import { createAppHost, type AppHost } from "@nocobase/app-host";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { createAdaptorServer, type ServerType } from '@hono/node-server';
+import { createAppHost, type AppHost } from '@nocobase/app-host';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   createApp,
   joinBasePath,
   normalizeBasePath,
   type HubApp,
-} from "./app.js";
+} from './app.js';
 import {
   type EnvMap,
   getEnvBoolean,
   getEnvString,
   readEnvFiles,
-} from "./env.js";
+} from './env.js';
 
 export interface StandaloneServerOptions {
   viteDevUrl?: string | false;
@@ -31,20 +31,20 @@ export function createStandaloneServer(
 function createStandaloneServerWithRegistry(
   options: StandaloneServerOptions,
   env: EnvMap,
-  appHostRegistry?: AppHost["registry"],
+  appHostRegistry?: AppHost['registry'],
 ): HubApp {
   const viteDevUrl = resolveViteDevUrl(options.viteDevUrl, env);
   const packageRoot = getPackageRoot();
-  const appName = getEnvString(env, "APP_NAME") ?? "hub";
+  const appName = getEnvString(env, 'APP_NAME') ?? 'hub';
   const basePath = normalizeBasePath(
-    getEnvString(env, "APP_BASE_PATH") ?? `/${appName}`,
+    getEnvString(env, 'APP_BASE_PATH') ?? `/${appName}`,
   );
   const browserBasePath = normalizeBasePath(
-    getEnvString(env, "APP_BROWSER_BASE_PATH") ?? basePath,
+    getEnvString(env, 'APP_BROWSER_BASE_PATH') ?? basePath,
   );
   const proxy = resolveApiProxyFromEnv(env, basePath);
-  const authSecret = getEnvString(env, "AUTH_SECRET");
-  const hubEnabled = getEnvBoolean(env, "HUB_ENABLED") ?? true;
+  const authSecret = getEnvString(env, 'AUTH_SECRET');
+  const hubEnabled = getEnvBoolean(env, 'HUB_ENABLED') ?? true;
 
   return createApp({
     appName,
@@ -55,18 +55,18 @@ function createStandaloneServerWithRegistry(
       ? (request) => proxyToViteDevServer(request, viteDevUrl)
       : undefined,
     clientIndexPath:
-      getEnvString(env, "APP_CLIENT_INDEX") ??
-      path.join(packageRoot, "dist/client/index.html"),
+      getEnvString(env, 'APP_CLIENT_INDEX') ??
+      path.join(packageRoot, 'dist/client/index.html'),
     nocoBaseApiUrl: proxy?.target,
     hub: hubEnabled,
     authSecret,
-    authBaseUrl: getEnvString(env, "AUTH_BASE_URL"),
-    databasePath: getEnvString(env, "HUB_DATABASE_PATH"),
-    releaseRoot: getEnvString(env, "HUB_RELEASE_ROOT"),
+    authBaseUrl: getEnvString(env, 'AUTH_BASE_URL'),
+    databasePath: getEnvString(env, 'HUB_DATABASE_PATH'),
+    releaseRoot: getEnvString(env, 'HUB_RELEASE_ROOT'),
     appHostRegistry,
-    apiClientStoragePrefix: getEnvString(env, "API_CLIENT_STORAGE_PREFIX"),
-    apiClientStorageType: getEnvString(env, "API_CLIENT_STORAGE_TYPE"),
-    apiClientShareToken: getEnvBoolean(env, "API_CLIENT_SHARE_TOKEN"),
+    apiClientStoragePrefix: getEnvString(env, 'API_CLIENT_STORAGE_PREFIX'),
+    apiClientStorageType: getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
+    apiClientShareToken: getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
   });
 }
 
@@ -81,18 +81,18 @@ async function startServerAsync(): Promise<void> {
   const env = loadServerEnv();
   const appHost = createAppHost({
     port:
-      numberFromEnv(env, "APP_HOST_PORT") ?? numberFromEnv(env, "PORT") ?? 3000,
+      numberFromEnv(env, 'APP_HOST_PORT') ?? numberFromEnv(env, 'PORT') ?? 3000,
     host:
-      getEnvString(env, "APP_HOST_BIND") ??
-      getEnvString(env, "HOST") ??
-      "127.0.0.1",
+      getEnvString(env, 'APP_HOST_BIND') ??
+      getEnvString(env, 'HOST') ??
+      '127.0.0.1',
     appDistDir:
-      getEnvString(env, "APP_DIST_DIR") ??
-      getEnvString(env, "HUB_RELEASE_ROOT"),
+      getEnvString(env, 'APP_DIST_DIR') ??
+      getEnvString(env, 'HUB_RELEASE_ROOT'),
   });
   const app = createStandaloneServerWithRegistry({}, env, appHost.registry);
-  const host = getEnvString(env, "APP_SERVER_HOST") ?? "127.0.0.1";
-  const port = numberFromEnv(env, "APP_SERVER_PORT") ?? 13000;
+  const host = getEnvString(env, 'APP_SERVER_HOST') ?? '127.0.0.1';
+  const port = numberFromEnv(env, 'APP_SERVER_PORT') ?? 13000;
   const server = createAdaptorServer({ fetch: app.fetch });
   const shutdown = waitForShutdown(server, appHost);
   void shutdown.promise.catch(() => undefined);
@@ -109,7 +109,7 @@ async function startServerAsync(): Promise<void> {
     }
 
     await listenServer(server, host, port, (info) => {
-      if (getEnvString(env, "APP_SERVER_START_LOG") !== "false") {
+      if (getEnvString(env, 'APP_SERVER_START_LOG') !== 'false') {
         console.log(
           `App server listening on http://${info.address}:${info.port}`,
         );
@@ -128,21 +128,21 @@ function startAppHost(appHost: AppHost): Promise<void> {
     let settled = false;
     const onError = (error: Error): void => {
       settled = true;
-      appHost.server.off("error", onError);
+      appHost.server.off('error', onError);
       reject(error);
     };
-    appHost.server.once("error", onError);
+    appHost.server.once('error', onError);
     void appHost.start().then(
       () => {
         if (settled) return;
         settled = true;
-        appHost.server.off("error", onError);
+        appHost.server.off('error', onError);
         resolve();
       },
       (error: unknown) => {
         if (settled) return;
         settled = true;
-        appHost.server.off("error", onError);
+        appHost.server.off('error', onError);
         reject(toError(error));
       },
     );
@@ -166,8 +166,8 @@ function waitForShutdown(server: ServerType, appHost: AppHost): ShutdownWaiter {
   });
   const dispose = (): void => {
     for (const [signal, handler] of handlers) process.off(signal, handler);
-    server.off("error", onError);
-    appHost.server.off("error", onError);
+    server.off('error', onError);
+    appHost.server.off('error', onError);
   };
   const onError = (error: Error): void => {
     if (stopping) return;
@@ -179,9 +179,9 @@ function waitForShutdown(server: ServerType, appHost: AppHost): ShutdownWaiter {
     stopping = true;
     resolveShutdown();
   };
-  server.once("error", onError);
-  appHost.server.once("error", onError);
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  server.once('error', onError);
+  appHost.server.once('error', onError);
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     handlers.set(signal, requestShutdown);
     process.once(signal, requestShutdown);
   }
@@ -204,21 +204,21 @@ function listenServer(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const onError = (error: Error): void => {
-      server.off("listening", onListeningEvent);
+      server.off('listening', onListeningEvent);
       reject(error);
     };
     const onListeningEvent = (): void => {
-      server.off("error", onError);
+      server.off('error', onError);
       const address = server.address();
-      if (!address || typeof address === "string") {
-        reject(new Error("Unable to resolve the Hub server address."));
+      if (!address || typeof address === 'string') {
+        reject(new Error('Unable to resolve the Hub server address.'));
         return;
       }
       onListening({ address: address.address, port: address.port });
       resolve();
     };
-    server.once("error", onError);
-    server.once("listening", onListeningEvent);
+    server.once('error', onError);
+    server.once('listening', onListeningEvent);
     server.listen(port, host);
   });
 }
@@ -238,12 +238,12 @@ async function closeStandalone(
   }).catch((error: unknown) => closeErrors.push(error));
   await app.close?.().catch((error: unknown) => closeErrors.push(error));
   await appHost
-    .close("Hub standalone shutdown")
+    .close('Hub standalone shutdown')
     .catch((error: unknown) => closeErrors.push(error));
   if (closeErrors.length > 0) {
     throw new AggregateError(
       closeErrors,
-      "Failed to close Hub standalone runtime.",
+      'Failed to close Hub standalone runtime.',
     );
   }
 }
@@ -252,20 +252,20 @@ function resolveViteDevUrl(
   value: string | false | undefined,
   env: EnvMap,
 ): URL | undefined {
-  if (value === false || getEnvString(env, "NODE_ENV") === "production") {
+  if (value === false || getEnvString(env, 'NODE_ENV') === 'production') {
     return undefined;
   }
 
   const raw =
     value ??
-    getEnvString(env, "APP_VITE_DEV_URL") ??
+    getEnvString(env, 'APP_VITE_DEV_URL') ??
     resolveViteDevUrlFromEnv(env);
   if (!raw) {
     return undefined;
   }
 
   const normalized = raw.trim();
-  if (!normalized || normalized === "false" || normalized === "0") {
+  if (!normalized || normalized === 'false' || normalized === '0') {
     return undefined;
   }
 
@@ -273,13 +273,13 @@ function resolveViteDevUrl(
 }
 
 function resolveViteDevUrlFromEnv(env: EnvMap): string | undefined {
-  const host = getEnvString(env, "APP_VITE_DEV_HOST");
-  const port = getEnvString(env, "APP_VITE_DEV_PORT");
+  const host = getEnvString(env, 'APP_VITE_DEV_HOST');
+  const port = getEnvString(env, 'APP_VITE_DEV_PORT');
   if (!host && !port) {
     return undefined;
   }
 
-  return `http://${host ?? "127.0.0.1"}:${port ?? "5173"}`;
+  return `http://${host ?? '127.0.0.1'}:${port ?? '5173'}`;
 }
 
 async function proxyToViteDevServer(
@@ -292,9 +292,9 @@ async function proxyToViteDevServer(
     viteDevUrl,
   );
   const headers = new Headers(request.headers);
-  headers.delete("cookie");
-  headers.set("host", targetUrl.host);
-  headers.set("accept-encoding", "identity");
+  headers.delete('cookie');
+  headers.set('host', targetUrl.host);
+  headers.set('accept-encoding', 'identity');
   removeHopByHopHeaders(headers);
 
   try {
@@ -302,12 +302,12 @@ async function proxyToViteDevServer(
       method: request.method,
       headers,
       body:
-        request.method === "GET" || request.method === "HEAD"
+        request.method === 'GET' || request.method === 'HEAD'
           ? undefined
           : request.body,
-      redirect: "manual",
-      duplex: "half",
-    } as RequestInit & { duplex: "half" });
+      redirect: 'manual',
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
 
     return new Response(response.body, {
       status: response.status,
@@ -315,13 +315,13 @@ async function proxyToViteDevServer(
       headers: createProxyResponseHeaders(response.headers),
     });
   } catch (error) {
-    console.error("Vite dev proxy request failed.", {
+    console.error('Vite dev proxy request failed.', {
       error,
       target: targetUrl.href,
     });
     return Response.json(
       {
-        error: "Vite dev server is unavailable.",
+        error: 'Vite dev server is unavailable.',
       },
       {
         status: 502,
@@ -333,21 +333,21 @@ async function proxyToViteDevServer(
 function createProxyResponseHeaders(headers: Headers): Headers {
   const nextHeaders = new Headers(headers);
   removeHopByHopHeaders(nextHeaders);
-  nextHeaders.delete("content-encoding");
-  nextHeaders.delete("content-length");
+  nextHeaders.delete('content-encoding');
+  nextHeaders.delete('content-length');
   return nextHeaders;
 }
 
 function removeHopByHopHeaders(headers: Headers): void {
   for (const header of [
-    "connection",
-    "keep-alive",
-    "proxy-authenticate",
-    "proxy-authorization",
-    "te",
-    "trailer",
-    "transfer-encoding",
-    "upgrade",
+    'connection',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
   ]) {
     headers.delete(header);
   }
@@ -355,7 +355,7 @@ function removeHopByHopHeaders(headers: Headers): void {
 
 function loadServerEnv(): EnvMap {
   const root = getPackageRoot();
-  const envFiles = [path.join(root, ".env"), path.join(root, ".env.local")];
+  const envFiles = [path.join(root, '.env'), path.join(root, '.env.local')];
   return {
     ...readEnvFiles(envFiles, process.env),
     ...process.env,
@@ -364,11 +364,11 @@ function loadServerEnv(): EnvMap {
 
 function getPackageRoot(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  if (path.basename(path.dirname(moduleDir)) === "dist") {
-    return path.resolve(moduleDir, "../..");
+  if (path.basename(path.dirname(moduleDir)) === 'dist') {
+    return path.resolve(moduleDir, '../..');
   }
 
-  return path.resolve(moduleDir, "..");
+  return path.resolve(moduleDir, '..');
 }
 
 function numberFromEnv(env: EnvMap, name: string): number | undefined {
@@ -385,8 +385,8 @@ function resolveApiProxyFromEnv(
   env: EnvMap,
   basePath: string,
 ): { path: string; target: string } | undefined {
-  const target = getEnvString(env, "NOCOBASE_API_PROXY_TARGET");
-  const rawPath = getEnvString(env, "NOCOBASE_API_PROXY_PATH");
+  const target = getEnvString(env, 'NOCOBASE_API_PROXY_TARGET');
+  const rawPath = getEnvString(env, 'NOCOBASE_API_PROXY_PATH');
   if (!target || !rawPath) {
     return undefined;
   }

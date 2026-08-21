@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import type { MailAccount, MailAccountSignature, MailSignature } from "./types";
-import { mailApi } from "./mail-api";
-import { createSignatureId } from "./mail-signatures";
+import { useCallback, useEffect, useState } from 'react';
+import type { MailAccount, MailAccountSignature, MailSignature } from './types';
+import { mailApi } from './mail-api';
+import { createSignatureId } from './mail-signatures';
 
 export interface MailSignatureValues {
   name: string;
@@ -38,7 +38,7 @@ function normalizeDefault(list: MailSignature[], defaultId?: string) {
 
 export function useMailSignatures(
   account?: MailAccount,
-  onAccountChange?: (account: MailAccount) => void
+  onAccountChange?: (account: MailAccount) => void,
 ) {
   const [state, setState] = useState<{
     accountId?: number;
@@ -54,7 +54,8 @@ export function useMailSignatures(
 
   const persist = useCallback(
     async (next: MailSignature[]) => {
-      if (!account) throw new Error("Select a sender account before managing signatures");
+      if (!account)
+        throw new Error('Select a sender account before managing signatures');
       setSaving(true);
       try {
         const config = {
@@ -74,7 +75,7 @@ export function useMailSignatures(
         setSaving(false);
       }
     },
-    [account, onAccountChange]
+    [account, onAccountChange],
   );
 
   const create = useCallback(
@@ -91,31 +92,34 @@ export function useMailSignatures(
       await persist(next);
       return signature;
     },
-    [persist, signatures]
+    [persist, signatures],
   );
 
   const update = useCallback(
     async (id: string, values: MailSignatureValues) => {
       let next = signatures.map((signature) =>
-        signature.id === id ? { ...signature, ...values } : signature
+        signature.id === id ? { ...signature, ...values } : signature,
       );
       if (values.isDefault) next = normalizeDefault(next, id);
       await persist(next);
     },
-    [persist, signatures]
+    [persist, signatures],
   );
 
   const remove = useCallback(
-    async (id: string) => persist(signatures.filter((signature) => signature.id !== id)),
-    [persist, signatures]
+    async (id: string) =>
+      persist(signatures.filter((signature) => signature.id !== id)),
+    [persist, signatures],
   );
 
   const setDefault = useCallback(
     async (id: string) => {
       const target = signatures.find((signature) => signature.id === id);
-      await persist(normalizeDefault(signatures, target?.isDefault ? undefined : id));
+      await persist(
+        normalizeDefault(signatures, target?.isDefault ? undefined : id),
+      );
     },
-    [persist, signatures]
+    [persist, signatures],
   );
 
   return { signatures, saving, create, update, remove, setDefault };

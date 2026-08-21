@@ -12,7 +12,7 @@ import {
   type AppEvent,
   type AppEventPayload,
   type AppState,
-} from "./events.ts";
+} from './events.ts';
 import type {
   ActiveAppHandle,
   AppFactory,
@@ -24,7 +24,7 @@ import type {
   AppScope,
   AppSnapshot,
   AppWebSocketAcceptResult,
-} from "./app-types.ts";
+} from './app-types.ts';
 
 export interface AppRuntimeOptions {
   version: number;
@@ -50,12 +50,12 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   readonly rootDir?: string;
   readonly dataDir?: string;
   readonly config?: unknown;
-  readonly backend: AppDefinition["backend"];
+  readonly backend: AppDefinition['backend'];
   readonly configVersion: string;
   readonly desiredVersion: string;
   readonly codeVersion: string;
-  readonly isolation: AppDefinition["isolation"];
-  readonly tier: AppDefinition["tier"];
+  readonly isolation: AppDefinition['isolation'];
+  readonly tier: AppDefinition['tier'];
   readonly events: AppEventBus = new AppEventBus();
   app!: FetchApp;
 
@@ -71,10 +71,10 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   private lastAccessedAt: Date | null = null;
   private lastError: string | null = null;
 
-  state: AppState = "creating";
+  state: AppState = 'creating';
   activeRequests = 0;
 
-  private constructor(options: Omit<AppRuntimeOptions, "createApp">) {
+  private constructor(options: Omit<AppRuntimeOptions, 'createApp'>) {
     this.id = options.definition.id;
     this.appName = options.definition.appName;
     this.version = options.version;
@@ -106,10 +106,10 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       runtime.app = await options.createApp(runtime);
       return runtime;
     } catch (error) {
-      runtime.transitionTo("failed");
+      runtime.transitionTo('failed');
       runtime.lastError =
         error instanceof Error ? error.message : String(error);
-      await runtime.disposeRegisteredResources("app create failed");
+      await runtime.disposeRegisteredResources('app create failed');
       throw error;
     }
   }
@@ -123,8 +123,8 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   }
 
   activate(): void {
-    this.transitionTo("active");
-    this.emit("app:created");
+    this.transitionTo('active');
+    this.emit('app:created');
   }
 
   on(
@@ -145,7 +145,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   }
 
   registerDisposer(name: string, dispose: AppDisposer): void {
-    if (this.state === "destroying" || this.state === "destroyed") {
+    if (this.state === 'destroying' || this.state === 'destroyed') {
       throw new Error(
         `Cannot register disposer "${name}" after app ${this.id} has started destroying`,
       );
@@ -169,7 +169,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       tier: this.tier,
       state: this.state,
       endpoint: {
-        kind: "in-process",
+        kind: 'in-process',
       },
       activeRequests: this.activeRequests,
       createdAt: this.createdAt.toISOString(),
@@ -184,18 +184,18 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     request: Request,
     metadata: AppRequestMetadata = {},
   ): Promise<Response> {
-    if (this.state !== "active") {
+    if (this.state !== 'active') {
       return new Response(
         JSON.stringify({
           error: `App ${this.id} is ${this.state}`,
         }),
         {
           status:
-            this.state === "draining" || this.state === "destroying"
+            this.state === 'draining' || this.state === 'destroying'
               ? 503
               : 410,
           headers: {
-            "content-type": "application/json",
+            'content-type': 'application/json',
           },
         },
       );
@@ -206,7 +206,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.activeRequests += 1;
     this.lastAccessedAt = new Date();
     this.touch();
-    this.emit("app:requestStart", {
+    this.emit('app:requestStart', {
       requestId,
       method: metadata.method ?? request.method,
       path: metadata.path ?? new URL(request.url).pathname,
@@ -224,7 +224,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
         signal: this.abortSignal,
       });
 
-      this.emit("app:requestEnd", {
+      this.emit('app:requestEnd', {
         requestId,
         method: metadata.method ?? request.method,
         path: metadata.path ?? new URL(request.url).pathname,
@@ -235,7 +235,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       return response;
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
-      this.emit("app:requestError", {
+      this.emit('app:requestError', {
         requestId,
         method: metadata.method ?? request.method,
         path: metadata.path ?? new URL(request.url).pathname,
@@ -256,24 +256,24 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     request: Request,
     metadata: AppRequestMetadata = {},
   ): Promise<AppWebSocketAcceptResult> {
-    if (this.state !== "active") {
+    if (this.state !== 'active') {
       return new Response(
         JSON.stringify({
           error: `App ${this.id} is ${this.state}`,
         }),
         {
           status:
-            this.state === "draining" || this.state === "destroying"
+            this.state === 'draining' || this.state === 'destroying'
               ? 503
               : 410,
           headers: {
-            "content-type": "application/json",
+            'content-type': 'application/json',
           },
         },
       );
     }
 
-    if (typeof this.app.websocket !== "function") {
+    if (typeof this.app.websocket !== 'function') {
       return null;
     }
 
@@ -282,13 +282,13 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.activeRequests += 1;
     this.lastAccessedAt = new Date();
     this.touch();
-    this.emit("app:requestStart", {
+    this.emit('app:requestStart', {
       requestId,
       method: metadata.method ?? request.method,
       path: metadata.path ?? new URL(request.url).pathname,
       activeRequests: this.activeRequests,
       metadata: {
-        transport: "websocket",
+        transport: 'websocket',
       },
     });
 
@@ -303,7 +303,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
         signal: this.abortSignal,
       });
 
-      this.emit("app:requestEnd", {
+      this.emit('app:requestEnd', {
         requestId,
         method: metadata.method ?? request.method,
         path: metadata.path ?? new URL(request.url).pathname,
@@ -311,13 +311,13 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
         durationMs: Date.now() - startedAt,
         activeRequests: this.activeRequests,
         metadata: {
-          transport: "websocket",
+          transport: 'websocket',
         },
       });
       return result;
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
-      this.emit("app:requestError", {
+      this.emit('app:requestError', {
         requestId,
         method: metadata.method ?? request.method,
         path: metadata.path ?? new URL(request.url).pathname,
@@ -325,7 +325,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
         error,
         activeRequests: this.activeRequests,
         metadata: {
-          transport: "websocket",
+          transport: 'websocket',
         },
       });
       throw error;
@@ -338,43 +338,43 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   }
 
   async destroy(options: string | AppDestroyOptions = {}): Promise<void> {
-    if (this.state === "destroyed") {
+    if (this.state === 'destroyed') {
       return;
     }
 
     const destroyOptions =
-      typeof options === "string" ? { reason: options } : options;
-    const reason = destroyOptions.reason ?? "manual destroy";
+      typeof options === 'string' ? { reason: options } : options;
+    const reason = destroyOptions.reason ?? 'manual destroy';
     const timeoutMs = destroyOptions.timeoutMs ?? 10_000;
 
-    if (this.state !== "failed" && this.state !== "creating") {
-      this.transitionTo("draining");
+    if (this.state !== 'failed' && this.state !== 'creating') {
+      this.transitionTo('draining');
     }
-    this.emit("app:beforeDrain", {
+    this.emit('app:beforeDrain', {
       reason,
       activeRequests: this.activeRequests,
     });
-    this.emit("app:draining", { reason, activeRequests: this.activeRequests });
+    this.emit('app:draining', { reason, activeRequests: this.activeRequests });
 
     await this.waitForIdle(timeoutMs);
 
     this.abortController.abort(new Error(reason));
-    this.emit("app:beforeDestroy", {
+    this.emit('app:beforeDestroy', {
       reason,
       activeRequests: this.activeRequests,
     });
     await this.runBeforeDestroyHandlers(reason);
 
-    this.transitionTo("destroying");
-    this.emit("app:destroying", {
+    this.transitionTo('destroying');
+    this.emit('app:destroying', {
       reason,
       activeRequests: this.activeRequests,
     });
     await this.disposeRegisteredResources(reason);
 
     this.events.removeAllListeners();
-    this.transitionTo("destroyed");
-    this.globalEvents.emit("app:destroyed", this.payload({ reason }));
+    this.transitionTo('destroyed');
+    this.globalEvents.emit('app:destroyed', this.payload({ reason }));
   }
 
   private async runBeforeDestroyHandlers(reason: string): Promise<void> {
@@ -383,9 +383,9 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
         await handler();
       } catch (error) {
         this.lastError = error instanceof Error ? error.message : String(error);
-        this.emit("app:destroyFailed", {
+        this.emit('app:destroyFailed', {
           reason,
-          resourceName: "beforeDestroy hook",
+          resourceName: 'beforeDestroy hook',
           error,
         });
       }
@@ -396,16 +396,16 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
 
   private async disposeRegisteredResources(reason: string): Promise<void> {
     for (const disposer of [...this.disposers].reverse()) {
-      this.emit("app:resourceDispose", { reason, resourceName: disposer.name });
+      this.emit('app:resourceDispose', { reason, resourceName: disposer.name });
       try {
         await disposer.dispose();
-        this.emit("app:resourceDisposed", {
+        this.emit('app:resourceDisposed', {
           reason,
           resourceName: disposer.name,
         });
       } catch (error) {
         this.lastError = error instanceof Error ? error.message : String(error);
-        this.emit("app:destroyFailed", {
+        this.emit('app:destroyFailed', {
           reason,
           resourceName: disposer.name,
           error,
@@ -474,12 +474,12 @@ function mergeAppConfig(
   if (!runtimeConfig) return definitionConfig;
   if (definitionConfig === undefined) return { ...runtimeConfig };
   if (
-    typeof definitionConfig !== "object" ||
+    typeof definitionConfig !== 'object' ||
     definitionConfig === null ||
     Array.isArray(definitionConfig)
   ) {
     throw new TypeError(
-      "App runtime config can only extend an object-valued definition config.",
+      'App runtime config can only extend an object-valued definition config.',
     );
   }
   return { ...definitionConfig, ...runtimeConfig };

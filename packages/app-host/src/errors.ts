@@ -11,7 +11,10 @@ export class AppRegistryError extends Error {
   readonly status: number;
   readonly code: string;
 
-  constructor(message: string, options: { status: number; code: string; cause?: unknown }) {
+  constructor(
+    message: string,
+    options: { status: number; code: string; cause?: unknown },
+  ) {
     super(message, { cause: options.cause });
     this.name = new.target.name;
     this.status = options.status;
@@ -21,10 +24,13 @@ export class AppRegistryError extends Error {
 
 export class InvalidAppIdError extends AppRegistryError {
   constructor(id: string) {
-    super(`Invalid app id "${id}". Use letters, numbers, underscores, or hyphens.`, {
-      status: 400,
-      code: 'APP_INVALID_ID',
-    });
+    super(
+      `Invalid app id "${id}". Use letters, numbers, underscores, or hyphens.`,
+      {
+        status: 400,
+        code: 'APP_INVALID_ID',
+      },
+    );
   }
 }
 
@@ -68,9 +74,12 @@ export class AppReloadFailedError extends AppRegistryError {
 
 export class AppCapacityExceededError extends AppRegistryError {
   constructor(maxActiveApps: number) {
-    super(`Active app capacity exceeded and no idle app can be evicted. maxActiveApps=${maxActiveApps}`, {
-      status: 503,
-      code: 'APP_CAPACITY_EXCEEDED',
-    });
+    super(
+      `Active app capacity exceeded and no idle app can be evicted. maxActiveApps=${maxActiveApps}`,
+      {
+        status: 503,
+        code: 'APP_CAPACITY_EXCEEDED',
+      },
+    );
   }
 }

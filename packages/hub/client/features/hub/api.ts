@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface HubPageMeta {
   total?: number;
@@ -25,7 +25,7 @@ export interface HubErrorEnvelope {
   requestId?: string;
 }
 
-export type HubApplicationStatus = "active" | "disabled" | "archived" | string;
+export type HubApplicationStatus = 'active' | 'disabled' | 'archived' | string;
 
 export interface HubApplication {
   id: string;
@@ -41,7 +41,7 @@ export interface HubApplication {
 }
 
 export type HubReleaseVerificationStatus =
-  "pending" | "verified" | "rejected" | string;
+  'pending' | 'verified' | 'rejected' | string;
 
 export interface HubRelease {
   id: string;
@@ -57,18 +57,18 @@ export interface HubRelease {
 }
 
 export type HubDeploymentStatus =
-  | "queued"
-  | "preparing"
-  | "activating"
-  | "checking"
-  | "switching"
-  | "draining"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
+  | 'queued'
+  | 'preparing'
+  | 'activating'
+  | 'checking'
+  | 'switching'
+  | 'draining'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
   | string;
 
-export type HubDeploymentType = "deploy" | "rollback" | "redeploy" | string;
+export type HubDeploymentType = 'deploy' | 'rollback' | 'redeploy' | string;
 
 export interface HubDeploymentFailure {
   code: string;
@@ -140,7 +140,7 @@ export type HubFetcher = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-const DEFAULT_API_BASE = "/hub/api";
+const DEFAULT_API_BASE = '/hub/api';
 const defaultFetcher: HubFetcher = (input, init) => fetch(input, init);
 let unauthorizedHandler: (() => void) | undefined;
 
@@ -156,22 +156,22 @@ export function getHubApiBase(): string {
     NOCOBASE_API_URL?: unknown;
   };
   const candidate =
-    typeof globalThis !== "undefined" &&
-    typeof runtime.NOCOBASE_API_URL === "string"
+    typeof globalThis !== 'undefined' &&
+    typeof runtime.NOCOBASE_API_URL === 'string'
       ? runtime.NOCOBASE_API_URL
-      : "";
+      : '';
   const value = candidate.trim();
-  if (!value || value === "false" || value === "0") return DEFAULT_API_BASE;
-  return value.replace(/\/+$/, "") || DEFAULT_API_BASE;
+  if (!value || value === 'false' || value === '0') return DEFAULT_API_BASE;
+  return value.replace(/\/+$/, '') || DEFAULT_API_BASE;
 }
 
 export function buildHubApiUrl(path: string, base = getHubApiBase()): string {
   if (/^[a-z][a-z\d+.-]*:\/\//i.test(path)) return path;
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   if (/^[a-z][a-z\d+.-]*:\/\//i.test(base)) {
-    return new URL(normalizedPath.replace(/^\//, ""), `${base}/`).toString();
+    return new URL(normalizedPath.replace(/^\//, ''), `${base}/`).toString();
   }
-  return `${base.replace(/\/+$/, "")}${normalizedPath}`;
+  return `${base.replace(/\/+$/, '')}${normalizedPath}`;
 }
 
 export class HubApiError extends Error {
@@ -190,21 +190,21 @@ export class HubApiError extends Error {
     } = {},
   ) {
     super(message);
-    this.name = "HubApiError";
+    this.name = 'HubApiError';
     this.status = options.status ?? 500;
-    this.code = options.code ?? "HUB_REQUEST_FAILED";
+    this.code = options.code ?? 'HUB_REQUEST_FAILED';
     this.requestId = options.requestId;
     this.retryable = options.retryable;
   }
 }
 
 function parseErrorPayload(payload: unknown): HubErrorPayload {
-  if (typeof payload === "string") return { message: payload };
-  if (!payload || typeof payload !== "object") return {};
+  if (typeof payload === 'string') return { message: payload };
+  if (!payload || typeof payload !== 'object') return {};
   const value = payload as HubErrorPayload;
   return {
-    code: typeof value.code === "string" ? value.code : undefined,
-    message: typeof value.message === "string" ? value.message : undefined,
+    code: typeof value.code === 'string' ? value.code : undefined,
+    message: typeof value.message === 'string' ? value.message : undefined,
     retryable: value.retryable,
     issues: value.issues,
   };
@@ -215,14 +215,14 @@ export function unwrapHubResponse<T>(
   payload: unknown,
   status = 200,
 ): HubEnvelope<T> {
-  if (!payload || typeof payload !== "object") {
-    throw new HubApiError("Hub returned an invalid response.", { status });
+  if (!payload || typeof payload !== 'object') {
+    throw new HubApiError('Hub returned an invalid response.', { status });
   }
 
   const value = payload as Partial<HubEnvelope<T>> & HubErrorEnvelope;
   if (value.error) {
     const error = parseErrorPayload(value.error);
-    throw new HubApiError(error.message ?? "Hub request failed.", {
+    throw new HubApiError(error.message ?? 'Hub request failed.', {
       status,
       code: error.code,
       requestId: value.requestId,
@@ -231,14 +231,14 @@ export function unwrapHubResponse<T>(
   }
 
   if (status >= 400) {
-    throw new HubApiError("Hub request failed.", {
+    throw new HubApiError('Hub request failed.', {
       status,
       requestId: value.requestId,
     });
   }
 
-  if (!("data" in value)) {
-    throw new HubApiError("Hub returned a response without data.", {
+  if (!('data' in value)) {
+    throw new HubApiError('Hub returned a response without data.', {
       status,
       requestId: value.requestId,
     });
@@ -257,9 +257,9 @@ export async function hubRequest<T>(
   fetcher: HubFetcher = defaultFetcher,
 ): Promise<HubEnvelope<T>> {
   const headers = new Headers(init.headers);
-  headers.set("accept", "application/json");
-  if (init.body && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
+  headers.set('accept', 'application/json');
+  if (init.body && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
   }
 
   let response: Response;
@@ -267,12 +267,12 @@ export async function hubRequest<T>(
     response = await fetcher(buildHubApiUrl(path), {
       ...init,
       headers,
-      credentials: init.credentials ?? "include",
+      credentials: init.credentials ?? 'include',
     });
   } catch (error) {
     throw new HubApiError(
-      error instanceof Error ? error.message : "Unable to reach Hub.",
-      { code: "NETWORK_ERROR", status: 0, retryable: true },
+      error instanceof Error ? error.message : 'Unable to reach Hub.',
+      { code: 'NETWORK_ERROR', status: 0, retryable: true },
     );
   }
 
@@ -280,7 +280,7 @@ export async function hubRequest<T>(
   try {
     payload = await response.json();
   } catch {
-    throw new HubApiError("Hub returned an unreadable response.", {
+    throw new HubApiError('Hub returned an unreadable response.', {
       status: response.status,
     });
   }
@@ -289,7 +289,7 @@ export async function hubRequest<T>(
   } catch (error) {
     if (
       error instanceof HubApiError &&
-      (error.status === 401 || error.code === "UNAUTHORIZED")
+      (error.status === 401 || error.code === 'UNAUTHORIZED')
     ) {
       unauthorizedHandler?.();
     }
@@ -301,7 +301,7 @@ export function hubGet<T>(
   path: string,
   fetcher?: HubFetcher,
 ): Promise<HubEnvelope<T>> {
-  return hubRequest<T>(path, { method: "GET" }, fetcher);
+  return hubRequest<T>(path, { method: 'GET' }, fetcher);
 }
 
 export function hubPost<T>(
@@ -311,20 +311,20 @@ export function hubPost<T>(
 ): Promise<HubEnvelope<T>> {
   return hubRequest<T>(
     path,
-    { method: "POST", body: JSON.stringify(body) },
+    { method: 'POST', body: JSON.stringify(body) },
     fetcher,
   );
 }
 
 function normalizeCapabilityPart(value: string): string {
-  return value.trim().toLowerCase().replace(/_/g, "-");
+  return value.trim().toLowerCase().replace(/_/g, '-');
 }
 
 function resourceMatches(actual: string, requested: string): boolean {
   const left = normalizeCapabilityPart(actual);
   const right = normalizeCapabilityPart(requested);
   return (
-    left === right || left === right.replace(/s$/, "") || right === `${left}s`
+    left === right || left === right.replace(/s$/, '') || right === `${left}s`
   );
 }
 
@@ -345,11 +345,11 @@ export function hasHubCapability(
   const entries = [...(capabilities.global ?? []), ...applicationEntries];
   return entries.some((entry) => {
     const resourceOkay =
-      entry.resource === "*" || resourceMatches(entry.resource, resource);
+      entry.resource === '*' || resourceMatches(entry.resource, resource);
     if (!resourceOkay) return false;
     return entry.actions.some(
       (candidate) =>
-        candidate === "*" ||
+        candidate === '*' ||
         normalizeCapabilityPart(candidate) === requestedAction,
     );
   });

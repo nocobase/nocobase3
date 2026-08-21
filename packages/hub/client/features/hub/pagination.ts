@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   hubGet,
   type HubApiError,
   type HubFetcher,
   type HubPageMeta,
-} from "./api";
+} from './api';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -161,18 +161,18 @@ export function useHubPaginatedQuery<T>({
 }
 
 function withPagination(path: string, limit: number, offset: number): string {
-  const separator = path.includes("?") ? "&" : "?";
+  const separator = path.includes('?') ? '&' : '?';
   return `${path}${separator}limit=${limit}&offset=${offset}`;
 }
 
 function positiveInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) && value > 0
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
     ? value
     : undefined;
 }
 
 function nonNegativeInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
     ? value
     : undefined;
 }

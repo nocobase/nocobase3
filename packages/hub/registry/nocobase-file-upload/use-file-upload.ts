@@ -1,21 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   allowsMultipleFiles,
   normalizeFileFieldValue,
   toFileFieldValue,
-} from "./form-value";
-import { uploadDirect } from "./upload-direct";
-import { uploadMultipart } from "./upload-multipart";
+} from './form-value';
+import { uploadDirect } from './upload-direct';
+import { uploadMultipart } from './upload-multipart';
 import {
   getAvailableFileCount,
   resolveFileUploadMode,
-} from "./upload-strategy";
-import { checkFileStorage } from "./use-file-storage";
-import {
-  validateFileBeforeUpload,
-  validateFileForField,
-} from "./validation";
+} from './upload-strategy';
+import { checkFileStorage } from './use-file-storage';
+import { validateFileBeforeUpload, validateFileForField } from './validation';
 import type {
   FileFieldDescriptor,
   FileStorageInfo,
@@ -25,7 +22,7 @@ import type {
   FileUploadMessages,
   FileUploadMode,
   NocoBaseFileRecord,
-} from "./types";
+} from './types';
 
 export type UseFileUploadOptions = {
   descriptor: FileFieldDescriptor;
@@ -55,9 +52,9 @@ const getFileKey = (file: File) =>
   `${file.name}-${file.size}-${file.lastModified}-${createUploadKey()}`;
 
 const isInProgress = (item: FileUploadItem) =>
-  item.status === "pending" ||
-  item.status === "checking" ||
-  item.status === "uploading";
+  item.status === 'pending' ||
+  item.status === 'checking' ||
+  item.status === 'uploading';
 
 function toError(value: unknown) {
   return value instanceof Error ? value : new Error(String(value));
@@ -69,11 +66,11 @@ async function uploadOne(
   storage: FileStorageInfo,
   signal: AbortSignal,
   messages: FileUploadMessages,
-  uploadMode: FileUploadMode
+  uploadMode: FileUploadMode,
 ) {
   const options = { file, descriptor, storage, signal };
 
-  return resolveFileUploadMode(storage, uploadMode) === "direct"
+  return resolveFileUploadMode(storage, uploadMode) === 'direct'
     ? uploadDirect(options, messages)
     : uploadMultipart(options);
 }
@@ -85,7 +82,7 @@ export function useFileUpload({
   disabled,
   readOnly,
   maxFiles,
-  uploadMode = "auto",
+  uploadMode = 'auto',
   uploadFile,
   messages,
   onUploadStart,
@@ -100,9 +97,9 @@ export function useFileUpload({
     recordsRef.current.map((record) => ({
       key: String(record.id),
       displayName: record.title || record.filename,
-      status: "done",
+      status: 'done',
       record,
-    }))
+    })),
   );
   const canUpload = !disabled && !readOnly;
   const multiple = allowsMultipleFiles(descriptor);
@@ -114,8 +111,8 @@ export function useFileUpload({
       const localItems = current.filter(
         (item) =>
           isInProgress(item) ||
-          item.status === "error" ||
-          item.status === "cancelled"
+          item.status === 'error' ||
+          item.status === 'cancelled',
       );
       const localKeys = new Set(localItems.map((item) => item.key));
       return [
@@ -124,7 +121,7 @@ export function useFileUpload({
           .map((record) => ({
             key: String(record.id),
             displayName: record.title || record.filename,
-            status: "done" as const,
+            status: 'done' as const,
             record,
           })),
         ...localItems,
@@ -138,7 +135,7 @@ export function useFileUpload({
       controllersRef.current.clear();
       reservationsRef.current.clear();
     },
-    []
+    [],
   );
 
   const limit = useMemo(() => (multiple ? maxFiles : 1), [maxFiles, multiple]);
@@ -154,12 +151,12 @@ export function useFileUpload({
       setItems((current) => current.filter((item) => item.key !== key));
 
       const nextRecords = recordsRef.current.filter(
-        (record) => String(record.id) !== key
+        (record) => String(record.id) !== key,
       );
       recordsRef.current = nextRecords;
       onChange(toFileFieldValue(descriptor, nextRecords));
     },
-    [descriptor, onChange]
+    [descriptor, onChange],
   );
 
   const cancelItem = useCallback((key: string) => {
@@ -170,8 +167,8 @@ export function useFileUpload({
     reservationsRef.current.delete(key);
     setItems((current) =>
       current.map((item) =>
-        item.key === key ? { ...item, status: "cancelled" } : item
-      )
+        item.key === key ? { ...item, status: 'cancelled' } : item,
+      ),
     );
   }, []);
 
@@ -195,9 +192,9 @@ export function useFileUpload({
           setItems((current) =>
             current.map((currentItem) =>
               currentItem.key === item.key
-                ? { ...currentItem, status: "uploading", error: undefined }
-                : currentItem
-            )
+                ? { ...currentItem, status: 'uploading', error: undefined }
+                : currentItem,
+            ),
           );
           onUploadStart?.(file);
           record = await uploadFile({
@@ -209,9 +206,9 @@ export function useFileUpload({
           setItems((current) =>
             current.map((currentItem) =>
               currentItem.key === item.key
-                ? { ...currentItem, status: "checking", error: undefined }
-                : currentItem
-            )
+                ? { ...currentItem, status: 'checking', error: undefined }
+                : currentItem,
+            ),
           );
           let storage: FileStorageInfo;
           try {
@@ -234,16 +231,16 @@ export function useFileUpload({
             file,
             descriptor,
             storage,
-            messages
+            messages,
           );
           if (!validation.valid) throw new Error(validation.message);
 
           setItems((current) =>
             current.map((currentItem) =>
               currentItem.key === item.key
-                ? { ...currentItem, status: "uploading", error: undefined }
-                : currentItem
-            )
+                ? { ...currentItem, status: 'uploading', error: undefined }
+                : currentItem,
+            ),
           );
           onUploadStart?.(file);
           record = await uploadOne(
@@ -252,7 +249,7 @@ export function useFileUpload({
             storage,
             controller.signal,
             messages,
-            uploadMode
+            uploadMode,
           );
         }
 
@@ -269,13 +266,13 @@ export function useFileUpload({
               ? {
                   ...currentItem,
                   key: String(record.id),
-                  status: "done",
+                  status: 'done',
                   record,
                   displayName: record.title || record.filename,
                   rawFile: undefined,
                 }
-              : currentItem
-          )
+              : currentItem,
+          ),
         );
         onChange(toFileFieldValue(descriptor, recordsRef.current));
         onUploadComplete?.(record, file);
@@ -289,11 +286,11 @@ export function useFileUpload({
             currentItem.key === item.key
               ? {
                   ...currentItem,
-                  status: cancelled ? "cancelled" : "error",
+                  status: cancelled ? 'cancelled' : 'error',
                   error: cancelled ? undefined : error,
                 }
-              : currentItem
-          )
+              : currentItem,
+          ),
         );
         if (!cancelled) onUploadError?.(error, file);
       }
@@ -308,7 +305,7 @@ export function useFileUpload({
       onUploadStart,
       uploadFile,
       uploadMode,
-    ]
+    ],
   );
 
   const addFiles = useCallback(
@@ -320,14 +317,14 @@ export function useFileUpload({
         limit,
         recordsRef.current.length,
         reservationsRef.current.size,
-        selected.length
+        selected.length,
       );
       const additions = selected.slice(0, available).map((file) => ({
         key: getFileKey(file),
         rawFile: file,
         displayName: file.name,
         showStatus: true,
-        status: "pending" as const,
+        status: 'pending' as const,
       }));
       if (!additions.length) return;
 
@@ -335,12 +332,14 @@ export function useFileUpload({
       setItems((current) =>
         multiple
           ? [...current, ...additions]
-          : current.filter((entry) => entry.status !== "done").concat(additions)
+          : current
+              .filter((entry) => entry.status !== 'done')
+              .concat(additions),
       );
 
       for (const item of additions) await runUpload(item);
     },
-    [canUpload, limit, multiple, runUpload]
+    [canUpload, limit, multiple, runUpload],
   );
 
   const retryItem = useCallback(
@@ -353,13 +352,13 @@ export function useFileUpload({
         limit,
         recordsRef.current.length,
         reservationsRef.current.size,
-        1
+        1,
       );
       if (!available) return;
       reservationsRef.current.add(key);
       await runUpload(item);
     },
-    [canUpload, items, limit, runUpload]
+    [canUpload, items, limit, runUpload],
   );
 
   return {

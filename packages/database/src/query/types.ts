@@ -21,10 +21,7 @@ export type PortableComparisonOperator =
 export type ComparisonOperator = PortableComparisonOperator;
 
 export type OperandValueExpressionOrList =
-  | unknown
-  | readonly unknown[]
-  | Expression<unknown>
-  | SubqueryBuilder;
+  unknown | readonly unknown[] | Expression<unknown> | SubqueryBuilder;
 
 export interface CompiledQuery {
   sql: string;
@@ -51,7 +48,10 @@ export interface Expression<T = unknown> {
   readonly expressionType?: T;
 }
 
-export interface AliasedExpression<T = unknown, TAlias extends string = string> extends Expression<T> {
+export interface AliasedExpression<
+  T = unknown,
+  TAlias extends string = string,
+> extends Expression<T> {
   readonly alias: TAlias;
 }
 
@@ -60,18 +60,29 @@ export interface AggregateExpression<T = unknown> extends Expression<T> {
   distinct(): AggregateExpression<T>;
 }
 
-export type ExpressionFactory<T = SqlBool> =
-  (eb: ExpressionBuilder) => Expression<T>;
+export type ExpressionFactory<T = SqlBool> = (
+  eb: ExpressionBuilder,
+) => Expression<T>;
 
 export type ExpressionInput<T = unknown> = Expression<T> | ExpressionFactory<T>;
 
 export interface FunctionModule {
-  count<T = number>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
+  count<T = number>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
   countAll<T = number>(table?: string): AggregateExpression<T>;
-  sum<T = number>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
-  avg<T = number>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
-  min<T = unknown>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
-  max<T = unknown>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
+  sum<T = number>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
+  avg<T = number>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
+  min<T = unknown>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
+  max<T = unknown>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
 }
 
 export interface ExpressionBuilder {
@@ -87,8 +98,12 @@ export interface ExpressionBuilder {
   ref(reference: ReferenceExpression): Expression<unknown>;
   val(value: unknown): Expression<unknown>;
 
-  and(expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>): Expression<SqlBool>;
-  or(expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>): Expression<SqlBool>;
+  and(
+    expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>,
+  ): Expression<SqlBool>;
+  or(
+    expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>,
+  ): Expression<SqlBool>;
   not(expression: ExpressionInput<SqlBool>): Expression<SqlBool>;
 
   between(
@@ -103,7 +118,9 @@ export interface ExpressionBuilder {
 }
 
 export type SelectionExpression = string | AliasedExpression;
-export type SelectionFactory = (eb: ExpressionBuilder) => readonly SelectionExpression[];
+export type SelectionFactory = (
+  eb: ExpressionBuilder,
+) => readonly SelectionExpression[];
 export type JoinCallback = (join: JoinBuilder) => JoinBuilder;
 
 export interface QueryAdapter {
@@ -112,7 +129,9 @@ export interface QueryAdapter {
    * It accepts table/column query identifiers and does not read Collection metadata,
    * so collection.tableName() and field.columnName() mappings are not applied.
    */
-  selectFrom<TRecord extends Row = Row>(table: string): SelectQuery<TRecord, Row>;
+  selectFrom<TRecord extends Row = Row>(
+    table: string,
+  ): SelectQuery<TRecord, Row>;
   /**
    * Database-layer insert builder.
    * It accepts table/column query identifiers and does not read Collection metadata.
@@ -154,12 +173,33 @@ export interface SelectQuery<
     rhs: ReferenceExpression,
   ): SelectQuery<TRecord, TResult>;
 
-  innerJoin(table: string, leftRef: ReferenceExpression, rightRef: ReferenceExpression): SelectQuery<TRecord, TResult>;
-  innerJoin(table: string, callback: JoinCallback): SelectQuery<TRecord, TResult>;
-  leftJoin(table: string, leftRef: ReferenceExpression, rightRef: ReferenceExpression): SelectQuery<TRecord, TResult>;
-  leftJoin(table: string, callback: JoinCallback): SelectQuery<TRecord, TResult>;
-  rightJoin(table: string, leftRef: ReferenceExpression, rightRef: ReferenceExpression): SelectQuery<TRecord, TResult>;
-  rightJoin(table: string, callback: JoinCallback): SelectQuery<TRecord, TResult>;
+  innerJoin(
+    table: string,
+    leftRef: ReferenceExpression,
+    rightRef: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult>;
+  innerJoin(
+    table: string,
+    callback: JoinCallback,
+  ): SelectQuery<TRecord, TResult>;
+  leftJoin(
+    table: string,
+    leftRef: ReferenceExpression,
+    rightRef: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult>;
+  leftJoin(
+    table: string,
+    callback: JoinCallback,
+  ): SelectQuery<TRecord, TResult>;
+  rightJoin(
+    table: string,
+    leftRef: ReferenceExpression,
+    rightRef: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult>;
+  rightJoin(
+    table: string,
+    callback: JoinCallback,
+  ): SelectQuery<TRecord, TResult>;
   crossJoin(table: string): SelectQuery<TRecord, TResult>;
 
   groupBy(column: string): SelectQuery<TRecord, TResult>;
@@ -179,7 +219,10 @@ export interface SelectQuery<
     rhs: ReferenceExpression,
   ): SelectQuery<TRecord, TResult>;
 
-  orderBy(column: string, direction?: OrderDirection): SelectQuery<TRecord, TResult>;
+  orderBy(
+    column: string,
+    direction?: OrderDirection,
+  ): SelectQuery<TRecord, TResult>;
   limit(count: number): SelectQuery<TRecord, TResult>;
   offset(count: number): SelectQuery<TRecord, TResult>;
 
@@ -262,7 +305,11 @@ export interface JoinBuilder {
   on(expression: Expression<SqlBool>): JoinBuilder;
   on(factory: ExpressionFactory<SqlBool>): JoinBuilder;
 
-  onRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): JoinBuilder;
+  onRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): JoinBuilder;
 }
 
 export interface SubqueryBuilder<TResult extends Row = Row> {

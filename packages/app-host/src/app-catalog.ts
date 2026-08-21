@@ -88,12 +88,16 @@ export class DirectoryAppCatalog {
     return definitions.sort((a, b) => a.id.localeCompare(b.id));
   }
 
-  async registerDiscovered(registry: AppRuntimeRegistry): Promise<AppDefinition[]> {
+  async registerDiscovered(
+    registry: AppRuntimeRegistry,
+  ): Promise<AppDefinition[]> {
     const result = await this.syncDiscovered(registry);
     return result.registered;
   }
 
-  async syncDiscovered(registry: AppRuntimeRegistry): Promise<AppCatalogSyncResult> {
+  async syncDiscovered(
+    registry: AppRuntimeRegistry,
+  ): Promise<AppCatalogSyncResult> {
     const definitions = await this.discover();
     const result: AppCatalogSyncResult = {
       registered: [],
@@ -109,11 +113,18 @@ export class DirectoryAppCatalog {
           continue;
         }
 
-        result.updated.push(await registry.updateDefinition(definition.id, definitionToOptions(definition)));
+        result.updated.push(
+          await registry.updateDefinition(
+            definition.id,
+            definitionToOptions(definition),
+          ),
+        );
         continue;
       }
 
-      result.registered.push(await registry.register(definition.id, definitionToOptions(definition)));
+      result.registered.push(
+        await registry.register(definition.id, definitionToOptions(definition)),
+      );
     }
 
     return result;
@@ -121,7 +132,9 @@ export class DirectoryAppCatalog {
 
   async resolveFactory(definition: AppDefinition): Promise<AppFactory> {
     if (!definition.rootDir) {
-      throw new Error(`App ${definition.id} has no rootDir and cannot be loaded from the directory catalog`);
+      throw new Error(
+        `App ${definition.id} has no rootDir and cannot be loaded from the directory catalog`,
+      );
     }
 
     if (!definition.server) {
@@ -129,13 +142,21 @@ export class DirectoryAppCatalog {
     }
 
     const entrypoint = definition.server.entrypoint;
-    const absoluteEntrypoint = path.resolve(definition.server.rootDir, entrypoint);
+    const absoluteEntrypoint = path.resolve(
+      definition.server.rootDir,
+      entrypoint,
+    );
     assertInside(definition.server.rootDir, absoluteEntrypoint);
 
     await stat(absoluteEntrypoint);
 
     const module = await importModule(pathToFileURL(absoluteEntrypoint).href);
-    const factory = module.createServer ?? module.createApp ?? module.default ?? module.createExampleApp ?? module.createApi;
+    const factory =
+      module.createServer ??
+      module.createApp ??
+      module.default ??
+      module.createExampleApp ??
+      module.createApi;
 
     if (typeof factory === 'function') {
       return factory as AppFactory;
@@ -161,20 +182,27 @@ export class DirectoryAppCatalog {
     }
 
     if (server) {
-      const absoluteEntrypoint = path.resolve(server.rootDir, server.entrypoint);
+      const absoluteEntrypoint = path.resolve(
+        server.rootDir,
+        server.entrypoint,
+      );
       assertInside(rootDir, absoluteEntrypoint);
     }
 
     const id = appName;
     const basePath = `/${appName}`;
-    const codeVersion = packageJson?.app?.version ?? packageJson?.version ?? 'local';
+    const codeVersion =
+      packageJson?.app?.version ?? packageJson?.version ?? 'local';
 
     return {
       id,
       appName,
       basePath,
       enabled: packageJson?.app?.enabled ?? true,
-      backend: packageJson?.app?.backend ?? packageJson?.app?.isolation ?? 'in-process',
+      backend:
+        packageJson?.app?.backend ??
+        packageJson?.app?.isolation ??
+        'in-process',
       configVersion: packageJson?.app?.configVersion ?? 'v1',
       isolation: packageJson?.app?.isolation ?? 'in-process',
       tier: packageJson?.app?.tier ?? 'warm',
@@ -188,7 +216,8 @@ export class DirectoryAppCatalog {
         rootDir: server.rootDir,
         entrypoint: server.entrypoint,
       },
-      healthPath: server.healthPath ?? packageJson?.app?.healthPath ?? '/healthz',
+      healthPath:
+        server.healthPath ?? packageJson?.app?.healthPath ?? '/healthz',
       resourcePolicy: packageJson?.app?.resourcePolicy,
       config: packageJson?.app?.config,
     };
@@ -199,7 +228,9 @@ export function defaultAppsDir(): string {
   return path.resolve(process.cwd(), 'app-dist');
 }
 
-async function readDirectories(rootDir: string): Promise<Array<{ name: string }>> {
+async function readDirectories(
+  rootDir: string,
+): Promise<Array<{ name: string }>> {
   let entries: Array<{
     name: string;
     isDirectory(): boolean;
@@ -263,8 +294,13 @@ async function readAppPackage(rootDir: string): Promise<AppPackageJson | null> {
   }
 }
 
-async function resolveServer(rootDir: string): Promise<AppServerReference | undefined> {
-  const entrypoint = await firstExistingPath(rootDir, SERVER_ENTRYPOINT_CANDIDATES);
+async function resolveServer(
+  rootDir: string,
+): Promise<AppServerReference | undefined> {
+  const entrypoint = await firstExistingPath(
+    rootDir,
+    SERVER_ENTRYPOINT_CANDIDATES,
+  );
   if (!entrypoint) {
     return undefined;
   }
@@ -275,16 +311,25 @@ async function resolveServer(rootDir: string): Promise<AppServerReference | unde
   };
 }
 
-async function resolveClient(rootDir: string): Promise<AppClientReference | undefined> {
-  const clientDir = await firstExistingDirectory(rootDir, CLIENT_DIR_CANDIDATES);
+async function resolveClient(
+  rootDir: string,
+): Promise<AppClientReference | undefined> {
+  const clientDir = await firstExistingDirectory(
+    rootDir,
+    CLIENT_DIR_CANDIDATES,
+  );
   if (!clientDir) {
     return undefined;
   }
 
   const absoluteClientDir = path.resolve(rootDir, clientDir);
   assertInside(rootDir, absoluteClientDir);
-  const index = (await firstExistingPath(rootDir, [`${clientDir}/index.html`])) ?? undefined;
-  const assetsDir = (await firstExistingDirectory(rootDir, [`${clientDir}/assets`])) ?? undefined;
+  const index =
+    (await firstExistingPath(rootDir, [`${clientDir}/index.html`])) ??
+    undefined;
+  const assetsDir =
+    (await firstExistingDirectory(rootDir, [`${clientDir}/assets`])) ??
+    undefined;
 
   return {
     rootDir: absoluteClientDir,
@@ -293,7 +338,10 @@ async function resolveClient(rootDir: string): Promise<AppClientReference | unde
   };
 }
 
-async function firstExistingPath(rootDir: string, candidates: Array<string | undefined>): Promise<string | null> {
+async function firstExistingPath(
+  rootDir: string,
+  candidates: Array<string | undefined>,
+): Promise<string | null> {
   for (const candidate of candidates) {
     if (!candidate) {
       continue;
@@ -317,7 +365,10 @@ async function firstExistingPath(rootDir: string, candidates: Array<string | und
   return null;
 }
 
-async function firstExistingDirectory(rootDir: string, candidates: Array<string | undefined>): Promise<string | null> {
+async function firstExistingDirectory(
+  rootDir: string,
+  candidates: Array<string | undefined>,
+): Promise<string | null> {
   for (const candidate of candidates) {
     if (!candidate) {
       continue;
@@ -341,7 +392,9 @@ async function firstExistingDirectory(rootDir: string, candidates: Array<string 
   return null;
 }
 
-function definitionToOptions(definition: AppDefinition): CreateAppDefinitionOptions {
+function definitionToOptions(
+  definition: AppDefinition,
+): CreateAppDefinitionOptions {
   return {
     appName: definition.appName,
     basePath: definition.basePath,
@@ -365,7 +418,10 @@ function definitionToOptions(definition: AppDefinition): CreateAppDefinitionOpti
 }
 
 function definitionsEquivalent(a: AppDefinition, b: AppDefinition): boolean {
-  return JSON.stringify(definitionToOptions(a)) === JSON.stringify(definitionToOptions(b));
+  return (
+    JSON.stringify(definitionToOptions(a)) ===
+    JSON.stringify(definitionToOptions(b))
+  );
 }
 
 function assertInside(rootDir: string, targetPath: string): void {
@@ -379,4 +435,5 @@ function isValidAppSegment(segment: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(segment);
 }
 
-const importModule: DynamicImport = (specifier) => import(specifier) as Promise<AppModule>;
+const importModule: DynamicImport = (specifier) =>
+  import(specifier) as Promise<AppModule>;

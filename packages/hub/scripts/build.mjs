@@ -1,11 +1,11 @@
-import spawn from "cross-spawn";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import spawn from 'cross-spawn';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "..",
+  '..',
 );
 
 // Only copy values that are needed to start the Hub runtime.  In particular,
@@ -14,21 +14,21 @@ const rootDir = path.resolve(
 // bundle.  Keep this list deliberately small and add a key only when the
 // standalone/embedded server has a non-sensitive use for it.
 const serverEnvKeys = [
-  "APP_NAME",
-  "APP_BASE_PATH",
-  "APP_BROWSER_BASE_PATH",
-  "APP_SERVER_HOST",
-  "APP_SERVER_PORT",
-  "APP_SERVER_START_LOG",
-  "AUTH_BASE_URL",
-  "HUB_ENABLED",
-  "HUB_DATABASE_PATH",
-  "HUB_RELEASE_ROOT",
-  "API_CLIENT_STORAGE_PREFIX",
-  "API_CLIENT_STORAGE_TYPE",
-  "API_CLIENT_SHARE_TOKEN",
-  "NOCOBASE_API_PROXY_TARGET",
-  "NOCOBASE_API_PROXY_PATH",
+  'APP_NAME',
+  'APP_BASE_PATH',
+  'APP_BROWSER_BASE_PATH',
+  'APP_SERVER_HOST',
+  'APP_SERVER_PORT',
+  'APP_SERVER_START_LOG',
+  'AUTH_BASE_URL',
+  'HUB_ENABLED',
+  'HUB_DATABASE_PATH',
+  'HUB_RELEASE_ROOT',
+  'API_CLIENT_STORAGE_PREFIX',
+  'API_CLIENT_STORAGE_TYPE',
+  'API_CLIENT_SHARE_TOKEN',
+  'NOCOBASE_API_PROXY_TARGET',
+  'NOCOBASE_API_PROXY_PATH',
 ];
 
 const serverEnvKeySet = new Set(serverEnvKeys);
@@ -44,7 +44,7 @@ const parseEnv = (content) => {
       continue;
     }
 
-    const [, key, rawValue = ""] = match;
+    const [, key, rawValue = ''] = match;
     const quote = rawValue[0];
     let value = rawValue.trim();
 
@@ -56,7 +56,7 @@ const parseEnv = (content) => {
       value = value.slice(1, -1);
     }
 
-    parsed[key] = value.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+    parsed[key] = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
   }
 
   return parsed;
@@ -64,11 +64,11 @@ const parseEnv = (content) => {
 
 const expandEnvValue = (value, env) =>
   value.replace(/\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g, (match, key) => {
-    if (match.startsWith("\\")) {
+    if (match.startsWith('\\')) {
       return match.slice(1);
     }
 
-    return env[key] ?? "";
+    return env[key] ?? '';
   });
 
 const readEnvFiles = (files, baseEnv = {}, allowedKeys) => {
@@ -79,7 +79,7 @@ const readEnvFiles = (files, baseEnv = {}, allowedKeys) => {
       continue;
     }
 
-    const parsed = parseEnv(fs.readFileSync(envFile, "utf8"));
+    const parsed = parseEnv(fs.readFileSync(envFile, 'utf8'));
     Object.assign(
       env,
       allowedKeys
@@ -108,7 +108,7 @@ const formatEnvValue = (value) => {
 };
 
 const isSafeUrlValue = (key, value) => {
-  if (!["AUTH_BASE_URL", "NOCOBASE_API_PROXY_TARGET"].includes(key)) {
+  if (!['AUTH_BASE_URL', 'NOCOBASE_API_PROXY_TARGET'].includes(key)) {
     return true;
   }
 
@@ -125,7 +125,7 @@ const isSafeUrlValue = (key, value) => {
   } catch {
     // Keep invalid or relative values only when they cannot carry URL
     // credentials, query parameters, or fragments into the build artifact.
-    return !value.includes("@");
+    return !value.includes('@');
   }
 };
 
@@ -136,7 +136,7 @@ const isSafeEnvEntry = (key, value) => {
 
   // This option is a boolean feature switch, not a token.  Refuse arbitrary
   // values so a misnamed secret cannot be copied under this key.
-  if (key === "API_CLIENT_SHARE_TOKEN") {
+  if (key === 'API_CLIENT_SHARE_TOKEN') {
     return /^(true|false|1|0|yes|no|on|off)$/i.test(value.trim());
   }
 
@@ -145,16 +145,16 @@ const isSafeEnvEntry = (key, value) => {
 
 const writeDistEnv = ({
   rootDir: envRootDir = rootDir,
-  distDir: envDistDir = path.join(envRootDir, "dist"),
+  distDir: envDistDir = path.join(envRootDir, 'dist'),
   baseEnv = process.env,
 } = {}) => {
   const envFiles = [
-    path.join(envRootDir, ".env"),
-    path.join(envRootDir, ".env.local"),
+    path.join(envRootDir, '.env'),
+    path.join(envRootDir, '.env.local'),
   ];
   const processEntries = Object.fromEntries(
     serverEnvKeys
-      .filter((key) => typeof baseEnv[key] === "string")
+      .filter((key) => typeof baseEnv[key] === 'string')
       .map((key) => [key, baseEnv[key]]),
   );
 
@@ -173,16 +173,16 @@ const writeDistEnv = ({
     .map((key) => [key, effectiveEnv[key]])
     .filter(
       (entry) =>
-        typeof entry[1] === "string" &&
-        entry[1].trim() !== "" &&
+        typeof entry[1] === 'string' &&
+        entry[1].trim() !== '' &&
         isSafeEnvEntry(entry[0], entry[1]),
     );
 
   if (entries.length === 0) {
-    fs.rmSync(path.join(envDistDir, ".env"), { force: true });
-    console.log("\n> Extract environment");
+    fs.rmSync(path.join(envDistDir, '.env'), { force: true });
+    console.log('\n> Extract environment');
     console.log(
-      "No supported server environment entries found; skipped dist/.env",
+      'No supported server environment entries found; skipped dist/.env',
     );
     return;
   }
@@ -190,17 +190,17 @@ const writeDistEnv = ({
   fs.mkdirSync(envDistDir, { recursive: true });
   const content = entries
     .map(([key, value]) => `${key}=${formatEnvValue(value)}`)
-    .join("\n");
+    .join('\n');
 
-  const outputPath = path.join(envDistDir, ".env");
+  const outputPath = path.join(envDistDir, '.env');
   fs.writeFileSync(outputPath, `${content}\n`, { mode: 0o600 });
 
-  console.log("\n> Extract environment");
+  console.log('\n> Extract environment');
   console.log(
     `Generated ${path.relative(envRootDir, outputPath)} from ${envFiles
       .filter((envFile) => fs.existsSync(envFile))
       .map((envFile) => path.basename(envFile))
-      .join(", ")}`,
+      .join(', ')}`,
   );
 };
 
@@ -209,7 +209,7 @@ const run = (label, command, args) => {
 
   const result = spawn.sync(command, args, {
     cwd: rootDir,
-    stdio: "inherit",
+    stdio: 'inherit',
   });
 
   if (result.error) {
@@ -222,47 +222,47 @@ const run = (label, command, args) => {
 };
 
 const buildServerWorkspaceFilters = [
-  "@nocobase/app-host",
-  "@nocobase/app-server",
-  "@nocobase/app-sdk",
-  "@nocobase/authentication",
-  "@nocobase/authorization",
-  "@nocobase/caching",
-  "@nocobase/database",
+  '@nocobase/app-host',
+  '@nocobase/app-server',
+  '@nocobase/app-sdk',
+  '@nocobase/authentication',
+  '@nocobase/authorization',
+  '@nocobase/caching',
+  '@nocobase/database',
 ];
 
 const build = ({
   rootDir: buildRootDir = rootDir,
-  distDir: buildDistDir = path.join(buildRootDir, "dist"),
+  distDir: buildDistDir = path.join(buildRootDir, 'dist'),
 } = {}) => {
   fs.rmSync(buildDistDir, { recursive: true, force: true });
 
-  run("Typecheck client", "pnpm", ["exec", "tsc"]);
-  run("Typecheck tooling", "pnpm", ["exec", "tsc", "-p", "tsconfig.node.json"]);
-  run("Build client", "pnpm", ["exec", "refine", "build"]);
+  run('Typecheck client', 'pnpm', ['exec', 'tsc']);
+  run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
+  run('Build client', 'pnpm', ['exec', 'refine', 'build']);
   run(
-    "Build server workspace dependencies",
-    "pnpm",
+    'Build server workspace dependencies',
+    'pnpm',
     buildServerWorkspaceFilters
-      .flatMap((filter) => ["--filter", filter])
-      .concat("build"),
+      .flatMap((filter) => ['--filter', filter])
+      .concat('build'),
   );
-  run("Build server", "pnpm", ["exec", "tsc", "-p", "tsconfig.server.json"]);
+  run('Build server', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.server.json']);
   writeDistEnv({ rootDir: buildRootDir, distDir: buildDistDir });
-  run("Generate server package", "node", [
-    "./scripts/build-server-dist-package.mjs",
+  run('Generate server package', 'node', [
+    './scripts/build-server-dist-package.mjs',
   ]);
-  run("Install server production dependencies", "npm", [
-    "install",
-    "--omit=dev",
-    "--package-lock=false",
-    "--prefix",
-    "./dist",
+  run('Install server production dependencies', 'npm', [
+    'install',
+    '--omit=dev',
+    '--package-lock=false',
+    '--prefix',
+    './dist',
   ]);
-  run("Clean server dependency bins", "node", ["./scripts/clean-dist-bin.mjs"]);
+  run('Clean server dependency bins', 'node', ['./scripts/clean-dist-bin.mjs']);
 
   console.log(
-    "\nBuild complete: dist/client, dist/server, dist/.env, and dist/package.json",
+    '\nBuild complete: dist/client, dist/server, dist/.env, and dist/package.json',
   );
 };
 

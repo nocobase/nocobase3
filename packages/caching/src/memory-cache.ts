@@ -53,7 +53,9 @@ export class MemoryCache implements Cache {
   }
 
   async setMany<T>(entries: readonly CacheEntry<T>[]): Promise<void> {
-    await Promise.all(entries.map((entry) => this.set(entry.key, entry.value, entry.ttl)));
+    await Promise.all(
+      entries.map((entry) => this.set(entry.key, entry.value, entry.ttl)),
+    );
   }
 
   delete(key: string): Promise<boolean> {
@@ -81,7 +83,11 @@ export class MemoryCache implements Cache {
     });
   }
 
-  async wrap<T>(key: string, loader: () => T | Promise<T>, ttl?: number): Promise<T> {
+  async wrap<T>(
+    key: string,
+    loader: () => T | Promise<T>,
+    ttl?: number,
+  ): Promise<T> {
     assertTtl(ttl);
     const cached = await this.get<T>(key);
     if (cached !== undefined) {

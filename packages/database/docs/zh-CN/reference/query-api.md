@@ -6,7 +6,9 @@
 
 ```ts
 interface QueryAdapter {
-  selectFrom<TRecord extends Row = Row>(table: string): SelectQuery<TRecord, Row>;
+  selectFrom<TRecord extends Row = Row>(
+    table: string,
+  ): SelectQuery<TRecord, Row>;
   insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord>;
   updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord>;
   deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord>;
@@ -16,34 +18,77 @@ interface QueryAdapter {
 ## SelectQuery
 
 ```ts
-interface SelectQuery<TRecord extends Row = Row, TResult extends Row = TRecord> {
+interface SelectQuery<
+  TRecord extends Row = Row,
+  TResult extends Row = TRecord,
+> {
   select(selection: SelectionExpression): SelectQuery<TRecord, Row>;
   select(selections: readonly SelectionExpression[]): SelectQuery<TRecord, Row>;
   select(factory: SelectionFactory): SelectQuery<TRecord, Row>;
   selectAll(table?: string): SelectQuery<TRecord, Row>;
   distinct(): SelectQuery<TRecord, TResult>;
 
-  where(lhs: ReferenceExpression | Expression<unknown>, op: ComparisonOperator, rhs: OperandValueExpressionOrList): SelectQuery<TRecord, TResult>;
+  where(
+    lhs: ReferenceExpression | Expression<unknown>,
+    op: ComparisonOperator,
+    rhs: OperandValueExpressionOrList,
+  ): SelectQuery<TRecord, TResult>;
   where(expression: Expression<SqlBool>): SelectQuery<TRecord, TResult>;
   where(factory: ExpressionFactory<SqlBool>): SelectQuery<TRecord, TResult>;
-  whereRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): SelectQuery<TRecord, TResult>;
+  whereRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult>;
 
-  innerJoin(table: string, leftRef: ReferenceExpression, rightRef: ReferenceExpression): SelectQuery<TRecord, TResult>;
-  innerJoin(table: string, callback: JoinCallback): SelectQuery<TRecord, TResult>;
-  leftJoin(table: string, leftRef: ReferenceExpression, rightRef: ReferenceExpression): SelectQuery<TRecord, TResult>;
-  leftJoin(table: string, callback: JoinCallback): SelectQuery<TRecord, TResult>;
-  rightJoin(table: string, leftRef: ReferenceExpression, rightRef: ReferenceExpression): SelectQuery<TRecord, TResult>;
-  rightJoin(table: string, callback: JoinCallback): SelectQuery<TRecord, TResult>;
+  innerJoin(
+    table: string,
+    leftRef: ReferenceExpression,
+    rightRef: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult>;
+  innerJoin(
+    table: string,
+    callback: JoinCallback,
+  ): SelectQuery<TRecord, TResult>;
+  leftJoin(
+    table: string,
+    leftRef: ReferenceExpression,
+    rightRef: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult>;
+  leftJoin(
+    table: string,
+    callback: JoinCallback,
+  ): SelectQuery<TRecord, TResult>;
+  rightJoin(
+    table: string,
+    leftRef: ReferenceExpression,
+    rightRef: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult>;
+  rightJoin(
+    table: string,
+    callback: JoinCallback,
+  ): SelectQuery<TRecord, TResult>;
   crossJoin(table: string): SelectQuery<TRecord, TResult>;
 
   groupBy(column: string): SelectQuery<TRecord, TResult>;
   groupBy(columns: readonly string[]): SelectQuery<TRecord, TResult>;
-  having(lhs: ReferenceExpression | Expression<unknown>, op: ComparisonOperator, rhs: OperandValueExpressionOrList): SelectQuery<TRecord, TResult>;
+  having(
+    lhs: ReferenceExpression | Expression<unknown>,
+    op: ComparisonOperator,
+    rhs: OperandValueExpressionOrList,
+  ): SelectQuery<TRecord, TResult>;
   having(expression: Expression<SqlBool>): SelectQuery<TRecord, TResult>;
   having(factory: ExpressionFactory<SqlBool>): SelectQuery<TRecord, TResult>;
-  havingRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): SelectQuery<TRecord, TResult>;
+  havingRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult>;
 
-  orderBy(column: string, direction?: OrderDirection): SelectQuery<TRecord, TResult>;
+  orderBy(
+    column: string,
+    direction?: OrderDirection,
+  ): SelectQuery<TRecord, TResult>;
   limit(count: number): SelectQuery<TRecord, TResult>;
   offset(count: number): SelectQuery<TRecord, TResult>;
 
@@ -81,10 +126,18 @@ interface InsertQuery<TRecord extends Row = Row> {
 ```ts
 interface UpdateQuery<TRecord extends Row = Row> {
   set(data: Partial<TRecord>): UpdateQuery<TRecord>;
-  where(lhs: ReferenceExpression | Expression<unknown>, op: ComparisonOperator, rhs: OperandValueExpressionOrList): UpdateQuery<TRecord>;
+  where(
+    lhs: ReferenceExpression | Expression<unknown>,
+    op: ComparisonOperator,
+    rhs: OperandValueExpressionOrList,
+  ): UpdateQuery<TRecord>;
   where(expression: Expression<SqlBool>): UpdateQuery<TRecord>;
   where(factory: ExpressionFactory<SqlBool>): UpdateQuery<TRecord>;
-  whereRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): UpdateQuery<TRecord>;
+  whereRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): UpdateQuery<TRecord>;
   clearWhere(): UpdateQuery<TRecord>;
   allowAllRows(): UpdateQuery<TRecord>;
   execute(): Promise<UpdateResult>;
@@ -96,10 +149,18 @@ interface UpdateQuery<TRecord extends Row = Row> {
 
 ```ts
 interface DeleteQuery<TRecord extends Row = Row> {
-  where(lhs: ReferenceExpression | Expression<unknown>, op: ComparisonOperator, rhs: OperandValueExpressionOrList): DeleteQuery<TRecord>;
+  where(
+    lhs: ReferenceExpression | Expression<unknown>,
+    op: ComparisonOperator,
+    rhs: OperandValueExpressionOrList,
+  ): DeleteQuery<TRecord>;
   where(expression: Expression<SqlBool>): DeleteQuery<TRecord>;
   where(factory: ExpressionFactory<SqlBool>): DeleteQuery<TRecord>;
-  whereRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): DeleteQuery<TRecord>;
+  whereRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): DeleteQuery<TRecord>;
   clearWhere(): DeleteQuery<TRecord>;
   allowAllRows(): DeleteQuery<TRecord>;
   execute(): Promise<DeleteResult>;
@@ -130,17 +191,29 @@ type ComparisonOperator =
 
 ```ts
 interface ExpressionBuilder {
-  (lhs: ReferenceExpression | Expression<unknown>, op: ComparisonOperator, rhs: OperandValueExpressionOrList): Expression<SqlBool>;
+  (
+    lhs: ReferenceExpression | Expression<unknown>,
+    op: ComparisonOperator,
+    rhs: OperandValueExpressionOrList,
+  ): Expression<SqlBool>;
 
   readonly eb: ExpressionBuilder;
   readonly fn: FunctionModule;
 
   ref(reference: ReferenceExpression): Expression<unknown>;
   val(value: unknown): Expression<unknown>;
-  and(expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>): Expression<SqlBool>;
-  or(expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>): Expression<SqlBool>;
+  and(
+    expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>,
+  ): Expression<SqlBool>;
+  or(
+    expressions: readonly ExpressionInput<SqlBool>[] | Record<string, unknown>,
+  ): Expression<SqlBool>;
   not(expression: ExpressionInput<SqlBool>): Expression<SqlBool>;
-  between(expr: ReferenceExpression | Expression<unknown>, start: unknown, end: unknown): Expression<SqlBool>;
+  between(
+    expr: ReferenceExpression | Expression<unknown>,
+    start: unknown,
+    end: unknown,
+  ): Expression<SqlBool>;
   exists(query: SubqueryBuilder): Expression<SqlBool>;
   selectFrom(table: string): SubqueryBuilder;
   parens<T = unknown>(expression: ExpressionInput<T>): Expression<T>;
@@ -151,10 +224,18 @@ interface ExpressionBuilder {
 
 ```ts
 interface JoinBuilder {
-  on(lhs: ReferenceExpression | Expression<unknown>, op: ComparisonOperator, rhs: OperandValueExpressionOrList): JoinBuilder;
+  on(
+    lhs: ReferenceExpression | Expression<unknown>,
+    op: ComparisonOperator,
+    rhs: OperandValueExpressionOrList,
+  ): JoinBuilder;
   on(expression: Expression<SqlBool>): JoinBuilder;
   on(factory: ExpressionFactory<SqlBool>): JoinBuilder;
-  onRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): JoinBuilder;
+  onRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): JoinBuilder;
 }
 ```
 
@@ -165,7 +246,7 @@ join.on((eb) =>
   eb.or([
     eb('o.customerId', '=', eb.ref('c.id')),
     eb('o.fallbackCustomerId', '=', eb.ref('c.id')),
-  ])
+  ]),
 );
 ```
 
@@ -173,11 +254,21 @@ join.on((eb) =>
 
 ```ts
 interface FunctionModule {
-  count<T = number>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
+  count<T = number>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
   countAll<T = number>(table?: string): AggregateExpression<T>;
-  sum<T = number>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
-  avg<T = number>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
-  min<T = unknown>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
-  max<T = unknown>(column: ReferenceExpression | Expression<unknown>): AggregateExpression<T>;
+  sum<T = number>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
+  avg<T = number>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
+  min<T = unknown>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
+  max<T = unknown>(
+    column: ReferenceExpression | Expression<unknown>,
+  ): AggregateExpression<T>;
 }
 ```

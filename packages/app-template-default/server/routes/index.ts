@@ -15,11 +15,17 @@ export interface RegisterAppRoutesOptions {
   services: AppServices;
 }
 
-export function registerAppRoutes(app: Hono, options: RegisterAppRoutesOptions): void {
+export function registerAppRoutes(
+  app: Hono,
+  options: RegisterAppRoutesOptions,
+): void {
   app.use('*', createSessionMiddleware(options.deps.sessionManager));
 
   app.get('/hello', createHelloPageHandler());
-  app.get('/realtime', createRealtimePageHandler({ publicBasePath: options.publicBasePath }));
+  app.get(
+    '/realtime',
+    createRealtimePageHandler({ publicBasePath: options.publicBasePath }),
+  );
 
   app.route(
     '/api',

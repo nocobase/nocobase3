@@ -13,9 +13,9 @@ export function serializeReplyQuote(body: string, replyBody?: string) {
     '<div class="nocobase-quote nb-mail-quote" data-role="reply-quote">',
     '<blockquote type="cite" style="border-left: 1px solid #ccc; padding-left: 8px; margin: 0;">',
     replyBody,
-    "</blockquote>",
-    "</div>",
-  ].join("");
+    '</blockquote>',
+    '</div>',
+  ].join('');
 }
 
 export function splitReplyQuote(value: string): MailReplyContent {

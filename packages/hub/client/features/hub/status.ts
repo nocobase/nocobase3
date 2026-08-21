@@ -2,27 +2,27 @@ import type {
   HubApplicationStatus,
   HubDeploymentStatus,
   HubReleaseVerificationStatus,
-} from "./api";
+} from './api';
 
 export type HubStatusVariant =
-  "default" | "secondary" | "outline" | "destructive";
+  'default' | 'secondary' | 'outline' | 'destructive';
 
 const labels: Record<string, string> = {
-  active: "Active",
-  archived: "Archived",
-  disabled: "Disabled",
-  pending: "Pending verification",
-  verified: "Verified",
-  rejected: "Rejected",
-  queued: "Queued",
-  preparing: "Preparing",
-  activating: "Starting runtime",
-  checking: "Checking health",
-  switching: "Switching traffic",
-  draining: "Draining old runtime",
-  succeeded: "Succeeded",
-  failed: "Failed",
-  cancelled: "Cancelled",
+  active: 'Active',
+  archived: 'Archived',
+  disabled: 'Disabled',
+  pending: 'Pending verification',
+  verified: 'Verified',
+  rejected: 'Rejected',
+  queued: 'Queued',
+  preparing: 'Preparing',
+  activating: 'Starting runtime',
+  checking: 'Checking health',
+  switching: 'Switching traffic',
+  draining: 'Draining old runtime',
+  succeeded: 'Succeeded',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
 };
 
 type Translate = (key: string, defaultMessage?: string) => string;
@@ -31,10 +31,10 @@ export function getStatusLabel(
   value: string | null | undefined,
   translate?: Translate,
 ): string {
-  if (!value) return translate?.("hub.status.unknown", "Unknown") ?? "Unknown";
+  if (!value) return translate?.('hub.status.unknown', 'Unknown') ?? 'Unknown';
   const fallback =
     labels[value] ??
-    value.replace(/[-_]/g, " ").replace(/^./, (c) => c.toUpperCase());
+    value.replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase());
   return translate?.(`hub.status.${value}`, fallback) ?? fallback;
 }
 
@@ -42,9 +42,9 @@ export function getDeploymentTypeLabel(
   value: string | null | undefined,
   translate?: Translate,
 ): string {
-  if (!value) return translate?.("hub.status.unknown", "Unknown") ?? "Unknown";
+  if (!value) return translate?.('hub.status.unknown', 'Unknown') ?? 'Unknown';
   const fallback = value
-    .replace(/[-_]/g, " ")
+    .replace(/[-_]/g, ' ')
     .replace(/^./, (character) => character.toUpperCase());
   return translate?.(`hub.deploymentType.${value}`, fallback) ?? fallback;
 }
@@ -53,21 +53,21 @@ export function getStatusVariant(
   value: string | null | undefined,
 ): HubStatusVariant {
   switch (value) {
-    case "failed":
-    case "rejected":
-    case "disabled":
-      return "destructive";
-    case "succeeded":
-    case "verified":
-    case "active":
-      return "default";
-    case "queued":
-    case "pending":
-    case "preparing":
-    case "checking":
-      return "secondary";
+    case 'failed':
+    case 'rejected':
+    case 'disabled':
+      return 'destructive';
+    case 'succeeded':
+    case 'verified':
+    case 'active':
+      return 'default';
+    case 'queued':
+    case 'pending':
+    case 'preparing':
+    case 'checking':
+      return 'secondary';
     default:
-      return "outline";
+      return 'outline';
   }
 }
 

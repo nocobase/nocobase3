@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import React from "react";
-import { type BaseKey, useCloneButton } from "@refinedev/core";
-import { Copy } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React from 'react';
+import { type BaseKey, useCloneButton } from '@refinedev/core';
+import { Copy } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 type CloneButtonProps = {
   /**
@@ -36,7 +36,7 @@ export const CloneButton = React.forwardRef<
 >(
   (
     { resource, recordItemId, accessControl, meta, children, onClick, ...rest },
-    ref
+    ref,
   ) => {
     const { hidden, disabled, LinkComponent, to, label } = useCloneButton({
       accessControl,
@@ -68,14 +68,14 @@ export const CloneButton = React.forwardRef<
         }}
       >
         {children ?? (
-          <div className="flex items-center gap-2 font-semibold">
-            <Copy className="h-4 w-4" />
+          <div className='flex items-center gap-2 font-semibold'>
+            <Copy className='h-4 w-4' />
             <span>{label}</span>
           </div>
         )}
       </Button>
     );
-  }
+  },
 );
 
-CloneButton.displayName = "CloneButton";
+CloneButton.displayName = 'CloneButton';

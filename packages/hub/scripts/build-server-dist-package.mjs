@@ -1,16 +1,16 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "..",
+  '..',
 );
-const databaseRuntimePackages = ["better-sqlite3", "knex"];
+const databaseRuntimePackages = ['better-sqlite3', 'knex'];
 
-const toPosix = (value) => value.split(path.sep).join("/");
+const toPosix = (value) => value.split(path.sep).join('/');
 
-const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 const writeJson = (file, value) => {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
@@ -22,7 +22,7 @@ const walkFiles = (directory) => {
   return fs
     .readdirSync(directory, { withFileTypes: true })
     .flatMap((entry) => {
-      if (entry.name === "node_modules") return [];
+      if (entry.name === 'node_modules') return [];
 
       const entryPath = path.join(directory, entry.name);
       return entry.isDirectory() ? walkFiles(entryPath) : [entryPath];
@@ -32,15 +32,15 @@ const walkFiles = (directory) => {
 
 const getPackageName = (specifier) => {
   if (
-    specifier.startsWith(".") ||
-    specifier.startsWith("/") ||
-    specifier.startsWith("node:")
+    specifier.startsWith('.') ||
+    specifier.startsWith('/') ||
+    specifier.startsWith('node:')
   ) {
     return undefined;
   }
 
-  const parts = specifier.split("/");
-  return specifier.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
+  const parts = specifier.split('/');
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 };
 
 const findBareImports = (content) => {
@@ -69,8 +69,8 @@ const getDeclaredVersion = (packageJson, packageName) => {
     packageJson.devDependencies?.[packageName] ??
     packageJson.peerDependencies?.[packageName];
 
-  if (!version || version.startsWith("workspace:")) return undefined;
-  return version.replace(/^[~^]/, "");
+  if (!version || version.startsWith('workspace:')) return undefined;
+  return version.replace(/^[~^]/, '');
 };
 
 const findInstalledPackageJson = (packageName, fromDir, stopDir) => {
@@ -80,9 +80,9 @@ const findInstalledPackageJson = (packageName, fromDir, stopDir) => {
   while (directory.startsWith(boundary)) {
     const packagePath = path.join(
       directory,
-      "node_modules",
-      ...packageName.split("/"),
-      "package.json",
+      'node_modules',
+      ...packageName.split('/'),
+      'package.json',
     );
     if (fs.existsSync(packagePath)) return packagePath;
 
@@ -97,7 +97,7 @@ const findInstalledPackageJson = (packageName, fromDir, stopDir) => {
 const createRuntimePackageJson = (packageJson, dependencies) => {
   const runtimePackage = {
     name: packageJson.name,
-    version: packageJson.version ?? "0.0.0",
+    version: packageJson.version ?? '0.0.0',
     private: true,
     type: packageJson.type,
     main: packageJson.main,
@@ -114,15 +114,15 @@ const createRuntimePackageJson = (packageJson, dependencies) => {
 
 const buildServerDistPackage = ({
   rootDir: packageRoot = rootDir,
-  workspacePackagesDir = path.resolve(packageRoot, ".."),
-  distDir = path.join(packageRoot, "dist"),
+  workspacePackagesDir = path.resolve(packageRoot, '..'),
+  distDir = path.join(packageRoot, 'dist'),
 } = {}) => {
-  const rootPackagePath = path.join(packageRoot, "package.json");
-  const distPackagePath = path.join(distDir, "package.json");
-  const vendorDir = path.join(distDir, "vendor");
+  const rootPackagePath = path.join(packageRoot, 'package.json');
+  const distPackagePath = path.join(distDir, 'package.json');
+  const vendorDir = path.join(distDir, 'vendor');
 
-  if (!fs.existsSync(path.join(distDir, "server"))) {
-    throw new Error("Missing dist/server. Run pnpm build first.");
+  if (!fs.existsSync(path.join(distDir, 'server'))) {
+    throw new Error('Missing dist/server. Run pnpm build first.');
   }
 
   const rootPackage = readJson(rootPackagePath);
@@ -176,7 +176,7 @@ const buildServerDistPackage = ({
     if (workspacePackageNames.has(packageName)) return;
     workspacePackageNames.add(packageName);
 
-    const packageJson = readJson(path.join(packageDir, "package.json"));
+    const packageJson = readJson(path.join(packageDir, 'package.json'));
     packageJsonByName.set(packageName, packageJson);
     packageDirByName.set(packageName, packageDir);
 
@@ -193,11 +193,11 @@ const buildServerDistPackage = ({
     }
   };
 
-  const serverFiles = walkFiles(path.join(distDir, "server")).filter((file) =>
+  const serverFiles = walkFiles(path.join(distDir, 'server')).filter((file) =>
     /\.[cm]?js$/.test(file),
   );
   for (const file of serverFiles) {
-    const content = fs.readFileSync(file, "utf8");
+    const content = fs.readFileSync(file, 'utf8');
     for (const packageName of findBareImports(content)) {
       addPackage(packageName);
     }
@@ -214,14 +214,14 @@ const buildServerDistPackage = ({
   for (const packageName of [...workspacePackageNames].sort()) {
     const packageDir = packageDirByName.get(packageName);
     const packageJson = packageJsonByName.get(packageName);
-    const sourceDistDir = path.join(packageDir, "dist");
+    const sourceDistDir = path.join(packageDir, 'dist');
     if (!fs.existsSync(sourceDistDir)) {
       throw new Error(
         `Missing ${path.relative(packageRoot, sourceDistDir)}. Build ${packageName} before generating the server package.`,
       );
     }
 
-    const targetDir = path.join(vendorDir, ...packageName.split("/"));
+    const targetDir = path.join(vendorDir, ...packageName.split('/'));
     const runtimeDependencies = {};
     for (const dependencyName of Object.keys({
       ...packageJson.dependencies,
@@ -230,7 +230,7 @@ const buildServerDistPackage = ({
       if (workspacePackages.has(dependencyName)) {
         runtimeDependencies[dependencyName] = toRelativeFileDependency(
           targetDir,
-          path.join(vendorDir, ...dependencyName.split("/")),
+          path.join(vendorDir, ...dependencyName.split('/')),
         );
       } else {
         runtimeDependencies[dependencyName] =
@@ -239,9 +239,9 @@ const buildServerDistPackage = ({
     }
 
     fs.mkdirSync(targetDir, { recursive: true });
-    fs.cpSync(sourceDistDir, path.join(targetDir, "dist"), { recursive: true });
+    fs.cpSync(sourceDistDir, path.join(targetDir, 'dist'), { recursive: true });
     writeJson(
-      path.join(targetDir, "package.json"),
+      path.join(targetDir, 'package.json'),
       createRuntimePackageJson(packageJson, runtimeDependencies),
     );
   }
@@ -257,7 +257,7 @@ const buildServerDistPackage = ({
         `file:${toPosix(
           path.relative(
             distDir,
-            path.join(vendorDir, ...packageName.split("/")),
+            path.join(vendorDir, ...packageName.split('/')),
           ),
         )}`,
       ]),
@@ -265,20 +265,20 @@ const buildServerDistPackage = ({
 
   const distPackage = {
     name: rootPackage.name,
-    version: rootPackage.version ?? "0.0.0",
+    version: rootPackage.version ?? '0.0.0',
     private: true,
-    type: "module",
-    main: "./server/embedded.js",
+    type: 'module',
+    main: './server/embedded.js',
     exports: {
-      ".": "./server/embedded.js",
-      "./embedded": "./server/embedded.js",
-      "./standalone": "./server/standalone.js",
+      '.': './server/embedded.js',
+      './embedded': './server/embedded.js',
+      './standalone': './server/standalone.js',
     },
     scripts: {
-      start: "node ./server/standalone.js",
+      start: 'node ./server/standalone.js',
     },
     engines: rootPackage.engines ?? {
-      node: ">=24.0.0",
+      node: '>=24.0.0',
     },
     dependencies,
   };
@@ -302,19 +302,19 @@ const listWorkspacePackages = (workspacePackagesDir) => {
       .filter((entry) => entry.isDirectory())
       .map((entry) => path.join(workspacePackagesDir, entry.name))
       .filter((packageDir) =>
-        fs.existsSync(path.join(packageDir, "package.json")),
+        fs.existsSync(path.join(packageDir, 'package.json')),
       )
       .map((packageDir) => [
-        readJson(path.join(packageDir, "package.json")).name,
+        readJson(path.join(packageDir, 'package.json')).name,
         packageDir,
       ])
-      .filter(([name]) => typeof name === "string"),
+      .filter(([name]) => typeof name === 'string'),
   );
 };
 
 const toRelativeFileDependency = (fromPackageDir, targetPackageDir) => {
   const relativePath = toPosix(path.relative(fromPackageDir, targetPackageDir));
-  return `file:${relativePath.startsWith(".") ? relativePath : `./${relativePath}`}`;
+  return `file:${relativePath.startsWith('.') ? relativePath : `./${relativePath}`}`;
 };
 
 buildServerDistPackage();

@@ -1,24 +1,20 @@
-import {
-  Suspense,
-  type PropsWithChildren,
-  type ReactNode,
-} from "react";
+import { Suspense, type PropsWithChildren, type ReactNode } from 'react';
 import {
   collectAppExtensionContributions,
   type AppExtension,
-} from "@nocobase/portal-sdk/extensions";
+} from '@nocobase/portal-sdk/extensions';
 import {
   buildRouteResources,
   renderAppRoutes,
-} from "@nocobase/portal-sdk/routing";
-import { LoadingState } from "@/components/app-shell/loading-state";
-import { appRoutes, registryRoutesEnabled } from "@/routes";
-import { createDevelopmentRoute } from "./development";
-import { RouteAccessGuard } from "./route-access-guard";
+} from '@nocobase/portal-sdk/routing';
+import { LoadingState } from '@/components/app-shell/loading-state';
+import { appRoutes, registryRoutesEnabled } from '@/routes';
+import { createDevelopmentRoute } from './development';
+import { RouteAccessGuard } from './route-access-guard';
 
 const extensionModules = import.meta.glob<{ default: AppExtension }>(
-  "@/extensions/*/extension.tsx",
-  { eager: true }
+  '@/extensions/*/extension.tsx',
+  { eager: true },
 );
 
 const extensionContributions = collectAppExtensionContributions({
@@ -38,7 +34,7 @@ export const configuredRouteElements = renderAppRoutes(
   extensionContributions.routeDefinitions,
   {
     AccessGuard: RouteAccessGuard,
-  }
+  },
 );
 
 export const extensionStandaloneRouteElements = import.meta.env.DEV
@@ -55,7 +51,7 @@ export function AppExtensionProviders({ children }: PropsWithChildren) {
       const Provider = extension.Provider;
       return Provider ? <Provider>{content}</Provider> : content;
     },
-    children
+    children,
   );
 }
 
@@ -69,6 +65,6 @@ export function AppAuthRuntimeProviders({ children }: PropsWithChildren) {
         </Suspense>
       );
     },
-    children
+    children,
   );
 }

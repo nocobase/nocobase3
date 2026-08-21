@@ -1,24 +1,24 @@
-import { Refine, type ResourceProps } from "@refinedev/core";
-import { lazy, Suspense } from "react";
+import { Refine, type ResourceProps } from '@refinedev/core';
+import { lazy, Suspense } from 'react';
 
-import { BrowserRouter } from "react-router";
+import { BrowserRouter } from 'react-router';
 import routerProvider, {
   UnsavedChangesNotifier,
-} from "@refinedev/react-router";
-import { i18nProvider } from "@nocobase/portal-sdk/i18n";
-import { DocumentTitleHandler } from "./components/app-shell/document-title-handler";
-import { useNotificationProvider } from "./components/notifications/use-notification-provider";
-import { Toaster } from "./components/notifications/toaster";
-import { ThemeProvider } from "./components/theme/theme-provider";
-import { TooltipProvider } from "./components/ui/tooltip";
-import { BrandLogo } from "./components/app-shell/brand";
-import { configuredResources } from "./app/extensions";
-import "./App.css";
-import { AppRoutes } from "./app/routes";
-import { hubAuthRuntime, getHubBrowserBase } from "./features/hub/runtime";
+} from '@refinedev/react-router';
+import { i18nProvider } from '@nocobase/portal-sdk/i18n';
+import { DocumentTitleHandler } from './components/app-shell/document-title-handler';
+import { useNotificationProvider } from './components/notifications/use-notification-provider';
+import { Toaster } from './components/notifications/toaster';
+import { ThemeProvider } from './components/theme/theme-provider';
+import { TooltipProvider } from './components/ui/tooltip';
+import { BrandLogo } from './components/app-shell/brand';
+import { configuredResources } from './app/extensions';
+import './App.css';
+import { AppRoutes } from './app/routes';
+import { hubAuthRuntime, getHubBrowserBase } from './features/hub/runtime';
 
 const getResourcePriority = (resource: ResourceProps) =>
-  typeof resource.meta?.priority === "number" ? resource.meta.priority : 100;
+  typeof resource.meta?.priority === 'number' ? resource.meta.priority : 100;
 
 const appResources = [...configuredResources].sort(
   (left, right) => getResourcePriority(left) - getResourcePriority(right),
@@ -27,7 +27,7 @@ const appResources = [...configuredResources].sort(
 const basename = getHubBrowserBase();
 
 const ReactGrabPicker = import.meta.env.DEV
-  ? lazy(() => import("./components/development/react-grab-picker"))
+  ? lazy(() => import('./components/development/react-grab-picker'))
   : null;
 
 function App() {
@@ -46,8 +46,8 @@ function App() {
               warnWhenUnsavedChanges: true,
               disableTelemetry: true,
               title: {
-                text: "NocoBase Hub",
-                icon: <BrandLogo className="size-14 rounded-2xl" />,
+                text: 'NocoBase Hub',
+                icon: <BrandLogo className='size-14 rounded-2xl' />,
               },
             }}
           >
@@ -55,7 +55,7 @@ function App() {
 
             <Toaster />
             <UnsavedChangesNotifier />
-            <DocumentTitleHandler appName="NocoBase Hub" />
+            <DocumentTitleHandler appName='NocoBase Hub' />
           </Refine>
           {ReactGrabPicker ? (
             <Suspense fallback={null}>

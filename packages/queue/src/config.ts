@@ -23,6 +23,8 @@ export function createSyncQueueConfig(): AppQueueConfig {
 
 export function assertDefaultConnection(config: AppQueueConfig): void {
   if (!config.connections[config.default]) {
-    throw new Error(`Default queue connection "${config.default}" is not configured.`);
+    throw new Error(
+      `Default queue connection "${config.default}" is not configured.`,
+    );
   }
 }

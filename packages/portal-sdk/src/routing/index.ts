@@ -1,4 +1,4 @@
-import type { ResourceProps } from "@refinedev/core";
+import type { ResourceProps } from '@refinedev/core';
 import {
   type ComponentType,
   createElement,
@@ -8,17 +8,17 @@ import {
   type ReactElement,
   type ReactNode,
   Suspense,
-} from "react";
-import { Outlet, Route } from "react-router";
+} from 'react';
+import { Outlet, Route } from 'react-router';
 
-import type { ResourceAcl, RouteAccessConstraint } from "../acl/index.ts";
+import type { ResourceAcl, RouteAccessConstraint } from '../acl/index.ts';
 
-export * from "./route-surface-context.ts";
-export * from "./contextual-navigation.ts";
-export * from "./use-route-surface-close.ts";
-export * from "./use-route-surface-state.ts";
+export * from './route-surface-context.ts';
+export * from './contextual-navigation.ts';
+export * from './use-route-surface-close.ts';
+export * from './use-route-surface-state.ts';
 
-type ResourceRouteAction = "create" | "edit" | "show";
+type ResourceRouteAction = 'create' | 'edit' | 'show';
 
 export type AppRouteLazyModule = {
   default: ComponentType;
@@ -28,7 +28,7 @@ export type AppRouteLazyLoader = () => Promise<AppRouteLazyModule>;
 
 export type AppRouteResource = Omit<
   ResourceProps,
-  "name" | "list" | ResourceRouteAction
+  'name' | 'list' | ResourceRouteAction
 >;
 
 type AppRouteContent =
@@ -44,7 +44,7 @@ type AppRouteContent =
 type AppRouteBase = AppRouteContent & {
   name: string;
   access?: RouteAccessConstraint;
-  outlet?: "auto" | "manual";
+  outlet?: 'auto' | 'manual';
 };
 
 // The application index redirects to the first accessible menu resource.
@@ -60,8 +60,7 @@ type AppIndexRouteDefinition = AppRouteBase & {
 type AppPathRouteDefinition = AppRouteBase & {
   index?: false;
   children?: AppRouteDefinition[];
-} &
-  (
+} & (
     | {
         path: string;
         resource: AppRouteResource;
@@ -80,26 +79,25 @@ type AppPathRouteDefinition = AppRouteBase & {
   );
 
 export type AppRouteDefinition =
-  | AppIndexRouteDefinition
-  | AppPathRouteDefinition;
+  AppIndexRouteDefinition | AppPathRouteDefinition;
 
 export function defineAppRoutes<const Routes extends AppRouteDefinition[]>(
-  routes: Routes
+  routes: Routes,
 ): Routes {
   return routes;
 }
 
 const joinRoutePath = (parentPath: string, path?: string) => {
-  if (!path) return parentPath || "/";
-  if (path.startsWith("/")) return path;
-  return `${parentPath.replace(/\/$/, "")}/${path}`.replace(/\/+/g, "/");
+  if (!path) return parentPath || '/';
+  if (path.startsWith('/')) return path;
+  return `${parentPath.replace(/\/$/, '')}/${path}`.replace(/\/+/g, '/');
 };
 
 const getResourceActionRoutes = (
   routes: AppRouteDefinition[],
   parentPath: string,
   resourceName: string,
-  actions: Partial<Record<ResourceRouteAction, string>> = {}
+  actions: Partial<Record<ResourceRouteAction, string>> = {},
 ): Partial<Record<ResourceRouteAction, string>> => {
   for (const route of routes) {
     if (route.resource) continue;
@@ -107,7 +105,7 @@ const getResourceActionRoutes = (
     if (route.resourceAction) {
       if (actions[route.resourceAction] !== undefined) {
         throw new Error(
-          `Resource "${resourceName}" declares multiple ${route.resourceAction} routes.`
+          `Resource "${resourceName}" declares multiple ${route.resourceAction} routes.`,
         );
       }
       actions[route.resourceAction] = fullPath;
@@ -116,28 +114,28 @@ const getResourceActionRoutes = (
       route.children ?? [],
       fullPath,
       resourceName,
-      actions
+      actions,
     );
   }
 
   return actions;
 };
 
-const getDefaultResourceAcl = (meta?: ResourceProps["meta"]): ResourceAcl =>
-  typeof meta?.acl === "undefined"
-    ? { type: "authenticated" }
+const getDefaultResourceAcl = (meta?: ResourceProps['meta']): ResourceAcl =>
+  typeof meta?.acl === 'undefined'
+    ? { type: 'authenticated' }
     : (meta.acl as ResourceAcl);
 
 export function buildRouteResources(
   routes: AppRouteDefinition[],
-  parentPath = "",
+  parentPath = '',
   parentResource?: string,
-  inheritedAccess: RouteAccessConstraint[] = []
+  inheritedAccess: RouteAccessConstraint[] = [],
 ): ResourceProps[] {
   return routes.flatMap((route) => {
     if (route.resourceAction && !parentResource) {
       throw new Error(
-        `Route "${route.name}" declares resourceAction without a parent resource.`
+        `Route "${route.name}" declares resourceAction without a parent resource.`,
       );
     }
 
@@ -152,7 +150,7 @@ export function buildRouteResources(
           ...getResourceActionRoutes(
             route.children ?? [],
             fullPath,
-            route.name
+            route.name,
           ),
           ...route.resource,
           meta: {
@@ -167,7 +165,7 @@ export function buildRouteResources(
       route.children ?? [],
       fullPath,
       resource ? route.name : parentResource,
-      routeAccess
+      routeAccess,
     );
 
     return resource ? [resource, ...childResources] : childResources;
@@ -178,7 +176,7 @@ const hasResourceActionRoute = (routes: AppRouteDefinition[]): boolean =>
   routes.some(
     (route) =>
       Boolean(route.resourceAction) ||
-      hasResourceActionRoute(route.children ?? [])
+      hasResourceActionRoute(route.children ?? []),
   );
 
 export type AppRouteAccessGuard = ComponentType<
@@ -192,7 +190,7 @@ export type RenderAppRoutesOptions = {
 
 export function renderAppRoutes(
   routes: AppRouteDefinition[],
-  options: RenderAppRoutesOptions = {}
+  options: RenderAppRoutesOptions = {},
 ): ReactElement[] {
   return routes.map((route) => {
     const routeName = route.name;
@@ -200,14 +198,14 @@ export function renderAppRoutes(
     const eagerElement = route.element;
     if (lazyLoader && eagerElement !== undefined) {
       throw new Error(
-        `Route "${routeName}" cannot declare both element and lazy.`
+        `Route "${routeName}" cannot declare both element and lazy.`,
       );
     }
     const routeElement = lazyLoader
       ? createElement(
           Suspense,
           { fallback: options.lazyFallback ?? null },
-          createElement(reactLazy(lazyLoader))
+          createElement(reactLazy(lazyLoader)),
         )
       : eagerElement;
     // resourceAction only binds Refine action paths. This provides the mount
@@ -217,23 +215,19 @@ export function renderAppRoutes(
     const content =
       routeElement &&
       route.resource &&
-      route.outlet !== "manual" &&
+      route.outlet !== 'manual' &&
       hasResourceActionRoute(route.children ?? [])
-        ? createElement(
-            Fragment,
-            null,
-            routeElement,
-            createElement(Outlet)
-          )
-        : routeElement ?? createElement(Outlet);
+        ? createElement(Fragment, null, routeElement, createElement(Outlet))
+        : (routeElement ?? createElement(Outlet));
     if (route.access && !options.AccessGuard) {
       throw new Error(
-        `Route "${route.name}" declares access constraints without an AccessGuard.`
+        `Route "${route.name}" declares access constraints without an AccessGuard.`,
       );
     }
-    const element = route.access && options.AccessGuard
-      ? createElement(options.AccessGuard, { access: route.access }, content)
-      : content;
+    const element =
+      route.access && options.AccessGuard
+        ? createElement(options.AccessGuard, { access: route.access }, content)
+        : content;
 
     return route.index
       ? createElement(Route, {
@@ -248,7 +242,7 @@ export function renderAppRoutes(
             path: route.path,
             element,
           },
-          renderAppRoutes(route.children ?? [], options)
+          renderAppRoutes(route.children ?? [], options),
         );
   });
 }

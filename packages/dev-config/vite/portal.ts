@@ -1,13 +1,13 @@
-import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
-import path from "node:path";
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import path from 'node:path';
 import type {
   ConfigEnv,
   PluginOption,
   UserConfig,
   UserConfigExport,
-} from "vite";
-import { defineConfig, loadEnv, mergeConfig } from "vite";
+} from 'vite';
+import { defineConfig, loadEnv, mergeConfig } from 'vite';
 
 export type PortalSdkCompatibilityPluginFactory = (options: {
   root: string;
@@ -25,7 +25,7 @@ const resolveLocalConfig = async (
   configEnvironment: ConfigEnv,
 ): Promise<UserConfig> => {
   const localConfigValue =
-    typeof localConfig === "function"
+    typeof localConfig === 'function'
       ? localConfig(configEnvironment)
       : localConfig;
 
@@ -45,20 +45,20 @@ export const createPortalViteConfig: (
     const envDirectory =
       resolvedLocalConfig.envDir === false
         ? undefined
-        : path.resolve(root, resolvedLocalConfig.envDir ?? ".");
+        : path.resolve(root, resolvedLocalConfig.envDir ?? '.');
     const env: Record<string, string> = envDirectory
-      ? loadEnv(configEnvironment.mode, envDirectory, "")
+      ? loadEnv(configEnvironment.mode, envDirectory, '')
       : {};
-    const devHost = env.APP_VITE_DEV_HOST || "127.0.0.1";
+    const devHost = env.APP_VITE_DEV_HOST || '127.0.0.1';
     const devPort = positiveInteger(env.APP_VITE_DEV_PORT) ?? 5173;
     const sharedConfig: UserConfig = {
       root,
       plugins: [portalSdkCompatibilityPlugin({ root }), react(), tailwindcss()],
       build: {
-        outDir: "dist/client",
+        outDir: 'dist/client',
       },
       server:
-        configEnvironment.command === "serve"
+        configEnvironment.command === 'serve'
           ? {
               hmr: {
                 host: devHost,

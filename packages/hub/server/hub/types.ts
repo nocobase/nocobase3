@@ -1,26 +1,26 @@
-export const APPLICATION_STATUSES = ["active", "disabled", "archived"] as const;
+export const APPLICATION_STATUSES = ['active', 'disabled', 'archived'] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
-export const RELEASE_STATUSES = ["pending", "verified", "rejected"] as const;
+export const RELEASE_STATUSES = ['pending', 'verified', 'rejected'] as const;
 export type ReleaseVerificationStatus = (typeof RELEASE_STATUSES)[number];
 
 export const DEPLOYMENT_STATUSES = [
-  "queued",
-  "preparing",
-  "activating",
-  "checking",
-  "switching",
-  "draining",
-  "succeeded",
-  "failed",
-  "cancelled",
+  'queued',
+  'preparing',
+  'activating',
+  'checking',
+  'switching',
+  'draining',
+  'succeeded',
+  'failed',
+  'cancelled',
 ] as const;
 export type DeploymentStatus = (typeof DEPLOYMENT_STATUSES)[number];
 
-export const DEPLOYMENT_TYPES = ["deploy", "rollback", "redeploy"] as const;
+export const DEPLOYMENT_TYPES = ['deploy', 'rollback', 'redeploy'] as const;
 export type DeploymentType = (typeof DEPLOYMENT_TYPES)[number];
 
-export const HUB_ROLES = ["owner", "admin", "deployer", "viewer"] as const;
+export const HUB_ROLES = ['owner', 'admin', 'deployer', 'viewer'] as const;
 export type HubRole = (typeof HUB_ROLES)[number];
 
 export interface HubApplication {

@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useTranslate } from "@refinedev/core";
-import { useTheme } from "@/components/theme/theme-provider";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { Moon, Sun } from "lucide-react";
+import { useTranslate } from '@refinedev/core';
+import { useTheme } from '@/components/theme/theme-provider';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { Moon, Sun } from 'lucide-react';
 
 type ThemeToggleProps = {
   className?: string;
@@ -13,58 +13,58 @@ type ThemeToggleProps = {
 export function ThemeToggle({ className }: ThemeToggleProps) {
   const translate = useTranslate();
   const { resolvedTheme, setTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
+  const isDark = resolvedTheme === 'dark';
 
-  const toggleTheme = () => setTheme(isDark ? "light" : "dark");
+  const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
 
   return (
     <Button
-      variant="outline"
-      size="icon"
+      variant='outline'
+      size='icon'
       onClick={toggleTheme}
       className={cn(
-        "rounded-xl",
-        "border-border/70",
-        "bg-background/60",
+        'rounded-xl',
+        'border-border/70',
+        'bg-background/60',
         className,
-        "h-10",
-        "w-10",
+        'h-10',
+        'w-10',
       )}
     >
       <Sun
         className={cn(
-          "h-[1.2rem]",
-          "w-[1.2rem]",
-          "rotate-0",
-          "scale-100",
-          "transition-all",
-          "duration-200",
+          'h-[1.2rem]',
+          'w-[1.2rem]',
+          'rotate-0',
+          'scale-100',
+          'transition-all',
+          'duration-200',
           {
-            "-rotate-90 scale-0": isDark,
+            '-rotate-90 scale-0': isDark,
           },
         )}
       />
       <Moon
         className={cn(
-          "absolute",
-          "h-[1.2rem]",
-          "w-[1.2rem]",
-          "rotate-90",
-          "scale-0",
-          "transition-all",
-          "duration-200",
+          'absolute',
+          'h-[1.2rem]',
+          'w-[1.2rem]',
+          'rotate-90',
+          'scale-0',
+          'transition-all',
+          'duration-200',
           {
-            "rotate-0 scale-100": isDark,
+            'rotate-0 scale-100': isDark,
           },
         )}
       />
-      <span className="sr-only">
+      <span className='sr-only'>
         {isDark
-          ? translate("theme.switchToLight", "Switch to light mode")
-          : translate("theme.switchToDark", "Switch to dark mode")}
+          ? translate('theme.switchToLight', 'Switch to light mode')
+          : translate('theme.switchToDark', 'Switch to dark mode')}
       </span>
     </Button>
   );
 }
 
-ThemeToggle.displayName = "ThemeToggle";
+ThemeToggle.displayName = 'ThemeToggle';

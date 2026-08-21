@@ -7,12 +7,12 @@ authentication 使用 NocoBase Database 实现 Better Auth 的持久化。应用
 
 内置 migration 创建四个 Collection：
 
-| Collection     | 用途                                               |
-| -------------- | -------------------------------------------------- |
-| `user`         | 用户名、邮箱、名称、头像和邮箱验证状态             |
-| `session`      | Session token、过期时间、客户端信息和所属用户      |
-| `account`      | 密码或外部身份提供者账号、token 和所属用户         |
-| `verification` | 邮箱验证、密码重置等短期验证值                     |
+| Collection     | 用途                                          |
+| -------------- | --------------------------------------------- |
+| `user`         | 用户名、邮箱、名称、头像和邮箱验证状态        |
+| `session`      | Session token、过期时间、客户端信息和所属用户 |
+| `account`      | 密码或外部身份提供者账号、token 和所属用户    |
+| `verification` | 邮箱验证、密码重置等短期验证值                |
 
 主要唯一约束包括：
 

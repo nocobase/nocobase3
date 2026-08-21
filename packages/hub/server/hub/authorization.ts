@@ -1,23 +1,23 @@
-import type { HubCapability, HubRole, HubUserSummary } from "./types.ts";
+import type { HubCapability, HubRole, HubUserSummary } from './types.ts';
 import {
   HubDomainError,
   type HubAppScope,
   type HubRoleAssignment,
   type HubStore,
-} from "./store.ts";
+} from './store.ts';
 
 export type HubResource =
-  | "hub.app"
-  | "hub.release"
-  | "hub.deployment"
-  | "hub.runtime"
-  | "hub.auditLog"
-  | "hub.member"
-  | "hub.permission"
-  | "hub.setting";
+  | 'hub.app'
+  | 'hub.release'
+  | 'hub.deployment'
+  | 'hub.runtime'
+  | 'hub.auditLog'
+  | 'hub.member'
+  | 'hub.permission'
+  | 'hub.setting';
 
 export type HubAction =
-  "create" | "read" | "update" | "delete" | "control" | "assign";
+  'create' | 'read' | 'update' | 'delete' | 'control' | 'assign';
 
 export interface HubAuthorizationRequest {
   resource: HubResource;
@@ -42,28 +42,28 @@ export interface AuthorizedHubActor {
 }
 
 const ROLE_CAPABILITIES: Readonly<Record<HubRole, readonly HubCapability[]>> = {
-  owner: [{ resource: "*", actions: ["*"] }],
+  owner: [{ resource: '*', actions: ['*'] }],
   admin: [
-    { resource: "hub.app", actions: ["create", "read", "update", "delete"] },
-    { resource: "hub.release", actions: ["create", "read"] },
-    { resource: "hub.deployment", actions: ["create", "read"] },
-    { resource: "hub.runtime", actions: ["read", "control"] },
-    { resource: "hub.auditLog", actions: ["read"] },
-    { resource: "hub.member", actions: ["create", "read", "update", "delete"] },
-    { resource: "hub.permission", actions: ["read", "assign"] },
-    { resource: "hub.setting", actions: ["read", "update"] },
+    { resource: 'hub.app', actions: ['create', 'read', 'update', 'delete'] },
+    { resource: 'hub.release', actions: ['create', 'read'] },
+    { resource: 'hub.deployment', actions: ['create', 'read'] },
+    { resource: 'hub.runtime', actions: ['read', 'control'] },
+    { resource: 'hub.auditLog', actions: ['read'] },
+    { resource: 'hub.member', actions: ['create', 'read', 'update', 'delete'] },
+    { resource: 'hub.permission', actions: ['read', 'assign'] },
+    { resource: 'hub.setting', actions: ['read', 'update'] },
   ],
   deployer: [
-    { resource: "hub.app", actions: ["read"] },
-    { resource: "hub.release", actions: ["read"] },
-    { resource: "hub.deployment", actions: ["create", "read"] },
-    { resource: "hub.runtime", actions: ["read"] },
+    { resource: 'hub.app', actions: ['read'] },
+    { resource: 'hub.release', actions: ['read'] },
+    { resource: 'hub.deployment', actions: ['create', 'read'] },
+    { resource: 'hub.runtime', actions: ['read'] },
   ],
   viewer: [
-    { resource: "hub.app", actions: ["read"] },
-    { resource: "hub.release", actions: ["read"] },
-    { resource: "hub.deployment", actions: ["read"] },
-    { resource: "hub.runtime", actions: ["read"] },
+    { resource: 'hub.app', actions: ['read'] },
+    { resource: 'hub.release', actions: ['read'] },
+    { resource: 'hub.deployment', actions: ['read'] },
+    { resource: 'hub.runtime', actions: ['read'] },
   ],
 };
 
@@ -76,7 +76,7 @@ export class HubAuthorization {
   ): Promise<void> {
     if (!(await this.can(userId, request))) {
       throw new HubDomainError(
-        "FORBIDDEN",
+        'FORBIDDEN',
         `Missing ${request.resource}:${request.action} capability.`,
         { status: 403 },
       );
@@ -162,7 +162,7 @@ function scopeAllows(
   const exact = `${request.resource}:${request.action}`;
   return scope.actions.some(
     (action) =>
-      action === "*" ||
+      action === '*' ||
       action === exact ||
       action === `${request.resource}:*` ||
       action === request.action,
@@ -174,8 +174,8 @@ function capabilityAllows(
   request: HubAuthorizationRequest,
 ): boolean {
   return (
-    (capability.resource === "*" || capability.resource === request.resource) &&
-    (capability.actions.includes("*") ||
+    (capability.resource === '*' || capability.resource === request.resource) &&
+    (capability.actions.includes('*') ||
       capability.actions.includes(request.action))
   );
 }
@@ -183,8 +183,8 @@ function capabilityAllows(
 function scopeCapabilities(scope: HubAppScope): HubCapability[] {
   const grouped = new Map<string, Set<string>>();
   for (const value of scope.actions) {
-    const separator = value.lastIndexOf(":");
-    const resource = separator > 0 ? value.slice(0, separator) : "*";
+    const separator = value.lastIndexOf(':');
+    const resource = separator > 0 ? value.slice(0, separator) : '*';
     const action = separator > 0 ? value.slice(separator + 1) : value;
     const actions = grouped.get(resource) ?? new Set<string>();
     actions.add(action);

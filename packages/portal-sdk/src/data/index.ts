@@ -20,14 +20,14 @@ import type {
   UpdateManyResponse,
   UpdateParams,
   UpdateResponse,
-} from "@refinedev/core";
+} from '@refinedev/core';
 
-import { nocobaseClient } from "../client/index.ts";
+import { nocobaseClient } from '../client/index.ts';
 import {
   resolveAclDataSourceKey,
   type ResourceAcl,
   updateRecordPermissions,
-} from "../acl/index.ts";
+} from '../acl/index.ts';
 
 type NocoBaseListResponse<T> = {
   rows?: T[];
@@ -65,30 +65,30 @@ const getRecordValue = (
 ): unknown => record[key];
 
 const toNocoBaseFilter = (
-  filters: GetListParams["filters"] = [],
+  filters: GetListParams['filters'] = [],
 ): NocoBaseFilter | undefined => {
   const filterItems: NocoBaseFilter[] = filters.flatMap((filter) => {
-    if ("field" in filter) {
+    if ('field' in filter) {
       const operatorMap: Record<string, string> = {
-        eq: "$eq",
-        ne: "$ne",
-        lt: "$lt",
-        gt: "$gt",
-        lte: "$lte",
-        gte: "$gte",
-        in: "$in",
-        nin: "$notIn",
-        contains: "$includes",
-        containss: "$includes",
-        startswith: "$startsWith",
-        endswith: "$endsWith",
-        null: "$null",
-        nnull: "$notNull",
-        between: "$between",
-        nbetween: "$notBetween",
+        eq: '$eq',
+        ne: '$ne',
+        lt: '$lt',
+        gt: '$gt',
+        lte: '$lte',
+        gte: '$gte',
+        in: '$in',
+        nin: '$notIn',
+        contains: '$includes',
+        containss: '$includes',
+        startswith: '$startsWith',
+        endswith: '$endsWith',
+        null: '$null',
+        nnull: '$notNull',
+        between: '$between',
+        nbetween: '$notBetween',
       };
 
-      const operator = operatorMap[filter.operator] ?? "$eq";
+      const operator = operatorMap[filter.operator] ?? '$eq';
       return [{ [filter.field]: { [operator]: toUnknown(filter.value) } }];
     }
 
@@ -104,7 +104,7 @@ const request = async <T>(
   resource: string,
   action: string,
   options: {
-    method?: "GET" | "POST";
+    method?: 'GET' | 'POST';
     query?: Record<string, string | number | undefined>;
     body?: unknown;
     meta?: NocoBaseMeta;
@@ -114,7 +114,7 @@ const request = async <T>(
   const dataSourceKey = resolveAclDataSourceKey(options.meta);
   const fields = Array.isArray(options.meta?.fields)
     ? options.meta.fields.filter(
-        (field): field is string => typeof field === "string",
+        (field): field is string => typeof field === 'string',
       )
     : undefined;
   return nocobaseClient.action<T>(resource, action, {
@@ -122,14 +122,14 @@ const request = async <T>(
     query: {
       ...options.query,
       ...(options.meta?.appends?.length
-        ? { "appends[]": options.meta.appends }
+        ? { 'appends[]': options.meta.appends }
         : {}),
-      ...(fields?.length ? { "fields[]": fields } : {}),
+      ...(fields?.length ? { 'fields[]': fields } : {}),
     },
     body: options.body,
     token: options.meta?.token,
-    headers: dataSourceKey ? { "X-Data-Source": dataSourceKey } : undefined,
-    unwrap: options.unwrapData === false ? "none" : "data",
+    headers: dataSourceKey ? { 'X-Data-Source': dataSourceKey } : undefined,
+    unwrap: options.unwrapData === false ? 'none' : 'data',
   });
 };
 
@@ -151,13 +151,13 @@ const cacheAllowedActions = <TData extends BaseRecord>({
   response: NocoBaseListResponse<TData>;
   meta?: NocoBaseMeta;
 }) => {
-  const idField = meta?.idField ?? "id";
+  const idField = meta?.idField ?? 'id';
   const dataSourceKey = resolveAclDataSourceKey(meta);
   const recordIds = records
     .map((record) => getRecordValue(record, idField))
     .filter(
       (id): id is string | number =>
-        typeof id === "string" || typeof id === "number",
+        typeof id === 'string' || typeof id === 'number',
     );
   return updateRecordPermissions({
     dataSourceKey,
@@ -183,17 +183,17 @@ export const dataProvider: DataProvider = {
     const pageSize = pagination?.pageSize ?? 10;
     const filter = toNocoBaseFilter(filters);
     const sort = sorters?.map(
-      (sorter) => `${sorter.order === "desc" ? "-" : ""}${sorter.field}`,
+      (sorter) => `${sorter.order === 'desc' ? '-' : ''}${sorter.field}`,
     );
     const response = await request<NocoBaseListResponse<TData>>(
       resource,
-      "list",
+      'list',
       {
         query: {
           page,
           pageSize,
           ...(filter ? { filter: JSON.stringify(filter) } : {}),
-          ...(sort?.length ? { sort: sort.join(",") } : {}),
+          ...(sort?.length ? { sort: sort.join(',') } : {}),
         },
         meta,
         unwrapData: false,
@@ -220,7 +220,7 @@ export const dataProvider: DataProvider = {
   }: GetOneParams): Promise<GetOneResponse<TData>> {
     const response = await request<NocoBaseGetResponse<TData>>(
       resource,
-      "get",
+      'get',
       {
         query: { filterByTk: id },
         meta,
@@ -246,7 +246,7 @@ export const dataProvider: DataProvider = {
   }: GetManyParams): Promise<GetManyResponse<TData>> {
     const responses = await Promise.all(
       ids.map((id) =>
-        request<NocoBaseGetResponse<TData>>(resource, "get", {
+        request<NocoBaseGetResponse<TData>>(resource, 'get', {
           query: { filterByTk: id },
           meta,
           unwrapData: false,
@@ -274,8 +274,8 @@ export const dataProvider: DataProvider = {
     meta,
   }: CreateParams<TVariables>): Promise<CreateResponse<TData>> {
     return {
-      data: await request<TData>(resource, "create", {
-        method: "POST",
+      data: await request<TData>(resource, 'create', {
+        method: 'POST',
         body: variables,
         meta,
       }),
@@ -292,8 +292,8 @@ export const dataProvider: DataProvider = {
   }: CreateManyParams<TVariables>): Promise<CreateManyResponse<TData>> {
     const data = await Promise.all(
       variables.map((values) =>
-        request<TData>(resource, "create", {
-          method: "POST",
+        request<TData>(resource, 'create', {
+          method: 'POST',
           body: values,
           meta,
         }),
@@ -312,8 +312,8 @@ export const dataProvider: DataProvider = {
     meta,
   }: UpdateParams<TVariables>): Promise<UpdateResponse<TData>> {
     return {
-      data: await request<TData>(resource, "update", {
-        method: "POST",
+      data: await request<TData>(resource, 'update', {
+        method: 'POST',
         query: { filterByTk: id },
         body: variables,
         meta,
@@ -332,8 +332,8 @@ export const dataProvider: DataProvider = {
   }: UpdateManyParams<TVariables>): Promise<UpdateManyResponse<TData>> {
     const data = await Promise.all(
       ids.map((id) =>
-        request<TData>(resource, "update", {
-          method: "POST",
+        request<TData>(resource, 'update', {
+          method: 'POST',
           query: { filterByTk: id },
           body: variables,
           meta,
@@ -352,8 +352,8 @@ export const dataProvider: DataProvider = {
     meta,
   }: DeleteOneParams<TVariables>): Promise<DeleteOneResponse<TData>> {
     return {
-      data: await request<TData>(resource, "destroy", {
-        method: "POST",
+      data: await request<TData>(resource, 'destroy', {
+        method: 'POST',
         query: { filterByTk: id },
         meta,
       }),
@@ -370,8 +370,8 @@ export const dataProvider: DataProvider = {
   }: DeleteManyParams<TVariables>): Promise<DeleteManyResponse<TData>> {
     const data = await Promise.all(
       ids.map((id) =>
-        request<TData>(resource, "destroy", {
-          method: "POST",
+        request<TData>(resource, 'destroy', {
+          method: 'POST',
           query: { filterByTk: id },
           meta,
         }),

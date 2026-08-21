@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   HubApiError,
@@ -7,21 +7,21 @@ import {
   hubGet,
   setHubUnauthorizedHandler,
   unwrapHubResponse,
-} from "@/features/hub/api";
-import { getDeploymentProgress } from "@/features/hub/status";
-import { appRoutes, registryRoutesEnabled } from "@/routes";
+} from '@/features/hub/api';
+import { getDeploymentProgress } from '@/features/hub/status';
+import { appRoutes, registryRoutesEnabled } from '@/routes';
 
-describe("Hub client API", () => {
-  it("uses the injected browser API URL and falls back to /hub/api", () => {
+describe('Hub client API', () => {
+  it('uses the injected browser API URL and falls back to /hub/api', () => {
     const original = (globalThis as { NOCOBASE_API_URL?: string })
       .NOCOBASE_API_URL;
 
     (globalThis as { NOCOBASE_API_URL?: string }).NOCOBASE_API_URL =
-      "/control/api/";
-    expect(getHubApiBase()).toBe("/control/api");
+      '/control/api/';
+    expect(getHubApiBase()).toBe('/control/api');
 
     delete (globalThis as { NOCOBASE_API_URL?: string }).NOCOBASE_API_URL;
-    expect(getHubApiBase()).toBe("/hub/api");
+    expect(getHubApiBase()).toBe('/hub/api');
 
     if (original === undefined) {
       delete (globalThis as { NOCOBASE_API_URL?: string }).NOCOBASE_API_URL;
@@ -30,26 +30,26 @@ describe("Hub client API", () => {
     }
   });
 
-  it("unwraps the stable response envelope", () => {
+  it('unwraps the stable response envelope', () => {
     expect(
       unwrapHubResponse({
-        data: [{ id: "app-1" }],
+        data: [{ id: 'app-1' }],
         meta: { total: 1, limit: 20, offset: 0 },
-        requestId: "req-1",
+        requestId: 'req-1',
       }),
     ).toEqual({
-      data: [{ id: "app-1" }],
+      data: [{ id: 'app-1' }],
       meta: { total: 1, limit: 20, offset: 0 },
-      requestId: "req-1",
+      requestId: 'req-1',
     });
   });
 
-  it("turns an error envelope into a useful typed error", () => {
+  it('turns an error envelope into a useful typed error', () => {
     expect(() =>
       unwrapHubResponse(
         {
-          error: { code: "FORBIDDEN", message: "Missing deploy capability" },
-          requestId: "req-2",
+          error: { code: 'FORBIDDEN', message: 'Missing deploy capability' },
+          requestId: 'req-2',
         },
         403,
       ),
@@ -58,56 +58,56 @@ describe("Hub client API", () => {
     try {
       unwrapHubResponse(
         {
-          error: { code: "FORBIDDEN", message: "Missing deploy capability" },
-          requestId: "req-2",
+          error: { code: 'FORBIDDEN', message: 'Missing deploy capability' },
+          requestId: 'req-2',
         },
         403,
       );
     } catch (error) {
       expect(error).toMatchObject({
         status: 403,
-        code: "FORBIDDEN",
-        requestId: "req-2",
+        code: 'FORBIDDEN',
+        requestId: 'req-2',
       });
     }
   });
 
-  it("notifies the auth boundary when a Hub request becomes unauthorized", async () => {
+  it('notifies the auth boundary when a Hub request becomes unauthorized', async () => {
     const onUnauthorized = vi.fn();
     setHubUnauthorizedHandler(onUnauthorized);
     const fetcher = vi.fn<typeof fetch>(async () =>
       Response.json(
         {
-          error: { code: "UNAUTHORIZED", message: "Session expired" },
-          requestId: "expired-session",
+          error: { code: 'UNAUTHORIZED', message: 'Session expired' },
+          requestId: 'expired-session',
         },
         { status: 401 },
       ),
     );
 
-    await expect(hubGet("/me", fetcher)).rejects.toMatchObject({ status: 401 });
+    await expect(hubGet('/me', fetcher)).rejects.toMatchObject({ status: 401 });
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
     setHubUnauthorizedHandler(undefined);
   });
 
-  it("matches exact and wildcard capabilities", () => {
+  it('matches exact and wildcard capabilities', () => {
     const capabilities = {
       global: [
-        { resource: "hub.app", actions: ["read", "create"] },
-        { resource: "hub.deployment", actions: ["read"] },
+        { resource: 'hub.app', actions: ['read', 'create'] },
+        { resource: 'hub.deployment', actions: ['read'] },
       ],
       application: [],
     };
 
-    expect(hasHubCapability(capabilities, "hub.app", "create")).toBe(true);
-    expect(hasHubCapability(capabilities, "hub.deployment", "create")).toBe(
+    expect(hasHubCapability(capabilities, 'hub.app', 'create')).toBe(true);
+    expect(hasHubCapability(capabilities, 'hub.deployment', 'create')).toBe(
       false,
     );
     expect(
       hasHubCapability(
-        { global: [{ resource: "*", actions: ["*"] }] },
-        "hub.deployment",
-        "create",
+        { global: [{ resource: '*', actions: ['*'] }] },
+        'hub.deployment',
+        'create',
       ),
     ).toBe(true);
 
@@ -117,29 +117,29 @@ describe("Hub client API", () => {
           global: [],
           application: [
             {
-              applicationId: "app-1",
+              applicationId: 'app-1',
               capabilities: [
-                { resource: "hub.deployment", actions: ["create"] },
+                { resource: 'hub.deployment', actions: ['create'] },
               ],
             },
           ],
         },
-        "hub.deployment",
-        "create",
-        "app-1",
+        'hub.deployment',
+        'create',
+        'app-1',
       ),
     ).toBe(true);
   });
 });
 
-describe("Hub route configuration", () => {
-  it("exposes only the four approved business routes without Registry routes", () => {
+describe('Hub route configuration', () => {
+  it('exposes only the four approved business routes without Registry routes', () => {
     expect(registryRoutesEnabled).toBe(false);
     expect(appRoutes.map((route) => route.path)).toEqual([
-      "/apps",
-      "/apps/:appId",
-      "/deployments",
-      "/deployments/:deploymentId",
+      '/apps',
+      '/apps/:appId',
+      '/deployments',
+      '/deployments/:deploymentId',
     ]);
     expect(
       appRoutes.flatMap((route) =>
@@ -153,29 +153,29 @@ describe("Hub route configuration", () => {
           : [],
       ),
     ).toEqual([
-      { name: "apps", capability: "hub.app" },
-      { name: "deployments", capability: "hub.deployment" },
+      { name: 'apps', capability: 'hub.app' },
+      { name: 'deployments', capability: 'hub.deployment' },
     ]);
   });
 });
 
-describe("deployment progress", () => {
-  it("maps lifecycle states to readable progress", () => {
-    expect(getDeploymentProgress("queued")).toEqual({
+describe('deployment progress', () => {
+  it('maps lifecycle states to readable progress', () => {
+    expect(getDeploymentProgress('queued')).toEqual({
       percent: 10,
-      label: "Queued",
+      label: 'Queued',
     });
-    expect(getDeploymentProgress("switching")).toEqual({
+    expect(getDeploymentProgress('switching')).toEqual({
       percent: 75,
-      label: "Switching traffic",
+      label: 'Switching traffic',
     });
-    expect(getDeploymentProgress("succeeded")).toEqual({
+    expect(getDeploymentProgress('succeeded')).toEqual({
       percent: 100,
-      label: "Succeeded",
+      label: 'Succeeded',
     });
-    expect(getDeploymentProgress("failed")).toEqual({
+    expect(getDeploymentProgress('failed')).toEqual({
       percent: 100,
-      label: "Failed",
+      label: 'Failed',
     });
   });
 });

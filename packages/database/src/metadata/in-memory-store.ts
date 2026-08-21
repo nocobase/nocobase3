@@ -1,4 +1,8 @@
-import type { CollectionDefinition, CollectionMetadataPatch, FieldMetadataPatch } from '../collection/types.js';
+import type {
+  CollectionDefinition,
+  CollectionMetadataPatch,
+  FieldMetadataPatch,
+} from '../collection/types.js';
 import type { CollectionMetadataStore } from './store.js';
 
 export class InMemoryCollectionMetadataStore implements CollectionMetadataStore {
@@ -8,7 +12,10 @@ export class InMemoryCollectionMetadataStore implements CollectionMetadataStore 
     return clone(this.collections.get(name));
   }
 
-  async saveCollection(name: string, definition: CollectionDefinition): Promise<void> {
+  async saveCollection(
+    name: string,
+    definition: CollectionDefinition,
+  ): Promise<void> {
     this.collections.set(name, clone({ ...definition, name }));
   }
 
@@ -25,7 +32,10 @@ export class InMemoryCollectionMetadataStore implements CollectionMetadataStore 
     this.collections.set(to, clone({ ...definition, name: to }));
   }
 
-  async patchCollection(name: string, patch: CollectionMetadataPatch): Promise<void> {
+  async patchCollection(
+    name: string,
+    patch: CollectionMetadataPatch,
+  ): Promise<void> {
     const definition = this.collections.get(name) ?? { name, fields: [] };
     const fields = [...(definition.fields ?? [])];
 
@@ -38,15 +48,22 @@ export class InMemoryCollectionMetadataStore implements CollectionMetadataStore 
       }
     }
 
-    this.collections.set(name, clone({
-      ...definition,
-      title: patch.title ?? definition.title,
-      description: patch.description ?? definition.description,
-      fields,
-    }));
+    this.collections.set(
+      name,
+      clone({
+        ...definition,
+        title: patch.title ?? definition.title,
+        description: patch.description ?? definition.description,
+        fields,
+      }),
+    );
   }
 
-  async patchField(collection: string, field: string, patch: FieldMetadataPatch): Promise<void> {
+  async patchField(
+    collection: string,
+    field: string,
+    patch: FieldMetadataPatch,
+  ): Promise<void> {
     await this.patchCollection(collection, {
       fields: {
         [field]: patch,

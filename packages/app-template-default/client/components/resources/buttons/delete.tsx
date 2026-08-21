@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import React from "react";
-import { type BaseKey, useDeleteButton } from "@refinedev/core";
-import { Loader2, Trash } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React from 'react';
+import { type BaseKey, useDeleteButton } from '@refinedev/core';
+import { Loader2, Trash } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from '@/components/ui/popover';
 
 type DeleteButtonProps = {
   /**
@@ -67,35 +67,30 @@ export const DeleteButton = React.forwardRef<
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<span className="inline-flex" />}>
-        <Button
-          variant="destructive"
-          {...rest}
-          ref={ref}
-          disabled={isDisabled}
-        >
-          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      <PopoverTrigger render={<span className='inline-flex' />}>
+        <Button variant='destructive' {...rest} ref={ref} disabled={isDisabled}>
+          {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
           {children ?? (
-            <div className="flex items-center gap-2 font-semibold">
-              <Trash className="h-4 w-4" />
+            <div className='flex items-center gap-2 font-semibold'>
+              <Trash className='h-4 w-4' />
               <span>{label}</span>
             </div>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto" align="start">
-        <div className="flex flex-col gap-2">
-          <p className="text-sm">{confirmTitle}</p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+      <PopoverContent className='w-auto' align='start'>
+        <div className='flex flex-col gap-2'>
+          <p className='text-sm'>{confirmTitle}</p>
+          <div className='flex justify-end gap-2'>
+            <Button variant='outline' size='sm' onClick={() => setOpen(false)}>
               {confirmCancelText}
             </Button>
             <Button
-              variant="destructive"
-              size="sm"
+              variant='destructive'
+              size='sm'
               disabled={loading}
               onClick={() => {
-                if (typeof onConfirm === "function") {
+                if (typeof onConfirm === 'function') {
                   onConfirm();
                 }
                 setOpen(false);
@@ -110,4 +105,4 @@ export const DeleteButton = React.forwardRef<
   );
 });
 
-DeleteButton.displayName = "DeleteButton";
+DeleteButton.displayName = 'DeleteButton';

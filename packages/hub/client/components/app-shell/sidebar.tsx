@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import React from "react";
+import React from 'react';
 import {
   useMenu,
   useLink,
   useTranslate,
   useUserFriendlyName,
   type TreeMenuItem,
-} from "@refinedev/core";
+} from '@refinedev/core';
 import {
   SidebarRail as ShadcnSidebarRail,
   Sidebar as ShadcnSidebar,
@@ -15,27 +15,27 @@ import {
   SidebarFooter as ShadcnSidebarFooter,
   SidebarHeader as ShadcnSidebarHeader,
   useSidebar as useShadcnSidebar,
-} from "@/components/ui/sidebar";
+} from '@/components/ui/sidebar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Button } from "@/components/ui/button";
-import { ChevronRight, ListIcon, ShieldCheck } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Brand } from "@/components/app-shell/brand";
-import { getResourceLabel } from "@/components/resources/resource-label";
-import { hasHubCapability } from "@/features/hub/api";
-import { useHubRuntime } from "@/features/hub/provider";
+} from '@/components/ui/collapsible';
+import { Button } from '@/components/ui/button';
+import { ChevronRight, ListIcon, ShieldCheck } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Brand } from '@/components/app-shell/brand';
+import { getResourceLabel } from '@/components/resources/resource-label';
+import { hasHubCapability } from '@/features/hub/api';
+import { useHubRuntime } from '@/features/hub/provider';
 
-const applicationScopedMenuResources = new Set(["hub.deployment"]);
+const applicationScopedMenuResources = new Set(['hub.deployment']);
 
 export function Sidebar() {
   const { menuItems, selectedKey } = useMenu();
@@ -61,22 +61,22 @@ export function SidebarNavigation({
 
   return (
     <ShadcnSidebar
-      collapsible="icon"
-      className={cn("border-r border-sidebar-border/70")}
+      collapsible='icon'
+      className={cn('border-r border-sidebar-border/70')}
     >
       <ShadcnSidebarRail />
       <SidebarHeader />
       <ShadcnSidebarContent
         className={cn(
-          "transition-discrete",
-          "duration-200",
-          "flex",
-          "flex-col",
-          "gap-1.5",
-          "py-3",
+          'transition-discrete',
+          'duration-200',
+          'flex',
+          'flex-col',
+          'gap-1.5',
+          'py-3',
           {
-            "px-3": open,
-            "px-1": !open,
+            'px-3': open,
+            'px-1': !open,
           },
         )}
       >
@@ -121,31 +121,31 @@ function SidebarItemGroup({ item, selectedKey }: MenuItemProps) {
   const displayName = useMenuItemLabel(item);
 
   return (
-    <div className={cn("mt-2 border-t", "border-sidebar-border/70", "pt-4")}>
+    <div className={cn('mt-2 border-t', 'border-sidebar-border/70', 'pt-4')}>
       <span
         className={cn(
-          "ml-3",
-          "block",
-          "text-xs",
-          "font-semibold",
-          "uppercase",
-          "text-muted-foreground",
-          "transition-all",
-          "duration-200",
+          'ml-3',
+          'block',
+          'text-xs',
+          'font-semibold',
+          'uppercase',
+          'text-muted-foreground',
+          'transition-all',
+          'duration-200',
           {
-            "h-8": open,
-            "h-0": !open,
-            "opacity-0": !open,
-            "opacity-100": open,
-            "pointer-events-none": !open,
-            "pointer-events-auto": open,
+            'h-8': open,
+            'h-0': !open,
+            'opacity-0': !open,
+            'opacity-100': open,
+            'pointer-events-none': !open,
+            'pointer-events-auto': open,
           },
         )}
       >
         {displayName}
       </span>
       {children && children.length > 0 && (
-        <div className={cn("flex", "flex-col")}>
+        <div className={cn('flex', 'flex-col')}>
           {children.map((child: TreeMenuItem) => (
             <SidebarItem
               key={child.key || child.name}
@@ -166,13 +166,13 @@ function SidebarItemCollapsible({ item, selectedKey }: MenuItemProps) {
   const chevronIcon = (
     <ChevronRight
       className={cn(
-        "h-4",
-        "w-4",
-        "shrink-0",
-        "text-muted-foreground",
-        "transition-transform",
-        "duration-200",
-        "group-data-[state=open]:rotate-90",
+        'h-4',
+        'w-4',
+        'shrink-0',
+        'text-muted-foreground',
+        'transition-transform',
+        'duration-200',
+        'group-data-[state=open]:rotate-90',
       )}
     />
   );
@@ -181,7 +181,7 @@ function SidebarItemCollapsible({ item, selectedKey }: MenuItemProps) {
     <Collapsible
       key={`collapsible-${name}`}
       defaultOpen={isSelected}
-      className={cn("w-full", "group")}
+      className={cn('w-full', 'group')}
     >
       <CollapsibleTrigger
         render={
@@ -192,7 +192,7 @@ function SidebarItemCollapsible({ item, selectedKey }: MenuItemProps) {
           />
         }
       />
-      <CollapsibleContent className={cn("ml-6", "flex", "flex-col", "gap-2")}>
+      <CollapsibleContent className={cn('ml-6', 'flex', 'flex-col', 'gap-2')}>
         {children?.map((child: TreeMenuItem) => (
           <SidebarItem
             key={child.key || child.name}
@@ -215,7 +215,7 @@ function SidebarItemDropdown({ item, selectedKey }: MenuItemProps) {
       <DropdownMenuTrigger
         render={<SidebarButton item={item} isSelected={isSelected} />}
       />
-      <DropdownMenuContent side="right" align="start">
+      <DropdownMenuContent side='right' align='start'>
         {children?.map((child: TreeMenuItem) => (
           <SidebarDropdownItem
             key={child.key || child.name}
@@ -241,9 +241,9 @@ function SidebarDropdownItem({
     <DropdownMenuItem
       render={
         <Link
-          to={item.route || ""}
-          className={cn("flex w-full items-center gap-2", {
-            "bg-accent text-accent-foreground": isSelected,
+          to={item.route || ''}
+          className={cn('flex w-full items-center gap-2', {
+            'bg-accent text-accent-foreground': isSelected,
           })}
         />
       }
@@ -266,21 +266,21 @@ function SidebarHeader() {
   return (
     <ShadcnSidebarHeader
       className={cn(
-        "h-16",
-        "p-0",
-        "border-b",
-        "border-sidebar-border/70",
-        "flex-row",
-        "items-center",
-        "overflow-hidden",
-        open ? "px-5" : "justify-center px-0",
+        'h-16',
+        'p-0',
+        'border-b',
+        'border-sidebar-border/70',
+        'flex-row',
+        'items-center',
+        'overflow-hidden',
+        open ? 'px-5' : 'justify-center px-0',
       )}
     >
       <Brand
         showText={open}
         logoClassName={cn(
-          "transition-transform duration-200",
-          !open && "size-9",
+          'transition-transform duration-200',
+          !open && 'size-9',
         )}
       />
     </ShadcnSidebarHeader>
@@ -292,27 +292,27 @@ function SidebarFooter() {
   const translate = useTranslate();
 
   return (
-    <ShadcnSidebarFooter className="border-t border-sidebar-border/70 p-0">
+    <ShadcnSidebarFooter className='border-t border-sidebar-border/70 p-0'>
       <div
         title={`${__PORTAL_TEMPLATE_NAME__} v${__PORTAL_TEMPLATE_VERSION__}`}
         className={cn(
-          "flex min-h-16 items-center",
-          open ? "gap-3 px-5 py-3" : "justify-center px-2",
+          'flex min-h-16 items-center',
+          open ? 'gap-3 px-5 py-3' : 'justify-center px-2',
         )}
       >
-        <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
+        <ShieldCheck className='size-4 shrink-0 text-muted-foreground' />
         {open && (
-          <div className="min-w-0 text-xs leading-4">
-            <div className="font-semibold text-sidebar-foreground">
-              {translate("shell.footer.controlPlane", "NocoBase Hub")}
+          <div className='min-w-0 text-xs leading-4'>
+            <div className='font-semibold text-sidebar-foreground'>
+              {translate('shell.footer.controlPlane', 'NocoBase Hub')}
             </div>
-            <div className="text-muted-foreground">
+            <div className='text-muted-foreground'>
               {translate(
-                "shell.footer.controlPlaneDescription",
-                "Application releases and runtime operations.",
+                'shell.footer.controlPlaneDescription',
+                'Application releases and runtime operations.',
               )}
             </div>
-            <div className="mt-1 font-mono text-[10px] text-muted-foreground/70">
+            <div className='mt-1 font-mono text-[10px] text-muted-foreground/70'>
               {__PORTAL_TEMPLATE_NAME__} v{__PORTAL_TEMPLATE_VERSION__}
             </div>
           </div>
@@ -331,7 +331,7 @@ function filterMenuItemsByHubCapability(
       ? filterMenuItemsByHubCapability(item.children, capabilities)
       : undefined;
     const hubResource =
-      typeof item.meta?.hubResource === "string"
+      typeof item.meta?.hubResource === 'string'
         ? item.meta.hubResource
         : undefined;
     const allowed = hubResource
@@ -346,10 +346,10 @@ function hasReadableHubMenuResource(
   capabilities: Parameters<typeof hasHubCapability>[0],
   resource: string,
 ): boolean {
-  if (hasHubCapability(capabilities, resource, "read")) return true;
+  if (hasHubCapability(capabilities, resource, 'read')) return true;
   if (!applicationScopedMenuResources.has(resource)) return false;
   return (capabilities?.application ?? []).some((entry) =>
-    hasHubCapability(capabilities, resource, "read", entry.applicationId),
+    hasHubCapability(capabilities, resource, 'read', entry.applicationId),
   );
 }
 
@@ -359,7 +359,7 @@ function useMenuItemLabel(item: TreeMenuItem) {
 
   return getResourceLabel(
     item,
-    "plural",
+    'plural',
     translate,
     getUserFriendlyName,
     item.name,
@@ -380,9 +380,9 @@ type IconProps = {
 function ItemIcon({ icon, isSelected }: IconProps) {
   return (
     <div
-      className={cn("w-4", {
-        "text-muted-foreground": !isSelected,
-        "text-primary": isSelected,
+      className={cn('w-4', {
+        'text-muted-foreground': !isSelected,
+        'text-primary': isSelected,
       })}
     >
       {icon ?? <ListIcon />}
@@ -414,13 +414,13 @@ function SidebarButton({
     <>
       <ItemIcon icon={item.meta?.icon ?? item.icon} isSelected={isSelected} />
       <span
-        className={cn("tracking-[-0.00875rem] text-foreground", {
-          "flex-1": rightIcon,
-          "text-left": rightIcon,
-          "line-clamp-1": !rightIcon,
+        className={cn('tracking-[-0.00875rem] text-foreground', {
+          'flex-1': rightIcon,
+          'text-left': rightIcon,
+          'line-clamp-1': !rightIcon,
           truncate: !rightIcon,
-          "font-normal": !isSelected,
-          "font-medium": isSelected,
+          'font-normal': !isSelected,
+          'font-medium': isSelected,
         })}
       >
         {displayName}
@@ -436,17 +436,17 @@ function SidebarButton({
         asLink && item.route ? (
           <Link
             to={item.route}
-            className={cn("flex w-full items-center gap-2")}
+            className={cn('flex w-full items-center gap-2')}
           />
         ) : undefined
       }
-      variant="ghost"
-      size="default"
+      variant='ghost'
+      size='default'
       className={cn(
-        "flex h-10 w-full items-center justify-start gap-3 rounded-lg px-3 text-sm transition-colors",
+        'flex h-10 w-full items-center justify-start gap-3 rounded-lg px-3 text-sm transition-colors',
         {
-          "bg-primary/10 text-primary hover:!bg-primary/15": isSelected,
-          "hover:bg-sidebar-accent/80": !isSelected,
+          'bg-primary/10 text-primary hover:!bg-primary/15': isSelected,
+          'hover:bg-sidebar-accent/80': !isSelected,
         },
         className,
       )}
@@ -458,4 +458,4 @@ function SidebarButton({
   );
 }
 
-Sidebar.displayName = "Sidebar";
+Sidebar.displayName = 'Sidebar';

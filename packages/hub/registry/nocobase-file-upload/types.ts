@@ -1,9 +1,5 @@
 export type FileRelationType =
-  | "belongsTo"
-  | "hasOne"
-  | "belongsToMany"
-  | "hasMany"
-  | "belongsToArray";
+  'belongsTo' | 'hasOne' | 'belongsToMany' | 'hasMany' | 'belongsToArray';
 
 export type FileFieldDescriptor = {
   // Business collection that owns the file relation field, e.g. "users".
@@ -59,14 +55,10 @@ export type NocoBaseFileRecord = {
 };
 
 export type FileUploadFieldValue =
-  | NocoBaseFileRecord
-  | NocoBaseFileRecord[]
-  | null;
+  NocoBaseFileRecord | NocoBaseFileRecord[] | null;
 
 export type SerializedFileFieldValue =
-  | { id: string | number }
-  | Array<{ id: string | number }>
-  | null;
+  { id: string | number } | Array<{ id: string | number }> | null;
 
 export type FileUploadOptions = {
   file: File;
@@ -75,7 +67,7 @@ export type FileUploadOptions = {
   signal?: AbortSignal;
 };
 
-export type FileUploadMode = "auto" | "direct" | "multipart";
+export type FileUploadMode = 'auto' | 'direct' | 'multipart';
 
 export type FileUploadHandlerOptions = {
   file: File;
@@ -84,7 +76,7 @@ export type FileUploadHandlerOptions = {
 };
 
 export type FileUploadHandler = (
-  options: FileUploadHandlerOptions
+  options: FileUploadHandlerOptions,
 ) => Promise<NocoBaseFileRecord>;
 
 export type FileUploadItem = {
@@ -92,13 +84,7 @@ export type FileUploadItem = {
   rawFile?: File;
   displayName: string;
   showStatus?: boolean;
-  status:
-    | "pending"
-    | "checking"
-    | "uploading"
-    | "done"
-    | "error"
-    | "cancelled";
+  status: 'pending' | 'checking' | 'uploading' | 'done' | 'error' | 'cancelled';
   record?: NocoBaseFileRecord;
   error?: Error;
 };

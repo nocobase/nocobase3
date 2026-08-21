@@ -55,7 +55,12 @@ function applyPersistResult<Data extends SessionData>(
   }
 
   if (result.cookieValue) {
-    setCookie(context, manager.config.cookie.name, result.cookieValue, cookieOptions);
+    setCookie(
+      context,
+      manager.config.cookie.name,
+      result.cookieValue,
+      cookieOptions,
+    );
   }
 }
 

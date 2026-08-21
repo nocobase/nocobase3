@@ -1,16 +1,16 @@
-import { useTranslate } from "@refinedev/core";
-import { useEffect, useState, type PropsWithChildren } from "react";
-import { Navigate, useLocation } from "react-router";
+import { useTranslate } from '@refinedev/core';
+import { useEffect, useState, type PropsWithChildren } from 'react';
+import { Navigate, useLocation } from 'react-router';
 
-import { HubErrorState, HubLoadingState } from "./components";
+import { HubErrorState, HubLoadingState } from './components';
 import {
   HubApiError,
   hubGet,
   setHubUnauthorizedHandler,
   type HubFetcher,
   type HubMe,
-} from "./api";
-import { hubAuthRuntime, type HubAuthRuntime } from "./runtime";
+} from './api';
+import { hubAuthRuntime, type HubAuthRuntime } from './runtime';
 
 export interface HubAuthGateProps extends PropsWithChildren {
   runtime?: HubAuthRuntime;
@@ -31,32 +31,32 @@ export function HubAuthGate({
   children,
   runtime = hubAuthRuntime,
   fetcher,
-  publicPaths = ["/login", "/signin", "/setup"],
+  publicPaths = ['/login', '/signin', '/setup'],
 }: HubAuthGateProps) {
   const translate = useTranslate();
   const location = useLocation();
   const [state, setState] = useState<
-    | { status: "loading" }
+    | { status: 'loading' }
     | {
-        status: "ready";
+        status: 'ready';
         authenticated: boolean;
         setupRequired: boolean;
         checkedPath: string;
       }
-    | { status: "error"; error: Error }
-  >({ status: "loading" });
+    | { status: 'error'; error: Error }
+  >({ status: 'loading' });
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     setHubUnauthorizedHandler(() => {
       void runtime.authProvider.onError?.(
-        new HubApiError("Hub session expired.", {
-          code: "UNAUTHORIZED",
+        new HubApiError('Hub session expired.', {
+          code: 'UNAUTHORIZED',
           status: 401,
         }),
       );
       setState({
-        status: "ready",
+        status: 'ready',
         authenticated: false,
         setupRequired: false,
         checkedPath: location.pathname,
@@ -70,12 +70,12 @@ export function HubAuthGate({
     let cancelled = false;
     void Promise.all([
       runtime.authProvider.check(),
-      hubGet<SetupStatus>("/setup/status", fetcher),
+      hubGet<SetupStatus>('/setup/status', fetcher),
     ])
       .then(([auth, setup]) => {
         if (cancelled) return;
         setState({
-          status: "ready",
+          status: 'ready',
           authenticated: auth.authenticated,
           setupRequired: setup.data.setupRequired,
           checkedPath: location.pathname,
@@ -84,7 +84,7 @@ export function HubAuthGate({
       .catch((reason: unknown) => {
         if (cancelled) return;
         setState({
-          status: "error",
+          status: 'error',
           error: reason instanceof Error ? reason : new Error(String(reason)),
         });
       });
@@ -93,28 +93,28 @@ export function HubAuthGate({
     };
   }, [fetcher, location.pathname, revision, runtime]);
 
-  if (state.status === "loading") {
+  if (state.status === 'loading') {
     return (
-      <HubLoadingState label={translate("hub.start.loading", "Loading Hub")} />
+      <HubLoadingState label={translate('hub.start.loading', 'Loading Hub')} />
     );
   }
-  if (state.status === "error") {
+  if (state.status === 'error') {
     return (
-      <div className="mx-auto flex min-h-svh max-w-xl items-center px-6">
+      <div className='mx-auto flex min-h-svh max-w-xl items-center px-6'>
         <HubErrorState
           error={state.error}
           onRetry={() => {
-            setState({ status: "loading" });
+            setState({ status: 'loading' });
             setRevision((value) => value + 1);
           }}
-          title={translate("hub.start.error", "Unable to start Hub")}
+          title={translate('hub.start.error', 'Unable to start Hub')}
         />
       </div>
     );
   }
   if (state.checkedPath !== location.pathname) {
     return (
-      <HubLoadingState label={translate("hub.start.loading", "Loading Hub")} />
+      <HubLoadingState label={translate('hub.start.loading', 'Loading Hub')} />
     );
   }
 
@@ -122,29 +122,29 @@ export function HubAuthGate({
     (path) =>
       location.pathname === path || location.pathname.startsWith(`${path}/`),
   );
-  if (state.setupRequired && location.pathname !== "/setup") {
-    return <Navigate to="/setup" replace state={{ from: location }} />;
+  if (state.setupRequired && location.pathname !== '/setup') {
+    return <Navigate to='/setup' replace state={{ from: location }} />;
   }
-  if (!state.setupRequired && location.pathname === "/setup") {
+  if (!state.setupRequired && location.pathname === '/setup') {
     const locationState: unknown = location.state;
     return (
       <Navigate
-        to={state.authenticated ? "/" : "/login"}
+        to={state.authenticated ? '/' : '/login'}
         replace
         state={locationState}
       />
     );
   }
   if (!state.authenticated && !isPublic) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    return <Navigate to='/login' replace state={{ from: location }} />;
   }
-  if (state.authenticated && location.pathname === "/login") {
-    return <Navigate to="/" replace />;
+  if (state.authenticated && location.pathname === '/login') {
+    return <Navigate to='/' replace />;
   }
   return <>{children}</>;
 }
 
 /** A compact session-aware capability read for pages that do not need a gate. */
 export async function readHubMe(fetcher?: HubFetcher): Promise<HubMe> {
-  return (await hubGet<HubMe>("/me", fetcher)).data;
+  return (await hubGet<HubMe>('/me', fetcher)).data;
 }

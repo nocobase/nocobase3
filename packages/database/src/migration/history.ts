@@ -23,14 +23,17 @@ export async function ensureMigrationTable(
   }
 
   try {
-    await knex.schema.createTable(tableName, (table: Knex.CreateTableBuilder) => {
-      table.increments('id').primary();
-      table.string('name', 191).notNullable().unique();
-      table.integer('batch').notNullable();
-      table.string('checksum', 128).notNullable();
-      table.dateTime('executed_at').notNullable();
-      table.integer('duration_ms').nullable();
-    });
+    await knex.schema.createTable(
+      tableName,
+      (table: Knex.CreateTableBuilder) => {
+        table.increments('id').primary();
+        table.string('name', 191).notNullable().unique();
+        table.integer('batch').notNullable();
+        table.string('checksum', 128).notNullable();
+        table.dateTime('executed_at').notNullable();
+        table.integer('duration_ms').nullable();
+      },
+    );
   } catch (error) {
     if (await knex.schema.hasTable(tableName)) {
       return;
@@ -54,7 +57,10 @@ export async function readMigrationHistory(
     batch: Number(row.batch),
     checksum: String(row.checksum),
     executedAt: row.executed_at,
-    durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
+    durationMs:
+      row.duration_ms === null || row.duration_ms === undefined
+        ? null
+        : Number(row.duration_ms),
   }));
 }
 

@@ -3,16 +3,16 @@ import type {
   AppDeploymentResult,
   AppRuntimeRegistry,
   DeployAppOptions,
-} from "@nocobase/app-host";
-import { stat } from "node:fs/promises";
-import path from "node:path";
+} from '@nocobase/app-host';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
 
 import {
   assertReleaseArtifactChecksum,
   resolveReleaseArtifactDirectory,
-} from "./artifact-integrity.js";
-import type { HubApplication, HubDeployment, HubRelease } from "./types.ts";
-import { HubDomainError } from "./store.ts";
+} from './artifact-integrity.js';
+import type { HubApplication, HubDeployment, HubRelease } from './types.ts';
+import { HubDomainError } from './store.ts';
 
 export interface LocalHostDeploymentRequest {
   application: HubApplication;
@@ -49,8 +49,8 @@ export class LocalHostAdapter {
     const registry = this.registry;
     if (!registry) {
       throw new HubDomainError(
-        "HOST_UNAVAILABLE",
-        "The local App Host is unavailable.",
+        'HOST_UNAVAILABLE',
+        'The local App Host is unavailable.',
         {
           status: 503,
           retryable: true,
@@ -90,8 +90,8 @@ export class LocalHostAdapter {
     const registry = this.registry;
     if (!registry) {
       throw new HubDomainError(
-        "HOST_UNAVAILABLE",
-        "The local App Host is unavailable.",
+        'HOST_UNAVAILABLE',
+        'The local App Host is unavailable.',
         { status: 503, retryable: true },
       );
     }
@@ -124,46 +124,46 @@ export class LocalHostAdapter {
   ): Promise<AppDefinition> {
     const releaseDir = this.resolveReleaseDirectory(application, release);
     const serverEntrypoint =
-      manifestString(release.manifest, ["server", "entrypoint"]) ??
-      "dist/server/embedded.js";
+      manifestString(release.manifest, ['server', 'entrypoint']) ??
+      'dist/server/embedded.js';
     const clientDirectory =
-      manifestString(release.manifest, ["client", "rootDir"]) ?? "dist/client";
+      manifestString(release.manifest, ['client', 'rootDir']) ?? 'dist/client';
     const serverPath = resolveInside(releaseDir, serverEntrypoint);
     const clientPath = resolveInside(releaseDir, clientDirectory);
-    await assertFile(serverPath, "RELEASE_SERVER_ENTRYPOINT_MISSING");
+    await assertFile(serverPath, 'RELEASE_SERVER_ENTRYPOINT_MISSING');
     await assertReleaseArtifactChecksum(releaseDir, release.checksum);
     const hasClient = await isDirectory(clientPath);
     const current = this.registry?.definition(application.slug);
     const healthPath =
-      manifestString(release.manifest, ["server", "healthPath"]) ??
-      manifestString(release.manifest, ["healthPath"]) ??
+      manifestString(release.manifest, ['server', 'healthPath']) ??
+      manifestString(release.manifest, ['healthPath']) ??
       current?.healthPath ??
-      "/healthz";
+      '/healthz';
 
     return {
       ...(current ?? {}),
       id: application.slug,
       appName: application.slug,
       basePath:
-        manifestString(release.manifest, ["basePath"]) ??
+        manifestString(release.manifest, ['basePath']) ??
         `/${application.slug}`,
       enabled: true,
-      backend: current?.backend ?? "in-process",
-      configVersion: current?.configVersion ?? "v1",
-      isolation: current?.isolation ?? "in-process",
-      tier: current?.tier ?? "warm",
+      backend: current?.backend ?? 'in-process',
+      configVersion: current?.configVersion ?? 'v1',
+      isolation: current?.isolation ?? 'in-process',
+      tier: current?.tier ?? 'warm',
       desiredVersion: release.version,
       rootDir: releaseDir,
       dataDir: path.join(
         this.releaseRoot ?? path.dirname(releaseDir),
-        ".runtime",
+        '.runtime',
         application.slug,
       ),
       client: hasClient
         ? {
             rootDir: clientPath,
-            index: "index.html",
-            assetsDir: path.join(clientPath, "assets"),
+            index: 'index.html',
+            assetsDir: path.join(clientPath, 'assets'),
           }
         : undefined,
       server: {
@@ -207,18 +207,18 @@ function manifestString(
 ): string | undefined {
   let value: unknown = manifest;
   for (const segment of pathSegments) {
-    if (!value || typeof value !== "object" || Array.isArray(value))
+    if (!value || typeof value !== 'object' || Array.isArray(value))
       return undefined;
     value = (value as Record<string, unknown>)[segment];
   }
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function resolveInside(root: string, relativePath: string): string {
   if (path.isAbsolute(relativePath)) {
     throw new HubDomainError(
-      "INVALID_RELEASE_PATH",
-      "Release paths must be relative.",
+      'INVALID_RELEASE_PATH',
+      'Release paths must be relative.',
       {
         status: 422,
       },
@@ -231,8 +231,8 @@ function resolveInside(root: string, relativePath: string): string {
     !resolved.startsWith(`${resolvedRoot}${path.sep}`)
   ) {
     throw new HubDomainError(
-      "INVALID_RELEASE_PATH",
-      "Release path escapes its artifact root.",
+      'INVALID_RELEASE_PATH',
+      'Release path escapes its artifact root.',
       {
         status: 422,
       },
@@ -249,7 +249,7 @@ async function assertFile(filePath: string, code: string): Promise<void> {
   }
   throw new HubDomainError(
     code,
-    "The release server entrypoint does not exist.",
+    'The release server entrypoint does not exist.',
     {
       status: 422,
     },

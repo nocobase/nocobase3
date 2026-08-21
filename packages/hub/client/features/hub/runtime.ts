@@ -1,11 +1,11 @@
-import type { AuthProvider } from "@refinedev/core";
+import type { AuthProvider } from '@refinedev/core';
 
 import {
   HubApiError,
   buildHubApiUrl,
   getHubApiBase,
   type HubFetcher,
-} from "./api";
+} from './api';
 
 export interface HubAuthSessionUser {
   id: string;
@@ -54,17 +54,17 @@ export function createHubAuthRuntime(
     try {
       response = await fetcher(buildHubApiUrl(`/auth/${path}`, baseURL), {
         ...init,
-        credentials: "include",
+        credentials: 'include',
         headers: {
-          accept: "application/json",
-          ...(init.body ? { "content-type": "application/json" } : {}),
+          accept: 'application/json',
+          ...(init.body ? { 'content-type': 'application/json' } : {}),
           ...init.headers,
         },
       });
     } catch (error) {
       throw new HubApiError(
-        error instanceof Error ? error.message : "Unable to reach Hub.",
-        { code: "NETWORK_ERROR", status: 0, retryable: true },
+        error instanceof Error ? error.message : 'Unable to reach Hub.',
+        { code: 'NETWORK_ERROR', status: 0, retryable: true },
       );
     }
 
@@ -88,13 +88,13 @@ export function createHubAuthRuntime(
   };
 
   const client: HubAuthClient = {
-    getSession: () => request<HubAuthSession | null>("get-session"),
+    getSession: () => request<HubAuthSession | null>('get-session'),
     signIn: (identifier, password) => {
-      const isEmail = identifier.includes("@");
+      const isEmail = identifier.includes('@');
       return request<HubAuthSession>(
-        isEmail ? "sign-in/email" : "sign-in/username",
+        isEmail ? 'sign-in/email' : 'sign-in/username',
         {
-          method: "POST",
+          method: 'POST',
           body: JSON.stringify(
             isEmail
               ? { email: identifier, password }
@@ -104,8 +104,8 @@ export function createHubAuthRuntime(
       );
     },
     signOut: async () => {
-      await request<unknown>("sign-out", {
-        method: "POST",
+      await request<unknown>('sign-out', {
+        method: 'POST',
         body: JSON.stringify({}),
       });
     },
@@ -136,14 +136,14 @@ export function createHubAuthRuntime(
       try {
         const values = asUnknownRecord(params);
         const identifier = stringValue(
-          values.identifier ?? values.email ?? values.username ?? "",
+          values.identifier ?? values.email ?? values.username ?? '',
         ).trim();
         const password = stringValue(values.password);
         if (!identifier || !password) {
           throw new HubApiError(
-            "Username or email and password are required.",
+            'Username or email and password are required.',
             {
-              code: "VALIDATION_ERROR",
+              code: 'VALIDATION_ERROR',
               status: 422,
             },
           );
@@ -153,12 +153,12 @@ export function createHubAuthRuntime(
         return {
           success: true,
           redirectTo:
-            typeof values.redirectTo === "string" ? values.redirectTo : "/",
+            typeof values.redirectTo === 'string' ? values.redirectTo : '/',
         };
       } catch (error) {
         return {
           success: false,
-          error: toAuthError(error, "Unable to sign in."),
+          error: toAuthError(error, 'Unable to sign in.'),
         };
       }
     },
@@ -168,19 +168,19 @@ export function createHubAuthRuntime(
       } finally {
         clear();
       }
-      return { success: true, redirectTo: "/login" };
+      return { success: true, redirectTo: '/login' };
     },
     check: async () => {
       try {
         return (await getSession())
           ? { authenticated: true }
-          : { authenticated: false, redirectTo: "/login" };
+          : { authenticated: false, redirectTo: '/login' };
       } catch (error) {
         clear();
         return {
           authenticated: false,
-          redirectTo: "/login",
-          error: toAuthError(error, "Unable to check authentication."),
+          redirectTo: '/login',
+          error: toAuthError(error, 'Unable to check authentication.'),
         };
       }
     },
@@ -192,7 +192,7 @@ export function createHubAuthRuntime(
         id: user.id,
         fullName: user.name,
         firstName: user.name,
-        lastName: "",
+        lastName: '',
         email: user.email,
         avatar: user.image ?? undefined,
       };
@@ -201,10 +201,10 @@ export function createHubAuthRuntime(
     onError: async (error) => {
       if (
         error instanceof HubApiError &&
-        (error.status === 401 || error.code === "UNAUTHORIZED")
+        (error.status === 401 || error.code === 'UNAUTHORIZED')
       ) {
         clear();
-        return { logout: true, redirectTo: "/login" };
+        return { logout: true, redirectTo: '/login' };
       }
       return {
         error: error instanceof Error ? error : new Error(String(error)),
@@ -216,27 +216,27 @@ export function createHubAuthRuntime(
 }
 
 function readAuthErrorMessage(payload: unknown): string {
-  if (typeof payload === "string" && payload) return payload;
-  if (!payload || typeof payload !== "object") return "Authentication failed.";
+  if (typeof payload === 'string' && payload) return payload;
+  if (!payload || typeof payload !== 'object') return 'Authentication failed.';
   const value = payload as { message?: unknown; error?: unknown };
-  if (typeof value.message === "string") return value.message;
-  if (typeof value.error === "string") return value.error;
-  if (value.error && typeof value.error === "object") {
+  if (typeof value.message === 'string') return value.message;
+  if (typeof value.error === 'string') return value.error;
+  if (value.error && typeof value.error === 'object') {
     const nested = value.error as { message?: unknown };
-    if (typeof nested.message === "string") return nested.message;
+    if (typeof nested.message === 'string') return nested.message;
   }
-  return "Authentication failed.";
+  return 'Authentication failed.';
 }
 
 function readAuthErrorCode(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "AUTHENTICATION_FAILED";
+  if (!payload || typeof payload !== 'object') return 'AUTHENTICATION_FAILED';
   const value = payload as { code?: unknown; error?: unknown };
-  if (typeof value.code === "string") return value.code;
-  if (value.error && typeof value.error === "object") {
+  if (typeof value.code === 'string') return value.code;
+  if (value.error && typeof value.error === 'object') {
     const nested = value.error as { code?: unknown };
-    if (typeof nested.code === "string") return nested.code;
+    if (typeof nested.code === 'string') return nested.code;
   }
-  return "AUTHENTICATION_FAILED";
+  return 'AUTHENTICATION_FAILED';
 }
 
 function toAuthError(error: unknown, fallback: string): Error {
@@ -245,20 +245,20 @@ function toAuthError(error: unknown, fallback: string): Error {
 }
 
 function asUnknownRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object"
+  return value && typeof value === 'object'
     ? (value as Record<string, unknown>)
     : {};
 }
 
 function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
+  return typeof value === 'string' ? value : '';
 }
 
 export function getHubBrowserBase(): string {
-  if (typeof window === "undefined") return "/hub";
-  const raw = window.NOCOBASE_PORTAL_BASE?.trim() || "/hub";
-  const normalized = raw.replace(/^\/+|\/+$/g, "");
-  return normalized ? `/${normalized}` : "";
+  if (typeof window === 'undefined') return '/hub';
+  const raw = window.NOCOBASE_PORTAL_BASE?.trim() || '/hub';
+  const normalized = raw.replace(/^\/+|\/+$/g, '');
+  return normalized ? `/${normalized}` : '';
 }
 
 export const hubAuthRuntime = createHubAuthRuntime();

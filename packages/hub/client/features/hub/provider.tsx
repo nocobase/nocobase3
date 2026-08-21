@@ -1,10 +1,10 @@
-import { useTranslate } from "@refinedev/core";
-import { createContext, useContext, type PropsWithChildren } from "react";
-import { useParams } from "react-router";
+import { useTranslate } from '@refinedev/core';
+import { createContext, useContext, type PropsWithChildren } from 'react';
+import { useParams } from 'react-router';
 
-import type { HubFetcher, HubMe } from "./api";
-import { hasHubCapability, useHubQuery } from "./api";
-import { HubEmptyState, HubErrorState, HubLoadingState } from "./components";
+import type { HubFetcher, HubMe } from './api';
+import { hasHubCapability, useHubQuery } from './api';
+import { HubEmptyState, HubErrorState, HubLoadingState } from './components';
 
 export interface HubRuntimeContextValue {
   me: HubMe;
@@ -18,24 +18,24 @@ export function HubRuntimeProvider({
   fetcher,
 }: PropsWithChildren<{ fetcher?: HubFetcher }>) {
   const translate = useTranslate();
-  const me = useHubQuery<HubMe>({ path: "/me", fetcher });
+  const me = useHubQuery<HubMe>({ path: '/me', fetcher });
 
   if (me.loading) {
     return (
       <HubLoadingState
-        label={translate("hub.session.loading", "Loading Hub session")}
+        label={translate('hub.session.loading', 'Loading Hub session')}
       />
     );
   }
   if (me.error) {
     return (
-      <div className="mx-auto flex min-h-svh max-w-xl items-center px-6">
+      <div className='mx-auto flex min-h-svh max-w-xl items-center px-6'>
         <HubErrorState
           error={me.error}
           onRetry={me.reload}
           title={translate(
-            "hub.access.loadError",
-            "Unable to load your Hub access",
+            'hub.access.loadError',
+            'Unable to load your Hub access',
           )}
         />
       </div>
@@ -44,7 +44,7 @@ export function HubRuntimeProvider({
   if (!me.data) {
     return (
       <HubLoadingState
-        label={translate("hub.session.loading", "Loading Hub session")}
+        label={translate('hub.session.loading', 'Loading Hub session')}
       />
     );
   }
@@ -59,7 +59,7 @@ export function HubRuntimeProvider({
 export function useHubRuntime(): HubRuntimeContextValue {
   const value = useContext(HubRuntimeContext);
   if (!value) {
-    throw new Error("useHubRuntime must be used inside HubRuntimeProvider.");
+    throw new Error('useHubRuntime must be used inside HubRuntimeProvider.');
   }
   return value;
 }
@@ -85,9 +85,9 @@ export function HubCapabilityGate({
   }
   return (
     <HubEmptyState
-      title={translate("hub.access.denied.title", "403 · Access denied")}
+      title={translate('hub.access.denied.title', '403 · Access denied')}
       description={translate(
-        "hub.access.denied.description",
+        'hub.access.denied.description',
         { resource, action },
         `Your Hub assignment does not include ${resource}:${action}. Ask an Owner or Admin to grant access.`,
       )}

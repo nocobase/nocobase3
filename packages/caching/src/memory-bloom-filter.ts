@@ -23,17 +23,25 @@ export class MemoryBloomFilter implements BloomFilter {
     if (!Number.isSafeInteger(options.capacity) || options.capacity < 1) {
       throw new Error('Bloom filter capacity must be a positive integer.');
     }
-    if (!Number.isFinite(options.errorRate) || options.errorRate <= 0 || options.errorRate >= 1) {
-      throw new Error('Bloom filter errorRate must be greater than 0 and less than 1.');
+    if (
+      !Number.isFinite(options.errorRate) ||
+      options.errorRate <= 0 ||
+      options.errorRate >= 1
+    ) {
+      throw new Error(
+        'Bloom filter errorRate must be greater than 0 and less than 1.',
+      );
     }
 
     const existing = this.filters.get(key);
     if (existing) {
       if (
-        existing.options.capacity !== options.capacity
-        || existing.options.errorRate !== options.errorRate
+        existing.options.capacity !== options.capacity ||
+        existing.options.errorRate !== options.errorRate
       ) {
-        throw new Error(`Bloom filter "${key}" is already reserved with different options.`);
+        throw new Error(
+          `Bloom filter "${key}" is already reserved with different options.`,
+        );
       }
       return;
     }

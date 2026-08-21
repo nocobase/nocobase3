@@ -1,4 +1,4 @@
-import type { DatabaseConnection, Row } from "@nocobase/database";
+import type { DatabaseConnection, Row } from '@nocobase/database';
 
 import type {
   HubApplication,
@@ -7,13 +7,13 @@ import type {
   HubErrorIssue,
   HubRelease,
   HubRole,
-} from "./types.ts";
+} from './types.ts';
 
-const DEFAULT_ENVIRONMENT_ID = "default";
+const DEFAULT_ENVIRONMENT_ID = 'default';
 const TERMINAL_DEPLOYMENT_STATUSES = [
-  "succeeded",
-  "failed",
-  "cancelled",
+  'succeeded',
+  'failed',
+  'cancelled',
 ] as const;
 
 export interface HubListOptions {
@@ -50,7 +50,7 @@ export interface CreateReleaseResult {
 
 export interface CreateDeploymentInput {
   targetReleaseId: string;
-  type?: "deploy" | "rollback" | "redeploy";
+  type?: 'deploy' | 'rollback' | 'redeploy';
   idempotencyKey?: string | null;
 }
 
@@ -61,7 +61,7 @@ export interface CreateDeploymentResult {
 
 export interface AppendDeploymentEventInput {
   type: string;
-  status: HubDeployment["status"];
+  status: HubDeployment['status'];
   message?: string | null;
   hostId?: string | null;
   runtimeId?: string | null;
@@ -69,7 +69,7 @@ export interface AppendDeploymentEventInput {
 }
 
 export interface UpdateDeploymentInput {
-  status: HubDeployment["status"];
+  status: HubDeployment['status'];
   hostOperationId?: string | null;
   startedAt?: string | null;
   finishedAt?: string | null;
@@ -130,7 +130,7 @@ export class HubDomainError extends Error {
     } = {},
   ) {
     super(message, { cause: options.cause });
-    this.name = "HubDomainError";
+    this.name = 'HubDomainError';
     this.code = code;
     this.status = options.status ?? 400;
     this.retryable = options.retryable ?? false;
@@ -143,10 +143,10 @@ export class HubStore {
 
   async isSetupRequired(): Promise<boolean> {
     return !(await this.connection.query
-      .selectFrom("hubRoleAssignments")
-      .select("id")
-      .where("role", "=", "owner")
-      .where("disabled", "=", false)
+      .selectFrom('hubRoleAssignments')
+      .select('id')
+      .where('role', '=', 'owner')
+      .where('disabled', '=', false)
       .limit(1)
       .executeTakeFirst());
   }
@@ -157,35 +157,35 @@ export class HubStore {
   ): Promise<void> {
     if (!(await this.isSetupRequired())) {
       throw conflict(
-        "SETUP_ALREADY_COMPLETED",
-        "Hub setup is already complete.",
+        'SETUP_ALREADY_COMPLETED',
+        'Hub setup is already complete.',
       );
     }
     const now = new Date();
     const row = await this.connection.query
-      .selectFrom("hubSettings")
+      .selectFrom('hubSettings')
       .selectAll()
-      .where("key", "=", "setup.owner.reservation")
+      .where('key', '=', 'setup.owner.reservation')
       .executeTakeFirst();
     if (row) {
       const age = now.valueOf() - new Date(String(row.updatedAt)).valueOf();
       if (!Number.isFinite(age) || age < staleAfterMs) {
         throw conflict(
-          "SETUP_IN_PROGRESS",
-          "Hub owner setup is already in progress.",
+          'SETUP_IN_PROGRESS',
+          'Hub owner setup is already in progress.',
         );
       }
       await this.connection.query
-        .deleteFrom("hubSettings")
-        .where("key", "=", "setup.owner.reservation")
-        .where("value", "=", row.value)
+        .deleteFrom('hubSettings')
+        .where('key', '=', 'setup.owner.reservation')
+        .where('value', '=', row.value)
         .execute();
     }
     try {
       await this.connection.query
-        .insertInto("hubSettings")
+        .insertInto('hubSettings')
         .values({
-          key: "setup.owner.reservation",
+          key: 'setup.owner.reservation',
           value: token,
           updatedAt: now,
         })
@@ -193,8 +193,8 @@ export class HubStore {
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         throw conflict(
-          "SETUP_IN_PROGRESS",
-          "Hub owner setup is already in progress.",
+          'SETUP_IN_PROGRESS',
+          'Hub owner setup is already in progress.',
         );
       }
       throw error;
@@ -203,9 +203,9 @@ export class HubStore {
 
   async releaseOwnerSetupReservation(token: string): Promise<void> {
     await this.connection.query
-      .deleteFrom("hubSettings")
-      .where("key", "=", "setup.owner.reservation")
-      .where("value", "=", token)
+      .deleteFrom('hubSettings')
+      .where('key', '=', 'setup.owner.reservation')
+      .where('value', '=', token)
       .execute();
   }
 
@@ -213,38 +213,38 @@ export class HubStore {
     try {
       await this.connection.transaction(async (connection) => {
         const existing = await connection.query
-          .selectFrom("hubRoleAssignments")
-          .select("id")
-          .where("role", "=", "owner")
-          .where("disabled", "=", false)
+          .selectFrom('hubRoleAssignments')
+          .select('id')
+          .where('role', '=', 'owner')
+          .where('disabled', '=', false)
           .limit(1)
           .executeTakeFirst();
         if (existing) {
           throw conflict(
-            "SETUP_ALREADY_COMPLETED",
-            "Hub setup is already complete.",
+            'SETUP_ALREADY_COMPLETED',
+            'Hub setup is already complete.',
           );
         }
 
         const reservation = await connection.query
-          .selectFrom("hubSettings")
-          .select("value")
-          .where("key", "=", "setup.owner.reservation")
+          .selectFrom('hubSettings')
+          .select('value')
+          .where('key', '=', 'setup.owner.reservation')
           .executeTakeFirst();
         if (reservation?.value !== input.reservationToken) {
           throw conflict(
-            "SETUP_RESERVATION_LOST",
-            "Hub setup reservation is no longer valid.",
+            'SETUP_RESERVATION_LOST',
+            'Hub setup reservation is no longer valid.',
           );
         }
 
         const now = new Date();
         await connection.query
-          .insertInto("hubRoleAssignments")
+          .insertInto('hubRoleAssignments')
           .values({
             id: crypto.randomUUID(),
             userId: input.userId,
-            role: "owner",
+            role: 'owner',
             applicationId: null,
             disabled: false,
             createdAt: now,
@@ -252,27 +252,27 @@ export class HubStore {
           })
           .execute();
         await connection.query
-          .insertInto("hubSettings")
+          .insertInto('hubSettings')
           .values({
-            key: "setup.completed",
+            key: 'setup.completed',
             value: input.userId,
             updatedAt: now,
           })
           .execute();
         await connection.query
-          .deleteFrom("hubSettings")
-          .where("key", "=", "setup.owner.reservation")
-          .where("value", "=", input.reservationToken)
+          .deleteFrom('hubSettings')
+          .where('key', '=', 'setup.owner.reservation')
+          .where('value', '=', input.reservationToken)
           .execute();
         await connection.query
-          .insertInto("hubAuditLogs")
+          .insertInto('hubAuditLogs')
           .values({
             id: crypto.randomUUID(),
             actorId: input.userId,
-            action: "setup.owner.created",
-            resource: "hub",
+            action: 'setup.owner.created',
+            resource: 'hub',
             resourceId: null,
-            details: JSON.stringify({ role: "owner" }),
+            details: JSON.stringify({ role: 'owner' }),
             requestId: input.requestId ?? null,
             createdAt: now,
           })
@@ -284,8 +284,8 @@ export class HubStore {
       }
       if (isUniqueConstraintError(error)) {
         throw conflict(
-          "SETUP_ALREADY_COMPLETED",
-          "Hub setup is already complete.",
+          'SETUP_ALREADY_COMPLETED',
+          'Hub setup is already complete.',
         );
       }
       throw error;
@@ -308,7 +308,7 @@ export class HubStore {
       updatedAt: now,
     };
     await this.connection.query
-      .insertInto("hubRoleAssignments")
+      .insertInto('hubRoleAssignments')
       .values(row)
       .execute();
     return toRoleAssignment(row);
@@ -316,19 +316,19 @@ export class HubStore {
 
   async listRoleAssignments(userId: string): Promise<HubRoleAssignment[]> {
     const rows = await this.connection.query
-      .selectFrom("hubRoleAssignments")
+      .selectFrom('hubRoleAssignments')
       .selectAll()
-      .where("userId", "=", userId)
-      .where("disabled", "=", false)
+      .where('userId', '=', userId)
+      .where('disabled', '=', false)
       .execute();
     return rows.map(toRoleAssignment);
   }
 
   async listAppScopes(userId: string): Promise<HubAppScope[]> {
     const rows = await this.connection.query
-      .selectFrom("hubAppScopes")
+      .selectFrom('hubAppScopes')
       .selectAll()
-      .where("userId", "=", userId)
+      .where('userId', '=', userId)
       .execute();
     return rows.map(toAppScope);
   }
@@ -339,22 +339,22 @@ export class HubStore {
     const pagination = normalizePagination(options);
     const [rows, total] = await Promise.all([
       this.connection.query
-        .selectFrom("hubApplications")
+        .selectFrom('hubApplications')
         .selectAll()
-        .orderBy("createdAt", "desc")
+        .orderBy('createdAt', 'desc')
         .limit(pagination.limit)
         .offset(pagination.offset)
         .execute(),
-      this.count("hubApplications"),
+      this.count('hubApplications'),
     ]);
     return { items: rows.map(toApplication), total, ...pagination };
   }
 
   async getApplication(id: string): Promise<HubApplication | undefined> {
     const row = await this.connection.query
-      .selectFrom("hubApplications")
+      .selectFrom('hubApplications')
       .selectAll()
-      .where("id", "=", id)
+      .where('id', '=', id)
       .executeTakeFirst();
     return row ? toApplication(row) : undefined;
   }
@@ -363,7 +363,7 @@ export class HubStore {
     const application = await this.getApplication(id);
     if (!application) {
       throw notFound(
-        "APPLICATION_NOT_FOUND",
+        'APPLICATION_NOT_FOUND',
         `Application "${id}" was not found.`,
       );
     }
@@ -375,14 +375,14 @@ export class HubStore {
     actorId: string,
   ): Promise<HubApplication> {
     const slug = normalizeSlug(input.slug);
-    const name = requireText(input.name, "name", 255);
+    const name = requireText(input.name, 'name', 255);
     const now = new Date();
     const row = {
       id: crypto.randomUUID(),
       slug,
       name,
       description: normalizeOptionalText(input.description, 10_000),
-      status: "active",
+      status: 'active',
       defaultEnvironmentId: DEFAULT_ENVIRONMENT_ID,
       activeReleaseId: null,
       createdBy: actorId,
@@ -391,13 +391,13 @@ export class HubStore {
     };
     try {
       await this.connection.query
-        .insertInto("hubApplications")
+        .insertInto('hubApplications')
         .values(row)
         .execute();
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         throw conflict(
-          "APPLICATION_SLUG_CONFLICT",
+          'APPLICATION_SLUG_CONFLICT',
           `Application slug "${slug}" already exists.`,
         );
       }
@@ -414,23 +414,23 @@ export class HubStore {
     const pagination = normalizePagination(options);
     const [rows, total] = await Promise.all([
       this.connection.query
-        .selectFrom("hubReleases")
+        .selectFrom('hubReleases')
         .selectAll()
-        .where("applicationId", "=", applicationId)
-        .orderBy("createdAt", "desc")
+        .where('applicationId', '=', applicationId)
+        .orderBy('createdAt', 'desc')
         .limit(pagination.limit)
         .offset(pagination.offset)
         .execute(),
-      this.count("hubReleases", { applicationId }),
+      this.count('hubReleases', { applicationId }),
     ]);
     return { items: rows.map(toRelease), total, ...pagination };
   }
 
   async getRelease(id: string): Promise<HubRelease | undefined> {
     const row = await this.connection.query
-      .selectFrom("hubReleases")
+      .selectFrom('hubReleases')
       .selectAll()
-      .where("id", "=", id)
+      .where('id', '=', id)
       .executeTakeFirst();
     return row ? toRelease(row) : undefined;
   }
@@ -441,21 +441,21 @@ export class HubStore {
     actorId: string,
   ): Promise<CreateReleaseResult> {
     await this.requireApplication(applicationId);
-    const version = requireText(input.version, "version", 128);
+    const version = requireText(input.version, 'version', 128);
     if (!isSemVer(version)) {
       throw validation(
-        "INVALID_RELEASE_VERSION",
-        "Release version must be valid SemVer.",
+        'INVALID_RELEASE_VERSION',
+        'Release version must be valid SemVer.',
       );
     }
-    const checksum = requireText(input.checksum, "checksum", 128);
-    assertJsonObject(input.manifest, "manifest");
+    const checksum = requireText(input.checksum, 'checksum', 128);
+    assertJsonObject(input.manifest, 'manifest');
 
     const existingRow = await this.connection.query
-      .selectFrom("hubReleases")
+      .selectFrom('hubReleases')
       .selectAll()
-      .where("applicationId", "=", applicationId)
-      .where("version", "=", version)
+      .where('applicationId', '=', applicationId)
+      .where('version', '=', version)
       .executeTakeFirst();
     if (existingRow) {
       const existing = toRelease(existingRow);
@@ -463,7 +463,7 @@ export class HubStore {
         return { release: existing, created: false };
       }
       throw conflict(
-        "VERSION_CONFLICT",
+        'VERSION_CONFLICT',
         `Release ${version} already exists with a different checksum.`,
       );
     }
@@ -477,28 +477,28 @@ export class HubStore {
       storageKey: normalizeOptionalText(input.storageKey, 1024),
       sizeBytes: normalizeSize(input.sizeBytes),
       sourceCommit: normalizeOptionalText(input.sourceCommit, 255),
-      verificationStatus: "verified",
+      verificationStatus: 'verified',
       createdBy: actorId,
       createdAt: new Date(),
     };
     try {
       await this.connection.query
-        .insertInto("hubReleases")
+        .insertInto('hubReleases')
         .values(row)
         .execute();
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         const raced = await this.connection.query
-          .selectFrom("hubReleases")
+          .selectFrom('hubReleases')
           .selectAll()
-          .where("applicationId", "=", applicationId)
-          .where("version", "=", version)
+          .where('applicationId', '=', applicationId)
+          .where('version', '=', version)
           .executeTakeFirst();
         if (raced && String(raced.checksum) === checksum) {
           return { release: toRelease(raced), created: false };
         }
         throw conflict(
-          "VERSION_CONFLICT",
+          'VERSION_CONFLICT',
           `Release ${version} already exists with a different checksum.`,
         );
       }
@@ -511,18 +511,18 @@ export class HubStore {
     options: HubListOptions & { applicationId?: string } = {},
   ): Promise<HubListResult<HubDeployment>> {
     const pagination = normalizePagination(options);
-    let query = this.connection.query.selectFrom("hubDeployments").selectAll();
+    let query = this.connection.query.selectFrom('hubDeployments').selectAll();
     if (options.applicationId) {
-      query = query.where("applicationId", "=", options.applicationId);
+      query = query.where('applicationId', '=', options.applicationId);
     }
     const [rows, total] = await Promise.all([
       query
-        .orderBy("createdAt", "desc")
+        .orderBy('createdAt', 'desc')
         .limit(pagination.limit)
         .offset(pagination.offset)
         .execute(),
       this.count(
-        "hubDeployments",
+        'hubDeployments',
         options.applicationId
           ? { applicationId: options.applicationId }
           : undefined,
@@ -533,9 +533,9 @@ export class HubStore {
 
   async getDeployment(id: string): Promise<HubDeployment | undefined> {
     const row = await this.connection.query
-      .selectFrom("hubDeployments")
+      .selectFrom('hubDeployments')
       .selectAll()
-      .where("id", "=", id)
+      .where('id', '=', id)
       .executeTakeFirst();
     return row ? toDeployment(row) : undefined;
   }
@@ -544,7 +544,7 @@ export class HubStore {
     const deployment = await this.getDeployment(id);
     if (!deployment) {
       throw notFound(
-        "DEPLOYMENT_NOT_FOUND",
+        'DEPLOYMENT_NOT_FOUND',
         `Deployment "${id}" was not found.`,
       );
     }
@@ -565,8 +565,8 @@ export class HubStore {
       if (existing) {
         if (existing.targetReleaseId !== input.targetReleaseId) {
           throw conflict(
-            "IDEMPOTENCY_KEY_CONFLICT",
-            "The idempotency key was already used with a different deployment target.",
+            'IDEMPOTENCY_KEY_CONFLICT',
+            'The idempotency key was already used with a different deployment target.',
           );
         }
         return { deployment: existing, created: false };
@@ -577,7 +577,7 @@ export class HubStore {
     const release = await this.getRelease(input.targetReleaseId);
     if (!release || release.applicationId !== applicationId) {
       throw notFound(
-        "RELEASE_NOT_FOUND",
+        'RELEASE_NOT_FOUND',
         `Release "${input.targetReleaseId}" was not found for this application.`,
       );
     }
@@ -585,17 +585,17 @@ export class HubStore {
     try {
       return await this.connection.transaction(async (connection) => {
         const running = await connection.query
-          .selectFrom("hubDeployments")
-          .select("id")
-          .where("applicationId", "=", applicationId)
-          .where("environmentId", "=", DEFAULT_ENVIRONMENT_ID)
-          .where("status", "not in", TERMINAL_DEPLOYMENT_STATUSES)
+          .selectFrom('hubDeployments')
+          .select('id')
+          .where('applicationId', '=', applicationId)
+          .where('environmentId', '=', DEFAULT_ENVIRONMENT_ID)
+          .where('status', 'not in', TERMINAL_DEPLOYMENT_STATUSES)
           .limit(1)
           .executeTakeFirst();
         if (running) {
           throw conflict(
-            "DEPLOYMENT_IN_PROGRESS",
-            "Another deployment is already running for this application.",
+            'DEPLOYMENT_IN_PROGRESS',
+            'Another deployment is already running for this application.',
           );
         }
 
@@ -607,8 +607,8 @@ export class HubStore {
           targetReleaseId: release.id,
           previousReleaseId: application.activeReleaseId,
           type:
-            input.type ?? (application.activeReleaseId ? "deploy" : "deploy"),
-          status: "queued",
+            input.type ?? (application.activeReleaseId ? 'deploy' : 'deploy'),
+          status: 'queued',
           requestedBy: actorId,
           idempotencyKey,
           hostOperationId: null,
@@ -619,11 +619,11 @@ export class HubStore {
           createdAt: now,
         };
         await connection.query
-          .insertInto("hubDeployments")
+          .insertInto('hubDeployments')
           .values(deploymentRow)
           .execute();
         await connection.query
-          .insertInto("hubSettings")
+          .insertInto('hubSettings')
           .values({
             key: deploymentReservationKey(applicationId),
             value: deploymentRow.id,
@@ -631,14 +631,14 @@ export class HubStore {
           })
           .execute();
         await connection.query
-          .insertInto("hubDeploymentEvents")
+          .insertInto('hubDeploymentEvents')
           .values({
             id: crypto.randomUUID(),
             deploymentId: deploymentRow.id,
             sequence: 1,
-            type: "queued",
-            status: "queued",
-            message: "Deployment queued.",
+            type: 'queued',
+            status: 'queued',
+            message: 'Deployment queued.',
             hostId: null,
             runtimeId: null,
             details: JSON.stringify({ targetReleaseId: release.id }),
@@ -661,15 +661,15 @@ export class HubStore {
         }
         if (existing) {
           throw conflict(
-            "IDEMPOTENCY_KEY_CONFLICT",
-            "The idempotency key is already in use.",
+            'IDEMPOTENCY_KEY_CONFLICT',
+            'The idempotency key is already in use.',
           );
         }
       }
       if (isUniqueConstraintError(error)) {
         throw conflict(
-          "DEPLOYMENT_IN_PROGRESS",
-          "Another deployment is already running for this application.",
+          'DEPLOYMENT_IN_PROGRESS',
+          'Another deployment is already running for this application.',
         );
       }
       throw error;
@@ -681,10 +681,10 @@ export class HubStore {
   ): Promise<HubDeploymentEvent[]> {
     await this.requireDeployment(deploymentId);
     const rows = await this.connection.query
-      .selectFrom("hubDeploymentEvents")
+      .selectFrom('hubDeploymentEvents')
       .selectAll()
-      .where("deploymentId", "=", deploymentId)
-      .orderBy("sequence", "asc")
+      .where('deploymentId', '=', deploymentId)
+      .orderBy('sequence', 'asc')
       .execute();
     return rows.map(toDeploymentEvent);
   }
@@ -695,17 +695,17 @@ export class HubStore {
   ): Promise<HubDeploymentEvent> {
     return this.connection.transaction(async (connection) => {
       const last = await connection.query
-        .selectFrom("hubDeploymentEvents")
-        .select("sequence")
-        .where("deploymentId", "=", deploymentId)
-        .orderBy("sequence", "desc")
+        .selectFrom('hubDeploymentEvents')
+        .select('sequence')
+        .where('deploymentId', '=', deploymentId)
+        .orderBy('sequence', 'desc')
         .limit(1)
         .executeTakeFirst();
       const row = {
         id: crypto.randomUUID(),
         deploymentId,
         sequence: Number(last?.sequence ?? 0) + 1,
-        type: requireText(input.type, "type", 64),
+        type: requireText(input.type, 'type', 64),
         status: input.status,
         message: normalizeOptionalText(input.message, 10_000),
         hostId: normalizeOptionalText(input.hostId, 128),
@@ -714,7 +714,7 @@ export class HubStore {
         createdAt: new Date(),
       };
       await connection.query
-        .insertInto("hubDeploymentEvents")
+        .insertInto('hubDeploymentEvents')
         .values(row)
         .execute();
       return toDeploymentEvent(row);
@@ -727,45 +727,45 @@ export class HubStore {
   ): Promise<HubDeployment> {
     return this.connection.transaction(async (connection) => {
       const currentRow = await connection.query
-        .selectFrom("hubDeployments")
+        .selectFrom('hubDeployments')
         .selectAll()
-        .where("id", "=", id)
+        .where('id', '=', id)
         .executeTakeFirst();
       if (!currentRow) {
         throw notFound(
-          "DEPLOYMENT_NOT_FOUND",
+          'DEPLOYMENT_NOT_FOUND',
           `Deployment "${id}" was not found.`,
         );
       }
       const current = toDeployment(currentRow);
-      if (current.status === "succeeded") return current;
+      if (current.status === 'succeeded') return current;
       if (isTerminalDeploymentStatus(current.status)) {
         throw conflict(
-          "DEPLOYMENT_ALREADY_TERMINAL",
-          "The deployment has already reached a terminal state.",
+          'DEPLOYMENT_ALREADY_TERMINAL',
+          'The deployment has already reached a terminal state.',
         );
       }
 
       const reservation = await connection.query
-        .selectFrom("hubSettings")
-        .select("value")
-        .where("key", "=", deploymentReservationKey(current.applicationId))
+        .selectFrom('hubSettings')
+        .select('value')
+        .where('key', '=', deploymentReservationKey(current.applicationId))
         .executeTakeFirst();
       if (reservation?.value !== id) {
         throw conflict(
-          "DEPLOYMENT_RESERVATION_LOST",
-          "The deployment no longer owns the application reservation.",
+          'DEPLOYMENT_RESERVATION_LOST',
+          'The deployment no longer owns the application reservation.',
         );
       }
 
       const application = await connection.query
-        .selectFrom("hubApplications")
-        .select(["id", "activeReleaseId"])
-        .where("id", "=", current.applicationId)
+        .selectFrom('hubApplications')
+        .select(['id', 'activeReleaseId'])
+        .where('id', '=', current.applicationId)
         .executeTakeFirst();
       if (!application) {
         throw notFound(
-          "APPLICATION_NOT_FOUND",
+          'APPLICATION_NOT_FOUND',
           `Application "${current.applicationId}" was not found.`,
         );
       }
@@ -775,23 +775,23 @@ export class HubStore {
 
       if (!recoveredAlreadyActive) {
         let applicationUpdate = connection.query
-          .updateTable("hubApplications")
+          .updateTable('hubApplications')
           .set({
             activeReleaseId: current.targetReleaseId,
             updatedAt: new Date(),
           })
-          .where("id", "=", current.applicationId);
+          .where('id', '=', current.applicationId);
         applicationUpdate = current.previousReleaseId
           ? applicationUpdate.where(
-              "activeReleaseId",
-              "=",
+              'activeReleaseId',
+              '=',
               current.previousReleaseId,
             )
-          : applicationUpdate.where("activeReleaseId", "is", null);
+          : applicationUpdate.where('activeReleaseId', 'is', null);
         const activeReleaseResult = await applicationUpdate.execute();
         if (activeReleaseResult.updatedCount !== 1) {
           throw conflict(
-            "DEPLOYMENT_SUPERSEDED",
+            'DEPLOYMENT_SUPERSEDED',
             "The application's active release changed while the deployment was running.",
           );
         }
@@ -799,42 +799,42 @@ export class HubStore {
 
       const finishedAt = new Date();
       const deploymentResult = await connection.query
-        .updateTable("hubDeployments")
+        .updateTable('hubDeployments')
         .set({
-          status: "succeeded",
+          status: 'succeeded',
           finishedAt,
           hostOperationId: input.hostOperationId,
           failureCode: null,
           failureMessage: null,
         })
-        .where("id", "=", id)
-        .where("status", "not in", TERMINAL_DEPLOYMENT_STATUSES)
+        .where('id', '=', id)
+        .where('status', 'not in', TERMINAL_DEPLOYMENT_STATUSES)
         .execute();
       if (deploymentResult.updatedCount !== 1) {
         throw conflict(
-          "DEPLOYMENT_ALREADY_TERMINAL",
-          "The deployment has already reached a terminal state.",
+          'DEPLOYMENT_ALREADY_TERMINAL',
+          'The deployment has already reached a terminal state.',
         );
       }
 
       const lastEvent = await connection.query
-        .selectFrom("hubDeploymentEvents")
-        .select("sequence")
-        .where("deploymentId", "=", id)
-        .orderBy("sequence", "desc")
+        .selectFrom('hubDeploymentEvents')
+        .select('sequence')
+        .where('deploymentId', '=', id)
+        .orderBy('sequence', 'desc')
         .limit(1)
         .executeTakeFirst();
       await connection.query
-        .insertInto("hubDeploymentEvents")
+        .insertInto('hubDeploymentEvents')
         .values({
           id: crypto.randomUUID(),
           deploymentId: id,
           sequence: Number(lastEvent?.sequence ?? 0) + 1,
-          type: "succeeded",
-          status: "succeeded",
+          type: 'succeeded',
+          status: 'succeeded',
           message: input.recovered
-            ? "Deployment outcome recovered."
-            : "Deployment completed.",
+            ? 'Deployment outcome recovered.'
+            : 'Deployment completed.',
           hostId: null,
           runtimeId: normalizeOptionalText(input.runtimeId, 128),
           details: JSON.stringify({
@@ -845,14 +845,14 @@ export class HubStore {
         })
         .execute();
       await connection.query
-        .deleteFrom("hubSettings")
-        .where("key", "=", deploymentReservationKey(current.applicationId))
-        .where("value", "=", id)
+        .deleteFrom('hubSettings')
+        .where('key', '=', deploymentReservationKey(current.applicationId))
+        .where('value', '=', id)
         .execute();
 
       return {
         ...current,
-        status: "succeeded",
+        status: 'succeeded',
         finishedAt: finishedAt.toISOString(),
         hostOperationId: input.hostOperationId,
         failureCode: null,
@@ -867,13 +867,13 @@ export class HubStore {
   ): Promise<HubDeployment> {
     return this.connection.transaction(async (connection) => {
       const currentRow = await connection.query
-        .selectFrom("hubDeployments")
+        .selectFrom('hubDeployments')
         .selectAll()
-        .where("id", "=", id)
+        .where('id', '=', id)
         .executeTakeFirst();
       if (!currentRow) {
         throw notFound(
-          "DEPLOYMENT_NOT_FOUND",
+          'DEPLOYMENT_NOT_FOUND',
           `Deployment "${id}" was not found.`,
         );
       }
@@ -881,14 +881,14 @@ export class HubStore {
       if (isTerminalDeploymentStatus(current.status)) {
         if (current.status === input.status) return current;
         throw conflict(
-          "DEPLOYMENT_ALREADY_TERMINAL",
-          "The deployment has already reached a terminal state.",
+          'DEPLOYMENT_ALREADY_TERMINAL',
+          'The deployment has already reached a terminal state.',
         );
       }
-      if (input.status === "succeeded") {
+      if (input.status === 'succeeded') {
         throw new HubDomainError(
-          "DEPLOYMENT_SUCCESS_REQUIRES_ATOMIC_COMMIT",
-          "Successful deployments must be committed atomically.",
+          'DEPLOYMENT_SUCCESS_REQUIRES_ATOMIC_COMMIT',
+          'Successful deployments must be committed atomically.',
           { status: 500 },
         );
       }
@@ -916,22 +916,22 @@ export class HubStore {
             : input.failureMessage,
       };
       const result = await connection.query
-        .updateTable("hubDeployments")
+        .updateTable('hubDeployments')
         .set(update)
-        .where("id", "=", id)
-        .where("status", "=", current.status)
+        .where('id', '=', id)
+        .where('status', '=', current.status)
         .execute();
       if (result.updatedCount !== 1) {
         throw conflict(
-          "DEPLOYMENT_STATE_CHANGED",
-          "The deployment state changed concurrently.",
+          'DEPLOYMENT_STATE_CHANGED',
+          'The deployment state changed concurrently.',
         );
       }
       if (isTerminalDeploymentStatus(input.status)) {
         await connection.query
-          .deleteFrom("hubSettings")
-          .where("key", "=", deploymentReservationKey(current.applicationId))
-          .where("value", "=", id)
+          .deleteFrom('hubSettings')
+          .where('key', '=', deploymentReservationKey(current.applicationId))
+          .where('value', '=', id)
           .execute();
       }
       return { ...current, ...input };
@@ -943,28 +943,28 @@ export class HubStore {
     releaseId: string,
   ): Promise<void> {
     await this.connection.query
-      .updateTable("hubApplications")
+      .updateTable('hubApplications')
       .set({ activeReleaseId: releaseId, updatedAt: new Date() })
-      .where("id", "=", applicationId)
+      .where('id', '=', applicationId)
       .execute();
   }
 
   async listUnfinishedDeployments(): Promise<HubDeployment[]> {
     const rows = await this.connection.query
-      .selectFrom("hubDeployments")
+      .selectFrom('hubDeployments')
       .selectAll()
-      .where("status", "not in", TERMINAL_DEPLOYMENT_STATUSES)
-      .orderBy("createdAt", "asc")
+      .where('status', 'not in', TERMINAL_DEPLOYMENT_STATUSES)
+      .orderBy('createdAt', 'asc')
       .execute();
     return rows.map(toDeployment);
   }
 
   async listActiveApplicationReleases(): Promise<ActiveApplicationRelease[]> {
     const rows = await this.connection.query
-      .selectFrom("hubApplications")
+      .selectFrom('hubApplications')
       .selectAll()
-      .where("activeReleaseId", "is not", null)
-      .where("status", "=", "active")
+      .where('activeReleaseId', 'is not', null)
+      .where('status', '=', 'active')
       .execute();
     const result: ActiveApplicationRelease[] = [];
     for (const row of rows) {
@@ -973,7 +973,7 @@ export class HubStore {
       const release = await this.getRelease(application.activeReleaseId);
       if (!release) {
         throw new HubDomainError(
-          "ACTIVE_RELEASE_NOT_FOUND",
+          'ACTIVE_RELEASE_NOT_FOUND',
           `Active release "${application.activeReleaseId}" for application "${application.id}" was not found.`,
           { status: 500 },
         );
@@ -988,10 +988,10 @@ export class HubStore {
     idempotencyKey: string,
   ): Promise<HubDeployment | undefined> {
     const row = await this.connection.query
-      .selectFrom("hubDeployments")
+      .selectFrom('hubDeployments')
       .selectAll()
-      .where("applicationId", "=", applicationId)
-      .where("idempotencyKey", "=", idempotencyKey)
+      .where('applicationId', '=', applicationId)
+      .where('idempotencyKey', '=', idempotencyKey)
       .executeTakeFirst();
     return row ? toDeployment(row) : undefined;
   }
@@ -1002,9 +1002,9 @@ export class HubStore {
   ): Promise<number> {
     let query = this.connection.query
       .selectFrom(table)
-      .select((eb) => [eb.fn.countAll().as("total")]);
+      .select((eb) => [eb.fn.countAll().as('total')]);
     for (const [key, value] of Object.entries(where ?? {})) {
-      query = query.where(key, "=", value);
+      query = query.where(key, '=', value);
     }
     const row = await query.executeTakeFirst();
     return Number(row?.total ?? 0);
@@ -1024,29 +1024,29 @@ function deploymentReservationKey(applicationId: string): string {
   return `deployment.running.${applicationId}.${DEFAULT_ENVIRONMENT_ID}`;
 }
 
-function isTerminalDeploymentStatus(status: HubDeployment["status"]): boolean {
+function isTerminalDeploymentStatus(status: HubDeployment['status']): boolean {
   return (TERMINAL_DEPLOYMENT_STATUSES as readonly string[]).includes(status);
 }
 
 function normalizeSlug(value: string): string {
-  const slug = requireText(value, "slug", 128).toLowerCase();
+  const slug = requireText(value, 'slug', 128).toLowerCase();
   if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) {
     throw validation(
-      "INVALID_APPLICATION_SLUG",
-      "Application slug must contain lowercase letters, numbers, and single hyphens.",
+      'INVALID_APPLICATION_SLUG',
+      'Application slug must contain lowercase letters, numbers, and single hyphens.',
     );
   }
   return slug;
 }
 
 function requireText(value: unknown, field: string, maxLength: number): string {
-  if (typeof value !== "string" || !value.trim()) {
-    throw validation("VALIDATION_ERROR", `${field} is required.`);
+  if (typeof value !== 'string' || !value.trim()) {
+    throw validation('VALIDATION_ERROR', `${field} is required.`);
   }
   const text = value.trim();
   if (text.length > maxLength) {
     throw validation(
-      "VALIDATION_ERROR",
+      'VALIDATION_ERROR',
       `${field} must not exceed ${maxLength} characters.`,
     );
   }
@@ -1057,16 +1057,16 @@ function normalizeOptionalText(
   value: unknown,
   maxLength: number,
 ): string | null {
-  if (value === undefined || value === null || value === "") {
+  if (value === undefined || value === null || value === '') {
     return null;
   }
-  if (typeof value !== "string") {
-    throw validation("VALIDATION_ERROR", "Expected a string value.");
+  if (typeof value !== 'string') {
+    throw validation('VALIDATION_ERROR', 'Expected a string value.');
   }
   const text = value.trim();
   if (text.length > maxLength) {
     throw validation(
-      "VALIDATION_ERROR",
+      'VALIDATION_ERROR',
       `Value must not exceed ${maxLength} characters.`,
     );
   }
@@ -1077,10 +1077,10 @@ function normalizeSize(value: unknown): number | null {
   if (value === undefined || value === null) {
     return null;
   }
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
     throw validation(
-      "VALIDATION_ERROR",
-      "sizeBytes must be a non-negative integer.",
+      'VALIDATION_ERROR',
+      'sizeBytes must be a non-negative integer.',
     );
   }
   return value;
@@ -1094,12 +1094,12 @@ function isSemVer(value: string): boolean {
   if (!match) return false;
   const prerelease = match[4];
   return !prerelease
-    ?.split(".")
+    ?.split('.')
     .some(
       (identifier) =>
         /^\d+$/.test(identifier) &&
         identifier.length > 1 &&
-        identifier.startsWith("0"),
+        identifier.startsWith('0'),
     );
 }
 
@@ -1107,13 +1107,13 @@ function assertJsonObject(
   value: unknown,
   field: string,
 ): asserts value is Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw validation("VALIDATION_ERROR", `${field} must be a JSON object.`);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw validation('VALIDATION_ERROR', `${field} must be a JSON object.`);
   }
   try {
     JSON.stringify(value);
   } catch {
-    throw validation("VALIDATION_ERROR", `${field} must be serializable JSON.`);
+    throw validation('VALIDATION_ERROR', `${field} must be serializable JSON.`);
   }
 }
 
@@ -1123,7 +1123,7 @@ function toApplication(row: Row): HubApplication {
     slug: String(row.slug),
     name: String(row.name),
     description: nullableString(row.description),
-    status: row.status as HubApplication["status"],
+    status: row.status as HubApplication['status'],
     defaultEnvironmentId: String(row.defaultEnvironmentId),
     activeReleaseId: nullableString(row.activeReleaseId),
     createdBy: String(row.createdBy),
@@ -1146,7 +1146,7 @@ function toRelease(row: Row): HubRelease {
         : Number(row.sizeBytes),
     sourceCommit: nullableString(row.sourceCommit),
     verificationStatus:
-      row.verificationStatus as HubRelease["verificationStatus"],
+      row.verificationStatus as HubRelease['verificationStatus'],
     createdBy: String(row.createdBy),
     createdAt: toIsoString(row.createdAt),
   };
@@ -1159,8 +1159,8 @@ function toDeployment(row: Row): HubDeployment {
     environmentId: String(row.environmentId),
     targetReleaseId: String(row.targetReleaseId),
     previousReleaseId: nullableString(row.previousReleaseId),
-    type: row.type as HubDeployment["type"],
-    status: row.status as HubDeployment["status"],
+    type: row.type as HubDeployment['type'],
+    status: row.status as HubDeployment['status'],
     requestedBy: String(row.requestedBy),
     idempotencyKey: nullableString(row.idempotencyKey),
     hostOperationId: nullableString(row.hostOperationId),
@@ -1178,7 +1178,7 @@ function toDeploymentEvent(row: Row): HubDeploymentEvent {
     deploymentId: String(row.deploymentId),
     sequence: Number(row.sequence),
     type: String(row.type),
-    status: row.status as HubDeploymentEvent["status"],
+    status: row.status as HubDeploymentEvent['status'],
     message: nullableString(row.message),
     hostId: nullableString(row.hostId),
     runtimeId: nullableString(row.runtimeId),
@@ -1213,13 +1213,13 @@ function toAppScope(row: Row): HubAppScope {
 
 function parseJsonObject(value: unknown): Record<string, unknown> {
   const parsed = parseJson(value);
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
     ? (parsed as Record<string, unknown>)
     : {};
 }
 
 function parseJson(value: unknown): unknown {
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return value;
   }
   try {
@@ -1231,11 +1231,11 @@ function parseJson(value: unknown): unknown {
 
 function nullableString(value: unknown): string | null {
   if (value === null || value === undefined) return null;
-  if (typeof value === "string") return value;
+  if (typeof value === 'string') return value;
   if (
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint"
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
   ) {
     return String(value);
   }
@@ -1250,7 +1250,7 @@ function toIsoString(value: unknown): string {
   if (value instanceof Date) {
     return value.toISOString();
   }
-  if (typeof value === "number" && Number.isFinite(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     const numericDate = new Date(value);
     if (!Number.isNaN(numericDate.valueOf())) return numericDate.toISOString();
   }
@@ -1277,9 +1277,9 @@ function notFound(code: string, message: string): HubDomainError {
 function isUniqueConstraintError(error: unknown): boolean {
   const value = error as { code?: unknown; message?: unknown };
   return (
-    value?.code === "SQLITE_CONSTRAINT" ||
-    value?.code === "SQLITE_CONSTRAINT_UNIQUE" ||
-    (typeof value?.message === "string" &&
-      value.message.includes("UNIQUE constraint failed"))
+    value?.code === 'SQLITE_CONSTRAINT' ||
+    value?.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+    (typeof value?.message === 'string' &&
+      value.message.includes('UNIQUE constraint failed'))
   );
 }

@@ -1,4 +1,7 @@
-import { getAIWorkContextRequiredTools, mergeAIRequiredTools } from "./page-context";
+import {
+  getAIWorkContextRequiredTools,
+  mergeAIRequiredTools,
+} from './page-context';
 import type {
   AIChatTaskRuntime,
   AIEmployee,
@@ -7,7 +10,7 @@ import type {
   AIEmployeeTaskTrigger,
   AIModel,
   AIWorkContextItem,
-} from "./types";
+} from './types';
 
 const EMPTY_TASKS: AIEmployeeTask[] = [];
 
@@ -32,9 +35,7 @@ export function getConfiguredAIChatTaskSet({
 }): AIChatTaskSet | undefined {
   const tasks =
     employeeTasks[employeeUsername] ??
-    (employeeUsername === defaultEmployeeUsername
-      ? defaultTasks
-      : EMPTY_TASKS);
+    (employeeUsername === defaultEmployeeUsername ? defaultTasks : EMPTY_TASKS);
   return tasks.length
     ? { employeeUsername, tasks, context: inheritedContext }
     : undefined;
@@ -42,12 +43,12 @@ export function getConfiguredAIChatTaskSet({
 
 export function findTriggeredAIEmployee(
   employees: AIEmployee[],
-  requested: AIEmployeeTaskTrigger["aiEmployee"]
+  requested: AIEmployeeTaskTrigger['aiEmployee'],
 ) {
-  return typeof requested === "string"
+  return typeof requested === 'string'
     ? employees.find((item) => item.username === requested)
-    : employees.find((item) => item.username === requested.username) ??
-        requested;
+    : (employees.find((item) => item.username === requested.username) ??
+        requested);
 }
 
 export function getTriggeredAIEmployeeTask(options: AIEmployeeTaskTrigger) {
@@ -62,19 +63,19 @@ export function getTriggeredAIEmployeeTask(options: AIEmployeeTaskTrigger) {
 export function getTriggeredAIWorkContext(
   options: AIEmployeeTaskTrigger,
   task: AIEmployeeTask | undefined,
-  inheritedContext: AIWorkContextItem[]
+  inheritedContext: AIWorkContextItem[],
 ) {
   const taskContext = task?.message?.workContext ?? [];
   return taskContext.length
     ? taskContext
     : options.context?.length
-    ? options.context
-    : inheritedContext;
+      ? options.context
+      : inheritedContext;
 }
 
 export function createAIChatTaskRuntime(
   task: AIEmployeeTask | undefined,
-  workContext: AIWorkContextItem[]
+  workContext: AIWorkContextItem[],
 ): AIChatTaskRuntime {
   const requiredTools = getAIWorkContextRequiredTools(workContext);
   return task
@@ -92,14 +93,13 @@ export function createAIChatTaskRuntime(
 
 export function findAIChatTaskModel(
   models: AIModel[],
-  task: AIEmployeeTask | undefined
+  task: AIEmployeeTask | undefined,
 ) {
   return task?.model
     ? models.find(
         (item) =>
           item.value === task.model?.model &&
-          (!task.model.llmService ||
-            item.llmService === task.model.llmService)
+          (!task.model.llmService || item.llmService === task.model.llmService),
       )
     : undefined;
 }

@@ -50,7 +50,7 @@ Collection Builder 的配置默认都使用 logical name，底层对接数据库
 
 ```ts
 {
-  tableName: 'audit_logs'
+  tableName: 'audit_logs';
 }
 ```
 

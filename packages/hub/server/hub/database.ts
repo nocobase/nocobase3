@@ -3,10 +3,10 @@ import {
   createMigrator,
   type DatabaseConnection,
   type DatabaseManager,
-} from "@nocobase/database";
-import { mkdir } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+} from '@nocobase/database';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export interface HubDatabaseOptions {
   filename?: string;
@@ -24,12 +24,12 @@ export function createHubDatabase(
   options: HubDatabaseOptions = {},
 ): HubDatabaseRuntime {
   const filename =
-    options.filename ?? path.resolve(process.cwd(), ".nocobase/hub.sqlite");
+    options.filename ?? path.resolve(process.cwd(), '.nocobase/hub.sqlite');
   const database = createDatabaseManager({
-    default: "default",
+    default: 'default',
     connections: {
       default: {
-        dialect: "sqlite",
+        dialect: 'sqlite',
         filename,
       },
     },
@@ -37,14 +37,14 @@ export function createHubDatabase(
   const connection = database.connection();
   const migrationsDirectory =
     options.migrationsDirectory ??
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "migrations");
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
   const ready = prepareSqliteStorage(filename)
     .then(() =>
       createMigrator({
         database,
         directory: migrationsDirectory,
-        tableName: "hubMigrations",
-        lockTableName: "hubMigrationLocks",
+        tableName: 'hubMigrations',
+        lockTableName: 'hubMigrationLocks',
       }).latest(),
     )
     .then(() => undefined)
@@ -65,7 +65,7 @@ export function createHubDatabase(
 }
 
 async function prepareSqliteStorage(filename: string): Promise<void> {
-  if (filename === ":memory:" || filename.startsWith("file:")) {
+  if (filename === ':memory:' || filename.startsWith('file:')) {
     return;
   }
 

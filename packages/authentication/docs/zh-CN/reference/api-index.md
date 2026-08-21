@@ -56,12 +56,10 @@ interface CreateAuthenticationOptions extends Omit<AuthOptions, 'connection'> {
 ### AuthSession
 
 ```ts
-type AuthSession =
-  | {
-      user: User;
-      session: Session;
-    }
-  | null;
+type AuthSession = {
+  user: User;
+  session: Session;
+} | null;
 ```
 
 这里的 `User` 和 `Session` 来自 Better Auth。

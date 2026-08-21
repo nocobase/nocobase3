@@ -5,18 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { loadStandaloneAppConfig } from '../server/runtime/config.ts';
 
 type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 type ObjectValue = Record<string, unknown>;
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
 const envFiles = [path.join(rootDir, '.env'), path.join(rootDir, '.env.local')];
-const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url).href;
+const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url)
+  .href;
 
 const config = loadStandaloneAppConfig(standaloneModuleUrl);
 
@@ -31,24 +30,28 @@ const activeLogger = {
 };
 const activeCachingProviderName = config.caching.default;
 const cachingProviders: Record<string, unknown> = config.caching.providers;
-const activeCachingProvider =
-  activeCachingProviderName ? cachingProviders[activeCachingProviderName] : undefined;
+const activeCachingProvider = activeCachingProviderName
+  ? cachingProviders[activeCachingProviderName]
+  : undefined;
 const activeDatabaseName = config.database.default;
-const databaseConnections: Record<string, unknown> = config.database.connections;
-const activeDatabase =
-  activeDatabaseName ? databaseConnections[activeDatabaseName] : undefined;
+const databaseConnections: Record<string, unknown> =
+  config.database.connections;
+const activeDatabase = activeDatabaseName
+  ? databaseConnections[activeDatabaseName]
+  : undefined;
 const activeDriveName = config.drive.default;
 const driveDisks: Record<string, unknown> = config.drive.disks;
-const activeDrive =
-  activeDriveName ? driveDisks[activeDriveName] : undefined;
+const activeDrive = activeDriveName ? driveDisks[activeDriveName] : undefined;
 const activeQueueName = config.queue.default;
 const queueConnections: Record<string, unknown> = config.queue.connections;
-const activeQueue =
-  activeQueueName ? queueConnections[activeQueueName] : undefined;
+const activeQueue = activeQueueName
+  ? queueConnections[activeQueueName]
+  : undefined;
 const activeSessionName = config.session.default;
 const sessionStores: Record<string, unknown> = config.session.stores;
-const activeSession =
-  activeSessionName ? sessionStores[activeSessionName] : undefined;
+const activeSession = activeSessionName
+  ? sessionStores[activeSessionName]
+  : undefined;
 const report = {
   mode: 'standalone',
   envFiles: envFiles.map((file) => ({
@@ -106,7 +109,9 @@ const report = {
       queues: config.queue.worker?.queues ?? [],
       concurrency: config.queue.worker?.concurrency ?? 1,
       idleDelay: String(config.queue.worker?.idleDelay ?? '2s'),
-      timeout: config.queue.worker?.timeout ? String(config.queue.worker.timeout) : '(none)',
+      timeout: config.queue.worker?.timeout
+        ? String(config.queue.worker.timeout)
+        : '(none)',
     },
     jobs: {
       locations: config.queue.jobs?.locations ?? [],
@@ -130,7 +135,9 @@ const report = {
     },
     lifetime: {
       absolute: String(config.session.lifetime.absolute),
-      inactivity: config.session.lifetime.inactivity ? String(config.session.lifetime.inactivity) : '(none)',
+      inactivity: config.session.lifetime.inactivity
+        ? String(config.session.lifetime.inactivity)
+        : '(none)',
       rolling: config.session.lifetime.rolling ?? true,
     },
     secret: config.session.secret ? '<configured>' : '(missing)',
@@ -163,9 +170,16 @@ function summarizeDatabaseConnection(connection: unknown): JsonValue {
 
   for (const key of ['host', 'port', 'database', 'username', 'schema', 'ssl']) {
     const value = connection[key];
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
       summary[key] = value;
-    } else if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    } else if (
+      Array.isArray(value) &&
+      value.every((item) => typeof item === 'string')
+    ) {
       summary[key] = value;
     }
   }
@@ -261,7 +275,15 @@ function summarizeDriveDisk(disk: unknown): JsonValue {
     visibility: stringValue(disk.visibility) ?? 'private',
   };
 
-  for (const key of ['location', 'bucket', 'region', 'endpoint', 'url', 'cdnUrl', 'encryption']) {
+  for (const key of [
+    'location',
+    'bucket',
+    'region',
+    'endpoint',
+    'url',
+    'cdnUrl',
+    'encryption',
+  ]) {
     const value = disk[key];
     if (typeof value === 'string' && value) {
       summary[key] = value;
@@ -277,8 +299,12 @@ function summarizeDriveDisk(disk: unknown): JsonValue {
 
   if (isObject(disk.credentials)) {
     summary.credentials = {
-      accessKeyId: stringValue(disk.credentials.accessKeyId) ? '<configured>' : '(missing)',
-      secretAccessKey: stringValue(disk.credentials.secretAccessKey) ? '<configured>' : '(missing)',
+      accessKeyId: stringValue(disk.credentials.accessKeyId)
+        ? '<configured>'
+        : '(missing)',
+      secretAccessKey: stringValue(disk.credentials.secretAccessKey)
+        ? '<configured>'
+        : '(missing)',
     };
   }
 
@@ -295,7 +321,15 @@ function summarizeQueueConnection(connection: unknown): JsonValue {
     driver,
   };
 
-  for (const key of ['host', 'port', 'db', 'keyPrefix', 'connection', 'table', 'schedulesTable']) {
+  for (const key of [
+    'host',
+    'port',
+    'db',
+    'keyPrefix',
+    'connection',
+    'table',
+    'schedulesTable',
+  ]) {
     const value = connection[key];
     if (typeof value === 'string' || typeof value === 'number') {
       summary[key] = value;
@@ -356,13 +390,21 @@ function printReport(value: typeof report): void {
   printPair('Mode', value.mode);
   printPair(
     'Env files',
-    value.envFiles.map((file) => `${path.relative(rootDir, file.path)}:${file.exists ? 'found' : 'missing'}`).join(', '),
+    value.envFiles
+      .map(
+        (file) =>
+          `${path.relative(rootDir, file.path)}:${file.exists ? 'found' : 'missing'}`,
+      )
+      .join(', '),
   );
 
   printSection('App routing');
   printPair('App name', value.app.name);
   printPair('Public base path', value.app.publicBasePath);
-  printPair('Internal base path', value.app.internalBasePath || '(app-local root)');
+  printPair(
+    'Internal base path',
+    value.app.internalBasePath || '(app-local root)',
+  );
   printPair('Internal API proxy', value.app.internalApiProxyPath);
   printPair('Public API URL', value.app.publicApiUrl);
   printPair('Upstream NocoBase API', value.app.nocoBaseApiUrl);
@@ -374,7 +416,10 @@ function printReport(value: typeof report): void {
   printPair('Vite dev proxy', value.server.viteDevUrl);
 
   printSection('SPA runtime');
-  printPair('Index path', `${value.spa.indexPath} (${value.spa.indexExists ? 'exists' : 'missing'})`);
+  printPair(
+    'Index path',
+    `${value.spa.indexPath} (${value.spa.indexExists ? 'exists' : 'missing'})`,
+  );
   printPair('Storage prefix', value.spa.runtime.storagePrefix);
   printPair('Storage type', value.spa.runtime.storageType);
   printPair('Share token', String(value.spa.runtime.shareToken));
@@ -435,7 +480,10 @@ function printReport(value: typeof report): void {
   printPair('GC lottery', value.session.gcLottery.join('/'));
 
   printSection('Useful checks');
-  printPair('Server-focused tests', 'pnpm test -- tests/logic/app-server.test.ts tests/logic/config.test.ts');
+  printPair(
+    'Server-focused tests',
+    'pnpm test -- tests/logic/app-server.test.ts tests/logic/config.test.ts',
+  );
   printPair('Typecheck', 'pnpm typecheck');
   printPair('JSON output', 'pnpm server:config -- --json');
 }

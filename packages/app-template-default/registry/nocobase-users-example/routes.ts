@@ -1,11 +1,11 @@
 export const userRoutes = {
-  list: "/users",
-  create: "/users/create",
-  edit: "/users/edit/:id",
-  show: "/users/show/:id",
-  role: "/users/roles/:roleName",
-  nestedEdit: "/users/show/:id/edit",
-  nestedRole: "/users/show/:id/roles/:roleName",
+  list: '/users',
+  create: '/users/create',
+  edit: '/users/edit/:id',
+  show: '/users/show/:id',
+  role: '/users/roles/:roleName',
+  nestedEdit: '/users/show/:id/edit',
+  nestedRole: '/users/show/:id/roles/:roleName',
 } as const;
 
 export const getUserEditPath = (id: string | number) =>

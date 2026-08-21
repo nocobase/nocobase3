@@ -29,4 +29,6 @@ export type ConfigFactories<TConfigMap extends Record<string, unknown>> = {
   [TKey in keyof TConfigMap]: ConfigFactory<TConfigMap[TKey]>;
 };
 
-export type DatabaseConfigFactory<TConfig extends AppDatabaseConfig = AppDatabaseConfig> = ConfigFactory<TConfig>;
+export type DatabaseConfigFactory<
+  TConfig extends AppDatabaseConfig = AppDatabaseConfig,
+> = ConfigFactory<TConfig>;

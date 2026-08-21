@@ -1,11 +1,11 @@
-import ReactEChartsCore from "echarts-for-react/lib/core";
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
-import { LoadingState } from "@/components/app-shell/loading-state";
+import ReactEChartsCore from 'echarts-for-react/lib/core';
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
+import { LoadingState } from '@/components/app-shell/loading-state';
 import echarts, {
   getEChartsRuntimeSignature,
   prepareEChartsRuntime,
-} from "./echarts-runtime";
+} from './echarts-runtime';
 
 export default function EChartsPreview({
   options,
@@ -35,10 +35,10 @@ export default function EChartsPreview({
   if (error) {
     throw error instanceof Error
       ? error
-      : new Error("Unable to prepare the ECharts runtime", { cause: error });
+      : new Error('Unable to prepare the ECharts runtime', { cause: error });
   }
   if (preparedSignature !== signature) {
-    return <LoadingState className="h-[280px]" />;
+    return <LoadingState className='h-[280px]' />;
   }
 
   return (
@@ -47,17 +47,17 @@ export default function EChartsPreview({
       option={{
         ...options,
         animation: false,
-        backgroundColor: options.backgroundColor ?? "transparent",
+        backgroundColor: options.backgroundColor ?? 'transparent',
         toolbox: {
           show: true,
           feature: {
-            saveAsImage: { title: "Save as image" },
+            saveAsImage: { title: 'Save as image' },
           },
         },
       }}
-      theme={resolvedTheme === "dark" ? "nocobase-dark" : undefined}
+      theme={resolvedTheme === 'dark' ? 'nocobase-dark' : undefined}
       notMerge
-      style={{ height: 280, width: "100%" }}
+      style={{ height: 280, width: '100%' }}
     />
   );
 }

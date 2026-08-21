@@ -16,7 +16,7 @@ export class NocoBaseHttpError extends Error {
     requestId?: string;
   }) {
     super(message);
-    this.name = "NocoBaseHttpError";
+    this.name = 'NocoBaseHttpError';
     this.status = status;
     this.payload = payload;
     this.code = getNocoBaseErrorDetail(payload)?.code;
@@ -38,7 +38,7 @@ export type NocoBaseErrorDetail = {
   [key: string]: unknown;
 };
 
-export type NocoBaseRuntimeErrorSource = "http" | "network" | "websocket";
+export type NocoBaseRuntimeErrorSource = 'http' | 'network' | 'websocket';
 
 export type NocoBaseRuntimeError = NocoBaseErrorDetail & {
   payload?: unknown;
@@ -47,15 +47,15 @@ export type NocoBaseRuntimeError = NocoBaseErrorDetail & {
 
 export const isNocoBaseLifecycleError = (error: NocoBaseErrorDetail): boolean =>
   error.maintaining === true ||
-  error.code?.startsWith("APP_") === true ||
-  error.code?.startsWith("COMMAND_") === true;
+  error.code?.startsWith('APP_') === true ||
+  error.code?.startsWith('COMMAND_') === true;
 
 export const isNocoBaseServiceError = (error: NocoBaseErrorDetail): boolean =>
   isNocoBaseLifecycleError(error) ||
   (error.status !== undefined && [502, 503, 504].includes(error.status));
 
 const asRecord = (value: unknown) =>
-  value && typeof value === "object"
+  value && typeof value === 'object'
     ? (value as Record<string, unknown>)
     : undefined;
 
@@ -83,9 +83,9 @@ export function getNocoBaseErrorDetail(
   if (firstMessage) return firstMessage;
 
   if (
-    typeof value.code === "string" ||
-    typeof value.message === "string" ||
-    typeof value.maintaining === "boolean"
+    typeof value.code === 'string' ||
+    typeof value.message === 'string' ||
+    typeof value.maintaining === 'boolean'
   ) {
     return value;
   }
@@ -95,7 +95,7 @@ export function getNocoBaseErrorDetail(
 
 export function normalizeNocoBaseRuntimeError(
   error: unknown,
-  source: NocoBaseRuntimeErrorSource = "http",
+  source: NocoBaseRuntimeErrorSource = 'http',
 ): NocoBaseRuntimeError {
   if (error instanceof NocoBaseHttpError) {
     const detail = getNocoBaseErrorDetail(error.payload);
@@ -114,7 +114,7 @@ export function normalizeNocoBaseRuntimeError(
   if (detail) {
     return {
       ...detail,
-      message: detail.message ?? "NocoBase request failed",
+      message: detail.message ?? 'NocoBase request failed',
       payload: error,
       source,
     };
@@ -130,7 +130,7 @@ export function normalizeNocoBaseRuntimeError(
 
   return {
     message:
-      typeof error === "string" && error ? error : "NocoBase request failed",
+      typeof error === 'string' && error ? error : 'NocoBase request failed',
     payload: error,
     source,
   };
@@ -143,8 +143,8 @@ export const getNocoBaseErrorMessage = (
   payload: unknown,
   fallback: string,
 ): string => {
-  if (typeof payload === "string") return payload || fallback;
-  if (!payload || typeof payload !== "object") return fallback;
+  if (typeof payload === 'string') return payload || fallback;
+  if (!payload || typeof payload !== 'object') return fallback;
   const value = payload as {
     message?: string;
     error?: { message?: string };
@@ -152,6 +152,6 @@ export const getNocoBaseErrorMessage = (
     messages?: Array<{ message?: string } | string>;
   };
   const first = value.errors?.[0] ?? value.messages?.[0];
-  if (typeof first === "string") return first;
+  if (typeof first === 'string') return first;
   return first?.message ?? value.error?.message ?? value.message ?? fallback;
 };

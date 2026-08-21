@@ -1,7 +1,7 @@
-import type { MailAttachment } from "./types";
+import type { MailAttachment } from './types';
 
 export function normalizeContentId(value?: string) {
-  if (!value) return "";
+  if (!value) return '';
   let decoded = value;
   try {
     decoded = decodeURIComponent(value);
@@ -9,8 +9,8 @@ export function normalizeContentId(value?: string) {
     // Keep malformed provider values usable instead of failing the whole body.
   }
   return decoded
-    .replace(/^cid:/i, "")
-    .replace(/[<>]/g, "")
+    .replace(/^cid:/i, '')
+    .replace(/[<>]/g, '')
     .trim()
     .toLocaleLowerCase();
 }
@@ -19,11 +19,11 @@ function contentIdFromSource(source: string) {
   if (/^cid:/i.test(source)) return normalizeContentId(source);
 
   try {
-    const url = new URL(source.replace(/&amp;/gi, "&"), "https://mail.invalid");
-    if (!url.pathname.includes("mail:messageContentPreview")) return "";
-    return normalizeContentId(url.searchParams.get("contentId") ?? "");
+    const url = new URL(source.replace(/&amp;/gi, '&'), 'https://mail.invalid');
+    if (!url.pathname.includes('mail:messageContentPreview')) return '';
+    return normalizeContentId(url.searchParams.get('contentId') ?? '');
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -45,7 +45,7 @@ export function collectInlineContentIds(html: string) {
 
 export function replaceInlineImageSources(
   html: string,
-  sourceByContentId: ReadonlyMap<string, string>
+  sourceByContentId: ReadonlyMap<string, string>,
 ) {
   return html.replace(
     IMAGE_SOURCE_PATTERN,
@@ -53,17 +53,17 @@ export function replaceInlineImageSources(
       const contentId = contentIdFromSource(source);
       const replacement = sourceByContentId.get(contentId);
       return replacement ? `src=${quote}${replacement}${quote}` : attribute;
-    }
+    },
   );
 }
 
 export function filterInlineAttachments(
   attachments: MailAttachment[],
-  html: string
+  html: string,
 ) {
   const inlineIds = new Set(collectInlineContentIds(html));
   if (!inlineIds.size) return attachments;
   return attachments.filter(
-    (attachment) => !inlineIds.has(normalizeContentId(attachment.contentId))
+    (attachment) => !inlineIds.has(normalizeContentId(attachment.contentId)),
   );
 }

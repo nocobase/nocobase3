@@ -50,9 +50,14 @@ export async function serveAppAssets(
     return methodNotAllowed('GET, HEAD');
   }
 
-  const fileResponse = await serveFileIfExists(definition.client.rootDir, pathInsideApp, method, {
-    cacheControl: `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
-  });
+  const fileResponse = await serveFileIfExists(
+    definition.client.rootDir,
+    pathInsideApp,
+    method,
+    {
+      cacheControl: `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
+    },
+  );
   if (!fileResponse) {
     return null;
   }
@@ -64,7 +69,10 @@ export function isAppAssetPath(pathInsideApp: string): boolean {
   return pathInsideApp === '/assets' || pathInsideApp.startsWith('/assets/');
 }
 
-export function getPathInsideApp(definition: AppDefinition, hostPath: string): string {
+export function getPathInsideApp(
+  definition: AppDefinition,
+  hostPath: string,
+): string {
   const pathInside = hostPath.slice(definition.basePath.length) || '/';
   return pathInside.startsWith('/') ? pathInside : `/${pathInside}`;
 }
@@ -103,11 +111,17 @@ async function serveFileIfExists(
     'last-modified': stats.mtime.toUTCString(),
   });
 
-  const body = method === 'HEAD' ? null : (Readable.toWeb(createReadStream(filePath)) as BodyInit);
+  const body =
+    method === 'HEAD'
+      ? null
+      : (Readable.toWeb(createReadStream(filePath)) as BodyInit);
   return new Response(body, { headers });
 }
 
-function resolveClientFile(rootDir: string, requestPath: string): string | null {
+function resolveClientFile(
+  rootDir: string,
+  requestPath: string,
+): string | null {
   let decodedPath: string;
   try {
     decodedPath = decodeURIComponent(requestPath);
@@ -131,7 +145,10 @@ function resolveClientFile(rootDir: string, requestPath: string): string | null 
 }
 
 function contentTypeFor(filePath: string): string {
-  return CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+  return (
+    CONTENT_TYPES[path.extname(filePath).toLowerCase()] ??
+    'application/octet-stream'
+  );
 }
 
 function methodNotAllowed(allow: string): Response {

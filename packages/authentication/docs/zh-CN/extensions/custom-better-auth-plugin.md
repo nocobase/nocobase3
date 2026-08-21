@@ -93,10 +93,7 @@ export interface TicketAuthPluginOptions {
   issuer: string;
   audience: string;
   allowSignUp?: boolean;
-  verifyTicket: (input: {
-    ticket: string;
-    request: Request;
-  }) => Promise<{
+  verifyTicket: (input: { ticket: string; request: Request }) => Promise<{
     subject: string;
     email?: string;
     emailVerified: boolean;
@@ -211,9 +208,9 @@ Zod，应把 Zod 声明为应用的直接依赖，并限制 ticket 长度，避�
 helper。这样默认模板中的这些能力才能继续工作：
 
 ```ts
-auth.getSession(headers)
-auth.required()
-createAuthProvider(authClient)
+auth.getSession(headers);
+auth.required();
+createAuthProvider(authClient);
 ```
 
 具体方法应以应用所安装 Better Auth 版本的 plugin 文档和公开类型为准。优先使用：

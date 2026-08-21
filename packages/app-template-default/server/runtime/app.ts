@@ -23,19 +23,28 @@ export function createAppFromRuntime(
   options: CreateAppFromRuntimeOptions,
 ): AppServer {
   const { config } = runtime;
-  const viteDevUrl = resolveViteDevUrlOption(options.viteDevUrl, config.server.viteDevUrl);
+  const viteDevUrl = resolveViteDevUrlOption(
+    options.viteDevUrl,
+    config.server.viteDevUrl,
+  );
 
   return createApp(runtime, {
     lifecycle: options.lifecycle,
     spa: {
       handler: viteDevUrl
-        ? createPublicBasePathOriginProxyHandler(viteDevUrl, config.app.publicBasePath)
+        ? createPublicBasePathOriginProxyHandler(
+            viteDevUrl,
+            config.app.publicBasePath,
+          )
         : undefined,
     },
   });
 }
 
-export function createPublicBasePathAdapter(app: AppServer, publicBasePath: string): AppServer {
+export function createPublicBasePathAdapter(
+  app: AppServer,
+  publicBasePath: string,
+): AppServer {
   const basePath = normalizeBasePath(publicBasePath);
   if (!basePath) {
     return app;
@@ -43,8 +52,12 @@ export function createPublicBasePathAdapter(app: AppServer, publicBasePath: stri
 
   const mounted = new Hono() as AppServer;
 
-  mounted.all(basePath, (context) => dispatchMountedApp(app, context.req.raw, basePath));
-  mounted.all(`${basePath}/*`, (context) => dispatchMountedApp(app, context.req.raw, basePath));
+  mounted.all(basePath, (context) =>
+    dispatchMountedApp(app, context.req.raw, basePath),
+  );
+  mounted.all(`${basePath}/*`, (context) =>
+    dispatchMountedApp(app, context.req.raw, basePath),
+  );
 
   const websocket = app.websocket;
   if (websocket) {
@@ -61,7 +74,10 @@ export function createPublicBasePathAdapter(app: AppServer, publicBasePath: stri
   return mounted;
 }
 
-export function stripPublicBasePathFromRequest(request: Request, publicBasePath: string): Request | null {
+export function stripPublicBasePathFromRequest(
+  request: Request,
+  publicBasePath: string,
+): Request | null {
   const basePath = normalizeBasePath(publicBasePath);
   if (!basePath) {
     return request;
@@ -81,8 +97,15 @@ export function stripPublicBasePathFromRequest(request: Request, publicBasePath:
   return cloneRequestWithUrl(request, url);
 }
 
-function dispatchMountedApp(app: AppServer, request: Request, publicBasePath: string): Response | Promise<Response> {
-  const strippedRequest = stripPublicBasePathFromRequest(request, publicBasePath);
+function dispatchMountedApp(
+  app: AppServer,
+  request: Request,
+  publicBasePath: string,
+): Response | Promise<Response> {
+  const strippedRequest = stripPublicBasePathFromRequest(
+    request,
+    publicBasePath,
+  );
   if (!strippedRequest) {
     return Response.json({ error: 'Not found' }, { status: 404 });
   }
@@ -90,15 +113,22 @@ function dispatchMountedApp(app: AppServer, request: Request, publicBasePath: st
   return app.fetch(strippedRequest);
 }
 
-function createPublicBasePathOriginProxyHandler(targetOrigin: URL, publicBasePath: string): SpaHandler {
+function createPublicBasePathOriginProxyHandler(
+  targetOrigin: URL,
+  publicBasePath: string,
+): SpaHandler {
   const proxyToOrigin = createOriginProxyHandler(targetOrigin, {
     unavailableMessage: 'Vite dev server is unavailable.',
   });
 
-  return (request) => proxyToOrigin(addPublicBasePathToRequest(request, publicBasePath));
+  return (request) =>
+    proxyToOrigin(addPublicBasePathToRequest(request, publicBasePath));
 }
 
-function addPublicBasePathToRequest(request: Request, publicBasePath: string): Request {
+function addPublicBasePathToRequest(
+  request: Request,
+  publicBasePath: string,
+): Request {
   const basePath = normalizeBasePath(publicBasePath);
   if (!basePath) {
     return request;
@@ -135,7 +165,10 @@ function cloneRequestWithUrl(request: Request, url: URL): Request {
   return new Request(url, init);
 }
 
-function resolveViteDevUrlOption(value: string | URL | false | undefined, defaultValue: URL | undefined): URL | undefined {
+function resolveViteDevUrlOption(
+  value: string | URL | false | undefined,
+  defaultValue: URL | undefined,
+): URL | undefined {
   if (value === undefined) {
     return defaultValue;
   }

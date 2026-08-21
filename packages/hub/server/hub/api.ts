@@ -1,19 +1,19 @@
-import type { Auth, AuthSession } from "@nocobase/authentication";
-import { AppRegistryError } from "@nocobase/app-host";
+import type { Auth, AuthSession } from '@nocobase/authentication';
+import { AppRegistryError } from '@nocobase/app-host';
 import type {
   AppDeploymentResult,
   AppRuntimeRegistry,
-} from "@nocobase/app-host";
-import { Hono, type Context } from "hono";
-import type { ContentfulStatusCode } from "hono/utils/http-status";
+} from '@nocobase/app-host';
+import { Hono, type Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-import type { HubDatabaseRuntime } from "./database.ts";
+import type { HubDatabaseRuntime } from './database.ts';
 import {
   HubAuthorization,
   type AuthorizedHubActor,
   type HubAction,
   type HubResource,
-} from "./authorization.ts";
+} from './authorization.ts';
 import {
   HubDomainError,
   HubStore,
@@ -21,13 +21,13 @@ import {
   type CreateDeploymentInput,
   type CreateReleaseInput,
   type HubListOptions,
-} from "./store.ts";
-import { LocalHostAdapter } from "./local-host-adapter.ts";
-import type { HubApplication, HubDeployment, HubUserSummary } from "./types.ts";
+} from './store.ts';
+import { LocalHostAdapter } from './local-host-adapter.ts';
+import type { HubApplication, HubDeployment, HubUserSummary } from './types.ts';
 import {
   assertReleaseArtifactChecksum,
   resolveReleaseArtifactDirectory,
-} from "./artifact-integrity.ts";
+} from './artifact-integrity.ts';
 
 export interface HubApiDeps {
   database: HubDatabaseRuntime;
@@ -63,8 +63,8 @@ export interface HubApi extends Hono<HubApiEnvironment> {
 
 type HubContext = Context<HubApiEnvironment>;
 
-const PUBLIC_INTERNAL_ERROR_MESSAGE = "An unexpected internal error occurred.";
-const JSON_CONTENT_TYPE = "application/json";
+const PUBLIC_INTERNAL_ERROR_MESSAGE = 'An unexpected internal error occurred.';
+const JSON_CONTENT_TYPE = 'application/json';
 
 export function createHubApi(
   deps: HubApiDeps,
@@ -82,15 +82,15 @@ export function createHubApi(
   let setupTail: Promise<void> = Promise.resolve();
   let ready: Promise<void> = deps.database.ready;
 
-  api.use("*", async (context, next) => {
+  api.use('*', async (context, next) => {
     await ready;
     const requestId =
-      context.req.header("x-request-id")?.trim() || crypto.randomUUID();
-    context.set("requestId", requestId);
+      context.req.header('x-request-id')?.trim() || crypto.randomUUID();
+    context.set('requestId', requestId);
     await next();
   });
 
-  api.use("*", async (context, next) => {
+  api.use('*', async (context, next) => {
     assertSecureMutation(context.req.raw, deps.authoritativeOrigin);
     await next();
   });
@@ -99,20 +99,20 @@ export function createHubApi(
     errorResponse(
       context,
       error,
-      context.get("requestId") ?? crypto.randomUUID(),
+      context.get('requestId') ?? crypto.randomUUID(),
     ),
   );
 
-  api.get("/healthz", (context) =>
+  api.get('/healthz', (context) =>
     successResponse(context, {
       ok: true,
       appName: deps.appName,
       basePath: deps.publicBasePath,
-      host: host.available() ? "available" : "unavailable",
+      host: host.available() ? 'available' : 'unavailable',
     }),
   );
 
-  api.get("/setup/status", async (context) => {
+  api.get('/setup/status', async (context) => {
     const setupRequired = await store.isSetupRequired();
     return successResponse(context, {
       setupRequired,
@@ -120,13 +120,13 @@ export function createHubApi(
     });
   });
 
-  api.post("/setup/owner", async (context) => {
+  api.post('/setup/owner', async (context) => {
     const body = await jsonBody(context);
     const result = await withSetupLock(async () => {
       if (!(await store.isSetupRequired())) {
         throw new HubDomainError(
-          "SETUP_ALREADY_COMPLETED",
-          "Hub setup is already complete.",
+          'SETUP_ALREADY_COMPLETED',
+          'Hub setup is already complete.',
           {
             status: 409,
           },
@@ -135,22 +135,22 @@ export function createHubApi(
       const reservationToken = crypto.randomUUID();
       await store.reserveOwnerSetup(reservationToken);
       try {
-        const email = requiredString(body.email, "email");
-        const password = requiredString(body.password, "password");
-        const name = requiredString(body.name, "name");
+        const email = requiredString(body.email, 'email');
+        const password = requiredString(body.password, 'password');
+        const name = requiredString(body.name, 'name');
         const username = optionalString(body.username);
         const bootstrap = deps.bootstrapAuth;
         const signupUrl = new URL(context.req.url);
         signupUrl.pathname = signupUrl.pathname.replace(
           /\/setup\/owner\/?$/,
-          "/auth/sign-up/email",
+          '/auth/sign-up/email',
         );
         const signupRequest = new Request(signupUrl, {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "content-type": "application/json",
-            accept: "application/json",
-            origin: context.req.header("origin")!,
+            'content-type': 'application/json',
+            accept: 'application/json',
+            origin: context.req.header('origin')!,
           },
           body: JSON.stringify({
             email,
@@ -164,15 +164,15 @@ export function createHubApi(
         if (!signupResponse.ok) {
           if (signupResponse.status >= 500) {
             throw new HubDomainError(
-              "INTERNAL_ERROR",
+              'INTERNAL_ERROR',
               PUBLIC_INTERNAL_ERROR_MESSAGE,
               { status: 500, retryable: true },
             );
           }
           throw new HubDomainError(
-            stringProperty(signupPayload, "code") ?? "OWNER_SIGNUP_FAILED",
-            stringProperty(signupPayload, "message") ??
-              "Unable to create the first owner.",
+            stringProperty(signupPayload, 'code') ?? 'OWNER_SIGNUP_FAILED',
+            stringProperty(signupPayload, 'message') ??
+              'Unable to create the first owner.',
             {
               status:
                 signupResponse.status >= 400 ? signupResponse.status : 422,
@@ -182,13 +182,13 @@ export function createHubApi(
         const user = signupPayload?.user;
         if (
           !user ||
-          typeof user !== "object" ||
-          !("id" in user) ||
-          typeof user.id !== "string"
+          typeof user !== 'object' ||
+          !('id' in user) ||
+          typeof user.id !== 'string'
         ) {
           throw new HubDomainError(
-            "OWNER_SIGNUP_INVALID_RESPONSE",
-            "Authentication did not return a user.",
+            'OWNER_SIGNUP_INVALID_RESPONSE',
+            'Authentication did not return a user.',
             {
               status: 502,
             },
@@ -197,11 +197,11 @@ export function createHubApi(
         await store.initializeOwner({
           userId: user.id,
           reservationToken,
-          requestId: context.get("requestId"),
+          requestId: context.get('requestId'),
         });
         return {
           payload: signupPayload,
-          setCookie: signupResponse.headers.get("set-cookie"),
+          setCookie: signupResponse.headers.get('set-cookie'),
         };
       } catch (error) {
         await store
@@ -216,51 +216,51 @@ export function createHubApi(
       undefined,
       201,
     );
-    if (result.setCookie) response.headers.set("set-cookie", result.setCookie);
+    if (result.setCookie) response.headers.set('set-cookie', result.setCookie);
     return response;
   });
 
-  api.on(["GET", "POST"], "/auth/*", async (context) => {
-    if (context.req.path.includes("/sign-up")) {
+  api.on(['GET', 'POST'], '/auth/*', async (context) => {
+    if (context.req.path.includes('/sign-up')) {
       return errorResponse(
         context,
         new HubDomainError(
-          "PUBLIC_SIGNUP_DISABLED",
-          "Public sign-up is disabled.",
+          'PUBLIC_SIGNUP_DISABLED',
+          'Public sign-up is disabled.',
           { status: 403 },
         ),
-        context.get("requestId"),
+        context.get('requestId'),
       );
     }
     return deps.auth.handler(context.req.raw);
   });
 
-  api.get("/me", async (context) => {
+  api.get('/me', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
     return successResponse(context, actor);
   });
 
-  api.get("/apps", async (context) => {
+  api.get('/apps', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
     await authorization.require(actor.user.id, {
-      resource: "hub.app",
-      action: "read",
+      resource: 'hub.app',
+      action: 'read',
     });
     const result = await store.listApplications(readPagination(context));
     return successResponse(context, result.items, pageMeta(result));
   });
 
-  api.post("/apps", async (context) => {
+  api.post('/apps', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
     await authorization.require(actor.user.id, {
-      resource: "hub.app",
-      action: "create",
+      resource: 'hub.app',
+      action: 'create',
     });
     const body = await jsonBody(context);
     const application = await store.createApplication(
       {
-        slug: requiredString(body.slug, "slug"),
-        name: requiredString(body.name, "name"),
+        slug: requiredString(body.slug, 'slug'),
+        name: requiredString(body.name, 'name'),
         description: optionalString(body.description),
       } satisfies CreateApplicationInput,
       actor.user.id,
@@ -268,28 +268,28 @@ export function createHubApi(
     return successResponse(context, application, undefined, 201);
   });
 
-  api.get("/apps/:id", async (context) => {
+  api.get('/apps/:id', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
     const application = await requireAuthorizedApplication(
       store,
       authorization,
       actor.user.id,
-      context.req.param("id"),
-      "read",
+      context.req.param('id'),
+      'read',
     );
     return successResponse(context, application);
   });
 
-  api.get("/apps/:id/releases", async (context) => {
+  api.get('/apps/:id/releases', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
-    const applicationId = context.req.param("id");
+    const applicationId = context.req.param('id');
     await requireAuthorizedApplication(
       store,
       authorization,
       actor.user.id,
       applicationId,
-      "read",
-      "hub.release",
+      'read',
+      'hub.release',
     );
     const result = await store.listReleases(
       applicationId,
@@ -298,19 +298,19 @@ export function createHubApi(
     return successResponse(context, result.items, pageMeta(result));
   });
 
-  api.post("/apps/:id/releases", async (context) => {
+  api.post('/apps/:id/releases', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
-    const applicationId = context.req.param("id");
+    const applicationId = context.req.param('id');
     const application = await requireAuthorizedApplication(
       store,
       authorization,
       actor.user.id,
       applicationId,
-      "create",
-      "hub.release",
+      'create',
+      'hub.release',
     );
     const body = await jsonBody(context);
-    const checksum = requiredString(body.checksum, "checksum");
+    const checksum = requiredString(body.checksum, 'checksum');
     const storageKey = optionalString(body.storageKey);
     const releaseDirectory = resolveReleaseArtifactDirectory({
       releaseRoot: deps.releaseRoot,
@@ -321,11 +321,11 @@ export function createHubApi(
     const result = await store.createRelease(
       applicationId,
       {
-        version: requiredString(body.version, "version"),
+        version: requiredString(body.version, 'version'),
         checksum,
-        manifest: objectValue(body.manifest, "manifest"),
+        manifest: objectValue(body.manifest, 'manifest'),
         storageKey,
-        sizeBytes: typeof body.sizeBytes === "number" ? body.sizeBytes : null,
+        sizeBytes: typeof body.sizeBytes === 'number' ? body.sizeBytes : null,
         sourceCommit: optionalString(body.sourceCommit),
       } satisfies CreateReleaseInput,
       actor.user.id,
@@ -338,16 +338,16 @@ export function createHubApi(
     );
   });
 
-  api.get("/apps/:id/deployments", async (context) => {
+  api.get('/apps/:id/deployments', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
-    const applicationId = context.req.param("id");
+    const applicationId = context.req.param('id');
     await requireAuthorizedApplication(
       store,
       authorization,
       actor.user.id,
       applicationId,
-      "read",
-      "hub.deployment",
+      'read',
+      'hub.deployment',
     );
     const result = await store.listDeployments({
       ...readPagination(context),
@@ -356,21 +356,21 @@ export function createHubApi(
     return successResponse(context, result.items, pageMeta(result));
   });
 
-  api.post("/apps/:id/deployments", async (context) => {
+  api.post('/apps/:id/deployments', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
-    const applicationId = context.req.param("id");
+    const applicationId = context.req.param('id');
     await requireAuthorizedApplication(
       store,
       authorization,
       actor.user.id,
       applicationId,
-      "create",
-      "hub.deployment",
+      'create',
+      'hub.deployment',
     );
     const body = await jsonBody(context);
     const targetReleaseId = requiredString(
       body.targetReleaseId,
-      "targetReleaseId",
+      'targetReleaseId',
     );
     const result = await store.createDeployment(
       applicationId,
@@ -378,7 +378,7 @@ export function createHubApi(
         targetReleaseId,
         type: deploymentType(body.type),
         idempotencyKey:
-          context.req.header("idempotency-key")?.trim() ||
+          context.req.header('idempotency-key')?.trim() ||
           optionalString(body.idempotencyKey),
       } satisfies CreateDeploymentInput,
       actor.user.id,
@@ -392,23 +392,23 @@ export function createHubApi(
     );
   });
 
-  api.get("/deployments", async (context) => {
+  api.get('/deployments', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
     await authorization.require(actor.user.id, {
-      resource: "hub.deployment",
-      action: "read",
+      resource: 'hub.deployment',
+      action: 'read',
     });
     const result = await store.listDeployments(readPagination(context));
     return successResponse(context, result.items, pageMeta(result));
   });
 
-  api.get("/deployments/:id/events", async (context) => {
+  api.get('/deployments/:id/events', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
     const deployment = await requireAuthorizedDeployment(
       store,
       authorization,
       actor.user.id,
-      context.req.param("id"),
+      context.req.param('id'),
     );
     return successResponse(
       context,
@@ -416,13 +416,13 @@ export function createHubApi(
     );
   });
 
-  api.get("/deployments/:id", async (context) => {
+  api.get('/deployments/:id', async (context) => {
     const actor = await requireActor(context, deps.auth, authorization);
     const deployment = await requireAuthorizedDeployment(
       store,
       authorization,
       actor.user.id,
-      context.req.param("id"),
+      context.req.param('id'),
     );
     return successResponse(context, deployment);
   });
@@ -493,23 +493,23 @@ class DeploymentCoordinator {
         operations.push(this.convergeRecoveredDeployment(deployment));
         continue;
       }
-      if (deployment.status === "queued" || deployment.status === "preparing") {
+      if (deployment.status === 'queued' || deployment.status === 'preparing') {
         operations.push(this.schedule(deployment));
         continue;
       }
       const message =
-        "Hub restarted after the Host operation began; deployment outcome cannot be proven safely.";
+        'Hub restarted after the Host operation began; deployment outcome cannot be proven safely.';
       await this.store.updateDeployment(deployment.id, {
-        status: "failed",
+        status: 'failed',
         finishedAt: new Date().toISOString(),
-        failureCode: "HUB_RESTARTED_DURING_DEPLOYMENT",
+        failureCode: 'HUB_RESTARTED_DURING_DEPLOYMENT',
         failureMessage: message,
       });
       await this.store.appendDeploymentEvent(deployment.id, {
-        type: "failed",
-        status: "failed",
+        type: 'failed',
+        status: 'failed',
         message,
-        details: { code: "HUB_RESTARTED_DURING_DEPLOYMENT" },
+        details: { code: 'HUB_RESTARTED_DURING_DEPLOYMENT' },
       });
     }
     await Promise.all(operations);
@@ -533,9 +533,9 @@ class DeploymentCoordinator {
     try {
       await this.transition(
         deployment,
-        "preparing",
-        "preparing",
-        "Preparing release.",
+        'preparing',
+        'preparing',
+        'Preparing release.',
       );
       const application = await this.store.requireApplication(
         deployment.applicationId,
@@ -543,8 +543,8 @@ class DeploymentCoordinator {
       const release = await this.store.getRelease(deployment.targetReleaseId);
       if (!release)
         throw new HubDomainError(
-          "RELEASE_NOT_FOUND",
-          "Deployment release was removed.",
+          'RELEASE_NOT_FOUND',
+          'Deployment release was removed.',
           { status: 404 },
         );
       if (deployment.previousReleaseId) {
@@ -553,8 +553,8 @@ class DeploymentCoordinator {
         );
         if (!previousRelease) {
           throw new HubDomainError(
-            "PREVIOUS_RELEASE_NOT_FOUND",
-            "The previous active release required for deployment recovery was not found.",
+            'PREVIOUS_RELEASE_NOT_FOUND',
+            'The previous active release required for deployment recovery was not found.',
             { status: 500 },
           );
         }
@@ -562,9 +562,9 @@ class DeploymentCoordinator {
       }
       await this.transition(
         deployment,
-        "activating",
-        "activating",
-        "Activating release.",
+        'activating',
+        'activating',
+        'Activating release.',
       );
       result = await this.host.deploy({
         application,
@@ -591,7 +591,7 @@ class DeploymentCoordinator {
         return;
       } catch (error) {
         logServerError(error, {
-          operation: "deployment-control-plane-commit",
+          operation: 'deployment-control-plane-commit',
           deploymentId: deployment.id,
           attempt,
           hostOperationId: result.operationId,
@@ -606,23 +606,23 @@ class DeploymentCoordinator {
   ): Promise<void> {
     await this.transition(
       deployment,
-      "checking",
-      "checking",
-      "Checking runtime readiness.",
+      'checking',
+      'checking',
+      'Checking runtime readiness.',
       result,
     );
     await this.transition(
       deployment,
-      "switching",
-      "switching",
-      "Switching active release.",
+      'switching',
+      'switching',
+      'Switching active release.',
       result,
     );
     await this.transition(
       deployment,
-      "draining",
-      "draining",
-      "Draining previous runtime.",
+      'draining',
+      'draining',
+      'Draining previous runtime.',
       result,
     );
   }
@@ -639,7 +639,7 @@ class DeploymentCoordinator {
         return;
       } catch (error) {
         logServerError(error, {
-          operation: "deployment-recovery-commit",
+          operation: 'deployment-recovery-commit',
           deploymentId: deployment.id,
           attempt,
         });
@@ -653,13 +653,13 @@ class DeploymentCoordinator {
   ): Promise<void> {
     const domainError = toDomainError(error);
     logServerError(error, {
-      operation: "deployment",
+      operation: 'deployment',
       deploymentId: deployment.id,
       code: domainError.code,
     });
     await this.store
       .updateDeployment(deployment.id, {
-        status: "failed",
+        status: 'failed',
         finishedAt: new Date().toISOString(),
         failureCode: domainError.code,
         failureMessage: domainError.message,
@@ -667,8 +667,8 @@ class DeploymentCoordinator {
       .catch(() => undefined);
     await this.store
       .appendDeploymentEvent(deployment.id, {
-        type: "failed",
-        status: "failed",
+        type: 'failed',
+        status: 'failed',
         message: domainError.message,
         details: { code: domainError.code },
       })
@@ -677,7 +677,7 @@ class DeploymentCoordinator {
 
   private async transition(
     deployment: HubDeployment,
-    status: HubDeployment["status"],
+    status: HubDeployment['status'],
     type: string,
     message: string,
     result?: AppDeploymentResult,
@@ -704,12 +704,12 @@ async function requireActor(
 ): Promise<AuthorizedHubActor> {
   const session = await auth.getSession(context.req.raw.headers);
   if (!session) {
-    throw new HubDomainError("UNAUTHORIZED", "Authentication required.", {
+    throw new HubDomainError('UNAUTHORIZED', 'Authentication required.', {
       status: 401,
     });
   }
   const actor = await authorization.actor(toUserSummary(session));
-  context.set("actor", actor);
+  context.set('actor', actor);
   return actor;
 }
 
@@ -719,7 +719,7 @@ async function requireAuthorizedApplication(
   userId: string,
   applicationId: string,
   action: HubAction,
-  resource: HubResource = "hub.app",
+  resource: HubResource = 'hub.app',
 ): Promise<HubApplication> {
   if (
     !(await authorization.can(userId, {
@@ -728,7 +728,7 @@ async function requireAuthorizedApplication(
       applicationId,
     }))
   ) {
-    throw concealedNotFound("APPLICATION_NOT_FOUND", applicationId);
+    throw concealedNotFound('APPLICATION_NOT_FOUND', applicationId);
   }
   return store.requireApplication(applicationId);
 }
@@ -743,19 +743,19 @@ async function requireAuthorizedDeployment(
   if (
     !deployment ||
     !(await authorization.can(userId, {
-      resource: "hub.deployment",
-      action: "read",
+      resource: 'hub.deployment',
+      action: 'read',
       applicationId: deployment.applicationId,
     }))
   ) {
-    throw concealedNotFound("DEPLOYMENT_NOT_FOUND", deploymentId);
+    throw concealedNotFound('DEPLOYMENT_NOT_FOUND', deploymentId);
   }
   return deployment;
 }
 
 function concealedNotFound(code: string, id: string): HubDomainError {
   const resource =
-    code === "DEPLOYMENT_NOT_FOUND" ? "Deployment" : "Application";
+    code === 'DEPLOYMENT_NOT_FOUND' ? 'Deployment' : 'Application';
   return new HubDomainError(code, `${resource} "${id}" was not found.`, {
     status: 404,
   });
@@ -763,7 +763,7 @@ function concealedNotFound(code: string, id: string): HubDomainError {
 
 function toUserSummary(session: AuthSession): HubUserSummary {
   if (!session) {
-    throw new HubDomainError("UNAUTHORIZED", "Authentication required.", {
+    throw new HubDomainError('UNAUTHORIZED', 'Authentication required.', {
       status: 401,
     });
   }
@@ -773,7 +773,7 @@ function toUserSummary(session: AuthSession): HubUserSummary {
     name: user.name,
     email: user.email,
     username:
-      "username" in user && typeof user.username === "string"
+      'username' in user && typeof user.username === 'string'
         ? user.username
         : null,
   };
@@ -782,8 +782,8 @@ function toUserSummary(session: AuthSession): HubUserSummary {
 function readPagination(
   context: Parameters<typeof successResponse>[0],
 ): HubListOptions {
-  const limit = Number(context.req.query("limit") ?? 20);
-  const offset = Number(context.req.query("offset") ?? 0);
+  const limit = Number(context.req.query('limit') ?? 20);
+  const offset = Number(context.req.query('offset') ?? 0);
   return {
     limit: Number.isFinite(limit) ? limit : 20,
     offset: Number.isFinite(offset) ? offset : 0,
@@ -803,45 +803,45 @@ async function jsonBody(
 ): Promise<Record<string, unknown>> {
   try {
     const body: unknown = await context.req.json();
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      throw new Error("object required");
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new Error('object required');
     }
     return body as Record<string, unknown>;
   } catch {
     throw new HubDomainError(
-      "INVALID_JSON",
-      "Request body must be a JSON object.",
+      'INVALID_JSON',
+      'Request body must be a JSON object.',
       { status: 400 },
     );
   }
 }
 
 function requiredString(value: unknown, field: string): string {
-  if (typeof value !== "string" || !value.trim()) {
+  if (typeof value !== 'string' || !value.trim()) {
     const message = `${field} is required.`;
-    throw new HubDomainError("VALIDATION_ERROR", message, {
+    throw new HubDomainError('VALIDATION_ERROR', message, {
       status: 422,
-      issues: [{ path: field, code: "required", message }],
+      issues: [{ path: field, code: 'required', message }],
     });
   }
   return value.trim();
 }
 
 function optionalString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function objectValue(value: unknown, field: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new HubDomainError(
-      "VALIDATION_ERROR",
+      'VALIDATION_ERROR',
       `${field} must be an object.`,
       {
         status: 422,
         issues: [
           {
             path: field,
-            code: "invalid_type",
+            code: 'invalid_type',
             message: `${field} must be an object.`,
           },
         ],
@@ -851,20 +851,20 @@ function objectValue(value: unknown, field: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function deploymentType(value: unknown): CreateDeploymentInput["type"] {
-  if (value === undefined || value === null || value === "") return "deploy";
-  if (value === "deploy" || value === "rollback" || value === "redeploy")
+function deploymentType(value: unknown): CreateDeploymentInput['type'] {
+  if (value === undefined || value === null || value === '') return 'deploy';
+  if (value === 'deploy' || value === 'rollback' || value === 'redeploy')
     return value;
   throw new HubDomainError(
-    "VALIDATION_ERROR",
-    "type must be deploy, rollback, or redeploy.",
+    'VALIDATION_ERROR',
+    'type must be deploy, rollback, or redeploy.',
     {
       status: 422,
       issues: [
         {
-          path: "type",
-          code: "invalid_value",
-          message: "type must be deploy, rollback, or redeploy.",
+          path: 'type',
+          code: 'invalid_value',
+          message: 'type must be deploy, rollback, or redeploy.',
         },
       ],
     },
@@ -877,7 +877,7 @@ function successResponse(
   meta: Record<string, unknown> = {},
   status: ContentfulStatusCode = 200,
 ): Response {
-  const requestId = context.get("requestId") ?? crypto.randomUUID();
+  const requestId = context.get('requestId') ?? crypto.randomUUID();
   return context.json({ data, meta, requestId }, status);
 }
 
@@ -885,27 +885,27 @@ function assertSecureMutation(
   request: Request,
   authoritativeOrigin?: string,
 ): void {
-  if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return;
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
 
   const contentType = request.headers
-    .get("content-type")
-    ?.split(";", 1)[0]
+    .get('content-type')
+    ?.split(';', 1)[0]
     ?.trim()
     .toLowerCase();
   if (contentType !== JSON_CONTENT_TYPE) {
     throw new HubDomainError(
-      "UNSUPPORTED_MEDIA_TYPE",
-      "Hub mutation requests must use application/json.",
+      'UNSUPPORTED_MEDIA_TYPE',
+      'Hub mutation requests must use application/json.',
       { status: 415 },
     );
   }
 
-  const origin = parseOrigin(request.headers.get("origin") ?? undefined);
+  const origin = parseOrigin(request.headers.get('origin') ?? undefined);
   const trustedOrigins = resolveMutationOrigins(request, authoritativeOrigin);
   if (!origin || !trustedOrigins.has(origin)) {
     throw new HubDomainError(
-      "UNTRUSTED_ORIGIN",
-      "Hub mutation requests must come from the Hub origin.",
+      'UNTRUSTED_ORIGIN',
+      'Hub mutation requests must come from the Hub origin.',
       { status: 403 },
     );
   }
@@ -927,18 +927,18 @@ function resolveOriginAliases(origin: string): Set<string> {
   const origins = new Set([effectiveUrl.origin]);
   if (!isLoopbackHostname(effectiveUrl.hostname)) return origins;
 
-  const port = effectiveUrl.port ? `:${effectiveUrl.port}` : "";
-  for (const hostname of ["localhost", "127.0.0.1", "[::1]"]) {
+  const port = effectiveUrl.port ? `:${effectiveUrl.port}` : '';
+  for (const hostname of ['localhost', '127.0.0.1', '[::1]']) {
     origins.add(`${effectiveUrl.protocol}//${hostname}${port}`);
   }
   return origins;
 }
 
 function parseOrigin(value: string | undefined): string | undefined {
-  if (!value || value === "null") return undefined;
+  if (!value || value === 'null') return undefined;
   try {
     const url = new URL(value);
-    if (url.origin === "null") return undefined;
+    if (url.origin === 'null') return undefined;
     return url.origin;
   } catch {
     return undefined;
@@ -956,7 +956,7 @@ function errorResponse(
 ): Response {
   const domainError = toDomainError(error);
   if (domainError.status >= 500) {
-    logServerError(error, { operation: "request", requestId });
+    logServerError(error, { operation: 'request', requestId });
   }
   return context.json(
     {
@@ -986,7 +986,7 @@ function toDomainError(error: unknown): HubDomainError {
       },
     );
   }
-  return new HubDomainError("INTERNAL_ERROR", PUBLIC_INTERNAL_ERROR_MESSAGE, {
+  return new HubDomainError('INTERNAL_ERROR', PUBLIC_INTERNAL_ERROR_MESSAGE, {
     status: 500,
     retryable: true,
     cause: error,
@@ -997,7 +997,7 @@ function logServerError(
   error: unknown,
   context: Record<string, unknown>,
 ): void {
-  console.error("Hub server error", { ...context, error });
+  console.error('Hub server error', { ...context, error });
 }
 
 async function readResponseJson(
@@ -1005,7 +1005,7 @@ async function readResponseJson(
 ): Promise<Record<string, unknown>> {
   try {
     const value: unknown = await response.json();
-    return value && typeof value === "object"
+    return value && typeof value === 'object'
       ? (value as Record<string, unknown>)
       : {};
   } catch {
@@ -1028,5 +1028,5 @@ function stringProperty(
   key: string,
 ): string | undefined {
   const property = value[key];
-  return typeof property === "string" ? property : undefined;
+  return typeof property === 'string' ? property : undefined;
 }

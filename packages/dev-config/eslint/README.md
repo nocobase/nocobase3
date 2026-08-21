@@ -22,16 +22,16 @@ All factories accept:
 - `environment`: additional environment config objects.
 
 ```js
-import { createPortalConfig } from "@nocobase/dev-config/eslint";
+import { createPortalConfig } from '@nocobase/dev-config/eslint';
 
 export default createPortalConfig({
   tsconfigRootDir: import.meta.dirname,
-  ignores: ["public/vendor/**"],
+  ignores: ['public/vendor/**'],
   overrides: [
     {
-      files: ["scripts/**/*.ts"],
+      files: ['scripts/**/*.ts'],
       rules: {
-        "no-console": "off",
+        'no-console': 'off',
       },
     },
   ],

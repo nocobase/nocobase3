@@ -124,21 +124,21 @@ Replace extension routes with synchronous definitions:
 
 ```tsx
 const extension: AppExtension = {
-  id: "customers",
+  id: 'customers',
   routes: defineAppRoutes([
     {
-      name: "customers",
-      path: "/customers",
-      resource: { meta: { label: "Customers" } },
-      lazy: () => import("./pages/customers"),
+      name: 'customers',
+      path: '/customers',
+      resource: { meta: { label: 'Customers' } },
+      lazy: () => import('./pages/customers'),
     },
   ]),
   dev: {
     routes: defineAppRoutes([
       {
-        name: "development.customers",
-        path: "customers",
-        lazy: () => import("./demo"),
+        name: 'development.customers',
+        path: 'customers',
+        lazy: () => import('./demo'),
       },
     ]),
   },

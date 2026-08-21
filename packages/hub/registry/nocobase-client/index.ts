@@ -1,2 +1,2 @@
-export * from "./remote-select";
-export type * from "./types";
+export * from './remote-select';
+export type * from './types';

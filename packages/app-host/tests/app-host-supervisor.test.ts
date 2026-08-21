@@ -13,11 +13,17 @@ import { sanitizeAppHostChildNodeOptions } from '../dist/supervisor.js';
 describe('AppHostSupervisor', () => {
   it('removes preserve symlink flags from app-host child NODE_OPTIONS', () => {
     expect(
-      sanitizeAppHostChildNodeOptions('--preserve-symlinks --max_old_space_size=4096 --preserve-symlinks-main=true'),
+      sanitizeAppHostChildNodeOptions(
+        '--preserve-symlinks --max_old_space_size=4096 --preserve-symlinks-main=true',
+      ),
     ).toBe('--max_old_space_size=4096');
   });
 
   it('removes empty NODE_OPTIONS when only preserve symlink flags are present', () => {
-    expect(sanitizeAppHostChildNodeOptions('--preserve-symlinks --preserve-symlinks-main')).toBe('');
+    expect(
+      sanitizeAppHostChildNodeOptions(
+        '--preserve-symlinks --preserve-symlinks-main',
+      ),
+    ).toBe('');
   });
 });

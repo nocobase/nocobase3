@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from 'node:fs';
 
 export type EnvMap = Record<string, string | undefined>;
 
@@ -13,7 +13,7 @@ export function readEnvFiles(
       continue;
     }
 
-    Object.assign(env, parseEnv(readFileSync(envFile, "utf8")));
+    Object.assign(env, parseEnv(readFileSync(envFile, 'utf8')));
   }
 
   const expansionEnv = { ...baseEnv, ...env };
@@ -58,7 +58,7 @@ function parseEnv(content: string): Record<string, string> {
       continue;
     }
 
-    const [, key, rawValue = ""] = match;
+    const [, key, rawValue = ''] = match;
     const quote = rawValue[0];
     let value = rawValue.trim();
 
@@ -70,7 +70,7 @@ function parseEnv(content: string): Record<string, string> {
       value = value.slice(1, -1);
     }
 
-    parsed[key] = value.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+    parsed[key] = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
   }
 
   return parsed;
@@ -80,11 +80,11 @@ function expandEnvValue(value: string, env: EnvMap): string {
   return value.replace(
     /\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g,
     (match: string, key: string) => {
-      if (match.startsWith("\\")) {
+      if (match.startsWith('\\')) {
         return match.slice(1);
       }
 
-      return env[key] ?? "";
+      return env[key] ?? '';
     },
   );
 }

@@ -1,9 +1,9 @@
-import { Activity, ArrowLeft, Boxes, GitCommit, Rocket } from "lucide-react";
-import { useTranslate } from "@refinedev/core";
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Activity, ArrowLeft, Boxes, GitCommit, Rocket } from 'lucide-react';
+import { useTranslate } from '@refinedev/core';
+import { useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,16 +13,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -30,8 +30,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   type HubApplication,
   type HubDeployment,
@@ -41,7 +41,7 @@ import {
   hasHubCapability,
   hubPost,
   useHubQuery,
-} from "@/features/hub/api";
+} from '@/features/hub/api';
 import {
   formatHubBytes,
   formatHubDate,
@@ -51,9 +51,9 @@ import {
   HubLoadingState,
   HubNotFoundState,
   HubStatusBadge,
-} from "@/features/hub/components";
-import { useHubPaginatedQuery } from "@/features/hub/pagination";
-import { useOptionalHubRuntime } from "@/features/hub/provider";
+} from '@/features/hub/components';
+import { useHubPaginatedQuery } from '@/features/hub/pagination';
+import { useOptionalHubRuntime } from '@/features/hub/provider';
 
 export interface ApplicationDetailPageProps {
   applicationId?: string;
@@ -78,21 +78,21 @@ export function ApplicationDetailPage({
   });
   const runtime = useOptionalHubRuntime();
   const me = useHubQuery<HubMe>({
-    path: encodedId && !runtime ? "/me" : null,
+    path: encodedId && !runtime ? '/me' : null,
     fetcher,
     enabled: Boolean(encodedId && !runtime),
   });
   const capabilities = runtime?.me.capabilities ?? me.data?.capabilities;
   const canReadReleases = hasHubCapability(
     capabilities,
-    "hub.release",
-    "read",
+    'hub.release',
+    'read',
     applicationId,
   );
   const canReadDeployments = hasHubCapability(
     capabilities,
-    "hub.deployment",
-    "read",
+    'hub.deployment',
+    'read',
     applicationId,
   );
   const releases = useHubPaginatedQuery<HubRelease>({
@@ -107,14 +107,14 @@ export function ApplicationDetailPage({
   });
   const canDeploy = hasHubCapability(
     capabilities,
-    "hub.deployment",
-    "create",
+    'hub.deployment',
+    'create',
     applicationId,
   );
   const canReadGlobalApplications = hasHubCapability(
     capabilities,
-    "hub.app",
-    "read",
+    'hub.app',
+    'read',
   );
   const [selectedRelease, setSelectedRelease] = useState<HubRelease | null>(
     null,
@@ -132,14 +132,14 @@ export function ApplicationDetailPage({
   };
 
   const applicationKind = translate(
-    "hub.application.notFoundKind",
-    "Application",
+    'hub.application.notFoundKind',
+    'Application',
   );
   if (!applicationId) return <HubNotFoundState kind={applicationKind} />;
   if (!runtime && me.loading) {
     return (
       <HubLoadingState
-        label={translate("hub.access.loading", "Loading Hub access")}
+        label={translate('hub.access.loading', 'Loading Hub access')}
       />
     );
   }
@@ -149,8 +149,8 @@ export function ApplicationDetailPage({
         error={me.error}
         onRetry={me.reload}
         title={translate(
-          "hub.access.loadError",
-          "Unable to load your Hub access",
+          'hub.access.loadError',
+          'Unable to load your Hub access',
         )}
       />
     );
@@ -158,7 +158,7 @@ export function ApplicationDetailPage({
   if (application.loading)
     return (
       <HubLoadingState
-        label={translate("hub.application.loading", "Loading application")}
+        label={translate('hub.application.loading', 'Loading application')}
       />
     );
   if (application.error) {
@@ -167,8 +167,8 @@ export function ApplicationDetailPage({
         error={application.error}
         onRetry={application.reload}
         title={translate(
-          "hub.application.loadError",
-          "Unable to load application",
+          'hub.application.loadError',
+          'Unable to load application',
         )}
       />
     );
@@ -177,32 +177,32 @@ export function ApplicationDetailPage({
   const applicationData = application.data;
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-4">
+    <div className='space-y-6'>
+      <header className='space-y-4'>
         <Button
-          variant="ghost"
-          size="sm"
+          variant='ghost'
+          size='sm'
           nativeButton={false}
-          render={<Link to={canReadGlobalApplications ? "/apps" : "/"} />}
+          render={<Link to={canReadGlobalApplications ? '/apps' : '/'} />}
         >
-          <ArrowLeft aria-hidden="true" />
+          <ArrowLeft aria-hidden='true' />
           {canReadGlobalApplications
-            ? translate("hub.common.applications", "Applications")
-            : translate("hub.common.home", "Home")}
+            ? translate('hub.common.applications', 'Applications')
+            : translate('hub.common.home', 'Home')}
         </Button>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-heading text-2xl font-semibold tracking-tight">
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+          <div className='space-y-1'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <h1 className='font-heading text-2xl font-semibold tracking-tight'>
                 {applicationData.name}
               </h1>
               <HubStatusBadge status={applicationData.status} />
             </div>
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className='font-mono text-xs text-muted-foreground'>
               {applicationData.slug}
             </p>
             {applicationData.description ? (
-              <p className="max-w-2xl text-sm text-muted-foreground">
+              <p className='max-w-2xl text-sm text-muted-foreground'>
                 {applicationData.description}
               </p>
             ) : null}
@@ -210,29 +210,29 @@ export function ApplicationDetailPage({
         </div>
       </header>
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue='overview'>
         <TabsList
-          variant="line"
+          variant='line'
           aria-label={translate(
-            "hub.application.sectionsAria",
-            "Application sections",
+            'hub.application.sectionsAria',
+            'Application sections',
           )}
         >
-          <TabsTrigger value="overview">
-            {translate("hub.application.tabs.overview", "Overview")}
+          <TabsTrigger value='overview'>
+            {translate('hub.application.tabs.overview', 'Overview')}
           </TabsTrigger>
           {canReadReleases ? (
-            <TabsTrigger value="releases">
-              {translate("hub.application.tabs.releases", "Releases")}
+            <TabsTrigger value='releases'>
+              {translate('hub.application.tabs.releases', 'Releases')}
             </TabsTrigger>
           ) : null}
           {canReadDeployments ? (
-            <TabsTrigger value="deployments">
-              {translate("hub.application.tabs.deployments", "Deployments")}
+            <TabsTrigger value='deployments'>
+              {translate('hub.application.tabs.deployments', 'Deployments')}
             </TabsTrigger>
           ) : null}
         </TabsList>
-        <TabsContent value="overview" className="pt-4">
+        <TabsContent value='overview' className='pt-4'>
           <ApplicationOverview
             application={applicationData}
             releases={releases.data ?? []}
@@ -243,7 +243,7 @@ export function ApplicationDetailPage({
           />
         </TabsContent>
         {canReadReleases ? (
-          <TabsContent value="releases" className="pt-4">
+          <TabsContent value='releases' className='pt-4'>
             <ApplicationReleases
               application={applicationData}
               releases={releases.data ?? []}
@@ -259,7 +259,7 @@ export function ApplicationDetailPage({
           </TabsContent>
         ) : null}
         {canReadDeployments ? (
-          <TabsContent value="deployments" className="pt-4">
+          <TabsContent value='deployments' className='pt-4'>
             <ApplicationDeployments
               deployments={deployments.data ?? []}
               releases={releases.data ?? []}
@@ -287,17 +287,17 @@ export function ApplicationDetailPage({
             <AlertDialogTitle>
               {applicationData.activeReleaseId
                 ? translate(
-                    "hub.application.deploy.changeTitle",
-                    "Change active release",
+                    'hub.application.deploy.changeTitle',
+                    'Change active release',
                   )
-                : translate("hub.application.deploy.title", "Deploy release")}
+                : translate('hub.application.deploy.title', 'Deploy release')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="block">
+              <span className='block'>
                 {translateWithValues(
                   translate,
-                  "hub.application.deploy.currentRelease",
-                  "Current release: {{version}}",
+                  'hub.application.deploy.currentRelease',
+                  'Current release: {{version}}',
                   {
                     version:
                       releases.data?.find(
@@ -305,40 +305,40 @@ export function ApplicationDetailPage({
                           release.id === applicationData.activeReleaseId,
                       )?.version ??
                       applicationData.activeReleaseId ??
-                      translate("hub.common.none", "None"),
+                      translate('hub.common.none', 'None'),
                   },
                 )}
               </span>
-              <span className="block">
+              <span className='block'>
                 {translateWithValues(
                   translate,
-                  "hub.application.deploy.targetRelease",
-                  "Target release: {{version}}",
-                  { version: selectedRelease?.version ?? "—" },
+                  'hub.application.deploy.targetRelease',
+                  'Target release: {{version}}',
+                  { version: selectedRelease?.version ?? '—' },
                 )}
               </span>
-              <span className="block">
+              <span className='block'>
                 {translateWithValues(
                   translate,
-                  "hub.application.deploy.environment",
-                  "Environment: {{environment}}",
+                  'hub.application.deploy.environment',
+                  'Environment: {{environment}}',
                   { environment: applicationData.defaultEnvironmentId },
                 )}
               </span>
-              <span className="mt-2 block">
+              <span className='mt-2 block'>
                 {translate(
-                  "hub.application.deploy.description",
-                  "This creates a new Deployment. If it fails, the current release remains active.",
+                  'hub.application.deploy.description',
+                  'This creates a new Deployment. If it fails, the current release remains active.',
                 )}
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deploymentError ? (
-            <Alert variant="destructive">
+            <Alert variant='destructive'>
               <AlertTitle>
                 {translate(
-                  "hub.application.deploy.error",
-                  "Unable to create deployment",
+                  'hub.application.deploy.error',
+                  'Unable to create deployment',
                 )}
               </AlertTitle>
               <AlertDescription>{deploymentError.message}</AlertDescription>
@@ -346,7 +346,7 @@ export function ApplicationDetailPage({
           ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={submittingDeployment}>
-              {translate("hub.common.cancel", "Cancel")}
+              {translate('hub.common.cancel', 'Cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               disabled={submittingDeployment || !selectedRelease}
@@ -362,8 +362,8 @@ export function ApplicationDetailPage({
                   activeRelease &&
                   new Date(selectedRelease.createdAt).valueOf() <
                     new Date(activeRelease.createdAt).valueOf()
-                    ? "rollback"
-                    : "deploy";
+                    ? 'rollback'
+                    : 'deploy';
                 void hubPost<HubDeployment>(
                   `/apps/${encodedId}/deployments`,
                   { targetReleaseId: selectedRelease.id, type },
@@ -384,10 +384,10 @@ export function ApplicationDetailPage({
               }}
             >
               {submittingDeployment
-                ? translate("hub.application.deploy.starting", "Starting…")
+                ? translate('hub.application.deploy.starting', 'Starting…')
                 : translate(
-                    "hub.application.deploy.confirm",
-                    "Confirm deployment",
+                    'hub.application.deploy.confirm',
+                    'Confirm deployment',
                   )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -427,94 +427,94 @@ function ApplicationOverview({
   );
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
       <OverviewCard
-        icon={<Rocket aria-hidden="true" />}
+        icon={<Rocket aria-hidden='true' />}
         label={translate(
-          "hub.application.overview.currentRelease",
-          "Current release",
+          'hub.application.overview.currentRelease',
+          'Current release',
         )}
         value={
           activeRelease?.version ??
           application.activeReleaseId ??
-          translate("hub.application.overview.notDeployed", "Not deployed")
+          translate('hub.application.overview.notDeployed', 'Not deployed')
         }
         detail={
           activeRelease
             ? translateWithValues(
                 translate,
-                "hub.application.overview.verifiedAt",
-                "Verified {{date}}",
+                'hub.application.overview.verifiedAt',
+                'Verified {{date}}',
                 { date: formatHubDate(activeRelease.createdAt) },
               )
             : translate(
-                "hub.application.overview.noActiveMetadata",
-                "No active release metadata",
+                'hub.application.overview.noActiveMetadata',
+                'No active release metadata',
               )
         }
       />
       <OverviewCard
-        icon={<Boxes aria-hidden="true" />}
-        label={translate("hub.application.overview.environment", "Environment")}
+        icon={<Boxes aria-hidden='true' />}
+        label={translate('hub.application.overview.environment', 'Environment')}
         value={application.defaultEnvironmentId}
         detail={translate(
-          "hub.application.overview.mvpTarget",
-          "MVP deployment target",
+          'hub.application.overview.mvpTarget',
+          'MVP deployment target',
         )}
       />
       <OverviewCard
-        icon={<Activity aria-hidden="true" />}
+        icon={<Activity aria-hidden='true' />}
         label={translate(
-          "hub.application.overview.latestDeployment",
-          "Latest deployment",
+          'hub.application.overview.latestDeployment',
+          'Latest deployment',
         )}
         value={
           canReadDeployments
             ? latestDeployment
               ? latestDeployment.status
               : translate(
-                  "hub.application.overview.noDeployments",
-                  "No deployments",
+                  'hub.application.overview.noDeployments',
+                  'No deployments',
                 )
-            : translate("hub.common.restricted", "Restricted")
+            : translate('hub.common.restricted', 'Restricted')
         }
         detail={
           !canReadDeployments
             ? translate(
-                "hub.application.overview.deploymentRestricted",
-                "Deployment access not granted",
+                'hub.application.overview.deploymentRestricted',
+                'Deployment access not granted',
               )
             : latestDeployment
               ? formatHubDate(latestDeployment.createdAt)
               : translate(
-                  "hub.application.overview.publishToBegin",
-                  "Publish a verified release to begin",
+                  'hub.application.overview.publishToBegin',
+                  'Publish a verified release to begin',
                 )
         }
         status={canReadDeployments ? latestDeployment?.status : undefined}
       />
       <OverviewCard
-        icon={<GitCommit aria-hidden="true" />}
+        icon={<GitCommit aria-hidden='true' />}
         label={translate(
-          "hub.application.overview.availableReleases",
-          "Available releases",
+          'hub.application.overview.availableReleases',
+          'Available releases',
         )}
         value={
           canReadReleases
             ? String(releaseTotal ?? releases.length)
-            : translate("hub.common.restricted", "Restricted")
+            : translate('hub.common.restricted', 'Restricted')
         }
         detail={
           canReadReleases
             ? translateWithValues(
                 translate,
-                "hub.application.overview.updatedAt",
-                "Updated {{date}}",
+                'hub.application.overview.updatedAt',
+                'Updated {{date}}',
                 { date: formatHubDate(application.updatedAt) },
               )
             : translate(
-                "hub.application.overview.releaseRestricted",
-                "Release access not granted",
+                'hub.application.overview.releaseRestricted',
+                'Release access not granted',
               )
         }
       />
@@ -536,17 +536,17 @@ function OverviewCard({
   status?: string;
 }) {
   return (
-    <Card size="sm">
+    <Card size='sm'>
       <CardHeader>
-        <div className="flex items-center gap-2 text-muted-foreground [&_svg]:size-4">
+        <div className='flex items-center gap-2 text-muted-foreground [&_svg]:size-4'>
           {icon}
           <CardDescription>{label}</CardDescription>
         </div>
-        <CardTitle className="flex items-center gap-2 pt-1">
+        <CardTitle className='flex items-center gap-2 pt-1'>
           {status ? <HubStatusBadge status={status} /> : value}
         </CardTitle>
       </CardHeader>
-      <CardContent className="text-xs text-muted-foreground">
+      <CardContent className='text-xs text-muted-foreground'>
         {detail}
       </CardContent>
     </Card>
@@ -580,7 +580,7 @@ function ApplicationReleases({
   if (loading) {
     return (
       <HubLoadingState
-        label={translate("hub.releases.loading", "Loading releases")}
+        label={translate('hub.releases.loading', 'Loading releases')}
       />
     );
   }
@@ -588,42 +588,42 @@ function ApplicationReleases({
   if (releases.length === 0) {
     return (
       <HubEmptyState
-        title={translate("hub.releases.empty.title", "No releases")}
+        title={translate('hub.releases.empty.title', 'No releases')}
         description={translate(
-          "hub.releases.empty.description",
-          "Upload a SemVer release through the CLI to make it available for deployment.",
+          'hub.releases.empty.description',
+          'Upload a SemVer release through the CLI to make it available for deployment.',
         )}
       />
     );
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="py-0">
-        <CardContent className="px-0">
+    <div className='space-y-4'>
+      <Card className='py-0'>
+        <CardContent className='px-0'>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">
-                  {translate("hub.releases.columns.version", "Version")}
+                <TableHead className='pl-4'>
+                  {translate('hub.releases.columns.version', 'Version')}
                 </TableHead>
                 <TableHead>
                   {translate(
-                    "hub.releases.columns.verification",
-                    "Verification",
+                    'hub.releases.columns.verification',
+                    'Verification',
                   )}
                 </TableHead>
                 <TableHead>
-                  {translate("hub.releases.columns.source", "Source")}
+                  {translate('hub.releases.columns.source', 'Source')}
                 </TableHead>
                 <TableHead>
-                  {translate("hub.releases.columns.size", "Size")}
+                  {translate('hub.releases.columns.size', 'Size')}
                 </TableHead>
                 <TableHead>
-                  {translate("hub.releases.columns.created", "Created")}
+                  {translate('hub.releases.columns.created', 'Created')}
                 </TableHead>
-                <TableHead className="text-right">
-                  {translate("hub.releases.columns.action", "Action")}
+                <TableHead className='text-right'>
+                  {translate('hub.releases.columns.action', 'Action')}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -632,12 +632,12 @@ function ApplicationReleases({
                 const isCurrent = release.id === application.activeReleaseId;
                 return (
                   <TableRow key={release.id}>
-                    <TableCell className="pl-4 font-medium">
-                      <div className="flex items-center gap-2">
+                    <TableCell className='pl-4 font-medium'>
+                      <div className='flex items-center gap-2'>
                         {release.version}
                         {isCurrent ? (
-                          <Badge variant="outline">
-                            {translate("hub.releases.current", "Current")}
+                          <Badge variant='outline'>
+                            {translate('hub.releases.current', 'Current')}
                           </Badge>
                         ) : null}
                       </div>
@@ -645,34 +645,34 @@ function ApplicationReleases({
                     <TableCell>
                       <HubStatusBadge status={release.verificationStatus} />
                     </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {release.sourceCommit ?? "—"}
+                    <TableCell className='font-mono text-xs'>
+                      {release.sourceCommit ?? '—'}
                     </TableCell>
                     <TableCell>{formatHubBytes(release.sizeBytes)}</TableCell>
                     <TableCell>{formatHubDate(release.createdAt)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className='text-right'>
                       {canDeploy &&
                       onDeployRelease &&
-                      release.verificationStatus === "verified" &&
+                      release.verificationStatus === 'verified' &&
                       !isCurrent ? (
                         <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
+                          type='button'
+                          size='sm'
+                          variant='outline'
                           aria-label={translateWithValues(
                             translate,
-                            "hub.releases.deployAria",
-                            "Deploy {{version}}",
+                            'hub.releases.deployAria',
+                            'Deploy {{version}}',
                             { version: release.version },
                           )}
                           onClick={() => onDeployRelease(release, application)}
                         >
                           {application.activeReleaseId
                             ? translate(
-                                "hub.releases.deployOrRollback",
-                                "Deploy / roll back",
+                                'hub.releases.deployOrRollback',
+                                'Deploy / roll back',
                               )
-                            : translate("hub.releases.deploy", "Deploy")}
+                            : translate('hub.releases.deploy', 'Deploy')}
                         </Button>
                       ) : null}
                     </TableCell>
@@ -716,8 +716,8 @@ function ApplicationDeployments({
     return (
       <HubLoadingState
         label={translate(
-          "hub.applicationDeployments.loading",
-          "Loading deployments",
+          'hub.applicationDeployments.loading',
+          'Loading deployments',
         )}
       />
     );
@@ -727,12 +727,12 @@ function ApplicationDeployments({
     return (
       <HubEmptyState
         title={translate(
-          "hub.applicationDeployments.empty.title",
-          "No deployments",
+          'hub.applicationDeployments.empty.title',
+          'No deployments',
         )}
         description={translate(
-          "hub.applicationDeployments.empty.description",
-          "A deployment record will appear after a verified release is sent to the default environment.",
+          'hub.applicationDeployments.empty.description',
+          'A deployment record will appear after a verified release is sent to the default environment.',
         )}
       />
     );
@@ -742,38 +742,38 @@ function ApplicationDeployments({
   );
 
   return (
-    <div className="space-y-4">
-      <Card className="py-0">
-        <CardContent className="px-0">
+    <div className='space-y-4'>
+      <Card className='py-0'>
+        <CardContent className='px-0'>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">
+                <TableHead className='pl-4'>
                   {translate(
-                    "hub.deployments.columns.deployment",
-                    "Deployment",
+                    'hub.deployments.columns.deployment',
+                    'Deployment',
                   )}
                 </TableHead>
                 <TableHead>
-                  {translate("hub.deployments.columns.target", "Target")}
+                  {translate('hub.deployments.columns.target', 'Target')}
                 </TableHead>
                 <TableHead>
-                  {translate("hub.common.environment", "Environment")}
+                  {translate('hub.common.environment', 'Environment')}
                 </TableHead>
                 <TableHead>
-                  {translate("hub.common.status", "Status")}
+                  {translate('hub.common.status', 'Status')}
                 </TableHead>
                 <TableHead>
-                  {translate("hub.common.started", "Started")}
+                  {translate('hub.common.started', 'Started')}
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {deployments.map((deployment) => (
                 <TableRow key={deployment.id}>
-                  <TableCell className="pl-4">
+                  <TableCell className='pl-4'>
                     <Link
-                      className="font-mono text-xs underline-offset-4 hover:underline"
+                      className='font-mono text-xs underline-offset-4 hover:underline'
                       to={`/deployments/${encodeURIComponent(deployment.id)}`}
                     >
                       {deployment.id}

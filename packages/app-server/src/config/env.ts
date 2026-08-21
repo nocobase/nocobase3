@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from 'node:fs';
 
-import type { ConfigEnv } from "./types.js";
+import type { ConfigEnv } from './types.js';
 
 export type EnvMap = Record<string, string | undefined>;
 
@@ -58,7 +58,7 @@ class ConfigEnvAccessor implements ConfigEnv {
     }
 
     const items = value
-      .split(",")
+      .split(',')
       .map((item) => item.trim())
       .filter(Boolean);
 
@@ -77,7 +77,7 @@ export function readEnvFiles(
       continue;
     }
 
-    Object.assign(env, parseEnv(readFileSync(envFile, "utf8")));
+    Object.assign(env, parseEnv(readFileSync(envFile, 'utf8')));
   }
 
   const expansionEnv = { ...baseEnv, ...env };
@@ -123,14 +123,14 @@ function parseEnv(content: string): Record<string, string> {
     }
 
     const keyCandidate: unknown = match[1];
-    if (typeof keyCandidate !== "string") {
+    if (typeof keyCandidate !== 'string') {
       continue;
     }
 
     const rawValueCandidate: unknown = match[2];
     const key = keyCandidate;
     const rawValue =
-      typeof rawValueCandidate === "string" ? rawValueCandidate : "";
+      typeof rawValueCandidate === 'string' ? rawValueCandidate : '';
     const quote = rawValue[0];
     let value = rawValue.trim();
 
@@ -142,7 +142,7 @@ function parseEnv(content: string): Record<string, string> {
       value = value.slice(1, -1);
     }
 
-    parsed[key] = value.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+    parsed[key] = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
   }
 
   return parsed;
@@ -152,11 +152,11 @@ function expandEnvValue(value: string, env: EnvMap): string {
   return value.replace(
     /\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g,
     (match: string, key: string): string => {
-      if (match.startsWith("\\")) {
+      if (match.startsWith('\\')) {
         return match.slice(1);
       }
 
-      return env[key] ?? "";
+      return env[key] ?? '';
     },
   );
 }

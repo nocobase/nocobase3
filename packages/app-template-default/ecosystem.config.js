@@ -1,10 +1,10 @@
 export const apps = [
   {
-    name: "nocobase-app-template-default",
-    script: "./dist/server/standalone.js",
-    interpreter: "node",
+    name: 'nocobase-app-template-default',
+    script: './dist/server/standalone.js',
+    interpreter: 'node',
     env: {
-      NODE_ENV: "production",
+      NODE_ENV: 'production',
     },
   },
 ];

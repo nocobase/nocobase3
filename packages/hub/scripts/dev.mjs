@@ -1,14 +1,14 @@
-import spawn from "cross-spawn";
-import fs from "node:fs";
-import net from "node:net";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import spawn from 'cross-spawn';
+import fs from 'node:fs';
+import net from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "..",
+  '..',
 );
-const viteDevHost = "127.0.0.1";
+const viteDevHost = '127.0.0.1';
 const viteDevPreferredPort = 5173;
 
 const parseEnv = (content) => {
@@ -20,7 +20,7 @@ const parseEnv = (content) => {
     const match = line.match(linePattern);
     if (!match) continue;
 
-    const [, key, rawValue = ""] = match;
+    const [, key, rawValue = ''] = match;
     const quote = rawValue[0];
     let value = rawValue.trim();
 
@@ -32,7 +32,7 @@ const parseEnv = (content) => {
       value = value.slice(1, -1);
     }
 
-    parsed[key] = value.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+    parsed[key] = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
   }
 
   return parsed;
@@ -40,17 +40,17 @@ const parseEnv = (content) => {
 
 const expandEnvValue = (value, env) =>
   value.replace(/\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g, (match, key) => {
-    if (match.startsWith("\\")) return match.slice(1);
-    return env[key] ?? "";
+    if (match.startsWith('\\')) return match.slice(1);
+    return env[key] ?? '';
   });
 
 const loadEnv = () => {
   const env = {};
 
-  for (const envFile of [".env", ".env.local"]) {
+  for (const envFile of ['.env', '.env.local']) {
     const envPath = path.join(rootDir, envFile);
     if (!fs.existsSync(envPath)) continue;
-    Object.assign(env, parseEnv(fs.readFileSync(envPath, "utf8")));
+    Object.assign(env, parseEnv(fs.readFileSync(envPath, 'utf8')));
   }
 
   const expansionEnv = { ...env, ...process.env };
@@ -65,7 +65,7 @@ const canListen = (host, port) =>
   new Promise((resolve) => {
     const server = net.createServer();
 
-    server.once("error", () => {
+    server.once('error', () => {
       resolve(false);
     });
 
@@ -89,9 +89,9 @@ const findAvailablePort = async (host, preferredPort) => {
 };
 
 const toUrlHost = (host) => {
-  if (host === "0.0.0.0") return "127.0.0.1";
-  if (host === "::") return "[::1]";
-  if (host.includes(":") && !host.startsWith("[")) return `[${host}]`;
+  if (host === '0.0.0.0') return '127.0.0.1';
+  if (host === '::') return '[::1]';
+  if (host.includes(':') && !host.startsWith('[')) return `[${host}]`;
   return host;
 };
 
@@ -102,9 +102,9 @@ const numberFromEnv = (value, fallback) => {
 
 const pipeViteOutput = (child) => {
   let suppressStartupBanner = true;
-  let buffer = "";
+  let buffer = '';
 
-  child.stdout?.on("data", (chunk) => {
+  child.stdout?.on('data', (chunk) => {
     if (!suppressStartupBanner) {
       process.stdout.write(chunk);
       return;
@@ -112,22 +112,22 @@ const pipeViteOutput = (child) => {
 
     buffer += chunk.toString();
 
-    const helpIndex = buffer.indexOf("press h + enter to show help");
+    const helpIndex = buffer.indexOf('press h + enter to show help');
     if (helpIndex >= 0) {
       suppressStartupBanner = false;
-      const nextLineIndex = buffer.indexOf("\n", helpIndex);
-      const rest = nextLineIndex >= 0 ? buffer.slice(nextLineIndex + 1) : "";
+      const nextLineIndex = buffer.indexOf('\n', helpIndex);
+      const rest = nextLineIndex >= 0 ? buffer.slice(nextLineIndex + 1) : '';
       if (rest) {
         process.stdout.write(rest);
       }
-      buffer = "";
+      buffer = '';
       return;
     }
 
     if (buffer.length > 16_000) {
       suppressStartupBanner = false;
       process.stdout.write(buffer);
-      buffer = "";
+      buffer = '';
     }
   });
 
@@ -138,25 +138,25 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
   const child = spawn(command, args, {
     cwd: rootDir,
     env,
-    stdio: options.filterViteStartup ? ["inherit", "pipe", "pipe"] : "inherit",
+    stdio: options.filterViteStartup ? ['inherit', 'pipe', 'pipe'] : 'inherit',
   });
 
   if (options.filterViteStartup) {
     pipeViteOutput(child);
   }
 
-  child.once("error", (error) => {
+  child.once('error', (error) => {
     console.error(`[${label}] failed to start`, error);
     shutdown(1);
   });
 
-  child.once("exit", (code, signal) => {
+  child.once('exit', (code, signal) => {
     if (shuttingDown) return;
 
     console.error(
-      `[${label}] exited unexpectedly; code=${code ?? "null"} signal=${signal ?? "null"}`,
+      `[${label}] exited unexpectedly; code=${code ?? 'null'} signal=${signal ?? 'null'}`,
     );
-    shutdown(typeof code === "number" ? code : 1);
+    shutdown(typeof code === 'number' ? code : 1);
   });
 
   children.push(child);
@@ -172,22 +172,22 @@ const shutdown = (exitCode = 0) => {
 
   for (const child of children) {
     if (!child.killed && child.exitCode === null) {
-      child.kill("SIGTERM");
+      child.kill('SIGTERM');
     }
   }
 
   setTimeout(() => {
     for (const child of children) {
       if (!child.killed && child.exitCode === null) {
-        child.kill("SIGKILL");
+        child.kill('SIGKILL');
       }
     }
     process.exit(exitCode);
   }, 1500).unref();
 };
 
-process.once("SIGINT", () => shutdown(0));
-process.once("SIGTERM", () => shutdown(0));
+process.once('SIGINT', () => shutdown(0));
+process.once('SIGTERM', () => shutdown(0));
 
 const env = loadEnv();
 const vitePort = await findAvailablePort(viteDevHost, viteDevPreferredPort);
@@ -197,45 +197,45 @@ const nextEnv = {
   APP_VITE_DEV_PORT: String(vitePort),
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
 };
-const appServerHost = nextEnv.APP_SERVER_HOST || "127.0.0.1";
+const appServerHost = nextEnv.APP_SERVER_HOST || '127.0.0.1';
 const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13000);
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;
 const appBasePath = String(
-  nextEnv.APP_BASE_PATH || `/${nextEnv.APP_NAME || "app"}`,
+  nextEnv.APP_BASE_PATH || `/${nextEnv.APP_NAME || 'app'}`,
 )
   .trim()
-  .replace(/^\/+|\/+$/g, "");
+  .replace(/^\/+|\/+$/g, '');
 const appUrl = appBasePath
   ? `${appServerUrl}/${appBasePath}/`
   : `${appServerUrl}/`;
-const hubApiPath = `/${[appBasePath, "api"].filter(Boolean).join("/")}`;
+const hubApiPath = `/${[appBasePath, 'api'].filter(Boolean).join('/')}`;
 
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);
 console.log(`  Hub API:   ${appServerUrl}${hubApiPath}\n`);
 
 spawnDevProcess(
-  "client",
-  "pnpm",
+  'client',
+  'pnpm',
   [
-    "exec",
-    "vite",
-    "--host",
+    'exec',
+    'vite',
+    '--host',
     viteDevHost,
-    "--port",
+    '--port',
     String(vitePort),
-    "--strictPort",
+    '--strictPort',
   ],
   nextEnv,
   { filterViteStartup: true },
 );
 
 spawnDevProcess(
-  "server",
-  "pnpm",
-  ["exec", "tsx", "watch", "--clear-screen=false", "server/standalone.ts"],
+  'server',
+  'pnpm',
+  ['exec', 'tsx', 'watch', '--clear-screen=false', 'server/standalone.ts'],
   {
     ...nextEnv,
-    APP_SERVER_START_LOG: "false",
+    APP_SERVER_START_LOG: 'false',
   },
 );

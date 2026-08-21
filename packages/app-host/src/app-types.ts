@@ -10,9 +10,9 @@
 import type {
   AppWebSocketAcceptResult,
   AppWebSocketHandler,
-} from "@nocobase/app-server/websocket";
+} from '@nocobase/app-server/websocket';
 
-import type { AppState } from "./events.ts";
+import type { AppState } from './events.ts';
 
 export type {
   AppWebSocket,
@@ -26,7 +26,7 @@ export type {
   AppWebSocketOpenEvent,
   AppWebSocketReadyState,
   AppWebSocketSendOptions,
-} from "@nocobase/app-server/websocket";
+} from '@nocobase/app-server/websocket';
 
 export type AppDisposer = () => void | Promise<void>;
 
@@ -62,11 +62,11 @@ export interface AppScope {
 export type AppFactory = (scope: AppScope) => FetchApp | Promise<FetchApp>;
 
 export type AppBackendKind =
-  "in-process" | "worker" | "process" | "external-service";
+  'in-process' | 'worker' | 'process' | 'external-service';
 
 export type AppIsolation = AppBackendKind;
 
-export type AppTier = "cold" | "warm" | "hot" | "dedicated";
+export type AppTier = 'cold' | 'warm' | 'hot' | 'dedicated';
 
 export interface AppCodeReference {
   version: string;
@@ -108,7 +108,7 @@ export interface AppResourcePolicy {
 }
 
 export interface AppRuntimeEndpoint {
-  kind: "in-process" | "local-http" | "external-http";
+  kind: 'in-process' | 'local-http' | 'external-http';
   host?: string;
   port?: number;
   url?: string;

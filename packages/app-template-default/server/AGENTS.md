@@ -28,10 +28,10 @@ Standalone and embedded may differ only in their adapter layer. After adapter
 normalization, app routes, SPA runtime globals, API proxy behavior, database
 setup, migrations, and services must use the shared runtime path.
 
-| Mode | Public base path | App-local incoming path | Internal base path | Public API URL | Internal proxy route |
-| --- | --- | --- | --- | --- | --- |
-| standalone | `APP_BASE_PATH` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<APP_BASE_PATH>/v2/api` | `/v2/api` |
-| embedded | `scope.basePath` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<scope.basePath>/v2/api` | `/v2/api` |
+| Mode       | Public base path | App-local incoming path            | Internal base path    | Public API URL            | Internal proxy route |
+| ---------- | ---------------- | ---------------------------------- | --------------------- | ------------------------- | -------------------- |
+| standalone | `APP_BASE_PATH`  | `/settings` from `/<app>/settings` | app-local root (`''`) | `<APP_BASE_PATH>/v2/api`  | `/v2/api`            |
+| embedded   | `scope.basePath` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<scope.basePath>/v2/api` | `/v2/api`            |
 
 `APP_BASE_PATH` and `scope.basePath` are public mount paths. Do not use them as
 app-local route prefixes. App-local routes should be written as `/api/*`,

@@ -2,7 +2,9 @@ import type { AuthProvider } from '@refinedev/core';
 import type { AuthClient } from './auth-client.js';
 
 export function createAuthProvider(client: AuthClient): AuthProvider {
-  type CurrentUser = NonNullable<Awaited<ReturnType<AuthClient['getSession']>>>['user'];
+  type CurrentUser = NonNullable<
+    Awaited<ReturnType<AuthClient['getSession']>>
+  >['user'];
   let currentUser: CurrentUser | null | undefined;
   let currentRequest: Promise<typeof currentUser> | undefined;
 
@@ -10,12 +12,15 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     if (currentUser !== undefined) {
       return currentUser;
     }
-    currentRequest ??= client.getSession().then((session) => {
-      currentUser = session?.user ?? null;
-      return currentUser;
-    }).finally(() => {
-      currentRequest = undefined;
-    });
+    currentRequest ??= client
+      .getSession()
+      .then((session) => {
+        currentUser = session?.user ?? null;
+        return currentUser;
+      })
+      .finally(() => {
+        currentRequest = undefined;
+      });
     return currentRequest;
   };
 
@@ -34,7 +39,10 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
         clear();
         return { success: true, redirectTo: params?.redirectTo ?? '/' };
       } catch (error) {
-        return { success: false, error: authError(error, 'Unable to sign in.') };
+        return {
+          success: false,
+          error: authError(error, 'Unable to sign in.'),
+        };
       }
     },
     register: async (params) => {
@@ -48,7 +56,10 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
         clear();
         return { success: true, redirectTo: params?.redirectTo ?? '/login' };
       } catch (error) {
-        return { success: false, error: authError(error, 'Unable to create the account.') };
+        return {
+          success: false,
+          error: authError(error, 'Unable to create the account.'),
+        };
       }
     },
     forgotPassword: async (params) => {
@@ -59,7 +70,10 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
         );
         return { success: true };
       } catch (error) {
-        return { success: false, error: authError(error, 'Unable to send the reset link.') };
+        return {
+          success: false,
+          error: authError(error, 'Unable to send the reset link.'),
+        };
       }
     },
     logout: async () => {
@@ -83,14 +97,16 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     },
     getIdentity: async () => {
       const user = await getUser();
-      return user ? {
-        id: user.id,
-        fullName: user.name,
-        firstName: user.name,
-        lastName: '',
-        email: user.email,
-        avatar: user.image ?? undefined,
-      } : null;
+      return user
+        ? {
+            id: user.id,
+            fullName: user.name,
+            firstName: user.name,
+            lastName: '',
+            email: user.email,
+            avatar: user.image ?? undefined,
+          }
+        : null;
     },
     onError: async (error) => {
       if (isUnauthorized(error)) {
@@ -110,8 +126,10 @@ function authError(error: unknown, fallback: string) {
 }
 
 function isUnauthorized(error: unknown): boolean {
-  return typeof error === 'object'
-    && error !== null
-    && 'status' in error
-    && error.status === 401;
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    error.status === 401
+  );
 }

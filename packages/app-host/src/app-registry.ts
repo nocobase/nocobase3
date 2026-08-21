@@ -15,9 +15,9 @@ import {
   AppNotFoundError,
   AppRegistryError,
   AppReloadFailedError,
-} from "./errors.ts";
-import { AppEventBus } from "./events.ts";
-import { InProcessAppBackend } from "./in-process-backend.ts";
+} from './errors.ts';
+import { AppEventBus } from './events.ts';
+import { InProcessAppBackend } from './in-process-backend.ts';
 import type {
   ActiveAppHandle,
   CreateAppDefinitionOptions,
@@ -30,7 +30,7 @@ import type {
   AppReadinessPolicy,
   AppRequestMetadata,
   AppSnapshot,
-} from "./app-types.ts";
+} from './app-types.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 30_000;
 const DEFAULT_READINESS_INTERVAL_MS = 250;
@@ -128,7 +128,7 @@ export class AppRuntimeRegistry {
     this.resolveFactory =
       options.resolveFactory ??
       (() => {
-        throw new Error("No app factory resolver configured");
+        throw new Error('No app factory resolver configured');
       });
     this.maxActiveApps = options.maxActiveApps ?? 500;
     this.idleTtlMs = options.idleTtlMs ?? 5 * 60_000;
@@ -180,7 +180,7 @@ export class AppRuntimeRegistry {
           `App "${id}" has an active runtime; deploy a release instead of replacing its definition`,
           {
             status: 409,
-            code: "APP_DEFINITION_ACTIVE",
+            code: 'APP_DEFINITION_ACTIVE',
           },
         );
       }
@@ -206,7 +206,7 @@ export class AppRuntimeRegistry {
     id: string,
     options: string | AppDestroyOptions = {},
   ): Promise<boolean> {
-    return this.evictWithSource(id, options, "manual");
+    return this.evictWithSource(id, options, 'manual');
   }
 
   async evictIdle(now: number = Date.now()): Promise<AppSnapshot[]> {
@@ -219,9 +219,9 @@ export class AppRuntimeRegistry {
       const didEvict = await this.evictWithSource(
         candidate.id,
         {
-          reason: "idle app eviction",
+          reason: 'idle app eviction',
         },
-        "idle",
+        'idle',
       );
 
       if (didEvict) {
@@ -278,7 +278,7 @@ export class AppRuntimeRegistry {
           `App "${id}" active release changed from the expected value`,
           {
             status: 409,
-            code: "APP_DEPLOYMENT_CONFLICT",
+            code: 'APP_DEPLOYMENT_CONFLICT',
           },
         );
       }
@@ -305,7 +305,7 @@ export class AppRuntimeRegistry {
           candidate,
           targetDefinition,
           options.readiness,
-          "before switching",
+          'before switching',
         );
 
         this.definitions.set(id, targetDefinition);
@@ -317,7 +317,7 @@ export class AppRuntimeRegistry {
             candidate,
             targetDefinition,
             options.readiness,
-            "after switching",
+            'after switching',
             false,
           );
         } catch (error) {
@@ -372,7 +372,7 @@ export class AppRuntimeRegistry {
 
         throw new AppRegistryError(`App "${id}" failed to deploy`, {
           status: 500,
-          code: "APP_DEPLOYMENT_FAILED",
+          code: 'APP_DEPLOYMENT_FAILED',
           cause: error,
         });
       }
@@ -385,7 +385,7 @@ export class AppRuntimeRegistry {
   ): Promise<boolean> {
     return this.withAppLock(id, async () => {
       const destroyOptions =
-        typeof options === "string" ? { reason: options } : options;
+        typeof options === 'string' ? { reason: options } : options;
       const runtime = this.runtimes.get(id);
       const hadDefinition = this.definitions.has(id);
 
@@ -412,7 +412,7 @@ export class AppRuntimeRegistry {
     const results = await Promise.allSettled(
       ids.map((id) => this.destroy(id, options)),
     );
-    const failures = results.filter((result) => result.status === "rejected");
+    const failures = results.filter((result) => result.status === 'rejected');
 
     if (failures.length > 0) {
       const failureReasons: unknown[] = [];
@@ -466,7 +466,7 @@ export class AppRuntimeRegistry {
     return [...this.runtimes.values()].map((runtime) => runtime.snapshot());
   }
 
-  capacity(): RegistryHealth["capacity"] {
+  capacity(): RegistryHealth['capacity'] {
     return {
       maxActiveApps: this.maxActiveApps,
       activeTotal: this.runtimes.size,
@@ -490,10 +490,10 @@ export class AppRuntimeRegistry {
       metrics: this.getMetrics(),
       registered: this.definitions.size,
       activeTotal: apps.length,
-      active: apps.filter((app) => app.state === "active").length,
-      draining: apps.filter((app) => app.state === "draining").length,
-      destroying: apps.filter((app) => app.state === "destroying").length,
-      failed: apps.filter((app) => app.state === "failed").length,
+      active: apps.filter((app) => app.state === 'active').length,
+      draining: apps.filter((app) => app.state === 'draining').length,
+      destroying: apps.filter((app) => app.state === 'destroying').length,
+      failed: apps.filter((app) => app.state === 'failed').length,
       operationsInFlight: this.operations.size,
     };
   }
@@ -505,7 +505,7 @@ export class AppRuntimeRegistry {
 
     this.evictionLoop = setInterval(() => {
       this.evictIdle().catch((error) => {
-        console.error("Idle app eviction failed", error);
+        console.error('Idle app eviction failed', error);
       });
     }, this.evictionIntervalMs);
     this.evictionLoop.unref?.();
@@ -531,13 +531,13 @@ export class AppRuntimeRegistry {
 
   async ensureActiveHandle(id: string): Promise<ActiveAppHandle> {
     const active = this.runtimes.get(id);
-    if (active?.state === "active") {
+    if (active?.state === 'active') {
       return active;
     }
 
     return this.withAppLock(id, async () => {
       const existing = this.runtimes.get(id);
-      if (existing?.state === "active") {
+      if (existing?.state === 'active') {
         return existing;
       }
 
@@ -580,11 +580,11 @@ export class AppRuntimeRegistry {
 
     const version = ++this.versionSequence;
 
-    this.events.emit("app:beforeCreate", {
+    this.events.emit('app:beforeCreate', {
       appId: definition.id,
       version,
       basePath: definition.basePath,
-      state: "creating",
+      state: 'creating',
       metadata: {
         configVersion: definition.configVersion,
         isolation: definition.isolation,
@@ -606,7 +606,7 @@ export class AppRuntimeRegistry {
       const activatableRuntime = runtime as ActiveAppHandle & {
         activate?: () => void;
       };
-      if (typeof activatableRuntime.activate === "function") {
+      if (typeof activatableRuntime.activate === 'function') {
         activatableRuntime.activate();
       }
 
@@ -615,11 +615,11 @@ export class AppRuntimeRegistry {
       return runtime;
     } catch (error) {
       this.metrics.activationFailures += 1;
-      this.events.emit("app:createFailed", {
+      this.events.emit('app:createFailed', {
         appId: definition.id,
         version,
         basePath: definition.basePath,
-        state: "failed",
+        state: 'failed',
         error,
       });
       throw new AppCreateFailedError(definition.id, error);
@@ -635,7 +635,7 @@ export class AppRuntimeRegistry {
         `Deployment target "${target.id}" does not match app "${id}"`,
         {
           status: 400,
-          code: "APP_DEPLOYMENT_TARGET_INVALID",
+          code: 'APP_DEPLOYMENT_TARGET_INVALID',
         },
       );
     }
@@ -646,7 +646,7 @@ export class AppRuntimeRegistry {
         `Deployment target for app "${id}" must reference a release`,
         {
           status: 400,
-          code: "APP_DEPLOYMENT_TARGET_INVALID",
+          code: 'APP_DEPLOYMENT_TARGET_INVALID',
         },
       );
     }
@@ -668,7 +668,7 @@ export class AppRuntimeRegistry {
     }
 
     const policy = this.resolveReadinessPolicy(definition, options);
-    const healthPath = `/${configuredPath.replace(/^\/+/, "")}`;
+    const healthPath = `/${configuredPath.replace(/^\/+/, '')}`;
     const deadline = Date.now() + policy.timeoutMs;
     let successes = 0;
     let lastFailure: unknown;
@@ -676,12 +676,12 @@ export class AppRuntimeRegistry {
     while (Date.now() < deadline) {
       const remainingMs = Math.max(1, deadline - Date.now());
       try {
-        const request = new Request(new URL(healthPath, "http://app.local"), {
+        const request = new Request(new URL(healthPath, 'http://app.local'), {
           signal: AbortSignal.timeout(remainingMs),
         });
         const response = await withTimeout(
           runtime.dispatch(request, {
-            method: "GET",
+            method: 'GET',
             path: healthPath,
           }),
           remainingMs,
@@ -720,7 +720,7 @@ export class AppRuntimeRegistry {
       `App "${definition.id}" readiness failed ${phase} at "${healthPath}"`,
       {
         status: 503,
-        code: "APP_READINESS_FAILED",
+        code: 'APP_READINESS_FAILED',
         cause: lastFailure,
       },
     );
@@ -748,9 +748,9 @@ export class AppRuntimeRegistry {
       !Number.isInteger(policy.successThreshold) ||
       policy.successThreshold <= 0
     ) {
-      throw new AppRegistryError("Invalid deployment readiness policy", {
+      throw new AppRegistryError('Invalid deployment readiness policy', {
         status: 400,
-        code: "APP_DEPLOYMENT_OPTIONS_INVALID",
+        code: 'APP_DEPLOYMENT_OPTIONS_INVALID',
       });
     }
 
@@ -772,9 +772,9 @@ export class AppRuntimeRegistry {
     const didEvict = await this.evictWithSource(
       candidate.id,
       {
-        reason: "max active apps reached",
+        reason: 'max active apps reached',
       },
-      "capacity",
+      'capacity',
     );
 
     if (!didEvict) {
@@ -785,7 +785,7 @@ export class AppRuntimeRegistry {
   private async evictWithSource(
     id: string,
     options: string | AppDestroyOptions,
-    source: "manual" | "idle" | "capacity",
+    source: 'manual' | 'idle' | 'capacity',
   ): Promise<boolean> {
     return this.withAppLock(id, () => this.evictUnlocked(id, options, source));
   }
@@ -793,7 +793,7 @@ export class AppRuntimeRegistry {
   private async evictUnlocked(
     id: string,
     options: string | AppDestroyOptions = {},
-    source: "manual" | "idle" | "capacity" = "manual",
+    source: 'manual' | 'idle' | 'capacity' = 'manual',
   ): Promise<boolean> {
     const runtime = this.runtimes.get(id);
     if (!runtime) {
@@ -806,11 +806,11 @@ export class AppRuntimeRegistry {
     this.metrics.evictions += 1;
     this.metrics.lastEvictionDurationMs = Date.now() - startedAt;
 
-    if (source === "idle") {
+    if (source === 'idle') {
       this.metrics.idleEvictions += 1;
     }
 
-    if (source === "capacity") {
+    if (source === 'capacity') {
       this.metrics.capacityEvictions += 1;
     }
 
@@ -822,7 +822,7 @@ export class AppRuntimeRegistry {
       .map((runtime) => runtime.snapshot())
       .filter(
         (snapshot) =>
-          snapshot.activeRequests === 0 && snapshot.tier !== "dedicated",
+          snapshot.activeRequests === 0 && snapshot.tier !== 'dedicated',
       );
   }
 
@@ -852,16 +852,16 @@ export class AppRuntimeRegistry {
       appName: options.appName,
       basePath: options.basePath ?? `/${options.appName ?? id}`,
       enabled: options.enabled ?? true,
-      backend: options.backend ?? options.isolation ?? "in-process",
-      configVersion: options.configVersion ?? "v1",
-      isolation: options.isolation ?? options.backend ?? "in-process",
-      tier: options.tier ?? "warm",
+      backend: options.backend ?? options.isolation ?? 'in-process',
+      configVersion: options.configVersion ?? 'v1',
+      isolation: options.isolation ?? options.backend ?? 'in-process',
+      tier: options.tier ?? 'warm',
       desiredVersion:
         options.desiredVersion ??
         options.code?.version ??
         options.release?.version ??
         options.configVersion ??
-        "v1",
+        'v1',
       rootDir: options.rootDir,
       dataDir: options.dataDir,
       client: options.client,

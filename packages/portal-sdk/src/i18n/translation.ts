@@ -32,7 +32,7 @@ const translationResources = new Map<string, TranslationResourceBundle>();
 const translationResourceListeners = new Set<TranslationResourceListener>();
 
 const hasStringifier = (value: object): value is Stringifiable =>
-  "toString" in value && typeof value.toString === "function";
+  'toString' in value && typeof value.toString === 'function';
 
 const stringify = (value: Stringifiable): string => value.toString();
 
@@ -54,10 +54,10 @@ function decodeQuotedValue(value: string) {
     .slice(1, -1)
     .replace(/\\'/g, "'")
     .replace(/\\"/g, '"')
-    .replace(/\\n/g, "\n")
-    .replace(/\\r/g, "\r")
-    .replace(/\\t/g, "\t")
-    .replace(/\\\\/g, "\\");
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\\\/g, '\\');
 }
 
 function parsePrimitive(value: string): unknown {
@@ -65,9 +65,9 @@ function parsePrimitive(value: string): unknown {
   if (normalized.startsWith('"') || normalized.startsWith("'")) {
     return decodeQuotedValue(normalized);
   }
-  if (normalized === "true") return true;
-  if (normalized === "false") return false;
-  if (normalized === "null") return null;
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  if (normalized === 'null') return null;
   if (/^-?\d+(?:\.\d+)?$/.test(normalized)) return Number(normalized);
   return undefined;
 }
@@ -78,18 +78,18 @@ function parseOptions(source?: string): TranslationOptions | undefined {
   const options: TranslationOptions = {};
   const propertyPattern = new RegExp(
     `([A-Za-z_$][\\w$]*)\\s*:\\s*(${quotedValuePattern}|-?\\d+(?:\\.\\d+)?|true|false|null)`,
-    "g",
+    'g',
   );
 
   for (const match of source.matchAll(propertyPattern)) {
     const value = parsePrimitive(match[2]);
-    if (typeof value !== "undefined") options[match[1]] = value;
+    if (typeof value !== 'undefined') options[match[1]] = value;
   }
 
   const namespaceArray = source.match(/\bns\s*:\s*\[([^\]]*)\]/);
   if (namespaceArray) {
     const namespaces = [
-      ...namespaceArray[1].matchAll(new RegExp(quotedValuePattern, "g")),
+      ...namespaceArray[1].matchAll(new RegExp(quotedValuePattern, 'g')),
     ].map((match) => decodeQuotedValue(match[0]));
     if (namespaces.length) options.ns = namespaces;
   }
@@ -158,17 +158,17 @@ export function resolveTranslatableText(
   value: unknown,
   options?: TranslationOptions,
 ): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value !== "string") {
-    if (typeof value === "object") {
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'string') {
+    if (typeof value === 'object') {
       return hasStringifier(value)
         ? stringify(value)
         : Object.prototype.toString.call(value);
     }
-    if (typeof value === "function") return value.toString();
-    if (typeof value === "boolean") return value ? "true" : "false";
-    if (typeof value === "number") return Number.prototype.toString.call(value);
-    if (typeof value === "bigint") return BigInt.prototype.toString.call(value);
+    if (typeof value === 'function') return value.toString();
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    if (typeof value === 'number') return Number.prototype.toString.call(value);
+    if (typeof value === 'bigint') return BigInt.prototype.toString.call(value);
     return Symbol.prototype.toString.call(value);
   }
 

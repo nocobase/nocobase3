@@ -42,7 +42,11 @@ const serializeError = (error: unknown): unknown => {
     return error;
   }
 
-  const errorWithCode = error as Error & { cause?: unknown; code?: unknown; status?: unknown };
+  const errorWithCode = error as Error & {
+    cause?: unknown;
+    code?: unknown;
+    status?: unknown;
+  };
   return {
     type: error.name,
     message: error.message,
@@ -76,5 +80,9 @@ export const writeAppSystemLog = (input: AppSystemLogInput): void => {
     msg: input.msg,
   });
 
-  appendFileSync(path.join(logDir, `system-${getDateStamp()}.log`), `${line}\n`, 'utf8');
+  appendFileSync(
+    path.join(logDir, `system-${getDateStamp()}.log`),
+    `${line}\n`,
+    'utf8',
+  );
 };

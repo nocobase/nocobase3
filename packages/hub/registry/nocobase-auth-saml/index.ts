@@ -1,1 +1,1 @@
-export { useSamlSignIn } from "./use-saml-sign-in";
+export { useSamlSignIn } from './use-saml-sign-in';

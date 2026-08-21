@@ -1,15 +1,11 @@
-import { LogIn } from "lucide-react";
+import { LogIn } from 'lucide-react';
 
-import type { AuthenticatorComponentProps } from "@nocobase/portal-sdk/auth";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { resolveTranslatableText } from "@nocobase/portal-sdk/i18n";
+import type { AuthenticatorComponentProps } from '@nocobase/portal-sdk/auth';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { resolveTranslatableText } from '@nocobase/portal-sdk/i18n';
 
-import { useOidcSignIn } from "./use-oidc-sign-in";
+import { useOidcSignIn } from './use-oidc-sign-in';
 
 export default function OidcSignInButton({
   authenticator,
@@ -18,25 +14,25 @@ export default function OidcSignInButton({
   const { signIn, isPending, error } = useOidcSignIn(authenticator);
 
   return (
-    <div className="space-y-3">
+    <div className='space-y-3'>
       {error && (
-        <Alert variant="destructive">
+        <Alert variant='destructive'>
           <AlertTitle>OIDC sign-in failed</AlertTitle>
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
       <Button
-        type="button"
-        variant="outline"
-        className="w-full"
+        type='button'
+        variant='outline'
+        className='w-full'
         disabled={!onSignIn && isPending}
         onClick={onSignIn ?? signIn}
       >
         <LogIn />
         {!onSignIn && isPending
-          ? "Redirecting…"
+          ? 'Redirecting…'
           : resolveTranslatableText(
-              authenticator.title || authenticator.authTypeTitle || "OIDC"
+              authenticator.title || authenticator.authTypeTitle || 'OIDC',
             )}
       </Button>
     </div>

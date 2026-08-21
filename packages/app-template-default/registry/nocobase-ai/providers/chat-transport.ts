@@ -1,13 +1,13 @@
-import type { ChatTransport } from "ai";
-import type { AIService } from "../services";
-import type { AIChatMessage, AIChatRequestContext } from "./types";
-import { createNocoBaseUIMessageStream } from "./ui-message-stream";
+import type { ChatTransport } from 'ai';
+import type { AIService } from '../services';
+import type { AIChatMessage, AIChatRequestContext } from './types';
+import { createNocoBaseUIMessageStream } from './ui-message-stream';
 
 const messageText = (message?: AIChatMessage) =>
   message?.parts
-    .filter((part) => part.type === "text")
+    .filter((part) => part.type === 'text')
     .map((part) => part.text)
-    .join("\n") ?? "";
+    .join('\n') ?? '';
 
 export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
   private pendingResend?: { messageId: string };
@@ -24,7 +24,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
       service: AIService;
       getContext: () => AIChatRequestContext;
       onSessionCreated?: (sessionId: string) => void;
-    }
+    },
   ) {}
 
   prepareResend(messageId: string) {
@@ -41,7 +41,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
     this.pendingConversationResume = {
       message: [...messages]
         .reverse()
-        .find((message) => message.role === "assistant"),
+        .find((message) => message.role === 'assistant'),
     };
   }
 
@@ -49,7 +49,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
     messageId: string,
     responseMessageId: string,
     toolCallIds: string[],
-    toolCallResults: Array<{ id: string; result: unknown }>
+    toolCallResults: Array<{ id: string; result: unknown }>,
   ) {
     this.pendingToolResume = {
       messageId,
@@ -68,11 +68,11 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
   async sendMessages({
     messages,
     abortSignal,
-  }: Parameters<ChatTransport<AIChatMessage>["sendMessages"]>[0]) {
+  }: Parameters<ChatTransport<AIChatMessage>['sendMessages']>[0]) {
     const context = this.options.getContext();
     if (context.model.configured === false) {
       throw new Error(
-        "No enabled LLM model is configured in NocoBase. Configure and enable an LLM service before starting a conversation."
+        'No enabled LLM model is configured in NocoBase. Configure and enable an LLM service before starting a conversation.',
       );
     }
     let sessionId = context.sessionId;
@@ -81,7 +81,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
     this.pendingResend = undefined;
     if (pendingResend) {
       if (!sessionId) {
-        throw new Error("A conversation is required to retry a message.");
+        throw new Error('A conversation is required to retry a message.');
       }
       const stream = await this.options.service.resendMessagesStream(
         {
@@ -93,7 +93,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
           },
           webSearch: context.task?.webSearch,
         },
-        abortSignal
+        abortSignal,
       );
       return createNocoBaseUIMessageStream(stream);
     }
@@ -110,7 +110,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
 
     const lastMessage = messages.at(-1);
     const attachments = lastMessage?.metadata?.attachments?.filter(
-      (attachment) => attachment.status === "done"
+      (attachment) => attachment.status === 'done',
     );
     const workContext = [
       ...(context.task?.workContext ?? []),
@@ -131,14 +131,14 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
         messages: [
           {
             key: lastMessage?.id ?? crypto.randomUUID(),
-            role: "user",
-            content: { type: "text", content: messageText(lastMessage) },
+            role: 'user',
+            content: { type: 'text', content: messageText(lastMessage) },
             attachments: attachments?.length ? attachments : undefined,
             workContext: workContext.length ? workContext : undefined,
           },
         ],
       },
-      abortSignal
+      abortSignal,
     );
 
     return createNocoBaseUIMessageStream(stream);
@@ -151,12 +151,12 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
     this.pendingConversationResume = undefined;
     const context = this.options.getContext();
     if (!context.sessionId) {
-      throw new Error("A conversation is required to resume a stream.");
+      throw new Error('A conversation is required to resume a stream.');
     }
 
     if (!pendingToolResume) {
       const stream = await this.options.service.resumeConversationStream(
-        context.sessionId
+        context.sessionId,
       );
       return createNocoBaseUIMessageStream(stream, null, {
         seedMessage: pendingConversationResume?.message,
@@ -178,7 +178,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
       pendingToolResume.responseMessageId,
       {
         waitForNewMessage: true,
-      }
+      },
     );
   }
 }
