@@ -209,7 +209,6 @@ describe('app server', () => {
     expect(registeredDisposers.map((disposer) => disposer.name)).toEqual([
       'runtime',
       'app-deps',
-      'app-services',
       'realtime-service',
       'clock-publisher',
     ]);
@@ -1184,6 +1183,12 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
     drive: options.drive,
     logging: createSilentLoggingConfig(),
+    notification: {
+      enabled: false,
+      allowNonPersistentStore: false,
+      channels: [],
+      logs: { enabled: true, retainDays: 90 },
+    },
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
     server: {

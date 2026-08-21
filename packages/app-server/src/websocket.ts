@@ -27,7 +27,6 @@ export interface AppWebSocket {
     data: string | ArrayBuffer | Uint8Array,
     options?: AppWebSocketSendOptions,
   ): void;
-  ping(data?: string | ArrayBuffer | Uint8Array): void;
   close(code?: number, reason?: string): void;
 }
 
@@ -52,11 +51,6 @@ export interface AppWebSocketErrorEvent {
   readonly error: unknown;
 }
 
-export interface AppWebSocketPongEvent {
-  readonly type: "pong";
-  readonly data: ArrayBuffer;
-}
-
 export interface AppWebSocketEvents {
   onOpen?: (
     event: AppWebSocketOpenEvent,
@@ -72,10 +66,6 @@ export interface AppWebSocketEvents {
   ) => void | Promise<void>;
   onError?: (
     event: AppWebSocketErrorEvent,
-    ws: AppWebSocket,
-  ) => void | Promise<void>;
-  onPong?: (
-    event: AppWebSocketPongEvent,
     ws: AppWebSocket,
   ) => void | Promise<void>;
 }
@@ -329,14 +319,6 @@ class NodeAppWebSocket implements AppWebSocket {
     this.socket.write(encodeWebSocketFrame(isText ? 0x1 : 0x2, payload));
   }
 
-  ping(data: string | ArrayBuffer | Uint8Array = ""): void {
-    if (this.state !== 1) {
-      return;
-    }
-
-    this.socket.write(encodeWebSocketFrame(0x9, normalizeOutgoingData(data)));
-  }
-
   close(code: number = CLOSE_NORMAL, reason: string = ""): void {
     if (this.state >= 2) {
       return;
@@ -407,11 +389,6 @@ class NodeAppWebSocket implements AppWebSocket {
     }
 
     if (frame.opcode === 0xa) {
-      this.invoke(
-        this.events.onPong,
-        { type: "pong", data: bufferToArrayBuffer(frame.payload) },
-        this,
-      );
       return;
     }
 
@@ -457,8 +434,7 @@ class NodeAppWebSocket implements AppWebSocket {
       | AppWebSocketOpenEvent
       | AppWebSocketMessageEvent
       | AppWebSocketCloseEvent
-      | AppWebSocketErrorEvent
-      | AppWebSocketPongEvent,
+      | AppWebSocketErrorEvent,
   >(
     handler:
       ((event: TEvent, ws: AppWebSocket) => void | Promise<void>) | undefined,

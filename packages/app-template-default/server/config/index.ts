@@ -6,7 +6,7 @@ import drive from './drive.js';
 import logging from './logging.js';
 import queue from './queue.js';
 import session from './session.js';
-import notification from '../../registry/notification/config/server.js';
+import notification from './notification.js';
 import server from './server.js';
 import spa from './spa.js';
 import type { AppConfig } from './types.js';

@@ -25,7 +25,7 @@ import { useSidebar, SidebarTrigger } from "@/components/ui/sidebar";
 import { LogOutIcon, SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Brand } from "@/components/app-shell/brand";
-import { extensionHeaderItems, extensionUserMenuItems } from "@/app/extensions";
+import { extensionUserMenuItems } from "@/app/extensions";
 
 const pluginSettingsResource = {
   name: "plugin-settings",
@@ -73,9 +73,6 @@ function DesktopHeader() {
         </span>
       </div>
       <div className="flex items-center gap-2">
-        {extensionHeaderItems.map(({ id, Component }) => (
-          <Component key={id} />
-        ))}
         <SettingsLink />
         <ThemeToggle />
         <UserDropdown />
@@ -114,9 +111,6 @@ function MobileHeader() {
       />
       <Brand logoClassName="h-6" />
       <div className="flex shrink-0 items-center gap-1">
-        {extensionHeaderItems.map(({ id, Component }) => (
-          <Component key={id} />
-        ))}
         <SettingsLink className="size-9" />
         <ThemeToggle className="size-9" />
         <UserDropdown />

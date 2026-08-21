@@ -46,7 +46,6 @@ export const extensionStandaloneRouteElements = import.meta.env.DEV
   : [];
 
 export const extensionUserMenuItems = extensionContributions.userMenuItems;
-export const extensionHeaderItems = extensionContributions.headerItems;
 
 export const extensionAuthAdapters = extensionContributions.authAdapters;
 

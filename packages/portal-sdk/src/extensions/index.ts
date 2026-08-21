@@ -16,16 +16,10 @@ export type AppExtension = {
   AuthRuntimeProvider?: ComponentType<PropsWithChildren>;
   authRuntimePriority?: number;
   UserMenuItems?: ComponentType;
-  HeaderItems?: ComponentType;
   authAdapters?: AuthenticatorAdapter[];
 };
 
 export type AppExtensionUserMenuItem = {
-  id: string;
-  Component: ComponentType;
-};
-
-export type AppExtensionHeaderItem = {
   id: string;
   Component: ComponentType;
 };
@@ -35,7 +29,6 @@ export type AppExtensionContributions = {
   routeDefinitions: AppRouteDefinition[];
   resources: ResourceProps[];
   userMenuItems: AppExtensionUserMenuItem[];
-  headerItems: AppExtensionHeaderItem[];
   authAdapters: AuthenticatorAdapter[];
   providerExtensions: AppExtension[];
   authRuntimeExtensions: AppExtension[];
@@ -72,12 +65,6 @@ export const collectAppExtensionContributions = ({
       .map((extension) => ({
         id: extension.id,
         Component: extension.UserMenuItems!,
-      })),
-    headerItems: sortedExtensions
-      .filter((extension) => extension.HeaderItems)
-      .map((extension) => ({
-        id: extension.id,
-        Component: extension.HeaderItems!,
       })),
     authAdapters: sortedExtensions.flatMap(
       (extension) => extension.authAdapters ?? []

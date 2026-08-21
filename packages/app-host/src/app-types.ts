@@ -24,7 +24,6 @@ export type {
   AppWebSocketMessageData,
   AppWebSocketMessageEvent,
   AppWebSocketOpenEvent,
-  AppWebSocketPongEvent,
   AppWebSocketReadyState,
   AppWebSocketSendOptions,
 } from '@nocobase/app-server/websocket';

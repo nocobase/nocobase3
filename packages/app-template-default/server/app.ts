@@ -60,8 +60,8 @@ export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOpti
 
   registerWebSocketRoutes(app);
 
-  if (services.notificationModule) {
-    app.route(joinBasePath(internalBasePath, '/api/notifications'), services.notificationModule.router);
+  if (services.notification) {
+    app.route(joinBasePath(internalBasePath, '/api/notifications'), services.notification.router);
   }
 
   registerSpaRoutes(app, {
@@ -78,11 +78,7 @@ export function createApp(runtime: AppRuntime<AppConfig>, options: CreateAppOpti
   });
 
   return Object.assign(app, {
-    websocket: createWebSocketHandler({
-      realtime,
-      portalLive: services.portalLive,
-      sessionCookieName: deps.sessionManager.config.cookie.name,
-    }),
+    websocket: createWebSocketHandler({ realtime }),
     start: onceAsync(() => services.start()),
   });
 }
