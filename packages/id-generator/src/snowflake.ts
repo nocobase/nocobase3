@@ -41,7 +41,7 @@ export class SnowflakeIdGenerator implements IdGenerator<number> {
   constructor(options: SnowflakeIdGeneratorOptions) {
     if (!options || !Number.isSafeInteger(options.workerId)) {
       throw new Error(
-        "Snowflake workerId must be an integer between 0 and 31.",
+        'Snowflake workerId must be an integer between 0 and 31.',
       );
     }
     if (options.workerId < 0 || options.workerId > SNOWFLAKE_MAX_WORKER_ID) {
@@ -52,7 +52,7 @@ export class SnowflakeIdGenerator implements IdGenerator<number> {
 
     const epoch = options.epoch ?? SNOWFLAKE_EPOCH_SECONDS;
     if (!Number.isFinite(epoch) || epoch < 0) {
-      throw new Error("Snowflake epoch must be a non-negative Unix timestamp.");
+      throw new Error('Snowflake epoch must be a non-negative Unix timestamp.');
     }
 
     this.workerId = options.workerId;
@@ -70,7 +70,7 @@ export class SnowflakeIdGenerator implements IdGenerator<number> {
 
     if (timestamp === this.lastTimestamp) {
       if (this.sequence === SNOWFLAKE_MAX_SEQUENCE) {
-        throw new Error("Snowflake sequence exhausted for the current second.");
+        throw new Error('Snowflake sequence exhausted for the current second.');
       }
       this.sequence += 1;
     } else {
@@ -79,7 +79,7 @@ export class SnowflakeIdGenerator implements IdGenerator<number> {
 
     const timestampOffset = timestamp - this.epoch;
     if (timestampOffset < 0) {
-      throw new Error("Snowflake clock is earlier than the configured epoch.");
+      throw new Error('Snowflake clock is earlier than the configured epoch.');
     }
 
     const id =
@@ -88,7 +88,7 @@ export class SnowflakeIdGenerator implements IdGenerator<number> {
       this.sequence;
     if (!Number.isSafeInteger(id)) {
       throw new Error(
-        "Snowflake ID exceeds the JavaScript safe integer range.",
+        'Snowflake ID exceeds the JavaScript safe integer range.',
       );
     }
 
@@ -102,10 +102,10 @@ export class SnowflakeIdGenerator implements IdGenerator<number> {
 
   parse(id: number | string): SnowflakeIdParts {
     let numericId: number;
-    if (typeof id === "string") {
-      if (id.trim() === "") {
+    if (typeof id === 'string') {
+      if (id.trim() === '') {
         throw new Error(
-          "Snowflake ID must be a non-negative JavaScript safe integer.",
+          'Snowflake ID must be a non-negative JavaScript safe integer.',
         );
       }
       numericId = Number(id);
@@ -114,7 +114,7 @@ export class SnowflakeIdGenerator implements IdGenerator<number> {
     }
     if (!Number.isSafeInteger(numericId) || numericId < 0) {
       throw new Error(
-        "Snowflake ID must be a non-negative JavaScript safe integer.",
+        'Snowflake ID must be a non-negative JavaScript safe integer.',
       );
     }
 
@@ -136,7 +136,7 @@ export class SnowflakeIdGenerator implements IdGenerator<number> {
     const now = this.clock();
     if (!Number.isFinite(now) || now < 0) {
       throw new Error(
-        "Snowflake clock must return a non-negative Unix timestamp in milliseconds.",
+        'Snowflake clock must return a non-negative Unix timestamp in milliseconds.',
       );
     }
     return Math.floor(now / 1_000);

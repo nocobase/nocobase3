@@ -1,13 +1,13 @@
-import { createMigrationContext } from "./context.js";
+import { createMigrationContext } from './context.js';
 import {
   DEFAULT_MIGRATION_TABLE,
   deleteMigrationHistoryRecord,
   ensureMigrationTable,
   readMigrationHistory,
   recordMigrationCompleted,
-} from "./history.js";
-import { DEFAULT_MIGRATION_LOCK_TABLE, withMigrationLock } from "./lock.js";
-import { loadMigrations } from "./loader.js";
+} from './history.js';
+import { DEFAULT_MIGRATION_LOCK_TABLE, withMigrationLock } from './lock.js';
+import { loadMigrations } from './loader.js';
 import type {
   CreateMigratorOptions,
   LoadedMigration,
@@ -15,7 +15,7 @@ import type {
   MigrationHistoryRecord,
   MigrationRollbackResult,
   MigrationRunResult,
-} from "./types.js";
+} from './types.js';
 
 export interface Migrator {
   latest(): Promise<MigrationRunResult>;
@@ -132,11 +132,11 @@ class DefaultMigrator implements Migrator {
   }
 
   private async runUpMigration(
-    connection: ReturnType<CreateMigratorOptions["database"]["connection"]>,
+    connection: ReturnType<CreateMigratorOptions['database']['connection']>,
     loaded: LoadedMigration,
     batch: number,
   ): Promise<void> {
-    const mode = loaded.migration.transaction ?? "auto";
+    const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
       const context = createMigrationContext(connection);
       const startedAt = Date.now();
@@ -168,10 +168,10 @@ class DefaultMigrator implements Migrator {
   }
 
   private async runDownMigration(
-    connection: ReturnType<CreateMigratorOptions["database"]["connection"]>,
+    connection: ReturnType<CreateMigratorOptions['database']['connection']>,
     loaded: LoadedMigration,
   ): Promise<void> {
-    const mode = loaded.migration.transaction ?? "auto";
+    const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
       const context = createMigrationContext(connection);
       await loaded.migration.down?.(context);

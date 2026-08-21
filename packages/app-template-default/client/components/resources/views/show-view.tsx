@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren } from 'react';
 
-import { ArrowLeftIcon } from "lucide-react";
-import { useBack, useResourceParams, useTranslate } from "@refinedev/core";
-import { Breadcrumb } from "@/components/app-shell/breadcrumb";
-import { Button } from "@/components/ui/button";
-import { RefreshButton } from "@/components/resources/buttons/refresh";
-import { cn } from "@/lib/utils";
-import { EditButton } from "../buttons/edit";
-import { useResourceLabel } from "@/components/resources/resource-label";
+import { ArrowLeftIcon } from 'lucide-react';
+import { useBack, useResourceParams, useTranslate } from '@refinedev/core';
+import { Breadcrumb } from '@/components/app-shell/breadcrumb';
+import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/resources/buttons/refresh';
+import { cn } from '@/lib/utils';
+import { EditButton } from '../buttons/edit';
+import { useResourceLabel } from '@/components/resources/resource-label';
 
 type ShowViewProps = PropsWithChildren<{
   className?: string;
@@ -24,7 +24,7 @@ export function ShowView({
   title,
 }: ShowViewProps) {
   return (
-    <div className={cn("flex flex-col", "gap-6", className)}>
+    <div className={cn('flex flex-col', 'gap-6', className)}>
       <ShowViewHeader resource={resource} title={title} />
       {children}
     </div>
@@ -54,50 +54,50 @@ export const ShowViewHeader = ({
 
   const resourceName = resource?.name ?? identifier;
 
-  const resourceTitle = useResourceLabel(resource, "singular", identifier);
+  const resourceTitle = useResourceLabel(resource, 'singular', identifier);
   const title = titleFromProps ?? resourceTitle;
   const description = translate(
-    "views.show.description",
-    "Review the record and its NocoBase-managed data."
+    'views.show.description',
+    'Review the record and its NocoBase-managed data.',
   );
 
   return (
-    <div className={cn("flex flex-col", "gap-3", wrapperClassName)}>
-      <div className="flex items-center text-muted-foreground">
+    <div className={cn('flex flex-col', 'gap-3', wrapperClassName)}>
+      <div className='flex items-center text-muted-foreground'>
         <Breadcrumb />
       </div>
       <div
         className={cn(
-          "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
-          headerClassName
+          'flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between',
+          headerClassName,
         )}
       >
-        <div className="flex items-start gap-2">
+        <div className='flex items-start gap-2'>
           <Button
-            variant="ghost"
-            size="icon"
-            className="mt-0.5 rounded-lg"
+            variant='ghost'
+            size='icon'
+            className='mt-0.5 rounded-lg'
             onClick={back}
-            aria-label={translate("buttons.cancel", "Cancel")}
+            aria-label={translate('buttons.cancel', 'Cancel')}
           >
-            <ArrowLeftIcon className="h-4 w-4" />
+            <ArrowLeftIcon className='h-4 w-4' />
           </Button>
           <div>
-            <h2 className="text-3xl font-semibold tracking-[-0.035em]">
+            <h2 className='text-3xl font-semibold tracking-[-0.035em]'>
               {title}
             </h2>
-            <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+            <p className='mt-2 text-sm text-muted-foreground'>{description}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className='flex items-center gap-2'>
           <RefreshButton
-            variant="outline"
+            variant='outline'
             recordItemId={recordItemId}
             resource={resourceName}
           />
           <EditButton
-            variant="outline"
+            variant='outline'
             recordItemId={recordItemId}
             resource={resourceName}
           />
@@ -107,4 +107,4 @@ export const ShowViewHeader = ({
   );
 };
 
-ShowView.displayName = "ShowView";
+ShowView.displayName = 'ShowView';

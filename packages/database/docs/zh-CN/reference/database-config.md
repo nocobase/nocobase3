@@ -32,9 +32,7 @@ const db = createDatabaseManager({
 
 ```ts
 type ConnectionConfig =
-  | SqliteConnectionConfig
-  | PostgresConnectionConfig
-  | MysqlConnectionConfig;
+  SqliteConnectionConfig | PostgresConnectionConfig | MysqlConnectionConfig;
 ```
 
 公共配置：
@@ -54,11 +52,11 @@ interface BaseConnectionConfig {
 
 `dialect` 是必填字段。`driver` 是底层 Node.js 数据库驱动，通常不写，由 `dialect` 自动推导：
 
-| dialect | 默认 driver |
-| --- | --- |
-| `sqlite` | `better-sqlite3` |
-| `postgres` | `pg` |
-| `mysql` | `mysql2` |
+| dialect    | 默认 driver      |
+| ---------- | ---------------- |
+| `sqlite`   | `better-sqlite3` |
+| `postgres` | `pg`             |
+| `mysql`    | `mysql2`         |
 
 `driver` 如果显式填写，必须和 `dialect` 匹配。
 
@@ -98,23 +96,23 @@ type MysqlConnectionConfig = BaseConnectionConfig & {
   timezone?: string;
   ssl?: boolean | Record<string, unknown>;
 } & (
-  | {
-      socketPath: string;
-      host?: never;
-      port?: never;
-      database?: string;
-      username?: string;
-      password?: string;
-    }
-  | {
-      host?: string;
-      port?: number;
-      database?: string;
-      username?: string;
-      password?: string;
-      socketPath?: never;
-    }
-);
+    | {
+        socketPath: string;
+        host?: never;
+        port?: never;
+        database?: string;
+        username?: string;
+        password?: string;
+      }
+    | {
+        host?: string;
+        port?: number;
+        database?: string;
+        username?: string;
+        password?: string;
+        socketPath?: never;
+      }
+  );
 ```
 
 用户配置使用 `username`，内部会转换成底层 driver 需要的 `user`。

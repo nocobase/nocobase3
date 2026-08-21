@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { type DatabaseCapabilities } from "../../../src/schema/index.js";
-import { CollectionBuilder } from "../../../src/index.js";
-import { UnsupportedCapabilityError } from "../../../src/index.js";
-import { InMemoryCollectionMetadataStore } from "../../../src/index.js";
+import { describe, expect, it } from 'vitest';
+import { type DatabaseCapabilities } from '../../../src/schema/index.js';
+import { CollectionBuilder } from '../../../src/index.js';
+import { UnsupportedCapabilityError } from '../../../src/index.js';
+import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
 
 const sqliteCapabilities: DatabaseCapabilities = {
   schemas: false,
@@ -30,11 +30,11 @@ const mysqlLikeCapabilities: DatabaseCapabilities = {
   comments: true,
 };
 
-describe("CollectionBuilder capability planning", () => {
-  it("warns and downgrades safe unsupported capabilities", async () => {
+describe('CollectionBuilder capability planning', () => {
+  it('warns and downgrades safe unsupported capabilities', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "sqlite",
+        dialect: 'sqlite',
         capabilities: sqliteCapabilities,
         async execute() {},
         async compile() {
@@ -44,12 +44,12 @@ describe("CollectionBuilder capability planning", () => {
     });
 
     const result = await builder.createCollection(
-      "events",
+      'events',
       (collection) => {
-        collection.dbSchema("public");
-        collection.native("ipAddress", "inet").dbComment("Client IP address");
-        collection.string("email");
-        collection.unique("email", { deferrable: "deferred" });
+        collection.dbSchema('public');
+        collection.native('ipAddress', 'inet').dbComment('Client IP address');
+        collection.string('email');
+        collection.unique('email', { deferrable: 'deferred' });
       },
       { dryRun: true },
     );
@@ -57,93 +57,93 @@ describe("CollectionBuilder capability planning", () => {
     expect(result.warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "UNSUPPORTED_SCHEMA",
-          fallback: "ignore",
-          severity: "warning",
+          code: 'UNSUPPORTED_SCHEMA',
+          fallback: 'ignore',
+          severity: 'warning',
         }),
         expect.objectContaining({
-          code: "UNSUPPORTED_NATIVE_TYPE",
-          fallback: "downgrade",
-          severity: "warning",
+          code: 'UNSUPPORTED_NATIVE_TYPE',
+          fallback: 'downgrade',
+          severity: 'warning',
         }),
         expect.objectContaining({
-          code: "UNSUPPORTED_COMMENT",
-          fallback: "skip",
-          severity: "warning",
+          code: 'UNSUPPORTED_COMMENT',
+          fallback: 'skip',
+          severity: 'warning',
         }),
         expect.objectContaining({
-          code: "UNSUPPORTED_DEFERRABLE_CONSTRAINT",
-          fallback: "downgrade",
-          severity: "warning",
+          code: 'UNSUPPORTED_DEFERRABLE_CONSTRAINT',
+          fallback: 'downgrade',
+          severity: 'warning',
         }),
       ]),
     );
     expect(result.schemaOperations?.[0]).toMatchObject({
-      type: "createTable",
+      type: 'createTable',
       table: {
         db: undefined,
         columns: [
           {
-            name: "ip_address",
-            type: "text",
+            name: 'ip_address',
+            type: 'text',
             db: undefined,
           },
           {
-            name: "email",
-            type: "string",
+            name: 'email',
+            type: 'string',
           },
         ],
         constraints: [
           {
-            type: "unique",
-            columns: ["email"],
+            type: 'unique',
+            columns: ['email'],
           },
         ],
       },
     });
     const createTable = result.schemaOperations?.[0];
-    expect(createTable?.type).toBe("createTable");
-    if (createTable?.type === "createTable") {
-      expect(createTable.table.constraints[0]).not.toHaveProperty("deferrable");
+    expect(createTable?.type).toBe('createTable');
+    if (createTable?.type === 'createTable') {
+      expect(createTable.table.constraints[0]).not.toHaveProperty('deferrable');
     }
   });
 
-  it("warns and skips unsafe materialized view operations in non-strict mode", async () => {
+  it('warns and skips unsafe materialized view operations in non-strict mode', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
       metadataStore,
       schemaAdapter: {
-        dialect: "sqlite",
+        dialect: 'sqlite',
         capabilities: sqliteCapabilities,
         async execute() {},
       },
     });
 
     const result = await builder.createMaterializedViewCollection(
-      "usersSnapshot",
+      'usersSnapshot',
       (view) => {
-        view.string("email");
-        view.as((query) => query.from("users").select("email"));
+        view.string('email');
+        view.as((query) => query.from('users').select('email'));
       },
     );
 
     expect(result.warnings).toEqual([
       expect.objectContaining({
-        code: "UNSUPPORTED_MATERIALIZED_VIEW",
-        fallback: "skip",
-        severity: "unsafe",
+        code: 'UNSUPPORTED_MATERIALIZED_VIEW',
+        fallback: 'skip',
+        severity: 'unsafe',
       }),
     ]);
     expect(result.schemaOperations).toEqual([]);
-    expect(await metadataStore.getCollection("usersSnapshot")).toBeUndefined();
+    expect(await metadataStore.getCollection('usersSnapshot')).toBeUndefined();
   });
 
-  it("only skips metadata for unsupported view operations in mixed apply batches", async () => {
+  it('only skips metadata for unsupported view operations in mixed apply batches', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
       metadataStore,
       schemaAdapter: {
-        dialect: "sqlite",
+        dialect: 'sqlite',
         capabilities: sqliteCapabilities,
         async execute() {},
       },
@@ -151,27 +151,27 @@ describe("CollectionBuilder capability planning", () => {
 
     const result = await builder.apply([
       {
-        type: "createViewCollection",
-        name: "usersView",
+        type: 'createViewCollection',
+        name: 'usersView',
         definition: {
-          fields: [{ name: "email", type: "string" }],
+          fields: [{ name: 'email', type: 'string' }],
           view: {
             as: {
-              from: "users",
-              select: ["email"],
+              from: 'users',
+              select: ['email'],
             },
           },
         },
       },
       {
-        type: "createMaterializedViewCollection",
-        name: "usersSnapshot",
+        type: 'createMaterializedViewCollection',
+        name: 'usersSnapshot',
         definition: {
-          fields: [{ name: "email", type: "string" }],
+          fields: [{ name: 'email', type: 'string' }],
           view: {
             as: {
-              from: "users",
-              select: ["email"],
+              from: 'users',
+              select: ['email'],
             },
           },
         },
@@ -180,22 +180,22 @@ describe("CollectionBuilder capability planning", () => {
 
     expect(result.schemaOperations).toEqual([
       expect.objectContaining({
-        type: "createView",
+        type: 'createView',
         view: expect.objectContaining({
-          name: "users_view",
+          name: 'users_view',
         }),
       }),
     ]);
-    expect(await metadataStore.getCollection("usersView")).toMatchObject({
-      name: "usersView",
+    expect(await metadataStore.getCollection('usersView')).toMatchObject({
+      name: 'usersView',
     });
-    expect(await metadataStore.getCollection("usersSnapshot")).toBeUndefined();
+    expect(await metadataStore.getCollection('usersSnapshot')).toBeUndefined();
   });
 
-  it("throws unsupported capability errors in strict apply mode", async () => {
+  it('throws unsupported capability errors in strict apply mode', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "sqlite",
+        dialect: 'sqlite',
         capabilities: sqliteCapabilities,
         async execute() {},
       },
@@ -203,58 +203,58 @@ describe("CollectionBuilder capability planning", () => {
 
     await expect(
       builder.createMaterializedViewCollection(
-        "usersSnapshot",
+        'usersSnapshot',
         (view) => {
-          view.string("email");
-          view.as((query) => query.from("users").select("email"));
+          view.string('email');
+          view.as((query) => query.from('users').select('email'));
         },
         { strict: true },
       ),
     ).rejects.toBeInstanceOf(UnsupportedCapabilityError);
   });
 
-  it("returns warnings instead of throwing during strict dryRun", async () => {
+  it('returns warnings instead of throwing during strict dryRun', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "sqlite",
+        dialect: 'sqlite',
         capabilities: sqliteCapabilities,
         async execute() {},
       },
     });
 
     const result = await builder.createMaterializedViewCollection(
-      "usersSnapshot",
+      'usersSnapshot',
       (view) => {
-        view.string("email");
-        view.as((query) => query.from("users").select("email"));
+        view.string('email');
+        view.as((query) => query.from('users').select('email'));
       },
       { dryRun: true, strict: true },
     );
 
     expect(result.warnings).toEqual([
       expect.objectContaining({
-        code: "UNSUPPORTED_MATERIALIZED_VIEW",
-        severity: "unsafe",
+        code: 'UNSUPPORTED_MATERIALIZED_VIEW',
+        severity: 'unsafe',
       }),
     ]);
     expect(result.schemaOperations).toEqual([]);
   });
 
-  it("marks partial unique constraints as unsafe and skips them", async () => {
+  it('marks partial unique constraints as unsafe and skips them', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "mysql",
+        dialect: 'mysql',
         capabilities: mysqlLikeCapabilities,
         async execute() {},
       },
     });
 
     const result = await builder.createCollection(
-      "jobs",
+      'jobs',
       (collection) => {
-        collection.integer("accountId");
-        collection.integer("programId");
-        collection.unique(["accountId", "programId"], {
+        collection.integer('accountId');
+        collection.integer('programId');
+        collection.unique(['accountId', 'programId'], {
           predicate: {
             accountId: { $notNull: true },
           },
@@ -265,30 +265,30 @@ describe("CollectionBuilder capability planning", () => {
 
     expect(result.warnings).toEqual([
       expect.objectContaining({
-        code: "UNSUPPORTED_PARTIAL_UNIQUE_CONSTRAINT",
-        fallback: "skip",
-        severity: "unsafe",
+        code: 'UNSUPPORTED_PARTIAL_UNIQUE_CONSTRAINT',
+        fallback: 'skip',
+        severity: 'unsafe',
       }),
     ]);
     expect(result.schemaOperations?.[0]).toMatchObject({
-      type: "createTable",
+      type: 'createTable',
       table: {
         constraints: [],
       },
     });
   });
 
-  it("skips unsupported refresh materialized view operations", async () => {
+  it('skips unsupported refresh materialized view operations', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "sqlite",
+        dialect: 'sqlite',
         capabilities: sqliteCapabilities,
         async execute() {},
       },
     });
 
     const result = await builder.refreshMaterializedViewCollection(
-      "usersSnapshot",
+      'usersSnapshot',
       {
         dryRun: true,
         concurrently: true,
@@ -297,18 +297,18 @@ describe("CollectionBuilder capability planning", () => {
 
     expect(result.warnings).toEqual([
       expect.objectContaining({
-        code: "UNSUPPORTED_REFRESH_MATERIALIZED_VIEW",
-        fallback: "skip",
-        severity: "unsafe",
+        code: 'UNSUPPORTED_REFRESH_MATERIALIZED_VIEW',
+        fallback: 'skip',
+        severity: 'unsafe',
       }),
     ]);
     expect(result.schemaOperations).toEqual([]);
   });
 
-  it("downgrades unsupported replace view operations to create view", async () => {
+  it('downgrades unsupported replace view operations to create view', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "legacy",
+        dialect: 'legacy',
         capabilities: {
           ...sqliteCapabilities,
           nativeTypes: true,
@@ -319,35 +319,35 @@ describe("CollectionBuilder capability planning", () => {
     });
 
     const result = await builder.replaceViewCollection(
-      "usersView",
+      'usersView',
       (view) => {
-        view.string("email");
-        view.as((query) => query.from("users").select("email"));
+        view.string('email');
+        view.as((query) => query.from('users').select('email'));
       },
       { dryRun: true },
     );
 
     expect(result.warnings).toEqual([
       expect.objectContaining({
-        code: "UNSUPPORTED_REPLACE_VIEW",
-        fallback: "downgrade",
-        severity: "warning",
+        code: 'UNSUPPORTED_REPLACE_VIEW',
+        fallback: 'downgrade',
+        severity: 'warning',
       }),
     ]);
     expect(result.schemaOperations).toEqual([
       expect.objectContaining({
-        type: "createView",
+        type: 'createView',
         orReplace: false,
       }),
     ]);
   });
 
-  it("skips unsupported views and does not sync their metadata", async () => {
+  it('skips unsupported views and does not sync their metadata', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
       metadataStore,
       schemaAdapter: {
-        dialect: "minimal",
+        dialect: 'minimal',
         capabilities: {
           ...sqliteCapabilities,
           views: false,
@@ -356,26 +356,26 @@ describe("CollectionBuilder capability planning", () => {
       },
     });
 
-    const result = await builder.createViewCollection("usersView", (view) => {
-      view.string("email");
-      view.as((query) => query.from("users").select("email"));
+    const result = await builder.createViewCollection('usersView', (view) => {
+      view.string('email');
+      view.as((query) => query.from('users').select('email'));
     });
 
     expect(result.warnings).toEqual([
       expect.objectContaining({
-        code: "UNSUPPORTED_VIEW",
-        fallback: "skip",
-        severity: "unsafe",
+        code: 'UNSUPPORTED_VIEW',
+        fallback: 'skip',
+        severity: 'unsafe',
       }),
     ]);
     expect(result.schemaOperations).toEqual([]);
-    expect(await metadataStore.getCollection("usersView")).toBeUndefined();
+    expect(await metadataStore.getCollection('usersView')).toBeUndefined();
   });
 
-  it("warns and skips unsupported foreign keys and check constraints in alter operations", async () => {
+  it('warns and skips unsupported foreign keys and check constraints in alter operations', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "minimal",
+        dialect: 'minimal',
         capabilities: {
           ...sqliteCapabilities,
           foreignKeys: false,
@@ -385,19 +385,19 @@ describe("CollectionBuilder capability planning", () => {
     });
 
     const result = await builder.alterCollection(
-      "orders",
+      'orders',
       {
         addConstraints: [
           {
-            type: "foreignKey",
-            fields: ["customerId"],
+            type: 'foreignKey',
+            fields: ['customerId'],
             references: {
-              collection: "customers",
-              fields: ["id"],
+              collection: 'customers',
+              fields: ['id'],
             },
           },
           {
-            type: "check",
+            type: 'check',
             expression: {
               amount: { $gte: 0 },
             },
@@ -410,34 +410,34 @@ describe("CollectionBuilder capability planning", () => {
     expect(result.warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "UNSUPPORTED_FOREIGN_KEY",
-          fallback: "skip",
-          severity: "unsafe",
+          code: 'UNSUPPORTED_FOREIGN_KEY',
+          fallback: 'skip',
+          severity: 'unsafe',
         }),
         expect.objectContaining({
-          code: "UNSUPPORTED_CHECK_CONSTRAINT",
-          fallback: "skip",
-          severity: "unsafe",
+          code: 'UNSUPPORTED_CHECK_CONSTRAINT',
+          fallback: 'skip',
+          severity: 'unsafe',
         }),
       ]),
     );
     expect(result.schemaOperations).toEqual([]);
   });
 
-  it("downgrades unsupported partial regular indexes without dropping the index", async () => {
+  it('downgrades unsupported partial regular indexes without dropping the index', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "mysql",
+        dialect: 'mysql',
         capabilities: mysqlLikeCapabilities,
         async execute() {},
       },
     });
 
     const result = await builder.addIndex(
-      "jobs",
+      'jobs',
       {
-        fields: ["accountId"],
-        name: "idx_jobs_account_id_partial",
+        fields: ['accountId'],
+        name: 'idx_jobs_account_id_partial',
         predicate: {
           accountId: { $notNull: true },
         },
@@ -447,37 +447,37 @@ describe("CollectionBuilder capability planning", () => {
 
     expect(result.warnings).toEqual([
       expect.objectContaining({
-        code: "UNSUPPORTED_PARTIAL_INDEX",
-        fallback: "downgrade",
-        severity: "warning",
+        code: 'UNSUPPORTED_PARTIAL_INDEX',
+        fallback: 'downgrade',
+        severity: 'warning',
       }),
     ]);
     expect(result.schemaOperations?.[0]).toMatchObject({
-      type: "alterTable",
+      type: 'alterTable',
       operations: [
         {
-          type: "addIndex",
+          type: 'addIndex',
           index: {
-            columns: ["account_id"],
-            name: "idx_jobs_account_id_partial",
+            columns: ['account_id'],
+            name: 'idx_jobs_account_id_partial',
           },
         },
       ],
     });
     const alterTable = result.schemaOperations?.[0];
-    expect(alterTable?.type).toBe("alterTable");
+    expect(alterTable?.type).toBe('alterTable');
     if (
-      alterTable?.type === "alterTable" &&
-      alterTable.operations[0].type === "addIndex"
+      alterTable?.type === 'alterTable' &&
+      alterTable.operations[0].type === 'addIndex'
     ) {
-      expect(alterTable.operations[0].index).not.toHaveProperty("predicate");
+      expect(alterTable.operations[0].index).not.toHaveProperty('predicate');
     }
   });
 
-  it("uses all warnings when strict errors have no unsafe warnings", async () => {
+  it('uses all warnings when strict errors have no unsafe warnings', async () => {
     const builder = new CollectionBuilder({
       schemaAdapter: {
-        dialect: "sqlite",
+        dialect: 'sqlite',
         capabilities: sqliteCapabilities,
         async execute() {},
       },
@@ -485,10 +485,10 @@ describe("CollectionBuilder capability planning", () => {
 
     await expect(
       builder.createCollection(
-        "events",
+        'events',
         (collection) => {
-          collection.dbSchema("public");
-          collection.string("email").dbComment("Email address");
+          collection.dbSchema('public');
+          collection.string('email').dbComment('Email address');
         },
         { strict: true },
       ),

@@ -20,10 +20,15 @@ interface RequestInitWithDuplex extends RequestInit {
   duplex?: 'half';
 }
 
-export function toFetchRequest(req: IncomingMessage, runtime: AppRequestTarget): Request {
+export function toFetchRequest(
+  req: IncomingMessage,
+  runtime: AppRequestTarget,
+): Request {
   const url = requestUrl(req);
   const pathInsideApp = url.pathname.slice(runtime.basePath.length) || '/';
-  url.pathname = pathInsideApp.startsWith('/') ? pathInsideApp : `/${pathInsideApp}`;
+  url.pathname = pathInsideApp.startsWith('/')
+    ? pathInsideApp
+    : `/${pathInsideApp}`;
 
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
@@ -54,7 +59,10 @@ export function toFetchRequest(req: IncomingMessage, runtime: AppRequestTarget):
   return new Request(url, init);
 }
 
-export async function applyFetchResponse(res: ServerResponse, response: Response): Promise<void> {
+export async function applyFetchResponse(
+  res: ServerResponse,
+  response: Response,
+): Promise<void> {
   res.statusCode = response.status;
   res.statusMessage = response.statusText;
 
@@ -78,7 +86,9 @@ export async function applyFetchResponse(res: ServerResponse, response: Response
     return;
   }
 
-  const body = Readable.fromWeb(response.body as unknown as import('node:stream/web').ReadableStream);
+  const body = Readable.fromWeb(
+    response.body as unknown as import('node:stream/web').ReadableStream,
+  );
   try {
     await pipeline(body, res);
   } catch (error) {
@@ -90,13 +100,21 @@ export async function applyFetchResponse(res: ServerResponse, response: Response
   }
 }
 
-export function isClientResponseClose(error: unknown, res: ServerResponse): boolean {
+export function isClientResponseClose(
+  error: unknown,
+  res: ServerResponse,
+): boolean {
   if (!isPrematureCloseError(error)) {
     return false;
   }
 
   const maybeClosed = res as ServerResponse & { closed?: boolean };
-  return res.destroyed || res.writableEnded || res.writableFinished || maybeClosed.closed === true;
+  return (
+    res.destroyed ||
+    res.writableEnded ||
+    res.writableFinished ||
+    maybeClosed.closed === true
+  );
 }
 
 export function requestPath(req: IncomingMessage): string {
@@ -106,7 +124,9 @@ export function requestPath(req: IncomingMessage): string {
 function requestUrl(req: IncomingMessage): URL {
   const host = req.headers.host ?? 'localhost';
   const forwardedProto = req.headers['x-forwarded-proto'];
-  const protocol = Array.isArray(forwardedProto) ? forwardedProto[0] ?? 'http' : forwardedProto ?? 'http';
+  const protocol = Array.isArray(forwardedProto)
+    ? (forwardedProto[0] ?? 'http')
+    : (forwardedProto ?? 'http');
 
   return new URL(req.url ?? '/', `${protocol}://${host}`);
 }
@@ -114,10 +134,14 @@ function requestUrl(req: IncomingMessage): URL {
 function requestAbortSignal(req: IncomingMessage): AbortSignal {
   const controller = new AbortController();
 
-  req.once('aborted', () => controller.abort(new Error('client request aborted')));
+  req.once('aborted', () =>
+    controller.abort(new Error('client request aborted')),
+  );
   req.once('close', () => {
     if (!req.complete) {
-      controller.abort(new Error('client connection closed before request completed'));
+      controller.abort(
+        new Error('client connection closed before request completed'),
+      );
     }
   });
 
@@ -133,7 +157,9 @@ function combineAbortSignals(...signals: AbortSignal[]): AbortSignal {
       return controller.signal;
     }
 
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    signal.addEventListener('abort', () => controller.abort(signal.reason), {
+      once: true,
+    });
   }
 
   return controller.signal;
@@ -142,6 +168,7 @@ function combineAbortSignals(...signals: AbortSignal[]): AbortSignal {
 function isPrematureCloseError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    (error.name === 'AbortError' || (error as NodeJS.ErrnoException).code === 'ERR_STREAM_PREMATURE_CLOSE')
+    (error.name === 'AbortError' ||
+      (error as NodeJS.ErrnoException).code === 'ERR_STREAM_PREMATURE_CLOSE')
   );
 }

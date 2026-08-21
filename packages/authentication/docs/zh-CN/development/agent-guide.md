@@ -84,11 +84,11 @@ subject；企业 ticket 协议也应该提供类似的稳定标识。邮箱适�
 在 `server/config/auth.ts` 或相邻配置文件中读取 provider 所需的环境变量，例如：
 
 ```ts
-const clientId = env.string("ACME_CLIENT_ID");
-const clientSecret = env.string("ACME_CLIENT_SECRET");
+const clientId = env.string('ACME_CLIENT_ID');
+const clientSecret = env.string('ACME_CLIENT_SECRET');
 
 if (!clientId || !clientSecret) {
-  throw new Error("ACME_CLIENT_ID and ACME_CLIENT_SECRET are required.");
+  throw new Error('ACME_CLIENT_ID and ACME_CLIENT_SECRET are required.');
 }
 ```
 
@@ -132,8 +132,8 @@ database/migrations/
 简单场景可以直接通过现有 `AppClient` 请求 plugin endpoint：
 
 ```ts
-await appClient.request("auth/sign-in/my-provider", {
-  method: "POST",
+await appClient.request('auth/sign-in/my-provider', {
+  method: 'POST',
   body: JSON.stringify(input),
 });
 ```
@@ -158,7 +158,7 @@ client。登录成功后继续使用默认 Refine `AuthProvider` 查询 session�
 应用可以直接在自己的登录页中导入组件：
 
 ```tsx
-import { MyProviderSignInButton } from "@/auth/my-provider/sign-in-button";
+import { MyProviderSignInButton } from '@/auth/my-provider/sign-in-button';
 ```
 
 如果 callback 需要独立页面，也可以直接在应用自己的路由配置中引用

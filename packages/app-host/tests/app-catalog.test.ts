@@ -15,8 +15,13 @@ import { DirectoryAppCatalog } from '../dist/app-catalog.js';
 
 const tempDirs: string[] = [];
 
-async function createAppWorkspace(files: string[], packageJson: string | null = '{"name":"customer-app","version":"1.0.0"}\n') {
-  const appsDir = await mkdtemp(path.join(os.tmpdir(), 'nocobase-app-catalog-'));
+async function createAppWorkspace(
+  files: string[],
+  packageJson: string | null = '{"name":"customer-app","version":"1.0.0"}\n',
+) {
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), 'nocobase-app-catalog-'),
+  );
   tempDirs.push(appsDir);
 
   const appDir = path.join(appsDir, 'customer');
@@ -35,12 +40,17 @@ async function createAppWorkspace(files: string[], packageJson: string | null = 
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
 });
 
 describe('DirectoryAppCatalog', () => {
   it('discovers an app from dist/server/embedded.js', async () => {
-    const { appsDir, appDir } = await createAppWorkspace(['dist/server/embedded.js'], null);
+    const { appsDir, appDir } = await createAppWorkspace(
+      ['dist/server/embedded.js'],
+      null,
+    );
     const catalog = new DirectoryAppCatalog({ appsDir });
 
     await expect(catalog.discover()).resolves.toMatchObject([
@@ -82,7 +92,10 @@ describe('DirectoryAppCatalog', () => {
   });
 
   it('does not discover a client-only app', async () => {
-    const { appsDir } = await createAppWorkspace(['dist/client/index.html', 'dist/client/assets/app.js']);
+    const { appsDir } = await createAppWorkspace([
+      'dist/client/index.html',
+      'dist/client/assets/app.js',
+    ]);
     const catalog = new DirectoryAppCatalog({ appsDir });
 
     await expect(catalog.discover()).resolves.toEqual([]);
@@ -148,13 +161,21 @@ describe('DirectoryAppCatalog', () => {
   });
 
   it('ignores nested app directories', async () => {
-    const appsDir = await mkdtemp(path.join(os.tmpdir(), 'nocobase-app-catalog-'));
+    const appsDir = await mkdtemp(
+      path.join(os.tmpdir(), 'nocobase-app-catalog-'),
+    );
     tempDirs.push(appsDir);
 
     const nestedAppDir = path.join(appsDir, 'main', 'customer');
     await mkdir(path.join(nestedAppDir, 'dist', 'server'), { recursive: true });
-    await writeFile(path.join(nestedAppDir, 'package.json'), '{"name":"customer-app","version":"1.0.0"}\n');
-    await writeFile(path.join(nestedAppDir, 'dist', 'server', 'embedded.js'), 'export const marker = true;\n');
+    await writeFile(
+      path.join(nestedAppDir, 'package.json'),
+      '{"name":"customer-app","version":"1.0.0"}\n',
+    );
+    await writeFile(
+      path.join(nestedAppDir, 'dist', 'server', 'embedded.js'),
+      'export const marker = true;\n',
+    );
 
     const catalog = new DirectoryAppCatalog({ appsDir });
 

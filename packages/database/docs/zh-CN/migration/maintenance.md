@@ -30,8 +30,8 @@ interface MigrationContext {
 ```ts
 interface MigrationConnection {
   name: string;
-  driver: "better-sqlite3" | "pg" | "mysql2";
-  dialect: "sqlite" | "postgres" | "mysql";
+  driver: 'better-sqlite3' | 'pg' | 'mysql2';
+  dialect: 'sqlite' | 'postgres' | 'mysql';
   capabilities: DatabaseCapabilities;
   client<T = unknown>(): Promise<T>;
 }
@@ -111,7 +111,7 @@ interface MigrationRunResult {
 默认事务模式是：
 
 ```ts
-transaction: "auto";
+transaction: 'auto';
 ```
 
 `transaction: true` 和 `transaction: 'auto'` 走 `connection.transaction()`。

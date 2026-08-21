@@ -8,7 +8,10 @@ export type SpaRuntimeGlobalValue =
   | SpaRuntimeGlobalValue[]
   | { [key: string]: SpaRuntimeGlobalValue };
 
-export type SpaRuntimeGlobals = Record<string, SpaRuntimeGlobalValue | undefined>;
+export type SpaRuntimeGlobals = Record<
+  string,
+  SpaRuntimeGlobalValue | undefined
+>;
 
 export interface RegisterSpaRoutesOptions {
   basePath: string;

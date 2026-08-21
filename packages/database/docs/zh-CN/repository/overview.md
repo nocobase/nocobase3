@@ -4,10 +4,10 @@
 
 `Repository` 是未来的应用层数据访问入口。它和 `db.query()` 的核心区别不是 API 写法，而是所处层级不同：
 
-| API | 层级 | 输入名 | 是否读取 Collection metadata | 当前状态 |
-| --- | --- | --- | --- | --- |
-| `db.query()` | 数据库查询层 | table / column query identifier | 否 | 已实现 |
-| `db.repository()` | 应用数据层 | Collection / Field 逻辑名 | 是 | 规划中 |
+| API               | 层级         | 输入名                          | 是否读取 Collection metadata | 当前状态 |
+| ----------------- | ------------ | ------------------------------- | ---------------------------- | -------- |
+| `db.query()`      | 数据库查询层 | table / column query identifier | 否                           | 已实现   |
+| `db.repository()` | 应用数据层   | Collection / Field 逻辑名       | 是                           | 规划中   |
 
 Repository 会面向 Collection 工作，理解字段类型、关系、命名策略、权限上下文、应用层元信息和未来的数据转换规则。它适合承载常规 CRUD、关系筛选、权限过滤、HTTP / CLI 数据访问，以及 Agent 需要理解业务数据模型的场景。
 
@@ -46,9 +46,13 @@ interface DatabaseConnection {
   repository(collectionName: string): Repository;
 }
 
-interface Repository<TRecord extends Record<string, unknown> = Record<string, unknown>> {
+interface Repository<
+  TRecord extends Record<string, unknown> = Record<string, unknown>,
+> {
   findMany<TResult = TRecord>(options?: FindManyOptions): Promise<TResult[]>;
-  findOne<TResult = TRecord>(options?: FindOneOptions): Promise<TResult | undefined>;
+  findOne<TResult = TRecord>(
+    options?: FindOneOptions,
+  ): Promise<TResult | undefined>;
   create<TResult = TRecord>(options: CreateOptions<TRecord>): Promise<TResult>;
   update(options: UpdateOptions<TRecord>): Promise<MutationResult>;
   delete(options?: DeleteOptions): Promise<MutationResult>;
@@ -76,7 +80,8 @@ const orders = await db.repository('orders').findMany({
 `db.query()` 仍然保留，用于更接近 SQL 的高级查询：
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orders')
   .select(['id', 'orderNo', 'createdAt'])
   .where('status', '=', 'paid')
@@ -104,12 +109,14 @@ await db.repository('users').findMany({
     filter.and([
       filter.string('name').includes('Chen'),
       filter.boolean('enabled').isTrue(),
-      filter.relation('roles').none((role) =>
-        role.or([
-          role.string('name').eq('root'),
-          role.string('name').eq('admin'),
-        ])
-      ),
+      filter
+        .relation('roles')
+        .none((role) =>
+          role.or([
+            role.string('name').eq('root'),
+            role.string('name').eq('admin'),
+          ]),
+        ),
     ]),
 });
 ```

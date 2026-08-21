@@ -71,7 +71,8 @@ collection.foreignKey('userId', {
 字段级 shortcut：
 
 ```ts
-collection.integer('userId')
+collection
+  .integer('userId')
   .unsigned()
   .references({ collection: 'items', field: 'id' });
 ```

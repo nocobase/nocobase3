@@ -125,8 +125,8 @@ provider、请求 ID、耗时和错误类别。
 Better Auth 提供公开的 plugin 类型和 endpoint helper：
 
 ```ts
-import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthEndpoint } from "better-auth/api";
+import type { BetterAuthPlugin } from 'better-auth';
+import { APIError, createAuthEndpoint } from 'better-auth/api';
 ```
 
 一个 plugin 至少需要稳定的 `id` 和 endpoint：
@@ -136,13 +136,13 @@ export function ticketAuthPlugin(
   options: TicketAuthPluginOptions,
 ): BetterAuthPlugin {
   return {
-    id: "nocobase-ticket-auth",
-    version: "0.1.0",
+    id: 'nocobase-ticket-auth',
+    version: '0.1.0',
     endpoints: {
       signInWithTicket: createAuthEndpoint(
-        "/sign-in/ticket",
+        '/sign-in/ticket',
         {
-          method: "POST",
+          method: 'POST',
           requireRequest: true,
           body: ticketBodySchema,
           metadata: {
@@ -156,9 +156,9 @@ export function ticketAuthPlugin(
           });
 
           if (identity.expiresAt <= new Date()) {
-            throw new APIError("UNAUTHORIZED", {
-              code: "TICKET_EXPIRED",
-              message: "The sign-in ticket has expired.",
+            throw new APIError('UNAUTHORIZED', {
+              code: 'TICKET_EXPIRED',
+              message: 'The sign-in ticket has expired.',
             });
           }
 
@@ -174,23 +174,23 @@ export function ticketAuthPlugin(
     },
     rateLimit: [
       {
-        pathMatcher: (path) => path === "/sign-in/ticket",
+        pathMatcher: (path) => path === '/sign-in/ticket',
         window: 60,
         max: 5,
       },
     ],
     $ERROR_CODES: {
       INVALID_TICKET: {
-        code: "INVALID_TICKET",
-        message: "The sign-in ticket is invalid.",
+        code: 'INVALID_TICKET',
+        message: 'The sign-in ticket is invalid.',
       },
       TICKET_EXPIRED: {
-        code: "TICKET_EXPIRED",
-        message: "The sign-in ticket has expired.",
+        code: 'TICKET_EXPIRED',
+        message: 'The sign-in ticket has expired.',
       },
       TICKET_REPLAYED: {
-        code: "TICKET_REPLAYED",
-        message: "The sign-in ticket has already been used.",
+        code: 'TICKET_REPLAYED',
+        message: 'The sign-in ticket has already been used.',
       },
     },
     options,
@@ -244,24 +244,24 @@ const ticketAccountSchema = {
   ticketAccount: {
     fields: {
       userId: {
-        type: "string",
+        type: 'string',
         required: true,
         index: true,
       },
       issuer: {
-        type: "string",
+        type: 'string',
         required: true,
       },
       subject: {
-        type: "string",
+        type: 'string',
         required: true,
       },
       createdAt: {
-        type: "date",
+        type: 'date',
         required: true,
       },
       updatedAt: {
-        type: "date",
+        type: 'date',
         required: true,
       },
     },
@@ -273,7 +273,7 @@ const ticketAccountSchema = {
 
 ```ts
 return {
-  id: "nocobase-ticket-auth",
+  id: 'nocobase-ticket-auth',
   schema: ticketAccountSchema,
   // endpoints、rateLimit 等配置
 };
@@ -287,32 +287,32 @@ migration。
 在 `database/migrations/` 中创建对应表：
 
 ```ts
-import { defineMigration } from "@nocobase/database";
+import { defineMigration } from '@nocobase/database';
 
 export default defineMigration({
-  name: "202608210001_create_ticket_accounts",
+  name: '202608210001_create_ticket_accounts',
 
   async up({ builder }) {
-    await builder.createCollection("ticketAccount", (collection) => {
-      collection.string("id", { length: 64 }).notNull();
-      collection.string("userId", { length: 64 }).notNull();
-      collection.string("issuer", { length: 512 }).notNull();
-      collection.string("subject", { length: 512 }).notNull();
-      collection.datetime("createdAt").notNull();
-      collection.datetime("updatedAt").notNull();
+    await builder.createCollection('ticketAccount', (collection) => {
+      collection.string('id', { length: 64 }).notNull();
+      collection.string('userId', { length: 64 }).notNull();
+      collection.string('issuer', { length: 512 }).notNull();
+      collection.string('subject', { length: 512 }).notNull();
+      collection.datetime('createdAt').notNull();
+      collection.datetime('updatedAt').notNull();
 
-      collection.primary("id", { name: "pk_ticket_account" });
-      collection.unique(["issuer", "subject"], {
-        name: "uq_ticket_account_issuer_subject",
+      collection.primary('id', { name: 'pk_ticket_account' });
+      collection.unique(['issuer', 'subject'], {
+        name: 'uq_ticket_account_issuer_subject',
       });
-      collection.index("userId", {
-        name: "idx_ticket_account_user",
+      collection.index('userId', {
+        name: 'idx_ticket_account_user',
       });
     });
   },
 
   async down({ builder }) {
-    await builder.dropCollection("ticketAccount");
+    await builder.dropCollection('ticketAccount');
   },
 });
 ```
@@ -393,14 +393,14 @@ POST /api/auth/sign-in/ticket
 封装一个小 client：
 
 ```ts
-import type { AppClient } from "@nocobase/app-sdk";
+import type { AppClient } from '@nocobase/app-sdk';
 
 export class TicketAuthClient {
   constructor(private readonly client: AppClient) {}
 
   async signIn(ticket: string): Promise<void> {
-    await this.client.request("auth/sign-in/ticket", {
-      method: "POST",
+    await this.client.request('auth/sign-in/ticket', {
+      method: 'POST',
       body: JSON.stringify({ ticket }),
     });
   }

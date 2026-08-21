@@ -1,7 +1,11 @@
 import type { DatabaseManager } from '@nocobase/database';
 
 import { createAppDatabaseManager } from '../database/manager.js';
-import { createAppMigrator, type AppMigrationRunResult, type AppMigrator } from '../database/migrator.js';
+import {
+  createAppMigrator,
+  type AppMigrationRunResult,
+  type AppMigrator,
+} from '../database/migrator.js';
 import { prepareAppDatabaseStorage } from '../database/storage.js';
 import type { AppDatabaseConfig } from '../database/types.js';
 
@@ -9,7 +13,9 @@ export interface AppRuntimeConfig {
   database: AppDatabaseConfig;
 }
 
-export interface AppRuntime<TConfig extends AppRuntimeConfig = AppRuntimeConfig> {
+export interface AppRuntime<
+  TConfig extends AppRuntimeConfig = AppRuntimeConfig,
+> {
   config: TConfig;
   database?: DatabaseManager;
   migrator?: AppMigrator;
@@ -17,7 +23,9 @@ export interface AppRuntime<TConfig extends AppRuntimeConfig = AppRuntimeConfig>
   dispose(): Promise<void>;
 }
 
-export function createAppRuntime<TConfig extends AppRuntimeConfig>(config: TConfig): AppRuntime<TConfig> {
+export function createAppRuntime<TConfig extends AppRuntimeConfig>(
+  config: TConfig,
+): AppRuntime<TConfig> {
   const database = createAppDatabaseManager(config.database);
   const migrator = database
     ? createAppMigrator({
@@ -35,7 +43,9 @@ export function createAppRuntime<TConfig extends AppRuntimeConfig>(config: TConf
   };
 }
 
-export async function runConfiguredAppMigrations(runtime: AppRuntime): Promise<AppMigrationRunResult | undefined> {
+export async function runConfiguredAppMigrations(
+  runtime: AppRuntime,
+): Promise<AppMigrationRunResult | undefined> {
   if (!runtime.config.database.migrations.autoRun) {
     return undefined;
   }

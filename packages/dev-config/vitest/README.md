@@ -3,11 +3,11 @@
 Use the Node factory for server packages:
 
 ```js
-import { createNodeVitestConfig } from "@nocobase/dev-config/vitest/node";
+import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
 
 export default createNodeVitestConfig({
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ['tests/**/*.test.ts'],
   },
 });
 ```
@@ -15,16 +15,16 @@ export default createNodeVitestConfig({
 Use the React factory for browser components:
 
 ```js
-import { createReactVitestConfig } from "@nocobase/dev-config/vitest/react";
+import { createReactVitestConfig } from '@nocobase/dev-config/vitest/react';
 
 export default createReactVitestConfig({
   resolve: {
     alias: {
-      "@": new URL("./client", import.meta.url).pathname,
+      '@': new URL('./client', import.meta.url).pathname,
     },
   },
   test: {
-    include: ["tests/**/*.test.{ts,tsx}"],
+    include: ['tests/**/*.test.{ts,tsx}'],
   },
 });
 ```

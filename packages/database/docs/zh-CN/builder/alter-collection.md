@@ -20,8 +20,12 @@ await builder.alterCollection('orders', (collection) => {
   collection.string('paymentStatus', { length: 32 }).defaultTo('pending');
   collection.alterField('amount', { precision: 14, scale: 2, nullable: false });
   collection.dropFields('legacyStatus', 'legacyCode');
-  collection.index(['paymentStatus', 'paidAt'], { name: 'idx_orders_payment_paid' });
-  collection.unique(['paymentStatus', 'paidAt'], { name: 'uk_orders_payment_paid' });
+  collection.index(['paymentStatus', 'paidAt'], {
+    name: 'idx_orders_payment_paid',
+  });
+  collection.unique(['paymentStatus', 'paidAt'], {
+    name: 'uk_orders_payment_paid',
+  });
 });
 ```
 
@@ -29,9 +33,7 @@ await builder.alterCollection('orders', (collection) => {
 
 ```ts
 await builder.alterCollection('orders', {
-  addFields: [
-    { name: 'paidAt', type: 'datetime', nullable: true },
-  ],
+  addFields: [{ name: 'paidAt', type: 'datetime', nullable: true }],
   alterFields: [
     {
       name: 'amount',

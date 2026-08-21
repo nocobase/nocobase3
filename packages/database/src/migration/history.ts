@@ -1,7 +1,7 @@
-import type { Knex } from "knex";
-import type { MigrationConnection, MigrationHistoryRecord } from "./types.js";
+import type { Knex } from 'knex';
+import type { MigrationConnection, MigrationHistoryRecord } from './types.js';
 
-export const DEFAULT_MIGRATION_TABLE = "__nocobase_migrations";
+export const DEFAULT_MIGRATION_TABLE = '__nocobase_migrations';
 
 interface MigrationHistoryRow {
   id: number;
@@ -24,13 +24,13 @@ export async function ensureMigrationTable(
       await knex.schema.createTable(
         tableName,
         (table: Knex.CreateTableBuilder) => {
-          table.increments("id").primary();
-          table.string("package_name", 191).notNullable();
-          table.string("name", 191).notNullable().unique();
-          table.integer("batch").notNullable();
-          table.string("checksum", 128).notNullable();
-          table.dateTime("executed_at").notNullable();
-          table.integer("duration_ms").nullable();
+          table.increments('id').primary();
+          table.string('package_name', 191).notNullable();
+          table.string('name', 191).notNullable().unique();
+          table.integer('batch').notNullable();
+          table.string('checksum', 128).notNullable();
+          table.dateTime('executed_at').notNullable();
+          table.integer('duration_ms').nullable();
         },
       );
     } catch (error) {
@@ -50,15 +50,15 @@ export async function readMigrationHistory(
   const knex = await connection.client<Knex>();
   const rows = await knex<MigrationHistoryRow>(tableName)
     .select([
-      "id",
-      "package_name",
-      "name",
-      "batch",
-      "checksum",
-      "executed_at",
-      "duration_ms",
+      'id',
+      'package_name',
+      'name',
+      'batch',
+      'checksum',
+      'executed_at',
+      'duration_ms',
     ])
-    .orderBy("id", "asc");
+    .orderBy('id', 'asc');
 
   return rows.map((row: MigrationHistoryRow) => ({
     id: Number(row.id),
@@ -87,7 +87,7 @@ export async function recordMigrationCompleted(
 ): Promise<void> {
   const knex = await connection.client<Knex>();
   await knex(options.tableName ?? DEFAULT_MIGRATION_TABLE).insert({
-    package_name: options.packageName ?? "app",
+    package_name: options.packageName ?? 'app',
     name: options.name,
     batch: options.batch,
     checksum: options.checksum,
@@ -113,11 +113,11 @@ async function ensurePackageNameColumn(
   knex: Knex,
   tableName: string,
 ): Promise<void> {
-  if (await knex.schema.hasColumn(tableName, "package_name")) {
+  if (await knex.schema.hasColumn(tableName, 'package_name')) {
     return;
   }
 
   await knex.schema.alterTable(tableName, (table: Knex.AlterTableBuilder) => {
-    table.string("package_name", 191).notNullable().defaultTo("app");
+    table.string('package_name', 191).notNullable().defaultTo('app');
   });
 }

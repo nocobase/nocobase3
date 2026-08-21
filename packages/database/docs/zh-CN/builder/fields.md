@@ -40,7 +40,8 @@ Field 是 Collection 的字段定义。字段既包含应用层信息，也可�
 ## Fluent DSL
 
 ```ts
-collection.decimal('amount', { precision: 12, scale: 2 })
+collection
+  .decimal('amount', { precision: 12, scale: 2 })
   .notNull()
   .defaultTo(0)
   .title('Amount')
@@ -92,8 +93,7 @@ collection.native('ipAddress', 'inet', {
 ## db options
 
 ```ts
-collection.string('email')
-  .dbComment('User email address');
+collection.string('email').dbComment('User email address');
 ```
 
 或者：

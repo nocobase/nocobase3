@@ -1,12 +1,12 @@
-import type { I18nProvider } from "@refinedev/core";
+import type { I18nProvider } from '@refinedev/core';
 import {
   createInstance,
   type i18n as I18nInstance,
   type InitOptions,
   type TOptions,
-} from "i18next";
+} from 'i18next';
 
-import { nocobaseClient } from "../client/index.ts";
+import { nocobaseClient } from '../client/index.ts';
 import {
   configurePortalLocales,
   getDefaultLocale,
@@ -17,13 +17,13 @@ import {
   resolveSupportedLocale,
   setEnabledLocales,
   type LocaleDefinition,
-} from "./locales.ts";
+} from './locales.ts';
 import {
   getTranslationResources,
   setTranslationResolver,
   subscribeTranslationResources,
   type TranslationOptions,
-} from "./translation.ts";
+} from './translation.ts';
 
 export type LocaleResources = Record<
   string,
@@ -45,14 +45,14 @@ export type PortalI18nConfiguration = {
 type LocalePersistence = (locale: string) => void | Promise<void>;
 
 let localePersistence: LocalePersistence | undefined;
-let onLocaleChanged: PortalI18nConfiguration["onLocaleChanged"];
+let onLocaleChanged: PortalI18nConfiguration['onLocaleChanged'];
 let i18nBindingsConfigured = false;
 
 export const i18n: I18nInstance = createInstance();
 
 function addLocaleResources(
   namespace: string,
-  resources: LocaleResources
+  resources: LocaleResources,
 ): void {
   if (!i18n.isInitialized) return;
 
@@ -86,7 +86,7 @@ export async function configurePortalI18n({
   await i18n.init({
     lng: resolveSupportedLocale(nocobaseClient.getLocale()),
     fallbackLng: defaultLocale,
-    defaultNS: "translation",
+    defaultNS: 'translation',
     keySeparator: false,
     nsSeparator: false,
     initImmediate: false,
@@ -97,25 +97,25 @@ export async function configurePortalI18n({
   });
 
   getTranslationResources().forEach(([namespace, resources]) =>
-    addLocaleResources(namespace, resources)
+    addLocaleResources(namespace, resources),
   );
   applyDocumentLocale();
 }
 
 export function getCurrentLocale(): string {
   return resolveSupportedLocale(
-    i18n.resolvedLanguage ?? i18n.language ?? nocobaseClient.getLocale()
+    i18n.resolvedLanguage ?? i18n.language ?? nocobaseClient.getLocale(),
   );
 }
 
 export function translate(
   key: string,
   options?: TranslationOptions | string,
-  defaultMessage?: string
+  defaultMessage?: string,
 ): string {
-  const normalizedOptions = typeof options === "string" ? undefined : options;
+  const normalizedOptions = typeof options === 'string' ? undefined : options;
   const normalizedDefault =
-    typeof options === "string" ? options : defaultMessage;
+    typeof options === 'string' ? options : defaultMessage;
   if (!i18n.isInitialized) {
     return normalizedDefault ?? normalizedOptions?.defaultValue ?? key;
   }
@@ -125,11 +125,11 @@ export function translate(
     defaultValue: normalizedDefault ?? normalizedOptions?.defaultValue ?? key,
   });
 
-  return typeof value === "string" ? value : String(value);
+  return typeof value === 'string' ? value : String(value);
 }
 
 export function applyDocumentLocale(locale: string = getCurrentLocale()): void {
-  if (typeof document === "undefined") return;
+  if (typeof document === 'undefined') return;
   const direction =
     getLocaleDefinition(locale)?.direction ?? getLocaleDirection(locale);
   document.documentElement.lang = locale;
@@ -155,7 +155,7 @@ function resolveSystemLocale(settings?: LocaleSystemSettings) {
 }
 
 export async function applySystemLocale(
-  settings?: LocaleSystemSettings
+  settings?: LocaleSystemSettings,
 ): Promise<string> {
   const enabledLanguages = Array.isArray(settings?.enabledLanguages)
     ? settings.enabledLanguages.filter(Boolean)
@@ -179,7 +179,7 @@ export async function applySystemLocale(
 }
 
 export function setLocalePersistence(
-  persistence?: LocalePersistence
+  persistence?: LocalePersistence,
 ): () => void {
   localePersistence = persistence;
   return () => {
@@ -193,7 +193,7 @@ export async function changeLocale(locale: string): Promise<void> {
   try {
     await localePersistence?.(nextLocale);
   } catch (error) {
-    console.warn("Unable to persist the language preference", error);
+    console.warn('Unable to persist the language preference', error);
   }
 
   nocobaseClient.setLocale(nextLocale);

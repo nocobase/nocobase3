@@ -9,8 +9,13 @@ export interface RealtimePageHandlerOptions {
   publicBasePath: string;
 }
 
-export function createRealtimePageHandler(options: RealtimePageHandlerOptions): Handler {
-  const websocketPath = joinBasePath(options.publicBasePath, APP_LOCAL_WEBSOCKET_PATH);
+export function createRealtimePageHandler(
+  options: RealtimePageHandlerOptions,
+): Handler {
+  const websocketPath = joinBasePath(
+    options.publicBasePath,
+    APP_LOCAL_WEBSOCKET_PATH,
+  );
 
   return (context) =>
     context.html(`<!doctype html>

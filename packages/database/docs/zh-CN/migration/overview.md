@@ -30,26 +30,26 @@ Migration 的写法刻意保持简单：结构变更用 `builder`，数据变更
 文件内容：
 
 ```ts
-import { defineMigration } from "@nocobase/database";
+import { defineMigration } from '@nocobase/database';
 
 export default defineMigration({
-  name: "202608180001_create_users",
+  name: '202608180001_create_users',
 
   async up({ builder }) {
     await builder.createCollection(
-      "users",
+      'users',
       (collection) => {
-        collection.increments("id");
-        collection.string("name");
-        collection.string("email").unique();
-        collection.datetime("createdAt");
+        collection.increments('id');
+        collection.string('name');
+        collection.string('email').unique();
+        collection.datetime('createdAt');
       },
       { ifNotExists: true },
     );
   },
 
   async down({ builder }) {
-    await builder.dropCollection("users", { ifExists: true });
+    await builder.dropCollection('users', { ifExists: true });
   },
 });
 ```
@@ -69,7 +69,7 @@ Migration 文件只有一种合法形状：
 
 ```ts
 export default defineMigration({
-  name: "202608180001_create_users",
+  name: '202608180001_create_users',
   async up(context) {},
   async down(context) {},
 });
@@ -82,7 +82,7 @@ export default defineMigration({
 ```
 
 ```ts
-name: "202608180001_create_users";
+name: '202608180001_create_users';
 ```
 
 推荐命名格式：
@@ -118,8 +118,8 @@ interface MigrationContext {
 ```ts
 interface MigrationConnection {
   name: string;
-  driver: "better-sqlite3" | "pg" | "mysql2";
-  dialect: "sqlite" | "postgres" | "mysql";
+  driver: 'better-sqlite3' | 'pg' | 'mysql2';
+  dialect: 'sqlite' | 'postgres' | 'mysql';
   capabilities: DatabaseCapabilities;
   client<T = unknown>(): Promise<T>;
 }
@@ -150,27 +150,27 @@ Migration context 顶层没有 `database`、`schema`、`client` 或 `dialect`。
 创建或修改数据库结构时，优先使用 `builder`：
 
 ```ts
-import { defineMigration } from "@nocobase/database";
+import { defineMigration } from '@nocobase/database';
 
 export default defineMigration({
-  name: "202608180004_create_orders",
+  name: '202608180004_create_orders',
 
   async up({ builder }) {
     await builder.createCollection(
-      "orders",
+      'orders',
       (collection) => {
-        collection.increments("id");
-        collection.string("orderNo").unique({ name: "uk_orders_order_no" });
-        collection.decimal("amount", { precision: 12, scale: 2 });
-        collection.string("status").defaultTo("draft");
-        collection.datetime("createdAt");
+        collection.increments('id');
+        collection.string('orderNo').unique({ name: 'uk_orders_order_no' });
+        collection.decimal('amount', { precision: 12, scale: 2 });
+        collection.string('status').defaultTo('draft');
+        collection.datetime('createdAt');
       },
       { ifNotExists: true },
     );
   },
 
   async down({ builder }) {
-    await builder.dropCollection("orders", { ifExists: true });
+    await builder.dropCollection('orders', { ifExists: true });
   },
 });
 ```
@@ -182,16 +182,16 @@ export default defineMigration({
 数据迁移使用 `query`：
 
 ```ts
-import { defineMigration } from "@nocobase/database";
+import { defineMigration } from '@nocobase/database';
 
 export default defineMigration({
-  name: "202608180005_backfill_user_status",
+  name: '202608180005_backfill_user_status',
 
   async up({ query }) {
     await query
-      .updateTable("users")
-      .set({ status: "active" })
-      .where("status", "is", null)
+      .updateTable('users')
+      .set({ status: 'active' })
+      .where('status', 'is', null)
       .execute();
   },
 
@@ -214,15 +214,15 @@ irreversible: true;
 只有 `builder` 和 `query` 表达不了时，才使用 `connection.client()`：
 
 ```ts
-import type { Knex } from "knex";
-import { defineMigration } from "@nocobase/database";
+import type { Knex } from 'knex';
+import { defineMigration } from '@nocobase/database';
 
 export default defineMigration({
-  name: "202608180006_create_pg_extension",
+  name: '202608180006_create_pg_extension',
   transaction: false,
 
   async up({ connection }) {
-    if (connection.dialect !== "postgres") {
+    if (connection.dialect !== 'postgres') {
       return;
     }
 
@@ -231,7 +231,7 @@ export default defineMigration({
   },
 
   async down({ connection }) {
-    if (connection.dialect !== "postgres") {
+    if (connection.dialect !== 'postgres') {
       return;
     }
 
@@ -248,12 +248,12 @@ export default defineMigration({
 通过 `createMigrator()` 创建 runner：
 
 ```ts
-import { createMigrator } from "@nocobase/database";
+import { createMigrator } from '@nocobase/database';
 
 const migrator = createMigrator({
   database,
-  connection: "main",
-  directory: "./database/migrations",
+  connection: 'main',
+  directory: './database/migrations',
 });
 
 await migrator.latest();
@@ -264,15 +264,15 @@ await migrator.latest();
 ```ts
 const migrator = createMigrator({
   database,
-  connection: "main",
+  connection: 'main',
   sources: [
     {
-      packageName: "@nocobase/plugin-users",
-      directory: "./plugins/users/database/migrations",
+      packageName: '@nocobase/plugin-users',
+      directory: './plugins/users/database/migrations',
     },
     {
-      packageName: "@nocobase/plugin-workflow",
-      directory: "./plugins/workflow/database/migrations",
+      packageName: '@nocobase/plugin-workflow',
+      directory: './plugins/workflow/database/migrations',
     },
   ],
 });
@@ -312,7 +312,7 @@ Migration 作者不手动管理主事务。Runner 会根据 `transaction` 选项
 默认事务策略是：
 
 ```ts
-transaction: "auto";
+transaction: 'auto';
 ```
 
 普通 migration 不需要显式写 `transaction`。
@@ -403,9 +403,9 @@ interface MigrationRollbackResult {
 可以单独校验 migration 目录：
 
 ```ts
-import { validateMigrations } from "@nocobase/database";
+import { validateMigrations } from '@nocobase/database';
 
-await validateMigrations("./database/migrations");
+await validateMigrations('./database/migrations');
 ```
 
 校验规则：

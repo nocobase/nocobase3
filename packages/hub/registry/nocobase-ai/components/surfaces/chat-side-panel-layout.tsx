@@ -1,13 +1,13 @@
-import { cn } from "@/lib/utils";
-import type { CSSProperties, ReactNode } from "react";
-import { ChatSidePanel } from "./chat-side-panel";
+import { cn } from '@/lib/utils';
+import type { CSSProperties, ReactNode } from 'react';
+import { ChatSidePanel } from './chat-side-panel';
 
 export type ChatSidePanelLayoutProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   panel: ReactNode;
   children: ReactNode;
-  side?: "left" | "right";
+  side?: 'left' | 'right';
   width?: number | string;
   closeOnEscape?: boolean;
   showCloseHandle?: boolean;
@@ -19,26 +19,26 @@ export function ChatSidePanelLayout({
   onOpenChange,
   panel,
   children,
-  side = "right",
+  side = 'right',
   width = 450,
   closeOnEscape = true,
   showCloseHandle = true,
   className,
 }: ChatSidePanelLayoutProps) {
-  const panelWidth = typeof width === "number" ? `${width}px` : width;
+  const panelWidth = typeof width === 'number' ? `${width}px` : width;
 
   return (
     <div
       data-open={open}
       data-chat-side={side}
-      className={cn("chat-side-panel-layout @container min-w-0", className)}
+      className={cn('chat-side-panel-layout @container min-w-0', className)}
       style={
         {
-          "--chat-side-panel-width": panelWidth,
+          '--chat-side-panel-width': panelWidth,
         } as CSSProperties
       }
     >
-      <div className="min-w-0">{children}</div>
+      <div className='min-w-0'>{children}</div>
       <ChatSidePanel
         open={open}
         onOpenChange={onOpenChange}

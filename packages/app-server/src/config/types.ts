@@ -1,4 +1,4 @@
-import type { AppDatabaseConfig } from "../database/types.js";
+import type { AppDatabaseConfig } from '../database/types.js';
 
 export interface ConfigEnv {
   string(key: string): string | undefined;

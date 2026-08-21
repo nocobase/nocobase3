@@ -42,7 +42,10 @@ const queueConfig: ConfigFactory<AppQueueConfig> = defineConfig(
     jobs: {
       locations: [path.join(paths.server(), 'jobs/**/*.{ts,js}')],
       autoLoad: env.boolean('QUEUE_JOBS_AUTO_LOAD', true),
-      hotReload: env.boolean('QUEUE_JOBS_HOT_RELOAD', process.env.NODE_ENV === 'development'),
+      hotReload: env.boolean(
+        'QUEUE_JOBS_HOT_RELOAD',
+        process.env.NODE_ENV === 'development',
+      ),
     },
   }),
 );

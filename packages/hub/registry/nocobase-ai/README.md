@@ -32,8 +32,8 @@ Prefer `useAIPageElementHandle` when a page element is both registered and refer
 
 ```tsx
 const customer = useAIPageElementHandle({
-  id: "customer-detail",
-  title: "Customer detail",
+  id: 'customer-detail',
+  title: 'Customer detail',
   getContext: () => customerRecord,
 });
 
@@ -69,7 +69,7 @@ Use one `AIChatWindow` inside `ChatSurface` when a global conversation can switc
 ```tsx
 <ChatSurface
   open={open}
-  variant={expanded ? "dialog" : "side-panel"}
+  variant={expanded ? 'dialog' : 'side-panel'}
   onOpenChange={setOpen}
 >
   <AIChatWindow />

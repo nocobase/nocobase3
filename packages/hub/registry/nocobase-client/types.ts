@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 export type RemoteSelectLoadParams = {
   search: string;
@@ -24,7 +24,7 @@ export type RemoteSelectMessages = {
 
 export type RemoteSelectCommonProps<TOption> = Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,
-  "children" | "onChange" | "value"
+  'children' | 'onChange' | 'value'
 > & {
   /**
    * Values that identify the remote data source and caller-owned filters.
@@ -32,7 +32,7 @@ export type RemoteSelectCommonProps<TOption> = Omit<
    */
   requestKey?: readonly unknown[];
   loadOptions: (
-    params: RemoteSelectLoadParams
+    params: RemoteSelectLoadParams,
   ) => Promise<RemoteSelectLoadResult<TOption>>;
   getOptionKey: (option: TOption) => string | number;
   getOptionLabel: (option: TOption) => string;
@@ -42,7 +42,7 @@ export type RemoteSelectCommonProps<TOption> = Omit<
   debounceMs?: number;
   placeholder?: string;
   messages?: Partial<RemoteSelectMessages>;
-  popupSide?: "top" | "bottom";
+  popupSide?: 'top' | 'bottom';
   containerClassName?: string;
   onOpenChange?: (open: boolean) => void;
 };
@@ -62,5 +62,4 @@ export type RemoteSelectMultipleProps<TOption> =
   };
 
 export type RemoteSelectProps<TOption> =
-  | RemoteSelectSingleProps<TOption>
-  | RemoteSelectMultipleProps<TOption>;
+  RemoteSelectSingleProps<TOption> | RemoteSelectMultipleProps<TOption>;

@@ -5,30 +5,30 @@ import {
   createPortalConfig,
   node,
   typescript,
-} from "@nocobase/dev-config/eslint";
+} from '@nocobase/dev-config/eslint';
 
-const supportedFiles = ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"];
+const supportedFiles = ['**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'];
 const rootNodeFiles = [
-  "*.{js,mjs,cjs}",
-  ".github/**/*.{js,mjs,cjs}",
-  "scripts/**/*.{js,mjs,cjs}",
-  "tools/**/*.{js,mjs,cjs}",
+  '*.{js,mjs,cjs}',
+  '.github/**/*.{js,mjs,cjs}',
+  'scripts/**/*.{js,mjs,cjs}',
+  'tools/**/*.{js,mjs,cjs}',
 ];
 const nodeLibraryRoots = [
-  "packages/app-server",
-  "packages/authorization",
-  "packages/caching",
-  "packages/database",
-  "packages/drive",
-  "packages/app-host",
-  "packages/id-generator",
-  "packages/logging",
-  "packages/queue",
-  "packages/session",
+  'packages/app-server',
+  'packages/authorization',
+  'packages/caching',
+  'packages/database',
+  'packages/drive',
+  'packages/app-host',
+  'packages/id-generator',
+  'packages/logging',
+  'packages/queue',
+  'packages/session',
 ];
-const devConfigRoots = ["packages/dev-config"];
-const clientLibraryRoots = ["packages/app-sdk", "packages/portal-sdk"];
-const portalRoots = ["packages/app-template-default", "packages/hub"];
+const devConfigRoots = ['packages/dev-config'];
+const clientLibraryRoots = ['packages/app-sdk', 'packages/portal-sdk'];
+const portalRoots = ['packages/app-template-default', 'packages/hub'];
 const prefixPatterns = (roots, patterns) =>
   roots.flatMap((root) => patterns.map((pattern) => `${root}/${pattern}`));
 
@@ -65,40 +65,40 @@ export default [
       tsconfigRootDir: import.meta.dirname,
     }),
     nodeLibraryRoots,
-    "node-libraries",
+    'node-libraries',
   ),
   ...scopePackageConfigs(
     [...base, ...typescript, ...node],
     devConfigRoots,
-    "dev-config",
+    'dev-config',
   ),
   ...scopePackageConfigs(
     createClientLibraryConfig({
       tsconfigRootDir: import.meta.dirname,
     }),
     clientLibraryRoots,
-    "client-libraries",
+    'client-libraries',
   ),
   ...scopePackageConfigs(
     createClientLibraryConfig({
       tsconfigRootDir: import.meta.dirname,
-      ignores: ["ui/**"],
+      ignores: ['ui/**'],
     }),
-    ["packages/authentication"],
-    "authentication",
+    ['packages/authentication'],
+    'authentication',
   ),
   ...scopePackageConfigs(
     createPortalConfig({
       tsconfigRootDir: import.meta.dirname,
       ignores: [
-        ".extension-state/**",
-        "public/r/**",
-        "public/storage/**",
-        "src/extensions/**",
-        "storage/**",
+        '.extension-state/**',
+        'public/r/**',
+        'public/storage/**',
+        'src/extensions/**',
+        'storage/**',
       ],
     }),
     portalRoots,
-    "portals",
+    'portals',
   ),
 ];

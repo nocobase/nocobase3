@@ -36,9 +36,7 @@ await builder.createCollection('orders', {
     { name: 'amount', type: 'decimal', precision: 12, scale: 2 },
     { name: 'status', type: 'string', length: 32, defaultValue: 'draft' },
   ],
-  indexes: [
-    { fields: ['status'] },
-  ],
+  indexes: [{ fields: ['status'] }],
 });
 ```
 

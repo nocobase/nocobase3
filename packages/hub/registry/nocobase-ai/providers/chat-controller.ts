@@ -1,5 +1,5 @@
-import { useRef, useSyncExternalStore } from "react";
-import type { AIEmployeeTaskTrigger } from "./types";
+import { useRef, useSyncExternalStore } from 'react';
+import type { AIEmployeeTaskTrigger } from './types';
 
 export type AIChatControllerSnapshot = {
   open: boolean;
@@ -13,15 +13,14 @@ export type AIChatController = {
   close: () => void;
   triggerTask: (options: AIEmployeeTaskTrigger) => void;
   bindTaskHandler: (
-    handler: (options: AIEmployeeTaskTrigger) => void | Promise<void>
+    handler: (options: AIEmployeeTaskTrigger) => void | Promise<void>,
   ) => () => void;
 };
 
 export function createAIChatController(): AIChatController {
   let snapshot: AIChatControllerSnapshot = { open: false };
   let taskHandler:
-    | ((options: AIEmployeeTaskTrigger) => void | Promise<void>)
-    | undefined;
+    ((options: AIEmployeeTaskTrigger) => void | Promise<void>) | undefined;
   const listeners = new Set<() => void>();
   const pendingTasks: AIEmployeeTaskTrigger[] = [];
 
@@ -51,7 +50,7 @@ export function createAIChatController(): AIChatController {
     bindTaskHandler: (handler) => {
       if (taskHandler && taskHandler !== handler) {
         console.warn(
-          "An AIChatController should be bound to only one AIChatProvider at a time."
+          'An AIChatController should be bound to only one AIChatProvider at a time.',
         );
       }
       taskHandler = handler;
@@ -79,6 +78,6 @@ export function useAIChatControllerState(controller?: AIChatController) {
   return useSyncExternalStore(
     controller?.subscribe ?? subscribeToVisibleController,
     controller?.getSnapshot ?? getVisibleControllerSnapshot,
-    controller?.getSnapshot ?? getVisibleControllerSnapshot
+    controller?.getSnapshot ?? getVisibleControllerSnapshot,
   );
 }

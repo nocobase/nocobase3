@@ -1,24 +1,24 @@
-import type { TreeMenuItem } from "@refinedev/core";
+import type { TreeMenuItem } from '@refinedev/core';
 
-import { evaluateAccess, matchesRoleConstraint } from "./evaluator.ts";
-import type { AclPermissionSet, RouteAccessConstraint } from "./types.ts";
+import { evaluateAccess, matchesRoleConstraint } from './evaluator.ts';
+import type { AclPermissionSet, RouteAccessConstraint } from './types.ts';
 
 const matchesRouteAccess = (
   item: TreeMenuItem,
-  permissions: AclPermissionSet
+  permissions: AclPermissionSet,
 ) => {
   const access = item.meta?.routeAccess as RouteAccessConstraint[] | undefined;
   return (
     !access?.length ||
     access.every((constraint) =>
-      matchesRoleConstraint(permissions, constraint.roles)
+      matchesRoleConstraint(permissions, constraint.roles),
     )
   );
 };
 
 export const filterMenuItemsByAcl = (
   items: TreeMenuItem[],
-  permissions: AclPermissionSet
+  permissions: AclPermissionSet,
 ): TreeMenuItem[] =>
   items.flatMap((item) => {
     const children = filterMenuItemsByAcl(item.children ?? [], permissions);
@@ -27,7 +27,7 @@ export const filterMenuItemsByAcl = (
       ? matchesRouteAccess(item, permissions) &&
         evaluateAccess(permissions, {
           resource: item.name,
-          action: "list",
+          action: 'list',
           resourceItem: item,
         })
       : true;
@@ -44,7 +44,7 @@ export const filterMenuItemsByAcl = (
   });
 
 export const findFirstAccessibleRoute = (
-  items: TreeMenuItem[]
+  items: TreeMenuItem[],
 ): string | undefined => {
   for (const item of items) {
     if (item.route) return item.route;

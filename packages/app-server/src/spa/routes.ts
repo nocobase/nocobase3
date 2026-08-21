@@ -6,7 +6,10 @@ import { serveSpaIndex } from './serve-index.js';
 import { serveSpaAsset } from './static-assets.js';
 import type { RegisterSpaRoutesOptions } from './types.js';
 
-export function registerSpaRoutes(app: Hono, options: RegisterSpaRoutesOptions): void {
+export function registerSpaRoutes(
+  app: Hono,
+  options: RegisterSpaRoutesOptions,
+): void {
   const basePath = normalizeBasePath(options.basePath);
   const handler = options.handler;
 
@@ -17,7 +20,10 @@ export function registerSpaRoutes(app: Hono, options: RegisterSpaRoutesOptions):
   }
 
   const rootDir = path.dirname(options.indexPath);
-  const assetsRoutePath = joinBasePath(basePath, options.assetsPath ?? '/assets');
+  const assetsRoutePath = joinBasePath(
+    basePath,
+    options.assetsPath ?? '/assets',
+  );
 
   app.all(assetsRoutePath, (context) =>
     serveSpaAsset(context.req.raw, {
@@ -31,6 +37,10 @@ export function registerSpaRoutes(app: Hono, options: RegisterSpaRoutesOptions):
       basePath,
     }),
   );
-  app.get(basePath || '/', () => serveSpaIndex(options.indexPath, options.runtimeGlobals));
-  app.get(`${basePath}/*`, () => serveSpaIndex(options.indexPath, options.runtimeGlobals));
+  app.get(basePath || '/', () =>
+    serveSpaIndex(options.indexPath, options.runtimeGlobals),
+  );
+  app.get(`${basePath}/*`, () =>
+    serveSpaIndex(options.indexPath, options.runtimeGlobals),
+  );
 }

@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import type {
   MailBoxType,
   MailListParams,
   MailMessage,
   MailScope,
-} from "./types";
-import { mailApi } from "./mail-api";
+} from './types';
+import { mailApi } from './mail-api';
 
 export interface UseMailMessagesOptions {
   scope?: MailScope;
@@ -38,7 +38,7 @@ export function useMailMessages(
   const {
     scope,
     boxType,
-    search = "",
+    search = '',
     labelId,
     isRead,
     userId,
@@ -99,7 +99,7 @@ export function useMailMessages(
       } catch (error) {
         if (seq !== requestSeq.current) return;
         toast.error(
-          error instanceof Error ? error.message : "Failed to load messages",
+          error instanceof Error ? error.message : 'Failed to load messages',
         );
         setMessages([]);
         setTotal(0);

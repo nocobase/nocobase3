@@ -1,38 +1,38 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState } from 'react';
 
-import { PromptOutput } from "@/components/demo/prompt-output";
+import { PromptOutput } from '@/components/demo/prompt-output';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
   getRouteSurfacePrompt,
   routeSurfaceScenarios,
   type RouteSurfaceScenarioId,
-} from "./scenarios";
+} from './scenarios';
 
 export function RouteSurfacePromptGenerator() {
   const [scenarioId, setScenarioId] =
-    useState<RouteSurfaceScenarioId>("drawer");
-  const [target, setTarget] = useState("a customer detail workflow");
+    useState<RouteSurfaceScenarioId>('drawer');
+  const [target, setTarget] = useState('a customer detail workflow');
   const scenario =
     routeSurfaceScenarios.find((item) => item.id === scenarioId) ??
     routeSurfaceScenarios[0];
   const prompt = useMemo(
     () => getRouteSurfacePrompt(scenario, target),
-    [scenario, target]
+    [scenario, target],
   );
 
   return (
@@ -44,17 +44,17 @@ export function RouteSurfacePromptGenerator() {
           component.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="route-surface-scenario">Scenario</Label>
+      <CardContent className='grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]'>
+        <div className='space-y-4'>
+          <div className='space-y-2'>
+            <Label htmlFor='route-surface-scenario'>Scenario</Label>
             <Select
               value={scenarioId}
               onValueChange={(value) =>
                 setScenarioId(value as RouteSurfaceScenarioId)
               }
             >
-              <SelectTrigger id="route-surface-scenario" className="w-full">
+              <SelectTrigger id='route-surface-scenario' className='w-full'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -66,20 +66,20 @@ export function RouteSurfacePromptGenerator() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="route-surface-target">Business target</Label>
+          <div className='space-y-2'>
+            <Label htmlFor='route-surface-target'>Business target</Label>
             <Input
-              id="route-surface-target"
+              id='route-surface-target'
               value={target}
               onChange={(event) => setTarget(event.target.value)}
             />
           </div>
         </div>
         <PromptOutput
-          title="Generated routing prompt"
-          description="Updates as you change the scenario and business target."
+          title='Generated routing prompt'
+          description='Updates as you change the scenario and business target.'
           prompt={prompt}
-          promptClassName="min-h-80"
+          promptClassName='min-h-80'
         />
       </CardContent>
     </Card>

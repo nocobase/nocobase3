@@ -37,7 +37,9 @@ export interface CreateAppMigratorOptions {
   connection?: string;
 }
 
-export function createAppMigrator(options: CreateAppMigratorOptions): AppMigrator {
+export function createAppMigrator(
+  options: CreateAppMigratorOptions,
+): AppMigrator {
   return {
     async latest(): Promise<AppMigrationRunResult> {
       if (!existsSync(options.config.directory)) {
@@ -52,7 +54,9 @@ export function createAppMigrator(options: CreateAppMigratorOptions): AppMigrato
         return skippedMigrationResult();
       }
 
-      return completedRollbackResult(await createDatabaseMigrator(options).rollback());
+      return completedRollbackResult(
+        await createDatabaseMigrator(options).rollback(),
+      );
     },
   };
 }
@@ -68,7 +72,8 @@ function createDatabaseMigrator(options: CreateAppMigratorOptions) {
   });
 }
 
-function skippedMigrationResult(): AppMigrationRunResult & AppMigrationRollbackResult {
+function skippedMigrationResult(): AppMigrationRunResult &
+  AppMigrationRollbackResult {
   return {
     status: 'skipped',
     reason: 'missing-directory',
@@ -84,7 +89,9 @@ function completedRunResult(result: MigrationRunResult): AppMigrationRunResult {
   };
 }
 
-function completedRollbackResult(result: MigrationRollbackResult): AppMigrationRollbackResult {
+function completedRollbackResult(
+  result: MigrationRollbackResult,
+): AppMigrationRollbackResult {
   return {
     status: 'completed',
     batch: result.batch,

@@ -7,7 +7,12 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { AppEventBus, type AppEvent, type AppEventPayload, type AppState } from './events.ts';
+import {
+  AppEventBus,
+  type AppEvent,
+  type AppEventPayload,
+  type AppState,
+} from './events.ts';
 import type {
   ActiveAppHandle,
   AppFactory,
@@ -81,7 +86,8 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.backend = options.definition.backend;
     this.configVersion = options.definition.configVersion;
     this.desiredVersion = options.definition.desiredVersion;
-    this.codeVersion = options.definition.code?.version ?? options.definition.desiredVersion;
+    this.codeVersion =
+      options.definition.code?.version ?? options.definition.desiredVersion;
     this.isolation = options.definition.isolation;
     this.tier = options.definition.tier;
     this.globalEvents = options.globalEvents;
@@ -95,7 +101,8 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       return runtime;
     } catch (error) {
       runtime.transitionTo('failed');
-      runtime.lastError = error instanceof Error ? error.message : String(error);
+      runtime.lastError =
+        error instanceof Error ? error.message : String(error);
       await runtime.disposeRegisteredResources('app create failed');
       throw error;
     }
@@ -114,7 +121,10 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.emit('app:created');
   }
 
-  on(event: AppEvent, handler: (payload: AppEventPayload) => void | Promise<void>): () => void {
+  on(
+    event: AppEvent,
+    handler: (payload: AppEventPayload) => void | Promise<void>,
+  ): () => void {
     return this.events.on(event, handler);
   }
 
@@ -130,7 +140,9 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
 
   registerDisposer(name: string, dispose: AppDisposer): void {
     if (this.state === 'destroying' || this.state === 'destroyed') {
-      throw new Error(`Cannot register disposer "${name}" after app ${this.id} has started destroying`);
+      throw new Error(
+        `Cannot register disposer "${name}" after app ${this.id} has started destroying`,
+      );
     }
 
     this.disposers.push({ name, dispose });
@@ -161,14 +173,20 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     };
   }
 
-  async dispatch(request: Request, metadata: AppRequestMetadata = {}): Promise<Response> {
+  async dispatch(
+    request: Request,
+    metadata: AppRequestMetadata = {},
+  ): Promise<Response> {
     if (this.state !== 'active') {
       return new Response(
         JSON.stringify({
           error: `App ${this.id} is ${this.state}`,
         }),
         {
-          status: this.state === 'draining' || this.state === 'destroying' ? 503 : 410,
+          status:
+            this.state === 'draining' || this.state === 'destroying'
+              ? 503
+              : 410,
           headers: {
             'content-type': 'application/json',
           },
@@ -227,14 +245,20 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     }
   }
 
-  async acceptWebSocket(request: Request, metadata: AppRequestMetadata = {}): Promise<AppWebSocketAcceptResult> {
+  async acceptWebSocket(
+    request: Request,
+    metadata: AppRequestMetadata = {},
+  ): Promise<AppWebSocketAcceptResult> {
     if (this.state !== 'active') {
       return new Response(
         JSON.stringify({
           error: `App ${this.id} is ${this.state}`,
         }),
         {
-          status: this.state === 'draining' || this.state === 'destroying' ? 503 : 410,
+          status:
+            this.state === 'draining' || this.state === 'destroying'
+              ? 503
+              : 410,
           headers: {
             'content-type': 'application/json',
           },
@@ -311,24 +335,34 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       return;
     }
 
-    const destroyOptions = typeof options === 'string' ? { reason: options } : options;
+    const destroyOptions =
+      typeof options === 'string' ? { reason: options } : options;
     const reason = destroyOptions.reason ?? 'manual destroy';
     const timeoutMs = destroyOptions.timeoutMs ?? 10_000;
 
     if (this.state !== 'failed' && this.state !== 'creating') {
       this.transitionTo('draining');
     }
-    this.emit('app:beforeDrain', { reason, activeRequests: this.activeRequests });
+    this.emit('app:beforeDrain', {
+      reason,
+      activeRequests: this.activeRequests,
+    });
     this.emit('app:draining', { reason, activeRequests: this.activeRequests });
 
     await this.waitForIdle(timeoutMs);
 
     this.abortController.abort(new Error(reason));
-    this.emit('app:beforeDestroy', { reason, activeRequests: this.activeRequests });
+    this.emit('app:beforeDestroy', {
+      reason,
+      activeRequests: this.activeRequests,
+    });
     await this.runBeforeDestroyHandlers(reason);
 
     this.transitionTo('destroying');
-    this.emit('app:destroying', { reason, activeRequests: this.activeRequests });
+    this.emit('app:destroying', {
+      reason,
+      activeRequests: this.activeRequests,
+    });
     await this.disposeRegisteredResources(reason);
 
     this.events.removeAllListeners();
@@ -358,10 +392,17 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       this.emit('app:resourceDispose', { reason, resourceName: disposer.name });
       try {
         await disposer.dispose();
-        this.emit('app:resourceDisposed', { reason, resourceName: disposer.name });
+        this.emit('app:resourceDisposed', {
+          reason,
+          resourceName: disposer.name,
+        });
       } catch (error) {
         this.lastError = error instanceof Error ? error.message : String(error);
-        this.emit('app:destroyFailed', { reason, resourceName: disposer.name, error });
+        this.emit('app:destroyFailed', {
+          reason,
+          resourceName: disposer.name,
+          error,
+        });
       }
     }
 
@@ -390,7 +431,10 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     }
   }
 
-  private emit(event: AppEvent, overrides: Partial<AppEventPayload> = {}): void {
+  private emit(
+    event: AppEvent,
+    overrides: Partial<AppEventPayload> = {},
+  ): void {
     const payload = this.payload(overrides);
     this.events.emit(event, payload);
     this.globalEvents.emit(event, payload);

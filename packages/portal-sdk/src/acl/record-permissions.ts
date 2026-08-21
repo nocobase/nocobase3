@@ -1,4 +1,4 @@
-import type { BaseKey } from "@refinedev/core";
+import type { BaseKey } from '@refinedev/core';
 
 type RecordPermissionEntry = {
   allowedIds: Map<string, Set<string>>;
@@ -17,15 +17,18 @@ export const clearRecordPermissions = (): void => {
   listeners.forEach((listener) => listener());
 };
 
-export const subscribeRecordPermissions = (listener: () => void): (() => void) => {
+export const subscribeRecordPermissions = (
+  listener: () => void,
+): (() => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
 
-export const getRecordPermissions = (): Map<string, RecordPermissionEntry> => permissions;
+export const getRecordPermissions = (): Map<string, RecordPermissionEntry> =>
+  permissions;
 
 export const updateRecordPermissions = ({
-  dataSourceKey = "main",
+  dataSourceKey = 'main',
   resource,
   recordIds,
   allowedActions,
@@ -45,13 +48,13 @@ export const updateRecordPermissions = ({
           Array.from(existingEntry.allowedIds, ([action, ids]) => [
             action,
             new Set(ids),
-          ])
+          ]),
         ),
         knownIds: new Map(
           Array.from(existingEntry.knownIds, ([action, ids]) => [
             action,
             new Set(ids),
-          ])
+          ]),
         ),
       }
     : {
@@ -63,7 +66,7 @@ export const updateRecordPermissions = ({
     Object.entries(allowedActions).map(([action, ids]) => [
       action,
       new Set(ids.map(String)),
-    ])
+    ]),
   );
   const actionNames = new Set([
     ...entry.knownIds.keys(),
@@ -116,7 +119,7 @@ export const updateRecordPermissions = ({
 };
 
 export const getRecordActionPermission = ({
-  dataSourceKey = "main",
+  dataSourceKey = 'main',
   resource,
   action,
   id,

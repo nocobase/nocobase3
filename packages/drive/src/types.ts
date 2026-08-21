@@ -36,14 +36,24 @@ export interface AppDriveConfig {
 
 export type NocoBaseDriveDisk = Disk;
 
-export type NocoBaseDriveManager = DriveManager<Record<string, () => DriverContract>>;
+export type NocoBaseDriveManager = DriveManager<
+  Record<string, () => DriverContract>
+>;
 
 export interface FlydriveFakesConfig {
   location: string | URL;
   urlBuilder?: {
     generateURL?(key: string, filePath: string): Promise<string>;
-    generateSignedURL?(key: string, filePath: string, options: SignedURLOptions): Promise<string>;
-    generateSignedUploadURL?(key: string, filePath: string, options: SignedURLOptions): Promise<string>;
+    generateSignedURL?(
+      key: string,
+      filePath: string,
+      options: SignedURLOptions,
+    ): Promise<string>;
+    generateSignedUploadURL?(
+      key: string,
+      filePath: string,
+      options: SignedURLOptions,
+    ): Promise<string>;
   };
 }
 

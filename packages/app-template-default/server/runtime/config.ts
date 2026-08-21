@@ -1,17 +1,17 @@
-import path from "node:path";
+import path from 'node:path';
 
 import {
   createConfigEnv,
   createConfigPaths,
   loadConfig,
-} from "@nocobase/app-server/config";
+} from '@nocobase/app-server/config';
 
-import configFactories, { type AppConfig } from "../config/index.js";
-import type { AppScope, ResolvedAppRuntimeOptions } from "./options.js";
+import configFactories, { type AppConfig } from '../config/index.js';
+import type { AppScope, ResolvedAppRuntimeOptions } from './options.js';
 import {
   resolveEmbeddedRuntimeOptions,
   resolveStandaloneRuntimeOptions,
-} from "./options.js";
+} from './options.js';
 
 export function loadStandaloneAppConfig(moduleUrl: string): AppConfig {
   return loadAppConfig(resolveStandaloneRuntimeOptions(moduleUrl));
@@ -44,7 +44,7 @@ export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
     spa: {
       ...config.spa,
       indexPath: options.paths.clientDir
-        ? path.join(options.paths.clientDir, "index.html")
+        ? path.join(options.paths.clientDir, 'index.html')
         : config.spa.indexPath,
     },
   };

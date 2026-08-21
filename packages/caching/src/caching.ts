@@ -22,7 +22,9 @@ interface ProviderState {
 export class Caching {
   private readonly providers = new Map<string, ProviderState>();
 
-  constructor(private readonly config: CachingConfig = createDefaultCachingConfig()) {
+  constructor(
+    private readonly config: CachingConfig = createDefaultCachingConfig(),
+  ) {
     validateCachingConfig(config);
   }
 
@@ -36,24 +38,34 @@ export class Caching {
     assertNamespace(namespace);
     return this.getOrCreateProvider(providerName, runtimeOptions).createCache({
       namespace,
-      defaultTtl: resolveTtlConfig(defaultTtl, `Cache "${namespace}" defaultTtl`),
+      defaultTtl: resolveTtlConfig(
+        defaultTtl,
+        `Cache "${namespace}" defaultTtl`,
+      ),
     });
   }
 
   getCounter(options: GetCapabilityOptions): Counter {
     const { provider: providerName, namespace, ...runtimeOptions } = options;
     assertNamespace(namespace);
-    return this.getOrCreateProvider(providerName, runtimeOptions).createCounter({ namespace });
+    return this.getOrCreateProvider(providerName, runtimeOptions).createCounter(
+      { namespace },
+    );
   }
 
   getBloomFilter(options: GetCapabilityOptions): BloomFilter {
     const { provider: providerName, namespace, ...runtimeOptions } = options;
     assertNamespace(namespace);
-    return this.getOrCreateProvider(providerName, runtimeOptions).createBloomFilter({ namespace });
+    return this.getOrCreateProvider(
+      providerName,
+      runtimeOptions,
+    ).createBloomFilter({ namespace });
   }
 
   async dispose(): Promise<void> {
-    const providers = [...new Set([...this.providers.values()].map(({ provider }) => provider))];
+    const providers = [
+      ...new Set([...this.providers.values()].map(({ provider }) => provider)),
+    ];
     this.providers.clear();
     await Promise.all(providers.map((provider) => provider.dispose()));
   }
@@ -71,15 +83,25 @@ export class Caching {
     const effectiveRuntimeOptions = removeUndefinedValues(runtimeOptions);
     const existing = this.providers.get(name);
     if (existing) {
-      assertCompatibleOptions(name, existing.initializationConfig, effectiveRuntimeOptions);
+      assertCompatibleOptions(
+        name,
+        existing.initializationConfig,
+        effectiveRuntimeOptions,
+      );
       return existing.provider;
     }
 
     const driver = getCachingDriver(definition.driver);
     if (!driver) {
-      throw new Error(`Cache provider driver "${definition.driver}" is not registered.`);
+      throw new Error(
+        `Cache provider driver "${definition.driver}" is not registered.`,
+      );
     }
-    assertDoesNotOverrideStaticConfig(name, definition, effectiveRuntimeOptions);
+    assertDoesNotOverrideStaticConfig(
+      name,
+      definition,
+      effectiveRuntimeOptions,
+    );
     const initializationConfig = {
       ...definition,
       ...effectiveRuntimeOptions,
@@ -90,24 +112,32 @@ export class Caching {
   }
 }
 
-export function createCaching(config: CachingConfig = createDefaultCachingConfig()): Caching {
+export function createCaching(
+  config: CachingConfig = createDefaultCachingConfig(),
+): Caching {
   return new Caching(config);
 }
 
 function validateCachingConfig(config: CachingConfig): void {
   const defaultProvider = config.providers[config.default];
   if (!defaultProvider) {
-    throw new Error(`Default cache provider "${config.default}" is not configured.`);
+    throw new Error(
+      `Default cache provider "${config.default}" is not configured.`,
+    );
   }
 
   for (const provider of Object.values(config.providers)) {
     if (!getCachingDriver(provider.driver)) {
-      throw new Error(`Cache provider driver "${provider.driver}" is not registered.`);
+      throw new Error(
+        `Cache provider driver "${provider.driver}" is not registered.`,
+      );
     }
   }
 }
 
-function removeUndefinedValues(options: CacheProviderRuntimeOptions): CacheProviderRuntimeOptions {
+function removeUndefinedValues(
+  options: CacheProviderRuntimeOptions,
+): CacheProviderRuntimeOptions {
   return Object.fromEntries(
     Object.entries(options).filter(([, value]) => value !== undefined),
   );

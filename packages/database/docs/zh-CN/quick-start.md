@@ -90,7 +90,8 @@ await db.builder().createCollection('orderItems', (collection) => {
 `db.query()` 返回默认连接上的 `QueryAdapter`。它是数据库层查询接口，不是 Repository，也不读取 Collection metadata。
 
 ```ts
-await db.query()
+await db
+  .query()
   .insertInto('orders')
   .values({
     orderNo: 'SO-001',
@@ -100,7 +101,8 @@ await db.query()
   })
   .execute();
 
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orders')
   .select(['id', 'orderNo', 'createdAt'])
   .where('status', '=', 'paid')
@@ -112,12 +114,14 @@ const rows = await db.query()
 查询终止方法推荐保持语义明确：
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orders')
   .where('status', '=', 'paid')
   .execute();
 
-const row = await db.query()
+const row = await db
+  .query()
   .selectFrom('orders')
   .where('orderNo', '=', 'SO-001')
   .executeTakeFirst();
@@ -128,12 +132,14 @@ const row = await db.query()
 也可以使用便捷终止方法：
 
 ```ts
-const status = await db.query()
+const status = await db
+  .query()
   .selectFrom('orders')
   .where('orderNo', '=', 'SO-001')
   .value<string>('status');
 
-const orderNos = await db.query()
+const orderNos = await db
+  .query()
   .selectFrom('orders')
   .where('status', '=', 'paid')
   .pluck<string>('orderNo');
@@ -142,17 +148,15 @@ const orderNos = await db.query()
 复杂条件使用 Kysely 风格的 `eb`：
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orders')
   .where(({ eb, and, or, not }) =>
     and([
       eb('tenantId', '=', tenantId),
-      or([
-        eb('status', '=', 'paid'),
-        eb('status', '=', 'completed'),
-      ]),
+      or([eb('status', '=', 'paid'), eb('status', '=', 'completed')]),
       not(eb.between('amount', 500, 700)),
-    ])
+    ]),
   )
   .execute();
 ```
@@ -167,7 +171,8 @@ createdAt -> created_at
 `select()` 会保留调用方传入的结果 key：
 
 ```ts
-const row = await db.query()
+const row = await db
+  .query()
   .selectFrom('orders')
   .select('createdAt')
   .executeTakeFirst();
@@ -177,14 +182,15 @@ SQL 中查询的是 `created_at`，结果 key 是：
 
 ```ts
 {
-  createdAt: '...'
+  createdAt: '...';
 }
 ```
 
 如果写的是物理列名：
 
 ```ts
-const row = await db.query()
+const row = await db
+  .query()
   .selectFrom('orders')
   .select('created_at')
   .executeTakeFirst();
@@ -194,14 +200,15 @@ const row = await db.query()
 
 ```ts
 {
-  created_at: '...'
+  created_at: '...';
 }
 ```
 
 显式 alias 也按同样规则：
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orderItems as oi')
   .leftJoin('orders as o', 'oi.orderId', 'o.id')
   .select([
@@ -228,7 +235,8 @@ await db.builder().createCollection('orderItems', (collection) => {
 数据库层查询应写物理名或可被 naming 归一化的 query identifier：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('tbl_order_item')
   .select('order_number')
   .where('order_number', '=', 'SO-001')
@@ -260,18 +268,18 @@ field.name: createdAt -> naming -> created_at
     orderNo: 'SO-001',
     createdAt: '...',
   },
-]
+];
 ```
 
 Repository 的筛选条件计划使用 Filter Builder，而不是旧的 object shorthand。详细设计见 [Repository 概览](./repository/overview.md)、[Filter Builder](./repository/filter-builder.md) 和 [Filter AST](./repository/filter-ast.md)。
 
 所以三层职责可以这样看：
 
-| API | 层级 | 输入名 | 是否读取 Collection metadata |
-| --- | --- | --- | --- |
-| `db.builder()` | Collection schema 层 | Collection / Field 逻辑名 | 是 |
-| `db.query()` | 数据库查询层 | table / column query identifier | 否 |
-| `db.repository()` | 应用数据层，规划中 | Collection / Field 逻辑名 | 是 |
+| API               | 层级                 | 输入名                          | 是否读取 Collection metadata |
+| ----------------- | -------------------- | ------------------------------- | ---------------------------- |
+| `db.builder()`    | Collection schema 层 | Collection / Field 逻辑名       | 是                           |
+| `db.query()`      | 数据库查询层         | table / column query identifier | 否                           |
+| `db.repository()` | 应用数据层，规划中   | Collection / Field 逻辑名       | 是                           |
 
 ## 使用 db.transaction()
 
@@ -329,10 +337,7 @@ await db.builder().createCollection('orders', (collection) => {
   collection.increments('id');
 });
 
-await db.query()
-  .insertInto('orders')
-  .values({ status: 'paid' })
-  .execute();
+await db.query().insertInto('orders').values({ status: 'paid' }).execute();
 ```
 
 命名连接有两种写法。
@@ -345,7 +350,8 @@ await db.builder('analytics').createCollection('events', (collection) => {
   collection.string('name');
 });
 
-const events = await db.query('analytics')
+const events = await db
+  .query('analytics')
   .selectFrom('events')
   .select(['id', 'name'])
   .execute();

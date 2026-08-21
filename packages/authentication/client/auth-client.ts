@@ -9,12 +9,17 @@ export class AuthClient {
 
   async signIn(identifier: string, password: string): Promise<AuthSession> {
     const isEmail = identifier.includes('@');
-    return this.send<AuthSession>(isEmail ? 'sign-in/email' : 'sign-in/username', {
-      method: 'POST',
-      body: JSON.stringify(isEmail
-        ? { email: identifier, password }
-        : { username: identifier, password }),
-    });
+    return this.send<AuthSession>(
+      isEmail ? 'sign-in/email' : 'sign-in/username',
+      {
+        method: 'POST',
+        body: JSON.stringify(
+          isEmail
+            ? { email: identifier, password }
+            : { username: identifier, password },
+        ),
+      },
+    );
   }
 
   async signUp(

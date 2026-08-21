@@ -10,13 +10,22 @@ import type {
 
 export const memoryCacheProviderDriver: CacheProviderDriver = {
   name: 'memory',
-  createProvider(config: CacheProviderConfig, _context: CacheProviderDriverContext): CacheProvider {
+  createProvider(
+    config: CacheProviderConfig,
+    _context: CacheProviderDriverContext,
+  ): CacheProvider {
     const memory = config as MemoryCacheProviderConfig;
     return new MemoryCacheProvider({
       maxSize: memory.maxSize,
-      defaultTtl: resolveTtlConfig(memory.defaultTtl, 'Memory cache defaultTtl'),
+      defaultTtl: resolveTtlConfig(
+        memory.defaultTtl,
+        'Memory cache defaultTtl',
+      ),
       maxTtl: resolveTtlConfig(memory.maxTtl, 'Memory cache maxTtl'),
-      checkInterval: resolveTtlConfig(memory.checkInterval, 'Memory cache checkInterval'),
+      checkInterval: resolveTtlConfig(
+        memory.checkInterval,
+        'Memory cache checkInterval',
+      ),
       useClone: memory.useClone,
     });
   },
@@ -28,7 +37,9 @@ const drivers = new Map<string, CacheProviderDriver>([
 
 export function registerCachingDriver(driver: CacheProviderDriver): () => void {
   if (drivers.has(driver.name)) {
-    throw new Error(`Cache provider driver "${driver.name}" is already registered.`);
+    throw new Error(
+      `Cache provider driver "${driver.name}" is already registered.`,
+    );
   }
   drivers.set(driver.name, driver);
   return () => {
@@ -38,6 +49,8 @@ export function registerCachingDriver(driver: CacheProviderDriver): () => void {
   };
 }
 
-export function getCachingDriver(name: string): CacheProviderDriver | undefined {
+export function getCachingDriver(
+  name: string,
+): CacheProviderDriver | undefined {
   return drivers.get(name);
 }

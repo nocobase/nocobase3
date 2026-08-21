@@ -1,6 +1,6 @@
-import path from "node:path";
+import path from 'node:path';
 
-import type { ConfigPaths } from "./types.js";
+import type { ConfigPaths } from './types.js';
 
 export interface CreateConfigPathsOptions {
   rootDir: string;
@@ -15,24 +15,24 @@ export function createConfigPaths(
 ): ConfigPaths {
   const rootDir = path.resolve(options.rootDir);
   const serverDir = path.resolve(
-    options.serverDir ?? path.join(rootDir, "server"),
+    options.serverDir ?? path.join(rootDir, 'server'),
   );
   const databaseDir = path.resolve(
-    options.databaseDir ?? path.join(rootDir, "database"),
+    options.databaseDir ?? path.join(rootDir, 'database'),
   );
   const configDir = path.resolve(
-    options.configDir ?? path.join(serverDir, "config"),
+    options.configDir ?? path.join(serverDir, 'config'),
   );
   const storageDir = path.resolve(
-    options.storageDir ?? path.join(rootDir, "storage"),
+    options.storageDir ?? path.join(rootDir, 'storage'),
   );
 
   return {
-    root: (pathInside = "") => resolveInside(rootDir, pathInside),
-    server: (pathInside = "") => resolveInside(serverDir, pathInside),
-    database: (pathInside = "") => resolveInside(databaseDir, pathInside),
-    config: (pathInside = "") => resolveInside(configDir, pathInside),
-    storage: (pathInside = "") => resolveInside(storageDir, pathInside),
+    root: (pathInside = '') => resolveInside(rootDir, pathInside),
+    server: (pathInside = '') => resolveInside(serverDir, pathInside),
+    database: (pathInside = '') => resolveInside(databaseDir, pathInside),
+    config: (pathInside = '') => resolveInside(configDir, pathInside),
+    storage: (pathInside = '') => resolveInside(storageDir, pathInside),
   };
 }
 

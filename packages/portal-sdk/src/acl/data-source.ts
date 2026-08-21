@@ -1,4 +1,4 @@
-import type { ResourceAcl } from "./types.ts";
+import type { ResourceAcl } from './types.ts';
 
 type DataSourceMeta = {
   dataSourceKey?: unknown;
@@ -9,12 +9,12 @@ export const resolveAclDataSourceKey = (
   ...candidates: Array<DataSourceMeta | null | undefined>
 ): string | undefined => {
   for (const candidate of candidates) {
-    if (typeof candidate?.dataSourceKey === "string") {
+    if (typeof candidate?.dataSourceKey === 'string') {
       return candidate.dataSourceKey;
     }
     if (
       candidate?.acl &&
-      candidate.acl.type === "collection" &&
+      candidate.acl.type === 'collection' &&
       candidate.acl.dataSourceKey
     ) {
       return candidate.acl.dataSourceKey;

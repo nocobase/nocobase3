@@ -69,18 +69,18 @@ Extend a TypeScript preset while keeping directory-specific fields local:
 Create a thin ESLint configuration:
 
 ```js
-import { createNodeLibraryConfig } from "@nocobase/dev-config/eslint";
+import { createNodeLibraryConfig } from '@nocobase/dev-config/eslint';
 
 export default createNodeLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
-  ignores: ["fixtures/generated/**"],
+  ignores: ['fixtures/generated/**'],
 });
 ```
 
 Use the shared formatter directly from `prettier.config.js`:
 
 ```js
-export { default } from "@nocobase/dev-config/prettier";
+export { default } from '@nocobase/dev-config/prettier';
 ```
 
 Each configuration area has a dedicated README with its supported overrides

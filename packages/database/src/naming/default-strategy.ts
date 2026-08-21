@@ -28,8 +28,14 @@ export class DefaultNamingStrategy implements NamingStrategy {
     return truncateIdentifier(`idx_${tableName}_${columns.join('_')}`);
   }
 
-  foreignKeyName(tableName: string, columns: string[], targetTable: string): string {
-    return truncateIdentifier(`fk_${tableName}_${columns.join('_')}_${targetTable}`);
+  foreignKeyName(
+    tableName: string,
+    columns: string[],
+    targetTable: string,
+  ): string {
+    return truncateIdentifier(
+      `fk_${tableName}_${columns.join('_')}_${targetTable}`,
+    );
   }
 
   private normalize(value: string): string {

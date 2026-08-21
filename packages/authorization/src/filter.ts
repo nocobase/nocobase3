@@ -6,39 +6,39 @@ import type {
   FilterNode,
   FilterOperator,
   FilterValue,
-} from "./types.js";
+} from './types.js';
 
 const operators = new Set<FilterOperator>([
-  "$includes",
-  "$notIncludes",
-  "$eq",
-  "$ne",
-  "$neq",
-  "$gt",
-  "$gte",
-  "$lt",
-  "$lte",
-  "$empty",
-  "$notEmpty",
-  "$dateOn",
-  "$dateNotOn",
-  "$dateBefore",
-  "$dateAfter",
-  "$dateNotBefore",
-  "$dateNotAfter",
-  "$dateBetween",
-  "$in",
-  "$notIn",
-  "$match",
-  "$notMatch",
-  "$anyOf",
-  "$noneOf",
-  "$isTruly",
-  "$isFalsy",
-  "$exists",
-  "$notExists",
-  "$childIn",
-  "$childNotIn",
+  '$includes',
+  '$notIncludes',
+  '$eq',
+  '$ne',
+  '$neq',
+  '$gt',
+  '$gte',
+  '$lt',
+  '$lte',
+  '$empty',
+  '$notEmpty',
+  '$dateOn',
+  '$dateNotOn',
+  '$dateBefore',
+  '$dateAfter',
+  '$dateNotBefore',
+  '$dateNotAfter',
+  '$dateBetween',
+  '$in',
+  '$notIn',
+  '$match',
+  '$notMatch',
+  '$anyOf',
+  '$noneOf',
+  '$isTruly',
+  '$isFalsy',
+  '$exists',
+  '$notExists',
+  '$childIn',
+  '$childNotIn',
 ]);
 
 export function condition(
@@ -47,8 +47,8 @@ export function condition(
   value?: FilterValue,
 ): FilterConditionNode {
   return {
-    kind: "condition",
-    path: typeof path === "string" ? path.split(".") : path,
+    kind: 'condition',
+    path: typeof path === 'string' ? path.split('.') : path,
     operator,
     ...(value === undefined ? {} : { value }),
   };
@@ -56,20 +56,20 @@ export function condition(
 
 export function membership(
   path: string | readonly string[],
-  source: FilterMembershipNode["source"],
+  source: FilterMembershipNode['source'],
 ): FilterMembershipNode {
   return {
-    kind: "membership",
-    path: typeof path === "string" ? path.split(".") : path,
+    kind: 'membership',
+    path: typeof path === 'string' ? path.split('.') : path,
     source,
   };
 }
 
 export function group(
-  logic: "and" | "or",
+  logic: 'and' | 'or',
   items: readonly FilterNode[],
 ): FilterGroupNode {
-  return { kind: "group", logic, items: [...items] };
+  return { kind: 'group', logic, items: [...items] };
 }
 
 export function filter(
@@ -77,7 +77,7 @@ export function filter(
   root: FilterNode | readonly FilterNode[],
 ): FilterAst {
   const items = isFilterNodeArray(root) ? [...root] : [root];
-  return { kind: "filter", version: 1, collection, root: group("and", items) };
+  return { kind: 'filter', version: 1, collection, root: group('and', items) };
 }
 
 function isFilterNodeArray(
@@ -87,7 +87,7 @@ function isFilterNodeArray(
 }
 
 export function allRecords(collection: string): FilterAst {
-  return { kind: "filter", version: 1, collection, root: group("and", []) };
+  return { kind: 'filter', version: 1, collection, root: group('and', []) };
 }
 
 export function orFilters(
@@ -98,11 +98,11 @@ export function orFilters(
     return allRecords(collection);
   }
   return {
-    kind: "filter",
+    kind: 'filter',
     version: 1,
     collection,
     root: group(
-      "or",
+      'or',
       filters.map((item) =>
         item.root.items.length === 1 ? item.root.items[0] : item.root,
       ),
@@ -119,11 +119,11 @@ export function andFilters(
     return allRecords(collection);
   }
   return {
-    kind: "filter",
+    kind: 'filter',
     version: 1,
     collection,
     root: group(
-      "and",
+      'and',
       effective.map((item) =>
         item.root.items.length === 1 ? item.root.items[0] : item.root,
       ),
@@ -135,65 +135,65 @@ function assertPath(path: unknown): asserts path is readonly string[] {
   if (
     !Array.isArray(path) ||
     !path.length ||
-    path.some((part) => typeof part !== "string" || !part)
+    path.some((part) => typeof part !== 'string' || !part)
   ) {
-    throw new Error("Invalid Filter AST path");
+    throw new Error('Invalid Filter AST path');
   }
 }
 
 function assertNode(node: unknown): asserts node is FilterNode {
-  if (!node || typeof node !== "object") {
-    throw new Error("Invalid Filter AST node");
+  if (!node || typeof node !== 'object') {
+    throw new Error('Invalid Filter AST node');
   }
   const candidate = node as Record<string, unknown>;
-  if (candidate.kind === "condition") {
+  if (candidate.kind === 'condition') {
     assertPath(candidate.path);
     if (!operators.has(candidate.operator as FilterOperator)) {
-      throw new Error("Invalid Filter AST operator");
+      throw new Error('Invalid Filter AST operator');
     }
     return;
   }
-  if (candidate.kind === "group") {
-    if (candidate.logic !== "and" && candidate.logic !== "or") {
-      throw new Error("Invalid Filter AST group logic");
+  if (candidate.kind === 'group') {
+    if (candidate.logic !== 'and' && candidate.logic !== 'or') {
+      throw new Error('Invalid Filter AST group logic');
     }
     if (!Array.isArray(candidate.items)) {
-      throw new Error("Invalid Filter AST group items");
+      throw new Error('Invalid Filter AST group items');
     }
     for (const item of candidate.items) {
       assertNode(item);
     }
     return;
   }
-  if (candidate.kind === "relation") {
+  if (candidate.kind === 'relation') {
     assertPath(candidate.path);
     if (
-      !["exists", "notExists", "some", "none", "empty", "notEmpty"].includes(
+      !['exists', 'notExists', 'some', 'none', 'empty', 'notEmpty'].includes(
         candidate.quantifier as string,
       )
     ) {
-      throw new Error("Invalid Filter AST relation quantifier");
+      throw new Error('Invalid Filter AST relation quantifier');
     }
     if (candidate.filter !== undefined) {
       assertNode(candidate.filter);
     }
     return;
   }
-  if (candidate.kind === "membership") {
+  if (candidate.kind === 'membership') {
     assertPath(candidate.path);
     const source = candidate.source as Record<string, unknown> | undefined;
     if (
       !source ||
-      typeof source.collection !== "string" ||
+      typeof source.collection !== 'string' ||
       !source.collection ||
-      typeof source.field !== "string" ||
+      typeof source.field !== 'string' ||
       !source.field ||
       !source.where ||
-      typeof source.where !== "object" ||
+      typeof source.where !== 'object' ||
       Array.isArray(source.where) ||
       !Object.keys(source.where).length
     ) {
-      throw new Error("Invalid Filter AST membership source");
+      throw new Error('Invalid Filter AST membership source');
     }
     for (const [key, value] of Object.entries(
       source.where as Record<string, unknown>,
@@ -201,29 +201,29 @@ function assertNode(node: unknown): asserts node is FilterNode {
       if (
         !key ||
         (value !== null &&
-          !["string", "number", "boolean"].includes(typeof value))
+          !['string', 'number', 'boolean'].includes(typeof value))
       ) {
-        throw new Error("Invalid Filter AST membership condition");
+        throw new Error('Invalid Filter AST membership condition');
       }
     }
     return;
   }
-  throw new Error("Invalid Filter AST node kind");
+  throw new Error('Invalid Filter AST node kind');
 }
 
 export function assertValidFilter(ast: unknown): asserts ast is FilterAst {
-  if (!ast || typeof ast !== "object") {
-    throw new Error("Invalid Filter AST");
+  if (!ast || typeof ast !== 'object') {
+    throw new Error('Invalid Filter AST');
   }
   const candidate = ast as Record<string, unknown>;
-  if (candidate.kind !== "filter" || candidate.version !== 1) {
-    throw new Error("Invalid Filter AST envelope");
+  if (candidate.kind !== 'filter' || candidate.version !== 1) {
+    throw new Error('Invalid Filter AST envelope');
   }
   if (
     candidate.collection !== undefined &&
-    typeof candidate.collection !== "string"
+    typeof candidate.collection !== 'string'
   ) {
-    throw new Error("Invalid Filter AST collection");
+    throw new Error('Invalid Filter AST collection');
   }
   assertNode(candidate.root);
 }
@@ -235,7 +235,7 @@ export function assertFilterCollection(
   assertValidFilter(ast);
   if (ast.collection !== collection) {
     throw new Error(
-      `Policy returned a filter for "${ast.collection ?? ""}" while authorizing "${collection}"`,
+      `Policy returned a filter for "${ast.collection ?? ''}" while authorizing "${collection}"`,
     );
   }
 }
@@ -246,7 +246,7 @@ function getPath(
 ): unknown {
   let current: unknown = record;
   for (const part of path) {
-    if (!current || typeof current !== "object") {
+    if (!current || typeof current !== 'object') {
       return undefined;
     }
     current = (current as Record<string, unknown>)[part];
@@ -257,38 +257,38 @@ function getPath(
 function compare(actual: unknown, node: FilterConditionNode): boolean {
   const expected = node.value;
   switch (node.operator) {
-    case "$eq":
+    case '$eq':
       return actual === expected;
-    case "$ne":
-    case "$neq":
+    case '$ne':
+    case '$neq':
       return actual !== expected;
-    case "$in":
+    case '$in':
       return Array.isArray(expected) && expected.includes(actual);
-    case "$notIn":
+    case '$notIn':
       return Array.isArray(expected) && !expected.includes(actual);
-    case "$gt":
+    case '$gt':
       return (actual as never) > (expected as never);
-    case "$gte":
+    case '$gte':
       return (actual as never) >= (expected as never);
-    case "$lt":
+    case '$lt':
       return (actual as never) < (expected as never);
-    case "$lte":
+    case '$lte':
       return (actual as never) <= (expected as never);
-    case "$empty":
+    case '$empty':
       return (
         actual == null ||
-        actual === "" ||
+        actual === '' ||
         (Array.isArray(actual) && !actual.length)
       );
-    case "$notEmpty":
+    case '$notEmpty':
       return !(
         actual == null ||
-        actual === "" ||
+        actual === '' ||
         (Array.isArray(actual) && !actual.length)
       );
-    case "$isTruly":
+    case '$isTruly':
       return actual === true;
-    case "$isFalsy":
+    case '$isFalsy':
       return actual === false;
     default:
       throw new Error(`Record evaluation does not support ${node.operator}`);
@@ -299,17 +299,17 @@ function matchesNode(
   node: FilterNode,
   record: Readonly<Record<string, unknown>>,
 ): boolean {
-  if (node.kind === "condition") {
+  if (node.kind === 'condition') {
     return compare(getPath(record, node.path), node);
   }
-  if (node.kind === "relation") {
-    throw new Error("Record evaluation does not support relation filters");
+  if (node.kind === 'relation') {
+    throw new Error('Record evaluation does not support relation filters');
   }
-  if (node.kind === "membership") {
-    throw new Error("Record evaluation requires a membership resolver");
+  if (node.kind === 'membership') {
+    throw new Error('Record evaluation requires a membership resolver');
   }
   const results = node.items.map((item) => matchesNode(item, record));
-  return node.logic === "and" ? results.every(Boolean) : results.some(Boolean);
+  return node.logic === 'and' ? results.every(Boolean) : results.some(Boolean);
 }
 
 export type FilterMembershipResolver = (
@@ -322,25 +322,25 @@ async function matchesNodeAsync(
   record: Readonly<Record<string, unknown>>,
   resolveMembership: FilterMembershipResolver,
 ): Promise<boolean> {
-  if (node.kind === "condition") {
+  if (node.kind === 'condition') {
     return compare(getPath(record, node.path), node);
   }
-  if (node.kind === "relation") {
-    throw new Error("Record evaluation does not support relation filters");
+  if (node.kind === 'relation') {
+    throw new Error('Record evaluation does not support relation filters');
   }
-  if (node.kind === "membership") {
+  if (node.kind === 'membership') {
     return resolveMembership(node, getPath(record, node.path));
   }
   for (const item of node.items) {
     const matched = await matchesNodeAsync(item, record, resolveMembership);
-    if (node.logic === "and" && !matched) {
+    if (node.logic === 'and' && !matched) {
       return false;
     }
-    if (node.logic === "or" && matched) {
+    if (node.logic === 'or' && matched) {
       return true;
     }
   }
-  return node.logic === "and";
+  return node.logic === 'and';
 }
 
 export function matchesFilter(

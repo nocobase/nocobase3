@@ -1,10 +1,10 @@
-import type { CollectionBuilder } from "../collection/builder/index.js";
-import type { DatabaseConnection } from "../database/index.js";
-import type { DatabaseDialect, DatabaseDriver } from "../database/config.js";
-import type { DatabaseCapabilities } from "../schema/index.js";
-import type { QueryAdapter } from "../query/index.js";
+import type { CollectionBuilder } from '../collection/builder/index.js';
+import type { DatabaseConnection } from '../database/index.js';
+import type { DatabaseDialect, DatabaseDriver } from '../database/config.js';
+import type { DatabaseCapabilities } from '../schema/index.js';
+import type { QueryAdapter } from '../query/index.js';
 
-export type MigrationTransactionMode = true | false | "auto";
+export type MigrationTransactionMode = true | false | 'auto';
 
 export interface MigrationConnection {
   readonly name: string;

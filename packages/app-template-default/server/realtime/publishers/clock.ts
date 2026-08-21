@@ -33,14 +33,17 @@ export function startClockPublisher(
     interval = undefined;
   };
 
-  const unsubscribe = realtime.onTopicSubscriptionChange(CLOCK_TOPIC, (count) => {
-    if (count > 0) {
-      start();
-      return;
-    }
+  const unsubscribe = realtime.onTopicSubscriptionChange(
+    CLOCK_TOPIC,
+    (count) => {
+      if (count > 0) {
+        start();
+        return;
+      }
 
-    stop();
-  });
+      stop();
+    },
+  );
 
   if (realtime.subscriptionCount(CLOCK_TOPIC) > 0) {
     start();

@@ -1,23 +1,23 @@
-import { createHash } from "node:crypto";
-import type { Dirent } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, extname, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import { isDefinedMigration } from "./define.js";
+import { createHash } from 'node:crypto';
+import type { Dirent } from 'node:fs';
+import { readdir, readFile, stat } from 'node:fs/promises';
+import { basename, extname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { isDefinedMigration } from './define.js';
 import type {
   LoadedMigration,
   LoadMigrationsOptions,
   MigrationDefinition,
   MigrationSource,
-} from "./types.js";
+} from './types.js';
 
 export const DEFAULT_MIGRATION_EXTENSIONS = [
-  ".js",
-  ".mjs",
-  ".cjs",
-  ".ts",
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.ts',
 ] as const;
-export const DEFAULT_MIGRATION_PACKAGE_NAME = "app";
+export const DEFAULT_MIGRATION_PACKAGE_NAME = 'app';
 
 export async function loadMigrations(
   options: LoadMigrationsOptions,
@@ -35,7 +35,7 @@ export async function validateMigrations(
   options: string | LoadMigrationsOptions,
 ): Promise<LoadedMigration[]> {
   return loadMigrations(
-    typeof options === "string" ? { directory: options } : options,
+    typeof options === 'string' ? { directory: options } : options,
   );
 }
 
@@ -70,7 +70,7 @@ function normalizeMigrationSources(
 ): MigrationSource[] {
   if (options.directory !== undefined && options.sources !== undefined) {
     throw new Error(
-      "Migration options cannot define both directory and sources.",
+      'Migration options cannot define both directory and sources.',
     );
   }
 
@@ -83,7 +83,7 @@ function normalizeMigrationSources(
   }
 
   if (options.directory === undefined) {
-    throw new Error("Migration options must define directory or sources.");
+    throw new Error('Migration options must define directory or sources.');
   }
 
   return [
@@ -99,14 +99,14 @@ function normalizeMigrationSources(
 
 function validateDirectory(directory: unknown): string {
   if (!isNonEmptyString(directory)) {
-    throw new Error("Migration directory must be a non-empty string.");
+    throw new Error('Migration directory must be a non-empty string.');
   }
   return directory;
 }
 
 function validatePackageName(packageName: unknown): string {
   if (!isNonEmptyString(packageName)) {
-    throw new Error("Migration packageName must be a non-empty string.");
+    throw new Error('Migration packageName must be a non-empty string.');
   }
   return packageName;
 }
@@ -115,7 +115,7 @@ async function readMigrationDirectory(directory: string): Promise<Dirent[]> {
   try {
     return await readdir(directory, { withFileTypes: true });
   } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
+    if (isNodeError(error) && error.code === 'ENOENT') {
       return [];
     }
     throw error;
@@ -128,7 +128,7 @@ async function loadMigrationFile(
   fileName: string,
 ): Promise<LoadedMigration> {
   const [source, fileStat] = await Promise.all([
-    readFile(filePath, "utf8"),
+    readFile(filePath, 'utf8'),
     stat(filePath),
   ]);
   const checksum = createMigrationChecksum(source);
@@ -150,7 +150,7 @@ async function importMigration(
   mtimeMs: number,
 ): Promise<unknown> {
   const url = pathToFileURL(filePath);
-  url.searchParams.set("mtime", String(Math.trunc(mtimeMs)));
+  url.searchParams.set('mtime', String(Math.trunc(mtimeMs)));
   const module = await import(url.href);
   return (module as { default?: unknown }).default;
 }
@@ -179,13 +179,13 @@ function validateMigrationDefinition(
     );
   }
 
-  if (typeof value.up !== "function") {
+  if (typeof value.up !== 'function') {
     throw new Error(
       `Migration "${value.name}" must define an up(context) function.`,
     );
   }
 
-  if (value.down !== undefined && typeof value.down !== "function") {
+  if (value.down !== undefined && typeof value.down !== 'function') {
     throw new Error(
       `Migration "${value.name}" down must be a function when provided.`,
     );
@@ -224,7 +224,7 @@ function validateUniqueMigrationNames(migrations: LoadedMigration[]): void {
 }
 
 function isMigrationFile(fileName: string, extensions: Set<string>): boolean {
-  if (fileName.startsWith(".") || fileName.endsWith(".d.ts")) {
+  if (fileName.startsWith('.') || fileName.endsWith('.d.ts')) {
     return false;
   }
   return extensions.has(extname(fileName));
@@ -235,19 +235,19 @@ function migrationNameFromFileName(fileName: string): string {
 }
 
 function createMigrationChecksum(source: string): string {
-  return createHash("sha256").update(source).digest("hex");
+  return createHash('sha256').update(source).digest('hex');
 }
 
 function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function isValidTransactionMode(value: unknown): boolean {
   return (
-    value === undefined || value === true || value === false || value === "auto"
+    value === undefined || value === true || value === false || value === 'auto'
   );
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
+  return error instanceof Error && 'code' in error;
 }

@@ -1,10 +1,10 @@
-import type { PropsWithChildren } from "react";
-import { ChatSurface } from "./chat-surface";
+import type { PropsWithChildren } from 'react';
+import { ChatSurface } from './chat-surface';
 
 export type ChatSidePanelProps = PropsWithChildren<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  side?: "left" | "right";
+  side?: 'left' | 'right';
   width?: number | string;
   closeOnEscape?: boolean;
   showCloseHandle?: boolean;
@@ -13,7 +13,7 @@ export type ChatSidePanelProps = PropsWithChildren<{
 export function ChatSidePanel({
   open,
   onOpenChange,
-  side = "right",
+  side = 'right',
   width = 450,
   closeOnEscape = true,
   showCloseHandle = true,
@@ -22,7 +22,7 @@ export function ChatSidePanel({
   return (
     <ChatSurface
       open={open}
-      variant="side-panel"
+      variant='side-panel'
       onOpenChange={onOpenChange}
       side={side}
       width={width}

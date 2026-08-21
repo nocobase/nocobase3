@@ -2,11 +2,17 @@ import type { CollectionMetadataStore } from '../metadata/index.js';
 import type { ConnectionConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 
-export interface ConnectionAdapter<TConfig extends ConnectionConfig = ConnectionConfig> {
-  createConnection(context: ConnectionAdapterContext<TConfig>): DatabaseConnection;
+export interface ConnectionAdapter<
+  TConfig extends ConnectionConfig = ConnectionConfig,
+> {
+  createConnection(
+    context: ConnectionAdapterContext<TConfig>,
+  ): DatabaseConnection;
 }
 
-export interface ConnectionAdapterContext<TConfig extends ConnectionConfig = ConnectionConfig> {
+export interface ConnectionAdapterContext<
+  TConfig extends ConnectionConfig = ConnectionConfig,
+> {
   name: string;
   config: TConfig;
   metadataStore: CollectionMetadataStore;
@@ -25,7 +31,9 @@ export class DefaultConnectionFactory implements ConnectionFactory {
   create(context: ConnectionAdapterContext): DatabaseConnection {
     const adapter = this.adapters[this.defaultAdapter];
     if (!adapter) {
-      throw new Error(`Database adapter "${this.defaultAdapter}" is not registered.`);
+      throw new Error(
+        `Database adapter "${this.defaultAdapter}" is not registered.`,
+      );
     }
     return adapter.createConnection(context as never);
   }

@@ -7,10 +7,10 @@ import type {
   SelectQuery,
   SqlBool,
   UpdateQuery,
-} from "@nocobase/database";
-import type { BetterAuthOptions, DBAdapterInstance, Where } from "better-auth";
-import { createAdapterFactory, type CustomAdapter } from "better-auth/adapters";
-import type { Knex } from "knex";
+} from '@nocobase/database';
+import type { BetterAuthOptions, DBAdapterInstance, Where } from 'better-auth';
+import { createAdapterFactory, type CustomAdapter } from 'better-auth/adapters';
+import type { Knex } from 'knex';
 
 export interface DatabaseAdapterOptions {
   debugLogs?: boolean;
@@ -24,35 +24,35 @@ function conditionExpression(
 ): Expression<SqlBool> {
   const { field, value, operator } = condition;
   if (value === null) {
-    return eb(field, operator === "ne" ? "is not" : "is", null);
+    return eb(field, operator === 'ne' ? 'is not' : 'is', null);
   }
-  if (operator === "in" || operator === "not_in") {
+  if (operator === 'in' || operator === 'not_in') {
     return eb(
       field,
-      operator === "in" ? "in" : "not in",
+      operator === 'in' ? 'in' : 'not in',
       Array.isArray(value) ? value : [value],
     );
   }
   if (
-    operator === "contains" ||
-    operator === "starts_with" ||
-    operator === "ends_with"
+    operator === 'contains' ||
+    operator === 'starts_with' ||
+    operator === 'ends_with'
   ) {
     const pattern =
-      operator === "contains"
+      operator === 'contains'
         ? `%${value}%`
-        : operator === "starts_with"
+        : operator === 'starts_with'
           ? `${value}%`
           : `%${value}`;
-    return eb(field, "like", pattern);
+    return eb(field, 'like', pattern);
   }
   const sqlOperator = {
-    eq: "=",
-    ne: "<>",
-    lt: "<",
-    lte: "<=",
-    gt: ">",
-    gte: ">=",
+    eq: '=',
+    ne: '<>',
+    lt: '<',
+    lte: '<=',
+    gt: '>',
+    gte: '>=',
   }[operator] as ComparisonOperator | undefined;
   if (!sqlOperator) {
     throw new Error(`Unsupported Better Auth operator: ${operator}`);
@@ -66,7 +66,7 @@ function whereExpression(
 ): Expression<SqlBool> {
   const branches: Array<Array<Expression<SqlBool>>> = [[]];
   for (const condition of where) {
-    if (condition.connector === "OR" && branches.at(-1)!.length) {
+    if (condition.connector === 'OR' && branches.at(-1)!.length) {
       branches.push([]);
     }
     branches.at(-1)!.push(conditionExpression(eb, condition));
@@ -101,10 +101,10 @@ function applyDeleteWhere(
 function equalityCondition(field: string, value: unknown): CleanWhere {
   return {
     field,
-    value: value as CleanWhere["value"],
-    operator: "eq",
-    connector: "AND",
-    mode: "sensitive",
+    value: value as CleanWhere['value'],
+    operator: 'eq',
+    connector: 'AND',
+    mode: 'sensitive',
   };
 }
 
@@ -116,7 +116,7 @@ async function resolveInsensitiveWhere(
   if (
     !where.some(
       (condition) =>
-        condition.mode === "insensitive" && typeof condition.value === "string",
+        condition.mode === 'insensitive' && typeof condition.value === 'string',
     )
   ) {
     return where;
@@ -125,7 +125,7 @@ async function resolveInsensitiveWhere(
   return Promise.all(
     where.map(async (condition) => {
       const { field, value, operator, mode } = condition;
-      if (mode !== "insensitive" || typeof value !== "string") {
+      if (mode !== 'insensitive' || typeof value !== 'string') {
         return condition;
       }
 
@@ -134,61 +134,61 @@ async function resolveInsensitiveWhere(
       // configured naming strategy.
       const source = connection.query
         .selectFrom(model)
-        .select(["id as authrecordid", `${field} as authcomparevalue`])
+        .select(['id as authrecordid', `${field} as authcomparevalue`])
         .compile();
       const query = knex
         .from(
           knex.raw(`(${source.sql}) as ??`, [
             ...(source.parameters as readonly Knex.RawBinding[]),
-            "authsource",
+            'authsource',
           ]),
         )
-        .select({ id: "authrecordid" });
+        .select({ id: 'authrecordid' });
       if (
-        operator === "contains" ||
-        operator === "starts_with" ||
-        operator === "ends_with"
+        operator === 'contains' ||
+        operator === 'starts_with' ||
+        operator === 'ends_with'
       ) {
         const pattern =
-          operator === "contains"
+          operator === 'contains'
             ? `%${value}%`
-            : operator === "starts_with"
+            : operator === 'starts_with'
               ? `${value}%`
               : `%${value}`;
-        query.whereRaw("lower(??) like lower(?)", [
-          "authcomparevalue",
+        query.whereRaw('lower(??) like lower(?)', [
+          'authcomparevalue',
           pattern,
         ]);
       } else {
         const sqlOperator =
-          operator === "eq"
-            ? "="
-            : operator === "ne"
-              ? "<>"
-              : operator === "lt"
-                ? "<"
-                : operator === "lte"
-                  ? "<="
-                  : operator === "gt"
-                    ? ">"
-                    : operator === "gte"
-                      ? ">="
+          operator === 'eq'
+            ? '='
+            : operator === 'ne'
+              ? '<>'
+              : operator === 'lt'
+                ? '<'
+                : operator === 'lte'
+                  ? '<='
+                  : operator === 'gt'
+                    ? '>'
+                    : operator === 'gte'
+                      ? '>='
                       : undefined;
         if (!sqlOperator) {
           return condition;
         }
         query.whereRaw(`lower(??) ${sqlOperator} lower(?)`, [
-          "authcomparevalue",
+          'authcomparevalue',
           value,
         ]);
       }
       const ids = (await query).map((row) => row.id);
       return {
         ...condition,
-        field: "id",
+        field: 'id',
         value: ids,
-        operator: "in",
-        mode: "sensitive",
+        operator: 'in',
+        mode: 'sensitive',
       };
     }),
   );
@@ -205,13 +205,13 @@ function buildCustomAdapter(
       return (await connection.query
         .selectFrom(model)
         .select(select?.length ? select : fieldsForModel(model))
-        .where("id", "=", data.id)
+        .where('id', '=', data.id)
         .executeTakeFirst()) as typeof data;
     },
     async findOne({ model, where, select, join }) {
       if (join) {
         throw new Error(
-          "Better Auth joins are not enabled by the NocoBase database adapter",
+          'Better Auth joins are not enabled by the NocoBase database adapter',
         );
       }
       const normalized = await resolveInsensitiveWhere(
@@ -228,7 +228,7 @@ function buildCustomAdapter(
     async findMany({ model, where, limit, select, sortBy, offset, join }) {
       if (join) {
         throw new Error(
-          "Better Auth joins are not enabled by the NocoBase database adapter",
+          'Better Auth joins are not enabled by the NocoBase database adapter',
         );
       }
       const normalized = await resolveInsensitiveWhere(
@@ -243,7 +243,7 @@ function buildCustomAdapter(
       if (sortBy) {
         query = query.orderBy(mapField(model, sortBy.field), sortBy.direction);
       } else if (offset != null) {
-        query = query.orderBy("id");
+        query = query.orderBy('id');
       }
       if (limit != null) {
         query = query.limit(limit);
@@ -266,7 +266,7 @@ function buildCustomAdapter(
         connection.query.selectFrom(model),
         normalized,
       )
-        .select("id")
+        .select('id')
         .executeTakeFirst();
       if (!existing) {
         return null;
@@ -274,13 +274,13 @@ function buildCustomAdapter(
       await connection.query
         .updateTable(model)
         .set(update as Record<string, unknown>)
-        .where("id", "=", existing.id)
+        .where('id', '=', existing.id)
         .execute();
       return (
         (await connection.query
           .selectFrom(model)
           .select(fieldsForModel(model))
-          .where("id", "=", existing.id)
+          .where('id', '=', existing.id)
           .executeTakeFirst()) ?? null
       );
     },
@@ -350,7 +350,7 @@ function buildCustomAdapter(
           connection.query.deleteFrom(model),
           normalized,
         )
-          .where("id", "=", existing.id as CleanWhere["value"])
+          .where('id', '=', existing.id as CleanWhere['value'])
           .execute();
         if (result.deletedCount === 1) {
           return existing as T;
@@ -393,16 +393,16 @@ function buildCustomAdapter(
         let query = applyUpdateWhere(
           connection.query.updateTable(model).set(update),
           normalized,
-        ).where("id", "=", existing.id as CleanWhere["value"]);
+        ).where('id', '=', existing.id as CleanWhere['value']);
         for (const guard of snapshotGuards) {
-          query = query.where(guard.field, "=", guard.value);
+          query = query.where(guard.field, '=', guard.value);
         }
         const result = await query.execute();
         if (result.updatedCount === 1) {
           return (await connection.query
             .selectFrom(model)
             .select(fieldsForModel(model))
-            .where("id", "=", existing.id as CleanWhere["value"])
+            .where('id', '=', existing.id as CleanWhere['value'])
             .executeTakeFirst()) as T;
         }
       }
@@ -417,7 +417,7 @@ function buildCustomAdapter(
         connection.query.selectFrom(model),
         normalized,
       )
-        .select(({ fn }) => [fn.countAll().as("count")])
+        .select(({ fn }) => [fn.countAll().as('count')])
         .executeTakeFirst<{ count: number | string }>();
       return Number(row?.count ?? 0);
     },
@@ -432,8 +432,8 @@ export function databaseAdapter(
   const factory = (currentConnection: DatabaseConnection): DBAdapterInstance =>
     createAdapterFactory({
       config: {
-        adapterId: "nocobase-database",
-        adapterName: "NocoBase Database",
+        adapterId: 'nocobase-database',
+        adapterName: 'NocoBase Database',
         debugLogs: options.debugLogs,
         supportsJSON: false,
         supportsDates: true,
@@ -441,7 +441,7 @@ export function databaseAdapter(
         supportsNumericIds: false,
         transaction: async (callback) => {
           if (!betterAuthOptions) {
-            throw new Error("Better Auth adapter is not initialized");
+            throw new Error('Better Auth adapter is not initialized');
           }
           return currentConnection.transaction(async (transaction) =>
             callback(factory(transaction)(betterAuthOptions!)),
@@ -458,7 +458,7 @@ export function databaseAdapter(
         const fieldsForModel = (model: string) => {
           const defaultModel = getDefaultModelName(model);
           const fields = new Set([
-            "id",
+            'id',
             ...Object.keys(schema[defaultModel]?.fields ?? {}),
           ]);
           return [...fields].map((field) =>

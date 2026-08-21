@@ -42,23 +42,57 @@ console.log(result.impact);
 ## CollectionOperation 列表
 
 ```ts
-{ type: 'createCollection', name, definition }
-{ type: 'alterCollection', collection, changes }
-{ type: 'dropCollection', collection }
-{ type: 'renameCollection', from, to, renameTable, renameTableTo }
-{ type: 'createViewCollection', name, definition }
-{ type: 'replaceViewCollection', name, definition }
-{ type: 'createMaterializedViewCollection', name, definition }
-{ type: 'refreshMaterializedViewCollection', collection, concurrently }
-{ type: 'addField', collection, field }
-{ type: 'alterField', collection, field, changes }
-{ type: 'dropField', collection, field }
-{ type: 'addIndex', collection, index }
-{ type: 'dropIndex', collection, index }
-{ type: 'addConstraint', collection, constraint }
-{ type: 'dropConstraint', collection, constraint }
-{ type: 'updateCollectionMetadata', collection, patch }
-{ type: 'updateFieldMetadata', collection, field, patch }
+{
+  type: ('createCollection', name, definition);
+}
+{
+  type: ('alterCollection', collection, changes);
+}
+{
+  type: ('dropCollection', collection);
+}
+{
+  type: ('renameCollection', from, to, renameTable, renameTableTo);
+}
+{
+  type: ('createViewCollection', name, definition);
+}
+{
+  type: ('replaceViewCollection', name, definition);
+}
+{
+  type: ('createMaterializedViewCollection', name, definition);
+}
+{
+  type: ('refreshMaterializedViewCollection', collection, concurrently);
+}
+{
+  type: ('addField', collection, field);
+}
+{
+  type: ('alterField', collection, field, changes);
+}
+{
+  type: ('dropField', collection, field);
+}
+{
+  type: ('addIndex', collection, index);
+}
+{
+  type: ('dropIndex', collection, index);
+}
+{
+  type: ('addConstraint', collection, constraint);
+}
+{
+  type: ('dropConstraint', collection, constraint);
+}
+{
+  type: ('updateCollectionMetadata', collection, patch);
+}
+{
+  type: ('updateFieldMetadata', collection, field, patch);
+}
 ```
 
 ## destructive 操作
@@ -72,7 +106,7 @@ console.log(result.impact);
     operation: 'dropField',
     message: 'Dropping field users.name may remove existing data.',
   },
-]
+];
 ```
 
 ## Agent 注意事项

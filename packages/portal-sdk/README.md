@@ -27,10 +27,10 @@ one synchronous definition while allowing the rendered page to load on demand:
 ```tsx
 export const appRoutes = defineAppRoutes([
   {
-    name: "customers",
-    path: "/customers",
-    resource: { meta: { label: "Customers" } },
-    lazy: () => import("./pages/customers"),
+    name: 'customers',
+    path: '/customers',
+    resource: { meta: { label: 'Customers' } },
+    lazy: () => import('./pages/customers'),
   },
 ]);
 ```

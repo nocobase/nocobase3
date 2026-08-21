@@ -1,8 +1,8 @@
 import {
   getNocoBaseAppName,
   resolveNocoBaseServerUrl,
-} from "../runtime/config.ts";
-import { authSession } from "./auth-session.ts";
+} from '../runtime/config.ts';
+import { authSession } from './auth-session.ts';
 
 export type NocoBaseWebSocketMessage = {
   payload?: Record<string, unknown>;
@@ -28,7 +28,7 @@ type WebSocketRuntime = Window & {
 };
 
 const getRuntimeWindow = () =>
-  typeof window === "undefined" ? undefined : (window as WebSocketRuntime);
+  typeof window === 'undefined' ? undefined : (window as WebSocketRuntime);
 
 const getRuntimeWebSocketUrl = () => {
   const runtime = getRuntimeWindow();
@@ -49,20 +49,20 @@ const getRuntimeWebSocketPath = (): string | undefined => {
 };
 
 export function resolveNocoBaseWebSocketUrl(
-  options: NocoBaseWebSocketOptions = {}
+  options: NocoBaseWebSocketOptions = {},
 ): string | undefined {
-  if (typeof window === "undefined") return undefined;
+  if (typeof window === 'undefined') return undefined;
 
   const configuredUrl = options.url ?? getRuntimeWebSocketUrl();
-  const wsPath = options.wsPath ?? getRuntimeWebSocketPath() ?? "/ws";
+  const wsPath = options.wsPath ?? getRuntimeWebSocketPath() ?? '/ws';
   const value = configuredUrl || resolveNocoBaseServerUrl(wsPath);
   const url = new URL(value, window.location.origin);
-  if (url.protocol === "http:") url.protocol = "ws:";
-  if (url.protocol === "https:") url.protocol = "wss:";
+  if (url.protocol === 'http:') url.protocol = 'ws:';
+  if (url.protocol === 'https:') url.protocol = 'wss:';
 
   const appName = getNocoBaseAppName();
-  if (appName !== "main" && !url.searchParams.has("__appName")) {
-    url.searchParams.set("__appName", appName);
+  if (appName !== 'main' && !url.searchParams.has('__appName')) {
+    url.searchParams.set('__appName', appName);
   }
   return url.toString();
 }
@@ -98,7 +98,7 @@ export class NocoBaseWebSocketClient {
   }
 
   connect(): void {
-    if (typeof WebSocket === "undefined") return;
+    if (typeof WebSocket === 'undefined') return;
     if (this.socket?.readyState === 0 || this.socket?.readyState === 1) return;
     const url = this.getURL();
     if (!url) return;
@@ -118,12 +118,12 @@ export class NocoBaseWebSocketClient {
 
     socket.onmessage = (event) => {
       if (this.socket !== socket) return;
-      if (typeof event.data !== "string") return;
+      if (typeof event.data !== 'string') return;
       try {
         const message = JSON.parse(event.data) as NocoBaseWebSocketMessage;
         this.messageListeners.forEach((listener) => listener(message));
       } catch (error) {
-        console.warn("Unable to parse NocoBase WebSocket message", error);
+        console.warn('Unable to parse NocoBase WebSocket message', error);
       }
     };
 
@@ -141,7 +141,7 @@ export class NocoBaseWebSocketClient {
 
     if (!this.authUnsubscribe) {
       this.authUnsubscribe = authSession.subscribe((field) => {
-        if (field === "token" || field === "auth") {
+        if (field === 'token' || field === 'auth') {
           this.authenticate();
         }
       });
@@ -169,17 +169,17 @@ export class NocoBaseWebSocketClient {
   send(message: string | Record<string, unknown>): boolean {
     if (!this.connected) return false;
     this.socket?.send(
-      typeof message === "string" ? message : JSON.stringify(message)
+      typeof message === 'string' ? message : JSON.stringify(message),
     );
     return true;
   }
 
   authenticate(): boolean {
     return this.send({
-      type: "auth:token",
+      type: 'auth:token',
       payload: {
-        token: authSession.get("token"),
-        authenticator: authSession.get("auth"),
+        token: authSession.get('token'),
+        authenticator: authSession.get('auth'),
       },
     });
   }
@@ -189,7 +189,7 @@ export class NocoBaseWebSocketClient {
     const maxInterval = this.options.reconnectMaxInterval ?? 30_000;
     const delay = Math.min(
       maxInterval,
-      1_000 * 2 ** Math.min(this.reconnectCount, 5)
+      1_000 * 2 ** Math.min(this.reconnectCount, 5),
     );
     this.reconnectCount += 1;
     this.reconnectTimer = setTimeout(() => this.connect(), delay);
@@ -203,8 +203,8 @@ export class NocoBaseWebSocketClient {
   private startPing() {
     this.stopPing();
     this.pingTimer = setInterval(
-      () => this.send("ping"),
-      this.options.pingInterval ?? 300_000
+      () => this.send('ping'),
+      this.options.pingInterval ?? 300_000,
     );
   }
 
