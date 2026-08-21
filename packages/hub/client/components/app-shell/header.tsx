@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { LanguageSwitcher } from "@/components/app-shell/language-switcher";
 import { UserAvatar } from "@/components/app-shell/user-avatar";
 import { UserInfo } from "@/components/app-shell/user-info";
 import { useSidebar, SidebarTrigger } from "@/components/ui/sidebar";
@@ -54,6 +55,7 @@ function DesktopHeader() {
         </span>
       </div>
       <div className="flex items-center gap-2">
+        <LanguageSwitcher />
         <ThemeToggle />
         <UserDropdown />
       </div>
@@ -91,6 +93,7 @@ function MobileHeader() {
       />
       <Brand logoClassName="h-6" />
       <div className="flex shrink-0 items-center gap-1">
+        <LanguageSwitcher className="size-9" />
         <ThemeToggle className="size-9" />
         <UserDropdown />
       </div>

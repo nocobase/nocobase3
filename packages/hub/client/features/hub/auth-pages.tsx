@@ -1,6 +1,6 @@
 import { AlertCircle, ShieldCheck } from "lucide-react";
 import { useState } from "react";
-import { useLogin } from "@refinedev/core";
+import { useLogin, useTranslate } from "@refinedev/core";
 import { Navigate, useLocation, useNavigate } from "react-router";
 
 import { AuthLayout } from "@/components/auth/auth-layout";
@@ -24,19 +24,29 @@ interface LoginVariables {
 }
 
 export function HubLoginPage({ fetcher }: { fetcher?: HubFetcher }) {
+  const translate = useTranslate();
   const location = useLocation();
   const setup = useHubQuery<HubSetupStatus>({
     path: "/setup/status",
     fetcher,
   });
-  if (setup.loading) return <HubLoadingState label="Checking Hub setup" />;
+  if (setup.loading) {
+    return (
+      <HubLoadingState
+        label={translate("hub.auth.setup.checking", "Checking Hub setup")}
+      />
+    );
+  }
   if (setup.error) {
     return (
       <div className="mx-auto flex min-h-svh max-w-xl items-center px-6">
         <HubErrorState
           error={setup.error}
           onRetry={setup.reload}
-          title="Unable to check Hub setup"
+          title={translate(
+            "hub.auth.setup.checkError",
+            "Unable to check Hub setup",
+          )}
         />
       </div>
     );
@@ -45,8 +55,11 @@ export function HubLoginPage({ fetcher }: { fetcher?: HubFetcher }) {
 
   return (
     <AuthLayout
-      title="Sign in to NocoBase Hub"
-      description="Use your Hub username or email. Application users are managed separately."
+      title={translate("hub.auth.signIn.title", "Sign in to NocoBase Hub")}
+      description={translate(
+        "hub.auth.signIn.description",
+        "Use your Hub username or email. Application users are managed separately.",
+      )}
     >
       <HubLoginForm
         redirectTo={readLoginRedirect(location.state)}
@@ -63,6 +76,7 @@ function HubLoginForm({
   redirectTo: string;
   ownerCreated: boolean;
 }) {
+  const translate = useTranslate();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const { mutate: login, isPending, data } = useLogin<LoginVariables>();
@@ -79,21 +93,30 @@ function HubLoginForm({
       {ownerCreated ? (
         <Alert>
           <ShieldCheck aria-hidden="true" />
-          <AlertTitle>Owner created</AlertTitle>
+          <AlertTitle>
+            {translate("hub.auth.signIn.ownerCreated.title", "Owner created")}
+          </AlertTitle>
           <AlertDescription>
-            Owner created. Sign in to continue.
+            {translate(
+              "hub.auth.signIn.ownerCreated.description",
+              "Owner created. Sign in to continue.",
+            )}
           </AlertDescription>
         </Alert>
       ) : null}
       {error ? (
         <Alert variant="destructive">
           <AlertCircle aria-hidden="true" />
-          <AlertTitle>Unable to sign in</AlertTitle>
+          <AlertTitle>
+            {translate("hub.auth.signIn.error", "Unable to sign in")}
+          </AlertTitle>
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       ) : null}
       <div className="space-y-2">
-        <Label htmlFor="hub-identifier">Username or email</Label>
+        <Label htmlFor="hub-identifier">
+          {translate("hub.auth.signIn.identifier", "Username or email")}
+        </Label>
         <Input
           id="hub-identifier"
           value={identifier}
@@ -104,7 +127,9 @@ function HubLoginForm({
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="hub-password">Password</Label>
+        <Label htmlFor="hub-password">
+          {translate("hub.auth.signIn.password", "Password")}
+        </Label>
         <InputPassword
           id="hub-password"
           value={password}
@@ -114,13 +139,16 @@ function HubLoginForm({
         />
       </div>
       <Button className="w-full" type="submit" disabled={isPending}>
-        {isPending ? "Signing in…" : "Sign in"}
+        {isPending
+          ? translate("hub.auth.signIn.submitting", "Signing in…")
+          : translate("hub.auth.signIn.submit", "Sign in")}
       </Button>
     </form>
   );
 }
 
 export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
+  const translate = useTranslate();
   const navigate = useNavigate();
   const setup = useHubQuery<HubSetupStatus>({
     path: "/setup/status",
@@ -135,7 +163,13 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  if (setup.loading) return <HubLoadingState label="Checking Hub setup" />;
+  if (setup.loading) {
+    return (
+      <HubLoadingState
+        label={translate("hub.auth.setup.checking", "Checking Hub setup")}
+      />
+    );
+  }
   if (setup.error) {
     return (
       <div className="mx-auto flex min-h-svh max-w-xl items-center px-6">
@@ -149,14 +183,19 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
 
   return (
     <AuthLayout
-      title="Initialize NocoBase Hub"
-      description="Create the first Owner. Public registration stays disabled after setup."
+      title={translate("hub.auth.setup.title", "Initialize NocoBase Hub")}
+      description={translate(
+        "hub.auth.setup.description",
+        "Create the first Owner. Public registration stays disabled after setup.",
+      )}
       footer={
         <div className="flex items-start gap-2 text-muted-foreground">
           <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>
-            The Owner controls Hub members, applications, releases, and
-            deployments.
+            {translate(
+              "hub.auth.setup.footer",
+              "The Owner controls Hub members, applications, releases, and deployments.",
+            )}
           </span>
         </div>
       }
@@ -199,12 +238,19 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
         {error ? (
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" />
-            <AlertTitle>Unable to create the Owner</AlertTitle>
+            <AlertTitle>
+              {translate(
+                "hub.auth.setup.createError",
+                "Unable to create the Owner",
+              )}
+            </AlertTitle>
             <AlertDescription>{error.message}</AlertDescription>
           </Alert>
         ) : null}
         <div className="space-y-2">
-          <Label htmlFor="hub-owner-name">Name</Label>
+          <Label htmlFor="hub-owner-name">
+            {translate("hub.auth.setup.name", "Name")}
+          </Label>
           <Input
             id="hub-owner-name"
             value={name}
@@ -214,7 +260,9 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="hub-owner-username">Username</Label>
+          <Label htmlFor="hub-owner-username">
+            {translate("hub.auth.setup.username", "Username")}
+          </Label>
           <Input
             id="hub-owner-username"
             value={username}
@@ -223,7 +271,9 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="hub-owner-email">Email</Label>
+          <Label htmlFor="hub-owner-email">
+            {translate("hub.auth.setup.email", "Email")}
+          </Label>
           <Input
             id="hub-owner-email"
             type="email"
@@ -234,7 +284,9 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="hub-owner-password">Password</Label>
+          <Label htmlFor="hub-owner-password">
+            {translate("hub.auth.setup.password", "Password")}
+          </Label>
           <InputPassword
             id="hub-owner-password"
             value={password}
@@ -249,7 +301,9 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
           type="submit"
           disabled={submitting || signingIn}
         >
-          {submitting || signingIn ? "Creating Owner…" : "Create Owner"}
+          {submitting || signingIn
+            ? translate("hub.auth.setup.creating", "Creating Owner…")
+            : translate("hub.auth.setup.create", "Create Owner")}
         </Button>
       </form>
     </AuthLayout>

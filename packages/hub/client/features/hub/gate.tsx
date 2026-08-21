@@ -1,3 +1,4 @@
+import { useTranslate } from "@refinedev/core";
 import { useEffect, useState, type PropsWithChildren } from "react";
 import { Navigate, useLocation } from "react-router";
 
@@ -32,6 +33,7 @@ export function HubAuthGate({
   fetcher,
   publicPaths = ["/login", "/signin", "/setup"],
 }: HubAuthGateProps) {
+  const translate = useTranslate();
   const location = useLocation();
   const [state, setState] = useState<
     | { status: "loading" }
@@ -92,7 +94,9 @@ export function HubAuthGate({
   }, [fetcher, location.pathname, revision, runtime]);
 
   if (state.status === "loading") {
-    return <HubLoadingState label="Loading Hub" />;
+    return (
+      <HubLoadingState label={translate("hub.start.loading", "Loading Hub")} />
+    );
   }
   if (state.status === "error") {
     return (
@@ -103,13 +107,15 @@ export function HubAuthGate({
             setState({ status: "loading" });
             setRevision((value) => value + 1);
           }}
-          title="Unable to start Hub"
+          title={translate("hub.start.error", "Unable to start Hub")}
         />
       </div>
     );
   }
   if (state.checkedPath !== location.pathname) {
-    return <HubLoadingState label="Loading Hub" />;
+    return (
+      <HubLoadingState label={translate("hub.start.loading", "Loading Hub")} />
+    );
   }
 
   const isPublic = publicPaths.some(

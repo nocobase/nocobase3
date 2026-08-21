@@ -1,6 +1,7 @@
 import { Activity, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
+import { useTranslate } from "@refinedev/core";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,12 +33,14 @@ import {
 } from "@/features/hub/components";
 import { useHubPaginatedQuery } from "@/features/hub/pagination";
 import { useOptionalHubRuntime } from "@/features/hub/provider";
+import { getDeploymentTypeLabel } from "@/features/hub/status";
 
 export interface DeploymentsPageProps {
   fetcher?: HubFetcher;
 }
 
 export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
+  const translate = useTranslate();
   const runtime = useOptionalHubRuntime();
   const capabilities = runtime?.me.capabilities;
   const canReadGlobalDeployments = hasHubCapability(
@@ -122,14 +125,18 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
       <header className="space-y-1">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Activity className="size-4" aria-hidden="true" />
-          <span className="text-sm font-medium">Operations</span>
+          <span className="text-sm font-medium">
+            {translate("hub.deployments.eyebrow", "Operations")}
+          </span>
         </div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Deployments
+          {translate("hub.deployments.title", "Deployments")}
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Follow deployments and rollbacks across every application and inspect
-          the complete execution timeline.
+          {translate(
+            "hub.deployments.description",
+            "Follow deployments and rollbacks across every application and inspect the complete execution timeline.",
+          )}
         </p>
       </header>
 
@@ -139,14 +146,22 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
         <HubListSkeleton rows={6} />
       ) : (deployments.data?.length ?? 0) === 0 ? (
         <HubEmptyState
-          title="No deployments yet"
-          description="Deploy a verified application release to create the first operation record."
+          title={translate("hub.deployments.empty.title", "No deployments yet")}
+          description={translate(
+            "hub.deployments.empty.description",
+            "Deploy a verified application release to create the first operation record.",
+          )}
         />
       ) : (
         <>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <label className="relative min-w-0 flex-1 lg:max-w-sm">
-              <span className="sr-only">Search deployments</span>
+              <span className="sr-only">
+                {translate(
+                  "hub.deployments.search.label",
+                  "Search deployments",
+                )}
+              </span>
               <Search
                 className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden="true"
@@ -154,7 +169,10 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search deployment or release"
+                placeholder={translate(
+                  "hub.deployments.search.placeholder",
+                  "Search deployment or release",
+                )}
                 className="pl-8"
               />
             </label>
@@ -162,10 +180,16 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
               <NativeSelect
                 value={applicationId}
                 onChange={(event) => setApplicationId(event.target.value)}
-                aria-label="Filter by application"
+                aria-label={translate(
+                  "hub.deployments.filter.applicationAria",
+                  "Filter by application",
+                )}
               >
                 <NativeSelectOption value="all">
-                  All applications
+                  {translate(
+                    "hub.deployments.filter.allApplications",
+                    "All applications",
+                  )}
                 </NativeSelectOption>
                 {(applications.data ?? []).map((application) => (
                   <NativeSelectOption
@@ -179,30 +203,40 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
               <NativeSelect
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                aria-label="Filter by deployment status"
+                aria-label={translate(
+                  "hub.deployments.filter.statusAria",
+                  "Filter by deployment status",
+                )}
               >
                 <NativeSelectOption value="all">
-                  All statuses
+                  {translate(
+                    "hub.deployments.filter.allStatuses",
+                    "All statuses",
+                  )}
                 </NativeSelectOption>
-                <NativeSelectOption value="queued">Queued</NativeSelectOption>
+                <NativeSelectOption value="queued">
+                  {translate("hub.status.queued", "Queued")}
+                </NativeSelectOption>
                 <NativeSelectOption value="preparing">
-                  Preparing
+                  {translate("hub.status.preparing", "Preparing")}
                 </NativeSelectOption>
                 <NativeSelectOption value="checking">
-                  Checking
+                  {translate("hub.status.checking", "Checking")}
                 </NativeSelectOption>
                 <NativeSelectOption value="switching">
-                  Switching
+                  {translate("hub.status.switching", "Switching")}
                 </NativeSelectOption>
                 <NativeSelectOption value="draining">
-                  Draining
+                  {translate("hub.status.draining", "Draining")}
                 </NativeSelectOption>
                 <NativeSelectOption value="succeeded">
-                  Succeeded
+                  {translate("hub.status.succeeded", "Succeeded")}
                 </NativeSelectOption>
-                <NativeSelectOption value="failed">Failed</NativeSelectOption>
+                <NativeSelectOption value="failed">
+                  {translate("hub.status.failed", "Failed")}
+                </NativeSelectOption>
                 <NativeSelectOption value="cancelled">
-                  Cancelled
+                  {translate("hub.status.cancelled", "Cancelled")}
                 </NativeSelectOption>
               </NativeSelect>
             </div>
@@ -210,8 +244,14 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
 
           {visibleDeployments.length === 0 ? (
             <HubEmptyState
-              title="No matching deployments"
-              description="Change the filters to see other deployment records."
+              title={translate(
+                "hub.deployments.noMatches.title",
+                "No matching deployments",
+              )}
+              description={translate(
+                "hub.deployments.noMatches.description",
+                "Change the filters to see other deployment records.",
+              )}
             />
           ) : (
             <DeploymentResults
@@ -220,9 +260,14 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
             />
           )}
           <p className="text-xs text-muted-foreground">
-            Showing {visibleDeployments.length} of{" "}
-            {deployments.meta?.total ?? deployments.data?.length ?? 0}{" "}
-            deployments
+            {translate(
+              "hub.deployments.summary",
+              {
+                visible: visibleDeployments.length,
+                total: deployments.meta?.total ?? deployments.data?.length ?? 0,
+              },
+              "Showing {{visible}} of {{total}} deployments",
+            )}
           </p>
           <HubLoadMore
             hasMore={deployments.hasMore}
@@ -242,6 +287,7 @@ function DeploymentResults({
   deployments: HubDeployment[];
   applicationNames: Map<string, string>;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <Card className="hidden py-0 md:block">
@@ -249,13 +295,31 @@ function DeploymentResults({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">Application</TableHead>
-                <TableHead>Target release</TableHead>
-                <TableHead>Environment</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead>Requested by</TableHead>
+                <TableHead className="pl-4">
+                  {translate("hub.common.application", "Application")}
+                </TableHead>
+                <TableHead>
+                  {translate(
+                    "hub.deployments.columns.targetRelease",
+                    "Target release",
+                  )}
+                </TableHead>
+                <TableHead>
+                  {translate("hub.common.environment", "Environment")}
+                </TableHead>
+                <TableHead>{translate("hub.common.type", "Type")}</TableHead>
+                <TableHead>
+                  {translate("hub.common.status", "Status")}
+                </TableHead>
+                <TableHead>
+                  {translate("hub.common.started", "Started")}
+                </TableHead>
+                <TableHead>
+                  {translate(
+                    "hub.deployments.columns.requestedBy",
+                    "Requested by",
+                  )}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -278,7 +342,7 @@ function DeploymentResults({
                   </TableCell>
                   <TableCell>{deployment.environmentId}</TableCell>
                   <TableCell className="capitalize">
-                    {deployment.type}
+                    {getDeploymentTypeLabel(deployment.type, translate)}
                   </TableCell>
                   <TableCell>
                     <HubStatusBadge status={deployment.status} />
@@ -317,13 +381,17 @@ function DeploymentResults({
               </div>
               <dl className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <dt className="text-muted-foreground">Environment</dt>
+                  <dt className="text-muted-foreground">
+                    {translate("hub.common.environment", "Environment")}
+                  </dt>
                   <dd className="mt-1 font-medium">
                     {deployment.environmentId}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Started</dt>
+                  <dt className="text-muted-foreground">
+                    {translate("hub.common.started", "Started")}
+                  </dt>
                   <dd className="mt-1 font-medium">
                     {formatHubDate(
                       deployment.startedAt ?? deployment.createdAt,

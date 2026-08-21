@@ -25,12 +25,28 @@ const labels: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-export function getStatusLabel(value: string | null | undefined): string {
-  if (!value) return "Unknown";
-  return (
+type Translate = (key: string, defaultMessage?: string) => string;
+
+export function getStatusLabel(
+  value: string | null | undefined,
+  translate?: Translate,
+): string {
+  if (!value) return translate?.("hub.status.unknown", "Unknown") ?? "Unknown";
+  const fallback =
     labels[value] ??
-    value.replace(/[-_]/g, " ").replace(/^./, (c) => c.toUpperCase())
-  );
+    value.replace(/[-_]/g, " ").replace(/^./, (c) => c.toUpperCase());
+  return translate?.(`hub.status.${value}`, fallback) ?? fallback;
+}
+
+export function getDeploymentTypeLabel(
+  value: string | null | undefined,
+  translate?: Translate,
+): string {
+  if (!value) return translate?.("hub.status.unknown", "Unknown") ?? "Unknown";
+  const fallback = value
+    .replace(/[-_]/g, " ")
+    .replace(/^./, (character) => character.toUpperCase());
+  return translate?.(`hub.deploymentType.${value}`, fallback) ?? fallback;
 }
 
 export function getStatusVariant(
@@ -55,7 +71,10 @@ export function getStatusVariant(
   }
 }
 
-export function getDeploymentProgress(status: HubDeploymentStatus): {
+export function getDeploymentProgress(
+  status: HubDeploymentStatus,
+  translate?: Translate,
+): {
   percent: number;
   label: string;
 } {
@@ -72,7 +91,7 @@ export function getDeploymentProgress(status: HubDeploymentStatus): {
   };
   return {
     percent: percentages[status] ?? 0,
-    label: getStatusLabel(status),
+    label: getStatusLabel(status, translate),
   };
 }
 

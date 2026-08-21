@@ -1,3 +1,4 @@
+import { useTranslate } from "@refinedev/core";
 import type { PropsWithChildren, ReactNode } from "react";
 import { Blocks, ShieldCheck, Sparkles } from "lucide-react";
 
@@ -15,6 +16,8 @@ export function AuthLayout({
   footer,
   children,
 }: AuthLayoutProps) {
+  const translate = useTranslate();
+
   return (
     <div className="grid min-h-svh md:grid-cols-[minmax(420px,44%)_1fr]">
       <main className="grid place-items-center bg-card px-6 py-10 sm:px-12">
@@ -35,15 +38,22 @@ export function AuthLayout({
         <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(currentColor_1px,transparent_1px),linear-gradient(90deg,currentColor_1px,transparent_1px)] [background-size:48px_48px]" />
         <div className="relative w-full max-w-xl">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-foreground/60">
-            AI-native application platform
+            {translate(
+              "auth.marketing.eyebrow",
+              "AI-native application platform",
+            )}
           </div>
           <h2 className="mt-3 max-w-lg text-5xl font-semibold leading-[1.08] tracking-[-0.04em]">
-            Let AI build freely. NocoBase keeps it reliable.
+            {translate(
+              "auth.marketing.title",
+              "Let AI build freely. NocoBase keeps it reliable.",
+            )}
           </h2>
           <p className="mt-5 max-w-lg text-base leading-7 text-white/60">
-            Give AI a flexible frontend framework to shape each experience,
-            while NocoBase secures the data, permissions, workflows and
-            governance underneath.
+            {translate(
+              "auth.marketing.description",
+              "Give AI a flexible frontend framework to shape each experience, while NocoBase secures the data, permissions, workflows and governance underneath.",
+            )}
           </p>
 
           <div className="mt-10 max-w-md rounded-xl border border-white/15 bg-white p-5 text-neutral-900 shadow-2xl shadow-black/20">
@@ -52,9 +62,17 @@ export function AuthLayout({
                 <Sparkles className="size-4" />
               </div>
               <div>
-                <div className="font-semibold">AI-native frontend</div>
+                <div className="font-semibold">
+                  {translate(
+                    "auth.marketing.aiFrontend.title",
+                    "AI-native frontend",
+                  )}
+                </div>
                 <div className="text-sm text-neutral-500">
-                  Compose interfaces freely on a flexible framework.
+                  {translate(
+                    "auth.marketing.aiFrontend.description",
+                    "Compose interfaces freely on a flexible framework.",
+                  )}
                 </div>
               </div>
             </div>
@@ -64,15 +82,26 @@ export function AuthLayout({
                 <ShieldCheck className="size-4" />
               </div>
               <div>
-                <div className="font-semibold">NocoBase foundation</div>
+                <div className="font-semibold">
+                  {translate(
+                    "auth.marketing.foundation.title",
+                    "NocoBase foundation",
+                  )}
+                </div>
                 <div className="text-sm text-neutral-500">
-                  Reliable data, access control, workflows and governance.
+                  {translate(
+                    "auth.marketing.foundation.description",
+                    "Reliable data, access control, workflows and governance.",
+                  )}
                 </div>
               </div>
             </div>
             <div className="mt-5 flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-2 text-xs font-medium text-neutral-600">
               <Blocks className="size-3.5" />
-              Freedom above. Confidence below.
+              {translate(
+                "auth.marketing.summary",
+                "Freedom above. Confidence below.",
+              )}
             </div>
           </div>
         </div>

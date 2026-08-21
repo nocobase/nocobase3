@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Server,
 } from "lucide-react";
+import { useTranslate } from "@refinedev/core";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
@@ -47,7 +48,11 @@ import {
   HubNotFoundState,
   HubStatusBadge,
 } from "@/features/hub/components";
-import { getDeploymentProgress, getStatusLabel } from "@/features/hub/status";
+import {
+  getDeploymentProgress,
+  getDeploymentTypeLabel,
+  getStatusLabel,
+} from "@/features/hub/status";
 import { useOptionalHubRuntime } from "@/features/hub/provider";
 
 export interface DeploymentDetailPageProps {
@@ -63,6 +68,7 @@ export function DeploymentDetailPage({
   fetcher,
   onRedeploy,
 }: DeploymentDetailPageProps) {
+  const translate = useTranslate();
   const params = useParams<{ deploymentId?: string }>();
   const navigate = useNavigate();
   const deploymentId = deploymentIdProp ?? params.deploymentId;
@@ -107,18 +113,28 @@ export function DeploymentDetailPage({
     return () => window.clearInterval(timer);
   }, [deploymentStatus, reloadDeployment, reloadEvents]);
 
-  if (!deploymentId) return <HubNotFoundState kind="Deployment" />;
-  if (deployment.loading) return <HubLoadingState label="Loading deployment" />;
+  const deploymentKind = translate("hub.deployment.notFoundKind", "Deployment");
+  if (!deploymentId) return <HubNotFoundState kind={deploymentKind} />;
+  if (deployment.loading) {
+    return (
+      <HubLoadingState
+        label={translate("hub.deployment.loading", "Loading deployment")}
+      />
+    );
+  }
   if (deployment.error) {
     return (
       <HubErrorState
         error={deployment.error}
         onRetry={deployment.reload}
-        title="Unable to load deployment"
+        title={translate(
+          "hub.deployment.loadError",
+          "Unable to load deployment",
+        )}
       />
     );
   }
-  if (!deployment.data) return <HubNotFoundState kind="Deployment" />;
+  if (!deployment.data) return <HubNotFoundState kind={deploymentKind} />;
   const deploymentData = deployment.data;
   const canReadGlobalDeployments = hasHubCapability(
     capabilities,
@@ -132,21 +148,26 @@ export function DeploymentDetailPage({
     deploymentData.applicationId,
   );
   const backTarget = canReadGlobalDeployments
-    ? { label: "Deployments", to: "/deployments" }
+    ? {
+        label: translate("hub.common.deployments", "Deployments"),
+        to: "/deployments",
+      }
     : canReadApplication
       ? {
-          label: "Application",
+          label: translate("hub.common.application", "Application"),
           to: `/apps/${encodeURIComponent(deploymentData.applicationId)}`,
         }
-      : { label: "Home", to: "/" };
+      : { label: translate("hub.common.home", "Home"), to: "/" };
 
-  const progress = getDeploymentProgress(deploymentData.status);
+  const progress = getDeploymentProgress(deploymentData.status, translate);
   const failure =
     deploymentData.failure ??
     (deploymentData.failureCode || deploymentData.failureMessage
       ? {
           code: deploymentData.failureCode ?? "DEPLOYMENT_FAILED",
-          message: deploymentData.failureMessage ?? "Deployment failed.",
+          message:
+            deploymentData.failureMessage ??
+            translate("hub.deployment.failure.default", "Deployment failed."),
         }
       : null);
 
@@ -166,12 +187,25 @@ export function DeploymentDetailPage({
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-heading text-2xl font-semibold tracking-tight">
-                Deployment {deploymentData.id}
+                {translateWithValues(
+                  translate,
+                  "hub.deployment.title",
+                  "Deployment {{id}}",
+                  { id: deploymentData.id },
+                )}
               </h1>
               <HubStatusBadge status={deploymentData.status} />
             </div>
             <p className="text-sm text-muted-foreground">
-              {deploymentData.type} to {deploymentData.environmentId}
+              {translateWithValues(
+                translate,
+                "hub.deployment.subtitle",
+                "{{type}} to {{environment}}",
+                {
+                  type: getDeploymentTypeLabel(deploymentData.type, translate),
+                  environment: deploymentData.environmentId,
+                },
+              )}
             </p>
           </div>
           {canRedeploy && TERMINAL_STATUSES.has(deploymentData.status) ? (
@@ -188,7 +222,7 @@ export function DeploymentDetailPage({
               }}
             >
               <RotateCcw aria-hidden="true" />
-              Redeploy
+              {translate("hub.deployment.redeploy", "Redeploy")}
             </Button>
           ) : null}
         </div>
@@ -196,10 +230,16 @@ export function DeploymentDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Deployment progress</CardTitle>
+          <CardTitle>
+            {translate("hub.deployment.progress.title", "Deployment progress")}
+          </CardTitle>
           <CardDescription aria-live="polite">
-            {progress.label}. Event history refreshes while the deployment is
-            running.
+            {translateWithValues(
+              translate,
+              "hub.deployment.progress.description",
+              "{{status}}. Event history refreshes while the deployment is running.",
+              { status: progress.label },
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -223,9 +263,14 @@ export function DeploymentDetailPage({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Event timeline</CardTitle>
+            <CardTitle>
+              {translate("hub.deployment.timeline.title", "Event timeline")}
+            </CardTitle>
             <CardDescription>
-              Persisted stages reported by the Hub deployment orchestrator.
+              {translate(
+                "hub.deployment.timeline.description",
+                "Persisted stages reported by the Hub deployment orchestrator.",
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -233,14 +278,28 @@ export function DeploymentDetailPage({
               <HubErrorState
                 error={events.error}
                 onRetry={events.reload}
-                title="Unable to load events"
+                title={translate(
+                  "hub.deployment.events.loadError",
+                  "Unable to load events",
+                )}
               />
             ) : events.loading ? (
-              <HubLoadingState label="Loading deployment events" />
+              <HubLoadingState
+                label={translate(
+                  "hub.deployment.events.loading",
+                  "Loading deployment events",
+                )}
+              />
             ) : (events.data?.length ?? 0) === 0 ? (
               <HubEmptyState
-                title="Waiting for events"
-                description="The orchestrator has not persisted an execution event yet."
+                title={translate(
+                  "hub.deployment.events.empty.title",
+                  "Waiting for events",
+                )}
+                description={translate(
+                  "hub.deployment.events.empty.description",
+                  "The orchestrator has not persisted an execution event yet.",
+                )}
               />
             ) : (
               <DeploymentTimeline events={events.data ?? []} />
@@ -250,39 +309,59 @@ export function DeploymentDetailPage({
 
         <Card className="h-fit">
           <CardHeader>
-            <CardTitle>Operation details</CardTitle>
+            <CardTitle>
+              {translate("hub.deployment.details.title", "Operation details")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 text-sm">
               <Detail
-                label="Application"
+                label={translate("hub.common.application", "Application")}
                 value={deploymentData.applicationId}
               />
               <Detail
-                label="Target release"
+                label={translate(
+                  "hub.deployment.details.targetRelease",
+                  "Target release",
+                )}
                 value={deploymentData.targetReleaseId}
                 mono
               />
               <Detail
-                label="Previous release"
-                value={deploymentData.previousReleaseId ?? "None"}
+                label={translate(
+                  "hub.deployment.details.previousRelease",
+                  "Previous release",
+                )}
+                value={
+                  deploymentData.previousReleaseId ??
+                  translate("hub.common.none", "None")
+                }
                 mono
               />
               <Detail
-                label="Environment"
+                label={translate("hub.common.environment", "Environment")}
                 value={deploymentData.environmentId}
               />
-              <Detail label="Requested by" value={deploymentData.requestedBy} />
               <Detail
-                label="Started"
+                label={translate(
+                  "hub.deployment.details.requestedBy",
+                  "Requested by",
+                )}
+                value={deploymentData.requestedBy}
+              />
+              <Detail
+                label={translate("hub.common.started", "Started")}
                 value={formatHubDate(deploymentData.startedAt)}
               />
               <Detail
-                label="Finished"
+                label={translate("hub.common.finished", "Finished")}
                 value={formatHubDate(deploymentData.finishedAt)}
               />
               <Detail
-                label="Host operation"
+                label={translate(
+                  "hub.deployment.details.hostOperation",
+                  "Host operation",
+                )}
                 value={deploymentData.hostOperationId ?? "—"}
                 mono
               />
@@ -301,21 +380,39 @@ export function DeploymentDetailPage({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Redeploy release</AlertDialogTitle>
+            <AlertDialogTitle>
+              {translate(
+                "hub.deployment.redeployDialog.title",
+                "Redeploy release",
+              )}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Create a new Deployment for release{" "}
-              {deploymentData.targetReleaseId} in {deploymentData.environmentId}
-              . The existing record remains unchanged.
+              {translateWithValues(
+                translate,
+                "hub.deployment.redeployDialog.description",
+                "Create a new Deployment for release {{release}} in {{environment}}. The existing record remains unchanged.",
+                {
+                  release: deploymentData.targetReleaseId,
+                  environment: deploymentData.environmentId,
+                },
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {redeployError ? (
             <Alert variant="destructive">
-              <AlertTitle>Unable to redeploy release</AlertTitle>
+              <AlertTitle>
+                {translate(
+                  "hub.deployment.redeployDialog.error",
+                  "Unable to redeploy release",
+                )}
+              </AlertTitle>
               <AlertDescription>{redeployError.message}</AlertDescription>
             </Alert>
           ) : null}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={redeploying}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={redeploying}>
+              {translate("hub.common.cancel", "Cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
               disabled={redeploying}
               onClick={(event) => {
@@ -346,7 +443,12 @@ export function DeploymentDetailPage({
                   .finally(() => setRedeploying(false));
               }}
             >
-              {redeploying ? "Starting…" : "Confirm redeploy"}
+              {redeploying
+                ? translate("hub.common.starting", "Starting…")
+                : translate(
+                    "hub.deployment.redeployDialog.confirm",
+                    "Confirm redeploy",
+                  )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -356,8 +458,12 @@ export function DeploymentDetailPage({
 }
 
 function DeploymentTimeline({ events }: { events: HubDeploymentEvent[] }) {
+  const translate = useTranslate();
   return (
-    <ol className="relative space-y-0" aria-label="Deployment events">
+    <ol
+      className="relative space-y-0"
+      aria-label={translate("hub.deployment.events.aria", "Deployment events")}
+    >
       {events.map((event, index) => {
         const complete = event.status === "succeeded";
         return (
@@ -387,7 +493,7 @@ function DeploymentTimeline({ events }: { events: HubDeploymentEvent[] }) {
             <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-medium">
-                  {event.message ?? getStatusLabel(event.type)}
+                  {event.message ?? getStatusLabel(event.type, translate)}
                 </p>
                 <time
                   className="text-xs text-muted-foreground"
@@ -397,7 +503,7 @@ function DeploymentTimeline({ events }: { events: HubDeploymentEvent[] }) {
                 </time>
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>{getStatusLabel(event.status)}</span>
+                <span>{getStatusLabel(event.status, translate)}</span>
                 {event.hostId ? (
                   <span className="inline-flex items-center gap-1">
                     <Server className="size-3" aria-hidden="true" />
@@ -439,6 +545,19 @@ function Detail({
         {value}
       </dd>
     </div>
+  );
+}
+
+function translateWithValues(
+  translate: ReturnType<typeof useTranslate>,
+  key: string,
+  fallback: string,
+  values: Record<string, string>,
+): string {
+  const translated = translate(key, values, fallback);
+  return Object.entries(values).reduce(
+    (result, [name, value]) => result.replaceAll(`{{${name}}}`, value),
+    translated,
   );
 }
 

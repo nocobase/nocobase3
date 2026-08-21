@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslate } from "@refinedev/core";
+import { getCurrentLocale } from "@nocobase/portal-sdk/i18n";
 import type { HubApiError } from "./api";
 import { getStatusLabel, getStatusVariant } from "./status";
 
@@ -26,26 +28,30 @@ export function HubStatusBadge({
 }: {
   status: string | null | undefined;
 }) {
+  const translate = useTranslate();
   return (
     <Badge variant={getStatusVariant(status)}>
       {status === "succeeded" ? <CheckCircle2 aria-hidden="true" /> : null}
-      {getStatusLabel(status)}
+      {getStatusLabel(status, translate)}
     </Badge>
   );
 }
 
 export function HubLoadingState({ label = "Loading" }: { label?: string }) {
+  const translate = useTranslate();
+  const resolvedLabel =
+    label === "Loading" ? translate("hub.loading.default", "Loading") : label;
   return (
     <div
       className="flex min-h-32 items-center justify-center"
       role="status"
-      aria-label={label}
+      aria-label={resolvedLabel}
     >
       <Loader2
         className="size-5 animate-spin text-muted-foreground"
         aria-hidden="true"
       />
-      <span className="sr-only">{label}</span>
+      <span className="sr-only">{resolvedLabel}</span>
     </div>
   );
 }
@@ -59,24 +65,33 @@ export function HubErrorState({
   onRetry?: () => void;
   title?: string;
 }) {
+  const translate = useTranslate();
   const apiError = error as Partial<HubApiError> | null | undefined;
   const status = apiError?.status;
   const message =
     status === 403
-      ? "You do not have permission to view this resource."
+      ? translate(
+          "hub.error.forbidden",
+          "You do not have permission to view this resource.",
+        )
       : status === 404
-        ? "This resource could not be found."
-        : error?.message || "Please try again.";
+        ? translate("hub.error.notFound", "This resource could not be found.")
+        : error?.message ||
+          translate("hub.error.defaultMessage", "Please try again.");
+  const resolvedTitle =
+    title === "Unable to load Hub data"
+      ? translate("hub.error.defaultTitle", "Unable to load Hub data")
+      : title;
 
   return (
     <Alert variant="destructive">
       <AlertCircle aria-hidden="true" />
-      <AlertTitle>{title}</AlertTitle>
+      <AlertTitle>{resolvedTitle}</AlertTitle>
       <AlertDescription className="flex flex-wrap items-center gap-3">
         <span>{message}</span>
         {onRetry ? (
           <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-            Try again
+            {translate("hub.common.tryAgain", "Try again")}
           </Button>
         ) : null}
       </AlertDescription>
@@ -108,16 +123,28 @@ export function HubEmptyState({
 }
 
 export function HubNotFoundState({ kind }: { kind: string }) {
+  const translate = useTranslate();
+  const kindKey = kind.toLowerCase();
+  const translatedKind = translate(`hub.${kindKey}.notFoundKind`, kind);
   return (
     <Empty className="min-h-64 border">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <CircleHelp aria-hidden="true" />
         </EmptyMedia>
-        <EmptyTitle>{kind} not found</EmptyTitle>
+        <EmptyTitle>
+          {translate(
+            "hub.notFound.title",
+            { kind: translatedKind },
+            `${kind} not found`,
+          )}
+        </EmptyTitle>
         <EmptyDescription>
-          The requested {kind.toLowerCase()} is unavailable or you do not have
-          access to it.
+          {translate(
+            "hub.notFound.description",
+            { kind: translatedKind },
+            `The requested ${kind.toLowerCase()} is unavailable or you do not have access to it.`,
+          )}
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -125,8 +152,13 @@ export function HubNotFoundState({ kind }: { kind: string }) {
 }
 
 export function HubListSkeleton({ rows = 4 }: { rows?: number }) {
+  const translate = useTranslate();
   return (
-    <div className="space-y-2" aria-label="Loading list" role="status">
+    <div
+      className="space-y-2"
+      aria-label={translate("hub.loading.list", "Loading list")}
+      role="status"
+    >
       {Array.from({ length: rows }, (_, index) => (
         <Skeleton key={index} className="h-12 w-full" />
       ))}
@@ -143,6 +175,7 @@ export function HubLoadMore({
   loading: boolean;
   onLoadMore: () => void;
 }) {
+  const translate = useTranslate();
   if (!hasMore) return null;
   return (
     <div className="flex justify-center">
@@ -152,7 +185,9 @@ export function HubLoadMore({
         disabled={loading}
         onClick={onLoadMore}
       >
-        {loading ? "Loading more…" : "Load more"}
+        {loading
+          ? translate("hub.common.loadingMore", "Loading more…")
+          : translate("hub.common.loadMore", "Load more")}
       </Button>
     </div>
   );
@@ -162,7 +197,7 @@ export function formatHubDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return value;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(getCurrentLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);

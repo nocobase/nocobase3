@@ -1,6 +1,7 @@
 import { Boxes, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
+import { useTranslate } from "@refinedev/core";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ export function ApplicationsPage({
   fetcher,
   onCreateApplication,
 }: ApplicationsPageProps) {
+  const translate = useTranslate();
   const applications = useHubPaginatedQuery<HubApplication>({
     path: "/apps",
     fetcher,
@@ -92,14 +94,18 @@ export function ApplicationsPage({
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Boxes className="size-4" aria-hidden="true" />
-            <span className="text-sm font-medium">Control plane</span>
+            <span className="text-sm font-medium">
+              {translate("hub.apps.eyebrow", "Control plane")}
+            </span>
           </div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Applications
+            {translate("hub.apps.title", "Applications")}
           </h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Inspect deployed applications, active releases, environments, and
-            runtime state from one place.
+            {translate(
+              "hub.apps.description",
+              "Inspect deployed applications, active releases, environments, and runtime state from one place.",
+            )}
           </p>
         </div>
         {canCreate ? (
@@ -114,7 +120,7 @@ export function ApplicationsPage({
             }}
           >
             <Plus aria-hidden="true" />
-            Create application
+            {translate("hub.apps.create", "Create application")}
           </Button>
         ) : null}
       </header>
@@ -128,8 +134,11 @@ export function ApplicationsPage({
         <HubListSkeleton rows={5} />
       ) : (applications.data?.length ?? 0) === 0 ? (
         <HubEmptyState
-          title="No applications yet"
-          description="Publish the first application with the NocoBase CLI. Once its release is registered, it will appear here for deployment."
+          title={translate("hub.apps.empty.title", "No applications yet")}
+          description={translate(
+            "hub.apps.empty.description",
+            "Publish the first application with the NocoBase CLI. Once its release is registered, it will appear here for deployment.",
+          )}
           action={
             <code className="rounded-md bg-muted px-2.5 py-1.5 text-xs">
               nb app publish
@@ -140,7 +149,9 @@ export function ApplicationsPage({
         <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <label className="relative min-w-0 flex-1 sm:max-w-sm">
-              <span className="sr-only">Search applications</span>
+              <span className="sr-only">
+                {translate("hub.apps.search.label", "Search applications")}
+              </span>
               <Search
                 className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden="true"
@@ -148,26 +159,34 @@ export function ApplicationsPage({
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by name or slug"
+                placeholder={translate(
+                  "hub.apps.search.placeholder",
+                  "Search by name or slug",
+                )}
                 className="pl-8"
               />
             </label>
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Status</span>
+              <span>{translate("hub.common.status", "Status")}</span>
               <NativeSelect
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                aria-label="Filter by status"
+                aria-label={translate(
+                  "hub.apps.filter.statusAria",
+                  "Filter by status",
+                )}
               >
                 <NativeSelectOption value="all">
-                  All statuses
+                  {translate("hub.apps.filter.allStatuses", "All statuses")}
                 </NativeSelectOption>
-                <NativeSelectOption value="active">Active</NativeSelectOption>
+                <NativeSelectOption value="active">
+                  {translate("hub.status.active", "Active")}
+                </NativeSelectOption>
                 <NativeSelectOption value="disabled">
-                  Disabled
+                  {translate("hub.status.disabled", "Disabled")}
                 </NativeSelectOption>
                 <NativeSelectOption value="archived">
-                  Archived
+                  {translate("hub.status.archived", "Archived")}
                 </NativeSelectOption>
               </NativeSelect>
             </label>
@@ -175,17 +194,29 @@ export function ApplicationsPage({
 
           {visibleApplications.length === 0 ? (
             <HubEmptyState
-              title="No matching applications"
-              description="Change the search text or status filter to see other applications."
+              title={translate(
+                "hub.apps.noMatches.title",
+                "No matching applications",
+              )}
+              description={translate(
+                "hub.apps.noMatches.description",
+                "Change the search text or status filter to see other applications.",
+              )}
             />
           ) : (
             <ApplicationResults applications={visibleApplications} />
           )}
 
           <p className="text-xs text-muted-foreground">
-            Showing {visibleApplications.length} of{" "}
-            {applications.meta?.total ?? applications.data?.length ?? 0}{" "}
-            applications
+            {translate(
+              "hub.apps.summary",
+              {
+                visible: visibleApplications.length,
+                total:
+                  applications.meta?.total ?? applications.data?.length ?? 0,
+              },
+              "Showing {{visible}} of {{total}} applications",
+            )}
           </p>
           <HubLoadMore
             hasMore={applications.hasMore}
@@ -215,6 +246,7 @@ function CreateApplicationDialog({
   fetcher?: HubFetcher;
   onCreated: () => void;
 }) {
+  const translate = useTranslate();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
@@ -266,19 +298,31 @@ function CreateApplicationDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Create application</DialogTitle>
+            <DialogTitle>
+              {translate("hub.apps.createDialog.title", "Create application")}
+            </DialogTitle>
             <DialogDescription>
-              Register the stable identity used by releases and deployments.
+              {translate(
+                "hub.apps.createDialog.description",
+                "Register the stable identity used by releases and deployments.",
+              )}
             </DialogDescription>
           </DialogHeader>
           {error ? (
             <Alert variant="destructive">
-              <AlertTitle>Unable to create application</AlertTitle>
+              <AlertTitle>
+                {translate(
+                  "hub.apps.createDialog.error",
+                  "Unable to create application",
+                )}
+              </AlertTitle>
               <AlertDescription>{error.message}</AlertDescription>
             </Alert>
           ) : null}
           <div className="space-y-2">
-            <Label htmlFor="hub-application-name">Name</Label>
+            <Label htmlFor="hub-application-name">
+              {translate("hub.common.name", "Name")}
+            </Label>
             <Input
               id="hub-application-name"
               value={name}
@@ -288,7 +332,9 @@ function CreateApplicationDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="hub-application-slug">Slug</Label>
+            <Label htmlFor="hub-application-slug">
+              {translate("hub.common.slug", "Slug")}
+            </Label>
             <Input
               id="hub-application-slug"
               value={slug}
@@ -299,7 +345,9 @@ function CreateApplicationDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="hub-application-description">Description</Label>
+            <Label htmlFor="hub-application-description">
+              {translate("hub.common.description", "Description")}
+            </Label>
             <Input
               id="hub-application-description"
               value={description}
@@ -313,10 +361,12 @@ function CreateApplicationDialog({
               disabled={submitting}
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {translate("hub.common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Creating…" : "Create"}
+              {submitting
+                ? translate("hub.apps.createDialog.submitting", "Creating…")
+                : translate("hub.apps.createDialog.submit", "Create")}
             </Button>
           </DialogFooter>
         </form>
@@ -330,6 +380,7 @@ function ApplicationResults({
 }: {
   applications: HubApplication[];
 }) {
+  const translate = useTranslate();
   return (
     <>
       <Card className="hidden py-0 md:block">
@@ -337,11 +388,24 @@ function ApplicationResults({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">Application</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Current release</TableHead>
-                <TableHead>Environment</TableHead>
-                <TableHead>Updated</TableHead>
+                <TableHead className="pl-4">
+                  {translate("hub.common.application", "Application")}
+                </TableHead>
+                <TableHead>
+                  {translate("hub.common.status", "Status")}
+                </TableHead>
+                <TableHead>
+                  {translate(
+                    "hub.apps.columns.currentRelease",
+                    "Current release",
+                  )}
+                </TableHead>
+                <TableHead>
+                  {translate("hub.common.environment", "Environment")}
+                </TableHead>
+                <TableHead>
+                  {translate("hub.common.updated", "Updated")}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -362,7 +426,8 @@ function ApplicationResults({
                     <HubStatusBadge status={application.status} />
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    {application.activeReleaseId ?? "Not deployed"}
+                    {application.activeReleaseId ??
+                      translate("hub.apps.notDeployed", "Not deployed")}
                   </TableCell>
                   <TableCell>{application.defaultEnvironmentId}</TableCell>
                   <TableCell>{formatHubDate(application.updatedAt)}</TableCell>
@@ -393,13 +458,17 @@ function ApplicationResults({
               </div>
               <dl className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <dt className="text-muted-foreground">Environment</dt>
+                  <dt className="text-muted-foreground">
+                    {translate("hub.common.environment", "Environment")}
+                  </dt>
                   <dd className="mt-1 font-medium">
                     {application.defaultEnvironmentId}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Updated</dt>
+                  <dt className="text-muted-foreground">
+                    {translate("hub.common.updated", "Updated")}
+                  </dt>
                   <dd className="mt-1 font-medium">
                     {formatHubDate(application.updatedAt)}
                   </dd>

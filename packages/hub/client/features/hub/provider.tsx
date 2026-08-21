@@ -1,3 +1,4 @@
+import { useTranslate } from "@refinedev/core";
 import { createContext, useContext, type PropsWithChildren } from "react";
 import { useParams } from "react-router";
 
@@ -16,21 +17,37 @@ export function HubRuntimeProvider({
   children,
   fetcher,
 }: PropsWithChildren<{ fetcher?: HubFetcher }>) {
+  const translate = useTranslate();
   const me = useHubQuery<HubMe>({ path: "/me", fetcher });
 
-  if (me.loading) return <HubLoadingState label="Loading Hub session" />;
+  if (me.loading) {
+    return (
+      <HubLoadingState
+        label={translate("hub.session.loading", "Loading Hub session")}
+      />
+    );
+  }
   if (me.error) {
     return (
       <div className="mx-auto flex min-h-svh max-w-xl items-center px-6">
         <HubErrorState
           error={me.error}
           onRetry={me.reload}
-          title="Unable to load your Hub access"
+          title={translate(
+            "hub.access.loadError",
+            "Unable to load your Hub access",
+          )}
         />
       </div>
     );
   }
-  if (!me.data) return <HubLoadingState label="Loading Hub session" />;
+  if (!me.data) {
+    return (
+      <HubLoadingState
+        label={translate("hub.session.loading", "Loading Hub session")}
+      />
+    );
+  }
 
   return (
     <HubRuntimeContext.Provider value={{ me: me.data, reload: me.reload }}>
@@ -61,14 +78,19 @@ export function HubCapabilityGate({
   action: string;
   applicationId?: string;
 }>) {
+  const translate = useTranslate();
   const { me } = useHubRuntime();
   if (hasHubCapability(me.capabilities, resource, action, applicationId)) {
     return children;
   }
   return (
     <HubEmptyState
-      title="403 · Access denied"
-      description={`Your Hub assignment does not include ${resource}:${action}. Ask an Owner or Admin to grant access.`}
+      title={translate("hub.access.denied.title", "403 · Access denied")}
+      description={translate(
+        "hub.access.denied.description",
+        { resource, action },
+        `Your Hub assignment does not include ${resource}:${action}. Ask an Owner or Admin to grant access.`,
+      )}
     />
   );
 }
