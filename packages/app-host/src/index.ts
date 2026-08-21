@@ -368,7 +368,6 @@ async function managementApi(
         "put hashed static files under app-dist/acme/dist/client/assets for /acme/assets/*",
         "curl -X POST http://localhost:3000/__apps/rescan",
         "curl -X POST http://localhost:3000/__apps/acme/activate",
-        "curl -X POST http://localhost:3000/__apps/acme/deploy",
         "curl -X POST http://localhost:3000/__apps/evict-idle",
         "curl http://localhost:3000/__apps/acme",
         "curl -X POST http://localhost:3000/__apps/acme/reload",
@@ -412,7 +411,7 @@ async function managementApi(
   }
 
   const actionMatch = path.match(
-    /^\/__apps\/([^/]+)\/(activate|deploy|evict|reload)$/,
+    /^\/__apps\/([^/]+)\/(activate|evict|reload)$/,
   );
   if (actionMatch) {
     if (method !== "POST") {
@@ -425,26 +424,6 @@ async function managementApi(
     if (action === "activate") {
       return jsonResponse({
         app: await registry.ensureActive(id),
-      });
-    }
-
-    if (action === "deploy") {
-      const input = await readJsonBody(req);
-      return jsonResponse({
-        deployment: await registry.deploy(id, {
-          version:
-            typeof input.version === "string" ? input.version : undefined,
-          strategy:
-            input.strategy === "restart" || input.strategy === "blue-green"
-              ? input.strategy
-              : undefined,
-          destroyTimeoutMs: numberFromValue(input.destroyTimeoutMs),
-          waitForReady:
-            typeof input.waitForReady === "boolean"
-              ? input.waitForReady
-              : undefined,
-          reason: "deploy API",
-        }),
       });
     }
 
@@ -535,7 +514,6 @@ function notFoundResponse(): Response {
         "POST /__apps/evict-idle",
         "GET /__apps/:id",
         "POST /__apps/:id/activate",
-        "POST /__apps/:id/deploy",
         "POST /__apps/:id/evict",
         "POST /__apps/:id/reload",
         "DELETE /__apps/:id",
@@ -572,37 +550,6 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
-async function readJsonBody(
-  req: IncomingMessage,
-): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
-
-  for await (const streamedChunk of req) {
-    const chunk: unknown = streamedChunk;
-    if (Buffer.isBuffer(chunk)) {
-      chunks.push(chunk);
-    } else if (typeof chunk === "string") {
-      chunks.push(Buffer.from(chunk));
-    } else {
-      throw new TypeError("Request body contained an unsupported chunk type");
-    }
-  }
-
-  if (chunks.length === 0) {
-    return {};
-  }
-
-  const text = Buffer.concat(chunks).toString("utf8").trim();
-  if (!text) {
-    return {};
-  }
-
-  const value = JSON.parse(text) as unknown;
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
 async function handleError(error: unknown, res: ServerResponse): Promise<void> {
   if (!(error instanceof AppRegistryError) || error.status >= 500) {
     console.error(error);
@@ -627,12 +574,6 @@ async function handleError(error: unknown, res: ServerResponse): Promise<void> {
   );
 
   await applyFetchResponse(res, response);
-}
-
-function numberFromValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 function numberFromEnv(name: string): number | undefined {

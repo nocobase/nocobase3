@@ -1,23 +1,35 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer as createHttpServer, type Server } from 'node:http';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { gzipSync } from 'node:zlib';
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer as createHttpServer, type Server } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { gzipSync } from "node:zlib";
 
 import {
   createApp,
   createServer as createEmbeddedServer,
   createStandaloneServer,
-} from '../../server/index.ts';
-import { createNocoBaseApiProxyHeaders } from '../../server/app.ts';
+} from "../../server/index.ts";
+import { createNocoBaseApiProxyHeaders } from "../../server/app.ts";
 
 const servers: Server[] = [];
 const tempDirs: string[] = [];
+const envSnapshot = new Map<string, string | undefined>();
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+
+  for (const [key, value] of envSnapshot) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+  envSnapshot.clear();
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -39,95 +51,175 @@ afterEach(async () => {
   );
 });
 
-describe('app server', () => {
-  it('creates embedded apps from a scope', async () => {
+describe("app server", () => {
+  it("creates embedded apps from a scope", async () => {
     const app = await createEmbeddedServer({
-      id: 'hub',
-      basePath: '/embedded-hub',
+      id: "hub",
+      basePath: "/embedded-hub",
+      registerDisposer: () => undefined,
     });
 
-    const response = await app.request('http://localhost/api/healthz');
+    const response = await app.request("http://localhost/api/healthz");
 
     await expect(response.json()).resolves.toEqual({
       ok: true,
       app: {
-        name: 'hub',
-        basePath: '/embedded-hub',
+        name: "hub",
+        basePath: "/embedded-hub",
       },
-      basePath: '/embedded-hub',
+      basePath: "/embedded-hub",
     });
   });
 
-  it('serves embedded production client routes from the stripped app-host path', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-embedded-client-'));
+  it("serves embedded production client routes from the stripped app-host path", async () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), "nocobase-hub-embedded-client-"),
+    );
     tempDirs.push(root);
     writeFileSync(
-      path.join(root, 'index.html'),
+      path.join(root, "index.html"),
       '<div id="root"></div><script type="module" src="/hub/assets/index.js"></script>',
     );
 
     const app = await createEmbeddedServer({
-      id: 'hub',
-      basePath: '/hub',
+      id: "hub",
+      basePath: "/hub",
       clientDir: root,
+      registerDisposer: () => undefined,
     });
 
-    const response = await app.request('http://localhost/');
+    const response = await app.request("http://localhost/");
     const html = await response.text();
 
     expect(response.status).toBe(200);
     expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/hub/";');
-    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/v2/api";');
+    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/api";');
   });
 
-  it('reads embedded runtime config from dist/.env without using process.env', async () => {
+  it("reads embedded runtime config from dist/.env without using process.env", async () => {
     const nocoBaseApiUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.setHeader("content-type", "application/json; charset=utf-8");
       response.end(
         JSON.stringify({
           url: _request.url,
-          forwardedPrefix: _request.headers['x-forwarded-prefix'],
+          forwardedPrefix: _request.headers["x-forwarded-prefix"],
         }),
       );
     });
-    const appRoot = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-embedded-root-'));
+    const appRoot = mkdtempSync(
+      path.join(tmpdir(), "nocobase-hub-embedded-root-"),
+    );
     tempDirs.push(appRoot);
-    const clientDir = path.join(appRoot, 'dist', 'client');
+    const clientDir = path.join(appRoot, "dist", "client");
     mkdirSync(clientDir, { recursive: true });
     writeFileSync(
-      path.join(appRoot, 'dist', '.env'),
+      path.join(appRoot, "dist", ".env"),
       [
         `NOCOBASE_API_PROXY_TARGET=${nocoBaseApiUrl}/nocobase/api/`,
-        'API_CLIENT_STORAGE_PREFIX=EMBEDDED_',
-        'API_CLIENT_STORAGE_TYPE=sessionStorage',
-        'API_CLIENT_SHARE_TOKEN=true',
-      ].join('\n'),
+        "NOCOBASE_API_PROXY_PATH=/legacy-api",
+        "API_CLIENT_STORAGE_PREFIX=EMBEDDED_",
+        "API_CLIENT_STORAGE_TYPE=sessionStorage",
+        "API_CLIENT_SHARE_TOKEN=true",
+      ].join("\n"),
     );
-    writeFileSync(path.join(clientDir, 'index.html'), '<script type="module" src="/hub/assets/index.js"></script>');
+    writeFileSync(
+      path.join(clientDir, "index.html"),
+      '<script type="module" src="/hub/assets/index.js"></script>',
+    );
 
     const app = await createEmbeddedServer({
-      id: 'hub',
-      basePath: '/hub',
+      id: "hub",
+      basePath: "/hub",
       rootDir: appRoot,
       clientDir,
+      registerDisposer: () => undefined,
     });
 
-    const api = await app.request('http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fhub%2F');
+    const api = await app.request(
+      "http://localhost/legacy-api/oidc:checkRedirect?redirect=%2Fhub%2F",
+    );
     await expect(api.json()).resolves.toEqual({
-      url: '/nocobase/api/oidc:checkRedirect?redirect=%2Fhub%2F',
-      forwardedPrefix: '/v2/api',
+      url: "/nocobase/api/oidc:checkRedirect?redirect=%2Fhub%2F",
+      forwardedPrefix: "/legacy-api",
     });
 
-    const page = await app.request('http://localhost/');
+    const page = await app.request("http://localhost/");
     const html = await page.text();
-    expect(html).toContain('window.__nocobase_api_client_storage_prefix__ = "EMBEDDED_";');
-    expect(html).toContain('window.__nocobase_api_client_storage_type__ = "sessionStorage";');
-    expect(html).toContain('window.__nocobase_api_client_share_token__ = true;');
+    expect(html).toContain(
+      'window.__nocobase_api_client_storage_prefix__ = "EMBEDDED_";',
+    );
+    expect(html).toContain(
+      'window.__nocobase_api_client_storage_type__ = "sessionStorage";',
+    );
+    expect(html).toContain(
+      "window.__nocobase_api_client_share_token__ = true;",
+    );
   });
 
-  it('proxies /<app>/v2/api requests to the configured NocoBase API URL', async () => {
+  it("rejects an embedded root proxy path that would contain the Hub API", async () => {
+    const appRoot = mkdtempSync(
+      path.join(tmpdir(), "nocobase-hub-embedded-root-proxy-"),
+    );
+    tempDirs.push(appRoot);
+    mkdirSync(path.join(appRoot, "dist"), { recursive: true });
+    writeFileSync(
+      path.join(appRoot, "dist", ".env"),
+      [
+        "HUB_ENABLED=false",
+        "NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api",
+        "NOCOBASE_API_PROXY_PATH=/",
+      ].join("\n"),
+    );
+
+    await expect(
+      createEmbeddedServer({
+        id: "hub",
+        basePath: "/hub",
+        rootDir: appRoot,
+        registerDisposer: () => undefined,
+      }),
+    ).rejects.toThrow(/must not overlap the Hub API path/);
+  });
+
+  it("does not enable the legacy proxy from embedded scope config", async () => {
+    let upstreamRequests = 0;
     const nocoBaseApiUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'application/json; charset=utf-8');
+      upstreamRequests += 1;
+      response.end("proxied");
+    });
+    const appRoot = mkdtempSync(
+      path.join(tmpdir(), "nocobase-hub-embedded-root-"),
+    );
+    tempDirs.push(appRoot);
+    mkdirSync(path.join(appRoot, "dist"), { recursive: true });
+
+    const app = await createEmbeddedServer({
+      id: "hub",
+      basePath: "/hub",
+      rootDir: appRoot,
+      config: {
+        hubEnabled: false,
+        nocoBaseApiProxyTarget: `${nocoBaseApiUrl}/nocobase/api/`,
+        nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
+        nocoBaseApiProxyPath: "/config-proxy",
+      },
+      registerDisposer: () => undefined,
+    });
+
+    const response = await app.request(
+      "http://localhost/config-proxy/systemSettings:get",
+      {
+        method: "POST",
+      },
+    );
+
+    expect(response.status).toBe(404);
+    expect(upstreamRequests).toBe(0);
+  });
+
+  it("proxies only the explicitly configured path to the configured NocoBase API URL", async () => {
+    const nocoBaseApiUrl = await startHttpStub((_request, response) => {
+      response.setHeader("content-type", "application/json; charset=utf-8");
       response.end(
         JSON.stringify({
           method: _request.method,
@@ -135,38 +227,105 @@ describe('app server', () => {
           host: _request.headers.host,
           origin: _request.headers.origin,
           referer: _request.headers.referer,
-          forwardedHost: _request.headers['x-forwarded-host'],
-          forwardedPrefix: _request.headers['x-forwarded-prefix'],
-          forwardedProto: _request.headers['x-forwarded-proto'],
+          forwardedHost: _request.headers["x-forwarded-host"],
+          forwardedPrefix: _request.headers["x-forwarded-prefix"],
+          forwardedProto: _request.headers["x-forwarded-proto"],
+          cookie: _request.headers.cookie ?? null,
         }),
       );
     });
     const app = createApp({
-      basePath: '/hub',
+      basePath: "/hub",
+      apiProxyPath: "/hub/legacy-api",
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request('http://localhost/hub/v2/api/systemSettings:get?locale=zh-CN', {
-      headers: {
-        host: '127.0.0.1:13000',
-        origin: 'http://127.0.0.1:13000',
-        referer: 'http://127.0.0.1:13000/hub/login',
+    const response = await app.request(
+      "http://localhost/hub/legacy-api/systemSettings:get?locale=zh-CN",
+      {
+        headers: {
+          host: "127.0.0.1:13000",
+          origin: "http://127.0.0.1:13000",
+          referer: "http://127.0.0.1:13000/hub/login",
+          cookie: "hub.session_token=do-not-forward",
+        },
       },
-    });
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      method: 'GET',
-      url: '/nocobase/api/systemSettings:get?locale=zh-CN',
+      method: "GET",
+      url: "/nocobase/api/systemSettings:get?locale=zh-CN",
       host: new URL(nocoBaseApiUrl).host,
       // The browser's own origin and referer are relayed untouched. Rewriting them to the upstream
       // address is what makes `auth:signIn` answer 403 Invalid sign-in origin.
-      origin: 'http://127.0.0.1:13000',
-      referer: 'http://127.0.0.1:13000/hub/login',
-      forwardedHost: '127.0.0.1:13000',
-      forwardedPrefix: '/hub/v2/api',
-      forwardedProto: 'http',
+      origin: "http://127.0.0.1:13000",
+      referer: "http://127.0.0.1:13000/hub/login",
+      forwardedHost: "127.0.0.1:13000",
+      forwardedPrefix: "/hub/legacy-api",
+      forwardedProto: "http",
+      cookie: null,
     });
+  });
+
+  it.each([
+    ["equal to", "/hub", "/hub/api"],
+    ["an ancestor of", "/hub", "/hub"],
+    ["a child of", "/hub", "/hub/api/auth"],
+    ["the root ancestor of", "", "/"],
+  ])(
+    "rejects a proxy path %s the Hub API path",
+    (_relationship, basePath, apiProxyPath) => {
+      expect(() =>
+        createApp({
+          basePath,
+          apiProxyPath,
+          nocoBaseApiUrl: "http://127.0.0.1:13000/api",
+        }),
+      ).toThrow(/must not overlap the Hub API path/);
+    },
+  );
+
+  it("allows proxy paths that only share the Hub API path prefix text", () => {
+    expect(() =>
+      createApp({
+        basePath: "/hub",
+        apiProxyPath: "/hub/apiary",
+        nocoBaseApiUrl: "http://127.0.0.1:13000/api",
+      }),
+    ).not.toThrow();
+  });
+
+  it("redacts API proxy failures while logging diagnostic details", async () => {
+    const proxyError = new Error(
+      "connect ECONNREFUSED http://secret.internal:7777",
+    );
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(proxyError);
+    const app = createApp({
+      basePath: "/hub",
+      apiProxyPath: "/hub/legacy-api",
+      nocoBaseApiUrl: "http://secret.internal:7777/nocobase/api",
+    });
+
+    const response = await app.request(
+      "http://localhost/hub/legacy-api/systemSettings:get",
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(502);
+    expect(JSON.parse(body)).toEqual({
+      error: "NocoBase API server is unavailable.",
+    });
+    expect(body).not.toContain("secret.internal");
+    expect(body).not.toContain("ECONNREFUSED");
+    expect(errorLog).toHaveBeenCalledWith(
+      "NocoBase API proxy request failed.",
+      expect.objectContaining({
+        error: proxyError,
+        target: "http://secret.internal:7777/nocobase/api/systemSettings:get",
+      }),
+    );
   });
 
   /**
@@ -182,198 +341,280 @@ describe('app server', () => {
    * `x-forwarded-*` gets corrected there, while a rewritten origin coincidentally matches the site.
    * Both faults cancel. Only a deployment that proxies straight to the upstream reveals them.
    */
-  it('relays the browser origin and protocol so the upstream sign-in origin check passes', async () => {
+  it("relays the browser origin and protocol so the upstream sign-in origin check passes", async () => {
     const nocoBaseApiUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.setHeader("content-type", "application/json; charset=utf-8");
       response.end(
         JSON.stringify({
           origin: _request.headers.origin,
           referer: _request.headers.referer,
-          forwardedHost: _request.headers['x-forwarded-host'],
-          forwardedProto: _request.headers['x-forwarded-proto'],
+          forwardedHost: _request.headers["x-forwarded-host"],
+          forwardedProto: _request.headers["x-forwarded-proto"],
         }),
       );
     });
     const app = createApp({
-      basePath: '/hub',
+      basePath: "/hub",
+      apiProxyPath: "/hub/legacy-api",
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
     // A TLS-terminating proxy in front of this process: the site is https, but this hop is cleartext
     // and its x-forwarded-* headers carry the browser's real context.
-    const response = await app.request('http://localhost/hub/v2/api/auth:signIn', {
-      method: 'POST',
-      headers: {
-        host: 'apps.example.com',
-        origin: 'https://apps.example.com',
-        referer: 'https://apps.example.com/hub/login',
-        'x-forwarded-host': 'apps.example.com',
-        'x-forwarded-proto': 'https',
+    const response = await app.request(
+      "http://localhost/hub/legacy-api/auth:signIn",
+      {
+        method: "POST",
+        headers: {
+          host: "apps.example.com",
+          origin: "https://apps.example.com",
+          referer: "https://apps.example.com/hub/login",
+          "x-forwarded-host": "apps.example.com",
+          "x-forwarded-proto": "https",
+        },
       },
-    });
+    );
 
     expect(response.status).toBe(200);
     const forwarded = (await response.json()) as Record<string, string>;
 
     // Existing x-forwarded-* must survive. Overwriting them with this connection's details would
     // report the https site as http, and the origin comparison below would fail on the scheme alone.
-    expect(forwarded.forwardedProto).toBe('https');
-    expect(forwarded.forwardedHost).toBe('apps.example.com');
-    expect(forwarded.origin).toBe('https://apps.example.com');
-    expect(forwarded.referer).toBe('https://apps.example.com/hub/login');
+    expect(forwarded.forwardedProto).toBe("https");
+    expect(forwarded.forwardedHost).toBe("apps.example.com");
+    expect(forwarded.origin).toBe("https://apps.example.com");
+    expect(forwarded.referer).toBe("https://apps.example.com/hub/login");
 
     // The check the upstream actually performs.
     const requestOrigin = `${forwarded.forwardedProto}://${forwarded.forwardedHost}`;
     expect(forwarded.origin).toBe(requestOrigin);
   });
 
-  it('returns a JSON error when the API proxy target is not configured', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-client-'));
+  it("does not register the removed legacy proxy when proxy settings are absent", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "nocobase-hub-client-"));
     tempDirs.push(root);
-    writeFileSync(path.join(root, 'index.html'), '<main>hub app</main>');
+    writeFileSync(path.join(root, "index.html"), "<main>hub app</main>");
 
     const app = createApp({
-      basePath: '/hub',
-      clientIndexPath: path.join(root, 'index.html'),
+      basePath: "/hub",
+      clientIndexPath: path.join(root, "index.html"),
     });
 
-    const response = await app.request('http://localhost/hub/v2/api/oidc:checkRedirect?redirect=%2Fhub%2F');
+    const response = await app.request(
+      "http://localhost/hub/v2/api/oidc:checkRedirect?redirect=%2Fhub%2F",
+    );
 
-    expect(response.status).toBe(503);
-    expect(response.headers.get('content-type')).toContain('application/json');
-    await expect(response.json()).resolves.toEqual({
-      error: 'NocoBase API proxy target is not configured.',
-    });
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    await expect(response.json()).resolves.toEqual({ error: "Not found" });
   });
 
-  it('strips compressed upstream response headers before returning proxied API responses', async () => {
+  it("strips compressed upstream response headers before returning proxied API responses", async () => {
     const payload = JSON.stringify({ ok: true });
     const compressedPayload = gzipSync(payload);
     const nocoBaseApiUrl = await startHttpStub((_request, response) => {
       response.statusCode = 200;
-      response.setHeader('content-type', 'application/json; charset=utf-8');
-      response.setHeader('content-encoding', 'gzip');
-      response.setHeader('content-length', String(compressedPayload.byteLength));
+      response.setHeader("content-type", "application/json; charset=utf-8");
+      response.setHeader("content-encoding", "gzip");
+      response.setHeader(
+        "content-length",
+        String(compressedPayload.byteLength),
+      );
       response.end(compressedPayload);
     });
     const app = createApp({
-      basePath: '/hub',
+      basePath: "/hub",
+      apiProxyPath: "/hub/legacy-api",
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request('http://localhost/hub/v2/api/systemSettings:get');
+    const response = await app.request(
+      "http://localhost/hub/legacy-api/systemSettings:get",
+    );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-encoding')).toBeNull();
-    expect(response.headers.get('content-length')).toBeNull();
+    expect(response.headers.get("content-encoding")).toBeNull();
+    expect(response.headers.get("content-length")).toBeNull();
     await expect(response.text()).resolves.toBe(payload);
   });
 
-  it('keeps hub API routes on the hub server when Vite dev proxy is enabled', async () => {
+  it("keeps hub API routes on the hub server when Vite dev proxy is enabled", async () => {
+    setEnv("APP_NAME", "hub");
+    setEnv("APP_BASE_PATH", "/hub");
+    setEnv("NOCOBASE_API_URL", "/hub/api");
+    setEnv("NOCOBASE_API_PROXY_TARGET", "");
+    setEnv("NOCOBASE_API_PROXY_PATH", "");
+    setEnv("HUB_ENABLED", "false");
     let viteRequestCount = 0;
     const viteDevUrl = await startHttpStub(() => {
       viteRequestCount += 1;
     });
     const app = createStandaloneServer({ viteDevUrl });
 
-    const response = await app.request('http://localhost/hub/api/healthz');
+    const response = await app.request("http://localhost/hub/api/healthz");
 
     await expect(response.json()).resolves.toEqual({
       ok: true,
       app: {
-        name: 'hub',
-        basePath: '/hub',
+        name: "hub",
+        basePath: "/hub",
       },
-      basePath: '/hub',
+      basePath: "/hub",
     });
     expect(viteRequestCount).toBe(0);
   });
 
-  it('proxies hub client routes to Vite dev server', async () => {
+  it("proxies hub client routes to Vite dev server", async () => {
+    setEnv("APP_NAME", "hub");
+    setEnv("APP_BASE_PATH", "/hub");
+    setEnv("HUB_ENABLED", "false");
+    setEnv("NOCOBASE_API_PROXY_TARGET", "");
+    setEnv("NOCOBASE_API_PROXY_PATH", "");
     const viteDevUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'text/plain; charset=utf-8');
-      response.end(`vite:${_request.method}:${_request.url}`);
+      response.setHeader("content-type", "application/json; charset=utf-8");
+      response.end(
+        JSON.stringify({
+          method: _request.method,
+          url: _request.url,
+          cookie: _request.headers.cookie ?? null,
+        }),
+      );
     });
     const app = createStandaloneServer({ viteDevUrl });
 
-    const response = await app.request('http://localhost/hub/settings?tab=apps');
+    const response = await app.request(
+      "http://localhost/hub/settings?tab=apps",
+      {
+        headers: { cookie: "hub.session_token=do-not-forward" },
+      },
+    );
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('vite:GET:/hub/settings?tab=apps');
+    await expect(response.json()).resolves.toEqual({
+      method: "GET",
+      url: "/hub/settings?tab=apps",
+      cookie: null,
+    });
   });
 
-  it('injects browser runtime config when serving the production client index', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-client-'));
+  it("redacts Vite proxy failures while logging diagnostic details", async () => {
+    setEnv("APP_NAME", "hub");
+    setEnv("APP_BASE_PATH", "/hub");
+    setEnv("HUB_ENABLED", "false");
+    setEnv("NOCOBASE_API_PROXY_TARGET", "");
+    setEnv("NOCOBASE_API_PROXY_PATH", "");
+    const proxyError = new Error(
+      "connect ECONNREFUSED http://vite-secret.internal:5173",
+    );
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(proxyError);
+    const app = createStandaloneServer({
+      viteDevUrl: "http://vite-secret.internal:5173",
+    });
+
+    const response = await app.request("http://localhost/hub/settings");
+    const body = await response.text();
+
+    expect(response.status).toBe(502);
+    expect(JSON.parse(body)).toEqual({
+      error: "Vite dev server is unavailable.",
+    });
+    expect(body).not.toContain("vite-secret.internal");
+    expect(body).not.toContain("ECONNREFUSED");
+    expect(errorLog).toHaveBeenCalledWith(
+      "Vite dev proxy request failed.",
+      expect.objectContaining({
+        error: proxyError,
+        target: "http://vite-secret.internal:5173/hub/settings",
+      }),
+    );
+  });
+
+  it("injects browser runtime config when serving the production client index", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "nocobase-hub-client-"));
     tempDirs.push(root);
-    const indexPath = path.join(root, 'index.html');
+    const indexPath = path.join(root, "index.html");
     writeFileSync(
       indexPath,
       [
-        '<!doctype html>',
-        '<html>',
-        '<body>',
+        "<!doctype html>",
+        "<html>",
+        "<body>",
         '<div id="root"></div>',
         '<script type="module" src="/hub/assets/index.js"></script>',
-        '</body>',
-        '</html>',
-      ].join(''),
+        "</body>",
+        "</html>",
+      ].join(""),
     );
 
     const app = createApp({
-      basePath: '/hub',
-      apiProxyPath: '/v2/api',
+      basePath: "/hub",
       clientIndexPath: indexPath,
       nocoBaseApiUrl: false,
     });
 
-    const response = await app.request('http://localhost/hub/settings');
+    const response = await app.request("http://localhost/hub/settings");
     const html = await response.text();
 
     expect(response.status).toBe(200);
     expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/hub/";');
-    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/v2/api";');
-    expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(html.indexOf('<script type="module"'));
+    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/api";');
+    expect(html.indexOf("window.NOCOBASE_PORTAL_BASE")).toBeLessThan(
+      html.indexOf('<script type="module"'),
+    );
   });
 
-  it('serves production client assets before the SPA fallback', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-client-'));
+  it("serves production client assets before the SPA fallback", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "nocobase-hub-client-"));
     tempDirs.push(root);
-    mkdirSync(path.join(root, 'assets'));
-    writeFileSync(path.join(root, 'index.html'), '<script type="module" src="/hub/assets/index.js"></script>');
-    writeFileSync(path.join(root, 'assets/index.js'), 'console.log("hub asset");');
+    mkdirSync(path.join(root, "assets"));
+    writeFileSync(
+      path.join(root, "index.html"),
+      '<script type="module" src="/hub/assets/index.js"></script>',
+    );
+    writeFileSync(
+      path.join(root, "assets/index.js"),
+      'console.log("hub asset");',
+    );
 
     const app = createApp({
-      basePath: '/hub',
-      clientIndexPath: path.join(root, 'index.html'),
+      basePath: "/hub",
+      clientIndexPath: path.join(root, "index.html"),
       nocoBaseApiUrl: false,
     });
 
-    const response = await app.request('http://localhost/hub/assets/index.js');
+    const response = await app.request("http://localhost/hub/assets/index.js");
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
-    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(response.headers.get("content-type")).toBe(
+      "text/javascript; charset=utf-8",
+    );
+    expect(response.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
     await expect(response.text()).resolves.toBe('console.log("hub asset");');
   });
 
-  it('does not return the SPA index for missing production client assets', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-client-'));
+  it("does not return the SPA index for missing production client assets", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "nocobase-hub-client-"));
     tempDirs.push(root);
-    mkdirSync(path.join(root, 'assets'));
-    writeFileSync(path.join(root, 'index.html'), '<main>hub app</main>');
+    mkdirSync(path.join(root, "assets"));
+    writeFileSync(path.join(root, "index.html"), "<main>hub app</main>");
 
     const app = createApp({
-      basePath: '/hub',
-      clientIndexPath: path.join(root, 'index.html'),
+      basePath: "/hub",
+      clientIndexPath: path.join(root, "index.html"),
       nocoBaseApiUrl: false,
     });
 
-    const response = await app.request('http://localhost/hub/assets/missing.js');
+    const response = await app.request(
+      "http://localhost/hub/assets/missing.js",
+    );
 
     expect(response.status).toBe(404);
-    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(response.headers.get("content-type")).toContain("application/json");
     await expect(response.json()).resolves.toEqual({
-      error: 'Not found',
+      error: "Not found",
     });
   });
 });
@@ -385,17 +626,24 @@ function startHttpStub(
   servers.push(server);
 
   return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
       const address = server.address();
-      if (!address || typeof address === 'string') {
-        reject(new Error('Failed to resolve Vite stub address.'));
+      if (!address || typeof address === "string") {
+        reject(new Error("Failed to resolve Vite stub address."));
         return;
       }
 
       resolve(`http://127.0.0.1:${address.port}`);
     });
   });
+}
+
+function setEnv(key: string, value: string): void {
+  if (!envSnapshot.has(key)) {
+    envSnapshot.set(key, process.env[key]);
+  }
+  process.env[key] = value;
 }
 
 /**
@@ -411,78 +659,80 @@ function startHttpStub(
  * These call the header builder directly rather than going through `createApp`: the cross-site
  * branch requires a non-loopback upstream, and a stub HTTP server can only bind loopback.
  */
-describe('forwarded headers for a cross-site upstream', () => {
-  const upstream = new URL('https://remote.example.com/api');
+describe("forwarded headers for a cross-site upstream", () => {
+  const upstream = new URL("https://remote.example.com/api");
 
   const forwardedFromLocalhost = (extra: Record<string, string>) =>
     createNocoBaseApiProxyHeaders(
-      new Request('http://127.0.0.1:3000/hub/v2/api/auth:signIn', {
-        method: 'POST',
-        headers: { host: '127.0.0.1:3000', ...extra },
+      new Request("http://127.0.0.1:3000/hub/v2/api/auth:signIn", {
+        method: "POST",
+        headers: { host: "127.0.0.1:3000", ...extra },
       }),
-      '/hub/v2/api',
+      "/hub/v2/api",
       upstream,
     );
 
-  it('aligns origin and x-forwarded-* on the upstream site', () => {
+  it("aligns origin and x-forwarded-* on the upstream site", () => {
     const headers = forwardedFromLocalhost({
-      origin: 'http://127.0.0.1:3000',
-      referer: 'http://127.0.0.1:3000/hub/login',
+      origin: "http://127.0.0.1:3000",
+      referer: "http://127.0.0.1:3000/hub/login",
     });
 
-    expect(headers.get('origin')).toBe(upstream.origin);
-    expect(headers.get('x-forwarded-host')).toBe(upstream.host);
-    expect(headers.get('x-forwarded-proto')).toBe('https');
+    expect(headers.get("origin")).toBe(upstream.origin);
+    expect(headers.get("x-forwarded-host")).toBe(upstream.host);
+    expect(headers.get("x-forwarded-proto")).toBe("https");
     // The point of the three assertions above: the requestOrigin the upstream derives has to equal,
     // verbatim, the origin it receives.
-    expect(`${headers.get('x-forwarded-proto')}://${headers.get('x-forwarded-host')}`).toBe(
-      headers.get('origin'),
-    );
+    expect(
+      `${headers.get("x-forwarded-proto")}://${headers.get("x-forwarded-host")}`,
+    ).toBe(headers.get("origin"));
   });
 
-  it('aligns referer too, since the upstream falls back to it without an origin', () => {
+  it("aligns referer too, since the upstream falls back to it without an origin", () => {
     const headers = forwardedFromLocalhost({
-      referer: 'http://127.0.0.1:3000/hub/login',
+      referer: "http://127.0.0.1:3000/hub/login",
     });
 
-    expect(new URL(headers.get('referer') ?? '').origin).toBe(upstream.origin);
+    expect(new URL(headers.get("referer") ?? "").origin).toBe(upstream.origin);
   });
 
-  it('does not invent an origin the browser never sent', () => {
+  it("does not invent an origin the browser never sent", () => {
     // Requests without an origin (curl, server-side calls) do not trigger the origin check at all.
     // Adding one would turn "no origin declared" into "claims to come from the site itself".
     const headers = forwardedFromLocalhost({});
 
-    expect(headers.has('origin')).toBe(false);
-    expect(headers.has('referer')).toBe(false);
+    expect(headers.has("origin")).toBe(false);
+    expect(headers.has("referer")).toBe(false);
     // The forwarded pair still has to be aligned: it decides who the upstream thinks it is,
     // independently of whether an origin was sent.
-    expect(headers.get('x-forwarded-host')).toBe(upstream.host);
+    expect(headers.get("x-forwarded-host")).toBe(upstream.host);
   });
 
-  it('still reports the proxy mount point', () => {
-    expect(forwardedFromLocalhost({}).get('x-forwarded-prefix')).toBe('/hub/v2/api');
+  it("still reports the proxy mount point", () => {
+    expect(forwardedFromLocalhost({}).get("x-forwarded-prefix")).toBe(
+      "/hub/v2/api",
+    );
   });
 
-  it('leaves a loopback upstream on the faithful-relay path', () => {
+  it("leaves a loopback upstream on the faithful-relay path", () => {
     // The counterpart of the group above: production proxies over loopback, where the browser's hop
     // must reach the upstream unchanged.
     const headers = createNocoBaseApiProxyHeaders(
-      new Request('http://site.example.com/hub/v2/api/auth:signIn', {
-        method: 'POST',
+      new Request("http://site.example.com/hub/v2/api/auth:signIn", {
+        method: "POST",
         headers: {
-          host: 'site.example.com',
-          origin: 'https://site.example.com',
-          'x-forwarded-host': 'site.example.com',
-          'x-forwarded-proto': 'https',
+          host: "site.example.com",
+          origin: "https://site.example.com",
+          "x-forwarded-host": "site.example.com",
+          "x-forwarded-proto": "https",
         },
       }),
-      '/hub/v2/api',
-      new URL('http://127.0.0.1:13000/api'),
+      "/hub/v2/api",
+      new URL("http://127.0.0.1:13000/api"),
     );
 
-    expect(headers.get('origin')).toBe('https://site.example.com');
-    expect(headers.get('x-forwarded-host')).toBe('site.example.com');
-    expect(headers.get('x-forwarded-proto')).toBe('https');
+    expect(headers.get("origin")).toBe("https://site.example.com");
+    expect(headers.get("x-forwarded-host")).toBe("site.example.com");
+    expect(headers.get("x-forwarded-proto")).toBe("https");
   });
 });

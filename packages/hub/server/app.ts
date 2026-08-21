@@ -1,8 +1,14 @@
-import { Hono } from 'hono';
-import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
-import path from 'node:path';
-import { Readable } from 'node:stream';
+import { Hono } from "hono";
+import { createReadStream } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
+import { Readable } from "node:stream";
+
+import { Auth } from "@nocobase/authentication";
+import type { AppRuntimeRegistry } from "@nocobase/app-host";
+
+import { createHubApi } from "./hub/api.js";
+import { createHubDatabase, type HubDatabaseRuntime } from "./hub/database.js";
 
 export interface CreateAppOptions {
   appName?: string;
@@ -16,23 +22,43 @@ export interface CreateAppOptions {
   apiClientStoragePrefix?: string;
   apiClientStorageType?: string;
   apiClientShareToken?: boolean;
+  /** Enable the self-contained Hub control plane (enabled when auth is configured). */
+  hub?: boolean;
+  databasePath?: string;
+  authSecret?: string;
+  authBaseUrl?: string;
+  releaseRoot?: string;
+  appHostRegistry?: AppRuntimeRegistry;
 }
 
 export type ClientHandler = (request: Request) => Response | Promise<Response>;
 
-export function createApp(options: CreateAppOptions = {}): Hono {
+export interface HubApp extends Hono {
+  readonly hubReady?: Promise<void>;
+  close?(): Promise<void>;
+}
+
+export function createApp(options: CreateAppOptions = {}): HubApp {
   const appName = resolveAppName(options.appName);
   const basePath = resolveBasePath(options.basePath, appName);
-  const browserBasePath = resolveBrowserBasePath(options.browserBasePath, basePath);
-  const apiProxyPath = resolveApiProxyPath(options.apiProxyPath, basePath);
-  const browserApiUrl = options.browserApiUrl ?? joinBasePath(browserBasePath, '/v2/api');
+  const browserBasePath = resolveBrowserBasePath(
+    options.browserBasePath,
+    basePath,
+  );
+  const apiProxyPath = resolveApiProxyPath(options.apiProxyPath);
   const nocoBaseApiUrl = resolveNocoBaseApiUrl(options.nocoBaseApiUrl);
+  if (apiProxyPath !== undefined && nocoBaseApiUrl) {
+    assertApiProxyPathDoesNotOverlapHubApi(apiProxyPath, basePath);
+  }
+  const browserApiUrl =
+    options.browserApiUrl ?? joinBasePath(browserBasePath, "/api");
   const clientHandler = options.clientHandler;
-  const clientIndexPath = options.clientIndexPath ?? path.resolve(process.cwd(), 'index.html');
+  const clientIndexPath =
+    options.clientIndexPath ?? path.resolve(process.cwd(), "index.html");
   const clientRootDir = path.dirname(clientIndexPath);
   const app = new Hono();
 
-  app.get('/healthz', (context) => {
+  app.get("/healthz", (context) => {
     return context.json({
       ok: true,
       app: {
@@ -42,76 +68,194 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     });
   });
 
-  if (apiProxyPath) {
-    app.all(apiProxyPath, (context) => proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl));
-    app.all(`${apiProxyPath}/*`, (context) => proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl));
+  if (apiProxyPath && nocoBaseApiUrl) {
+    app.all(apiProxyPath, (context) =>
+      proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl),
+    );
+    app.all(`${apiProxyPath}/*`, (context) =>
+      proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl),
+    );
   }
 
   const api = new Hono();
+  const authSecret = options.authSecret ?? process.env.AUTH_SECRET;
+  const hubEnabled = options.hub ?? Boolean(authSecret || options.databasePath);
+  let hubRuntime: HubDatabaseRuntime | undefined;
+  let hubReady: Promise<void> | undefined;
+  let closeHubApi: (() => Promise<void>) | undefined;
 
-  api.get('/healthz', (context) => {
-    return context.json({
-      ok: true,
-      app: {
-        name: appName,
-        basePath: browserBasePath,
-      },
-      basePath: browserBasePath,
+  if (hubEnabled) {
+    if (!authSecret || authSecret.trim().length < 32) {
+      throw new Error(
+        "AUTH_SECRET must contain at least 32 characters when Hub is enabled.",
+      );
+    }
+    hubRuntime = createHubDatabase({
+      filename: options.databasePath ?? process.env.HUB_DATABASE_PATH,
     });
-  });
-
-  api.get('/apps', (context) => {
-    return context.json({
-      apps: [],
-    });
-  });
-
-  app.route(`${basePath}/api`, api);
-  if (clientHandler) {
-    app.all(basePath || '/', (context) => clientHandler(context.req.raw));
-    app.all(`${basePath}/*`, (context) => clientHandler(context.req.raw));
-  } else {
-    app.all(`${basePath}/assets`, (context) => serveClientAsset(context.req.raw, clientRootDir, basePath));
-    app.all(`${basePath}/assets/*`, (context) => serveClientAsset(context.req.raw, clientRootDir, basePath));
-    app.get(basePath || '/', () =>
-      serveClient(clientIndexPath, {
-        appBasePath: browserBasePath,
-        apiUrl: browserApiUrl,
-        storagePrefix: options.apiClientStoragePrefix,
-        storageType: options.apiClientStorageType,
-        shareToken: options.apiClientShareToken,
-      }),
+    const configuredAuthBaseUrl = options.authBaseUrl?.trim();
+    const authUrl = new URL(
+      configuredAuthBaseUrl ||
+        `http://localhost${joinBasePath(basePath, "/api/auth")}`,
     );
-    app.get(`${basePath}/*`, () =>
-      serveClient(clientIndexPath, {
-        appBasePath: browserBasePath,
-        apiUrl: browserApiUrl,
-        storagePrefix: options.apiClientStoragePrefix,
-        storageType: options.apiClientStorageType,
-        shareToken: options.apiClientShareToken,
+    const authOptions = {
+      connection: hubRuntime.connection,
+      baseURL: authUrl.origin,
+      basePath: normalizeBasePath(authUrl.pathname),
+      trustedOrigins: configuredAuthBaseUrl
+        ? undefined
+        : [
+            "http://localhost:*",
+            "http://127.0.0.1",
+            "http://127.0.0.1:*",
+            "http://[::1]",
+            "http://[::1]:*",
+          ],
+      secret: authSecret,
+      appName,
+      session: {
+        storeSessionInDatabase: true,
+      },
+      advanced: {
+        cookiePrefix: "hub",
+        disableOriginCheck: false,
+        defaultCookieAttributes: { path: browserBasePath || "/" },
+      },
+    } as const;
+    const auth = new Auth({
+      ...authOptions,
+      emailAndPassword: {
+        enabled: true,
+        autoSignIn: false,
+        disableSignUp: true,
+      },
+    });
+    const bootstrapAuth = new Auth({
+      ...authOptions,
+      emailAndPassword: {
+        enabled: true,
+        autoSignIn: false,
+      },
+    });
+    const hubApi = createHubApi({
+      database: hubRuntime,
+      auth,
+      bootstrapAuth,
+      appName,
+      publicBasePath: browserBasePath,
+      authoritativeOrigin: configuredAuthBaseUrl ? authUrl.origin : undefined,
+      registry: options.appHostRegistry,
+      releaseRoot: options.releaseRoot,
+    });
+    api.route("/", hubApi);
+    hubReady = hubApi.ready;
+    closeHubApi = () => hubApi.close();
+  } else {
+    api.get("/healthz", (context) => {
+      return context.json({
+        ok: true,
+        app: {
+          name: appName,
+          basePath: browserBasePath,
+        },
+        basePath: browserBasePath,
+      });
+    });
+    api.get("/apps", (context) =>
+      context.json({
+        data: [],
+        meta: { total: 0 },
+        requestId: crypto.randomUUID(),
       }),
     );
   }
 
-  return app;
+  app.route(`${basePath}/api`, api);
+  if (clientHandler) {
+    app.all(basePath || "/", (context) =>
+      dispatchClientRoute(context.req.raw, basePath, clientHandler),
+    );
+    app.all(`${basePath}/*`, (context) =>
+      dispatchClientRoute(context.req.raw, basePath, clientHandler),
+    );
+  } else {
+    app.all(`${basePath}/assets`, (context) =>
+      serveClientAsset(context.req.raw, clientRootDir, basePath),
+    );
+    app.all(`${basePath}/assets/*`, (context) =>
+      serveClientAsset(context.req.raw, clientRootDir, basePath),
+    );
+    app.get(basePath || "/", (context) =>
+      dispatchClientRoute(context.req.raw, basePath, () =>
+        serveClient(clientIndexPath, {
+          appBasePath: browserBasePath,
+          apiUrl: browserApiUrl,
+          storagePrefix: options.apiClientStoragePrefix,
+          storageType: options.apiClientStorageType,
+          shareToken: options.apiClientShareToken,
+        }),
+      ),
+    );
+    app.get(`${basePath}/*`, (context) =>
+      dispatchClientRoute(context.req.raw, basePath, () =>
+        serveClient(clientIndexPath, {
+          appBasePath: browserBasePath,
+          apiUrl: browserApiUrl,
+          storagePrefix: options.apiClientStoragePrefix,
+          storageType: options.apiClientStorageType,
+          shareToken: options.apiClientShareToken,
+        }),
+      ),
+    );
+  }
+
+  let closePromise: Promise<void> | undefined;
+  const mounted = Object.assign(app, {
+    hubReady,
+    close: (): Promise<void> =>
+      (closePromise ??= (async (): Promise<void> => {
+        await hubReady?.catch(() => undefined);
+        await closeHubApi?.();
+        await hubRuntime?.close();
+      })()),
+  });
+  return mounted;
+}
+
+function dispatchClientRoute(
+  request: Request,
+  basePath: string,
+  handler: ClientHandler,
+): Response | Promise<Response> {
+  const pathInsideClient = getPathInsideClient(
+    new URL(request.url).pathname,
+    basePath,
+  );
+  if (/^\/(?:v\d+\/)?api(?:\/|$)/.test(pathInsideClient)) {
+    return notFound();
+  }
+  return handler(request);
 }
 
 function resolveAppName(value: string | undefined): string {
-  const normalized = value?.trim() || 'app';
-  return normalized.replace(/^\/+|\/+$/g, '') || 'app';
+  const normalized = value?.trim() || "app";
+  return normalized.replace(/^\/+|\/+$/g, "") || "app";
 }
 
 function resolveBasePath(value: string | undefined, appName: string): string {
   return normalizeBasePath(value ?? `/${appName}`);
 }
 
-function resolveBrowserBasePath(value: string | undefined, basePath: string): string {
+function resolveBrowserBasePath(
+  value: string | undefined,
+  basePath: string,
+): string {
   return normalizeBasePath(value ?? basePath);
 }
 
-function resolveApiProxyPath(value: string | undefined, basePath: string): string {
+function resolveApiProxyPath(value: string | undefined): string | undefined {
   if (!value) {
-    return joinBasePath(basePath, '/v2/api');
+    return undefined;
   }
 
   try {
@@ -122,25 +266,46 @@ function resolveApiProxyPath(value: string | undefined, basePath: string): strin
   }
 }
 
+function assertApiProxyPathDoesNotOverlapHubApi(
+  apiProxyPath: string,
+  basePath: string,
+): void {
+  const hubApiPath = joinBasePath(basePath, "/api");
+  if (
+    pathContains(apiProxyPath, hubApiPath) ||
+    pathContains(hubApiPath, apiProxyPath)
+  ) {
+    throw new Error(
+      `NocoBase API proxy path "${apiProxyPath || "/"}" must not overlap the Hub API path "${hubApiPath}".`,
+    );
+  }
+}
+
+function pathContains(parent: string, child: string): boolean {
+  return parent === "" || child === parent || child.startsWith(`${parent}/`);
+}
+
 export function normalizeBasePath(value: string): string {
-  const normalized = value.trim().replace(/^\/+|\/+$/g, '');
-  return normalized ? `/${normalized}` : '';
+  const normalized = value.trim().replace(/^\/+|\/+$/g, "");
+  return normalized ? `/${normalized}` : "";
 }
 
 export function joinBasePath(basePath: string, pathInsideBase: string): string {
   const normalizedBasePath = normalizeBasePath(basePath);
   const normalizedPath = normalizeBasePath(pathInsideBase);
-  return `${normalizedBasePath}${normalizedPath}` || '/';
+  return `${normalizedBasePath}${normalizedPath}` || "/";
 }
 
-function resolveNocoBaseApiUrl(value: string | false | undefined): URL | undefined {
+function resolveNocoBaseApiUrl(
+  value: string | false | undefined,
+): URL | undefined {
   if (value === false) {
     return undefined;
   }
 
   const raw = value;
   const normalized = raw?.trim();
-  if (!normalized || normalized === 'false' || normalized === '0') {
+  if (!normalized || normalized === "false" || normalized === "0") {
     return undefined;
   }
 
@@ -155,7 +320,7 @@ async function proxyToNocoBaseApi(
   if (!nocoBaseApiUrl) {
     return Response.json(
       {
-        error: 'NocoBase API proxy target is not configured.',
+        error: "NocoBase API proxy target is not configured.",
       },
       {
         status: 503,
@@ -166,17 +331,27 @@ async function proxyToNocoBaseApi(
   const targetUrl = createApiTargetUrl(request, apiProxyPath, nocoBaseApiUrl);
 
   return proxyRequest(request, targetUrl, {
-    headers: createNocoBaseApiProxyHeaders(request, apiProxyPath, nocoBaseApiUrl),
-    unavailableMessage: 'NocoBase API server is unavailable.',
+    headers: createNocoBaseApiProxyHeaders(
+      request,
+      apiProxyPath,
+      nocoBaseApiUrl,
+    ),
+    unavailableMessage: "NocoBase API server is unavailable.",
   });
 }
 
-function createApiTargetUrl(request: Request, apiProxyPath: string, nocoBaseApiUrl: URL): URL {
+function createApiTargetUrl(
+  request: Request,
+  apiProxyPath: string,
+  nocoBaseApiUrl: URL,
+): URL {
   const requestUrl = new URL(request.url);
-  const normalizedProxyPath = apiProxyPath.replace(/\/$/, '');
-  const apiBasePath = nocoBaseApiUrl.pathname.replace(/\/$/, '');
-  const suffix = requestUrl.pathname.slice(normalizedProxyPath.length).replace(/^\/+/, '');
-  const pathname = suffix ? `${apiBasePath}/${suffix}` : apiBasePath || '/';
+  const normalizedProxyPath = apiProxyPath.replace(/\/$/, "");
+  const apiBasePath = nocoBaseApiUrl.pathname.replace(/\/$/, "");
+  const suffix = requestUrl.pathname
+    .slice(normalizedProxyPath.length)
+    .replace(/^\/+/, "");
+  const pathname = suffix ? `${apiBasePath}/${suffix}` : apiBasePath || "/";
   const targetUrl = new URL(nocoBaseApiUrl);
   targetUrl.pathname = pathname;
   targetUrl.search = requestUrl.search;
@@ -194,18 +369,21 @@ async function proxyRequest(
     unavailableMessage: string;
   },
 ): Promise<Response> {
-  headers.set('host', targetUrl.host);
-  headers.set('accept-encoding', 'identity');
+  headers.set("host", targetUrl.host);
+  headers.set("accept-encoding", "identity");
   removeHopByHopHeaders(headers);
 
   try {
     const response = await fetch(targetUrl, {
       method: request.method,
       headers,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-      redirect: 'manual',
-      duplex: 'half',
-    } as RequestInit & { duplex: 'half' });
+      body:
+        request.method === "GET" || request.method === "HEAD"
+          ? undefined
+          : request.body,
+      redirect: "manual",
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
 
     return new Response(response.body, {
       status: response.status,
@@ -213,11 +391,13 @@ async function proxyRequest(
       headers: createProxyResponseHeaders(response.headers),
     });
   } catch (error) {
+    console.error("NocoBase API proxy request failed.", {
+      error,
+      target: targetUrl.href,
+    });
     return Response.json(
       {
         error: unavailableMessage,
-        target: targetUrl.origin,
-        message: error instanceof Error ? error.message : String(error),
       },
       {
         status: 502,
@@ -229,21 +409,21 @@ async function proxyRequest(
 function createProxyResponseHeaders(headers: Headers): Headers {
   const nextHeaders = new Headers(headers);
   removeHopByHopHeaders(nextHeaders);
-  nextHeaders.delete('content-encoding');
-  nextHeaders.delete('content-length');
+  nextHeaders.delete("content-encoding");
+  nextHeaders.delete("content-length");
   return nextHeaders;
 }
 
 function removeHopByHopHeaders(headers: Headers): void {
   for (const header of [
-    'connection',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'te',
-    'trailer',
-    'transfer-encoding',
-    'upgrade',
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
   ]) {
     headers.delete(header);
   }
@@ -278,8 +458,13 @@ function removeHopByHopHeaders(headers: Headers): void {
  */
 // Exported for tests only: the cross-site branch requires a non-loopback upstream, and a stub HTTP
 // server can only bind loopback -- so that branch cannot be exercised through `createApp`.
-export function createNocoBaseApiProxyHeaders(request: Request, apiProxyPath: string, nocoBaseApiUrl: URL): Headers {
+export function createNocoBaseApiProxyHeaders(
+  request: Request,
+  apiProxyPath: string,
+  nocoBaseApiUrl: URL,
+): Headers {
   const headers = new Headers(request.headers);
+  headers.delete("cookie");
   const sourceUrl = new URL(request.url);
 
   // Cross-site upstream (typically local development, where the proxy target is a shared remote
@@ -290,22 +475,22 @@ export function createNocoBaseApiProxyHeaders(request: Request, apiProxyPath: st
   // Align all three at the upstream site instead. They have to agree with each other; which site
   // they agree on is the only question, and the upstream can only ever see itself.
   if (isCrossSiteUpstream(nocoBaseApiUrl)) {
-    headers.set('x-forwarded-host', nocoBaseApiUrl.host);
-    headers.set('x-forwarded-proto', nocoBaseApiUrl.protocol.replace(/:$/, ''));
+    headers.set("x-forwarded-host", nocoBaseApiUrl.host);
+    headers.set("x-forwarded-proto", nocoBaseApiUrl.protocol.replace(/:$/, ""));
 
     // Only rewrite what the browser actually sent. A request without `origin` (curl, server-side
     // calls) does not trigger the origin check at all; inventing one would turn "no origin declared"
     // into "claims to come from the site itself", a strictly stronger assertion that a proxy has no
     // business making on the caller's behalf.
-    if (headers.has('origin')) {
-      headers.set('origin', nocoBaseApiUrl.origin);
+    if (headers.has("origin")) {
+      headers.set("origin", nocoBaseApiUrl.origin);
     }
 
-    if (headers.has('referer')) {
-      headers.set('referer', `${nocoBaseApiUrl.origin}/`);
+    if (headers.has("referer")) {
+      headers.set("referer", `${nocoBaseApiUrl.origin}/`);
     }
 
-    headers.set('x-forwarded-prefix', apiProxyPath);
+    headers.set("x-forwarded-prefix", apiProxyPath);
 
     return headers;
   }
@@ -320,15 +505,15 @@ export function createNocoBaseApiProxyHeaders(request: Request, apiProxyPath: st
   //
   // Note the protocol cannot come from `request.url`: the scheme there is derived from whether this
   // socket is encrypted, and behind a TLS-terminating proxy that is always plain http.
-  if (!headers.has('x-forwarded-host')) {
-    headers.set('x-forwarded-host', headers.get('host') ?? sourceUrl.host);
+  if (!headers.has("x-forwarded-host")) {
+    headers.set("x-forwarded-host", headers.get("host") ?? sourceUrl.host);
   }
 
-  if (!headers.has('x-forwarded-proto')) {
-    headers.set('x-forwarded-proto', sourceUrl.protocol.replace(/:$/, ''));
+  if (!headers.has("x-forwarded-proto")) {
+    headers.set("x-forwarded-proto", sourceUrl.protocol.replace(/:$/, ""));
   }
 
-  headers.set('x-forwarded-prefix', apiProxyPath);
+  headers.set("x-forwarded-prefix", apiProxyPath);
 
   // `origin` and `referer` are forwarded as-is, deliberately.
 
@@ -357,7 +542,9 @@ export function createNocoBaseApiProxyHeaders(request: Request, apiProxyPath: st
  * `127.0.0.1`, so matching the literal forms below is sufficient.
  */
 function isCrossSiteUpstream(nocoBaseApiUrl: URL): boolean {
-  return !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(nocoBaseApiUrl.hostname);
+  return !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(
+    nocoBaseApiUrl.hostname,
+  );
 }
 
 interface ClientRuntimeConfig {
@@ -369,53 +556,68 @@ interface ClientRuntimeConfig {
 }
 
 const oneYearSeconds = 31_536_000;
-const runtimeConfigStartMarker = '<!-- nocobase-runtime-config:start -->';
-const runtimeConfigEndMarker = '<!-- nocobase-runtime-config:end -->';
+const runtimeConfigStartMarker = "<!-- nocobase-runtime-config:start -->";
+const runtimeConfigEndMarker = "<!-- nocobase-runtime-config:end -->";
 const contentTypes: Record<string, string> = {
-  '.css': 'text/css; charset=utf-8',
-  '.gif': 'image/gif',
-  '.html': 'text/html; charset=utf-8',
-  '.ico': 'image/x-icon',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.map': 'application/json; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.txt': 'text/plain; charset=utf-8',
-  '.wasm': 'application/wasm',
-  '.webp': 'image/webp',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
+  ".css": "text/css; charset=utf-8",
+  ".gif": "image/gif",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
 };
 
-async function serveClientAsset(request: Request, clientRootDir: string, basePath: string): Promise<Response> {
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    return methodNotAllowed('GET, HEAD');
+async function serveClientAsset(
+  request: Request,
+  clientRootDir: string,
+  basePath: string,
+): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return methodNotAllowed("GET, HEAD");
   }
 
   const requestUrl = new URL(request.url);
   const pathInsideClient = getPathInsideClient(requestUrl.pathname, basePath);
-  const response = await serveFileIfExists(clientRootDir, pathInsideClient, request.method, {
-    cacheControl: `public, max-age=${oneYearSeconds}, immutable`,
-  });
+  const response = await serveFileIfExists(
+    clientRootDir,
+    pathInsideClient,
+    request.method,
+    {
+      cacheControl: `public, max-age=${oneYearSeconds}, immutable`,
+    },
+  );
 
   return response ?? notFound();
 }
 
-async function serveClient(clientIndexPath: string, runtimeConfig: ClientRuntimeConfig): Promise<Response> {
-  const html = await readFile(clientIndexPath, 'utf8');
+async function serveClient(
+  clientIndexPath: string,
+  runtimeConfig: ClientRuntimeConfig,
+): Promise<Response> {
+  const html = await readFile(clientIndexPath, "utf8");
   return new Response(injectRuntimeConfig(html, runtimeConfig), {
     headers: {
-      'cache-control': 'no-cache',
-      'content-type': 'text/html; charset=utf-8',
+      "cache-control": "no-cache",
+      "content-type": "text/html; charset=utf-8",
     },
   });
 }
 
-function injectRuntimeConfig(html: string, runtimeConfig: ClientRuntimeConfig): string {
+function injectRuntimeConfig(
+  html: string,
+  runtimeConfig: ClientRuntimeConfig,
+): string {
   const cleanHtml = stripExistingRuntimeConfig(html);
   const moduleScriptPattern = /<script\s+[^>]*type=["']module["'][^>]*>/i;
   const moduleScriptMatch = cleanHtml.match(moduleScriptPattern);
@@ -429,13 +631,22 @@ function injectRuntimeConfig(html: string, runtimeConfig: ClientRuntimeConfig): 
 }
 
 function stripExistingRuntimeConfig(html: string): string {
-  const pattern = new RegExp(`${runtimeConfigStartMarker}[\\s\\S]*?${runtimeConfigEndMarker}\\s*`, 'g');
-  return html.replace(pattern, '');
+  const pattern = new RegExp(
+    `${runtimeConfigStartMarker}[\\s\\S]*?${runtimeConfigEndMarker}\\s*`,
+    "g",
+  );
+  return html.replace(pattern, "");
 }
 
-function createRuntimeConfigHtml({ appBasePath, apiUrl, storagePrefix, storageType, shareToken }: ClientRuntimeConfig): string {
-  const normalizedStoragePrefix = storagePrefix?.trim() || 'NOCOBASE_';
-  const normalizedStorageType = storageType?.trim() || 'localStorage';
+function createRuntimeConfigHtml({
+  appBasePath,
+  apiUrl,
+  storagePrefix,
+  storageType,
+  shareToken,
+}: ClientRuntimeConfig): string {
+  const normalizedStoragePrefix = storagePrefix?.trim() || "NOCOBASE_";
+  const normalizedStorageType = storageType?.trim() || "localStorage";
   const normalizedShareToken = shareToken ?? false;
 
   return `${runtimeConfigStartMarker}
@@ -451,7 +662,7 @@ ${runtimeConfigEndMarker}
 }
 
 function toBrowserBasePath(value: string): string {
-  return value ? `${value.replace(/\/+$/, '')}/` : '/';
+  return value ? `${value.replace(/\/+$/, "")}/` : "/";
 }
 
 async function serveFileIfExists(
@@ -470,7 +681,7 @@ async function serveFileIfExists(
     stats = await stat(filePath);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
+    if (code === "ENOENT" || code === "ENOTDIR") {
       return null;
     }
 
@@ -482,25 +693,33 @@ async function serveFileIfExists(
   }
 
   const headers = new Headers({
-    'cache-control': options.cacheControl ?? 'no-cache',
-    'content-length': String(stats.size),
-    'content-type': contentTypeFor(filePath),
-    'last-modified': stats.mtime.toUTCString(),
+    "cache-control": options.cacheControl ?? "no-cache",
+    "content-length": String(stats.size),
+    "content-type": contentTypeFor(filePath),
+    "last-modified": stats.mtime.toUTCString(),
   });
 
   const body =
-    method === 'HEAD'
+    method === "HEAD"
       ? null
-      : (Readable.toWeb(createReadStream(filePath)) as ConstructorParameters<typeof Response>[0]);
+      : (Readable.toWeb(createReadStream(filePath)) as ConstructorParameters<
+          typeof Response
+        >[0]);
   return new Response(body, { headers });
 }
 
 function getPathInsideClient(pathname: string, basePath: string): string {
-  const pathInside = basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) : pathname;
-  return pathInside.startsWith('/') ? pathInside : `/${pathInside}`;
+  const pathInside =
+    basePath && pathname.startsWith(basePath)
+      ? pathname.slice(basePath.length)
+      : pathname;
+  return pathInside.startsWith("/") ? pathInside : `/${pathInside}`;
 }
 
-function resolveClientFile(rootDir: string, requestPath: string): string | null {
+function resolveClientFile(
+  rootDir: string,
+  requestPath: string,
+): string | null {
   let decodedPath: string;
   try {
     decodedPath = decodeURIComponent(requestPath);
@@ -508,15 +727,15 @@ function resolveClientFile(rootDir: string, requestPath: string): string | null 
     return null;
   }
 
-  if (decodedPath.includes('\0')) {
+  if (decodedPath.includes("\0")) {
     return null;
   }
 
-  const normalizedPath = decodedPath.replace(/^\/+/, '');
+  const normalizedPath = decodedPath.replace(/^\/+/, "");
   const filePath = path.resolve(rootDir, normalizedPath);
   const relative = path.relative(rootDir, filePath);
 
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
     return null;
   }
 
@@ -524,13 +743,16 @@ function resolveClientFile(rootDir: string, requestPath: string): string | null 
 }
 
 function contentTypeFor(filePath: string): string {
-  return contentTypes[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+  return (
+    contentTypes[path.extname(filePath).toLowerCase()] ??
+    "application/octet-stream"
+  );
 }
 
 function methodNotAllowed(allow: string): Response {
   return Response.json(
     {
-      error: 'Method not allowed',
+      error: "Method not allowed",
     },
     {
       status: 405,
@@ -544,7 +766,7 @@ function methodNotAllowed(allow: string): Response {
 function notFound(): Response {
   return Response.json(
     {
-      error: 'Not found',
+      error: "Not found",
     },
     {
       status: 404,

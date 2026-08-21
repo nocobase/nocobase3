@@ -13,6 +13,7 @@ import {
   AppAlreadyExistsError,
   AppCreateFailedError,
   AppNotFoundError,
+  AppRegistryError,
   AppReloadFailedError,
 } from "./errors.ts";
 import { AppEventBus } from "./events.ts";
@@ -26,9 +27,14 @@ import type {
   AppDefinition,
   AppDeploymentResult,
   AppDestroyOptions,
+  AppReadinessPolicy,
   AppRequestMetadata,
   AppSnapshot,
 } from "./app-types.ts";
+
+const DEFAULT_READINESS_TIMEOUT_MS = 30_000;
+const DEFAULT_READINESS_INTERVAL_MS = 250;
+const DEFAULT_READINESS_SUCCESS_THRESHOLD = 1;
 
 export interface ReloadAppOptions {
   reason?: string;
@@ -165,6 +171,16 @@ export class AppRuntimeRegistry {
   ): Promise<AppDefinition> {
     return this.withAppLock(id, async () => {
       this.requireDefinition(id);
+      if (this.runtimes.has(id)) {
+        throw new AppRegistryError(
+          `App "${id}" has an active runtime; deploy a release instead of replacing its definition`,
+          {
+            status: 409,
+            code: "APP_DEFINITION_ACTIVE",
+          },
+        );
+      }
+
       const definition = this.createDefinition(id, options);
       this.definitions.set(id, definition);
       return definition;
@@ -242,62 +258,104 @@ export class AppRuntimeRegistry {
 
   async deploy(
     id: string,
-    options: DeployAppOptions = {},
+    options: DeployAppOptions,
   ): Promise<AppDeploymentResult> {
     return this.withAppLock(id, async () => {
-      const currentDefinition = this.requireDefinition(id);
+      const currentDefinition = this.definitions.get(id);
       const oldRuntime = this.runtimes.get(id);
       const oldSnapshot = oldRuntime?.snapshot() ?? null;
-      const desiredVersion =
-        options.version ?? currentDefinition.desiredVersion;
-      let definition = currentDefinition;
+      const previousReleaseId = oldSnapshot?.releaseId ?? null;
 
-      if (desiredVersion !== currentDefinition.desiredVersion) {
-        definition = this.createDefinition(id, {
-          ...currentDefinition,
-          desiredVersion,
-          code: currentDefinition.code
-            ? { ...currentDefinition.code, version: desiredVersion }
-            : undefined,
-          release: currentDefinition.release
-            ? { ...currentDefinition.release, version: desiredVersion }
-            : undefined,
-        });
-        this.definitions.set(id, definition);
+      if (previousReleaseId !== options.expectedCurrentReleaseId) {
+        throw new AppRegistryError(
+          `App "${id}" active release changed from the expected value`,
+          {
+            status: 409,
+            code: "APP_DEPLOYMENT_CONFLICT",
+          },
+        );
       }
+
+      const targetDefinition = this.createDeploymentTarget(id, options.target);
+      const targetReleaseId = targetDefinition.release!.releaseId;
+
+      let candidate: ActiveAppHandle | null = null;
+      let bindingSwitched = false;
 
       try {
         if (!oldRuntime) {
           await this.evictForCapacity();
         }
 
-        const newRuntime = await this.activateDefinition(definition);
-        this.runtimes.set(id, newRuntime);
+        candidate = await this.activateDefinition(targetDefinition);
+        await this.assertReadiness(
+          candidate,
+          targetDefinition,
+          options.readiness,
+          "before switching",
+        );
+
+        this.definitions.set(id, targetDefinition);
+        this.runtimes.set(id, candidate);
+        bindingSwitched = true;
+
+        try {
+          await this.assertReadiness(
+            candidate,
+            targetDefinition,
+            options.readiness,
+            "after switching",
+            false,
+          );
+        } catch (error) {
+          if (currentDefinition) {
+            this.definitions.set(id, currentDefinition);
+          } else {
+            this.definitions.delete(id);
+          }
+          if (oldRuntime) {
+            this.runtimes.set(id, oldRuntime);
+          } else {
+            this.runtimes.delete(id);
+          }
+          bindingSwitched = false;
+          throw error;
+        }
 
         if (oldRuntime) {
           await oldRuntime.destroy({
-            reason: options.reason ?? `deployed version ${desiredVersion}`,
-            timeoutMs: options.destroyTimeoutMs,
+            reason: options.reason ?? `deployed release ${targetReleaseId}`,
+            timeoutMs: options.drainTimeoutMs,
           });
         }
 
-        const app = newRuntime.snapshot();
+        const app = candidate.snapshot();
         this.metrics.deployments += 1;
         return {
           id,
-          strategy: options.strategy ?? "blue-green",
-          previousVersion: oldSnapshot?.codeVersion ?? null,
-          desiredVersion,
-          activeVersion: app.codeVersion,
-          changed: oldSnapshot?.codeVersion !== app.codeVersion,
+          operationId: options.operationId,
+          previousReleaseId,
+          activeReleaseId: app.releaseId,
+          changed: previousReleaseId !== app.releaseId,
           app,
         };
       } catch (error) {
-        if (desiredVersion !== currentDefinition.desiredVersion) {
-          this.definitions.set(id, currentDefinition);
+        if (!bindingSwitched && candidate) {
+          await candidate.destroy({
+            reason: `deployment ${options.operationId} failed`,
+            timeoutMs: 0,
+          });
         }
 
-        throw new AppReloadFailedError(id, error);
+        if (error instanceof AppRegistryError) {
+          throw error;
+        }
+
+        throw new AppRegistryError(`App "${id}" failed to deploy`, {
+          status: 500,
+          code: "APP_DEPLOYMENT_FAILED",
+          cause: error,
+        });
       }
     });
   }
@@ -452,9 +510,14 @@ export class AppRuntimeRegistry {
   }
 
   async ensureActiveHandle(id: string): Promise<ActiveAppHandle> {
+    const active = this.runtimes.get(id);
+    if (active?.state === "active") {
+      return active;
+    }
+
     return this.withAppLock(id, async () => {
       const existing = this.runtimes.get(id);
-      if (existing) {
+      if (existing?.state === "active") {
         return existing;
       }
 
@@ -533,6 +596,137 @@ export class AppRuntimeRegistry {
       });
       throw new AppCreateFailedError(definition.id, error);
     }
+  }
+
+  private createDeploymentTarget(
+    id: string,
+    target: AppDefinition,
+  ): AppDefinition {
+    if (target.id !== id) {
+      throw new AppRegistryError(
+        `Deployment target "${target.id}" does not match app "${id}"`,
+        {
+          status: 400,
+          code: "APP_DEPLOYMENT_TARGET_INVALID",
+        },
+      );
+    }
+
+    const definition = this.createDefinition(id, target);
+    if (!definition.release?.releaseId) {
+      throw new AppRegistryError(
+        `Deployment target for app "${id}" must reference a release`,
+        {
+          status: 400,
+          code: "APP_DEPLOYMENT_TARGET_INVALID",
+        },
+      );
+    }
+
+    return definition;
+  }
+
+  private async assertReadiness(
+    runtime: ActiveAppHandle,
+    definition: AppDefinition,
+    options: AppReadinessPolicy | undefined,
+    phase: string,
+    retry = true,
+  ): Promise<void> {
+    const configuredPath =
+      definition.server?.healthPath ?? definition.healthPath;
+    if (!configuredPath) {
+      return;
+    }
+
+    const policy = this.resolveReadinessPolicy(definition, options);
+    const healthPath = `/${configuredPath.replace(/^\/+/, "")}`;
+    const deadline = Date.now() + policy.timeoutMs;
+    let successes = 0;
+    let lastFailure: unknown;
+
+    while (Date.now() < deadline) {
+      const remainingMs = Math.max(1, deadline - Date.now());
+      try {
+        const request = new Request(new URL(healthPath, "http://app.local"), {
+          signal: AbortSignal.timeout(remainingMs),
+        });
+        const response = await withTimeout(
+          runtime.dispatch(request, {
+            method: "GET",
+            path: healthPath,
+          }),
+          remainingMs,
+        );
+        const ready = response.ok;
+        await response.body?.cancel();
+
+        if (ready) {
+          successes += 1;
+          if (!retry || successes >= policy.successThreshold) {
+            return;
+          }
+        } else {
+          successes = 0;
+          lastFailure = new Error(`Readiness returned HTTP ${response.status}`);
+        }
+      } catch (error) {
+        successes = 0;
+        lastFailure = error;
+      }
+
+      if (!retry) {
+        break;
+      }
+
+      const delayMs = Math.min(
+        policy.intervalMs,
+        Math.max(0, deadline - Date.now()),
+      );
+      if (delayMs > 0) {
+        await delay(delayMs);
+      }
+    }
+
+    throw new AppRegistryError(
+      `App "${definition.id}" readiness failed ${phase} at "${healthPath}"`,
+      {
+        status: 503,
+        code: "APP_READINESS_FAILED",
+        cause: lastFailure,
+      },
+    );
+  }
+
+  private resolveReadinessPolicy(
+    definition: AppDefinition,
+    options: AppReadinessPolicy | undefined,
+  ): Required<AppReadinessPolicy> {
+    const policy = {
+      timeoutMs:
+        options?.timeoutMs ??
+        definition.resourcePolicy?.startupTimeoutMs ??
+        DEFAULT_READINESS_TIMEOUT_MS,
+      intervalMs: options?.intervalMs ?? DEFAULT_READINESS_INTERVAL_MS,
+      successThreshold:
+        options?.successThreshold ?? DEFAULT_READINESS_SUCCESS_THRESHOLD,
+    };
+
+    if (
+      !Number.isFinite(policy.timeoutMs) ||
+      policy.timeoutMs <= 0 ||
+      !Number.isFinite(policy.intervalMs) ||
+      policy.intervalMs <= 0 ||
+      !Number.isInteger(policy.successThreshold) ||
+      policy.successThreshold <= 0
+    ) {
+      throw new AppRegistryError("Invalid deployment readiness policy", {
+        status: 400,
+        code: "APP_DEPLOYMENT_OPTIONS_INVALID",
+      });
+    }
+
+    return policy;
   }
 
   private async evictForCapacity(): Promise<void> {
@@ -694,4 +888,27 @@ function sortByLastAccessed(a: AppSnapshot, b: AppSnapshot): number {
     ? Date.parse(b.lastAccessedAt)
     : Date.parse(b.createdAt);
   return aTime - bTime;
+}
+
+function delay(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, timeoutMs));
+}
+
+function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Operation timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    operation.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
 }

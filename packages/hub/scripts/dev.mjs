@@ -4,7 +4,10 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const viteDevHost = "127.0.0.1";
 const viteDevPreferredPort = 5173;
 
@@ -81,7 +84,7 @@ const findAvailablePort = async (host, preferredPort) => {
   }
 
   throw new Error(
-    `Unable to find an available Vite dev port from ${preferredPort} to ${preferredPort + 99}.`
+    `Unable to find an available Vite dev port from ${preferredPort} to ${preferredPort + 99}.`,
   );
 };
 
@@ -151,7 +154,7 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
     if (shuttingDown) return;
 
     console.error(
-      `[${label}] exited unexpectedly; code=${code ?? "null"} signal=${signal ?? "null"}`
+      `[${label}] exited unexpectedly; code=${code ?? "null"} signal=${signal ?? "null"}`,
     );
     shutdown(typeof code === "number" ? code : 1);
   });
@@ -197,34 +200,42 @@ const nextEnv = {
 const appServerHost = nextEnv.APP_SERVER_HOST || "127.0.0.1";
 const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13000);
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;
-const appBasePath = String(nextEnv.APP_BASE_PATH || `/${nextEnv.APP_NAME || "app"}`)
+const appBasePath = String(
+  nextEnv.APP_BASE_PATH || `/${nextEnv.APP_NAME || "app"}`,
+)
   .trim()
   .replace(/^\/+|\/+$/g, "");
-const appUrl = appBasePath ? `${appServerUrl}/${appBasePath}/` : `${appServerUrl}/`;
-const proxyApiPath =
-  nextEnv.NOCOBASE_API_URL || `/${[appBasePath, "v2/api"].filter(Boolean).join("/")}`;
+const appUrl = appBasePath
+  ? `${appServerUrl}/${appBasePath}/`
+  : `${appServerUrl}/`;
+const hubApiPath = `/${[appBasePath, "api"].filter(Boolean).join("/")}`;
 
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);
-console.log(`  Proxy API: ${appServerUrl}${proxyApiPath}\n`);
+console.log(`  Hub API:   ${appServerUrl}${hubApiPath}\n`);
 
-spawnDevProcess("client", "pnpm", [
-  "exec",
-  "vite",
-  "--host",
-  viteDevHost,
-  "--port",
-  String(vitePort),
-  "--strictPort",
-], nextEnv, { filterViteStartup: true });
+spawnDevProcess(
+  "client",
+  "pnpm",
+  [
+    "exec",
+    "vite",
+    "--host",
+    viteDevHost,
+    "--port",
+    String(vitePort),
+    "--strictPort",
+  ],
+  nextEnv,
+  { filterViteStartup: true },
+);
 
-spawnDevProcess("server", "pnpm", [
-  "exec",
-  "tsx",
-  "watch",
-  "--clear-screen=false",
-  "server/standalone.ts",
-], {
-  ...nextEnv,
-  APP_SERVER_START_LOG: "false",
-});
+spawnDevProcess(
+  "server",
+  "pnpm",
+  ["exec", "tsx", "watch", "--clear-screen=false", "server/standalone.ts"],
+  {
+    ...nextEnv,
+    APP_SERVER_START_LOG: "false",
+  },
+);

@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { filterMenuItemsByAcl, useAclState } from "@nocobase/portal-sdk/acl";
 import {
   useMenu,
   useLink,
@@ -33,16 +32,17 @@ import { ChevronRight, ListIcon, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Brand } from "@/components/app-shell/brand";
 import { getResourceLabel } from "@/components/resources/resource-label";
+import { hasHubCapability } from "@/features/hub/api";
+import { useHubRuntime } from "@/features/hub/provider";
+
+const applicationScopedMenuResources = new Set(["hub.deployment"]);
 
 export function Sidebar() {
   const { menuItems, selectedKey } = useMenu();
-  const acl = useAclState();
+  const { me } = useHubRuntime();
   const allowedMenuItems = React.useMemo(
-    () =>
-      acl.status === "ready"
-        ? filterMenuItemsByAcl(menuItems, acl.permissions)
-        : [],
-    [acl, menuItems]
+    () => filterMenuItemsByHubCapability(menuItems, me.capabilities),
+    [me.capabilities, menuItems],
   );
 
   return (
@@ -77,7 +77,7 @@ export function SidebarNavigation({
           {
             "px-3": open,
             "px-1": !open,
-          }
+          },
         )}
       >
         {menuItems.map((item: TreeMenuItem) => (
@@ -139,7 +139,7 @@ function SidebarItemGroup({ item, selectedKey }: MenuItemProps) {
             "opacity-100": open,
             "pointer-events-none": !open,
             "pointer-events-auto": open,
-          }
+          },
         )}
       >
         {displayName}
@@ -172,7 +172,7 @@ function SidebarItemCollapsible({ item, selectedKey }: MenuItemProps) {
         "text-muted-foreground",
         "transition-transform",
         "duration-200",
-        "group-data-[state=open]:rotate-90"
+        "group-data-[state=open]:rotate-90",
       )}
     />
   );
@@ -273,14 +273,14 @@ function SidebarHeader() {
         "flex-row",
         "items-center",
         "overflow-hidden",
-        open ? "px-5" : "justify-center px-0"
+        open ? "px-5" : "justify-center px-0",
       )}
     >
       <Brand
         showText={open}
         logoClassName={cn(
           "transition-transform duration-200",
-          !open && "size-9"
+          !open && "size-9",
         )}
       />
     </ShadcnSidebarHeader>
@@ -297,27 +297,19 @@ function SidebarFooter() {
         title={`${__PORTAL_TEMPLATE_NAME__} v${__PORTAL_TEMPLATE_VERSION__}`}
         className={cn(
           "flex min-h-16 items-center",
-          open ? "gap-3 px-5 py-3" : "justify-center px-2"
+          open ? "gap-3 px-5 py-3" : "justify-center px-2",
         )}
       >
         <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
         {open && (
           <div className="min-w-0 text-xs leading-4">
             <div className="font-semibold text-sidebar-foreground">
-              {translate("shell.footer.freedom", "AI builds freely.")}
+              {translate("shell.footer.controlPlane", "NocoBase Hub")}
             </div>
             <div className="text-muted-foreground">
-              <a
-                href="https://nocobase.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-sidebar-foreground hover:underline"
-              >
-                NocoBase
-              </a>{" "}
               {translate(
-                "shell.footer.reliabilitySuffix",
-                "keeps it reliable."
+                "shell.footer.controlPlaneDescription",
+                "Application releases and runtime operations.",
               )}
             </div>
             <div className="mt-1 font-mono text-[10px] text-muted-foreground/70">
@@ -330,6 +322,37 @@ function SidebarFooter() {
   );
 }
 
+function filterMenuItemsByHubCapability(
+  items: TreeMenuItem[],
+  capabilities: Parameters<typeof hasHubCapability>[0],
+): TreeMenuItem[] {
+  return items.flatMap((item) => {
+    const children = item.children
+      ? filterMenuItemsByHubCapability(item.children, capabilities)
+      : undefined;
+    const hubResource =
+      typeof item.meta?.hubResource === "string"
+        ? item.meta.hubResource
+        : undefined;
+    const allowed = hubResource
+      ? hasReadableHubMenuResource(capabilities, hubResource)
+      : true;
+    if (!allowed || (item.meta?.group && !children?.length)) return [];
+    return item.children ? [{ ...item, children: children ?? [] }] : [item];
+  });
+}
+
+function hasReadableHubMenuResource(
+  capabilities: Parameters<typeof hasHubCapability>[0],
+  resource: string,
+): boolean {
+  if (hasHubCapability(capabilities, resource, "read")) return true;
+  if (!applicationScopedMenuResources.has(resource)) return false;
+  return (capabilities?.application ?? []).some((entry) =>
+    hasHubCapability(capabilities, resource, "read", entry.applicationId),
+  );
+}
+
 function useMenuItemLabel(item: TreeMenuItem) {
   const translate = useTranslate();
   const getUserFriendlyName = useUserFriendlyName();
@@ -339,7 +362,7 @@ function useMenuItemLabel(item: TreeMenuItem) {
     "plural",
     translate,
     getUserFriendlyName,
-    item.name
+    item.name,
   );
 }
 
@@ -408,6 +431,7 @@ function SidebarButton({
 
   return (
     <Button
+      nativeButton={!asLink}
       render={
         asLink && item.route ? (
           <Link
@@ -424,7 +448,7 @@ function SidebarButton({
           "bg-primary/10 text-primary hover:!bg-primary/15": isSelected,
           "hover:bg-sidebar-accent/80": !isSelected,
         },
-        className
+        className,
       )}
       onClick={onClick}
       {...props}

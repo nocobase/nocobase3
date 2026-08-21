@@ -14,6 +14,17 @@ export default createPortalConfig({
   ignores: ["public/r/**"],
   overrides: [
     {
+      name: "hub/migration-project",
+      files: ["server/hub/migrations/*.ts"],
+      languageOptions: {
+        parserOptions: {
+          project: "./tsconfig.migrations.json",
+          projectService: false,
+          tsconfigRootDir: import.meta.dirname,
+        },
+      },
+    },
+    {
       name: "hub/async-jsx-handlers",
       files: [
         "client/**/*.{ts,tsx}",

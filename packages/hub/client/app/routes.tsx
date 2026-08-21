@@ -1,65 +1,72 @@
-import { Authenticated } from "@refinedev/core";
-import { CatchAllNavigate } from "@refinedev/react-router";
-import { Outlet, Route, Routes } from "react-router";
+import { Navigate, Outlet, Route, Routes } from "react-router";
 
-import { AclBootstrap } from "@/components/access-control/acl-bootstrap";
-import { NavigateToAccessibleResource } from "@/components/access-control/navigate-to-accessible-resource";
 import { ErrorComponent } from "@/components/app-shell/error-component";
 import { Layout } from "@/components/app-shell/layout";
-import { ForgotPassword } from "@/pages/forgot-password";
-import { Login } from "@/pages/login";
-import { Register } from "@/pages/register";
-import {
-  AppExtensionProviders,
-  configuredRouteElements,
-  extensionStandaloneRouteElements,
-} from "./extensions";
+import { hasHubCapability } from "@/features/hub/api";
+import { HubLoginPage, HubSetupPage } from "@/features/hub/auth-pages";
+import { HubAuthGate } from "@/features/hub/gate";
+import { HubRuntimeProvider, useHubRuntime } from "@/features/hub/provider";
+import { configuredRouteElements } from "./extensions";
 
 export function AppRoutes() {
   return (
-    <Routes>
-      <Route
-        element={
-          <Authenticated
-            key="authenticated-inner"
-            fallback={<CatchAllNavigate to="/login" />}
-          >
-            <AclBootstrap>
-              <AppExtensionProviders>
-                <Outlet />
-              </AppExtensionProviders>
-            </AclBootstrap>
-          </Authenticated>
-        }
-      >
-        {extensionStandaloneRouteElements}
+    <HubAuthGate publicPaths={["/login", "/setup"]}>
+      <Routes>
+        <Route path="/login" element={<HubLoginPage />} />
+        <Route path="/setup" element={<HubSetupPage />} />
         <Route
           element={
-            <Layout>
+            <HubRuntimeProvider>
               <Outlet />
-            </Layout>
+            </HubRuntimeProvider>
           }
         >
-          <Route index element={<NavigateToAccessibleResource />} />
-          {configuredRouteElements}
-          <Route path="*" element={<ErrorComponent />} />
+          <Route
+            element={
+              <Layout>
+                <Outlet />
+              </Layout>
+            }
+          >
+            <Route index element={<HubHomeRedirect />} />
+            {configuredRouteElements}
+            <Route path="*" element={<ErrorComponent />} />
+          </Route>
         </Route>
-      </Route>
-
-      <Route
-        element={
-          <Authenticated key="authenticated-outer" fallback={<Outlet />}>
-            <AclBootstrap>
-              <NavigateToAccessibleResource />
-            </AclBootstrap>
-          </Authenticated>
-        }
-      >
-        <Route path="/login" element={<Login />} />
-        <Route path="/signin" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-      </Route>
-    </Routes>
+      </Routes>
+    </HubAuthGate>
   );
+}
+
+function HubHomeRedirect() {
+  const { me } = useHubRuntime();
+  if (hasHubCapability(me.capabilities, "hub.app", "read")) {
+    return <Navigate to="/apps" replace />;
+  }
+  const scopedApplication = (me.capabilities.application ?? []).find((entry) =>
+    hasHubCapability(me.capabilities, "hub.app", "read", entry.applicationId),
+  );
+  if (scopedApplication) {
+    return (
+      <Navigate
+        to={`/apps/${encodeURIComponent(scopedApplication.applicationId)}`}
+        replace
+      />
+    );
+  }
+  if (hasHubCapability(me.capabilities, "hub.deployment", "read")) {
+    return <Navigate to="/deployments" replace />;
+  }
+  const deploymentScope = (me.capabilities.application ?? []).find((entry) =>
+    hasHubCapability(
+      me.capabilities,
+      "hub.deployment",
+      "read",
+      entry.applicationId,
+    ),
+  );
+  if (deploymentScope) {
+    return <Navigate to="/deployments" replace />;
+  }
+  return <Navigate to="/apps" replace />;
 }

@@ -10,9 +10,9 @@
 import type {
   AppWebSocketAcceptResult,
   AppWebSocketHandler,
-} from '@nocobase/app-server/websocket';
+} from "@nocobase/app-server/websocket";
 
-import type { AppState } from './events.ts';
+import type { AppState } from "./events.ts";
 
 export type {
   AppWebSocket,
@@ -26,12 +26,16 @@ export type {
   AppWebSocketOpenEvent,
   AppWebSocketReadyState,
   AppWebSocketSendOptions,
-} from '@nocobase/app-server/websocket';
+} from "@nocobase/app-server/websocket";
 
 export type AppDisposer = () => void | Promise<void>;
 
 export interface FetchApp {
-  fetch(request: Request, env?: unknown, executionCtx?: unknown): Response | Promise<Response>;
+  fetch(
+    request: Request,
+    env?: unknown,
+    executionCtx?: unknown,
+  ): Response | Promise<Response>;
   websocket?: AppWebSocketHandler;
 }
 
@@ -57,11 +61,12 @@ export interface AppScope {
 
 export type AppFactory = (scope: AppScope) => FetchApp | Promise<FetchApp>;
 
-export type AppBackendKind = 'in-process' | 'worker' | 'process' | 'external-service';
+export type AppBackendKind =
+  "in-process" | "worker" | "process" | "external-service";
 
 export type AppIsolation = AppBackendKind;
 
-export type AppTier = 'cold' | 'warm' | 'hot' | 'dedicated';
+export type AppTier = "cold" | "warm" | "hot" | "dedicated";
 
 export interface AppCodeReference {
   version: string;
@@ -88,6 +93,7 @@ export interface AppServerReference {
 export type AppApiReference = AppServerReference;
 
 export interface AppReleaseReference extends AppCodeReference {
+  releaseId: string;
   releaseDir: string;
   manifestPath?: string;
 }
@@ -102,7 +108,7 @@ export interface AppResourcePolicy {
 }
 
 export interface AppRuntimeEndpoint {
-  kind: 'in-process' | 'local-http' | 'external-http';
+  kind: "in-process" | "local-http" | "external-http";
   host?: string;
   port?: number;
   url?: string;
@@ -172,6 +178,7 @@ export interface AppSnapshot {
   id: string;
   appName?: string;
   version: number;
+  releaseId: string | null;
   basePath: string;
   backend: AppBackendKind;
   configVersion: string;
@@ -197,7 +204,10 @@ export interface ActiveAppHandle {
   readonly signal: AbortSignal;
   readonly state: AppState;
   dispatch(request: Request, metadata?: AppRequestMetadata): Promise<Response>;
-  acceptWebSocket(request: Request, metadata?: AppRequestMetadata): Promise<AppWebSocketAcceptResult>;
+  acceptWebSocket(
+    request: Request,
+    metadata?: AppRequestMetadata,
+  ): Promise<AppWebSocketAcceptResult>;
   destroy(options?: string | AppDestroyOptions): Promise<void>;
   snapshot(): AppSnapshot;
 }
@@ -218,20 +228,26 @@ export interface AppActivationBackend {
   activate(request: AppActivationRequest): Promise<ActiveAppHandle>;
 }
 
+export interface AppReadinessPolicy {
+  timeoutMs?: number;
+  intervalMs?: number;
+  successThreshold?: number;
+}
+
 export interface DeployAppOptions {
-  version?: string;
+  target: AppDefinition;
+  operationId: string;
+  expectedCurrentReleaseId: string | null;
+  readiness?: AppReadinessPolicy;
   reason?: string;
-  strategy?: 'restart' | 'blue-green';
-  destroyTimeoutMs?: number;
-  waitForReady?: boolean;
+  drainTimeoutMs?: number;
 }
 
 export interface AppDeploymentResult {
   id: string;
-  strategy: 'restart' | 'blue-green';
-  previousVersion: string | null;
-  desiredVersion: string;
-  activeVersion: string;
+  operationId: string;
+  previousReleaseId: string | null;
+  activeReleaseId: string | null;
   changed: boolean;
   app: AppSnapshot;
 }

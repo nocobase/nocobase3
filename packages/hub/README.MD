@@ -1,7 +1,8 @@
-# NocoBase Portal Template
+# NocoBase Hub
 
-A React and shadcn/ui template for building standalone frontends backed by
-NocoBase.
+The self-contained NocoBase 3 application-management control plane. Hub owns
+its users, permissions, applications, immutable releases, deployments, and
+audit events. A local App Host owns the application runtimes.
 
 ![NocoBase Portal Template](https://static-docs.nocobase.com/2026-07-22-08-48-12.png)
 
@@ -23,23 +24,57 @@ The minimum local configuration is:
 ```env
 APP_NAME=hub
 APP_BASE_PATH=/hub
-NOCOBASE_API_URL=/v2/api
-NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api
+AUTH_SECRET=replace-with-at-least-32-random-characters
+HUB_DATABASE_PATH=.nocobase/hub.sqlite
+HUB_RELEASE_ROOT=app-dist
 ```
 
 - `APP_NAME` is the runtime app name. Hub uses `hub`.
 - `APP_BASE_PATH` is the public mount path for the app server. Hub uses `/hub`.
-- `NOCOBASE_API_URL` is the browser-facing NocoBase REST API root. The app server
-  uses `/v2/api` by default and proxies that path.
-- `NOCOBASE_API_PROXY_TARGET` is the upstream NocoBase REST API root and must
-  include `/api`. This value is read by the app server and is not exposed through
-  Vite.
-- `NOCOBASE_API_TOKEN` can provide a temporary development token. Never commit
-  real tokens.
+- `AUTH_SECRET` protects Hub sessions and must contain at least 32 characters.
+  Inject it at runtime; never package or commit it.
+- `AUTH_BASE_URL` is optional for loopback development. Set it to the complete
+  public Better Auth URL, such as `https://hub.example.com/hub/api/auth`, when
+  Hub is served from any non-loopback origin or behind a reverse proxy.
+- `HUB_DATABASE_PATH` points to Hub's SQLite database.
+- `HUB_RELEASE_ROOT` is the controlled root containing immutable application
+  release artifacts. The same directory is used by the local App Host unless
+  `APP_DIST_DIR` is set explicitly.
 
-The Portal uses the same authentication storage convention as NocoBase. If the
-server customizes it, keep `API_CLIENT_STORAGE_PREFIX`,
-`API_CLIENT_STORAGE_TYPE`, and `API_CLIENT_SHARE_TOKEN` aligned with the server.
+Hub management endpoints are served directly under `<APP_BASE_PATH>/api`, with
+Better Auth at `<APP_BASE_PATH>/api/auth/*`. There is no default `/v2/api/*`
+legacy proxy. An external NocoBase proxy is enabled only when both variables are
+set explicitly:
+
+```env
+NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:14000/api
+NOCOBASE_API_PROXY_PATH=/external-api
+```
+
+`NOCOBASE_API_URL` does not enable or derive this proxy.
+
+The browser API URL is injected by the Hub server and defaults to
+`<APP_BASE_PATH>/api`.
+
+### Release artifact checksum
+
+Release registration accepts only the canonical lowercase
+`sha256:<64 lowercase hex characters>` representation. To compute the v1
+artifact checksum, start a SHA-256 stream with the UTF-8 domain prefix
+`nocobase-release-artifact-v1` followed by one NUL byte. Recursively enumerate
+regular files, reject symbolic links and special files, convert every relative
+path to UTF-8 POSIX form, and sort paths by their UTF-8 byte order. For each
+file, append these bytes in order:
+
+1. the UTF-8 relative path;
+2. one NUL byte;
+3. the file length as an unsigned 8-byte big-endian integer;
+4. the raw 32-byte SHA-256 digest of the file contents;
+5. one NUL byte.
+
+The final lowercase hexadecimal digest, prefixed with `sha256:`, is the Release
+checksum. Directory metadata is intentionally excluded, so identical trees
+produce the same checksum across supported platforms.
 
 ## Development
 
@@ -54,8 +89,9 @@ pnpm build
 pnpm start
 ```
 
-Application pages and resources live under `client`. The included Users page is a
-working example based on the standard NocoBase `users` collection.
+Hub pages and resources live under `client`. The application, release, and
+deployment pages consume only the authenticated Hub API; they never call App
+Host management endpoints directly.
 
 Application translations live in `client/locales`. Default locale, available
 locale labels, i18next options, and post-switch behavior remain customizable in
@@ -98,13 +134,10 @@ npm template contains the default extensions under `client/extensions` instead.
 
 ## Authentication
 
-Basic username or email and password login is built in. The default login page
-also renders enabled NocoBase authentication methods when their frontend
-Registry adapters are installed.
-
-Customize `client/pages/login/index.tsx` to replace the whole login page, or use
-`DefaultSignInPage` to keep dynamic authentication while overriding individual
-authenticator UI.
+On first start, visit `/hub/setup` to create the single initial Owner. Public
+registration and password-recovery routes are not exposed. Afterwards, sign in
+with the Owner's username or email and password. Hub identities and permissions
+are independent from identities inside managed applications.
 
 ## Testing
 

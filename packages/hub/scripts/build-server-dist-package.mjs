@@ -2,15 +2,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const distDir = path.join(rootDir, "dist");
-const rootPackagePath = path.join(rootDir, "package.json");
-const distPackagePath = path.join(distDir, "package.json");
-const serverRuntimeDirs = ["server"];
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const databaseRuntimePackages = ["better-sqlite3", "knex"];
 
 const toPosix = (value) => value.split(path.sep).join("/");
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+
+const writeJson = (file, value) => {
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+};
 
 const walkFiles = (directory) => {
   if (!fs.existsSync(directory)) return [];
@@ -58,89 +62,259 @@ const findBareImports = (content) => {
   return specifiers;
 };
 
-const getInstalledVersion = (packageName) => {
-  const packagePath = path.join(
-    rootDir,
-    "node_modules",
-    ...packageName.split("/"),
-    "package.json"
-  );
-
-  if (!fs.existsSync(packagePath)) return undefined;
-  return readJson(packagePath).version;
-};
-
-const getDeclaredVersion = (rootPackage, packageName) => {
+const getDeclaredVersion = (packageJson, packageName) => {
   const version =
-    rootPackage.dependencies?.[packageName] ??
-    rootPackage.devDependencies?.[packageName] ??
-    rootPackage.peerDependencies?.[packageName];
+    packageJson.dependencies?.[packageName] ??
+    packageJson.optionalDependencies?.[packageName] ??
+    packageJson.devDependencies?.[packageName] ??
+    packageJson.peerDependencies?.[packageName];
 
-  if (!version) return undefined;
+  if (!version || version.startsWith("workspace:")) return undefined;
   return version.replace(/^[~^]/, "");
 };
 
-if (!fs.existsSync(path.join(distDir, "server"))) {
-  throw new Error("Missing dist/server. Run pnpm build first.");
-}
+const findInstalledPackageJson = (packageName, fromDir, stopDir) => {
+  let directory = path.resolve(fromDir);
+  const boundary = path.resolve(stopDir);
 
-const rootPackage = readJson(rootPackagePath);
-const files = serverRuntimeDirs.flatMap((runtimeDir) =>
-  walkFiles(path.join(distDir, runtimeDir)).filter((file) =>
-    /\.[cm]?js$/.test(file)
-  )
-);
-const packageNames = new Set();
+  while (directory.startsWith(boundary)) {
+    const packagePath = path.join(
+      directory,
+      "node_modules",
+      ...packageName.split("/"),
+      "package.json",
+    );
+    if (fs.existsSync(packagePath)) return packagePath;
 
-for (const file of files) {
-  const content = fs.readFileSync(file, "utf8");
-  for (const packageName of findBareImports(content)) {
-    packageNames.add(packageName);
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
   }
-}
 
-const dependencies = Object.fromEntries(
-  [...packageNames]
-    .sort((left, right) => left.localeCompare(right))
-    .map((packageName) => {
-      const version =
-        getInstalledVersion(packageName) ??
-        getDeclaredVersion(rootPackage, packageName);
-
-      if (!version) {
-        throw new Error(
-          `Could not find a declared or installed version for ${packageName}`
-        );
-      }
-
-      return [packageName, version];
-    })
-);
-
-const distPackage = {
-  name: rootPackage.name,
-  version: rootPackage.version ?? "0.0.0",
-  private: true,
-  type: "module",
-  main: "./server/embedded.js",
-  exports: {
-    ".": "./server/embedded.js",
-    "./embedded": "./server/embedded.js",
-    "./standalone": "./server/standalone.js",
-  },
-  scripts: {
-    start: "node ./server/standalone.js",
-  },
-  engines: rootPackage.engines ?? {
-    node: ">=20",
-  },
-  dependencies,
+  return undefined;
 };
 
-fs.writeFileSync(distPackagePath, `${JSON.stringify(distPackage, null, 2)}\n`);
+const createRuntimePackageJson = (packageJson, dependencies) => {
+  const runtimePackage = {
+    name: packageJson.name,
+    version: packageJson.version ?? "0.0.0",
+    private: true,
+    type: packageJson.type,
+    main: packageJson.main,
+    types: packageJson.types,
+    exports: packageJson.publishConfig?.exports ?? packageJson.exports,
+    engines: packageJson.engines,
+    dependencies,
+  };
 
-console.log(
-  `Generated ${toPosix(path.relative(rootDir, distPackagePath))} with ${Object.keys(
-    dependencies
-  ).length} production dependencies.`
-);
+  return Object.fromEntries(
+    Object.entries(runtimePackage).filter(([, value]) => value !== undefined),
+  );
+};
+
+const buildServerDistPackage = ({
+  rootDir: packageRoot = rootDir,
+  workspacePackagesDir = path.resolve(packageRoot, ".."),
+  distDir = path.join(packageRoot, "dist"),
+} = {}) => {
+  const rootPackagePath = path.join(packageRoot, "package.json");
+  const distPackagePath = path.join(distDir, "package.json");
+  const vendorDir = path.join(distDir, "vendor");
+
+  if (!fs.existsSync(path.join(distDir, "server"))) {
+    throw new Error("Missing dist/server. Run pnpm build first.");
+  }
+
+  const rootPackage = readJson(rootPackagePath);
+  const workspacePackages = listWorkspacePackages(workspacePackagesDir);
+  const workspacePackageNames = new Set();
+  const externalPackageVersions = new Map();
+  const packageJsonByName = new Map([[rootPackage.name, rootPackage]]);
+  const packageDirByName = new Map([[rootPackage.name, packageRoot]]);
+
+  const addExternalPackage = (
+    packageName,
+    sourcePackageDir = packageRoot,
+    sourcePackage = rootPackage,
+  ) => {
+    if (externalPackageVersions.has(packageName)) return;
+
+    const installedPackagePath =
+      findInstalledPackageJson(
+        packageName,
+        sourcePackageDir,
+        path.dirname(workspacePackagesDir),
+      ) ??
+      findInstalledPackageJson(
+        packageName,
+        packageRoot,
+        path.dirname(workspacePackagesDir),
+      );
+    const version =
+      (installedPackagePath
+        ? readJson(installedPackagePath).version
+        : undefined) ??
+      getDeclaredVersion(sourcePackage, packageName) ??
+      getDeclaredVersion(rootPackage, packageName);
+
+    if (!version) {
+      throw new Error(
+        `Could not find a declared or installed version for ${packageName}`,
+      );
+    }
+
+    externalPackageVersions.set(packageName, version);
+  };
+
+  const addPackage = (packageName) => {
+    const packageDir = workspacePackages.get(packageName);
+    if (!packageDir) {
+      addExternalPackage(packageName);
+      return;
+    }
+
+    if (workspacePackageNames.has(packageName)) return;
+    workspacePackageNames.add(packageName);
+
+    const packageJson = readJson(path.join(packageDir, "package.json"));
+    packageJsonByName.set(packageName, packageJson);
+    packageDirByName.set(packageName, packageDir);
+
+    const dependencies = {
+      ...packageJson.dependencies,
+      ...packageJson.optionalDependencies,
+    };
+    for (const dependencyName of Object.keys(dependencies)) {
+      if (workspacePackages.has(dependencyName)) {
+        addPackage(dependencyName);
+      } else {
+        addExternalPackage(dependencyName, packageDir, packageJson);
+      }
+    }
+  };
+
+  const serverFiles = walkFiles(path.join(distDir, "server")).filter((file) =>
+    /\.[cm]?js$/.test(file),
+  );
+  for (const file of serverFiles) {
+    const content = fs.readFileSync(file, "utf8");
+    for (const packageName of findBareImports(content)) {
+      addPackage(packageName);
+    }
+  }
+
+  // Knex loads dialects dynamically, so a static import scan cannot discover
+  // the SQLite native driver.  Hub's built-in database is SQLite; pin both
+  // parts of that runtime explicitly in the deployable package.
+  for (const packageName of databaseRuntimePackages) {
+    addExternalPackage(packageName);
+  }
+
+  fs.rmSync(vendorDir, { recursive: true, force: true });
+  for (const packageName of [...workspacePackageNames].sort()) {
+    const packageDir = packageDirByName.get(packageName);
+    const packageJson = packageJsonByName.get(packageName);
+    const sourceDistDir = path.join(packageDir, "dist");
+    if (!fs.existsSync(sourceDistDir)) {
+      throw new Error(
+        `Missing ${path.relative(packageRoot, sourceDistDir)}. Build ${packageName} before generating the server package.`,
+      );
+    }
+
+    const targetDir = path.join(vendorDir, ...packageName.split("/"));
+    const runtimeDependencies = {};
+    for (const dependencyName of Object.keys({
+      ...packageJson.dependencies,
+      ...packageJson.optionalDependencies,
+    }).sort()) {
+      if (workspacePackages.has(dependencyName)) {
+        runtimeDependencies[dependencyName] = toRelativeFileDependency(
+          targetDir,
+          path.join(vendorDir, ...dependencyName.split("/")),
+        );
+      } else {
+        runtimeDependencies[dependencyName] =
+          externalPackageVersions.get(dependencyName);
+      }
+    }
+
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.cpSync(sourceDistDir, path.join(targetDir, "dist"), { recursive: true });
+    writeJson(
+      path.join(targetDir, "package.json"),
+      createRuntimePackageJson(packageJson, runtimeDependencies),
+    );
+  }
+
+  const dependencies = Object.fromEntries([
+    ...[...externalPackageVersions.entries()].sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+    ...[...workspacePackageNames]
+      .sort((left, right) => left.localeCompare(right))
+      .map((packageName) => [
+        packageName,
+        `file:${toPosix(
+          path.relative(
+            distDir,
+            path.join(vendorDir, ...packageName.split("/")),
+          ),
+        )}`,
+      ]),
+  ]);
+
+  const distPackage = {
+    name: rootPackage.name,
+    version: rootPackage.version ?? "0.0.0",
+    private: true,
+    type: "module",
+    main: "./server/embedded.js",
+    exports: {
+      ".": "./server/embedded.js",
+      "./embedded": "./server/embedded.js",
+      "./standalone": "./server/standalone.js",
+    },
+    scripts: {
+      start: "node ./server/standalone.js",
+    },
+    engines: rootPackage.engines ?? {
+      node: ">=24.0.0",
+    },
+    dependencies,
+  };
+
+  writeJson(distPackagePath, distPackage);
+  console.log(
+    `Generated ${toPosix(
+      path.relative(packageRoot, distPackagePath),
+    )} with ${Object.keys(dependencies).length} production dependencies and ${workspacePackageNames.size} vendored workspace packages.`,
+  );
+
+  return distPackage;
+};
+
+const listWorkspacePackages = (workspacePackagesDir) => {
+  if (!fs.existsSync(workspacePackagesDir)) return new Map();
+
+  return new Map(
+    fs
+      .readdirSync(workspacePackagesDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(workspacePackagesDir, entry.name))
+      .filter((packageDir) =>
+        fs.existsSync(path.join(packageDir, "package.json")),
+      )
+      .map((packageDir) => [
+        readJson(path.join(packageDir, "package.json")).name,
+        packageDir,
+      ])
+      .filter(([name]) => typeof name === "string"),
+  );
+};
+
+const toRelativeFileDependency = (fromPackageDir, targetPackageDir) => {
+  const relativePath = toPosix(path.relative(fromPackageDir, targetPackageDir));
+  return `file:${relativePath.startsWith(".") ? relativePath : `./${relativePath}`}`;
+};
+
+buildServerDistPackage();

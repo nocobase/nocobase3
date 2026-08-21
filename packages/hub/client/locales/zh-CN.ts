@@ -1,12 +1,15 @@
 export const starter = {
-  "shell.workspace": "AI 应用工作区",
+  "shell.workspace": "应用控制面",
+  "shell.footer.controlPlane": "NocoBase Hub",
+  "shell.footer.controlPlaneDescription": "应用版本与运行时操作。",
   "shell.settings": "设置",
   "shell.footer.freedom": "AI 自由构建。",
   "shell.footer.reliabilitySuffix": "保障可靠运行。",
   "auth.signOut": "退出登录",
   "auth.signingOut": "正在退出...",
   "acl.portalAccessDenied.title": "无权访问此门户",
-  "acl.portalAccessDenied.description": "当前角色没有访问权限，请切换角色后重试。",
+  "acl.portalAccessDenied.description":
+    "当前角色没有访问权限，请切换角色后重试。",
   "acl.roleSwitcher.switchRole": "切换角色",
   "acl.roleSwitcher.currentRole": "当前角色",
   "acl.roleSwitcher.selectRole": "选择角色",
