@@ -6,7 +6,7 @@
 ## 创建 Auth
 
 ```ts
-import { createAuthentication } from '@nocobase/authentication';
+import { createAuthentication } from "@nocobase/authentication";
 
 const auth = createAuthentication({
   connection: runtime.database.connection(),
@@ -23,7 +23,7 @@ const auth = createAuthentication({
 也可以直接实例化 `Auth`：
 
 ```ts
-import { Auth } from '@nocobase/authentication/server';
+import { Auth } from "@nocobase/authentication/server";
 
 const auth = new Auth({
   connection,
@@ -36,7 +36,7 @@ const auth = new Auth({
 `auth.handler(request)` 将完整请求转发给 Better Auth，并返回原始 `Response`：
 
 ```ts
-app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+app.on(["GET", "POST"], "/api/auth/*", (context) =>
   auth.handler(context.req.raw),
 );
 ```
@@ -63,13 +63,13 @@ if (current) {
 `required()` 只允许有效 session 继续执行：
 
 ```ts
-import type { AuthEnv } from '@nocobase/authentication';
+import type { AuthEnv } from "@nocobase/authentication";
 
 const protectedRoutes = new Hono<AuthEnv>();
 
-protectedRoutes.use('*', auth.required());
-protectedRoutes.get('/apps', (context) => {
-  const current = context.get('auth');
+protectedRoutes.use("*", auth.required());
+protectedRoutes.get("/apps", (context) => {
+  const current = context.get("auth");
   return context.json({ userId: current.user.id });
 });
 ```
@@ -84,8 +84,8 @@ HTTP 401。
 ```ts
 const routes = new Hono<AuthEnv>();
 
-routes.get('/profile', auth.optional(), (context) => {
-  const current = context.get('auth');
+routes.get("/profile", auth.optional(), (context) => {
+  const current = context.get("auth");
   return context.json({ user: current?.user ?? null });
 });
 ```
@@ -98,9 +98,9 @@ routes.get('/profile', auth.optional(), (context) => {
 
 ```ts
 app.use(
-  '*',
+  "*",
   auth.required({
-    skip: (context) => context.req.path.endsWith('/healthz'),
+    skip: (context) => context.req.path.endsWith("/healthz"),
   }),
 );
 ```
@@ -110,8 +110,8 @@ app.use(
 ## 接入 secondary storage
 
 ```ts
-import { createAuthStorage } from '@nocobase/authentication';
-import { createCaching } from '@nocobase/caching';
+import { createAuthStorage } from "@nocobase/authentication";
+import { createCaching } from "@nocobase/caching";
 
 const caching = createCaching(config.caching);
 
@@ -133,8 +133,8 @@ nocobase-auth:rate-limit
 
 ```ts
 const secondaryStorage = createAuthStorage(caching, {
-  namespace: 'customer-portal-auth',
-  provider: 'redis',
+  namespace: "customer-portal-auth",
+  provider: "redis",
 });
 ```
 
@@ -157,9 +157,9 @@ const auth = createAuthentication({
   connection,
   secret,
   advanced: {
-    cookiePrefix: 'my_app',
+    cookiePrefix: "my_app",
     defaultCookieAttributes: {
-      path: '/my-app',
+      path: "/my-app",
     },
   },
 });

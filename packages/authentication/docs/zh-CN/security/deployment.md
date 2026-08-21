@@ -8,9 +8,9 @@ Cookie、缓存和密码重置通道。
 `secret` 是强制配置。应从环境变量或 secret manager 读取：
 
 ```ts
-const secret = env.string('AUTH_SECRET');
+const secret = env.string("AUTH_SECRET");
 if (!secret) {
-  throw new Error('AUTH_SECRET is required.');
+  throw new Error("AUTH_SECRET is required.");
 }
 ```
 
@@ -30,7 +30,7 @@ if (!secret) {
 createAuthentication({
   connection,
   secret,
-  baseURL: 'https://apps.example.com/my-app/api/auth',
+  baseURL: "https://apps.example.com/my-app/api/auth",
 });
 ```
 

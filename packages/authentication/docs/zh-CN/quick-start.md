@@ -21,18 +21,18 @@ migration 管理。默认应用模板采用复制 migration 文件到
 ## 2. 创建认证服务
 
 ```ts
-import { createAuthentication } from '@nocobase/authentication';
+import { createAuthentication } from "@nocobase/authentication";
 
 const secret = process.env.AUTH_SECRET;
 if (!secret) {
-  throw new Error('AUTH_SECRET is required.');
+  throw new Error("AUTH_SECRET is required.");
 }
 
 const auth = createAuthentication({
   connection: database.connection(),
-  baseURL: 'https://example.com/api/auth',
+  baseURL: "https://example.com/api/auth",
   secret,
-  appName: 'My NocoBase App',
+  appName: "My NocoBase App",
   emailAndPassword: {
     enabled: true,
     autoSignIn: false,
@@ -49,11 +49,11 @@ const auth = createAuthentication({
 ## 3. 挂载认证协议路由
 
 ```ts
-import { Hono } from 'hono';
+import { Hono } from "hono";
 
 const app = new Hono();
 
-app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+app.on(["GET", "POST"], "/api/auth/*", (context) =>
   auth.handler(context.req.raw),
 );
 ```
@@ -77,13 +77,13 @@ Better Auth 插件可以在同一路径下增加其他端点。
 ## 4. 保护业务路由
 
 ```ts
-import type { AuthEnv } from '@nocobase/authentication';
-import { Hono } from 'hono';
+import type { AuthEnv } from "@nocobase/authentication";
+import { Hono } from "hono";
 
 const api = new Hono<AuthEnv>();
 
-api.get('/private', auth.required(), (context) => {
-  const current = context.get('auth');
+api.get("/private", auth.required(), (context) => {
+  const current = context.get("auth");
   return context.json({ userId: current.user.id });
 });
 ```
@@ -105,8 +105,8 @@ HTTP 状态码为 `401`。
 import {
   createAuthClient,
   createAuthProvider,
-} from '@nocobase/authentication/client';
-import { createAppClient } from '@nocobase/app-sdk';
+} from "@nocobase/authentication/client";
+import { createAppClient } from "@nocobase/app-sdk";
 
 export const appClient = createAppClient();
 export const authClient = createAuthClient({ client: appClient });
