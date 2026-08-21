@@ -256,6 +256,7 @@ const distPackage = {
   scripts: {
     start: 'node ./server/standalone.js',
     migrate: 'node ./scripts/migrate.js',
+    seed: 'node ./scripts/seed.js',
   },
   engines: rootPackage.engines ?? {
     node: '>=20',

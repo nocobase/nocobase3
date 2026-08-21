@@ -144,6 +144,9 @@ describe('app config', () => {
     expect(config.database.migrations.directory).toBe(
       path.join(root, 'dist', 'database', 'migrations'),
     );
+    expect(config.database.seeds?.directory).toBe(
+      path.join(root, 'dist', 'database', 'seeds'),
+    );
     expect(config.drive.disks.local).toMatchObject({
       location: path.join(dataDir, 'app/private'),
     });
@@ -484,6 +487,13 @@ describe('database config', () => {
       tableName: undefined,
       lockTableName: undefined,
     });
+    expect(config.seeds).toEqual({
+      directory: '/tmp/app-template-default/database/seeds',
+      packageName: '@nocobase/app-template-default',
+      autoRun: false,
+      tableName: undefined,
+      lockTableName: undefined,
+    });
   });
 
   it('maps postgres env values into a named connection', () => {
@@ -498,6 +508,9 @@ describe('database config', () => {
         DB_SCHEMA: 'public,tenant',
         DB_DEBUG: 'true',
         DB_MIGRATIONS_AUTO_RUN: 'true',
+        DB_SEEDS_AUTO_RUN: 'true',
+        DB_SEEDS_TABLE: 'app_seeds',
+        DB_SEEDS_LOCK_TABLE: 'app_seed_lock',
       }),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
@@ -517,6 +530,11 @@ describe('database config', () => {
       debug: true,
     });
     expect(config.migrations.autoRun).toBe(true);
+    expect(config.seeds).toMatchObject({
+      autoRun: true,
+      tableName: 'app_seeds',
+      lockTableName: 'app_seed_lock',
+    });
   });
 
   it('does not consume database URL env values as connection config', () => {
@@ -657,11 +675,14 @@ describe('database migrations', () => {
 });
 
 describe('standalone runtime database config', () => {
-  it('uses the active database directory for migrations', () => {
+  it('uses the active database directory for migrations and seeds', () => {
     const runtime = createStandaloneRuntime();
 
     expect(runtime.config.database.migrations.directory).toMatch(
       /database\/migrations$/,
+    );
+    expect(runtime.config.database.seeds?.directory).toMatch(
+      /database\/seeds$/,
     );
   });
 });

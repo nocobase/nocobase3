@@ -31,6 +31,9 @@ const serverEnvKeys = new Set([
   'DB_MIGRATIONS_AUTO_RUN',
   'DB_MIGRATIONS_TABLE',
   'DB_MIGRATIONS_LOCK_TABLE',
+  'DB_SEEDS_AUTO_RUN',
+  'DB_SEEDS_TABLE',
+  'DB_SEEDS_LOCK_TABLE',
   'QUEUE_CONNECTION',
   'QUEUE_REDIS_PREFIX',
   'QUEUE_DB_CONNECTION',
@@ -201,13 +204,13 @@ run('Rewrite server path aliases', 'pnpm', [
   '-p',
   'tsconfig.server.json',
 ]);
-run('Build migrations', 'pnpm', [
+run('Build database tasks', 'pnpm', [
   'exec',
   'tsc',
   '-p',
   'tsconfig.migrations.json',
 ]);
-run('Rewrite migration path aliases', 'pnpm', [
+run('Rewrite database task path aliases', 'pnpm', [
   'exec',
   'tsc-alias',
   '-p',

@@ -10,6 +10,6 @@
       "@/services/*": ["./server/services/*"]
     }
   },
-  "include": ["server/**/*.ts", "scripts/migrate.ts"],
-  "exclude": ["database/migrations/**/*.ts"]
+  "include": ["server/**/*.ts", "scripts/migrate.ts", "scripts/seed.ts"],
+  "exclude": ["database/migrations/**/*.ts", "database/seeds/**/*.ts"]
 }

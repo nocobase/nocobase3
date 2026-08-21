@@ -1346,6 +1346,10 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         directory: '',
         autoRun: false,
       },
+      seeds: {
+        directory: '',
+        autoRun: false,
+      },
     },
     drive: options.drive,
     logging: createSilentLoggingConfig(),
@@ -1374,6 +1378,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         ? undefined
         : (options.database ?? createMockDatabase([])),
     runMigrations: () => Promise.resolve(undefined),
+    runSeeds: () => Promise.resolve(undefined),
     dispose: () => Promise.resolve(),
   };
   const lifecycle = createAppDisposerRegistry();

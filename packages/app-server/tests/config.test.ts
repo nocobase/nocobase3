@@ -6,6 +6,7 @@ import type { DatabaseManager } from '@nocobase/database';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createDatabaseMigratorMock = vi.hoisted(() => vi.fn());
+const createDatabaseSeederMock = vi.hoisted(() => vi.fn());
 const tempDirs: string[] = [];
 
 vi.mock('@nocobase/database', async (importOriginal) => {
@@ -14,6 +15,7 @@ vi.mock('@nocobase/database', async (importOriginal) => {
   return {
     ...actual,
     createMigrator: createDatabaseMigratorMock,
+    createSeeder: createDatabaseSeederMock,
   };
 });
 
@@ -21,17 +23,20 @@ import {
   createAppDatabaseManager,
   createAppMigrator,
   createAppRuntime,
+  createAppSeeder,
   createConfigEnv,
   createConfigPaths,
   defineConfig,
   loadConfig,
   prepareAppDatabaseStorage,
   runConfiguredAppMigrations,
+  runConfiguredAppSeeds,
   type AppDatabaseConfig,
 } from '../src/index.js';
 
 beforeEach(() => {
   createDatabaseMigratorMock.mockReset();
+  createDatabaseSeederMock.mockReset();
 });
 
 afterEach(() => {
@@ -150,7 +155,7 @@ describe('app database storage', () => {
 });
 
 describe('app runtime context', () => {
-  it('creates database and migrator services from config', () => {
+  it('creates database, migrator, and seeder services from config', () => {
     const runtime = createAppRuntime({
       database: {
         default: 'sqlite',
@@ -164,11 +169,33 @@ describe('app runtime context', () => {
           directory: '/tmp/app/database/migrations',
           autoRun: false,
         },
+        seeds: {
+          directory: '/tmp/app/database/seeds',
+          packageName: '@nocobase/app',
+          autoRun: false,
+        },
       },
     });
 
     expect(runtime.database).toBeDefined();
     expect(runtime.migrator).toBeDefined();
+    expect(runtime.seeder).toBeDefined();
+  });
+
+  it('supports database configs without seeds', async () => {
+    const runtime = createAppRuntime({
+      database: {
+        default: 'none',
+        connections: {},
+        migrations: {
+          directory: '/tmp/app/database/migrations',
+          autoRun: false,
+        },
+      },
+    });
+
+    expect(runtime.seeder).toBeUndefined();
+    await expect(runtime.runSeeds()).resolves.toBeUndefined();
   });
 
   it('skips configured migrations unless autoRun is enabled', async () => {
@@ -184,6 +211,59 @@ describe('app runtime context', () => {
     });
 
     await expect(runConfiguredAppMigrations(runtime)).resolves.toBeUndefined();
+  });
+
+  it('skips configured seeds unless autoRun is enabled', async () => {
+    const runtime = createAppRuntime({
+      database: {
+        default: 'none',
+        connections: {},
+        migrations: {
+          directory: '/tmp/app/database/migrations',
+          autoRun: false,
+        },
+        seeds: {
+          directory: '/tmp/app/database/seeds',
+          autoRun: false,
+        },
+      },
+    });
+
+    await expect(runConfiguredAppSeeds(runtime)).resolves.toBeUndefined();
+  });
+
+  it('runs configured seeds when autoRun is enabled', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-auto-seeds-'));
+    tempDirs.push(root);
+    const run = vi.fn().mockResolvedValue({ executed: [], skipped: [] });
+    createDatabaseSeederMock.mockReturnValue({ run });
+    const runtime = createAppRuntime({
+      database: {
+        default: 'sqlite',
+        connections: {
+          sqlite: {
+            dialect: 'sqlite',
+            filename: path.join(root, 'storage', 'database.sqlite'),
+          },
+        },
+        migrations: {
+          directory: path.join(root, 'migrations'),
+          autoRun: false,
+        },
+        seeds: {
+          directory: root,
+          autoRun: true,
+        },
+      },
+    });
+
+    await expect(runConfiguredAppSeeds(runtime)).resolves.toEqual({
+      status: 'completed',
+      executed: [],
+      skipped: [],
+    });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(existsSync(path.join(root, 'storage'))).toBe(true);
   });
 });
 
@@ -279,6 +359,67 @@ describe('app migrator', () => {
       extensions: undefined,
     });
     expect(rollback).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('app seeder', () => {
+  it('skips missing seed directories', async () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-missing-seeds-'),
+    );
+    tempDirs.push(root);
+    const seeder = createAppSeeder({
+      database: createMockDatabaseManager(),
+      config: {
+        directory: path.join(root, 'seeds'),
+        autoRun: true,
+      },
+    });
+
+    await expect(seeder.run()).resolves.toEqual({
+      status: 'skipped',
+      reason: 'missing-directory',
+    });
+    expect(createDatabaseSeederMock).not.toHaveBeenCalled();
+  });
+
+  it('runs seeds from the configured directory', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-app-seeds-'));
+    tempDirs.push(directory);
+    const run = vi.fn().mockResolvedValue({
+      executed: ['001_create_admin'],
+      skipped: ['000_create_roles'],
+    });
+    createDatabaseSeederMock.mockReturnValue({ run });
+    const database = createMockDatabaseManager();
+    const seeder = createAppSeeder({
+      database,
+      config: {
+        directory,
+        packageName: '@nocobase/app',
+        autoRun: true,
+        tableName: 'app_seeds',
+        lockTableName: 'app_seed_lock',
+        extensions: ['.js', '.mjs'],
+      },
+      connection: 'tenant',
+    });
+
+    await expect(seeder.run()).resolves.toEqual({
+      status: 'completed',
+      executed: ['001_create_admin'],
+      skipped: ['000_create_roles'],
+    });
+    expect(createDatabaseSeederMock).toHaveBeenCalledWith({
+      database,
+      connection: 'tenant',
+      directory,
+      packageName: '@nocobase/app',
+      tableName: 'app_seeds',
+      lockTableName: 'app_seed_lock',
+      extensions: ['.js', '.mjs'],
+    });
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });
 
