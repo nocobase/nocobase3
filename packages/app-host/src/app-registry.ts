@@ -95,6 +95,10 @@ export class AppRuntimeRegistry {
 
   private readonly definitions = new Map<string, AppDefinition>();
   private readonly runtimes = new Map<string, ActiveAppHandle>();
+  private readonly runtimeConfigs = new Map<
+    string,
+    Readonly<Record<string, unknown>>
+  >();
   private readonly operations = new Map<string, Promise<unknown>>();
   private readonly backend: AppActivationBackend;
   private readonly resolveFactory: (
@@ -237,7 +241,10 @@ export class AppRuntimeRegistry {
       const oldRuntime = this.runtimes.get(id);
 
       try {
-        const newRuntime = await this.activateDefinition(definition);
+        const newRuntime = await this.activateDefinition(
+          definition,
+          this.runtimeConfigs.get(id),
+        );
         this.runtimes.set(id, newRuntime);
 
         if (oldRuntime) {
@@ -278,6 +285,9 @@ export class AppRuntimeRegistry {
 
       const targetDefinition = this.createDeploymentTarget(id, options.target);
       const targetReleaseId = targetDefinition.release!.releaseId;
+      const targetRuntimeConfig = options.runtimeConfig
+        ? { ...options.runtimeConfig }
+        : this.runtimeConfigs.get(id);
 
       let candidate: ActiveAppHandle | null = null;
       let bindingSwitched = false;
@@ -287,7 +297,10 @@ export class AppRuntimeRegistry {
           await this.evictForCapacity();
         }
 
-        candidate = await this.activateDefinition(targetDefinition);
+        candidate = await this.activateDefinition(
+          targetDefinition,
+          targetRuntimeConfig,
+        );
         await this.assertReadiness(
           candidate,
           targetDefinition,
@@ -320,6 +333,12 @@ export class AppRuntimeRegistry {
           }
           bindingSwitched = false;
           throw error;
+        }
+
+        if (targetRuntimeConfig === undefined) {
+          this.runtimeConfigs.delete(id);
+        } else {
+          this.runtimeConfigs.set(id, targetRuntimeConfig);
         }
 
         if (oldRuntime) {
@@ -378,6 +397,7 @@ export class AppRuntimeRegistry {
 
       if (destroyOptions.removeDefinition !== false) {
         this.definitions.delete(id);
+        this.runtimeConfigs.delete(id);
       }
 
       return Boolean(runtime || hadDefinition);
@@ -523,7 +543,10 @@ export class AppRuntimeRegistry {
 
       const definition = this.requireDefinition(id);
       await this.evictForCapacity();
-      const runtime = await this.activateDefinition(definition);
+      const runtime = await this.activateDefinition(
+        definition,
+        this.runtimeConfigs.get(id),
+      );
       this.metrics.coldActivations += 1;
       this.runtimes.set(id, runtime);
       return runtime;
@@ -538,7 +561,10 @@ export class AppRuntimeRegistry {
 
     const definition = this.requireDefinition(id);
     await this.evictForCapacity();
-    const runtime = await this.activateDefinition(definition);
+    const runtime = await this.activateDefinition(
+      definition,
+      this.runtimeConfigs.get(id),
+    );
     this.metrics.coldActivations += 1;
     this.runtimes.set(id, runtime);
     return runtime.snapshot();
@@ -546,6 +572,7 @@ export class AppRuntimeRegistry {
 
   private async activateDefinition(
     definition: AppDefinition,
+    runtimeConfig?: Readonly<Record<string, unknown>>,
   ): Promise<ActiveAppHandle> {
     if (!definition.enabled) {
       throw new AppNotFoundError(definition.id);
@@ -572,6 +599,7 @@ export class AppRuntimeRegistry {
         definition,
         version,
         createApp,
+        runtimeConfig,
       });
 
       // In-process runtimes emit `created` only after activation.

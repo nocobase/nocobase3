@@ -22,6 +22,7 @@ export class InProcessAppBackend implements AppActivationBackend {
       definition: request.definition,
       createApp: request.createApp,
       globalEvents: this.globalEvents,
+      runtimeConfig: request.runtimeConfig,
     });
   }
 }

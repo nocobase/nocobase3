@@ -221,6 +221,7 @@ export interface AppActivationRequest {
   definition: AppDefinition;
   version: number;
   createApp: AppFactory;
+  runtimeConfig?: Readonly<Record<string, unknown>>;
 }
 
 export interface AppActivationBackend {
@@ -238,6 +239,8 @@ export interface DeployAppOptions {
   target: AppDefinition;
   operationId: string;
   expectedCurrentReleaseId: string | null;
+  /** Private runtime-only configuration that is not exposed through AppDefinition. */
+  runtimeConfig?: Readonly<Record<string, unknown>>;
   readiness?: AppReadinessPolicy;
   reason?: string;
   drainTimeoutMs?: number;

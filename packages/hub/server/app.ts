@@ -146,6 +146,7 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
       authoritativeOrigin: configuredAuthBaseUrl ? authUrl.origin : undefined,
       registry: options.appHostRegistry,
       releaseRoot: options.releaseRoot,
+      appAuthSecret: authSecret,
     });
     api.route("/", hubApi);
     hubReady = hubApi.ready;

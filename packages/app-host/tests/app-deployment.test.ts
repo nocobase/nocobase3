@@ -29,6 +29,46 @@ afterEach(async () => {
 });
 
 describe("AppRuntimeRegistry release deployment", () => {
+  it("keeps deployment runtime config private and reuses it after cold activation", async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease("release-v1", "1.0.0", "ready");
+    v1.definition.config = { publicSetting: "release-value" };
+    const { host, origin } = await startEmptyHost(fixture.appsDir);
+    const runtimeConfig = {
+      authSecret: "shared-runtime-auth-secret-at-least-32-characters",
+    };
+
+    await host.registry.deploy("customer", {
+      target: v1.definition,
+      operationId: "private-runtime-config",
+      expectedCurrentReleaseId: null,
+      runtimeConfig,
+    });
+
+    await expect(fetchScopeConfig(origin)).resolves.toEqual({
+      publicSetting: "release-value",
+      ...runtimeConfig,
+    });
+    expect(host.registry.definition("customer")?.config).toEqual({
+      publicSetting: "release-value",
+    });
+    const managementResponse = await fetch(`${origin}/__apps/customer`);
+    expect(await managementResponse.text()).not.toContain(
+      runtimeConfig.authSecret,
+    );
+
+    await host.registry.evict("customer");
+    await expect(fetchScopeConfig(origin)).resolves.toEqual({
+      publicSetting: "release-value",
+      ...runtimeConfig,
+    });
+    await host.registry.reload("customer");
+    await expect(fetchScopeConfig(origin)).resolves.toEqual({
+      publicSetting: "release-value",
+      ...runtimeConfig,
+    });
+  });
+
   it("deploys the first release without publishing a provisional definition", async () => {
     const fixture = await createDeploymentFixture();
     const v1 = await fixture.createRelease("release-v1", "1.0.0", "ready");
@@ -466,6 +506,10 @@ function releaseModuleSource(
             }
           }
 
+          if (pathname === "/api/runtime-config") {
+            return Response.json({ config: scope.config });
+          }
+
           return Response.json({ version });
         },
       };
@@ -517,6 +561,12 @@ async function fetchVersion(
 async function fetchAsset(origin: string): Promise<string> {
   const response = await fetch(`${origin}/customer/assets/app.js`);
   return response.text();
+}
+
+async function fetchScopeConfig(origin: string): Promise<unknown> {
+  const response = await fetch(`${origin}/customer/api/runtime-config`);
+  const body = (await response.json()) as { config: unknown };
+  return body.config;
 }
 
 async function waitForFile(filePath: string, timeoutMs = 2_000): Promise<void> {

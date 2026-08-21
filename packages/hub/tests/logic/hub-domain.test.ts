@@ -473,16 +473,20 @@ describe("LocalHostAdapter", () => {
       { targetReleaseId: release.id },
       "user-1",
     );
+    let activatedConfig: unknown;
     const registry = new AppRuntimeRegistry({
       startEvictionLoop: false,
-      resolveFactory: (definition) => () => ({
-        fetch: (request) => {
-          const pathname = new URL(request.url).pathname;
-          return pathname === "/healthz"
-            ? Response.json({ ok: true })
-            : Response.json({ version: definition.desiredVersion });
-        },
-      }),
+      resolveFactory: (definition) => (scope) => {
+        activatedConfig = scope.config;
+        return {
+          fetch: (request) => {
+            const pathname = new URL(request.url).pathname;
+            return pathname === "/healthz"
+              ? Response.json({ ok: true })
+              : Response.json({ version: definition.desiredVersion });
+          },
+        };
+      },
     });
     registries.push(registry);
     const auth = new Auth({
@@ -496,6 +500,7 @@ describe("LocalHostAdapter", () => {
       bootstrapAuth: auth,
       registry,
       releaseRoot,
+      appAuthSecret: "shared-runtime-auth-secret-at-least-32-characters",
       appName: "hub",
       publicBasePath: "/hub",
     });
@@ -508,6 +513,10 @@ describe("LocalHostAdapter", () => {
     await expect(
       store.requireApplication(application.id),
     ).resolves.toMatchObject({ activeReleaseId: release.id });
+    expect(activatedConfig).toEqual({
+      authSecret: "shared-runtime-auth-secret-at-least-32-characters",
+    });
+    expect(registry.definition(application.slug)?.config).toBeUndefined();
     expect(registry.snapshot(application.slug)?.releaseId).toBe(release.id);
     await api.close();
   });

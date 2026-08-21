@@ -37,6 +37,8 @@ export interface HubApiDeps {
   bootstrapAuth: Auth;
   registry?: AppRuntimeRegistry;
   releaseRoot?: string;
+  /** Shared runtime secret injected into embedded Apps; never exposed in API responses. */
+  appAuthSecret?: string;
   appName: string;
   publicBasePath: string;
   /** Origin derived from the configured public/auth URL by the composition root. */
@@ -73,6 +75,7 @@ export function createHubApi(
   const host = new LocalHostAdapter({
     registry: deps.registry,
     releaseRoot: deps.releaseRoot,
+    appAuthSecret: deps.appAuthSecret,
   });
   const coordinator = new DeploymentCoordinator(store, host);
   const api = new Hono<HubApiEnvironment>() as HubApi;

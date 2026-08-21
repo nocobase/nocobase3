@@ -31,6 +31,7 @@ export interface AppRuntimeOptions {
   definition: AppDefinition;
   createApp: AppFactory;
   globalEvents: AppEventBus;
+  runtimeConfig?: Readonly<Record<string, unknown>>;
 }
 
 interface RegisteredDisposer {
@@ -84,7 +85,10 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.apiBasePath = `${this.basePath}/api`;
     this.rootDir = options.definition.rootDir;
     this.dataDir = options.definition.dataDir;
-    this.config = options.definition.config;
+    this.config = mergeAppConfig(
+      options.definition.config,
+      options.runtimeConfig,
+    );
     this.backend = options.definition.backend;
     this.configVersion = options.definition.configVersion;
     this.desiredVersion = options.definition.desiredVersion;
@@ -461,4 +465,22 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       ...overrides,
     };
   }
+}
+
+function mergeAppConfig(
+  definitionConfig: unknown,
+  runtimeConfig: Readonly<Record<string, unknown>> | undefined,
+): unknown {
+  if (!runtimeConfig) return definitionConfig;
+  if (definitionConfig === undefined) return { ...runtimeConfig };
+  if (
+    typeof definitionConfig !== "object" ||
+    definitionConfig === null ||
+    Array.isArray(definitionConfig)
+  ) {
+    throw new TypeError(
+      "App runtime config can only extend an object-valued definition config.",
+    );
+  }
+  return { ...definitionConfig, ...runtimeConfig };
 }

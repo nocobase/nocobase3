@@ -23,17 +23,20 @@ export interface LocalHostDeploymentRequest {
 export interface LocalHostAdapterOptions {
   registry?: AppRuntimeRegistry;
   releaseRoot?: string;
+  appAuthSecret?: string;
 }
 
 export class LocalHostAdapter {
   private readonly registry?: AppRuntimeRegistry;
   private readonly releaseRoot?: string;
+  private readonly appAuthSecret?: string;
 
   constructor(options: LocalHostAdapterOptions = {}) {
     this.registry = options.registry;
     this.releaseRoot = options.releaseRoot
       ? path.resolve(options.releaseRoot)
       : undefined;
+    this.appAuthSecret = options.appAuthSecret;
   }
 
   available(): boolean {
@@ -72,6 +75,9 @@ export class LocalHostAdapter {
       target,
       operationId: request.deployment.id,
       expectedCurrentReleaseId: previousReleaseId,
+      runtimeConfig: this.appAuthSecret
+        ? { authSecret: this.appAuthSecret }
+        : undefined,
       reason: `Hub deployment ${request.deployment.id}`,
     };
     return registry.deploy(target.id, options);
@@ -105,6 +111,9 @@ export class LocalHostAdapter {
       target,
       operationId: `recovery-${release.id}`,
       expectedCurrentReleaseId: current?.releaseId ?? null,
+      runtimeConfig: this.appAuthSecret
+        ? { authSecret: this.appAuthSecret }
+        : undefined,
       reason: `Restore Hub active release ${release.id}`,
     });
   }
