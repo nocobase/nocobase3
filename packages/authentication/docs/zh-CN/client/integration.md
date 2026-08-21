@@ -6,8 +6,8 @@ Database、Hono 或 Better Auth 服务端实现。
 ## 创建 AuthClient
 
 ```ts
-import { createAuthClient } from '@nocobase/authentication/client';
-import { createAppClient } from '@nocobase/app-sdk';
+import { createAuthClient } from "@nocobase/authentication/client";
+import { createAppClient } from "@nocobase/app-sdk";
 
 const appClient = createAppClient();
 const authClient = createAuthClient({ client: appClient });
@@ -47,15 +47,10 @@ interface AuthSession {
 ## 登录与注册
 
 ```ts
-await authClient.signIn('alice@example.com', password);
-await authClient.signIn('alice.admin', password);
+await authClient.signIn("alice@example.com", password);
+await authClient.signIn("alice.admin", password);
 
-await authClient.signUp(
-  'Alice',
-  'alice.admin',
-  'alice@example.com',
-  password,
-);
+await authClient.signUp("Alice", "alice.admin", "alice@example.com", password);
 ```
 
 `signIn()` 使用简单的 identifier 路由规则：包含 `@` 时调用邮箱登录，否则调用
@@ -67,7 +62,7 @@ await authClient.signUp(
 await authClient.signOut();
 
 await authClient.requestPasswordReset(
-  'alice@example.com',
+  "alice@example.com",
   `${window.location.origin}/reset-password`,
 );
 ```
@@ -78,7 +73,7 @@ await authClient.requestPasswordReset(
 ## Refine AuthProvider
 
 ```ts
-import { createAuthProvider } from '@nocobase/authentication/client';
+import { createAuthProvider } from "@nocobase/authentication/client";
 
 const authProvider = createAuthProvider(authClient);
 ```
@@ -89,15 +84,15 @@ const authProvider = createAuthProvider(authClient);
 
 适配器实现以下 Refine 行为：
 
-| 方法             | 行为                                                         |
-| ---------------- | ------------------------------------------------------------ |
+| 方法             | 行为                                                        |
+| ---------------- | ----------------------------------------------------------- |
 | `login`          | 使用 identifier、email 或 username 登录，成功后默认跳转 `/` |
-| `register`       | 创建密码账号，成功后默认跳转 `/login`                        |
-| `forgotPassword` | 请求发送重置链接                                             |
-| `logout`         | 退出并跳转 `/login`                                          |
-| `check`          | 有 session 时返回 authenticated，否则跳转 `/login`           |
-| `getIdentity`    | 将 session user 映射为 Refine identity                       |
-| `onError`        | HTTP 401 时清除缓存并请求 logout                              |
+| `register`       | 创建密码账号，成功后默认跳转 `/login`                       |
+| `forgotPassword` | 请求发送重置链接                                            |
+| `logout`         | 退出并跳转 `/login`                                         |
+| `check`          | 有 session 时返回 authenticated，否则跳转 `/login`          |
+| `getIdentity`    | 将 session user 映射为 Refine identity                      |
+| `onError`        | HTTP 401 时清除缓存并请求 logout                            |
 
 provider 会合并并缓存并发的 session 查询。login、register、logout 和 HTTP 401
 会清除当前 identity 缓存，下一次读取重新请求服务端。

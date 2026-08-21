@@ -44,13 +44,13 @@ client/auth/
 
 增加一种登录方式时，建议按下面的顺序判断：
 
-| 需求 | 推荐方式 |
-| --- | --- |
-| GitHub、Google 等 Better Auth 已支持的平台 | 配置 `socialProviders` |
-| 标准 OAuth 2.0 或 OIDC 服务 | 使用 Better Auth `genericOAuth` plugin |
-| Magic Link、Email OTP 等已有功能 | 使用对应的 Better Auth 官方 plugin |
-| 登录后的普通业务操作 | 增加 Hono API，并用 `auth.required()` 保护 |
-| 非标准 ticket、签名或企业协议 | 开发自定义 Better Auth plugin |
+| 需求                                       | 推荐方式                                   |
+| ------------------------------------------ | ------------------------------------------ |
+| GitHub、Google 等 Better Auth 已支持的平台 | 配置 `socialProviders`                     |
+| 标准 OAuth 2.0 或 OIDC 服务                | 使用 Better Auth `genericOAuth` plugin     |
+| Magic Link、Email OTP 等已有功能           | 使用对应的 Better Auth 官方 plugin         |
+| 登录后的普通业务操作                       | 增加 Hono API，并用 `auth.required()` 保护 |
+| 非标准 ticket、签名或企业协议              | 开发自定义 Better Auth plugin              |
 
 前面三种方式通常更容易维护，也能直接复用 Better Auth 已有的安全处理。只有现有
 能力确实不能描述目标协议时，才需要自定义 plugin。
@@ -84,11 +84,11 @@ subject；企业 ticket 协议也应该提供类似的稳定标识。邮箱适�
 在 `server/config/auth.ts` 或相邻配置文件中读取 provider 所需的环境变量，例如：
 
 ```ts
-const clientId = env.string('ACME_CLIENT_ID');
-const clientSecret = env.string('ACME_CLIENT_SECRET');
+const clientId = env.string("ACME_CLIENT_ID");
+const clientSecret = env.string("ACME_CLIENT_SECRET");
 
 if (!clientId || !clientSecret) {
-  throw new Error('ACME_CLIENT_ID and ACME_CLIENT_SECRET are required.');
+  throw new Error("ACME_CLIENT_ID and ACME_CLIENT_SECRET are required.");
 }
 ```
 
@@ -132,8 +132,8 @@ server/migrations/
 简单场景可以直接通过现有 `AppClient` 请求 plugin endpoint：
 
 ```ts
-await appClient.request('auth/sign-in/my-provider', {
-  method: 'POST',
+await appClient.request("auth/sign-in/my-provider", {
+  method: "POST",
   body: JSON.stringify(input),
 });
 ```
@@ -158,7 +158,7 @@ client。登录成功后继续使用默认 Refine `AuthProvider` 查询 session�
 应用可以直接在自己的登录页中导入组件：
 
 ```tsx
-import { MyProviderSignInButton } from '@/auth/my-provider/sign-in-button';
+import { MyProviderSignInButton } from "@/auth/my-provider/sign-in-button";
 ```
 
 如果 callback 需要独立页面，也可以直接在应用自己的路由配置中引用
