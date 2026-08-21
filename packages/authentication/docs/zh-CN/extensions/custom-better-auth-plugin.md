@@ -55,7 +55,7 @@ server/auth/ticket/
   protocol-client.ts
   types.ts
 
-server/migrations/
+database/migrations/
   202608210001_create_ticket_accounts.ts
 
 client/auth/ticket/
@@ -284,7 +284,7 @@ migration。
 
 ## 5. 增加 NocoBase migration
 
-在 `server/migrations/` 中创建对应表：
+在 `database/migrations/` 中创建对应表：
 
 ```ts
 import { defineMigration } from "@nocobase/database";

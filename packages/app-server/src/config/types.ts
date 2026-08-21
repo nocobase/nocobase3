@@ -1,4 +1,4 @@
-import type { AppDatabaseConfig } from '../database/types.js';
+import type { AppDatabaseConfig } from "../database/types.js";
 
 export interface ConfigEnv {
   string(key: string): string | undefined;
@@ -14,6 +14,7 @@ export interface ConfigEnv {
 export interface ConfigPaths {
   root(path?: string): string;
   server(path?: string): string;
+  database(path?: string): string;
   config(path?: string): string;
   storage(path?: string): string;
 }
@@ -29,4 +30,6 @@ export type ConfigFactories<TConfigMap extends Record<string, unknown>> = {
   [TKey in keyof TConfigMap]: ConfigFactory<TConfigMap[TKey]>;
 };
 
-export type DatabaseConfigFactory<TConfig extends AppDatabaseConfig = AppDatabaseConfig> = ConfigFactory<TConfig>;
+export type DatabaseConfigFactory<
+  TConfig extends AppDatabaseConfig = AppDatabaseConfig,
+> = ConfigFactory<TConfig>;

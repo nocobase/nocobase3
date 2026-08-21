@@ -5,6 +5,6 @@
     "declarationMap": false,
     "isolatedDeclarations": false
   },
-  "include": ["server/migrations/**/*.ts"],
+  "include": ["database/migrations/**/*.ts"],
   "exclude": []
 }

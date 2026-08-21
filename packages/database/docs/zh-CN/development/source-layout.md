@@ -87,6 +87,8 @@ src/
 
 `migration/` 是版本化数据库变更层。它负责 `defineMigration()`、文件加载、history、lock、事务执行和 rollback。Migration context 只暴露 `builder`、`query`、`connection`，不在顶层暴露 `schema`。
 
+Package 的 migration 文件通常位于 package 自己的 `database/migrations/` 目录，由上层插件系统以 `MigrationSource` 传给 runner。数据库包不负责扫描或识别插件 package。
+
 `metadata/` 是 Collection metadata 存储接口与默认内存实现。
 
 `naming/` 是逻辑名和数据库 identifier 之间的命名策略，例如 `underscored`、`tablePrefix`、索引名和外键名生成。

@@ -51,6 +51,96 @@ describe("migration loader", () => {
       "202608180002_second",
     ]);
     expect(migrations[0].checksum).toHaveLength(64);
+    expect(migrations.map((migration) => migration.packageName)).toEqual([
+      "app",
+      "app",
+    ]);
+  });
+
+  it("loads multiple package sources and keeps global name ordering", async () => {
+    const firstDirectory = await createTempDirectory();
+    const secondDirectory = await createTempDirectory();
+    await writeMigration(
+      firstDirectory,
+      "202608180002_from_alpha",
+      migrationSource("202608180002_from_alpha"),
+    );
+    await writeMigration(
+      secondDirectory,
+      "202608180001_from_beta",
+      migrationSource("202608180001_from_beta"),
+    );
+
+    const migrations = await loadMigrations({
+      sources: [
+        { packageName: "@nocobase/plugin-alpha", directory: firstDirectory },
+        { packageName: "@nocobase/plugin-beta", directory: secondDirectory },
+      ],
+    });
+
+    expect(
+      migrations.map(({ packageName, name }) => ({ packageName, name })),
+    ).toEqual([
+      { packageName: "@nocobase/plugin-beta", name: "202608180001_from_beta" },
+      {
+        packageName: "@nocobase/plugin-alpha",
+        name: "202608180002_from_alpha",
+      },
+    ]);
+  });
+
+  it("supports an explicit package name for the legacy directory API", async () => {
+    const directory = await createTempDirectory();
+    await writeMigration(
+      directory,
+      "202608180001_plugin_migration",
+      migrationSource("202608180001_plugin_migration"),
+    );
+
+    const migrations = await loadMigrations({
+      directory,
+      packageName: "@nocobase/plugin-example",
+    });
+
+    expect(migrations[0].packageName).toBe("@nocobase/plugin-example");
+  });
+
+  it("rejects duplicate names across package sources", async () => {
+    const firstDirectory = await createTempDirectory();
+    const secondDirectory = await createTempDirectory();
+    const name = "202608180001_duplicate_across_packages";
+    await writeMigration(firstDirectory, name, migrationSource(name));
+    await writeMigration(secondDirectory, name, migrationSource(name));
+
+    await expect(
+      loadMigrations({
+        sources: [
+          { packageName: "@nocobase/plugin-alpha", directory: firstDirectory },
+          { packageName: "@nocobase/plugin-beta", directory: secondDirectory },
+        ],
+      }),
+    ).rejects.toThrow(`Duplicate migration name "${name}"`);
+  });
+
+  it("rejects empty package names", async () => {
+    const directory = await createTempDirectory();
+
+    await expect(
+      loadMigrations({
+        sources: [{ packageName: " ", directory }],
+      }),
+    ).rejects.toThrow("Migration packageName must be a non-empty string.");
+  });
+
+  it("requires exactly one migration source shape", async () => {
+    const directory = await createTempDirectory();
+
+    await expect(loadMigrations({})).rejects.toThrow(
+      "Migration options must define directory or sources.",
+    );
+    await expect(loadMigrations({ directory, sources: [] })).rejects.toThrow(
+      "Migration options cannot define both directory and sources.",
+    );
   });
 
   it("accepts irreversible migrations without down", async () => {
@@ -222,4 +312,16 @@ async function writeMigration(
 
 function trimSource(source: string): string {
   return `${source.trim().replace(/^ {6}/gm, "")}\n`;
+}
+
+function migrationSource(name: string): string {
+  return `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${name}',
+        async up() {},
+        async down() {},
+      });
+    `;
 }

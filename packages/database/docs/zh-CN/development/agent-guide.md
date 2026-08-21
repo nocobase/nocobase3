@@ -53,6 +53,9 @@ Agent 的推荐 DSL 取决于输出载体：
 - 使用 `connection.client()` 的特殊 migration 应显式判断 `connection.dialect` 或 `connection.capabilities`。
 - 没有 `down` 时必须声明 `irreversible: true`，不要生成虚假的 rollback。
 - Runner 应在事务连接内创建 context，确保 `builder`、`query`、`connection.client()` 和 history 写入共享同一个事务。
+- 插件 package 的 migration 通过 `sources` 注册，并使用 package 的 `package.json.name` 作为 `packageName`。
+- 所有来源的 migration 按全局 `name` 排序，`name` 必须全局唯一；`packageName` 只用于归属、历史记录和诊断。
+- 旧的单目录 `directory` API 默认使用 `packageName: 'app'`。
 
 ## Query 规则
 

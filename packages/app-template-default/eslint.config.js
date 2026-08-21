@@ -21,7 +21,7 @@ export default createPortalConfig({
   overrides: [
     {
       name: "app-template-default/migration-project",
-      files: ["server/migrations/*.ts"],
+      files: ["database/migrations/*.ts"],
       languageOptions: {
         parserOptions: {
           project: "./tsconfig.migrations.json",

@@ -21,7 +21,7 @@ server/runtime/deps.ts
 server/routes/api/auth.ts
   把 /api/auth/* 交给 Better Auth
 
-server/migrations/
+database/migrations/
   应用拥有的认证表结构
 
 client/auth/
@@ -115,11 +115,11 @@ endpoint 通常会自动生效，不需要再写一套重复的 Hono 路由。
 有些 provider 只使用现有的 `user`、`session`、`account`、`verification` 表；有些
 plugin 会增加字段或 model。
 
-如果需要新结构，应在应用的 `server/migrations/` 中增加 migration。应用应把
+如果需要新结构，应在应用的 `database/migrations/` 中增加 migration。应用应把
 migration 当作自己的数据库历史，而不是在生产环境依赖 Better Auth 自动改表。
 
 ```text
-server/migrations/
+database/migrations/
   202608200001_create_authentication_tables.ts
   202608210001_add_my_auth_provider.ts
 ```

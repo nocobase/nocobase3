@@ -66,6 +66,7 @@ describe("app-server config runtime", () => {
     const factories = {
       app: defineConfig(({ env, paths }) => ({
         name: env.string("APP_NAME", "app"),
+        migrations: paths.database("migrations"),
         storage: paths.storage("database.sqlite"),
       })),
     };
@@ -73,9 +74,21 @@ describe("app-server config runtime", () => {
     expect(loadConfig(factories, { env, paths })).toEqual({
       app: {
         name: "orders",
+        migrations: "/tmp/app/database/migrations",
         storage: "/tmp/app/storage/database.sqlite",
       },
     });
+  });
+
+  it("supports custom database runtime paths", () => {
+    const paths = createConfigPaths({
+      rootDir: "/tmp/app",
+      databaseDir: "/tmp/app/dist/database",
+    });
+
+    expect(paths.database("migrations")).toBe(
+      "/tmp/app/dist/database/migrations",
+    );
   });
 });
 
@@ -85,7 +98,7 @@ describe("app database manager", () => {
       default: "none",
       connections: {},
       migrations: {
-        directory: "/tmp/app/server/migrations",
+        directory: "/tmp/app/database/migrations",
         autoRun: false,
       },
     };
@@ -103,7 +116,7 @@ describe("app database manager", () => {
         },
       },
       migrations: {
-        directory: "/tmp/app/server/migrations",
+        directory: "/tmp/app/database/migrations",
         autoRun: false,
       },
     };
@@ -127,7 +140,7 @@ describe("app database storage", () => {
         },
       },
       migrations: {
-        directory: path.join(root, "server", "migrations"),
+        directory: path.join(root, "database", "migrations"),
         autoRun: false,
       },
     });
@@ -148,7 +161,7 @@ describe("app runtime context", () => {
           },
         },
         migrations: {
-          directory: "/tmp/app/server/migrations",
+          directory: "/tmp/app/database/migrations",
           autoRun: false,
         },
       },
@@ -164,7 +177,7 @@ describe("app runtime context", () => {
         default: "none",
         connections: {},
         migrations: {
-          directory: "/tmp/app/server/migrations",
+          directory: "/tmp/app/database/migrations",
           autoRun: false,
         },
       },

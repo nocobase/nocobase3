@@ -34,10 +34,10 @@ import { authenticationMigration } from "@nocobase/authentication/server";
 它是标准 `MigrationDefinition`，可以交给使用 `@nocobase/database` 的 migration
 runner。具体注册方式取决于应用如何发现 migration。
 
-默认应用模板选择将 migration 源文件复制到自己的 `server/migrations` 目录：
+默认应用模板选择将 migration 源文件复制到自己的 `database/migrations` 目录：
 
 ```text
-server/migrations/
+database/migrations/
   202608200001_create_authentication_tables.ts
 ```
 

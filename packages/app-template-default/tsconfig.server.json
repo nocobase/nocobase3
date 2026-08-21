@@ -11,5 +11,5 @@
     }
   },
   "include": ["server/**/*.ts", "scripts/migrate.ts"],
-  "exclude": ["server/migrations/**/*.ts"]
+  "exclude": ["database/migrations/**/*.ts"]
 }

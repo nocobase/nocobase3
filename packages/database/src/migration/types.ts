@@ -1,10 +1,10 @@
-import type { CollectionBuilder } from '../collection/builder/index.js';
-import type { DatabaseConnection } from '../database/index.js';
-import type { DatabaseDialect, DatabaseDriver } from '../database/config.js';
-import type { DatabaseCapabilities } from '../schema/index.js';
-import type { QueryAdapter } from '../query/index.js';
+import type { CollectionBuilder } from "../collection/builder/index.js";
+import type { DatabaseConnection } from "../database/index.js";
+import type { DatabaseDialect, DatabaseDriver } from "../database/config.js";
+import type { DatabaseCapabilities } from "../schema/index.js";
+import type { QueryAdapter } from "../query/index.js";
 
-export type MigrationTransactionMode = true | false | 'auto';
+export type MigrationTransactionMode = true | false | "auto";
 
 export interface MigrationConnection {
   readonly name: string;
@@ -30,6 +30,7 @@ export interface MigrationDefinition {
 }
 
 export interface LoadedMigration {
+  readonly packageName: string;
   readonly name: string;
   readonly filePath: string;
   readonly fileName: string;
@@ -37,9 +38,17 @@ export interface LoadedMigration {
   readonly migration: MigrationDefinition;
 }
 
-export interface LoadMigrationsOptions {
+export interface MigrationSource {
+  readonly packageName: string;
   readonly directory: string;
   readonly extensions?: readonly string[];
+}
+
+export interface LoadMigrationsOptions {
+  readonly directory?: string;
+  readonly packageName?: string;
+  readonly extensions?: readonly string[];
+  readonly sources?: readonly MigrationSource[];
 }
 
 export interface CreateMigratorOptions extends LoadMigrationsOptions {
@@ -64,6 +73,7 @@ export interface MigrationRollbackResult {
 
 export interface MigrationHistoryRecord {
   readonly id: number;
+  readonly packageName: string;
   readonly name: string;
   readonly batch: number;
   readonly checksum: string;

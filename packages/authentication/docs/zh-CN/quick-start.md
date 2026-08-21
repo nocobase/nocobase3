@@ -14,7 +14,7 @@
 
 包导出了 `authenticationMigration`。应用需要把该 migration 纳入自己的
 migration 管理。默认应用模板采用复制 migration 文件到
-`server/migrations` 的方式，使应用构建产物能够独立完成数据库升级。
+`database/migrations` 的方式，使应用构建产物能够独立完成数据库升级。
 
 详细说明见[数据库与 Migration](./server/database-and-migration.md)。
 

@@ -2,13 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const distDir = path.join(rootDir, "dist");
 const rootPackagePath = path.join(rootDir, "package.json");
 const distPackagePath = path.join(distDir, "package.json");
 const workspacePackagesDir = path.resolve(rootDir, "..");
 const vendorDir = path.join(distDir, "vendor");
-const serverRuntimeDirs = ["server", "scripts"];
+const runtimeDirs = ["server", "database", "scripts"];
 const databaseRuntimeDrivers = ["better-sqlite3", "pg", "mysql2"];
 
 const toPosix = (value) => value.split(path.sep).join("/");
@@ -73,9 +76,14 @@ const listWorkspacePackages = () => {
       .readdirSync(workspacePackagesDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => path.join(workspacePackagesDir, entry.name))
-      .filter((packageDir) => fs.existsSync(path.join(packageDir, "package.json")))
-      .map((packageDir) => [readJson(path.join(packageDir, "package.json")).name, packageDir])
-      .filter(([name]) => typeof name === "string")
+      .filter((packageDir) =>
+        fs.existsSync(path.join(packageDir, "package.json")),
+      )
+      .map((packageDir) => [
+        readJson(path.join(packageDir, "package.json")).name,
+        packageDir,
+      ])
+      .filter(([name]) => typeof name === "string"),
   );
 };
 
@@ -84,7 +92,7 @@ const getInstalledVersion = (packageName, fromDir = rootDir) => {
     fromDir,
     "node_modules",
     ...packageName.split("/"),
-    "package.json"
+    "package.json",
   );
 
   if (!fs.existsSync(packagePath)) return undefined;
@@ -123,14 +131,19 @@ const copyWorkspacePackage = (packageName, packageDir) => {
   const sourceDistDir = path.join(packageDir, "dist");
 
   if (!fs.existsSync(sourceDistDir)) {
-    throw new Error(`Missing ${path.relative(rootDir, sourceDistDir)}. Build ${packageName} before generating the server package.`);
+    throw new Error(
+      `Missing ${path.relative(rootDir, sourceDistDir)}. Build ${packageName} before generating the server package.`,
+    );
   }
 
   const targetDir = getVendorPackagePath(packageName);
   fs.rmSync(targetDir, { recursive: true, force: true });
   fs.mkdirSync(targetDir, { recursive: true });
   fs.cpSync(sourceDistDir, path.join(targetDir, "dist"), { recursive: true });
-  writeJson(path.join(targetDir, "package.json"), createRuntimePackageJson(packageJson));
+  writeJson(
+    path.join(targetDir, "package.json"),
+    createRuntimePackageJson(packageJson),
+  );
 };
 
 if (!fs.existsSync(path.join(distDir, "server"))) {
@@ -139,15 +152,19 @@ if (!fs.existsSync(path.join(distDir, "server"))) {
 
 const rootPackage = readJson(rootPackagePath);
 const workspacePackages = listWorkspacePackages();
-const files = serverRuntimeDirs.flatMap((runtimeDir) =>
+const files = runtimeDirs.flatMap((runtimeDir) =>
   walkFiles(path.join(distDir, runtimeDir)).filter((file) =>
-    /\.[cm]?js$/.test(file)
-  )
+    /\.[cm]?js$/.test(file),
+  ),
 );
 const workspacePackageNames = new Set();
 const externalPackageNames = new Map();
 
-const addExternalPackage = (packageName, sourcePackageDir = rootDir, sourcePackage = rootPackage) => {
+const addExternalPackage = (
+  packageName,
+  sourcePackageDir = rootDir,
+  sourcePackage = rootPackage,
+) => {
   if (externalPackageNames.has(packageName)) return;
 
   const version =
@@ -158,7 +175,7 @@ const addExternalPackage = (packageName, sourcePackageDir = rootDir, sourcePacka
 
   if (!version) {
     throw new Error(
-      `Could not find a declared or installed version for ${packageName}`
+      `Could not find a declared or installed version for ${packageName}`,
     );
   }
 
@@ -181,7 +198,9 @@ const addPackage = (packageName) => {
     ...packageJson.optionalDependencies,
   };
 
-  for (const [dependencyName, dependencyVersion] of Object.entries(dependencies)) {
+  for (const [dependencyName, dependencyVersion] of Object.entries(
+    dependencies,
+  )) {
     if (isWorkspaceVersion(dependencyVersion)) {
       addPackage(dependencyName);
     } else {
@@ -213,11 +232,13 @@ const workspaceDependencies = Object.fromEntries(
     .map((packageName) => [
       packageName,
       `file:${toPosix(path.relative(distDir, getVendorPackagePath(packageName)))}`,
-    ])
+    ]),
 );
 
 const dependencies = Object.fromEntries([
-  ...[...externalPackageNames.entries()].sort(([left], [right]) => left.localeCompare(right)),
+  ...[...externalPackageNames.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  ),
   ...Object.entries(workspaceDependencies),
 ]);
 
@@ -245,7 +266,7 @@ const distPackage = {
 writeJson(distPackagePath, distPackage);
 
 console.log(
-  `Generated ${toPosix(path.relative(rootDir, distPackagePath))} with ${Object.keys(
-    dependencies
-  ).length} production dependencies and ${workspacePackageNames.size} vendored workspace packages.`
+  `Generated ${toPosix(path.relative(rootDir, distPackagePath))} with ${
+    Object.keys(dependencies).length
+  } production dependencies and ${workspacePackageNames.size} vendored workspace packages.`,
 );

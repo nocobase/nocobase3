@@ -53,6 +53,8 @@ Migration 入口：
 - `migrator.rollback()`：回滚最近一批 migrations。
 - `validateMigrations(options)`：校验 migration 文件格式和名称一致性。
 
+Migration 可以使用 `{ directory, packageName? }` 加载单个来源，也可以使用 `sources: [{ packageName, directory }]` 加载多个 package。所有 migration 的 `name` 必须全局唯一，执行顺序按 `name` 排序。
+
 Migration context 顶层只暴露 `builder`、`query` 和 `connection`。不在顶层公开 `schema`；底层 adapter client 兜底通过 `connection.client()`。
 
 详见 [Migration](../migration/overview.md) 和 [Migration 维护清单](../migration/maintenance.md)。
