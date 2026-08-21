@@ -87,9 +87,9 @@ Repository 和 Repository Filter Builder 当前是规划设计，尚未实现。
 
 ## 测试规则
 
-- 新增 Builder 行为时，通常需要同时补 `test/unit/builder/` 和 `test/integration/builder/`。
-- 新增 Query 行为时，优先补 `test/integration/query/`，因为 QueryAdapter 的价值在真实数据库行为。
-- `test/integration` 是真实数据库连接测试，不是 SQLite 专属。
+- 新增 Builder 行为时，通常需要同时补 `tests/unit/builder/` 和 `tests/integration/builder/`。
+- 新增 Query 行为时，优先补 `tests/integration/query/`，因为 QueryAdapter 的价值在真实数据库行为。
+- `tests/integration` 是真实数据库连接测试，不是 SQLite 专属。
 - 修改 Builder 编译或 adapter 行为后，应跑 `npm run test:integration:all`。
 - SQLite 通过不代表 PostgreSQL/MySQL 一定通过。
 
