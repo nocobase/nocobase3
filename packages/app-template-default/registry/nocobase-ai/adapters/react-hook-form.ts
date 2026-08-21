@@ -3,11 +3,11 @@ import type {
   Path,
   PathValue,
   UseFormReturn,
-} from "react-hook-form";
+} from 'react-hook-form';
 
 export function applyReactHookFormValues<TValues extends FieldValues>(
-  form: Pick<UseFormReturn<TValues>, "setValue">,
-  values: Record<string, unknown>
+  form: Pick<UseFormReturn<TValues>, 'setValue'>,
+  values: Record<string, unknown>,
 ) {
   for (const [name, value] of Object.entries(values)) {
     const path = name as Path<TValues>;

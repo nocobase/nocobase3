@@ -95,7 +95,7 @@ interface MigrationRunResult {
 默认事务模式是：
 
 ```ts
-transaction: 'auto'
+transaction: 'auto';
 ```
 
 `transaction: true` 和 `transaction: 'auto'` 走 `connection.transaction()`。

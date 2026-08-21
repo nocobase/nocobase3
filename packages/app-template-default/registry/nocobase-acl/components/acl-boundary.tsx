@@ -1,9 +1,9 @@
-import type { BaseKey } from "@refinedev/core";
-import type { PropsWithChildren, ReactNode } from "react";
+import type { BaseKey } from '@refinedev/core';
+import type { PropsWithChildren, ReactNode } from 'react';
 
-import { AccessDenied } from "@/components/access-control/access-denied";
-import { useAclEvaluator } from "@nocobase/portal-sdk/acl";
-import type { RoleConstraint } from "@nocobase/portal-sdk/acl";
+import { AccessDenied } from '@/components/access-control/access-denied';
+import { useAclEvaluator } from '@nocobase/portal-sdk/acl';
+import type { RoleConstraint } from '@nocobase/portal-sdk/acl';
 
 export type AclPermission = {
   resource: string;
@@ -21,8 +21,8 @@ export type AclPageProps = PropsWithChildren<{
 }>;
 
 export type AclRegionProps = PropsWithChildren<
-  Omit<AclPermission, "field"> & {
-    fallback?: "hidden" | "forbidden" | ReactNode;
+  Omit<AclPermission, 'field'> & {
+    fallback?: 'hidden' | 'forbidden' | ReactNode;
   }
 >;
 
@@ -65,7 +65,7 @@ export function AclRegion({
   action,
   id,
   dataSourceKey,
-  fallback = "hidden",
+  fallback = 'hidden',
 }: AclRegionProps) {
   const canAccess = useAclEvaluator();
   const allowed = canAccess({
@@ -76,9 +76,9 @@ export function AclRegion({
   });
 
   if (allowed) return children;
-  if (fallback === "hidden") return null;
-  if (fallback === "forbidden") {
-    return <AccessDenied className="min-h-40" />;
+  if (fallback === 'hidden') return null;
+  if (fallback === 'forbidden') {
+    return <AccessDenied className='min-h-40' />;
   }
   return fallback;
 }

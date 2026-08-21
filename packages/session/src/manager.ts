@@ -57,11 +57,15 @@ export function createNullSessionConfig(): AppSessionConfig {
 
 export function assertDefaultSessionStore(config: AppSessionConfig): void {
   if (!config.stores[config.default]) {
-    throw new Error(`Default session store "${config.default}" is not configured.`);
+    throw new Error(
+      `Default session store "${config.default}" is not configured.`,
+    );
   }
 }
 
-export function resolveSessionConfig(config: AppSessionConfig): ResolvedSessionConfig {
+export function resolveSessionConfig(
+  config: AppSessionConfig,
+): ResolvedSessionConfig {
   return {
     enabled: config.enabled ?? true,
     store: config.default,
@@ -88,13 +92,17 @@ export function resolveSessionConfig(config: AppSessionConfig): ResolvedSessionC
   };
 }
 
-class DefaultSessionManager<Data extends SessionData> implements NocoBaseSessionManager<Data> {
+class DefaultSessionManager<
+  Data extends SessionData,
+> implements NocoBaseSessionManager<Data> {
   constructor(
     public readonly config: ResolvedSessionConfig,
     public readonly store: NocoBaseSessionStore<Data>,
   ) {}
 
-  createRequestSession(options: CreateRequestSessionOptions): NocoBaseSession<Data> & PersistableSession {
+  createRequestSession(
+    options: CreateRequestSessionOptions,
+  ): NocoBaseSession<Data> & PersistableSession {
     return new RequestSession<Data>(this.config, this.store, options);
   }
 
@@ -120,7 +128,9 @@ class DefaultSessionManager<Data extends SessionData> implements NocoBaseSession
   }
 }
 
-class RequestSession<Data extends SessionData> implements NocoBaseSession<Data>, PersistableSession {
+class RequestSession<Data extends SessionData>
+  implements NocoBaseSession<Data>, PersistableSession
+{
   private idValue: string | null = null;
   private dataValue: Data | null = null;
   private loaded = false;
@@ -157,10 +167,13 @@ class RequestSession<Data extends SessionData> implements NocoBaseSession<Data>,
   }
 
   async set(key: string, value: unknown): Promise<void> {
-    await this.update((previous) => ({
-      ...(previous ?? {}),
-      [key]: value,
-    }) as Data);
+    await this.update(
+      (previous) =>
+        ({
+          ...(previous ?? {}),
+          [key]: value,
+        }) as Data,
+    );
   }
 
   async forget(key: string): Promise<void> {
@@ -200,19 +213,33 @@ class RequestSession<Data extends SessionData> implements NocoBaseSession<Data>,
       return { action: 'none' };
     }
 
-    if (this.destroyed || this.deleteCookie || !this.idValue || !this.dataValue) {
+    if (
+      this.destroyed ||
+      this.deleteCookie ||
+      !this.idValue ||
+      !this.dataValue
+    ) {
       return { action: this.deleteCookie ? 'delete-cookie' : 'none' };
     }
 
     const now = Date.now();
-    const stored = createStoredSession(this.dataValue, this.config, now, this.storedValue);
+    const stored = createStoredSession(
+      this.dataValue,
+      this.config,
+      now,
+      this.storedValue,
+    );
     const ttl = Math.max(1, Math.ceil((stored.expiresAt - now) / 1000));
     await this.store.set(this.idValue, stored, { ttl });
     this.storedValue = stored;
 
     return {
       action: 'set-cookie',
-      cookieValue: await encryptSessionCookie({ sid: this.idValue }, this.config.secret, stored.expiresAt),
+      cookieValue: await encryptSessionCookie(
+        { sid: this.idValue },
+        this.config.secret,
+        stored.expiresAt,
+      ),
       maxAge: this.resolveCookieMaxAge(stored, now),
     };
   }
@@ -228,7 +255,10 @@ class RequestSession<Data extends SessionData> implements NocoBaseSession<Data>,
       return;
     }
 
-    const payload = await decryptSessionCookie(cookieValue, [this.config.secret, ...this.config.previousSecrets]);
+    const payload = await decryptSessionCookie(cookieValue, [
+      this.config.secret,
+      ...this.config.previousSecrets,
+    ]);
     if (!payload) {
       this.deleteCookie = true;
       return;
@@ -254,17 +284,26 @@ class RequestSession<Data extends SessionData> implements NocoBaseSession<Data>,
     this.idValue ??= generateSessionId();
   }
 
-  private resolveCookieMaxAge(stored: StoredSession<Data>, now: number): number | undefined {
+  private resolveCookieMaxAge(
+    stored: StoredSession<Data>,
+    now: number,
+  ): number | undefined {
     if (this.config.cookie.expireOnClose) {
       return undefined;
     }
 
-    const sessionMaxAge = Math.max(1, Math.ceil((stored.expiresAt - now) / 1000));
+    const sessionMaxAge = Math.max(
+      1,
+      Math.ceil((stored.expiresAt - now) / 1000),
+    );
     if (!stored.idleExpiresAt) {
       return sessionMaxAge;
     }
 
-    const idleMaxAge = Math.max(1, Math.ceil((stored.idleExpiresAt - now) / 1000));
+    const idleMaxAge = Math.max(
+      1,
+      Math.ceil((stored.idleExpiresAt - now) / 1000),
+    );
     return Math.min(sessionMaxAge, idleMaxAge);
   }
 }
@@ -296,13 +335,23 @@ function createStoredSession<Data extends SessionData>(
 }
 
 function isStoredSessionExpired(stored: StoredSession, now: number): boolean {
-  return stored.expiresAt <= now || Boolean(stored.idleExpiresAt && stored.idleExpiresAt <= now);
+  return (
+    stored.expiresAt <= now ||
+    Boolean(stored.idleExpiresAt && stored.idleExpiresAt <= now)
+  );
 }
 
-function shouldRefreshSession(stored: StoredSession, config: ResolvedSessionConfig, now: number): boolean {
+function shouldRefreshSession(
+  stored: StoredSession,
+  config: ResolvedSessionConfig,
+  now: number,
+): boolean {
   if (!config.lifetime.rolling || !config.lifetime.inactivityMs) {
     return false;
   }
 
-  return Boolean(stored.idleExpiresAt && stored.idleExpiresAt - now < config.lifetime.inactivityMs / 2);
+  return Boolean(
+    stored.idleExpiresAt &&
+    stored.idleExpiresAt - now < config.lifetime.inactivityMs / 2,
+  );
 }

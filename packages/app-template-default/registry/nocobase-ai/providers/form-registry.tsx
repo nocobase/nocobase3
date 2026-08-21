@@ -3,8 +3,8 @@ import {
   useContext,
   useMemo,
   type PropsWithChildren,
-} from "react";
-import type { AIToolInvoker } from "./types";
+} from 'react';
+import type { AIToolInvoker } from './types';
 
 export type AIFormField = {
   name: string;
@@ -27,12 +27,12 @@ export type AIFormTarget = {
 
 export type AIFormFillSkippedField = {
   name: string;
-  reason: "undeclared" | "readonly" | "invalid";
+  reason: 'undeclared' | 'readonly' | 'invalid';
   message: string;
 };
 
 export type AIFormFillResult = {
-  status: "success" | "error";
+  status: 'success' | 'error';
   content: string;
   appliedFields: string[];
   skippedFields: AIFormFillSkippedField[];
@@ -45,23 +45,24 @@ export class AIFormRegistry {
   >();
 
   register(target: AIFormTarget) {
-    if (!target.id.trim()) throw new Error("AI Form id is required");
-    if (!target.title.trim()) throw new Error("AI Form title is required");
+    if (!target.id.trim()) throw new Error('AI Form id is required');
+    if (!target.title.trim()) throw new Error('AI Form title is required');
     if (!Array.isArray(target.fields)) {
-      throw new Error("AI Form fields must be an array");
+      throw new Error('AI Form fields must be an array');
     }
-    if (typeof target.getValues !== "function") {
-      throw new Error("AI Form getValues must be a function");
+    if (typeof target.getValues !== 'function') {
+      throw new Error('AI Form getValues must be a function');
     }
-    if (typeof target.setValues !== "function") {
-      throw new Error("AI Form setValues must be a function");
+    if (typeof target.setValues !== 'function') {
+      throw new Error('AI Form setValues must be a function');
     }
     const fieldNames = new Set<string>();
     for (const field of target.fields) {
-      if (!field.name?.trim()) throw new Error("AI Form field name is required");
+      if (!field.name?.trim())
+        throw new Error('AI Form field name is required');
       if (fieldNames.has(field.name)) {
         throw new Error(
-          `AI Form field "${field.name}" is declared more than once`
+          `AI Form field "${field.name}" is declared more than once`,
         );
       }
       fieldNames.add(field.name);
@@ -98,7 +99,7 @@ export function useAIFormRegistry() {
   const registry = useContext(AIFormRegistryContext);
   if (!registry) {
     throw new Error(
-      "useAIFormRegistry must be used inside AIFormRegistryProvider"
+      'useAIFormRegistry must be used inside AIFormRegistryProvider',
     );
   }
   return registry;
@@ -110,7 +111,7 @@ const getErrorMessage = (error: unknown) =>
 const getEnumValues = (definition: unknown) => {
   if (!Array.isArray(definition)) return undefined;
   return definition.map((item) => {
-    if (item && typeof item === "object" && !Array.isArray(item)) {
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
       return (item as { value?: unknown }).value;
     }
     return item;
@@ -119,76 +120,79 @@ const getEnumValues = (definition: unknown) => {
 
 const validateFieldValue = (field: AIFormField, value: unknown) => {
   const enumValues = getEnumValues(field.enum);
-  if (enumValues?.length && !enumValues.some((item) => Object.is(item, value))) {
-    return "The value is not one of the declared options.";
+  if (
+    enumValues?.length &&
+    !enumValues.some((item) => Object.is(item, value))
+  ) {
+    return 'The value is not one of the declared options.';
   }
 
   switch (field.type?.toLowerCase()) {
-    case "string":
-    case "text":
-    case "textarea":
-    case "email":
-    case "url":
-    case "date":
-    case "datetime":
-      return typeof value === "string" ? undefined : "Expected a string.";
-    case "number":
-    case "percent":
-      return typeof value === "number" && Number.isFinite(value)
+    case 'string':
+    case 'text':
+    case 'textarea':
+    case 'email':
+    case 'url':
+    case 'date':
+    case 'datetime':
+      return typeof value === 'string' ? undefined : 'Expected a string.';
+    case 'number':
+    case 'percent':
+      return typeof value === 'number' && Number.isFinite(value)
         ? undefined
-        : "Expected a finite number.";
-    case "integer":
-      return typeof value === "number" && Number.isInteger(value)
+        : 'Expected a finite number.';
+    case 'integer':
+      return typeof value === 'number' && Number.isInteger(value)
         ? undefined
-        : "Expected an integer.";
-    case "boolean":
-    case "checkbox":
-      return typeof value === "boolean" ? undefined : "Expected a boolean.";
-    case "array":
-      return Array.isArray(value) ? undefined : "Expected an array.";
-    case "object":
-      return value && typeof value === "object" && !Array.isArray(value)
+        : 'Expected an integer.';
+    case 'boolean':
+    case 'checkbox':
+      return typeof value === 'boolean' ? undefined : 'Expected a boolean.';
+    case 'array':
+      return Array.isArray(value) ? undefined : 'Expected an array.';
+    case 'object':
+      return value && typeof value === 'object' && !Array.isArray(value)
         ? undefined
-        : "Expected an object.";
+        : 'Expected an object.';
     default:
       return undefined;
   }
 };
 
 export function createFormFillerInvoker(
-  registry: AIFormRegistry
+  registry: AIFormRegistry,
 ): AIToolInvoker {
   return async (input, context) => {
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
       return {
-        status: "error",
-        content: "Form filler requires a form identifier and field data.",
+        status: 'error',
+        content: 'Form filler requires a form identifier and field data.',
         appliedFields: [],
         skippedFields: [],
       };
     }
 
     const { form, data } = input as { form?: unknown; data?: unknown };
-    if (typeof form !== "string" || !form) {
+    if (typeof form !== 'string' || !form) {
       return {
-        status: "error",
-        content: "The target form identifier is missing.",
+        status: 'error',
+        content: 'The target form identifier is missing.',
         appliedFields: [],
         skippedFields: [],
       };
     }
     if (context.allowedFormIds?.includes(form) !== true) {
       return {
-        status: "error",
+        status: 'error',
         content: `The target form "${form}" is not available in this conversation context.`,
         appliedFields: [],
         skippedFields: [],
       };
     }
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
       return {
-        status: "error",
-        content: "Form filler data must be an object.",
+        status: 'error',
+        content: 'Form filler data must be an object.',
         appliedFields: [],
         skippedFields: [],
       };
@@ -197,7 +201,7 @@ export function createFormFillerInvoker(
     const target = registry.get(form);
     if (!target) {
       return {
-        status: "error",
+        status: 'error',
         content: `The target form "${form}" is not available on this page.`,
         appliedFields: [],
         skippedFields: [],
@@ -209,22 +213,22 @@ export function createFormFillerInvoker(
       const accepted: Record<string, unknown> = {};
       const skippedFields: AIFormFillSkippedField[] = [];
       for (const [name, value] of Object.entries(
-        data as Record<string, unknown>
+        data as Record<string, unknown>,
       )) {
         const field = fields.get(name);
         if (!field) {
           skippedFields.push({
             name,
-            reason: "undeclared",
-            message: "This field is not declared by the target form.",
+            reason: 'undeclared',
+            message: 'This field is not declared by the target form.',
           });
           continue;
         }
         if (field.readonly) {
           skippedFields.push({
             name,
-            reason: "readonly",
-            message: "This field is read-only.",
+            reason: 'readonly',
+            message: 'This field is read-only.',
           });
           continue;
         }
@@ -232,7 +236,7 @@ export function createFormFillerInvoker(
         if (validationError) {
           skippedFields.push({
             name,
-            reason: "invalid",
+            reason: 'invalid',
             message: validationError,
           });
           continue;
@@ -243,7 +247,7 @@ export function createFormFillerInvoker(
       const appliedFields = Object.keys(accepted);
       if (!appliedFields.length) {
         return {
-          status: "error",
+          status: 'error',
           content: `No valid editable fields were provided for "${target.title}".`,
           appliedFields,
           skippedFields,
@@ -252,7 +256,7 @@ export function createFormFillerInvoker(
 
       await target.setValues(accepted);
       return {
-        status: "success",
+        status: 'success',
         content: skippedFields.length
           ? `Filled ${appliedFields.length} field(s) in "${target.title}" and skipped ${skippedFields.length}. Please review the values and submit the form manually.`
           : `Filled "${target.title}". Please review the values and submit the form manually.`,
@@ -261,7 +265,7 @@ export function createFormFillerInvoker(
       } satisfies AIFormFillResult;
     } catch (error) {
       return {
-        status: "error",
+        status: 'error',
         content: `Unable to fill "${target.title}": ${getErrorMessage(error)}`,
         appliedFields: [],
         skippedFields: [],

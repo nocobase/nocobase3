@@ -1,4 +1,4 @@
-import * as React from "react";
+import * as React from 'react';
 
 export type FieldValidationResult = boolean | string | string[] | undefined;
 
@@ -19,10 +19,10 @@ function isPassingValidationResult(result: FieldValidationResult) {
 }
 
 export function validateFieldValidationControllers(
-  controllers: FieldValidationController[]
+  controllers: FieldValidationController[],
 ): FieldValidationResult | Promise<FieldValidationResult> {
   const validateAt = (
-    index: number
+    index: number,
   ): FieldValidationResult | Promise<FieldValidationResult> => {
     const controller = controllers[index];
     if (!controller) return true;
@@ -30,9 +30,7 @@ export function validateFieldValidationControllers(
     const result = controller.validate();
     if (result instanceof Promise) {
       return result.then((resolved) =>
-        isPassingValidationResult(resolved)
-          ? validateAt(index + 1)
-          : resolved
+        isPassingValidationResult(resolved) ? validateAt(index + 1) : resolved,
       );
     }
 
@@ -44,20 +42,23 @@ export function validateFieldValidationControllers(
 
 export function useFieldValidationSlot(): FieldValidationSlot {
   const controllersRef = React.useRef(new Set<FieldValidationController>());
-  const register = React.useCallback((controller: FieldValidationController) => {
-    controllersRef.current.add(controller);
-    return () => controllersRef.current.delete(controller);
-  }, []);
+  const register = React.useCallback(
+    (controller: FieldValidationController) => {
+      controllersRef.current.add(controller);
+      return () => controllersRef.current.delete(controller);
+    },
+    [],
+  );
   const validate = React.useCallback(
     () => validateFieldValidationControllers([...controllersRef.current]),
-    []
+    [],
   );
 
   return React.useMemo(() => ({ register, validate }), [register, validate]);
 }
 
 export function useRegisterFieldValidationController(
-  controller: FieldValidationController
+  controller: FieldValidationController,
 ) {
   const slot = React.useContext(FieldValidationSlotContext);
 

@@ -28,7 +28,7 @@ session、account 和 verification 的常用查询字段带有索引。
 服务端入口导出：
 
 ```ts
-import { authenticationMigration } from "@nocobase/authentication/server";
+import { authenticationMigration } from '@nocobase/authentication/server';
 ```
 
 它是标准 `MigrationDefinition`，可以交给使用 `@nocobase/database` 的 migration

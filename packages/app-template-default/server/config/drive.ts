@@ -44,7 +44,10 @@ const driveConfig: ConfigFactory<AppDriveConfig> = defineConfig(
 
 export default driveConfig;
 
-function resolveVisibility(value: string | undefined, fallback: DriveVisibility): DriveVisibility {
+function resolveVisibility(
+  value: string | undefined,
+  fallback: DriveVisibility,
+): DriveVisibility {
   if (value === 'public' || value === 'private') {
     return value;
   }

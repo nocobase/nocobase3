@@ -1,14 +1,14 @@
-import { expect, it } from "vitest";
-import { describeIntegrationDatabases } from "../helpers.js";
+import { expect, it } from 'vitest';
+import { describeIntegrationDatabases } from '../helpers.js';
 
-describeIntegrationDatabases("query transactions", (context) => {
-  it("runs query operations inside transactions on a real connection", async () => {
-    const ordersTable = context.table("queryOrders");
+describeIntegrationDatabases('query transactions', (context) => {
+  it('runs query operations inside transactions on a real connection', async () => {
+    const ordersTable = context.table('queryOrders');
 
-    await context.builder.createCollection("queryOrders", (collection) => {
-      collection.increments("id");
-      collection.string("orderNo");
-      collection.string("status");
+    await context.builder.createCollection('queryOrders', (collection) => {
+      collection.increments('id');
+      collection.string('orderNo');
+      collection.string('status');
     });
 
     class ExpectedRollback extends Error {}
@@ -17,13 +17,13 @@ describeIntegrationDatabases("query transactions", (context) => {
       context.database.transaction(async (connection) => {
         await connection.query
           .insertInto(ordersTable)
-          .values({ orderNo: "SO-rollback", status: "draft" })
+          .values({ orderNo: 'SO-rollback', status: 'draft' })
           .execute();
 
         await expect(
           connection.query
             .selectFrom(ordersTable)
-            .where("orderNo", "=", "SO-rollback")
+            .where('orderNo', '=', 'SO-rollback')
             .exists(),
         ).resolves.toBe(true);
 
@@ -35,14 +35,14 @@ describeIntegrationDatabases("query transactions", (context) => {
       context.database
         .query()
         .selectFrom(ordersTable)
-        .where("orderNo", "=", "SO-rollback")
+        .where('orderNo', '=', 'SO-rollback')
         .exists(),
     ).resolves.toBe(false);
 
     await context.database.transaction(async (connection) => {
       await connection.query
         .insertInto(ordersTable)
-        .values({ orderNo: "SO-commit", status: "paid" })
+        .values({ orderNo: 'SO-commit', status: 'paid' })
         .execute();
     }, context.spec.name);
 
@@ -50,8 +50,8 @@ describeIntegrationDatabases("query transactions", (context) => {
       context.database
         .query()
         .selectFrom(ordersTable)
-        .where("orderNo", "=", "SO-commit")
-        .value<string>("status"),
-    ).resolves.toBe("paid");
+        .where('orderNo', '=', 'SO-commit')
+        .value<string>('status'),
+    ).resolves.toBe('paid');
   });
 });

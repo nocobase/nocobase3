@@ -30,39 +30,39 @@ effective role names. Its result follows the familiar Refine query shape with
 ACL role set, not every role assigned to the signed-in user.
 
 ```tsx
-import { useGetRoles } from "@nocobase/portal-sdk/acl";
+import { useGetRoles } from '@nocobase/portal-sdk/acl';
 
 function CurrentAccessContext() {
   const { data: roles, isLoading } = useGetRoles();
 
   if (isLoading) return null;
-  return <span>Effective roles: {roles?.join(", ")}</span>;
+  return <span>Effective roles: {roles?.join(', ')}</span>;
 }
 ```
 
 ```tsx
-import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
+import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
 
 export const appRoutes = defineAppRoutes([
   {
-    name: "administration",
-    path: "/administration",
+    name: 'administration',
+    path: '/administration',
     element: <AdministrationPage />,
     resource: {
       meta: {
-        label: "Administration",
+        label: 'Administration',
       },
     },
     access: {
-      roles: { anyOf: ["admin"] },
+      roles: { anyOf: ['admin'] },
     },
   },
 ]);
 
 function AuditLogsRoute() {
   return (
-    <AclPage roles={{ anyOf: ["admin", "auditor"] }}>
-      <AclRegion resource="auditLogs" action="list">
+    <AclPage roles={{ anyOf: ['admin', 'auditor'] }}>
+      <AclRegion resource='auditLogs' action='list'>
         <AuditLogTable />
       </AclRegion>
     </AclPage>

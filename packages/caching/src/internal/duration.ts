@@ -1,4 +1,4 @@
-import type { CacheTtlConfig } from "../types.js";
+import type { CacheTtlConfig } from '../types.js';
 
 const units: Readonly<Record<string, number>> = {
   ms: 1,
@@ -15,7 +15,7 @@ export function resolveTtlConfig(
   if (value === undefined) {
     return undefined;
   }
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     assertResolvedTtl(value, name);
     return value;
   }

@@ -1,2 +1,2 @@
-export { PasswordSignInForm } from "./sign-in-form";
-export { PasswordSignUpForm } from "./sign-up-form";
+export { PasswordSignInForm } from './sign-in-form';
+export { PasswordSignUpForm } from './sign-up-form';

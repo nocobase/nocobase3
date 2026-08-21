@@ -1,4 +1,4 @@
-import { PromptOutput } from "@/components/demo/prompt-output";
+import { PromptOutput } from '@/components/demo/prompt-output';
 
 export function PromptCard({
   title,
@@ -14,7 +14,7 @@ export function PromptCard({
       title={title}
       description={description}
       prompt={prompt}
-      promptClassName="max-h-[620px]"
+      promptClassName='max-h-[620px]'
     />
   );
 }

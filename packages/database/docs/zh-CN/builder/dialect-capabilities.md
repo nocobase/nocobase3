@@ -4,18 +4,18 @@ Collection DSL 的目标是屏蔽常见数据库差异，但底层数据库能�
 
 ## 当前能力表
 
-| 能力 | SQLite | PostgreSQL | MySQL |
-| --- | --- | --- | --- |
-| 表 | 支持 | 支持 | 支持 |
-| 外键 | 支持 | 支持 | 支持 |
-| 普通视图 | 支持 | 支持 | 支持 |
-| replace view | 支持 | 支持 | 支持 |
-| 物化视图 | 不支持 | 支持 | 不支持 |
-| schema | 不支持 | 支持 | 不支持 |
-| comment | 有限 | 支持 | 支持 |
-| native type | 有限 | 支持 | 支持 |
-| partial index | 支持 | 支持 | 有限 |
-| deferrable constraint | 不支持 | 支持 | 不支持 |
+| 能力                  | SQLite | PostgreSQL | MySQL  |
+| --------------------- | ------ | ---------- | ------ |
+| 表                    | 支持   | 支持       | 支持   |
+| 外键                  | 支持   | 支持       | 支持   |
+| 普通视图              | 支持   | 支持       | 支持   |
+| replace view          | 支持   | 支持       | 支持   |
+| 物化视图              | 不支持 | 支持       | 不支持 |
+| schema                | 不支持 | 支持       | 不支持 |
+| comment               | 有限   | 支持       | 支持   |
+| native type           | 有限   | 支持       | 支持   |
+| partial index         | 支持   | 支持       | 有限   |
+| deferrable constraint | 不支持 | 支持       | 不支持 |
 
 ## 当前实现中的能力
 

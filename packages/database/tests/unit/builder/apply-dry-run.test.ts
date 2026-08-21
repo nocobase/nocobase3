@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { CollectionBuilder } from "../../../src/index.js";
-import { InMemoryCollectionMetadataStore } from "../../../src/index.js";
-import { RecordingSchemaAdapter } from "./helpers.js";
+import { describe, expect, it } from 'vitest';
+import { CollectionBuilder } from '../../../src/index.js';
+import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
+import { RecordingSchemaAdapter } from './helpers.js';
 
-describe("CollectionBuilder apply and dryRun", () => {
-  it("does not execute schema operations or metadata sync during dryRun", async () => {
+describe('CollectionBuilder apply and dryRun', () => {
+  it('does not execute schema operations or metadata sync during dryRun', async () => {
     const adapter = new RecordingSchemaAdapter([
-      "alter table orders add column paid_at timestamp",
+      'alter table orders add column paid_at timestamp',
     ]);
     const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
@@ -17,11 +17,11 @@ describe("CollectionBuilder apply and dryRun", () => {
     const result = await builder.apply(
       [
         {
-          type: "addField",
-          collection: "orders",
+          type: 'addField',
+          collection: 'orders',
           field: {
-            name: "paidAt",
-            type: "datetime",
+            name: 'paidAt',
+            type: 'datetime',
           },
         },
       ],
@@ -33,12 +33,12 @@ describe("CollectionBuilder apply and dryRun", () => {
 
     expect(adapter.executed).toEqual([]);
     expect(result.sql).toEqual([
-      "alter table orders add column paid_at timestamp",
+      'alter table orders add column paid_at timestamp',
     ]);
-    expect(await metadataStore.getCollection("orders")).toBeUndefined();
+    expect(await metadataStore.getCollection('orders')).toBeUndefined();
   });
 
-  it("executes schema operations and syncs metadata by default", async () => {
+  it('executes schema operations and syncs metadata by default', async () => {
     const adapter = new RecordingSchemaAdapter();
     const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
@@ -48,13 +48,13 @@ describe("CollectionBuilder apply and dryRun", () => {
 
     await builder.apply([
       {
-        type: "createCollection",
-        name: "orders",
+        type: 'createCollection',
+        name: 'orders',
         definition: {
           fields: [
             {
-              name: "id",
-              type: "increments",
+              name: 'id',
+              type: 'increments',
               primaryKey: true,
             },
           ],
@@ -64,30 +64,30 @@ describe("CollectionBuilder apply and dryRun", () => {
 
     expect(adapter.executed).toHaveLength(1);
     expect(adapter.executed[0][0]).toMatchObject({
-      type: "createTable",
+      type: 'createTable',
       table: {
-        name: "orders",
+        name: 'orders',
       },
     });
-    expect(await metadataStore.getCollection("orders")).toMatchObject({
-      name: "orders",
-      fields: [{ name: "id" }],
+    expect(await metadataStore.getCollection('orders')).toMatchObject({
+      name: 'orders',
+      fields: [{ name: 'id' }],
     });
   });
 
-  it("marks destructive operations in impact output", async () => {
+  it('marks destructive operations in impact output', async () => {
     const builder = new CollectionBuilder();
 
     const result = await builder.apply(
       [
         {
-          type: "dropField",
-          collection: "users",
-          field: "name",
+          type: 'dropField',
+          collection: 'users',
+          field: 'name',
         },
         {
-          type: "dropCollection",
-          collection: "legacyLogs",
+          type: 'dropCollection',
+          collection: 'legacyLogs',
         },
       ],
       { dryRun: true },
@@ -95,15 +95,15 @@ describe("CollectionBuilder apply and dryRun", () => {
 
     expect(result.impact).toEqual([
       {
-        level: "destructive",
-        operation: "dropField",
-        message: "Dropping field users.name may remove existing data.",
+        level: 'destructive',
+        operation: 'dropField',
+        message: 'Dropping field users.name may remove existing data.',
       },
       {
-        level: "destructive",
-        operation: "dropCollection",
+        level: 'destructive',
+        operation: 'dropCollection',
         message:
-          "Dropping collection legacyLogs may remove the backing database object.",
+          'Dropping collection legacyLogs may remove the backing database object.',
       },
     ]);
   });

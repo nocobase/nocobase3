@@ -1,10 +1,10 @@
-import { useCallback, useRef, useState } from "react";
-import type { AIWorkContextItem } from "./types";
+import { useCallback, useRef, useState } from 'react';
+import type { AIWorkContextItem } from './types';
 
 const EMPTY_CONTEXT: AIWorkContextItem[] = [];
 
 const contextItemKey = (item: AIWorkContextItem) =>
-  `${item.type}:${item.id ?? item.title ?? "context"}`;
+  `${item.type}:${item.id ?? item.title ?? 'context'}`;
 
 export function useChatWorkContext(activeConversationId: string) {
   const [drafts, setDrafts] = useState<Record<string, AIWorkContextItem[]>>({});
@@ -16,17 +16,17 @@ export function useChatWorkContext(activeConversationId: string) {
       conversationId: string,
       value:
         | AIWorkContextItem[]
-        | ((current: AIWorkContextItem[]) => AIWorkContextItem[])
+        | ((current: AIWorkContextItem[]) => AIWorkContextItem[]),
     ) => {
       setDrafts((current) => ({
         ...current,
         [conversationId]:
-          typeof value === "function"
+          typeof value === 'function'
             ? value(current[conversationId] ?? [])
             : value,
       }));
     },
-    []
+    [],
   );
 
   const addWorkContext = useCallback(
@@ -39,17 +39,17 @@ export function useChatWorkContext(activeConversationId: string) {
         ];
       });
     },
-    [activeConversationId, setConversationWorkContext]
+    [activeConversationId, setConversationWorkContext],
   );
 
   const removeWorkContext = useCallback(
     (item: AIWorkContextItem) => {
       const key = contextItemKey(item);
       setConversationWorkContext(activeConversationId, (current) =>
-        current.filter((entry) => contextItemKey(entry) !== key)
+        current.filter((entry) => contextItemKey(entry) !== key),
       );
     },
-    [activeConversationId, setConversationWorkContext]
+    [activeConversationId, setConversationWorkContext],
   );
 
   const moveWorkContext = useCallback((from: string, to: string) => {
@@ -70,7 +70,7 @@ export function useChatWorkContext(activeConversationId: string) {
         return next;
       });
     },
-    []
+    [],
   );
 
   const clearWorkContext = useCallback(() => setDrafts({}), []);
@@ -78,8 +78,9 @@ export function useChatWorkContext(activeConversationId: string) {
   // compares this by identity across an await, so a new array each call would read as "the user
   // changed the work context" and silently abort every send.
   const getConversationWorkContext = useCallback(
-    (conversationId: string) => draftsRef.current[conversationId] ?? EMPTY_CONTEXT,
-    []
+    (conversationId: string) =>
+      draftsRef.current[conversationId] ?? EMPTY_CONTEXT,
+    [],
   );
   const workContext = drafts[activeConversationId] ?? EMPTY_CONTEXT;
 

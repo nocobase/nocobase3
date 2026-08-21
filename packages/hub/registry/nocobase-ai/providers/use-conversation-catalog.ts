@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { AIConfigurationStatus, AIConversation } from "./types";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AIConfigurationStatus, AIConversation } from './types';
 
 export function useConversationCatalog({
   configurationStatus,
@@ -13,8 +13,8 @@ export function useConversationCatalog({
   onError: (error?: Error) => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const searchRef = useRef("");
+  const [search, setSearch] = useState('');
+  const searchRef = useRef('');
   const requestRef = useRef(0);
   const catalogRef = useRef<AIConversation[]>([]);
 
@@ -23,7 +23,7 @@ export function useConversationCatalog({
       if (!keyword) catalogRef.current = conversations;
       onChange(conversations);
     },
-    [onChange]
+    [onChange],
   );
 
   const refresh = useCallback(async () => {
@@ -36,21 +36,21 @@ export function useConversationCatalog({
   }, [apply, listConversations]);
 
   useEffect(() => {
-    if (configurationStatus !== "ready") return;
+    if (configurationStatus !== 'ready') return;
     let active = true;
     setLoading(true);
     onError(undefined);
     void listConversations()
       .then((conversations) => {
         if (!active || searchRef.current) return;
-        apply(conversations, "");
+        apply(conversations, '');
       })
       .catch((error: unknown) => {
         if (!active) return;
         onError(
           error instanceof Error
             ? error
-            : new Error("Unable to load conversations")
+            : new Error('Unable to load conversations'),
         );
       })
       .finally(() => {
@@ -80,21 +80,21 @@ export function useConversationCatalog({
         const resolvedError =
           error instanceof Error
             ? error
-            : new Error("Unable to search conversations");
+            : new Error('Unable to search conversations');
         onError(resolvedError);
         throw resolvedError;
       } finally {
         if (requestRef.current === requestId) setLoading(false);
       }
     },
-    [apply, listConversations, onError]
+    [apply, listConversations, onError],
   );
 
   const updateCatalog = useCallback(
     (updater: (conversations: AIConversation[]) => AIConversation[]) => {
       catalogRef.current = updater(catalogRef.current);
     },
-    []
+    [],
   );
 
   return {

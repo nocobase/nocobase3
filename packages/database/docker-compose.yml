@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: nocobase
       POSTGRES_DB: nocobase_collection_builder
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U nocobase -d nocobase_collection_builder']
+      test:
+        ['CMD-SHELL', 'pg_isready -U nocobase -d nocobase_collection_builder']
       interval: 5s
       timeout: 5s
       retries: 20
@@ -23,7 +24,11 @@ services:
       MYSQL_PASSWORD: nocobase
       MYSQL_DATABASE: nocobase_collection_builder
     healthcheck:
-      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -unocobase -pnocobase --silent']
+      test:
+        [
+          'CMD-SHELL',
+          'mysqladmin ping -h 127.0.0.1 -unocobase -pnocobase --silent',
+        ]
       interval: 5s
       timeout: 5s
       retries: 30

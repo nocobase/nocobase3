@@ -1,6 +1,6 @@
-import type { InferUIMessageChunk } from "ai";
-import type { AIChatMessage, AISubAgentConversation } from "./types";
-import type { NocoBaseStreamEvent } from "./stream-parser";
+import type { InferUIMessageChunk } from 'ai';
+import type { AIChatMessage, AISubAgentConversation } from './types';
+import type { NocoBaseStreamEvent } from './stream-parser';
 import {
   getToolCallState,
   getToolProviderMetadata,
@@ -8,13 +8,13 @@ import {
   parseToolInput,
   toolCallsFromEvent,
   type NocoBaseToolCall,
-} from "./stream-event-utils";
+} from './stream-event-utils';
 
 type AIChatChunk = InferUIMessageChunk<AIChatMessage>;
 
 const createMessage = (username: string): AIChatMessage => ({
   id: `sub-agent-${crypto.randomUUID()}`,
-  role: "assistant",
+  role: 'assistant',
   metadata: {
     createdAt: new Date().toISOString(),
     employeeUsername: username,
@@ -24,7 +24,7 @@ const createMessage = (username: string): AIChatMessage => ({
 
 const updateLastMessage = (
   conversation: AISubAgentConversation,
-  updater: (message: AIChatMessage) => AIChatMessage
+  updater: (message: AIChatMessage) => AIChatMessage,
 ) => {
   const messages = conversation.messages.length
     ? [...conversation.messages]
@@ -35,8 +35,8 @@ const updateLastMessage = (
 
 const appendNarrative = (
   message: AIChatMessage,
-  type: "text" | "reasoning",
-  delta: string
+  type: 'text' | 'reasoning',
+  delta: string,
 ): AIChatMessage => {
   const parts = [...message.parts];
   const last = parts.at(-1);
@@ -44,51 +44,51 @@ const appendNarrative = (
     parts[parts.length - 1] = {
       ...last,
       text: `${last.text}${delta}`,
-      state: "streaming",
+      state: 'streaming',
     };
   } else {
-    parts.push({ type, text: delta, state: "streaming" });
+    parts.push({ type, text: delta, state: 'streaming' });
   }
   return { ...message, parts };
 };
 
 const toToolPart = (
-  toolCall: NocoBaseToolCall
-): AIChatMessage["parts"][number] => {
+  toolCall: NocoBaseToolCall,
+): AIChatMessage['parts'][number] => {
   const toolCallId = toolCall.id ?? `tool-${crypto.randomUUID()}`;
-  const toolName = toolCall.name ?? "tool";
+  const toolName = toolCall.name ?? 'tool';
   const input = parseToolInput(toolCall.args ?? toolCall.input ?? {});
   const state = getToolCallState(toolCall);
   const callProviderMetadata = getToolProviderMetadata(toolCall);
   if (state.failed) {
     return {
-      type: "dynamic-tool",
+      type: 'dynamic-tool',
       toolCallId,
       toolName,
-      state: "output-error",
+      state: 'output-error',
       input,
       errorText: String(
-        toolCall.content ?? toolCall.output ?? "Tool call failed"
+        toolCall.content ?? toolCall.output ?? 'Tool call failed',
       ),
       callProviderMetadata,
     };
   }
   if (state.completed) {
     return {
-      type: "dynamic-tool",
+      type: 'dynamic-tool',
       toolCallId,
       toolName,
-      state: "output-available",
+      state: 'output-available',
       input,
-      output: toolCall.output ?? toolCall.content ?? { status: "completed" },
+      output: toolCall.output ?? toolCall.content ?? { status: 'completed' },
       callProviderMetadata,
     };
   }
   return {
-    type: "dynamic-tool",
+    type: 'dynamic-tool',
     toolCallId,
     toolName,
-    state: "input-available",
+    state: 'input-available',
     input,
     callProviderMetadata,
   };
@@ -96,15 +96,15 @@ const toToolPart = (
 
 const updateToolCalls = (
   message: AIChatMessage,
-  toolCalls: NocoBaseToolCall[]
+  toolCalls: NocoBaseToolCall[],
 ) => {
   const parts = [...message.parts];
   for (const toolCall of toolCalls) {
     const nextPart = toToolPart(toolCall);
-    if (nextPart.type !== "dynamic-tool") continue;
+    if (nextPart.type !== 'dynamic-tool') continue;
     const index = parts.findIndex(
       (part) =>
-        part.type === "dynamic-tool" && part.toolCallId === nextPart.toolCallId
+        part.type === 'dynamic-tool' && part.toolCallId === nextPart.toolCallId,
     );
     if (index >= 0) parts[index] = nextPart;
     else parts.push(nextPart);
@@ -116,9 +116,9 @@ const finishMessages = (messages: AIChatMessage[]) =>
   messages.map((message) => ({
     ...message,
     parts: message.parts.map((part) =>
-      part.type === "text" || part.type === "reasoning"
-        ? { ...part, state: "done" as const }
-        : part
+      part.type === 'text' || part.type === 'reasoning'
+        ? { ...part, state: 'done' as const }
+        : part,
     ),
   }));
 
@@ -139,8 +139,11 @@ export class SubAgentStreamAccumulator {
     const seed = (messages: AIChatMessage[]) => {
       for (const message of messages) {
         for (const part of message.parts) {
-          if (part.type !== "data-subAgent") continue;
-          this.conversations.set(part.data.sessionId, structuredClone(part.data));
+          if (part.type !== 'data-subAgent') continue;
+          this.conversations.set(
+            part.data.sessionId,
+            structuredClone(part.data),
+          );
           seed(part.data.messages);
         }
       }
@@ -163,27 +166,27 @@ export class SubAgentStreamAccumulator {
 
   private normalizeToolChunk(
     sessionId: string,
-    chunk: NocoBaseToolCall
+    chunk: NocoBaseToolCall,
   ): NocoBaseToolCall | undefined {
     const stream = this.getToolStream(sessionId);
     const indexedId =
-      typeof chunk.index === "number"
+      typeof chunk.index === 'number'
         ? stream.idsByIndex.get(chunk.index)
         : undefined;
     const toolCallId = chunk.id ?? indexedId ?? stream.currentId;
     if (!toolCallId) return undefined;
 
     stream.currentId = toolCallId;
-    if (typeof chunk.index === "number") {
+    if (typeof chunk.index === 'number') {
       stream.idsByIndex.set(chunk.index, toolCallId);
     }
     if (chunk.name) stream.names.set(toolCallId, chunk.name);
 
-    if (typeof chunk.args === "string") {
+    if (typeof chunk.args === 'string') {
       const previous = stream.inputs.get(toolCallId);
       stream.inputs.set(
         toolCallId,
-        `${typeof previous === "string" ? previous : ""}${chunk.args}`
+        `${typeof previous === 'string' ? previous : ''}${chunk.args}`,
       );
     } else if (chunk.args !== undefined) {
       stream.inputs.set(toolCallId, chunk.args);
@@ -194,23 +197,23 @@ export class SubAgentStreamAccumulator {
     return {
       ...chunk,
       id: toolCallId,
-      name: chunk.name ?? stream.names.get(toolCallId) ?? "tool",
+      name: chunk.name ?? stream.names.get(toolCallId) ?? 'tool',
       args: stream.inputs.get(toolCallId),
     };
   }
 
   private normalizeToolCall(
     sessionId: string,
-    toolCall: NocoBaseToolCall
+    toolCall: NocoBaseToolCall,
   ): NocoBaseToolCall {
     const stream = this.getToolStream(sessionId);
     const toolCallId =
       toolCall.id ?? stream.currentId ?? `tool-${crypto.randomUUID()}`;
     stream.currentId = toolCallId;
-    if (typeof toolCall.index === "number") {
+    if (typeof toolCall.index === 'number') {
       stream.idsByIndex.set(toolCall.index, toolCallId);
     }
-    const toolName = toolCall.name ?? stream.names.get(toolCallId) ?? "tool";
+    const toolName = toolCall.name ?? stream.names.get(toolCallId) ?? 'tool';
     stream.names.set(toolCallId, toolName);
     const input = toolCall.args ?? toolCall.input;
     if (input !== undefined) stream.inputs.set(toolCallId, input);
@@ -223,53 +226,53 @@ export class SubAgentStreamAccumulator {
   }
 
   process(event: NocoBaseStreamEvent): AIChatChunk[] {
-    if (event.from !== "sub-agent" || !event.sessionId) return [];
-    const username = event.username || "sub-agent";
+    if (event.from !== 'sub-agent' || !event.sessionId) return [];
+    const username = event.username || 'sub-agent';
     let conversation = this.conversations.get(event.sessionId) ?? {
       sessionId: event.sessionId,
       username,
-      status: "pending" as const,
+      status: 'pending' as const,
       messages: [],
     };
 
-    if (event.type === "new_message") {
+    if (event.type === 'new_message') {
       this.getToolStream(event.sessionId).currentId = undefined;
       conversation = {
         ...conversation,
         username,
         messages: [...conversation.messages, createMessage(username)],
       };
-    } else if (event.type === "content" && typeof event.body === "string") {
+    } else if (event.type === 'content' && typeof event.body === 'string') {
       conversation = updateLastMessage(conversation, (message) =>
-        appendNarrative(message, "text", event.body as string)
+        appendNarrative(message, 'text', event.body as string),
       );
-    } else if (event.type === "reasoning" && isRecord(event.body)) {
+    } else if (event.type === 'reasoning' && isRecord(event.body)) {
       const content = event.body.content;
-      if (typeof content === "string" && content) {
+      if (typeof content === 'string' && content) {
         conversation = updateLastMessage(conversation, (message) =>
-          appendNarrative(message, "reasoning", content)
+          appendNarrative(message, 'reasoning', content),
         );
       }
-    } else if (event.type === "tool_call_chunks") {
+    } else if (event.type === 'tool_call_chunks') {
       const toolCalls = toolCallsFromEvent(event).flatMap((toolCall) => {
         const normalized = this.normalizeToolChunk(event.sessionId!, toolCall);
         return normalized ? [normalized] : [];
       });
       if (toolCalls.length) {
         conversation = updateLastMessage(conversation, (message) =>
-          updateToolCalls(message, toolCalls)
+          updateToolCalls(message, toolCalls),
         );
       }
-    } else if (event.type === "tool_calls") {
+    } else if (event.type === 'tool_calls') {
       const toolCalls = toolCallsFromEvent(event).map((toolCall) =>
-        this.normalizeToolCall(event.sessionId!, toolCall)
+        this.normalizeToolCall(event.sessionId!, toolCall),
       );
       if (toolCalls.length) {
         conversation = updateLastMessage(conversation, (message) =>
-          updateToolCalls(message, toolCalls)
+          updateToolCalls(message, toolCalls),
         );
       }
-    } else if (event.type === "tool_call_status" && isRecord(event.body)) {
+    } else if (event.type === 'tool_call_status' && isRecord(event.body)) {
       const rawToolCall = isRecord(event.body.toolCall)
         ? ({
             ...event.body.toolCall,
@@ -296,10 +299,10 @@ export class SubAgentStreamAccumulator {
             : updated;
         });
       }
-    } else if (event.type === "sub_agent_completed") {
+    } else if (event.type === 'sub_agent_completed') {
       conversation = {
         ...conversation,
-        status: "completed",
+        status: 'completed',
         messages: finishMessages(conversation.messages),
       };
     }
@@ -307,7 +310,7 @@ export class SubAgentStreamAccumulator {
     this.conversations.set(event.sessionId, conversation);
     return [
       {
-        type: "data-subAgent",
+        type: 'data-subAgent',
         id: event.sessionId,
         data: conversation,
       },

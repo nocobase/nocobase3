@@ -3,7 +3,7 @@ import type {
   AIConversation,
   AIEmployee,
   AIModel,
-} from "../providers/types";
+} from '../providers/types';
 
 export type CreateAIConversationOptions = {
   employee: AIEmployee;
@@ -20,10 +20,10 @@ export type UpdateToolCallDecisionOptions = {
   messageId: string;
   toolCallId: string;
   userDecision:
-    | { type: "approve" }
-    | { type: "reject"; message?: string }
+    | { type: 'approve' }
+    | { type: 'reject'; message?: string }
     | {
-        type: "edit";
+        type: 'edit';
         editedAction: { name: string; args: unknown };
       };
 };
@@ -39,7 +39,7 @@ export type UpdatedToolCall = {
   args?: unknown;
 };
 
-export type AIConversationActiveState = "idle" | "streaming" | "invoking";
+export type AIConversationActiveState = 'idle' | 'streaming' | 'invoking';
 
 export interface AIService {
   listEmployees(): Promise<AIEmployee[]>;
@@ -48,35 +48,35 @@ export interface AIService {
   listConversations(keyword?: string): Promise<AIConversation[]>;
   getConversationMessages(
     sessionId: string,
-    options?: { updateRead?: boolean }
+    options?: { updateRead?: boolean },
   ): Promise<AIChatMessage[]>;
   getConversationActiveState(
-    sessionId: string
+    sessionId: string,
   ): Promise<AIConversationActiveState | undefined>;
   updateConversationTitle(sessionId: string, title: string): Promise<void>;
   destroyConversation(sessionId: string): Promise<void>;
   uploadFile(
     file: File,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<Record<string, unknown>>;
   createConversation(options: CreateAIConversationOptions): Promise<string>;
   sendMessagesStream(
     body: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<ReadableStream<Uint8Array>>;
   resendMessagesStream(
     body: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<ReadableStream<Uint8Array>>;
   updateToolCallDecision(
-    options: UpdateToolCallDecisionOptions
+    options: UpdateToolCallDecisionOptions,
   ): Promise<{ updated: number; toolCalls: UpdatedToolCall[] }>;
   resumeToolCallStream(
     body: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<ReadableStream<Uint8Array>>;
   resumeConversationStream(
     sessionId: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<ReadableStream<Uint8Array>>;
 }

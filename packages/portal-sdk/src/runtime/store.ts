@@ -1,4 +1,4 @@
-import type { NocoBaseRuntimeError } from "../client/error.ts";
+import type { NocoBaseRuntimeError } from '../client/error.ts';
 
 export type PortalRuntimeState = {
   error?: NocoBaseRuntimeError;

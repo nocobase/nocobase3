@@ -1,10 +1,13 @@
-import type { Chat } from "@ai-sdk/react";
-import { useCallback, useRef } from "react";
-import { getChatToolParts, getNocoBaseToolMetadata } from "./chat-message-utils";
-import type { AIChatMessage, AIToolCallDecision } from "./types";
+import type { Chat } from '@ai-sdk/react';
+import { useCallback, useRef } from 'react';
+import {
+  getChatToolParts,
+  getNocoBaseToolMetadata,
+} from './chat-message-utils';
+import type { AIChatMessage, AIToolCallDecision } from './types';
 
 const isChatRunning = (chat: Chat<AIChatMessage>) =>
-  chat.status === "streaming" || chat.status === "submitted";
+  chat.status === 'streaming' || chat.status === 'submitted';
 
 export function useAutomaticToolApproval({
   enabled,
@@ -15,7 +18,7 @@ export function useAutomaticToolApproval({
     conversationId: string,
     targetChat: Chat<AIChatMessage>,
     decision: AIToolCallDecision,
-    options?: { automatic?: boolean }
+    options?: { automatic?: boolean },
   ) => Promise<void>;
 }) {
   const approvedRef = useRef(new Set<string>());
@@ -36,7 +39,7 @@ export function useAutomaticToolApproval({
           rerunRef.current.delete(conversationId);
           const pending = getChatToolParts(targetChat.messages)
             .filter(
-              ({ part }) => getNocoBaseToolMetadata(part)?.autoApprove === true
+              ({ part }) => getNocoBaseToolMetadata(part)?.autoApprove === true,
             )
             .flatMap(({ message, part }) => {
               const key = `${conversationId}:${message.id}:${part.toolCallId}`;
@@ -55,12 +58,12 @@ export function useAutomaticToolApproval({
                   messageId: message.id,
                   toolCallId: part.toolCallId,
                   toolName:
-                    part.type === "dynamic-tool"
+                    part.type === 'dynamic-tool'
                       ? part.toolName
                       : part.type.slice(5),
-                  decision: "approve",
+                  decision: 'approve',
                 },
-                { automatic: true }
+                { automatic: true },
               );
             } catch (error) {
               approvedRef.current.delete(key);
@@ -73,7 +76,7 @@ export function useAutomaticToolApproval({
         rerunRef.current.delete(conversationId);
       }
     },
-    [decide, enabled]
+    [decide, enabled],
   );
 
   const clearConversation = useCallback((conversationId: string) => {

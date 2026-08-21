@@ -2,7 +2,7 @@ import {
   createParser,
   type EventSourceMessage,
   type ParseError,
-} from "eventsource-parser";
+} from 'eventsource-parser';
 
 export type NocoBaseStreamEvent = {
   type: string;
@@ -35,7 +35,7 @@ export async function* parseNocoBaseSSE(
       const event = events.shift();
       if (!event) continue;
       const payload = event.data.trim();
-      if (!payload || payload === "[DONE]") continue;
+      if (!payload || payload === '[DONE]') continue;
       yield JSON.parse(payload) as NocoBaseStreamEvent;
     }
   };
@@ -45,7 +45,7 @@ export async function* parseNocoBaseSSE(
       const { done, value } = await reader.read();
       if (value) parser.feed(decoder.decode(value, { stream: true }));
       if (parseError) {
-        throw new Error("Unable to parse the NocoBase event stream", {
+        throw new Error('Unable to parse the NocoBase event stream', {
           cause: parseError,
         });
       }
@@ -56,7 +56,7 @@ export async function* parseNocoBaseSSE(
       if (remainder) parser.feed(remainder);
       parser.reset({ consume: true });
       if (parseError) {
-        throw new Error("Unable to parse the NocoBase event stream", {
+        throw new Error('Unable to parse the NocoBase event stream', {
           cause: parseError,
         });
       }

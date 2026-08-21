@@ -1,6 +1,6 @@
-import { createDefaultLoggingConfig } from "./config.js";
-import { createLogger } from "./logger.js";
-import type { Logger, LoggerConfig, LoggingConfig } from "./types.js";
+import { createDefaultLoggingConfig } from './config.js';
+import { createLogger } from './logger.js';
+import type { Logger, LoggerConfig, LoggingConfig } from './types.js';
 
 export class Logging {
   private readonly defaultLogger: string;
@@ -10,7 +10,7 @@ export class Logging {
 
   constructor(config: LoggingConfig = createDefaultLoggingConfig()) {
     const {
-      default: defaultLogger = "system",
+      default: defaultLogger = 'system',
       loggers = {},
       ...defaultConfig
     } = config;
@@ -108,9 +108,9 @@ function mergeObjectConfig<T>(
 }
 
 function mergeTransportConfig(
-  base: LoggerConfig["transport"],
-  override: LoggerConfig["transport"],
-): LoggerConfig["transport"] {
+  base: LoggerConfig['transport'],
+  override: LoggerConfig['transport'],
+): LoggerConfig['transport'] {
   if (override === undefined) {
     return base;
   }
@@ -122,19 +122,19 @@ function mergeTransportConfig(
     ...base,
     ...override,
     options: mergeObjectConfig(base.options, override.options),
-  } as LoggerConfig["transport"];
+  } as LoggerConfig['transport'];
 }
 
 function resolveTransportTemplate(
-  transport: LoggerConfig["transport"],
+  transport: LoggerConfig['transport'],
   loggerName: string,
-): LoggerConfig["transport"] {
+): LoggerConfig['transport'] {
   if (!isRecord(transport) || !isRecord(transport.options)) {
     return transport;
   }
 
   const destination = transport.options.destination;
-  if (typeof destination !== "string" || !destination.includes("{logger}")) {
+  if (typeof destination !== 'string' || !destination.includes('{logger}')) {
     return transport;
   }
 
@@ -142,11 +142,11 @@ function resolveTransportTemplate(
     ...transport,
     options: {
       ...transport.options,
-      destination: destination.replaceAll("{logger}", loggerName),
+      destination: destination.replaceAll('{logger}', loggerName),
     },
-  } as LoggerConfig["transport"];
+  } as LoggerConfig['transport'];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

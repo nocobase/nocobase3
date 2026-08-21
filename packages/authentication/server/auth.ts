@@ -1,5 +1,10 @@
 import type { DatabaseConnection } from '@nocobase/database';
-import { betterAuth, type BetterAuthOptions, type Session, type User } from 'better-auth';
+import {
+  betterAuth,
+  type BetterAuthOptions,
+  type Session,
+  type User,
+} from 'better-auth';
 import { username } from 'better-auth/plugins';
 import type { Context, MiddlewareHandler } from 'hono';
 import { databaseAdapter } from './better-auth/database-adapter.js';
@@ -8,7 +13,10 @@ export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
   connection: DatabaseConnection;
 }
 
-export interface CreateAuthenticationOptions extends Omit<AuthOptions, 'connection'> {
+export interface CreateAuthenticationOptions extends Omit<
+  AuthOptions,
+  'connection'
+> {
   connection?: DatabaseConnection;
 }
 
@@ -46,7 +54,9 @@ export class Auth {
         ...config.advanced,
         database: {
           ...config.advanced?.database,
-          generateId: config.advanced?.database?.generateId ?? (() => crypto.randomUUID()),
+          generateId:
+            config.advanced?.database?.generateId ??
+            (() => crypto.randomUUID()),
         },
       },
     });
@@ -79,10 +89,13 @@ export class Auth {
       }
       const auth = await this.getSession(context.req.raw.headers);
       if (!auth) {
-        return context.json({
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-        }, 401);
+        return context.json(
+          {
+            code: 'UNAUTHORIZED',
+            message: 'Authentication required',
+          },
+          401,
+        );
       }
       context.set('auth', auth);
       await next();
@@ -90,7 +103,9 @@ export class Auth {
   }
 }
 
-export function createAuthentication(options: CreateAuthenticationOptions): Auth {
+export function createAuthentication(
+  options: CreateAuthenticationOptions,
+): Auth {
   if (!options.connection) {
     throw new Error('Authentication requires a database connection.');
   }

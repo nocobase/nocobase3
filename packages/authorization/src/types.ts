@@ -4,11 +4,8 @@ export interface Principal {
   attributes?: Readonly<Record<string, unknown>>;
 }
 
-export type AssignmentSubjectType = 'user'
-  | 'group'
-  | 'team'
-  | 'department'
-  | 'allAuthenticatedUsers';
+export type AssignmentSubjectType =
+  'user' | 'group' | 'team' | 'department' | 'allAuthenticatedUsers';
 
 export interface AssignmentSubject {
   type: AssignmentSubjectType;
@@ -22,23 +19,40 @@ export interface FilterVariable {
   path: string;
 }
 
-export type FilterValue = FilterScalar
-  | FilterVariable
-  | readonly (FilterScalar | FilterVariable)[];
+export type FilterValue =
+  FilterScalar | FilterVariable | readonly (FilterScalar | FilterVariable)[];
 
 export type FilterOperator =
-  | '$includes' | '$notIncludes'
-  | '$eq' | '$ne' | '$neq'
-  | '$gt' | '$gte' | '$lt' | '$lte'
-  | '$empty' | '$notEmpty'
-  | '$dateOn' | '$dateNotOn' | '$dateBefore' | '$dateAfter'
-  | '$dateNotBefore' | '$dateNotAfter' | '$dateBetween'
-  | '$in' | '$notIn'
-  | '$match' | '$notMatch'
-  | '$anyOf' | '$noneOf'
-  | '$isTruly' | '$isFalsy'
-  | '$exists' | '$notExists'
-  | '$childIn' | '$childNotIn';
+  | '$includes'
+  | '$notIncludes'
+  | '$eq'
+  | '$ne'
+  | '$neq'
+  | '$gt'
+  | '$gte'
+  | '$lt'
+  | '$lte'
+  | '$empty'
+  | '$notEmpty'
+  | '$dateOn'
+  | '$dateNotOn'
+  | '$dateBefore'
+  | '$dateAfter'
+  | '$dateNotBefore'
+  | '$dateNotAfter'
+  | '$dateBetween'
+  | '$in'
+  | '$notIn'
+  | '$match'
+  | '$notMatch'
+  | '$anyOf'
+  | '$noneOf'
+  | '$isTruly'
+  | '$isFalsy'
+  | '$exists'
+  | '$notExists'
+  | '$childIn'
+  | '$childNotIn';
 
 export interface FilterConditionNode {
   kind: 'condition';
@@ -71,7 +85,11 @@ export interface FilterMembershipNode {
   };
 }
 
-export type FilterNode = FilterConditionNode | FilterGroupNode | FilterRelationNode | FilterMembershipNode;
+export type FilterNode =
+  | FilterConditionNode
+  | FilterGroupNode
+  | FilterRelationNode
+  | FilterMembershipNode;
 
 export interface FilterAst {
   kind: 'filter';
@@ -141,7 +159,8 @@ export interface Assignment {
   expiresAt?: Date;
 }
 
-export type OrganizationWideAccess = 'private' | 'publicReadOnly' | 'publicReadWrite';
+export type OrganizationWideAccess =
+  'private' | 'publicReadOnly' | 'publicReadWrite';
 
 export interface OrganizationWideDefault {
   access: OrganizationWideAccess;
@@ -223,7 +242,15 @@ export interface RelationAuthorizationRequest {
 }
 
 export interface AuthorizationReason {
-  type: 'permissionSet' | 'recordAccess' | 'organizationWideDefault' | 'ownerAccess' | 'sharingRule' | 'restrictionRule' | 'fieldSecurity' | 'error';
+  type:
+    | 'permissionSet'
+    | 'recordAccess'
+    | 'organizationWideDefault'
+    | 'ownerAccess'
+    | 'sharingRule'
+    | 'restrictionRule'
+    | 'fieldSecurity'
+    | 'error';
   key: string;
   message: string;
 }

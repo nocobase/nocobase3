@@ -76,7 +76,11 @@ export interface StoredSession<Data extends SessionData = SessionData> {
 
 export interface NocoBaseSessionStore<Data extends SessionData = SessionData> {
   get(id: string): Promise<StoredSession<Data> | null>;
-  set(id: string, value: StoredSession<Data>, options?: SessionStoreSetOptions): Promise<void>;
+  set(
+    id: string,
+    value: StoredSession<Data>,
+    options?: SessionStoreSetOptions,
+  ): Promise<void>;
   delete(id: string): Promise<void>;
   keys?(): Promise<string[]>;
   dispose?(): Promise<void>;
@@ -96,12 +100,18 @@ export interface NocoBaseSession<Data extends SessionData = SessionData> {
   destroy(): Promise<void>;
 }
 
-export type SessionUpdate<Data extends SessionData> = (previous: Data | null) => Data;
+export type SessionUpdate<Data extends SessionData> = (
+  previous: Data | null,
+) => Data;
 
-export interface NocoBaseSessionManager<Data extends SessionData = SessionData> {
+export interface NocoBaseSessionManager<
+  Data extends SessionData = SessionData,
+> {
   readonly config: ResolvedSessionConfig;
   readonly store: NocoBaseSessionStore<Data>;
-  createRequestSession(options: CreateRequestSessionOptions): NocoBaseSession<Data> & PersistableSession;
+  createRequestSession(
+    options: CreateRequestSessionOptions,
+  ): NocoBaseSession<Data> & PersistableSession;
   sweepExpiredSessions(now?: number): Promise<number>;
   dispose(): Promise<void>;
 }
@@ -109,7 +119,12 @@ export interface NocoBaseSessionManager<Data extends SessionData = SessionData> 
 export interface ResolvedSessionConfig {
   enabled: boolean;
   store: string;
-  cookie: Required<Pick<AppSessionCookieConfig, 'name' | 'path' | 'httpOnly' | 'sameSite' | 'expireOnClose'>> &
+  cookie: Required<
+    Pick<
+      AppSessionCookieConfig,
+      'name' | 'path' | 'httpOnly' | 'sameSite' | 'expireOnClose'
+    >
+  > &
     Pick<AppSessionCookieConfig, 'domain' | 'secure' | 'partitioned'>;
   lifetime: {
     absoluteMs: number;

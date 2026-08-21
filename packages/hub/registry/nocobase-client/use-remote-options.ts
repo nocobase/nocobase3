@@ -1,10 +1,7 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type {
-  RemoteSelectLoadParams,
-  RemoteSelectLoadResult,
-} from "./types";
+import type { RemoteSelectLoadParams, RemoteSelectLoadResult } from './types';
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -19,7 +16,7 @@ function useDebouncedValue<T>(value: T, delay: number) {
 
 function mergeOptionPages<TOption>(
   pages: RemoteSelectLoadResult<TOption>[],
-  getOptionKey: (option: TOption) => string | number
+  getOptionKey: (option: TOption) => string | number,
 ) {
   const options = new Map<string | number, TOption>();
   for (const page of pages) {
@@ -43,7 +40,7 @@ export function useRemoteOptions<TOption>({
   debounceMs: number;
   getOptionKey: (option: TOption) => string | number;
   loadOptions: (
-    params: RemoteSelectLoadParams
+    params: RemoteSelectLoadParams,
   ) => Promise<RemoteSelectLoadResult<TOption>>;
   open: boolean;
   pageSize: number;
@@ -53,11 +50,11 @@ export function useRemoteOptions<TOption>({
 }) {
   const [debouncedSearch, setDebouncedSearch] = useDebouncedValue(
     search.trim(),
-    debounceMs
+    debounceMs,
   );
   const query = useInfiniteQuery({
     queryKey: [
-      "nocobase-remote-select",
+      'nocobase-remote-select',
       selectId,
       ...requestKey,
       pageSize,
@@ -78,7 +75,7 @@ export function useRemoteOptions<TOption>({
   });
   const options = useMemo(
     () => mergeOptionPages(query.data?.pages ?? [], getOptionKey),
-    [getOptionKey, query.data?.pages]
+    [getOptionKey, query.data?.pages],
   );
   const loading = query.isPending && query.isFetching;
   const loadingMore = query.isFetchingNextPage;
@@ -91,8 +88,8 @@ export function useRemoteOptions<TOption>({
     void query.refetch();
   };
   const resetSearch = useCallback(
-    () => setDebouncedSearch(""),
-    [setDebouncedSearch]
+    () => setDebouncedSearch(''),
+    [setDebouncedSearch],
   );
 
   return {

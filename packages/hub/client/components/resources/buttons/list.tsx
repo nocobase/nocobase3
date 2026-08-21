@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import React from "react";
-import { type BaseKey, useListButton } from "@refinedev/core";
-import { Button } from "@/components/ui/button";
-import { List } from "lucide-react";
+import React from 'react';
+import { type BaseKey, useListButton } from '@refinedev/core';
+import { Button } from '@/components/ui/button';
+import { List } from 'lucide-react';
 
 type ListButtonProps = {
   /**
@@ -58,8 +58,8 @@ export const ListButton = React.forwardRef<
       }}
     >
       {children ?? (
-        <div className="flex items-center gap-2 font-semibold">
-          <List className="w-4 h-4" />
+        <div className='flex items-center gap-2 font-semibold'>
+          <List className='w-4 h-4' />
           <span>{label}</span>
         </div>
       )}
@@ -67,4 +67,4 @@ export const ListButton = React.forwardRef<
   );
 });
 
-ListButton.displayName = "ListButton";
+ListButton.displayName = 'ListButton';

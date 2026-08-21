@@ -81,12 +81,19 @@ describe('app-host system log', () => {
     });
 
     try {
-      await expect(registry.ensureActive('main')).rejects.toThrow('App "main" failed to initialize');
+      await expect(registry.ensureActive('main')).rejects.toThrow(
+        'App "main" failed to initialize',
+      );
     } finally {
       await registry.destroyAll('test cleanup');
     }
 
-    const systemFile = path.join(rootDir, 'logs', 'embedded', `system-${getDateStamp()}.log`);
+    const systemFile = path.join(
+      rootDir,
+      'logs',
+      'embedded',
+      `system-${getDateStamp()}.log`,
+    );
     const logs = readJsonLines(systemFile);
 
     expect(logs.at(-1)).toMatchObject({

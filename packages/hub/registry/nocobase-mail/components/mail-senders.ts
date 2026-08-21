@@ -1,4 +1,4 @@
-import type { MailAccount } from "./types";
+import type { MailAccount } from './types';
 
 export interface MailSenderCandidate {
   key: string;
@@ -8,10 +8,10 @@ export interface MailSenderCandidate {
   label: string;
 }
 
-export const DEFAULT_MAIL_SENDER_KEY = "nocobase-mail:default-sender";
+export const DEFAULT_MAIL_SENDER_KEY = 'nocobase-mail:default-sender';
 
 export function getMailSenderCandidates(
-  accounts: MailAccount[]
+  accounts: MailAccount[],
 ): MailSenderCandidate[] {
   return accounts.flatMap((account) => {
     const identities = [
@@ -44,18 +44,22 @@ export function getMailSenderCandidates(
 
 export function resolveMailSender(
   candidates: MailSenderCandidate[],
-  initial?: { from?: string; accountEmail?: string; identityEmail?: string }
+  initial?: { from?: string; accountEmail?: string; identityEmail?: string },
 ) {
-  const identityEmail = (initial?.identityEmail ?? initial?.from)?.toLocaleLowerCase();
+  const identityEmail = (
+    initial?.identityEmail ?? initial?.from
+  )?.toLocaleLowerCase();
   const accountEmail = initial?.accountEmail?.toLocaleLowerCase();
   return (
     candidates.find(
       (candidate) =>
         candidate.identityEmail.toLocaleLowerCase() === identityEmail &&
-        (!accountEmail || candidate.accountEmail.toLocaleLowerCase() === accountEmail)
+        (!accountEmail ||
+          candidate.accountEmail.toLocaleLowerCase() === accountEmail),
     ) ??
     candidates.find(
-      (candidate) => candidate.identityEmail.toLocaleLowerCase() === identityEmail
+      (candidate) =>
+        candidate.identityEmail.toLocaleLowerCase() === identityEmail,
     )
   );
 }

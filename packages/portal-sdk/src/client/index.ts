@@ -2,16 +2,16 @@ import {
   API_ORIGIN,
   API_URL,
   NOCOBASE_AUTHENTICATOR,
-} from "../runtime/constants.ts";
-import { getNocoBasePortalName } from "../runtime/config.ts";
-import { portalRuntimeStore } from "../runtime/store.ts";
-import { authSession } from "./auth-session.ts";
+} from '../runtime/constants.ts';
+import { getNocoBasePortalName } from '../runtime/config.ts';
+import { portalRuntimeStore } from '../runtime/store.ts';
+import { authSession } from './auth-session.ts';
 import {
   getNocoBaseErrorMessage,
   isNocoBaseLifecycleError,
   NocoBaseHttpError,
   normalizeNocoBaseRuntimeError,
-} from "./error.ts";
+} from './error.ts';
 
 type QueryValue =
   | string
@@ -22,7 +22,7 @@ type QueryValue =
   | Array<string | number | boolean>;
 
 export type NocoBaseRequestOptions = {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   query?: Record<string, QueryValue>;
   body?: unknown;
   signal?: AbortSignal;
@@ -32,14 +32,14 @@ export type NocoBaseRequestOptions = {
   includeRole?: boolean;
   withAclMeta?: boolean;
   headers?: Record<string, string>;
-  accept?: "json" | "stream";
-  unwrap?: "data" | "deep-data" | "none";
+  accept?: 'json' | 'stream';
+  unwrap?: 'data' | 'deep-data' | 'none';
 };
 
 const getBrowserLocale = () =>
-  typeof navigator === "undefined" ? undefined : navigator.language;
+  typeof navigator === 'undefined' ? undefined : navigator.language;
 
-const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const readResponsePayload = async (response: Response) => {
   const text = await response.text();
@@ -54,32 +54,32 @@ const readResponsePayload = async (response: Response) => {
 const createResponseError = (
   response: Response,
   payload: unknown,
-  fallback: string
+  fallback: string,
 ) =>
   new NocoBaseHttpError({
     status: response.status,
     payload,
-    requestId: response.headers.get("x-request-id") ?? undefined,
+    requestId: response.headers.get('x-request-id') ?? undefined,
     message: getNocoBaseErrorMessage(payload, fallback),
   });
 
 const getClientTimezone = () => {
   const offsetMinutes = -new Date().getTimezoneOffset();
-  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const sign = offsetMinutes >= 0 ? '+' : '-';
   const absoluteMinutes = Math.abs(offsetMinutes);
-  const hours = String(Math.floor(absoluteMinutes / 60)).padStart(2, "0");
-  const minutes = String(absoluteMinutes % 60).padStart(2, "0");
+  const hours = String(Math.floor(absoluteMinutes / 60)).padStart(2, '0');
+  const minutes = String(absoluteMinutes % 60).padStart(2, '0');
   return `${sign}${hours}:${minutes}`;
 };
 
 const unwrapPayload = (
   payload: unknown,
-  mode: NocoBaseRequestOptions["unwrap"]
+  mode: NocoBaseRequestOptions['unwrap'],
 ) => {
-  if (mode === "none") return payload;
-  if (!payload || typeof payload !== "object") return payload;
+  if (mode === 'none') return payload;
+  if (!payload || typeof payload !== 'object') return payload;
   const data = (payload as { data?: unknown }).data;
-  if (mode === "deep-data" && data && typeof data === "object") {
+  if (mode === 'deep-data' && data && typeof data === 'object') {
     return (data as { data?: unknown }).data ?? data;
   }
   return data ?? payload;
@@ -91,7 +91,7 @@ export class NocoBaseClient {
 
   constructor(
     private readonly apiUrl: string = API_URL,
-    apiOrigin: string | undefined = getUrlOrigin(apiUrl) ?? API_ORIGIN
+    apiOrigin: string | undefined = getUrlOrigin(apiUrl) ?? API_ORIGIN,
   ) {
     this.apiOrigin = apiOrigin;
   }
@@ -108,21 +108,21 @@ export class NocoBaseClient {
     if (!value || /^[a-z][a-z\d+.-]*:/i.test(value)) return value;
     const base =
       this.apiOrigin ??
-      (typeof window === "undefined" ? undefined : window.location.origin);
+      (typeof window === 'undefined' ? undefined : window.location.origin);
     if (!base) return value;
     try {
-      return new URL(value, `${base.replace(/\/$/, "")}/`).toString();
+      return new URL(value, `${base.replace(/\/$/, '')}/`).toString();
     } catch {
       return value;
     }
   }
 
   getToken(): string | undefined {
-    return authSession.get("token") ?? import.meta.env?.NOCOBASE_API_TOKEN;
+    return authSession.get('token') ?? import.meta.env?.NOCOBASE_API_TOKEN;
   }
 
   getStoredAuthenticator(): string | undefined {
-    return authSession.get("auth");
+    return authSession.get('auth');
   }
 
   getAuthenticator(): string {
@@ -130,23 +130,23 @@ export class NocoBaseClient {
   }
 
   setAuthenticator(authenticator?: string | null): void {
-    authSession.set("auth", authenticator);
+    authSession.set('auth', authenticator);
   }
 
   setToken(token?: string | null): void {
-    authSession.set("token", token);
+    authSession.set('token', token);
   }
 
   getRole(): string | undefined {
-    return authSession.get("role") ?? authSession.getCookie("role");
+    return authSession.get('role') ?? authSession.getCookie('role');
   }
 
   setRole(role?: string | null): void {
-    authSession.set("role", role);
+    authSession.set('role', role);
   }
 
   getStoredLocale(): string | undefined {
-    return authSession.get("locale");
+    return authSession.get('locale');
   }
 
   getLocale(): string | undefined {
@@ -154,7 +154,7 @@ export class NocoBaseClient {
   }
 
   setLocale(locale?: string | null): void {
-    authSession.set("locale", locale);
+    authSession.set('locale', locale);
   }
 
   clearAuthentication(): void {
@@ -166,9 +166,9 @@ export class NocoBaseClient {
   }
 
   buildUrl(endpoint: string, query?: Record<string, QueryValue>): URL {
-    const base = `${this.apiUrl.replace(/\/$/, "")}/${endpoint.replace(
+    const base = `${this.apiUrl.replace(/\/$/, '')}/${endpoint.replace(
       /^\//,
-      ""
+      '',
     )}`;
     const url = /^https?:\/\//.test(base)
       ? new URL(base)
@@ -186,84 +186,84 @@ export class NocoBaseClient {
   }
 
   getHeaders({
-    method = "GET",
+    method = 'GET',
     token = this.getToken(),
     authenticator,
     role = this.getRole(),
     includeRole = true,
     withAclMeta = true,
     headers,
-    accept = "json",
+    accept = 'json',
     body,
   }: Pick<
     NocoBaseRequestOptions,
-    | "method"
-    | "token"
-    | "authenticator"
-    | "role"
-    | "includeRole"
-    | "withAclMeta"
-    | "headers"
-    | "accept"
-    | "body"
+    | 'method'
+    | 'token'
+    | 'authenticator'
+    | 'role'
+    | 'includeRole'
+    | 'withAclMeta'
+    | 'headers'
+    | 'accept'
+    | 'body'
   > = {}): Record<string, string> {
     const resolvedAuthenticator =
       authenticator === null
         ? undefined
-        : authenticator ?? this.getStoredAuthenticator();
+        : (authenticator ?? this.getStoredAuthenticator());
     const locale = this.getLocale();
     const portalName = getNocoBasePortalName();
     const formData =
-      typeof FormData !== "undefined" && body instanceof FormData;
+      typeof FormData !== 'undefined' && body instanceof FormData;
     const requestHeaders: Record<string, string> = {
-      Accept: accept === "stream" ? "text/event-stream" : "application/json",
+      Accept: accept === 'stream' ? 'text/event-stream' : 'application/json',
       ...(body !== undefined && !formData
-        ? { "Content-Type": "application/json" }
+        ? { 'Content-Type': 'application/json' }
         : {}),
-      ...(accept === "stream"
-        ? { "Cache-Control": "no-cache", Pragma: "no-cache" }
+      ...(accept === 'stream'
+        ? { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
         : {}),
       ...(resolvedAuthenticator
-        ? { "X-Authenticator": resolvedAuthenticator }
+        ? { 'X-Authenticator': resolvedAuthenticator }
         : {}),
-      ...(includeRole && role ? { "X-Role": role } : {}),
-      ...(withAclMeta ? { "X-With-ACL-Meta": "true" } : {}),
-      ...(locale ? { "X-Locale": locale } : {}),
-      ...(portalName ? { "X-Portal": portalName } : {}),
-      "X-Timezone": getClientTimezone(),
+      ...(includeRole && role ? { 'X-Role': role } : {}),
+      ...(withAclMeta ? { 'X-With-ACL-Meta': 'true' } : {}),
+      ...(locale ? { 'X-Locale': locale } : {}),
+      ...(portalName ? { 'X-Portal': portalName } : {}),
+      'X-Timezone': getClientTimezone(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     };
-    const csrfToken = authSession.getCookie("csrfToken");
+    const csrfToken = authSession.getCookie('csrfToken');
     if (
       !SAFE_METHODS.has(method) &&
       csrfToken &&
       !Object.keys(requestHeaders).some(
-        (key) => key.toLowerCase() === "x-csrf-token"
+        (key) => key.toLowerCase() === 'x-csrf-token',
       )
     ) {
-      requestHeaders["X-CSRF-Token"] = csrfToken;
+      requestHeaders['X-CSRF-Token'] = csrfToken;
     }
     return requestHeaders;
   }
 
   async request<T>(
     endpoint: string,
-    options: NocoBaseRequestOptions = {}
+    options: NocoBaseRequestOptions = {},
   ): Promise<T> {
     const method =
-      options.method ?? (options.body === undefined ? "GET" : "POST");
+      options.method ?? (options.body === undefined ? 'GET' : 'POST');
     const headers = this.getHeaders({ ...options, method, body: options.body });
     const response = await fetch(this.buildUrl(endpoint, options.query), {
       method,
       headers,
-      credentials: "include",
+      credentials: 'include',
       body:
         options.body === undefined
           ? undefined
           : options.body instanceof FormData
-          ? options.body
-          : JSON.stringify(options.body),
+            ? options.body
+            : JSON.stringify(options.body),
       signal: options.signal,
     });
     this.captureRenewedToken(response);
@@ -272,39 +272,39 @@ export class NocoBaseClient {
       const error = createResponseError(
         response,
         payload,
-        `NocoBase request failed (${response.status})`
+        `NocoBase request failed (${response.status})`,
       );
       this.reportRuntimeResponseError(error);
       throw error;
     }
-    return unwrapPayload(payload, options.unwrap ?? "data") as T;
+    return unwrapPayload(payload, options.unwrap ?? 'data') as T;
   }
 
   action<T>(
     resource: string,
     action: string,
-    options: Omit<NocoBaseRequestOptions, "accept"> = {}
+    options: Omit<NocoBaseRequestOptions, 'accept'> = {},
   ): Promise<T> {
     const method =
-      options.method ?? (["get", "list"].includes(action) ? "GET" : "POST");
+      options.method ?? (['get', 'list'].includes(action) ? 'GET' : 'POST');
     return this.request<T>(`${resource}:${action}`, { ...options, method });
   }
 
   async stream(
     endpoint: string,
-    options: Omit<NocoBaseRequestOptions, "accept" | "unwrap"> = {}
+    options: Omit<NocoBaseRequestOptions, 'accept' | 'unwrap'> = {},
   ): Promise<ReadableStream<Uint8Array>> {
-    const method = options.method ?? "POST";
+    const method = options.method ?? 'POST';
     const headers = this.getHeaders({
       ...options,
       method,
-      accept: "stream",
+      accept: 'stream',
       body: options.body,
     });
     const response = await fetch(this.buildUrl(endpoint, options.query), {
       method,
       headers,
-      credentials: "include",
+      credentials: 'include',
       body:
         options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: options.signal,
@@ -315,7 +315,7 @@ export class NocoBaseClient {
       const error = createResponseError(
         response,
         payload,
-        `NocoBase stream failed (${response.status})`
+        `NocoBase stream failed (${response.status})`,
       );
       this.reportRuntimeResponseError(error);
       throw error;
@@ -324,13 +324,13 @@ export class NocoBaseClient {
   }
 
   private reportRuntimeResponseError(error: NocoBaseHttpError) {
-    const runtimeError = normalizeNocoBaseRuntimeError(error, "http");
+    const runtimeError = normalizeNocoBaseRuntimeError(error, 'http');
     if (!isNocoBaseLifecycleError(runtimeError)) return;
     portalRuntimeStore.setError(runtimeError);
   }
 
   private captureRenewedToken(response: Response) {
-    const token = response.headers.get("x-new-token");
+    const token = response.headers.get('x-new-token');
     if (token) this.setToken(token);
   }
 }
@@ -346,6 +346,6 @@ const getUrlOrigin = (value: string) => {
 
 export const nocobaseClient: NocoBaseClient = new NocoBaseClient();
 
-export * from "./auth-session.ts";
-export * from "./error.ts";
-export * from "./websocket.ts";
+export * from './auth-session.ts';
+export * from './error.ts';
+export * from './websocket.ts';

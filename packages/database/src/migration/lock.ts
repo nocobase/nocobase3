@@ -1,7 +1,7 @@
-import type { Knex } from "knex";
-import type { MigrationConnection } from "./types.js";
+import type { Knex } from 'knex';
+import type { MigrationConnection } from './types.js';
 
-export const DEFAULT_MIGRATION_LOCK_TABLE = "__nocobase_migration_lock";
+export const DEFAULT_MIGRATION_LOCK_TABLE = '__nocobase_migration_lock';
 
 const inProcessLocks = new Set<string>();
 
@@ -54,9 +54,9 @@ export async function ensureMigrationLockTable(
     await knex.schema.createTable(
       tableName,
       (table: Knex.CreateTableBuilder) => {
-        table.integer("id").primary();
-        table.string("locked_by", 191).notNullable();
-        table.dateTime("locked_at").notNullable();
+        table.integer('id').primary();
+        table.string('locked_by', 191).notNullable();
+        table.dateTime('locked_at').notNullable();
       },
     );
   } catch (error) {

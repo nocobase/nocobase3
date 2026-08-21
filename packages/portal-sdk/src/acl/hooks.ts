@@ -1,8 +1,8 @@
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore } from 'react';
 
-import { useAclState, useAclStore } from "./context.ts";
-import { evaluateAccess } from "./evaluator.ts";
-import type { AclAccessRequest } from "./types.ts";
+import { useAclState, useAclStore } from './context.ts';
+import { evaluateAccess } from './evaluator.ts';
+import type { AclAccessRequest } from './types.ts';
 
 export type UseGetRolesResult = {
   data: string[] | undefined;
@@ -18,15 +18,15 @@ export const useAclEvaluator = (): ((request: AclAccessRequest) => boolean) => {
   useSyncExternalStore(
     store.recordPermissions.subscribe,
     store.recordPermissions.getState,
-    store.recordPermissions.getState
+    store.recordPermissions.getState,
   );
 
   return (request: AclAccessRequest) =>
-    state.status === "ready" &&
+    state.status === 'ready' &&
     evaluateAccess(
       state.permissions,
       request,
-      store.recordPermissions.getPermission
+      store.recordPermissions.getPermission,
     );
 };
 
@@ -35,11 +35,11 @@ export const useCanAccess = (request: AclAccessRequest): boolean =>
 
 export const useGetRoles = (): UseGetRolesResult => {
   const state = useAclState();
-  const isLoading = state.status === "idle" || state.status === "loading";
-  const isError = state.status === "error";
+  const isLoading = state.status === 'idle' || state.status === 'loading';
+  const isError = state.status === 'error';
 
   return {
-    data: state.status === "ready" ? state.permissions.roles : undefined,
+    data: state.status === 'ready' ? state.permissions.roles : undefined,
     error: isError ? state.error : undefined,
     isError,
     isLoading,

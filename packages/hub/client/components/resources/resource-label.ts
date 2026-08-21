@@ -2,14 +2,14 @@ import {
   type IResourceItem,
   useTranslate,
   useUserFriendlyName,
-} from "@refinedev/core";
+} from '@refinedev/core';
 
 import {
   parseTranslationExpression,
   type TranslationOptions,
-} from "@nocobase/portal-sdk/i18n";
+} from '@nocobase/portal-sdk/i18n';
 
-export type ResourceLabelForm = "plural" | "singular";
+export type ResourceLabelForm = 'plural' | 'singular';
 
 type ResourceLabelMeta = {
   i18nKey?: string;
@@ -26,7 +26,7 @@ function translateWithFallback(
   translate: Translate,
   key: string,
   fallback: string,
-  options?: TranslationOptions
+  options?: TranslationOptions,
 ) {
   const translated = options
     ? translate(key, options, fallback)
@@ -36,7 +36,7 @@ function translateWithFallback(
 }
 
 function resolveExplicitLabel(value: unknown, translate: Translate) {
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return value == null ? undefined : String(value);
   }
 
@@ -48,7 +48,7 @@ function resolveExplicitLabel(value: unknown, translate: Translate) {
     translate,
     expression.key,
     fallback,
-    expression.options
+    expression.options,
   );
 }
 
@@ -57,25 +57,25 @@ export function getResourceLabel(
   form: ResourceLabelForm,
   translate: Translate,
   getUserFriendlyName: UserFriendlyName,
-  fallbackIdentifier?: string
+  fallbackIdentifier?: string,
 ) {
   const meta = resource?.meta as ResourceLabelMeta | undefined;
   const topLevelLabel = (
     resource as (IResourceItem & { label?: unknown }) | undefined
   )?.label;
   const explicitLabel =
-    form === "singular"
-      ? meta?.singularLabel ?? meta?.label ?? topLevelLabel
-      : meta?.label ?? topLevelLabel;
+    form === 'singular'
+      ? (meta?.singularLabel ?? meta?.label ?? topLevelLabel)
+      : (meta?.label ?? topLevelLabel);
   const fallback =
     resolveExplicitLabel(explicitLabel, translate) ??
     getUserFriendlyName(
-      fallbackIdentifier ?? resource?.identifier ?? resource?.name ?? "",
-      form
+      fallbackIdentifier ?? resource?.identifier ?? resource?.name ?? '',
+      form,
     );
   const i18nKey =
-    form === "singular"
-      ? meta?.i18nSingularKey ?? meta?.i18nKey
+    form === 'singular'
+      ? (meta?.i18nSingularKey ?? meta?.i18nKey)
       : meta?.i18nKey;
 
   return i18nKey
@@ -86,7 +86,7 @@ export function getResourceLabel(
 export function useResourceLabel(
   resource: IResourceItem | undefined,
   form: ResourceLabelForm,
-  fallbackIdentifier?: string
+  fallbackIdentifier?: string,
 ) {
   const translate = useTranslate();
   const getUserFriendlyName = useUserFriendlyName();
@@ -96,6 +96,6 @@ export function useResourceLabel(
     form,
     translate,
     getUserFriendlyName,
-    fallbackIdentifier
+    fallbackIdentifier,
   );
 }

@@ -1,8 +1,8 @@
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren } from 'react';
 
-import { AuthAutoRedirectProvider } from "@/components/auth";
+import { AuthAutoRedirectProvider } from '@/components/auth';
 
-import { isWecomBrowser } from "./use-wecom-sign-in";
+import { isWecomBrowser } from './use-wecom-sign-in';
 
 export default function WecomAutoLoginProvider({
   children,
@@ -10,8 +10,8 @@ export default function WecomAutoLoginProvider({
   const insideWecom = isWecomBrowser();
   return (
     <AuthAutoRedirectProvider
-      resource="wecom"
-      action="checkLogin"
+      resource='wecom'
+      action='checkLogin'
       enabled={insideWecom}
       query={{ isWeComBrowser: insideWecom }}
     >

@@ -1,12 +1,8 @@
-import {
-  useGetIdentity,
-  useNotification,
-  useTranslate,
-} from "@refinedev/core";
-import { Loader2, ShieldCheck } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useGetIdentity, useNotification, useTranslate } from '@refinedev/core';
+import { Loader2, ShieldCheck } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -14,7 +10,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -22,22 +18,22 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
   switchRole,
   useAclState,
   type AclIdentity,
   type Role,
-} from "@nocobase/portal-sdk/acl";
-import { nocobaseClient } from "@nocobase/portal-sdk/client";
-import { cn } from "@/lib/utils";
+} from '@nocobase/portal-sdk/acl';
+import { nocobaseClient } from '@nocobase/portal-sdk/client';
+import { cn } from '@/lib/utils';
 import {
   canSwitchRoles,
   getRoleOptions,
   resolveRoleTitle,
   UNION_ROLE,
-} from "./role-options";
-import { resolveRoleSwitcherContext } from "./role-switcher-context";
+} from './role-options';
+import { resolveRoleSwitcherContext } from './role-switcher-context';
 
 export type RoleSwitcherProps = {
   className?: string;
@@ -57,19 +53,18 @@ function useRoleSwitcherOptions() {
         roleMode: context.roleMode,
         allowAnonymous: context.allowAnonymous,
       }),
-    [context.allowAnonymous, context.roleMode, identity?.roles]
+    [context.allowAnonymous, context.roleMode, identity?.roles],
   );
   const currentRole =
-    context.roleMode === "only-use-union"
+    context.roleMode === 'only-use-union'
       ? UNION_ROLE
-      : context.currentRole ?? roles[0]?.name;
+      : (context.currentRole ?? roles[0]?.name);
 
   return {
     roles,
     currentRole,
     canSwitch: canSwitchRoles(roles, context.roleMode),
-    isLoading:
-      isLoading || acl.status === "idle" || acl.status === "loading",
+    isLoading: isLoading || acl.status === 'idle' || acl.status === 'loading',
   };
 }
 
@@ -82,8 +77,7 @@ export function RoleSwitcher({
   const translate = useTranslate();
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string>();
-  const { roles, currentRole, canSwitch, isLoading } =
-    useRoleSwitcherOptions();
+  const { roles, currentRole, canSwitch, isLoading } = useRoleSwitcherOptions();
 
   const handleRoleChange = async (value: string | null) => {
     if (!value || value === currentRole) return;
@@ -94,37 +88,34 @@ export function RoleSwitcher({
       window.location.reload();
     } catch {
       setError(
-        translate(
-          "acl.roleSwitcher.switchFailed",
-          "Unable to switch role"
-        )
+        translate('acl.roleSwitcher.switchFailed', 'Unable to switch role'),
       );
       setSwitching(false);
     }
   };
 
   if (isLoading) {
-    return <Loader2 className="size-4 animate-spin text-muted-foreground" />;
+    return <Loader2 className='size-4 animate-spin text-muted-foreground' />;
   }
   if (!canSwitch && !showWhenUnavailable) return null;
 
   if (!canSwitch) {
     return (
-      <div className={cn("flex items-center gap-2 text-sm", className)}>
-        <ShieldCheck className="size-4 text-muted-foreground" />
-        <span className="text-muted-foreground">
-          {translate("acl.roleSwitcher.currentRole", "Current role")}
+      <div className={cn('flex items-center gap-2 text-sm', className)}>
+        <ShieldCheck className='size-4 text-muted-foreground' />
+        <span className='text-muted-foreground'>
+          {translate('acl.roleSwitcher.currentRole', 'Current role')}
         </span>
-        <Badge variant="secondary">{getRoleTitle(roles, currentRole)}</Badge>
+        <Badge variant='secondary'>{getRoleTitle(roles, currentRole)}</Badge>
       </div>
     );
   }
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn('space-y-2', className)}>
       {label === false ? null : (
-        <p className="text-xs font-medium text-muted-foreground">
-          {label ?? translate("acl.roleSwitcher.switchRole", "Switch role")}
+        <p className='text-xs font-medium text-muted-foreground'>
+          {label ?? translate('acl.roleSwitcher.switchRole', 'Switch role')}
         </p>
       )}
       <Select
@@ -133,13 +124,10 @@ export function RoleSwitcher({
         onValueChange={handleRoleChange}
       >
         <SelectTrigger
-          className={cn("w-full min-w-52", triggerClassName)}
-          aria-label={translate(
-            "acl.roleSwitcher.switchRole",
-            "Switch role"
-          )}
+          className={cn('w-full min-w-52', triggerClassName)}
+          aria-label={translate('acl.roleSwitcher.switchRole', 'Switch role')}
         >
-          {switching ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+          {switching ? <Loader2 className='animate-spin' /> : <ShieldCheck />}
           <SelectValue>{getRoleTitle(roles, currentRole)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -152,7 +140,7 @@ export function RoleSwitcher({
           ))}
         </SelectContent>
       </Select>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className='text-xs text-destructive'>{error}</p> : null}
     </div>
   );
 }
@@ -161,8 +149,7 @@ export function RoleSwitcherUserMenuItems() {
   const translate = useTranslate();
   const { open } = useNotification();
   const [switching, setSwitching] = useState(false);
-  const { roles, currentRole, canSwitch, isLoading } =
-    useRoleSwitcherOptions();
+  const { roles, currentRole, canSwitch, isLoading } = useRoleSwitcherOptions();
 
   if (isLoading || !canSwitch) return null;
 
@@ -174,10 +161,10 @@ export function RoleSwitcherUserMenuItems() {
       window.location.reload();
     } catch {
       open?.({
-        type: "error",
+        type: 'error',
         message: translate(
-          "acl.roleSwitcher.switchFailed",
-          "Unable to switch role"
+          'acl.roleSwitcher.switchFailed',
+          'Unable to switch role',
         ),
       });
       setSwitching(false);
@@ -188,13 +175,11 @@ export function RoleSwitcherUserMenuItems() {
     <>
       <DropdownMenuSeparator />
       <DropdownMenuSub>
-        <DropdownMenuSubTrigger className="min-h-9 gap-2 px-2 text-muted-foreground focus:text-foreground">
-          {switching ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-          <span>
-            {translate("acl.roleSwitcher.switchRole", "Switch role")}
-          </span>
+        <DropdownMenuSubTrigger className='min-h-9 gap-2 px-2 text-muted-foreground focus:text-foreground'>
+          {switching ? <Loader2 className='animate-spin' /> : <ShieldCheck />}
+          <span>{translate('acl.roleSwitcher.switchRole', 'Switch role')}</span>
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="min-w-44">
+        <DropdownMenuSubContent className='min-w-44'>
           <DropdownMenuRadioGroup
             value={currentRole}
             onValueChange={(value) => void handleRoleChange(value)}
@@ -204,9 +189,7 @@ export function RoleSwitcherUserMenuItems() {
                 key={role.name}
                 role={role}
                 disabled={switching}
-                showSeparator={
-                  index === 1 && roles[0]?.name === UNION_ROLE
-                }
+                showSeparator={index === 1 && roles[0]?.name === UNION_ROLE}
               />
             ))}
           </DropdownMenuRadioGroup>
@@ -253,6 +236,6 @@ function RoleOption({
 function getRoleTitle(roles: Role[], roleName?: string) {
   return resolveRoleTitle(
     roles.find((role) => role.name === roleName) ??
-      (roleName ? { name: roleName } : undefined)
+      (roleName ? { name: roleName } : undefined),
   );
 }

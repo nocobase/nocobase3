@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import { mailApi } from "./mail-api";
-import type { MailTemplate } from "./types";
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { mailApi } from './mail-api';
+import type { MailTemplate } from './types';
 
 export interface MailTemplateValues {
   name: string;
@@ -18,7 +18,9 @@ export function useMailTemplates() {
       setTemplates(await mailApi.getTemplates());
     } catch (error) {
       setTemplates([]);
-      toast.error(error instanceof Error ? error.message : "Failed to load templates");
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to load templates',
+      );
     } finally {
       setLoading(false);
     }
@@ -38,11 +40,11 @@ export function useMailTemplates() {
     async (id: number | string, values: MailTemplateValues) => {
       const template = await mailApi.updateTemplate(id, values);
       setTemplates((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, ...template } : item))
+        prev.map((item) => (item.id === id ? { ...item, ...template } : item)),
       );
       return template;
     },
-    []
+    [],
   );
 
   const remove = useCallback(async (id: number | string) => {

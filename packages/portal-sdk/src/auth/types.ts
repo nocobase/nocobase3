@@ -1,8 +1,4 @@
-import type {
-  ComponentType,
-  LazyExoticComponent,
-  ReactNode,
-} from "react";
+import type { ComponentType, LazyExoticComponent, ReactNode } from 'react';
 
 export type AuthenticatorSignUpFieldOption = {
   label?: unknown;
@@ -16,7 +12,7 @@ export type AuthenticatorSignUpField = {
   uiSchema?: {
     enum?: AuthenticatorSignUpFieldOption[];
     title?: unknown;
-    "x-component"?: string;
+    'x-component'?: string;
   };
 };
 
@@ -43,10 +39,9 @@ type AuthenticatorComponent = ComponentType<AuthenticatorComponentProps>;
 
 export type AuthenticatorAdapter = {
   authType: string;
-  placement: "form" | "button";
+  placement: 'form' | 'button';
   Component:
-    | AuthenticatorComponent
-    | LazyExoticComponent<AuthenticatorComponent>;
+    AuthenticatorComponent | LazyExoticComponent<AuthenticatorComponent>;
 };
 
 export type RenderAuthenticatorContext = {
@@ -56,5 +51,5 @@ export type RenderAuthenticatorContext = {
 };
 
 export type RenderAuthenticator = (
-  context: RenderAuthenticatorContext
+  context: RenderAuthenticatorContext,
 ) => ReactNode;

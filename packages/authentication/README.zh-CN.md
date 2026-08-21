@@ -21,9 +21,9 @@ Refine `AuthProvider` 适配器。
 
 ## 包入口
 
-| 入口                             | 用途                                             |
-| -------------------------------- | ------------------------------------------------ |
-| `@nocobase/authentication`        | 服务端认证、存储适配、数据库适配和 migration     |
+| 入口                              | 用途                                              |
+| --------------------------------- | ------------------------------------------------- |
+| `@nocobase/authentication`        | 服务端认证、存储适配、数据库适配和 migration      |
 | `@nocobase/authentication/server` | 显式的服务端入口，与根入口导出相同                |
 | `@nocobase/authentication/client` | 浏览器 `AuthClient` 和 Refine `AuthProvider` 适配 |
 

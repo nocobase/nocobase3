@@ -1,217 +1,217 @@
-import { describe, expect, it } from "vitest";
-import { CollectionBuilder } from "../../../src/index.js";
+import { describe, expect, it } from 'vitest';
+import { CollectionBuilder } from '../../../src/index.js';
 
-describe("CollectionBuilder alterCollection", () => {
-  it("collects fluent alter operations", async () => {
+describe('CollectionBuilder alterCollection', () => {
+  it('collects fluent alter operations', async () => {
     const builder = new CollectionBuilder();
 
     const result = await builder.alterCollection(
-      "orders",
+      'orders',
       (collection) => {
-        collection.datetime("paidAt").nullable();
-        collection.string("paymentStatus", { length: 32 }).defaultTo("pending");
-        collection.alterField("amount", {
+        collection.datetime('paidAt').nullable();
+        collection.string('paymentStatus', { length: 32 }).defaultTo('pending');
+        collection.alterField('amount', {
           precision: 14,
           scale: 2,
           nullable: false,
         });
-        collection.dropFields("legacyStatus", "legacyCode");
-        collection.index(["paymentStatus", "paidAt"], {
-          name: "idx_orders_payment_paid",
+        collection.dropFields('legacyStatus', 'legacyCode');
+        collection.index(['paymentStatus', 'paidAt'], {
+          name: 'idx_orders_payment_paid',
         });
-        collection.unique(["paymentStatus", "paidAt"], {
-          name: "uk_orders_payment_paid",
+        collection.unique(['paymentStatus', 'paidAt'], {
+          name: 'uk_orders_payment_paid',
         });
-        collection.dropConstraint("uk_orders_old_constraint");
+        collection.dropConstraint('uk_orders_old_constraint');
       },
       { dryRun: true },
     );
 
     expect(result.operations).toEqual([
       {
-        type: "alterCollection",
-        collection: "orders",
+        type: 'alterCollection',
+        collection: 'orders',
         changes: {
           addFields: [
-            { name: "paidAt", type: "datetime", nullable: true },
+            { name: 'paidAt', type: 'datetime', nullable: true },
             {
-              name: "paymentStatus",
-              type: "string",
+              name: 'paymentStatus',
+              type: 'string',
               length: 32,
-              defaultValue: "pending",
+              defaultValue: 'pending',
             },
           ],
           alterFields: [
             {
-              name: "amount",
+              name: 'amount',
               changes: { precision: 14, scale: 2, nullable: false },
             },
           ],
-          dropFields: ["legacyStatus", "legacyCode"],
+          dropFields: ['legacyStatus', 'legacyCode'],
           addIndexes: [
             {
-              fields: ["paymentStatus", "paidAt"],
-              name: "idx_orders_payment_paid",
+              fields: ['paymentStatus', 'paidAt'],
+              name: 'idx_orders_payment_paid',
             },
           ],
           addConstraints: [
             {
-              type: "unique",
-              fields: ["paymentStatus", "paidAt"],
-              name: "uk_orders_payment_paid",
+              type: 'unique',
+              fields: ['paymentStatus', 'paidAt'],
+              name: 'uk_orders_payment_paid',
             },
           ],
-          dropConstraints: ["uk_orders_old_constraint"],
+          dropConstraints: ['uk_orders_old_constraint'],
         },
       },
     ]);
     const schemaOperation = result.schemaOperations?.[0];
-    expect(schemaOperation?.type).toBe("alterTable");
-    if (!schemaOperation || schemaOperation.type !== "alterTable") {
-      throw new Error("Expected an alterTable schema operation.");
+    expect(schemaOperation?.type).toBe('alterTable');
+    if (!schemaOperation || schemaOperation.type !== 'alterTable') {
+      throw new Error('Expected an alterTable schema operation.');
     }
-    expect(schemaOperation.tableName).toBe("orders");
+    expect(schemaOperation.tableName).toBe('orders');
     expect(schemaOperation.operations).toEqual(
       expect.arrayContaining([
         {
-          type: "addColumn",
-          column: { name: "paid_at", type: "datetime", nullable: true },
+          type: 'addColumn',
+          column: { name: 'paid_at', type: 'datetime', nullable: true },
         },
-        { type: "dropColumn", column: "legacy_status" },
-        { type: "dropColumn", column: "legacy_code" },
-        { type: "dropConstraint", name: "uk_orders_old_constraint" },
+        { type: 'dropColumn', column: 'legacy_status' },
+        { type: 'dropColumn', column: 'legacy_code' },
+        { type: 'dropConstraint', name: 'uk_orders_old_constraint' },
       ]),
     );
   });
 
-  it("supports field, index, and constraint shortcut methods", async () => {
+  it('supports field, index, and constraint shortcut methods', async () => {
     const builder = new CollectionBuilder();
 
     const addField = await builder.addField(
-      "orders",
+      'orders',
       {
-        name: "paidAt",
-        type: "datetime",
+        name: 'paidAt',
+        type: 'datetime',
         nullable: true,
       },
       { dryRun: true },
     );
     const alterField = await builder.alterField(
-      "orders",
-      "amount",
+      'orders',
+      'amount',
       { precision: 14 },
       { dryRun: true },
     );
-    const dropField = await builder.dropField("orders", "legacyStatus", {
+    const dropField = await builder.dropField('orders', 'legacyStatus', {
       dryRun: true,
     });
     const addIndex = await builder.addIndex(
-      "orders",
-      { fields: ["paidAt"] },
+      'orders',
+      { fields: ['paidAt'] },
       { dryRun: true },
     );
-    const dropIndex = await builder.dropIndex("orders", "idx_orders_paid_at", {
+    const dropIndex = await builder.dropIndex('orders', 'idx_orders_paid_at', {
       dryRun: true,
     });
     const addConstraint = await builder.addConstraint(
-      "orders",
-      { type: "unique", fields: ["paidAt"], name: "uk_orders_paid_at" },
+      'orders',
+      { type: 'unique', fields: ['paidAt'], name: 'uk_orders_paid_at' },
       { dryRun: true },
     );
     const dropConstraint = await builder.dropConstraint(
-      "orders",
-      "uk_orders_paid_at",
+      'orders',
+      'uk_orders_paid_at',
       { dryRun: true },
     );
 
     expect(addField.operations[0]).toMatchObject({
-      type: "addField",
-      collection: "orders",
+      type: 'addField',
+      collection: 'orders',
     });
     expect(alterField.operations[0]).toMatchObject({
-      type: "alterField",
-      field: "amount",
+      type: 'alterField',
+      field: 'amount',
     });
     expect(dropField.schemaOperations?.[0]).toMatchObject({
-      type: "alterTable",
-      operations: [{ type: "dropColumn", column: "legacy_status" }],
+      type: 'alterTable',
+      operations: [{ type: 'dropColumn', column: 'legacy_status' }],
     });
     expect(addIndex.schemaOperations?.[0]).toMatchObject({
-      operations: [{ type: "addIndex", index: { columns: ["paid_at"] } }],
+      operations: [{ type: 'addIndex', index: { columns: ['paid_at'] } }],
     });
     expect(dropIndex.schemaOperations?.[0]).toMatchObject({
-      operations: [{ type: "dropIndex", name: "idx_orders_paid_at" }],
+      operations: [{ type: 'dropIndex', name: 'idx_orders_paid_at' }],
     });
     expect(addConstraint.schemaOperations?.[0]).toMatchObject({
       operations: [
         {
-          type: "addConstraint",
-          constraint: { type: "unique", columns: ["paid_at"] },
+          type: 'addConstraint',
+          constraint: { type: 'unique', columns: ['paid_at'] },
         },
       ],
     });
     expect(dropConstraint.schemaOperations?.[0]).toMatchObject({
-      operations: [{ type: "dropConstraint", name: "uk_orders_paid_at" }],
+      operations: [{ type: 'dropConstraint', name: 'uk_orders_paid_at' }],
     });
   });
 
-  it("resolves relation keys through fields added in the same alter operation", async () => {
+  it('resolves relation keys through fields added in the same alter operation', async () => {
     const builder = new CollectionBuilder();
 
-    await builder.createCollection("users", {
-      tableName: "app_users",
+    await builder.createCollection('users', {
+      tableName: 'app_users',
       fields: [
         {
-          name: "userId",
-          type: "integer",
-          columnName: "user_pk",
+          name: 'userId',
+          type: 'integer',
+          columnName: 'user_pk',
           primaryKey: true,
         },
       ],
     });
-    await builder.createCollection("orders", {
-      fields: [{ name: "id", type: "increments", primaryKey: true }],
+    await builder.createCollection('orders', {
+      fields: [{ name: 'id', type: 'increments', primaryKey: true }],
     });
 
     const result = await builder.alterCollection(
-      "orders",
+      'orders',
       (collection) => {
-        collection.bigInt("createdById").columnName("creator_id");
+        collection.bigInt('createdById').columnName('creator_id');
         collection
-          .belongsTo("createdBy", "users")
-          .foreignKey("createdById")
-          .targetKey("userId")
+          .belongsTo('createdBy', 'users')
+          .foreignKey('createdById')
+          .targetKey('userId')
           .constraints(true);
       },
       { dryRun: true },
     );
 
     expect(result.schemaOperations?.[0]).toMatchObject({
-      type: "alterTable",
-      tableName: "orders",
+      type: 'alterTable',
+      tableName: 'orders',
       operations: expect.arrayContaining([
         expect.objectContaining({
-          type: "addColumn",
+          type: 'addColumn',
           column: expect.objectContaining({
-            name: "creator_id",
-            type: "bigInt",
+            name: 'creator_id',
+            type: 'bigInt',
           }),
         }),
         expect.objectContaining({
-          type: "addIndex",
+          type: 'addIndex',
           index: expect.objectContaining({
-            columns: ["creator_id"],
-            name: "idx_orders_creator_id",
+            columns: ['creator_id'],
+            name: 'idx_orders_creator_id',
           }),
         }),
         expect.objectContaining({
-          type: "addConstraint",
+          type: 'addConstraint',
           constraint: expect.objectContaining({
-            type: "foreignKey",
-            columns: ["creator_id"],
+            type: 'foreignKey',
+            columns: ['creator_id'],
             references: {
-              table: "app_users",
-              columns: ["user_pk"],
+              table: 'app_users',
+              columns: ['user_pk'],
             },
           }),
         }),
@@ -219,7 +219,7 @@ describe("CollectionBuilder alterCollection", () => {
     });
     expect(result.schemaOperations?.[0]).not.toMatchObject({
       operations: expect.arrayContaining([
-        { type: "addColumn", column: { name: "created_by_id" } },
+        { type: 'addColumn', column: { name: 'created_by_id' } },
       ]),
     });
   });

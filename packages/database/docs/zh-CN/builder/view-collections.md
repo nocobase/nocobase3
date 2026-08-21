@@ -16,7 +16,7 @@ await builder.createViewCollection('adultUsers', (view) => {
   view.tableName('adult_users');
   view.string('firstName', { columnName: 'first_name' });
   view.as((query) =>
-    query.from('users').select('firstName').where('age', '>', 18)
+    query.from('users').select('firstName').where('age', '>', 18),
   );
 });
 ```
@@ -30,7 +30,7 @@ await builder.replaceViewCollection('adultUsers', (view) => {
   view.tableName('adult_users');
   view.string('firstName', { columnName: 'first_name' });
   view.as((query) =>
-    query.from('users').select('firstName').where('age', '>', 16)
+    query.from('users').select('firstName').where('age', '>', 16),
   );
 });
 ```
@@ -54,7 +54,7 @@ await builder.createMaterializedViewCollection('adultUsers', (view) => {
   view.tableName('adult_users');
   view.string('firstName', { columnName: 'first_name' });
   view.as((query) =>
-    query.from('users').select('firstName').where('age', '>', 18)
+    query.from('users').select('firstName').where('age', '>', 18),
   );
 });
 

@@ -1,8 +1,8 @@
-import type { Action, IResourceItem } from "@refinedev/core";
-import { useParsed, useTranslate } from "@refinedev/core";
-import { useLayoutEffect } from "react";
-import { useLocation } from "react-router";
-import { useResourceLabel } from "@/components/resources/resource-label";
+import type { Action, IResourceItem } from '@refinedev/core';
+import { useParsed, useTranslate } from '@refinedev/core';
+import { useLayoutEffect } from 'react';
+import { useLocation } from 'react-router';
+import { useResourceLabel } from '@/components/resources/resource-label';
 
 export type ActionPrefixContext = {
   id?: string;
@@ -33,18 +33,18 @@ export type DocumentTitleHandlerProps = {
 };
 
 const defaultActionPrefixes = {
-  clone: ({ id }: ActionPrefixContext) => `#${id ?? ""} Clone `,
-  create: "Create new ",
-  edit: ({ id }: ActionPrefixContext) => `#${id ?? ""} Edit `,
-  list: "",
-  show: ({ id }: ActionPrefixContext) => `#${id ?? ""} Show `,
+  clone: ({ id }: ActionPrefixContext) => `#${id ?? ''} Clone `,
+  create: 'Create new ',
+  edit: ({ id }: ActionPrefixContext) => `#${id ?? ''} Edit `,
+  list: '',
+  show: ({ id }: ActionPrefixContext) => `#${id ?? ''} Show `,
 } satisfies Partial<Record<Action, ActionPrefix>>;
 
 const safeTranslate = (
   translate: ReturnType<typeof useTranslate>,
   key: string,
   defaultMessage?: string,
-  options?: Record<string, unknown>
+  options?: Record<string, unknown>,
 ) => {
   const translated = options
     ? translate(key, options, defaultMessage)
@@ -52,7 +52,7 @@ const safeTranslate = (
 
   const fallback = defaultMessage ?? key;
 
-  if (translated === key || typeof translated === "undefined") {
+  if (translated === key || typeof translated === 'undefined') {
     return fallback;
   }
 
@@ -61,21 +61,21 @@ const safeTranslate = (
 
 const resolveActionPrefix = (
   actionPrefix: ActionPrefix | undefined,
-  context: ActionPrefixContext
+  context: ActionPrefixContext,
 ) => {
-  if (typeof actionPrefix === "function") {
+  if (typeof actionPrefix === 'function') {
     return actionPrefix(context);
   }
 
-  return actionPrefix ?? "";
+  return actionPrefix ?? '';
 };
 
 export function DocumentTitleHandler({
   actionPrefixes,
-  appName = "NocoBase",
+  appName = 'NocoBase',
   defaultTitle = appName,
   formatTitle,
-  separator = " | ",
+  separator = ' | ',
 }: DocumentTitleHandlerProps) {
   const location = useLocation();
   const { action, id, params, pathname, resource } = useParsed();
@@ -83,8 +83,8 @@ export function DocumentTitleHandler({
   const identifier = resource?.identifier ?? resource?.name;
   const resourceNameFallback = useResourceLabel(
     resource,
-    action === "list" ? "plural" : "singular",
-    identifier
+    action === 'list' ? 'plural' : 'singular',
+    identifier,
   );
 
   useLayoutEffect(() => {
@@ -92,7 +92,7 @@ export function DocumentTitleHandler({
       ? safeTranslate(
           translate,
           `${resource.name}.${resource.name}`,
-          resourceNameFallback
+          resourceNameFallback,
         )
       : resourceNameFallback;
 
@@ -100,7 +100,7 @@ export function DocumentTitleHandler({
       action,
       appName,
       defaultTitle,
-      id: typeof id === "undefined" ? undefined : `${id}`,
+      id: typeof id === 'undefined' ? undefined : `${id}`,
       params,
       pathname,
       resource: resource
@@ -137,7 +137,7 @@ export function DocumentTitleHandler({
       translate,
       `documentTitle.${identifier}.${action}`,
       fallbackTitle,
-      { id: context.id }
+      { id: context.id },
     );
   }, [
     action,

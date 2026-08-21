@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
 import {
   ThemeProvider as NextThemesProvider,
   type ThemeProviderProps,
   useTheme,
-} from "next-themes";
+} from 'next-themes';
 
 export function ThemeProvider({
   children,
-  attribute = "class",
-  defaultTheme = "light",
+  attribute = 'class',
+  defaultTheme = 'light',
   enableSystem = true,
-  storageKey = "nocobase-theme",
+  storageKey = 'nocobase-theme',
   ...props
 }: ThemeProviderProps) {
   return (
@@ -29,4 +29,4 @@ export function ThemeProvider({
 
 export { useTheme };
 
-ThemeProvider.displayName = "ThemeProvider";
+ThemeProvider.displayName = 'ThemeProvider';
