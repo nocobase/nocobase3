@@ -4,12 +4,22 @@ import type { CollectionMetadataStore } from '../../../metadata/index.js';
 import { DefaultNamingStrategy } from '../../../naming/index.js';
 import { KnexQueryAdapter, type QueryAdapter } from '../../../query/index.js';
 import { KnexSchemaAdapter } from '../../../schema/adapters/knex/index.js';
-import type { DatabaseCapabilities, SchemaAdapter } from '../../../schema/index.js';
+import type {
+  DatabaseCapabilities,
+  SchemaAdapter,
+} from '../../../schema/index.js';
 import { resolveDatabaseCapabilities } from '../../capabilities.js';
-import type { ConnectionConfig, DatabaseDialect, DatabaseDriver } from '../../config.js';
+import type {
+  ConnectionConfig,
+  DatabaseDialect,
+  DatabaseDriver,
+} from '../../config.js';
 import type { DatabaseConnection } from '../../connection.js';
 import { createKnexClient } from './client.js';
-import { resolveKnexConnectionConfig, type KnexConnectionConfig } from './config.js';
+import {
+  resolveKnexConnectionConfig,
+  type KnexConnectionConfig,
+} from './config.js';
 
 export class KnexDatabaseConnection implements DatabaseConnection {
   readonly driver: DatabaseDriver;
@@ -32,13 +42,17 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     this.config = resolveKnexConnectionConfig(sourceConfig);
     this.driver = this.config.driver;
     this.dialect = this.config.dialect;
-    this.capabilities = resolveDatabaseCapabilities(this.dialect, this.config.capabilities);
+    this.capabilities = resolveDatabaseCapabilities(
+      this.dialect,
+      this.config.capabilities,
+    );
     this.schema = new LazySchemaAdapter(
       () => this.resolveClient(),
-      (client) => new KnexSchemaAdapter(client, {
-        dialect: this.dialect,
-        capabilities: this.capabilities,
-      }),
+      (client) =>
+        new KnexSchemaAdapter(client, {
+          dialect: this.dialect,
+          capabilities: this.capabilities,
+        }),
       this.dialect,
       this.capabilities,
     );
@@ -81,10 +95,17 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     return this;
   }
 
-  async transaction<T>(fn: (connection: DatabaseConnection) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    fn: (connection: DatabaseConnection) => Promise<T>,
+  ): Promise<T> {
     const client = await this.resolveClient();
     return client.transaction(async (trx) => {
-      const connection = new KnexDatabaseConnection(this.name, this.sourceConfig, this.metadataStore, trx);
+      const connection = new KnexDatabaseConnection(
+        this.name,
+        this.sourceConfig,
+        this.metadataStore,
+        trx,
+      );
       return fn(connection);
     });
   }
@@ -111,11 +132,15 @@ class LazySchemaAdapter implements SchemaAdapter {
     readonly capabilities: DatabaseCapabilities,
   ) {}
 
-  async execute(operations: Parameters<SchemaAdapter['execute']>[0]): Promise<void> {
+  async execute(
+    operations: Parameters<SchemaAdapter['execute']>[0],
+  ): Promise<void> {
     return (await this.resolveAdapter()).execute(operations);
   }
 
-  async compile(operations: Parameters<NonNullable<SchemaAdapter['compile']>>[0]): Promise<string[]> {
+  async compile(
+    operations: Parameters<NonNullable<SchemaAdapter['compile']>>[0],
+  ): Promise<string[]> {
     const adapter = await this.resolveAdapter();
     return adapter.compile ? adapter.compile(operations) : [];
   }

@@ -1,23 +1,23 @@
-import type { Knex } from "knex";
-import { afterEach, beforeEach, describe, expect } from "vitest";
-import { CollectionBuilder, type ConnectionConfig } from "../../src/index.js";
+import type { Knex } from 'knex';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { CollectionBuilder, type ConnectionConfig } from '../../src/index.js';
 import {
   createDatabaseManager,
   type DatabaseManager,
-} from "../../src/index.js";
-import { InMemoryCollectionMetadataStore } from "../../src/index.js";
+} from '../../src/index.js';
+import { InMemoryCollectionMetadataStore } from '../../src/index.js';
 import {
   DefaultNamingStrategy,
   snakeCase,
   truncateIdentifier,
-} from "../../src/index.js";
+} from '../../src/index.js';
 
-export type IntegrationDialect = "sqlite" | "postgres" | "mysql";
+export type IntegrationDialect = 'sqlite' | 'postgres' | 'mysql';
 
 export interface IntegrationDatabaseSpec {
   name: string;
   dialect: IntegrationDialect;
-  driver?: ConnectionConfig["driver"];
+  driver?: ConnectionConfig['driver'];
   filename?: string;
   host?: string;
   port?: number;
@@ -104,21 +104,21 @@ export async function listIndexes(
   tableName: string,
 ): Promise<Array<Record<string, any>>> {
   switch (context.spec.dialect) {
-    case "sqlite":
+    case 'sqlite':
       return rawRows(
         await context.db.raw(`PRAGMA index_list(${quoteLiteral(tableName)})`),
       );
-    case "postgres":
+    case 'postgres':
       return rawRows(
         await context.db.raw(
-          "select indexname as name from pg_indexes where schemaname = current_schema() and tablename = ?",
+          'select indexname as name from pg_indexes where schemaname = current_schema() and tablename = ?',
           [tableName],
         ),
       );
-    case "mysql": {
+    case 'mysql': {
       const rows = rawRows(
         await context.db.raw(
-          "select distinct index_name as name from information_schema.statistics where table_schema = database() and table_name = ?",
+          'select distinct index_name as name from information_schema.statistics where table_schema = database() and table_name = ?',
           [tableName],
         ),
       );
@@ -134,13 +134,13 @@ export async function listForeignKeys(
   tableName: string,
 ): Promise<Array<Record<string, any>>> {
   switch (context.spec.dialect) {
-    case "sqlite":
+    case 'sqlite':
       return rawRows(
         await context.db.raw(
           `PRAGMA foreign_key_list(${quoteLiteral(tableName)})`,
         ),
       );
-    case "postgres":
+    case 'postgres':
       return rawRows(
         await context.db.raw(
           `
@@ -162,7 +162,7 @@ export async function listForeignKeys(
           [tableName],
         ),
       );
-    case "mysql":
+    case 'mysql':
       return rawRows(
         await context.db.raw(
           `
@@ -192,11 +192,11 @@ export async function listColumns(
   tableName: string,
 ): Promise<Array<Record<string, any>>> {
   switch (context.spec.dialect) {
-    case "sqlite":
+    case 'sqlite':
       return rawRows(
         await context.db.raw(`PRAGMA table_info(${quoteLiteral(tableName)})`),
       );
-    case "postgres":
+    case 'postgres':
       return rawRows(
         await context.db.raw(
           `
@@ -208,7 +208,7 @@ export async function listColumns(
           [tableName],
         ),
       );
-    case "mysql":
+    case 'mysql':
       return rawRows(
         await context.db.raw(
           `
@@ -261,48 +261,48 @@ function getIntegrationDatabaseSpecs(): IntegrationDatabaseSpec[] {
   const requested = splitList(
     process.env.INTEGRATION_DB_CONNECTIONS ??
       process.env.DB_CONNECTION ??
-      "sqlite",
+      'sqlite',
   );
-  const connectionNames = requested.includes("all")
-    ? ["sqlite", "postgres", "mysql"]
+  const connectionNames = requested.includes('all')
+    ? ['sqlite', 'postgres', 'mysql']
     : requested;
   return connectionNames.map(createIntegrationDatabaseSpec);
 }
 
 function createIntegrationDatabaseSpec(name: string): IntegrationDatabaseSpec {
   switch (normalizeConnectionName(name)) {
-    case "sqlite":
+    case 'sqlite':
       return {
-        name: "sqlite",
-        dialect: "sqlite",
-        driver: "better-sqlite3",
-        filename: process.env.SQLITE_FILENAME ?? ":memory:",
+        name: 'sqlite',
+        dialect: 'sqlite',
+        driver: 'better-sqlite3',
+        filename: process.env.SQLITE_FILENAME ?? ':memory:',
       };
-    case "postgres":
+    case 'postgres':
       return {
-        name: "postgres",
-        dialect: "postgres",
-        driver: "pg",
-        host: process.env.POSTGRES_HOST ?? process.env.PGHOST ?? "127.0.0.1",
+        name: 'postgres',
+        dialect: 'postgres',
+        driver: 'pg',
+        host: process.env.POSTGRES_HOST ?? process.env.PGHOST ?? '127.0.0.1',
         port: Number(process.env.POSTGRES_PORT ?? process.env.PGPORT ?? 15432),
-        username: process.env.POSTGRES_USER ?? process.env.PGUSER ?? "nocobase",
+        username: process.env.POSTGRES_USER ?? process.env.PGUSER ?? 'nocobase',
         password:
-          process.env.POSTGRES_PASSWORD ?? process.env.PGPASSWORD ?? "nocobase",
+          process.env.POSTGRES_PASSWORD ?? process.env.PGPASSWORD ?? 'nocobase',
         database:
           process.env.POSTGRES_DATABASE ??
           process.env.PGDATABASE ??
-          "nocobase_collection_builder",
+          'nocobase_collection_builder',
       };
-    case "mysql":
+    case 'mysql':
       return {
-        name: "mysql",
-        dialect: "mysql",
-        driver: "mysql2",
-        host: process.env.MYSQL_HOST ?? "127.0.0.1",
+        name: 'mysql',
+        dialect: 'mysql',
+        driver: 'mysql2',
+        host: process.env.MYSQL_HOST ?? '127.0.0.1',
         port: Number(process.env.MYSQL_PORT ?? 13306),
-        username: process.env.MYSQL_USER ?? "nocobase",
-        password: process.env.MYSQL_PASSWORD ?? "nocobase",
-        database: process.env.MYSQL_DATABASE ?? "nocobase_collection_builder",
+        username: process.env.MYSQL_USER ?? 'nocobase',
+        password: process.env.MYSQL_PASSWORD ?? 'nocobase',
+        database: process.env.MYSQL_DATABASE ?? 'nocobase_collection_builder',
       };
     default:
       throw new Error(`Unsupported integration database connection "${name}".`);
@@ -313,26 +313,26 @@ function createConnectionConfig(
   spec: IntegrationDatabaseSpec,
 ): ConnectionConfig {
   switch (spec.dialect) {
-    case "sqlite":
+    case 'sqlite':
       return {
-        dialect: "sqlite",
-        driver: "better-sqlite3",
-        filename: spec.filename ?? ":memory:",
+        dialect: 'sqlite',
+        driver: 'better-sqlite3',
+        filename: spec.filename ?? ':memory:',
       };
-    case "postgres":
+    case 'postgres':
       return {
-        dialect: "postgres",
-        driver: "pg",
+        dialect: 'postgres',
+        driver: 'pg',
         host: spec.host,
         port: spec.port,
         database: spec.database,
         username: spec.username,
         password: spec.password,
       };
-    case "mysql":
+    case 'mysql':
       return {
-        dialect: "mysql",
-        driver: "mysql2",
+        dialect: 'mysql',
+        driver: 'mysql2',
         host: spec.host,
         port: spec.port,
         database: spec.database,
@@ -346,8 +346,8 @@ function createConnectionConfig(
 }
 
 async function setupConnection(context: IntegrationTestContext): Promise<void> {
-  if (context.spec.dialect === "sqlite") {
-    await context.db.raw("PRAGMA foreign_keys = ON");
+  if (context.spec.dialect === 'sqlite') {
+    await context.db.raw('PRAGMA foreign_keys = ON');
   }
 }
 
@@ -358,12 +358,12 @@ async function cleanupIntegrationObjects(
     return;
   }
 
-  const views = await listObjects(context, "view");
-  const tables = await listObjects(context, "table");
+  const views = await listObjects(context, 'view');
+  const tables = await listObjects(context, 'table');
 
   switch (context.spec.dialect) {
-    case "sqlite":
-      await context.db.raw("PRAGMA foreign_keys = OFF");
+    case 'sqlite':
+      await context.db.raw('PRAGMA foreign_keys = OFF');
       for (const view of views) {
         await context.db.raw(
           `drop view if exists ${quoteIdentifier(view, context.spec.dialect)}`,
@@ -374,9 +374,9 @@ async function cleanupIntegrationObjects(
           `drop table if exists ${quoteIdentifier(table, context.spec.dialect)}`,
         );
       }
-      await context.db.raw("PRAGMA foreign_keys = ON");
+      await context.db.raw('PRAGMA foreign_keys = ON');
       break;
-    case "postgres":
+    case 'postgres':
       for (const view of views) {
         await context.db.raw(
           `drop view if exists ${quoteIdentifier(view, context.spec.dialect)} cascade`,
@@ -388,8 +388,8 @@ async function cleanupIntegrationObjects(
         );
       }
       break;
-    case "mysql":
-      await context.db.raw("set foreign_key_checks = 0");
+    case 'mysql':
+      await context.db.raw('set foreign_key_checks = 0');
       try {
         for (const view of views) {
           await context.db.raw(
@@ -402,7 +402,7 @@ async function cleanupIntegrationObjects(
           );
         }
       } finally {
-        await context.db.raw("set foreign_key_checks = 1");
+        await context.db.raw('set foreign_key_checks = 1');
       }
       break;
     default:
@@ -412,20 +412,20 @@ async function cleanupIntegrationObjects(
 
 async function listObjects(
   context: IntegrationTestContext,
-  objectType: "table" | "view",
+  objectType: 'table' | 'view',
 ): Promise<string[]> {
   const like = `${context.prefix}_%`;
   switch (context.spec.dialect) {
-    case "sqlite":
+    case 'sqlite':
       return rawRows(
         await context
-          .db("sqlite_master")
-          .select("name")
-          .where("type", objectType)
-          .where("name", "like", like),
+          .db('sqlite_master')
+          .select('name')
+          .where('type', objectType)
+          .where('name', 'like', like),
       ).map((row) => String(row.name));
-    case "postgres": {
-      const tableType = objectType === "table" ? "BASE TABLE" : "VIEW";
+    case 'postgres': {
+      const tableType = objectType === 'table' ? 'BASE TABLE' : 'VIEW';
       return rawRows(
         await context.db.raw(
           `
@@ -439,8 +439,8 @@ async function listObjects(
         ),
       ).map((row) => String(row.name));
     }
-    case "mysql": {
-      const tableType = objectType === "table" ? "BASE TABLE" : "VIEW";
+    case 'mysql': {
+      const tableType = objectType === 'table' ? 'BASE TABLE' : 'VIEW';
       return rawRows(
         await context.db.raw(
           `
@@ -466,7 +466,7 @@ function rawRows(result: unknown): Array<Record<string, any>> {
     }
     return result as Array<Record<string, any>>;
   }
-  if (result && typeof result === "object" && "rows" in result) {
+  if (result && typeof result === 'object' && 'rows' in result) {
     return (result as { rows: Array<Record<string, any>> }).rows;
   }
   return [];
@@ -479,24 +479,24 @@ function createTestPrefix(): string {
 
 function splitList(value: string): string[] {
   return value
-    .split(",")
+    .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
 }
 
 function normalizeConnectionName(name: string): IntegrationDialect {
   switch (name) {
-    case "sqlite":
-    case "sqlite3":
-    case "better-sqlite3":
-      return "sqlite";
-    case "pg":
-    case "postgres":
-    case "postgresql":
-      return "postgres";
-    case "mysql":
-    case "mysql2":
-      return "mysql";
+    case 'sqlite':
+    case 'sqlite3':
+    case 'better-sqlite3':
+      return 'sqlite';
+    case 'pg':
+    case 'postgres':
+    case 'postgresql':
+      return 'postgres';
+    case 'mysql':
+    case 'mysql2':
+      return 'mysql';
     default:
       throw new Error(`Unsupported integration database connection "${name}".`);
   }
@@ -506,8 +506,8 @@ function quoteIdentifier(
   identifier: string,
   dialect: IntegrationDialect,
 ): string {
-  if (dialect === "mysql") {
-    return `\`${identifier.replace(/`/g, "``")}\``;
+  if (dialect === 'mysql') {
+    return `\`${identifier.replace(/`/g, '``')}\``;
   }
   return `"${identifier.replace(/"/g, '""')}"`;
 }

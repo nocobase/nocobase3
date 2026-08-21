@@ -1,13 +1,13 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
-import { createMigrator } from "../../../src/index.js";
-import { describeIntegrationDatabases } from "../helpers.js";
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { afterEach, expect, it } from 'vitest';
+import { createMigrator } from '../../../src/index.js';
+import { describeIntegrationDatabases } from '../helpers.js';
 
-const tempRoot = join(process.cwd(), "tests/.tmp");
+const tempRoot = join(process.cwd(), 'tests/.tmp');
 const tempDirectories: string[] = [];
 
-describeIntegrationDatabases("migration runner", (context) => {
+describeIntegrationDatabases('migration runner', (context) => {
   afterEach(async () => {
     await Promise.all(
       tempDirectories
@@ -16,13 +16,13 @@ describeIntegrationDatabases("migration runner", (context) => {
     );
   });
 
-  it("runs pending migrations once and records history", async () => {
+  it('runs pending migrations once and records history', async () => {
     const directory = await createTempDirectory();
-    const tableName = context.table("migrationHistory");
-    const lockTableName = context.table("migrationLock");
+    const tableName = context.table('migrationHistory');
+    const lockTableName = context.table('migrationLock');
     await writeMigration(
       directory,
-      "202608180001_create_migration_users",
+      '202608180001_create_migration_users',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -53,35 +53,35 @@ describeIntegrationDatabases("migration runner", (context) => {
 
     await expect(migrator.latest()).resolves.toMatchObject({
       batch: 1,
-      executed: ["202608180001_create_migration_users"],
+      executed: ['202608180001_create_migration_users'],
       skipped: [],
     });
     expect(
-      await context.db.schema.hasTable(context.table("migrationUsers")),
+      await context.db.schema.hasTable(context.table('migrationUsers')),
     ).toBe(true);
 
     await expect(migrator.latest()).resolves.toMatchObject({
       batch: 1,
       executed: [],
-      skipped: ["202608180001_create_migration_users"],
+      skipped: ['202608180001_create_migration_users'],
     });
 
-    const history = await context.db(tableName).select(["name", "batch"]);
+    const history = await context.db(tableName).select(['name', 'batch']);
     expect(history).toEqual([
       {
-        name: "202608180001_create_migration_users",
+        name: '202608180001_create_migration_users',
         batch: 1,
       },
     ]);
   });
 
-  it("rolls back the latest batch in reverse order", async () => {
+  it('rolls back the latest batch in reverse order', async () => {
     const directory = await createTempDirectory();
-    const tableName = context.table("rollbackHistory");
-    const lockTableName = context.table("rollbackLock");
+    const tableName = context.table('rollbackHistory');
+    const lockTableName = context.table('rollbackLock');
     await writeMigration(
       directory,
-      "202608180001_create_rollback_users",
+      '202608180001_create_rollback_users',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -112,32 +112,32 @@ describeIntegrationDatabases("migration runner", (context) => {
 
     await migrator.latest();
     expect(
-      await context.db.schema.hasTable(context.table("rollbackUsers")),
+      await context.db.schema.hasTable(context.table('rollbackUsers')),
     ).toBe(true);
 
     await expect(migrator.rollback()).resolves.toEqual({
       batch: 1,
-      rolledBack: ["202608180001_create_rollback_users"],
+      rolledBack: ['202608180001_create_rollback_users'],
     });
     expect(
-      await context.db.schema.hasTable(context.table("rollbackUsers")),
+      await context.db.schema.hasTable(context.table('rollbackUsers')),
     ).toBe(false);
     await expect(context.db(tableName).select()).resolves.toEqual([]);
   });
 
-  it("keeps query changes and history writes in the same transaction", async () => {
+  it('keeps query changes and history writes in the same transaction', async () => {
     const directory = await createTempDirectory();
-    const tableName = context.table("failedHistory");
-    const lockTableName = context.table("failedLock");
-    const dataTableName = context.table("migrationRows");
+    const tableName = context.table('failedHistory');
+    const lockTableName = context.table('failedLock');
+    const dataTableName = context.table('migrationRows');
 
-    await context.builder.createCollection("migrationRows", (collection) => {
-      collection.increments("id");
-      collection.string("status");
+    await context.builder.createCollection('migrationRows', (collection) => {
+      collection.increments('id');
+      collection.string('status');
     });
     await writeMigration(
       directory,
-      "202608180001_failing_data_migration",
+      '202608180001_failing_data_migration',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -171,23 +171,23 @@ describeIntegrationDatabases("migration runner", (context) => {
     });
 
     await expect(migrator.latest()).rejects.toThrow(
-      "migration failed on purpose",
+      'migration failed on purpose',
     );
     await expect(
       context.database
         .query()
         .selectFrom(dataTableName)
-        .select("status")
+        .select('status')
         .execute(),
     ).resolves.toEqual([]);
     await expect(context.db(tableName).select()).resolves.toEqual([]);
   });
 
-  it("rejects checksum changes for already executed migrations", async () => {
+  it('rejects checksum changes for already executed migrations', async () => {
     const directory = await createTempDirectory();
-    const tableName = context.table("checksumHistory");
-    const lockTableName = context.table("checksumLock");
-    const migrationName = "202608180001_checksum_guard";
+    const tableName = context.table('checksumHistory');
+    const lockTableName = context.table('checksumLock');
+    const migrationName = '202608180001_checksum_guard';
     await writeMigration(
       directory,
       migrationName,
@@ -235,7 +235,7 @@ describeIntegrationDatabases("migration runner", (context) => {
 
 async function createTempDirectory(): Promise<string> {
   await mkdir(tempRoot, { recursive: true });
-  const directory = await mkdtemp(join(tempRoot, "migrations-"));
+  const directory = await mkdtemp(join(tempRoot, 'migrations-'));
   tempDirectories.push(directory);
   return directory;
 }
@@ -249,5 +249,5 @@ async function writeMigration(
 }
 
 function trimSource(source: string): string {
-  return `${source.trim().replace(/^ {6}/gm, "")}\n`;
+  return `${source.trim().replace(/^ {6}/gm, '')}\n`;
 }

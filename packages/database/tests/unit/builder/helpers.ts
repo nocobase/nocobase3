@@ -1,5 +1,5 @@
-import type { SchemaAdapter } from "../../../src/schema/index.js";
-import type { SchemaOperation } from "../../../src/index.js";
+import type { SchemaAdapter } from '../../../src/schema/index.js';
+import type { SchemaOperation } from '../../../src/index.js';
 
 export class RecordingSchemaAdapter implements SchemaAdapter {
   executed: SchemaOperation[][] = [];

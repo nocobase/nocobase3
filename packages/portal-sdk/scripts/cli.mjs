@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { checkTemplateCompatibility } from "./check-template-compatibility.mjs";
+import { checkTemplateCompatibility } from './check-template-compatibility.mjs';
 
-const command = process.argv[2] ?? "check";
+const command = process.argv[2] ?? 'check';
 
-if (command !== "check") {
-  process.stderr.write("Usage: portal-sdk check\n");
+if (command !== 'check') {
+  process.stderr.write('Usage: portal-sdk check\n');
   process.exitCode = 1;
 } else {
   try {

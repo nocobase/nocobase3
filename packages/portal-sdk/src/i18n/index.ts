@@ -1,3 +1,3 @@
-export * from "./locales.ts";
-export * from "./runtime.ts";
-export * from "./translation.ts";
+export * from './locales.ts';
+export * from './runtime.ts';
+export * from './translation.ts';

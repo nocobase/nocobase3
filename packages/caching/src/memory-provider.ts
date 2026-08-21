@@ -10,7 +10,11 @@ import type {
 import { MemoryCache } from './memory-cache.js';
 import { MemoryCounter } from './memory-counter.js';
 import { MemoryBloomFilter } from './memory-bloom-filter.js';
-import { assertMaxSize, assertNamespace, assertTtl } from './internal/validation.js';
+import {
+  assertMaxSize,
+  assertNamespace,
+  assertTtl,
+} from './internal/validation.js';
 
 export class MemoryCacheProvider implements CacheProvider {
   private readonly maxSize: number;
@@ -18,7 +22,10 @@ export class MemoryCacheProvider implements CacheProvider {
   private readonly maxTtl?: number;
   private readonly checkInterval?: number;
   private readonly useClone: boolean;
-  private readonly caches = new Map<string, { cache: MemoryCache; defaultTtl?: number }>();
+  private readonly caches = new Map<
+    string,
+    { cache: MemoryCache; defaultTtl?: number }
+  >();
   private readonly counters = new Map<string, MemoryCounter>();
   private readonly bloomFilters = new Map<string, MemoryBloomFilter>();
 
@@ -41,7 +48,9 @@ export class MemoryCacheProvider implements CacheProvider {
     const existing = this.caches.get(options.namespace);
     if (existing) {
       if (existing.defaultTtl !== defaultTtl) {
-        throw new Error(`Cache namespace "${options.namespace}" already uses a different default TTL.`);
+        throw new Error(
+          `Cache namespace "${options.namespace}" already uses a different default TTL.`,
+        );
       }
       return existing.cache;
     }
@@ -64,7 +73,10 @@ export class MemoryCacheProvider implements CacheProvider {
     if (existing) {
       return existing;
     }
-    const counter = new MemoryCounter({ namespace: options.namespace, maxSize: this.maxSize });
+    const counter = new MemoryCounter({
+      namespace: options.namespace,
+      maxSize: this.maxSize,
+    });
     this.counters.set(options.namespace, counter);
     return counter;
   }
@@ -81,7 +93,9 @@ export class MemoryCacheProvider implements CacheProvider {
   }
 
   async dispose(): Promise<void> {
-    await Promise.all([...this.caches.values()].map(({ cache }) => cache.disconnect()));
+    await Promise.all(
+      [...this.caches.values()].map(({ cache }) => cache.disconnect()),
+    );
     for (const counter of this.counters.values()) {
       counter.clear();
     }

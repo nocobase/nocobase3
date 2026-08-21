@@ -1,1 +1,1 @@
-export { isWecomBrowser, useWecomSignIn } from "./use-wecom-sign-in";
+export { isWecomBrowser, useWecomSignIn } from './use-wecom-sign-in';

@@ -1,5 +1,5 @@
-import { useLogin } from "@refinedev/core";
-import type { AuthActionResponse, HttpError } from "@refinedev/core";
+import { useLogin } from '@refinedev/core';
+import type { AuthActionResponse, HttpError } from '@refinedev/core';
 
 type SignInValues = Record<string, unknown>;
 
@@ -10,7 +10,7 @@ export type UseAuthenticatorSignInResult = {
 };
 
 export function useAuthenticatorSignIn(
-  authenticator: string
+  authenticator: string,
 ): UseAuthenticatorSignInResult {
   const mutation = useLogin<SignInValues & { authenticator: string }>();
 

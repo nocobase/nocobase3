@@ -8,7 +8,11 @@ import path from 'node:path';
 import { validateMigrations } from '@nocobase/database';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createConfigEnv, createConfigPaths, loadConfig } from '@nocobase/app-server/config';
+import {
+  createConfigEnv,
+  createConfigPaths,
+  loadConfig,
+} from '@nocobase/app-server/config';
 
 import app from '../../server/config/app.ts';
 import caching from '../../server/config/caching.ts';
@@ -35,7 +39,9 @@ afterEach(() => {
 describe('config registry', () => {
   it('loads every registered config section', () => {
     const config = loadConfig(configFactories, {
-      env: createConfigEnv({ AUTH_SECRET: 'test-auth-secret-at-least-32-characters' }),
+      env: createConfigEnv({
+        AUTH_SECRET: 'test-auth-secret-at-least-32-characters',
+      }),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
       }),
@@ -55,7 +61,9 @@ describe('config registry', () => {
     expect(config.logging.default).toBe('system');
     expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
-    expect(config.spa.indexPath).toBe('/tmp/app-template-default/dist/client/index.html');
+    expect(config.spa.indexPath).toBe(
+      '/tmp/app-template-default/dist/client/index.html',
+    );
   });
 });
 
@@ -99,7 +107,9 @@ describe('app config', () => {
   });
 
   it('resolves embedded routing from the app-host scope', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-embedded-config-'));
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-embedded-config-'),
+    );
     const dataDir = path.join(root, 'data');
     const clientDir = path.join(root, 'dist/client');
     tempDirs.push(root);
@@ -111,8 +121,8 @@ describe('app config', () => {
         basePath: '/main',
         rootDir: root,
         clientDir,
-      dataDir,
-      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
+        dataDir,
+        config: { authSecret: 'test-auth-secret-at-least-32-characters' },
       },
       new URL('../../server/embedded.ts', import.meta.url).href,
     );
@@ -407,10 +417,15 @@ describe('spa config', () => {
   });
 
   it('uses the copied client index when config root is a deployment dist root', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-dist-root-'));
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-dist-root-'),
+    );
     tempDirs.push(root);
     mkdirSync(path.join(root, 'client'), { recursive: true });
-    writeFileSync(path.join(root, 'client', 'index.html'), '<div id="root"></div>');
+    writeFileSync(
+      path.join(root, 'client', 'index.html'),
+      '<div id="root"></div>',
+    );
 
     const config = spa({
       env: createConfigEnv({}),
@@ -562,7 +577,8 @@ describe('drive config', () => {
       visibility: 'private',
     });
     expect(config.links).toEqual({
-      '/tmp/app-template-default/public/storage': '/tmp/app-template-default/storage/app/public',
+      '/tmp/app-template-default/public/storage':
+        '/tmp/app-template-default/storage/app/public',
     });
   });
 
@@ -620,7 +636,9 @@ describe('drive config', () => {
 
 describe('database migrations', () => {
   it('loads template migration files with the current definition format', async () => {
-    const directory = fileURLToPath(new URL('../../server/migrations', import.meta.url));
+    const directory = fileURLToPath(
+      new URL('../../server/migrations', import.meta.url),
+    );
 
     await expect(validateMigrations(directory)).resolves.toEqual([
       expect.objectContaining({
@@ -639,6 +657,8 @@ describe('standalone runtime database config', () => {
   it('uses the active server directory for migrations', () => {
     const runtime = createStandaloneRuntime();
 
-    expect(runtime.config.database.migrations.directory).toMatch(/server\/migrations$/);
+    expect(runtime.config.database.migrations.directory).toMatch(
+      /server\/migrations$/,
+    );
   });
 });

@@ -1,47 +1,47 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync } from 'node:child_process';
 
 const supportedExtension =
   /\.(?:[cm]?[jt]sx?|json5?|jsonc|mdx?|ya?ml|css|scss|less|html)$/u;
 const mode = process.argv[2];
 
-if (mode !== "--check" && mode !== "--write") {
-  console.error("Usage: node scripts/format-changed.mjs --check|--write");
+if (mode !== '--check' && mode !== '--write') {
+  console.error('Usage: node scripts/format-changed.mjs --check|--write');
   process.exitCode = 2;
 } else {
   const tracked = readGitPaths([
-    "diff",
-    "--name-only",
-    "--diff-filter=ACMR",
-    "-z",
-    "HEAD",
+    'diff',
+    '--name-only',
+    '--diff-filter=ACMR',
+    '-z',
+    'HEAD',
   ]);
   const untracked = readGitPaths([
-    "ls-files",
-    "--others",
-    "--exclude-standard",
-    "-z",
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '-z',
   ]);
   const files = [...new Set([...tracked, ...untracked])].filter((file) =>
     supportedExtension.test(file),
   );
 
   if (files.length === 0) {
-    console.log("No changed files require formatting.");
+    console.log('No changed files require formatting.');
   } else {
-    const prettierMode = mode === "--check" ? "--check" : "--write";
-    const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+    const prettierMode = mode === '--check' ? '--check' : '--write';
+    const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
     const result = spawnSync(
       pnpmCommand,
       [
-        "exec",
-        "prettier",
+        'exec',
+        'prettier',
         prettierMode,
-        "--ignore-path",
-        ".prettierignore",
-        "--",
+        '--ignore-path',
+        '.prettierignore',
+        '--',
         ...files,
       ],
-      { stdio: "inherit" },
+      { stdio: 'inherit' },
     );
 
     if (result.error) {
@@ -52,7 +52,7 @@ if (mode !== "--check" && mode !== "--write") {
 }
 
 function readGitPaths(args) {
-  const result = spawnSync("git", args, { encoding: "buffer" });
+  const result = spawnSync('git', args, { encoding: 'buffer' });
   if (result.error) {
     throw result.error;
   }
@@ -61,5 +61,5 @@ function readGitPaths(args) {
     process.exit(result.status ?? 1);
   }
 
-  return result.stdout.toString("utf8").split("\0").filter(Boolean);
+  return result.stdout.toString('utf8').split('\0').filter(Boolean);
 }

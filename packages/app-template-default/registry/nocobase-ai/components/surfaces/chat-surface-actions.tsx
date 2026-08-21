@@ -1,11 +1,11 @@
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Maximize2, PanelRight, X } from "lucide-react";
-import { useAITranslate } from "../../locales/use-ai-translate";
+} from '@/components/ui/tooltip';
+import { Maximize2, PanelRight, X } from 'lucide-react';
+import { useAITranslate } from '../../locales/use-ai-translate';
 
 export function ChatSurfaceActions({
   expanded,
@@ -18,16 +18,16 @@ export function ChatSurfaceActions({
 }) {
   const t = useAITranslate();
   const resizeLabel = expanded
-    ? t("surface.collapse", "Collapse to side panel")
-    : t("surface.expand", "Expand panel");
+    ? t('surface.collapse', 'Collapse to side panel')
+    : t('surface.expand', 'Expand panel');
   return (
     <>
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
-              variant="ghost"
-              size="icon-sm"
+              variant='ghost'
+              size='icon-sm'
               aria-label={resizeLabel}
               onClick={() => onExpandedChange(!expanded)}
             />
@@ -35,24 +35,22 @@ export function ChatSurfaceActions({
         >
           {expanded ? <PanelRight /> : <Maximize2 />}
         </TooltipTrigger>
-        <TooltipContent>
-          {resizeLabel}
-        </TooltipContent>
+        <TooltipContent>{resizeLabel}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("surface.closeChat", "Close AI chat")}
+              variant='ghost'
+              size='icon-sm'
+              aria-label={t('surface.closeChat', 'Close AI chat')}
               onClick={onClose}
             />
           }
         >
           <X />
         </TooltipTrigger>
-        <TooltipContent>{t("actions.close", "Close")}</TooltipContent>
+        <TooltipContent>{t('actions.close', 'Close')}</TooltipContent>
       </Tooltip>
     </>
   );

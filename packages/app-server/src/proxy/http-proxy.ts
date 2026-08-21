@@ -9,8 +9,8 @@ export async function proxyRequest(
   options: ProxyRequestOptions,
 ): Promise<Response> {
   const headers = options.headers ?? new Headers(request.headers);
-  headers.set("host", targetUrl.host);
-  headers.set("accept-encoding", "identity");
+  headers.set('host', targetUrl.host);
+  headers.set('accept-encoding', 'identity');
   removeHopByHopHeaders(headers);
 
   try {
@@ -19,11 +19,11 @@ export async function proxyRequest(
       headers,
       signal: request.signal,
       body:
-        request.method === "GET" || request.method === "HEAD"
+        request.method === 'GET' || request.method === 'HEAD'
           ? undefined
           : request.body,
-      redirect: "manual",
-      duplex: "half",
+      redirect: 'manual',
+      duplex: 'half',
     });
 
     return new Response(response.body, {
@@ -48,21 +48,21 @@ export async function proxyRequest(
 export function createProxyResponseHeaders(headers: Headers): Headers {
   const nextHeaders = new Headers(headers);
   removeHopByHopHeaders(nextHeaders);
-  nextHeaders.delete("content-encoding");
-  nextHeaders.delete("content-length");
+  nextHeaders.delete('content-encoding');
+  nextHeaders.delete('content-length');
   return nextHeaders;
 }
 
 export function removeHopByHopHeaders(headers: Headers): void {
   for (const header of [
-    "connection",
-    "keep-alive",
-    "proxy-authenticate",
-    "proxy-authorization",
-    "te",
-    "trailer",
-    "transfer-encoding",
-    "upgrade",
+    'connection',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
   ]) {
     headers.delete(header);
   }

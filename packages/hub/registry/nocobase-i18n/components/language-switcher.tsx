@@ -1,7 +1,7 @@
-import { useGetLocale, useSetLocale, useTranslate } from "@refinedev/core";
-import { useEnabledLocales } from "@nocobase/portal-sdk/i18n";
-import { Languages, Loader2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useGetLocale, useSetLocale, useTranslate } from '@refinedev/core';
+import { useEnabledLocales } from '@nocobase/portal-sdk/i18n';
+import { Languages, Loader2 } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 
 import {
   DropdownMenuRadioGroup,
@@ -10,15 +10,15 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 export type LanguageSwitcherProps = {
   className?: string;
@@ -39,8 +39,8 @@ export function LanguageSwitcher({
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string>();
   const resolvedLabel =
-    typeof label === "undefined"
-      ? translate("language.label", { ns: "nocobase-i18n" }, "Language")
+    typeof label === 'undefined'
+      ? translate('language.label', { ns: 'nocobase-i18n' }, 'Language')
       : label;
 
   if (locales.length < 2) return null;
@@ -49,9 +49,9 @@ export function LanguageSwitcher({
     locales.find(({ locale }) => locale === currentLocale) ?? locales[0];
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn('space-y-2', className)}>
       {resolvedLabel === false ? null : (
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className='text-xs font-medium text-muted-foreground'>
           {resolvedLabel}
         </p>
       )}
@@ -67,20 +67,20 @@ export function LanguageSwitcher({
               reason instanceof Error
                 ? reason.message
                 : translate(
-                    "language.switchError",
-                    { ns: "nocobase-i18n" },
-                    "Unable to switch language."
-                  )
+                    'language.switchError',
+                    { ns: 'nocobase-i18n' },
+                    'Unable to switch language.',
+                  ),
             );
             setSwitching(false);
           });
         }}
       >
         <SelectTrigger
-          className={cn("w-full min-w-52", triggerClassName)}
-          aria-label={String(resolvedLabel || "Language")}
+          className={cn('w-full min-w-52', triggerClassName)}
+          aria-label={String(resolvedLabel || 'Language')}
         >
-          {switching ? <Loader2 className="animate-spin" /> : <Languages />}
+          {switching ? <Loader2 className='animate-spin' /> : <Languages />}
           <SelectValue>{currentDefinition?.label ?? currentLocale}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -91,7 +91,7 @@ export function LanguageSwitcher({
           ))}
         </SelectContent>
       </Select>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className='text-xs text-destructive'>{error}</p> : null}
     </div>
   );
 }
@@ -109,13 +109,13 @@ export function LanguageUserMenuItems() {
     <>
       <DropdownMenuSeparator />
       <DropdownMenuSub>
-        <DropdownMenuSubTrigger className="min-h-9 gap-2 px-2 text-muted-foreground focus:text-foreground">
+        <DropdownMenuSubTrigger className='min-h-9 gap-2 px-2 text-muted-foreground focus:text-foreground'>
           <Languages />
           <span>
-            {translate("language.label", { ns: "nocobase-i18n" }, "Language")}
+            {translate('language.label', { ns: 'nocobase-i18n' }, 'Language')}
           </span>
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="min-w-44">
+        <DropdownMenuSubContent className='min-w-44'>
           <DropdownMenuRadioGroup
             value={currentLocale}
             onValueChange={(value) => {

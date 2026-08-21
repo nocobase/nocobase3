@@ -8,83 +8,83 @@ import {
   Trash2,
   UserRoundCog,
   UsersRound,
-} from "lucide-react";
-import type { TreeMenuItem } from "@refinedev/core";
+} from 'lucide-react';
+import type { TreeMenuItem } from '@refinedev/core';
 
 import {
   buildRouteResources,
   defineAppRoutes,
-} from "@nocobase/portal-sdk/routing";
-import { RouteAccessGuard } from "@/app/route-access-guard";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { CanAccess } from "@/components/access-control/can-access";
+} from '@nocobase/portal-sdk/routing';
+import { RouteAccessGuard } from '@/app/route-access-guard';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { CanAccess } from '@/components/access-control/can-access';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
   filterMenuItemsByAcl,
   type RoleConstraint,
   useAclState,
-} from "@nocobase/portal-sdk/acl";
-import { AclField, AclPage, AclRegion } from "../components/acl-boundary";
-import { AclPreviewProvider } from "./acl-preview-provider";
-import { AclBoundaryApi } from "./boundary-api";
-import { AclScenarioSection } from "./scenario-section";
+} from '@nocobase/portal-sdk/acl';
+import { AclField, AclPage, AclRegion } from '../components/acl-boundary';
+import { AclPreviewProvider } from './acl-preview-provider';
+import { AclBoundaryApi } from './boundary-api';
+import { AclScenarioSection } from './scenario-section';
 
 const demoUsers = [
   {
     id: 1,
-    name: "Alex Johnson",
-    username: "alex",
-    email: "alex@example.com",
-    phone: "+1 202 555 0148",
-    role: "Administrator",
+    name: 'Alex Johnson',
+    username: 'alex',
+    email: 'alex@example.com',
+    phone: '+1 202 555 0148',
+    role: 'Administrator',
   },
   {
     id: 2,
-    name: "Jamie Chen",
-    username: "jamie",
-    email: "jamie@example.com",
-    phone: "+1 202 555 0186",
-    role: "Member",
+    name: 'Jamie Chen',
+    username: 'jamie',
+    email: 'jamie@example.com',
+    phone: '+1 202 555 0186',
+    role: 'Member',
   },
   {
     id: 3,
-    name: "Morgan Lee",
-    username: "morgan",
-    email: "morgan@example.com",
-    phone: "+1 202 555 0162",
-    role: "Member",
+    name: 'Morgan Lee',
+    username: 'morgan',
+    email: 'morgan@example.com',
+    phone: '+1 202 555 0162',
+    role: 'Member',
   },
 ];
 
 const usersRouteRoles = {
-  anyOf: ["admin"],
+  anyOf: ['admin'],
 } satisfies RoleConstraint;
 
 const navigationDemoRoutes = defineAppRoutes([
   {
-    name: "dashboard",
-    path: "/dashboard",
+    name: 'dashboard',
+    path: '/dashboard',
     resource: {
       meta: {
-        label: "Dashboard",
+        label: 'Dashboard',
         icon: <LayoutPanelTop />,
       },
     },
   },
   {
-    name: "users",
-    path: "/users",
+    name: 'users',
+    path: '/users',
     resource: {
       meta: {
-        label: "Users",
+        label: 'Users',
         icon: <UsersRound />,
       },
     },
@@ -93,11 +93,11 @@ const navigationDemoRoutes = defineAppRoutes([
     },
   },
   {
-    name: "roles",
-    path: "/roles",
+    name: 'roles',
+    path: '/roles',
     resource: {
       meta: {
-        label: "Roles",
+        label: 'Roles',
         icon: <UserRoundCog />,
       },
     },
@@ -109,81 +109,81 @@ const navigationDemoMenuItems: TreeMenuItem[] = navigationDemoResources.map(
   (resource) => ({
     key: resource.name,
     name: resource.name,
-    route: typeof resource.list === "string" ? resource.list : undefined,
+    route: typeof resource.list === 'string' ? resource.list : undefined,
     meta: resource.meta,
     children: [],
-  })
+  }),
 );
 
 const allowedRegionPermissions = {
-  "users:list": {},
-  "departments:list": {},
+  'users:list': {},
+  'departments:list': {},
 };
 
 const restrictedRegionPermissions = {
-  "users:list": {},
+  'users:list': {},
 };
 
 const allowedActionPermissions = {
-  "users:get": {},
-  "users:create": {},
-  "users:update": {},
-  "users:destroy": {},
+  'users:get': {},
+  'users:create': {},
+  'users:update': {},
+  'users:destroy': {},
 };
 
 const restrictedActionPermissions = {
-  "users:get": {},
-  "users:update": {},
-  "users:destroy": {},
+  'users:get': {},
+  'users:update': {},
+  'users:destroy': {},
 };
 
 const restrictedRecordPermissions = demoUsers.flatMap((user) => [
   {
-    resource: "users",
-    action: "update",
+    resource: 'users',
+    action: 'update',
     id: user.id,
     allowed: false,
   },
   {
-    resource: "users",
-    action: "destroy",
+    resource: 'users',
+    action: 'destroy',
     id: user.id,
     allowed: false,
   },
 ]);
 
 const editableFieldPermissions = {
-  "users:update": { fields: ["nickname", "email", "phone"] },
+  'users:update': { fields: ['nickname', 'email', 'phone'] },
 };
 
 const restrictedFieldPermissions = {
-  "users:update": { fields: ["nickname"] },
+  'users:update': { fields: ['nickname'] },
 };
 
 export function AclPatternsPage() {
   return (
-    <div className="space-y-10 pb-12">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-[-0.025em] sm:text-3xl">
+    <div className='space-y-10 pb-12'>
+      <header className='space-y-2'>
+        <h1 className='text-2xl font-semibold tracking-[-0.025em] sm:text-3xl'>
           Permission patterns
         </h1>
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+        <p className='max-w-3xl text-sm leading-6 text-muted-foreground'>
           Compare the authorized and restricted outcomes of navigation, pages,
           regions, record actions, and form fields using the same fixed data.
         </p>
       </header>
 
       <AclScenarioSection
-        eyebrow="Navigation permission"
-        title="Role-restricted routes disappear from navigation"
-        description="A route outside the current effective role is removed from the sidebar and its direct URL is guarded. Other accessible navigation remains unchanged."
+        eyebrow='Navigation permission'
+        title='Role-restricted routes disappear from navigation'
+        description='A route outside the current effective role is removed from the sidebar and its direct URL is guarded. Other accessible navigation remains unchanged.'
         prompt={{
-          title: "Resource navigation",
+          title: 'Resource navigation',
           description:
-            "Generate application resources, sidebar behavior, and guarded routes backed by NocoBase collections.",
-          defaultScene: "User and role administration",
+            'Generate application resources, sidebar behavior, and guarded routes backed by NocoBase collections.',
+          defaultScene: 'User and role administration',
           defaultTarget:
-            "Allow administrators to open Users, but remove it from navigation and block its direct URL for other roles.",
+            'Allow administrators to open Users, but remove it from navigation and block its direct URL for other roles.',
           requirements: `- Define application-owned navigation once through defineAppRoutes in client/routes.tsx.
 - Put role constraints in the route access.roles field using anyOf, allOf, or noneOf.
 - Let the route runtime generate the Refine resource, filter the sidebar item, and wrap the direct route with CanAccess.
@@ -193,15 +193,15 @@ export function AclPatternsPage() {
         }}
       >
         <OutcomeComparison
-          allowedTitle="Users permission granted"
-          deniedTitle="Users permission denied"
+          allowedTitle='Users permission granted'
+          deniedTitle='Users permission denied'
           allowed={
-            <AclPreviewProvider roles={["admin"]}>
+            <AclPreviewProvider roles={['admin']}>
               <NavigationPreview />
             </AclPreviewProvider>
           }
           denied={
-            <AclPreviewProvider roles={["member"]}>
+            <AclPreviewProvider roles={['member']}>
               <NavigationPreview />
             </AclPreviewProvider>
           }
@@ -209,16 +209,16 @@ export function AclPatternsPage() {
       </AclScenarioSection>
 
       <AclScenarioSection
-        eyebrow="Page permission"
-        title="A complete page is either available or replaced"
-        description="Page-level permission is useful when the whole route has one business purpose. Denial produces an understandable destination instead of a blank screen."
+        eyebrow='Page permission'
+        title='A complete page is either available or replaced'
+        description='Page-level permission is useful when the whole route has one business purpose. Denial produces an understandable destination instead of a blank screen.'
         prompt={{
-          title: "Page permission",
+          title: 'Page permission',
           description:
-            "Generate a complete page whose availability depends on NocoBase permissions.",
-          defaultScene: "User directory and account administration page",
+            'Generate a complete page whose availability depends on NocoBase permissions.',
+          defaultScene: 'User directory and account administration page',
           defaultTarget:
-            "Allow administrators and user managers to render the complete page.",
+            'Allow administrators and user managers to render the complete page.',
           requirements: `- Wrap the complete business page with AclPage.
 - Use the AclPage roles prop with anyOf, allOf, or noneOf for page-level role access.
 - Keep anyOf and allOf for resource permissions when the page also needs collection access.
@@ -227,15 +227,15 @@ export function AclPatternsPage() {
         }}
       >
         <OutcomeComparison
-          allowedTitle="Page allowed"
-          deniedTitle="Page denied"
+          allowedTitle='Page allowed'
+          deniedTitle='Page denied'
           allowed={
-            <AclPreviewProvider roles={["user-manager"]}>
+            <AclPreviewProvider roles={['user-manager']}>
               <PagePermissionPreview />
             </AclPreviewProvider>
           }
           denied={
-            <AclPreviewProvider roles={["member"]}>
+            <AclPreviewProvider roles={['member']}>
               <PagePermissionPreview />
             </AclPreviewProvider>
           }
@@ -243,16 +243,16 @@ export function AclPatternsPage() {
       </AclScenarioSection>
 
       <AclScenarioSection
-        eyebrow="Region permission"
-        title="Only the protected region changes"
-        description="On a page with multiple resources, denying Departments hides only that panel and must not affect the Users table."
+        eyebrow='Region permission'
+        title='Only the protected region changes'
+        description='On a page with multiple resources, denying Departments hides only that panel and must not affect the Users table.'
         prompt={{
-          title: "Region permission",
+          title: 'Region permission',
           description:
-            "Generate a multi-resource page where each region follows its own collection ACL.",
-          defaultScene: "Organization management dashboard",
+            'Generate a multi-resource page where each region follows its own collection ACL.',
+          defaultScene: 'Organization management dashboard',
           defaultTarget:
-            "Keep Users visible while hiding the denied Departments panel.",
+            'Keep Users visible while hiding the denied Departments panel.',
           requirements: `- Keep the outer page visible when its page-level permission is satisfied.
 - Wrap every collection-backed panel in its own AclRegion.
 - Enable each data query only when the corresponding list permission is allowed.
@@ -261,11 +261,11 @@ export function AclPatternsPage() {
         }}
       >
         <OutcomeComparison
-          allowedTitle="Both regions allowed"
-          deniedTitle="Departments resource hidden"
+          allowedTitle='Both regions allowed'
+          deniedTitle='Departments resource hidden'
           allowed={
             <AclPreviewProvider
-              roles={["member"]}
+              roles={['member']}
               permissions={allowedRegionPermissions}
             >
               <RegionPreview />
@@ -273,7 +273,7 @@ export function AclPatternsPage() {
           }
           denied={
             <AclPreviewProvider
-              roles={["member"]}
+              roles={['member']}
               permissions={restrictedRegionPermissions}
             >
               <RegionPreview />
@@ -283,16 +283,16 @@ export function AclPatternsPage() {
       </AclScenarioSection>
 
       <AclScenarioSection
-        eyebrow="Action and record permission"
-        title="Only unavailable actions are removed"
-        description="Collection permission controls global actions such as Create. Record ACL metadata controls Edit and Delete for each individual row."
+        eyebrow='Action and record permission'
+        title='Only unavailable actions are removed'
+        description='Collection permission controls global actions such as Create. Record ACL metadata controls Edit and Delete for each individual row.'
         prompt={{
-          title: "Action permission",
+          title: 'Action permission',
           description:
-            "Generate a data table whose toolbar and row actions respond to collection and record scopes.",
-          defaultScene: "User administration table",
+            'Generate a data table whose toolbar and row actions respond to collection and record scopes.',
+          defaultScene: 'User administration table',
           defaultTarget:
-            "Allow all actions for one user record and show a view-only row when update and delete are denied.",
+            'Allow all actions for one user record and show a view-only row when update and delete are denied.',
           requirements: `- Use the Starter dataProvider so X-With-ACL-Meta captures NocoBase allowedActions from list, get, and getMany responses.
 - Use the built-in Create, Show, Edit, and Delete buttons; do not manually compare user IDs or role names.
 - Collection-level denial hides the action everywhere.
@@ -301,11 +301,11 @@ export function AclPatternsPage() {
         }}
       >
         <OutcomeComparison
-          allowedTitle="Create and row actions allowed"
-          deniedTitle="Create, Update, and Delete denied"
+          allowedTitle='Create and row actions allowed'
+          deniedTitle='Create, Update, and Delete denied'
           allowed={
             <AclPreviewProvider
-              roles={["admin"]}
+              roles={['admin']}
               permissions={allowedActionPermissions}
             >
               <ActionsPreview />
@@ -313,7 +313,7 @@ export function AclPatternsPage() {
           }
           denied={
             <AclPreviewProvider
-              roles={["viewer"]}
+              roles={['viewer']}
               permissions={restrictedActionPermissions}
               recordPermissions={restrictedRecordPermissions}
             >
@@ -324,16 +324,16 @@ export function AclPatternsPage() {
       </AclScenarioSection>
 
       <AclScenarioSection
-        eyebrow="Field permission"
-        title="A form can mix editable, read-only, and hidden fields"
-        description="Field ACL does not have to hide the complete form. Only protected inputs change, while permitted fields remain usable."
+        eyebrow='Field permission'
+        title='A form can mix editable, read-only, and hidden fields'
+        description='Field ACL does not have to hide the complete form. Only protected inputs change, while permitted fields remain usable.'
         prompt={{
-          title: "Field permission",
+          title: 'Field permission',
           description:
-            "Generate a form or detail page whose individual fields follow NocoBase field ACL.",
-          defaultScene: "User profile edit form",
+            'Generate a form or detail page whose individual fields follow NocoBase field ACL.',
+          defaultScene: 'User profile edit form',
           defaultTarget:
-            "Allow nickname editing, make email read-only, and hide phone when those fields are denied.",
+            'Allow nickname editing, make email read-only, and hide phone when those fields are denied.',
           requirements: `- Wrap each protected field or field group with AclField.
 - Pass the collection resource, application action, and exact field name.
 - Choose whether a denied field is hidden, replaced by read-only output, or shown with a custom fallback.
@@ -342,11 +342,11 @@ export function AclPatternsPage() {
         }}
       >
         <OutcomeComparison
-          allowedTitle="All fields editable"
-          deniedTitle="Email read-only and phone hidden"
+          allowedTitle='All fields editable'
+          deniedTitle='Email read-only and phone hidden'
           allowed={
             <AclPreviewProvider
-              roles={["admin"]}
+              roles={['admin']}
               permissions={editableFieldPermissions}
             >
               <ProfileFormPreview />
@@ -354,7 +354,7 @@ export function AclPatternsPage() {
           }
           denied={
             <AclPreviewProvider
-              roles={["member"]}
+              roles={['member']}
               permissions={restrictedFieldPermissions}
             >
               <ProfileFormPreview />
@@ -380,17 +380,17 @@ function OutcomeComparison({
   denied: React.ReactNode;
 }) {
   return (
-    <div className="grid items-start gap-5 xl:grid-cols-2">
-      <div className="min-w-0 space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
-          <Check className="size-4" />
+    <div className='grid items-start gap-5 xl:grid-cols-2'>
+      <div className='min-w-0 space-y-3'>
+        <div className='flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400'>
+          <Check className='size-4' />
           {allowedTitle}
         </div>
         {allowed}
       </div>
-      <div className="min-w-0 space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
-          <LockKeyhole className="size-4" />
+      <div className='min-w-0 space-y-3'>
+        <div className='flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400'>
+          <LockKeyhole className='size-4' />
           {deniedTitle}
         </div>
         {denied}
@@ -402,18 +402,18 @@ function OutcomeComparison({
 function NavigationPreview() {
   const acl = useAclState();
   const menuItems =
-    acl.status === "ready"
+    acl.status === 'ready'
       ? filterMenuItemsByAcl(navigationDemoMenuItems, acl.permissions)
       : [];
-  const usersVisible = menuItems.some((item) => item.name === "users");
+  const usersVisible = menuItems.some((item) => item.name === 'users');
   const usersRoute = navigationDemoRoutes.find(
-    (route) => route.name === "users"
+    (route) => route.name === 'users',
   );
 
   return (
-    <div className="grid min-h-48 grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background">
-      <aside className="border-r bg-muted/35 p-3">
-        <div className="mb-3 text-xs font-semibold text-muted-foreground">
+    <div className='grid min-h-48 grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background'>
+      <aside className='border-r bg-muted/35 p-3'>
+        <div className='mb-3 text-xs font-semibold text-muted-foreground'>
           Workspace
         </div>
         {menuItems.map((item) => (
@@ -422,28 +422,28 @@ function NavigationPreview() {
             icon={item.meta?.icon}
             label={String(item.meta?.label ?? item.name)}
             active={
-              usersVisible ? item.name === "users" : item.name === "dashboard"
+              usersVisible ? item.name === 'users' : item.name === 'dashboard'
             }
           />
         ))}
       </aside>
-      <div className="flex items-center justify-center p-5 text-center">
+      <div className='flex items-center justify-center p-5 text-center'>
         <RouteAccessGuard
           access={usersRoute?.access}
           fallback={
             <div>
-              <LayoutPanelTop className="mx-auto size-7 text-muted-foreground" />
-              <div className="mt-2 font-medium">Dashboard</div>
-              <div className="mt-1 max-w-48 text-xs text-muted-foreground">
+              <LayoutPanelTop className='mx-auto size-7 text-muted-foreground' />
+              <div className='mt-2 font-medium'>Dashboard</div>
+              <div className='mt-1 max-w-48 text-xs text-muted-foreground'>
                 Users is absent from navigation and its direct route is guarded.
               </div>
             </div>
           }
         >
           <div>
-            <UsersRound className="mx-auto size-7 text-primary" />
-            <div className="mt-2 font-medium">Users</div>
-            <div className="mt-1 text-xs text-muted-foreground">
+            <UsersRound className='mx-auto size-7 text-primary' />
+            <div className='mt-2 font-medium'>Users</div>
+            <div className='mt-1 text-xs text-muted-foreground'>
               Route is available
             </div>
           </div>
@@ -465,10 +465,10 @@ function NavItem({
   return (
     <div
       className={`mb-1 flex items-center gap-2 rounded-md px-2 py-2 text-xs ${
-        active ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+        active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
       }`}
     >
-      <span className="[&_svg]:size-3.5">{icon}</span>
+      <span className='[&_svg]:size-3.5'>{icon}</span>
       {label}
     </div>
   );
@@ -477,7 +477,7 @@ function NavItem({
 function PagePermissionPreview() {
   return (
     <AclPage
-      roles={{ anyOf: ["admin", "user-manager"] }}
+      roles={{ anyOf: ['admin', 'user-manager'] }}
       fallback={<PageDeniedPreview />}
     >
       <UserDirectoryPreview />
@@ -501,15 +501,15 @@ function UserDirectoryPreview() {
 
 function PageDeniedPreview() {
   return (
-    <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed bg-background p-6 text-center">
+    <div className='flex min-h-64 items-center justify-center rounded-xl border border-dashed bg-background p-6 text-center'>
       <div>
-        <LockKeyhole className="mx-auto size-8 text-muted-foreground" />
-        <div className="mt-3 font-medium">You cannot open this page</div>
-        <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
+        <LockKeyhole className='mx-auto size-8 text-muted-foreground' />
+        <div className='mt-3 font-medium'>You cannot open this page</div>
+        <p className='mx-auto mt-1 max-w-xs text-sm text-muted-foreground'>
           Ask an administrator for access to the user directory or return to an
           available page.
         </p>
-        <Button className="mt-4" variant="outline" size="sm">
+        <Button className='mt-4' variant='outline' size='sm'>
           Return to dashboard
         </Button>
       </div>
@@ -519,9 +519,9 @@ function PageDeniedPreview() {
 
 function RegionPreview() {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-background p-3 md:flex-row">
-      <AclRegion resource="users" action="list">
-        <Card size="sm" className="min-w-0 flex-1">
+    <div className='flex flex-col gap-3 rounded-xl border bg-background p-3 md:flex-row'>
+      <AclRegion resource='users' action='list'>
+        <Card size='sm' className='min-w-0 flex-1'>
           <CardHeader>
             <CardTitle>Users</CardTitle>
           </CardHeader>
@@ -530,14 +530,14 @@ function RegionPreview() {
           </CardContent>
         </Card>
       </AclRegion>
-      <AclRegion resource="departments" action="list">
-        <Card size="sm" className="md:w-56">
+      <AclRegion resource='departments' action='list'>
+        <Card size='sm' className='md:w-56'>
           <CardHeader>
             <CardTitle>Departments</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <ResourceRow title="Engineering" name="engineering" />
-            <ResourceRow title="Operations" name="operations" />
+          <CardContent className='space-y-2'>
+            <ResourceRow title='Engineering' name='engineering' />
+            <ResourceRow title='Operations' name='operations' />
           </CardContent>
         </Card>
       </AclRegion>
@@ -548,56 +548,56 @@ function RegionPreview() {
 function ActionsPreview() {
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-3">
+      <CardHeader className='flex-row items-center justify-between gap-3'>
         <div>
           <CardTitle>Users</CardTitle>
           <CardDescription>Record actions</CardDescription>
         </div>
-        <CanAccess resource="users" action="create">
-          <Button size="sm">
+        <CanAccess resource='users' action='create'>
+          <Button size='sm'>
             <Plus /> New user
           </Button>
         </CanAccess>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
-        <table className="w-full min-w-[420px] text-sm">
+      <CardContent className='overflow-x-auto'>
+        <table className='w-full min-w-[420px] text-sm'>
           <thead>
-            <tr className="border-b text-left text-muted-foreground">
-              <th className="pb-3 font-medium">User</th>
-              <th className="pb-3 font-medium">Role</th>
-              <th className="pb-3 text-right font-medium">Actions</th>
+            <tr className='border-b text-left text-muted-foreground'>
+              <th className='pb-3 font-medium'>User</th>
+              <th className='pb-3 font-medium'>Role</th>
+              <th className='pb-3 text-right font-medium'>Actions</th>
             </tr>
           </thead>
           <tbody>
             {demoUsers.slice(0, 2).map((user) => (
-              <tr key={user.id} className="border-b last:border-0">
-                <td className="py-3 font-medium">{user.name}</td>
-                <td className="py-3 text-muted-foreground">{user.role}</td>
-                <td className="py-3">
-                  <div className="flex justify-end gap-1">
-                    <CanAccess resource="users" action="show" id={user.id}>
+              <tr key={user.id} className='border-b last:border-0'>
+                <td className='py-3 font-medium'>{user.name}</td>
+                <td className='py-3 text-muted-foreground'>{user.role}</td>
+                <td className='py-3'>
+                  <div className='flex justify-end gap-1'>
+                    <CanAccess resource='users' action='show' id={user.id}>
                       <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="View user"
+                        variant='ghost'
+                        size='icon-sm'
+                        aria-label='View user'
                       >
                         <Eye />
                       </Button>
                     </CanAccess>
-                    <CanAccess resource="users" action="edit" id={user.id}>
+                    <CanAccess resource='users' action='edit' id={user.id}>
                       <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Edit user"
+                        variant='ghost'
+                        size='icon-sm'
+                        aria-label='Edit user'
                       >
                         <Pencil />
                       </Button>
                     </CanAccess>
-                    <CanAccess resource="users" action="delete" id={user.id}>
+                    <CanAccess resource='users' action='delete' id={user.id}>
                       <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Delete user"
+                        variant='ghost'
+                        size='icon-sm'
+                        aria-label='Delete user'
                       >
                         <Trash2 />
                       </Button>
@@ -622,38 +622,38 @@ function ProfileFormPreview() {
         <CardTitle>Edit profile</CardTitle>
         <CardDescription>{user.name}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <AclField resource="users" action="edit" field="nickname">
-          <DemoField label="Nickname">
+      <CardContent className='space-y-4'>
+        <AclField resource='users' action='edit' field='nickname'>
+          <DemoField label='Nickname'>
             <Input defaultValue={user.name} />
           </DemoField>
         </AclField>
         <AclField
-          resource="users"
-          action="edit"
-          field="email"
+          resource='users'
+          action='edit'
+          field='email'
           fallback={
-            <DemoField label="Email">
-              <div className="rounded-md border bg-muted/45 px-3 py-2 text-sm text-muted-foreground">
+            <DemoField label='Email'>
+              <div className='rounded-md border bg-muted/45 px-3 py-2 text-sm text-muted-foreground'>
                 {user.email}
-                <Badge className="ml-2" variant="outline">
+                <Badge className='ml-2' variant='outline'>
                   Read only
                 </Badge>
               </div>
             </DemoField>
           }
         >
-          <DemoField label="Email">
+          <DemoField label='Email'>
             <Input defaultValue={user.email} />
           </DemoField>
         </AclField>
-        <AclField resource="users" action="edit" field="phone">
-          <DemoField label="Phone">
+        <AclField resource='users' action='edit' field='phone'>
+          <DemoField label='Phone'>
             <Input defaultValue={user.phone} />
           </DemoField>
         </AclField>
-        <CanAccess resource="users" action="edit">
-          <Button size="sm">Save changes</Button>
+        <CanAccess resource='users' action='edit'>
+          <Button size='sm'>Save changes</Button>
         </CanAccess>
       </CardContent>
     </Card>
@@ -668,8 +668,8 @@ function DemoField({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block space-y-2">
-      <span className="text-xs font-medium">{label}</span>
+    <label className='block space-y-2'>
+      <span className='text-xs font-medium'>{label}</span>
       {children}
     </label>
   );
@@ -677,24 +677,24 @@ function DemoField({
 
 function CompactUsersTable({ limit = 3 }: { limit?: number }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[360px] text-sm">
+    <div className='overflow-x-auto'>
+      <table className='w-full min-w-[360px] text-sm'>
         <thead>
-          <tr className="border-b text-left text-muted-foreground">
-            <th className="pb-3 font-medium">User</th>
-            <th className="pb-3 font-medium">Email</th>
+          <tr className='border-b text-left text-muted-foreground'>
+            <th className='pb-3 font-medium'>User</th>
+            <th className='pb-3 font-medium'>Email</th>
           </tr>
         </thead>
         <tbody>
           {demoUsers.slice(0, limit).map((user) => (
-            <tr key={user.id} className="border-b last:border-0">
-              <td className="py-3">
-                <div className="font-medium">{user.name}</div>
-                <div className="text-xs text-muted-foreground">
+            <tr key={user.id} className='border-b last:border-0'>
+              <td className='py-3'>
+                <div className='font-medium'>{user.name}</div>
+                <div className='text-xs text-muted-foreground'>
                   {user.username}
                 </div>
               </td>
-              <td className="py-3 text-muted-foreground">{user.email}</td>
+              <td className='py-3 text-muted-foreground'>{user.email}</td>
             </tr>
           ))}
         </tbody>
@@ -705,9 +705,9 @@ function CompactUsersTable({ limit = 3 }: { limit?: number }) {
 
 function ResourceRow({ title, name }: { title: string; name: string }) {
   return (
-    <div className="rounded-lg border px-3 py-2">
-      <div className="text-sm font-medium">{title}</div>
-      <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+    <div className='rounded-lg border px-3 py-2'>
+      <div className='text-sm font-medium'>{title}</div>
+      <div className='mt-0.5 font-mono text-xs text-muted-foreground'>
         {name}
       </div>
     </div>

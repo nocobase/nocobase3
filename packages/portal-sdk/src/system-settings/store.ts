@@ -1,11 +1,13 @@
-import { nocobaseClient } from "../client/index.ts";
-import type { SystemSettings } from "./context.ts";
+import { nocobaseClient } from '../client/index.ts';
+import type { SystemSettings } from './context.ts';
 
 let cachedSettings: SystemSettings | undefined;
 let settingsRequest: Promise<SystemSettings> | undefined;
 let settingsGeneration = 0;
 
-export function loadSystemSettings(force: boolean = false): Promise<SystemSettings> {
+export function loadSystemSettings(
+  force: boolean = false,
+): Promise<SystemSettings> {
   if (!force && cachedSettings) return Promise.resolve(cachedSettings);
   if (!force && settingsRequest) return settingsRequest;
 
@@ -13,8 +15,8 @@ export function loadSystemSettings(force: boolean = false): Promise<SystemSettin
   const requestGeneration = settingsGeneration;
 
   const request = nocobaseClient
-    .action<SystemSettings>("systemSettings", "get", {
-      method: "GET",
+    .action<SystemSettings>('systemSettings', 'get', {
+      method: 'GET',
       includeRole: false,
       withAclMeta: false,
     })

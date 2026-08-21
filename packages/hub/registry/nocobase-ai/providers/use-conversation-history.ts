@@ -1,11 +1,11 @@
-import type { Chat } from "@ai-sdk/react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { NocoBaseChatTransport } from "./chat-transport";
-import { reconcileRefreshedMessages } from "./chat-message-utils";
-import { AI_DRAFT_CONVERSATION_ID, type AIChatMessage } from "./types";
+import type { Chat } from '@ai-sdk/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { NocoBaseChatTransport } from './chat-transport';
+import { reconcileRefreshedMessages } from './chat-message-utils';
+import { AI_DRAFT_CONVERSATION_ID, type AIChatMessage } from './types';
 
 const isChatRunning = (chat: Chat<AIChatMessage>) =>
-  chat.status === "streaming" || chat.status === "submitted";
+  chat.status === 'streaming' || chat.status === 'submitted';
 
 export function useConversationHistory({
   chatSurfaceOpen,
@@ -25,10 +25,10 @@ export function useConversationHistory({
   getTransport: (conversationId: string) => NocoBaseChatTransport | undefined;
   getConversationMessages: (
     conversationId: string,
-    options?: { updateRead?: boolean }
+    options?: { updateRead?: boolean },
   ) => Promise<AIChatMessage[]>;
   getConversationActiveState: (
-    conversationId: string
+    conversationId: string,
   ) => Promise<string | undefined>;
   onMarkRead: (conversationId: string) => void;
   onError: (error?: Error) => void;
@@ -36,7 +36,7 @@ export function useConversationHistory({
   const surfaceOpenRef = useRef(chatSurfaceOpen);
   const openVersionRef = useRef(0);
   const pendingRequestsRef = useRef(
-    new Map<string, Promise<AIChatMessage[]>>()
+    new Map<string, Promise<AIChatMessage[]>>(),
   );
   const [loadingId, setLoadingId] = useState<string>();
   surfaceOpenRef.current = chatSurfaceOpen;
@@ -45,10 +45,10 @@ export function useConversationHistory({
     (
       conversationId: string,
       targetChat: Chat<AIChatMessage>,
-      options: { updateRead?: boolean } = {}
+      options: { updateRead?: boolean } = {},
     ) => {
       const updateRead = options.updateRead === true;
-      const requestKey = `${conversationId}:${updateRead ? "read" : "peek"}`;
+      const requestKey = `${conversationId}:${updateRead ? 'read' : 'peek'}`;
       const pending = pendingRequestsRef.current.get(requestKey);
       if (pending) return pending;
 
@@ -56,7 +56,7 @@ export function useConversationHistory({
         .then((messages) => {
           const reconciled = reconcileRefreshedMessages(
             targetChat.messages,
-            messages
+            messages,
           );
           targetChat.messages = reconciled;
           return reconciled;
@@ -65,7 +65,7 @@ export function useConversationHistory({
       pendingRequestsRef.current.set(requestKey, request);
       return request;
     },
-    [getConversationMessages]
+    [getConversationMessages],
   );
 
   const load = useCallback(
@@ -84,12 +84,12 @@ export function useConversationHistory({
         onError(
           error instanceof Error
             ? error
-            : new Error("Unable to load conversation messages")
+            : new Error('Unable to load conversation messages'),
         );
         return;
       } finally {
         setLoadingId((current) =>
-          current === conversationId ? undefined : current
+          current === conversationId ? undefined : current,
         );
       }
 
@@ -107,19 +107,19 @@ export function useConversationHistory({
           openVersionRef.current !== openVersion ||
           getActiveConversationId() !== conversationId ||
           isChatRunning(targetChat) ||
-          activeState !== "streaming"
+          activeState !== 'streaming'
         ) {
           return;
         }
         getTransport(conversationId)?.prepareConversationResume(
-          targetChat.messages
+          targetChat.messages,
         );
         await targetChat.resumeStream();
       } catch (error) {
         onError(
           error instanceof Error
             ? error
-            : new Error("Unable to resume the conversation stream")
+            : new Error('Unable to resume the conversation stream'),
         );
       }
     },
@@ -131,14 +131,11 @@ export function useConversationHistory({
       onError,
       onMarkRead,
       refresh,
-    ]
+    ],
   );
 
   useEffect(() => {
-    if (
-      !chatSurfaceOpen ||
-      activeConversationId === AI_DRAFT_CONVERSATION_ID
-    ) {
+    if (!chatSurfaceOpen || activeConversationId === AI_DRAFT_CONVERSATION_ID) {
       return;
     }
     const targetChat = getChat(activeConversationId);
@@ -157,7 +154,7 @@ export function useConversationHistory({
         onError(
           error instanceof Error
             ? error
-            : new Error("Unable to mark the conversation as read")
+            : new Error('Unable to mark the conversation as read'),
         );
       });
   }, [

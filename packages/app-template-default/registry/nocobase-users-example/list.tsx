@@ -1,35 +1,35 @@
-import { useGetLocale, useList, useTranslate } from "@refinedev/core";
-import { useTable } from "@refinedev/react-table";
+import { useGetLocale, useList, useTranslate } from '@refinedev/core';
+import { useTable } from '@refinedev/react-table';
 import {
   createColumnHelper,
   type Column,
   type Table as ReactTable,
-} from "@tanstack/react-table";
-import { Eye, Pencil, Trash2 } from "lucide-react";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+} from '@tanstack/react-table';
+import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 
-import { AccessDenied } from "@/components/access-control/access-denied";
-import { CanAccess } from "@/components/access-control/can-access";
-import { DataTable } from "@/components/data-table/data-table";
+import { AccessDenied } from '@/components/access-control/access-denied';
+import { CanAccess } from '@/components/access-control/can-access';
+import { DataTable } from '@/components/data-table/data-table';
 import {
   DataTableFilterCombobox,
   DataTableFilterDropdownText,
-} from "@/components/data-table/data-table-filter";
-import { DataTableSorter } from "@/components/data-table/data-table-sorter";
-import { DeleteButton } from "@/components/resources/buttons/delete";
-import { EditButton } from "@/components/resources/buttons/edit";
-import { ShowButton } from "@/components/resources/buttons/show";
-import { ListView } from "@/components/resources/views/list-view";
-import { useAIPageElementHandle } from "./optional-ai";
-import type { Role } from "@nocobase/portal-sdk/acl";
-import { RoleBadges } from "./role-badges";
-import { resolveRoleLabel } from "./role-utils";
-import { getRolePath } from "./routes";
-import type { RoleRecord, UserRecord } from "./types";
+} from '@/components/data-table/data-table-filter';
+import { DataTableSorter } from '@/components/data-table/data-table-sorter';
+import { DeleteButton } from '@/components/resources/buttons/delete';
+import { EditButton } from '@/components/resources/buttons/edit';
+import { ShowButton } from '@/components/resources/buttons/show';
+import { ListView } from '@/components/resources/views/list-view';
+import { useAIPageElementHandle } from './optional-ai';
+import type { Role } from '@nocobase/portal-sdk/acl';
+import { RoleBadges } from './role-badges';
+import { resolveRoleLabel } from './role-utils';
+import { getRolePath } from './routes';
+import type { RoleRecord, UserRecord } from './types';
 
 const isRootUser = (record: UserRecord) =>
-  record.roles?.some((role) => role.name === "root") ?? false;
+  record.roles?.some((role) => role.name === 'root') ?? false;
 
 function RoleFilter({
   column,
@@ -43,8 +43,8 @@ function RoleFilter({
   const locale = getLocale();
   const [shouldLoadRoles, setShouldLoadRoles] = useState(false);
   const { result: rolesResult, query: rolesQuery } = useList<RoleRecord>({
-    resource: "roles",
-    pagination: { mode: "server", currentPage: 1, pageSize: 200 },
+    resource: 'roles',
+    pagination: { mode: 'server', currentPage: 1, pageSize: 200 },
     errorNotification: false,
     queryOptions: { enabled: shouldLoadRoles, retry: false },
   });
@@ -57,7 +57,7 @@ function RoleFilter({
           label: resolveRoleLabel(role),
         }))
         .sort((left, right) => left.label.localeCompare(right.label, locale)),
-    [locale, rolesResult.data]
+    [locale, rolesResult.data],
   );
 
   return (
@@ -65,17 +65,17 @@ function RoleFilter({
       column={column}
       table={table}
       options={roleOptions}
-      defaultOperator="in"
-      operators={["in", "nin"]}
+      defaultOperator='in'
+      operators={['in', 'nin']}
       placeholder={translate(
-        "users.filters.roles.placeholder",
-        { ns: "app" },
-        "Select roles..."
+        'users.filters.roles.placeholder',
+        { ns: 'app' },
+        'Select roles...',
       )}
       noResultsText={translate(
-        "users.filters.roles.noResults",
-        { ns: "app" },
-        "No roles found."
+        'users.filters.roles.noResults',
+        { ns: 'app' },
+        'No roles found.',
       )}
       loading={rolesQuery.isFetching && rolesResult.data.length === 0}
       onOpenChange={(open) => {
@@ -98,7 +98,7 @@ function UserColumnHeader<TValue>({
   sortable?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className='flex items-center gap-1'>
       <span>{label}</span>
       {sortable ? <DataTableSorter column={column} /> : null}
       {children}
@@ -113,99 +113,99 @@ export const UserList = () => {
   const navigate = useNavigate();
   const showRole = useCallback(
     (role: Role) => navigate(getRolePath(role.name)),
-    [navigate]
+    [navigate],
   );
   const columns = useMemo(() => {
     const columnHelper = createColumnHelper<UserRecord>();
 
     return [
-      columnHelper.accessor("nickname", {
-        id: "nickname",
+      columnHelper.accessor('nickname', {
+        id: 'nickname',
         header: ({ column, table }) => (
           <UserColumnHeader
             column={column}
             label={translate(
-              "users.fields.nickname",
-              { ns: "app" },
-              "Nickname"
+              'users.fields.nickname',
+              { ns: 'app' },
+              'Nickname',
             )}
           >
             <DataTableFilterDropdownText
               column={column}
               table={table}
-              defaultOperator="contains"
-              operators={["contains", "eq", "startswith", "endswith"]}
+              defaultOperator='contains'
+              operators={['contains', 'eq', 'startswith', 'endswith']}
             />
           </UserColumnHeader>
         ),
         enableSorting: true,
         cell: ({ row, getValue }) =>
-          getValue() || row.original.username || row.original.email || "-",
+          getValue() || row.original.username || row.original.email || '-',
       }),
-      columnHelper.accessor("username", {
-        id: "username",
+      columnHelper.accessor('username', {
+        id: 'username',
         header: ({ column, table }) => (
           <UserColumnHeader
             column={column}
             label={translate(
-              "users.fields.username",
-              { ns: "app" },
-              "Username"
+              'users.fields.username',
+              { ns: 'app' },
+              'Username',
             )}
           >
             <DataTableFilterDropdownText
               column={column}
               table={table}
-              defaultOperator="contains"
-              operators={["contains", "eq", "startswith", "endswith"]}
+              defaultOperator='contains'
+              operators={['contains', 'eq', 'startswith', 'endswith']}
             />
           </UserColumnHeader>
         ),
         enableSorting: true,
-        cell: ({ getValue }) => getValue() || "-",
+        cell: ({ getValue }) => getValue() || '-',
       }),
-      columnHelper.accessor("email", {
-        id: "email",
+      columnHelper.accessor('email', {
+        id: 'email',
         header: ({ column, table }) => (
           <UserColumnHeader
             column={column}
-            label={translate("users.fields.email", { ns: "app" }, "Email")}
+            label={translate('users.fields.email', { ns: 'app' }, 'Email')}
           >
             <DataTableFilterDropdownText
               column={column}
               table={table}
-              defaultOperator="contains"
-              operators={["contains", "eq", "startswith", "endswith"]}
+              defaultOperator='contains'
+              operators={['contains', 'eq', 'startswith', 'endswith']}
             />
           </UserColumnHeader>
         ),
         enableSorting: true,
-        cell: ({ getValue }) => getValue() || "-",
+        cell: ({ getValue }) => getValue() || '-',
       }),
-      columnHelper.accessor("phone", {
-        id: "phone",
+      columnHelper.accessor('phone', {
+        id: 'phone',
         header: ({ column, table }) => (
           <UserColumnHeader
             column={column}
-            label={translate("users.fields.phone", { ns: "app" }, "Phone")}
+            label={translate('users.fields.phone', { ns: 'app' }, 'Phone')}
           >
             <DataTableFilterDropdownText
               column={column}
               table={table}
-              defaultOperator="contains"
-              operators={["contains", "eq", "startswith", "endswith"]}
+              defaultOperator='contains'
+              operators={['contains', 'eq', 'startswith', 'endswith']}
             />
           </UserColumnHeader>
         ),
         enableSorting: true,
-        cell: ({ getValue }) => getValue() || "-",
+        cell: ({ getValue }) => getValue() || '-',
       }),
       columnHelper.accessor((record) => record.roles, {
-        id: "roles.name",
+        id: 'roles.name',
         header: ({ column, table }) => (
           <UserColumnHeader
             column={column}
-            label={translate("users.fields.roles", { ns: "app" }, "Roles")}
+            label={translate('users.fields.roles', { ns: 'app' }, 'Roles')}
             sortable={false}
           >
             <RoleFilter column={column} table={table} />
@@ -214,18 +214,18 @@ export const UserList = () => {
         enableSorting: false,
         cell: ({ getValue }) => {
           const roles = getValue() ?? [];
-          return <RoleBadges roles={roles} onSelect={showRole} empty="-" />;
+          return <RoleBadges roles={roles} onSelect={showRole} empty='-' />;
         },
       }),
-      columnHelper.accessor("createdAt", {
-        id: "createdAt",
+      columnHelper.accessor('createdAt', {
+        id: 'createdAt',
         header: ({ column }) => (
           <UserColumnHeader
             column={column}
             label={translate(
-              "users.fields.createdAt",
-              { ns: "app" },
-              "Created at"
+              'users.fields.createdAt',
+              { ns: 'app' },
+              'Created at',
             )}
           />
         ),
@@ -234,68 +234,68 @@ export const UserList = () => {
           const value = getValue();
           return value
             ? new Intl.DateTimeFormat(locale, {
-                dateStyle: "medium",
+                dateStyle: 'medium',
               }).format(new Date(value))
-            : "-";
+            : '-';
         },
       }),
       columnHelper.display({
-        id: "actions",
-        header: translate("users.fields.actions", { ns: "app" }, "Actions"),
+        id: 'actions',
+        header: translate('users.fields.actions', { ns: 'app' }, 'Actions'),
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className='flex items-center gap-1'>
             <EditButton
-              resource="users"
+              resource='users'
               recordItemId={row.original.id}
-              variant="ghost"
-              size="icon"
+              variant='ghost'
+              size='icon'
               aria-label={translate(
-                "users.actions.edit",
-                { ns: "app" },
-                "Edit user"
+                'users.actions.edit',
+                { ns: 'app' },
+                'Edit user',
               )}
               title={translate(
-                "users.actions.edit",
-                { ns: "app" },
-                "Edit user"
+                'users.actions.edit',
+                { ns: 'app' },
+                'Edit user',
               )}
             >
               <Pencil />
             </EditButton>
             <ShowButton
-              resource="users"
+              resource='users'
               recordItemId={row.original.id}
-              variant="ghost"
-              size="icon"
+              variant='ghost'
+              size='icon'
               aria-label={translate(
-                "users.actions.view",
-                { ns: "app" },
-                "View user"
+                'users.actions.view',
+                { ns: 'app' },
+                'View user',
               )}
               title={translate(
-                "users.actions.view",
-                { ns: "app" },
-                "View user"
+                'users.actions.view',
+                { ns: 'app' },
+                'View user',
               )}
             >
               <Eye />
             </ShowButton>
             {isRootUser(row.original) ? null : (
               <DeleteButton
-                resource="users"
+                resource='users'
                 recordItemId={row.original.id}
-                variant="ghost"
-                size="icon"
-                className="text-destructive hover:text-destructive"
+                variant='ghost'
+                size='icon'
+                className='text-destructive hover:text-destructive'
                 aria-label={translate(
-                  "users.actions.delete",
-                  { ns: "app" },
-                  "Delete user"
+                  'users.actions.delete',
+                  { ns: 'app' },
+                  'Delete user',
                 )}
                 title={translate(
-                  "users.actions.delete",
-                  { ns: "app" },
-                  "Delete user"
+                  'users.actions.delete',
+                  { ns: 'app' },
+                  'Delete user',
                 )}
               >
                 <Trash2 />
@@ -312,23 +312,23 @@ export const UserList = () => {
   const table = useTable<UserRecord>({
     columns,
     refineCoreProps: {
-      resource: "users",
+      resource: 'users',
       syncWithLocation: false,
       meta: {
-        appends: ["roles"],
+        appends: ['roles'],
       },
       sorters: {
-        initial: [{ field: "createdAt", order: "desc" }],
+        initial: [{ field: 'createdAt', order: 'desc' }],
       },
     },
   });
 
   const tableContext = useAIPageElementHandle({
-    id: "users-table",
-    title: translate("users.ai.table", { ns: "app" }, "Users table"),
-    kind: "table",
+    id: 'users-table',
+    title: translate('users.ai.table', { ns: 'app' }, 'Users table'),
+    kind: 'table',
     getContext: () => ({
-      resource: "users",
+      resource: 'users',
       page: table.refineCore.currentPage,
       pageSize: table.refineCore.pageSize,
       total: table.refineCore.tableQuery.data?.total ?? 0,
@@ -348,7 +348,7 @@ export const UserList = () => {
   });
 
   return (
-    <ListView resource="users">
+    <ListView resource='users'>
       <div ref={tableContext.ref}>
         <DataTable table={table} />
       </div>
@@ -358,7 +358,7 @@ export const UserList = () => {
 
 export default function UserListRoute() {
   return (
-    <CanAccess resource="users" action="list" fallback={<AccessDenied />}>
+    <CanAccess resource='users' action='list' fallback={<AccessDenied />}>
       <UserList />
     </CanAccess>
   );

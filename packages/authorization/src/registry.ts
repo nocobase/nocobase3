@@ -20,7 +20,9 @@ class Registry<T extends { key: string }> {
 }
 
 export class ResourceRegistry {
-  private readonly registry = new Registry<ResourceDefinition & { key: string }>();
+  private readonly registry = new Registry<
+    ResourceDefinition & { key: string }
+  >();
 
   register(resource: ResourceDefinition): void {
     if (new Set(resource.actions).size !== resource.actions.length) {
@@ -30,8 +32,13 @@ export class ResourceRegistry {
       if (!name) {
         throw new Error(`Resource "${resource.name}" has an empty field name`);
       }
-      if (field.type === 'relation' && (!field.target || !['one', 'many'].includes(field.cardinality))) {
-        throw new Error(`Resource "${resource.name}" has an invalid relation field "${name}"`);
+      if (
+        field.type === 'relation' &&
+        (!field.target || !['one', 'many'].includes(field.cardinality))
+      ) {
+        throw new Error(
+          `Resource "${resource.name}" has an invalid relation field "${name}"`,
+        );
       }
     }
     this.registry.register({ ...resource, key: resource.name });

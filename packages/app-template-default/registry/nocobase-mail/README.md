@@ -41,11 +41,7 @@ delivery jobs are visible together. Reusable compose forms can still opt into bu
   To recipient, and defaults to a 2-second interval between messages.
 
 ```tsx
-<MailComposeForm
-  allowScheduleSend
-  allowBulkSend
-  defaultBulkIntervalMs={2000}
-/>
+<MailComposeForm allowScheduleSend allowBulkSend defaultBulkIntervalMs={2000} />
 ```
 
 Bulk and scheduled sending are separate modes, matching the NocoBase email

@@ -3,7 +3,8 @@
 聚合通过 `eb.fn` 表达：
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orders')
   .select((eb) => [
     'customerId',
@@ -31,12 +32,10 @@ const rows = await db.query()
 ## groupBy
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('orders')
-  .select((eb) => [
-    'status',
-    eb.fn.countAll<number>().as('total'),
-  ])
+  .select((eb) => ['status', eb.fn.countAll<number>().as('total')])
   .groupBy('status')
   .execute();
 ```
@@ -53,12 +52,10 @@ await db.query()
 `having()` 的表达方式和 `where()` 一致：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('orders')
-  .select((eb) => [
-    'status',
-    eb.fn.countAll<number>().as('total'),
-  ])
+  .select((eb) => ['status', eb.fn.countAll<number>().as('total')])
   .groupBy('status')
   .having((eb) => eb(eb.fn.countAll<number>(), '>', 1))
   .execute();
@@ -67,7 +64,8 @@ await db.query()
 字段和字段比较使用 `havingRef()`：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('metrics')
   .select(['metricName', 'planned', 'actual'])
   .groupBy(['metricName', 'planned', 'actual'])

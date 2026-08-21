@@ -20,31 +20,43 @@ export function createSessionStore<Data extends SessionData = SessionData>(
   config: AppSessionStoreConfig,
 ): NocoBaseSessionStore<Data> {
   if (config.driver === 'memory') {
-    return createUnstorageSessionStore(createStorage<SessionStorageValue<Data>>({
-      driver: memoryDriver(),
-    }), config.base);
+    return createUnstorageSessionStore(
+      createStorage<SessionStorageValue<Data>>({
+        driver: memoryDriver(),
+      }),
+      config.base,
+    );
   }
 
   if (config.driver === 'fs') {
-    return createUnstorageSessionStore(createStorage<SessionStorageValue<Data>>({
-      driver: fsDriver({
-        base: config.base,
+    return createUnstorageSessionStore(
+      createStorage<SessionStorageValue<Data>>({
+        driver: fsDriver({
+          base: config.base,
+        }),
       }),
-    }));
+    );
   }
 
   if (config.driver === 'redis') {
-    return createUnstorageSessionStore(createStorage<SessionStorageValue<Data>>({
-      driver: redisDriver(createRedisOptions(config)),
-    }), config.base);
+    return createUnstorageSessionStore(
+      createStorage<SessionStorageValue<Data>>({
+        driver: redisDriver(createRedisOptions(config)),
+      }),
+      config.base,
+    );
   }
 
-  return createUnstorageSessionStore(createStorage<SessionStorageValue<Data>>({
-    driver: nullDriver(),
-  }));
+  return createUnstorageSessionStore(
+    createStorage<SessionStorageValue<Data>>({
+      driver: nullDriver(),
+    }),
+  );
 }
 
-export function createUnstorageSessionStore<Data extends SessionData = SessionData>(
+export function createUnstorageSessionStore<
+  Data extends SessionData = SessionData,
+>(
   storage: Storage<SessionStorageValue<Data>>,
   base = '',
 ): NocoBaseSessionStore<Data> {
@@ -55,8 +67,16 @@ export function createUnstorageSessionStore<Data extends SessionData = SessionDa
       return storage.getItem(toStorageKey(prefix, id));
     },
 
-    async set(id: string, value: StoredSession<Data>, options: SessionStoreSetOptions = {}): Promise<void> {
-      await storage.setItem(toStorageKey(prefix, id), value, options.ttl ? { ttl: options.ttl } : undefined);
+    async set(
+      id: string,
+      value: StoredSession<Data>,
+      options: SessionStoreSetOptions = {},
+    ): Promise<void> {
+      await storage.setItem(
+        toStorageKey(prefix, id),
+        value,
+        options.ttl ? { ttl: options.ttl } : undefined,
+      );
     },
 
     async delete(id: string): Promise<void> {

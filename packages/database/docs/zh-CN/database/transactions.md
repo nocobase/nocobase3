@@ -39,10 +39,7 @@ await db.transaction(async (connection) => {
 
 ```ts
 await db.transaction(async () => {
-  await db.query()
-    .insertInto('orders')
-    .values({ status: 'paid' })
-    .execute();
+  await db.query().insertInto('orders').values({ status: 'paid' }).execute();
 });
 ```
 

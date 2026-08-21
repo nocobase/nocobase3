@@ -6,8 +6,8 @@ Database、Hono 或 Better Auth 服务端实现。
 ## 创建 AuthClient
 
 ```ts
-import { createAuthClient } from "@nocobase/authentication/client";
-import { createAppClient } from "@nocobase/app-sdk";
+import { createAuthClient } from '@nocobase/authentication/client';
+import { createAppClient } from '@nocobase/app-sdk';
 
 const appClient = createAppClient();
 const authClient = createAuthClient({ client: appClient });
@@ -47,10 +47,10 @@ interface AuthSession {
 ## 登录与注册
 
 ```ts
-await authClient.signIn("alice@example.com", password);
-await authClient.signIn("alice.admin", password);
+await authClient.signIn('alice@example.com', password);
+await authClient.signIn('alice.admin', password);
 
-await authClient.signUp("Alice", "alice.admin", "alice@example.com", password);
+await authClient.signUp('Alice', 'alice.admin', 'alice@example.com', password);
 ```
 
 `signIn()` 使用简单的 identifier 路由规则：包含 `@` 时调用邮箱登录，否则调用
@@ -62,7 +62,7 @@ await authClient.signUp("Alice", "alice.admin", "alice@example.com", password);
 await authClient.signOut();
 
 await authClient.requestPasswordReset(
-  "alice@example.com",
+  'alice@example.com',
   `${window.location.origin}/reset-password`,
 );
 ```
@@ -73,7 +73,7 @@ await authClient.requestPasswordReset(
 ## Refine AuthProvider
 
 ```ts
-import { createAuthProvider } from "@nocobase/authentication/client";
+import { createAuthProvider } from '@nocobase/authentication/client';
 
 const authProvider = createAuthProvider(authClient);
 ```

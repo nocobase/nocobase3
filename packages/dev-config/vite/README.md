@@ -12,21 +12,21 @@ Pass a Vite config object or config function. It is merged after the shared
 configuration, so local values can extend or override the baseline:
 
 ```js
-import { createPortalViteConfig } from "@nocobase/dev-config/vite/portal";
-import { portalSdkCompatibilityPlugin } from "@nocobase/portal-sdk/vite";
-import path from "node:path";
+import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
+import { portalSdkCompatibilityPlugin } from '@nocobase/portal-sdk/vite';
+import path from 'node:path';
 
 export default createPortalViteConfig(
   portalSdkCompatibilityPlugin,
   ({ command, mode }) => ({
-    base: "/my-portal/",
+    base: '/my-portal/',
     define: {
       __PORTAL_MODE__: JSON.stringify(`${command}:${mode}`),
     },
-    envPrefix: ["VITE_", "NOCOBASE_"],
+    envPrefix: ['VITE_', 'NOCOBASE_'],
     resolve: {
       alias: {
-        "@": path.resolve(import.meta.dirname, "./client"),
+        '@': path.resolve(import.meta.dirname, './client'),
       },
     },
   }),

@@ -1,4 +1,4 @@
-import { useCallback, type RefCallback } from "react";
+import { useCallback, type RefCallback } from 'react';
 
 export type AIFormField = {
   name: string;
@@ -34,13 +34,13 @@ type AIPageElementHandle = {
 type OptionalAIModule = {
   useAIForm?: (descriptor: AIFormDescriptor) => RefCallback<HTMLElement>;
   useAIPageElementHandle?: (
-    descriptor: AIPageElementDescriptor
+    descriptor: AIPageElementDescriptor,
   ) => AIPageElementHandle;
 };
 
 const aiModules = import.meta.glob<OptionalAIModule>(
-  "../nocobase-ai/index.ts",
-  { eager: true }
+  '../nocobase-ai/index.ts',
+  { eager: true },
 );
 const aiModule = Object.values(aiModules)[0];
 
@@ -49,7 +49,7 @@ function useFallbackAIForm() {
 }
 
 function useFallbackAIPageElementHandle(
-  descriptor: AIPageElementDescriptor
+  descriptor: AIPageElementDescriptor,
 ): AIPageElementHandle {
   const ref = useCallback<RefCallback<HTMLElement>>(() => undefined, []);
   return {

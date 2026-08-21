@@ -6,7 +6,9 @@ V1 按操作类型拆分入口，整体参考 Kysely：
 
 ```ts
 interface QueryAdapter {
-  selectFrom<TRecord extends Row = Row>(table: string): SelectQuery<TRecord, Row>;
+  selectFrom<TRecord extends Row = Row>(
+    table: string,
+  ): SelectQuery<TRecord, Row>;
   insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord>;
   updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord>;
   deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord>;
@@ -32,7 +34,8 @@ await query.exists();
 ## 基础示例
 
 ```ts
-await db.query()
+await db
+  .query()
   .insertInto('orders')
   .values({
     orderNo: 'SO-001',
@@ -41,7 +44,8 @@ await db.query()
   })
   .execute();
 
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orders')
   .select(['id', 'orderNo', 'createdAt'])
   .where('status', '=', 'paid')
@@ -72,10 +76,7 @@ await builder.createCollection('orders', (collection) => {
   collection.string('orderNo').columnName('order_number');
 });
 
-await db.query()
-  .selectFrom('orders')
-  .where('orderNo', '=', 'SO-001')
-  .execute();
+await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 ```
 
 上面的 `orderNo` 会被归一化为 `order_no`，不会映射成显式 `columnName: 'order_number'`。

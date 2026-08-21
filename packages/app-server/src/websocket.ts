@@ -7,9 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { createHash } from "node:crypto";
-import { STATUS_CODES, type IncomingMessage } from "node:http";
-import type { Duplex } from "node:stream";
+import { createHash } from 'node:crypto';
+import { STATUS_CODES, type IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
 
 export type AppWebSocketReadyState = 0 | 1 | 2 | 3;
 
@@ -31,23 +31,23 @@ export interface AppWebSocket {
 }
 
 export interface AppWebSocketOpenEvent {
-  readonly type: "open";
+  readonly type: 'open';
 }
 
 export interface AppWebSocketMessageEvent {
-  readonly type: "message";
+  readonly type: 'message';
   readonly data: AppWebSocketMessageData;
 }
 
 export interface AppWebSocketCloseEvent {
-  readonly type: "close";
+  readonly type: 'close';
   readonly code: number;
   readonly reason: string;
   readonly wasClean: boolean;
 }
 
 export interface AppWebSocketErrorEvent {
-  readonly type: "error";
+  readonly type: 'error';
   readonly error: unknown;
 }
 
@@ -96,29 +96,29 @@ interface ParsedWebSocketFrame {
   bytesRead: number;
 }
 
-const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const CLOSE_NORMAL = 1000;
 const CLOSE_GOING_AWAY = 1001;
 const CLOSE_PROTOCOL_ERROR = 1002;
 const CLOSE_ABNORMAL = 1006;
 
 const responseHeadersToSkip = new Set([
-  "connection",
-  "content-length",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailer",
-  "transfer-encoding",
-  "upgrade",
-  "sec-websocket-accept",
-  "sec-websocket-extensions",
-  "sec-websocket-protocol",
+  'connection',
+  'content-length',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'sec-websocket-accept',
+  'sec-websocket-extensions',
+  'sec-websocket-protocol',
 ]);
 
 export function isWebSocketUpgrade(req: IncomingMessage): boolean {
-  return firstHeaderValue(req.headers.upgrade)?.toLowerCase() === "websocket";
+  return firstHeaderValue(req.headers.upgrade)?.toLowerCase() === 'websocket';
 }
 
 export function createWebSocketUpgradeRequest(
@@ -126,7 +126,7 @@ export function createWebSocketUpgradeRequest(
   options: CreateWebSocketUpgradeRequestOptions = {},
 ): Request {
   return new Request(createRequestUrl(req), {
-    method: req.method ?? "GET",
+    method: req.method ?? 'GET',
     headers: createRequestHeaders(req),
     signal: options.signal,
   });
@@ -137,12 +137,12 @@ export function rejectWebSocketUpgrade(
   status: number = 404,
   headers?: Headers,
 ): void {
-  const responseLines = ["Connection: close", "Content-Length: 0"];
+  const responseLines = ['Connection: close', 'Content-Length: 0'];
   appendResponseHeaders(responseLines, headers);
 
   try {
     socket.end(
-      `HTTP/1.1 ${status.toString()} ${STATUS_CODES[status] ?? ""}\r\n${responseLines.join("\r\n")}\r\n\r\n`,
+      `HTTP/1.1 ${status.toString()} ${STATUS_CODES[status] ?? ''}\r\n${responseLines.join('\r\n')}\r\n\r\n`,
     );
   } catch (error) {
     socket.destroy(error instanceof Error ? error : new Error(String(error)));
@@ -154,16 +154,16 @@ export function acceptWebSocketUpgrade(
   socket: Duplex,
   options: AcceptWebSocketUpgradeOptions,
 ): AppWebSocket | null {
-  const key = firstHeaderValue(req.headers["sec-websocket-key"]);
+  const key = firstHeaderValue(req.headers['sec-websocket-key']);
   if (!key) {
     rejectWebSocketUpgrade(socket, 400);
     return null;
   }
 
   const responseLines = [
-    "HTTP/1.1 101 Switching Protocols",
-    "Upgrade: websocket",
-    "Connection: Upgrade",
+    'HTTP/1.1 101 Switching Protocols',
+    'Upgrade: websocket',
+    'Connection: Upgrade',
     `Sec-WebSocket-Accept: ${createAcceptKey(key)}`,
   ];
   const protocol = selectSubprotocol(req);
@@ -171,7 +171,7 @@ export function acceptWebSocketUpgrade(
     responseLines.push(`Sec-WebSocket-Protocol: ${protocol}`);
   }
 
-  socket.write(`${responseLines.join("\r\n")}\r\n\r\n`);
+  socket.write(`${responseLines.join('\r\n')}\r\n\r\n`);
 
   const connection = new NodeAppWebSocket(socket, {
     events: options.events,
@@ -203,19 +203,19 @@ function createRequestHeaders(req: IncomingMessage): Headers {
 }
 
 function createRequestUrl(req: IncomingMessage): URL {
-  const host = firstHeaderValue(req.headers.host) ?? "localhost";
+  const host = firstHeaderValue(req.headers.host) ?? 'localhost';
   const protocol = requestProtocol(req);
-  return new URL(req.url ?? "/", `${protocol}://${host}`);
+  return new URL(req.url ?? '/', `${protocol}://${host}`);
 }
 
 function requestProtocol(req: IncomingMessage): string {
-  const forwardedProto = firstHeaderValue(req.headers["x-forwarded-proto"]);
+  const forwardedProto = firstHeaderValue(req.headers['x-forwarded-proto']);
   if (forwardedProto) {
-    return forwardedProto.split(",")[0]?.trim() || "http";
+    return forwardedProto.split(',')[0]?.trim() || 'http';
   }
 
   const socket = req.socket as typeof req.socket & { encrypted?: boolean };
-  return socket.encrypted ? "https" : "http";
+  return socket.encrypted ? 'https' : 'http';
 }
 
 function appendResponseHeaders(
@@ -234,12 +234,12 @@ function appendResponseHeaders(
 }
 
 function createAcceptKey(key: string): string {
-  return createHash("sha1").update(`${key}${WEBSOCKET_GUID}`).digest("base64");
+  return createHash('sha1').update(`${key}${WEBSOCKET_GUID}`).digest('base64');
 }
 
 function selectSubprotocol(req: IncomingMessage): string | null {
-  const header = firstHeaderValue(req.headers["sec-websocket-protocol"]);
-  return header?.split(",")[0]?.trim() || null;
+  const header = firstHeaderValue(req.headers['sec-websocket-protocol']);
+  return header?.split(',')[0]?.trim() || null;
 }
 
 function firstHeaderValue(
@@ -282,24 +282,24 @@ class NodeAppWebSocket implements AppWebSocket {
 
   start(head?: Buffer): void {
     const closeForAbort = (): void => {
-      this.close(CLOSE_GOING_AWAY, "app runtime closed");
+      this.close(CLOSE_GOING_AWAY, 'app runtime closed');
     };
 
-    this.signal?.addEventListener("abort", closeForAbort, { once: true });
-    this.socket.on("data", this.handleData);
-    this.socket.once("close", () => {
-      this.signal?.removeEventListener("abort", closeForAbort);
-      this.finish(CLOSE_ABNORMAL, "", false);
+    this.signal?.addEventListener('abort', closeForAbort, { once: true });
+    this.socket.on('data', this.handleData);
+    this.socket.once('close', () => {
+      this.signal?.removeEventListener('abort', closeForAbort);
+      this.finish(CLOSE_ABNORMAL, '', false);
     });
-    this.socket.once("end", () => {
-      this.finish(CLOSE_ABNORMAL, "", false);
+    this.socket.once('end', () => {
+      this.finish(CLOSE_ABNORMAL, '', false);
     });
-    this.socket.once("error", (error) => {
+    this.socket.once('error', (error) => {
       this.emitError(error);
-      this.finish(CLOSE_ABNORMAL, "", false);
+      this.finish(CLOSE_ABNORMAL, '', false);
     });
 
-    this.invoke(this.events.onOpen, { type: "open" }, this);
+    this.invoke(this.events.onOpen, { type: 'open' }, this);
 
     if (head && head.length > 0) {
       this.handleData(head);
@@ -314,12 +314,12 @@ class NodeAppWebSocket implements AppWebSocket {
       return;
     }
 
-    const isText = typeof data === "string";
+    const isText = typeof data === 'string';
     const payload = normalizeOutgoingData(data);
     this.socket.write(encodeWebSocketFrame(isText ? 0x1 : 0x2, payload));
   }
 
-  close(code: number = CLOSE_NORMAL, reason: string = ""): void {
+  close(code: number = CLOSE_NORMAL, reason: string = ''): void {
     if (this.state >= 2) {
       return;
     }
@@ -343,7 +343,7 @@ class NodeAppWebSocket implements AppWebSocket {
         this.emitError(error);
         this.close(
           CLOSE_PROTOCOL_ERROR,
-          error instanceof Error ? error.message : "invalid WebSocket frame",
+          error instanceof Error ? error.message : 'invalid WebSocket frame',
         );
         return;
       }
@@ -359,12 +359,12 @@ class NodeAppWebSocket implements AppWebSocket {
 
   private handleFrame(frame: ParsedWebSocketFrame): void {
     if (!frame.fin) {
-      this.close(CLOSE_PROTOCOL_ERROR, "fragmented frames are not supported");
+      this.close(CLOSE_PROTOCOL_ERROR, 'fragmented frames are not supported');
       return;
     }
 
     if (frame.opcode === 0x1) {
-      this.emitMessage(frame.payload.toString("utf8"));
+      this.emitMessage(frame.payload.toString('utf8'));
       return;
     }
 
@@ -392,15 +392,15 @@ class NodeAppWebSocket implements AppWebSocket {
       return;
     }
 
-    this.close(CLOSE_PROTOCOL_ERROR, "unsupported frame opcode");
+    this.close(CLOSE_PROTOCOL_ERROR, 'unsupported frame opcode');
   }
 
   private emitMessage(data: AppWebSocketMessageData): void {
-    this.invoke(this.events.onMessage, { type: "message", data }, this);
+    this.invoke(this.events.onMessage, { type: 'message', data }, this);
   }
 
   private emitError(error: unknown): void {
-    this.invoke(this.events.onError, { type: "error", error }, this);
+    this.invoke(this.events.onError, { type: 'error', error }, this);
   }
 
   private finish(code: number, reason: string, wasClean: boolean): void {
@@ -410,10 +410,10 @@ class NodeAppWebSocket implements AppWebSocket {
 
     this.finished = true;
     this.state = 3;
-    this.socket.off("data", this.handleData);
+    this.socket.off('data', this.handleData);
     this.invoke(
       this.events.onClose,
-      { type: "close", code, reason, wasClean },
+      { type: 'close', code, reason, wasClean },
       this,
     );
   }
@@ -457,7 +457,7 @@ class NodeAppWebSocket implements AppWebSocket {
 function normalizeOutgoingData(
   data: string | ArrayBuffer | Uint8Array,
 ): Buffer {
-  if (typeof data === "string") {
+  if (typeof data === 'string') {
     return Buffer.from(data);
   }
 
@@ -494,14 +494,14 @@ function parseWebSocketFrame(buffer: Buffer): ParsedWebSocketFrame | null {
 
     const length = buffer.readBigUInt64BE(offset);
     if (length > BigInt(Number.MAX_SAFE_INTEGER)) {
-      throw new Error("WebSocket frame is too large");
+      throw new Error('WebSocket frame is too large');
     }
     payloadLength = Number(length);
     offset += 8;
   }
 
   if (!masked) {
-    throw new Error("Client WebSocket frames must be masked");
+    throw new Error('Client WebSocket frames must be masked');
   }
 
   if (buffer.length < offset + 4 + payloadLength) {
@@ -556,13 +556,13 @@ function parseClosePayload(payload: Buffer): { code: number; reason: string } {
   if (payload.length < 2) {
     return {
       code: CLOSE_NORMAL,
-      reason: "",
+      reason: '',
     };
   }
 
   return {
     code: payload.readUInt16BE(0),
-    reason: payload.subarray(2).toString("utf8"),
+    reason: payload.subarray(2).toString('utf8'),
   };
 }
 

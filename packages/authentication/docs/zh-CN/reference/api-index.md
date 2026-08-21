@@ -5,8 +5,8 @@
 以下导出同时存在于：
 
 ```ts
-import {} from "@nocobase/authentication";
-import {} from "@nocobase/authentication/server";
+import {} from '@nocobase/authentication';
+import {} from '@nocobase/authentication/server';
 ```
 
 ### Auth
@@ -35,7 +35,7 @@ function createAuthentication(options: CreateAuthenticationOptions): Auth;
 ### AuthOptions
 
 ```ts
-interface AuthOptions extends Omit<BetterAuthOptions, "database"> {
+interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
   connection: DatabaseConnection;
 }
 ```
@@ -46,7 +46,7 @@ Better Auth 配置加 NocoBase database connection。数据库实现由本包接
 ### CreateAuthenticationOptions
 
 ```ts
-interface CreateAuthenticationOptions extends Omit<AuthOptions, "connection"> {
+interface CreateAuthenticationOptions extends Omit<AuthOptions, 'connection'> {
   connection?: DatabaseConnection;
 }
 ```
@@ -96,7 +96,7 @@ function createAuthStorage(
     namespace?: string;
     provider?: string;
   },
-): NonNullable<BetterAuthOptions["secondaryStorage"]>;
+): NonNullable<BetterAuthOptions['secondaryStorage']>;
 ```
 
 将 NocoBase `Caching` 适配为 Better Auth secondary storage。默认 namespace
@@ -121,7 +121,7 @@ function databaseAdapter(
 ### authenticationMigration
 
 ```ts
-import { authenticationMigration } from "@nocobase/authentication/server";
+import { authenticationMigration } from '@nocobase/authentication/server';
 ```
 
 创建 `user`、`session`、`account`、`verification` Collection 的标准
@@ -130,7 +130,7 @@ import { authenticationMigration } from "@nocobase/authentication/server";
 ## 客户端入口
 
 ```ts
-import {} from "@nocobase/authentication/client";
+import {} from '@nocobase/authentication/client';
 ```
 
 ### AuthClient

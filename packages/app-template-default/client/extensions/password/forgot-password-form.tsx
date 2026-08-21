@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { ArrowLeft } from "lucide-react";
-import { useForgotPassword, useLink } from "@refinedev/core";
+import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { useForgotPassword, useLink } from '@refinedev/core';
 
-import { AuthLayout } from "@/extensions/password/auth-layout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AuthLayout } from '@/extensions/password/auth-layout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export const ForgotPasswordForm = () => {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState('');
   const Link = useLink();
   const { mutate: forgotPassword, isPending } = useForgotPassword();
 
@@ -21,41 +21,37 @@ export const ForgotPasswordForm = () => {
 
   return (
     <AuthLayout
-      title="Forgot password"
-      description="Enter your email to reset your password."
+      title='Forgot password'
+      description='Enter your email to reset your password.'
       footer={
         <Link
-          to="/login"
-          className="inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+          to='/login'
+          className='inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground'
         >
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className='size-4' />
           Back to sign in
         </Link>
       }
     >
-      <form onSubmit={handleForgotPassword} className="space-y-5">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+      <form onSubmit={handleForgotPassword} className='space-y-5'>
+        <div className='space-y-2'>
+          <Label htmlFor='email'>Email</Label>
           <Input
-            id="email"
-            type="email"
+            id='email'
+            type='email'
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            autoComplete="email"
+            autoComplete='email'
             autoFocus
             required
           />
         </div>
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={isPending}
-        >
-          {isPending ? "Sending…" : "Send reset link"}
+        <Button type='submit' className='w-full' disabled={isPending}>
+          {isPending ? 'Sending…' : 'Send reset link'}
         </Button>
       </form>
     </AuthLayout>
   );
 };
 
-ForgotPasswordForm.displayName = "ForgotPasswordForm";
+ForgotPasswordForm.displayName = 'ForgotPasswordForm';

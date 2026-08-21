@@ -1,76 +1,76 @@
-import type { DestinationStream } from "pino";
-import { describe, expect, it } from "vitest";
+import type { DestinationStream } from 'pino';
+import { describe, expect, it } from 'vitest';
 
-import { createLogger } from "../src/index.js";
+import { createLogger } from '../src/index.js';
 
-describe("createLogger", () => {
-  it("creates structured loggers and supports child bindings", () => {
+describe('createLogger', () => {
+  it('creates structured loggers and supports child bindings', () => {
     const output = createMemoryDestination();
     const logger = createLogger(
-      { level: "debug", base: { app: "test" } },
+      { level: 'debug', base: { app: 'test' } },
       output,
     );
 
     logger
-      .child({ module: "authentication" })
-      .debug({ requestId: "req-1" }, "signed in");
+      .child({ module: 'authentication' })
+      .debug({ requestId: 'req-1' }, 'signed in');
 
     expect(output.records()).toEqual([
       expect.objectContaining({
         level: 20,
-        app: "test",
-        module: "authentication",
-        requestId: "req-1",
-        msg: "signed in",
+        app: 'test',
+        module: 'authentication',
+        requestId: 'req-1',
+        msg: 'signed in',
       }),
     ]);
   });
 
-  it("redacts common credentials by default", () => {
+  it('redacts common credentials by default', () => {
     const output = createMemoryDestination();
     const logger = createLogger({}, output);
 
-    logger.info({ password: "secret", token: "session-token" }, "credentials");
+    logger.info({ password: 'secret', token: 'session-token' }, 'credentials');
 
     expect(output.records()[0]).toMatchObject({
-      password: "[REDACTED]",
-      token: "[REDACTED]",
+      password: '[REDACTED]',
+      token: '[REDACTED]',
     });
   });
 
-  it("allows default redaction to be disabled explicitly", () => {
+  it('allows default redaction to be disabled explicitly', () => {
     const output = createMemoryDestination();
     const logger = createLogger({ redact: false }, output);
 
-    logger.info({ password: "secret" }, "credentials");
+    logger.info({ password: 'secret' }, 'credentials');
 
-    expect(output.records()[0]).toMatchObject({ password: "secret" });
+    expect(output.records()[0]).toMatchObject({ password: 'secret' });
   });
 
-  it("merges custom and default redaction paths", () => {
+  it('merges custom and default redaction paths', () => {
     const output = createMemoryDestination();
-    const logger = createLogger({ redact: ["credentials.secret"] }, output);
+    const logger = createLogger({ redact: ['credentials.secret'] }, output);
 
     logger.info(
-      { password: "secret", credentials: { secret: "secret" } },
-      "credentials",
+      { password: 'secret', credentials: { secret: 'secret' } },
+      'credentials',
     );
 
     expect(output.records()[0]).toMatchObject({
-      password: "[REDACTED]",
-      credentials: { secret: "[REDACTED]" },
+      password: '[REDACTED]',
+      credentials: { secret: '[REDACTED]' },
     });
   });
 
-  it("rejects transport and destination together", () => {
+  it('rejects transport and destination together', () => {
     expect(() =>
       createLogger(
         {
-          transport: { target: "pino-pretty" },
+          transport: { target: 'pino-pretty' },
         },
         createMemoryDestination(),
       ),
-    ).toThrow("both transport and destination");
+    ).toThrow('both transport and destination');
   });
 });
 
@@ -86,8 +86,8 @@ function createMemoryDestination(): MemoryDestination {
     },
     records(): Array<Record<string, unknown>> {
       return lines
-        .join("")
-        .split("\n")
+        .join('')
+        .split('\n')
         .filter(Boolean)
         .map((line) => JSON.parse(line) as Record<string, unknown>);
     },

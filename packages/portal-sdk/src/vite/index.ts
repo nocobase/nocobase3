@@ -1,11 +1,11 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import semver from "semver";
-import type { Plugin, RenderBuiltAssetUrl, ResolvedConfig } from "vite";
+import semver from 'semver';
+import type { Plugin, RenderBuiltAssetUrl, ResolvedConfig } from 'vite';
 
-import { formatPortalTemplateCompatibilityError } from "../compat/index.ts";
+import { formatPortalTemplateCompatibilityError } from '../compat/index.ts';
 
 type PortalPackage = {
   name?: string;
@@ -17,11 +17,11 @@ type PortalPackage = {
 };
 
 const readPackage = (packagePath: string): PortalPackage =>
-  JSON.parse(fs.readFileSync(packagePath, "utf8")) as PortalPackage;
+  JSON.parse(fs.readFileSync(packagePath, 'utf8')) as PortalPackage;
 
 const sdkPackagePath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../package.json"
+  '../../package.json',
 );
 
 export const portalSdkCompatibilityPlugin = ({
@@ -29,13 +29,13 @@ export const portalSdkCompatibilityPlugin = ({
 }: {
   root?: string;
 } = {}): Plugin => ({
-  name: "nocobase-portal-sdk-compatibility",
+  name: 'nocobase-portal-sdk-compatibility',
   configResolved() {
-    const projectPackage = readPackage(path.resolve(root, "package.json"));
+    const projectPackage = readPackage(path.resolve(root, 'package.json'));
     const sdkPackage = readPackage(sdkPackagePath);
     const defaultTemplateVersion =
       projectPackage.nocobase?.defaultTemplateVersion ??
-      (projectPackage.name === "@nocobase/portal-template-default"
+      (projectPackage.name === '@nocobase/portal-template-default'
         ? projectPackage.version
         : undefined);
     const supportedDefaultTemplateRange =
@@ -43,36 +43,38 @@ export const portalSdkCompatibilityPlugin = ({
 
     if (!defaultTemplateVersion) {
       throw new Error(
-        "Missing nocobase.defaultTemplateVersion in the project package.json."
+        'Missing nocobase.defaultTemplateVersion in the project package.json.',
       );
     }
     if (!supportedDefaultTemplateRange || !sdkPackage.version) {
       throw new Error(
-        "The installed @nocobase/portal-sdk has incomplete compatibility metadata."
+        'The installed @nocobase/portal-sdk has incomplete compatibility metadata.',
       );
     }
     if (!semver.valid(defaultTemplateVersion)) {
       throw new Error(
-        `Invalid nocobase.defaultTemplateVersion: ${defaultTemplateVersion}`
+        `Invalid nocobase.defaultTemplateVersion: ${defaultTemplateVersion}`,
       );
     }
     if (!semver.valid(sdkPackage.version)) {
       throw new Error(
-        `Invalid @nocobase/portal-sdk version: ${sdkPackage.version}`
+        `Invalid @nocobase/portal-sdk version: ${sdkPackage.version}`,
       );
     }
     if (!semver.validRange(supportedDefaultTemplateRange)) {
       throw new Error(
-        `Invalid SDK supportedDefaultTemplateRange: ${supportedDefaultTemplateRange}`
+        `Invalid SDK supportedDefaultTemplateRange: ${supportedDefaultTemplateRange}`,
       );
     }
-    if (!semver.satisfies(defaultTemplateVersion, supportedDefaultTemplateRange)) {
+    if (
+      !semver.satisfies(defaultTemplateVersion, supportedDefaultTemplateRange)
+    ) {
       throw new Error(
         formatPortalTemplateCompatibilityError({
           defaultTemplateVersion,
           sdkVersion: sdkPackage.version,
           supportedDefaultTemplateRange,
-        })
+        }),
       );
     }
   },
@@ -89,21 +91,21 @@ const defaultRuntimeConfig = `<!-- nocobase-runtime-config:start -->
 <!-- nocobase-runtime-config:end -->
 `;
 
-const getBasePrefix = (base: string) => base.replace(/\/$/, "");
+const getBasePrefix = (base: string) => base.replace(/\/$/, '');
 
 const renderPortalBuiltUrl: RenderBuiltAssetUrl = (
   filename,
-  { hostType, ssr }
+  { hostType, ssr },
 ) => {
   if (ssr) return undefined;
 
-  if (hostType === "js") {
+  if (hostType === 'js') {
     return {
       runtime: `new URL(${JSON.stringify(filename)}, new URL(window.NOCOBASE_PORTAL_BASE || "/", window.location.origin)).href`,
     };
   }
 
-  if (hostType === "css") {
+  if (hostType === 'css') {
     return { relative: true };
   }
 
@@ -116,11 +118,14 @@ const stripBaseFromIndexHtml = (html: string, base: string) => {
 
   const attributePattern = /\b(src|href|content)=(["'])\/(?!\/)([^"']*)\2/g;
 
-  return html.replace(attributePattern, (match, attribute, quote, assetPath) => {
-    const value = `/${assetPath}`;
-    if (!value.startsWith(`${basePrefix}/`)) return match;
-    return `${attribute}=${quote}${value.slice(basePrefix.length) || "/"}${quote}`;
-  });
+  return html.replace(
+    attributePattern,
+    (match, attribute, quote, assetPath) => {
+      const value = `/${assetPath}`;
+      if (!value.startsWith(`${basePrefix}/`)) return match;
+      return `${attribute}=${quote}${value.slice(basePrefix.length) || '/'}${quote}`;
+    },
+  );
 };
 
 export const portalRawIndexHtmlPlugin = ({
@@ -133,7 +138,7 @@ export const portalRawIndexHtmlPlugin = ({
   let config: ResolvedConfig | undefined;
 
   return {
-    name: "nocobase-copy-raw-index-html",
+    name: 'nocobase-copy-raw-index-html',
     config() {
       return {
         experimental: {
@@ -145,13 +150,13 @@ export const portalRawIndexHtmlPlugin = ({
       config = resolvedConfig;
     },
     closeBundle() {
-      const distDir = path.resolve(root, config?.build.outDir ?? "dist");
-      const indexHtml = path.join(distDir, "index.html");
-      const rawIndexHtml = path.join(distDir, "index.raw.html");
+      const distDir = path.resolve(root, config?.build.outDir ?? 'dist');
+      const indexHtml = path.join(distDir, 'index.html');
+      const rawIndexHtml = path.join(distDir, 'index.raw.html');
 
       if (!fs.existsSync(indexHtml)) return;
 
-      const html = fs.readFileSync(indexHtml, "utf8");
+      const html = fs.readFileSync(indexHtml, 'utf8');
       const rawHtml = stripBaseFromIndexHtml(html, base);
       const moduleScriptPattern = /<script\s+[^>]*type=["']module["'][^>]*>/i;
       const moduleScriptMatch = rawHtml.match(moduleScriptPattern);
@@ -163,7 +168,7 @@ export const portalRawIndexHtmlPlugin = ({
 
       fs.writeFileSync(
         rawIndexHtml,
-        `${rawHtml.slice(0, moduleScriptMatch.index)}${defaultRuntimeConfig}${rawHtml.slice(moduleScriptMatch.index)}`
+        `${rawHtml.slice(0, moduleScriptMatch.index)}${defaultRuntimeConfig}${rawHtml.slice(moduleScriptMatch.index)}`,
       );
     },
   };

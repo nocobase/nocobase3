@@ -1,5 +1,5 @@
-import type { PropsWithChildren } from "react";
-import { ChatSurface } from "./chat-surface";
+import type { PropsWithChildren } from 'react';
+import { ChatSurface } from './chat-surface';
 
 export function ChatDialog({
   open,
@@ -10,7 +10,7 @@ export function ChatDialog({
   onOpenChange: (open: boolean) => void;
 }>) {
   return (
-    <ChatSurface open={open} variant="dialog" onOpenChange={onOpenChange}>
+    <ChatSurface open={open} variant='dialog' onOpenChange={onOpenChange}>
       {children}
     </ChatSurface>
   );

@@ -9,12 +9,12 @@ Collection Builder 当前支持四种关系字段：
 
 ## 行为表
 
-| Relation | 创建本地列 | 默认创建索引 | 默认创建外键约束 | Metadata |
-| --- | --- | --- | --- | --- |
-| `belongsTo` | 是 | 是 | 否 | 是 |
-| `hasOne` | 否 | 否 | 否 | 是 |
-| `hasMany` | 否 | 否 | 否 | 是 |
-| `belongsToMany` | 否 | 否 | 否 | 是 |
+| Relation        | 创建本地列 | 默认创建索引 | 默认创建外键约束 | Metadata |
+| --------------- | ---------- | ------------ | ---------------- | -------- |
+| `belongsTo`     | 是         | 是           | 否               | 是       |
+| `hasOne`        | 否         | 否           | 否               | 是       |
+| `hasMany`       | 否         | 否           | 否               | 是       |
+| `belongsToMany` | 否         | 否           | 否               | 是       |
 
 ## belongsTo
 
@@ -97,16 +97,16 @@ collection
 
 关系参数只引用 Collection 和 Field 层面的 `name`：
 
-| 参数 | 逻辑作用域 |
-| --- | --- |
-| `target` | 目标 Collection 的 `name` |
-| `through` | 中间表 Collection 的 `name` |
-| `belongsTo.foreignKey` | 当前 Collection 的本地外键字段 `name` |
-| `hasOne.foreignKey` / `hasMany.foreignKey` | target Collection 上指回当前 Collection 的字段 `name` |
-| `belongsToMany.foreignKey` | through Collection 上指向 source Collection 的字段 `name` |
-| `belongsToMany.otherKey` | through Collection 上指向 target Collection 的字段 `name` |
-| `sourceKey` | source Collection 上的字段 `name` |
-| `targetKey` | target Collection 上的字段 `name` |
+| 参数                                       | 逻辑作用域                                                |
+| ------------------------------------------ | --------------------------------------------------------- |
+| `target`                                   | 目标 Collection 的 `name`                                 |
+| `through`                                  | 中间表 Collection 的 `name`                               |
+| `belongsTo.foreignKey`                     | 当前 Collection 的本地外键字段 `name`                     |
+| `hasOne.foreignKey` / `hasMany.foreignKey` | target Collection 上指回当前 Collection 的字段 `name`     |
+| `belongsToMany.foreignKey`                 | through Collection 上指向 source Collection 的字段 `name` |
+| `belongsToMany.otherKey`                   | through Collection 上指向 target Collection 的字段 `name` |
+| `sourceKey`                                | source Collection 上的字段 `name`                         |
+| `targetKey`                                | target Collection 上的字段 `name`                         |
 
 物理表名和物理列名只通过 `tableName`、`columnName` 表达。即使数据库列叫 `creator_id`，关系里也应写逻辑字段名：
 

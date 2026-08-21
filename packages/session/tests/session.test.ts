@@ -1,7 +1,7 @@
-import { setTimeout as sleep } from "node:timers/promises";
+import { setTimeout as sleep } from 'node:timers/promises';
 
-import { Hono } from "hono";
-import { describe, expect, it } from "vitest";
+import { Hono } from 'hono';
+import { describe, expect, it } from 'vitest';
 
 import {
   assertDefaultSessionStore,
@@ -11,22 +11,22 @@ import {
   type AppSessionConfig,
   type SessionData,
   type SessionEnv,
-} from "../src/index.js";
+} from '../src/index.js';
 
 type TestSessionData = SessionData & {
   userId?: number;
   count?: number;
 };
 
-describe("createSessionManager", () => {
-  it("persists session data across Hono requests", async () => {
+describe('createSessionManager', () => {
+  it('persists session data across Hono requests', async () => {
     const app = createTestApp();
 
-    const login = await app.request("http://localhost/login");
+    const login = await app.request('http://localhost/login');
     const cookie = firstCookie(login);
-    expect(cookie).toContain("nocobase_session=");
+    expect(cookie).toContain('nocobase_session=');
 
-    const me = await app.request("http://localhost/me", {
+    const me = await app.request('http://localhost/me', {
       headers: {
         cookie,
       },
@@ -38,19 +38,19 @@ describe("createSessionManager", () => {
     });
   });
 
-  it("updates and destroys an existing session", async () => {
+  it('updates and destroys an existing session', async () => {
     const app = createTestApp();
-    const login = await app.request("http://localhost/login");
+    const login = await app.request('http://localhost/login');
     const cookie = firstCookie(login);
 
-    const bump = await app.request("http://localhost/bump", {
+    const bump = await app.request('http://localhost/bump', {
       headers: {
         cookie,
       },
     });
     const updatedCookie = firstCookie(bump);
 
-    const me = await app.request("http://localhost/me", {
+    const me = await app.request('http://localhost/me', {
       headers: {
         cookie: updatedCookie,
       },
@@ -60,15 +60,15 @@ describe("createSessionManager", () => {
       count: 2,
     });
 
-    const logout = await app.request("http://localhost/logout", {
+    const logout = await app.request('http://localhost/logout', {
       headers: {
         cookie: updatedCookie,
       },
     });
 
-    expect(logout.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
 
-    const afterLogout = await app.request("http://localhost/me", {
+    const afterLogout = await app.request('http://localhost/me', {
       headers: {
         cookie: updatedCookie,
       },
@@ -76,11 +76,11 @@ describe("createSessionManager", () => {
     await expect(afterLogout.json()).resolves.toBeNull();
   });
 
-  it("sweeps expired stored sessions", async () => {
+  it('sweeps expired stored sessions', async () => {
     const manager = createSessionManager<TestSessionData>(createConfig());
     const now = Date.now();
 
-    await manager.store.set("expired", {
+    await manager.store.set('expired', {
       data: {
         userId: 1,
       },
@@ -88,7 +88,7 @@ describe("createSessionManager", () => {
       updatedAt: now - 2000,
       expiresAt: now - 1000,
     });
-    await manager.store.set("active", {
+    await manager.store.set('active', {
       data: {
         userId: 2,
       },
@@ -98,8 +98,8 @@ describe("createSessionManager", () => {
     });
 
     await expect(manager.sweepExpiredSessions(now)).resolves.toBe(1);
-    await expect(manager.store.get("expired")).resolves.toBeNull();
-    await expect(manager.store.get("active")).resolves.toEqual({
+    await expect(manager.store.get('expired')).resolves.toBeNull();
+    await expect(manager.store.get('active')).resolves.toEqual({
       data: {
         userId: 2,
       },
@@ -111,45 +111,45 @@ describe("createSessionManager", () => {
     await manager.dispose();
   });
 
-  it("throws when the default store is missing", () => {
+  it('throws when the default store is missing', () => {
     expect(() =>
       assertDefaultSessionStore({
         ...createConfig(),
-        default: "missing",
+        default: 'missing',
       }),
     ).toThrow('Default session store "missing" is not configured.');
   });
 
-  it("parses session durations", () => {
-    expect(parseSessionDuration("2h", "Test")).toBe(2 * 60 * 60 * 1000);
-    expect(parseSessionDuration("30 minutes", "Test")).toBe(30 * 60 * 1000);
-    expect(parseSessionDuration(5000, "Test")).toBe(5000);
-    expect(() => parseSessionDuration("soon", "Test")).toThrow(
+  it('parses session durations', () => {
+    expect(parseSessionDuration('2h', 'Test')).toBe(2 * 60 * 60 * 1000);
+    expect(parseSessionDuration('30 minutes', 'Test')).toBe(30 * 60 * 1000);
+    expect(parseSessionDuration(5000, 'Test')).toBe(5000);
+    expect(() => parseSessionDuration('soon', 'Test')).toThrow(
       'Test session duration "soon" is invalid.',
     );
   });
 
-  it("expires idle sessions on read", async () => {
+  it('expires idle sessions on read', async () => {
     const app = createTestApp({
       lifetime: {
-        absolute: "1h",
-        inactivity: "20ms",
+        absolute: '1h',
+        inactivity: '20ms',
         rolling: true,
       },
     });
 
-    const login = await app.request("http://localhost/login");
+    const login = await app.request('http://localhost/login');
     const cookie = firstCookie(login);
     await sleep(40);
 
-    const me = await app.request("http://localhost/me", {
+    const me = await app.request('http://localhost/me', {
       headers: {
         cookie,
       },
     });
 
     await expect(me.json()).resolves.toBeNull();
-    expect(me.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(me.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 });
 
@@ -162,9 +162,9 @@ function createTestApp(
   });
   const app = new Hono<SessionEnv<TestSessionData>>();
 
-  app.use("*", createSessionMiddleware(manager));
+  app.use('*', createSessionMiddleware(manager));
 
-  app.get("/login", async (context) => {
+  app.get('/login', async (context) => {
     await context.var.session.update({
       userId: 1,
       count: 1,
@@ -176,7 +176,7 @@ function createTestApp(
     });
   });
 
-  app.get("/bump", async (context) => {
+  app.get('/bump', async (context) => {
     await context.var.session.update((previous) => ({
       userId: previous?.userId,
       count: Number(previous?.count ?? 0) + 1,
@@ -185,11 +185,11 @@ function createTestApp(
     return context.json(await context.var.session.get());
   });
 
-  app.get("/me", async (context) => {
+  app.get('/me', async (context) => {
     return context.json(await context.var.session.get());
   });
 
-  app.get("/logout", async (context) => {
+  app.get('/logout', async (context) => {
     await context.var.session.destroy();
     return context.json({
       ok: true,
@@ -202,33 +202,33 @@ function createTestApp(
 function createConfig(): AppSessionConfig {
   return {
     enabled: true,
-    default: "memory",
+    default: 'memory',
     stores: {
       memory: {
-        driver: "memory",
-        base: "tests:session:",
+        driver: 'memory',
+        base: 'tests:session:',
       },
       null: {
-        driver: "null",
+        driver: 'null',
       },
     },
     cookie: {
-      name: "nocobase_session",
-      path: "/",
+      name: 'nocobase_session',
+      path: '/',
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: 'lax',
     },
     lifetime: {
-      absolute: "2h",
+      absolute: '2h',
       rolling: true,
     },
-    secret: "test-session-secret",
+    secret: 'test-session-secret',
     gcLottery: [0, 100],
   };
 }
 
 function firstCookie(response: Response): string {
-  const setCookie = response.headers.get("set-cookie");
+  const setCookie = response.headers.get('set-cookie');
   expect(setCookie).toBeTruthy();
-  return setCookie?.split(";")[0] ?? "";
+  return setCookie?.split(';')[0] ?? '';
 }

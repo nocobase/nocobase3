@@ -21,5 +21,8 @@ const contentTypes: Record<string, string> = {
 };
 
 export function contentTypeFor(filePath: string): string {
-  return contentTypes[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+  return (
+    contentTypes[path.extname(filePath).toLowerCase()] ??
+    'application/octet-stream'
+  );
 }

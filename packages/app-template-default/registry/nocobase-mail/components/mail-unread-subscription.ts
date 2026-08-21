@@ -1,5 +1,5 @@
 export function createMailUnreadPollingSubscription(
-  onActiveChange: (active: boolean) => void
+  onActiveChange: (active: boolean) => void,
 ) {
   let subscriberCount = 0;
 

@@ -1,33 +1,33 @@
-import { authProvider } from "@/extensions/password/auth";
+import { authProvider } from '@/extensions/password/auth';
 import {
   isNocoBaseServiceError,
   nocobaseClient,
   nocobaseWebSocket,
   normalizeNocoBaseRuntimeError,
-} from "@nocobase/portal-sdk/client";
-import { portalRuntimeStore } from "@nocobase/portal-sdk/runtime";
-import { resolveAppUrl } from "@nocobase/app-sdk";
+} from '@nocobase/portal-sdk/client';
+import { portalRuntimeStore } from '@nocobase/portal-sdk/runtime';
+import { resolveAppUrl } from '@nocobase/app-sdk';
 import {
   useEffect,
   useRef,
   useSyncExternalStore,
   type PropsWithChildren,
-} from "react";
+} from 'react';
 
-import { NocoBaseRuntimeStatus } from "@/extensions/nocobase-error-boundary";
+import { NocoBaseRuntimeStatus } from '@/extensions/nocobase-error-boundary';
 
 export function AppRuntimeGate({ children }: PropsWithChildren) {
   const runtimeState = useSyncExternalStore(
     portalRuntimeStore.subscribe,
     portalRuntimeStore.getState,
-    portalRuntimeStore.getState
+    portalRuntimeStore.getState,
   );
   const runtimeError = runtimeState.error;
   const errorRef = useRef(runtimeError);
   const hasLoadErrorRef = useRef(false);
   errorRef.current = runtimeError;
   if (
-    runtimeError?.source !== "websocket" &&
+    runtimeError?.source !== 'websocket' &&
     runtimeError &&
     isNocoBaseServiceError(runtimeError)
   ) {
@@ -45,15 +45,15 @@ export function AppRuntimeGate({ children }: PropsWithChildren) {
         return;
       }
 
-      if (message.type !== "maintaining") {
+      if (message.type !== 'maintaining') {
         return;
       }
       const nextError = normalizeNocoBaseRuntimeError(
         message.payload,
-        "websocket"
+        'websocket',
       );
 
-      if (nextError.code === "APP_RUNNING") {
+      if (nextError.code === 'APP_RUNNING') {
         const currentError = errorRef.current;
         if (currentError && !isNocoBaseServiceError(currentError)) {
           return;
@@ -79,10 +79,10 @@ export function AppRuntimeGate({ children }: PropsWithChildren) {
       }
     };
 
-    window.addEventListener("online", handleOnline);
+    window.addEventListener('online', handleOnline);
     nocobaseWebSocket.connect();
     return () => {
-      window.removeEventListener("online", handleOnline);
+      window.removeEventListener('online', handleOnline);
       unsubscribeMessages();
       nocobaseWebSocket.close();
     };
@@ -91,8 +91,8 @@ export function AppRuntimeGate({ children }: PropsWithChildren) {
   useEffect(() => {
     if (
       runtimeError &&
-      ["ROLE_NOT_FOUND_ERR", "ROLE_NOT_FOUND_FOR_USER"].includes(
-        runtimeError.code ?? ""
+      ['ROLE_NOT_FOUND_ERR', 'ROLE_NOT_FOUND_FOR_USER'].includes(
+        runtimeError.code ?? '',
       )
     ) {
       errorRef.current = undefined;
@@ -119,7 +119,7 @@ export function AppRuntimeGate({ children }: PropsWithChildren) {
       nocobaseClient.clearAuthentication();
       errorRef.current = undefined;
       portalRuntimeStore.clear();
-      window.location.assign(resolveAppUrl("/login"));
+      window.location.assign(resolveAppUrl('/login'));
     }
   };
 
@@ -128,9 +128,7 @@ export function AppRuntimeGate({ children }: PropsWithChildren) {
       error={runtimeError}
       onRetry={handleRetry}
       onLogout={
-        runtimeError.code === "USER_HAS_NO_ROLES_ERR"
-          ? handleLogout
-          : undefined
+        runtimeError.code === 'USER_HAS_NO_ROLES_ERR' ? handleLogout : undefined
       }
       context={{
         templateName: __PORTAL_TEMPLATE_NAME__,

@@ -30,9 +30,9 @@ or third-party renderers. Keep normal API errors in their owning page or region
 state instead of escalating every request failure to an error boundary.
 
 ```tsx
-import { NocoBaseErrorBoundary } from "@/extensions/nocobase-error-boundary";
+import { NocoBaseErrorBoundary } from '@/extensions/nocobase-error-boundary';
 
-<NocoBaseErrorBoundary variant="region" resetKeys={[record.id]}>
+<NocoBaseErrorBoundary variant='region' resetKeys={[record.id]}>
   <RiskyRegion />
 </NocoBaseErrorBoundary>;
 ```

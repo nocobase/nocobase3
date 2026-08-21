@@ -1,8 +1,8 @@
-import type { ChatTransport, UIMessage } from "ai";
+import type { ChatTransport, UIMessage } from 'ai';
 
-export const AI_DRAFT_CONVERSATION_ID = "__draft__";
+export const AI_DRAFT_CONVERSATION_ID = '__draft__';
 
-export type AIConfigurationStatus = "loading" | "ready" | "error";
+export type AIConfigurationStatus = 'loading' | 'ready' | 'error';
 
 export type AIEmployee = {
   username: string;
@@ -29,7 +29,7 @@ export type AIEmployee = {
   };
 };
 
-export type AIChatAttachmentStatus = "uploading" | "done" | "error";
+export type AIChatAttachmentStatus = 'uploading' | 'done' | 'error';
 
 export type AIChatAttachment = {
   uid: string;
@@ -108,7 +108,7 @@ export type AIEmployeeTaskTrigger = {
 export type AIChatTaskRuntime = {
   systemMessage?: string;
   workContext: AIWorkContextItem[];
-  skillSettings?: AIEmployeeTask["skillSettings"];
+  skillSettings?: AIEmployeeTask['skillSettings'];
   webSearch?: boolean;
 };
 
@@ -124,14 +124,14 @@ export type AIChatMessageMetadata = {
 
 export type AIToolCallApproval = {
   required: boolean;
-  status?: "pending" | "approved" | "rejected";
+  status?: 'pending' | 'approved' | 'rejected';
 };
 
 export type AIToolCallDecision = {
   messageId: string;
   toolCallId: string;
   toolName: string;
-  decision: "approve" | "reject" | "edit";
+  decision: 'approve' | 'reject' | 'edit';
   input?: unknown;
 };
 
@@ -147,7 +147,7 @@ export type AIToolCallInvocationContext = {
 
 export type AIToolInvoker = (
   input: unknown,
-  context: AIToolCallInvocationContext
+  context: AIToolCallInvocationContext,
 ) => unknown | Promise<unknown>;
 
 export type AIToolInvokerMap = Record<string, AIToolInvoker>;
@@ -155,7 +155,7 @@ export type AIToolInvokerMap = Record<string, AIToolInvoker>;
 export type AISubAgentConversation = {
   sessionId: string;
   username: string;
-  status: "pending" | "completed";
+  status: 'pending' | 'completed';
   messages: AIChatMessage[];
 };
 
@@ -179,5 +179,5 @@ export type AITransportFactoryOptions = {
 };
 
 export type AITransportFactory = (
-  options: AITransportFactoryOptions
+  options: AITransportFactoryOptions,
 ) => ChatTransport<AIChatMessage>;

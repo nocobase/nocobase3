@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn } from 'node:child_process';
 import {
   copyFile,
   mkdir,
@@ -6,9 +6,9 @@ import {
   readFile,
   rm,
   unlink,
-} from "node:fs/promises";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+} from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 interface PackageManifest {
   name: string;
@@ -16,39 +16,39 @@ interface PackageManifest {
 }
 
 const isPackageManifest = (value: unknown): value is PackageManifest =>
-  typeof value === "object" &&
+  typeof value === 'object' &&
   value !== null &&
-  "name" in value &&
-  typeof value.name === "string" &&
-  "version" in value &&
-  typeof value.version === "string";
+  'name' in value &&
+  typeof value.name === 'string' &&
+  'version' in value &&
+  typeof value.version === 'string';
 
-const packageRoot: string = path.resolve(import.meta.dirname, "..");
+const packageRoot: string = path.resolve(import.meta.dirname, '..');
 const packDirectoryValue: string | undefined = process.env.PACK_DIR;
 
 if (!packDirectoryValue) {
-  throw new Error("PACK_DIR must be set before running pack:check.");
+  throw new Error('PACK_DIR must be set before running pack:check.');
 }
 
 const packDirectory: string = path.resolve(packDirectoryValue);
 const parsedPackageManifest: unknown = JSON.parse(
-  await readFile(path.join(packageRoot, "package.json"), "utf8"),
+  await readFile(path.join(packageRoot, 'package.json'), 'utf8'),
 );
 
 if (!isPackageManifest(parsedPackageManifest)) {
   throw new TypeError(
-    "package.json must contain string name and version fields.",
+    'package.json must contain string name and version fields.',
   );
 }
 
 const packageManifest: PackageManifest = parsedPackageManifest;
 const generatedArchiveName: string = `${packageManifest.name
-  .replace(/^@/, "")
-  .replaceAll("/", "-")}-${packageManifest.version}.tgz`;
+  .replace(/^@/, '')
+  .replaceAll('/', '-')}-${packageManifest.version}.tgz`;
 const generatedArchive: string = path.join(packDirectory, generatedArchiveName);
 const checkedArchive: string = path.join(
   packDirectory,
-  "nocobase-dev-config.tgz",
+  'nocobase-dev-config.tgz',
 );
 
 const run = (
@@ -59,11 +59,11 @@ const run = (
   new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      stdio: "inherit",
+      stdio: 'inherit',
     });
 
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
+    child.once('error', reject);
+    child.once('exit', (code, signal) => {
       if (code === 0) {
         resolve();
         return;
@@ -71,7 +71,7 @@ const run = (
 
       reject(
         new Error(
-          `${command} ${args.join(" ")} failed with ${
+          `${command} ${args.join(' ')} failed with ${
             signal ? `signal ${signal}` : `exit code ${code}`
           }.`,
         ),
@@ -80,28 +80,28 @@ const run = (
   });
 
 await mkdir(packDirectory, { recursive: true });
-await run("pnpm", ["pack", "--pack-destination", packDirectory]);
+await run('pnpm', ['pack', '--pack-destination', packDirectory]);
 await copyFile(generatedArchive, checkedArchive);
 await unlink(generatedArchive);
 
 const smokeDirectory: string = await mkdtemp(
-  path.join(packageRoot, ".pack-check-"),
+  path.join(packageRoot, '.pack-check-'),
 );
 
 try {
-  await run("tar", ["-xzf", checkedArchive, "-C", smokeDirectory]);
+  await run('tar', ['-xzf', checkedArchive, '-C', smokeDirectory]);
 
   const runtimeEntries: string[] = [
-    "eslint/index.js",
-    "prettier/index.js",
-    "vitest/node.js",
-    "vitest/react.js",
-    "vite/portal.js",
+    'eslint/index.js',
+    'prettier/index.js',
+    'vitest/node.js',
+    'vitest/react.js',
+    'vite/portal.js',
   ];
 
   for (const runtimeEntry of runtimeEntries) {
     const entryUrl = pathToFileURL(
-      path.join(smokeDirectory, "package", "dist", runtimeEntry),
+      path.join(smokeDirectory, 'package', 'dist', runtimeEntry),
     );
     await import(entryUrl.href);
   }
@@ -109,18 +109,18 @@ try {
   await rm(smokeDirectory, { force: true, recursive: true });
 }
 
-await run("pnpm", ["exec", "publint", "."]);
-await run("pnpm", [
-  "exec",
-  "attw",
+await run('pnpm', ['exec', 'publint', '.']);
+await run('pnpm', [
+  'exec',
+  'attw',
   checkedArchive,
-  "--profile",
-  "esm-only",
-  "--entrypoints",
-  "eslint",
-  "prettier",
-  "vitest/node",
-  "vitest/react",
-  "vitest/react-setup",
-  "vite/portal",
+  '--profile',
+  'esm-only',
+  '--entrypoints',
+  'eslint',
+  'prettier',
+  'vitest/node',
+  'vitest/react',
+  'vitest/react-setup',
+  'vite/portal',
 ]);

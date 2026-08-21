@@ -1,6 +1,6 @@
-import { translate } from "@nocobase/portal-sdk/i18n";
+import { translate } from '@nocobase/portal-sdk/i18n';
 
-import { NOCOBASE_ERROR_BOUNDARY_I18N_NAMESPACE } from "./locales";
+import { NOCOBASE_ERROR_BOUNDARY_I18N_NAMESPACE } from './locales';
 
 export type ErrorBoundaryLabels = {
   backHome: string;
@@ -15,33 +15,33 @@ export type ErrorBoundaryLabels = {
 };
 
 const defaults: Record<keyof ErrorBoundaryLabels, string> = {
-  title: "Something went wrong",
+  title: 'Something went wrong',
   description:
-    "This part of the application could not be displayed. Copy the diagnostic information if you need help.",
-  details: "Diagnostic information",
-  copyDetails: "Copy diagnostic information",
-  copied: "Copied",
-  copyFailed: "Copy failed",
-  retry: "Try again",
-  reload: "Reload page",
-  backHome: "Back to homepage",
+    'This part of the application could not be displayed. Copy the diagnostic information if you need help.',
+  details: 'Diagnostic information',
+  copyDetails: 'Copy diagnostic information',
+  copied: 'Copied',
+  copyFailed: 'Copy failed',
+  retry: 'Try again',
+  reload: 'Reload page',
+  backHome: 'Back to homepage',
 };
 
 const keys: Record<keyof ErrorBoundaryLabels, string> = {
-  title: "boundary.title",
-  description: "boundary.description",
-  details: "actions.details",
-  copyDetails: "actions.copyDetails",
-  copied: "actions.copied",
-  copyFailed: "actions.copyFailed",
-  retry: "actions.retry",
-  reload: "actions.reload",
-  backHome: "actions.backHome",
+  title: 'boundary.title',
+  description: 'boundary.description',
+  details: 'actions.details',
+  copyDetails: 'actions.copyDetails',
+  copied: 'actions.copied',
+  copyFailed: 'actions.copyFailed',
+  retry: 'actions.retry',
+  reload: 'actions.reload',
+  backHome: 'actions.backHome',
 };
 
 export function getErrorBoundaryLabels(
   locale?: string,
-  overrides: Partial<ErrorBoundaryLabels> = {}
+  overrides: Partial<ErrorBoundaryLabels> = {},
 ): ErrorBoundaryLabels {
   const translated = Object.fromEntries(
     (Object.keys(keys) as Array<keyof ErrorBoundaryLabels>).map((name) => [
@@ -52,9 +52,9 @@ export function getErrorBoundaryLabels(
           ns: NOCOBASE_ERROR_BOUNDARY_I18N_NAMESPACE,
           ...(locale ? { lng: locale } : {}),
         },
-        defaults[name]
+        defaults[name],
       ),
-    ])
+    ]),
   ) as ErrorBoundaryLabels;
 
   return { ...translated, ...overrides };

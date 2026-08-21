@@ -6,20 +6,20 @@ import {
   useMemo,
   useState,
   type PropsWithChildren,
-} from "react";
-import { nocobaseAIService, type AIService } from "../services";
-import { NocoBaseChatTransport } from "./chat-transport";
-import { useAIChatController, type AIChatController } from "./chat-controller";
+} from 'react';
+import { nocobaseAIService, type AIService } from '../services';
+import { NocoBaseChatTransport } from './chat-transport';
+import { useAIChatController, type AIChatController } from './chat-controller';
 import {
   AIFormRegistryProvider,
   createFormFillerInvoker,
   useAIFormRegistry,
-} from "./form-registry";
+} from './form-registry';
 import {
   AIFrontendToolRegistryProvider,
   createFrontendToolInvokers,
   useAIFrontendToolRegistry,
-} from "./frontend-tool-registry";
+} from './frontend-tool-registry';
 import type {
   AIConfigurationStatus,
   AIConversation,
@@ -28,18 +28,18 @@ import type {
   AIToolCallInvocationContext,
   AIToolInvokerMap,
   AITransportFactory,
-} from "./types";
+} from './types';
 
 const UNCONFIGURED_MODEL: AIModel = {
-  value: "__unconfigured__",
-  label: "No enabled model",
+  value: '__unconfigured__',
+  label: 'No enabled model',
   configured: false,
 };
 
 const RESERVED_TOOL_INVOKER_NAMES = [
-  "formFiller",
-  "loadFrontendTool",
-  "executeFrontendTool",
+  'formFiller',
+  'loadFrontendTool',
+  'executeFrontendTool',
 ] as const;
 
 type AIProviderValue = {
@@ -51,23 +51,23 @@ type AIProviderValue = {
   models: AIModel[];
   globalController: AIChatController;
   createTransport: AITransportFactory;
-  uploadFile: AIService["uploadFile"];
+  uploadFile: AIService['uploadFile'];
   updateEmployeeUserPrompt: (username: string, prompt: string) => Promise<void>;
   listConversations: (keyword?: string) => Promise<AIConversation[]>;
-  getConversationMessages: AIService["getConversationMessages"];
-  getConversationActiveState: AIService["getConversationActiveState"];
+  getConversationMessages: AIService['getConversationMessages'];
+  getConversationActiveState: AIService['getConversationActiveState'];
   updateConversationTitle: (sessionId: string, title: string) => Promise<void>;
   destroyConversation: (sessionId: string) => Promise<void>;
-  updateToolCallDecision: AIService["updateToolCallDecision"];
+  updateToolCallDecision: AIService['updateToolCallDecision'];
   invokeToolCall: (
     toolName: string,
     input: unknown,
-    context: AIToolCallInvocationContext
+    context: AIToolCallInvocationContext,
   ) => Promise<{ handled: boolean; result?: unknown }>;
   canAutoApproveToolCall: (
     toolName: string,
     input: unknown,
-    context: AIToolCallInvocationContext
+    context: AIToolCallInvocationContext,
   ) => boolean;
 };
 
@@ -101,24 +101,21 @@ function AIProviderRuntime({
 }: AIProviderProps) {
   const formRegistry = useAIFormRegistry();
   const frontendToolRegistry = useAIFrontendToolRegistry();
-  const resolvedToolInvokers = useMemo<AIToolInvokerMap>(
-    () => {
-      const reservedToolCollision = RESERVED_TOOL_INVOKER_NAMES.find(
-        (name) => toolInvokers?.[name]
+  const resolvedToolInvokers = useMemo<AIToolInvokerMap>(() => {
+    const reservedToolCollision = RESERVED_TOOL_INVOKER_NAMES.find(
+      (name) => toolInvokers?.[name],
+    );
+    if (reservedToolCollision) {
+      throw new Error(
+        `Tool invoker "${reservedToolCollision}" is built into AIProvider and cannot be overridden`,
       );
-      if (reservedToolCollision) {
-        throw new Error(
-          `Tool invoker "${reservedToolCollision}" is built into AIProvider and cannot be overridden`
-        );
-      }
-      return {
-        ...toolInvokers,
-        ...createFrontendToolInvokers(frontendToolRegistry),
-        formFiller: createFormFillerInvoker(formRegistry),
-      };
-    },
-    [formRegistry, frontendToolRegistry, toolInvokers]
-  );
+    }
+    return {
+      ...toolInvokers,
+      ...createFrontendToolInvokers(frontendToolRegistry),
+      formFiller: createFormFillerInvoker(formRegistry),
+    };
+  }, [formRegistry, frontendToolRegistry, toolInvokers]);
   const [liveConfiguration, setLiveConfiguration] = useState<{
     employees: AIEmployee[];
     models: AIModel[];
@@ -129,15 +126,13 @@ function AIProviderRuntime({
     providedEmployees && providedModels
       ? {
           employees: providedEmployees,
-          models: providedModels.length
-            ? providedModels
-            : [UNCONFIGURED_MODEL],
-          status: "ready",
+          models: providedModels.length ? providedModels : [UNCONFIGURED_MODEL],
+          status: 'ready',
           modelError: providedModels.length
             ? undefined
-            : new Error("No enabled AI models were provided."),
+            : new Error('No enabled AI models were provided.'),
         }
-      : { employees: [], models: [], status: "loading" }
+      : { employees: [], models: [], status: 'loading' },
   );
   const internalGlobalController = useAIChatController();
   const globalController = providedGlobalController ?? internalGlobalController;
@@ -147,10 +142,10 @@ function AIProviderRuntime({
       setLiveConfiguration({
         employees: providedEmployees,
         models: providedModels.length ? providedModels : [UNCONFIGURED_MODEL],
-        status: "ready",
+        status: 'ready',
         modelError: providedModels.length
           ? undefined
-          : new Error("No enabled AI models were provided."),
+          : new Error('No enabled AI models were provided.'),
       });
       return;
     }
@@ -158,7 +153,7 @@ function AIProviderRuntime({
     let active = true;
     setLiveConfiguration((current) => ({
       ...current,
-      status: "loading",
+      status: 'loading',
       error: undefined,
     }));
 
@@ -167,15 +162,15 @@ function AIProviderRuntime({
       providedModels ?? service.listModels(),
     ]).then(([employeesResult, modelsResult]) => {
       if (!active) return;
-      if (employeesResult.status === "rejected") {
+      if (employeesResult.status === 'rejected') {
         setLiveConfiguration({
           employees: [],
           models: [],
-          status: "error",
+          status: 'error',
           error:
             employeesResult.reason instanceof Error
               ? employeesResult.reason
-              : new Error("Unable to load NocoBase AI configuration."),
+              : new Error('Unable to load NocoBase AI configuration.'),
         });
         return;
       }
@@ -185,28 +180,28 @@ function AIProviderRuntime({
         setLiveConfiguration({
           employees: [],
           models: [],
-          status: "error",
+          status: 'error',
           error: new Error(
-            "No AI employees are available for the current NocoBase user."
+            'No AI employees are available for the current NocoBase user.',
           ),
         });
         return;
       }
 
       const models =
-        modelsResult.status === "fulfilled" ? modelsResult.value : [];
+        modelsResult.status === 'fulfilled' ? modelsResult.value : [];
       const modelError =
-        modelsResult.status === "rejected"
+        modelsResult.status === 'rejected'
           ? modelsResult.reason instanceof Error
             ? modelsResult.reason
-            : new Error("Unable to load enabled AI models from NocoBase.")
+            : new Error('Unable to load enabled AI models from NocoBase.')
           : models.length
-          ? undefined
-          : new Error("No enabled AI models were returned by NocoBase.");
+            ? undefined
+            : new Error('No enabled AI models were returned by NocoBase.');
       setLiveConfiguration({
         employees,
         models: models.length ? models : [UNCONFIGURED_MODEL],
-        status: "ready",
+        status: 'ready',
         modelError,
       });
     });
@@ -234,54 +229,54 @@ function AIProviderRuntime({
                 ...employee,
                 userConfig: { ...employee.userConfig, prompt },
               }
-            : employee
+            : employee,
         ),
       }));
     },
-    [service]
+    [service],
   );
 
   const invokeToolCall = useCallback(
     async (
       toolName: string,
       input: unknown,
-      context: AIToolCallInvocationContext
+      context: AIToolCallInvocationContext,
     ) => {
       const invoke = resolvedToolInvokers[toolName];
       if (!invoke) return { handled: false };
       return { handled: true, result: await invoke(input, context) };
     },
-    [resolvedToolInvokers]
+    [resolvedToolInvokers],
   );
 
   const canAutoApproveToolCall = useCallback(
     (
       toolName: string,
       input: unknown,
-      context: AIToolCallInvocationContext
+      context: AIToolCallInvocationContext,
     ) => {
-      if (toolName === "formFiller") return false;
+      if (toolName === 'formFiller') return false;
       if (
-        toolName !== "loadFrontendTool" &&
-        toolName !== "executeFrontendTool"
+        toolName !== 'loadFrontendTool' &&
+        toolName !== 'executeFrontendTool'
       ) {
         return true;
       }
       const toolId =
-        input && typeof input === "object" && !Array.isArray(input)
+        input && typeof input === 'object' && !Array.isArray(input)
           ? (input as { toolId?: unknown }).toolId
           : undefined;
       if (
-        typeof toolId !== "string" ||
+        typeof toolId !== 'string' ||
         context.allowedFrontendToolIds?.includes(toolId) !== true
       ) {
         return false;
       }
       const manifest = frontendToolRegistry.getManifest(toolId);
       if (!manifest) return false;
-      return toolName === "loadFrontendTool" || manifest.permission === "ALLOW";
+      return toolName === 'loadFrontendTool' || manifest.permission === 'ALLOW';
     },
-    [frontendToolRegistry]
+    [frontendToolRegistry],
   );
 
   const value = useMemo<AIProviderValue>(
@@ -319,7 +314,7 @@ function AIProviderRuntime({
       models,
       service,
       updateEmployeeUserPrompt,
-    ]
+    ],
   );
 
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>;
@@ -327,7 +322,7 @@ function AIProviderRuntime({
 
 export function useAI() {
   const value = useContext(AIContext);
-  if (!value) throw new Error("useAI must be used inside AIProvider");
+  if (!value) throw new Error('useAI must be used inside AIProvider');
   return value;
 }
 

@@ -3,14 +3,11 @@ import {
   useContext,
   useMemo,
   type PropsWithChildren,
-} from "react";
-import type {
-  AIEmployeeTask,
-  AIWorkContextItem,
-} from "./types";
+} from 'react';
+import type { AIEmployeeTask, AIWorkContextItem } from './types';
 
 export type AIPageContextResolver = (
-  items: AIWorkContextItem[]
+  items: AIWorkContextItem[],
 ) => Promise<AIWorkContextItem[]>;
 
 const AIPageContextResolverContext = createContext<
@@ -36,30 +33,27 @@ const AIPageContextScopeContext = createContext(EMPTY_PAGE_CONTEXT);
 
 export function AIPageContextScope({
   context,
-  mode = "replace",
+  mode = 'replace',
   children,
 }: PropsWithChildren<{
   context: AIWorkContextItem | AIWorkContextItem[];
-  mode?: "replace" | "append";
+  mode?: 'replace' | 'append';
 }>) {
   const inheritedContext = useContext(AIPageContextScopeContext);
-  const value = useMemo(
-    () => {
-      const ownContext = Array.isArray(context) ? context : [context];
-      if (mode !== "append") return ownContext;
-      const combined = [...inheritedContext, ...ownContext];
-      return combined.filter((item, index) => {
-        if (!item.id) return true;
-        return (
-          combined.findLastIndex(
-            (candidate) =>
-              candidate.type === item.type && candidate.id === item.id
-          ) === index
-        );
-      });
-    },
-    [context, inheritedContext, mode]
-  );
+  const value = useMemo(() => {
+    const ownContext = Array.isArray(context) ? context : [context];
+    if (mode !== 'append') return ownContext;
+    const combined = [...inheritedContext, ...ownContext];
+    return combined.filter((item, index) => {
+      if (!item.id) return true;
+      return (
+        combined.findLastIndex(
+          (candidate) =>
+            candidate.type === item.type && candidate.id === item.id,
+        ) === index
+      );
+    });
+  }, [context, inheritedContext, mode]);
   return (
     <AIPageContextScopeContext.Provider value={value}>
       {children}
@@ -80,7 +74,7 @@ export function createAIPageContextReference({
   kind?: string;
 }): AIWorkContextItem {
   return {
-    type: "page-element",
+    type: 'page-element',
     id,
     title,
     ...(kind ? { kind } : {}),
@@ -88,14 +82,14 @@ export function createAIPageContextReference({
 }
 
 const isFormContext = (item: AIWorkContextItem) => {
-  if (item.kind === "form") return true;
-  if (!item.content || typeof item.content !== "object") return false;
+  if (item.kind === 'form') return true;
+  if (!item.content || typeof item.content !== 'object') return false;
   const content = item.content as Record<string, unknown>;
-  return typeof content.form === "string" && Array.isArray(content.fields);
+  return typeof content.form === 'string' && Array.isArray(content.fields);
 };
 
 export function getAIWorkContextRequiredTools(items: AIWorkContextItem[]) {
-  return items.some(isFormContext) ? ["formFiller"] : [];
+  return items.some(isFormContext) ? ['formFiller'] : [];
 }
 
 export function getAIWorkContextToolScope(items: AIWorkContextItem[]) {
@@ -106,8 +100,8 @@ export function getAIWorkContextToolScope(items: AIWorkContextItem[]) {
       for (const tool of item.frontendTools) {
         if (
           tool &&
-          typeof tool === "object" &&
-          typeof (tool as { id?: unknown }).id === "string"
+          typeof tool === 'object' &&
+          typeof (tool as { id?: unknown }).id === 'string'
         ) {
           frontendToolIds.add((tool as { id: string }).id);
         }
@@ -115,7 +109,7 @@ export function getAIWorkContextToolScope(items: AIWorkContextItem[]) {
     }
     if (isFormContext(item)) {
       const form = (item.content as { form?: unknown } | undefined)?.form;
-      if (typeof form === "string" && form) formIds.add(form);
+      if (typeof form === 'string' && form) formIds.add(form);
     }
   }
   return {
@@ -125,9 +119,9 @@ export function getAIWorkContextToolScope(items: AIWorkContextItem[]) {
 }
 
 export function mergeAIRequiredTools(
-  skillSettings: AIEmployeeTask["skillSettings"],
-  requiredTools: string[]
-): AIEmployeeTask["skillSettings"] {
+  skillSettings: AIEmployeeTask['skillSettings'],
+  requiredTools: string[],
+): AIEmployeeTask['skillSettings'] {
   if (!requiredTools.length) return skillSettings;
   return {
     ...skillSettings,

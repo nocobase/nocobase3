@@ -7,26 +7,26 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { EventEmitter } from "node:events";
+import { EventEmitter } from 'node:events';
 
 export type AppState =
-  "creating" | "active" | "draining" | "destroying" | "destroyed" | "failed";
+  'creating' | 'active' | 'draining' | 'destroying' | 'destroyed' | 'failed';
 
 export type AppEvent =
-  | "app:beforeCreate"
-  | "app:created"
-  | "app:createFailed"
-  | "app:requestStart"
-  | "app:requestEnd"
-  | "app:requestError"
-  | "app:beforeDrain"
-  | "app:draining"
-  | "app:beforeDestroy"
-  | "app:destroying"
-  | "app:resourceDispose"
-  | "app:resourceDisposed"
-  | "app:destroyed"
-  | "app:destroyFailed";
+  | 'app:beforeCreate'
+  | 'app:created'
+  | 'app:createFailed'
+  | 'app:requestStart'
+  | 'app:requestEnd'
+  | 'app:requestError'
+  | 'app:beforeDrain'
+  | 'app:draining'
+  | 'app:beforeDestroy'
+  | 'app:destroying'
+  | 'app:resourceDispose'
+  | 'app:resourceDisposed'
+  | 'app:destroyed'
+  | 'app:destroyFailed';
 
 export interface AppEventPayload {
   appId: string;

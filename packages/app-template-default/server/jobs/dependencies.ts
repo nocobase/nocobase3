@@ -7,6 +7,8 @@ export interface AppJobDependencies {
   database?: DatabaseManager;
 }
 
-export function createAppJobFactory(dependencies: AppJobDependencies): JobFactory {
+export function createAppJobFactory(
+  dependencies: AppJobDependencies,
+): JobFactory {
   return (JobClass: JobClass) => new JobClass(dependencies) as Job;
 }

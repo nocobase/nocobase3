@@ -2,17 +2,17 @@ import {
   getNocoBaseErrorCode,
   nocobaseClient,
   normalizeNocoBaseRuntimeError,
-} from "../client/index.ts";
-import { portalRuntimeStore } from "../runtime/store.ts";
-import type { AclStore } from "./context.ts";
-import { getPortalAccessDeniedData } from "./portal-access.ts";
+} from '../client/index.ts';
+import { portalRuntimeStore } from '../runtime/store.ts';
+import type { AclStore } from './context.ts';
+import { getPortalAccessDeniedData } from './portal-access.ts';
 import {
   clearRecordPermissions,
   getRecordActionPermission,
   getRecordPermissions,
   subscribeRecordPermissions,
-} from "./record-permissions.ts";
-import type { AclPermissionSet, AclResponse, AclState } from "./types.ts";
+} from './record-permissions.ts';
+import type { AclPermissionSet, AclResponse, AclState } from './types.ts';
 
 const listeners = new Set<() => void>();
 let activeRequest:
@@ -24,7 +24,7 @@ let activeRequest:
   | undefined;
 let requestId = 0;
 let loadedSessionKey: string | undefined;
-let state: AclState = { status: "idle" };
+let state: AclState = { status: 'idle' };
 
 const emit = () => listeners.forEach((listener) => listener());
 
@@ -35,14 +35,14 @@ const setState = (next: AclState) => {
 };
 
 const getSessionKey = () => {
-  return `${nocobaseClient.getToken() ?? "cookie"}:${
-    nocobaseClient.getRole() ?? ""
+  return `${nocobaseClient.getToken() ?? 'cookie'}:${
+    nocobaseClient.getRole() ?? ''
   }`;
 };
 
 const requestAcl = async (role?: string) =>
-  nocobaseClient.request<AclResponse>("roles:check", {
-    unwrap: "none",
+  nocobaseClient.request<AclResponse>('roles:check', {
+    unwrap: 'none',
     withAclMeta: false,
     role,
     includeRole: Boolean(role),
@@ -50,14 +50,12 @@ const requestAcl = async (role?: string) =>
 
 const isStaleRoleError = (error: unknown) => {
   const code = getNocoBaseErrorCode(error);
-  return ["ROLE_NOT_FOUND_ERR", "ROLE_NOT_FOUND_FOR_USER"].includes(
-    code ?? ""
-  );
+  return ['ROLE_NOT_FOUND_ERR', 'ROLE_NOT_FOUND_FOR_USER'].includes(code ?? '');
 };
 
 const normalizePermissions = (
   response: AclResponse,
-  fallbackRole?: string
+  fallbackRole?: string,
 ): AclPermissionSet => {
   const { role, roles, ...permissions } = response.data ?? {};
   const currentRole = role ?? fallbackRole;
@@ -81,19 +79,19 @@ export const clearAcl = (): void => {
   activeRequest = undefined;
   loadedSessionKey = undefined;
   clearRecordPermissions();
-  setState({ status: "idle" });
+  setState({ status: 'idle' });
 };
 
 const load = async ({ force = false } = {}) => {
   const sessionKey = getSessionKey();
-  if (!force && state.status === "ready" && loadedSessionKey === sessionKey) {
+  if (!force && state.status === 'ready' && loadedSessionKey === sessionKey) {
     return state;
   }
   if (!force && activeRequest?.sessionKey === sessionKey) {
     return activeRequest.promise;
   }
 
-  setState({ status: "loading" });
+  setState({ status: 'loading' });
   const currentRequestId = ++requestId;
   const requestedRole = nocobaseClient.getRole();
   const promise = (async () => {
@@ -114,21 +112,21 @@ const load = async ({ force = false } = {}) => {
       nocobaseClient.setRole(permissions.currentRole ?? null);
       clearRecordPermissions();
       loadedSessionKey = getSessionKey();
-      return setState({ status: "ready", permissions });
+      return setState({ status: 'ready', permissions });
     } catch (error) {
-      if (getNocoBaseErrorCode(error) === "USER_HAS_NO_ROLES_ERR") {
+      if (getNocoBaseErrorCode(error) === 'USER_HAS_NO_ROLES_ERR') {
         portalRuntimeStore.setError(
-          normalizeNocoBaseRuntimeError(error, "http")
+          normalizeNocoBaseRuntimeError(error, 'http'),
         );
       }
       const normalizedError =
         error instanceof Error
           ? error
-          : new Error("Unable to load permissions");
+          : new Error('Unable to load permissions');
       if (currentRequestId !== requestId) return state;
       loadedSessionKey = undefined;
       return setState({
-        status: "error",
+        status: 'error',
         error: normalizedError,
         portalAccessDenied: getPortalAccessDeniedData(error),
       });
@@ -149,20 +147,20 @@ export const switchRole = async (roleName: string): Promise<void> => {
   nocobaseClient.setRole(roleName);
 
   try {
-    await nocobaseClient.action("users", "setDefaultRole", {
-      method: "POST",
+    await nocobaseClient.action('users', 'setDefaultRole', {
+      method: 'POST',
       body: { roleName },
       withAclMeta: false,
     });
-    await nocobaseClient.action("auth", "syncCookies", {
-      method: "POST",
+    await nocobaseClient.action('auth', 'syncCookies', {
+      method: 'POST',
       withAclMeta: false,
     });
   } catch (error) {
     nocobaseClient.setRole(previousRole);
     try {
-      await nocobaseClient.action("auth", "syncCookies", {
-        method: "POST",
+      await nocobaseClient.action('auth', 'syncCookies', {
+        method: 'POST',
         withAclMeta: false,
       });
     } catch {

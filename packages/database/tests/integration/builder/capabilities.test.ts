@@ -1,69 +1,69 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 import {
   describeIntegrationDatabases,
   useIntegrationDatabase,
-} from "../helpers.js";
+} from '../helpers.js';
 
-describeIntegrationDatabases("capability warnings", (context) => {
-  it("downgrades safe unsupported capabilities without failing real DDL", async () => {
+describeIntegrationDatabases('capability warnings', (context) => {
+  it('downgrades safe unsupported capabilities without failing real DDL', async () => {
     const result = await context.builder.createCollection(
-      "capabilityEvents",
+      'capabilityEvents',
       (collection) => {
-        collection.dbSchema("public");
-        collection.increments("id");
-        collection.native("ipAddress", "text", {
-          columnName: "ip_address",
+        collection.dbSchema('public');
+        collection.increments('id');
+        collection.native('ipAddress', 'text', {
+          columnName: 'ip_address',
           db: {
-            comment: "Client IP address",
+            comment: 'Client IP address',
           },
         });
-        collection.string("email");
-        collection.unique("email", {
-          deferrable: "deferred",
+        collection.string('email');
+        collection.unique('email', {
+          deferrable: 'deferred',
         });
       },
     );
 
     expect(
-      await context.db.schema.hasTable(context.table("capabilityEvents")),
+      await context.db.schema.hasTable(context.table('capabilityEvents')),
     ).toBe(true);
     expect(
       await context.db.schema.hasColumn(
-        context.table("capabilityEvents"),
-        "ip_address",
+        context.table('capabilityEvents'),
+        'ip_address',
       ),
     ).toBe(true);
 
-    if (context.spec.dialect === "postgres") {
+    if (context.spec.dialect === 'postgres') {
       expect(result.warnings).toEqual([]);
     } else {
       expect(result.warnings?.map((warning) => warning.code)).toEqual(
         expect.arrayContaining([
-          "UNSUPPORTED_SCHEMA",
-          "UNSUPPORTED_DEFERRABLE_CONSTRAINT",
+          'UNSUPPORTED_SCHEMA',
+          'UNSUPPORTED_DEFERRABLE_CONSTRAINT',
         ]),
       );
     }
 
-    if (context.spec.dialect === "sqlite") {
+    if (context.spec.dialect === 'sqlite') {
       expect(result.warnings?.map((warning) => warning.code)).toEqual(
         expect.arrayContaining([
-          "UNSUPPORTED_NATIVE_TYPE",
-          "UNSUPPORTED_COMMENT",
+          'UNSUPPORTED_NATIVE_TYPE',
+          'UNSUPPORTED_COMMENT',
         ]),
       );
     }
   });
 
-  it("handles partial unique constraints according to dialect capability", async () => {
+  it('handles partial unique constraints according to dialect capability', async () => {
     const result = await context.builder.createCollection(
-      "partialUniqueJobs",
+      'partialUniqueJobs',
       (collection) => {
-        collection.increments("id");
-        collection.integer("accountId");
-        collection.integer("programId");
-        collection.unique(["accountId", "programId"], {
-          name: context.identifier("uk_partial_unique_jobs_account_program"),
+        collection.increments('id');
+        collection.integer('accountId');
+        collection.integer('programId');
+        collection.unique(['accountId', 'programId'], {
+          name: context.identifier('uk_partial_unique_jobs_account_program'),
           predicate: {
             accountId: { $notNull: true },
           },
@@ -72,24 +72,24 @@ describeIntegrationDatabases("capability warnings", (context) => {
     );
 
     expect(
-      await context.db.schema.hasTable(context.table("partialUniqueJobs")),
+      await context.db.schema.hasTable(context.table('partialUniqueJobs')),
     ).toBe(true);
 
-    if (context.spec.dialect === "mysql") {
+    if (context.spec.dialect === 'mysql') {
       expect(result.warnings).toEqual([
         expect.objectContaining({
-          code: "UNSUPPORTED_PARTIAL_UNIQUE_CONSTRAINT",
-          severity: "unsafe",
-          fallback: "skip",
+          code: 'UNSUPPORTED_PARTIAL_UNIQUE_CONSTRAINT',
+          severity: 'unsafe',
+          fallback: 'skip',
         }),
       ]);
 
-      await context.db(context.table("partialUniqueJobs")).insert({
+      await context.db(context.table('partialUniqueJobs')).insert({
         account_id: 1,
         program_id: 1,
       });
       await expect(
-        context.db(context.table("partialUniqueJobs")).insert({
+        context.db(context.table('partialUniqueJobs')).insert({
           account_id: 1,
           program_id: 1,
         }),
@@ -97,20 +97,20 @@ describeIntegrationDatabases("capability warnings", (context) => {
     } else {
       expect(result.warnings).toEqual([]);
 
-      await context.db(context.table("partialUniqueJobs")).insert({
+      await context.db(context.table('partialUniqueJobs')).insert({
         account_id: null,
         program_id: 1,
       });
-      await context.db(context.table("partialUniqueJobs")).insert({
+      await context.db(context.table('partialUniqueJobs')).insert({
         account_id: null,
         program_id: 1,
       });
-      await context.db(context.table("partialUniqueJobs")).insert({
+      await context.db(context.table('partialUniqueJobs')).insert({
         account_id: 1,
         program_id: 1,
       });
       await expect(
-        context.db(context.table("partialUniqueJobs")).insert({
+        context.db(context.table('partialUniqueJobs')).insert({
           account_id: 1,
           program_id: 1,
         }),
@@ -119,32 +119,32 @@ describeIntegrationDatabases("capability warnings", (context) => {
   });
 });
 
-describe("capability warnings [sqlite materialized view]", () => {
+describe('capability warnings [sqlite materialized view]', () => {
   const context = useIntegrationDatabase({
-    name: "sqlite",
-    dialect: "sqlite",
-    filename: ":memory:",
+    name: 'sqlite',
+    dialect: 'sqlite',
+    filename: ':memory:',
   });
 
-  it("warns and skips unsupported materialized views without throwing", async () => {
+  it('warns and skips unsupported materialized views without throwing', async () => {
     const result = await context.builder.createMaterializedViewCollection(
-      "usersSnapshot",
+      'usersSnapshot',
       (view) => {
-        view.string("email");
-        view.as((query) => query.from("users").select("email"));
+        view.string('email');
+        view.as((query) => query.from('users').select('email'));
       },
     );
 
     expect(result.warnings).toEqual([
       expect.objectContaining({
-        code: "UNSUPPORTED_MATERIALIZED_VIEW",
-        severity: "unsafe",
-        fallback: "skip",
+        code: 'UNSUPPORTED_MATERIALIZED_VIEW',
+        severity: 'unsafe',
+        fallback: 'skip',
       }),
     ]);
     expect(result.schemaOperations).toEqual([]);
     expect(
-      await context.db.schema.hasTable(context.table("usersSnapshot")),
+      await context.db.schema.hasTable(context.table('usersSnapshot')),
     ).toBe(false);
   });
 });

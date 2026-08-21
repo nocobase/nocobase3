@@ -8,11 +8,11 @@ Migration 的写法刻意保持简单：结构变更用 `builder`，数据变更
 
 写 migration 前先判断变更类型：
 
-| 场景 | 入口 | 说明 |
-| --- | --- | --- |
-| 创建、修改、删除 Collection 或字段 | `builder` | 走 Collection DSL、命名策略和 metadata 同步 |
-| 添加、删除索引或约束 | `builder` | 让 Builder 负责数据库能力检查和稳定命名 |
-| 回填、修正或清理数据 | `query` | 使用物理查询名，不读取 Collection metadata |
+| 场景                                     | 入口         | 说明                                                           |
+| ---------------------------------------- | ------------ | -------------------------------------------------------------- |
+| 创建、修改、删除 Collection 或字段       | `builder`    | 走 Collection DSL、命名策略和 metadata 同步                    |
+| 添加、删除索引或约束                     | `builder`    | 让 Builder 负责数据库能力检查和稳定命名                        |
+| 回填、修正或清理数据                     | `query`      | 使用物理查询名，不读取 Collection metadata                     |
 | 需要数据库方言或底层 adapter client 能力 | `connection` | 先判断 `dialect` 或 `capabilities`，再用 `connection.client()` |
 
 常规 migration 不需要接触 `database`、`schema` 或底层 adapter client。只有 `builder` 和 `query` 表达不了时，才使用 `connection.client()`。
@@ -80,7 +80,7 @@ export default defineMigration({
 ```
 
 ```ts
-name: '202608180001_create_users'
+name: '202608180001_create_users';
 ```
 
 推荐命名格式：
@@ -125,15 +125,15 @@ interface MigrationConnection {
 
 选择规则：
 
-| 要做什么 | 用什么 |
-| --- | --- |
-| 创建、修改、删除 Collection | `builder` |
-| 添加、修改、删除字段 | `builder` |
-| 添加、删除索引或约束 | `builder` |
-| 回填数据、修正数据 | `query` |
-| 判断数据库类型 | `connection.dialect` |
-| 判断数据库能力 | `connection.capabilities` |
-| 使用底层 adapter client 能力 | `connection.client()` |
+| 要做什么                     | 用什么                    |
+| ---------------------------- | ------------------------- |
+| 创建、修改、删除 Collection  | `builder`                 |
+| 添加、修改、删除字段         | `builder`                 |
+| 添加、删除索引或约束         | `builder`                 |
+| 回填数据、修正数据           | `query`                   |
+| 判断数据库类型               | `connection.dialect`      |
+| 判断数据库能力               | `connection.capabilities` |
+| 使用底层 adapter client 能力 | `connection.client()`     |
 
 Migration context 顶层没有 `database`、`schema`、`client` 或 `dialect`。
 
@@ -202,7 +202,7 @@ export default defineMigration({
 很多数据迁移没有可靠的反向操作。没有可靠 `down` 时，必须声明：
 
 ```ts
-irreversible: true
+irreversible: true;
 ```
 
 不要为了通过校验而写一个不真实的 `down`。
@@ -289,18 +289,18 @@ Migration 作者不手动管理主事务。Runner 会根据 `transaction` 选项
 默认事务策略是：
 
 ```ts
-transaction: 'auto'
+transaction: 'auto';
 ```
 
 普通 migration 不需要显式写 `transaction`。
 
 可选值：
 
-| 值 | 含义 |
-| --- | --- |
+| 值       | 含义                        |
+| -------- | --------------------------- |
 | `'auto'` | 默认值，runner 尽量使用事务 |
-| `true` | 要求使用事务 |
-| `false` | 不使用事务 |
+| `true`   | 要求使用事务                |
+| `false`  | 不使用事务                  |
 
 事务内执行时，runner 必须用事务连接创建 context：
 

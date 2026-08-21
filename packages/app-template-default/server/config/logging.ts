@@ -26,15 +26,18 @@ const defaultRedactPaths = [
 const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(
   ({ env }): LoggingConfig => {
     const isProduction = env.string('NODE_ENV') === 'production';
-    const transport: LoggerConfig['transport'] = env.boolean('LOG_PRETTY', !isProduction)
+    const transport: LoggerConfig['transport'] = env.boolean(
+      'LOG_PRETTY',
+      !isProduction,
+    )
       ? {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'SYS:standard',
-          ignore: 'pid,hostname',
-        },
-      }
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname',
+          },
+        }
       : undefined;
 
     return {
@@ -50,7 +53,10 @@ const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(
   },
 );
 
-function resolveLevel(value: string | undefined, fallback: LoggerLevel): LoggerLevel {
+function resolveLevel(
+  value: string | undefined,
+  fallback: LoggerLevel,
+): LoggerLevel {
   return isLoggerLevel(value) ? value : fallback;
 }
 

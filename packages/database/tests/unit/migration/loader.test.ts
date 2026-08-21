@@ -1,12 +1,12 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { loadMigrations, validateMigrations } from "../../../src/index.js";
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { loadMigrations, validateMigrations } from '../../../src/index.js';
 
-const tempRoot = join(process.cwd(), "tests/.tmp");
+const tempRoot = join(process.cwd(), 'tests/.tmp');
 const tempDirectories: string[] = [];
 
-describe("migration loader", () => {
+describe('migration loader', () => {
   afterEach(async () => {
     await Promise.all(
       tempDirectories
@@ -15,11 +15,11 @@ describe("migration loader", () => {
     );
   });
 
-  it("loads only default defineMigration exports and sorts by migration name", async () => {
+  it('loads only default defineMigration exports and sorts by migration name', async () => {
     const directory = await createTempDirectory();
     await writeMigration(
       directory,
-      "202608180002_second",
+      '202608180002_second',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -32,7 +32,7 @@ describe("migration loader", () => {
     );
     await writeMigration(
       directory,
-      "202608180001_first",
+      '202608180001_first',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -47,17 +47,17 @@ describe("migration loader", () => {
     const migrations = await loadMigrations({ directory });
 
     expect(migrations.map((migration) => migration.name)).toEqual([
-      "202608180001_first",
-      "202608180002_second",
+      '202608180001_first',
+      '202608180002_second',
     ]);
     expect(migrations[0].checksum).toHaveLength(64);
   });
 
-  it("accepts irreversible migrations without down", async () => {
+  it('accepts irreversible migrations without down', async () => {
     const directory = await createTempDirectory();
     await writeMigration(
       directory,
-      "202608180001_cleanup_data",
+      '202608180001_cleanup_data',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -72,11 +72,11 @@ describe("migration loader", () => {
     await expect(validateMigrations(directory)).resolves.toHaveLength(1);
   });
 
-  it("rejects named up and down exports", async () => {
+  it('rejects named up and down exports', async () => {
     const directory = await createTempDirectory();
     await writeMigration(
       directory,
-      "202608180001_named_exports",
+      '202608180001_named_exports',
       `
       export async function up() {}
       export async function down() {}
@@ -84,15 +84,15 @@ describe("migration loader", () => {
     );
 
     await expect(loadMigrations({ directory })).rejects.toThrow(
-      "must default export defineMigration({...}).",
+      'must default export defineMigration({...}).',
     );
   });
 
-  it("rejects default objects that did not go through defineMigration", async () => {
+  it('rejects default objects that did not go through defineMigration', async () => {
     const directory = await createTempDirectory();
     await writeMigration(
       directory,
-      "202608180001_plain_object",
+      '202608180001_plain_object',
       `
       export default {
         name: '202608180001_plain_object',
@@ -103,15 +103,15 @@ describe("migration loader", () => {
     );
 
     await expect(loadMigrations({ directory })).rejects.toThrow(
-      "must default export defineMigration({...}).",
+      'must default export defineMigration({...}).',
     );
   });
 
-  it("rejects CommonJS module exports", async () => {
+  it('rejects CommonJS module exports', async () => {
     const directory = await createTempDirectory();
     await writeMigration(
       directory,
-      "202608180001_commonjs",
+      '202608180001_commonjs',
       `
       module.exports = {
         name: '202608180001_commonjs',
@@ -119,19 +119,19 @@ describe("migration loader", () => {
         async down() {},
       };
     `,
-      ".cjs",
+      '.cjs',
     );
 
     await expect(loadMigrations({ directory })).rejects.toThrow(
-      "must default export defineMigration({...}).",
+      'must default export defineMigration({...}).',
     );
   });
 
-  it("rejects missing down unless irreversible is true", async () => {
+  it('rejects missing down unless irreversible is true', async () => {
     const directory = await createTempDirectory();
     await writeMigration(
       directory,
-      "202608180001_missing_down",
+      '202608180001_missing_down',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -143,15 +143,15 @@ describe("migration loader", () => {
     );
 
     await expect(loadMigrations({ directory })).rejects.toThrow(
-      "must define down(context) or set irreversible: true.",
+      'must define down(context) or set irreversible: true.',
     );
   });
 
-  it("rejects file name and migration name mismatches", async () => {
+  it('rejects file name and migration name mismatches', async () => {
     const directory = await createTempDirectory();
     await writeMigration(
       directory,
-      "202608180001_file_name",
+      '202608180001_file_name',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -168,11 +168,11 @@ describe("migration loader", () => {
     );
   });
 
-  it("rejects duplicate migration names", async () => {
+  it('rejects duplicate migration names', async () => {
     const directory = await createTempDirectory();
     await writeMigration(
       directory,
-      "202608180001_duplicate",
+      '202608180001_duplicate',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -185,7 +185,7 @@ describe("migration loader", () => {
     );
     await writeMigration(
       directory,
-      "202608180001_duplicate",
+      '202608180001_duplicate',
       `
       import { defineMigration } from '../../../src/index.js';
 
@@ -195,7 +195,7 @@ describe("migration loader", () => {
         async down() {},
       });
     `,
-      ".js",
+      '.js',
     );
 
     await expect(loadMigrations({ directory })).rejects.toThrow(
@@ -206,7 +206,7 @@ describe("migration loader", () => {
 
 async function createTempDirectory(): Promise<string> {
   await mkdir(tempRoot, { recursive: true });
-  const directory = await mkdtemp(join(tempRoot, "migrations-"));
+  const directory = await mkdtemp(join(tempRoot, 'migrations-'));
   tempDirectories.push(directory);
   return directory;
 }
@@ -215,11 +215,11 @@ async function writeMigration(
   directory: string,
   name: string,
   source: string,
-  extension = ".ts",
+  extension = '.ts',
 ): Promise<void> {
   await writeFile(join(directory, `${name}${extension}`), trimSource(source));
 }
 
 function trimSource(source: string): string {
-  return `${source.trim().replace(/^ {6}/gm, "")}\n`;
+  return `${source.trim().replace(/^ {6}/gm, '')}\n`;
 }

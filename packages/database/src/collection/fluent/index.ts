@@ -66,46 +66,82 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
   }
 
   increments(name = 'id'): FieldDefinitionBuilder {
-    return this.field({ name, type: 'increments', primaryKey: true, autoIncrement: true });
+    return this.field({
+      name,
+      type: 'increments',
+      primaryKey: true,
+      autoIncrement: true,
+    });
   }
 
-  integer(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  integer(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'integer', ...options });
   }
 
-  bigInt(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  bigInt(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'bigInt', ...options });
   }
 
-  string(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  string(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'string', ...options });
   }
 
-  text(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  text(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'text', ...options });
   }
 
-  boolean(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  boolean(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'boolean', ...options });
   }
 
-  decimal(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  decimal(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'decimal', ...options });
   }
 
-  datetime(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  datetime(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'datetime', ...options });
   }
 
-  json(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  json(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'json', ...options });
   }
 
-  uuid(name: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  uuid(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({ name, type: 'uuid', ...options });
   }
 
-  native(name: string, nativeType: string, options: Partial<FieldDefinition> = {}): FieldDefinitionBuilder {
+  native(
+    name: string,
+    nativeType: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
     return this.field({
       name,
       type: options.type ?? 'native',
@@ -117,38 +153,78 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     });
   }
 
-  belongsTo(name: string, target: string, options: Partial<RelationFieldDefinition> = {}): RelationFieldBuilder {
+  belongsTo(
+    name: string,
+    target: string,
+    options: Partial<RelationFieldDefinition> = {},
+  ): RelationFieldBuilder {
     return this.relation({ name, target, type: 'belongsTo', ...options });
   }
 
-  hasOne(name: string, target: string, options: Partial<RelationFieldDefinition> = {}): RelationFieldBuilder {
+  hasOne(
+    name: string,
+    target: string,
+    options: Partial<RelationFieldDefinition> = {},
+  ): RelationFieldBuilder {
     return this.relation({ name, target, type: 'hasOne', ...options });
   }
 
-  hasMany(name: string, target: string, options: Partial<RelationFieldDefinition> = {}): RelationFieldBuilder {
+  hasMany(
+    name: string,
+    target: string,
+    options: Partial<RelationFieldDefinition> = {},
+  ): RelationFieldBuilder {
     return this.relation({ name, target, type: 'hasMany', ...options });
   }
 
-  belongsToMany(name: string, target: string, options: Partial<RelationFieldDefinition> = {}): RelationFieldBuilder {
+  belongsToMany(
+    name: string,
+    target: string,
+    options: Partial<RelationFieldDefinition> = {},
+  ): RelationFieldBuilder {
     return this.relation({ name, target, type: 'belongsToMany', ...options });
   }
 
-  primary(fields: string | string[], options: Omit<PrimaryConstraintDefinition, 'type' | 'fields'> = {}): this {
-    this.definition.constraints?.push({ type: 'primary', fields: array(fields), ...options });
+  primary(
+    fields: string | string[],
+    options: Omit<PrimaryConstraintDefinition, 'type' | 'fields'> = {},
+  ): this {
+    this.definition.constraints?.push({
+      type: 'primary',
+      fields: array(fields),
+      ...options,
+    });
     return this;
   }
 
-  unique(fields: string | string[], options: Omit<UniqueConstraintDefinition, 'type' | 'fields'> = {}): this {
-    this.definition.constraints?.push({ type: 'unique', fields: array(fields), ...options });
+  unique(
+    fields: string | string[],
+    options: Omit<UniqueConstraintDefinition, 'type' | 'fields'> = {},
+  ): this {
+    this.definition.constraints?.push({
+      type: 'unique',
+      fields: array(fields),
+      ...options,
+    });
     return this;
   }
 
-  foreignKey(fields: string | string[], options: Omit<ForeignKeyConstraintDefinition, 'type' | 'fields'>): this {
-    this.definition.constraints?.push({ type: 'foreignKey', fields: array(fields), ...options });
+  foreignKey(
+    fields: string | string[],
+    options: Omit<ForeignKeyConstraintDefinition, 'type' | 'fields'>,
+  ): this {
+    this.definition.constraints?.push({
+      type: 'foreignKey',
+      fields: array(fields),
+      ...options,
+    });
     return this;
   }
 
-  index(fields: string | string[], options: Omit<IndexDefinition, 'fields'> = {}): this {
+  index(
+    fields: string | string[],
+    options: Omit<IndexDefinition, 'fields'> = {},
+  ): this {
     this.definition.indexes?.push({ fields: array(fields), ...options });
     return this;
   }
@@ -158,7 +234,9 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
       ...this.definition,
       fields: this.definition.fields?.map((field) => ({ ...field })),
       indexes: this.definition.indexes?.map((index) => ({ ...index })),
-      constraints: this.definition.constraints?.map((constraint) => ({ ...constraint })),
+      constraints: this.definition.constraints?.map((constraint) => ({
+        ...constraint,
+      })),
     });
   }
 
@@ -187,22 +265,46 @@ export class FluentCollectionAlterBuilder
     dropConstraints: [],
   };
 
-  override primary(fields: string | string[], options: Omit<PrimaryConstraintDefinition, 'type' | 'fields'> = {}): this {
-    this.changes.addConstraints?.push({ type: 'primary', fields: array(fields), ...options });
+  override primary(
+    fields: string | string[],
+    options: Omit<PrimaryConstraintDefinition, 'type' | 'fields'> = {},
+  ): this {
+    this.changes.addConstraints?.push({
+      type: 'primary',
+      fields: array(fields),
+      ...options,
+    });
     return this;
   }
 
-  override unique(fields: string | string[], options: Omit<UniqueConstraintDefinition, 'type' | 'fields'> = {}): this {
-    this.changes.addConstraints?.push({ type: 'unique', fields: array(fields), ...options });
+  override unique(
+    fields: string | string[],
+    options: Omit<UniqueConstraintDefinition, 'type' | 'fields'> = {},
+  ): this {
+    this.changes.addConstraints?.push({
+      type: 'unique',
+      fields: array(fields),
+      ...options,
+    });
     return this;
   }
 
-  override foreignKey(fields: string | string[], options: Omit<ForeignKeyConstraintDefinition, 'type' | 'fields'>): this {
-    this.changes.addConstraints?.push({ type: 'foreignKey', fields: array(fields), ...options });
+  override foreignKey(
+    fields: string | string[],
+    options: Omit<ForeignKeyConstraintDefinition, 'type' | 'fields'>,
+  ): this {
+    this.changes.addConstraints?.push({
+      type: 'foreignKey',
+      fields: array(fields),
+      ...options,
+    });
     return this;
   }
 
-  override index(fields: string | string[], options: Omit<IndexDefinition, 'fields'> = {}): this {
+  override index(
+    fields: string | string[],
+    options: Omit<IndexDefinition, 'fields'> = {},
+  ): this {
     this.changes.addIndexes?.push({ fields: array(fields), ...options });
     return this;
   }
@@ -244,19 +346,31 @@ export class FluentViewCollectionDefinitionBuilder
   extends FluentCollectionDefinitionBuilder
   implements ViewCollectionDefinitionBuilder
 {
-  as(query: QueryViewDefinition | ((query: ViewQueryBuilder) => ViewQueryBuilder)): this {
-    const nextQuery = typeof query === 'function' ? query(new FluentViewQueryBuilder()).toQuery() : query;
+  as(
+    query:
+      QueryViewDefinition | ((query: ViewQueryBuilder) => ViewQueryBuilder),
+  ): this {
+    const nextQuery =
+      typeof query === 'function'
+        ? query(new FluentViewQueryBuilder()).toQuery()
+        : query;
     this.definition.view = { ...(this.definition.view ?? {}), as: nextQuery };
     return this;
   }
 
   asRaw(sql: string, bindings?: unknown[]): this {
-    this.definition.view = { ...(this.definition.view ?? {}), asRaw: { sql, bindings } };
+    this.definition.view = {
+      ...(this.definition.view ?? {}),
+      asRaw: { sql, bindings },
+    };
     return this;
   }
 
   refresh(options: NonNullable<ViewOptions['refresh']>): this {
-    this.definition.view = { ...(this.definition.view ?? {}), refresh: options };
+    this.definition.view = {
+      ...(this.definition.view ?? {}),
+      refresh: options,
+    };
     return this;
   }
 }
@@ -296,7 +410,9 @@ export class FluentFieldDefinitionBuilder implements FieldDefinitionBuilder {
     public readonly definition: AnyFieldDefinition,
   ) {}
 
-  primary(options: Omit<PrimaryConstraintDefinition, 'type' | 'fields'> = {}): this {
+  primary(
+    options: Omit<PrimaryConstraintDefinition, 'type' | 'fields'> = {},
+  ): this {
     this.definition.primaryKey = true;
     this.collection.primary(this.definition.name, options);
     return this;
@@ -322,7 +438,9 @@ export class FluentFieldDefinitionBuilder implements FieldDefinitionBuilder {
     return this;
   }
 
-  unique(options: Omit<UniqueConstraintDefinition, 'type' | 'fields'> = {}): this {
+  unique(
+    options: Omit<UniqueConstraintDefinition, 'type' | 'fields'> = {},
+  ): this {
     this.definition.unique = true;
     this.collection.unique(this.definition.name, options);
     return this;
@@ -368,7 +486,11 @@ export class FluentFieldDefinitionBuilder implements FieldDefinitionBuilder {
     return this;
   }
 
-  references(ref: { collection: string; field?: string; fields?: string[] }): this {
+  references(ref: {
+    collection: string;
+    field?: string;
+    fields?: string[];
+  }): this {
     this.collection.foreignKey(this.definition.name, {
       references: {
         collection: ref.collection,
@@ -389,21 +511,30 @@ export class FluentRelationFieldBuilder
 {
   override definition: RelationFieldDefinition;
 
-  constructor(collection: FluentCollectionDefinitionBuilder, definition: RelationFieldDefinition) {
+  constructor(
+    collection: FluentCollectionDefinitionBuilder,
+    definition: RelationFieldDefinition,
+  ) {
     super(collection, definition);
     this.definition = definition;
   }
 
   override columnName(): never {
-    throw new Error('Relation fields do not support columnName(). Define a local foreign key field and reference it with foreignKey().');
+    throw new Error(
+      'Relation fields do not support columnName(). Define a local foreign key field and reference it with foreignKey().',
+    );
   }
 
   override mapToColumn(): never {
-    throw new Error('Relation fields do not support mapToColumn(). Define a local foreign key field and reference it with foreignKey().');
+    throw new Error(
+      'Relation fields do not support mapToColumn(). Define a local foreign key field and reference it with foreignKey().',
+    );
   }
 
   override references(): never {
-    throw new Error('Relation fields do not support references(). Define a scalar field for database foreign key constraints.');
+    throw new Error(
+      'Relation fields do not support references(). Define a scalar field for database foreign key constraints.',
+    );
   }
 
   override toDefinition(): RelationFieldDefinition {
