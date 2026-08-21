@@ -57,6 +57,18 @@ Agent 的推荐 DSL 取决于输出载体：
 - 所有来源的 migration 按全局 `name` 排序，`name` 必须全局唯一；`packageName` 只用于归属、历史记录和诊断。
 - 旧的单目录 `directory` API 默认使用 `packageName: 'app'`。
 
+## Seed 规则
+
+- 插件安装默认数据放在 package 自己的 `database/seeds/`。
+- 上层安装器必须先执行 migrations，再执行 seeds。
+- 只生成 `export default defineSeed({})`，文件名主体和 `name` 完全一致。
+- Seed 使用 `query` 写数据，不使用 `builder` 修改数据库结构。
+- Seed context 顶层只使用 `query` 和 `connection`。
+- 所有 package 的 seed `name` 全局唯一，并按 `name` 排序；`packageName` 只用于归属和历史。
+- 已发布 seed 不修改、不插队；默认数据变化时新增更晚的 seed。
+- Seed 应幂等，并以稳定业务 key 和数据库唯一约束防止重复数据。
+- Seed 失败时不写历史；不要生成 rollback、refresh 或 truncate 行为。
+
 ## Query 规则
 
 - 写查询代码时，优先使用 `selectFrom()`、`insertInto()`、`updateTable()`、`deleteFrom()`。
@@ -103,6 +115,7 @@ Repository 和 Repository Filter Builder 当前是规划设计，尚未实现。
 - Collection Builder 用法放 `builder/`。
 - QueryAdapter 用法放 `query/`。
 - Migration 用法和维护清单放 `migration/`。
+- Seed 用法和维护清单放 `seed/`。
 - Repository 和 Repository Filter 规划放 `repository/`。
 - 开发维护说明放 `development/`。
 - 纯 API 签名和类型说明放 `reference/`。

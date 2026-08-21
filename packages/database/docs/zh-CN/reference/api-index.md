@@ -59,6 +59,20 @@ Migration context 顶层只暴露 `builder`、`query` 和 `connection`。不在�
 
 详见 [Migration](../migration/overview.md) 和 [Migration 维护清单](../migration/maintenance.md)。
 
+## Seed
+
+Seed 入口：
+
+- `defineSeed(definition)`：定义一次性安装数据初始化。
+- `createSeeder(options)`：创建 seed runner。
+- `seeder.run()`：执行 pending seeds。
+- `loadSeeds(options)`：加载并校验 seed sources。
+- `validateSeeds(options)`：只校验 seed 文件。
+
+Seed 支持 `{ directory, packageName? }` 和 `sources: [{ packageName, directory }]`。所有 seed 的 `name` 全局唯一并决定执行顺序。Seed context 只暴露 `query` 和 `connection`。
+
+详见 [Seed](../seed/overview.md) 和 [Seed 维护清单](../seed/maintenance.md)。
+
 ## Builder
 
 - `createCollection(name, input, options?)`
@@ -97,6 +111,8 @@ Migration context 顶层只暴露 `builder`、`query` 和 `connection`。不在�
 - [Query API](./query-api.md)
 - [Migration](../migration/overview.md)
 - [Migration 维护清单](../migration/maintenance.md)
+- [Seed](../seed/overview.md)
+- [Seed 维护清单](../seed/maintenance.md)
 - [Repository 概览（规划中）](../repository/overview.md)
 - [Repository Filter Builder（规划中）](../repository/filter-builder.md)
 - [Repository Filter AST（规划中）](../repository/filter-ast.md)
