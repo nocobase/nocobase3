@@ -8,7 +8,7 @@ export default createNodeVitestConfig({
       include: ["src/**/*.ts"],
       exclude: [
         "dist/**",
-        "test/**",
+        "tests/**",
         "src/**/index.ts",
         "src/**/types.ts",
         "src/database/connection.ts",

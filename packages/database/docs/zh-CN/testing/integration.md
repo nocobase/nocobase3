@@ -1,6 +1,6 @@
 # 集成测试
 
-`test/integration` 是真实数据库连接测试，不是 mock，也不是 SQLite 专属目录。
+`tests/integration` 是真实数据库连接测试，不是 mock，也不是 SQLite 专属目录。
 
 同一批 Collection Builder 用例可以跑在：
 
@@ -48,7 +48,7 @@ npm run test:integration:all
 等价于：
 
 ```bash
-INTEGRATION_DB_CONNECTIONS=all vitest run test/integration
+INTEGRATION_DB_CONNECTIONS=all vitest run tests/integration
 ```
 
 ## 指定数据库
@@ -78,7 +78,7 @@ Integration helper 会为每个测试生成唯一表名前缀，避免并行测�
 真实数据库测试目录按能力拆分：
 
 ```text
-test/integration/
+tests/integration/
   helpers.ts
   builder/
     create-collection.test.ts
