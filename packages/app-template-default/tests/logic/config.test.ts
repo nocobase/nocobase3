@@ -23,8 +23,14 @@ import logging from '../../server/config/logging.ts';
 import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
 import spa from '../../server/config/spa.ts';
-import { createStandaloneRuntime } from '../../server/index.ts';
-import { loadEmbeddedAppConfig } from '../../server/runtime/config.ts';
+import {
+  createStandaloneDatabaseTaskRuntime,
+  createStandaloneRuntime,
+} from '../../server/index.ts';
+import {
+  loadDatabaseTaskConfig,
+  loadEmbeddedAppConfig,
+} from '../../server/runtime/config.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
@@ -736,6 +742,53 @@ describe('app plugins', () => {
 });
 
 describe('standalone runtime database config', () => {
+  it('loads database tasks without application-only configuration', () => {
+    const rootDir = fileURLToPath(new URL('../..', import.meta.url));
+    const config = loadDatabaseTaskConfig({
+      mode: 'standalone',
+      env: {},
+      paths: {
+        rootDir,
+        serverDir: path.join(rootDir, 'server'),
+        databaseDir: path.join(rootDir, 'database'),
+      },
+      routing: {
+        name: 'app-template-default',
+        publicBasePath: '/app-template-default',
+        internalBasePath: '',
+        internalApiProxyPath: '/v2/api',
+        publicApiUrl: '/app-template-default/v2/api',
+      },
+    });
+
+    expect(config.database.default).toBe('sqlite');
+    expect(config).not.toHaveProperty('auth');
+    expect(config.database.migrations.sources).toEqual([
+      expect.objectContaining({
+        packageName: '@nocobase/app-template-default',
+      }),
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-example',
+      }),
+    ]);
+  });
+
+  it('creates a database task runtime with plugin sources', async () => {
+    const runtime = createStandaloneDatabaseTaskRuntime();
+
+    expect(runtime.config).not.toHaveProperty('auth');
+    expect(runtime.config.plugins).toEqual([
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-example',
+        enabled: true,
+      }),
+    ]);
+    expect(runtime.migrator).toBeDefined();
+    expect(runtime.seeder).toBeDefined();
+
+    await runtime.dispose();
+  });
+
   it('uses the active database directory for migrations and seeds', () => {
     const runtime = createStandaloneRuntime();
 

@@ -1,11 +1,11 @@
 import { prepareAppDatabaseStorage } from '@nocobase/app-server/database';
 
-import { createStandaloneRuntime } from '../server/standalone.js';
+import { createStandaloneDatabaseTaskRuntime } from '../server/database-task.js';
 
 await seed();
 
 async function seed(): Promise<void> {
-  const runtime = createStandaloneRuntime();
+  const runtime = createStandaloneDatabaseTaskRuntime();
 
   try {
     await prepareAppDatabaseStorage(runtime.config.database);

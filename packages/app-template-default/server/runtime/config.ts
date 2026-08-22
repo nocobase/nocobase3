@@ -4,14 +4,18 @@ import {
   createConfigEnv,
   createConfigPaths,
   loadConfig,
+  type ConfigContext,
 } from '@nocobase/app-server/config';
+import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 
 import configFactories, { type AppConfig } from '../config/index.js';
+import databaseConfigFactory from '../config/database.js';
 import type { AppScope, ResolvedAppRuntimeOptions } from './options.js';
 import {
   createPluginMigrationSources,
   createPluginSeedSources,
   resolveAppPlugins,
+  type ResolvedAppPlugin,
 } from '../plugins/index.js';
 import {
   resolveEmbeddedRuntimeOptions,
@@ -22,6 +26,17 @@ export function loadStandaloneAppConfig(moduleUrl: string): AppConfig {
   return loadAppConfig(resolveStandaloneRuntimeOptions(moduleUrl));
 }
 
+export interface DatabaseTaskConfig {
+  database: AppDatabaseConfig;
+  plugins: readonly ResolvedAppPlugin[];
+}
+
+export function loadStandaloneDatabaseTaskConfig(
+  moduleUrl: string,
+): DatabaseTaskConfig {
+  return loadDatabaseTaskConfig(resolveStandaloneRuntimeOptions(moduleUrl));
+}
+
 export function loadEmbeddedAppConfig(
   scope: AppScope,
   moduleUrl: string,
@@ -30,51 +45,15 @@ export function loadEmbeddedAppConfig(
 }
 
 export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
-  const config = loadConfig(configFactories, {
-    env: createConfigEnv(options.env),
-    paths: createConfigPaths({
-      rootDir: options.paths.rootDir,
-      serverDir: options.paths.serverDir,
-      databaseDir: options.paths.databaseDir,
-      storageDir: options.paths.storageDir,
-    }),
-  });
-  const resolvedPlugins = resolveAppPlugins(options.paths.rootDir);
-  const appMigrationSource = {
-    packageName: resolvedPlugins.appPackageName,
-    directory: config.database.migrations.directory,
-  };
-  const appSeedSource = config.database.seeds
-    ? {
-        packageName: resolvedPlugins.appPackageName,
-        directory: config.database.seeds.directory,
-      }
-    : undefined;
-  const seedSources = appSeedSource
-    ? [appSeedSource, ...createPluginSeedSources(resolvedPlugins.plugins)]
-    : undefined;
+  const config = loadConfig(configFactories, createConfigContext(options));
+  const databaseTaskConfig = resolveDatabaseTaskConfig(
+    config.database,
+    options.paths.rootDir,
+  );
 
   return {
     ...config,
-    plugins: resolvedPlugins.plugins,
-    database: {
-      ...config.database,
-      migrations: {
-        ...config.database.migrations,
-        packageName: resolvedPlugins.appPackageName,
-        sources: [
-          appMigrationSource,
-          ...createPluginMigrationSources(resolvedPlugins.plugins),
-        ],
-      },
-      seeds: config.database.seeds
-        ? {
-            ...config.database.seeds,
-            packageName: resolvedPlugins.appPackageName,
-            sources: seedSources,
-          }
-        : undefined,
-    },
+    ...databaseTaskConfig,
     app: {
       ...config.app,
       ...options.routing,
@@ -84,6 +63,71 @@ export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
       indexPath: options.paths.clientDir
         ? path.join(options.paths.clientDir, 'index.html')
         : config.spa.indexPath,
+    },
+  };
+}
+
+export function loadDatabaseTaskConfig(
+  options: ResolvedAppRuntimeOptions,
+): DatabaseTaskConfig {
+  return resolveDatabaseTaskConfig(
+    databaseConfigFactory(createConfigContext(options)),
+    options.paths.rootDir,
+  );
+}
+
+function createConfigContext(
+  options: ResolvedAppRuntimeOptions,
+): ConfigContext {
+  return {
+    env: createConfigEnv(options.env),
+    paths: createConfigPaths({
+      rootDir: options.paths.rootDir,
+      serverDir: options.paths.serverDir,
+      databaseDir: options.paths.databaseDir,
+      storageDir: options.paths.storageDir,
+    }),
+  };
+}
+
+function resolveDatabaseTaskConfig(
+  database: AppDatabaseConfig,
+  rootDir: string,
+): DatabaseTaskConfig {
+  const resolvedPlugins = resolveAppPlugins(rootDir);
+  const appMigrationSource = {
+    packageName: resolvedPlugins.appPackageName,
+    directory: database.migrations.directory,
+  };
+  const appSeedSource = database.seeds
+    ? {
+        packageName: resolvedPlugins.appPackageName,
+        directory: database.seeds.directory,
+      }
+    : undefined;
+  const seedSources = appSeedSource
+    ? [appSeedSource, ...createPluginSeedSources(resolvedPlugins.plugins)]
+    : undefined;
+
+  return {
+    plugins: resolvedPlugins.plugins,
+    database: {
+      ...database,
+      migrations: {
+        ...database.migrations,
+        packageName: resolvedPlugins.appPackageName,
+        sources: [
+          appMigrationSource,
+          ...createPluginMigrationSources(resolvedPlugins.plugins),
+        ],
+      },
+      seeds: database.seeds
+        ? {
+            ...database.seeds,
+            packageName: resolvedPlugins.appPackageName,
+            sources: seedSources,
+          }
+        : undefined,
     },
   };
 }
