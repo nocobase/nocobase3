@@ -6,5 +6,5 @@
     "outDir": "dist"
   },
   "include": ["index.ts", "server/**/*.ts", "client/**/*.ts"],
-  "exclude": ["server/test", "client/test", "ui/test"]
+  "exclude": ["server/tests", "client/tests", "ui/tests"]
 }

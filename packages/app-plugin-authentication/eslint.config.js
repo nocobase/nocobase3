@@ -7,6 +7,17 @@ export default createClientLibraryConfig({
   ignores: ['ui/**'],
   overrides: [
     {
+      name: 'app-plugin-authentication/database-task-project',
+      files: ['database/migrations/*.ts'],
+      languageOptions: {
+        parserOptions: {
+          project: './tsconfig.migrations.json',
+          projectService: false,
+          tsconfigRootDir: import.meta.dirname,
+        },
+      },
+    },
+    {
       // Refine's AuthProvider callbacks expose form payloads as any. The
       // adapter normalizes each field before passing it to the typed client.
       files: ['client/auth-provider.ts'],

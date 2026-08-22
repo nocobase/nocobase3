@@ -5,8 +5,8 @@
 以下导出同时存在于：
 
 ```ts
-import {} from '@nocobase/authentication';
-import {} from '@nocobase/authentication/server';
+import {} from '@nocobase/app-plugin-authentication';
+import {} from '@nocobase/app-plugin-authentication/server';
 ```
 
 ### Auth
@@ -118,19 +118,10 @@ function databaseAdapter(
 将 NocoBase `DatabaseConnection` 适配为 Better Auth database factory。通常由
 `Auth` 内部调用；只有扩展或测试 adapter 时才需要直接使用。
 
-### authenticationMigration
-
-```ts
-import { authenticationMigration } from '@nocobase/authentication/server';
-```
-
-创建 `user`、`session`、`account`、`verification` Collection 的标准
-`MigrationDefinition`。
-
 ## 客户端入口
 
 ```ts
-import {} from '@nocobase/authentication/client';
+import {} from '@nocobase/app-plugin-authentication/client';
 ```
 
 ### AuthClient

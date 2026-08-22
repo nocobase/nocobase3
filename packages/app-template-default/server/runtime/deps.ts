@@ -2,7 +2,7 @@ import { createCaching, type Caching } from '@nocobase/caching';
 import {
   createAuthStorage,
   createAuthentication,
-} from '@nocobase/authentication';
+} from '@nocobase/app-plugin-authentication';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import { SnowflakeIdGenerator } from '@nocobase/id-generator';
 import { createLogging, type Logging } from '@nocobase/logging';
@@ -17,7 +17,7 @@ import {
   type NocoBaseSessionManager,
 } from '@nocobase/session';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
-import type { Auth } from '@nocobase/authentication';
+import type { Auth } from '@nocobase/app-plugin-authentication';
 
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';

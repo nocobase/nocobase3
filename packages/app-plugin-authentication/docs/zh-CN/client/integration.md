@@ -1,12 +1,12 @@
 # 客户端与 Refine 集成
 
-浏览器代码必须从 `@nocobase/authentication/client` 导入。这个入口不包含
+浏览器代码必须从 `@nocobase/app-plugin-authentication/client` 导入。这个入口不包含
 Database、Hono 或 Better Auth 服务端实现。
 
 ## 创建 AuthClient
 
 ```ts
-import { createAuthClient } from '@nocobase/authentication/client';
+import { createAuthClient } from '@nocobase/app-plugin-authentication/client';
 import { createAppClient } from '@nocobase/app-sdk';
 
 const appClient = createAppClient();
@@ -73,7 +73,7 @@ await authClient.requestPasswordReset(
 ## Refine AuthProvider
 
 ```ts
-import { createAuthProvider } from '@nocobase/authentication/client';
+import { createAuthProvider } from '@nocobase/app-plugin-authentication/client';
 
 const authProvider = createAuthProvider(authClient);
 ```
@@ -109,5 +109,5 @@ provider 会合并并缓存并发的 session 查询。login、register、logout 
 - 应用的 `@/components/ui/input`；
 - 应用的 `@/components/ui/label`。
 
-应用可以复制后修改布局和文案，不应从 `@nocobase/authentication/ui/*` 直接做
+应用可以复制后修改布局和文案，不应从 `@nocobase/app-plugin-authentication/ui/*` 直接做
 运行时导入。

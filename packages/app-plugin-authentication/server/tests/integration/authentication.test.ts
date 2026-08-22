@@ -1,19 +1,23 @@
-import { createDatabaseManager } from '@nocobase/database';
+import { fileURLToPath } from 'node:url';
+
+import { createDatabaseManager, createMigrator } from '@nocobase/database';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Auth, authenticationMigration, type AuthEnv } from '../../../index.js';
+import { Auth, type AuthEnv } from '../../../index.js';
 import { databaseAdapter } from '../../better-auth/database-adapter.js';
 
 async function migrateAuthentication(
   database: ReturnType<typeof createDatabaseManager>,
-) {
-  const connection = database.connection();
-  await authenticationMigration.up({
-    builder: connection.builder,
-    query: connection.query,
-    connection,
+): Promise<void> {
+  const migrator = createMigrator({
+    database,
+    packageName: '@nocobase/app-plugin-authentication',
+    directory: fileURLToPath(
+      new URL('../../../database/migrations', import.meta.url),
+    ),
   });
+  await migrator.latest();
 }
 
 describe('Authentication', () => {

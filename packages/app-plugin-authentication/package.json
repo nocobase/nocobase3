@@ -1,5 +1,7 @@
 {
-  "name": "@nocobase/authentication",
+  "name": "@nocobase/app-plugin-authentication",
+  "displayName": "Authentication App Plugin",
+  "description": "Authentication plugin for NocoBase applications.",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -21,7 +23,8 @@
     "./client": {
       "types": "./client/index.ts",
       "import": "./client/index.ts"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "exports": {
@@ -36,16 +39,24 @@
       "./client": {
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
-      }
+      },
+      "./package.json": "./package.json"
     }
   },
   "files": [
     "dist",
     "ui"
   ],
+  "nocobase": {
+    "plugin": {
+      "database": {
+        "migrations": "./database/migrations"
+      }
+    }
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",

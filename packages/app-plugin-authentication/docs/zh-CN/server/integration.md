@@ -6,7 +6,7 @@
 ## 创建 Auth
 
 ```ts
-import { createAuthentication } from '@nocobase/authentication';
+import { createAuthentication } from '@nocobase/app-plugin-authentication';
 
 const auth = createAuthentication({
   connection: runtime.database.connection(),
@@ -23,7 +23,7 @@ const auth = createAuthentication({
 也可以直接实例化 `Auth`：
 
 ```ts
-import { Auth } from '@nocobase/authentication/server';
+import { Auth } from '@nocobase/app-plugin-authentication/server';
 
 const auth = new Auth({
   connection,
@@ -63,7 +63,7 @@ if (current) {
 `required()` 只允许有效 session 继续执行：
 
 ```ts
-import type { AuthEnv } from '@nocobase/authentication';
+import type { AuthEnv } from '@nocobase/app-plugin-authentication';
 
 const protectedRoutes = new Hono<AuthEnv>();
 
@@ -110,7 +110,7 @@ app.use(
 ## 接入 secondary storage
 
 ```ts
-import { createAuthStorage } from '@nocobase/authentication';
+import { createAuthStorage } from '@nocobase/app-plugin-authentication';
 import { createCaching } from '@nocobase/caching';
 
 const caching = createCaching(config.caching);

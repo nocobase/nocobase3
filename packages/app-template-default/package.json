@@ -10,6 +10,9 @@
   "nocobase": {
     "defaultTemplateVersion": "3.1.1",
     "plugins": {
+      "@nocobase/app-plugin-authentication": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-example": {
         "enabled": true
       }
@@ -23,10 +26,10 @@
     "@hono/node-server": "catalog:",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/app-plugin-example": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
-    "@nocobase/authentication": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/database": "workspace:^",
     "@nocobase/drive": "workspace:^",

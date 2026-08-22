@@ -673,35 +673,46 @@ describe('database migrations', () => {
         name: '202608180001_create_app_settings_table',
         fileName: '202608180001_create_app_settings_table.ts',
       }),
-      expect.objectContaining({
-        name: '202608200001_create_authentication_tables',
-        fileName: '202608200001_create_authentication_tables.ts',
-      }),
     ]);
   });
 });
 
 describe('app plugins', () => {
-  it('resolves the example plugin and its enabled database sources', async () => {
+  it('resolves enabled plugins and their database sources', async () => {
     const runtime = createStandaloneRuntime();
-    const plugin = runtime.config.plugins.find(
+    const authenticationPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-authentication',
+    );
+    const examplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-example',
     );
 
-    expect(plugin).toMatchObject({
+    expect(authenticationPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-authentication',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(authenticationPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-authentication\/database\/migrations$/,
+    );
+    expect(authenticationPlugin?.seedsDirectory).toBeUndefined();
+    expect(examplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-example',
       version: '0.1.0',
       enabled: true,
     });
-    expect(plugin?.migrationsDirectory).toMatch(
+    expect(examplePlugin?.migrationsDirectory).toMatch(
       /app-plugin-example\/database\/migrations$/,
     );
-    expect(plugin?.seedsDirectory).toMatch(
+    expect(examplePlugin?.seedsDirectory).toMatch(
       /app-plugin-example\/database\/seeds$/,
     );
     expect(runtime.config.database.migrations.sources).toEqual([
       expect.objectContaining({
         packageName: '@nocobase/app-template-default',
+      }),
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-authentication',
       }),
       expect.objectContaining({
         packageName: '@nocobase/app-plugin-example',
@@ -722,6 +733,10 @@ describe('app plugins', () => {
       }),
     ).resolves.toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+          name: '202608200001_create_authentication_tables',
+        }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-example',
           name: '202608220001_example_create_messages',
@@ -768,6 +783,9 @@ describe('standalone runtime database config', () => {
         packageName: '@nocobase/app-template-default',
       }),
       expect.objectContaining({
+        packageName: '@nocobase/app-plugin-authentication',
+      }),
+      expect.objectContaining({
         packageName: '@nocobase/app-plugin-example',
       }),
     ]);
@@ -778,6 +796,10 @@ describe('standalone runtime database config', () => {
 
     expect(runtime.config).not.toHaveProperty('auth');
     expect(runtime.config.plugins).toEqual([
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-authentication',
+        enabled: true,
+      }),
       expect.objectContaining({
         packageName: '@nocobase/app-plugin-example',
         enabled: true,

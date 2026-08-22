@@ -3,7 +3,7 @@
 这篇指南适合两类读者：希望在应用里增加登录方式的开发者，以及协助完成这项工作
 的 AI Agent。
 
-这里假设应用基于 `app-template-default` 创建，`@nocobase/authentication` 已作为
+这里假设应用基于 `app-template-default` 创建，`@nocobase/app-plugin-authentication` 已作为
 发布包安装。Agent 能修改的是应用代码，不需要、通常也无法读取 authentication
 包的仓库源码。
 
@@ -21,8 +21,11 @@ server/runtime/deps.ts
 server/routes/api/auth.ts
   把 /api/auth/* 交给 Better Auth
 
+@nocobase/app-plugin-authentication/database/migrations/
+  插件拥有的基础认证表结构
+
 database/migrations/
-  应用拥有的认证表结构
+  应用自己的认证扩展表结构
 
 client/auth/
   用户自己的认证 client、页面和组件
@@ -33,7 +36,7 @@ client/auth/
 
 开始前，Agent 可以先阅读这些应用文件，再查看：
 
-- 当前安装的 `@nocobase/authentication` 版本及其文档；
+- 当前安装的 `@nocobase/app-plugin-authentication` 版本及其文档；
 - 当前应用使用的 Better Auth 版本；
 - 目标 provider 或 plugin 对应版本的 Better Auth 官方文档；
 - 应用现有的路由、登录页面和 migration。
@@ -115,12 +118,13 @@ endpoint 通常会自动生效，不需要再写一套重复的 Hono 路由。
 有些 provider 只使用现有的 `user`、`session`、`account`、`verification` 表；有些
 plugin 会增加字段或 model。
 
-如果需要新结构，应在应用的 `database/migrations/` 中增加 migration。应用应把
-migration 当作自己的数据库历史，而不是在生产环境依赖 Better Auth 自动改表。
+基础认证结构由 `@nocobase/app-plugin-authentication` 的 `database/migrations/`
+维护。如果应用接入额外 provider 或 Better Auth plugin 并需要新结构，应在应用的
+`database/migrations/` 中增加 migration。不要修改或复制插件已经发布的 migration，
+也不要在生产环境依赖 Better Auth 自动改表。
 
 ```text
 database/migrations/
-  202608200001_create_authentication_tables.ts
   202608210001_add_my_auth_provider.ts
 ```
 

@@ -12,16 +12,16 @@
 - `account`
 - `verification`
 
-包导出了 `authenticationMigration`。应用需要把该 migration 纳入自己的
-migration 管理。默认应用模板采用复制 migration 文件到
-`database/migrations` 的方式，使应用构建产物能够独立完成数据库升级。
+插件在 `package.json` 中声明自己的 `database/migrations`，应用启用插件后会将
+该目录纳入统一的 migration 管理。自定义应用也应通过 migration source 加载这个
+目录，不需要手工导入 migration definition。
 
 详细说明见[数据库与 Migration](./server/database-and-migration.md)。
 
 ## 2. 创建认证服务
 
 ```ts
-import { createAuthentication } from '@nocobase/authentication';
+import { createAuthentication } from '@nocobase/app-plugin-authentication';
 
 const secret = process.env.AUTH_SECRET;
 if (!secret) {
@@ -77,7 +77,7 @@ Better Auth 插件可以在同一路径下增加其他端点。
 ## 4. 保护业务路由
 
 ```ts
-import type { AuthEnv } from '@nocobase/authentication';
+import type { AuthEnv } from '@nocobase/app-plugin-authentication';
 import { Hono } from 'hono';
 
 const api = new Hono<AuthEnv>();
@@ -105,7 +105,7 @@ HTTP 状态码为 `401`。
 import {
   createAuthClient,
   createAuthProvider,
-} from '@nocobase/authentication/client';
+} from '@nocobase/app-plugin-authentication/client';
 import { createAppClient } from '@nocobase/app-sdk';
 
 export const appClient = createAppClient();

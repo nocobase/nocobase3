@@ -1,6 +1,6 @@
 # 概览
 
-`@nocobase/authentication` 负责把认证协议接入 NocoBase 应用运行时。它不负责
+`@nocobase/app-plugin-authentication` 负责把认证协议接入 NocoBase 应用运行时。它不负责
 应用页面、用户授权或业务资源访问控制；这些能力分别由应用 UI 和 ACL 模块承担。
 
 ## 模块边界

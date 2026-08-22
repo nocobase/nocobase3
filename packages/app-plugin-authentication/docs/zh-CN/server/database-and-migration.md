@@ -25,25 +25,33 @@ session、account 和 verification 的常用查询字段带有索引。
 
 ## 使用内置 migration
 
-服务端入口导出：
+插件的 `package.json` 声明 migration 目录：
 
-```ts
-import { authenticationMigration } from '@nocobase/authentication/server';
+```json
+{
+  "nocobase": {
+    "plugin": {
+      "database": {
+        "migrations": "./database/migrations"
+      }
+    }
+  }
+}
 ```
 
-它是标准 `MigrationDefinition`，可以交给使用 `@nocobase/database` 的 migration
-runner。具体注册方式取决于应用如何发现 migration。
+应用在插件注册表中启用 `@nocobase/app-plugin-authentication` 后，会自动把该目录
+作为插件 migration source，并用插件包名记录执行历史。
 
-默认应用模板选择将 migration 源文件复制到自己的 `database/migrations` 目录：
+真实 Migration 文件位于插件包内：
 
 ```text
 database/migrations/
   202608200001_create_authentication_tables.ts
 ```
 
-这种方式让应用构建产物独立拥有数据库历史，不要求部署时扫描依赖包源码。如果
-应用采用集中式 migration registry，也可以直接注册导出的 definition。两种方式
-只能选一种，避免同名 migration 被重复发现。
+默认应用模板会把启用插件的编译产物一同打入发布包，不依赖插件包源码。自定义
+runner 应把这个目录作为 package migration source 加载。不要再把该文件复制到
+应用自己的 migration 目录，否则同名 migration 会被重复发现。
 
 ## 不创建物理外键
 

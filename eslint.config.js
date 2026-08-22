@@ -84,8 +84,8 @@ export default [
       tsconfigRootDir: import.meta.dirname,
       ignores: ['ui/**'],
     }),
-    ['packages/authentication'],
-    'authentication',
+    ['packages/app-plugin-authentication'],
+    'app-plugin-authentication',
   ),
   ...scopePackageConfigs(
     createPortalConfig({
