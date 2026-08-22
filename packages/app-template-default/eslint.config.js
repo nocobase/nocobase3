@@ -20,8 +20,8 @@ export default createPortalConfig({
   ],
   overrides: [
     {
-      name: 'app-template-default/migration-project',
-      files: ['server/migrations/*.ts'],
+      name: 'app-template-default/database-task-project',
+      files: ['database/{migrations,seeds}/*.ts'],
       languageOptions: {
         parserOptions: {
           project: './tsconfig.migrations.json',

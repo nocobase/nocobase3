@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { createMigrator } from '../../../src/index.js';
+import { createMigrator, loadMigrations } from '../../../src/index.js';
 import { describeIntegrationDatabases } from '../helpers.js';
 
 const tempRoot = join(process.cwd(), 'tests/.tmp');
@@ -47,6 +47,7 @@ describeIntegrationDatabases('migration runner', (context) => {
       database: context.database,
       connection: context.spec.name,
       directory,
+      packageName: '@nocobase/plugin-users',
       tableName,
       lockTableName,
     });
@@ -66,11 +67,191 @@ describeIntegrationDatabases('migration runner', (context) => {
       skipped: ['202608180001_create_migration_users'],
     });
 
-    const history = await context.db(tableName).select(['name', 'batch']);
+    const history = await context
+      .db(tableName)
+      .select(['package_name', 'name', 'batch']);
     expect(history).toEqual([
       {
+        package_name: '@nocobase/plugin-users',
         name: '202608180001_create_migration_users',
         batch: 1,
+      },
+    ]);
+  });
+
+  it('upgrades legacy history tables and preserves applied migrations', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('legacyMigrationHistory');
+    const lockTableName = context.table('legacyMigrationLock');
+    const migrationName = '202608180001_legacy_history';
+    await writeMigration(
+      directory,
+      migrationName,
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${migrationName}',
+        async up() { throw new Error('already applied migration ran again'); },
+        async down() {},
+      });
+    `,
+    );
+    const [loaded] = await loadMigrations({ directory });
+    await context.db.schema.createTable(tableName, (table) => {
+      table.increments('id').primary();
+      table.string('name', 191).notNullable().unique();
+      table.integer('batch').notNullable();
+      table.string('checksum', 128).notNullable();
+      table.dateTime('executed_at').notNullable();
+      table.integer('duration_ms').nullable();
+    });
+    await context.db(tableName).insert({
+      name: loaded.name,
+      batch: 1,
+      checksum: loaded.checksum,
+      executed_at: new Date(),
+      duration_ms: 1,
+    });
+
+    const migrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      sources: [{ packageName: '@nocobase/plugin-legacy', directory }],
+      tableName,
+      lockTableName,
+    });
+
+    await expect(migrator.latest()).resolves.toEqual({
+      batch: 1,
+      executed: [],
+      skipped: [migrationName],
+    });
+    await expect(
+      context.db(tableName).select(['package_name', 'name']),
+    ).resolves.toEqual([{ package_name: 'app', name: migrationName }]);
+  });
+
+  it('runs and rolls back a global batch across package sources', async () => {
+    const firstDirectory = await createTempDirectory();
+    const secondDirectory = await createTempDirectory();
+    const tableName = context.table('packageMigrationHistory');
+    const lockTableName = context.table('packageMigrationLock');
+    const dataTableName = context.table('packageMigrationEvents');
+    await context.db.schema.createTable(dataTableName, (table) => {
+      table.increments('id').primary();
+      table.string('event').notNullable();
+    });
+    await writeEventMigration(
+      firstDirectory,
+      '202608180002_package_alpha',
+      dataTableName,
+    );
+    await writeEventMigration(
+      secondDirectory,
+      '202608180001_package_beta',
+      dataTableName,
+    );
+
+    const migrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      sources: [
+        { packageName: '@nocobase/plugin-alpha', directory: firstDirectory },
+        { packageName: '@nocobase/plugin-beta', directory: secondDirectory },
+      ],
+      tableName,
+      lockTableName,
+    });
+
+    await expect(migrator.latest()).resolves.toMatchObject({
+      executed: ['202608180001_package_beta', '202608180002_package_alpha'],
+    });
+    await expect(
+      context.db(tableName).select(['package_name', 'name']).orderBy('id'),
+    ).resolves.toEqual([
+      {
+        package_name: '@nocobase/plugin-beta',
+        name: '202608180001_package_beta',
+      },
+      {
+        package_name: '@nocobase/plugin-alpha',
+        name: '202608180002_package_alpha',
+      },
+    ]);
+
+    await expect(migrator.rollback()).resolves.toEqual({
+      batch: 1,
+      rolledBack: ['202608180002_package_alpha', '202608180001_package_beta'],
+    });
+    await expect(
+      context.db(dataTableName).select('event').orderBy('id'),
+    ).resolves.toEqual([
+      { event: 'up:202608180001_package_beta' },
+      { event: 'up:202608180002_package_alpha' },
+      { event: 'down:202608180002_package_alpha' },
+      { event: 'down:202608180001_package_beta' },
+    ]);
+  });
+
+  it('keeps history for packages that no longer participate', async () => {
+    const pluginDirectory = await createTempDirectory();
+    const appDirectory = await createTempDirectory();
+    const tableName = context.table('disabledPackageHistory');
+    const lockTableName = context.table('disabledPackageLock');
+    const migrationName = '202608180001_disabled_package';
+    await writeMigration(
+      pluginDirectory,
+      migrationName,
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${migrationName}',
+        async up() {},
+        async down() {},
+      });
+    `,
+    );
+
+    const installer = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      sources: [
+        {
+          packageName: '@nocobase/app-plugin-disabled',
+          directory: pluginDirectory,
+        },
+      ],
+      tableName,
+      lockTableName,
+    });
+    await installer.latest();
+
+    const appMigrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      sources: [
+        {
+          packageName: '@nocobase/app-template-default',
+          directory: appDirectory,
+        },
+      ],
+      tableName,
+      lockTableName,
+    });
+
+    await expect(appMigrator.latest()).resolves.toEqual({
+      batch: 1,
+      executed: [],
+      skipped: [],
+    });
+    await expect(
+      context.db(tableName).select(['package_name', 'name']),
+    ).resolves.toEqual([
+      {
+        package_name: '@nocobase/app-plugin-disabled',
+        name: migrationName,
       },
     ]);
   });
@@ -250,4 +431,31 @@ async function writeMigration(
 
 function trimSource(source: string): string {
   return `${source.trim().replace(/^ {6}/gm, '')}\n`;
+}
+
+async function writeEventMigration(
+  directory: string,
+  name: string,
+  tableName: string,
+): Promise<void> {
+  await writeMigration(
+    directory,
+    name,
+    `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${name}',
+        transaction: false,
+        async up({ connection }) {
+          const knex = await connection.client();
+          await knex('${tableName}').insert({ event: 'up:${name}' });
+        },
+        async down({ connection }) {
+          const knex = await connection.client();
+          await knex('${tableName}').insert({ event: 'down:${name}' });
+        },
+      });
+    `,
+  );
 }

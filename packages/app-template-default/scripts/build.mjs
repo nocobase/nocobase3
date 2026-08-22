@@ -9,6 +9,21 @@ const rootDir = path.resolve(
 );
 const distDir = path.join(rootDir, 'dist');
 const envOutputPath = path.join(distDir, '.env');
+const appPackage = JSON.parse(
+  fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'),
+);
+const configuredPluginNames = Object.keys(appPackage.nocobase?.plugins ?? {});
+const workspacePluginNames = configuredPluginNames.filter((packageName) => {
+  const packageDir = path.resolve(rootDir, '..', packageName.split('/').at(-1));
+  if (!fs.existsSync(path.join(packageDir, 'package.json'))) {
+    return false;
+  }
+
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'),
+  );
+  return packageJson.name === packageName;
+});
 const serverEnvKeys = new Set([
   'APP_BASE_PATH',
   'APP_SERVER_HOST',
@@ -31,6 +46,9 @@ const serverEnvKeys = new Set([
   'DB_MIGRATIONS_AUTO_RUN',
   'DB_MIGRATIONS_TABLE',
   'DB_MIGRATIONS_LOCK_TABLE',
+  'DB_SEEDS_AUTO_RUN',
+  'DB_SEEDS_TABLE',
+  'DB_SEEDS_LOCK_TABLE',
   'QUEUE_CONNECTION',
   'QUEUE_REDIS_PREFIX',
   'QUEUE_DB_CONNECTION',
@@ -173,11 +191,11 @@ run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
 run('Build client', 'pnpm', ['exec', 'refine', 'build']);
 run('Build server workspace dependencies', 'pnpm', [
   '--filter',
+  '@nocobase/app-sdk',
+  '--filter',
   '@nocobase/database',
   '--filter',
   '@nocobase/app-server',
-  '--filter',
-  '@nocobase/authentication',
   '--filter',
   '@nocobase/caching',
   '--filter',
@@ -190,6 +208,7 @@ run('Build server workspace dependencies', 'pnpm', [
   '@nocobase/queue',
   '--filter',
   '@nocobase/session',
+  ...workspacePluginNames.flatMap((packageName) => ['--filter', packageName]),
   'build',
 ]);
 run('Build server', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.server.json']);
@@ -199,13 +218,13 @@ run('Rewrite server path aliases', 'pnpm', [
   '-p',
   'tsconfig.server.json',
 ]);
-run('Build migrations', 'pnpm', [
+run('Build database tasks', 'pnpm', [
   'exec',
   'tsc',
   '-p',
   'tsconfig.migrations.json',
 ]);
-run('Rewrite migration path aliases', 'pnpm', [
+run('Rewrite database task path aliases', 'pnpm', [
   'exec',
   'tsc-alias',
   '-p',

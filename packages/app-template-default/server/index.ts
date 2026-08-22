@@ -21,7 +21,6 @@ export {
   type StandaloneServerOptions,
 } from './standalone.js';
 export {
-  default as QueueDemoJob,
-  queueDemoExecutions,
-  type QueueDemoPayload,
-} from './jobs/queue-demo.js';
+  createStandaloneDatabaseTaskRuntime,
+  type DatabaseTaskRuntime,
+} from './database-task.js';
