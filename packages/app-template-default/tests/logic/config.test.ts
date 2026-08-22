@@ -695,7 +695,9 @@ describe('app plugins', () => {
     expect(authenticationPlugin?.migrationsDirectory).toMatch(
       /app-plugin-authentication\/database\/migrations$/,
     );
-    expect(authenticationPlugin?.seedsDirectory).toBeUndefined();
+    expect(authenticationPlugin?.seedsDirectory).toMatch(
+      /app-plugin-authentication\/database\/seeds$/,
+    );
     expect(examplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-example',
       version: '0.1.0',
@@ -723,6 +725,9 @@ describe('app plugins', () => {
         packageName: '@nocobase/app-template-default',
       }),
       expect.objectContaining({
+        packageName: '@nocobase/app-plugin-authentication',
+      }),
+      expect.objectContaining({
         packageName: '@nocobase/app-plugin-example',
       }),
     ]);
@@ -747,12 +752,18 @@ describe('app plugins', () => {
       validateSeeds({
         sources: runtime.config.database.seeds?.sources ?? [],
       }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-example',
-        name: '202608220002_example_create_welcome_message',
-      }),
-    ]);
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-example',
+          name: '202608220002_example_create_welcome_message',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+          name: '202608220003_authentication_create_default_admin_user',
+        }),
+      ]),
+    );
   });
 });
 

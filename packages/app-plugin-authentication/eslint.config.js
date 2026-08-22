@@ -8,7 +8,7 @@ export default createClientLibraryConfig({
   overrides: [
     {
       name: 'app-plugin-authentication/database-task-project',
-      files: ['database/migrations/*.ts'],
+      files: ['database/{migrations,seeds}/*.ts'],
       languageOptions: {
         parserOptions: {
           project: './tsconfig.migrations.json',

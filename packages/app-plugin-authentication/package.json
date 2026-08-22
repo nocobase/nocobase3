@@ -50,7 +50,8 @@
   "nocobase": {
     "plugin": {
       "database": {
-        "migrations": "./database/migrations"
+        "migrations": "./database/migrations",
+        "seeds": "./database/seeds"
       }
     }
   },

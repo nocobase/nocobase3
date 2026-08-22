@@ -1,6 +1,10 @@
 import { fileURLToPath } from 'node:url';
 
-import { createDatabaseManager, createMigrator } from '@nocobase/database';
+import {
+  createDatabaseManager,
+  createMigrator,
+  createSeeder,
+} from '@nocobase/database';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,6 +22,23 @@ async function migrateAuthentication(
     ),
   });
   await migrator.latest();
+}
+
+async function seedAuthentication(
+  database: ReturnType<typeof createDatabaseManager>,
+): Promise<void> {
+  const seeder = createSeeder({
+    database,
+    sources: [
+      {
+        packageName: '@nocobase/app-plugin-authentication',
+        directory: fileURLToPath(
+          new URL('../../../database/seeds', import.meta.url),
+        ),
+      },
+    ],
+  });
+  await seeder.run();
 }
 
 describe('Authentication', () => {
@@ -275,6 +296,130 @@ describe('Authentication naming strategy', () => {
           ],
         }),
       ).resolves.toMatchObject({ email: 'camel@example.com' });
+    } finally {
+      await database.destroy();
+    }
+  });
+});
+
+describe('Authentication seed', () => {
+  it('creates the default admin with working hashed credentials', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      await seedAuthentication(database);
+
+      const connection = database.connection();
+      const user = await connection.query
+        .selectFrom('user')
+        .select(['id', 'name', 'username', 'email', 'emailVerified'])
+        .where('email', '=', 'admin@nocobase.com')
+        .executeTakeFirst();
+      expect(user).toMatchObject({
+        name: 'nocobase',
+        username: 'nocobase',
+        email: 'admin@nocobase.com',
+        emailVerified: 1,
+      });
+
+      const account = await connection.query
+        .selectFrom('account')
+        .select(['issuer', 'accountId', 'providerId', 'userId', 'password'])
+        .where('userId', '=', user?.id)
+        .executeTakeFirst();
+      expect(account).toMatchObject({
+        issuer: 'local:credential',
+        accountId: user?.id,
+        providerId: 'credential',
+        userId: user?.id,
+      });
+      expect(account?.password).not.toBe('admin123');
+
+      const auth = new Auth({
+        connection,
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+      });
+      const app = new Hono();
+      app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+        auth.handler(context.req.raw),
+      );
+
+      const response = await app.request('/api/auth/sign-in/username', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          username: 'nocobase',
+          password: 'admin123',
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        user: {
+          name: 'nocobase',
+          username: 'nocobase',
+          email: 'admin@nocobase.com',
+        },
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('does not add a default credential to an existing installation', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      const now = new Date();
+      await database
+        .connection()
+        .query.insertInto('user')
+        .values({
+          id: crypto.randomUUID(),
+          name: 'Existing User',
+          username: 'existing',
+          email: 'existing@example.com',
+          emailVerified: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute();
+
+      await seedAuthentication(database);
+
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('user')
+          .select('id')
+          .where('email', '=', 'admin@nocobase.com')
+          .executeTakeFirst(),
+      ).resolves.toBeUndefined();
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('account')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
     } finally {
       await database.destroy();
     }
