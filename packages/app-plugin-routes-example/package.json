@@ -1,38 +1,20 @@
 {
-  "name": "@nocobase/app-plugin-example",
-  "displayName": "Example App Plugin",
-  "description": "Example app plugin with a migration and seed.",
+  "name": "@nocobase/app-plugin-routes-example",
+  "displayName": "Routes Example App Plugin",
+  "description": "Example app plugin with a convention-based HTTP route.",
   "version": "0.1.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
     "exports": {
-      ".": {
-        "types": "./dist/src/index.d.ts",
-        "import": "./dist/src/index.js"
-      },
       "./package.json": "./package.json"
-    }
-  },
-  "nocobase": {
-    "plugin": {
-      "database": {
-        "migrations": "./database/migrations",
-        "seeds": "./database/seeds"
-      }
     }
   },
   "scripts": {
@@ -48,7 +30,6 @@
   },
   "dependencies": {
     "@nocobase/app-server": "workspace:^",
-    "@nocobase/database": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

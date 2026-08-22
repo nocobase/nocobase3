@@ -25,7 +25,6 @@ import type {
 } from '@nocobase/app-server/websocket';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
 import type { AppDriveConfig } from '@nocobase/drive';
-import { CLOCK_TOPIC } from '@nocobase/app-plugin-realtime-example';
 import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import {
@@ -69,6 +68,7 @@ interface RegisteredTestDisposer {
 const apps: CloseableResource[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
+const TEST_REALTIME_TOPIC = 'test:realtime';
 
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -173,24 +173,24 @@ describe('app server', () => {
       connection,
       JSON.stringify({
         type: 'subscribe',
-        id: 'subscribe-clock',
-        topic: CLOCK_TOPIC,
+        id: 'subscribe-test-topic',
+        topic: TEST_REALTIME_TOPIC,
       }),
     );
     const subscribed = websocket.messages[0];
 
     expect(subscribed).toMatchObject({
       type: 'subscribed',
-      id: 'subscribe-clock',
-      topic: CLOCK_TOPIC,
+      id: 'subscribe-test-topic',
+      topic: TEST_REALTIME_TOPIC,
       subscriptionId: expect.any(String),
     });
 
-    realtime.publish(CLOCK_TOPIC, 'tick');
+    realtime.publish(TEST_REALTIME_TOPIC, 'tick');
 
     expect(websocket.messages[1]).toMatchObject({
       type: 'event',
-      topic: CLOCK_TOPIC,
+      topic: TEST_REALTIME_TOPIC,
       payload: 'tick',
       publishedAt: expect.any(String),
     });
@@ -199,18 +199,18 @@ describe('app server', () => {
       connection,
       JSON.stringify({
         type: 'unsubscribe',
-        id: 'unsubscribe-clock',
+        id: 'unsubscribe-test-topic',
         subscriptionId: (subscribed as { subscriptionId: string })
           .subscriptionId,
       }),
     );
-    realtime.publish(CLOCK_TOPIC, 'after unsubscribe');
+    realtime.publish(TEST_REALTIME_TOPIC, 'after unsubscribe');
 
     expect(websocket.messages[2]).toMatchObject({
       type: 'unsubscribed',
-      id: 'unsubscribe-clock',
+      id: 'unsubscribe-test-topic',
       subscriptionId: (subscribed as { subscriptionId: string }).subscriptionId,
-      topic: CLOCK_TOPIC,
+      topic: TEST_REALTIME_TOPIC,
     });
     expect(websocket.messages).toHaveLength(3);
 
@@ -760,13 +760,13 @@ describe('app server', () => {
       await createStandaloneServer({ viteDevUrl: false }),
     );
     const response = await app.request(
-      `http://localhost${runtime.config.app.publicBasePath}/install`,
+      `http://localhost${runtime.config.app.publicBasePath}/routes-example`,
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      installed: false,
-      settings: expect.any(Array),
+      plugin: '@nocobase/app-plugin-routes-example',
+      message: 'Hello from the routes example plugin',
     });
   });
 
@@ -851,30 +851,19 @@ describe('app server', () => {
       websocket,
       (message) => message.type === 'subscribed',
     );
-    const event = waitForWebSocketJsonMessage(
-      websocket,
-      (message) => message.type === 'event' && message.topic === CLOCK_TOPIC,
-    );
-
     websocket.send(
       JSON.stringify({
         type: 'subscribe',
-        id: 'clock',
-        topic: CLOCK_TOPIC,
+        id: 'test-topic',
+        topic: TEST_REALTIME_TOPIC,
       }),
     );
 
     await expect(subscribed).resolves.toMatchObject({
       type: 'subscribed',
-      id: 'clock',
-      topic: CLOCK_TOPIC,
+      id: 'test-topic',
+      topic: TEST_REALTIME_TOPIC,
       subscriptionId: expect.any(String),
-    });
-    await expect(event).resolves.toMatchObject({
-      type: 'event',
-      topic: CLOCK_TOPIC,
-      payload: expect.any(String),
-      publishedAt: expect.any(String),
     });
 
     const close = waitForWebSocketClose(websocket);

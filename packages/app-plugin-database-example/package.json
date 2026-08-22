@@ -1,7 +1,7 @@
 {
-  "name": "@nocobase/app-plugin-queue-example",
-  "displayName": "Queue Example App Plugin",
-  "description": "Example app plugin with a convention-based queue job and route.",
+  "name": "@nocobase/app-plugin-database-example",
+  "displayName": "Database Example App Plugin",
+  "description": "Example app plugin with a migration and seed.",
   "version": "0.1.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -17,6 +17,14 @@
       "./package.json": "./package.json"
     }
   },
+  "nocobase": {
+    "plugin": {
+      "database": {
+        "migrations": "./database/migrations",
+        "seeds": "./database/seeds"
+      }
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -29,9 +37,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/queue": "workspace:^",
-    "hono": "catalog:"
+    "@nocobase/database": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

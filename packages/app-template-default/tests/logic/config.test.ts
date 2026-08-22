@@ -683,8 +683,11 @@ describe('app plugins', () => {
     const authenticationPlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-authentication',
     );
-    const examplePlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-example',
+    const databaseExamplePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-database-example',
+    );
+    const routesExamplePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-routes-example',
     );
     const queueExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-queue-example',
@@ -704,19 +707,27 @@ describe('app plugins', () => {
     expect(authenticationPlugin?.seedsDirectory).toMatch(
       /app-plugin-authentication\/database\/seeds$/,
     );
-    expect(examplePlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-example',
+    expect(databaseExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-database-example',
       version: '0.1.0',
       enabled: true,
     });
-    expect(examplePlugin?.migrationsDirectory).toMatch(
-      /app-plugin-example\/database\/migrations$/,
+    expect(databaseExamplePlugin?.migrationsDirectory).toMatch(
+      /app-plugin-database-example\/database\/migrations$/,
     );
-    expect(examplePlugin?.seedsDirectory).toMatch(
-      /app-plugin-example\/database\/seeds$/,
+    expect(databaseExamplePlugin?.seedsDirectory).toMatch(
+      /app-plugin-database-example\/database\/seeds$/,
     );
-    expect(examplePlugin?.routesEntry).toMatch(
-      /app-plugin-example\/server\/routes\/index\.ts$/,
+    expect(databaseExamplePlugin?.routesEntry).toBeUndefined();
+    expect(routesExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-routes-example',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
+    expect(routesExamplePlugin?.seedsDirectory).toBeUndefined();
+    expect(routesExamplePlugin?.routesEntry).toMatch(
+      /app-plugin-routes-example\/server\/routes\/index\.ts$/,
     );
     expect(queueExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-queue-example',
@@ -754,7 +765,7 @@ describe('app plugins', () => {
         packageName: '@nocobase/app-plugin-authentication',
       }),
       expect.objectContaining({
-        packageName: '@nocobase/app-plugin-example',
+        packageName: '@nocobase/app-plugin-database-example',
       }),
     ]);
     expect(runtime.config.database.seeds?.sources).toEqual([
@@ -765,7 +776,7 @@ describe('app plugins', () => {
         packageName: '@nocobase/app-plugin-authentication',
       }),
       expect.objectContaining({
-        packageName: '@nocobase/app-plugin-example',
+        packageName: '@nocobase/app-plugin-database-example',
       }),
     ]);
 
@@ -780,8 +791,8 @@ describe('app plugins', () => {
           name: '202608200001_create_authentication_tables',
         }),
         expect.objectContaining({
-          packageName: '@nocobase/app-plugin-example',
-          name: '202608220001_example_create_messages',
+          packageName: '@nocobase/app-plugin-database-example',
+          name: '202608220001_database_example_create_messages',
         }),
       ]),
     );
@@ -792,8 +803,8 @@ describe('app plugins', () => {
     ).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          packageName: '@nocobase/app-plugin-example',
-          name: '202608220002_example_create_welcome_message',
+          packageName: '@nocobase/app-plugin-database-example',
+          name: '202608220002_database_example_create_welcome_message',
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-authentication',
@@ -834,7 +845,7 @@ describe('standalone runtime database config', () => {
         packageName: '@nocobase/app-plugin-authentication',
       }),
       expect.objectContaining({
-        packageName: '@nocobase/app-plugin-example',
+        packageName: '@nocobase/app-plugin-database-example',
       }),
     ]);
   });
@@ -849,7 +860,11 @@ describe('standalone runtime database config', () => {
         enabled: true,
       }),
       expect.objectContaining({
-        packageName: '@nocobase/app-plugin-example',
+        packageName: '@nocobase/app-plugin-database-example',
+        enabled: true,
+      }),
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-routes-example',
         enabled: true,
       }),
       expect.objectContaining({
