@@ -8,7 +8,12 @@
     "node": ">=24.0.0"
   },
   "nocobase": {
-    "defaultTemplateVersion": "3.1.1"
+    "defaultTemplateVersion": "3.1.1",
+    "plugins": {
+      "@nocobase/app-plugin-example": {
+        "enabled": true
+      }
+    }
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -19,6 +24,7 @@
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-plugin-example": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/authentication": "workspace:^",
     "@nocobase/caching": "workspace:^",

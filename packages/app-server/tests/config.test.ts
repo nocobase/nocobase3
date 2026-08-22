@@ -319,6 +319,7 @@ describe('app migrator', () => {
       database,
       connection: undefined,
       directory,
+      packageName: undefined,
       tableName: 'app_migrations',
       lockTableName: 'app_migration_lock',
       extensions: ['.js', '.mjs'],
@@ -354,11 +355,56 @@ describe('app migrator', () => {
       database: expect.any(Object),
       connection: 'tenant',
       directory,
+      packageName: undefined,
       tableName: undefined,
       lockTableName: undefined,
       extensions: undefined,
     });
     expect(rollback).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs migrations from package sources', async () => {
+    const firstDirectory = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-migration-source-'),
+    );
+    const secondDirectory = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-migration-source-'),
+    );
+    tempDirs.push(firstDirectory, secondDirectory);
+    const latest = vi.fn().mockResolvedValue({
+      batch: 1,
+      executed: [],
+      skipped: [],
+    });
+    createDatabaseMigratorMock.mockReturnValue({ latest, rollback: vi.fn() });
+    const sources = [
+      { packageName: '@nocobase/app', directory: firstDirectory },
+      {
+        packageName: '@nocobase/app-plugin-example',
+        directory: secondDirectory,
+      },
+    ];
+    const database = createMockDatabaseManager();
+    const migrator = createAppMigrator({
+      database,
+      config: {
+        directory: '/unused',
+        autoRun: true,
+      },
+      sources,
+    });
+
+    await expect(migrator.latest()).resolves.toMatchObject({
+      status: 'completed',
+    });
+    expect(createDatabaseMigratorMock).toHaveBeenCalledWith({
+      database,
+      connection: undefined,
+      sources,
+      tableName: undefined,
+      lockTableName: undefined,
+      extensions: undefined,
+    });
   });
 });
 
@@ -420,6 +466,37 @@ describe('app seeder', () => {
       extensions: ['.js', '.mjs'],
     });
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs seeds from enabled package sources', async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-seed-source-'),
+    );
+    tempDirs.push(directory);
+    const run = vi.fn().mockResolvedValue({ executed: [], skipped: [] });
+    createDatabaseSeederMock.mockReturnValue({ run });
+    const sources = [
+      { packageName: '@nocobase/app-plugin-example', directory },
+    ];
+    const database = createMockDatabaseManager();
+    const seeder = createAppSeeder({
+      database,
+      config: {
+        directory: '/unused',
+        autoRun: true,
+      },
+      sources,
+    });
+
+    await expect(seeder.run()).resolves.toMatchObject({ status: 'completed' });
+    expect(createDatabaseSeederMock).toHaveBeenCalledWith({
+      database,
+      connection: undefined,
+      sources,
+      tableName: undefined,
+      lockTableName: undefined,
+      extensions: undefined,
+    });
   });
 });
 

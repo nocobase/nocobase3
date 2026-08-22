@@ -2,9 +2,11 @@ import { existsSync } from 'node:fs';
 
 import {
   createSeeder,
+  type CreateSeederOptions,
   type DatabaseManager,
   type Seeder,
   type SeedRunResult,
+  type SeedSource,
 } from '@nocobase/database';
 
 import type { AppDatabaseSeedConfig } from './types.js';
@@ -26,12 +28,13 @@ export interface CreateAppSeederOptions {
   database: DatabaseManager;
   config: AppDatabaseSeedConfig;
   connection?: string;
+  sources?: readonly SeedSource[];
 }
 
 export function createAppSeeder(options: CreateAppSeederOptions): AppSeeder {
   return {
     async run(): Promise<AppSeedRunResult> {
-      if (!existsSync(options.config.directory)) {
+      if (!hasSeedDirectory(options)) {
         return {
           status: 'skipped',
           reason: 'missing-directory',
@@ -44,15 +47,40 @@ export function createAppSeeder(options: CreateAppSeederOptions): AppSeeder {
 }
 
 function createDatabaseSeeder(options: CreateAppSeederOptions): Seeder {
-  return createSeeder({
+  return createSeeder(createDatabaseSeederOptions(options));
+}
+
+function createDatabaseSeederOptions(
+  options: CreateAppSeederOptions,
+): CreateSeederOptions {
+  const common = {
     database: options.database,
     connection: options.connection,
-    directory: options.config.directory,
-    packageName: options.config.packageName,
     tableName: options.config.tableName,
     lockTableName: options.config.lockTableName,
     extensions: options.config.extensions,
-  });
+  };
+
+  if (options.sources) {
+    return {
+      ...common,
+      sources: options.sources,
+    };
+  }
+
+  return {
+    ...common,
+    directory: options.config.directory,
+    packageName: options.config.packageName,
+  };
+}
+
+function hasSeedDirectory(options: CreateAppSeederOptions): boolean {
+  if (options.sources) {
+    return options.sources.some((source) => existsSync(source.directory));
+  }
+
+  return existsSync(options.config.directory);
 }
 
 function completedRunResult(result: SeedRunResult): AppSeedRunResult {

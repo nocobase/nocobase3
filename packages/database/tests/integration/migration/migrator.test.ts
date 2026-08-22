@@ -194,6 +194,68 @@ describeIntegrationDatabases('migration runner', (context) => {
     ]);
   });
 
+  it('keeps history for packages that no longer participate', async () => {
+    const pluginDirectory = await createTempDirectory();
+    const appDirectory = await createTempDirectory();
+    const tableName = context.table('disabledPackageHistory');
+    const lockTableName = context.table('disabledPackageLock');
+    const migrationName = '202608180001_disabled_package';
+    await writeMigration(
+      pluginDirectory,
+      migrationName,
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${migrationName}',
+        async up() {},
+        async down() {},
+      });
+    `,
+    );
+
+    const installer = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      sources: [
+        {
+          packageName: '@nocobase/app-plugin-disabled',
+          directory: pluginDirectory,
+        },
+      ],
+      tableName,
+      lockTableName,
+    });
+    await installer.latest();
+
+    const appMigrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      sources: [
+        {
+          packageName: '@nocobase/app-template-default',
+          directory: appDirectory,
+        },
+      ],
+      tableName,
+      lockTableName,
+    });
+
+    await expect(appMigrator.latest()).resolves.toEqual({
+      batch: 1,
+      executed: [],
+      skipped: [],
+    });
+    await expect(
+      context.db(tableName).select(['package_name', 'name']),
+    ).resolves.toEqual([
+      {
+        package_name: '@nocobase/app-plugin-disabled',
+        name: migrationName,
+      },
+    ]);
+  });
+
   it('rolls back the latest batch in reverse order', async () => {
     const directory = await createTempDirectory();
     const tableName = context.table('rollbackHistory');

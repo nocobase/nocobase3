@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { validateMigrations } from '@nocobase/database';
+import { validateMigrations, validateSeeds } from '@nocobase/database';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -483,6 +483,7 @@ describe('database config', () => {
     });
     expect(config.migrations).toEqual({
       directory: '/tmp/app-template-default/database/migrations',
+      packageName: '@nocobase/app-template-default',
       autoRun: false,
       tableName: undefined,
       lockTableName: undefined,
@@ -669,6 +670,66 @@ describe('database migrations', () => {
       expect.objectContaining({
         name: '202608200001_create_authentication_tables',
         fileName: '202608200001_create_authentication_tables.ts',
+      }),
+    ]);
+  });
+});
+
+describe('app plugins', () => {
+  it('resolves the example plugin and its enabled database sources', async () => {
+    const runtime = createStandaloneRuntime();
+    const plugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-example',
+    );
+
+    expect(plugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-example',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(plugin?.migrationsDirectory).toMatch(
+      /app-plugin-example\/database\/migrations$/,
+    );
+    expect(plugin?.seedsDirectory).toMatch(
+      /app-plugin-example\/database\/seeds$/,
+    );
+    expect(runtime.config.database.migrations.sources).toEqual([
+      expect.objectContaining({
+        packageName: '@nocobase/app-template-default',
+      }),
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-example',
+      }),
+    ]);
+    expect(runtime.config.database.seeds?.sources).toEqual([
+      expect.objectContaining({
+        packageName: '@nocobase/app-template-default',
+      }),
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-example',
+      }),
+    ]);
+
+    await expect(
+      validateMigrations({
+        sources: runtime.config.database.migrations.sources ?? [],
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-example',
+          name: '202608220001_example_create_messages',
+        }),
+      ]),
+    );
+    await expect(
+      validateSeeds({
+        sources: runtime.config.database.seeds?.sources ?? [],
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-example',
+        name: '202608220002_example_create_welcome_message',
       }),
     ]);
   });

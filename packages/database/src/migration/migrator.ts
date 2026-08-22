@@ -51,7 +51,11 @@ class DefaultMigrator implements Migrator {
           migrationConnection,
           this.options.tableName,
         );
-        validateAppliedMigrationHistory(migrations, history);
+        validateAppliedMigrationHistory(
+          migrations,
+          history,
+          participatingPackageNames(this.options),
+        );
 
         const appliedNames = new Set(history.map((record) => record.name));
         const pending = migrations.filter(
@@ -96,7 +100,11 @@ class DefaultMigrator implements Migrator {
           migrationConnection,
           this.options.tableName,
         );
-        validateAppliedMigrationHistory(migrations, history);
+        validateAppliedMigrationHistory(
+          migrations,
+          history,
+          participatingPackageNames(this.options),
+        );
 
         const batch = currentBatch(history);
         if (batch === 0) {
@@ -196,6 +204,7 @@ class DefaultMigrator implements Migrator {
 function validateAppliedMigrationHistory(
   migrations: LoadedMigration[],
   history: MigrationHistoryRecord[],
+  participatingPackages?: ReadonlySet<string>,
 ): void {
   const migrationsByName = new Map(
     migrations.map((migration) => [migration.name, migration]),
@@ -203,6 +212,12 @@ function validateAppliedMigrationHistory(
   for (const record of history) {
     const migration = migrationsByName.get(record.name);
     if (!migration) {
+      if (
+        participatingPackages &&
+        !participatingPackages.has(record.packageName)
+      ) {
+        continue;
+      }
       throw new Error(
         `Executed migration "${record.name}" is missing from migration sources. Package: "${record.packageName}".`,
       );
@@ -213,6 +228,16 @@ function validateAppliedMigrationHistory(
       );
     }
   }
+}
+
+function participatingPackageNames(
+  options: CreateMigratorOptions,
+): ReadonlySet<string> {
+  if (options.sources) {
+    return new Set(options.sources.map((source) => source.packageName));
+  }
+
+  return new Set([options.packageName ?? 'app']);
 }
 
 function validateRollbackMigration(migration: MigrationDefinition): void {

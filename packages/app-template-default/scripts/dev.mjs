@@ -228,6 +228,12 @@ spawnDevProcess(
     '--tsconfig',
     'tsconfig.server.json',
     '--clear-screen=false',
+    '--include',
+    'package.json',
+    '--include',
+    '../app-plugin-*/package.json',
+    '--include',
+    '../app-plugin-*/database/**/*',
     'server/standalone.ts',
   ],
   {

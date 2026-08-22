@@ -1,4 +1,8 @@
-import type { DatabaseConfig as NocoBaseDatabaseConfig } from '@nocobase/database';
+import type {
+  DatabaseConfig as NocoBaseDatabaseConfig,
+  MigrationSource,
+  SeedSource,
+} from '@nocobase/database';
 
 export interface AppDatabaseConfig extends NocoBaseDatabaseConfig {
   migrations: AppDatabaseMigrationConfig;
@@ -7,7 +11,9 @@ export interface AppDatabaseConfig extends NocoBaseDatabaseConfig {
 
 export interface AppDatabaseMigrationConfig {
   directory: string;
+  packageName?: string;
   autoRun: boolean;
+  sources?: readonly MigrationSource[];
   tableName?: string;
   lockTableName?: string;
   extensions?: readonly string[];
@@ -17,6 +23,7 @@ export interface AppDatabaseSeedConfig {
   directory: string;
   packageName?: string;
   autoRun: boolean;
+  sources?: readonly SeedSource[];
   tableName?: string;
   lockTableName?: string;
   extensions?: readonly string[];

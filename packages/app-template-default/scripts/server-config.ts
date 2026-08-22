@@ -105,6 +105,13 @@ const report = {
       lockTableName: config.database.seeds?.lockTableName ?? '(default)',
     },
   },
+  plugins: config.plugins.map((plugin) => ({
+    packageName: plugin.packageName,
+    version: plugin.version,
+    enabled: plugin.enabled,
+    migrationsDirectory: plugin.migrationsDirectory ?? '(none)',
+    seedsDirectory: plugin.seedsDirectory ?? '(none)',
+  })),
   drive: {
     default: activeDriveName || '(none)',
     active: summarizeDriveDisk(activeDrive),
@@ -458,6 +465,9 @@ function printReport(value: typeof report): void {
   printPair('Auto-run seeds', String(value.database.seeds.autoRun));
   printPair('Seed table', value.database.seeds.tableName);
   printPair('Seed lock table', value.database.seeds.lockTableName);
+
+  printSection('Plugins');
+  printJson('Registered plugins', value.plugins);
 
   printSection('Drive');
   printPair('Default disk', value.drive.default);

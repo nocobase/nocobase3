@@ -1,4 +1,8 @@
-import type { DatabaseManager } from '@nocobase/database';
+import type {
+  DatabaseManager,
+  MigrationSource,
+  SeedSource,
+} from '@nocobase/database';
 
 import { createAppDatabaseManager } from '../database/manager.js';
 import {
@@ -18,6 +22,11 @@ export interface AppRuntimeConfig {
   database: AppDatabaseConfig;
 }
 
+export interface CreateAppRuntimeOptions {
+  migrationSources?: readonly MigrationSource[];
+  seedSources?: readonly SeedSource[];
+}
+
 export interface AppRuntime<
   TConfig extends AppRuntimeConfig = AppRuntimeConfig,
 > {
@@ -32,12 +41,14 @@ export interface AppRuntime<
 
 export function createAppRuntime<TConfig extends AppRuntimeConfig>(
   config: TConfig,
+  options: CreateAppRuntimeOptions = {},
 ): AppRuntime<TConfig> {
   const database = createAppDatabaseManager(config.database);
   const migrator = database
     ? createAppMigrator({
         database,
         config: config.database.migrations,
+        sources: options.migrationSources ?? config.database.migrations.sources,
       })
     : undefined;
   const seeder =
@@ -45,6 +56,7 @@ export function createAppRuntime<TConfig extends AppRuntimeConfig>(
       ? createAppSeeder({
           database,
           config: config.database.seeds,
+          sources: options.seedSources ?? config.database.seeds.sources,
         })
       : undefined;
 

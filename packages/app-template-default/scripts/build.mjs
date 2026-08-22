@@ -9,6 +9,21 @@ const rootDir = path.resolve(
 );
 const distDir = path.join(rootDir, 'dist');
 const envOutputPath = path.join(distDir, '.env');
+const appPackage = JSON.parse(
+  fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'),
+);
+const configuredPluginNames = Object.keys(appPackage.nocobase?.plugins ?? {});
+const workspacePluginNames = configuredPluginNames.filter((packageName) => {
+  const packageDir = path.resolve(rootDir, '..', packageName.split('/').at(-1));
+  if (!fs.existsSync(path.join(packageDir, 'package.json'))) {
+    return false;
+  }
+
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'),
+  );
+  return packageJson.name === packageName;
+});
 const serverEnvKeys = new Set([
   'APP_BASE_PATH',
   'APP_SERVER_HOST',
@@ -195,6 +210,7 @@ run('Build server workspace dependencies', 'pnpm', [
   '@nocobase/queue',
   '--filter',
   '@nocobase/session',
+  ...workspacePluginNames.flatMap((packageName) => ['--filter', packageName]),
   'build',
 ]);
 run('Build server', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.server.json']);
