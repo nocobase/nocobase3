@@ -234,6 +234,8 @@ spawnDevProcess(
     '../app-plugin-*/package.json',
     '--include',
     '../app-plugin-*/database/**/*',
+    '--include',
+    '../app-plugin-*/server/**/*',
     'server/standalone.ts',
   ],
   {

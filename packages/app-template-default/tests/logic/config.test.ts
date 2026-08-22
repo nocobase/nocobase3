@@ -709,6 +709,9 @@ describe('app plugins', () => {
     expect(examplePlugin?.seedsDirectory).toMatch(
       /app-plugin-example\/database\/seeds$/,
     );
+    expect(examplePlugin?.routesEntry).toMatch(
+      /app-plugin-example\/server\/routes\/index\.ts$/,
+    );
     expect(runtime.config.database.migrations.sources).toEqual([
       expect.objectContaining({
         packageName: '@nocobase/app-template-default',

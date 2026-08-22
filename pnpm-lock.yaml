@@ -277,9 +277,15 @@ importers:
 
   packages/app-plugin-example:
     dependencies:
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../app-server
       '@nocobase/database':
         specifier: workspace:^
         version: link:../database
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*

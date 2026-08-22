@@ -1,12 +1,15 @@
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 
 import type { MigrationSource, SeedSource } from '@nocobase/database';
+import type { AppPluginRoutesRegistrar } from '@nocobase/app-server/plugins';
 
 import type {
   AppPluginManifest,
   AppPluginRegistry,
+  LoadedAppPluginRoutes,
   ResolvedAppPlugin,
 } from './types.js';
 
@@ -64,6 +67,34 @@ export function createPluginSeedSources(
           },
         ]
       : [],
+  );
+}
+
+export async function loadPluginRoutes(
+  plugins: readonly ResolvedAppPlugin[],
+): Promise<LoadedAppPluginRoutes[]> {
+  const enabled = plugins.flatMap((plugin) =>
+    plugin.enabled && plugin.routesEntry
+      ? [{ plugin, routesEntry: plugin.routesEntry }]
+      : [],
+  );
+
+  return Promise.all(
+    enabled.map(async ({ plugin, routesEntry }) => {
+      const routeModule = (await import(pathToFileURL(routesEntry).href)) as {
+        default?: unknown;
+      };
+      if (typeof routeModule.default !== 'function') {
+        throw new Error(
+          `Plugin "${plugin.packageName}" routes entry must default-export a function.`,
+        );
+      }
+
+      return {
+        packageName: plugin.packageName,
+        registerRoutes: routeModule.default as AppPluginRoutesRegistrar,
+      };
+    }),
   );
 }
 
@@ -131,6 +162,12 @@ function resolvePlugin(
       packageRoot,
       manifest.database?.seeds,
     ),
+    routesEntry: resolveConventionFile(packageRoot, [
+      'server/routes/index.ts',
+      'server/routes/index.js',
+      'dist/server/routes/index.js',
+      'dist/server/routes/index.mjs',
+    ]),
   };
 }
 
@@ -193,6 +230,15 @@ function resolveOptionalDirectory(
   }
 
   return resolved;
+}
+
+function resolveConventionFile(
+  packageRoot: string,
+  candidates: readonly string[],
+): string | undefined {
+  return candidates
+    .map((candidate) => path.resolve(packageRoot, candidate))
+    .find((candidate) => existsSync(candidate));
 }
 
 function resolvePackageJson(rootDir: string, packageName: string): string {

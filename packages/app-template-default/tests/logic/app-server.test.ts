@@ -865,6 +865,22 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
+  it('loads routes from enabled app plugins', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(
+      await createStandaloneServer({ viteDevUrl: false }),
+    );
+    const response = await app.request(
+      `http://localhost${runtime.config.app.publicBasePath}/install`,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      installed: false,
+      settings: expect.any(Array),
+    });
+  });
+
   it('mounts standalone app-local routes behind the public base path', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(

@@ -1,4 +1,8 @@
 # @nocobase/app-plugin-example
 
-Minimal app plugin example. Its manifest contributes one migration and one
-seed to `@nocobase/app-template-default` when the plugin is enabled.
+Minimal app plugin example. When enabled, it contributes one migration, one
+seed, and a convention-based `server/routes/index.ts` entry to
+`@nocobase/app-template-default`.
+
+The routes entry receives the App's `app`, `deps`, and `services`, and mounts
+an example endpoint at `/install`.

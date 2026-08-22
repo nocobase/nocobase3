@@ -111,6 +111,7 @@ const report = {
     enabled: plugin.enabled,
     migrationsDirectory: plugin.migrationsDirectory ?? '(none)',
     seedsDirectory: plugin.seedsDirectory ?? '(none)',
+    routesEntry: plugin.routesEntry ?? '(none)',
   })),
   drive: {
     default: activeDriveName || '(none)',

@@ -75,6 +75,10 @@ export function createApp(
     services,
   });
 
+  for (const plugin of options.pluginRoutes ?? []) {
+    plugin.registerRoutes({ app, deps, services });
+  }
+
   registerNocoBaseApiProxyRoutes(app, {
     apiProxyPath: internalApiProxyPath,
     nocoBaseApiUrl,

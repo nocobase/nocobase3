@@ -1,4 +1,5 @@
 import type { SpaHandler } from '@nocobase/app-server/spa';
+import type { LoadedAppPluginRoutes } from './plugins/index.js';
 
 export type AppDisposer = () => void | Promise<void>;
 
@@ -8,6 +9,7 @@ export interface AppLifecycle {
 
 export interface CreateAppOptions {
   lifecycle: AppLifecycle;
+  pluginRoutes?: readonly LoadedAppPluginRoutes[];
   spa?: CreateAppSpaOptions;
 }
 
