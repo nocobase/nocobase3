@@ -62,25 +62,22 @@ export interface ScaffoldOptions {
   templateDirectory: string;
   targetDirectory: string;
   name: string;
-  templateName: string;
-  templateVersion: string;
+  /** Extra files to write once the template is in place, keyed by path relative to the target. */
+  extraFiles?: Record<string, string>;
 }
 
 /**
- * Copies an extracted template into its final location and writes the app's own metadata.
+ * Copies an extracted template into its final location and rewrites its manifest.
  *
- * The template's `package.json` name and version belong to the template, not to the app being created, so both are
- * replaced. The dependency ranges are left exactly as packed: pnpm already resolved `workspace:` and `catalog:` into
- * real versions when the tarball was built.
+ * The template's `package.json` name and version belong to the template, not to what is being created from it, so both
+ * are replaced and the publish metadata is dropped — neither an app nor a hub should be publishable by accident. The
+ * dependency ranges are left exactly as packed: pnpm already resolved `workspace:` and `catalog:` into real versions
+ * when the tarball was built.
  */
-export async function scaffoldApp(options: ScaffoldOptions): Promise<void> {
-  const {
-    name,
-    targetDirectory,
-    templateDirectory,
-    templateName,
-    templateVersion,
-  } = options;
+export async function scaffoldFromTemplate(
+  options: ScaffoldOptions,
+): Promise<void> {
+  const { extraFiles, name, targetDirectory, templateDirectory } = options;
 
   await mkdir(targetDirectory, { recursive: true });
   await cp(templateDirectory, targetDirectory, { recursive: true });
@@ -104,15 +101,38 @@ export async function scaffoldApp(options: ScaffoldOptions): Promise<void> {
     'utf8',
   );
 
-  const config: AppConfig = { name, template: templateName, templateVersion };
-  const stateDirectory = path.join(targetDirectory, APP_STATE_DIR);
+  for (const [relative, contents] of Object.entries(extraFiles ?? {})) {
+    const target = path.join(targetDirectory, relative);
 
-  await mkdir(stateDirectory, { recursive: true });
-  await writeFile(
-    path.join(stateDirectory, 'config.json'),
-    `${JSON.stringify(config, null, 2)}\n`,
-    'utf8',
-  );
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, contents, 'utf8');
+  }
+}
+
+export interface ScaffoldAppOptions {
+  templateDirectory: string;
+  targetDirectory: string;
+  name: string;
+  templateName: string;
+  templateVersion: string;
+}
+
+export async function scaffoldApp(options: ScaffoldAppOptions): Promise<void> {
+  const config: AppConfig = {
+    name: options.name,
+    template: options.templateName,
+    templateVersion: options.templateVersion,
+  };
+
+  await scaffoldFromTemplate({
+    extraFiles: {
+      [path.join(APP_STATE_DIR, 'config.json')]:
+        `${JSON.stringify(config, null, 2)}\n`,
+    },
+    name: options.name,
+    targetDirectory: options.targetDirectory,
+    templateDirectory: options.templateDirectory,
+  });
 }
 
 export async function removeDirectory(directory: string): Promise<void> {

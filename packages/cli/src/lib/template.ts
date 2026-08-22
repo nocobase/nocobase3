@@ -4,10 +4,13 @@ import path from 'node:path';
 import { CommandFailedError, runCommand } from './run-command.ts';
 
 /**
- * The v3 template is not on npm yet, so `nb3 app create` points at the published v2 portal template for now. That is
- * enough to exercise the whole download-install-run path; only this constant changes once the v3 package ships.
+ * Neither v3 package is on npm yet, so both defaults point at the published v2 portal template for now. It is enough to
+ * exercise the whole download-install-run path; only these constants change once the v3 packages ship.
  */
 export const DEFAULT_TEMPLATE = '@nocobase/portal-template-default@3.1.1';
+
+/** The hub is scaffolded the same way an app is: download a package, extract it, install, run. */
+export const DEFAULT_HUB_TEMPLATE = '@nocobase/portal-template-default@3.1.1';
 
 const PACK_TIMEOUT_MS = 5 * 60 * 1000;
 

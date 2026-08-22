@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 export interface RunCommandOptions {
   cwd?: string;
   timeoutMs?: number;
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface RunCommandResult {
@@ -101,6 +102,7 @@ export function runAttached(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
+      env: options.env,
       shell: process.platform === 'win32',
       stdio: 'inherit',
     });

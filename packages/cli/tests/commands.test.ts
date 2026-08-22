@@ -98,8 +98,8 @@ describe('documented argument contract', () => {
     ['app:config', ['key', 'value'], ['dir', 'json']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
-    ['hub:create', ['name'], ['dir', 'port', 'host']],
-    ['hub:dev', [], ['port', 'host', 'hub-dir', 'portals-dir']],
+    ['hub:create', ['name'], ['dir', 'template', 'registry', 'port', 'host']],
+    ['hub:dev', [], ['hub-dir', 'port', 'host', 'portals-dir']],
     ['hub:logs', [], ['dir', 'follow', 'tail']],
     ['hub:status', [], ['dir', 'json']],
     ['hub:open', [], ['dir', 'print']],
@@ -166,10 +166,8 @@ describe('unimplemented commands', () => {
 
   it.each([
     ['app:deploy', ['--dir']],
-    ['hub:start', ['--dir']],
     ['app:list', []],
     ['app:pull', ['crm']],
-    ['hub:dev', []],
   ])('%s fails with exit 3', async (id, argv) => {
     const withWorkspace = argv.at(-1) === '--dir' ? [...argv, workspace] : argv;
 

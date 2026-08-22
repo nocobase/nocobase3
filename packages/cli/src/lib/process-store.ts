@@ -30,6 +30,31 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
+/**
+ * Signals a whole process group, falling back to the single process if the group is gone.
+ *
+ * A start script is usually a package-manager wrapper that spawns the real server as a grandchild. Signalling only the
+ * recorded pid would kill the wrapper and leave the server orphaned, still holding its port. Because the process is
+ * spawned detached it leads its own group, so the negative pid reaches everything it started.
+ */
+function signalGroup(pid: number, signal: NodeJS.Signals): boolean {
+  try {
+    process.kill(-pid, signal);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+      return false;
+    }
+  }
+
+  try {
+    process.kill(pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function writeProcessRecord(
   stateDirectory: string,
   record: ProcessRecord,
@@ -91,9 +116,7 @@ export async function stopProcess(
     return { stopped: false };
   }
 
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch {
+  if (!signalGroup(pid, 'SIGTERM')) {
     return { stopped: false };
   }
 
@@ -107,11 +130,7 @@ export async function stopProcess(
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
-  try {
-    process.kill(pid, 'SIGKILL');
-  } catch {
-    // Already gone between the last check and here.
-  }
+  signalGroup(pid, 'SIGKILL');
 
   return { pid, stopped: true };
 }

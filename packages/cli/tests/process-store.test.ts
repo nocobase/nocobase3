@@ -206,3 +206,55 @@ describe('stopProcess', () => {
     ).toBe(false);
   });
 });
+
+/**
+ * A start script is normally a package-manager wrapper that spawns the real server as a grandchild. Signalling only the
+ * recorded pid would kill the wrapper and leave the server running, still holding its port — which is exactly what
+ * happened before stopping switched to the process group.
+ */
+describe('stopProcess with a child of its own', () => {
+  it('takes the whole process group down, not just the recorded process', async () => {
+    const script = [
+      "const { spawn } = require('node:child_process');",
+      "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });",
+      'console.log(child.pid);',
+      'setInterval(() => {}, 1000);',
+    ].join('\n');
+
+    const parent = spawn(process.execPath, ['-e', script], {
+      detached: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    parent.unref();
+    const parentPid = parent.pid as number;
+    pids.push(parentPid);
+
+    const childPid = await new Promise<number>((resolve) => {
+      parent.stdout?.once('data', (chunk: Buffer) =>
+        resolve(Number(chunk.toString().trim())),
+      );
+    });
+    pids.push(childPid);
+
+    expect(isProcessAlive(childPid)).toBe(true);
+
+    await stopProcess(parentPid, 300);
+
+    for (
+      let attempt = 0;
+      attempt < 20 && isProcessAlive(childPid);
+      attempt += 1
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    expect(
+      isProcessAlive(parentPid),
+      'the recorded process should be gone',
+    ).toBe(false);
+    expect(
+      isProcessAlive(childPid),
+      'the grandchild holding the port should be gone too',
+    ).toBe(false);
+  });
+});
