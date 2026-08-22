@@ -49,7 +49,7 @@ export default class AppDestroy extends Command {
       this.error(
         [
           `"${target}" is not an app directory.`,
-          'An app directory contains a .nb3/ directory. Pass the app root itself.',
+          'An app directory contains a .nb3/config.json file. Pass the app root itself.',
         ].join('\n'),
       );
     }

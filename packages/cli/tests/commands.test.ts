@@ -1,5 +1,8 @@
 import type { Config } from '@oclif/core';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadTestConfig, runCommand } from './helpers.ts';
 
 /**
@@ -95,9 +98,11 @@ describe('documented argument contract', () => {
     ['app:config', ['key', 'value'], ['dir', 'json']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
-    ['hub:create', ['name'], ['dir']],
+    ['hub:create', ['name'], ['dir', 'port', 'host']],
     ['hub:dev', [], ['port', 'host', 'hub-dir', 'portals-dir']],
     ['hub:logs', [], ['dir', 'follow', 'tail']],
+    ['hub:status', [], ['dir', 'json']],
+    ['hub:open', [], ['dir', 'print']],
   ])('%s takes the documented args and flags', (id, args, flags) => {
     const command = config.findCommand(id, { must: true });
 
@@ -126,66 +131,51 @@ describe('documented argument contract', () => {
 });
 
 /**
- * Commands that no longer just report themselves. Some are built, and the rest fail on purpose because they need a hub
- * API that does not exist yet; either way they are not stubs and the stub assertions below do not apply to them.
+ * These commands are blocked on work outside the CLI. They must fail rather than print a placeholder and succeed: a
+ * script that deploys, sees exit 0, and carries on would be badly misled. Exit 3 marks "not built yet" specifically,
+ * so it can be told apart from a runtime error (1) or a bad argument (2).
  */
-const NOT_A_STUB = new Set([
-  'app:config',
-  'app:create',
-  'app:deploy',
-  'app:destroy',
-  'app:dev',
-  'app:info',
-  'app:list',
-  'app:pull',
-]);
+describe('unimplemented commands', () => {
+  // `app deploy` and `hub start` resolve their project before reporting, so they need one to reach that point.
+  let workspace: string;
 
-describe('stub behaviour', () => {
-  it('reports every unimplemented command as not implemented', async () => {
-    for (const id of config.commandIDs.filter(
-      (commandId) => !NOT_A_STUB.has(commandId),
-    )) {
-      const command = config.findCommand(id, { must: true });
-      // Derived from the command itself rather than hard-coded, so a command that gains a required argument later does
-      // not quietly start failing here for the wrong reason.
-      const argv = Object.values(command.args ?? {})
-        .filter((arg) => arg.required)
-        .map(() => 'placeholder');
-      const { stdout } = await runCommand(config, id, argv);
+  beforeAll(async () => {
+    workspace = await mkdtemp(path.join(os.tmpdir(), 'nb3-unimplemented-'));
 
-      expect(stdout, `${id} printed nothing`).toContain('(not implemented)');
-      expect(stdout, `${id} did not name itself`).toContain(
-        id.replace(':', ' '),
-      );
-    }
+    await mkdir(path.join(workspace, '.nb3'), { recursive: true });
+    await writeFile(
+      path.join(workspace, '.nb3', 'config.json'),
+      JSON.stringify({
+        hub: 'http://localhost:3000',
+        name: 'demo',
+        template: 't',
+        templateVersion: '1.0.0',
+      }),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, '.nb3', 'hub.json'),
+      JSON.stringify({ host: '127.0.0.1', name: 'demo', port: 3000 }),
+      'utf8',
+    );
   });
 
-  it('echoes the arguments it parsed', async () => {
-    const { lines } = await runCommand(config, 'hub:dev', [
-      '--port',
-      '3100',
-      '--hub-dir',
-      './playground/hub',
-    ]);
-
-    expect(lines).toEqual([
-      '[nb3] hub dev (not implemented)',
-      '  --port     3100',
-      '  --hub-dir  ./playground/hub',
-    ]);
+  afterAll(async () => {
+    await rm(workspace, { force: true, recursive: true });
   });
 
-  it('reports a flag default even when the flag was not passed', async () => {
-    const { stdout } = await runCommand(config, 'hub:logs', []);
+  it.each([
+    ['app:deploy', ['--dir']],
+    ['hub:start', ['--dir']],
+    ['app:list', []],
+    ['app:pull', ['crm']],
+    ['hub:dev', []],
+  ])('%s fails with exit 3', async (id, argv) => {
+    const withWorkspace = argv.at(-1) === '--dir' ? [...argv, workspace] : argv;
 
-    expect(stdout).toContain('--tail  100');
-  });
-
-  it('omits flags that have no value', async () => {
-    const { stdout } = await runCommand(config, 'hub:logs', []);
-
-    expect(stdout).not.toContain('--follow');
-    expect(stdout).not.toContain('--dir');
+    await expect(runCommand(config, id, withWorkspace)).rejects.toMatchObject({
+      oclif: { exit: 3 },
+    });
   });
 });
 

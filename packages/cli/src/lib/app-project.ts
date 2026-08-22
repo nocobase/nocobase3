@@ -51,7 +51,7 @@ export async function findAppProject(
 export function formatMissingAppMessage(startDirectory: string): string {
   return [
     `No app found in "${startDirectory}" or any directory above it.`,
-    `An app directory contains a ${APP_STATE_DIR}/ directory.`,
+    `An app directory contains a ${APP_STATE_DIR}/config.json file.`,
     'Run this from inside an app, pass --dir, or create one with `nb3 app create <name>`.',
   ].join('\n');
 }

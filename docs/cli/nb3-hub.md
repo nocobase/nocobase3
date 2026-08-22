@@ -8,14 +8,18 @@ Hub 是用于部署和管理 App 的应用中心。只有需要部署 App、管�
 
 ```text
 nb3 hub create    创建本地 Hub
-nb3 hub start     启动 Hub
-nb3 hub dev       源码开发模式启动 Hub
-nb3 hub stop      停止 Hub
-nb3 hub restart   重启 Hub
 nb3 hub status    查看 Hub 状态
-nb3 hub open      打开 App Console
+nb3 hub stop      停止 Hub
 nb3 hub logs      查看 Hub 日志
+nb3 hub open      打开 App Console
+nb3 hub start     启动 Hub（待实现）
+nb3 hub restart   重启 Hub（待实现）
+nb3 hub dev       源码开发模式启动 Hub（待实现）
 ```
+
+`nb3 hub start` 依赖 Hub 服务端包，该包尚未发布到 npm，且它把运行时依赖放在 `devDependencies` 里、又依赖了未发布的包，所以打包后也装不上。`nb3 hub dev` 依赖源码仓库中的 `playground/hub` 目录，该目录目前不存在。这三条命令执行会以退出码 3 明确报错。
+
+`stop`、`status`、`logs` 的进程管理已经实现，等服务端包可用后 `start` 即可接上。
 
 ## 创建 Hub
 
@@ -29,14 +33,21 @@ cd my-hub
 ```text
 my-hub/
   .nb3/
-    config.json
-    hub.sqlite
+    hub.json
     logs/
     cache/
   app-dist/
-  package.json
-  ...
+  .gitignore
 ```
+
+可以指定监听地址：
+
+```bash
+nb3 hub create my-hub --port 3100
+nb3 hub create my-hub --host 0.0.0.0
+```
+
+配置记录在 `.nb3/hub.json`。App 部署后落在 `app-dist/`。
 
 ## 启动 Hub
 
@@ -48,6 +59,7 @@ nb3 hub start
 
 ```bash
 nb3 hub open
+nb3 hub open --print   # 只打印地址，不打开浏览器
 ```
 
 App Console 用于创建、查看、配置和管理 App。
@@ -84,14 +96,16 @@ nb3 hub dev --hub-dir ./playground/hub --portals-dir ./playground/hub/app-dist
 
 ```bash
 nb3 hub status
+nb3 hub status --json
 ```
 
-可以查看当前 Hub 是否正在运行、访问地址、Console 地址和已部署 App 数量。
+可以查看当前 Hub 是否正在运行、进程号、访问地址和已部署 App 数量。
 
 ## 查看日志
 
 ```bash
 nb3 hub logs
+nb3 hub logs --tail 200
 ```
 
 持续查看日志：
