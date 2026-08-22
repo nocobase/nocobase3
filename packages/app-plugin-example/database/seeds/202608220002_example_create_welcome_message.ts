@@ -5,10 +5,10 @@ const seed: SeedDefinition = defineSeed({
 
   async run({ query }) {
     await query
-      .insertInto('app_plugin_example_messages')
+      .insertInto('appPluginExampleMessages')
       .values({
         message: 'Welcome from @nocobase/app-plugin-example',
-        created_at: new Date(),
+        createdAt: new Date(),
       })
       .execute();
   },
