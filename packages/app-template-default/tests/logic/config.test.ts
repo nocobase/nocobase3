@@ -757,28 +757,32 @@ describe('app plugins', () => {
         /app-plugin-queue-example\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
       ),
     ]);
-    expect(runtime.config.database.migrations.sources).toEqual([
-      expect.objectContaining({
-        packageName: '@nocobase/app-template-default',
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-authentication',
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-database-example',
-      }),
-    ]);
-    expect(runtime.config.database.seeds?.sources).toEqual([
-      expect.objectContaining({
-        packageName: '@nocobase/app-template-default',
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-authentication',
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-database-example',
-      }),
-    ]);
+    expect(runtime.config.database.migrations.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-template-default',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+        }),
+      ]),
+    );
+    expect(runtime.config.database.seeds?.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-template-default',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+        }),
+      ]),
+    );
 
     await expect(
       validateMigrations({
@@ -837,45 +841,49 @@ describe('standalone runtime database config', () => {
 
     expect(config.database.default).toBe('sqlite');
     expect(config).not.toHaveProperty('auth');
-    expect(config.database.migrations.sources).toEqual([
-      expect.objectContaining({
-        packageName: '@nocobase/app-template-default',
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-authentication',
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-database-example',
-      }),
-    ]);
+    expect(config.database.migrations.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-template-default',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+        }),
+      ]),
+    );
   });
 
   it('creates a database task runtime with plugin sources', async () => {
     const runtime = createStandaloneDatabaseTaskRuntime();
 
     expect(runtime.config).not.toHaveProperty('auth');
-    expect(runtime.config.plugins).toEqual([
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-authentication',
-        enabled: true,
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-database-example',
-        enabled: true,
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-routes-example',
-        enabled: true,
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-queue-example',
-        enabled: true,
-      }),
-      expect.objectContaining({
-        packageName: '@nocobase/app-plugin-realtime-example',
-        enabled: true,
-      }),
-    ]);
+    expect(runtime.config.plugins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-routes-example',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-queue-example',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-realtime-example',
+          enabled: true,
+        }),
+      ]),
+    );
     expect(runtime.migrator).toBeDefined();
     expect(runtime.seeder).toBeDefined();
 

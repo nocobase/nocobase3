@@ -88,6 +88,10 @@ test('refuses removal while a workspace package references the plugin', async (t
       assert.match(error.message, /packages\/app\/package\.json/u);
       assert.match(error.message, /dependencies/u);
       assert.match(error.message, /nocobase\.plugins/u);
+      assert.match(
+        error.message,
+        /pnpm plugin:unregister audit-log --app app/u,
+      );
       return true;
     },
   );

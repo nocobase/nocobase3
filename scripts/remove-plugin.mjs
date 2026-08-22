@@ -276,7 +276,28 @@ function formatReferenceError(packageName, references) {
         `  ${packageJsonPath} (${locations.join(', ')})`,
     )
     .join('\n');
-  return `Cannot remove ${packageName}; remove these workspace references first:\n${details}`;
+  const shortName = packageName.slice(packagePrefix.length);
+  const unregisterCommands = [
+    ...new Set(
+      references.flatMap(({ locations, packageJsonPath }) => {
+        if (
+          !locations.includes('devDependencies') &&
+          !locations.includes('nocobase.plugins')
+        ) {
+          return [];
+        }
+        const app = path.posix.basename(path.posix.dirname(packageJsonPath));
+        return app === '.'
+          ? []
+          : [`  pnpm plugin:unregister ${shortName} --app ${app}`];
+      }),
+    ),
+  ];
+  const suggestion =
+    unregisterCommands.length > 0
+      ? `\nUnregister the plugin before retrying:\n${unregisterCommands.join('\n')}`
+      : '';
+  return `Cannot remove ${packageName}; remove these workspace references first:\n${details}${suggestion}`;
 }
 
 async function readJson(file) {
