@@ -45,6 +45,24 @@ crm/
 
 App 源码可以放在任意位置，不需要放在 Hub 目录里。
 
+创建完成后安装依赖并启动：
+
+```bash
+cd crm
+pnpm install
+nb3 app dev
+```
+
+模板通过 npm 下载，只会拉取模板这一个包，不会克隆整个仓库。也可以指定其他模板来源：
+
+```bash
+nb3 app create crm --template @nocobase/app-template-default@3.1.1
+nb3 app create crm --template ./packages/app-template-default
+nb3 app create crm --registry https://registry.npmmirror.com
+```
+
+`--template` 传本地目录时会用 pnpm 打包，把 `workspace:` 和 `catalog:` 依赖解析成真实版本号，因此生成的项目在仓库之外也能安装。
+
 ## 本地开发
 
 ```bash

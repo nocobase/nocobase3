@@ -89,7 +89,7 @@ describe('command tree', () => {
 
 describe('documented argument contract', () => {
   it.each([
-    ['app:create', ['name'], ['dir', 'template']],
+    ['app:create', ['name'], ['dir', 'template', 'registry']],
     ['app:pull', ['name', 'dir'], ['hub']],
     ['app:deploy', [], ['dir', 'hub']],
     ['app:config', ['key', 'value'], ['dir', 'json']],
@@ -118,9 +118,14 @@ describe('documented argument contract', () => {
   });
 });
 
+/** Commands whose behaviour is built. Everything else still reports itself and exits 0. */
+const IMPLEMENTED = new Set(['app:create']);
+
 describe('stub behaviour', () => {
-  it('reports every command as not implemented', async () => {
-    for (const id of config.commandIDs) {
+  it('reports every unimplemented command as not implemented', async () => {
+    for (const id of config.commandIDs.filter(
+      (commandId) => !IMPLEMENTED.has(commandId),
+    )) {
       const command = config.findCommand(id, { must: true });
       // Derived from the command itself rather than hard-coded, so a command that gains a required argument later does
       // not quietly start failing here for the wrong reason.
@@ -153,9 +158,9 @@ describe('stub behaviour', () => {
   });
 
   it('reports a flag default even when the flag was not passed', async () => {
-    const { stdout } = await runCommand(config, 'app:create', ['crm']);
+    const { stdout } = await runCommand(config, 'hub:logs', []);
 
-    expect(stdout).toContain('--template  @nocobase/app-template-default');
+    expect(stdout).toContain('--tail  100');
   });
 
   it('omits flags that have no value', async () => {

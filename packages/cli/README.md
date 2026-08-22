@@ -6,13 +6,19 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 
 ## 当前状态
 
-16 条命令的参数契约（args、flags、description、examples）都已按文档定义完整，但尚未实现具体行为。执行任何命令都会打印命令名和解析出的参数，并标注 `not implemented`，退出码为 0：
+`nb3 app create` 已实现：从 npm 下载模板包并生成本地 App 项目。
+
+由于 v3 的模板包尚未发布，默认模板源暂时指向已发布的 v2 包 `@nocobase/portal-template-default@3.1.1`，用于跑通完整流程。等 v3 包发布后，只需改 `src/lib/template.ts` 里的 `DEFAULT_TEMPLATE` 一个常量。开发 v3 模板本身时可以直接指向本地目录：
 
 ```bash
-$ nb3 app create crm
-[nb3] app create (not implemented)
-  name        crm
-  --template  @nocobase/app-template-default
+nb3 app create crm --template ./packages/app-template-default
+```
+
+其余 15 条命令的参数契约（args、flags、description、examples）都已按文档定义完整，但尚未实现具体行为。执行它们会打印命令名和解析出的参数，并标注 `not implemented`，退出码为 0：
+
+```bash
+$ nb3 hub start
+[nb3] hub start (not implemented)
 ```
 
 参数错误（缺少必填参数、未知 flag、未知命令）仍然按 oclif 的正常行为报错并以非 0 退出。
