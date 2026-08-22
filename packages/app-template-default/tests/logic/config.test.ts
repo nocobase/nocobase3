@@ -686,6 +686,12 @@ describe('app plugins', () => {
     const examplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-example',
     );
+    const queueExamplePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-queue-example',
+    );
+    const realtimeExamplePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-realtime-example',
+    );
 
     expect(authenticationPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-authentication',
@@ -712,6 +718,34 @@ describe('app plugins', () => {
     expect(examplePlugin?.routesEntry).toMatch(
       /app-plugin-example\/server\/routes\/index\.ts$/,
     );
+    expect(queueExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-queue-example',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(queueExamplePlugin?.jobsDirectory).toMatch(
+      /app-plugin-queue-example\/server\/jobs$/,
+    );
+    expect(queueExamplePlugin?.routesEntry).toMatch(
+      /app-plugin-queue-example\/server\/routes\/index\.ts$/,
+    );
+    expect(realtimeExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-realtime-example',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(realtimeExamplePlugin?.routesEntry).toMatch(
+      /app-plugin-realtime-example\/server\/routes\/index\.ts$/,
+    );
+    expect(realtimeExamplePlugin?.bootstrapEntry).toMatch(
+      /app-plugin-realtime-example\/server\/bootstrap\.ts$/,
+    );
+    expect(runtime.config.queue.jobs?.locations).toEqual([
+      expect.stringMatching(/app-template-default\/server\/jobs/),
+      expect.stringMatching(
+        /app-plugin-queue-example\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+      ),
+    ]);
     expect(runtime.config.database.migrations.sources).toEqual([
       expect.objectContaining({
         packageName: '@nocobase/app-template-default',
@@ -816,6 +850,14 @@ describe('standalone runtime database config', () => {
       }),
       expect.objectContaining({
         packageName: '@nocobase/app-plugin-example',
+        enabled: true,
+      }),
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-queue-example',
+        enabled: true,
+      }),
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-realtime-example',
         enabled: true,
       }),
     ]);

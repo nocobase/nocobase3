@@ -7,8 +7,10 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  createPluginJobLocations,
   createPluginMigrationSources,
   createPluginSeedSources,
+  loadPluginBootstraps,
   loadPluginRoutes,
   type ResolvedAppPlugin,
 } from '../../server/plugins/index.ts';
@@ -45,6 +47,31 @@ describe('app plugin database sources', () => {
         packageName: '@nocobase/app-plugin-enabled',
         directory: '/plugins/enabled/database/seeds',
       },
+    ]);
+  });
+});
+
+describe('app plugin jobs', () => {
+  it('creates job locations only for enabled plugins', () => {
+    const plugins: ResolvedAppPlugin[] = [
+      {
+        ...createPlugin({
+          packageName: '@nocobase/app-plugin-enabled',
+          enabled: true,
+        }),
+        jobsDirectory: '/plugins/enabled/server/jobs',
+      },
+      {
+        ...createPlugin({
+          packageName: '@nocobase/app-plugin-disabled',
+          enabled: false,
+        }),
+        jobsDirectory: '/plugins/disabled/server/jobs',
+      },
+    ];
+
+    expect(createPluginJobLocations(plugins)).toEqual([
+      '/plugins/enabled/server/jobs/**/*.{ts,js,mts,mjs}',
     ]);
   });
 });
@@ -94,6 +121,53 @@ describe('app plugin routes', () => {
 
     await expect(loadPluginRoutes([plugin])).rejects.toThrow(
       'Plugin "@nocobase/app-plugin-enabled" routes entry must default-export a function.',
+    );
+  });
+});
+
+describe('app plugin bootstraps', () => {
+  it('loads default bootstraps only for enabled plugins', async () => {
+    const enabledEntry = createRoutesEntry('export default function init() {}');
+    const disabledEntry = createRoutesEntry(
+      'throw new Error("disabled plugin server should not load")',
+    );
+    const plugins = [
+      {
+        ...createPlugin({
+          packageName: '@nocobase/app-plugin-enabled',
+          enabled: true,
+        }),
+        bootstrapEntry: enabledEntry,
+      },
+      {
+        ...createPlugin({
+          packageName: '@nocobase/app-plugin-disabled',
+          enabled: false,
+        }),
+        bootstrapEntry: disabledEntry,
+      },
+    ];
+
+    await expect(loadPluginBootstraps(plugins)).resolves.toEqual([
+      {
+        packageName: '@nocobase/app-plugin-enabled',
+        bootstrap: expect.any(Function),
+      },
+    ]);
+  });
+
+  it('rejects a bootstrap entry without a default function', async () => {
+    const bootstrapEntry = createRoutesEntry('export const bootstrap = {};');
+    const plugin = {
+      ...createPlugin({
+        packageName: '@nocobase/app-plugin-enabled',
+        enabled: true,
+      }),
+      bootstrapEntry,
+    };
+
+    await expect(loadPluginBootstraps([plugin])).rejects.toThrow(
+      'Plugin "@nocobase/app-plugin-enabled" bootstrap entry must default-export a function.',
     );
   });
 });

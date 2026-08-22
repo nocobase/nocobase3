@@ -24,8 +24,3 @@ export {
   createStandaloneDatabaseTaskRuntime,
   type DatabaseTaskRuntime,
 } from './database-task.js';
-export {
-  default as QueueDemoJob,
-  queueDemoExecutions,
-  type QueueDemoPayload,
-} from './jobs/queue-demo.js';

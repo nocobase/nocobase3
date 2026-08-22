@@ -15,6 +15,12 @@
       },
       "@nocobase/app-plugin-example": {
         "enabled": true
+      },
+      "@nocobase/app-plugin-queue-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-realtime-example": {
+        "enabled": true
       }
     }
   },
@@ -29,6 +35,8 @@
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/app-plugin-example": "workspace:^",
+    "@nocobase/app-plugin-queue-example": "workspace:^",
+    "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/database": "workspace:^",

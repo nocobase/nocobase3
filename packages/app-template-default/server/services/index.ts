@@ -2,6 +2,7 @@ import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { AppDriveConfig } from '@nocobase/drive';
 
 import type { AppConfig } from '../config/index.js';
+import type { RealtimeService } from '../realtime/service.js';
 import type { AppDeps } from '../runtime/deps.js';
 import {
   AppSettingsService,
@@ -17,11 +18,17 @@ import {
 export interface AppServices {
   appSettingsStore: AppSettings;
   publicFileStorage: FileUploads;
+  realtime: RealtimeService;
+}
+
+export interface CreateAppServicesOptions {
+  realtime: RealtimeService;
 }
 
 export function createAppServices(
   runtime: AppRuntime<AppConfig>,
   deps: AppDeps,
+  options: CreateAppServicesOptions,
 ): AppServices {
   return {
     appSettingsStore: runtime.database
@@ -33,6 +40,7 @@ export function createAppServices(
         : new UnavailableFileUploadsService(
             resolveFileUploadsUnavailableMessage(runtime.config.drive),
           ),
+    realtime: options.realtime,
   };
 }
 

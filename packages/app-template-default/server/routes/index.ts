@@ -6,7 +6,6 @@ import type { AppDeps } from '../runtime/deps.js';
 import type { AppServices } from '../services/index.js';
 import { createApiRoutes } from './api/index.js';
 import { createHelloPageHandler } from './hello.js';
-import { createRealtimePageHandler } from './realtime.js';
 
 export interface RegisterAppRoutesOptions {
   appName: string;
@@ -22,10 +21,6 @@ export function registerAppRoutes(
   app.use('*', createSessionMiddleware(options.deps.sessionManager));
 
   app.get('/hello', createHelloPageHandler());
-  app.get(
-    '/realtime',
-    createRealtimePageHandler({ publicBasePath: options.publicBasePath }),
-  );
 
   app.route(
     '/api',

@@ -1,13 +1,20 @@
-import type { RealtimeService } from '../service.js';
-
 export const CLOCK_TOPIC: string = 'clock:now';
+
+export interface ClockPublisherRealtime {
+  publish(topic: string, payload: unknown): unknown;
+  subscriptionCount(topic: string): number;
+  onTopicSubscriptionChange(
+    topic: string,
+    listener: (count: number) => void,
+  ): () => void;
+}
 
 export interface ClockPublisherOptions {
   intervalMs?: number;
 }
 
 export function startClockPublisher(
-  realtime: RealtimeService,
+  realtime: ClockPublisherRealtime,
   options: ClockPublisherOptions = {},
 ): () => void {
   const intervalMs = options.intervalMs ?? 200;

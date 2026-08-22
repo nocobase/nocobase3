@@ -1,23 +1,14 @@
-import type { Handler } from 'hono';
+import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';
+import { Hono } from 'hono';
 
-import { joinBasePath } from '@nocobase/app-server/support';
+import { CLOCK_TOPIC } from '../publishers/clock.js';
 
-import { CLOCK_TOPIC } from '../realtime/publishers/clock.js';
-import { APP_LOCAL_WEBSOCKET_PATH } from './websocket.js';
+export type RealtimeExamplePluginRoutesContext = AppPluginRoutesContext;
 
-export interface RealtimePageHandlerOptions {
-  publicBasePath: string;
-}
+export default ({ app }: RealtimeExamplePluginRoutesContext): void => {
+  const routes = new Hono();
 
-export function createRealtimePageHandler(
-  options: RealtimePageHandlerOptions,
-): Handler {
-  const websocketPath = joinBasePath(
-    options.publicBasePath,
-    APP_LOCAL_WEBSOCKET_PATH,
-  );
-
-  return (context) =>
+  routes.get('/', (context) =>
     context.html(`<!doctype html>
 <html lang="en">
   <head>
@@ -68,7 +59,12 @@ export function createRealtimePageHandler(
       <div id="realtime-status">connecting</div>
     </main>
     <script>
-      const websocketPath = ${JSON.stringify(websocketPath)};
+      const pathname = location.pathname.endsWith('/')
+        ? location.pathname.slice(0, -1)
+        : location.pathname;
+      const websocketPath = pathname.endsWith('/realtime')
+        ? pathname.slice(0, -'/realtime'.length) + '/ws'
+        : '/ws';
       const topic = ${JSON.stringify(CLOCK_TOPIC)};
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(protocol + '//' + location.host + websocketPath);
@@ -100,5 +96,8 @@ export function createRealtimePageHandler(
       });
     </script>
   </body>
-</html>`);
-}
+</html>`),
+  );
+
+  app.route('/realtime', routes);
+};

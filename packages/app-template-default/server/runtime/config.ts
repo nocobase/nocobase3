@@ -7,12 +7,14 @@ import {
   type ConfigContext,
 } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
+import type { AppQueueConfig } from '@nocobase/queue';
 
 import configFactories, { type AppConfig } from '../config/index.js';
 import databaseConfigFactory from '../config/database.js';
 import type { AppScope, ResolvedAppRuntimeOptions } from './options.js';
 import {
   createPluginMigrationSources,
+  createPluginJobLocations,
   createPluginSeedSources,
   resolveAppPlugins,
   type ResolvedAppPlugin,
@@ -54,6 +56,7 @@ export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
   return {
     ...config,
     ...databaseTaskConfig,
+    queue: withPluginJobLocations(config.queue, databaseTaskConfig.plugins),
     app: {
       ...config.app,
       ...options.routing,
@@ -63,6 +66,22 @@ export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
       indexPath: options.paths.clientDir
         ? path.join(options.paths.clientDir, 'index.html')
         : config.spa.indexPath,
+    },
+  };
+}
+
+function withPluginJobLocations(
+  queue: AppQueueConfig,
+  plugins: readonly ResolvedAppPlugin[],
+): AppQueueConfig {
+  return {
+    ...queue,
+    jobs: {
+      ...queue.jobs,
+      locations: [
+        ...(queue.jobs?.locations ?? []),
+        ...createPluginJobLocations(plugins),
+      ],
     },
   };
 }

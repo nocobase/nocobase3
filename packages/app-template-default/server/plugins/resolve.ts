@@ -4,11 +4,15 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
 import type { MigrationSource, SeedSource } from '@nocobase/database';
-import type { AppPluginRoutesRegistrar } from '@nocobase/app-server/plugins';
+import type {
+  AppPluginBootstrap,
+  AppPluginRoutesRegistrar,
+} from '@nocobase/app-server/plugins';
 
 import type {
   AppPluginManifest,
   AppPluginRegistry,
+  LoadedAppPluginBootstrap,
   LoadedAppPluginRoutes,
   ResolvedAppPlugin,
 } from './types.js';
@@ -67,6 +71,46 @@ export function createPluginSeedSources(
           },
         ]
       : [],
+  );
+}
+
+export function createPluginJobLocations(
+  plugins: readonly ResolvedAppPlugin[],
+): string[] {
+  return plugins.flatMap((plugin) =>
+    plugin.enabled && plugin.jobsDirectory
+      ? [path.join(plugin.jobsDirectory, '**/*.{ts,js,mts,mjs}')]
+      : [],
+  );
+}
+
+export async function loadPluginBootstraps(
+  plugins: readonly ResolvedAppPlugin[],
+): Promise<LoadedAppPluginBootstrap[]> {
+  const enabled = plugins.flatMap((plugin) =>
+    plugin.enabled && plugin.bootstrapEntry
+      ? [{ plugin, bootstrapEntry: plugin.bootstrapEntry }]
+      : [],
+  );
+
+  return Promise.all(
+    enabled.map(async ({ plugin, bootstrapEntry }) => {
+      const bootstrapModule = (await import(
+        pathToFileURL(bootstrapEntry).href
+      )) as {
+        default?: unknown;
+      };
+      if (typeof bootstrapModule.default !== 'function') {
+        throw new Error(
+          `Plugin "${plugin.packageName}" bootstrap entry must default-export a function.`,
+        );
+      }
+
+      return {
+        packageName: plugin.packageName,
+        bootstrap: bootstrapModule.default as AppPluginBootstrap,
+      };
+    }),
   );
 }
 
@@ -162,6 +206,16 @@ function resolvePlugin(
       packageRoot,
       manifest.database?.seeds,
     ),
+    jobsDirectory: resolveConventionDirectory(packageRoot, [
+      'server/jobs',
+      'dist/server/jobs',
+    ]),
+    bootstrapEntry: resolveConventionFile(packageRoot, [
+      'server/bootstrap.ts',
+      'server/bootstrap.js',
+      'dist/server/bootstrap.js',
+      'dist/server/bootstrap.mjs',
+    ]),
     routesEntry: resolveConventionFile(packageRoot, [
       'server/routes/index.ts',
       'server/routes/index.js',
@@ -230,6 +284,15 @@ function resolveOptionalDirectory(
   }
 
   return resolved;
+}
+
+function resolveConventionDirectory(
+  packageRoot: string,
+  candidates: readonly string[],
+): string | undefined {
+  return candidates
+    .map((candidate) => path.resolve(packageRoot, candidate))
+    .find((candidate) => existsSync(candidate));
 }
 
 function resolveConventionFile(

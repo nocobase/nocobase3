@@ -8,7 +8,7 @@ import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 import { createApp, type AppServer } from '../app.js';
 import type { AppLifecycle } from '../app-options.js';
 import type { AppConfig } from '../config/index.js';
-import { loadPluginRoutes } from '../plugins/index.js';
+import { loadPluginBootstraps, loadPluginRoutes } from '../plugins/index.js';
 
 export interface CreateAppFromRuntimeOptions {
   lifecycle: AppLifecycle;
@@ -29,10 +29,14 @@ export async function createAppFromRuntime(
     config.server.viteDevUrl,
   );
 
-  const pluginRoutes = await loadPluginRoutes(config.plugins);
+  const [pluginBootstraps, pluginRoutes] = await Promise.all([
+    loadPluginBootstraps(config.plugins),
+    loadPluginRoutes(config.plugins),
+  ]);
 
   return createApp(runtime, {
     lifecycle: options.lifecycle,
+    pluginBootstraps,
     pluginRoutes,
     spa: {
       handler: viteDevUrl

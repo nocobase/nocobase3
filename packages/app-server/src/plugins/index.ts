@@ -6,6 +6,22 @@ export interface AppPluginRoutesContext<TDeps = unknown, TServices = unknown> {
   readonly services: TServices;
 }
 
+export type AppPluginDisposer = () => void | Promise<void>;
+
+export interface AppPluginLifecycle {
+  registerDisposer(name: string, dispose: AppPluginDisposer): void;
+}
+
+export interface AppPluginServerContext<TDeps = unknown, TServices = unknown> {
+  readonly deps: TDeps;
+  readonly services: TServices;
+  readonly lifecycle: AppPluginLifecycle;
+}
+
+export type AppPluginBootstrap<TDeps = unknown, TServices = unknown> = (
+  context: AppPluginServerContext<TDeps, TServices>,
+) => void;
+
 export type AppPluginRoutesRegistrar<TDeps = unknown, TServices = unknown> = (
   context: AppPluginRoutesContext<TDeps, TServices>,
 ) => void;

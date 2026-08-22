@@ -1,4 +1,7 @@
-import type { AppPluginRoutesRegistrar } from '@nocobase/app-server/plugins';
+import type {
+  AppPluginBootstrap,
+  AppPluginRoutesRegistrar,
+} from '@nocobase/app-server/plugins';
 
 export interface AppPluginRegistration {
   enabled: boolean;
@@ -25,7 +28,14 @@ export interface ResolvedAppPlugin {
   manifest: AppPluginManifest;
   migrationsDirectory?: string;
   seedsDirectory?: string;
+  jobsDirectory?: string;
+  bootstrapEntry?: string;
   routesEntry?: string;
+}
+
+export interface LoadedAppPluginBootstrap {
+  packageName: string;
+  bootstrap: AppPluginBootstrap;
 }
 
 export interface LoadedAppPluginRoutes {

@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 import {
   mkdirSync,
@@ -25,6 +25,7 @@ import type {
 } from '@nocobase/app-server/websocket';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
 import type { AppDriveConfig } from '@nocobase/drive';
+import { CLOCK_TOPIC } from '@nocobase/app-plugin-realtime-example';
 import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import {
@@ -44,12 +45,10 @@ import {
   createServer as createEmbeddedServer,
   createStandaloneRuntime,
   createStandaloneServer,
-  queueDemoExecutions,
   type StandaloneServer,
 } from '../../server/index.ts';
 import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalone.ts';
 import type { AppConfig } from '../../server/config/index.ts';
-import { CLOCK_TOPIC } from '../../server/realtime/publishers/clock.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
@@ -72,6 +71,7 @@ const servers: Server[] = [];
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(apps.splice(0).map((app) => app.close()));
 
   for (const dir of tempDirs.splice(0)) {
@@ -164,23 +164,6 @@ describe('app server', () => {
     expect(missingEvents).toBeNull();
   });
 
-  it('serves an app-local realtime demo page', async () => {
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-    });
-
-    const response = await app.request('http://localhost/realtime');
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('text/html');
-    expect(html).toContain('id="now-time"');
-    expect(html).toContain('/app-template-default/ws');
-    expect(html).toContain(CLOCK_TOPIC);
-    expect(html).toContain("type: 'subscribe'");
-  });
-
   it('subscribes, publishes, and unsubscribes realtime messages', () => {
     const realtime = createRealtimeService();
     const websocket = createTestWebSocket();
@@ -251,7 +234,7 @@ describe('app server', () => {
       'runtime',
       'app-deps',
       'realtime-service',
-      'clock-publisher',
+      'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
     ]);
 
     for (const disposer of [...registeredDisposers].reverse()) {
@@ -638,100 +621,6 @@ describe('app server', () => {
     });
   });
 
-  it('serves a queue API example with the sync connection', async () => {
-    queueDemoExecutions.length = 0;
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      queue: {
-        default: 'sync',
-        connections: {
-          sync: {
-            driver: 'sync',
-          },
-        },
-        jobs: {
-          locations: [],
-          autoLoad: false,
-        },
-      },
-    });
-
-    const response = await app.request('http://localhost/api/queue/demo', {
-      method: 'POST',
-    });
-    const payload = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(payload).toMatchObject({
-      jobId: expect.any(String),
-      job: 'QueueDemo',
-      queue: 'default',
-      syncExecutions: 1,
-    });
-    expect(queueDemoExecutions).toHaveLength(1);
-    expect(queueDemoExecutions[0]).toMatchObject({
-      message: 'Hello from NocoBase queue',
-      requestedAt: expect.any(String),
-      executedAt: expect.any(String),
-    });
-
-    await app.close();
-  });
-
-  it('writes a queue demo database log when database is configured', async () => {
-    queueDemoExecutions.length = 0;
-    const insertedRows: unknown[] = [];
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      database: createMockDatabase([], insertedRows),
-      queue: {
-        default: 'sync',
-        connections: {
-          sync: {
-            driver: 'sync',
-          },
-        },
-        jobs: {
-          locations: [],
-          autoLoad: false,
-        },
-      },
-    });
-
-    const response = await app.request('http://localhost/api/queue/demo', {
-      method: 'POST',
-    });
-    const payload = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(payload).toMatchObject({
-      jobId: expect.any(String),
-      job: 'QueueDemo',
-      queue: 'default',
-      syncExecutions: 1,
-    });
-    expect(insertedRows).toHaveLength(1);
-    expect(insertedRows[0]).toMatchObject({
-      key: `queue.demo.${payload.jobId}`,
-      value: expect.any(String),
-      createdAt: expect.any(String),
-      updatedAt: expect.any(String),
-    });
-
-    const value = JSON.parse(
-      (insertedRows[0] as { value: string }).value,
-    ) as Record<string, unknown>;
-    expect(value).toMatchObject({
-      message: 'Hello from NocoBase queue',
-      requestedAt: expect.any(String),
-      executedAt: expect.any(String),
-    });
-
-    await app.close();
-  });
-
   it('returns a JSON error when upload is requested without file drive', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
@@ -878,6 +767,25 @@ describe('app server', () => {
     await expect(response.json()).resolves.toEqual({
       installed: false,
       settings: expect.any(Array),
+    });
+  });
+
+  it('dispatches jobs from enabled app plugins', async () => {
+    vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(
+      await createStandaloneServer({ viteDevUrl: false }),
+    );
+    const response = await app.request(
+      `http://localhost${runtime.config.app.publicBasePath}/queue-example`,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      jobId: expect.any(String),
+      job: 'QueueExample',
+      queue: 'default',
+      syncExecutions: 1,
     });
   });
 
