@@ -93,6 +93,8 @@ describe('documented argument contract', () => {
     ['app:pull', ['name', 'dir'], ['hub']],
     ['app:deploy', [], ['dir', 'hub']],
     ['app:config', ['key', 'value'], ['dir', 'json']],
+    ['app:destroy', ['dir'], ['hub', 'yes']],
+    ['app:destroy', ['dir'], ['hub', 'yes']],
     ['hub:create', ['name'], ['dir']],
     ['hub:dev', [], ['port', 'host', 'hub-dir', 'portals-dir']],
     ['hub:logs', [], ['dir', 'follow', 'tail']],
@@ -103,8 +105,13 @@ describe('documented argument contract', () => {
     expect(Object.keys(command.flags ?? {})).toEqual(flags);
   });
 
-  it('requires a name for the commands that create or delete something', () => {
-    for (const id of ['app:create', 'app:destroy', 'hub:create']) {
+  it('requires the directory to delete, so destroy can never guess', () => {
+    const command = config.findCommand('app:destroy', { must: true });
+    expect(command.args?.dir?.required).toBe(true);
+  });
+
+  it('requires a name for the commands that create something', () => {
+    for (const id of ['app:create', 'hub:create']) {
       const command = config.findCommand(id, { must: true });
       expect(command.args?.name?.required, `${id} should require name`).toBe(
         true,
@@ -118,13 +125,25 @@ describe('documented argument contract', () => {
   });
 });
 
-/** Commands whose behaviour is built. Everything else still reports itself and exits 0. */
-const IMPLEMENTED = new Set(['app:create']);
+/**
+ * Commands that no longer just report themselves. Some are built, and the rest fail on purpose because they need a hub
+ * API that does not exist yet; either way they are not stubs and the stub assertions below do not apply to them.
+ */
+const NOT_A_STUB = new Set([
+  'app:config',
+  'app:create',
+  'app:deploy',
+  'app:destroy',
+  'app:dev',
+  'app:info',
+  'app:list',
+  'app:pull',
+]);
 
 describe('stub behaviour', () => {
   it('reports every unimplemented command as not implemented', async () => {
     for (const id of config.commandIDs.filter(
-      (commandId) => !IMPLEMENTED.has(commandId),
+      (commandId) => !NOT_A_STUB.has(commandId),
     )) {
       const command = config.findCommand(id, { must: true });
       // Derived from the command itself rather than hard-coded, so a command that gains a required argument later does
@@ -142,18 +161,17 @@ describe('stub behaviour', () => {
   });
 
   it('echoes the arguments it parsed', async () => {
-    const { lines } = await runCommand(config, 'app:pull', [
-      'crm',
-      './crm',
-      '--hub',
-      'http://localhost:3000',
+    const { lines } = await runCommand(config, 'hub:dev', [
+      '--port',
+      '3100',
+      '--hub-dir',
+      './playground/hub',
     ]);
 
     expect(lines).toEqual([
-      '[nb3] app pull (not implemented)',
-      '  name   crm',
-      '  dir    ./crm',
-      '  --hub  http://localhost:3000',
+      '[nb3] hub dev (not implemented)',
+      '  --port     3100',
+      '  --hub-dir  ./playground/hub',
     ]);
   });
 

@@ -1,8 +1,13 @@
 import { Command, Flags } from '@oclif/core';
-import { reportStub } from '../../lib/stub.ts';
+import {
+  HUB_API_MISSING,
+  failNotImplemented,
+} from '../../lib/not-implemented.ts';
 
 export default class AppList extends Command {
   static override summary = 'List the apps in a hub.';
+  static override description =
+    'Lists the apps deployed to a hub. Not implemented yet.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
@@ -10,15 +15,19 @@ export default class AppList extends Command {
   ];
 
   static override flags = {
-    hub: Flags.string({ description: 'Hub URL to list apps from.' }),
+    hub: Flags.string({
+      description: 'Hub URL to list apps from.',
+    }),
     json: Flags.boolean({
-      description: 'Print the result as JSON.',
       default: false,
+      description: 'Print the result as JSON.',
     }),
   };
 
   public async run(): Promise<void> {
-    const { flags } = await this.parse(AppList);
-    reportStub(this, { flags });
+    await this.parse(AppList);
+
+    // TODO: Query the hub for its deployed apps.
+    failNotImplemented(this, HUB_API_MISSING);
   }
 }

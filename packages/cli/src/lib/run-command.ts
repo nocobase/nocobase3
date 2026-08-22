@@ -85,3 +85,36 @@ export function runCommand(
     });
   });
 }
+
+/**
+ * Runs a child process with the terminal attached, for long-running work such as a dev server. Output goes straight to
+ * the user rather than being collected, and Ctrl+C reaches the child because it shares the terminal.
+ *
+ * Resolves with the exit code instead of throwing, since a dev server exiting non-zero is the command's result rather
+ * than an error in the CLI.
+ */
+export function runAttached(
+  command: string,
+  args: string[],
+  options: RunCommandOptions = {},
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      shell: process.platform === 'win32',
+      stdio: 'inherit',
+    });
+
+    child.once('error', (error: Error) => {
+      reject(error);
+    });
+
+    child.once(
+      'close',
+      (code: number | null, signal: NodeJS.Signals | null) => {
+        // A process killed by a signal reports a null code; report the conventional 128+n so callers see a failure.
+        resolve(code ?? (signal ? 1 : 0));
+      },
+    );
+  });
+}
