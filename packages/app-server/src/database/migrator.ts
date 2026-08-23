@@ -2,7 +2,9 @@ import { existsSync } from 'node:fs';
 
 import {
   createMigrator,
+  type CreateMigratorOptions,
   type DatabaseManager,
+  type MigrationSource,
   type MigrationRollbackResult,
   type MigrationRunResult,
 } from '@nocobase/database';
@@ -35,6 +37,7 @@ export interface CreateAppMigratorOptions {
   database: DatabaseManager;
   config: AppDatabaseMigrationConfig;
   connection?: string;
+  sources?: readonly MigrationSource[];
 }
 
 export function createAppMigrator(
@@ -42,7 +45,7 @@ export function createAppMigrator(
 ): AppMigrator {
   return {
     async latest(): Promise<AppMigrationRunResult> {
-      if (!existsSync(options.config.directory)) {
+      if (!hasMigrationDirectory(options)) {
         return skippedMigrationResult();
       }
 
@@ -50,7 +53,7 @@ export function createAppMigrator(
     },
 
     async rollback(): Promise<AppMigrationRollbackResult> {
-      if (!existsSync(options.config.directory)) {
+      if (!hasMigrationDirectory(options)) {
         return skippedMigrationResult();
       }
 
@@ -62,14 +65,40 @@ export function createAppMigrator(
 }
 
 function createDatabaseMigrator(options: CreateAppMigratorOptions) {
-  return createMigrator({
+  return createMigrator(createDatabaseMigratorOptions(options));
+}
+
+function createDatabaseMigratorOptions(
+  options: CreateAppMigratorOptions,
+): CreateMigratorOptions {
+  const common = {
     database: options.database,
     connection: options.connection,
-    directory: options.config.directory,
     tableName: options.config.tableName,
     lockTableName: options.config.lockTableName,
     extensions: options.config.extensions,
-  });
+  };
+
+  if (options.sources) {
+    return {
+      ...common,
+      sources: options.sources,
+    };
+  }
+
+  return {
+    ...common,
+    directory: options.config.directory,
+    packageName: options.config.packageName,
+  };
+}
+
+function hasMigrationDirectory(options: CreateAppMigratorOptions): boolean {
+  if (options.sources) {
+    return options.sources.some((source) => existsSync(source.directory));
+  }
+
+  return existsSync(options.config.directory);
 }
 
 function skippedMigrationResult(): AppMigrationRunResult &

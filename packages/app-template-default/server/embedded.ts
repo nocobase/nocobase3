@@ -24,7 +24,7 @@ export async function createServer(scope: AppScope): Promise<EmbeddedServer> {
   );
   await prepareAppRuntime(runtime);
 
-  return createAppFromRuntime(runtime, {
+  return await createAppFromRuntime(runtime, {
     viteDevUrl: false,
     lifecycle: scope,
   });

@@ -8,7 +8,6 @@ import { createAppsHandler } from './apps.js';
 import { createCacheRoutes } from './cache.js';
 import { createApiErrorHandler } from './errors.js';
 import { createHealthzHandler } from './healthz.js';
-import { createQueueRoutes } from './queue.js';
 import { createSessionRoutes } from './session.js';
 import { createUploadRoutes } from './upload.js';
 import { createAuthRoutes } from './auth.js';
@@ -43,10 +42,6 @@ export function createApiRoutes({
     createHealthzHandler({ appName, publicBasePath }),
   );
   publicRoutes.route('/cache', createCacheRoutes({ caching: deps.caching }));
-  publicRoutes.route(
-    '/queue',
-    createQueueRoutes({ queueManager: deps.queueManager }),
-  );
   publicRoutes.route('/session', createSessionRoutes());
   publicRoutes.route(
     '/app-settings',

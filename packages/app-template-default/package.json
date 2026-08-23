@@ -8,7 +8,24 @@
     "node": ">=24.0.0"
   },
   "nocobase": {
-    "defaultTemplateVersion": "3.1.1"
+    "defaultTemplateVersion": "3.1.1",
+    "plugins": {
+      "@nocobase/app-plugin-authentication": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-database-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-routes-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-queue-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-realtime-example": {
+        "enabled": true
+      }
+    }
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -18,9 +35,13 @@
     "@hono/node-server": "catalog:",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-queue-example": "workspace:^",
+    "@nocobase/app-plugin-realtime-example": "workspace:^",
+    "@nocobase/app-plugin-routes-example": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
-    "@nocobase/authentication": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/database": "workspace:^",
     "@nocobase/drive": "workspace:^",
@@ -122,6 +143,7 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
+    "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

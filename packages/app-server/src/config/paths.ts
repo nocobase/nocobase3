@@ -5,6 +5,7 @@ import type { ConfigPaths } from './types.js';
 export interface CreateConfigPathsOptions {
   rootDir: string;
   serverDir?: string;
+  databaseDir?: string;
   configDir?: string;
   storageDir?: string;
 }
@@ -16,6 +17,9 @@ export function createConfigPaths(
   const serverDir = path.resolve(
     options.serverDir ?? path.join(rootDir, 'server'),
   );
+  const databaseDir = path.resolve(
+    options.databaseDir ?? path.join(rootDir, 'database'),
+  );
   const configDir = path.resolve(
     options.configDir ?? path.join(serverDir, 'config'),
   );
@@ -26,6 +30,7 @@ export function createConfigPaths(
   return {
     root: (pathInside = '') => resolveInside(rootDir, pathInside),
     server: (pathInside = '') => resolveInside(serverDir, pathInside),
+    database: (pathInside = '') => resolveInside(databaseDir, pathInside),
     config: (pathInside = '') => resolveInside(configDir, pathInside),
     storage: (pathInside = '') => resolveInside(storageDir, pathInside),
   };

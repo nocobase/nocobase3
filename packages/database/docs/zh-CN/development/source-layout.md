@@ -65,6 +65,16 @@ src/
     lock.ts
     migrator.ts
 
+  seed/
+    index.ts
+    types.ts
+    define.ts
+    context.ts
+    loader.ts
+    history.ts
+    lock.ts
+    seeder.ts
+
   schema/
     index.ts
     adapter.ts
@@ -87,6 +97,10 @@ src/
 
 `migration/` 是版本化数据库变更层。它负责 `defineMigration()`、文件加载、history、lock、事务执行和 rollback。Migration context 只暴露 `builder`、`query`、`connection`，不在顶层暴露 `schema`。
 
+Package 的 migration 文件通常位于 package 自己的 `database/migrations/` 目录，由上层插件系统以 `MigrationSource` 传给 runner。数据库包不负责扫描或识别插件 package。
+
+`seed/` 是一次性安装数据初始化层。Package 的 seed 通常位于自己的 `database/seeds/`，由上层插件安装器在 migrations 成功后执行。Seed context 只暴露 `query` 和 `connection`。
+
 `metadata/` 是 Collection metadata 存储接口与默认内存实现。
 
 `naming/` 是逻辑名和数据库 identifier 之间的命名策略，例如 `underscored`、`tablePrefix`、索引名和外键名生成。
@@ -99,6 +113,7 @@ tests/
     builder/
     database/
     migration/
+    seed/
     metadata/
     naming/
     schema/
@@ -136,6 +151,8 @@ tests/
       rollback.test.ts
       transactions.test.ts
       checksum.test.ts
+    seed/
+      seeder.test.ts
 ```
 
 ## 测试分层说明
@@ -151,6 +168,8 @@ tests/
 `tests/integration/migration/` 覆盖 migration runner 到真实数据库的行为，重点验证 history、事务、rollback、checksum 和 lock。
 
 `tests/unit/migration/` 覆盖 `defineMigration()`、loader、validator 等不需要真实数据库的行为。
+
+`tests/unit/seed/` 覆盖 `defineSeed()`、loader 和 validator；`tests/integration/seed/` 覆盖 history、事务、失败重试和 checksum。
 
 ## Agent 注意事项
 

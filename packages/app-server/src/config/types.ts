@@ -14,6 +14,7 @@ export interface ConfigEnv {
 export interface ConfigPaths {
   root(path?: string): string;
   server(path?: string): string;
+  database(path?: string): string;
   config(path?: string): string;
   storage(path?: string): string;
 }
