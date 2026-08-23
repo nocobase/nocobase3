@@ -8,7 +8,7 @@ Sharing Rules 把指定对象或满足条件的对象分享给用户、角色、
 ```ts
 import { sharingRules } from '@nocobase/authorization/sharing-rules';
 
-const authorization = createAuthorization({
+const authz = createAuthorization({
   connection,
   plugins: [grantProvider, sharingRules(), resourceAuthorization],
 });
@@ -30,7 +30,7 @@ Migration 创建两张表：
 把两张订单分享给审计角色：
 
 ```ts
-await authorization.sharingRules.create({
+await authz.sharingRules.create({
   key: 'share-orders-with-auditors',
   title: '审计订单',
   resource: {
@@ -53,7 +53,7 @@ await authorization.sharingRules.create({
 把北区订单分享给北区销售部门：
 
 ```ts
-await authorization.sharingRules.create({
+await authz.sharingRules.create({
   key: 'share-north-orders',
   resource: {
     type: 'database.collection',
@@ -63,7 +63,7 @@ await authorization.sharingRules.create({
   subjects: [{ type: 'department', id: 'north-sales' }],
   selection: {
     type: 'criteria',
-    scope: authorization.database.scope({
+    scope: authz.database.scope({
       key: 'regionalRecords',
       params: { region: 'north' },
     }),
@@ -93,15 +93,12 @@ subjects: [
 ## 管理规则
 
 ```ts
-const rule = await authorization.sharingRules.get('share-orders-with-auditors');
-const rules = await authorization.sharingRules.list();
+const rule = await authz.sharingRules.get('share-orders-with-auditors');
+const rules = await authz.sharingRules.list();
 
-await authorization.sharingRules.update(
-  'share-orders-with-auditors',
-  updatedRule,
-);
+await authz.sharingRules.update('share-orders-with-auditors', updatedRule);
 
-await authorization.sharingRules.delete('share-orders-with-auditors');
+await authz.sharingRules.delete('share-orders-with-auditors');
 ```
 
 更新显式记录分享时，Store 会同步替换对应的记录 ID；删除规则时，也会删除它的记录

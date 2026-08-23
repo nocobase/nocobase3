@@ -8,20 +8,20 @@ Authorization Core 提供统一的权限判断入口。应用和业务模块可�
 ```ts
 import { createAuthorization } from '@nocobase/authorization/core';
 
-const authorization = createAuthorization({
+const authz = createAuthorization({
   plugins: [],
 });
 ```
 
-`authorization` 是应用级实例，负责管理资源规则和请求上下文。一次 HTTP 请求进入后，使用
-`authorization.for()` 创建请求级实例，或使用 `authorization.middleware()` 自动创建。
+`authz` 是应用级实例，负责管理资源规则和请求上下文。一次 HTTP 请求进入后，使用
+`authz.for()` 创建请求级实例，或使用 `authz.middleware()` 自动创建。
 
 ## 一次授权请求
 
 授权请求由以下部分组成：
 
 ```ts
-await authorization
+await authz
   .for({
     principal: { type: 'user', id: 'user-alice' },
     subjects: [{ type: 'role', id: 'sales' }],
@@ -59,10 +59,10 @@ Authorization 不负责读取登录状态，应用需要将已经验证的身份
 请求中经过验证的当前角色可以作为 subject 传入：
 
 ```ts
-const authz = authorization.for({
+const identity = {
   principal,
   subjects: [{ type: 'role', id: currentRole.id }],
-});
+};
 ```
 
 授权规则可以使用这组 subjects 区分用户当前生效的角色、团队或部门。
@@ -76,7 +76,7 @@ interface PostAuthorizationParams {
   post: Post;
 }
 
-authorization.resources.add<PostAuthorizationParams>({
+authz.resources.add<PostAuthorizationParams>({
   resourceType: 'post',
 
   async authorize(request) {
@@ -97,7 +97,7 @@ authorization.resources.add<PostAuthorizationParams>({
 调用时传入对应参数：
 
 ```ts
-await authz.require({
+await authz.for(identity).require({
   resource: { type: 'post', id: post.id },
   action: 'update',
   params: { post },
@@ -154,11 +154,11 @@ const decision = await authz.authorize({
 
 ## HTTP 请求中的用法
 
-认证中间件先完成身份验证，`authorization.middleware()` 再创建请求级 `authz`：
+认证中间件先完成身份验证，`authz.middleware()` 再创建请求级授权实例：
 
 ```ts
 router.use('*', auth.required());
-router.use('*', authorization.middleware());
+router.use('*', authz.middleware());
 
 router.put('/posts/:id', async (context) => {
   const post = await postService.get(context.req.param('id'));
@@ -176,7 +176,7 @@ router.put('/posts/:id', async (context) => {
 });
 ```
 
-后台任务或测试可以直接使用 `authorization.for(identity)`。
+后台任务或测试可以直接使用 `authz.for(identity)`。
 
 同一个请求级实例会复用当前身份已经解析的 Grants 和 Constraints。一个请求中多次执行
 页面、按钮或数据权限判断，不会重复加载相同的基础权限配置。新请求应创建新的实例，
@@ -204,7 +204,7 @@ Core 同时提供 Fetch handler，应用可以自行决定挂载路径：
 
 ```ts
 router.get('/authz/permissions', (context) =>
-  authorization.permissions.handler({
+  authz.permissions.handler({
     request: context.req.raw,
     authorization: context.get('authz'),
   }),
@@ -221,7 +221,7 @@ router.get('/authz/permissions', (context) =>
 ```ts
 router.put(
   '/posts/:post',
-  authorization.guard((context) => ({
+  authz.guard((context) => ({
     resource: {
       type: 'post',
       id: context.req.param('post'),
@@ -240,7 +240,7 @@ router.put(
 ```ts
 router.put(
   '/posts/:post',
-  authorization.guard(async (context) => {
+  authz.guard(async (context) => {
     const post = await posts.findOrFail(context.req.param('post'));
     return {
       resource: { type: 'post', id: post.id },
@@ -272,7 +272,7 @@ async function downloadFile(fileId: string, authz: AuthorizationScope) {
 ## 运行状态
 
 ```ts
-authorization.describe();
+authz.describe();
 // {
 //   plugins: [],
 //   resourceTypes: ['report'],

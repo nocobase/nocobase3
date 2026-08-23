@@ -10,7 +10,7 @@ import { createAuthorization } from '@nocobase/authorization/core';
 import { pages } from '@nocobase/authorization/pages';
 import { permissionSets } from '@nocobase/authorization/permissions';
 
-const authorization = createAuthorization({
+const authz = createAuthorization({
   connection,
   plugins: [permissionSets(), pages()],
 });
@@ -21,7 +21,7 @@ const authorization = createAuthorization({
 页面使用 `page` 资源类型和 `access` 动作：
 
 ```ts
-await authorization.permissionSets.create({
+await authz.permissionSets.create({
   key: 'user-administrator',
   title: '用户管理员',
   grants: [

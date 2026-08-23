@@ -18,7 +18,7 @@ import { createAuthorization } from '@nocobase/authorization/core';
 import { databaseAuthorization } from '@nocobase/authorization/database';
 import { permissionSets } from '@nocobase/authorization/permissions';
 
-const authorization = createAuthorization({
+const authz = createAuthorization({
   connection,
   plugins: [permissionSets(), databaseAuthorization()],
 });
@@ -33,7 +33,7 @@ Database 插件不会自动把所有 Collection 变成授权资源。业务模�
 保护的数据表：
 
 ```ts
-authorization.database.collections.add({
+authz.database.collections.add({
   name: 'orders',
   actions: ['create', 'read', 'update', 'delete', 'approve'],
   fields: [
@@ -72,21 +72,21 @@ export function registerOrderAuthorization(authz: AppAuthorization): void {
 可以查询已经注册的定义：
 
 ```ts
-const orders = authorization.database.collections.get('orders');
-const collections = authorization.database.collections.list();
+const orders = authz.database.collections.get('orders');
+const collections = authz.database.collections.list();
 ```
 
 ## 定义数据表权限
 
-`authorization.database.grant()` 创建 Database 能够解释的 Grant。下面的 Permission Set
+`authz.database.grant()` 创建 Database 能够解释的 Grant。下面的 Permission Set
 允许读取订单的三个字段，并把记录范围限制为当前用户拥有的订单：
 
 ```ts
-await authorization.permissionSets.create({
+await authz.permissionSets.create({
   key: 'order-reader',
   title: '订单只读',
   grants: [
-    authorization.database.grant('orders', {
+    authz.database.grant('orders', {
       read: {
         fields: {
           output: ['id', 'number', 'amount'],
@@ -101,7 +101,7 @@ await authorization.permissionSets.create({
 创建和更新可以分别声明输入、输出字段：
 
 ```ts
-authorization.database.grant('orders', {
+authz.database.grant('orders', {
   create: {
     fields: {
       input: ['number', 'amount'],
@@ -272,7 +272,7 @@ Database 插件内置三个 Policy：
 业务模块也可以定义自己的 Policy：
 
 ```ts
-authorization.database.recordAccess.add<{
+authz.database.recordAccess.add<{
   field: string;
 }>({
   key: 'regionalRecords',
@@ -297,8 +297,8 @@ Collection 定义和 Action，返回 NocoBase Filter AST。
 可以查询当前可用的 Policy：
 
 ```ts
-const policy = authorization.database.recordAccess.get('regionalRecords');
-const policies = authorization.database.recordAccess.list();
+const policy = authz.database.recordAccess.get('regionalRecords');
+const policies = authz.database.recordAccess.list();
 ```
 
 `allRecords`、`recordsIOwn` 和 `recordsICreated` 也注册在这个 registry 中。Policy key
@@ -331,7 +331,7 @@ AND Restriction Rules
 例如把两张订单分享给审计角色：
 
 ```ts
-await authorization.sharingRules.create({
+await authz.sharingRules.create({
   key: 'share-orders-with-auditors',
   resource: { type: 'database.collection', id: 'main.orders' },
   actions: ['read'],
@@ -346,12 +346,12 @@ await authorization.sharingRules.create({
 限制外部协作者只能访问自己拥有的订单：
 
 ```ts
-await authorization.restrictionRules.create({
+await authz.restrictionRules.create({
   key: 'contractor-owned-orders',
   resource: { type: 'database.collection', id: 'main.orders' },
   actions: ['read', 'update'],
   subjects: [{ type: 'role', id: 'contractor' }],
-  scope: authorization.database.scope('recordsIOwn'),
+  scope: authz.database.scope('recordsIOwn'),
 });
 ```
 

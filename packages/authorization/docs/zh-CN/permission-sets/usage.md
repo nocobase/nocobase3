@@ -10,12 +10,12 @@ import { createAuthorization } from '@nocobase/authorization/core';
 import { permissionSets } from '@nocobase/authorization/permissions';
 import { databaseAuthorization } from '@nocobase/authorization/database';
 
-const authorization = createAuthorization({
+const authz = createAuthorization({
   connection,
   plugins: [permissionSets(), databaseAuthorization()],
 });
 
-authorization.database.collections.add({
+authz.database.collections.add({
   name: 'orders',
   actions: ['read'],
   fields: ['id', 'number', 'amount'],
@@ -30,14 +30,14 @@ Permission Sets 使用数据库保存配置。应用初始化时执行包内 mig
 
 ## 创建 Permission Set
 
-Database 插件安装后，通过 `authorization.database.grant()` 定义数据库权限：
+Database 插件安装后，通过 `authz.database.grant()` 定义数据库权限：
 
 ```ts
-await authorization.permissionSets.create({
+await authz.permissionSets.create({
   key: 'order-reader',
   title: '订单只读',
   grants: [
-    authorization.database.grant('orders', {
+    authz.database.grant('orders', {
       read: { fields: { output: ['id', 'number', 'amount'] } },
     }),
   ],
@@ -65,7 +65,7 @@ Permission Set 的每个 Action 可以携带一个 `policy`。`type` 标识负�
 ```
 
 Permission Sets 只保存和传递 Policy，不解释插件字段。业务代码通常优先使用资源插件
-提供的 `grant()` API，例如 `authorization.database.grant()`，由插件生成正确的 Policy
+提供的 `grant()` API，例如 `authz.database.grant()`，由插件生成正确的 Policy
 结构。
 
 ## 分配 Permission Set
@@ -73,7 +73,7 @@ Permission Sets 只保存和传递 Policy，不解释插件字段。业务代码
 ### 分配给用户
 
 ```ts
-const assignment = await authorization.permissionSets.assign({
+const assignment = await authz.permissionSets.assign({
   permissionSet: 'order-reader',
   subject: { type: 'user', id: 'user-alice' },
 });
@@ -82,7 +82,7 @@ const assignment = await authorization.permissionSets.assign({
 撤销分配：
 
 ```ts
-await authorization.permissionSets.revoke(assignment.id);
+await authz.permissionSets.revoke(assignment.id);
 ```
 
 ### 分配给所有已认证用户
@@ -91,12 +91,12 @@ await authorization.permissionSets.revoke(assignment.id);
 Principal 类型自行推断是否已经认证：
 
 ```ts
-await authorization.permissionSets.assign({
+await authz.permissionSets.assign({
   permissionSet: 'help-center-reader',
   subject: { type: 'authenticated', id: '*' },
 });
 
-authorization.for({
+authz.for({
   principal: { type: 'user', id: 'user-alice' },
   subjects: [{ type: 'authenticated', id: '*' }],
 });
@@ -107,12 +107,12 @@ authorization.for({
 应用在请求入口解析当前角色，并把它加入 `subjects`：
 
 ```ts
-const authz = authorization.for({
+authz.for({
   principal: { type: 'user', id: 'user-alice' },
   subjects: [{ type: 'role', id: 'sales-manager' }],
 });
 
-await authorization.permissionSets.assign({
+await authz.permissionSets.assign({
   permissionSet: 'order-manager',
   subject: { type: 'role', id: 'sales-manager' },
 });
@@ -123,24 +123,23 @@ await authorization.permissionSets.assign({
 ## 查询和维护
 
 ```ts
-const all = await authorization.permissionSets.list();
-const reader = await authorization.permissionSets.get('order-reader');
-const assignments =
-  await authorization.permissionSets.listAssignments('order-reader');
+const all = await authz.permissionSets.list();
+const reader = await authz.permissionSets.get('order-reader');
+const assignments = await authz.permissionSets.listAssignments('order-reader');
 
-await authorization.permissionSets.update('order-reader', {
+await authz.permissionSets.update('order-reader', {
   key: 'order-reader',
   title: '订单查看者',
   grants: updatedGrants,
 });
 
-await authorization.permissionSets.delete('order-reader');
+await authz.permissionSets.delete('order-reader');
 ```
 
 查询某个 Principal 当前生效的 Permission Sets：
 
 ```ts
-const effective = await authorization.permissionSets.getEffective({
+const effective = await authz.permissionSets.getEffective({
   principal: { type: 'user', id: 'user-alice' },
   subjects: [{ type: 'role', id: 'sales-manager' }],
 });
@@ -149,13 +148,18 @@ const effective = await authorization.permissionSets.getEffective({
 这个 API 适合权限管理界面和审计。具体资源的最终访问结果通过请求级 `authz` 判断：
 
 ```ts
-const decision = await authz.explain({
-  resource: { type: 'database.collection', id: 'main.orders' },
-  action: 'read',
-  params: {
-    fields: { output: ['id', 'number', 'amount'] },
-  },
-});
+const decision = await authz
+  .for({
+    principal: { type: 'user', id: 'user-alice' },
+    subjects: [{ type: 'role', id: 'sales-manager' }],
+  })
+  .explain({
+    resource: { type: 'database.collection', id: 'main.orders' },
+    action: 'read',
+    params: {
+      fields: { output: ['id', 'number', 'amount'] },
+    },
+  });
 ```
 
 ## HTTP API
@@ -167,7 +171,7 @@ router.on(
   ['GET', 'POST', 'PUT', 'DELETE'],
   ['/authz/permission-sets', '/authz/permission-sets/*'],
   (context) =>
-    authorization.permissionSets.handler({
+    authz.permissionSets.handler({
       request: context.req.raw,
       authorization: context.get('authz'),
       basePath: '/authz',
@@ -179,7 +183,7 @@ handler 使用当前请求级 Authorization 检查管理权限。应用可以创
 Permission Set：
 
 ```ts
-await authorization.permissionSets.create({
+await authz.permissionSets.create({
   key: 'permission-administrator',
   grants: [
     {
@@ -214,7 +218,7 @@ await authorization.permissionSets.create({
 默认配置使用数据库 Store。需要接入其他存储时，实现 `PermissionSetStore` 并传入：
 
 ```ts
-const authorization = createAuthorization({
+const authz = createAuthorization({
   plugins: [permissionSets({ store: customPermissionSetStore })],
 });
 ```
@@ -222,7 +226,7 @@ const authorization = createAuthorization({
 测试中可以传入测试专用的 Mock Store：
 
 ```ts
-const authorization = createAuthorization({
+const authz = createAuthorization({
   plugins: [permissionSets({ store: new MockPermissionSetStore() })],
 });
 ```

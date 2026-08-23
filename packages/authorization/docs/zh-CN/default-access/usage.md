@@ -8,7 +8,7 @@ Default Access 为资源和动作设置默认对象范围。它只扩大已经�
 ```ts
 import { defaultAccess } from '@nocobase/authorization/default-access';
 
-const authorization = createAuthorization({
+const authz = createAuthorization({
   connection,
   plugins: [grantProvider, defaultAccess(), resourceAuthorization],
 });
@@ -25,7 +25,7 @@ const authorization = createAuthorization({
 允许所有已获得文章读取权限的主体读取全部文章：
 
 ```ts
-await authorization.defaultAccess.set({
+await authz.defaultAccess.set({
   resource: {
     type: 'database.collection',
     id: 'main.articles',
@@ -38,7 +38,7 @@ await authorization.defaultAccess.set({
 也可以设置指定对象范围：
 
 ```ts
-await authorization.defaultAccess.set({
+await authz.defaultAccess.set({
   resource: {
     type: 'document.library',
     id: 'help-center',
@@ -55,30 +55,27 @@ await authorization.defaultAccess.set({
 Access Policy：
 
 ```ts
-await authorization.defaultAccess.set({
+await authz.defaultAccess.set({
   resource: {
     type: 'database.collection',
     id: 'main.articles',
   },
   actions: ['read'],
-  scope: authorization.database.scope('publishedArticles'),
+  scope: authz.database.scope('publishedArticles'),
 });
 ```
 
 ## 管理配置
 
 ```ts
-const rule = await authorization.defaultAccess.get(
+const rule = await authz.defaultAccess.get(
   'database.collection',
   'main.articles',
 );
 
-const rules = await authorization.defaultAccess.list();
+const rules = await authz.defaultAccess.list();
 
-await authorization.defaultAccess.delete(
-  'database.collection',
-  'main.articles',
-);
+await authz.defaultAccess.delete('database.collection', 'main.articles');
 ```
 
 再次调用 `set()` 会更新相同 Resource Type 和 Resource ID 的配置。

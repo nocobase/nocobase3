@@ -8,7 +8,7 @@ Restriction Rules 为指定主体增加必须满足的对象范围限制。它�
 ```ts
 import { restrictionRules } from '@nocobase/authorization/restriction-rules';
 
-const authorization = createAuthorization({
+const authz = createAuthorization({
   connection,
   plugins: [grantProvider, restrictionRules(), resourceAuthorization],
 });
@@ -25,7 +25,7 @@ const authorization = createAuthorization({
 限制外部协作者只能读取和修改自己拥有的订单：
 
 ```ts
-await authorization.restrictionRules.create({
+await authz.restrictionRules.create({
   key: 'contractor-owned-orders',
   title: '外部协作者只能操作自己的订单',
   resource: {
@@ -34,14 +34,14 @@ await authorization.restrictionRules.create({
   },
   actions: ['read', 'update'],
   subjects: [{ type: 'role', id: 'contractor' }],
-  scope: authorization.database.scope('recordsIOwn'),
+  scope: authz.database.scope('recordsIOwn'),
 });
 ```
 
 限制指定用户只能访问一组对象：
 
 ```ts
-await authorization.restrictionRules.create({
+await authz.restrictionRules.create({
   key: 'temporary-order-access',
   resource: {
     type: 'database.collection',
@@ -73,17 +73,12 @@ Handler 应同时满足这些限制。
 ## 管理规则
 
 ```ts
-const rule = await authorization.restrictionRules.get(
-  'contractor-owned-orders',
-);
-const rules = await authorization.restrictionRules.list();
+const rule = await authz.restrictionRules.get('contractor-owned-orders');
+const rules = await authz.restrictionRules.list();
 
-await authorization.restrictionRules.update(
-  'contractor-owned-orders',
-  updatedRule,
-);
+await authz.restrictionRules.update('contractor-owned-orders', updatedRule);
 
-await authorization.restrictionRules.delete('contractor-owned-orders');
+await authz.restrictionRules.delete('contractor-owned-orders');
 ```
 
 ## 授权结果
