@@ -14,17 +14,12 @@ import {
   UnavailableFileUploadsService,
   type FileUploads,
 } from './public-file-storage.js';
-import {
-  DatabaseWorkflowService,
-  UnavailableWorkflowService,
-  type WorkflowService,
-} from './workflow.js';
 
 export interface AppServices {
   appSettingsStore: AppSettings;
   publicFileStorage: FileUploads;
   realtime: RealtimeService;
-  workflow: WorkflowService;
+  plugins: Record<string, unknown>;
 }
 
 export interface CreateAppServicesOptions {
@@ -47,10 +42,7 @@ export function createAppServices(
             resolveFileUploadsUnavailableMessage(runtime.config.drive),
           ),
     realtime: options.realtime,
-    workflow:
-      deps.workflowRuntime && runtime.database
-        ? new DatabaseWorkflowService(runtime.database, deps.workflowRuntime)
-        : new UnavailableWorkflowService(),
+    plugins: {},
   };
 }
 
@@ -79,8 +71,3 @@ export {
   BadRequestError,
   ServiceUnavailableError,
 } from './errors.js';
-export {
-  DatabaseWorkflowService,
-  UnavailableWorkflowService,
-  type WorkflowService,
-} from './workflow.js';

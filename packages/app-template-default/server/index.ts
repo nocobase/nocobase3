@@ -26,7 +26,6 @@ export {
 export {
   createAppFromRuntime,
   createPublicBasePathAdapter,
-  startAppWorkflow,
   stripPublicBasePathFromRequest,
 } from './runtime/app.js';
 export {

@@ -24,7 +24,6 @@ import {
   loadStandaloneAppConfig,
   onceAsync,
   prepareAppRuntime,
-  startAppWorkflow,
   type AppDisposerRegistry,
 } from './runtime/index.js';
 
@@ -136,7 +135,7 @@ async function createStandaloneAppFromRuntime(
     ...options,
     lifecycle,
   });
-  await startAppWorkflow(runtime);
+  await app.startPlugins();
   const mounted = createPublicBasePathAdapter(
     app,
     runtime.config.app.publicBasePath,

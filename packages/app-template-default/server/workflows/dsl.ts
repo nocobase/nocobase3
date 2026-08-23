@@ -1,4 +1,4 @@
-import { condition, run } from '@nocobase/workflow';
+import { condition, run } from '@nocobase/app-plugin-workflow';
 
 export const node: {
   condition: typeof condition;
@@ -7,4 +7,4 @@ export const node: {
   condition,
   run,
 };
-export { defineWorkflow } from '@nocobase/workflow';
+export { defineWorkflow } from '@nocobase/app-plugin-workflow';

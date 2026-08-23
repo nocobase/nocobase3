@@ -10,8 +10,8 @@ import {
   buildExecutionOverlay,
   projectWorkflowGraph,
   restoreFromFlatIr,
-} from '@nocobase/workflow/client';
-import type { WorkflowSourceAst } from '@nocobase/workflow';
+} from '@nocobase/app-plugin-workflow/client';
+import type { WorkflowSourceAst } from '@nocobase/app-plugin-workflow';
 import { workflowApi } from './data';
 import {
   WorkflowContextDialog,

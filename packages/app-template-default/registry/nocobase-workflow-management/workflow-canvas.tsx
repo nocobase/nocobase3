@@ -17,7 +17,7 @@ import {
   applyLayoutResult,
   createLayoutInput,
   projectWorkflowGraph,
-} from '@nocobase/workflow/client';
+} from '@nocobase/app-plugin-workflow/client';
 import { layoutWithElk } from './graph/elk-layout';
 import type { WorkflowCanvasProps, WorkflowNodeRunRecord } from './types';
 import './workflow-canvas.css';

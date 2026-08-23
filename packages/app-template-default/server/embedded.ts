@@ -6,7 +6,6 @@ import {
   loadEmbeddedAppConfig,
   onceAsync,
   prepareAppRuntime,
-  startAppWorkflow,
   type AppScope,
 } from './runtime/index.js';
 
@@ -30,7 +29,7 @@ export async function createServer(
     viteDevUrl: false,
     lifecycle: scope,
   });
-  await startAppWorkflow(runtime);
+  await app.startPlugins();
   return app;
 }
 

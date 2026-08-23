@@ -50,6 +50,7 @@ import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalo
 import type { AppConfig } from '../../server/config/index.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
+import type { LoadedAppPluginBootstrap } from '../../server/plugins/index.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
@@ -96,6 +97,33 @@ afterEach(async () => {
 });
 
 describe('app server', () => {
+  it('starts without optional plugins or workflow routes', async () => {
+    const app = createTestApp();
+
+    await expect(app.startPlugins()).resolves.toBeUndefined();
+    expect(app.routes.some((route) => route.path.includes('/workflows'))).toBe(
+      false,
+    );
+  });
+
+  it('defers plugin startup until the host explicitly starts plugins', async () => {
+    const start = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const app = createTestApp({
+      pluginBootstraps: [
+        {
+          packageName: '@nocobase/app-plugin-test',
+          bootstrap: ({ lifecycle }): void => {
+            lifecycle.registerStarter('runtime', start);
+          },
+        },
+      ],
+    });
+
+    expect(start).not.toHaveBeenCalled();
+    await app.startPlugins();
+    expect(start).toHaveBeenCalledOnce();
+  });
+
   it('creates embedded apps from a scope', async () => {
     const app = await createEmbeddedServer(
       createEmbeddedTestScope({
@@ -235,6 +263,7 @@ describe('app server', () => {
       'app-deps',
       'realtime-service',
       'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
+      'plugin:@nocobase/app-plugin-workflow:runtime',
     ]);
 
     for (const disposer of [...registeredDisposers].reverse()) {
@@ -1224,6 +1253,7 @@ interface CreateTestAppOptions {
   drive?: AppDriveConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
+  pluginBootstraps?: readonly LoadedAppPluginBootstrap[];
   spa?: {
     indexPath?: string;
     runtime?: AppConfig['spa']['runtime'];
@@ -1295,9 +1325,15 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     dispose: () => Promise.resolve(),
   };
   const lifecycle = createAppDisposerRegistry();
-  const app = Object.assign(createApp(runtime, { lifecycle }), {
-    close: () => lifecycle.disposeAll(),
-  });
+  const app = Object.assign(
+    createApp(runtime, {
+      lifecycle,
+      pluginBootstraps: options.pluginBootstraps,
+    }),
+    {
+      close: () => lifecycle.disposeAll(),
+    },
+  );
 
   return trackCloseable(app);
 }

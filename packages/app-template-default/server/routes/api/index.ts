@@ -11,7 +11,6 @@ import { createHealthzHandler } from './healthz.js';
 import { createSessionRoutes } from './session.js';
 import { createUploadRoutes } from './upload.js';
 import { createAuthRoutes } from './auth.js';
-import { createWorkflowRoutes } from './workflows.js';
 
 export interface ApiRouteOptions {
   appName: string;
@@ -56,11 +55,6 @@ export function createApiRoutes({
   const protectedRoutes = new Hono();
   protectedRoutes.use('*', deps.auth.required());
   protectedRoutes.get('/apps', createAppsHandler());
-  protectedRoutes.route(
-    '/',
-    createWorkflowRoutes({ workflow: services.workflow }),
-  );
-
   api.onError(
     createApiErrorHandler({
       logger: deps.logging.getLogger().child({ module: 'api' }),

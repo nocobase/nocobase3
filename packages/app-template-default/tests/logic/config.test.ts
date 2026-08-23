@@ -673,10 +673,6 @@ describe('database migrations', () => {
         name: '202608180001_create_app_settings_table',
         fileName: '202608180001_create_app_settings_table.ts',
       }),
-      expect.objectContaining({
-        name: '202608200001_create_workflow_collections',
-        fileName: '202608200001_create_workflow_collections.ts',
-      }),
     ]);
   });
 });
@@ -698,6 +694,9 @@ describe('app plugins', () => {
     );
     const realtimeExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-realtime-example',
+    );
+    const workflowPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-workflow',
     );
 
     expect(authenticationPlugin).toMatchObject({
@@ -755,6 +754,17 @@ describe('app plugins', () => {
     expect(realtimeExamplePlugin?.bootstrapEntry).toMatch(
       /app-plugin-realtime-example\/server\/bootstrap\.ts$/,
     );
+    expect(workflowPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-workflow',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(workflowPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-workflow\/database\/migrations$/,
+    );
+    expect(workflowPlugin?.routesEntry).toMatch(
+      /app-plugin-workflow\/server\/routes\/index\.ts$/,
+    );
     expect(runtime.config.queue.jobs?.locations).toEqual([
       expect.stringMatching(/app-template-default\/server\/jobs/),
       expect.stringMatching(
@@ -771,6 +781,9 @@ describe('app plugins', () => {
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-workflow',
         }),
       ]),
     );
@@ -801,6 +814,10 @@ describe('app plugins', () => {
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
           name: '202608220001_database_example_create_messages',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-workflow',
+          name: '202608200001_create_workflow_collections',
         }),
       ]),
     );

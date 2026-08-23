@@ -1,0 +1,100 @@
+{
+  "name": "@nocobase/app-plugin-workflow",
+  "displayName": "Workflow App Plugin",
+  "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/engine/index.js",
+  "types": "./dist/engine/index.d.ts",
+  "bin": {
+    "workflow": "./dist/engine/cli.js"
+  },
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "source": "./engine/index.ts",
+      "types": "./dist/engine/index.d.ts",
+      "import": "./dist/engine/index.js"
+    },
+    "./collections": {
+      "source": "./engine/collections/index.ts",
+      "types": "./dist/engine/collections/index.d.ts",
+      "import": "./dist/engine/collections/index.js"
+    },
+    "./client": {
+      "source": "./engine/client/index.ts",
+      "types": "./dist/engine/client/index.d.ts",
+      "import": "./dist/engine/client/index.js"
+    },
+    "./server": {
+      "source": "./server/index.ts",
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/engine/index.d.ts",
+        "import": "./dist/engine/index.js"
+      },
+      "./collections": {
+        "types": "./dist/engine/collections/index.d.ts",
+        "import": "./dist/engine/collections/index.js"
+      },
+      "./client": {
+        "types": "./dist/engine/client/index.d.ts",
+        "import": "./dist/engine/client/index.js"
+      },
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "nocobase": {
+    "plugin": {
+      "database": {
+        "migrations": "./database/migrations",
+        "seeds": "./database/seeds"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "dependencies": {
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/database": "workspace:^",
+    "@nocobase/drive": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "esbuild": "^0.25.12",
+    "hono": "catalog:",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@boringnode/queue": "^0.7.1",
+    "better-sqlite3": "^13.0.3",
+    "knex": "^3.1.0"
+  }
+}

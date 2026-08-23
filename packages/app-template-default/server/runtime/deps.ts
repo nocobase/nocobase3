@@ -3,11 +3,7 @@ import {
   createAuthStorage,
   createAuthentication,
 } from '@nocobase/app-plugin-authentication';
-import {
-  createDriveManager,
-  type FsDriveDiskConfig,
-  type NocoBaseDriveManager,
-} from '@nocobase/drive';
+import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import { SnowflakeIdGenerator } from '@nocobase/id-generator';
 import { createLogging, type Logging } from '@nocobase/logging';
 import {
@@ -26,11 +22,6 @@ import type { Auth } from '@nocobase/app-plugin-authentication';
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
 import { createCookiePrefix } from './utils.js';
-import {
-  bindRuntimeWorkflow,
-  createAppWorkflowRuntime,
-  type AppWorkflowRuntime,
-} from '../workflows/runtime.js';
 
 export interface AppDeps {
   auth: Auth;
@@ -40,7 +31,7 @@ export interface AppDeps {
   logging: Logging;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
-  workflowRuntime?: AppWorkflowRuntime;
+  runtime: AppRuntime<AppConfig>;
 }
 
 export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
@@ -86,23 +77,6 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       }),
     },
   );
-  const workflowRuntime =
-    runtime.database && config.workflow
-      ? createAppWorkflowRuntime({
-          database: runtime.database,
-          queue: queueManager,
-          app: runtime,
-          sourceRoot: config.workflow.sourceRoot,
-          distRoot: config.workflow.distRoot ?? config.workflow.sourceRoot,
-          artifactDisk: resolveWorkflowArtifactDisk(config),
-          production: config.workflow.production ?? false,
-          sourceResolverDiagnostic:
-            config.workflow.sourceResolverDiagnostic ?? false,
-          warn: (message: string): void => logging.getLogger().warn(message),
-        })
-      : undefined;
-  bindRuntimeWorkflow(runtime, workflowRuntime);
-
   return {
     caching,
     auth,
@@ -111,30 +85,11 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
     logging,
     queueManager,
     sessionManager,
-    workflowRuntime,
+    runtime,
   };
 }
 
-export function resolveWorkflowArtifactDisk(
-  config: AppConfig,
-): FsDriveDiskConfig {
-  const name = config.workflow.artifactDisk ?? config.drive.default;
-  const disk = config.drive.disks[name];
-  if (!disk)
-    throw new Error(`Workflow Artifact disk "${name}" is not configured`);
-  if (disk.driver !== 'fs')
-    throw new Error(
-      `Workflow Artifact disk "${name}" must use the fs/local driver`,
-    );
-  if (disk.visibility !== 'private')
-    throw new Error(
-      `Workflow Artifact disk "${name}" must have private visibility`,
-    );
-  return disk;
-}
-
 export async function disposeAppDeps(deps: AppDeps): Promise<void> {
-  await deps.workflowRuntime?.stop();
   await deps.queueManager.close();
   await Promise.all([
     deps.caching.dispose(),

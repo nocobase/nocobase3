@@ -23,7 +23,6 @@ import {
   registerWebSocketRoutes,
 } from './routes/websocket.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
-import type { AppWorkflowRuntime } from './workflows/runtime.js';
 
 export type {
   AppDisposer,
@@ -35,7 +34,7 @@ export { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
 export type AppServer = Hono & {
   websocket?: AppWebSocketHandler;
-  workflowRuntime?: AppWorkflowRuntime;
+  startPlugins(): Promise<void>;
 };
 
 export function createApp(
@@ -63,6 +62,7 @@ export function createApp(
   );
   const services = createAppServices(runtime, deps, { realtime });
   const app = new Hono();
+  const pluginStarters: Array<() => void | Promise<void>> = [];
 
   for (const plugin of options.pluginBootstraps ?? []) {
     plugin.bootstrap({
@@ -74,6 +74,9 @@ export function createApp(
             `plugin:${plugin.packageName}:${name}`,
             onceAsync(dispose),
           );
+        },
+        registerStarter(_name, start): void {
+          pluginStarters.push(start);
         },
       },
     });
@@ -112,6 +115,8 @@ export function createApp(
 
   return Object.assign(app, {
     websocket: createWebSocketHandler({ realtime }),
-    workflowRuntime: deps.workflowRuntime,
+    async startPlugins(): Promise<void> {
+      for (const start of pluginStarters) await start();
+    },
   });
 }

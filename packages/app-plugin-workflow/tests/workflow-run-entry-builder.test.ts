@@ -1,0 +1,143 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  buildWorkflowServerEntries,
+  scanWorkflowPackage,
+  type WorkflowFlatIr,
+} from '../engine/index.js';
+const roots: string[] = [];
+afterEach(async () =>
+  Promise.all(
+    roots
+      .splice(0)
+      .map((root) => fs.rm(root, { recursive: true, force: true })),
+  ),
+);
+async function fixture(
+  script = `export function run() { return 'ok'; }`,
+): Promise<string> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'run-entry-'));
+  roots.push(root);
+  await fs.writeFile(path.join(root, 'workflow.ts'), 'export default {};');
+  await fs.mkdir(path.join(root, 'server'));
+  await fs.writeFile(path.join(root, 'server/run.ts'), script);
+  return root;
+}
+function ir(scripts: string[]): WorkflowFlatIr {
+  return {
+    title: 'x',
+    contextSchema: { type: 'object' },
+    start: scripts.length ? 'n0' : null,
+    nodes: scripts.map((script, index) => ({
+      key: `n${index}`,
+      type: 'run',
+      config: { script },
+      upstreamKey: index ? `n${index - 1}` : null,
+      downstreamKey: index + 1 < scripts.length ? `n${index + 1}` : null,
+      branchKey: null,
+    })),
+  };
+}
+describe('workflow run server entry builder', () => {
+  it('bundles TypeScript and local dependencies, with stable deduplicated entry keys', async () => {
+    const root = await fixture(
+      `import { value } from './value.js'; export function run() { return value; }`,
+    );
+    await fs.writeFile(
+      path.join(root, 'server/value.ts'),
+      `export const value = 'ok';`,
+    );
+    const built = await buildWorkflowServerEntries(
+      await scanWorkflowPackage(root),
+      ir(['server/run.ts', 'server/run.ts']),
+    );
+    expect(Object.keys(built.entries)).toHaveLength(1);
+    expect(Object.keys(built.entries)[0]).toMatch(/^run:[a-f0-9]{16}$/);
+    expect([...built.files]).toHaveLength(1);
+  });
+  it.each([
+    '/absolute.ts',
+    '../escape.ts',
+    'https://host/run.ts',
+    'package-name',
+    'nul\0.ts',
+  ])('rejects unsafe entry %s', async (script) => {
+    const root = await fixture();
+    await expect(
+      buildWorkflowServerEntries(await scanWorkflowPackage(root), ir([script])),
+    ).rejects.toThrow();
+  });
+  it('rejects symlink escape, secret material and a missing run export', async () => {
+    const root = await fixture('export const nope = 1;');
+    await expect(
+      buildWorkflowServerEntries(
+        await scanWorkflowPackage(root),
+        ir(['server/run.ts']),
+      ),
+    ).rejects.toThrow(/export a function named run/);
+    await fs.writeFile(path.join(root, '.env'), 'SECRET=1');
+    await fs.writeFile(
+      path.join(root, 'server/run.ts'),
+      `import '../../outside.env'; export function run(){}`,
+    );
+    await expect(
+      buildWorkflowServerEntries(
+        await scanWorkflowPackage(root),
+        ir(['server/run.ts']),
+      ),
+    ).rejects.toThrow();
+  });
+  it('rejects direct and symlink dependency escape while never executing module top-level code during build', async () => {
+    const root = await fixture(
+      `throw new Error('must not execute while building'); export function run(){}`,
+    );
+    await expect(
+      buildWorkflowServerEntries(
+        await scanWorkflowPackage(root),
+        ir(['server/run.ts']),
+      ),
+    ).resolves.toMatchObject({ entries: expect.any(Object) });
+    const outside = path.join(path.dirname(root), 'outside.ts');
+    await fs.writeFile(outside, 'export const value = 1;');
+    await fs.writeFile(
+      path.join(root, 'server/run.ts'),
+      `import { value } from '../../outside.ts'; export function run(){ return value; }`,
+    );
+    await expect(
+      buildWorkflowServerEntries(
+        await scanWorkflowPackage(root),
+        ir(['server/run.ts']),
+      ),
+    ).rejects.toThrow(/escapes workflow package/);
+    await fs.symlink(outside, path.join(root, 'server/link.ts'));
+    await fs.writeFile(
+      path.join(root, 'server/run.ts'),
+      `import { value } from './link.js'; export function run(){ return value; }`,
+    );
+    await expect(
+      scanWorkflowPackage(root).then((scanned) =>
+        buildWorkflowServerEntries(scanned, ir(['server/run.ts'])),
+      ),
+    ).rejects.toThrow(/escapes package root/);
+    await fs.rm(outside, { force: true });
+  });
+  it('externalizes builtins and enforces explicit bare allowlist', async () => {
+    const root = await fixture(
+      `import path from 'node:path'; import x from 'allowed-package'; export function run(){ return path.join(String(x)); }`,
+    );
+    await expect(
+      buildWorkflowServerEntries(
+        await scanWorkflowPackage(root),
+        ir(['server/run.ts']),
+      ),
+    ).rejects.toThrow(/allowlist/);
+    const built = await buildWorkflowServerEntries(
+      await scanWorkflowPackage(root),
+      ir(['server/run.ts']),
+      { bareImportAllowlist: ['allowed-package'] },
+    );
+    expect(built.externalPackages).toEqual(['allowed-package']);
+  });
+});

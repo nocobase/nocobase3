@@ -1,0 +1,269 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  ConditionInstruction,
+  RunInstruction,
+  compileWorkflowSource,
+  defineWorkflow,
+  getAvailableNodeResults,
+  getAvailableNodeResultsAt,
+  run,
+  condition,
+  validateNodeResultReference,
+  validateNodeResultSchema,
+  validateWorkflowSourceAst,
+} from '../engine/index.js';
+import type {
+  NodeResultSchema,
+  WorkflowSourceAst,
+  WorkflowSourceContracts,
+} from '../engine/index.js';
+
+const contracts: WorkflowSourceContracts = {
+  nodes: new Map([
+    ['condition', ConditionInstruction],
+    ['run', RunInstruction],
+  ]),
+};
+const objectResult: NodeResultSchema = {
+  type: 'object',
+  required: ['value'],
+  properties: {
+    value: { type: 'number' },
+    nested: { type: 'object', properties: { name: { type: 'string' } } },
+  },
+};
+
+function issues(
+  ast: WorkflowSourceAst,
+): ReturnType<typeof validateWorkflowSourceAst> {
+  return validateWorkflowSourceAst(ast, 'workflow.ts', contracts);
+}
+
+describe('workflow node result schemas', () => {
+  it('preserves source declarations and resolves instance, class, and null precedence into Flat IR', () => {
+    const ast = defineWorkflow({
+      title: 'results',
+      nodes: [
+        condition({ key: 'defaulted', config: {} }),
+        condition({
+          key: 'overridden',
+          result: { type: 'string' },
+          config: {},
+        }),
+        condition({ key: 'disabled', result: null, config: {} }),
+        run({ key: 'undeclared', config: { script: './x.ts' } }),
+      ],
+    });
+    expect(ast.nodes.map((node) => node.result)).toEqual([
+      undefined,
+      { type: 'string' },
+      null,
+      undefined,
+    ]);
+    expect(
+      compileWorkflowSource(ast, 'workflow.ts', contracts).nodes.map(
+        (node) => node.result,
+      ),
+    ).toEqual([
+      { type: 'boolean', description: 'The evaluated condition result.' },
+      { type: 'string' },
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it('applies AST scopes to prior, branch-owner, sibling, downstream, self, and branch-leak references', () => {
+    const ast = defineWorkflow({
+      title: 'scope',
+      nodes: [
+        run({
+          key: 'first',
+          result: objectResult,
+          config: { script: './x.ts' },
+        }),
+        condition({
+          key: 'owner',
+          config: {
+            expression: { '===': [{ var: 'nodeResults.first.value' }, 1] },
+          },
+        }).branch({
+          yes: [
+            run({
+              key: 'inside',
+              result: objectResult,
+              config: {
+                script: './x.ts',
+                args: {
+                  owner: '{{$nodeResults.owner}}',
+                  first: '{{$nodeResults.first.nested.name}}',
+                },
+              },
+            }),
+            condition({ key: 'nestedOwner', config: {} }).branch({
+              yes: [
+                run({
+                  key: 'nested',
+                  config: {
+                    script: './x.ts',
+                    args: {
+                      inherited: '{{$nodeResults.inside.value}}',
+                      owner: '{{$nodeResults.nestedOwner}}',
+                    },
+                  },
+                }),
+              ],
+            }),
+            run({
+              key: 'laterInside',
+              config: {
+                script: './x.ts',
+                args: {
+                  value: '{{$nodeResults.inside.value}}',
+                  hiddenNested: '{{$nodeResults.nested.value}}',
+                },
+              },
+            }),
+          ],
+          no: [
+            run({
+              key: 'sibling',
+              config: {
+                script: './x.ts',
+                args: { invalid: '{{$nodeResults.inside.value}}' },
+              },
+            }),
+          ],
+        }),
+        run({
+          key: 'after',
+          config: {
+            script: './x.ts',
+            args: {
+              leaked: '{{$nodeResults.inside.value}}',
+              future: '{{$nodeResults.last.value}}',
+            },
+          },
+        }),
+        run({
+          key: 'last',
+          result: objectResult,
+          config: {
+            script: './x.ts',
+            args: { self: '{{$nodeResults.last.value}}' },
+          },
+        }),
+      ],
+    });
+    expect(
+      issues(ast)
+        .filter((item) => item.code === 'NODE_RESULT_NOT_VISIBLE')
+        .map((item) => item.nodeKey),
+    ).toEqual(['sibling', 'laterInside', 'after', 'after', 'last']);
+    expect(
+      getAvailableNodeResults(ast, 'inside', contracts).map(
+        (item) => item.nodeKey,
+      ),
+    ).toEqual(['first', 'owner']);
+    expect(
+      getAvailableNodeResults(ast, 'after', contracts).map(
+        (item) => item.nodeKey,
+      ),
+    ).toEqual(['first', 'owner']);
+    expect(
+      getAvailableNodeResultsAt(
+        ast,
+        { parentNodeKey: 'owner', branchKey: 'yes', index: 1 },
+        contracts,
+      ).map((item) => item.nodeKey),
+    ).toEqual(['first', 'owner', 'inside']);
+  });
+
+  it('checks object, array, additionalProperties, primitive access, and every oneOf branch', () => {
+    const scope = new Map<string, NodeResultSchema>([
+      [
+        'complex',
+        {
+          type: 'object',
+          properties: {
+            list: {
+              type: 'array',
+              items: { type: 'object', properties: { id: { type: 'number' } } },
+            },
+            open: {
+              type: 'object',
+              properties: {},
+              additionalProperties: true,
+            },
+            typed: {
+              type: 'object',
+              properties: {},
+              additionalProperties: {
+                type: 'object',
+                properties: { id: { type: 'string' } },
+              },
+            },
+            choice: {
+              oneOf: [
+                { type: 'object', properties: { shared: { type: 'string' } } },
+                {
+                  type: 'object',
+                  properties: {
+                    shared: { type: 'string' },
+                    only: { type: 'number' },
+                  },
+                },
+              ],
+            },
+            scalar: { type: 'boolean' },
+          },
+        },
+      ],
+    ]);
+    expect(
+      validateNodeResultReference('nodeResults.complex.list.0.id', scope),
+    ).toBeNull();
+    expect(
+      validateNodeResultReference('nodeResults.complex.typed.any.id', scope),
+    ).toBeNull();
+    expect(
+      validateNodeResultReference('nodeResults.complex.choice.shared', scope),
+    ).toBeNull();
+    expect(
+      validateNodeResultReference('nodeResults.complex.list.first.id', scope)
+        ?.code,
+    ).toBe('INVALID_NODE_RESULT_ACCESS');
+    expect(
+      validateNodeResultReference('nodeResults.complex.open.any.deep', scope)
+        ?.code,
+    ).toBe('INVALID_NODE_RESULT_ACCESS');
+    expect(
+      validateNodeResultReference('nodeResults.complex.choice.only', scope)
+        ?.code,
+    ).toBe('INVALID_NODE_RESULT_PATH');
+    expect(
+      validateNodeResultReference('nodeResults.complex.scalar.value', scope)
+        ?.code,
+    ).toBe('INVALID_NODE_RESULT_ACCESS');
+  });
+
+  it('reports malformed schemas with deterministic paths', () => {
+    expect(
+      validateNodeResultSchema({
+        type: 'object',
+        properties: { ok: { type: 'string' } },
+        required: ['missing'],
+        extra: true,
+      }),
+    ).toEqual([
+      {
+        path: 'result.required',
+        message: 'Required property "missing" is not declared',
+      },
+      {
+        path: 'result.extra',
+        message: 'Unsupported node result schema field "extra"',
+      },
+    ]);
+  });
+});
