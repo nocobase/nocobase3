@@ -7,6 +7,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const distDir = path.join(rootDir, "dist");
 const envOutputPath = path.join(distDir, ".env");
 const serverEnvKeys = new Set([
+  "NODE_ENV",
   "APP_BASE_PATH",
   "APP_SERVER_HOST",
   "APP_SERVER_PORT",
@@ -46,6 +47,8 @@ const serverEnvKeys = new Set([
   "REDIS_PASSWORD",
   "REDIS_DB",
   "REDIS_TLS",
+  "WORKFLOW_ARTIFACT_DISK",
+  "WORKFLOW_SOURCE_RESOLVER_DIAGNOSTIC",
 ]);
 
 const parseEnv = (content) => {
@@ -183,6 +186,7 @@ run("Rewrite server path aliases", "pnpm", [
   "-p",
   "tsconfig.server.json",
 ]);
+run("Build workflow Artifacts", "pnpm", ["exec", "tsx", "--tsconfig", "tsconfig.node.json", "./scripts/build-workflows.ts"]);
 run("Build migrations", "pnpm", ["exec", "tsc", "-p", "tsconfig.migrations.json"]);
 run("Rewrite migration path aliases", "pnpm", [
   "exec",

@@ -25,15 +25,10 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
     },
-    "./workflow-source": {
-      "source": "./src/workflow-source/index.ts",
-      "types": "./dist/workflow-source/index.d.ts",
-      "import": "./dist/workflow-source/index.js"
-    },
-    "./workflow-source/triggers": {
-      "source": "./src/workflow-source/triggers/index.ts",
-      "types": "./dist/workflow-source/triggers/index.d.ts",
-      "import": "./dist/workflow-source/triggers/index.js"
+    "./client": {
+      "source": "./src/client/index.ts",
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
     }
   },
   "files": [
@@ -46,9 +41,11 @@
   },
   "dependencies": {
     "@nocobase/database": "workspace:*",
+    "@nocobase/drive": "workspace:*",
     "@nocobase/queue": "workspace:*",
     "esbuild": "^0.25.12",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@boringnode/queue": "^0.7.1",

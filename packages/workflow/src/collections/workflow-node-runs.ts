@@ -21,7 +21,10 @@ export function defineWorkflowNodeRuns(collection: CollectionDefinitionBuilder):
   collection.integer('status').notNull();
   collection.json('meta');
   collection.json('result');
+  collection.text('error');
   collection.datetime('startedAt').notNull();
+  collection.datetime('finishedAt');
+  collection.datetime('expiresAt');
   collection.text('log');
 
   collection.index(['workflowRun', 'id']);

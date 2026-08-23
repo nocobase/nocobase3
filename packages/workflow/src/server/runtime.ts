@@ -9,19 +9,28 @@ import { createWorkflowQueueAdapter, type WorkflowQueueAdapter } from './queue-a
 import { createSourceDirResolver, WorkflowRunModuleError } from './run-module-resolver.js';
 import WorkflowSourceLoader from './source-loader.js';
 import { createTimeoutReaper, type TimeoutReaper } from './timeout-reaper.js';
-import { coreTriggers } from './triggers/index.js';
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 import type { Row } from '@nocobase/database';
 import type {
+  JsonObject,
   WorkflowDefinition,
   WorkflowEventOptions,
-  WorkflowInstruction,
+  WorkflowInstructionClass,
   WorkflowLogger,
   WorkflowQueueTask,
   WorkflowRuntimeOptions,
-  WorkflowTrigger,
 } from './types.js';
 import { noopWorkflowLogger } from './utils.js';
+import { loadNodeRun, loadRun, loadWorkflow, serializeJson } from './utils.js';
+import {
+  assertContextSize,
+  validateContextValue,
+  WorkflowInvocationError,
+  type WorkflowTriggerReceipt,
+  type WorkflowTriggerOptions,
+} from './invocation-contract.js';
+import { randomUUID } from 'node:crypto';
+import { ArtifactResolver } from './artifact-resolver.js';
 
 /**
  * The assembly layer.
@@ -34,8 +43,7 @@ import { noopWorkflowLogger } from './utils.js';
  */
 export default class WorkflowRuntime {
   readonly database: DatabaseManager;
-  readonly instructions: Map<string, WorkflowInstruction>;
-  readonly triggers: Map<string, WorkflowTrigger>;
+  readonly instructions: Map<string, WorkflowInstructionClass>;
   readonly dispatcher: Dispatcher;
   readonly logger: WorkflowLogger;
 
@@ -51,7 +59,9 @@ export default class WorkflowRuntime {
     this.database = options.database;
     this.logger = options.logger ?? noopWorkflowLogger;
     this.sourceResolversByHash = new Map<string, WorkflowRunModuleResolver>();
-    const sourceResolver: WorkflowRunModuleResolver = {
+    const sourceResolver: WorkflowRunModuleResolver = options.allowSourceRunModules === true && options.diagnosticSourceRoot ? {
+      resolve: (request) => createSourceDirResolver({ rootPath: path.join(options.diagnosticSourceRoot as string, request.workflowKey), enabled: true }).resolve(request),
+    } : options.artifactStore ? new ArtifactResolver({ store: options.artifactStore }) : {
       resolve: (request) => {
         if (!request.hash) {
           return Promise.reject(new WorkflowRunModuleError(
@@ -67,20 +77,18 @@ export default class WorkflowRuntime {
         return resolver.resolve(request);
       },
     };
-    const applicationInstructions = new Map<string, WorkflowInstruction>(options.instructions);
-    if (options.sources) {
+    const applicationInstructions = new Map<string, WorkflowInstructionClass>(options.instructions);
+    if (options.artifactStore || (options.sources && options.allowSourceRunModules === true)) {
       applicationInstructions.set('run', createRunInstruction({ resolver: sourceResolver, app: options.app }));
     }
     // Core registrations first, so an application entry under the same key
     // overrides the core one instead of being shadowed by it.
-    this.instructions = new Map<string, WorkflowInstruction>([...coreInstructions, ...applicationInstructions]);
-    this.triggers = new Map<string, WorkflowTrigger>([...coreTriggers, ...(options.triggers ?? [])]);
+    this.instructions = new Map<string, WorkflowInstructionClass>([...coreInstructions, ...applicationInstructions]);
     this.sourceLoader = options.sources
       ? new WorkflowSourceLoader({
         database: options.database,
         ...(options.connectionName === undefined ? {} : { connectionName: options.connectionName }),
         instructions: this.instructions,
-        triggers: this.triggers,
         defaultRootPath: options.sources.rootPath,
         autoActivate: options.sources.autoActivate === true,
       })
@@ -101,7 +109,6 @@ export default class WorkflowRuntime {
       database: options.database,
       ...(options.connectionName === undefined ? {} : { connectionName: options.connectionName }),
       instructions: this.instructions,
-      triggers: this.triggers,
       ...(this.queueAdapter === null ? {} : { queue: this.queueAdapter }),
       logger: this.logger,
       ...(options.environment === undefined ? {} : { environment: options.environment }),
@@ -195,17 +202,11 @@ export default class WorkflowRuntime {
     await this.queueAdapter?.stop();
   }
 
-  /** Raise an event on a workflow. Delegates to the dispatcher unchanged. */
-  trigger(
-    workflow: WorkflowDefinition,
-    context: unknown,
-    options: WorkflowEventOptions = {},
-  ): Promise<Processor | null | void> {
-    return this.dispatcher.trigger(workflow, context, options);
-  }
-
   /** Resume or re-run a persisted execution. This is what the queue worker calls. */
-  dispatch(task: WorkflowQueueTask): Promise<Processor | null> {
+  dispatch(task: WorkflowQueueTask): Promise<Processor | null | void> {
+    if ('type' in task && task.type === 'trigger') {
+      return this.dispatchTrigger(task);
+    }
     return this.dispatcher.dispatch(task);
   }
 
@@ -221,4 +222,84 @@ export default class WorkflowRuntime {
   async sweepTimeouts(): Promise<number> {
     return this.reaper ? this.reaper.sweep() : 0;
   }
+
+  trigger(workflowKey: string, context: JsonObject, options?: WorkflowTriggerOptions): Promise<WorkflowTriggerReceipt>;
+  /** @deprecated Compatibility entry point; new callers pass a workflow key. */
+  trigger(workflow: WorkflowDefinition, context: JsonObject, options?: WorkflowEventOptions): Promise<Processor | null | void>;
+  async trigger(
+    workflowOrKey: string | WorkflowDefinition,
+    context: JsonObject,
+    options: WorkflowTriggerOptions | WorkflowEventOptions = {},
+  ): Promise<WorkflowTriggerReceipt | Processor | null | void> {
+    if (typeof workflowOrKey !== 'string') {
+      return this.dispatcher.trigger(workflowOrKey, context, options);
+    }
+    if (!this.running) throw new WorkflowInvocationError('WORKFLOW_NOT_FOUND', 'Workflow runtime is not started');
+    const workflow = await this.loadCurrentWorkflow(workflowOrKey);
+    if (!workflow.enabled) throw new WorkflowInvocationError('WORKFLOW_DISABLED', `Workflow "${workflowOrKey}" is disabled`);
+    assertContextSize(context);
+    const validation = validateContextValue(workflow.contextSchema, context);
+    if (!validation.valid) throw new WorkflowInvocationError('INVALID_CONTEXT', `Workflow "${workflowOrKey}" context is invalid`, validation.issues);
+
+    const invocation: WorkflowTriggerOptions = {
+      ...(options.eventKey === undefined ? {} : { eventKey: options.eventKey }),
+      ...(options.parentRunId === undefined ? {} : { parentRunId: options.parentRunId }),
+    };
+    if (invocation.parentRunId !== undefined) {
+      const parent = await loadRun(this.database.query(this.options.connectionName), invocation.parentRunId);
+      if (!parent) throw new WorkflowInvocationError('PARENT_RUN_NOT_FOUND', `Parent run "${String(invocation.parentRunId)}" was not found`);
+      const stack = [...parent.stack, parent.id];
+      const repeats = await this.database.query(this.options.connectionName)
+        .selectFrom(WORKFLOW_COLLECTIONS.runs)
+        .select(({ fn }) => [fn.countAll().as('count')])
+        .where('workflowId', '=', workflow.id)
+        .where('id', 'in', stack)
+        .executeTakeFirst<{ count: number | string }>();
+      const limit = Number(workflow.options.stackLimit ?? 1);
+      if (Number(repeats?.count ?? 0) >= limit) {
+        throw new WorkflowInvocationError('STACK_LIMIT_EXCEEDED', `Workflow "${workflow.key}" stack limit ${limit} was exceeded`);
+      }
+    }
+    const eventKey = invocation.eventKey ?? randomUUID();
+    const task: import('./types.js').WorkflowTriggerQueueTask = {
+      type: 'trigger',
+      workflowId: workflow.id,
+      eventKey,
+      context,
+      inputValues: workflow.inputValues,
+      ...(invocation.parentRunId === undefined ? {} : { parentRunId: invocation.parentRunId }),
+    };
+    if (this.queueAdapter) await this.queueAdapter.publish(task);
+    else await this.dispatchTrigger(task);
+    return { eventKey };
+  }
+
+  async resume(runId: import('./types.js').WorkflowId, nodeRunId: import('./types.js').WorkflowId, result: unknown): Promise<void> {
+    const nodeRun = await loadNodeRun(this.database.query(this.options.connectionName), nodeRunId);
+    if (!nodeRun || String(nodeRun.workflowRunId) !== String(runId)) throw new Error(`Node run "${String(nodeRunId)}" does not belong to run "${String(runId)}"`);
+    await this.database.query(this.options.connectionName).updateTable(WORKFLOW_COLLECTIONS.nodeRuns).set({ result: serializeJson(result) }).where('id', '=', nodeRunId).execute();
+    await this.dispatcher.dispatch({ executionId: runId, nodeRunId });
+  }
+
+  private async loadCurrentWorkflow(key: string): Promise<WorkflowDefinition> {
+    const row = await this.database.query(this.options.connectionName).selectFrom(WORKFLOW_COLLECTIONS.workflows).select('id').where('key', '=', key).where('current', '=', true).executeTakeFirst<Row>();
+    if (!row) throw new WorkflowInvocationError('WORKFLOW_NOT_FOUND', `Workflow "${key}" was not found`);
+    const workflow = await loadWorkflow(this.database.query(this.options.connectionName), row.id as string | number);
+    if (!workflow) throw new WorkflowInvocationError('WORKFLOW_NOT_FOUND', `Workflow "${key}" was not found`);
+    return workflow;
+  }
+
+  private async dispatchTrigger(task: import('./types.js').WorkflowTriggerQueueTask): Promise<Processor | null | void> {
+    const workflow = await loadWorkflow(this.database.query(this.options.connectionName), task.workflowId);
+    if (!workflow) {
+      throw new WorkflowInvocationError('WORKFLOW_NOT_FOUND', `Workflow version "${String(task.workflowId)}" was not found`);
+    }
+    return this.dispatcher.trigger(workflow, task.context, {
+      eventKey: task.eventKey,
+      inputValues: task.inputValues,
+      force: true,
+      ...(task.parentRunId === undefined ? {} : { parentRunId: task.parentRunId }),
+    });
+  }
+
 }

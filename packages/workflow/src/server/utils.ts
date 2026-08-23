@@ -11,6 +11,7 @@ import type {
   WorkflowNodeRun,
 } from './types.js';
 import type { WorkflowInputSchema, WorkflowInputValues } from './workflow-inputs.js';
+import type { ContextSchema } from './invocation-contract.js';
 
 export const noopWorkflowLogger: WorkflowLogger = {
   debug: () => undefined,
@@ -60,13 +61,14 @@ export function hydrateWorkflowNode(row: Row): WorkflowNode {
     id: asId(row.id),
     key: String(row.key),
     title: asNullableString(row.title),
+    description: asNullableString(row.description),
     workflowId: asId(row.workflowId, 'workflowId'),
     upstreamKey: asNullableString(row.upstreamKey),
     branchKey: asNullableString(row.branchKey),
     downstreamKey: asNullableString(row.downstreamKey),
     type: String(row.type),
     config: parseJson<JsonObject>(row.config, {}),
-    output: parseJson<JsonObject>(row.output, {}),
+    options: parseJson(row.options, {}),
   };
 }
 
@@ -79,9 +81,7 @@ export function hydrateWorkflow(row: Row, nodes: WorkflowNode[] = []): WorkflowD
     title: asNullableString(row.title),
     enabled: asBoolean(row.enabled),
     description: asNullableString(row.description),
-    type: String(row.type),
-    triggerTitle: asNullableString(row.triggerTitle),
-    config: parseJson<JsonObject>(row.config, {}),
+    contextSchema: parseJson<ContextSchema>(row.contextSchema, { type: 'object' }),
     inputSchema: parseJson<WorkflowInputSchema>(row.inputSchema, {}),
     inputValues: parseJson<WorkflowInputValues>(row.inputValues, {}),
     current: row.current == null ? null : asBoolean(row.current),
@@ -95,15 +95,17 @@ export function hydrateRun(row: Row): WorkflowRun {
     id: asId(row.id),
     workflowId: asId(row.workflowId, 'workflowId'),
     workflowKey: String(row.workflowKey),
+    hash: asNullableString(row.hash),
     eventKey: String(row.eventKey),
-    context: parseJson(row.context, null),
+    context: parseJson<JsonObject>(row.context, {}),
     input: parseJson<WorkflowInputValues>(row.input, {}),
     status: row.status == null ? null : Number(row.status),
     dispatched: asBoolean(row.dispatched),
-    parentExecutionId: row.parentExecutionId == null ? null : asId(row.parentExecutionId, 'parentExecutionId'),
+    parentRunId: row.parentRunId == null ? null : asId(row.parentRunId, 'parentRunId'),
     stack: parseJson<WorkflowId[]>(row.stack, []),
     output: parseJson(row.output, null),
     startedAt: asNullableString(row.startedAt),
+    finishedAt: asNullableString(row.finishedAt),
     expiresAt: asNullableString(row.expiresAt),
     createdAt: asNullableString(row.createdAt) ?? new Date(0).toISOString(),
     manually: asBoolean(row.manually),
@@ -120,7 +122,10 @@ export function hydrateNodeRun(row: Row): WorkflowNodeRun {
     status: Number(row.status),
     meta: parseJson(row.meta, null),
     result: parseJson(row.result, null),
+    error: asNullableString(row.error),
     startedAt: asNullableString(row.startedAt) ?? new Date(0).toISOString(),
+    finishedAt: asNullableString(row.finishedAt),
+    expiresAt: asNullableString(row.expiresAt),
     log: asNullableString(row.log),
   };
 }

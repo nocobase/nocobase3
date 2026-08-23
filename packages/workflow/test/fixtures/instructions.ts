@@ -1,101 +1,79 @@
 import {
   NODE_RUN_STATUS,
-  type Processor,
-  type WorkflowInstruction,
+  WorkflowInstruction,
+  type ConfigIssue,
+  type WorkflowInstructionClass,
   type WorkflowInstructionResult,
-  type WorkflowNode,
+  type WorkflowNodeSourceInput,
+  type NodeExpression,
   type WorkflowNodeRun,
 } from '../../src/index.js';
 
-/**
- * Resolves with its own `config.value`, run through the variable resolver so a
- * test can assert on scope wiring without a production node type.
- */
-export const echoInstruction: WorkflowInstruction = {
-  async run(node: WorkflowNode, _input, processor: Processor): Promise<WorkflowInstructionResult> {
-    return {
-      status: NODE_RUN_STATUS.RESOLVED,
-      result: processor.getParsedValue(node.config.value ?? node.key, node.id),
-    };
-  },
-};
+export function defineTestInstruction(
+  type: string,
+  run: (instruction: WorkflowInstruction) => Promise<WorkflowInstructionResult>,
+  resume?: (instruction: WorkflowInstruction) => Promise<WorkflowInstructionResult>,
+): WorkflowInstructionClass {
+  return class FixtureInstruction extends WorkflowInstruction {
+    static readonly type: string = type;
+    static readonly branches: null = null;
+    static create(_source: WorkflowNodeSourceInput<import('../../src/index.js').JsonObject>): NodeExpression { throw new Error('Test-only instruction'); }
+    static validateConfig(_config: unknown): ConfigIssue[] { return []; }
+    async run(): Promise<WorkflowInstructionResult> { return run(this); }
+    async resume(): Promise<WorkflowInstructionResult> {
+      if (!resume) throw new Error(`Instruction "${type}" does not implement resume()`);
+      return resume(this);
+    }
+  };
+}
 
-/**
- * The PENDING fixture of M1 §1.6.
- *
- * It exists only in tests: nothing in `src` is allowed to suspend a run yet, but
- * every branch of `Processor` that deals with a suspended nodeRun needs a carrier.
- * A test resumes it by dispatching `{ executionId, nodeRunId }`.
- */
-export const pendingInstruction: WorkflowInstruction = {
-  async run(): Promise<WorkflowInstructionResult> {
-    return { status: NODE_RUN_STATUS.PENDING };
-  },
-  async resume(_node: WorkflowNode, nodeRun): Promise<WorkflowInstructionResult> {
-    return { status: NODE_RUN_STATUS.RESOLVED, result: nodeRun?.result ?? null };
-  },
-};
+export const echoInstruction: WorkflowInstructionClass = defineTestInstruction('echo', async (instruction) => ({
+  status: NODE_RUN_STATUS.RESOLVED,
+  result: instruction.processor.getParsedValue(instruction.node.config.value ?? instruction.node.key, instruction.node.id),
+}));
 
-/**
- * Suspends like `pendingInstruction`, but comes back with ERROR.
- *
- * Ported from the v2 cases "resuming with error should end execution" and
- * "resume error downstream in condition branch, should error".
- */
-export const errorResumeInstruction: WorkflowInstruction = {
-  async run(): Promise<WorkflowInstructionResult> {
-    return { status: NODE_RUN_STATUS.PENDING };
-  },
-  async resume(_node: WorkflowNode, nodeRun): Promise<WorkflowInstructionResult> {
-    return { status: NODE_RUN_STATUS.ERROR, result: nodeRun?.result ?? null };
-  },
-};
+export const pendingInstruction: WorkflowInstructionClass = defineTestInstruction(
+  'pending',
+  async () => ({ status: NODE_RUN_STATUS.PENDING }),
+  async (instruction) => ({ status: NODE_RUN_STATUS.RESOLVED, result: instruction.input && 'status' in instruction.input ? instruction.input.result : null }),
+);
 
-/** Resolves with an incrementing counter, so a re-run is distinguishable from the first run. */
-export function createCounterInstruction(): WorkflowInstruction & { readonly calls: () => number } {
+export const errorResumeInstruction: WorkflowInstructionClass = defineTestInstruction(
+  'error-resume',
+  async () => ({ status: NODE_RUN_STATUS.PENDING }),
+  async (instruction) => ({ status: NODE_RUN_STATUS.ERROR, error: instruction.input && 'status' in instruction.input ? instruction.input.error ?? 'Resume failed' : 'Resume failed' }),
+);
+
+export function createCounterInstruction(): WorkflowInstructionClass & { readonly calls: () => number } {
   let calls = 0;
-  return {
-    calls: () => calls,
-    async run(): Promise<WorkflowInstructionResult> {
-      calls += 1;
-      return { status: NODE_RUN_STATUS.RESOLVED, result: calls };
-    },
-  };
+  const Instruction = defineTestInstruction('counter', async () => {
+    calls += 1;
+    return { status: NODE_RUN_STATUS.RESOLVED, result: calls };
+  });
+  Object.defineProperty(Instruction, 'calls', { value: () => calls });
+  return Instruction as WorkflowInstructionClass & { readonly calls: () => number };
 }
 
-/** Resolves only after `delayMs`, which is how a timeout can interrupt a live run. */
-export function createSlowInstruction(delayMs: number): WorkflowInstruction {
-  return {
-    async run(): Promise<WorkflowInstructionResult> {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      return { status: NODE_RUN_STATUS.RESOLVED, result: 'slow' };
-    },
-  };
+export function createSlowInstruction(delayMs: number): WorkflowInstructionClass {
+  return defineTestInstruction('slow', async () => {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return { status: NODE_RUN_STATUS.RESOLVED, result: 'slow' };
+  });
 }
 
-/** Records the node keys it ran, in order. */
-export function createTraceInstruction(trace: string[]): WorkflowInstruction {
-  return {
-    async run(node: WorkflowNode): Promise<WorkflowInstructionResult> {
-      trace.push(node.key);
-      return { status: NODE_RUN_STATUS.RESOLVED, result: node.key };
-    },
-  };
+export function createTraceInstruction(trace: string[]): WorkflowInstructionClass {
+  return defineTestInstruction('trace', async (instruction) => {
+    trace.push(instruction.node.key);
+    return { status: NODE_RUN_STATUS.RESOLVED, result: instruction.node.key };
+  });
 }
 
-/** Fails with the configured status, so failure propagation out of a branch is observable. */
-export function createFailingInstruction(status: number = NODE_RUN_STATUS.FAILED): WorkflowInstruction {
-  return {
-    async run(node: WorkflowNode): Promise<WorkflowInstructionResult> {
-      return { status, result: { failedAt: node.key } };
-    },
-  };
+export function createFailingInstruction(status: number = NODE_RUN_STATUS.FAILED): WorkflowInstructionClass {
+  return defineTestInstruction('fail', async (instruction) => ({ status, error: `Failed at ${instruction.node.key}` }));
 }
 
 export function nodeRunOf(nodeRuns: WorkflowNodeRun[], nodeKey: string): WorkflowNodeRun {
   const nodeRun = nodeRuns.find((candidate) => candidate.nodeKey === nodeKey);
-  if (!nodeRun) {
-    throw new Error(`No nodeRun for node "${nodeKey}"`);
-  }
+  if (!nodeRun) throw new Error(`No nodeRun for node "${nodeKey}"`);
   return nodeRun;
 }

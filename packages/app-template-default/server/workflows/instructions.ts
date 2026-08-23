@@ -1,4 +1,4 @@
-import type { WorkflowInstruction } from '@nocobase/workflow';
+import type { WorkflowInstructionClass } from '@nocobase/workflow';
 
 /** Application-owned instruction registrations layered on top of workflow core. */
-export const appWorkflowInstructions: Map<string, WorkflowInstruction> = new Map<string, WorkflowInstruction>();
+export const appWorkflowInstructions: Map<string, WorkflowInstructionClass> = new Map<string, WorkflowInstructionClass>();

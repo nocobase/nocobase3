@@ -26,35 +26,70 @@ export interface JSONSchema {
   readonly [key: string]: JsonValue;
 }
 
-export interface NodeFactorySpec<TType extends string, TConfig, TBranch extends string = never> {
-  readonly type: TType;
-  readonly branches: readonly TBranch[] | null | ((config: TConfig) => readonly string[]);
-  readonly validateConfig: (config: unknown) => ConfigIssue[];
-  readonly configSchema?: JSONSchema;
+export interface ContextSchema extends JSONSchema {
+  readonly type: 'object';
 }
 
-export interface TriggerFactorySpec<TType extends string, _TConfig> {
-  readonly type: TType;
-  readonly validateConfig: (config: unknown) => ConfigIssue[];
-  readonly configSchema?: JSONSchema;
+export interface WorkflowNodeOptions {
+  /** Maximum execution time in milliseconds. */
+  timeout?: number;
 }
 
-export interface NodeSourceInput<TConfig> {
+export interface NodeResultSchemaBase {
+  readonly title?: string;
+  readonly description?: string;
+  readonly examples?: readonly JsonValue[];
+}
+
+export interface NodeResultNullSchema extends NodeResultSchemaBase { readonly type: 'null'; }
+export interface NodeResultBooleanSchema extends NodeResultSchemaBase { readonly type: 'boolean'; }
+export interface NodeResultNumberSchema extends NodeResultSchemaBase {
+  readonly type: 'number' | 'integer';
+  readonly enum?: readonly number[];
+}
+export interface NodeResultStringSchema extends NodeResultSchemaBase {
+  readonly type: 'string';
+  readonly enum?: readonly string[];
+}
+export interface NodeResultArraySchema extends NodeResultSchemaBase {
+  readonly type: 'array';
+  readonly items: NodeResultSchema;
+}
+export interface NodeResultObjectSchema extends NodeResultSchemaBase {
+  readonly type: 'object';
+  readonly properties: Readonly<Record<string, NodeResultSchema>>;
+  readonly required?: readonly string[];
+  readonly additionalProperties?: boolean | NodeResultSchema;
+}
+export interface NodeResultUnionSchema extends NodeResultSchemaBase {
+  readonly oneOf: readonly NodeResultSchema[];
+}
+export type NodeResultSchema =
+  | NodeResultNullSchema
+  | NodeResultBooleanSchema
+  | NodeResultNumberSchema
+  | NodeResultStringSchema
+  | NodeResultArraySchema
+  | NodeResultObjectSchema
+  | NodeResultUnionSchema;
+
+export interface WorkflowNodeSourceInput<TConfig> {
   key: string;
   title?: string;
+  description?: string;
   config: TConfig;
-}
-
-export interface TriggerSourceInput<TConfig> {
-  title?: string;
-  config: TConfig;
+  options?: WorkflowNodeOptions;
+  result?: NodeResultSchema | null;
 }
 
 export interface BaseNodeExpression {
   readonly key: string;
   readonly title?: string;
+  readonly description?: string;
   readonly type: string;
   readonly config: unknown;
+  readonly options?: WorkflowNodeOptions;
+  readonly result?: NodeResultSchema | null;
 }
 
 export interface BranchingNodeExpression<TBranch extends string> extends BaseNodeExpression {
@@ -62,51 +97,29 @@ export interface BranchingNodeExpression<TBranch extends string> extends BaseNod
 }
 
 export type AnyNodeExpression = BaseNodeExpression | BranchingNodeExpression<string>;
-export type NodeExpression<TBranch extends string = never> = [TBranch] extends [never]
-  ? BaseNodeExpression
-  : BranchingNodeExpression<TBranch>;
-
-export interface TriggerExpression {
-  readonly title?: string;
-  readonly type: string;
-  readonly config: unknown;
-}
-
-export interface NodeFactory<TType extends string, TConfig, TBranch extends string = never> {
-  (source: NodeSourceInput<TConfig>): NodeExpression<TBranch>;
-  readonly type: TType;
-  readonly branches: readonly TBranch[] | null | ((config: TConfig) => readonly string[]);
-  readonly validateConfig: (config: unknown) => ConfigIssue[];
-  readonly configSchema?: JSONSchema;
-}
-
-export interface TriggerFactory<TType extends string, TConfig> {
-  (source: TriggerSourceInput<TConfig>): TriggerExpression;
-  readonly type: TType;
-  readonly validateConfig: (config: unknown) => ConfigIssue[];
-  readonly configSchema?: JSONSchema;
-}
+export type NodeExpression<TBranch extends string = never> = string extends TBranch
+  ? AnyNodeExpression
+  : [TBranch] extends [never]
+    ? BaseNodeExpression
+    : BranchingNodeExpression<TBranch>;
 
 export interface WorkflowSourceInput {
   title: string;
   description?: string;
   options?: JsonObject;
   inputs?: WorkflowInputSchema;
-  trigger: TriggerExpression;
+  contextSchema?: ContextSchema;
   nodes: readonly AnyNodeExpression[];
-}
-
-export interface TriggerSourceAst {
-  type: string;
-  title?: string;
-  config: JsonObject;
 }
 
 export interface NodeSourceAst {
   key: string;
   title?: string;
+  description?: string;
   type: string;
   config: JsonObject;
+  options?: WorkflowNodeOptions;
+  result?: NodeResultSchema | null;
   branches?: Record<string, NodeSourceAst[]>;
 }
 
@@ -115,7 +128,7 @@ export interface WorkflowSourceAst {
   description?: string;
   options?: JsonObject;
   inputs?: WorkflowInputSchema;
-  trigger: TriggerSourceAst;
+  contextSchema: ContextSchema;
   nodes: NodeSourceAst[];
 }
 
@@ -124,8 +137,11 @@ export type WorkflowDefinition = WorkflowSourceAst;
 export interface WorkflowFlatNode {
   key: string;
   title?: string;
+  description?: string;
   type: string;
   config: JsonObject;
+  options?: WorkflowNodeOptions;
+  result?: NodeResultSchema;
   upstreamKey: string | null;
   downstreamKey: string | null;
   branchKey: string | null;
@@ -136,7 +152,7 @@ export interface WorkflowFlatIr {
   description?: string;
   options?: JsonObject;
   inputs?: WorkflowInputSchema;
-  trigger: TriggerSourceAst;
+  contextSchema: ContextSchema;
   start: string | null;
   nodes: WorkflowFlatNode[];
 }

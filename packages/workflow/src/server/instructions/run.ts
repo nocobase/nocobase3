@@ -1,13 +1,17 @@
 import { NODE_RUN_STATUS } from '../constants.js';
-import type Processor from '../processor.js';
+import { createNodeExpression } from '../../workflow-source/core.js';
+import type { ConfigIssue, NodeExpression, WorkflowNodeSourceInput } from '../../workflow-source/types.js';
 import type {
   JsonObject,
-  WorkflowInstruction,
+  WorkflowInstructionClass,
+  WorkflowInstructionContext,
   WorkflowInstructionResult,
   WorkflowLogger,
   WorkflowNode,
-  WorkflowNodeRun,
 } from '../types.js';
+import { WorkflowInstruction } from '../types.js';
+import { getWorkflowRunArtifactMetadata } from '../artifact-resolver.js';
+import { logRunExecution } from '../run-inspector.js';
 
 export type WorkflowRunJsonValue =
   | null
@@ -53,6 +57,7 @@ export interface WorkflowRunModuleRequest {
    * a historical run keeps loading the artifact it started with.
    */
   hash: string | null;
+  workflowKey: string;
   nodeKey: string;
   sourcePath: string;
 }
@@ -75,10 +80,10 @@ export interface RunInstructionOptions {
   app: unknown;
 }
 
-export interface RunConfig {
+export type RunConfig = JsonObject & {
   script: string;
   args?: JsonObject;
-}
+};
 
 const TEMPLATE_PATTERN = /\{\{[^{}]*\}\}/;
 
@@ -87,29 +92,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Hand-written config validation (D3: the first version has no schema library). */
-export function validateRunConfig(config: JsonObject): Record<string, string> | null {
-  const errors: Record<string, string> = {};
-  for (const key of Object.keys(config)) {
+function runConfigIssues(config: unknown): ConfigIssue[] {
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) {
+    return [{ path: 'config', message: 'run config must be an object' }];
+  }
+  const record = config as JsonObject;
+  const errors: ConfigIssue[] = [];
+  for (const key of Object.keys(record)) {
     if (key !== 'script' && key !== 'args') {
-      errors[key] = `run config does not accept field "${key}"`;
+      errors.push({ path: `config.${key}`, message: `run config does not accept field "${key}"` });
     }
   }
-  if (typeof config.script !== 'string' || !config.script.trim()) {
-    errors.script = 'run config script must be a non-empty string';
-  } else if (TEMPLATE_PATTERN.test(config.script)) {
+  if (typeof record.script !== 'string' || !record.script.trim()) {
+    errors.push({ path: 'config.script', message: 'run config script must be a non-empty string' });
+  } else if (TEMPLATE_PATTERN.test(record.script)) {
     // The entry of a published version has to be static and auditable.
-    errors.script = 'run config script must not contain a variable template';
+    errors.push({ path: 'config.script', message: 'run config script must not contain a variable template' });
   }
-  if (config.args !== undefined && !isRecord(config.args)) {
-    errors.args = 'run config args must be an object';
+  if (record.args !== undefined && !isRecord(record.args)) {
+    errors.push({ path: 'config.args', message: 'run config args must be an object' });
   }
-  return Object.keys(errors).length ? errors : null;
+  return errors;
+}
+
+export function validateRunConfig(config: JsonObject): Record<string, string> | null {
+  const issues = runConfigIssues(config);
+  const errors = Object.fromEntries(issues.map(({ path, message }) => [path.replace(/^config\./, ''), message]));
+  return issues.length ? errors : null;
 }
 
 function readRunConfig(config: JsonObject): RunConfig {
-  const errors = validateRunConfig(config);
-  if (errors) {
-    throw new Error(`Invalid run config: ${Object.values(errors).join('; ')}`);
+  const issues = runConfigIssues(config);
+  if (issues.length) {
+    throw new Error(`Invalid run config: ${issues.map(({ message }) => message).join('; ')}`);
   }
   return {
     script: String(config.script),
@@ -186,37 +201,61 @@ export function assertWorkflowRunResult(
  * machine: a script returning `{ status: 'failed' }` is ordinary business data,
  * never a nodeRun status. There is no `resume()` — a run node can never be PENDING.
  */
-export function createRunInstruction(options: RunInstructionOptions): WorkflowInstruction {
-  return {
-    validateConfig: validateRunConfig,
+export class RunInstruction extends WorkflowInstruction<RunConfig> {
+  static readonly type: 'run' = 'run';
+  static readonly branches: null = null;
+  static readonly result: null = null;
+  static readonly options: RunInstructionOptions = { resolver: unboundResolver(), app: undefined };
 
-    async run(
-      node: WorkflowNode,
-      _input: WorkflowNodeRun | { result: unknown } | undefined,
-      processor: Processor,
-      runOptions?: { rerun?: true; signal?: AbortSignal },
-    ): Promise<WorkflowInstructionResult> {
-      const config = readRunConfig(node.config);
-      const args = processor.getParsedValue(config.args ?? {}, node.id);
-      const signal = runOptions?.signal ?? processor.abortSignal;
+  constructor(context: WorkflowInstructionContext) {
+    super({ ...context, node: context.node as WorkflowNode<RunConfig> });
+  }
+
+  static create(source: WorkflowNodeSourceInput<RunConfig>): NodeExpression {
+    return createNodeExpression(RunInstruction, source);
+  }
+
+  static validateConfig(config: unknown): ConfigIssue[] {
+    return runConfigIssues(config);
+  }
+
+  async run(): Promise<WorkflowInstructionResult> {
+      const config = readRunConfig(this.config);
+      const args = this.processor.getParsedValue(config.args ?? {}, this.node.id);
+      const signal = this.signal;
+      const options = (this.constructor as typeof RunInstruction).options;
 
       const module = await options.resolver.resolve({
-        hash: processor.workflow.hash,
-        nodeKey: node.key,
+        hash: this.processor.execution.hash,
+        workflowKey: this.processor.workflow.key,
+        nodeKey: this.node.key,
         sourcePath: config.script,
       });
-
-      const result = await module.run(args, {
-        app: options.app,
-        signal,
-        logger: processor.logger,
-      });
+      const artifact = getWorkflowRunArtifactMetadata(module);
+      const startedAt = performance.now();
+      let result: unknown;
+      try {
+        result = await module.run(args, { app: options.app, signal, logger: this.processor.logger });
+        logRunExecution(this.processor.logger, { workflowId: this.processor.workflow.id, executionId: this.processor.execution.id, nodeId: this.node.id, nodeKey: this.node.key, artifactDigest: artifact?.artifactDigest ?? this.processor.execution.hash, script: config.script, durationMs: performance.now() - startedAt, status: 'success' });
+      } catch (error) {
+        logRunExecution(this.processor.logger, { workflowId: this.processor.workflow.id, executionId: this.processor.execution.id, nodeId: this.node.id, nodeKey: this.node.key, artifactDigest: artifact?.artifactDigest ?? this.processor.execution.hash, script: config.script, durationMs: performance.now() - startedAt, status: signal.aborted ? 'aborted' : 'error' });
+        throw error;
+      }
 
       // `undefined` would otherwise collide with the instruction protocol's
       // "no return value means exit silently", so normalize it to `null`.
       const normalized = result === undefined ? null : result;
       assertWorkflowRunResult(normalized);
       return { status: NODE_RUN_STATUS.RESOLVED, result: normalized };
-    },
+  }
+}
+
+function unboundResolver(): WorkflowRunModuleResolver {
+  return { resolve: (request: WorkflowRunModuleRequest): Promise<WorkflowRunModule> => Promise.reject(new Error(`No resolver configured for run node "${request.nodeKey}"`)) };
+}
+
+export function createRunInstruction(options: RunInstructionOptions): WorkflowInstructionClass {
+  return class ConfiguredRunInstruction extends RunInstruction {
+    static readonly options: RunInstructionOptions = options;
   };
 }

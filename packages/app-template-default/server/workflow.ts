@@ -15,5 +15,6 @@ export {
   isAppWorkflowRuntimeStarted,
   startRuntimeWorkflow,
   triggerAppWorkflow,
+  getWorkflowEngine,
 } from './workflows/runtime.js';
 export type { AppWorkflowRuntime } from './workflows/runtime.js';

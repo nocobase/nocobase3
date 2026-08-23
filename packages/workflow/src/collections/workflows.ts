@@ -10,9 +10,7 @@ export function defineWorkflows(collection: CollectionDefinitionBuilder): void {
   collection.string('title');
   collection.boolean('enabled').notNull().defaultTo(false);
   collection.text('description');
-  collection.string('type').notNull();
-  collection.string('triggerTitle');
-  collection.json('config').notNull().defaultTo({});
+  collection.json('contextSchema').notNull().defaultTo({ type: 'object' });
   collection.json('inputSchema').notNull().defaultTo({});
   collection.json('inputValues').notNull().defaultTo({});
   collection

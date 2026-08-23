@@ -210,6 +210,14 @@ const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13000);
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;
 const appUrl = appBasePath ? `${appServerUrl}/${appBasePath}/` : `${appServerUrl}/`;
 
+const workflowBuild = spawn.sync("tsx", ["--tsconfig", "tsconfig.node.json", "scripts/build-workflows.ts"], {
+  cwd: rootDir,
+  env: nextEnv,
+  stdio: "inherit",
+});
+if (workflowBuild.error) throw workflowBuild.error;
+if (workflowBuild.status !== 0) process.exit(workflowBuild.status ?? 1);
+
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);
 console.log(`  Proxy API: ${appServerUrl}${proxyApiPath}\n`);

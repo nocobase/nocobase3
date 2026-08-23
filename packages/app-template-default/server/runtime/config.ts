@@ -34,5 +34,17 @@ export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
       ...config.spa,
       indexPath: options.paths.clientDir ? path.join(options.paths.clientDir, 'index.html') : config.spa.indexPath,
     },
+    workflow: {
+      ...config.workflow,
+      distRoot: resolveWorkflowDistRoot(options),
+      production: config.workflow.production || path.basename(path.dirname(options.paths.serverDir)) === 'dist',
+    },
   };
+}
+
+function resolveWorkflowDistRoot(options: ResolvedAppRuntimeOptions): string {
+  const serverParent = path.basename(path.dirname(options.paths.serverDir));
+  return serverParent === 'dist'
+    ? path.join(options.paths.serverDir, 'workflows')
+    : path.join(options.paths.rootDir, 'dist', 'server', 'workflows');
 }

@@ -85,6 +85,7 @@ describe('timeout reaper', () => {
     const run = await readRun(expired);
     expect(run.status).toBe(EXECUTION_STATUS.ABORTED);
     expect(run.reason).toBe(EXECUTION_REASON.TIMEOUT);
+    expect(run.finishedAt).toBeTruthy();
   });
 
   it('leaves runs that are not expired, not started, or have no deadline', async () => {
@@ -149,13 +150,13 @@ describe('timeout reaper', () => {
 
     const nodeRuns = await database.query()
       .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-      .select(['nodeKey', 'status'])
+      .select(['nodeKey', 'status', 'finishedAt'])
       .where('workflowRunId', '=', expired)
       .orderBy('id')
       .execute<Row>();
     expect(nodeRuns).toEqual([
-      { nodeKey: 'done', status: NODE_RUN_STATUS.RESOLVED },
-      { nodeKey: 'waiting', status: NODE_RUN_STATUS.ABORTED },
+      { nodeKey: 'done', status: NODE_RUN_STATUS.RESOLVED, finishedAt: null },
+      { nodeKey: 'waiting', status: NODE_RUN_STATUS.ABORTED, finishedAt: expect.anything() },
     ]);
   });
 

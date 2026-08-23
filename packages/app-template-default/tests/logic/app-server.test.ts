@@ -42,6 +42,7 @@ import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 import { DatabaseWorkflowService } from '../../server/services/workflow.ts';
+import { createWorkflowRoutes } from '../../server/routes/api/workflows.ts';
 import {
   getRuntimeWorkflow,
   isAppWorkflowRuntimeStarted,
@@ -125,9 +126,8 @@ describe('app server', () => {
       key: 'manual-api',
       title: 'Manual API historical revision',
       enabled: true,
-      type: 'custom',
       current: null,
-      config: JSON.stringify({}),
+      contextSchema: JSON.stringify({ type: 'object', properties: { approved: { type: 'boolean' }, source: { type: 'string' } } }),
       inputSchema: JSON.stringify({ threshold: { type: 'number', title: 'Threshold', default: 1000 } }),
       inputValues: JSON.stringify({}),
       options: JSON.stringify({}),
@@ -142,9 +142,8 @@ describe('app server', () => {
       key: 'manual-api',
       title: 'Manual API',
       enabled: false,
-      type: 'custom',
       current: true,
-      config: JSON.stringify({}),
+      contextSchema: JSON.stringify({ type: 'object', properties: { approved: { type: 'boolean' }, source: { type: 'string' } } }),
       inputSchema: JSON.stringify({ threshold: { type: 'number', title: 'Threshold', default: 1000 } }),
       inputValues: JSON.stringify({}),
       options: JSON.stringify({}),
@@ -161,7 +160,6 @@ describe('app server', () => {
       title: 'Condition',
       type: 'condition',
       config: JSON.stringify({}),
-      output: JSON.stringify({}),
     }).execute();
 
     const { app, runtime } = createTestAppFixture({ database });
@@ -173,15 +171,19 @@ describe('app server', () => {
     const workflowsResponse = await mounted.request('http://localhost/app-template-default/api/workflows');
     await expect(workflowsResponse.json()).resolves.toEqual({
       data: [{
-        id: workflowId,
+        id: String(workflowId),
         key: 'manual-api',
         title: 'Manual API',
         enabled: false,
-        type: 'custom',
         current: true,
         hasInputs: true,
         executed: 0,
+        version: null,
+        hash: null,
+        activeRunCount: 0,
+        latestRun: null,
       }],
+      meta: { page: 1, pageSize: 20, total: 1 },
     });
     const inputsResponse = await mounted.request(
       `http://localhost/app-template-default/api/workflows/${String(workflowId)}/inputs`,
@@ -221,7 +223,7 @@ describe('app server', () => {
     );
     expect(enableHistoricalResponse.status).toBe(200);
     await expect(enableHistoricalResponse.json()).resolves.toMatchObject({
-      data: { id: historicalWorkflowId, key: 'manual-api', enabled: true, current: true },
+      data: { id: String(historicalWorkflowId), key: 'manual-api', enabled: true, current: true },
     });
     await expect(database.query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
@@ -243,7 +245,7 @@ describe('app server', () => {
     );
     expect(disableResponse.status).toBe(200);
     await expect(disableResponse.json()).resolves.toMatchObject({
-      data: { id: workflowId, key: 'manual-api', enabled: false, current: true },
+      data: { id: String(workflowId), key: 'manual-api', enabled: false, current: true },
     });
     const triggerResponse = await mounted.request(
       `http://localhost/app-template-default/api/workflows/${String(workflowId)}/run`,
@@ -255,8 +257,46 @@ describe('app server', () => {
     );
     expect(triggerResponse.status).toBe(200);
     await expect(triggerResponse.json()).resolves.toMatchObject({
-      data: { workflowId, workflowKey: 'manual-api', status: EXECUTION_STATUS.RESOLVED },
+      data: { workflowId: String(workflowId), workflowKey: 'manual-api', status: EXECUTION_STATUS.RESOLVED },
     });
+
+    const firstIdempotent = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/run`,
+      { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'double-click' }, body: JSON.stringify({ context: { approved: true } }) },
+    );
+    const secondIdempotent = await mounted.request(
+      `http://localhost/app-template-default/api/workflows/${String(workflowId)}/run`,
+      { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'double-click' }, body: JSON.stringify({ context: { approved: true } }) },
+    );
+    const firstIdempotentBody = await firstIdempotent.json() as { data: { id: string } };
+    await expect(secondIdempotent.json()).resolves.toMatchObject({ data: { id: firstIdempotentBody.data.id } });
+    await expect(database.query().selectFrom(WORKFLOW_COLLECTIONS.runs).where('eventKey', '=', 'manual-double-click').execute()).resolves.toHaveLength(1);
+
+    const definitionResponse = await mounted.request(`http://localhost/app-template-default/api/workflows/${String(workflowId)}`);
+    await expect(definitionResponse.json()).resolves.toMatchObject({ data: { id: String(workflowId), nodes: expect.any(Array) } });
+    const revisionsResponse = await mounted.request(`http://localhost/app-template-default/api/workflows/${String(workflowId)}/revisions`);
+    await expect(revisionsResponse.json()).resolves.toMatchObject({ data: expect.arrayContaining([expect.objectContaining({ id: String(workflowId) }), expect.objectContaining({ id: String(historicalWorkflowId) })]) });
+    const runDetailResponse = await mounted.request(`http://localhost/app-template-default/api/workflow-runs/${firstIdempotentBody.data.id}`);
+    const runDetailBody = await runDetailResponse.json() as { data: { nodeRuns: Array<Record<string, unknown>> } };
+    expect(runDetailBody.data.nodeRuns.length).toBeGreaterThan(0);
+    expect(runDetailBody.data.nodeRuns[0]).not.toHaveProperty('result');
+    expect(runDetailBody.data.nodeRuns[0]).not.toHaveProperty('error');
+    expect(runDetailBody.data.nodeRuns[0]).not.toHaveProperty('log');
+    const nodeKey = String(runDetailBody.data.nodeRuns[0].nodeKey);
+    const nodeRunsResponse = await mounted.request(`http://localhost/app-template-default/api/workflow-runs/${firstIdempotentBody.data.id}/node-runs?nodeKey=${encodeURIComponent(nodeKey)}`);
+    const nodeRunsBody = await nodeRunsResponse.json() as { data: Array<{ id: string; nodeKey: string }> };
+    expect(nodeRunsBody.data.length).toBeGreaterThan(0);
+    expect(nodeRunsBody.data.every((item) => item.nodeKey === nodeKey)).toBe(true);
+    const previousNodeRun = await database.query().selectFrom(WORKFLOW_COLLECTIONS.nodeRuns).selectAll().where('id', '=', nodeRunsBody.data[0].id).executeTakeFirstOrThrow();
+    await database.query().insertInto(WORKFLOW_COLLECTIONS.nodeRuns).values({ workflowRunId: previousNodeRun.workflowRunId, nodeId: previousNodeRun.nodeId, nodeKey: previousNodeRun.nodeKey, status: previousNodeRun.status, meta: previousNodeRun.meta, result: previousNodeRun.result, error: previousNodeRun.error, startedAt: previousNodeRun.startedAt, finishedAt: previousNodeRun.finishedAt, log: previousNodeRun.log }).execute();
+    const refreshedRunDetail = await mounted.request(`http://localhost/app-template-default/api/workflow-runs/${firstIdempotentBody.data.id}`);
+    const refreshedRunDetailBody = await refreshedRunDetail.json() as { data: { nodeRuns: Array<{ id: string; nodeKey: string }> } };
+    expect(refreshedRunDetailBody.data.nodeRuns.filter((item) => item.nodeKey === nodeKey)).toHaveLength(1);
+    expect(refreshedRunDetailBody.data.nodeRuns.find((item) => item.nodeKey === nodeKey)?.id).not.toBe(nodeRunsBody.data[0].id);
+    const deniedRoutes = createWorkflowRoutes({ workflow: new DatabaseWorkflowService(database, getRuntimeWorkflow(runtime)!), authorize: (_request, permission) => permission !== 'workflowRun:viewPayload' });
+    const deniedPayload = await deniedRoutes.request(`http://localhost/workflow-runs/${firstIdempotentBody.data.id}/node-runs/${nodeRunsBody.data[0].id}/payload`);
+    expect(deniedPayload.status).toBe(403);
+    await expect(deniedPayload.json()).resolves.toEqual({ error: 'Forbidden' });
 
     await mounted.request(
       `http://localhost/app-template-default/api/workflows/${String(workflowId)}/enable`,
@@ -264,17 +304,18 @@ describe('app server', () => {
     );
     if (!workflowRuntime) throw new Error('Workflow runtime was not created');
     const workflowService = new DatabaseWorkflowService(database, workflowRuntime);
-    await expect(workflowService.trigger('manual-api', { source: 'business-service' })).resolves.toMatchObject({
-      workflowId,
-      workflowKey: 'manual-api',
-      eventKey: expect.stringMatching(/^custom-/),
-    });
+    const businessReceipt = await workflowService.trigger('manual-api', { source: 'business-service' });
+    expect(businessReceipt.eventKey).toEqual(expect.any(String));
+    const routes = createWorkflowRoutes({ workflow: workflowService });
+    await expect(routes.request('http://localhost/workflows/manual-api/trigger')).resolves.toMatchObject({ status: 404 });
+    await expect(routes.request('http://localhost/workflows/manual-api/descriptor')).resolves.toMatchObject({ status: 404 });
 
     const runsResponse = await mounted.request('http://localhost/app-template-default/api/workflow-runs');
     await expect(runsResponse.json()).resolves.toMatchObject({
       data: [
-        { workflowId, workflowKey: 'manual-api', eventKey: expect.stringMatching(/^custom-/), status: EXECUTION_STATUS.RESOLVED },
-        { workflowId, workflowKey: 'manual-api', eventKey: expect.stringMatching(/^manual-/), status: EXECUTION_STATUS.RESOLVED },
+        { workflowId: String(workflowId), workflowKey: 'manual-api', eventKey: businessReceipt.eventKey, status: EXECUTION_STATUS.RESOLVED },
+        { workflowId: String(workflowId), workflowKey: 'manual-api', eventKey: 'manual-double-click', status: EXECUTION_STATUS.RESOLVED },
+        { workflowId: String(workflowId), workflowKey: 'manual-api', eventKey: expect.stringMatching(/^manual-/), status: EXECUTION_STATUS.RESOLVED },
       ],
     });
     const workflowRunsResponse = await mounted.request(
@@ -283,13 +324,14 @@ describe('app server', () => {
     expect(workflowRunsResponse.status).toBe(200);
     await expect(workflowRunsResponse.json()).resolves.toMatchObject({
       data: [
-        { workflowId, workflowKey: 'manual-api', eventKey: expect.stringMatching(/^custom-/) },
-        { workflowId, workflowKey: 'manual-api', eventKey: expect.stringMatching(/^manual-/) },
+        { workflowId: String(workflowId), workflowKey: 'manual-api', eventKey: businessReceipt.eventKey },
+        { workflowId: String(workflowId), workflowKey: 'manual-api', eventKey: 'manual-double-click' },
+        { workflowId: String(workflowId), workflowKey: 'manual-api', eventKey: expect.stringMatching(/^manual-/) },
       ],
     });
     const refreshedWorkflowsResponse = await mounted.request('http://localhost/app-template-default/api/workflows');
     await expect(refreshedWorkflowsResponse.json()).resolves.toMatchObject({
-      data: [{ id: workflowId, executed: 2 }],
+      data: [{ id: String(workflowId), executed: 3 }],
     });
 
     await app.close();
@@ -1374,6 +1416,10 @@ interface TestAppFixture {
 function createTestAppFixture(options: CreateTestAppOptions = {}): TestAppFixture {
   const publicBasePath = normalizeBasePath(options.publicBasePath ?? '/app-template-default');
   const internalApiProxyPath = '/v2/api';
+  const workflowRoot = mkdtempSync(path.join(tmpdir(), 'nocobase-workflow-fixture-'));
+  tempDirs.push(workflowRoot);
+  mkdirSync(path.join(workflowRoot, 'dist/server/workflows'), { recursive: true });
+  const drive = options.drive ?? (options.database ? { default: 'local', disks: { local: { driver: 'fs', location: path.join(workflowRoot, 'storage/private'), visibility: 'private' } }, links: {} } satisfies AppDriveConfig : undefined);
   const config = {
     app: {
       name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
@@ -1392,12 +1438,16 @@ function createTestAppFixture(options: CreateTestAppOptions = {}): TestAppFixtur
         autoRun: false,
       },
     },
-    drive: options.drive,
+    drive,
     logger: createSilentLoggerConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
     workflow: {
-      sourceRoot: '',
+      sourceRoot: path.join(workflowRoot, 'server/workflows'),
+      distRoot: path.join(workflowRoot, 'dist/server/workflows'),
+      artifactDisk: 'local',
+      sourceResolverDiagnostic: false,
+      production: false,
     },
     server: {
       host: '127.0.0.1',
@@ -1441,6 +1491,7 @@ async function createEmbeddedTestScope(
   }
   const dataDir = options.dataDir ?? path.join(rootDir, 'data');
   mkdirSync(dataDir, { recursive: true });
+  mkdirSync(path.join(rootDir, 'dist/server/workflows'), { recursive: true });
   const database = createDatabaseManager({
     default: 'sqlite',
     connections: {

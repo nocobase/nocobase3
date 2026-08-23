@@ -49,7 +49,11 @@ describe('workflow collections', () => {
 
     await expect(db.schema.hasColumn('workflow_nodes', 'workflow_id')).resolves.toBe(true);
     await expect(db.schema.hasColumn('workflow_runs', 'event_key')).resolves.toBe(true);
+    await expect(db.schema.hasColumn('workflow_runs', 'parent_run_id')).resolves.toBe(true);
+    await expect(db.schema.hasColumn('workflow_runs', 'hash')).resolves.toBe(true);
+    await expect(db.schema.hasColumn('workflow_runs', 'finished_at')).resolves.toBe(true);
     await expect(db.schema.hasColumn('workflow_node_runs', 'node_id')).resolves.toBe(true);
+    await expect(db.schema.hasColumn('workflow_node_runs', 'finished_at')).resolves.toBe(true);
   });
 
   it('preserves workflow indexes and relation metadata without physical foreign keys', async () => {
@@ -68,7 +72,7 @@ describe('workflow collections', () => {
     await expect(db.raw('PRAGMA foreign_key_list(workflow_nodes)')).resolves.toEqual([]);
     await expect(db.raw('PRAGMA foreign_key_list(workflow_runs)')).resolves.toEqual([]);
 
-    const [workflowId] = await db('workflows').insert({ key: 'order-created', type: 'code' });
+    const [workflowId] = await db('workflows').insert({ key: 'order-created' });
     const [nodeId] = await db('workflow_nodes').insert({
       key: 'start',
       workflow_id: workflowId,

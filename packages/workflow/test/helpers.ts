@@ -23,7 +23,6 @@ export type TestNodeInput = {
 
 export type TestWorkflowInput = {
   key: string;
-  type?: string;
   enabled?: boolean;
   options?: JsonObject;
   nodes: TestNodeInput[];
@@ -47,9 +46,8 @@ export async function createTestWorkflow(
     key: input.key,
     title: input.key,
     enabled: input.enabled ?? true,
-    type: input.type ?? 'custom',
     current: true,
-    config: JSON.stringify({}),
+    contextSchema: JSON.stringify({ type: 'object' }),
     inputSchema: JSON.stringify({}),
     inputValues: JSON.stringify({}),
     options: JSON.stringify(input.options ?? {}),
@@ -69,7 +67,7 @@ export async function createTestWorkflow(
       title: node.key,
       type: node.type,
       config: JSON.stringify(node.config ?? {}),
-      output: JSON.stringify({}),
+      options: JSON.stringify({}),
       upstreamKey: node.upstreamKey ?? null,
       downstreamKey: node.downstreamKey ?? null,
       branchKey: node.branchKey ?? null,
@@ -94,10 +92,10 @@ export async function findRun(database: DatabaseManager, eventKey: string): Prom
 export async function listNodeRuns(
   database: DatabaseManager,
   runId: WorkflowId,
-): Promise<Pick<WorkflowNodeRun, 'nodeKey' | 'status' | 'result'>[]> {
+): Promise<Array<Pick<WorkflowNodeRun, 'nodeKey' | 'status' | 'result'> & { error?: string }>> {
   const rows = await database.query()
     .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-    .select(['nodeKey', 'status', 'result'])
+    .select(['nodeKey', 'status', 'result', 'error'])
     .where('workflowRunId', '=', runId)
     .orderBy('id')
     .execute<Row>();
@@ -105,6 +103,7 @@ export async function listNodeRuns(
     nodeKey: String(row.nodeKey),
     status: Number(row.status),
     result: typeof row.result === 'string' ? JSON.parse(row.result) : row.result,
+    ...(row.error == null ? {} : { error: String(row.error) }),
   }));
 }
 
@@ -118,6 +117,7 @@ export type TestRunInput = {
   expiresAt?: string | null;
   createdAt?: string;
   context?: unknown;
+  hash?: string | null;
 };
 
 /** Inserts a run row directly, which is how a test stages "what a crashed process left behind". */
@@ -125,6 +125,7 @@ export async function insertTestRun(database: DatabaseManager, input: TestRunInp
   await database.query().insertInto(WORKFLOW_COLLECTIONS.runs).values({
     workflowId: input.workflowId,
     workflowKey: input.workflowKey,
+    hash: input.hash ?? null,
     eventKey: input.eventKey,
     context: JSON.stringify(input.context ?? {}),
     input: JSON.stringify({}),

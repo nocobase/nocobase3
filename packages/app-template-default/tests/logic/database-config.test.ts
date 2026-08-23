@@ -145,6 +145,10 @@ describe('workflow config', () => {
       paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
     })).toEqual({
       sourceRoot: '/tmp/app-template-default/server/workflows',
+      distRoot: '/tmp/app-template-default/server/workflows',
+      artifactDisk: 'local',
+      sourceResolverDiagnostic: false,
+      production: false,
     });
   });
 });
@@ -623,6 +627,14 @@ describe('database migrations', () => {
       expect.objectContaining({
         name: '202608200001_create_workflow_collections',
         fileName: '202608200001_create_workflow_collections.ts',
+      }),
+      expect.objectContaining({
+        name: '202608210001_add_workflow_node_description',
+        fileName: '202608210001_add_workflow_node_description.ts',
+      }),
+      expect.objectContaining({
+        name: '202608220001_add_workflow_node_run_error',
+        fileName: '202608220001_add_workflow_node_run_error.ts',
       }),
     ]);
   });

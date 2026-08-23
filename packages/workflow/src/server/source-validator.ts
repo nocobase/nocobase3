@@ -1,8 +1,10 @@
-import type { WorkflowSourceAst } from '../workflow-source/core.js';
+import type { NodeResultSchema, WorkflowSourceAst } from '../workflow-source/core.js';
 
-import type { WorkflowInstruction, WorkflowTrigger } from './types.js';
+import type { WorkflowInstructionClass } from './types.js';
 import { normalizeWorkflowInputSchema, type WorkflowInputSchema } from './workflow-inputs.js';
 import type { WorkflowSourceIssue } from './source-issues.js';
+import { validateContextSchema } from './invocation-contract.js';
+import { resolveNodeResultSchema, validateNodeResultReference, validateNodeResultSchema, visitNodeResultScopes, type NodeResultScope } from './node-results.js';
 
 const NODE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const BRANCH_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -11,22 +13,16 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 export interface WorkflowNodeSourceContract {
   readonly type: string;
   readonly branches: readonly string[] | null | ((config: never) => readonly string[]);
-  readonly validateConfig: (config: unknown) => readonly { path: string; message: string }[];
-}
-
-export interface WorkflowTriggerSourceContract {
-  readonly type: string;
+  readonly result?: NodeResultSchema | null;
   readonly validateConfig: (config: unknown) => readonly { path: string; message: string }[];
 }
 
 export interface WorkflowSourceContracts {
   nodes: ReadonlyMap<string, WorkflowNodeSourceContract>;
-  triggers: ReadonlyMap<string, WorkflowTriggerSourceContract>;
 }
 
 export interface WorkflowSourceRuntimeContracts {
-  instructions: Map<string, WorkflowInstruction>;
-  triggers: Map<string, WorkflowTrigger>;
+  instructions: Map<string, WorkflowInstructionClass>;
 }
 
 type TemplateParameter = { key: string; defaultValue?: string };
@@ -37,11 +33,22 @@ function templateParameters(value: unknown): TemplateParameter[] {
       const expression = match[1].trim();
       const separator = expression.indexOf(':');
       return { key: separator < 0 ? expression : expression.slice(0, separator).trim(), ...(separator < 0 ? {} : { defaultValue: expression.slice(separator + 1) }) };
-    }).filter((parameter) => parameter.key.includes('$input'));
+    });
   }
   if (Array.isArray(value)) return value.flatMap(templateParameters);
   if (value !== null && typeof value === 'object') return Object.entries(value).flatMap(([key, item]) => [...templateParameters(key), ...templateParameters(item)]);
   return [];
+}
+
+function jsonLogicVariables(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(jsonLogicVariables);
+  if (value === null || typeof value !== 'object') return [];
+  const record = value as Record<string, unknown>;
+  const variable = record.var;
+  const own = typeof variable === 'string'
+    ? [variable]
+    : Array.isArray(variable) && typeof variable[0] === 'string' ? [variable[0]] : [];
+  return [...own, ...Object.entries(record).filter(([key]) => key !== 'var').flatMap(([, item]) => jsonLogicVariables(item))];
 }
 
 function issue(file: string, phase: 'schema' | 'semantic', code: string, message: string, astPath: string, contractType: string, nodeKey?: string): WorkflowSourceIssue {
@@ -54,25 +61,18 @@ export function validateWorkflowSourceAst(
   contracts: WorkflowSourceContracts | WorkflowSourceRuntimeContracts,
 ): WorkflowSourceIssue[] {
   const issues: WorkflowSourceIssue[] = [];
+  for (const schemaIssue of validateContextSchema(ast.contextSchema).issues) {
+    issues.push(issue(file, 'schema', 'INVALID_CONTEXT_SCHEMA', schemaIssue.message, `workflow.contextSchema${schemaIssue.path.slice(1)}`, 'ContextSchema', 'workflow'));
+  }
   let inputs: WorkflowInputSchema = {};
   try {
     inputs = normalizeWorkflowInputSchema(ast.inputs, 'workflow.inputs');
   } catch (error) {
     issues.push(issue(file, 'schema', 'INVALID_INPUT_SCHEMA', error instanceof Error ? error.message : String(error), 'workflow.inputs', 'WorkflowInputSchema', 'workflow'));
   }
-  const triggerContract = 'triggers' in contracts && contracts.triggers.get(ast.trigger.type);
-  if (!triggerContract) {
-    issues.push(issue(file, 'semantic', 'UNREGISTERED_TRIGGER', `Trigger type "${ast.trigger.type}" is not registered by this application`, 'workflow.trigger', ast.trigger.type, 'workflow'));
-  } else {
-    const errors = triggerContract.validateConfig?.(ast.trigger.config) ?? [];
-    if (Array.isArray(errors)) {
-      for (const configIssue of errors) issues.push(issue(file, 'schema', 'INVALID_TRIGGER_CONFIG', configIssue.message, `workflow.trigger.${configIssue.path}`, ast.trigger.type, 'workflow'));
-    } else {
-      for (const [path, message] of Object.entries(errors)) issues.push(issue(file, 'schema', 'INVALID_TRIGGER_CONFIG', message, `workflow.trigger.config.${path}`, ast.trigger.type, 'workflow'));
-    }
-  }
-
   const keys = new Set<string>();
+  const resultScopes = new Map<WorkflowSourceAst['nodes'][number], NodeResultScope>();
+  visitNodeResultScopes(ast, contracts, (node, scope): void => { resultScopes.set(node, scope); });
   const visit = (nodes: WorkflowSourceAst['nodes'], basePath: string): void => {
     nodes.forEach((node, index) => {
       const astPath = `${basePath}[${index}]`;
@@ -83,20 +83,45 @@ export function validateWorkflowSourceAst(
       if (!contract) {
         issues.push(issue(file, 'semantic', 'UNREGISTERED_NODE_TYPE', `Node type "${node.type}" is not registered by this application`, astPath, node.type, node.key));
       } else {
-        const errors = contract.validateConfig?.(node.config) ?? [];
+        const errors = contract.validateConfig(node.config);
         if (Array.isArray(errors)) {
           for (const configIssue of errors) issues.push(issue(file, 'schema', 'INVALID_NODE_CONFIG', configIssue.message, `${astPath}.${configIssue.path}`, node.type, node.key));
         } else {
-          for (const [path, message] of Object.entries(errors)) issues.push(issue(file, 'schema', 'INVALID_NODE_CONFIG', message, `${astPath}.config.${path}`, node.type, node.key));
+          for (const [path, message] of Object.entries(errors ?? {})) issues.push(issue(file, 'schema', 'INVALID_NODE_CONFIG', String(message), `${astPath}.config.${path}`, node.type, node.key));
+        }
+      }
+      const effectiveResult = resolveNodeResultSchema(node, contract);
+      if (effectiveResult !== null) {
+        for (const schemaIssue of validateNodeResultSchema(effectiveResult)) {
+          issues.push(issue(file, 'schema', 'INVALID_NODE_RESULT_SCHEMA', schemaIssue.message, `${astPath}.${schemaIssue.path}`, node.type, node.key));
         }
       }
       for (const parameter of templateParameters(node.config)) {
+        if (parameter.key.startsWith('$nodeResults')) {
+          const referenceIssue = validateNodeResultReference(parameter.key, resultScopes.get(node) ?? new Map());
+          if (referenceIssue) issues.push(issue(file, 'semantic', referenceIssue.code, referenceIssue.message, `${astPath}.config`, node.type, node.key));
+          continue;
+        }
+        if (!parameter.key.includes('$input')) continue;
         const match = /^\$input\.([A-Za-z_][A-Za-z0-9_]*)$/.exec(parameter.key);
         const message = parameter.defaultValue !== undefined
           ? `Workflow input reference "${parameter.key}" cannot have an inline default`
           : !match ? `Invalid workflow input reference "${parameter.key}"`
             : !Object.hasOwn(inputs, match[1]) ? `Workflow input "${match[1]}" is not declared` : null;
         if (message) issues.push(issue(file, 'semantic', 'INVALID_INPUT_REFERENCE', message, `${astPath}.config`, node.type, node.key));
+      }
+      const expression = node.type === 'condition' ? (node.config as Record<string, unknown>).expression : undefined;
+      for (const variable of jsonLogicVariables(expression)) {
+        if (variable === 'nodeResults' || variable.startsWith('nodeResults.')) {
+          const referenceIssue = validateNodeResultReference(variable, resultScopes.get(node) ?? new Map());
+          if (referenceIssue) issues.push(issue(file, 'semantic', referenceIssue.code, referenceIssue.message, `${astPath}.config.expression`, node.type, node.key));
+          continue;
+        }
+        const match = /^input\.([A-Za-z_][A-Za-z0-9_]*)(?:\.|$)/.exec(variable);
+        if (variable.startsWith('input.') && (!match || !Object.hasOwn(inputs, match[1]))) {
+          const message = !match ? `Invalid workflow input reference "${variable}"` : `Workflow input "${match[1]}" is not declared`;
+          issues.push(issue(file, 'semantic', 'INVALID_INPUT_REFERENCE', message, `${astPath}.config.expression`, node.type, node.key));
+        }
       }
       for (const [branchKey, branch] of Object.entries(node.branches ?? {})) {
         if (!BRANCH_KEY_PATTERN.test(branchKey) || FORBIDDEN_KEYS.has(branchKey)) issues.push(issue(file, 'semantic', 'INVALID_BRANCH_KEY', `Branch key "${branchKey}" is unsafe`, `${astPath}.branches.${branchKey}`, node.type, node.key));

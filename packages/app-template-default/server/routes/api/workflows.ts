@@ -2,20 +2,33 @@ import { Hono } from 'hono';
 
 import type { WorkflowService } from '../../services/index.js';
 
-export function createWorkflowRoutes(options: { workflow: WorkflowService }): Hono {
+export type WorkflowPermission = 'workflow:list' | 'workflow:view' | 'workflow:updateStatus' | 'workflow:updateInputs' | 'workflow:run' | 'workflowRun:list' | 'workflowRun:view' | 'workflowRun:viewPayload' | 'workflowRun:viewLog';
+export interface WorkflowAuditEvent { action: 'workflow.status' | 'workflow.inputValues' | 'workflow.run'; workflowId: string; occurredAt: string; details: Record<string, string | number | boolean | null>; }
+export interface WorkflowRouteOptions { workflow: WorkflowService; authorize?: (request: Request, permission: WorkflowPermission) => boolean | Promise<boolean>; audit?: (request: Request, event: WorkflowAuditEvent) => void | Promise<void>; }
+
+export function createWorkflowRoutes(options: WorkflowRouteOptions): Hono {
   const routes = new Hono();
-  routes.get('/workflows', async (context) => context.json({ data: await options.workflow.list() }));
-  routes.get('/workflow-runs', async (context) => context.json({ data: await options.workflow.runs() }));
-  routes.get('/workflows/:id/runs', async (context) => context.json({ data: await options.workflow.runsForWorkflow(context.req.param('id')) }));
-  routes.get('/workflows/:id/inputs', async (context) => context.json({ data: await options.workflow.getInputs(context.req.param('id')) }));
-  routes.put('/workflows/:id/inputs', async (context) => context.json({ data: await options.workflow.updateInputs(context.req.param('id'), await readBody(context.req.raw)) }));
-  routes.post('/workflows/:id/enable', async (context) => context.json({ data: await options.workflow.enable(context.req.param('id')) }));
-  routes.post('/workflows/:id/disable', async (context) => context.json({ data: await options.workflow.disable(context.req.param('id')) }));
-  routes.post('/workflows/:id/run', async (context) => context.json({ data: await options.workflow.run(context.req.param('id'), await readBody(context.req.raw)) }));
+  const allowed = async (request: Request, permission: WorkflowPermission): Promise<Response | null> => options.authorize && !(await options.authorize(request, permission)) ? Response.json({ error: 'Forbidden' }, { status: 403 }) : null;
+  routes.get('/workflows', async (c) => { const denied = await allowed(c.req.raw, 'workflow:list'); if (denied) return denied; const items = await options.workflow.list(); const q = c.req.query('q')?.toLowerCase(); const enabled = c.req.query('enabled'); const filtered = items.filter((item) => (!q || item.key.toLowerCase().includes(q) || item.title?.toLowerCase().includes(q)) && (enabled === undefined || item.enabled === (enabled === 'true'))); const page = pageItems(filtered, c.req.query('page'), c.req.query('pageSize')); return c.json(page); });
+  routes.get('/workflows/:id', async (c) => (await allowed(c.req.raw, 'workflow:view')) ?? c.json({ data: await options.workflow.getWorkflow(c.req.param('id')) }));
+  routes.get('/workflows/:id/revisions', async (c) => (await allowed(c.req.raw, 'workflow:view')) ?? c.json({ data: await options.workflow.revisions(c.req.param('id')) }));
+  routes.get('/workflow-runs', async (c) => { const denied = await allowed(c.req.raw, 'workflowRun:list'); if (denied) return denied; const items = await options.workflow.runs(); const workflowKey = c.req.query('workflowKey'); const workflowTitle = c.req.query('workflowTitle')?.toLowerCase(); const status = c.req.query('status'); const filtered = items.filter((item) => (!workflowKey || item.workflowKey === workflowKey) && (!workflowTitle || item.workflowTitle?.toLowerCase().includes(workflowTitle)) && (status === undefined || String(item.status) === status)); return c.json(pageItems(filtered, c.req.query('page'), c.req.query('pageSize'))); });
+  routes.get('/workflow-runs/:id', async (c) => (await allowed(c.req.raw, 'workflowRun:view')) ?? c.json({ data: await options.workflow.getRun(c.req.param('id')) }));
+  routes.get('/workflow-runs/:id/node-runs', async (c) => (await allowed(c.req.raw, 'workflowRun:view')) ?? c.json({ data: await options.workflow.nodeRuns(c.req.param('id'), c.req.query('nodeKey')) }));
+  routes.get('/workflow-runs/:runId/node-runs/:nodeRunId/payload', async (c) => { const denied = await allowed(c.req.raw, 'workflowRun:viewPayload'); if (denied) return denied; const payload = await options.workflow.nodeRunPayload(c.req.param('runId'), c.req.param('nodeRunId')); const canViewLog = !options.authorize || await options.authorize(c.req.raw, 'workflowRun:viewLog'); return c.json({ data: canViewLog ? payload : { ...payload, log: null } }); });
+  routes.get('/workflows/:id/runs', async (c) => (await allowed(c.req.raw, 'workflowRun:list')) ?? c.json({ data: await options.workflow.runsForWorkflow(c.req.param('id')) }));
+  routes.get('/workflows/:id/inputs', async (c) => (await allowed(c.req.raw, 'workflow:view')) ?? c.json({ data: await options.workflow.getInputs(c.req.param('id')) }));
+  routes.put('/workflows/:id/inputs', async (c) => (await allowed(c.req.raw, 'workflow:updateInputs')) ?? c.json({ data: await options.workflow.updateInputs(c.req.param('id'), await readBody(c.req.raw)) }));
+  routes.put('/workflows/:id/input-values', async (c) => { const denied = await allowed(c.req.raw, 'workflow:updateInputs'); if (denied) return denied; const data = await options.workflow.updateInputs(c.req.param('id'), await readInputValues(c.req.raw)); await options.audit?.(c.req.raw, auditEvent('workflow.inputValues', c.req.param('id'), { overrideCount: Object.keys(data.values).length })); return c.json({ data }); });
+  routes.patch('/workflows/:id/status', async (c) => { const denied = await allowed(c.req.raw, 'workflow:updateStatus'); if (denied) return denied; const body = await readBody(c.req.raw); const enabled = body !== null && typeof body === 'object' && !Array.isArray(body) ? Reflect.get(body, 'enabled') : undefined; if (typeof enabled !== 'boolean') return c.json({ error: 'enabled must be a boolean' }, 400); const data = await options.workflow.setStatus(c.req.param('id'), enabled); await options.audit?.(c.req.raw, auditEvent('workflow.status', c.req.param('id'), { enabled })); return c.json({ data }); });
+  routes.post('/workflows/:id/enable', async (c) => (await allowed(c.req.raw, 'workflow:updateStatus')) ?? c.json({ data: await options.workflow.enable(c.req.param('id')) }));
+  routes.post('/workflows/:id/disable', async (c) => (await allowed(c.req.raw, 'workflow:updateStatus')) ?? c.json({ data: await options.workflow.disable(c.req.param('id')) }));
+  routes.post('/workflows/:id/run', async (c) => { const denied = await allowed(c.req.raw, 'workflow:run'); if (denied) return denied; const data = await options.workflow.run(c.req.param('id'), await readContext(c.req.raw), c.req.header('idempotency-key')); await options.audit?.(c.req.raw, auditEvent('workflow.run', c.req.param('id'), { runId: String(data.id), eventKey: data.eventKey })); return c.json({ data }); });
   return routes;
 }
 
-async function readBody(request: Request): Promise<unknown> {
-  const contentType = request.headers.get('content-type') ?? '';
-  return contentType.includes('application/json') ? request.json() : {};
-}
+async function readBody(request: Request): Promise<unknown> { const contentType = request.headers.get('content-type') ?? ''; return contentType.includes('application/json') ? request.json() : {}; }
+async function readInputValues(request: Request): Promise<unknown> { const body = await readBody(request); return body !== null && typeof body === 'object' && !Array.isArray(body) && Object.hasOwn(body, 'inputValues') ? Reflect.get(body, 'inputValues') : body; }
+async function readContext(request: Request): Promise<unknown> { const body = await readBody(request); return body !== null && typeof body === 'object' && !Array.isArray(body) && Object.hasOwn(body, 'context') ? Reflect.get(body, 'context') : body; }
+function pageItems<T>(items: T[], pageValue?: string, pageSizeValue?: string): { data: T[]; meta: { page: number; pageSize: number; total: number } } { const page = Math.max(1, Number(pageValue ?? 1) || 1); const pageSize = Math.min(100, Math.max(1, Number(pageSizeValue ?? 20) || 20)); return { data: items.slice((page - 1) * pageSize, page * pageSize), meta: { page, pageSize, total: items.length } }; }
+function auditEvent(action: WorkflowAuditEvent['action'], workflowId: string, details: WorkflowAuditEvent['details']): WorkflowAuditEvent { return { action, workflowId, occurredAt: new Date().toISOString(), details }; }

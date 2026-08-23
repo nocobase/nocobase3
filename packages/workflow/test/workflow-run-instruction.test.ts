@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import type { DatabaseManager } from '@nocobase/database';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertWorkflowRunResult,
@@ -15,12 +16,16 @@ import {
   unboundRunModuleResolver,
   validateRunConfig,
   WorkflowRunModuleError,
-  type WorkflowInstruction,
+  ArtifactResolver,
+  buildWorkflowArtifact,
+  LocalWorkflowArtifactStore,
+  type WorkflowInstructionClass,
   type WorkflowRunModule,
   type WorkflowRunModuleRequest,
   type WorkflowRunModuleResolver,
   type WorkflowRunRuntime,
 } from '../src/index.js';
+import { pendingInstruction } from './fixtures/instructions.js';
 import { createTestDatabase, createTestWorkflow, findRun, listNodeRuns } from './helpers.js';
 
 const SOURCE_ROOT = fileURLToPath(new URL('./fixtures/run-scripts', import.meta.url));
@@ -43,8 +48,8 @@ function stubResolver(modules: Record<string, ScriptRun>): WorkflowRunModuleReso
   };
 }
 
-function instructionsWith(resolver: WorkflowRunModuleResolver): Map<string, WorkflowInstruction> {
-  return new Map<string, WorkflowInstruction>([['run', createRunInstruction({ resolver, app })]]);
+function instructionsWith(resolver: WorkflowRunModuleResolver): Map<string, WorkflowInstructionClass> {
+  return new Map<string, WorkflowInstructionClass>([['run', createRunInstruction({ resolver, app })]]);
 }
 
 describe('run instruction', () => {
@@ -71,13 +76,79 @@ describe('run instruction', () => {
     const dispatcher = new Dispatcher({
       database,
       instructions: instructionsWith(resolver),
-      triggers: new Map([['custom', {}]]),
     });
     dispatcher.setReady(true);
     await dispatcher.trigger(workflow, context, { eventKey: key, manually: true });
     const run = await findRun(database, key);
     return { status: run.status, nodeRuns: await listNodeRuns(database, run.id as number) };
   }
+
+  it('resumes a pending historical run with its pinned artifact after the workflow revision changes', async () => {
+    const artifactRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'run-pin-artifact-'));
+    const store = new LocalWorkflowArtifactStore({ storeRoot: path.join(artifactRoot, 'private') });
+    const makeArtifact = async (version: 'v1' | 'v2'): Promise<string> => {
+      const code = `exports.run = () => ${JSON.stringify(version)};`;
+      const definition = { title: version, contextSchema: { type: 'object' as const }, nodes: [] };
+      const built = buildWorkflowArtifact({ scanned: { key: 'pin-artifact', root: artifactRoot, entries: [] }, definition, flatIr: { ...definition, start: null, nodes: [] }, serverEntries: { entry: { source: './server/run.ts', output: 'server/run/run.cjs', exports: ['run'] } }, serverEntryFiles: new Map([['server/run/run.cjs', code]]) });
+      const stage = path.join(artifactRoot, `stage-${version}`); for (const [file, content] of built.files) { const target = path.join(stage, file); await fs.mkdir(path.dirname(target), { recursive: true }); await fs.writeFile(target, content); } await store.commit('pin-artifact', built.digest, stage); return built.digest;
+    };
+    const [v1Hash, v2Hash] = await Promise.all([makeArtifact('v1'), makeArtifact('v2')]);
+    const workflow = await createTestWorkflow(database, {
+      key: 'pin-artifact',
+      nodes: [
+        { key: 'hold', type: 'pending', downstreamKey: 'script' },
+        {
+          key: 'script',
+          type: 'run',
+          config: { script: './server/run.ts' },
+          upstreamKey: 'hold',
+        },
+      ],
+    });
+    await database.query().updateTable('workflows').set({ hash: v1Hash }).where('id', '=', workflow.id).execute();
+    workflow.hash = v1Hash;
+    const resolver = new ArtifactResolver({ store });
+    const dispatcher = new Dispatcher({
+      database,
+      instructions: new Map<string, WorkflowInstructionClass>([
+        ['pending', pendingInstruction],
+        ['run', createRunInstruction({ resolver, app })],
+      ]),
+    });
+    dispatcher.setReady(true);
+
+    await dispatcher.trigger(workflow, {}, { eventKey: 'historical', manually: true });
+    const run = await findRun(database, 'historical');
+    expect(run.hash).toBe(v1Hash);
+    const runId = run.id as number;
+    const pendingNodeRun = await database.query()
+      .selectFrom('workflowNodeRuns')
+      .select(['id'])
+      .where('workflowRunId', '=', runId)
+      .where('nodeKey', '=', 'hold')
+      .executeTakeFirstOrThrow();
+    await expect(listNodeRuns(database, runId)).resolves.toEqual([
+      { nodeKey: 'hold', status: NODE_RUN_STATUS.PENDING, result: null },
+    ]);
+
+    await database.query().updateTable('workflows').set({ hash: v2Hash }).where('id', '=', workflow.id).execute();
+    await dispatcher.dispatch({ executionId: runId, nodeRunId: pendingNodeRun.id as number });
+
+    await expect(listNodeRuns(database, runId)).resolves.toEqual([
+      { nodeKey: 'hold', status: NODE_RUN_STATUS.RESOLVED, result: null },
+      { nodeKey: 'script', status: NODE_RUN_STATUS.RESOLVED, result: 'v1' },
+    ]);
+    await fs.rm(artifactRoot, { recursive: true, force: true }).catch(() => undefined);
+  });
+
+  it('emits fixed execution metadata without args or result values', async () => {
+    const workflow = await createTestWorkflow(database, { key: 'safe-log', nodes: [{ key: 'script', type: 'run', config: { script: './run', args: { secret: 'hidden' } } }] });
+    const info = vi.fn();
+    const dispatcher = new Dispatcher({ database, instructions: instructionsWith(stubResolver({ './run': () => ({ confidential: 'result' }) })), logger: { debug: vi.fn(), info, warn: vi.fn(), error: vi.fn() } }); dispatcher.setReady(true);
+    await dispatcher.trigger(workflow, {}, { eventKey: 'safe-log', manually: true });
+    const serialized = JSON.stringify(info.mock.calls);
+    expect(serialized).toContain('durationMs'); expect(serialized).not.toContain('hidden'); expect(serialized).not.toContain('confidential');
+  });
 
   // §11.2 (1)
   it('resolves args from $context, $input and earlier nodeRun results', async () => {
@@ -93,7 +164,7 @@ describe('run instruction', () => {
             script: './second',
             args: {
               orderId: '{{$context.order.id}}',
-              previous: '{{$nodeRunsMapByNodeKey.first.total}}',
+              previous: '{{$nodeResults.first.total}}',
               label: 'order-{{$context.order.id}}',
             },
           },
@@ -111,7 +182,6 @@ describe('run instruction', () => {
     const dispatcher = new Dispatcher({
       database,
       instructions: instructionsWith(resolver),
-      triggers: new Map([['custom', {}]]),
     });
     dispatcher.setReady(true);
     await dispatcher.trigger(workflow, { order: { id: 7 } }, { eventKey: 'args', manually: true });
@@ -168,7 +238,8 @@ describe('run instruction', () => {
       );
       expect(status).toBe(EXECUTION_STATUS.ERROR);
       expect(nodeRuns[0].status).toBe(NODE_RUN_STATUS.ERROR);
-      expect((nodeRuns[0].result as { message: string }).message).toMatch(message);
+      expect(nodeRuns[0].result).toBeNull();
+      expect(nodeRuns[0].error).toMatch(message);
     }
   });
 
@@ -186,7 +257,8 @@ describe('run instruction', () => {
     expect(status).toBe(EXECUTION_STATUS.ERROR);
     expect(nodeRuns[0]).toMatchObject({
       status: NODE_RUN_STATUS.ERROR,
-      result: { message: 'remote service returned 500' },
+      result: null,
+      error: 'remote service returned 500',
     });
   });
 
@@ -207,7 +279,6 @@ describe('run instruction', () => {
     const dispatcher = new Dispatcher({
       database,
       instructions: instructionsWith(resolver),
-      triggers: new Map([['custom', {}]]),
     });
     dispatcher.setReady(true);
     await dispatcher.trigger(workflow, {}, { eventKey: 'aborted', manually: true });
@@ -266,13 +337,15 @@ describe('run instruction', () => {
       unboundRunModuleResolver,
     );
     expect(status).toBe(EXECUTION_STATUS.ERROR);
-    expect((nodeRuns[0].result as { message: string }).message).toMatch(/no workflow package artifact/);
+    expect(nodeRuns[0].result).toBeNull();
+    expect(nodeRuns[0].error).toMatch(/no workflow package artifact/);
   });
 
   it('reports an invalid config as an ERROR nodeRun', async () => {
     const { status, nodeRuns } = await runSingleNode('no-script', {}, stubResolver({}));
     expect(status).toBe(EXECUTION_STATUS.ERROR);
-    expect((nodeRuns[0].result as { message: string }).message).toMatch(/script must be a non-empty string/);
+    expect(nodeRuns[0].result).toBeNull();
+    expect(nodeRuns[0].error).toMatch(/script must be a non-empty string/);
   });
 });
 

@@ -1,6 +1,8 @@
 import { compileToFlatIr, type WorkflowFlatIr, type WorkflowSourceAst } from '../workflow-source/core.js';
 
 import { WorkflowSourceCheckError, type WorkflowSourceIssue } from './source-issues.js';
+import { createNodeResultSchemaResolver } from './node-results.js';
+import type { WorkflowSourceContracts, WorkflowSourceRuntimeContracts } from './source-validator.js';
 
 export function validateWorkflowFlatIrTopology(ir: WorkflowFlatIr): void {
   const byKey = new Map(ir.nodes.map((node) => [node.key, node]));
@@ -48,9 +50,9 @@ export function validateWorkflowFlatIrTopology(ir: WorkflowFlatIr): void {
   if (visited.size !== ir.nodes.length) throw new Error('Flat IR contains nodes that are not reachable from its start');
 }
 
-export function compileWorkflowSource(ast: WorkflowSourceAst, file: string): WorkflowFlatIr {
+export function compileWorkflowSource(ast: WorkflowSourceAst, file: string, contracts?: WorkflowSourceContracts | WorkflowSourceRuntimeContracts): WorkflowFlatIr {
   try {
-    const ir = compileToFlatIr(ast);
+    const ir = compileToFlatIr(ast, contracts === undefined ? undefined : createNodeResultSchemaResolver(contracts));
     validateWorkflowFlatIrTopology(ir);
     return ir;
   } catch (error) {

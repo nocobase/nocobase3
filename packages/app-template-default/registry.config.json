@@ -3,6 +3,26 @@
   "homepage": "https://www.nocobase.com",
   "items": [
     {
+      "name": "workflow-management",
+      "type": "registry:block",
+      "title": "NocoBase Workflow Management",
+      "description": "Read-only workflow definitions and execution traces with operational controls.",
+      "dependencies": [
+        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/workflow@workspace:^",
+        "@xyflow/react@^12.11.0",
+        "elkjs@^0.10.0",
+        "react-router@^7.0.2"
+      ],
+      "registryDependencies": ["button", "card", "input", "sheet", "table", "tabs", "textarea"],
+      "docs": "Provides workflow and execution lists, hidden detail routes, a read-only canvas, visibility-aware HTTP refreshes for non-terminal execution views, input overrides, status management and manual execution. These client refreshes are unrelated to the removed server-side database polling for workflow timeout detection.",
+      "source": {
+        "root": "registry/nocobase-workflow-management",
+        "target": "client/extensions/nocobase-workflow-management",
+        "include": ["."]
+      }
+    },
+    {
       "name": "error-boundary",
       "type": "registry:lib",
       "title": "NocoBase Error Boundary",

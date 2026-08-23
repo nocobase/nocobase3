@@ -5,19 +5,17 @@ import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  conditionInstruction,
+  ConditionInstruction,
   EXECUTION_REASON,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
-  customTrigger,
   WORKFLOW_COLLECTIONS,
   WORKFLOW_QUEUE_NAME,
   WorkflowRuntime,
   type JsonObject,
   type WorkflowId,
-  type WorkflowInstruction,
+  type WorkflowInstructionClass,
   type WorkflowRuntimeOptions,
-  type WorkflowTrigger,
 } from '../src/index.js';
 import {
   createCounterInstruction,
@@ -44,15 +42,12 @@ const SCHEDULES_TABLE = 'queue_schedules';
 
 type RuntimeOverrides = Omit<Partial<WorkflowRuntimeOptions>, 'database' | 'instructions'>;
 
-/** A trigger that accepts anything for tests of non-core event types. */
-const openTrigger: WorkflowTrigger = {};
-
-function equals(left: unknown, right: unknown): JsonObject {
-  return { calculation: { calculator: 'equal', operands: [left, right] } };
+function equals(path: string, right: unknown): JsonObject {
+  return { expression: { '===': [{ var: path }, right] } };
 }
 
 function defineWorkflow(input: TestWorkflowInput): TestWorkflowInput {
-  return { type: 'test', ...input };
+  return input;
 }
 
 function databaseQueueConfig(): AppQueueConfig {
@@ -76,13 +71,12 @@ describe('workflow runtime', () => {
   let queueManager: NocoBaseQueueManager | null = null;
 
   function buildRuntime(
-    instructions: Map<string, WorkflowInstruction>,
+    instructions: Map<string, WorkflowInstructionClass>,
     overrides: RuntimeOverrides = {},
   ): WorkflowRuntime {
     const runtime = new WorkflowRuntime({
       database,
       instructions,
-      triggers: new Map([['test', openTrigger]]),
       ...overrides,
     });
     runtimes.push(runtime);
@@ -90,7 +84,7 @@ describe('workflow runtime', () => {
   }
 
   async function startRuntime(
-    instructions: Map<string, WorkflowInstruction>,
+    instructions: Map<string, WorkflowInstructionClass>,
     overrides: RuntimeOverrides = {},
   ): Promise<WorkflowRuntime> {
     const runtime = buildRuntime(instructions, overrides);
@@ -146,19 +140,47 @@ describe('workflow runtime', () => {
   });
 
   describe('assembly', () => {
-    it('registers the core instructions and triggers, and lets the caller override them', () => {
+    it('exposes key-based invocation with context validation and an event-key receipt', async () => {
+      const workflow = await createTestWorkflow(database, defineWorkflow({
+        key: 'invocation',
+        nodes: [{ key: 'only', type: 'echo', config: { value: 'ok' } }],
+      }));
+      await database.query().updateTable(WORKFLOW_COLLECTIONS.workflows).set({
+        contextSchema: JSON.stringify({ type: 'object', required: ['enabled'], properties: { enabled: { type: 'boolean' } }, additionalProperties: false }),
+      }).where('id', '=', workflow.id).execute();
       const runtime = buildRuntime(new Map([['echo', echoInstruction]]));
-      expect(runtime.instructions.get('condition')).toBe(conditionInstruction);
-      expect(runtime.instructions.get('echo')).toBe(echoInstruction);
-      expect(runtime.triggers.get('custom')).toBe(customTrigger);
-      expect(runtime.triggers.get('test')).toBe(openTrigger);
+      await runtime.start();
+      await expect(runtime.trigger('invocation', { enabled: 'yes' })).rejects.toMatchObject({ code: 'INVALID_CONTEXT' });
+      await expect(runtime.trigger('invocation', { enabled: true }, { eventKey: 'once' })).resolves.toEqual({ eventKey: 'once' });
+      const generated = await runtime.trigger('invocation', { enabled: true });
+      expect(generated.eventKey).toMatch(/^[0-9a-f-]{36}$/);
+      await expect(runtime.trigger('invocation', { enabled: true }, { parentRunId: 'missing' })).rejects.toMatchObject({ code: 'PARENT_RUN_NOT_FOUND' });
+      const parent = await runIdOf((await runtime.trigger('invocation', { enabled: true }, { eventKey: 'parent' })).eventKey);
+      await expect(runtime.trigger('invocation', { enabled: true }, { eventKey: 'child', parentRunId: parent })).rejects.toMatchObject({ code: 'STACK_LIMIT_EXCEEDED' });
+      await expect(database.query().selectFrom(WORKFLOW_COLLECTIONS.runs).where('eventKey', '=', 'child').exists()).resolves.toBe(false);
+    });
 
-      const replacement: WorkflowTrigger = { validateEvent: () => false };
-      const overriding = buildRuntime(new Map([['condition', echoInstruction]]), {
-        triggers: new Map([['custom', replacement]]),
-      });
+    it('pins revision, context and input snapshots before a new current revision appears', async () => {
+      const first = await createTestWorkflow(database, defineWorkflow({ key: 'pinned', nodes: [{ key: 'only', type: 'echo' }] }));
+      await database.query().updateTable(WORKFLOW_COLLECTIONS.workflows).set({
+        contextSchema: JSON.stringify({ type: 'object', required: ['falseValue', 'zero', 'empty', 'nested'], properties: { falseValue: { type: 'boolean' }, zero: { type: 'number' }, empty: { type: 'string' }, nested: { type: 'object', properties: { value: { type: 'number' } } } } }),
+        inputSchema: JSON.stringify({ limit: { type: 'number', default: 3 } }),
+      }).where('id', '=', first.id).execute();
+      const runtime = await startRuntime(new Map([['echo', echoInstruction]]));
+      const context = { falseValue: false, zero: 0, empty: '', nested: { value: 0 } };
+      const receipt = await runtime.trigger('pinned', context);
+      await database.query().updateTable(WORKFLOW_COLLECTIONS.workflows).set({ current: null }).where('id', '=', first.id).execute();
+      const second = await createTestWorkflow(database, defineWorkflow({ key: 'pinned', nodes: [{ key: 'replacement', type: 'echo' }] }));
+      await database.query().updateTable(WORKFLOW_COLLECTIONS.workflows).set({ inputSchema: JSON.stringify({ limit: { type: 'number', default: 9 } }) }).where('id', '=', second.id).execute();
+      const runId = await runIdOf(receipt.eventKey);
+      await expect(readRun(database, runId)).resolves.toMatchObject({ workflowId: first.id, context, input: { limit: 3 } });
+    });
+    it('registers core instructions and lets the caller override them', () => {
+      const runtime = buildRuntime(new Map([['echo', echoInstruction]]));
+      expect(runtime.instructions.get('condition')).toBe(ConditionInstruction);
+      expect(runtime.instructions.get('echo')).toBe(echoInstruction);
+      const overriding = buildRuntime(new Map([['condition', echoInstruction]]));
       expect(overriding.instructions.get('condition')).toBe(echoInstruction);
-      expect(overriding.triggers.get('custom')).toBe(replacement);
     });
 
     it('only accepts events between start() and stop()', async () => {
@@ -246,17 +268,13 @@ describe('workflow runtime', () => {
       await expect(listNodeRuns(database, runId)).resolves.toEqual([]);
     });
 
-    it('manually executes any workflow inline, even when disabled or its trigger is not registered', async () => {
+    it('manually executes a disabled workflow inline', async () => {
       const workflow = await createTestWorkflow(database, {
         key: 'manual-only',
-        type: 'not-registered',
         enabled: false,
         nodes: [{ key: 'only', type: 'echo', config: { value: 'manual' } }],
       });
       const runtime = await startRuntime(new Map([['echo', echoInstruction]]));
-
-      await expect(runtime.trigger(workflow, {}, { eventKey: 'auto', force: true }))
-        .rejects.toThrow(/not registered/);
 
       await runtime.trigger(workflow, {}, { eventKey: 'by-hand', manually: true });
       await expect(readRun(database, await runIdOf('by-hand'))).resolves.toMatchObject({
@@ -294,7 +312,7 @@ describe('workflow runtime', () => {
       const workflow = await createTestWorkflow(database, defineWorkflow({
         key: 'branching',
         nodes: [
-          { key: 'gate', type: 'condition', config: equals('{{$context.mode}}', 'yes'), downstreamKey: 'after' },
+          { key: 'gate', type: 'condition', config: equals('context.mode', 'yes'), downstreamKey: 'after' },
           { key: 'yes1', type: 'trace', upstreamKey: 'gate', branchKey: 'yes', downstreamKey: 'yes2' },
           { key: 'yes2', type: 'trace', upstreamKey: 'yes1' },
           { key: 'no1', type: 'trace', upstreamKey: 'gate', branchKey: 'no' },
@@ -306,12 +324,11 @@ describe('workflow runtime', () => {
       await runtime.trigger(workflow, { mode: 'yes' }, { eventKey: 'branch-yes' });
       await runtime.trigger(workflow, { mode: 'no' }, { eventKey: 'branch-no' });
 
-      // The second `gate` row is the recall: control came back out of the branch
-      // and the condition decided what happens next.
+      // Recall completes the original condition nodeRun instead of appending one.
       await expect(jobTrace(database, await runIdOf('branch-yes'))).resolves
-        .toEqual(['gate', 'yes1', 'yes2', 'gate', 'after']);
+        .toEqual(['gate', 'yes1', 'yes2', 'after']);
       await expect(jobTrace(database, await runIdOf('branch-no'))).resolves
-        .toEqual(['gate', 'no1', 'gate', 'after']);
+        .toEqual(['gate', 'no1', 'after']);
       await expect(readRun(database, await runIdOf('branch-no'))).resolves
         .toMatchObject({ status: EXECUTION_STATUS.RESOLVED, output: 'after' });
     });
@@ -320,7 +337,7 @@ describe('workflow runtime', () => {
       const workflow = await createTestWorkflow(database, defineWorkflow({
         key: 'empty-branch',
         nodes: [
-          { key: 'gate', type: 'condition', config: equals('{{$context.mode}}', 'yes'), downstreamKey: 'after' },
+          { key: 'gate', type: 'condition', config: equals('context.mode', 'yes'), downstreamKey: 'after' },
           { key: 'yes1', type: 'trace', upstreamKey: 'gate', branchKey: 'yes' },
           { key: 'after', type: 'trace', upstreamKey: 'gate' },
         ],
@@ -340,14 +357,14 @@ describe('workflow runtime', () => {
           {
             key: 'outer',
             type: 'condition',
-            config: equals('{{$context.mode}}', 'yes'),
+            config: equals('context.mode', 'yes'),
             upstreamKey: 'start',
             downstreamKey: 'tail',
           },
           {
             key: 'inner',
             type: 'condition',
-            config: equals('{{$context.deep}}', 'yes'),
+            config: equals('context.deep', 'yes'),
             upstreamKey: 'outer',
             branchKey: 'yes',
           },
@@ -361,14 +378,14 @@ describe('workflow runtime', () => {
       await runtime.trigger(workflow, { mode: 'yes', deep: 'yes' }, { eventKey: 'nested-deep' });
       await runtime.trigger(workflow, { mode: 'yes', deep: 'no' }, { eventKey: 'nested-shallow' });
 
-      // Two levels of recall: `leaf2` ends the inner branch, the recalled inner
-      // condition then ends the outer branch, and only then does `tail` run.
+      // Two levels of recall complete the existing inner and outer condition
+      // nodeRuns in place, and only then does `tail` run.
       await expect(jobTrace(database, await runIdOf('nested-deep'))).resolves
-        .toEqual(['start', 'outer', 'inner', 'leaf1', 'leaf2', 'inner', 'outer', 'tail']);
+        .toEqual(['start', 'outer', 'inner', 'leaf1', 'leaf2', 'tail']);
       // The inner condition has no `no` branch and no downstream of its own, so
       // it ends the outer branch immediately.
       await expect(jobTrace(database, await runIdOf('nested-shallow'))).resolves
-        .toEqual(['start', 'outer', 'inner', 'outer', 'tail']);
+        .toEqual(['start', 'outer', 'inner', 'tail']);
       await expect(readRun(database, await runIdOf('nested-deep'))).resolves
         .toMatchObject({ status: EXECUTION_STATUS.RESOLVED, output: 'tail' });
     });
@@ -391,9 +408,43 @@ describe('workflow runtime', () => {
 
       const runId = await runIdOf('branch-fail');
       const nodeRuns = await listNodeRuns(database, runId);
-      expect(nodeRuns.map((nodeRun) => nodeRun.nodeKey)).toEqual(['gate', 'bad', 'gate']);
-      expect(nodeRuns.at(-1)).toMatchObject({ status: NODE_RUN_STATUS.FAILED });
+      expect(nodeRuns.map((nodeRun) => nodeRun.nodeKey)).toEqual(['gate', 'bad']);
+      expect(nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'gate'))
+        .toMatchObject({
+          status: NODE_RUN_STATUS.FAILED,
+          error: 'Condition node "gate" received an error from branch node "bad"',
+        });
+      expect(nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'bad'))
+        .toMatchObject({ status: NODE_RUN_STATUS.FAILED, error: 'Failed at bad' });
       await expect(readRun(database, runId)).resolves.toMatchObject({ status: EXECUTION_STATUS.FAILED });
+    });
+
+    it('records one contextual error per condition when a nested branch fails', async () => {
+      const workflow = await createTestWorkflow(database, defineWorkflow({
+        key: 'nested-failing-branch',
+        nodes: [
+          { key: 'outer', type: 'condition', config: {} },
+          { key: 'inner', type: 'condition', config: {}, upstreamKey: 'outer', branchKey: 'yes' },
+          { key: 'bad', type: 'fail', upstreamKey: 'inner', branchKey: 'yes' },
+        ],
+      }));
+      const runtime = await startRuntime(new Map([['fail', createFailingInstruction(NODE_RUN_STATUS.ERROR)]]));
+
+      await runtime.trigger(workflow, {}, { eventKey: 'nested-branch-fail' });
+
+      const nodeRuns = await listNodeRuns(database, await runIdOf('nested-branch-fail'));
+      expect(nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'bad'))
+        .toMatchObject({ status: NODE_RUN_STATUS.ERROR, error: 'Failed at bad' });
+      expect(nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'inner'))
+        .toMatchObject({
+          status: NODE_RUN_STATUS.ERROR,
+          error: 'Condition node "inner" received an error from branch node "bad"',
+        });
+      expect(nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'outer'))
+        .toMatchObject({
+          status: NODE_RUN_STATUS.ERROR,
+          error: 'Condition node "outer" received an error from branch node "inner"',
+        });
     });
 
     it('suspends on a PENDING nodeRun and finishes when the nodeRun is dispatched again', async () => {
@@ -449,14 +500,19 @@ describe('workflow runtime', () => {
 
       await runtime.trigger(workflow, {}, { eventKey: 'suspend-branch' });
       const runId = await runIdOf('suspend-branch');
-      // The condition was recalled with a PENDING branch nodeRun and returned null,
-      // which must leave the persisted status untouched.
+      const gateNodeRunId = await nodeRunIdOf(runId, 'gate');
+      // Both the condition scope and its suspended branch node remain pending.
       await expect(readRun(database, runId)).resolves.toMatchObject({ status: EXECUTION_STATUS.STARTED });
       await expect(jobTrace(database, runId)).resolves.toEqual(['gate', 'hold']);
+      expect((await listNodeRuns(database, runId)).find((nodeRun) => nodeRun.nodeKey === 'gate'))
+        .toMatchObject({ status: NODE_RUN_STATUS.PENDING });
 
       await runtime.dispatcher.dispatch({ executionId: runId, nodeRunId: await nodeRunIdOf(runId, 'hold') });
 
-      await expect(jobTrace(database, runId)).resolves.toEqual(['gate', 'hold', 'gate', 'after']);
+      await expect(jobTrace(database, runId)).resolves.toEqual(['gate', 'hold', 'after']);
+      expect(await nodeRunIdOf(runId, 'gate')).toBe(gateNodeRunId);
+      expect((await listNodeRuns(database, runId)).find((nodeRun) => nodeRun.nodeKey === 'gate'))
+        .toMatchObject({ status: NODE_RUN_STATUS.RESOLVED });
       await expect(readRun(database, runId)).resolves.toMatchObject({ status: EXECUTION_STATUS.RESOLVED });
     });
 
@@ -500,13 +556,17 @@ describe('workflow runtime', () => {
       const runId = await runIdOf('resume-error-2');
       await runtime.dispatcher.dispatch({ executionId: runId, nodeRunId: await nodeRunIdOf(runId, 'hold') });
 
-      // The condition bubbles the errored branch status up instead of continuing
-      // to its own downstream. The third row is the recall — the v2 engine
-      // mutated the condition's first nodeRun instead of appending one, so the same
-      // path produced two rows there and produces three here.
+      // The condition bubbles the errored branch status into its original nodeRun
+      // instead of continuing to its downstream or appending a recall record.
       const nodeRuns = await listNodeRuns(database, runId);
-      expect(nodeRuns.map((nodeRun) => nodeRun.nodeKey)).toEqual(['gate', 'hold', 'gate']);
-      expect(nodeRuns.at(-1)).toMatchObject({ status: NODE_RUN_STATUS.ERROR });
+      expect(nodeRuns.map((nodeRun) => nodeRun.nodeKey)).toEqual(['gate', 'hold']);
+      expect(nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'gate'))
+        .toMatchObject({
+          status: NODE_RUN_STATUS.ERROR,
+          error: 'Condition node "gate" received an error from branch node "hold"',
+        });
+      expect(nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'hold'))
+        .toMatchObject({ status: NODE_RUN_STATUS.ERROR, error: 'Resume failed' });
       await expect(readRun(database, runId)).resolves.toMatchObject({ status: EXECUTION_STATUS.ERROR });
     });
   });
@@ -607,7 +667,7 @@ describe('workflow runtime', () => {
       await waitFor(async () => (await readRun(database, runId)).status === EXECUTION_STATUS.ABORTED);
       await expect(readRun(database, runId)).resolves.toMatchObject({ reason: EXECUTION_REASON.TIMEOUT });
       await expect(listNodeRuns(database, runId)).resolves
-        .toEqual([{ nodeKey: 'hold', status: NODE_RUN_STATUS.ABORTED, result: null }]);
+        .toEqual([{ nodeKey: 'hold', status: NODE_RUN_STATUS.ABORTED, result: null, error: 'Workflow execution timed out' }]);
     });
 
     it('exposes the sweep directly, and reports 0 when the reaper is switched off', async () => {
@@ -638,7 +698,7 @@ describe('workflow runtime', () => {
     type SuspendedRun = {
       runtime: WorkflowRuntime;
       runId: WorkflowId;
-      counter: WorkflowInstruction & { readonly calls: () => number };
+      counter: WorkflowInstructionClass & { readonly calls: () => number };
     };
 
     async function stageSuspendedRun(): Promise<SuspendedRun> {
@@ -710,7 +770,7 @@ describe('workflow runtime', () => {
 
       await expect(runtime.trigger(workflow, {}, {
         eventKey: 'stack-default-1',
-        parentExecutionId: first,
+        parentRunId: first,
       })).rejects.toThrow(/not valid/);
 
       // A run that is not on the stack does not count towards the limit.
@@ -730,13 +790,13 @@ describe('workflow runtime', () => {
 
       await runtime.trigger(workflow, {}, { eventKey: 'stack-0' });
       const first = await runIdOf('stack-0');
-      await runtime.trigger(workflow, {}, { eventKey: 'stack-1', parentExecutionId: first });
+      await runtime.trigger(workflow, {}, { eventKey: 'stack-1', parentRunId: first });
       const second = await runIdOf('stack-1');
       await expect(readRun(database, second)).resolves.toMatchObject({ stack: [first] });
 
       await expect(runtime.trigger(workflow, {}, {
         eventKey: 'stack-2',
-        parentExecutionId: second,
+        parentRunId: second,
         onTriggerFail: (_workflow, _context, _options, error) => {
           failures.push(error);
         },

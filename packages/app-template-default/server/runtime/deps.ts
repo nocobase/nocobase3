@@ -3,7 +3,7 @@ import {
   createNullCacheConfig,
   type NocoBaseCacheManager,
 } from '@nocobase/cache';
-import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
+import { createDriveManager, type FsDriveDiskConfig, type NocoBaseDriveManager } from '@nocobase/drive';
 import {
   createLoggerManager,
   createSilentLoggerConfig,
@@ -59,6 +59,11 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       queue: queueManager,
       app: runtime,
       sourceRoot: config.workflow.sourceRoot,
+      distRoot: config.workflow.distRoot ?? config.workflow.sourceRoot,
+      artifactDisk: resolveWorkflowArtifactDisk(config),
+      production: config.workflow.production ?? false,
+      sourceResolverDiagnostic: config.workflow.sourceResolverDiagnostic ?? false,
+      warn: (message: string): void => loggerManager.use().warn(message),
     })
     : undefined;
   bindRuntimeWorkflow(runtime, workflowRuntime);
@@ -71,6 +76,15 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
     sessionManager,
     workflowRuntime,
   };
+}
+
+export function resolveWorkflowArtifactDisk(config: AppConfig): FsDriveDiskConfig {
+  const name = config.workflow.artifactDisk ?? config.drive.default;
+  const disk = config.drive.disks[name];
+  if (!disk) throw new Error(`Workflow Artifact disk "${name}" is not configured`);
+  if (disk.driver !== 'fs') throw new Error(`Workflow Artifact disk "${name}" must use the fs/local driver`);
+  if (disk.visibility !== 'private') throw new Error(`Workflow Artifact disk "${name}" must have private visibility`);
+  return disk;
 }
 
 export async function disposeAppDeps(deps: AppDeps): Promise<void> {

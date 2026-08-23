@@ -9,14 +9,13 @@ import { compileWorkflowSource } from './source-compiler.js';
 import { WorkflowSourceCheckError } from './source-issues.js';
 import { activateWorkflowSource, materializeWorkflowSource } from './source-materializer.js';
 import { parseWorkflowSource } from './source-parser.js';
-import type { WorkflowId, WorkflowInstruction, WorkflowTrigger } from './types.js';
+import type { WorkflowId, WorkflowInstructionClass } from './types.js';
 import { validateWorkflowSourceAst } from './source-validator.js';
 
 export interface WorkflowSourceLoaderOptions {
   database: DatabaseManager;
   connectionName?: string;
-  instructions: Map<string, WorkflowInstruction>;
-  triggers: Map<string, WorkflowTrigger>;
+  instructions: Map<string, WorkflowInstructionClass>;
   defaultRootPath?: string;
   autoActivate?: boolean;
   onWorkflowUpdated?: (workflowId: WorkflowId) => void | Promise<void>;
@@ -85,9 +84,9 @@ export default class WorkflowSourceLoader {
       const packagePath = path.join(rootPath, directory.name);
       const filePath = await resolveWorkflowEntry(packagePath);
       const parsed = await parseWorkflowSource(filePath);
-      const issues = validateWorkflowSourceAst(parsed.ast, filePath, { instructions: this.options.instructions, triggers: this.options.triggers });
+      const issues = validateWorkflowSourceAst(parsed.ast, filePath, { instructions: this.options.instructions });
       if (issues.length) throw new WorkflowSourceCheckError(issues);
-      sources.push({ key: directory.name, hash: createHash('sha256').update(parsed.bundle).digest('hex'), filePath, ir: compileWorkflowSource(parsed.ast, filePath) });
+      sources.push({ key: directory.name, hash: createHash('sha256').update(parsed.bundle).digest('hex'), filePath, ir: compileWorkflowSource(parsed.ast, filePath, { instructions: this.options.instructions }) });
     }
     return sources;
   }

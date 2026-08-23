@@ -1,0 +1,48 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { assertPackageRelativePath, scanWorkflowPackage } from '../src/server/package-scanner.js';
+
+const roots: string[] = [];
+async function fixture(): Promise<string> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'workflow-scan-'));
+  roots.push(root);
+  await fs.writeFile(path.join(root, 'workflow.ts'), 'export default {};');
+  return root;
+}
+afterEach(async () => Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))));
+
+describe('workflow package scanner', () => {
+  it.each(['/absolute', '../escape', 'a/../escape', 'nul\0file', 'C:\\escape'])('rejects unsafe manifest path %s', (candidate) => {
+    expect(() => assertPackageRelativePath(candidate)).toThrow();
+  });
+  it.each(['/absolute', '../escape', 'nul\0file'])('rejects unsafe descriptor include %s', async (candidate) => {
+    const root = await fixture(); await fs.writeFile(path.join(root, 'workflow.package.yaml'), `include:\n  - ${JSON.stringify(candidate)}\n`);
+    await expect(scanWorkflowPackage(root)).rejects.toThrow();
+  });
+  it('expands descriptor include/exclude and validates declared entries', async () => {
+    const root = await fixture(); await fs.mkdir(path.join(root, 'server')); await fs.writeFile(path.join(root, 'server/run.ts'), 'run'); await fs.writeFile(path.join(root, 'server/skip.ts'), 'skip');
+    await fs.writeFile(path.join(root, 'workflow.package.yaml'), 'include:\n  - workflow.ts\n  - server/**\nexclude:\n  - server/skip.ts\nentries:\n  - server/run.ts\n');
+    await expect(scanWorkflowPackage(root)).resolves.toMatchObject({ entries: expect.arrayContaining([expect.objectContaining({ path: 'workflow.ts' }), expect.objectContaining({ path: 'server/run.ts' })]) });
+  });
+  it('rejects case collisions', async () => {
+    const root = await fixture(); await fs.writeFile(path.join(root, 'A.ts'), 'a'); await fs.writeFile(path.join(root, 'a.ts'), 'b');
+    await expect(scanWorkflowPackage(root)).rejects.toThrow(/case-conflicting/);
+  });
+  it('rejects a symlink escaping the package root', async () => {
+    const root = await fixture(); const outside = path.join(path.dirname(root), 'outside.txt'); await fs.writeFile(outside, 'secret'); await fs.symlink(outside, path.join(root, 'escape'));
+    await expect(scanWorkflowPackage(root)).rejects.toThrow(/escapes package root/); await fs.rm(outside, { force: true });
+  });
+  it('rejects file count and total size limits', async () => {
+    const root = await fixture(); await fs.writeFile(path.join(root, 'extra.ts'), 'large');
+    await expect(scanWorkflowPackage(root, { maxFiles: 1 })).rejects.toThrow(/exceeds 1 files/);
+    await expect(scanWorkflowPackage(root, { maxBytes: 1 })).rejects.toThrow(/exceeds 1 bytes/);
+  });
+  it('excludes repositories, dependencies, caches, temporary, socket and secret-shaped files', async () => {
+    const root = await fixture();
+    for (const directory of ['.git', 'node_modules', '.cache', 'dist']) { await fs.mkdir(path.join(root, directory)); await fs.writeFile(path.join(root, directory, 'x'), 'x'); }
+    for (const file of ['.env', 'token.secret', 'private.pem', 'scratch.tmp', 'editor.swp', 'service.sock']) await fs.writeFile(path.join(root, file), 'x');
+    await expect(scanWorkflowPackage(root)).resolves.toMatchObject({ entries: [{ path: 'workflow.ts' }] });
+  });
+});

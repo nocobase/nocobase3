@@ -4,19 +4,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDatabaseManager, type DatabaseManager, type Row } from '@nocobase/database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { conditionInstruction, createWorkflowCollections, loadWorkflow, resolveWorkflowInput, WORKFLOW_COLLECTIONS, WorkflowRuntime, WorkflowSourceLoader, type WorkflowInstruction } from '../src/index.js';
-import { createTraceInstruction } from './fixtures/instructions.js';
+import { ConditionInstruction, createWorkflowCollections, loadWorkflow, resolveWorkflowInput, WORKFLOW_COLLECTIONS, WorkflowRuntime, WorkflowSourceLoader, type WorkflowInstructionClass } from '../src/index.js';
+import { createTraceInstruction, defineTestInstruction } from './fixtures/instructions.js';
 
 const dslImport = fileURLToPath(new URL('../src/workflow-source/index.ts', import.meta.url));
-const triggerImport = fileURLToPath(new URL('../src/workflow-source/triggers/index.ts', import.meta.url));
 
 function workflowSource(title: string, defaultValue: number = 100): string {
   return `import { defineWorkflow, condition, run } from ${JSON.stringify(dslImport)};
-import { custom } from ${JSON.stringify(triggerImport)};
 export default defineWorkflow({ title: ${JSON.stringify(title)},
   inputs: { limit: { type: 'number', default: 100 }, threshold: { type: 'number', default: ${defaultValue} }, flag: { type: 'boolean', default: true }, label: { type: 'string', default: 'default' } },
-  trigger: custom({ config: {} }), nodes: [
-    condition({ key: 'condition', config: { calculation: { calculator: 'gt', operands: ['{{$input.limit}}', 0] } } }).branch({ yes: [run({ key: 'branchAction', config: { script: './server/action.ts' } })], no: [] }),
+  nodes: [
+    condition({ key: 'condition', config: { expression: { '>': [{ var: 'input.limit' }, 0] } } }).branch({ yes: [run({ key: 'branchAction', config: { script: './server/action.ts' } })], no: [] }),
     run({ key: 'finalAction', config: { script: './server/final.ts' } }),
   ] });`;
 }
@@ -36,8 +34,7 @@ describe('workflow TypeScript source loader', () => {
     database = createDatabaseManager({ connections: { main: { dialect: 'sqlite', filename: ':memory:' } } });
     await createWorkflowCollections(database.builder());
     rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'nocobase3-workflow-source-'));
-    const instruction: WorkflowInstruction = { async run() { return { status: 1 }; }, validateConfig: () => null };
-    loader = new WorkflowSourceLoader({ database, autoActivate: true, instructions: new Map([['condition', instruction], ['run', instruction]]), triggers: new Map([['custom', { validateConfig: () => null }]]) });
+    loader = new WorkflowSourceLoader({ database, autoActivate: true, instructions: new Map([['condition', ConditionInstruction], ['run', defineTestInstruction('run', async () => ({ status: 1 }))]]) });
   });
 
   afterEach(async () => { await database.destroy(); await fs.rm(rootPath, { recursive: true, force: true }); });
@@ -53,12 +50,14 @@ describe('workflow TypeScript source loader', () => {
       { key: 'branchAction', upstreamKey: 'condition', downstreamKey: null, branchKey: 'yes' },
       { key: 'finalAction', upstreamKey: 'condition', downstreamKey: null, branchKey: null },
     ]);
+    const materializedCondition = await database.query().selectFrom(WORKFLOW_COLLECTIONS.nodes).selectAll().where('workflowId', '=', workflow.id).where('key', '=', 'condition').executeTakeFirstOrThrow<Row>();
+    expect(Object.hasOwn(materializedCondition, 'result')).toBe(false);
 
     const definition = await loadWorkflow(database.query(), String(workflow.id));
     const trace: string[] = [];
     const runtime = new WorkflowRuntime({
       database,
-      instructions: new Map([['condition', conditionInstruction], ['run', createTraceInstruction(trace)]]),
+      instructions: new Map([['condition', ConditionInstruction], ['run', createTraceInstruction(trace)]]),
       timeoutReaper: false,
     });
     await runtime.start();
@@ -73,11 +72,9 @@ describe('workflow TypeScript source loader', () => {
     await loader.load(rootPath);
     const first = await database.query().selectFrom(WORKFLOW_COLLECTIONS.workflows).selectAll().where('key', '=', 'quotation').executeTakeFirstOrThrow<Row>();
     await database.query().updateTable(WORKFLOW_COLLECTIONS.workflows).set({ enabled: true, inputValues: JSON.stringify({ limit: 0, flag: false, label: '' }) }).where('id', '=', first.id).execute();
-    const instruction: WorkflowInstruction = { async run() { return { status: 1 }; }, validateConfig: () => null };
     loader = new WorkflowSourceLoader({
       database,
-      instructions: new Map([['condition', instruction], ['run', instruction]]),
-      triggers: new Map([['custom', { validateConfig: () => null }]]),
+      instructions: new Map([['condition', ConditionInstruction], ['run', defineTestInstruction('run', async () => ({ status: 1 }))]]),
     });
     await writeSource(rootPath, 'quotation', workflowSource('V2', 200));
     await loader.load(rootPath);
@@ -99,7 +96,7 @@ describe('workflow TypeScript source loader', () => {
   });
 
   it('reports undeclared input references with structured semantic diagnostics', async () => {
-    await writeSource(rootPath, 'bad', workflowSource('Bad').replace('$input.limit', '$input.missing'));
+    await writeSource(rootPath, 'bad', workflowSource('Bad').replace('input.limit', 'input.missing'));
     await expect(loader.load(rootPath)).rejects.toMatchObject({ issues: [expect.objectContaining({ phase: 'semantic', code: 'INVALID_INPUT_REFERENCE', file: expect.stringContaining('workflow.ts'), nodeKey: 'condition', contractType: 'condition' })] });
   });
 });

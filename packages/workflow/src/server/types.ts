@@ -3,21 +3,27 @@ import type { NocoBaseQueueManager } from '@nocobase/queue';
 
 import type Processor from './processor.js';
 import type { WorkflowInputSchema, WorkflowInputValues } from './workflow-inputs.js';
+import type { ContextSchema } from './invocation-contract.js';
+import type { WorkflowArtifactStore } from './artifact-store.js';
+import type { ConfigIssue, NodeExpression, NodeResultSchema, WorkflowNodeOptions, WorkflowNodeSourceInput } from '../workflow-source/types.js';
 
 export type WorkflowId = number | string;
-export type JsonObject = Record<string, unknown>;
+export type JsonPrimitive = null | boolean | number | string;
+export type JsonValue = JsonPrimitive | JsonValue[] | JsonObject;
+export interface JsonObject { [key: string]: JsonValue; }
 
-export interface WorkflowNode {
+export interface WorkflowNode<TConfig extends JsonObject = JsonObject> {
   id: WorkflowId;
   key: string;
   title: string | null;
+  description: string | null;
   workflowId: WorkflowId;
   upstreamKey: string | null;
   branchKey: string | null;
   downstreamKey: string | null;
   type: string;
-  config: JsonObject;
-  output: JsonObject;
+  config: TConfig;
+  options: WorkflowNodeOptions;
   upstream?: WorkflowNode;
   downstream?: WorkflowNode;
 }
@@ -30,9 +36,7 @@ export interface WorkflowDefinition {
   title: string | null;
   enabled: boolean;
   description: string | null;
-  type: string;
-  triggerTitle: string | null;
-  config: JsonObject;
+  contextSchema: ContextSchema;
   inputSchema: WorkflowInputSchema;
   inputValues: WorkflowInputValues;
   current: boolean | null;
@@ -44,15 +48,17 @@ export interface WorkflowRun {
   id: WorkflowId;
   workflowId: WorkflowId;
   workflowKey: string;
+  hash: string | null;
   eventKey: string;
-  context: unknown;
+  context: JsonObject;
   input: WorkflowInputValues;
   status: number | null;
   dispatched: boolean;
-  parentExecutionId: WorkflowId | null;
+  parentRunId: WorkflowId | null;
   stack: WorkflowId[];
   output: unknown;
   startedAt: string | null;
+  finishedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
   manually: boolean;
@@ -69,7 +75,10 @@ export interface WorkflowNodeRun {
   status: number;
   meta: unknown;
   result: unknown;
+  error: string | null;
   startedAt: string;
+  finishedAt: string | null;
+  expiresAt: string | null;
   log: string | null;
   execution?: WorkflowRun;
 }
@@ -77,33 +86,53 @@ export interface WorkflowNodeRun {
 export interface WorkflowInstructionResult {
   status: number;
   result?: unknown;
+  error?: string;
   meta?: unknown;
   log?: string;
   nextKey?: string | null;
 }
 
-export type WorkflowInstructionRunner = (
-  node: WorkflowNode,
-  input: WorkflowNodeRun | { result: unknown } | undefined,
-  processor: Processor,
-  options?: { rerun?: true; signal?: AbortSignal },
-) => WorkflowInstructionResult | null | void | Promise<WorkflowInstructionResult | null | void>;
-
-export interface WorkflowInstruction {
-  branching?: boolean;
-  run: WorkflowInstructionRunner;
-  resume?: WorkflowInstructionRunner;
-  getScope?: (node: WorkflowNode, data: unknown, processor: Processor) => unknown;
-  validateConfig?: (config: JsonObject) => Record<string, string> | null;
+export interface WorkflowInstructionContext<TConfig extends JsonObject = JsonObject> {
+  readonly node: WorkflowNode<TConfig>;
+  readonly nodeRun: WorkflowNodeRun;
+  readonly processor: Processor;
+  readonly input: WorkflowNodeRun | { result: unknown } | undefined;
+  readonly signal: AbortSignal;
 }
 
-export interface WorkflowTrigger {
-  validateEvent?: (
-    workflow: WorkflowDefinition,
-    context: unknown,
-    options: WorkflowEventOptions,
-  ) => boolean | Promise<boolean>;
-  validateConfig?: (config: JsonObject) => Record<string, string> | null;
+export abstract class WorkflowInstruction<TConfig extends JsonObject = JsonObject> {
+  readonly node: WorkflowNode<TConfig>;
+  readonly nodeRun: WorkflowNodeRun;
+  readonly processor: Processor;
+  readonly input: WorkflowNodeRun | { result: unknown } | undefined;
+  readonly signal: AbortSignal;
+
+  constructor(context: WorkflowInstructionContext<TConfig>) {
+    this.node = context.node;
+    this.nodeRun = context.nodeRun;
+    this.processor = context.processor;
+    this.input = context.input;
+    this.signal = context.signal;
+  }
+
+  get config(): TConfig {
+    return this.node.config;
+  }
+
+  abstract run(): Promise<WorkflowInstructionResult | null | void>;
+  resume?(): Promise<WorkflowInstructionResult | null | void>;
+}
+
+export interface WorkflowInstructionClass<
+  TConfig extends JsonObject = JsonObject,
+  TBranch extends string = string,
+> {
+  readonly type: string;
+  readonly branches: readonly TBranch[] | null | ((config: JsonObject) => readonly string[]);
+  readonly result?: NodeResultSchema | null;
+  create(source: WorkflowNodeSourceInput<TConfig>): NodeExpression<TBranch>;
+  validateConfig(config: unknown): ConfigIssue[];
+  new (context: WorkflowInstructionContext<TConfig>): WorkflowInstruction<TConfig>;
 }
 
 export interface WorkflowLogger {
@@ -120,7 +149,7 @@ export interface WorkflowEventOptions {
   manually?: boolean;
   force?: boolean;
   stack?: WorkflowId[];
-  parentExecutionId?: WorkflowId;
+  parentRunId?: WorkflowId;
   inputValues?: WorkflowInputValues;
   onTriggerFail?: (
     workflow: WorkflowDefinition,
@@ -130,11 +159,22 @@ export interface WorkflowEventOptions {
   ) => void | Promise<void>;
 }
 
-export interface WorkflowQueueTask {
+export interface WorkflowExecutionQueueTask {
   executionId: WorkflowId;
   nodeRunId?: WorkflowId;
   rerun?: ProcessorRerunOptions;
 }
+
+export interface WorkflowTriggerQueueTask {
+  type: 'trigger';
+  workflowId: WorkflowId;
+  eventKey: string;
+  context: JsonObject;
+  inputValues: WorkflowInputValues;
+  parentRunId?: WorkflowId;
+}
+
+export type WorkflowQueueTask = WorkflowExecutionQueueTask | WorkflowTriggerQueueTask;
 
 export interface WorkflowQueue {
   publish(task: WorkflowQueueTask): Promise<void>;
@@ -164,9 +204,7 @@ export interface WorkflowRuntimeOptions {
    * `WorkflowRuntime` layers this map on top of `coreInstructions`, so an entry
    * here adds a node type or replaces a core one under the same key.
    */
-  instructions: Map<string, WorkflowInstruction>;
-  /** Same layering as `instructions`, on top of `coreTriggers`. */
-  triggers?: Map<string, WorkflowTrigger>;
+  instructions: Map<string, WorkflowInstructionClass>;
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
@@ -174,6 +212,12 @@ export interface WorkflowRuntimeOptions {
   app?: unknown;
   /** Source packages discovered and registered before the runtime accepts work. */
   sources?: WorkflowRuntimeSourceOptions;
+  /** Immutable production artifacts. When present, run nodes never read source directories. */
+  artifactStore?: WorkflowArtifactStore;
+  /** Explicit development-only opt-in for executing package source. Default false. */
+  allowSourceRunModules?: boolean;
+  /** Source root used only by the explicit execution diagnostic; it is never scanned or published. */
+  diagnosticSourceRoot?: string;
 
   // --- T5: fields the assembly layer needs. All optional, so the meaning of
   // every field declared before this point is unchanged. ---

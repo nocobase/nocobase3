@@ -2,11 +2,12 @@ import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/database';
 
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 import { EXECUTION_REASON, EXECUTION_STATUS, NODE_RUN_STATUS } from './constants.js';
+import type { JsonLogicDataBindings } from './expressions/index.js';
 import type {
   ProcessorRerunOptions,
   WorkflowDefinition,
   WorkflowId,
-  WorkflowInstruction,
+  WorkflowInstructionClass,
   WorkflowInstructionResult,
   WorkflowLogger,
   WorkflowNode,
@@ -32,7 +33,7 @@ export interface ProcessorOptions {
   connectionName?: string;
   workflow: WorkflowDefinition;
   execution: WorkflowRun;
-  instructions: Map<string, WorkflowInstruction>;
+  instructions: Map<string, WorkflowInstructionClass>;
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
@@ -47,8 +48,17 @@ function idEquals(left: WorkflowId, right: WorkflowId): boolean {
   return String(left) === String(right);
 }
 
-function errorResult(error: unknown): { message: string } {
-  return { message: error instanceof Error ? error.message : String(error) };
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  try { return JSON.stringify(error); } catch { return String(error); }
+}
+
+function isTerminalNodeStatus(status: number): boolean {
+  return status === NODE_RUN_STATUS.RESOLVED
+    || status === NODE_RUN_STATUS.FAILED
+    || status === NODE_RUN_STATUS.ERROR
+    || status === NODE_RUN_STATUS.ABORTED;
 }
 
 export default class Processor {
@@ -70,14 +80,14 @@ export default class Processor {
   lastSavedNodeRun: WorkflowNodeRun | null = null;
 
   private readonly connectionName?: string;
-  private readonly instructions: Map<string, WorkflowInstruction>;
+  private readonly instructions: Map<string, WorkflowInstructionClass>;
   /** Public so instructions can log on the current workflow / execution channel. */
   readonly logger: WorkflowLogger;
   private readonly environment?: ProcessorOptions['environment'];
   private readonly functions: Record<string, (...args: unknown[]) => unknown>;
   private readonly nodesById = new Map<string, WorkflowNode>();
   private readonly nodeRunsMapByNodeKey: Record<string, WorkflowNodeRun> = {};
-  private readonly nodeRunResultsMapByNodeKey: Record<string, unknown> = {};
+  private readonly nodeResultsByNodeKey: Record<string, unknown> = {};
   private rerunContext: RerunContext | null = null;
   private timeoutGuard: ReturnType<typeof setTimeout> | null = null;
   private abortReason: string | null = null;
@@ -179,7 +189,7 @@ export default class Processor {
     this.execution.nodeRuns = nodeRuns.map(hydrateNodeRun);
     for (const nodeRun of this.execution.nodeRuns) {
       this.nodeRunsMapByNodeKey[nodeRun.nodeKey] = nodeRun;
-      this.nodeRunResultsMapByNodeKey[nodeRun.nodeKey] = nodeRun.result;
+      this.nodeResultsByNodeKey[nodeRun.nodeKey] = nodeRun.result;
     }
   }
 
@@ -257,14 +267,16 @@ export default class Processor {
     input?: WorkflowNodeRun | { result: unknown },
     options: ProcessorRunOptions = {},
   ): Promise<WorkflowNodeRun | null | undefined> {
-    const instruction = this.instructions.get(node.type);
-    if (!instruction) {
+    const Instruction = this.instructions.get(node.type);
+    if (!Instruction) {
       throw new Error(`Instruction "${node.type}" was not found for node "${node.key}"`);
     }
     this.logger.info(`Running instruction "${node.type}" for node "${node.key}"`, {
       executionId: this.execution.id,
     });
-    return this.exec(instruction.run.bind(instruction), node, input, options);
+    const nodeRun = await this.createNodeRun(node);
+    const instruction = new Instruction({ node, nodeRun, processor: this, input, signal: this.abortSignal });
+    return this.exec(instruction, 'run', node, nodeRun, options);
   }
 
   async end(node: WorkflowNode, nodeRun: WorkflowNodeRun): Promise<WorkflowNodeRun | null | undefined> {
@@ -287,9 +299,10 @@ export default class Processor {
 
     const executionStatus = Processor.StatusMap[status] ?? Math.sign(status);
     const reason = executionStatus === EXECUTION_STATUS.ABORTED ? this.abortReason : null;
+    const finishedAt = new Date().toISOString();
     const result = await this.query
       .updateTable(WORKFLOW_COLLECTIONS.runs)
-      .set({ status: executionStatus, output: serializeJson(output), reason })
+      .set({ status: executionStatus, output: serializeJson(output), reason, finishedAt })
       .where('id', '=', this.execution.id)
       .where('status', '=', EXECUTION_STATUS.STARTED)
       .execute();
@@ -297,6 +310,7 @@ export default class Processor {
       this.execution.status = executionStatus;
       this.execution.output = output;
       this.execution.reason = reason;
+      this.execution.finishedAt = finishedAt;
     }
     return null;
   }
@@ -304,8 +318,13 @@ export default class Processor {
   async saveNodeRun(
     payload: WorkflowInstructionResult & { nodeId: WorkflowId; nodeKey: string },
     existing?: WorkflowNodeRun,
+    timing?: { startedAt: string; finishedAt: string },
   ): Promise<WorkflowNodeRun> {
-    const startedAt = new Date().toISOString();
+    const startedAt = timing?.startedAt ?? new Date().toISOString();
+    const finishedAt = isTerminalNodeStatus(payload.status) ? timing?.finishedAt ?? startedAt : null;
+    const failed = payload.status === NODE_RUN_STATUS.FAILED || payload.status === NODE_RUN_STATUS.ERROR || payload.status === NODE_RUN_STATUS.ABORTED;
+    const result = failed ? null : payload.result ?? null;
+    const error = failed ? payload.error ?? (payload.result == null ? null : errorText(payload.result)) : null;
     const overwrite = existing
       ?? (this.rerunContext?.overwrite
         && this.rerunContext.targetNodeRun
@@ -319,20 +338,25 @@ export default class Processor {
         .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
         .set({
           status: payload.status,
-          result: serializeJson(payload.result ?? null),
+          result: serializeJson(result),
+          error,
           meta: serializeJson(payload.meta ?? null),
           log: payload.log ?? null,
           startedAt,
+          finishedAt,
         })
         .where('id', '=', overwrite.id)
         .execute();
       nodeRun = {
         ...overwrite,
         status: payload.status,
-        result: payload.result ?? null,
+        result,
+        error,
         meta: payload.meta ?? null,
         log: payload.log ?? null,
         startedAt,
+        finishedAt,
+        expiresAt: overwrite.expiresAt,
       };
     } else {
       const insert = await this.query
@@ -343,8 +367,10 @@ export default class Processor {
           nodeKey: payload.nodeKey,
           status: payload.status,
           meta: serializeJson(payload.meta ?? null),
-          result: serializeJson(payload.result ?? null),
+          result: serializeJson(result),
+          error,
           startedAt,
+          finishedAt,
           log: payload.log ?? null,
         })
         .execute();
@@ -371,7 +397,7 @@ export default class Processor {
 
     this.lastSavedNodeRun = nodeRun;
     this.nodeRunsMapByNodeKey[nodeRun.nodeKey] = nodeRun;
-    this.nodeRunResultsMapByNodeKey[nodeRun.nodeKey] = nodeRun.result;
+    this.nodeResultsByNodeKey[nodeRun.nodeKey] = nodeRun.result;
     this.logger.debug(`Saved node run "${nodeRun.id}" for node "${nodeRun.nodeKey}"`, { status: nodeRun.status });
     return nodeRun;
   }
@@ -449,22 +475,15 @@ export default class Processor {
       current;
       current = this.findBranchParentNode(current)
     ) {
-      const instruction = this.instructions.get(current.type);
-      if (instruction?.getScope) {
-        const value = instruction.getScope(current, this.nodeRunResultsMapByNodeKey[current.key], this);
-        scopes[String(current.id)] = value;
-        scopes[current.key] = value;
-      }
     }
     const environment = typeof this.environment === 'function' ? this.environment() : this.environment ?? {};
     const base = {
       $context: this.execution.context,
       $input: this.execution.input,
-      $nodeRunsMapByNodeKey: this.nodeRunResultsMapByNodeKey,
+      $nodeResults: this.nodeResultsByNodeKey,
       $system: this.functions,
       $scopes: scopes,
       $env: environment,
-      $run: this.execution,
       $node: node,
     };
     return { ...base, ctx: base };
@@ -478,6 +497,15 @@ export default class Processor {
     return resolveWorkflowValue(value, {
       ...this.getScope(sourceNode, options.includeSelfScope),
       ...(options.additionalScope ?? {}),
+    });
+  }
+
+  /** Data-only bindings exposed to condition expressions. */
+  getConditionDataBindings(): JsonLogicDataBindings {
+    return Object.freeze({
+      context: Object.freeze({ ...this.execution.context }),
+      input: Object.freeze({ ...this.execution.input }),
+      nodeResults: Object.freeze({ ...this.nodeResultsByNodeKey }),
     });
   }
 
@@ -530,9 +558,10 @@ export default class Processor {
   }
 
   private async exec(
-    runner: WorkflowInstruction['run'],
+    instruction: import('./types.js').WorkflowInstruction,
+    method: 'run' | 'resume',
     node: WorkflowNode,
-    previous?: WorkflowNodeRun | { result: unknown },
+    nodeRun: WorkflowNodeRun,
     options: ProcessorRunOptions = {},
   ): Promise<WorkflowNodeRun | null | undefined> {
     if (!(await this.shouldContinueExecution())) {
@@ -542,7 +571,9 @@ export default class Processor {
 
     let result: WorkflowInstructionResult | null | void;
     try {
-      result = await runner(node, previous, this, { ...options, signal: this.abortSignal });
+      const runner = instruction[method];
+      if (!runner) throw new Error(`Instruction "${node.type}" does not implement ${method}()`);
+      result = await runner.call(instruction);
       if (result === null) {
         await this.exit();
         return null;
@@ -555,25 +586,22 @@ export default class Processor {
       this.logger.error(`Instruction "${node.type}" failed for node "${node.key}"`, { error });
       result = {
         status: this.abortSignal.aborted ? NODE_RUN_STATUS.ABORTED : NODE_RUN_STATUS.ERROR,
-        result: errorResult(error),
+        error: errorText(error),
       };
     }
 
-    const previousNodeRun = previous && 'nodeId' in previous && idEquals(previous.nodeId, node.id)
-      ? previous
-      : undefined;
-    const nodeRun = await this.saveNodeRun({
+    const savedNodeRun = await this.saveNodeRun({
       ...result,
       nodeId: node.id,
       nodeKey: node.key,
-    }, previousNodeRun);
+    }, nodeRun, { startedAt: nodeRun.startedAt, finishedAt: new Date().toISOString() });
 
     if (this.abortSignal.aborted) {
-      await this.exit(NODE_RUN_STATUS.ABORTED, nodeRun.result);
-      return nodeRun;
+      await this.exit(NODE_RUN_STATUS.ABORTED, savedNodeRun.result);
+      return savedNodeRun;
     }
 
-    if (nodeRun.status === NODE_RUN_STATUS.RESOLVED) {
+    if (savedNodeRun.status === NODE_RUN_STATUS.RESOLVED || (savedNodeRun.status === NODE_RUN_STATUS.PENDING && result.nextKey != null)) {
       const next = result.nextKey === undefined
         ? node.downstream
         : result.nextKey == null
@@ -584,24 +612,40 @@ export default class Processor {
           nodeId: node.id,
           nodeKey: node.key,
           status: NODE_RUN_STATUS.ERROR,
-          result: { message: `Downstream node "${result.nextKey}" was not found` },
-        }, nodeRun);
-        await this.exit(NODE_RUN_STATUS.ERROR, missing.result);
+          error: `Downstream node "${result.nextKey}" was not found`,
+        }, savedNodeRun);
+        await this.exit(NODE_RUN_STATUS.ERROR);
         return missing;
       }
       if (next) {
-        return this.run(next, nodeRun, options);
+        return this.run(next, savedNodeRun, options);
       }
     }
-    return this.end(node, nodeRun);
+    return this.end(node, savedNodeRun);
   }
 
   private async recall(node: WorkflowNode, nodeRun: WorkflowNodeRun): Promise<WorkflowNodeRun | null | undefined> {
-    const instruction = this.instructions.get(node.type);
-    if (!instruction?.resume) {
+    const Instruction = this.instructions.get(node.type);
+    if (!Instruction) {
+      throw new Error(`Instruction "${node.type}" was not found for node "${node.key}"`);
+    }
+    if (!Instruction.prototype.resume) {
       throw new Error(`Instruction "${node.type}" does not implement resume()`);
     }
-    return this.exec(instruction.resume.bind(instruction), node, nodeRun);
+    const parentNodeRun = this.findBranchParentNodeRun(nodeRun, node);
+    if (!parentNodeRun) {
+      throw new Error(`Pending branch parent node run of node "${node.key}" was not found`);
+    }
+    const instruction = new Instruction({ node, nodeRun: parentNodeRun, processor: this, input: nodeRun, signal: this.abortSignal });
+    return this.exec(instruction, 'resume', node, parentNodeRun);
+  }
+
+  private async createNodeRun(node: WorkflowNode): Promise<WorkflowNodeRun> {
+    return this.saveNodeRun({
+      nodeId: node.id,
+      nodeKey: node.key,
+      status: NODE_RUN_STATUS.PENDING,
+    });
   }
 
   private enterRunningState(): void {

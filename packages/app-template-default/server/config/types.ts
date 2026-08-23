@@ -6,8 +6,11 @@ import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 
 export interface AppWorkflowConfig {
-  /** Directory containing application-owned workflow source packages. */
   sourceRoot: string;
+  distRoot: string;
+  artifactDisk: string;
+  sourceResolverDiagnostic: boolean;
+  production: boolean;
 }
 
 export interface AppRoutingConfig {

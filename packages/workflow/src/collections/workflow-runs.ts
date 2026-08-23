@@ -11,6 +11,7 @@ export function defineWorkflowRuns(collection: CollectionDefinitionBuilder): voi
     .notNull()
     .constraints(false);
   collection.string('workflowKey').notNull();
+  collection.string('hash');
   collection.string('eventKey').notNull().unique({ mode: 'index' });
   collection
     .hasMany('nodeRuns', WORKFLOW_COLLECTIONS.nodeRuns)
@@ -20,10 +21,11 @@ export function defineWorkflowRuns(collection: CollectionDefinitionBuilder): voi
   collection.json('input').notNull().defaultTo({});
   collection.integer('status');
   collection.boolean('dispatched').notNull().defaultTo(false);
-  collection.bigInt('parentExecutionId');
+  collection.bigInt('parentRunId');
   collection.json('stack');
   collection.json('output');
   collection.datetime('startedAt');
+  collection.datetime('finishedAt');
   collection.datetime('expiresAt');
   collection.datetime('createdAt').notNull();
   collection.boolean('manually').notNull().defaultTo(false);
@@ -31,5 +33,5 @@ export function defineWorkflowRuns(collection: CollectionDefinitionBuilder): voi
 
   collection.index(['dispatched', 'id']);
   collection.index(['status', 'expiresAt']);
-  collection.index(['parentExecutionId', 'status']);
+  collection.index(['parentRunId', 'status']);
 }

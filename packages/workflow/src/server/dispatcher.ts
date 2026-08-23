@@ -10,13 +10,13 @@ import type {
   WorkflowDefinition,
   WorkflowEventOptions,
   WorkflowId,
-  WorkflowInstruction,
+  WorkflowInstructionClass,
   WorkflowLogger,
   WorkflowQueue,
   WorkflowQueueTask,
+  WorkflowExecutionQueueTask,
   WorkflowRun,
   WorkflowNodeRun,
-  WorkflowTrigger,
 } from './types.js';
 import { hydrateRun, loadNodeRun, loadRun, loadWorkflow, noopWorkflowLogger, serializeJson } from './utils.js';
 import { normalizeWorkflowInputValues, resolveWorkflowInput } from './workflow-inputs.js';
@@ -24,8 +24,7 @@ import { normalizeWorkflowInputValues, resolveWorkflowInput } from './workflow-i
 export interface DispatcherOptions {
   database: DatabaseManager;
   connectionName?: string;
-  instructions: Map<string, WorkflowInstruction>;
-  triggers?: Map<string, WorkflowTrigger>;
+  instructions: Map<string, WorkflowInstructionClass>;
   queue?: WorkflowQueue;
   logger?: WorkflowLogger | ((workflowId: WorkflowId | 'dispatcher') => WorkflowLogger);
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
@@ -110,6 +109,7 @@ export default class Dispatcher {
   }
 
   async dispatch(task: WorkflowQueueTask): Promise<Processor | null> {
+    if ('type' in task) throw new Error('Trigger queue tasks must be handled by WorkflowRuntime');
     const operation = this.resolveAndProcessTask(task);
     this.inFlight.add(operation);
     try {
@@ -161,7 +161,7 @@ export default class Dispatcher {
     await this.dispatch(task);
   }
 
-  private async resolveAndProcessTask(task: WorkflowQueueTask): Promise<Processor | null> {
+  private async resolveAndProcessTask(task: WorkflowExecutionQueueTask): Promise<Processor | null> {
     const query = this.options.database.query(this.options.connectionName);
     const execution = await loadRun(query, task.executionId);
     if (!execution) {
@@ -221,15 +221,17 @@ export default class Dispatcher {
           .values({
             workflowId: workflow.id,
             workflowKey: workflow.key,
+            hash: workflow.hash,
             eventKey,
             context: serializeJson(context),
             input: serializeJson(input),
             status: options.deferred ? EXECUTION_STATUS.STARTED : EXECUTION_STATUS.QUEUEING,
             dispatched: options.deferred ?? false,
-            parentExecutionId: options.parentExecutionId ?? null,
+            parentRunId: options.parentRunId ?? null,
             stack: serializeJson(stack),
             output: serializeJson(null),
             startedAt: options.deferred ? createdAt : null,
+            finishedAt: null,
             expiresAt: options.deferred ? this.getExpiresAt(workflow, createdAt) : null,
             createdAt,
             manually: options.manually ?? false,
@@ -272,6 +274,7 @@ export default class Dispatcher {
         dispatched: true,
         status: EXECUTION_STATUS.STARTED,
         startedAt,
+        finishedAt: null,
         expiresAt: this.getExpiresAt(workflow, startedAt),
       })
       .where('id', '=', execution.id)
@@ -319,21 +322,9 @@ export default class Dispatcher {
 
   private async validateEvent(
     workflow: WorkflowDefinition,
-    context: unknown,
+    _context: unknown,
     options: WorkflowEventOptions,
   ): Promise<boolean> {
-    // Manual execution is available to every workflow, independently of its
-    // configured event type. Event-specific validation only applies when a
-    // workflow is started by its declared trigger.
-    if (!options.manually) {
-      const trigger = this.options.triggers?.get(workflow.type);
-      if (this.options.triggers && !trigger) {
-        throw new Error(`Trigger "${workflow.type}" is not registered`);
-      }
-      if (trigger?.validateEvent && !(await trigger.validateEvent(workflow, context, options))) {
-        return false;
-      }
-    }
     const stack = options.stack ?? [];
     if (stack.length) {
       const countRow = await this.options.database.query(this.options.connectionName)
@@ -354,12 +345,13 @@ export default class Dispatcher {
     if (options.stack) {
       return [...options.stack];
     }
-    if (options.parentExecutionId == null) {
+    const parentRunId = options.parentRunId;
+    if (parentRunId == null) {
       return [];
     }
     const parent = await loadRun(
       this.options.database.query(this.options.connectionName),
-      options.parentExecutionId,
+      parentRunId,
     );
     return parent ? [...parent.stack, parent.id] : [];
   }

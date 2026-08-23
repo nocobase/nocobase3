@@ -6,6 +6,7 @@ export function defineWorkflowNodes(collection: CollectionDefinitionBuilder): vo
   collection.bigInt('id').primary().autoIncrement().notNull();
   collection.string('key').notNull();
   collection.string('title');
+  collection.text('description');
   collection
     .belongsTo('workflow', WORKFLOW_COLLECTIONS.workflows)
     .foreignKey('workflowId')
@@ -22,7 +23,7 @@ export function defineWorkflowNodes(collection: CollectionDefinitionBuilder): vo
   collection.string('downstreamKey');
   collection.string('type').notNull();
   collection.json('config').notNull().defaultTo({});
-  collection.json('output').notNull().defaultTo({});
+  collection.json('options').notNull().defaultTo({});
 
   collection.unique(['workflow', 'key'], { mode: 'index' });
 }

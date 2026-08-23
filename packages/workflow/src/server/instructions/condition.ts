@@ -1,346 +1,93 @@
+import { createNodeExpression } from '../../workflow-source/core.js';
+import type { ConfigIssue, NodeExpression, NodeResultSchema, WorkflowNodeSourceInput } from '../../workflow-source/types.js';
 import { NODE_RUN_STATUS } from '../constants.js';
-import type Processor from '../processor.js';
-import type {
-  JsonObject,
-  WorkflowInstruction,
-  WorkflowInstructionResult,
-  WorkflowNode,
-  WorkflowNodeRun,
-} from '../types.js';
+import { evaluateJsonLogic, validateJsonLogicExpression } from '../expressions/index.js';
+import type { JsonLogicExpression } from '../expressions/index.js';
+import { WorkflowInstruction } from '../types.js';
+import type { JsonObject, WorkflowInstructionContext, WorkflowInstructionResult, WorkflowNode, WorkflowNodeRun } from '../types.js';
 
-/**
- * Branch keys of the `condition` node.
- *
- * D4: a `branchKey` is always a semantic string. There is no numeric
- * `branchIndex` and no alias mapping layer — what the DSL writes is what the
- * `workflowNodes.branchKey` column stores.
- */
-export const CONDITION_BRANCH_KEYS = {
-  yes: 'yes',
-  no: 'no',
-} as const;
-
+export const CONDITION_BRANCH_KEYS: { readonly yes: 'yes'; readonly no: 'no' } = { yes: 'yes', no: 'no' };
 export type ConditionBranchKey = (typeof CONDITION_BRANCH_KEYS)[keyof typeof CONDITION_BRANCH_KEYS];
 
-export type ConditionComparator =
-  | 'equal'
-  | 'notEqual'
-  | 'gt'
-  | 'gte'
-  | 'lt'
-  | 'lte'
-  | '=='
-  | '!='
-  | '>'
-  | '>='
-  | '<'
-  | '<='
-  | 'includes'
-  | 'notIncludes'
-  | 'startsWith'
-  | 'notStartsWith'
-  | 'endsWith'
-  | 'notEndsWith';
+export type ConditionConfig = JsonObject & { expression?: JsonLogicExpression };
 
-export interface ConditionComparison {
-  calculator?: ConditionComparator;
-  operands?: unknown[];
-}
-
-export interface ConditionGroup {
-  group: {
-    type: 'and' | 'or';
-    calculations?: ConditionCalculation[];
-  };
-}
-
-export type ConditionCalculation = ConditionComparison | ConditionGroup;
-
-export interface ConditionConfig {
-  /** An omitted or incomplete calculation evaluates to `true`, as in the v2 engine. */
-  calculation?: ConditionCalculation;
-}
-
-type Comparer = (left: unknown, right: unknown) => boolean;
-
-type Ordinal = number | string;
-
-/**
- * Normalize an operand for ordering comparisons.
- *
- * Dates and date-like values compare by epoch milliseconds; everything else
- * keeps the JavaScript relational semantics of "two strings compare as text,
- * anything else compares numerically".
- */
-function toOrdinal(value: unknown): Ordinal {
-  if (value instanceof Date) {
-    return value.getTime();
+function conditionConfigIssues(config: unknown): ConfigIssue[] {
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) {
+    return [{ path: 'config', message: 'condition config must be an object' }];
   }
-  if (typeof value === 'string' || typeof value === 'number') {
-    return value;
+  const record = config as JsonObject;
+  const issues: ConfigIssue[] = [];
+  for (const key of Object.keys(record)) {
+    if (key !== 'expression') issues.push({ path: `config.${key}`, message: `condition config does not accept field "${key}"` });
   }
-  if (typeof value === 'bigint') {
-    return Number(value);
-  }
-  return Number(value);
-}
-
-function order(left: unknown, right: unknown, compare: (result: number) => boolean): boolean {
-  const isDatePair = left instanceof Date || right instanceof Date;
-  if (isDatePair) {
-    // A boolean or nullish operand can never be ordered against a Date.
-    if (typeof left === 'boolean' || typeof right === 'boolean' || left == null || right == null) {
-      return false;
+  if (Object.hasOwn(record, 'expression')) {
+    const result = validateJsonLogicExpression(record.expression);
+    for (const issue of result.issues) {
+      const path = issue.path === '$' ? 'expression' : `expression${issue.path.slice(1)}`;
+      issues.push({ path: `config.${path}`, message: issue.message });
     }
   }
-  const leftValue = isDatePair ? new Date(toOrdinal(left)).getTime() : toOrdinal(left);
-  const rightValue = isDatePair ? new Date(toOrdinal(right)).getTime() : toOrdinal(right);
-  if (typeof leftValue === 'string' && typeof rightValue === 'string') {
-    return compare(leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0);
-  }
-  const leftNumber = Number(leftValue);
-  const rightNumber = Number(rightValue);
-  if (Number.isNaN(leftNumber) || Number.isNaN(rightNumber)) {
-    return false;
-  }
-  return compare(leftNumber < rightNumber ? -1 : leftNumber > rightNumber ? 1 : 0);
+  return issues;
 }
 
-function looseEqual(left: unknown, right: unknown): boolean {
-  if (left instanceof Date || right instanceof Date) {
-    if (typeof left === 'boolean' || typeof right === 'boolean' || left == null || right == null) {
-      return false;
-    }
-    return order(left, right, (result) => result === 0);
-  }
-  // eslint-disable-next-line eqeqeq
-  return left == right;
-}
-
-function asText(value: unknown): string {
-  if (value == null) {
-    throw new Error('Cannot compare a null or undefined operand as text');
-  }
-  return String(value);
-}
-
-function contains(haystack: unknown, needle: unknown): boolean {
-  if (typeof haystack === 'string') {
-    return haystack.includes(asText(needle));
-  }
-  if (Array.isArray(haystack)) {
-    return haystack.includes(needle);
-  }
-  throw new Error('The first operand of "includes" must be a string or an array');
-}
-
-function buildComparers(): Map<string, Comparer> {
-  const comparers = new Map<string, Comparer>([
-    ['equal', looseEqual],
-    ['notEqual', (left, right) => !looseEqual(left, right)],
-    ['gt', (left, right) => order(left, right, (result) => result > 0)],
-    ['gte', (left, right) => order(left, right, (result) => result >= 0)],
-    ['lt', (left, right) => order(left, right, (result) => result < 0)],
-    ['lte', (left, right) => order(left, right, (result) => result <= 0)],
-    ['includes', contains],
-    ['notIncludes', (left, right) => !contains(left, right)],
-    ['startsWith', (left, right) => asText(left).startsWith(asText(right))],
-    ['notStartsWith', (left, right) => !asText(left).startsWith(asText(right))],
-    ['endsWith', (left, right) => asText(left).endsWith(asText(right))],
-    ['notEndsWith', (left, right) => !asText(left).endsWith(asText(right))],
-  ]);
-  for (const [alias, name] of [['==', 'equal'], ['!=', 'notEqual'], ['>', 'gt'], ['>=', 'gte'], ['<', 'lt'], ['<=', 'lte']]) {
-    const comparer = comparers.get(name);
-    if (comparer) {
-      comparers.set(alias, comparer);
-    }
-  }
-  return comparers;
-}
-
-const COMPARERS: Map<string, Comparer> = buildComparers();
-
-export const CONDITION_COMPARATORS: readonly string[] = [...COMPARERS.keys()];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-/**
- * Evaluate a calculation tree whose leaves have already been resolved through
- * the workflow variable system, so every operand here is plain runtime data.
- */
-export function evaluateConditionCalculation(calculation: unknown): boolean {
-  if (calculation == null) {
-    return true;
-  }
-  if (!isRecord(calculation)) {
-    throw new Error('Condition calculation must be an object');
-  }
-
-  const group = calculation.group;
-  if (group !== undefined) {
-    if (!isRecord(group)) {
-      throw new Error('Condition calculation group must be an object');
-    }
-    if (group.type !== 'and' && group.type !== 'or') {
-      throw new Error('Condition calculation group type must be "and" or "or"');
-    }
-    const calculations = group.calculations;
-    if (calculations === undefined) {
-      return true;
-    }
-    if (!Array.isArray(calculations)) {
-      throw new Error('Condition calculation group calculations must be an array');
-    }
-    return group.type === 'and'
-      ? calculations.every((item) => evaluateConditionCalculation(item))
-      : calculations.some((item) => evaluateConditionCalculation(item));
-  }
-
-  const { calculator, operands } = calculation;
-  if (calculator == null || !Array.isArray(operands) || !operands.length) {
-    return true;
-  }
-  if (typeof calculator !== 'string') {
-    throw new Error('Condition calculator must be a string');
-  }
-  const comparer = COMPARERS.get(calculator);
-  if (!comparer) {
-    throw new Error(`No condition calculator registered for "${calculator}"`);
-  }
-  return Boolean(comparer(operands[0], operands[1]));
-}
-
-function validateCalculationShape(calculation: unknown, location: string): string | null {
-  if (calculation == null) {
-    return null;
-  }
-  if (!isRecord(calculation)) {
-    return `${location} must be an object`;
-  }
-  const group = calculation.group;
-  if (group !== undefined) {
-    if (!isRecord(group)) {
-      return `${location}.group must be an object`;
-    }
-    if (group.type !== 'and' && group.type !== 'or') {
-      return `${location}.group.type must be "and" or "or"`;
-    }
-    if (group.calculations === undefined) {
-      return null;
-    }
-    if (!Array.isArray(group.calculations)) {
-      return `${location}.group.calculations must be an array`;
-    }
-    for (const [index, item] of group.calculations.entries()) {
-      const error = validateCalculationShape(item, `${location}.group.calculations[${index}]`);
-      if (error) {
-        return error;
-      }
-    }
-    return null;
-  }
-  if (
-    calculation.calculator !== undefined
-    && (typeof calculation.calculator !== 'string' || !COMPARERS.has(calculation.calculator))
-  ) {
-    return `${location}.calculator must be one of: ${CONDITION_COMPARATORS.join(', ')}`;
-  }
-  if (calculation.operands !== undefined && !Array.isArray(calculation.operands)) {
-    return `${location}.operands must be an array`;
-  }
-  return null;
-}
-
-/** Hand-written config validation (D3: the first version has no schema library). */
 export function validateConditionConfig(config: JsonObject): Record<string, string> | null {
-  const errors: Record<string, string> = {};
-  for (const key of Object.keys(config)) {
-    if (key !== 'calculation') {
-      errors[key] = `condition config does not accept field "${key}"`;
-    }
-  }
-  const calculationError = validateCalculationShape(config.calculation, 'calculation');
-  if (calculationError) {
-    errors.calculation = calculationError;
-  }
-  return Object.keys(errors).length ? errors : null;
+  const issues = conditionConfigIssues(config);
+  const errors = Object.fromEntries(issues.map(({ path, message }) => [path.replace(/^config\./, ''), message]));
+  return issues.length ? errors : null;
 }
 
 function readConditionConfig(config: JsonObject): ConditionConfig {
-  const errors = validateConditionConfig(config);
-  if (errors) {
-    throw new Error(`Invalid condition config: ${Object.values(errors).join('; ')}`);
-  }
-  return {
-    ...(config.calculation == null ? {} : { calculation: config.calculation as ConditionCalculation }),
-  };
+  const issues = conditionConfigIssues(config);
+  if (issues.length) throw new Error(`Invalid condition config: ${issues.map(({ path, message }) => `${path}: ${message}`).join('; ')}`);
+  return Object.hasOwn(config, 'expression') ? { expression: config.expression as JsonLogicExpression } : {};
 }
 
-/**
- * `condition` — the only branching node of the first version.
- *
- * A truthy calculation enters the `yes` branch and a falsy one enters the `no`
- * branch. A branch that is not declared falls through to the node's own
- * downstream, which is how an empty branch is expressed in the flat topology.
- */
-export const conditionInstruction: WorkflowInstruction = {
-  branching: true,
+export class ConditionInstruction extends WorkflowInstruction<ConditionConfig> {
+  static readonly type: 'condition' = 'condition';
+  static readonly branches: readonly ['yes', 'no'] = ['yes', 'no'];
+  static readonly branching: true = true;
+  static readonly result: NodeResultSchema = { type: 'boolean', description: 'The evaluated condition result.' };
 
-  async run(
-    node: WorkflowNode,
-    _input: WorkflowNodeRun | { result: unknown } | undefined,
-    processor: Processor,
-  ): Promise<WorkflowInstructionResult> {
-    const config = readConditionConfig(node.config);
-    const result = evaluateConditionCalculation(processor.getParsedValue(config.calculation, node.id));
+  constructor(context: WorkflowInstructionContext) {
+    super({ ...context, node: context.node as WorkflowNode<ConditionConfig> });
+  }
 
-    const branchKey = result ? CONDITION_BRANCH_KEYS.yes : CONDITION_BRANCH_KEYS.no;
-    const branch = processor.getBranches(node).find((candidate) => candidate.branchKey === branchKey);
-    // `nextKey` makes the processor persist this node's nodeRun first and then enter
-    // the branch head with that nodeRun as input, so branch recall always has a
-    // persisted parent nodeRun to come back to.
+  static create(source: WorkflowNodeSourceInput<ConditionConfig>): NodeExpression<ConditionBranchKey> {
+    return createNodeExpression(ConditionInstruction, source);
+  }
+
+  static validateConfig(config: unknown): ConfigIssue[] {
+    return conditionConfigIssues(config);
+  }
+
+  async run(): Promise<WorkflowInstructionResult> {
+    const config = readConditionConfig(this.config);
+    const evaluated = config.expression === undefined
+      ? true
+      : evaluateJsonLogic(config.expression, this.processor.getConditionDataBindings());
+    if (typeof evaluated !== 'boolean') {
+      throw new TypeError(`Condition expression must evaluate to a boolean, received ${evaluated === null ? 'null' : typeof evaluated}`);
+    }
+    const branchKey = evaluated ? CONDITION_BRANCH_KEYS.yes : CONDITION_BRANCH_KEYS.no;
+    const branch = this.processor.getBranches(this.node).find((candidate) => candidate.branchKey === branchKey);
     return branch
-      ? { status: NODE_RUN_STATUS.RESOLVED, result, nextKey: branch.key }
-      : { status: NODE_RUN_STATUS.RESOLVED, result };
-  },
+      ? { status: NODE_RUN_STATUS.PENDING, result: evaluated, nextKey: branch.key }
+      : { status: NODE_RUN_STATUS.RESOLVED, result: evaluated };
+  }
 
-  /**
-   * Called by `Processor.end()` when the last node of a branch finished and the
-   * branch parent has to decide what happens next.
-   *
-   * The v3 instruction protocol returns a payload instead of a mutable model,
-   * so this recall appends a second nodeRun row for the condition node rather than
-   * updating the one written by `run()`. The extra row records the moment
-   * control came back from the branch; `nodeRunsMapByNodeKey` keeps the latest one.
-   */
-  async resume(
-    node: WorkflowNode,
-    input: WorkflowNodeRun | { result: unknown } | undefined,
-    processor: Processor,
-  ): Promise<WorkflowInstructionResult | null> {
-    if (!input || !('status' in input)) {
-      throw new Error(`Condition node "${node.key}" was resumed without a branch nodeRun`);
-    }
-    const branchNodeRun: WorkflowNodeRun = input;
-
-    if (branchNodeRun.status === NODE_RUN_STATUS.PENDING) {
-      // A node inside the branch is still waiting to be resumed. Returning
-      // `null` stops here without touching the persisted execution status, so
-      // the run stays STARTED until that node is dispatched again.
-      return null;
-    }
-
+  async resume(): Promise<WorkflowInstructionResult | null> {
+    if (!this.input || !('status' in this.input)) throw new Error(`Condition node "${this.node.key}" was resumed without a branch nodeRun`);
+    const branchNodeRun: WorkflowNodeRun = this.input;
+    if (branchNodeRun.status === NODE_RUN_STATUS.PENDING) return null;
     if (branchNodeRun.status === NODE_RUN_STATUS.RESOLVED) {
-      // Branch succeeded: restore this node's own result and continue downstream.
-      const parentNodeRun = processor.findBranchParentNodeRun(branchNodeRun, node);
+      const parentNodeRun = this.processor.findBranchParentNodeRun(branchNodeRun, this.node);
       return { status: NODE_RUN_STATUS.RESOLVED, result: parentNodeRun ? parentNodeRun.result : null };
     }
+    return {
+      status: branchNodeRun.status,
+      error: `Condition node "${this.node.key}" received an error from branch node "${branchNodeRun.nodeKey}"`,
+    };
+  }
+}
 
-    // Bubble the rejected status up so an enclosing scope can decide about it.
-    return { status: branchNodeRun.status, result: branchNodeRun.result };
-  },
-};
-
-export default conditionInstruction;
+export default ConditionInstruction;

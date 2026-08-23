@@ -1,5 +1,7 @@
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { build, type Message } from 'esbuild';
 import ts from 'typescript';
@@ -91,6 +93,8 @@ export async function parseWorkflowSource(filePath: string, runTypecheck: boolea
 
   let bundle: string;
   try {
+    const sourceExtension = fileURLToPath(import.meta.url).endsWith('.ts') ? '.ts' : '.js';
+    const workflowSourceEntry = path.resolve(path.dirname(fileURLToPath(import.meta.url)), `../workflow-source/index${sourceExtension}`);
     const result = await build({
       entryPoints: [filePath],
       bundle: true,
@@ -98,7 +102,16 @@ export async function parseWorkflowSource(filePath: string, runTypecheck: boolea
       platform: 'node',
       format: 'cjs',
       target: 'node22',
+      define: { 'import.meta.url': JSON.stringify(import.meta.url) },
       conditions: ['source'],
+      plugins: [{
+        name: 'workflow-authoring-entry',
+        setup(buildContext): void {
+          buildContext.onResolve({ filter: /^@nocobase\/workflow(?:\/workflow-source)?$/ }, () => ({
+            path: workflowSourceEntry,
+          }));
+        },
+      }],
       sourcemap: 'inline',
       logLevel: 'silent',
     });

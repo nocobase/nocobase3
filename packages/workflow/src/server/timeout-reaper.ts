@@ -3,7 +3,7 @@ import type { DatabaseManager, Row } from '@nocobase/database';
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 import { EXECUTION_REASON, EXECUTION_STATUS, NODE_RUN_STATUS } from './constants.js';
 import type { WorkflowId, WorkflowLogger } from './types.js';
-import { asId, noopWorkflowLogger } from './utils.js';
+import { asId, noopWorkflowLogger, serializeJson } from './utils.js';
 
 export interface TimeoutReaper {
   start(): void;
@@ -56,7 +56,7 @@ export function createTimeoutReaper(options: TimeoutReaperOptions): TimeoutReape
     // processor: whoever updates the row first wins and the other one is a no-op.
     const result = await query()
       .updateTable(WORKFLOW_COLLECTIONS.runs)
-      .set({ status: EXECUTION_STATUS.ABORTED, reason: EXECUTION_REASON.TIMEOUT })
+      .set({ status: EXECUTION_STATUS.ABORTED, reason: EXECUTION_REASON.TIMEOUT, finishedAt: new Date().toISOString() })
       .where('id', '=', executionId)
       .where('status', '=', EXECUTION_STATUS.STARTED)
       .execute();
@@ -65,7 +65,7 @@ export function createTimeoutReaper(options: TimeoutReaperOptions): TimeoutReape
     }
     await query()
       .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
-      .set({ status: NODE_RUN_STATUS.ABORTED })
+      .set({ status: NODE_RUN_STATUS.ABORTED, result: serializeJson(null), error: 'Workflow execution timed out', finishedAt: new Date().toISOString() })
       .where('workflowRunId', '=', executionId)
       .where('status', '=', NODE_RUN_STATUS.PENDING)
       .execute();

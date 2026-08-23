@@ -2,7 +2,7 @@ import { createDatabaseManager, type DatabaseManager, type Row } from '@nocobase
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  conditionInstruction,
+  ConditionInstruction,
   createWorkflowCollections,
   Dispatcher,
   EXECUTION_REASON,
@@ -13,10 +13,10 @@ import {
   WORKFLOW_COLLECTIONS,
   type WorkflowDefinition,
   type WorkflowId,
-  type WorkflowInstruction,
+  type WorkflowInstructionClass,
   type WorkflowNode,
 } from '../src/index.js';
-import { echoInstruction } from './fixtures/instructions.js';
+import { defineTestInstruction, echoInstruction } from './fixtures/instructions.js';
 import { createTestDatabase, createTestWorkflow, insertTestRun, listNodeRuns, readRun } from './helpers.js';
 
 describe('workflow dispatcher and processor', () => {
@@ -43,9 +43,8 @@ describe('workflow dispatcher and processor', () => {
       key: 'key-topology',
       title: 'Key topology',
       enabled: true,
-      type: 'test',
       current: true,
-      config: {},
+      contextSchema: { type: 'object' },
       inputSchema: {},
       inputValues: {},
       options: {},
@@ -63,7 +62,6 @@ describe('workflow dispatcher and processor', () => {
         key: 'first',
         type: 'echo',
         config: JSON.stringify({ value: 1 }),
-        output: JSON.stringify({}),
         upstreamKey: null,
         downstreamKey: 'second',
         branchKey: null,
@@ -73,25 +71,22 @@ describe('workflow dispatcher and processor', () => {
         key: 'second',
         type: 'echo',
         config: JSON.stringify({ value: 2 }),
-        output: JSON.stringify({}),
         upstreamKey: 'first',
         downstreamKey: null,
         branchKey: null,
       },
     ]).execute();
 
-    const echo: WorkflowInstruction = {
-      async run(node) {
-        return { status: NODE_RUN_STATUS.RESOLVED, result: node.config.value };
-      },
-    };
+    const echo: WorkflowInstructionClass = defineTestInstruction('echo', async (instruction) => ({
+      status: NODE_RUN_STATUS.RESOLVED,
+      result: instruction.node.config.value,
+    }));
     const workflow = await loadWorkflow(database.query(), workflowId as string | number);
     expect(workflow).not.toBeNull();
 
     const dispatcher = new Dispatcher({
       database,
       instructions: new Map([['echo', echo]]),
-      triggers: new Map([['test', {}]]),
     });
     dispatcher.setReady(true);
     await dispatcher.trigger(workflow!, { orderId: 10 }, { eventKey: 'event-key-topology' });
@@ -120,9 +115,8 @@ describe('workflow dispatcher and processor', () => {
     await database.query().insertInto(WORKFLOW_COLLECTIONS.workflows).values({
       key: 'recoverable',
       enabled: true,
-      type: 'test',
       current: true,
-      config: {},
+      contextSchema: { type: 'object' },
       inputSchema: {},
       inputValues: {},
       options: {},
@@ -136,7 +130,6 @@ describe('workflow dispatcher and processor', () => {
       key: 'only',
       type: 'echo',
       config: JSON.stringify({}),
-      output: JSON.stringify({}),
       upstreamKey: null,
       downstreamKey: null,
       branchKey: null,
@@ -156,11 +149,10 @@ describe('workflow dispatcher and processor', () => {
 
     const dispatcher = new Dispatcher({
       database,
-      instructions: new Map([['echo', {
-        async run() {
-          return { status: NODE_RUN_STATUS.RESOLVED, result: 'recovered' };
-        },
-      }]]),
+      instructions: new Map([['echo', defineTestInstruction('echo', async () => ({
+        status: NODE_RUN_STATUS.RESOLVED,
+        result: 'recovered',
+      }))]]),
     });
     dispatcher.setReady(true);
     await expect(dispatcher.recover()).resolves.toBe(1);
@@ -184,8 +176,8 @@ describe('Processor public API', () => {
   let workflow: WorkflowDefinition;
   let runCounter = 0;
 
-  const instructions = new Map<string, WorkflowInstruction>([
-    ['condition', conditionInstruction],
+  const instructions = new Map<string, WorkflowInstructionClass>([
+    ['condition', ConditionInstruction],
     ['echo', echoInstruction],
   ]);
 
@@ -250,6 +242,17 @@ describe('Processor public API', () => {
       [NODE_RUN_STATUS.ERROR]: EXECUTION_STATUS.ERROR,
       [NODE_RUN_STATUS.ABORTED]: EXECUTION_STATUS.ABORTED,
     });
+  });
+
+  it('records finishedAt for every terminal node status and keeps pending null', async () => {
+    const { processor } = await createProcessor();
+    const node = processor.workflow.nodes[0];
+    for (const status of [NODE_RUN_STATUS.RESOLVED, NODE_RUN_STATUS.FAILED, NODE_RUN_STATUS.ERROR, NODE_RUN_STATUS.ABORTED]) {
+      const nodeRun = await processor.saveNodeRun({ nodeId: node.id, nodeKey: node.key, status });
+      expect(nodeRun.finishedAt).toBeTruthy();
+    }
+    const pending = await processor.saveNodeRun({ nodeId: node.id, nodeKey: node.key, status: NODE_RUN_STATUS.PENDING });
+    expect(pending.finishedAt).toBeNull();
   });
 
   it('exposes a query adapter bound to the configured connection', async () => {
@@ -401,7 +404,7 @@ describe('Processor public API', () => {
     const branch = await createProcessor();
     const gate = branch.processor.nodesMap.get('gate');
     const b2 = branch.processor.nodesMap.get('b2');
-    await branch.processor.saveNodeRun({ nodeId: gate!.id, nodeKey: 'gate', status: NODE_RUN_STATUS.RESOLVED, result: true });
+    await branch.processor.saveNodeRun({ nodeId: gate!.id, nodeKey: 'gate', status: NODE_RUN_STATUS.PENDING, result: true });
     const branchNodeRun = await branch.processor.saveNodeRun({
       nodeId: b2!.id,
       nodeKey: 'b2',
@@ -413,7 +416,6 @@ describe('Processor public API', () => {
     await expect(listNodeRuns(database, branch.runId)).resolves.toEqual([
       { nodeKey: 'gate', status: NODE_RUN_STATUS.RESOLVED, result: true },
       { nodeKey: 'b2', status: NODE_RUN_STATUS.RESOLVED, result: 'b2' },
-      { nodeKey: 'gate', status: NODE_RUN_STATUS.RESOLVED, result: true },
       { nodeKey: 'after', status: NODE_RUN_STATUS.RESOLVED, result: 'after' },
     ]);
   });
@@ -440,7 +442,6 @@ describe('Processor public API', () => {
       { nodeKey: 'gate', status: NODE_RUN_STATUS.RESOLVED, result: true },
       { nodeKey: 'b1', status: NODE_RUN_STATUS.RESOLVED, result: 'b1' },
       { nodeKey: 'b2', status: NODE_RUN_STATUS.RESOLVED, result: 'b2' },
-      { nodeKey: 'gate', status: NODE_RUN_STATUS.RESOLVED, result: true },
       { nodeKey: 'after', status: NODE_RUN_STATUS.RESOLVED, result: 'after' },
     ]);
 
@@ -468,7 +469,7 @@ describe('Processor public API', () => {
     await reran.processor.rerun({ nodeKey: 'head', overwrite: true });
     const nodeRuns = await listNodeRuns(database, reran.runId);
     expect(nodeRuns[0]).toEqual({ nodeKey: 'head', status: NODE_RUN_STATUS.RESOLVED, result: 'head' });
-    expect(nodeRuns.map((entry) => entry.nodeKey)).toEqual(['head', 'gate', 'b1', 'b2', 'gate', 'after']);
+    expect(nodeRuns.map((entry) => entry.nodeKey)).toEqual(['head', 'gate', 'b1', 'b2', 'after']);
   });
 
   it('resolves a workflow that has no nodes at all', async () => {

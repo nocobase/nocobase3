@@ -3,20 +3,22 @@ export type {
   BaseNodeExpression,
   BranchingNodeExpression,
   ConfigIssue,
+  ContextSchema,
   JSONSchema,
   JsonObject,
+  NodeResultArraySchema,
+  NodeResultBooleanSchema,
+  NodeResultNullSchema,
+  NodeResultNumberSchema,
+  NodeResultSchema,
+  NodeResultSchemaBase,
+  NodeResultStringSchema,
+  NodeResultObjectSchema,
+  NodeResultUnionSchema,
   JsonPrimitive,
   JsonValue,
   NodeExpression,
-  NodeFactory,
-  NodeFactorySpec,
   NodeSourceAst,
-  NodeSourceInput,
-  TriggerExpression,
-  TriggerFactory,
-  TriggerFactorySpec,
-  TriggerSourceAst,
-  TriggerSourceInput,
   WorkflowDefinition,
   WorkflowFlatIr,
   WorkflowFlatNode,
@@ -25,6 +27,8 @@ export type {
   WorkflowInputSchema,
   WorkflowSourceAst,
   WorkflowSourceInput,
+  WorkflowNodeOptions,
+  WorkflowNodeSourceInput,
 } from './types.js';
 
 import type {
@@ -32,76 +36,61 @@ import type {
   BaseNodeExpression,
   BranchingNodeExpression,
   JsonObject,
+  NodeResultSchema,
   NodeExpression,
-  NodeFactory,
-  NodeFactorySpec,
   NodeSourceAst,
-  TriggerExpression,
-  TriggerFactory,
-  TriggerFactorySpec,
   WorkflowFlatIr,
   WorkflowFlatNode,
   WorkflowSourceAst,
   WorkflowSourceInput,
+  WorkflowNodeOptions,
+  WorkflowNodeSourceInput,
 } from './types.js';
 
 const EXPRESSION_BRANCHES: unique symbol = Symbol('workflow.expression.branches');
 type InternalExpression = AnyNodeExpression & { readonly [EXPRESSION_BRANCHES]?: Record<string, readonly AnyNodeExpression[]> };
 
-function copyMetadata<TConfig, TBranch extends string>(
-  factory: NodeFactory<string, TConfig, TBranch>,
-  spec: NodeFactorySpec<string, TConfig, TBranch>,
-): void {
-  Object.defineProperties(factory, {
-    type: { value: spec.type, enumerable: true },
-    branches: { value: spec.branches, enumerable: true },
-    validateConfig: { value: spec.validateConfig, enumerable: true },
-    ...(spec.configSchema === undefined ? {} : { configSchema: { value: spec.configSchema, enumerable: true } }),
-  });
+export interface WorkflowNodeExpressionClass<TConfig, TBranch extends string = never> {
+  readonly type: string;
+  readonly branches: readonly TBranch[] | null | ((config: TConfig) => readonly string[]);
+  readonly result?: NodeResultSchema | null;
 }
 
-export function defineNode<TType extends string, TConfig, TBranch extends string = never>(
-  spec: NodeFactorySpec<TType, TConfig, TBranch>,
-): NodeFactory<TType, TConfig, TBranch> {
-  const create = (source: { key: string; title?: string; config: TConfig }): NodeExpression<TBranch> => {
-    const base: BaseNodeExpression = Object.freeze({
-      key: source.key,
-      ...(source.title === undefined ? {} : { title: source.title }),
-      type: spec.type,
-      config: source.config,
-    });
-    if (spec.branches === null) {
-      return base as NodeExpression<TBranch>;
-    }
-    const branching: BranchingNodeExpression<TBranch> = {
-      ...base,
-      branch(branches: Partial<Record<TBranch, readonly AnyNodeExpression[]>>): NodeExpression<TBranch> {
-        const next = { ...base, branch: branching.branch } as BranchingNodeExpression<TBranch> & InternalExpression;
-        Object.defineProperty(next, EXPRESSION_BRANCHES, { value: branches });
-        return Object.freeze(next) as NodeExpression<TBranch>;
-      },
-    };
-    return Object.freeze(branching) as NodeExpression<TBranch>;
-  };
-  const factory = create as NodeFactory<TType, TConfig, TBranch>;
-  copyMetadata(factory as NodeFactory<string, TConfig, TBranch>, spec);
-  return factory;
-}
-
-export function defineTrigger<TType extends string, TConfig>(
-  spec: TriggerFactorySpec<TType, TConfig>,
-): TriggerFactory<TType, TConfig> {
-  const factory = ((source: { title?: string; config: TConfig }): TriggerExpression => Object.freeze({
+export function createNodeExpression<TConfig, TBranch extends string = never>(
+  instruction: WorkflowNodeExpressionClass<TConfig, TBranch>,
+  source: WorkflowNodeSourceInput<TConfig>,
+): NodeExpression<TBranch> {
+  const base: BaseNodeExpression = Object.freeze({
+    key: source.key,
     ...(source.title === undefined ? {} : { title: source.title }),
-    type: spec.type,
+    ...(source.description === undefined ? {} : { description: source.description }),
+    type: instruction.type,
     config: source.config,
-  })) as TriggerFactory<TType, TConfig>;
-  Object.defineProperties(factory, {
-    type: { value: spec.type, enumerable: true },
-    validateConfig: { value: spec.validateConfig, enumerable: true },
-    ...(spec.configSchema === undefined ? {} : { configSchema: { value: spec.configSchema, enumerable: true } }),
+    ...(source.options === undefined ? {} : { options: source.options }),
+    ...(source.result === undefined ? {} : { result: source.result }),
   });
-  return factory;
+  if (instruction.branches === null) {
+    return base as NodeExpression<TBranch>;
+  }
+  const branching: BranchingNodeExpression<TBranch> = {
+    ...base,
+    branch(branches: Partial<Record<TBranch, readonly AnyNodeExpression[]>>): NodeExpression<TBranch> {
+      const next = { ...base, branch: branching.branch } as BranchingNodeExpression<TBranch> & InternalExpression;
+      Object.defineProperty(next, EXPRESSION_BRANCHES, { value: branches });
+      return Object.freeze(next) as NodeExpression<TBranch>;
+    },
+  };
+  return Object.freeze(branching) as NodeExpression<TBranch>;
+}
+
+function validateNodeOptions(options: WorkflowNodeOptions | undefined, location: string): void {
+  if (options === undefined) return;
+  for (const key of Object.keys(options)) {
+    if (key !== 'timeout') throw new TypeError(`${location} does not accept field "${key}"`);
+  }
+  if (options.timeout !== undefined && (!Number.isFinite(options.timeout) || options.timeout <= 0)) {
+    throw new TypeError(`${location}.timeout must be a finite positive number`);
+  }
 }
 
 function toJsonObject(value: unknown, location: string): JsonObject {
@@ -135,6 +124,7 @@ function assertJsonCompatible(value: unknown, location: string, ancestors: Set<o
 }
 
 function unwrapNode(expression: AnyNodeExpression, astPath: string): NodeSourceAst {
+  validateNodeOptions(expression.options, `${astPath}.options`);
   const internal = expression as InternalExpression;
   const branches = internal[EXPRESSION_BRANCHES];
   const normalizedBranches: Record<string, NodeSourceAst[]> = {};
@@ -145,8 +135,11 @@ function unwrapNode(expression: AnyNodeExpression, astPath: string): NodeSourceA
   return {
     key: expression.key,
     ...(expression.title === undefined ? {} : { title: expression.title }),
+    ...(expression.description === undefined ? {} : { description: expression.description }),
     type: expression.type,
     config: toJsonObject(expression.config, `${astPath}.config`),
+    ...(expression.options === undefined ? {} : { options: expression.options }),
+    ...(expression.result === undefined ? {} : { result: expression.result }),
     ...(Object.keys(normalizedBranches).length ? { branches: normalizedBranches } : {}),
   };
 }
@@ -157,18 +150,16 @@ export function defineWorkflow(source: WorkflowSourceInput): WorkflowSourceAst {
     ...(source.description === undefined ? {} : { description: source.description }),
     ...(source.options === undefined ? {} : { options: source.options }),
     ...(source.inputs === undefined ? {} : { inputs: source.inputs }),
-    trigger: {
-      type: source.trigger.type,
-      ...(source.trigger.title === undefined ? {} : { title: source.trigger.title }),
-      config: toJsonObject(source.trigger.config, 'workflow.trigger.config'),
-    },
+    contextSchema: source.contextSchema ?? { type: 'object' },
     nodes: source.nodes.map((node, index) => unwrapNode(node, `workflow.nodes[${index}]`)),
   };
   assertJsonCompatible(ast, 'workflow');
   return ast;
 }
 
-export function compileToFlatIr(ast: WorkflowSourceAst): WorkflowFlatIr {
+export type NodeResultSchemaResolver = (node: NodeSourceAst) => NodeResultSchema | null;
+
+export function compileToFlatIr(ast: WorkflowSourceAst, resolveResult: NodeResultSchemaResolver = (node: NodeSourceAst): NodeResultSchema | null => node.result ?? null): WorkflowFlatIr {
   assertJsonCompatible(ast, 'workflow');
   const keys = new Set<string>();
   const collect = (block: readonly NodeSourceAst[]): void => {
@@ -184,11 +175,15 @@ export function compileToFlatIr(ast: WorkflowSourceAst): WorkflowFlatIr {
   const nodes: WorkflowFlatNode[] = [];
   const compileBlock = (block: readonly NodeSourceAst[], ownerKey: string | null, branchKey: string | null): void => {
     block.forEach((node, index) => {
+      const result = resolveResult(node);
       nodes.push({
         key: node.key,
         ...(node.title === undefined ? {} : { title: node.title }),
+        ...(node.description === undefined ? {} : { description: node.description }),
         type: node.type,
         config: node.config,
+        ...(node.options === undefined ? {} : { options: node.options }),
+        ...(result === null ? {} : { result }),
         upstreamKey: index === 0 ? ownerKey : block[index - 1].key,
         downstreamKey: index + 1 < block.length ? block[index + 1].key : null,
         branchKey: index === 0 ? branchKey : null,
@@ -204,7 +199,7 @@ export function compileToFlatIr(ast: WorkflowSourceAst): WorkflowFlatIr {
     ...(ast.description === undefined ? {} : { description: ast.description }),
     ...(ast.options === undefined ? {} : { options: ast.options }),
     ...(ast.inputs === undefined ? {} : { inputs: ast.inputs }),
-    trigger: ast.trigger,
+    contextSchema: ast.contextSchema,
     start: ast.nodes[0]?.key ?? null,
     nodes,
   };
@@ -236,7 +231,7 @@ export function restoreFromFlatIr(ir: WorkflowFlatIr): WorkflowSourceAst {
         if (roots.length !== 1) throw new Error(`Flat IR branch "${key}.${branchKey}" must have exactly one head`);
         branches[branchKey] = buildBlock(roots[0].key);
       }
-      result.push({ key: node.key, ...(node.title === undefined ? {} : { title: node.title }), type: node.type, config: node.config, ...(Object.keys(branches).length ? { branches } : {}) });
+      result.push({ key: node.key, ...(node.title === undefined ? {} : { title: node.title }), ...(node.description === undefined ? {} : { description: node.description }), type: node.type, config: node.config, ...(node.options === undefined ? {} : { options: node.options }), ...(node.result === undefined ? {} : { result: node.result }), ...(Object.keys(branches).length ? { branches } : {}) });
       key = node.downstreamKey;
     }
     return result;
@@ -246,7 +241,7 @@ export function restoreFromFlatIr(ir: WorkflowFlatIr): WorkflowSourceAst {
     ...(ir.description === undefined ? {} : { description: ir.description }),
     ...(ir.options === undefined ? {} : { options: ir.options }),
     ...(ir.inputs === undefined ? {} : { inputs: ir.inputs }),
-    trigger: ir.trigger,
+    contextSchema: ir.contextSchema,
     nodes: buildBlock(ir.start),
   };
 }

@@ -27,15 +27,15 @@ export async function materializeWorkflowSource(loaded: MaterializedWorkflowSour
   const inheritedInputValues = retainCompatibleWorkflowInputValues(inputSchema, current?.inputValues);
   await query.insertInto(WORKFLOW_COLLECTIONS.workflows).values({
     key: loaded.key, hash: loaded.hash, version: nextVersion(revisions), title: loaded.ir.title,
-    description: loaded.ir.description ?? null, options: serializeJson(loaded.ir.options ?? {}), type: loaded.ir.trigger.type,
-    triggerTitle: loaded.ir.trigger.title ?? null, config: serializeJson(loaded.ir.trigger.config), inputSchema: serializeJson(inputSchema),
+    description: loaded.ir.description ?? null, options: serializeJson(loaded.ir.options ?? {}), contextSchema: serializeJson(loaded.ir.contextSchema), inputSchema: serializeJson(inputSchema),
     inputValues: serializeJson(inheritedInputValues), enabled: false, current: null,
   }).execute();
   const inserted = await query.selectFrom(WORKFLOW_COLLECTIONS.workflows).select('id').where('key', '=', loaded.key).where('hash', '=', loaded.hash).orderBy('id', 'desc').limit(1).executeTakeFirstOrThrow<Row>();
   const workflowId = asId(inserted.id);
   if (loaded.ir.nodes.length) {
     await query.insertInto(WORKFLOW_COLLECTIONS.nodes).values(loaded.ir.nodes.map((node) => ({
-      workflowId, key: node.key, title: node.title ?? null, type: node.type, config: serializeJson(node.config), output: serializeJson({}),
+      workflowId, key: node.key, title: node.title ?? null, description: node.description ?? null, type: node.type, config: serializeJson(node.config),
+      ...(node.options === undefined ? {} : { options: serializeJson(node.options) }),
       upstreamKey: node.upstreamKey, downstreamKey: node.downstreamKey, branchKey: node.branchKey,
     }))).execute();
   }
