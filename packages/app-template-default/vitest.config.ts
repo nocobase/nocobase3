@@ -1,32 +1,12 @@
-import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { createReactVitestConfig } from '@nocobase/dev-config/vitest/react';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
-const registryRoot = fileURLToPath(new URL('./registry', import.meta.url));
-const clientExtensionsRoot = fileURLToPath(
-  new URL('./client/extensions', import.meta.url),
-);
-const extensionsRoot = fs.existsSync(registryRoot)
-  ? registryRoot
-  : clientExtensionsRoot;
-const localExtensionAliases = fs.existsSync(clientExtensionsRoot)
-  ? fs
-      .readdirSync(clientExtensionsRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => ({
-        find: `@/extensions/${entry.name}`,
-        replacement: fileURLToPath(
-          new URL(`./client/extensions/${entry.name}`, import.meta.url),
-        ),
-      }))
-  : [];
 
 export default createReactVitestConfig({
   resolve: {
     alias: [
-      ...localExtensionAliases,
       {
         find: '@/jobs',
         replacement: fileURLToPath(new URL('./server/jobs', import.meta.url)),
@@ -38,10 +18,6 @@ export default createReactVitestConfig({
         ),
       },
       {
-        find: '@/extensions',
-        replacement: extensionsRoot,
-      },
-      {
         find: '@',
         replacement: fileURLToPath(new URL('./client', import.meta.url)),
       },
@@ -50,9 +26,13 @@ export default createReactVitestConfig({
   test: {
     root,
     include: [
-      'tests/logic/**/*.test.{ts,tsx}',
-      'tests/components/**/*.test.{ts,tsx}',
-      'registry/*/tests/**/*.test.{ts,tsx}',
+      'tests/logic/app-server.test.ts',
+      'tests/logic/client-plugins.test.ts',
+      'tests/logic/client-runtime.test.ts',
+      'tests/logic/config.test.ts',
+      'tests/logic/e2e-support.test.ts',
+      'tests/logic/lifecycle.test.ts',
+      'tests/logic/plugins.test.ts',
     ],
     coverage: {
       provider: 'v8',

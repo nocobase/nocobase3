@@ -726,6 +726,7 @@ describe('app plugins', () => {
     });
     expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
     expect(routesExamplePlugin?.seedsDirectory).toBeUndefined();
+    expect(routesExamplePlugin?.manifest.client).toBe('./client/bootstrap');
     expect(routesExamplePlugin?.routesEntry).toMatch(
       /app-plugin-routes-example\/server\/routes\/index\.ts$/,
     );

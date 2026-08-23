@@ -35,7 +35,10 @@ export class AuthClient {
   }
 
   async signOut(): Promise<void> {
-    await this.send('sign-out', { method: 'POST' });
+    await this.send('sign-out', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
   }
 
   async requestPasswordReset(email: string, redirectTo: string): Promise<void> {

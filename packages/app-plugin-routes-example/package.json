@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-plugin-routes-example",
   "displayName": "Routes Example App Plugin",
-  "description": "Example app plugin with a convention-based HTTP route.",
+  "description": "Full-stack example with server and lazy client routes.",
   "version": "0.1.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -9,12 +9,28 @@
     "node": ">=24.0.0"
   },
   "exports": {
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client/bootstrap": {
+      "types": "./client/bootstrap.ts",
+      "import": "./client/bootstrap.ts"
+    }
   },
   "publishConfig": {
     "access": "public",
     "exports": {
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./client/bootstrap": {
+        "types": "./dist/client/bootstrap.d.ts",
+        "import": "./dist/client/bootstrap.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "nocobase": {
+    "plugin": {
+      "client": "./client/bootstrap"
     }
   },
   "scripts": {
@@ -33,11 +49,20 @@
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "@types/react": "catalog:",
+    "react": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "^0.1.0",
+    "@nocobase/app-sdk": "^0.1.0",
+    "react": "^19.0.0"
   }
 }

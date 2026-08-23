@@ -1,45 +1,40 @@
-import React from 'react';
+import { appClientPluginLoaders } from 'virtual:nocobase-app-client-plugins';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  NocoBaseErrorBoundary,
-  NocoBaseErrorFallback,
-} from '@/extensions/nocobase-error-boundary';
 
-import './locales';
-import { portalI18nReady } from './providers/i18n/runtime';
-import App from './App';
+import { App } from './app-root';
+import { createApp } from './app';
+import { createAppRuntime } from './runtime';
+import { AppStartupError } from './startup';
+import './styles.css';
 
-async function bootstrap() {
-  const container = document.getElementById('root') as HTMLElement;
-  const root = createRoot(container);
-  const errorContext = {
-    templateName: __PORTAL_TEMPLATE_NAME__,
-    templateVersion: __PORTAL_TEMPLATE_VERSION__,
-  };
+const container = document.getElementById('root');
 
+if (!container) {
+  throw new Error('Missing application root element.');
+}
+
+const root = createRoot(container);
+
+async function start(): Promise<void> {
   try {
-    try {
-      await portalI18nReady;
-    } catch (error) {
-      console.warn('Unable to initialize Portal translations', error);
-    }
+    const runtime = await createAppRuntime({
+      plugins: appClientPluginLoaders,
+    });
+    const app = createApp(runtime);
 
     root.render(
-      <NocoBaseErrorBoundary variant='root' context={errorContext}>
-        <App />
-      </NocoBaseErrorBoundary>,
+      <StrictMode>
+        <App config={app} />
+      </StrictMode>,
     );
   } catch (error) {
-    console.error('Unable to bootstrap Portal', error);
     root.render(
-      <NocoBaseErrorFallback
-        variant='root'
-        error={error}
-        context={errorContext}
-        onReload={() => window.location.reload()}
-      />,
+      <StrictMode>
+        <AppStartupError error={error} />
+      </StrictMode>,
     );
   }
 }
 
-void bootstrap();
+void start();
