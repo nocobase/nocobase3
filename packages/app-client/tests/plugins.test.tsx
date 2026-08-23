@@ -2,7 +2,9 @@ import type { PropsWithChildren, ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyClientRouteComponentOverrides,
   defineClientProviders,
+  defineClientRouteComponentOverrides,
   defineClientRoutes,
   resolveAppClientContributions,
 } from '../src/plugins.js';
@@ -115,6 +117,98 @@ describe('client plugin definitions', () => {
         },
       ]),
     ).toThrow('unless auth is "guest"');
+  });
+
+  it('overrides only a registered route component loader', async () => {
+    const PluginPage = (): null => null;
+    const ApplicationPage = (): null => null;
+    const [route] = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-authentication',
+        routes: defineClientRoutes([
+          {
+            name: 'login',
+            path: '/login',
+            auth: 'guest',
+            componentLoader: async () => ({ default: PluginPage }),
+          },
+        ]),
+      },
+    ]).routes;
+    const overridden = applyClientRouteComponentOverrides(
+      [route],
+      defineClientRouteComponentOverrides([
+        {
+          routeId: '@nocobase/app-plugin-authentication:login',
+          componentLoader: async () => ({ default: ApplicationPage }),
+        },
+      ]),
+    );
+
+    expect(overridden[0]).toMatchObject({
+      auth: 'guest',
+      id: '@nocobase/app-plugin-authentication:login',
+      name: 'login',
+      packageName: '@nocobase/app-plugin-authentication',
+      path: '/login',
+    });
+    await expect(overridden[0].componentLoader()).resolves.toEqual({
+      default: ApplicationPage,
+    });
+    expect(Object.isFrozen(overridden)).toBe(true);
+    expect(Object.isFrozen(overridden[0])).toBe(true);
+  });
+
+  it('validates route component override targets and loaders', async () => {
+    const [route] = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-example',
+        routes: defineClientRoutes([
+          {
+            name: 'index',
+            path: '/example',
+            componentLoader: async () => ({ default: () => null }),
+          },
+        ]),
+      },
+    ]).routes;
+    const routeId = '@nocobase/app-plugin-example:index';
+
+    expect(() =>
+      applyClientRouteComponentOverrides(
+        [route],
+        [
+          {
+            routeId: '@nocobase/app-plugin-missing:index',
+            componentLoader: async () => ({ default: () => null }),
+          },
+        ],
+      ),
+    ).toThrow('references missing route');
+    expect(() =>
+      applyClientRouteComponentOverrides(
+        [route],
+        [
+          { routeId, componentLoader: async () => ({ default: () => null }) },
+          { routeId, componentLoader: async () => ({ default: () => null }) },
+        ],
+      ),
+    ).toThrow('is overridden more than once');
+
+    const overridden = applyClientRouteComponentOverrides(
+      [route],
+      [
+        {
+          routeId,
+          componentLoader: async () => {
+            throw new Error('Application page failed.');
+          },
+        },
+      ],
+    );
+    await expect(overridden[0].componentLoader()).rejects.toThrow(
+      `Failed to load client route "${routeId}".`,
+    );
   });
 
   it('keeps registration order when providers have no constraints', () => {

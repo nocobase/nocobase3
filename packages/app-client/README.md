@@ -84,6 +84,30 @@ The application owns route placement, authentication, loading, error UI, and
 the final provider tree. `bootstrap` remains the imperative initialization
 entry; routes and providers remain inspectable declarations.
 
+An application may customize a plugin route's final component without taking
+over its path or auth metadata:
+
+```ts
+import {
+  applyClientRouteComponentOverrides,
+  defineClientRouteComponentOverrides,
+} from '@nocobase/app-client/plugins';
+
+const overrides = defineClientRouteComponentOverrides([
+  {
+    routeId: '@nocobase/app-plugin-authentication:login',
+    componentEntry: './client/auth/pages/login-page',
+    componentLoader: () => import('./auth/pages/login-page'),
+  },
+]);
+
+const finalRoutes = applyClientRouteComponentOverrides(routes, overrides);
+```
+
+Overrides are applied after route normalization and before `React.lazy()`.
+They can replace only the loader. Missing targets, duplicate overrides, invalid
+loaders, and invalid component modules fail with the stable route ID.
+
 The bootstrap context exposes a plugin-scoped Refine registry. Its setters are
 derived from `RefineProps`, so every Refine prop has a required `setXxx()`
 method:

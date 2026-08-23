@@ -280,6 +280,47 @@ const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
 export default routes;
 ```
 
+### App 自定义插件路由页面
+
+一个 App 只想改变某个插件路由的页面 UI 时，不应注册同一路径的新路由。插件继续拥有
+route ID、path 和 auth，App 只覆盖 `componentLoader`：
+
+```ts
+import {
+  defineClientRouteComponentOverrides,
+  type AppClientRouteComponentOverrideDefinition,
+} from '@nocobase/app-client/plugins';
+
+const overrides: readonly AppClientRouteComponentOverrideDefinition[] =
+  defineClientRouteComponentOverrides([
+    {
+      routeId: '@nocobase/app-plugin-audit-log:list',
+      componentEntry: './client/audit-log/pages/list-page',
+      componentLoader: () => import('./audit-log/pages/list-page'),
+    },
+  ]);
+
+export default overrides;
+```
+
+默认 App 在 `client/route-overrides.ts` 集中声明覆盖。覆盖会在插件路由规范化之后、
+`React.lazy()` 之前应用；目标不存在、重复覆盖或 loader 无效都会在启动阶段报错。
+`componentEntry` 不参与运行时加载，但应填写，方便 `app:client:inspect` 和 Agent 判断
+最终组件归属。
+
+认证 UI 还有一个带稳定 route ID 映射的便捷 API：
+
+```ts
+import { defineAuthenticationPageOverrides } from '@nocobase/app-plugin-authentication/client/ui';
+
+export default defineAuthenticationPageOverrides({
+  login: {
+    componentEntry: './client/auth/pages/login-page',
+    componentLoader: () => import('./pages/login-page'),
+  },
+});
+```
+
 Provider 示例：
 
 ```ts

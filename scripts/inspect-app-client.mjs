@@ -1,3 +1,4 @@
+import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -67,11 +68,13 @@ export async function inspectAppClient({
 } = {}) {
   const application = await resolveApplication(repoRoot, app);
   const appRoot = path.dirname(application.packageJsonPath);
-  const [{ resolveAppPlugins }, { resolveAppClientContributions }] =
-    await Promise.all([
-      import('../packages/app-template-default/server/plugins/index.js'),
-      import('../packages/app-client/src/plugins.js'),
-    ]);
+  const [
+    { resolveAppPlugins },
+    { applyClientRouteComponentOverrides, resolveAppClientContributions },
+  ] = await Promise.all([
+    import('../packages/app-template-default/server/plugins/index.js'),
+    import('../packages/app-client/src/plugins.js'),
+  ]);
   const resolvedApp = resolveAppPlugins(appRoot);
   const clientPlugins = resolvedApp.plugins.filter(
     (plugin) => plugin.enabled && plugin.manifest.client,
@@ -84,19 +87,38 @@ export async function inspectAppClient({
     })),
   );
   const resolved = resolveAppClientContributions(contributions);
+  const routeComponentOverrides =
+    await loadApplicationRouteComponentOverrides(appRoot);
+  const finalRoutes = applyClientRouteComponentOverrides(
+    resolved.routes,
+    routeComponentOverrides,
+  );
   const entries = new Map(
     clientPlugins.map((plugin) => [plugin.packageName, plugin.manifest.client]),
   );
 
   return {
     app: resolvedApp.appPackageName,
-    routes: resolved.routes.map((route) => ({
+    routes: finalRoutes.map((route) => ({
       auth: route.auth,
       id: route.id,
       name: route.name,
       packageName: route.packageName,
       path: route.path,
       entry: entries.get(route.packageName)?.routes,
+      routeSource: 'plugin',
+      routeEntry: formatPluginClientEntry(
+        route.packageName,
+        entries.get(route.packageName)?.routes,
+      ),
+      componentSource: routeComponentOverrides.some(
+        (override) => override.routeId === route.id,
+      )
+        ? 'application'
+        : 'plugin',
+      componentEntry: routeComponentOverrides.find(
+        (override) => override.routeId === route.id,
+      )?.componentEntry,
     })),
     providers: resolved.providers.map((provider, index) => ({
       order: index + 1,
@@ -108,6 +130,40 @@ export async function inspectAppClient({
       after: provider.after ?? [],
     })),
   };
+}
+
+function formatPluginClientEntry(packageName, entry) {
+  return entry?.startsWith('./') ? `${packageName}/${entry.slice(2)}` : entry;
+}
+
+async function loadApplicationRouteComponentOverrides(appRoot) {
+  const candidates = [
+    path.join(appRoot, 'client/route-overrides.ts'),
+    path.join(appRoot, 'client/route-overrides.tsx'),
+    path.join(appRoot, 'client/route-overrides.js'),
+  ];
+  const entry = candidates.find(
+    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+  );
+  if (!entry) {
+    return [];
+  }
+
+  try {
+    const module = await import(pathToFileURL(entry).href);
+    if (!Array.isArray(module.default)) {
+      throw new Error(
+        'the default export must be an override definition array',
+      );
+    }
+    return module.default;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to inspect application route component overrides: ${reason}`,
+      { cause: error },
+    );
+  }
 }
 
 async function loadDefinitions(plugin, contribution) {
@@ -168,9 +224,18 @@ function formatRoutes(routes) {
     return 'Routes\n  (none)';
   }
   return `Routes\n${routes
-    .map(
-      (route) =>
-        `  ${route.path}\n    id: ${route.id}\n    auth: ${route.auth}\n    entry: ${route.entry}`,
+    .map((route) =>
+      [
+        `  ${route.path}`,
+        `    id: ${route.id}`,
+        `    auth: ${route.auth}`,
+        `    route source: ${route.routeSource}`,
+        `    route entry: ${route.routeEntry}`,
+        `    component source: ${route.componentSource}`,
+        ...(route.componentEntry
+          ? [`    component entry: ${route.componentEntry}`]
+          : []),
+      ].join('\n'),
     )
     .join('\n')}`;
 }

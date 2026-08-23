@@ -7,7 +7,9 @@ export {
   type AppClientRefineConfig,
 } from './config.js';
 export {
+  applyClientRouteComponentOverrides,
   defineClientProviders,
+  defineClientRouteComponentOverrides,
   defineClientRoutes,
   resolveAppClientContributions,
 } from './plugins.js';
@@ -29,6 +31,7 @@ export type {
   AppClientRouteAuth,
   AppClientRouteComponentLoader,
   AppClientRouteComponentModule,
+  AppClientRouteComponentOverrideDefinition,
   AppClientRouteDefinition,
   AppClientRoutesLoader,
   AppClientRoutesModule,

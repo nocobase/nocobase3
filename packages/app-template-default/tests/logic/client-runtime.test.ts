@@ -178,6 +178,35 @@ describe('app client runtime', () => {
     expect(Object.isFrozen(runtime.routes)).toBe(true);
   });
 
+  it('applies application route component overrides before rendering', async () => {
+    const PluginLoginPage: ComponentType = () => null;
+    const ApplicationLoginPage: ComponentType = () => null;
+    const authPlugin = createAuthPlugin(
+      '@nocobase/app-plugin-authentication',
+      PluginLoginPage,
+    );
+
+    const runtime = await createAppRuntime({
+      plugins: [authPlugin],
+      routeComponentOverrides: [
+        {
+          routeId: '@nocobase/app-plugin-authentication:login',
+          componentLoader: async () => ({ default: ApplicationLoginPage }),
+        },
+      ],
+    });
+
+    expect(runtime.routes[0]).toMatchObject({
+      auth: 'guest',
+      id: '@nocobase/app-plugin-authentication:login',
+      packageName: '@nocobase/app-plugin-authentication',
+      path: '/login',
+    });
+    await expect(runtime.routes[0].componentLoader()).resolves.toEqual({
+      default: ApplicationLoginPage,
+    });
+  });
+
   it('rejects invalid routes module exports', async () => {
     const plugin: AppClientPluginLoader = {
       packageName: '@nocobase/app-plugin-routes',
@@ -322,6 +351,7 @@ function createAppRuntime(
   options: CreateAppRuntimeOptions,
 ): ReturnType<typeof createRawAppRuntime> {
   return createRawAppRuntime({
+    ...options,
     plugins: [...options.plugins, createDataProviderPlugin()],
   });
 }
@@ -333,7 +363,10 @@ function createDataProviderPlugin(): AppClientPluginLoader {
   };
 }
 
-function createAuthPlugin(packageName: string): AppClientPluginLoader {
+function createAuthPlugin(
+  packageName: string,
+  LoginPage: ComponentType = () => null,
+): AppClientPluginLoader {
   return {
     packageName,
     loadBootstrap: async () => ({
@@ -342,7 +375,9 @@ function createAuthPlugin(packageName: string): AppClientPluginLoader {
       },
     }),
     loadRoutes: async () => ({
-      default: [createRoute('login', '/login', undefined, 'guest')],
+      default: [
+        createRoute('login', '/login', { default: LoginPage }, 'guest'),
+      ],
     }),
   };
 }

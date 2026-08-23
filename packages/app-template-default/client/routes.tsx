@@ -9,7 +9,8 @@ import {
   groupRenderablePluginRoutes,
   type AppClientRenderableRoute,
 } from './plugin-routes';
-import { ThemeSettings } from './theme';
+import { AppShell } from './shell/index.js';
+import { ThemeSettings } from './theme/index.js';
 
 export interface AppRoutesProps {
   pluginRoutes: readonly AppClientRenderableRoute[];
@@ -19,19 +20,18 @@ export function AppRoutes({ pluginRoutes }: AppRoutesProps): ReactElement {
   const routeGroups = groupRenderablePluginRoutes(pluginRoutes);
 
   return (
-    <div className='relative min-h-svh'>
-      <ThemeSettings />
-      <Routes>
-        <Route
-          element={
-            <Authenticated
-              key='authenticated-inner'
-              fallback={<Navigate to='/login' replace />}
-            >
-              <Outlet />
-            </Authenticated>
-          }
-        >
+    <Routes>
+      <Route
+        element={
+          <Authenticated
+            key='authenticated-inner'
+            fallback={<Navigate to='/login' replace />}
+          >
+            <Outlet />
+          </Authenticated>
+        }
+      >
+        <Route element={<AppShell />}>
           <Route index element={<HomePage />} />
           {routeGroups.required.map((route) => (
             <Route
@@ -41,14 +41,16 @@ export function AppRoutes({ pluginRoutes }: AppRoutesProps): ReactElement {
             />
           ))}
         </Route>
+      </Route>
 
-        <Route
-          element={
-            <Authenticated key='authenticated-outer' fallback={<Outlet />}>
-              <Navigate to='/' replace />
-            </Authenticated>
-          }
-        >
+      <Route
+        element={
+          <Authenticated key='authenticated-outer' fallback={<Outlet />}>
+            <Navigate to='/' replace />
+          </Authenticated>
+        }
+      >
+        <Route element={<StandalonePageLayout />}>
           {routeGroups.guest.map((route) => (
             <Route
               key={route.id}
@@ -57,7 +59,9 @@ export function AppRoutes({ pluginRoutes }: AppRoutesProps): ReactElement {
             />
           ))}
         </Route>
+      </Route>
 
+      <Route element={<StandalonePageLayout />}>
         {routeGroups.optional.map((route) => (
           <Route
             key={route.id}
@@ -65,9 +69,20 @@ export function AppRoutes({ pluginRoutes }: AppRoutesProps): ReactElement {
             element={<PluginRoute route={route} />}
           />
         ))}
+      </Route>
 
-        <Route path='*' element={<Navigate to='/' replace />} />
-      </Routes>
+      <Route path='*' element={<Navigate to='/' replace />} />
+    </Routes>
+  );
+}
+
+function StandalonePageLayout(): ReactElement {
+  return (
+    <div className='relative min-h-svh'>
+      <div className='fixed top-4 right-4 z-50'>
+        <ThemeSettings />
+      </div>
+      <Outlet />
     </div>
   );
 }
@@ -89,12 +104,12 @@ function PluginRoute({ route }: PluginRouteProps): ReactElement {
 }
 
 function PluginRouteLoading(): ReactElement {
-  return <Loading fullscreen label='Loading page' />;
+  return <Loading className='min-h-[calc(100svh-4rem)]' label='Loading page' />;
 }
 
 function PluginRouteError({ route }: PluginRouteProps): ReactElement {
   return (
-    <main className='grid min-h-svh place-items-center px-6'>
+    <section className='grid min-h-[calc(100svh-4rem)] place-items-center px-6'>
       <section className='w-full max-w-lg space-y-4 text-center'>
         <h1 className='text-xl font-semibold'>Unable to load page</h1>
         <p className='text-sm text-muted-foreground'>
@@ -102,6 +117,6 @@ function PluginRouteError({ route }: PluginRouteProps): ReactElement {
         </p>
         <Button onClick={() => window.location.reload()}>Retry</Button>
       </section>
-    </main>
+    </section>
   );
 }

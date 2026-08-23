@@ -5,8 +5,35 @@ import {
   createRenderablePluginRoutes,
   groupRenderablePluginRoutes,
 } from '../../client/plugin-routes.ts';
+import routeComponentOverrides from '../../client/route-overrides.ts';
 
 describe('app client plugin route groups', () => {
+  it('declares application-owned authentication page overrides', () => {
+    expect(
+      routeComponentOverrides.map(({ componentEntry, routeId }) => ({
+        componentEntry,
+        routeId,
+      })),
+    ).toEqual([
+      {
+        componentEntry: './client/auth/pages/login-page',
+        routeId: '@nocobase/app-plugin-authentication:login',
+      },
+      {
+        componentEntry: './client/auth/pages/register-page',
+        routeId: '@nocobase/app-plugin-authentication:register',
+      },
+      {
+        componentEntry: './client/auth/pages/forgot-password-page',
+        routeId: '@nocobase/app-plugin-authentication:forgot-password',
+      },
+      {
+        componentEntry: './client/auth/pages/reset-password-page',
+        routeId: '@nocobase/app-plugin-authentication:reset-password',
+      },
+    ]);
+  });
+
   it('separates required, guest, and optional routes', () => {
     const renderable = createRenderablePluginRoutes([
       createRoute('private', '/private', 'required'),

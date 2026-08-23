@@ -33,6 +33,12 @@ export interface AppClientRegisteredRoute extends AppClientRouteDefinition {
   readonly packageName: string;
 }
 
+export interface AppClientRouteComponentOverrideDefinition {
+  readonly routeId: string;
+  readonly componentLoader: AppClientRouteComponentLoader;
+  readonly componentEntry?: string;
+}
+
 export interface AppClientProviderDefinition {
   readonly name: string;
   readonly component: AppClientProvider;
@@ -121,6 +127,33 @@ export function defineClientRoutes(
   return Object.freeze(routes.map((route) => Object.freeze({ ...route })));
 }
 
+export function defineClientRouteComponentOverrides(
+  overrides: readonly AppClientRouteComponentOverrideDefinition[],
+): readonly AppClientRouteComponentOverrideDefinition[] {
+  return Object.freeze(
+    overrides.map((override) =>
+      Object.freeze({
+        ...override,
+        routeId: normalizeRouteOverrideId(override.routeId),
+        componentEntry: normalizeOptionalComponentEntry(
+          override.componentEntry,
+          override.routeId,
+        ),
+      }),
+    ),
+  );
+}
+
+function normalizeRouteOverrideId(routeId: string): string {
+  const normalized = routeId.trim();
+  if (!normalized) {
+    throw new Error(
+      'A client route component override must define a non-empty routeId.',
+    );
+  }
+  return normalized;
+}
+
 export function defineClientProviders(
   providers: readonly AppClientProviderDefinition[],
 ): readonly AppClientProviderDefinition[] {
@@ -190,10 +223,74 @@ export function resolveAppClientContributions(
   });
 }
 
+export function applyClientRouteComponentOverrides(
+  routes: readonly AppClientRegisteredRoute[],
+  overrides: readonly AppClientRouteComponentOverrideDefinition[],
+): readonly AppClientRegisteredRoute[] {
+  const routesById = new Map(routes.map((route) => [route.id, route]));
+  const loadersByRouteId = new Map<string, AppClientRouteComponentLoader>();
+
+  for (const override of overrides) {
+    const routeId = override.routeId.trim();
+    if (!routeId) {
+      throw new Error(
+        'A client route component override must define a non-empty routeId.',
+      );
+    }
+    if (loadersByRouteId.has(routeId)) {
+      throw new Error(
+        `Client route component "${routeId}" is overridden more than once.`,
+      );
+    }
+    if (!routesById.has(routeId)) {
+      throw new Error(
+        `Client route component override references missing route "${routeId}".`,
+      );
+    }
+    if (typeof override.componentLoader !== 'function') {
+      throw new Error(
+        `Client route component override for "${routeId}" must define a componentLoader function.`,
+      );
+    }
+    loadersByRouteId.set(routeId, override.componentLoader);
+  }
+
+  return Object.freeze(
+    routes.map((route) => {
+      const componentLoader = loadersByRouteId.get(route.id);
+      return componentLoader
+        ? Object.freeze({
+            ...route,
+            componentLoader: wrapRouteComponentLoader(
+              componentLoader,
+              route.id,
+            ),
+          })
+        : route;
+    }),
+  );
+}
+
 function freezeOptionalList(
   values: readonly string[] | undefined,
 ): readonly string[] | undefined {
   return values ? Object.freeze([...values]) : undefined;
+}
+
+function normalizeOptionalComponentEntry(
+  componentEntry: string | undefined,
+  routeId: string,
+): string | undefined {
+  if (componentEntry === undefined) {
+    return undefined;
+  }
+  const normalized = componentEntry.trim();
+  if (!normalized) {
+    throw new Error(
+      `Client route component override for "${routeId}" must define a non-empty componentEntry when provided.`,
+    );
+  }
+  return normalized;
 }
 
 function normalizePackageName(packageName: string): string {

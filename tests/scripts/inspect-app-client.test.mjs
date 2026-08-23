@@ -85,7 +85,32 @@ test('inspects configured client routes and providers', async () => {
   const output = formatAppClientInspection(inspection);
   assert.match(output, /Routes/u);
   assert.match(output, /auth: guest/u);
+  assert.match(output, /route source: plugin/u);
+  assert.match(output, /component source: application/u);
+  assert.match(output, /client\/auth\/pages\/login-page/u);
   assert.match(output, /Providers \(outer -> inner\)/u);
+
+  assert.deepEqual(
+    inspection.routes
+      .filter(({ packageName }) =>
+        packageName.endsWith('app-plugin-authentication'),
+      )
+      .map(({ componentEntry, componentSource, routeSource }) => ({
+        componentEntry,
+        componentSource,
+        routeSource,
+      })),
+    [
+      './client/auth/pages/login-page',
+      './client/auth/pages/register-page',
+      './client/auth/pages/forgot-password-page',
+      './client/auth/pages/reset-password-page',
+    ].map((componentEntry) => ({
+      componentEntry,
+      componentSource: 'application',
+      routeSource: 'plugin',
+    })),
+  );
 
   assert.deepEqual(selectAppClientInspection(inspection, 'routes'), {
     app: '@nocobase/app-template-default',

@@ -9,7 +9,7 @@ export function ThemeSettings(): ReactElement {
   };
 
   return (
-    <label className='fixed top-4 right-4 z-50 flex items-center gap-2 rounded-lg border border-border bg-background/90 px-2.5 py-1.5 text-sm text-foreground shadow-sm backdrop-blur-sm'>
+    <label className='flex items-center gap-2 rounded-lg border border-border bg-background/90 px-2.5 py-1.5 text-sm text-foreground shadow-sm backdrop-blur-sm'>
       <span className='sr-only'>Theme</span>
       <select
         aria-label='Theme'

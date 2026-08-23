@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { createApp } from './app';
+import routeComponentOverrides from './route-overrides';
 import { createAppRuntime } from './runtime';
 import { AppStartupError } from './startup';
 import './styles.css';
@@ -20,6 +21,7 @@ async function start(): Promise<void> {
   try {
     const runtime = await createAppRuntime({
       plugins: appClientPluginLoaders,
+      routeComponentOverrides,
     });
     const app = createApp(runtime);
 

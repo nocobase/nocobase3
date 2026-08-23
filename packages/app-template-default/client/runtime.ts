@@ -1,4 +1,5 @@
 import {
+  applyClientRouteComponentOverrides,
   resolveAppClientContributions,
   type AppClientPluginBootstrap,
   type AppClientPluginLoader,
@@ -6,6 +7,7 @@ import {
   type AppClientRegisteredProvider,
   type AppClientRegisteredRoute,
   type AppClientRouteDefinition,
+  type AppClientRouteComponentOverrideDefinition,
 } from '@nocobase/app-client/plugins';
 import type { AppClientRefineConfig } from '@nocobase/app-client';
 import { createAppClient, type AppClient } from '@nocobase/app-sdk';
@@ -28,6 +30,7 @@ export interface AppClientRuntime {
 
 export interface CreateAppRuntimeOptions {
   readonly plugins: readonly AppClientPluginLoader[];
+  readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
 }
 
 interface LoadedClientPlugin {
@@ -83,8 +86,12 @@ export async function createAppRuntime(
   }
 
   const contributions = resolveAppClientContributions(loadedPlugins);
+  const routes = applyClientRouteComponentOverrides(
+    contributions.routes,
+    options.routeComponentOverrides ?? [],
+  );
   if (
-    !contributions.routes.some(
+    !routes.some(
       (route) =>
         route.path.toLowerCase() === '/login' && route.auth === 'guest',
     )
@@ -102,7 +109,7 @@ export async function createAppRuntime(
       dataProvider: refine.dataProvider,
     }),
     providers: contributions.providers,
-    routes: contributions.routes,
+    routes,
   });
 }
 

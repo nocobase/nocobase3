@@ -7,7 +7,7 @@ export default function NotificationDemoPage(): ReactElement {
   const [undoStatus, setUndoStatus] = useState('No undo requested.');
 
   return (
-    <main className='mx-auto flex min-h-svh w-full max-w-3xl flex-col px-6 py-10'>
+    <section className='mx-auto flex w-full max-w-3xl flex-col px-6 py-10'>
       <header className='space-y-2 border-b pb-6'>
         <p className='text-sm text-muted-foreground'>Client route example</p>
         <h1 className='text-2xl font-semibold'>Notification provider</h1>
@@ -66,6 +66,6 @@ export default function NotificationDemoPage(): ReactElement {
           </p>
         </div>
       </section>
-    </main>
+    </section>
   );
 }
