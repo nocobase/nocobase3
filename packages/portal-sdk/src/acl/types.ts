@@ -1,6 +1,6 @@
-import type { BaseKey, IResourceItem } from "@refinedev/core";
+import type { BaseKey, IResourceItem } from '@refinedev/core';
 
-export type RoleMode = "default" | "allow-use-union" | "only-use-union";
+export type RoleMode = 'default' | 'allow-use-union' | 'only-use-union';
 
 export type PortalAccessDeniedData = {
   portalName: string;
@@ -67,17 +67,17 @@ export type AclResponse = {
 
 export type AclState =
   | {
-      status: "idle" | "loading";
+      status: 'idle' | 'loading';
       permissions?: undefined;
       error?: undefined;
     }
   | {
-      status: "ready";
+      status: 'ready';
       permissions: AclPermissionSet;
       error?: undefined;
     }
   | {
-      status: "error";
+      status: 'error';
       permissions?: undefined;
       error: Error;
       portalAccessDenied?: PortalAccessDeniedData;
@@ -87,20 +87,20 @@ type ResourceAclRule = {
   roles?: RoleConstraint;
 } & (
   | {
-      type: "authenticated";
+      type: 'authenticated';
     }
   | {
-      type: "collection";
+      type: 'collection';
       resource?: string;
       dataSourceKey?: string;
       actionMap?: Record<string, string>;
     }
   | {
-      type: "snippet";
+      type: 'snippet';
       name: string;
     }
   | {
-      type: "route";
+      type: 'route';
       routeId: string | number;
     }
 );

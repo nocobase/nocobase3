@@ -1,6 +1,6 @@
-import * as React from "react";
-import { mergeProps } from "@base-ui/react/merge-props";
-import { useRender } from "@base-ui/react/use-render";
+import * as React from 'react';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import {
   Controller,
   FormProvider,
@@ -10,29 +10,31 @@ import {
   type FieldPath,
   type FieldPathValue,
   type FieldValues,
-} from "react-hook-form";
+} from 'react-hook-form';
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
 import {
   FieldValidationSlotContext,
   useFieldValidationSlot,
-} from "@/lib/field-validation";
-import { Label } from "@/components/ui/label";
+} from '@/lib/field-validation';
+import { Label } from '@/components/ui/label';
 
 const Form = FormProvider;
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
-  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
 > = {
   name: TName;
 };
 
-const FormFieldContext = React.createContext<FormFieldContextValue | null>(null);
+const FormFieldContext = React.createContext<FormFieldContextValue | null>(
+  null,
+);
 
 const FormField = <
   TFieldValues extends FieldValues = FieldValues,
-  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
 >({
   ...props
 }: ControllerProps<TFieldValues, TName>) => {
@@ -41,17 +43,17 @@ const FormField = <
   const rules = React.useMemo(() => {
     const validate = props.rules?.validate;
     const mergedValidate =
-      typeof validate === "function"
+      typeof validate === 'function'
         ? (
             value: FieldPathValue<TFieldValues, TName>,
-            formValues: TFieldValues
+            formValues: TFieldValues,
           ) => {
             const configuredResult = validate(value, formValues);
             if (configuredResult instanceof Promise) {
               return configuredResult.then((resolved) =>
                 resolved === true || resolved === undefined
                   ? validateRegisteredControllers()
-                  : resolved
+                  : resolved,
               );
             }
             return configuredResult === true || configuredResult === undefined
@@ -83,7 +85,7 @@ const useFormField = () => {
   const itemContext = React.useContext(FormItemContext);
 
   if (!fieldContext) {
-    throw new Error("useFormField should be used within <FormField>");
+    throw new Error('useFormField should be used within <FormField>');
   }
 
   const { getFieldState } = useFormContext();
@@ -107,17 +109,17 @@ type FormItemContextValue = {
 };
 
 const FormItemContext = React.createContext<FormItemContextValue>(
-  {} as FormItemContextValue
+  {} as FormItemContextValue,
 );
 
-function FormItem({ className, ...props }: React.ComponentProps<"div">) {
+function FormItem({ className, ...props }: React.ComponentProps<'div'>) {
   const id = React.useId();
 
   return (
     <FormItemContext.Provider value={{ id }}>
       <div
-        data-slot="form-item"
-        className={cn("grid gap-2", className)}
+        data-slot='form-item'
+        className={cn('grid gap-2', className)}
         {...props}
       />
     </FormItemContext.Provider>
@@ -132,58 +134,55 @@ function FormLabel({
 
   return (
     <Label
-      data-slot="form-label"
+      data-slot='form-label'
       data-error={!!error}
-      className={cn("data-[error=true]:text-destructive", className)}
+      className={cn('data-[error=true]:text-destructive', className)}
       htmlFor={formItemId}
       {...props}
     />
   );
 }
 
-function FormControl({
-  render,
-  ...props
-}: useRender.ComponentProps<"div">) {
+function FormControl({ render, ...props }: useRender.ComponentProps<'div'>) {
   const { error, formItemId, formDescriptionId, formMessageId } =
     useFormField();
 
   return useRender({
-    defaultTagName: "div",
-    props: mergeProps<"div">(
+    defaultTagName: 'div',
+    props: mergeProps<'div'>(
       {
         id: formItemId,
-        "aria-describedby": !error
+        'aria-describedby': !error
           ? formDescriptionId
           : `${formDescriptionId} ${formMessageId}`,
-        "aria-invalid": !!error,
+        'aria-invalid': !!error,
       },
-      props
+      props,
     ),
     render,
     state: {
-      slot: "form-control",
+      slot: 'form-control',
       invalid: !!error,
     },
   });
 }
 
-function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
+function FormDescription({ className, ...props }: React.ComponentProps<'p'>) {
   const { formDescriptionId } = useFormField();
 
   return (
     <p
-      data-slot="form-description"
+      data-slot='form-description'
       id={formDescriptionId}
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn('text-muted-foreground text-sm', className)}
       {...props}
     />
   );
 }
 
-function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
+function FormMessage({ className, ...props }: React.ComponentProps<'p'>) {
   const { error, formMessageId } = useFormField();
-  const body = error ? String(error?.message ?? "") : props.children;
+  const body = error ? String(error?.message ?? '') : props.children;
 
   if (!body) {
     return null;
@@ -191,9 +190,9 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
 
   return (
     <p
-      data-slot="form-message"
+      data-slot='form-message'
       id={formMessageId}
-      className={cn("text-destructive text-sm", className)}
+      className={cn('text-destructive text-sm', className)}
       {...props}
     >
       {body}

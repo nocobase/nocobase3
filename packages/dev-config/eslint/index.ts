@@ -1,43 +1,43 @@
-import js from "@eslint/js";
-import eslintReact from "@eslint-react/eslint-plugin";
-import vitestPlugin from "@vitest/eslint-plugin";
-import type { ESLint, Linter } from "eslint";
-import eslintConfigPrettier from "eslint-config-prettier";
-import reactHooks from "eslint-plugin-react-hooks";
-import reactRefresh from "eslint-plugin-react-refresh";
-import globals from "globals";
-import tseslint from "typescript-eslint";
+import js from '@eslint/js';
+import eslintReact from '@eslint-react/eslint-plugin';
+import vitestPlugin from '@vitest/eslint-plugin';
+import type { ESLint, Linter } from 'eslint';
+import eslintConfigPrettier from 'eslint-config-prettier';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
-const allFiles: string[] = ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"];
-const typescriptFiles: string[] = ["**/*.{ts,tsx,mts,cts}"];
-const reactFiles: string[] = ["**/*.{js,jsx,ts,tsx}"];
+const allFiles: string[] = ['**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'];
+const typescriptFiles: string[] = ['**/*.{ts,tsx,mts,cts}'];
+const reactFiles: string[] = ['**/*.{js,jsx,ts,tsx}'];
 const testFiles: string[] = [
-  "**/*.{test,spec}.{js,jsx,ts,tsx,mts,cts}",
-  "**/{test,tests}/**/*.{js,mjs,cjs,ts,tsx,mts,cts}",
-  "**/e2e/**/*.{js,mjs,cjs,ts,tsx,mts,cts}",
+  '**/*.{test,spec}.{js,jsx,ts,tsx,mts,cts}',
+  '**/{test,tests}/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
+  '**/e2e/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
 ];
 const toolingFiles: string[] = [
-  "**/*.{config,setup}.{ts,mts,cts}",
-  "**/scripts/**/*.{ts,mts,cts}",
+  '**/*.{config,setup}.{ts,mts,cts}',
+  '**/scripts/**/*.{ts,mts,cts}',
 ];
 const portalClientFiles: string[] = [
-  "client/**/*.{js,jsx,ts,tsx}",
-  "registry/**/*.{js,jsx,ts,tsx}",
-  "tests/**/*.{js,jsx,ts,tsx}",
+  'client/**/*.{js,jsx,ts,tsx}',
+  'registry/**/*.{js,jsx,ts,tsx}',
+  'tests/**/*.{js,jsx,ts,tsx}',
 ];
 const portalNodeFiles: string[] = [
-  "*.{js,mjs,cjs}",
-  "server/**/*.{js,mjs,cjs,ts,tsx,mts,cts}",
-  "scripts/**/*.{js,mjs,cjs,ts,tsx,mts,cts}",
-  "*.config.{js,mjs,cjs,ts,mts,cts}",
+  '*.{js,mjs,cjs}',
+  'server/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
+  'scripts/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
+  '*.config.{js,mjs,cjs,ts,mts,cts}',
 ];
 const defaultIgnores: string[] = [
-  "**/dist/**",
-  "**/build/**",
-  "**/coverage/**",
-  "**/generated/**",
-  "**/playwright-report/**",
-  "**/test-results/**",
+  '**/dist/**',
+  '**/build/**',
+  '**/coverage/**',
+  '**/generated/**',
+  '**/playwright-report/**',
+  '**/test-results/**',
 ];
 
 const scopeConfigs = (
@@ -78,7 +78,7 @@ const vitestEnvironment: ConfigWithLanguageOptions = vitestPlugin.configs.env;
 export interface SharedConfigOptions {
   tsconfigRootDir?: string;
   ignores?: string[];
-  rules?: Linter.Config["rules"];
+  rules?: Linter.Config['rules'];
   overrides?: Linter.Config[];
   environment?: Linter.Config[];
 }
@@ -86,11 +86,11 @@ export interface SharedConfigOptions {
 export const base: Linter.Config[] = [
   {
     ...js.configs.recommended,
-    name: "@nocobase/dev-config/base",
+    name: '@nocobase/dev-config/base',
     files: allFiles,
     languageOptions: {
-      ecmaVersion: "latest",
-      sourceType: "module",
+      ecmaVersion: 'latest',
+      sourceType: 'module',
       globals: globals.es2024,
     },
   },
@@ -98,18 +98,18 @@ export const base: Linter.Config[] = [
 
 export const typescript: Linter.Config[] = nameConfigs(
   tseslint.configs.recommended,
-  "@nocobase/dev-config/typescript",
+  '@nocobase/dev-config/typescript',
   typescriptFiles,
 );
 
 export const typeChecked: Linter.Config[] = [
   ...nameConfigs(
     tseslint.configs.recommendedTypeChecked,
-    "@nocobase/dev-config/type-checked",
+    '@nocobase/dev-config/type-checked',
     typescriptFiles,
   ),
   {
-    name: "@nocobase/dev-config/project-service",
+    name: '@nocobase/dev-config/project-service',
     files: typescriptFiles,
     languageOptions: {
       parserOptions: {
@@ -118,25 +118,25 @@ export const typeChecked: Linter.Config[] = [
     },
   },
   {
-    name: "@nocobase/dev-config/typescript-rules",
+    name: '@nocobase/dev-config/typescript-rules',
     files: typescriptFiles,
     rules: {
-      "@typescript-eslint/no-unused-vars": [
-        "error",
+      '@typescript-eslint/no-unused-vars': [
+        'error',
         {
-          argsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
+          argsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
         },
       ],
-      "@typescript-eslint/require-await": "off",
+      '@typescript-eslint/require-await': 'off',
     },
   },
 ];
 
 export const node: Linter.Config[] = [
   {
-    name: "@nocobase/dev-config/node",
+    name: '@nocobase/dev-config/node',
     files: allFiles,
     languageOptions: {
       globals: {
@@ -150,7 +150,7 @@ export const node: Linter.Config[] = [
 export const react: Linter.Config[] = [
   {
     ...reactRecommended,
-    name: "@nocobase/dev-config/react",
+    name: '@nocobase/dev-config/react',
     files: reactFiles,
     languageOptions: {
       ...reactRecommended.languageOptions,
@@ -161,16 +161,16 @@ export const react: Linter.Config[] = [
     },
     plugins: {
       ...reactRecommended.plugins,
-      "react-hooks": reactHooksPlugin,
-      "react-refresh": reactRefreshPlugin,
+      'react-hooks': reactHooksPlugin,
+      'react-refresh': reactRefreshPlugin,
     },
     rules: {
       ...reactRecommended.rules,
       ...hooksRecommended.rules,
-      "@eslint-react/no-context-provider": "off",
-      "@eslint-react/no-use-context": "off",
-      "react-refresh/only-export-components": [
-        "error",
+      '@eslint-react/no-context-provider': 'off',
+      '@eslint-react/no-use-context': 'off',
+      'react-refresh/only-export-components': [
+        'error',
         { allowConstantExport: true },
       ],
     },
@@ -180,7 +180,7 @@ export const react: Linter.Config[] = [
 export const vitest: Linter.Config[] = [
   {
     ...vitestRecommended,
-    name: "@nocobase/dev-config/vitest",
+    name: '@nocobase/dev-config/vitest',
     files: testFiles,
     languageOptions: {
       ...vitestEnvironment.languageOptions,
@@ -192,10 +192,10 @@ export const vitest: Linter.Config[] = [
     },
     rules: {
       ...vitestRecommended.rules,
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-expressions": "off",
-      "vitest/expect-expect": "off",
-      "vitest/no-conditional-expect": "off",
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-expressions': 'off',
+      'vitest/expect-expect': 'off',
+      'vitest/no-conditional-expect': 'off',
     },
   },
 ];
@@ -208,13 +208,13 @@ const createConfig = ({
   overrides = [],
 }: SharedConfigOptions): Linter.Config[] => [
   {
-    name: "@nocobase/dev-config/ignores",
+    name: '@nocobase/dev-config/ignores',
     ignores: [...defaultIgnores, ...ignores],
   },
   ...base,
   ...typeChecked,
   {
-    name: "@nocobase/dev-config/project-root",
+    name: '@nocobase/dev-config/project-root',
     files: typescriptFiles,
     languageOptions: {
       parserOptions: {
@@ -227,18 +227,27 @@ const createConfig = ({
   ...vitest,
   {
     ...tseslint.configs.disableTypeChecked,
-    name: "@nocobase/dev-config/untyped-support-files",
+    name: '@nocobase/dev-config/untyped-support-files',
     files: [...testFiles, ...toolingFiles],
   },
   {
-    name: "@nocobase/dev-config/local-rules",
+    name: '@nocobase/dev-config/local-rules',
     files: allFiles,
     rules,
   },
   ...overrides,
   {
     ...eslintConfigPrettier,
-    name: "@nocobase/dev-config/prettier-compatibility",
+    name: '@nocobase/dev-config/prettier-compatibility',
+    rules: {
+      ...eslintConfigPrettier.rules,
+      quotes: [
+        'error',
+        'single',
+        { avoidEscape: true, allowTemplateLiterals: true },
+      ],
+      'jsx-quotes': ['error', 'prefer-single'],
+    },
   },
 ];
 

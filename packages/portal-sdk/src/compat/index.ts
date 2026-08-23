@@ -14,9 +14,9 @@ export const formatPortalTemplateCompatibilityError = ({
   supportedDefaultTemplateRange: string;
 }): string =>
   [
-    "Incompatible NocoBase Portal SDK.",
+    'Incompatible NocoBase Portal SDK.',
     `Current Default Template: ${defaultTemplateVersion}`,
     `Portal SDK: ${sdkVersion}`,
     `Supported Default Template range: ${supportedDefaultTemplateRange}`,
-    "Upgrade the base template first, or install a compatible @nocobase/portal-sdk version.",
-  ].join("\n");
+    'Upgrade the base template first, or install a compatible @nocobase/portal-sdk version.',
+  ].join('\n');

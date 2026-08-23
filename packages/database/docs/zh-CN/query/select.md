@@ -3,12 +3,10 @@
 `selectFrom()` 创建查询，`select()` 决定返回列。
 
 ```ts
-await db.query()
-  .selectFrom('orders')
-  .select('orderNo')
-  .execute();
+await db.query().selectFrom('orders').select('orderNo').execute();
 
-await db.query()
+await db
+  .query()
   .selectFrom('orders')
   .select(['id', 'orderNo', 'createdAt'])
   .execute();
@@ -21,7 +19,8 @@ await db.query()
 别名使用 Kysely 风格的 `as` 字符串。V1 不支持对象映射。
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orderItems as oi')
   .leftJoin('orders as o', 'oi.orderId', 'o.id')
   .select([
@@ -39,12 +38,10 @@ const rows = await db.query()
 如果 alias 写成驼峰，则结果 key 使用驼峰：
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orderItems as oi')
-  .select([
-    'oi.id as itemId',
-    'oi.orderNo as orderNo',
-  ])
+  .select(['oi.id as itemId', 'oi.orderNo as orderNo'])
   .execute();
 ```
 
@@ -53,10 +50,7 @@ const rows = await db.query()
 `selectAll()` 用于选择所有列：
 
 ```ts
-const rows = await db.query()
-  .selectFrom('orders')
-  .selectAll()
-  .execute();
+const rows = await db.query().selectFrom('orders').selectAll().execute();
 ```
 
 如果启用了 `underscored: true`，`selectAll()` 会把未显式命名的下划线字段映射回驼峰。更完整的结果 key 规则见 [命名归一化](./naming.md)。
@@ -64,17 +58,20 @@ const rows = await db.query()
 ## 终止方法
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orders')
   .where('status', '=', 'paid')
   .execute();
 
-const row = await db.query()
+const row = await db
+  .query()
   .selectFrom('orders')
   .where('orderNo', '=', 'SO-001')
   .executeTakeFirst();
 
-const requiredRow = await db.query()
+const requiredRow = await db
+  .query()
   .selectFrom('orders')
   .where('orderNo', '=', 'SO-001')
   .executeTakeFirstOrThrow();
@@ -87,7 +84,8 @@ const requiredRow = await db.query()
 `value()` 返回第一行的某一列：
 
 ```ts
-const status = await db.query()
+const status = await db
+  .query()
   .selectFrom('orders')
   .where('orderNo', '=', 'SO-001')
   .value<string>('status');
@@ -96,7 +94,8 @@ const status = await db.query()
 `pluck()` 返回某一列的值数组：
 
 ```ts
-const orderNos = await db.query()
+const orderNos = await db
+  .query()
   .selectFrom('orders')
   .where('status', '=', 'paid')
   .orderBy('id')
@@ -106,7 +105,8 @@ const orderNos = await db.query()
 `exists()` 判断是否存在记录：
 
 ```ts
-const exists = await db.query()
+const exists = await db
+  .query()
   .selectFrom('orders')
   .where('orderNo', '=', 'SO-001')
   .exists();
@@ -115,7 +115,8 @@ const exists = await db.query()
 ## distinct 和分页
 
 ```ts
-const statuses = await db.query()
+const statuses = await db
+  .query()
   .selectFrom('orders')
   .select('status')
   .distinct()
@@ -126,7 +127,8 @@ const statuses = await db.query()
 `offset()` 要求同时存在 `orderBy()`，否则会抛错。这样做是为了避免不同数据库在无序分页下产生不稳定结果。
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('orders')
   .select('orderNo')
   .orderBy('orderNo')

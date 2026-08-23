@@ -2,7 +2,9 @@ import { existsSync } from 'node:fs';
 
 import {
   createMigrator,
+  type CreateMigratorOptions,
   type DatabaseManager,
+  type MigrationSource,
   type MigrationRollbackResult,
   type MigrationRunResult,
 } from '@nocobase/database';
@@ -35,12 +37,15 @@ export interface CreateAppMigratorOptions {
   database: DatabaseManager;
   config: AppDatabaseMigrationConfig;
   connection?: string;
+  sources?: readonly MigrationSource[];
 }
 
-export function createAppMigrator(options: CreateAppMigratorOptions): AppMigrator {
+export function createAppMigrator(
+  options: CreateAppMigratorOptions,
+): AppMigrator {
   return {
     async latest(): Promise<AppMigrationRunResult> {
-      if (!existsSync(options.config.directory)) {
+      if (!hasMigrationDirectory(options)) {
         return skippedMigrationResult();
       }
 
@@ -48,27 +53,56 @@ export function createAppMigrator(options: CreateAppMigratorOptions): AppMigrato
     },
 
     async rollback(): Promise<AppMigrationRollbackResult> {
-      if (!existsSync(options.config.directory)) {
+      if (!hasMigrationDirectory(options)) {
         return skippedMigrationResult();
       }
 
-      return completedRollbackResult(await createDatabaseMigrator(options).rollback());
+      return completedRollbackResult(
+        await createDatabaseMigrator(options).rollback(),
+      );
     },
   };
 }
 
 function createDatabaseMigrator(options: CreateAppMigratorOptions) {
-  return createMigrator({
+  return createMigrator(createDatabaseMigratorOptions(options));
+}
+
+function createDatabaseMigratorOptions(
+  options: CreateAppMigratorOptions,
+): CreateMigratorOptions {
+  const common = {
     database: options.database,
     connection: options.connection,
-    directory: options.config.directory,
     tableName: options.config.tableName,
     lockTableName: options.config.lockTableName,
     extensions: options.config.extensions,
-  });
+  };
+
+  if (options.sources) {
+    return {
+      ...common,
+      sources: options.sources,
+    };
+  }
+
+  return {
+    ...common,
+    directory: options.config.directory,
+    packageName: options.config.packageName,
+  };
 }
 
-function skippedMigrationResult(): AppMigrationRunResult & AppMigrationRollbackResult {
+function hasMigrationDirectory(options: CreateAppMigratorOptions): boolean {
+  if (options.sources) {
+    return options.sources.some((source) => existsSync(source.directory));
+  }
+
+  return existsSync(options.config.directory);
+}
+
+function skippedMigrationResult(): AppMigrationRunResult &
+  AppMigrationRollbackResult {
   return {
     status: 'skipped',
     reason: 'missing-directory',
@@ -84,7 +118,9 @@ function completedRunResult(result: MigrationRunResult): AppMigrationRunResult {
   };
 }
 
-function completedRollbackResult(result: MigrationRollbackResult): AppMigrationRollbackResult {
+function completedRollbackResult(
+  result: MigrationRollbackResult,
+): AppMigrationRollbackResult {
   return {
     status: 'completed',
     batch: result.batch,

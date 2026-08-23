@@ -1,11 +1,11 @@
-import { cn } from "@/lib/utils";
-import { useAIChatBase, type AIToolCallDecision } from "../../providers";
-import { useRef, useState, type DragEvent, type ReactNode } from "react";
-import { ChatComposer, type AIChatComposerAction } from "./chat-composer";
-import { ChatHeader } from "./chat-header";
-import { ChatMessages } from "./chat-messages";
-import { ConversationList } from "./conversation-list";
-import { useAITranslate } from "../../locales/use-ai-translate";
+import { cn } from '@/lib/utils';
+import { useAIChatBase, type AIToolCallDecision } from '../../providers';
+import { useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { ChatComposer, type AIChatComposerAction } from './chat-composer';
+import { ChatHeader } from './chat-header';
+import { ChatMessages } from './chat-messages';
+import { ConversationList } from './conversation-list';
+import { useAITranslate } from '../../locales/use-ai-translate';
 
 export function AIChatWindow({
   className,
@@ -29,13 +29,13 @@ export function AIChatWindow({
   const dragDepthRef = useRef(0);
 
   const hasFiles = (event: DragEvent) =>
-    Array.from(event.dataTransfer.types).includes("Files");
+    Array.from(event.dataTransfer.types).includes('Files');
 
   return (
     <section
       className={cn(
-        "ai-chat-window relative flex h-full min-h-0 w-full overflow-hidden bg-background text-foreground",
-        className
+        'ai-chat-window relative flex h-full min-h-0 w-full overflow-hidden bg-background text-foreground',
+        className,
       )}
       onDragEnter={(event) => {
         if (!enableAttachments || !hasFiles(event)) return;
@@ -46,7 +46,7 @@ export function AIChatWindow({
       onDragOver={(event) => {
         if (!enableAttachments || !hasFiles(event)) return;
         event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
+        event.dataTransfer.dropEffect = 'copy';
       }}
       onDragLeave={(event) => {
         if (!enableAttachments || !hasFiles(event)) return;
@@ -64,27 +64,27 @@ export function AIChatWindow({
       }}
     >
       {draggingFiles ? (
-        <div className="pointer-events-none absolute inset-2 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-foreground/25 bg-background/90 text-sm font-medium shadow-sm backdrop-blur-sm">
-          {t("chat.dropFiles", "Drop files to upload")}
+        <div className='pointer-events-none absolute inset-2 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-foreground/25 bg-background/90 text-sm font-medium shadow-sm backdrop-blur-sm'>
+          {t('chat.dropFiles', 'Drop files to upload')}
         </div>
       ) : null}
       {conversationListOpen && showConversationToggle ? (
         <button
-          type="button"
-          className="ai-chat-conversation-backdrop absolute inset-0 z-20 bg-black/25 backdrop-blur-[1px]"
+          type='button'
+          className='ai-chat-conversation-backdrop absolute inset-0 z-20 bg-black/25 backdrop-blur-[1px]'
           aria-label={t(
-            "chat.closeConversationList",
-            "Close conversation list"
+            'chat.closeConversationList',
+            'Close conversation list',
           )}
           onClick={() => setConversationListOpen(false)}
         />
       ) : null}
       {conversationListOpen && showConversationToggle ? (
-        <aside className="ai-chat-conversation-panel z-30 flex h-full w-[300px] shrink-0 border-r bg-card">
+        <aside className='ai-chat-conversation-panel z-30 flex h-full w-[300px] shrink-0 border-r bg-card'>
           <ConversationList />
         </aside>
       ) : null}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className='flex min-w-0 flex-1 flex-col'>
         <ChatHeader
           actions={headerActions}
           showConversationToggle={showConversationToggle}

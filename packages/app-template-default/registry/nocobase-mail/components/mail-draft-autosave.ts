@@ -6,7 +6,7 @@ export interface DebouncedDraftSaver<T> {
 /** Collapse rapid edits into one write while always saving the latest snapshot. */
 export function createDebouncedDraftSaver<T>(
   save: (value: T) => void | Promise<void>,
-  delayMs = 1_500
+  delayMs = 1_500,
 ): DebouncedDraftSaver<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
 

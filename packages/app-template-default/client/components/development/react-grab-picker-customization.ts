@@ -1,8 +1,8 @@
-import type { ReactGrabAPI } from "react-grab";
+import type { ReactGrabAPI } from 'react-grab';
 
 declare const __PORTAL_DEV_SOURCE_ROOT__: string;
 
-const PORTAL_COPY_PLUGIN = "nocobase-portal-copy-input-line";
+const PORTAL_COPY_PLUGIN = 'nocobase-portal-copy-input-line';
 const REACT_GRAB_HOST_SELECTOR = '[data-react-grab="true"]';
 const V8_ANONYMOUS_DEBUG_SOURCE_LINE =
   /^\s*at (?:async\s+)?((?:[a-z][a-z\d+.-]*:|[\\/]|[A-Za-z]:[\\/]).+)\s*$/i;
@@ -14,7 +14,7 @@ const MAX_SOURCE_OCCURRENCES_PER_FILE = 128;
 const MAX_SOURCE_STACK_LINE_LENGTH = 64 * 1024;
 const URI_UNRESERVED_CHARACTER = /^[A-Za-z\d._~-]$/;
 
-export const REACT_GRAB_DISABLED_ACTIONS = ["comment", "edit"] as const;
+export const REACT_GRAB_DISABLED_ACTIONS = ['comment', 'edit'] as const;
 
 interface ReactGrabElementContextLike {
   element?: unknown;
@@ -70,12 +70,12 @@ interface StructuredSourceNameOccurrence {
 }
 
 function normalizePortalBase(portalBase: string) {
-  const normalized = portalBase.trim().replace(/^\/+|\/+$/g, "");
-  return normalized ? `/${normalized}/` : "/";
+  const normalized = portalBase.trim().replace(/^\/+|\/+$/g, '');
+  return normalized ? `/${normalized}/` : '/';
 }
 
 function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function getLimitedDelimiterIndexes(value: string, delimiter: string) {
@@ -93,24 +93,24 @@ function getLimitedDelimiterIndexes(value: string, delimiter: string) {
 
 function normalizeDecodedSourcePath(value: string) {
   try {
-    return decodeURIComponent(value).replace(/\\/g, "/");
+    return decodeURIComponent(value).replace(/\\/g, '/');
   } catch {
-    return value.replace(/\\/g, "/");
+    return value.replace(/\\/g, '/');
   }
 }
 
 function getContextOrigin(context: ReactGrabElementContextLike) {
-  if (!context.element || typeof context.element !== "object") return null;
+  if (!context.element || typeof context.element !== 'object') return null;
 
   const ownerDocument = (context.element as { ownerDocument?: unknown })
     .ownerDocument;
-  if (!ownerDocument || typeof ownerDocument !== "object") return null;
+  if (!ownerDocument || typeof ownerDocument !== 'object') return null;
 
   const location = (ownerDocument as { location?: unknown }).location;
-  if (!location || typeof location !== "object") return null;
+  if (!location || typeof location !== 'object') return null;
 
   const origin = (location as { origin?: unknown }).origin;
-  if (typeof origin !== "string") return null;
+  if (typeof origin !== 'string') return null;
 
   try {
     return new URL(origin).origin;
@@ -120,13 +120,13 @@ function getContextOrigin(context: ReactGrabElementContextLike) {
 }
 
 function getFiberDebugStack(fiber: unknown) {
-  if (!fiber || typeof fiber !== "object") return null;
+  if (!fiber || typeof fiber !== 'object') return null;
 
   const debugStack = (fiber as { _debugStack?: unknown })._debugStack;
-  if (!debugStack || typeof debugStack !== "object") return null;
+  if (!debugStack || typeof debugStack !== 'object') return null;
 
   const stack = (debugStack as { stack?: unknown }).stack;
-  return typeof stack === "string" ? stack : null;
+  return typeof stack === 'string' ? stack : null;
 }
 
 function getFiberDebugStacks(fiber: unknown) {
@@ -135,7 +135,7 @@ function getFiberDebugStacks(fiber: unknown) {
   let hasMissingDebugStack = false;
   let currentFiber = fiber;
 
-  while (currentFiber && typeof currentFiber === "object") {
+  while (currentFiber && typeof currentFiber === 'object') {
     if (visited.has(currentFiber)) break;
     visited.add(currentFiber);
 
@@ -155,7 +155,7 @@ function getFiberDebugStacks(fiber: unknown) {
 function getPortalSourcePaths(
   source: string,
   portalBase: string,
-  expectedOrigin: string | null
+  expectedOrigin: string | null,
 ) {
   const normalizedBase = normalizePortalBase(portalBase);
   const sourcePattern = new RegExp(
@@ -163,7 +163,7 @@ function getPortalSourcePaths(
       `${escapeRegExp(normalizedBase)}` +
       `((?:registry|client)/[^?#\\r\\n]+?\\.[cm]?[jt]sx?)` +
       `(?:[?#][^\\r\\n]*)?(?::\\d+){0,2}$`,
-    "i"
+    'i',
   );
   const match = source.trim().match(sourcePattern);
   if (!match) return [];
@@ -178,20 +178,20 @@ function getPortalSourcePaths(
   }
 
   const relativePath = normalizeDecodedSourcePath(match[2]);
-  return relativePath.split("/").includes("..") ? [] : [relativePath];
+  return relativePath.split('/').includes('..') ? [] : [relativePath];
 }
 
 function getSourcePosition(value: unknown) {
-  return typeof value === "number" && Number.isInteger(value) && value > 0
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
     ? value
     : null;
 }
 
 function formatSourcePosition(
   sourceLocation: PortalSourceLocation | null | undefined,
-  originalPosition: string | undefined
+  originalPosition: string | undefined,
 ) {
-  if (!sourceLocation?.lineNumber) return originalPosition ?? "";
+  if (!sourceLocation?.lineNumber) return originalPosition ?? '';
 
   const original = originalPosition?.match(/^:(\d+)(?::(\d+))?$/);
   const originalColumn =
@@ -201,13 +201,13 @@ function formatSourcePosition(
   const columnNumber = sourceLocation.columnNumber ?? originalColumn;
 
   return `:${sourceLocation.lineNumber}${
-    columnNumber ? `:${columnNumber}` : ""
+    columnNumber ? `:${columnNumber}` : ''
   }`;
 }
 
 function isAliasSourcePositionCompatible(
   sourceLocation: PortalSourceLocation | null | undefined,
-  originalPosition: string | undefined
+  originalPosition: string | undefined,
 ) {
   if (!originalPosition || !sourceLocation?.lineNumber) return true;
 
@@ -225,33 +225,30 @@ function isAliasSourcePositionCompatible(
 
 function getSourceFileName(value: string) {
   const tail = value
-    .replace(/\\/g, "/")
-    .replace(/[?#].*$/, "")
-    .split("/")
+    .replace(/\\/g, '/')
+    .replace(/[?#].*$/, '')
+    .split('/')
     .pop();
   const fileName = tail?.match(/^(.*\.[cm]?[jt]sx?)(?::\d+){0,2}$/i)?.[1];
   if (!fileName) return null;
 
-  return normalizeDecodedSourcePath(fileName).split("/").pop() ?? null;
+  return normalizeDecodedSourcePath(fileName).split('/').pop() ?? null;
 }
 
 function parseSourceLocation(value: string): ParsedSourceLocation | null {
   const source = value.match(
-    /^(.+\.[cm]?[jt]sx?)([?#][^\s]*?)?((?::\d+)(?::\d+)?)?$/i
+    /^(.+\.[cm]?[jt]sx?)([?#][^\s]*?)?((?::\d+)(?::\d+)?)?$/i,
   );
   if (!source) return null;
 
-  const sourcePath = `${source[1]}${source[2] ?? ""}`;
+  const sourcePath = `${source[1]}${source[2] ?? ''}`;
   const fileName = getSourceFileName(sourcePath);
-  return fileName
-    ? { fileName, position: source[3], sourcePath }
-    : null;
+  return fileName ? { fileName, position: source[3], sourcePath } : null;
 }
 
 function getParsedSourcePosition(value: string) {
-  const position = parseSourceLocation(value)?.position?.match(
-    /^:(\d+)(?::(\d+))?$/
-  );
+  const position =
+    parseSourceLocation(value)?.position?.match(/^:(\d+)(?::(\d+))?$/);
   if (!position) return null;
 
   return {
@@ -264,15 +261,15 @@ function canUseStructuredSourcePosition(
   fileName: string,
   relativePath: string,
   portalBase: string,
-  expectedOrigin: string | null
+  expectedOrigin: string | null,
 ) {
   const normalizedFileName = normalizeDecodedSourcePath(
     fileName
-    .replace(/\\/g, "/")
-    .replace(/[?#].*$/, "")
-      .replace(/:\d+(?::\d+)?$/, "")
+      .replace(/\\/g, '/')
+      .replace(/[?#].*$/, '')
+      .replace(/:\d+(?::\d+)?$/, ''),
   );
-  if (!normalizedFileName.includes("/")) {
+  if (!normalizedFileName.includes('/')) {
     return true;
   }
 
@@ -280,23 +277,21 @@ function canUseStructuredSourcePosition(
     const matchingPaths = getPortalSourcePaths(
       fileName,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     );
     return matchingPaths.length === 1 && matchingPaths[0] === relativePath;
   }
 
-  const normalizedRelativePath = normalizedFileName.replace(/^(?:\.\/)+/, "");
+  const normalizedRelativePath = normalizedFileName.replace(/^(?:\.\/)+/, '');
   return (
-    !normalizedRelativePath.split("/").includes("..") &&
+    !normalizedRelativePath.split('/').includes('..') &&
     normalizedRelativePath === relativePath
   );
 }
 
 function normalizeUrlPathname(pathname: string) {
   const normalizeEscape = (escape: string) => {
-    const character = String.fromCharCode(
-      Number.parseInt(escape.slice(1), 16)
-    );
+    const character = String.fromCharCode(Number.parseInt(escape.slice(1), 16));
     return URI_UNRESERVED_CHARACTER.test(character)
       ? character
       : escape.toUpperCase();
@@ -308,9 +303,9 @@ function normalizeUrlPathname(pathname: string) {
       .map((part, index) =>
         index % 2 === 1
           ? normalizeEscape(part)
-          : encodeURI(part).replace(/%[\da-f]{2}/gi, normalizeEscape)
+          : encodeURI(part).replace(/%[\da-f]{2}/gi, normalizeEscape),
       )
-      .join("");
+      .join('');
   } catch {
     return pathname.replace(/%[\da-f]{2}/gi, normalizeEscape);
   }
@@ -319,26 +314,26 @@ function normalizeUrlPathname(pathname: string) {
 function getComparableSourcePath(
   source: string,
   portalBase: string,
-  expectedOrigin: string | null
+  expectedOrigin: string | null,
 ) {
   const portalSourcePaths = getPortalSourcePaths(
     source,
     portalBase,
-    expectedOrigin
+    expectedOrigin,
   );
   if (portalSourcePaths.length === 1) {
     return `portal:${portalSourcePaths[0]}`;
   }
 
-  const sourceWithoutPosition = source.trim().replace(/(?::\d+){1,2}$/, "");
+  const sourceWithoutPosition = source.trim().replace(/(?::\d+){1,2}$/, '');
   const normalizedSource = normalizeDecodedSourcePath(
-    sourceWithoutPosition.replace(/[?#].*$/, "")
+    sourceWithoutPosition.replace(/[?#].*$/, ''),
   );
-  const normalizedRelativeSource = normalizedSource.replace(/^(?:\.\/)+/, "");
+  const normalizedRelativeSource = normalizedSource.replace(/^(?:\.\/)+/, '');
   if (/^(?:registry|client)\//i.test(normalizedRelativeSource)) {
     return `portal:${normalizedRelativeSource}`;
   }
-  if (!normalizedSource.includes("/")) return null;
+  if (!normalizedSource.includes('/')) return null;
   if (/^[A-Za-z]:\//.test(normalizedSource)) {
     return `path:${normalizedSource[0].toUpperCase()}${normalizedSource.slice(1)}`;
   }
@@ -356,7 +351,7 @@ function getComparableSourcePath(
 }
 
 function getUrlSourcePathname(source: string) {
-  const sourceWithoutPosition = source.trim().replace(/(?::\d+){1,2}$/, "");
+  const sourceWithoutPosition = source.trim().replace(/(?::\d+){1,2}$/, '');
   try {
     return normalizeUrlPathname(new URL(sourceWithoutPosition).pathname);
   } catch {
@@ -367,36 +362,34 @@ function getUrlSourcePathname(source: string) {
 function getOriginlessAbsoluteCopyPath(
   source: string,
   portalBase: string,
-  expectedOrigin: string | null
+  expectedOrigin: string | null,
 ) {
   if (getPortalSourcePaths(source, portalBase, expectedOrigin).length > 0) {
     return null;
   }
 
-  const sourceWithoutPosition = source.trim().replace(/(?::\d+){1,2}$/, "");
+  const sourceWithoutPosition = source.trim().replace(/(?::\d+){1,2}$/, '');
   const sourcePath = sourceWithoutPosition
-    .replace(/[?#].*$/, "")
-    .replace(/\\/g, "/");
-  return /^\/(?!\/)/.test(sourcePath)
-    ? normalizeUrlPathname(sourcePath)
-    : null;
+    .replace(/[?#].*$/, '')
+    .replace(/\\/g, '/');
+  return /^\/(?!\/)/.test(sourcePath) ? normalizeUrlPathname(sourcePath) : null;
 }
 
 function createSourceOccurrenceMatcher(
   rawSources: RawSourceOccurrence[],
   copySources: CopySourceOccurrence[],
   portalBase: string,
-  expectedOrigin: string | null
+  expectedOrigin: string | null,
 ) {
   const rawMatches = rawSources.map(({ sourcePath }) => {
     const comparablePath = getComparableSourcePath(
       sourcePath,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     );
     return {
       comparablePath,
-      urlPathname: comparablePath?.startsWith("url:")
+      urlPathname: comparablePath?.startsWith('url:')
         ? getUrlSourcePathname(sourcePath)
         : null,
     };
@@ -405,21 +398,21 @@ function createSourceOccurrenceMatcher(
     comparablePath: getComparableSourcePath(
       sourcePath,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     ),
     originlessAbsolutePath: getOriginlessAbsoluteCopyPath(
       sourcePath,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     ),
   }));
   const rawIndexBySource = new Map(
-    rawSources.map((source, rawIndex) => [source, rawIndex] as const)
+    rawSources.map((source, rawIndex) => [source, rawIndex] as const),
   );
   const canMatchSources = (
     rawIndex: number,
     copyIndex: number,
-    matchSourceLocationKeys: boolean
+    matchSourceLocationKeys: boolean,
   ) => {
     const { comparablePath: rawPath, urlPathname } = rawMatches[rawIndex];
     const { comparablePath: copyPath, originlessAbsolutePath } =
@@ -433,7 +426,7 @@ function createSourceOccurrenceMatcher(
       hasCompatiblePath &&
       (!matchSourceLocationKeys ||
         rawSources[rawIndex].sourceLocationKeys.includes(
-          copySources[copyIndex].sourceLocationKey
+          copySources[copyIndex].sourceLocationKey,
         ))
     );
   };
@@ -460,15 +453,15 @@ function createSourceOccurrenceMatcher(
       copyMatches.flatMap((_copyMatch, copyIndex) =>
         canMatchSources(rawIndex, copyIndex, matchSourceLocationKeys)
           ? [copyIndex]
-          : []
-      )
+          : [],
+      ),
     );
     const copyToRawIndexes = copyMatches.map((_match, copyIndex) =>
       rawMatches.flatMap((_rawMatch, rawIndex) =>
         canMatchSources(rawIndex, copyIndex, matchSourceLocationKeys)
           ? [rawIndex]
-          : []
-      )
+          : [],
+      ),
     );
     const graph = { copyToRawIndexes, rawToCopyIndexes };
     normalGraphs.set(matchSourceLocationKeys, graph);
@@ -477,10 +470,10 @@ function createSourceOccurrenceMatcher(
 
   const hasCompleteNormalMatching = (
     selectedRawIndexes: number[],
-    matchSourceLocationKeys: boolean
+    matchSourceLocationKeys: boolean,
   ) => {
     const { copyToRawIndexes, rawToCopyIndexes } = getNormalGraph(
-      matchSourceLocationKeys
+      matchSourceLocationKeys,
     );
     const relevantRawIndexes = new Set<number>();
     const relevantCopyIndexes = new Set<number>();
@@ -510,7 +503,7 @@ function createSourceOccurrenceMatcher(
     const matchedRawIndexes = new Array<number>(copySources.length).fill(-1);
     const matchRawSource = (
       rawIndex: number,
-      visitedCopies: Set<number>
+      visitedCopies: Set<number>,
     ): boolean => {
       for (const copyIndex of rawToCopyIndexes[rawIndex]) {
         if (visitedCopies.has(copyIndex)) continue;
@@ -530,7 +523,7 @@ function createSourceOccurrenceMatcher(
     };
 
     return [...relevantRawIndexes].every((rawIndex) =>
-      matchRawSource(rawIndex, new Set())
+      matchRawSource(rawIndex, new Set()),
     );
   };
 
@@ -592,8 +585,7 @@ function createSourceOccurrenceMatcher(
           originlessAbsolutePath,
           sourceLocationKey,
         ]);
-        const existingCopyGroupIndex =
-          copyGroupIndexBySignature.get(signature);
+        const existingCopyGroupIndex = copyGroupIndexBySignature.get(signature);
         if (existingCopyGroupIndex !== undefined) {
           copyGroups[existingCopyGroupIndex].count += 1;
           return;
@@ -606,13 +598,13 @@ function createSourceOccurrenceMatcher(
           originlessAbsolutePath,
           sourceLocationKey,
         });
-      }
+      },
     );
 
     const addIndex = (
       indexesByValue: Map<string, number[]>,
       value: string,
-      index: number
+      index: number,
     ) => {
       const indexes = indexesByValue.get(value);
       if (indexes) indexes.push(index);
@@ -621,14 +613,8 @@ function createSourceOccurrenceMatcher(
     const copyGroupIndexesByComparablePath = new Map<string, number[]>();
     const copyGroupIndexesByOriginlessPath = new Map<string, number[]>();
     const copyGroupsWithoutComparablePath: number[] = [];
-    const copyGroupIndexesByComparablePathAndKey = new Map<
-      string,
-      number[]
-    >();
-    const copyGroupIndexesByOriginlessPathAndKey = new Map<
-      string,
-      number[]
-    >();
+    const copyGroupIndexesByComparablePathAndKey = new Map<string, number[]>();
+    const copyGroupIndexesByOriginlessPathAndKey = new Map<string, number[]>();
     const copyGroupIndexesWithoutComparablePathByKey = new Map<
       string,
       number[]
@@ -642,13 +628,13 @@ function createSourceOccurrenceMatcher(
               copyGroup.comparablePath,
               copyGroup.sourceLocationKey,
             ]),
-            copyGroupIndex
+            copyGroupIndex,
           );
         } else {
           addIndex(
             copyGroupIndexesWithoutComparablePathByKey,
             copyGroup.sourceLocationKey,
-            copyGroupIndex
+            copyGroupIndex,
           );
         }
         if (copyGroup.originlessAbsolutePath) {
@@ -658,7 +644,7 @@ function createSourceOccurrenceMatcher(
               copyGroup.originlessAbsolutePath,
               copyGroup.sourceLocationKey,
             ]),
-            copyGroupIndex
+            copyGroupIndex,
           );
         }
         return;
@@ -668,7 +654,7 @@ function createSourceOccurrenceMatcher(
         addIndex(
           copyGroupIndexesByComparablePath,
           copyGroup.comparablePath,
-          copyGroupIndex
+          copyGroupIndex,
         );
       } else {
         copyGroupsWithoutComparablePath.push(copyGroupIndex);
@@ -677,7 +663,7 @@ function createSourceOccurrenceMatcher(
         addIndex(
           copyGroupIndexesByOriginlessPath,
           copyGroup.originlessAbsolutePath,
-          copyGroupIndex
+          copyGroupIndex,
         );
       }
     });
@@ -686,28 +672,22 @@ function createSourceOccurrenceMatcher(
       if (matchSourceLocationKeys) {
         const candidates = new Set<number>();
         for (const sourceLocationKey of rawGroup.sourceLocationKeys) {
-          for (const copyGroupIndex of
-            copyGroupIndexesWithoutComparablePathByKey.get(
-              sourceLocationKey
-            ) ?? []) {
+          for (const copyGroupIndex of copyGroupIndexesWithoutComparablePathByKey.get(
+            sourceLocationKey,
+          ) ?? []) {
             candidates.add(copyGroupIndex);
           }
           if (rawGroup.comparablePath) {
-            for (const copyGroupIndex of
-              copyGroupIndexesByComparablePathAndKey.get(
-                JSON.stringify([
-                  rawGroup.comparablePath,
-                  sourceLocationKey,
-                ])
-              ) ?? []) {
+            for (const copyGroupIndex of copyGroupIndexesByComparablePathAndKey.get(
+              JSON.stringify([rawGroup.comparablePath, sourceLocationKey]),
+            ) ?? []) {
               candidates.add(copyGroupIndex);
             }
           }
           if (rawGroup.urlPathname) {
-            for (const copyGroupIndex of
-              copyGroupIndexesByOriginlessPathAndKey.get(
-                JSON.stringify([rawGroup.urlPathname, sourceLocationKey])
-              ) ?? []) {
+            for (const copyGroupIndex of copyGroupIndexesByOriginlessPathAndKey.get(
+              JSON.stringify([rawGroup.urlPathname, sourceLocationKey]),
+            ) ?? []) {
               candidates.add(copyGroupIndex);
             }
           }
@@ -717,14 +697,16 @@ function createSourceOccurrenceMatcher(
 
       const candidates = new Set(copyGroupsWithoutComparablePath);
       if (rawGroup.comparablePath) {
-        for (const copyGroupIndex of
-          copyGroupIndexesByComparablePath.get(rawGroup.comparablePath) ?? []) {
+        for (const copyGroupIndex of copyGroupIndexesByComparablePath.get(
+          rawGroup.comparablePath,
+        ) ?? []) {
           candidates.add(copyGroupIndex);
         }
       }
       if (rawGroup.urlPathname) {
-        for (const copyGroupIndex of
-          copyGroupIndexesByOriginlessPath.get(rawGroup.urlPathname) ?? []) {
+        for (const copyGroupIndex of copyGroupIndexesByOriginlessPath.get(
+          rawGroup.urlPathname,
+        ) ?? []) {
           candidates.add(copyGroupIndex);
         }
       }
@@ -740,15 +722,15 @@ function createSourceOccurrenceMatcher(
 
     const hasCompleteComponentMatching = (
       componentRawGroupIndexes: number[],
-      componentCopyGroupIndexes: number[]
+      componentCopyGroupIndexes: number[],
     ) => {
       const rawCount = componentRawGroupIndexes.reduce(
         (count, rawGroupIndex) => count + rawGroups[rawGroupIndex].count,
-        0
+        0,
       );
       const copyCount = componentCopyGroupIndexes.reduce(
         (count, copyGroupIndex) => count + copyGroups[copyGroupIndex].count,
-        0
+        0,
       );
       if (rawCount > copyCount) return false;
 
@@ -763,7 +745,7 @@ function createSourceOccurrenceMatcher(
       const sinkNode = firstCopyNode + componentCopyGroupIndexes.length;
       const graph = Array.from(
         { length: sinkNode + 1 },
-        () => [] as FlowEdge[]
+        () => [] as FlowEdge[],
       );
       const addFlowEdge = (from: number, to: number, capacity: number) => {
         const forwardEdge = {
@@ -783,11 +765,7 @@ function createSourceOccurrenceMatcher(
       componentCopyGroupIndexes.forEach((copyGroupIndex, index) => {
         const copyNode = firstCopyNode + index;
         copyNodeByGroupIndex.set(copyGroupIndex, copyNode);
-        addFlowEdge(
-          copyNode,
-          sinkNode,
-          copyGroups[copyGroupIndex].count
-        );
+        addFlowEdge(copyNode, sinkNode, copyGroups[copyGroupIndex].count);
       });
       componentRawGroupIndexes.forEach((rawGroupIndex, index) => {
         const rawNode = firstRawNode + index;
@@ -844,21 +822,18 @@ function createSourceOccurrenceMatcher(
         nextEdgeIndexes.fill(0);
         let sentFlow = sendFlow(
           sourceNode,
-          Math.max(0, rawCount - matchedCount)
+          Math.max(0, rawCount - matchedCount),
         );
         while (sentFlow > 0) {
           matchedCount += sentFlow;
-          sentFlow = sendFlow(
-            sourceNode,
-            Math.max(0, rawCount - matchedCount)
-          );
+          sentFlow = sendFlow(sourceNode, Math.max(0, rawCount - matchedCount));
         }
       }
       return matchedCount === rawCount;
     };
 
     const rawGroupToComponentIndex = new Array<number>(rawGroups.length).fill(
-      -1
+      -1,
     );
     const componentResults: boolean[] = [];
     for (
@@ -881,8 +856,9 @@ function createSourceOccurrenceMatcher(
         for (const copyGroupIndex of rawGroupToCopyGroups[rawGroupIndex]) {
           if (componentCopyGroupIndexes.has(copyGroupIndex)) continue;
           componentCopyGroupIndexes.add(copyGroupIndex);
-          for (const connectedRawGroupIndex of
-            copyGroupToRawGroups[copyGroupIndex]) {
+          for (const connectedRawGroupIndex of copyGroupToRawGroups[
+            copyGroupIndex
+          ]) {
             if (rawGroupToComponentIndex[connectedRawGroupIndex] !== -1) {
               continue;
             }
@@ -895,14 +871,13 @@ function createSourceOccurrenceMatcher(
       const componentEdgeCount = componentRawGroupIndexes.reduce(
         (edgeCount, rawGroupIndex) =>
           edgeCount + rawGroupToCopyGroups[rawGroupIndex].length,
-        0
+        0,
       );
       componentResults.push(
         componentEdgeCount <= MAX_GROUPED_SOURCE_MATCHING_EDGES &&
-          hasCompleteComponentMatching(
-            componentRawGroupIndexes,
-            [...componentCopyGroupIndexes]
-          )
+          hasCompleteComponentMatching(componentRawGroupIndexes, [
+            ...componentCopyGroupIndexes,
+          ]),
       );
     }
 
@@ -916,7 +891,7 @@ function createSourceOccurrenceMatcher(
   return {
     hasCompleteMatching(
       selectedSources: RawSourceOccurrence[],
-      matchSourceLocationKeys = false
+      matchSourceLocationKeys = false,
     ) {
       const selectedRawIndexes = getSelectedRawIndexes(selectedSources);
       if (!selectedRawIndexes) return false;
@@ -928,7 +903,7 @@ function createSourceOccurrenceMatcher(
       ) {
         return hasCompleteNormalMatching(
           selectedRawIndexes,
-          matchSourceLocationKeys
+          matchSourceLocationKeys,
         );
       }
 
@@ -938,8 +913,7 @@ function createSourceOccurrenceMatcher(
         groupedAnalyses.set(matchSourceLocationKeys, groupedAnalysis);
       }
       return selectedRawIndexes.every((rawIndex) => {
-        const rawGroupIndex =
-          groupedAnalysis.rawGroupIndexByRawIndex[rawIndex];
+        const rawGroupIndex = groupedAnalysis.rawGroupIndexByRawIndex[rawIndex];
         const componentIndex =
           groupedAnalysis.rawGroupToComponentIndex[rawGroupIndex];
         return groupedAnalysis.componentResults[componentIndex] === true;
@@ -955,15 +929,15 @@ function getSourceLocationKey(componentName: string, fileName: string) {
 function parseCopySourceLine(
   line: string,
   componentSourcePaths: Map<string, string | null>,
-  structuredSourcePathHintsByKey: Map<string, Set<string>>
+  structuredSourcePathHintsByKey: Map<string, Set<string>>,
 ) {
   if (line.length > MAX_SOURCE_STACK_LINE_LENGTH) return null;
 
   const prefix = line.match(/^(\s*in )/)?.[1];
-  if (!prefix || !line.endsWith(")")) return null;
+  if (!prefix || !line.endsWith(')')) return null;
 
   const body = line.slice(prefix.length, -1);
-  const delimiterIndexes = getLimitedDelimiterIndexes(body, " (at ");
+  const delimiterIndexes = getLimitedDelimiterIndexes(body, ' (at ');
   if (!delimiterIndexes) return null;
 
   const candidates: Array<{
@@ -981,28 +955,28 @@ function parseCopySourceLine(
 
   if (candidates.length === 1) return candidates[0];
 
-  const trustedRawCandidates = candidates.filter(
-    ({ componentName, source }) =>
-      Boolean(
-        componentSourcePaths.get(
-          getSourceLocationKey(componentName, source.fileName)
-        )
-      )
+  const trustedRawCandidates = candidates.filter(({ componentName, source }) =>
+    Boolean(
+      componentSourcePaths.get(
+        getSourceLocationKey(componentName, source.fileName),
+      ),
+    ),
   );
-  const untrustedRawCandidates = candidates.filter(({ componentName, source }) => {
-    const key = getSourceLocationKey(componentName, source.fileName);
-    return componentSourcePaths.has(key) && !componentSourcePaths.get(key);
-  });
-  const structuredCandidates = candidates.filter(
-    ({ componentName, source }) =>
-      structuredSourcePathHintsByKey.has(
-        getSourceLocationKey(componentName, source.fileName)
-      )
+  const untrustedRawCandidates = candidates.filter(
+    ({ componentName, source }) => {
+      const key = getSourceLocationKey(componentName, source.fileName);
+      return componentSourcePaths.has(key) && !componentSourcePaths.get(key);
+    },
+  );
+  const structuredCandidates = candidates.filter(({ componentName, source }) =>
+    structuredSourcePathHintsByKey.has(
+      getSourceLocationKey(componentName, source.fileName),
+    ),
   );
   if (untrustedRawCandidates.length > 0) return null;
 
   const sharedCandidates = trustedRawCandidates.filter((candidate) =>
-    structuredCandidates.includes(candidate)
+    structuredCandidates.includes(candidate),
   );
   if (sharedCandidates.length === 1) return sharedCandidates[0];
   if (sharedCandidates.length > 1) return null;
@@ -1015,19 +989,14 @@ function parseCopySourceLine(
   return null;
 }
 
-function hasNestedDebugSource(
-  source: string,
-  delimiter: " (" | "@"
-) {
+function hasNestedDebugSource(source: string, delimiter: ' (' | '@') {
   const delimiterIndexes = getLimitedDelimiterIndexes(source, delimiter);
   if (!delimiterIndexes) return true;
 
   for (const delimiterIndex of delimiterIndexes) {
     if (
       SOURCE_FILE_REFERENCE.test(source.slice(0, delimiterIndex)) &&
-      SOURCE_LIKE_PREFIX.test(
-        source.slice(delimiterIndex + delimiter.length)
-      )
+      SOURCE_LIKE_PREFIX.test(source.slice(delimiterIndex + delimiter.length))
     ) {
       return true;
     }
@@ -1041,15 +1010,15 @@ function parseV8DebugSourceLine(
   portalBase: string,
   expectedOrigin: string | null,
   structuredSourceKeys: Set<string>,
-  structuredSourcePathIdentities: Set<string>
+  structuredSourcePathIdentities: Set<string>,
 ) {
   if (line.length > MAX_SOURCE_STACK_LINE_LENGTH) return null;
 
   const prefix = line.match(/^\s*at\s+/)?.[0];
-  if (!prefix || !line.trimEnd().endsWith(")")) return null;
+  if (!prefix || !line.trimEnd().endsWith(')')) return null;
 
   const body = line.trimEnd().slice(prefix.length, -1);
-  const delimiterIndexes = getLimitedDelimiterIndexes(body, " (");
+  const delimiterIndexes = getLimitedDelimiterIndexes(body, ' (');
   if (!delimiterIndexes) return null;
 
   const candidates: DebugSourceLine[] = [];
@@ -1062,19 +1031,19 @@ function parseV8DebugSourceLine(
   }
 
   const viableCandidates = candidates.filter(
-    ({ source }) => !hasNestedDebugSource(source, " (")
+    ({ source }) => !hasNestedDebugSource(source, ' ('),
   );
   if (viableCandidates.length === 1) return viableCandidates[0];
 
   const portalCandidates = viableCandidates.filter(
     ({ source }) =>
-      getPortalSourcePaths(source, portalBase, expectedOrigin).length === 1
+      getPortalSourcePaths(source, portalBase, expectedOrigin).length === 1,
   );
   const structuredPathCandidates = viableCandidates.filter(({ source }) => {
     const sourceIdentity = getComparableSourcePath(
       source,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     );
     return (
       sourceIdentity !== null &&
@@ -1087,18 +1056,18 @@ function parseV8DebugSourceLine(
       if (!componentName?.trim() || !fileName) return false;
 
       return structuredSourceKeys.has(
-        getSourceLocationKey(componentName, fileName)
+        getSourceLocationKey(componentName, fileName),
       );
-    }
+    },
   );
   if (portalCandidates.length === 1) return portalCandidates[0];
   const sharedPathCandidates = portalCandidates.filter((candidate) =>
-    structuredPathCandidates.includes(candidate)
+    structuredPathCandidates.includes(candidate),
   );
   if (sharedPathCandidates.length === 1) return sharedPathCandidates[0];
   if (sharedPathCandidates.length > 1) return null;
   const sharedCandidates = portalCandidates.filter((candidate) =>
-    structuredCandidates.includes(candidate)
+    structuredCandidates.includes(candidate),
   );
   if (sharedCandidates.length === 1) return sharedCandidates[0];
   if (portalCandidates.length > 1) return null;
@@ -1116,12 +1085,12 @@ function parseWebKitDebugSourceLine(
   portalBase: string,
   expectedOrigin: string | null,
   structuredSourceKeys: Set<string>,
-  structuredSourcePathIdentities: Set<string>
+  structuredSourcePathIdentities: Set<string>,
 ) {
   if (line.length > MAX_SOURCE_STACK_LINE_LENGTH) return null;
 
   const body = line.trim();
-  const delimiterIndexes = getLimitedDelimiterIndexes(body, "@");
+  const delimiterIndexes = getLimitedDelimiterIndexes(body, '@');
   if (!delimiterIndexes) return null;
 
   const candidates: DebugSourceLine[] = [];
@@ -1134,19 +1103,19 @@ function parseWebKitDebugSourceLine(
   }
 
   const viableCandidates = candidates.filter(
-    ({ source }) => !hasNestedDebugSource(source, "@")
+    ({ source }) => !hasNestedDebugSource(source, '@'),
   );
   if (viableCandidates.length === 1) return viableCandidates[0];
 
   const portalCandidates = viableCandidates.filter(
     ({ source }) =>
-      getPortalSourcePaths(source, portalBase, expectedOrigin).length === 1
+      getPortalSourcePaths(source, portalBase, expectedOrigin).length === 1,
   );
   const structuredPathCandidates = viableCandidates.filter(({ source }) => {
     const sourceIdentity = getComparableSourcePath(
       source,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     );
     return (
       sourceIdentity !== null &&
@@ -1158,19 +1127,19 @@ function parseWebKitDebugSourceLine(
       const fileName = getSourceFileName(source);
       if (!componentName?.trim() || !fileName) return false;
       return structuredSourceKeys.has(
-        getSourceLocationKey(componentName, fileName)
+        getSourceLocationKey(componentName, fileName),
       );
-    }
+    },
   );
 
   if (portalCandidates.length === 1) return portalCandidates[0];
   const sharedPathCandidates = portalCandidates.filter((candidate) =>
-    structuredPathCandidates.includes(candidate)
+    structuredPathCandidates.includes(candidate),
   );
   if (sharedPathCandidates.length === 1) return sharedPathCandidates[0];
   if (sharedPathCandidates.length > 1) return null;
   const sharedCandidates = portalCandidates.filter((candidate) =>
-    structuredCandidates.includes(candidate)
+    structuredCandidates.includes(candidate),
   );
   if (sharedCandidates.length === 1) return sharedCandidates[0];
   if (portalCandidates.length > 1) return null;
@@ -1185,14 +1154,14 @@ function parseDebugSourceLine(
   portalBase: string,
   expectedOrigin: string | null,
   structuredSourceKeys: Set<string>,
-  structuredSourcePathIdentities: Set<string>
+  structuredSourcePathIdentities: Set<string>,
 ) {
   const namedV8Line = parseV8DebugSourceLine(
     line,
     portalBase,
     expectedOrigin,
     structuredSourceKeys,
-    structuredSourcePathIdentities
+    structuredSourcePathIdentities,
   );
   if (namedV8Line) return namedV8Line;
 
@@ -1206,14 +1175,14 @@ function parseDebugSourceLine(
     portalBase,
     expectedOrigin,
     structuredSourceKeys,
-    structuredSourcePathIdentities
+    structuredSourcePathIdentities,
   );
 }
 
 function isReactRuntimeSource(source: string) {
-  const normalizedSource = source.replace(/\\/g, "/");
+  const normalizedSource = source.replace(/\\/g, '/');
   return /\/node_modules\/(?:\.vite\/deps\/(?:react[-_]dom(?:_client)?|react_jsx(?:-dev)?-runtime)\.js|react(?:-dom)?\/.*(?:jsx.*runtime|react-dom))/i.test(
-    normalizedSource
+    normalizedSource,
   );
 }
 
@@ -1222,7 +1191,7 @@ function getPrimaryDebugSourceLines(
   portalBase: string,
   expectedOrigin: string | null,
   structuredSourceKeys: Set<string>,
-  structuredSourcePathIdentities: Set<string>
+  structuredSourcePathIdentities: Set<string>,
 ) {
   const sourceLines: DebugSourceLine[] = [];
   let hasUnknownDebugStack = false;
@@ -1236,7 +1205,7 @@ function getPrimaryDebugSourceLines(
         portalBase,
         expectedOrigin,
         structuredSourceKeys,
-        structuredSourcePathIdentities
+        structuredSourcePathIdentities,
       );
       if (parsedLine) {
         if (isReactRuntimeSource(parsedLine.source)) continue;
@@ -1258,14 +1227,14 @@ function getPrimaryDebugSourceLines(
 }
 
 function flattenReactGrabStack(stackString: string) {
-  return stackString.replace(/\r?\n\s+/g, " ").trimEnd();
+  return stackString.replace(/\r?\n\s+/g, ' ').trimEnd();
 }
 
 function getCopyStackRange(
   content: string,
-  context: ReactGrabElementContextLike
+  context: ReactGrabElementContextLike,
 ) {
-  if (typeof context.stackString !== "string") return null;
+  if (typeof context.stackString !== 'string') return null;
 
   const copyStack = flattenReactGrabStack(context.stackString);
   if (!copyStack.trim()) return null;
@@ -1279,9 +1248,9 @@ function getCopyStackRange(
 
     const suffix = content.slice(start + copyStack.length);
     if (
-      suffix.startsWith("]") ||
-      suffix.startsWith(" key: ") ||
-      suffix.startsWith(" selector: ")
+      suffix.startsWith(']') ||
+      suffix.startsWith(' key: ') ||
+      suffix.startsWith(' selector: ')
     ) {
       candidates.push(start);
     }
@@ -1296,7 +1265,7 @@ function getCopyStackRange(
 function getUniqueSourcePaths(
   sources: string[],
   portalBase: string,
-  expectedOrigin: string | null
+  expectedOrigin: string | null,
 ) {
   const sourcePaths = new Map<string, string | null>();
 
@@ -1304,9 +1273,9 @@ function getUniqueSourcePaths(
     for (const relativePath of getPortalSourcePaths(
       source,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     )) {
-      const fileName = relativePath.split("/").pop();
+      const fileName = relativePath.split('/').pop();
       if (!fileName) continue;
 
       const existingPath = sourcePaths.get(fileName);
@@ -1325,7 +1294,7 @@ function getComponentSourcePaths(
   sourceLines: DebugSourceLine[],
   portalBase: string,
   expectedOrigin: string | null,
-  hasUnknownDebugStack: boolean
+  hasUnknownDebugStack: boolean,
 ) {
   const componentSourcePaths = new Map<string, string | null>();
   const componentSourcePathKeyCounts = new Map<string, number>();
@@ -1341,10 +1310,9 @@ function getComponentSourcePaths(
     const matchingPaths = getPortalSourcePaths(
       source,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     ).filter((relativePath) => relativePath.endsWith(`/${fileName}`));
-    const relativePath =
-      matchingPaths.length === 1 ? matchingPaths[0] : null;
+    const relativePath = matchingPaths.length === 1 ? matchingPaths[0] : null;
     if (!relativePath) {
       hasUntrustedSource = true;
       if (componentName?.trim()) {
@@ -1354,7 +1322,7 @@ function getComponentSourcePaths(
       } else if (fileName) {
         untrustedAnonymousFileNameCounts.set(
           fileName,
-          (untrustedAnonymousFileNameCounts.get(fileName) ?? 0) + 1
+          (untrustedAnonymousFileNameCounts.get(fileName) ?? 0) + 1,
         );
       } else {
         hasUnkeyedUntrustedAnonymousSource = true;
@@ -1366,12 +1334,12 @@ function getComponentSourcePaths(
     const key = getSourceLocationKey(componentName, fileName);
     componentSourcePathKeyCounts.set(
       key,
-      (componentSourcePathKeyCounts.get(key) ?? 0) + 1
+      (componentSourcePathKeyCounts.get(key) ?? 0) + 1,
     );
     if (relativePath) {
       trustedComponentSourcePathKeyCounts.set(
         key,
-        (trustedComponentSourcePathKeyCounts.get(key) ?? 0) + 1
+        (trustedComponentSourcePathKeyCounts.get(key) ?? 0) + 1,
       );
     }
     const existingPath = componentSourcePaths.get(key);
@@ -1404,7 +1372,7 @@ function resolveSourcePath(
   fileName: string,
   sourcePaths: Map<string, string | null>,
   componentSourcePaths: Map<string, string | null>,
-  allowUniqueFallback: boolean
+  allowUniqueFallback: boolean,
 ) {
   const key = getSourceLocationKey(componentName, fileName);
   if (componentSourcePaths.has(key)) {
@@ -1417,7 +1385,7 @@ function resolveSourcePath(
 function addUniqueSourceLocation(
   sourceLocations: Map<string, PortalSourceLocation | null>,
   key: string,
-  location: PortalSourceLocation
+  location: PortalSourceLocation,
 ) {
   const existingLocation = sourceLocations.get(key);
 
@@ -1435,16 +1403,17 @@ function addUniqueSourceLocation(
 
 function getUniqueSourceLocations(
   context: ReactGrabElementContextLike,
-  portalBase: string
+  portalBase: string,
 ) {
   const stackFrames = Array.isArray(context.stack)
     ? context.stack.filter(
         (frame): frame is ReactGrabStackFrameLike =>
-          Boolean(frame) && typeof frame === "object"
+          Boolean(frame) && typeof frame === 'object',
       )
     : [];
-  const { hasMissingDebugStack, stacks: debugStacks } =
-    getFiberDebugStacks(context.fiber);
+  const { hasMissingDebugStack, stacks: debugStacks } = getFiberDebugStacks(
+    context.fiber,
+  );
   const expectedOrigin = getContextOrigin(context);
   const structuredSourceKeys = new Set<string>();
   const structuredSourcePathIdentities = new Set<string>();
@@ -1459,12 +1428,12 @@ function getUniqueSourceLocations(
     lineNumber,
   } of stackFrames) {
     const normalizedComponentName =
-      typeof functionName === "string" ? functionName.trim() : "";
-    if (typeof fileName === "string") {
+      typeof functionName === 'string' ? functionName.trim() : '';
+    if (typeof fileName === 'string') {
       const sourceIdentity = getComparableSourcePath(
         fileName,
         portalBase,
-        expectedOrigin
+        expectedOrigin,
       );
       if (sourceIdentity) {
         structuredSourcePathIdentities.add(sourceIdentity);
@@ -1487,14 +1456,14 @@ function getUniqueSourceLocations(
         }
       }
     }
-    if (typeof fileName !== "string" || typeof functionName !== "string") {
+    if (typeof fileName !== 'string' || typeof functionName !== 'string') {
       continue;
     }
 
     const normalizedFileName = getSourceFileName(fileName);
     if (normalizedComponentName && normalizedFileName) {
       structuredSourceKeys.add(
-        getSourceLocationKey(normalizedComponentName, normalizedFileName)
+        getSourceLocationKey(normalizedComponentName, normalizedFileName),
       );
     }
   }
@@ -1504,21 +1473,20 @@ function getUniqueSourceLocations(
       portalBase,
       expectedOrigin,
       structuredSourceKeys,
-      structuredSourcePathIdentities
+      structuredSourcePathIdentities,
     );
-  const hasUnknownDebugStack =
-    hasMissingDebugStack || hasUnparsedDebugStack;
+  const hasUnknownDebugStack = hasMissingDebugStack || hasUnparsedDebugStack;
   const sourcePaths = getUniqueSourcePaths(
     sourceLines.map(({ source }) => source),
     portalBase,
-    expectedOrigin
+    expectedOrigin,
   );
   const anonymousSourcePaths = getUniqueSourcePaths(
     sourceLines
       .filter(({ componentName }) => !componentName?.trim())
       .map(({ source }) => source),
     portalBase,
-    expectedOrigin
+    expectedOrigin,
   );
   const rawSourceOccurrencesByFileName = new Map<
     string,
@@ -1532,17 +1500,15 @@ function getUniqueSourceLocations(
     const sourceIdentity = getComparableSourcePath(
       source,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     );
     if (!sourceIdentity) continue;
 
     rawSourceIdentityCounts.set(
       sourceIdentity,
-      (rawSourceIdentityCounts.get(sourceIdentity) ?? 0) + 1
+      (rawSourceIdentityCounts.get(sourceIdentity) ?? 0) + 1,
     );
-    if (
-      getPortalSourcePaths(source, portalBase, expectedOrigin).length === 0
-    ) {
+    if (getPortalSourcePaths(source, portalBase, expectedOrigin).length === 0) {
       untrustedRawSourceIdentities.add(sourceIdentity);
     }
   }
@@ -1556,7 +1522,7 @@ function getUniqueSourceLocations(
       const sourceIdentity = getComparableSourcePath(
         source,
         portalBase,
-        expectedOrigin
+        expectedOrigin,
       );
       const sourceComponentNames = new Set<string>();
       if (normalizedComponentName) {
@@ -1579,14 +1545,14 @@ function getUniqueSourceLocations(
         matchingOccurrence = structuredOccurrences[occurrenceIndex] ?? null;
         nextStructuredOccurrenceIndexByIdentity.set(
           sourceIdentity,
-          occurrenceIndex + 1
+          occurrenceIndex + 1,
         );
       } else if (
         rawSourceIdentityCount <= MAX_SOURCE_OCCURRENCES_PER_FILE &&
         structuredOccurrences.length <= MAX_SOURCE_OCCURRENCES_PER_FILE
       ) {
         const availableOccurrences = structuredOccurrences.filter(
-          ({ consumed }) => !consumed
+          ({ consumed }) => !consumed,
         );
         const sourcePosition = getParsedSourcePosition(source);
         const positionMatches = sourcePosition
@@ -1594,11 +1560,11 @@ function getUniqueSourceLocations(
               (occurrence) =>
                 occurrence.lineNumber === sourcePosition.lineNumber &&
                 (sourcePosition.columnNumber === null ||
-                  occurrence.columnNumber === sourcePosition.columnNumber)
+                  occurrence.columnNumber === sourcePosition.columnNumber),
             )
           : [];
         const positionMatchNames = new Set(
-          positionMatches.map(({ componentName }) => componentName)
+          positionMatches.map(({ componentName }) => componentName),
         );
         matchingOccurrence =
           positionMatches.length > 0 && positionMatchNames.size === 1
@@ -1607,7 +1573,7 @@ function getUniqueSourceLocations(
 
         if (!matchingOccurrence && rawSourceIdentityCount === 1) {
           const availableNames = new Set(
-            availableOccurrences.map(({ componentName }) => componentName)
+            availableOccurrences.map(({ componentName }) => componentName),
           );
           if (availableNames.size === 1) {
             matchingOccurrence = availableOccurrences[0] ?? null;
@@ -1625,8 +1591,9 @@ function getUniqueSourceLocations(
         isTrusted:
           getPortalSourcePaths(source, portalBase, expectedOrigin).length === 1,
         sourcePath: source,
-        sourceLocationKeys: [...sourceComponentNames].map((sourceComponentName) =>
-          getSourceLocationKey(sourceComponentName, sourceFileName)
+        sourceLocationKeys: [...sourceComponentNames].map(
+          (sourceComponentName) =>
+            getSourceLocationKey(sourceComponentName, sourceFileName),
         ),
       };
       if (sourceOccurrences) {
@@ -1640,11 +1607,11 @@ function getUniqueSourceLocations(
     for (const relativePath of getPortalSourcePaths(
       source,
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     )) {
       anonymousSourcePathCounts.set(
         relativePath,
-        (anonymousSourcePathCounts.get(relativePath) ?? 0) + 1
+        (anonymousSourcePathCounts.get(relativePath) ?? 0) + 1,
       );
     }
   }
@@ -1671,17 +1638,17 @@ function getUniqueSourceLocations(
     unkeyedUntrustedComponentNames,
     untrustedFileNames,
   } = getComponentSourcePaths(
-      sourceLines,
-      portalBase,
-      expectedOrigin,
-      hasUnknownDebugStack
-    );
+    sourceLines,
+    portalBase,
+    expectedOrigin,
+    hasUnknownDebugStack,
+  );
   for (const componentName of unresolvedUntrustedStructuredComponentNames) {
     unkeyedUntrustedComponentNames.add(componentName);
   }
   const componentSourceKeysByFileName = new Map<string, Set<string>>();
   for (const key of trustedComponentSourcePathKeyCounts.keys()) {
-    const fileName = key.slice(key.indexOf("\0") + 1);
+    const fileName = key.slice(key.indexOf('\0') + 1);
     if (!fileName) continue;
 
     const componentKeys = componentSourceKeysByFileName.get(fileName);
@@ -1695,16 +1662,13 @@ function getUniqueSourceLocations(
   const sourceLocations = new Map<string, PortalSourceLocation | null>();
   const sourceLocationKeyCounts = new Map<string, number>();
   const aliasSourceLocationKeysByFileName = new Map<string, Set<string>>();
-  const anonymousSourceLocationKeysByFileName = new Map<
-    string,
-    Set<string>
-  >();
+  const anonymousSourceLocationKeysByFileName = new Map<string, Set<string>>();
   const incompatibleStructuredSourceKeys = new Set<string>();
   const structuredSourcePathHintsByKey = new Map<string, Set<string>>();
 
   for (const frame of stackFrames) {
     const { columnNumber, fileName, functionName, lineNumber } = frame;
-    if (typeof fileName !== "string" || typeof functionName !== "string") {
+    if (typeof fileName !== 'string' || typeof functionName !== 'string') {
       continue;
     }
 
@@ -1714,7 +1678,7 @@ function getUniqueSourceLocations(
 
     const key = getSourceLocationKey(
       normalizedComponentName,
-      normalizedFileName
+      normalizedFileName,
     );
     const structuredSourcePathHints = structuredSourcePathHintsByKey.get(key);
     if (structuredSourcePathHints) {
@@ -1729,7 +1693,7 @@ function getUniqueSourceLocations(
           normalizedFileName,
           sourcePaths,
           componentSourcePaths,
-          !hasUntrustedSource
+          !hasUntrustedSource,
         )
       : null;
     if (!relativePath) continue;
@@ -1738,7 +1702,7 @@ function getUniqueSourceLocations(
         fileName,
         relativePath,
         portalBase,
-        expectedOrigin
+        expectedOrigin,
       )
     ) {
       incompatibleStructuredSourceKeys.add(key);
@@ -1757,34 +1721,32 @@ function getUniqueSourceLocations(
     addUniqueSourceLocation(sourceLocations, key, location);
     sourceLocationKeyCounts.set(
       key,
-      (sourceLocationKeyCounts.get(key) ?? 0) + 1
+      (sourceLocationKeyCounts.get(key) ?? 0) + 1,
     );
     if (
       !hasExactComponentSource &&
       anonymousSourcePaths.get(normalizedFileName) === relativePath
     ) {
-      const anonymousKeys = anonymousSourceLocationKeysByFileName.get(
-        normalizedFileName
-      );
+      const anonymousKeys =
+        anonymousSourceLocationKeysByFileName.get(normalizedFileName);
       if (anonymousKeys) {
         anonymousKeys.add(key);
       } else {
         anonymousSourceLocationKeysByFileName.set(
           normalizedFileName,
-          new Set([key])
+          new Set([key]),
         );
       }
     }
     if (hasExactComponentSource) {
-      const aliasKeys = aliasSourceLocationKeysByFileName.get(
-        normalizedFileName
-      );
+      const aliasKeys =
+        aliasSourceLocationKeysByFileName.get(normalizedFileName);
       if (aliasKeys) {
         aliasKeys.add(key);
       } else {
         aliasSourceLocationKeysByFileName.set(
           normalizedFileName,
-          new Set([key])
+          new Set([key]),
         );
       }
     }
@@ -1817,9 +1779,9 @@ export function absolutizeSingleReactGrabCopyContent(
   content: string,
   context: ReactGrabElementContextLike,
   sourceRoot: string,
-  portalBase: string
+  portalBase: string,
 ) {
-  const normalizedRoot = sourceRoot.replace(/[\\/]+$/, "");
+  const normalizedRoot = sourceRoot.replace(/[\\/]+$/, '');
   if (!normalizedRoot) return content;
 
   const stackRange = getCopyStackRange(content, context);
@@ -1861,21 +1823,21 @@ export function absolutizeSingleReactGrabCopyContent(
     const stackLine = parseCopySourceLine(
       line,
       componentSourcePaths,
-      structuredSourcePathHintsByKey
+      structuredSourcePathHintsByKey,
     );
     if (!stackLine) continue;
     const { componentName, source } = stackLine;
 
     const sourceLocationKey = getSourceLocationKey(
       componentName,
-      source.fileName
+      source.fileName,
     );
     copySourceLocationKeyCounts.set(
       sourceLocationKey,
-      (copySourceLocationKeyCounts.get(sourceLocationKey) ?? 0) + 1
+      (copySourceLocationKeyCounts.get(sourceLocationKey) ?? 0) + 1,
     );
     const copySourceOccurrences = copySourceOccurrencesByFileName.get(
-      source.fileName
+      source.fileName,
     );
     if (copySourceOccurrences) {
       copySourceOccurrences.push({
@@ -1893,7 +1855,7 @@ export function absolutizeSingleReactGrabCopyContent(
     } else {
       copySourcePathHintsByKey.set(
         sourceLocationKey,
-        new Set([source.sourcePath])
+        new Set([source.sourcePath]),
       );
     }
     const copySourceKeys = copySourceKeysByFileName.get(source.fileName);
@@ -1902,32 +1864,31 @@ export function absolutizeSingleReactGrabCopyContent(
     } else {
       copySourceKeysByFileName.set(
         source.fileName,
-        new Set([sourceLocationKey])
+        new Set([sourceLocationKey]),
       );
     }
-    const exactComponentSourcePath = componentSourcePaths.get(
-      sourceLocationKey
-    );
+    const exactComponentSourcePath =
+      componentSourcePaths.get(sourceLocationKey);
     if (
       exactComponentSourcePath &&
       canUseStructuredSourcePosition(
         source.sourcePath,
         exactComponentSourcePath,
         portalBase,
-        expectedOrigin
+        expectedOrigin,
       )
     ) {
       compatibleExactCopySourceLocationKeyCounts.set(
         sourceLocationKey,
         (compatibleExactCopySourceLocationKeyCounts.get(sourceLocationKey) ??
-          0) + 1
+          0) + 1,
       );
     }
     if (componentSourcePaths.has(sourceLocationKey)) continue;
 
     copyLocationFallbackCounts.set(
       source.fileName,
-      (copyLocationFallbackCounts.get(source.fileName) ?? 0) + 1
+      (copyLocationFallbackCounts.get(source.fileName) ?? 0) + 1,
     );
   }
 
@@ -1943,13 +1904,13 @@ export function absolutizeSingleReactGrabCopyContent(
       rawSourceOccurrencesByFileName.get(fileName) ?? [],
       copySourceOccurrencesByFileName.get(fileName) ?? [],
       portalBase,
-      expectedOrigin
+      expectedOrigin,
     );
     sourceOccurrenceMatchersByFileName.set(fileName, matcher);
     return matcher;
   };
   const unconsumedUntrustedComponentNames = new Set(
-    unkeyedUntrustedComponentNames
+    unkeyedUntrustedComponentNames,
   );
   for (const [fileName, sourceOccurrences] of rawSourceOccurrencesByFileName) {
     const untrustedSourceGroups = new Map<string, RawSourceOccurrence[]>();
@@ -1957,8 +1918,11 @@ export function absolutizeSingleReactGrabCopyContent(
       if (source.isAnonymous || source.isTrusted) continue;
 
       const sourceIdentity =
-        getComparableSourcePath(source.sourcePath, portalBase, expectedOrigin) ??
-        source.sourcePath;
+        getComparableSourcePath(
+          source.sourcePath,
+          portalBase,
+          expectedOrigin,
+        ) ?? source.sourcePath;
       const sourceGroupKey = JSON.stringify([
         sourceIdentity,
         [...source.sourceLocationKeys].sort(),
@@ -1972,7 +1936,7 @@ export function absolutizeSingleReactGrabCopyContent(
       if (
         getSourceOccurrenceMatcher(fileName).hasCompleteMatching(
           sourceGroup,
-          true
+          true,
         )
       ) {
         continue;
@@ -1981,7 +1945,7 @@ export function absolutizeSingleReactGrabCopyContent(
       for (const source of sourceGroup) {
         for (const key of source.sourceLocationKeys) {
           unconsumedUntrustedComponentNames.add(
-            key.slice(0, key.indexOf("\0"))
+            key.slice(0, key.indexOf('\0')),
           );
         }
       }
@@ -1994,8 +1958,8 @@ export function absolutizeSingleReactGrabCopyContent(
     if (
       !getSourceOccurrenceMatcher(fileName).hasCompleteMatching(
         sourceOccurrences.filter(
-          (source) => source.isAnonymous && !source.isTrusted
-        )
+          (source) => source.isAnonymous && !source.isTrusted,
+        ),
       )
     ) {
       hasUntrustedAnonymousSource = true;
@@ -2015,7 +1979,7 @@ export function absolutizeSingleReactGrabCopyContent(
     const availableCopyKeys = [...copySourceKeys].filter(
       (key) =>
         !componentSourcePaths.has(key) &&
-        !incompatibleStructuredSourceKeys.has(key)
+        !incompatibleStructuredSourceKeys.has(key),
     );
     const availableComponentKeys = componentSourceKeys.filter((key) => {
       const remainingOccurrenceCount =
@@ -2027,13 +1991,10 @@ export function absolutizeSingleReactGrabCopyContent(
       );
     });
 
-    if (
-      availableCopyKeys.length === 1 &&
-      availableComponentKeys.length === 1
-    ) {
+    if (availableCopyKeys.length === 1 && availableComponentKeys.length === 1) {
       const relativePath = componentSourcePaths.get(availableComponentKeys[0]);
       const sourcePathHints = copySourcePathHintsByKey.get(
-        availableCopyKeys[0]
+        availableCopyKeys[0],
       );
       const structuredSourcePathHints = [
         ...(structuredSourcePathHintsByKey.get(availableCopyKeys[0]) ?? []),
@@ -2049,8 +2010,8 @@ export function absolutizeSingleReactGrabCopyContent(
               sourcePathHint,
               relativePath,
               portalBase,
-              expectedOrigin
-            )
+              expectedOrigin,
+            ),
         );
       const anonymousSourcePath = anonymousSourcePaths.get(fileName);
       const hasCompatibleAnonymousSourcePath =
@@ -2061,7 +2022,7 @@ export function absolutizeSingleReactGrabCopyContent(
         (trustedComponentSourcePathKeyCounts.get(availableComponentKeys[0]) ??
           0) -
           (compatibleExactCopySourceLocationKeyCounts.get(
-            availableComponentKeys[0]
+            availableComponentKeys[0],
           ) ?? 0);
       if (
         relativePath &&
@@ -2080,14 +2041,14 @@ export function absolutizeSingleReactGrabCopyContent(
   >();
   for (const [fileName, aliasKeys] of aliasSourceLocationKeysByFileName) {
     const availableKeys = [...aliasKeys].filter(
-      (key) => !copySourceLocationKeyCounts.has(key)
+      (key) => !copySourceLocationKeyCounts.has(key),
     );
     const availableComponentKeys = [
       ...(componentSourceKeysByFileName.get(fileName) ?? []),
     ].filter(
       (key) =>
         !copySourceLocationKeyCounts.has(key) &&
-        !incompatibleStructuredSourceKeys.has(key)
+        !incompatibleStructuredSourceKeys.has(key),
     );
     if (
       availableKeys.length === 1 &&
@@ -2096,7 +2057,7 @@ export function absolutizeSingleReactGrabCopyContent(
     ) {
       aliasSourceLocationsByFileName.set(
         fileName,
-        sourceLocations.get(availableKeys[0]) ?? null
+        sourceLocations.get(availableKeys[0]) ?? null,
       );
     }
   }
@@ -2108,7 +2069,7 @@ export function absolutizeSingleReactGrabCopyContent(
         const stackLine = parseCopySourceLine(
           line,
           componentSourcePaths,
-          structuredSourcePathHintsByKey
+          structuredSourcePathHintsByKey,
         );
         if (!stackLine) return line;
 
@@ -2116,7 +2077,7 @@ export function absolutizeSingleReactGrabCopyContent(
 
         const sourceLocationKey = getSourceLocationKey(
           componentName,
-          source.fileName
+          source.fileName,
         );
         if (
           hasUntrustedAnonymousSource ||
@@ -2141,9 +2102,8 @@ export function absolutizeSingleReactGrabCopyContent(
           return line;
         }
 
-        const candidateStructuredSourceLocation = sourceLocations.get(
-          sourceLocationKey
-        );
+        const candidateStructuredSourceLocation =
+          sourceLocations.get(sourceLocationKey);
         const anonymousSourceLocationKeys =
           anonymousSourceLocationKeysByFileName.get(source.fileName);
         const structuredSourceLocation =
@@ -2154,7 +2114,7 @@ export function absolutizeSingleReactGrabCopyContent(
           anonymousSourceLocationKeys?.size === 1 &&
           anonymousSourceLocationKeys.has(sourceLocationKey) &&
           anonymousSourcePathCounts.get(
-            candidateStructuredSourceLocation?.relativePath ?? ""
+            candidateStructuredSourceLocation?.relativePath ?? '',
           ) === copySourceLocationKeyCounts.get(sourceLocationKey) &&
           anonymousSourcePaths.get(source.fileName) ===
             candidateStructuredSourceLocation?.relativePath
@@ -2171,7 +2131,7 @@ export function absolutizeSingleReactGrabCopyContent(
             source.sourcePath,
             relativePath,
             portalBase,
-            expectedOrigin
+            expectedOrigin,
           )
         ) {
           return line;
@@ -2192,7 +2152,7 @@ export function absolutizeSingleReactGrabCopyContent(
             ? aliasSourceLocationsByFileName.get(source.fileName)
             : undefined;
         const originalPosition = incompatibleStructuredSourceKeys.has(
-          sourceLocationKey
+          sourceLocationKey,
         )
           ? undefined
           : source.position;
@@ -2205,39 +2165,39 @@ export function absolutizeSingleReactGrabCopyContent(
 
         const sourcePosition = formatSourcePosition(
           sourceLocation,
-          originalPosition
+          originalPosition,
         );
 
         return `${prefix}${componentName} (at ${normalizedRoot}/${relativePath}${sourcePosition})`;
       })
-      .join("\n")
+      .join('\n'),
   );
 
   return `${content.slice(0, stackRange.start)}${transformedStack}${content.slice(
-    stackRange.start + stackRange.copyStack.length
+    stackRange.start + stackRange.copyStack.length,
   )}`;
 }
 
 export function appendReactGrabInputLine(content: string) {
-  return content.endsWith("\n") ? content : `${content}\n`;
+  return content.endsWith('\n') ? content : `${content}\n`;
 }
 
 async function transformReactGrabCopyContent(
   content: string,
-  elements: Element[]
+  elements: Element[],
 ) {
   if (elements.length !== 1) return appendReactGrabInputLine(content);
 
   try {
-    const { getElementContext } = await import("react-grab/primitives");
+    const { getElementContext } = await import('react-grab/primitives');
     const context = await getElementContext(elements[0]);
     return appendReactGrabInputLine(
       absolutizeSingleReactGrabCopyContent(
         content,
         context,
         __PORTAL_DEV_SOURCE_ROOT__,
-        import.meta.env.BASE_URL
-      )
+        import.meta.env.BASE_URL,
+      ),
     );
   } catch {
     return appendReactGrabInputLine(content);
@@ -2245,10 +2205,10 @@ async function transformReactGrabCopyContent(
 }
 
 function rewriteReactGrabClipboardAsPlainText(content: string) {
-  if (typeof navigator === "undefined") return;
+  if (typeof navigator === 'undefined') return;
 
   const clipboard = navigator.clipboard;
-  if (!clipboard || typeof clipboard.writeText !== "function") return;
+  if (!clipboard || typeof clipboard.writeText !== 'function') return;
 
   try {
     void clipboard.writeText(content).catch(() => {});
@@ -2269,10 +2229,10 @@ export function hideDisabledReactGrabToolbarActions(root: ParentNode) {
     if (displaySnapshots.has(element)) return;
 
     displaySnapshots.set(element, {
-      priority: element.style.getPropertyPriority("display"),
-      value: element.style.getPropertyValue("display"),
+      priority: element.style.getPropertyPriority('display'),
+      value: element.style.getPropertyValue('display'),
     });
-    element.style.setProperty("display", "none", "important");
+    element.style.setProperty('display', 'none', 'important');
   };
 
   for (const action of REACT_GRAB_DISABLED_ACTIONS) {
@@ -2285,7 +2245,7 @@ export function hideDisabledReactGrabToolbarActions(root: ParentNode) {
   }
 
   for (const button of root.querySelectorAll<HTMLElement>(
-    "[data-react-grab-more-options]"
+    '[data-react-grab-more-options]',
   )) {
     hideElement(button);
   }
@@ -2293,13 +2253,9 @@ export function hideDisabledReactGrabToolbarActions(root: ParentNode) {
   return () => {
     for (const [wrapper, snapshot] of displaySnapshots) {
       if (snapshot.value) {
-        wrapper.style.setProperty(
-          "display",
-          snapshot.value,
-          snapshot.priority
-        );
+        wrapper.style.setProperty('display', snapshot.value, snapshot.priority);
       } else {
-        wrapper.style.removeProperty("display");
+        wrapper.style.removeProperty('display');
       }
     }
     displaySnapshots.clear();
@@ -2307,7 +2263,7 @@ export function hideDisabledReactGrabToolbarActions(root: ParentNode) {
 }
 
 function observeReactGrabToolbar() {
-  if (typeof document === "undefined") return () => {};
+  if (typeof document === 'undefined') return () => {};
 
   const observedRoots = new Map<ShadowRoot, () => void>();
 
@@ -2329,7 +2285,7 @@ function observeReactGrabToolbar() {
 
   const observeAvailableRoots = () => {
     for (const host of document.querySelectorAll<HTMLElement>(
-      REACT_GRAB_HOST_SELECTOR
+      REACT_GRAB_HOST_SELECTOR,
     )) {
       if (host.shadowRoot) observeRoot(host.shadowRoot);
     }
@@ -2350,18 +2306,17 @@ function observeReactGrabToolbar() {
   };
 }
 
-const REACT_GRAB_ACTIVE_CURSOR_ATTRIBUTE =
-  "data-nocobase-react-grab-active";
+const REACT_GRAB_ACTIVE_CURSOR_ATTRIBUTE = 'data-nocobase-react-grab-active';
 
 function installReactGrabDefaultCursor(): {
   dispose: () => void;
   setActive: (active: boolean) => void;
 } {
-  if (typeof document === "undefined") {
+  if (typeof document === 'undefined') {
     return { dispose: () => {}, setActive: () => {} };
   }
 
-  const style = document.createElement("style");
+  const style = document.createElement('style');
   style.textContent = `
 html[${REACT_GRAB_ACTIVE_CURSOR_ATTRIBUTE}],
 html[${REACT_GRAB_ACTIVE_CURSOR_ATTRIBUTE}] * {
@@ -2372,14 +2327,14 @@ html[${REACT_GRAB_ACTIVE_CURSOR_ATTRIBUTE}] * {
   return {
     dispose() {
       document.documentElement.removeAttribute(
-        REACT_GRAB_ACTIVE_CURSOR_ATTRIBUTE
+        REACT_GRAB_ACTIVE_CURSOR_ATTRIBUTE,
       );
       style.remove();
     },
     setActive(active: boolean) {
       document.documentElement.toggleAttribute(
         REACT_GRAB_ACTIVE_CURSOR_ATTRIBUTE,
-        active
+        active,
       );
     },
   };
@@ -2389,7 +2344,7 @@ export function configureReactGrabPicker(api: ReactGrabAPI) {
   for (const action of REACT_GRAB_DISABLED_ACTIONS) {
     api.unregisterPlugin(action);
   }
-  api.setToolbarState({ defaultAction: "copy" });
+  api.setToolbarState({ defaultAction: 'copy' });
   const cursor = installReactGrabDefaultCursor();
   cursor.setActive(api.isActive());
   api.registerPlugin({

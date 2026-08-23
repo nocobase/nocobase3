@@ -14,9 +14,9 @@ import {
   AppCreateFailedError,
   AppNotFoundError,
   AppReloadFailedError,
-} from "./errors.ts";
-import { AppEventBus } from "./events.ts";
-import { InProcessAppBackend } from "./in-process-backend.ts";
+} from './errors.ts';
+import { AppEventBus } from './events.ts';
+import { InProcessAppBackend } from './in-process-backend.ts';
 import type {
   ActiveAppHandle,
   CreateAppDefinitionOptions,
@@ -28,7 +28,7 @@ import type {
   AppDestroyOptions,
   AppRequestMetadata,
   AppSnapshot,
-} from "./app-types.ts";
+} from './app-types.ts';
 
 export interface ReloadAppOptions {
   reason?: string;
@@ -118,7 +118,7 @@ export class AppRuntimeRegistry {
     this.resolveFactory =
       options.resolveFactory ??
       (() => {
-        throw new Error("No app factory resolver configured");
+        throw new Error('No app factory resolver configured');
       });
     this.maxActiveApps = options.maxActiveApps ?? 500;
     this.idleTtlMs = options.idleTtlMs ?? 5 * 60_000;
@@ -186,7 +186,7 @@ export class AppRuntimeRegistry {
     id: string,
     options: string | AppDestroyOptions = {},
   ): Promise<boolean> {
-    return this.evictWithSource(id, options, "manual");
+    return this.evictWithSource(id, options, 'manual');
   }
 
   async evictIdle(now: number = Date.now()): Promise<AppSnapshot[]> {
@@ -199,9 +199,9 @@ export class AppRuntimeRegistry {
       const didEvict = await this.evictWithSource(
         candidate.id,
         {
-          reason: "idle app eviction",
+          reason: 'idle app eviction',
         },
-        "idle",
+        'idle',
       );
 
       if (didEvict) {
@@ -285,7 +285,7 @@ export class AppRuntimeRegistry {
         this.metrics.deployments += 1;
         return {
           id,
-          strategy: options.strategy ?? "blue-green",
+          strategy: options.strategy ?? 'blue-green',
           previousVersion: oldSnapshot?.codeVersion ?? null,
           desiredVersion,
           activeVersion: app.codeVersion,
@@ -308,7 +308,7 @@ export class AppRuntimeRegistry {
   ): Promise<boolean> {
     return this.withAppLock(id, async () => {
       const destroyOptions =
-        typeof options === "string" ? { reason: options } : options;
+        typeof options === 'string' ? { reason: options } : options;
       const runtime = this.runtimes.get(id);
       const hadDefinition = this.definitions.has(id);
 
@@ -334,7 +334,7 @@ export class AppRuntimeRegistry {
     const results = await Promise.allSettled(
       ids.map((id) => this.destroy(id, options)),
     );
-    const failures = results.filter((result) => result.status === "rejected");
+    const failures = results.filter((result) => result.status === 'rejected');
 
     if (failures.length > 0) {
       const failureReasons: unknown[] = [];
@@ -388,7 +388,7 @@ export class AppRuntimeRegistry {
     return [...this.runtimes.values()].map((runtime) => runtime.snapshot());
   }
 
-  capacity(): RegistryHealth["capacity"] {
+  capacity(): RegistryHealth['capacity'] {
     return {
       maxActiveApps: this.maxActiveApps,
       activeTotal: this.runtimes.size,
@@ -412,10 +412,10 @@ export class AppRuntimeRegistry {
       metrics: this.getMetrics(),
       registered: this.definitions.size,
       activeTotal: apps.length,
-      active: apps.filter((app) => app.state === "active").length,
-      draining: apps.filter((app) => app.state === "draining").length,
-      destroying: apps.filter((app) => app.state === "destroying").length,
-      failed: apps.filter((app) => app.state === "failed").length,
+      active: apps.filter((app) => app.state === 'active').length,
+      draining: apps.filter((app) => app.state === 'draining').length,
+      destroying: apps.filter((app) => app.state === 'destroying').length,
+      failed: apps.filter((app) => app.state === 'failed').length,
       operationsInFlight: this.operations.size,
     };
   }
@@ -427,7 +427,7 @@ export class AppRuntimeRegistry {
 
     this.evictionLoop = setInterval(() => {
       this.evictIdle().catch((error) => {
-        console.error("Idle app eviction failed", error);
+        console.error('Idle app eviction failed', error);
       });
     }, this.evictionIntervalMs);
     this.evictionLoop.unref?.();
@@ -490,11 +490,11 @@ export class AppRuntimeRegistry {
 
     const version = ++this.versionSequence;
 
-    this.events.emit("app:beforeCreate", {
+    this.events.emit('app:beforeCreate', {
       appId: definition.id,
       version,
       basePath: definition.basePath,
-      state: "creating",
+      state: 'creating',
       metadata: {
         configVersion: definition.configVersion,
         isolation: definition.isolation,
@@ -515,7 +515,7 @@ export class AppRuntimeRegistry {
       const activatableRuntime = runtime as ActiveAppHandle & {
         activate?: () => void;
       };
-      if (typeof activatableRuntime.activate === "function") {
+      if (typeof activatableRuntime.activate === 'function') {
         activatableRuntime.activate();
       }
 
@@ -524,11 +524,11 @@ export class AppRuntimeRegistry {
       return runtime;
     } catch (error) {
       this.metrics.activationFailures += 1;
-      this.events.emit("app:createFailed", {
+      this.events.emit('app:createFailed', {
         appId: definition.id,
         version,
         basePath: definition.basePath,
-        state: "failed",
+        state: 'failed',
         error,
       });
       throw new AppCreateFailedError(definition.id, error);
@@ -550,9 +550,9 @@ export class AppRuntimeRegistry {
     const didEvict = await this.evictWithSource(
       candidate.id,
       {
-        reason: "max active apps reached",
+        reason: 'max active apps reached',
       },
-      "capacity",
+      'capacity',
     );
 
     if (!didEvict) {
@@ -563,7 +563,7 @@ export class AppRuntimeRegistry {
   private async evictWithSource(
     id: string,
     options: string | AppDestroyOptions,
-    source: "manual" | "idle" | "capacity",
+    source: 'manual' | 'idle' | 'capacity',
   ): Promise<boolean> {
     return this.withAppLock(id, () => this.evictUnlocked(id, options, source));
   }
@@ -571,7 +571,7 @@ export class AppRuntimeRegistry {
   private async evictUnlocked(
     id: string,
     options: string | AppDestroyOptions = {},
-    source: "manual" | "idle" | "capacity" = "manual",
+    source: 'manual' | 'idle' | 'capacity' = 'manual',
   ): Promise<boolean> {
     const runtime = this.runtimes.get(id);
     if (!runtime) {
@@ -584,11 +584,11 @@ export class AppRuntimeRegistry {
     this.metrics.evictions += 1;
     this.metrics.lastEvictionDurationMs = Date.now() - startedAt;
 
-    if (source === "idle") {
+    if (source === 'idle') {
       this.metrics.idleEvictions += 1;
     }
 
-    if (source === "capacity") {
+    if (source === 'capacity') {
       this.metrics.capacityEvictions += 1;
     }
 
@@ -600,7 +600,7 @@ export class AppRuntimeRegistry {
       .map((runtime) => runtime.snapshot())
       .filter(
         (snapshot) =>
-          snapshot.activeRequests === 0 && snapshot.tier !== "dedicated",
+          snapshot.activeRequests === 0 && snapshot.tier !== 'dedicated',
       );
   }
 
@@ -630,16 +630,16 @@ export class AppRuntimeRegistry {
       appName: options.appName,
       basePath: options.basePath ?? `/${options.appName ?? id}`,
       enabled: options.enabled ?? true,
-      backend: options.backend ?? options.isolation ?? "in-process",
-      configVersion: options.configVersion ?? "v1",
-      isolation: options.isolation ?? options.backend ?? "in-process",
-      tier: options.tier ?? "warm",
+      backend: options.backend ?? options.isolation ?? 'in-process',
+      configVersion: options.configVersion ?? 'v1',
+      isolation: options.isolation ?? options.backend ?? 'in-process',
+      tier: options.tier ?? 'warm',
       desiredVersion:
         options.desiredVersion ??
         options.code?.version ??
         options.release?.version ??
         options.configVersion ??
-        "v1",
+        'v1',
       rootDir: options.rootDir,
       dataDir: options.dataDir,
       client: options.client,

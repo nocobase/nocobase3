@@ -7,23 +7,23 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
-import http from "node:http";
-import net from "node:net";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import http from 'node:http';
+import net from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export type AppHostSupervisorStatus =
-  | "disabled"
-  | "external"
-  | "stopped"
-  | "starting"
-  | "ready"
-  | "stopping"
-  | "failed";
+  | 'disabled'
+  | 'external'
+  | 'stopped'
+  | 'starting'
+  | 'ready'
+  | 'stopping'
+  | 'failed';
 
-export type AppHostDriver = "disabled" | "external" | "node" | "tsx";
+export type AppHostDriver = 'disabled' | 'external' | 'node' | 'tsx';
 
 export interface AppHostSupervisorOptions {
   enabled?: boolean;
@@ -70,10 +70,10 @@ interface AppHostLaunchOptions {
 const DEFAULT_APP_HOST_PORT = 13010;
 const DEFAULT_START_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 30 * 1000;
-const DEFAULT_HEALTH_PATH = "/__health";
+const DEFAULT_HEALTH_PATH = '/__health';
 const APP_HOST_CHILD_DENIED_NODE_OPTIONS = [
-  "--preserve-symlinks",
-  "--preserve-symlinks-main",
+  '--preserve-symlinks',
+  '--preserve-symlinks-main',
 ];
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -96,47 +96,47 @@ export class AppHostSupervisor {
   private shuttingDown = false;
 
   private constructor(options: AppHostSupervisorOptions = {}) {
-    this.enabled = options.enabled ?? process.env.APP_HOST_ENABLED !== "false";
+    this.enabled = options.enabled ?? process.env.APP_HOST_ENABLED !== 'false';
     this.externalUrl = normalizeUrl(
       options.targetUrl ?? process.env.APP_HOST_URL,
     );
     this.driver = this.resolveDriver(options);
     this.appDistDir = options.appDistDir ?? process.env.APP_DIST_DIR;
-    this.host = options.host ?? process.env.APP_HOST_BIND ?? "127.0.0.1";
-    this.configuredPort = options.port ?? numberFromEnv("APP_HOST_PORT");
+    this.host = options.host ?? process.env.APP_HOST_BIND ?? '127.0.0.1';
+    this.configuredPort = options.port ?? numberFromEnv('APP_HOST_PORT');
     this.startTimeoutMs =
       options.startTimeoutMs ??
-      numberFromEnv("APP_HOST_START_TIMEOUT_MS") ??
+      numberFromEnv('APP_HOST_START_TIMEOUT_MS') ??
       DEFAULT_START_TIMEOUT_MS;
     this.shutdownTimeoutMs =
       options.shutdownTimeoutMs ??
-      numberFromEnv("APP_HOST_SHUTDOWN_TIMEOUT_MS") ??
+      numberFromEnv('APP_HOST_SHUTDOWN_TIMEOUT_MS') ??
       DEFAULT_SHUTDOWN_TIMEOUT_MS;
     this.healthPath =
       options.healthPath ??
       process.env.APP_HOST_HEALTH_PATH ??
       DEFAULT_HEALTH_PATH;
     this.status =
-      !this.enabled || this.driver === "disabled"
-        ? "disabled"
+      !this.enabled || this.driver === 'disabled'
+        ? 'disabled'
         : this.externalUrl
-          ? "external"
-          : "stopped";
+          ? 'external'
+          : 'stopped';
 
-    process.once("SIGINT", () => {
+    process.once('SIGINT', () => {
       this.shutdown().catch((error) => {
-        console.error("Failed to shutdown app-host child process", error);
+        console.error('Failed to shutdown app-host child process', error);
       });
     });
-    process.once("SIGTERM", () => {
+    process.once('SIGTERM', () => {
       this.shutdown().catch((error) => {
-        console.error("Failed to shutdown app-host child process", error);
+        console.error('Failed to shutdown app-host child process', error);
       });
     });
 
-    if (options.prestart ?? process.env.APP_HOST_PRESTART === "true") {
+    if (options.prestart ?? process.env.APP_HOST_PRESTART === 'true') {
       this.ensureStarted().catch((error) => {
-        console.error("Failed to prestart app-host child process", error);
+        console.error('Failed to prestart app-host child process', error);
       });
     }
   }
@@ -186,14 +186,14 @@ export class AppHostSupervisor {
 
   async ensureStarted(): Promise<URL> {
     if (!this.enabled) {
-      throw new Error("App host is disabled");
+      throw new Error('App host is disabled');
     }
 
     if (this.externalUrl) {
       return this.externalUrl;
     }
 
-    if (this.managedChild && this.status === "ready") {
+    if (this.managedChild && this.status === 'ready') {
       return this.managedChild.targetUrl;
     }
 
@@ -209,7 +209,7 @@ export class AppHostSupervisor {
     }
   }
 
-  async stop(reason = "app-host stopped"): Promise<void> {
+  async stop(reason = 'app-host stopped'): Promise<void> {
     if (this.externalUrl || !this.enabled || !this.managedChild) {
       return;
     }
@@ -226,14 +226,14 @@ export class AppHostSupervisor {
     }
   }
 
-  async restart(reason = "app-host restarted"): Promise<URL> {
-    if (this.externalUrl || this.driver === "external") {
+  async restart(reason = 'app-host restarted'): Promise<URL> {
+    if (this.externalUrl || this.driver === 'external') {
       throw new Error(
-        "App host is external and cannot be restarted by the supervisor",
+        'App host is external and cannot be restarted by the supervisor',
       );
     }
-    if (!this.enabled || this.driver === "disabled") {
-      throw new Error("App host is disabled");
+    if (!this.enabled || this.driver === 'disabled') {
+      throw new Error('App host is disabled');
     }
 
     await this.stop(reason);
@@ -246,7 +246,7 @@ export class AppHostSupervisor {
     }
 
     this.shuttingDown = true;
-    await this.stop("App host supervisor shutdown");
+    await this.stop('App host supervisor shutdown');
   }
 
   private async startManagedChild(): Promise<URL> {
@@ -254,7 +254,7 @@ export class AppHostSupervisor {
       await this.stopPromise;
     }
 
-    this.status = "starting";
+    this.status = 'starting';
     const port = await this.resolvePort();
     const targetUrl = new URL(`http://${this.host}:${port}`);
     const launchOptions = this.resolveLaunchOptions(port);
@@ -262,7 +262,7 @@ export class AppHostSupervisor {
     const child = spawn(launchOptions.command, launchOptions.args, {
       cwd: process.cwd(),
       env: launchOptions.env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     this.managedChild = {
@@ -273,24 +273,24 @@ export class AppHostSupervisor {
     };
 
     this.pipeChildLogs(child);
-    child.once("exit", (code, signal) => {
-      const wasStopping = this.status === "stopping" || this.shuttingDown;
+    child.once('exit', (code, signal) => {
+      const wasStopping = this.status === 'stopping' || this.shuttingDown;
       this.managedChild = null;
-      this.status = wasStopping ? "stopped" : "failed";
+      this.status = wasStopping ? 'stopped' : 'failed';
       if (!wasStopping) {
         console.error(
-          `app-host exited unexpectedly; code=${code ?? "null"} signal=${signal ?? "null"}`,
+          `app-host exited unexpectedly; code=${code ?? 'null'} signal=${signal ?? 'null'}`,
         );
       }
     });
 
     try {
       await this.waitForReady(targetUrl);
-      this.status = "ready";
+      this.status = 'ready';
       return targetUrl;
     } catch (error) {
-      this.status = "failed";
-      await this.stopManagedChild("app-host failed to start");
+      this.status = 'failed';
+      await this.stopManagedChild('app-host failed to start');
       throw error;
     }
   }
@@ -298,22 +298,22 @@ export class AppHostSupervisor {
   private async stopManagedChild(reason: string): Promise<void> {
     const managed = this.managedChild;
     if (!managed) {
-      this.status = this.enabled ? "stopped" : "disabled";
+      this.status = this.enabled ? 'stopped' : 'disabled';
       return;
     }
 
-    this.status = "stopping";
+    this.status = 'stopping';
     console.log(`Stopping app-host child process: ${reason}`);
     const exitPromise = waitForChildExit(managed.child, this.shutdownTimeoutMs);
-    managed.child.kill("SIGTERM");
+    managed.child.kill('SIGTERM');
 
     await exitPromise.catch((error: unknown) => {
       console.warn(error instanceof Error ? error.message : String(error));
-      managed.child.kill("SIGKILL");
+      managed.child.kill('SIGKILL');
     });
 
     this.managedChild = null;
-    this.status = this.enabled ? "stopped" : "disabled";
+    this.status = this.enabled ? 'stopped' : 'disabled';
   }
 
   private release(): void {
@@ -321,19 +321,19 @@ export class AppHostSupervisor {
   }
 
   private resolveDriver(options: AppHostSupervisorOptions): AppHostDriver {
-    if (!(options.enabled ?? process.env.APP_HOST_ENABLED !== "false")) {
-      return "disabled";
+    if (!(options.enabled ?? process.env.APP_HOST_ENABLED !== 'false')) {
+      return 'disabled';
     }
     if (options.targetUrl ?? process.env.APP_HOST_URL) {
-      return "external";
+      return 'external';
     }
 
-    const driver = options.driver ?? process.env.APP_HOST_DRIVER ?? "node";
-    return driver === "tsx" ? "tsx" : "node";
+    const driver = options.driver ?? process.env.APP_HOST_DRIVER ?? 'node';
+    return driver === 'tsx' ? 'tsx' : 'node';
   }
 
   private resolveLaunchOptions(port: number): AppHostLaunchOptions {
-    if (this.driver === "tsx") {
+    if (this.driver === 'tsx') {
       return this.resolveTsxLaunchOptions(port);
     }
 
@@ -362,9 +362,9 @@ export class AppHostSupervisor {
   private resolveNodeLaunchOptions(port: number): AppHostLaunchOptions {
     const entrypoint = resolveNodeAppHostEntrypoint();
     if (!entrypoint) {
-      this.status = "failed";
+      this.status = 'failed';
       throw new Error(
-        "The app-host code is not compiled. Please run pnpm build first.",
+        'The app-host code is not compiled. Please run pnpm build first.',
       );
     }
 
@@ -380,30 +380,30 @@ export class AppHostSupervisor {
     const entrypoint = resolveTsxAppHostEntrypoint();
     const tsxCli = resolveTsxCli();
     if (!entrypoint) {
-      this.status = "failed";
-      throw new Error("The app-host source entrypoint does not exist.");
+      this.status = 'failed';
+      throw new Error('The app-host source entrypoint does not exist.');
     }
     if (!tsxCli) {
-      this.status = "failed";
+      this.status = 'failed';
       throw new Error(
-        "The tsx runtime is not installed. Please run pnpm install first.",
+        'The tsx runtime is not installed. Please run pnpm install first.',
       );
     }
 
     const tsconfig =
       process.env.APP_HOST_TSCONFIG ?? process.env.SERVER_TSCONFIG_PATH;
-    const args = [tsxCli, "watch", "--clear-screen=false"];
+    const args = [tsxCli, 'watch', '--clear-screen=false'];
     if (tsconfig) {
-      args.push("--tsconfig", tsconfig);
+      args.push('--tsconfig', tsconfig);
     }
-    args.push("-r", "tsconfig-paths/register", entrypoint);
+    args.push('-r', 'tsconfig-paths/register', entrypoint);
 
     return {
       command: process.execPath,
       args,
       env: {
         ...this.baseAppHostEnv(port),
-        NODE_ENV: "development",
+        NODE_ENV: 'development',
       },
       entrypoint,
     };
@@ -414,16 +414,16 @@ export class AppHostSupervisor {
       return this.configuredPort;
     }
 
-    const appPort = numberFromEnv("APP_PORT") ?? DEFAULT_APP_HOST_PORT - 10;
+    const appPort = numberFromEnv('APP_PORT') ?? DEFAULT_APP_HOST_PORT - 10;
     return await findAvailablePort(appPort + 10, this.host);
   }
 
   private pipeChildLogs(child: ChildProcess): void {
-    child.stdout?.on("data", (chunk: unknown) => {
-      writePrefixedChunk("app-host", chunk, process.stdout);
+    child.stdout?.on('data', (chunk: unknown) => {
+      writePrefixedChunk('app-host', chunk, process.stdout);
     });
-    child.stderr?.on("data", (chunk: unknown) => {
-      writePrefixedChunk("app-host", chunk, process.stderr);
+    child.stderr?.on('data', (chunk: unknown) => {
+      writePrefixedChunk('app-host', chunk, process.stderr);
     });
   }
 
@@ -433,7 +433,7 @@ export class AppHostSupervisor {
 
     while (Date.now() - startedAt < this.startTimeoutMs) {
       if (!this.managedChild) {
-        throw new Error("app-host child process exited before it became ready");
+        throw new Error('app-host child process exited before it became ready');
       }
 
       try {
@@ -446,7 +446,7 @@ export class AppHostSupervisor {
     }
 
     throw new Error(
-      `app-host did not become ready within ${this.startTimeoutMs}ms: ${lastError?.message ?? ""}`,
+      `app-host did not become ready within ${this.startTimeoutMs}ms: ${lastError?.message ?? ''}`,
     );
   }
 }
@@ -457,7 +457,7 @@ function resolveNodeAppHostEntrypoint(): string | null {
     return path.resolve(process.cwd(), explicit);
   }
 
-  const compiled = path.resolve(currentDir, "cli.js");
+  const compiled = path.resolve(currentDir, 'cli.js');
   if (existsSync(compiled)) {
     return compiled;
   }
@@ -471,7 +471,7 @@ function resolveTsxAppHostEntrypoint(): string | null {
     return path.resolve(process.cwd(), explicit);
   }
 
-  const source = path.resolve(currentDir, "cli.ts");
+  const source = path.resolve(currentDir, 'cli.ts');
   if (existsSync(source)) {
     return source;
   }
@@ -486,9 +486,9 @@ function resolveTsxCli(): string | null {
   }
 
   try {
-    return require.resolve("tsx/dist/cli.mjs", { paths: [process.cwd()] });
+    return require.resolve('tsx/dist/cli.mjs', { paths: [process.cwd()] });
   } catch {
-    const local = path.resolve(process.cwd(), "node_modules/tsx/dist/cli.mjs");
+    const local = path.resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs');
     return existsSync(local) ? local : null;
   }
 }
@@ -502,7 +502,7 @@ function normalizeUrl(value?: string): URL | undefined {
 }
 
 export function sanitizeAppHostChildNodeOptions(value: unknown): string {
-  const source = typeof value === "string" ? value : "";
+  const source = typeof value === 'string' ? value : '';
   return source
     .trim()
     .split(/\s+/)
@@ -514,7 +514,7 @@ export function sanitizeAppHostChildNodeOptions(value: unknown): string {
             option === deniedOption || option.startsWith(`${deniedOption}=`),
         ),
     )
-    .join(" ");
+    .join(' ');
 }
 
 function numberFromEnv(name: string): number | undefined {
@@ -542,8 +542,8 @@ async function findAvailablePort(
 function isPortAvailable(port: number, host: string): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
-    server.once("error", () => resolve(false));
-    server.once("listening", () => {
+    server.once('error', () => resolve(false));
+    server.once('listening', () => {
       server.close(() => resolve(true));
     });
     server.listen(port, host);
@@ -561,15 +561,15 @@ function requestHealth(url: URL): Promise<void> {
 
       reject(
         new Error(
-          `health check returned ${res.statusCode ?? "unknown status"}`,
+          `health check returned ${res.statusCode ?? 'unknown status'}`,
         ),
       );
     });
 
     req.setTimeout(1000, () => {
-      req.destroy(new Error("health check timed out"));
+      req.destroy(new Error('health check timed out'));
     });
-    req.once("error", reject);
+    req.once('error', reject);
   });
 }
 
@@ -590,10 +590,10 @@ function waitForChildExit(
 
     const cleanup = () => {
       clearTimeout(timer);
-      child.off("exit", onExit);
+      child.off('exit', onExit);
     };
 
-    child.once("exit", onExit);
+    child.once('exit', onExit);
   });
 }
 
@@ -614,7 +614,7 @@ function writePrefixedChunk(
 
   const text = chunk.toString();
   const lines = text.split(/\r?\n/);
-  const hasTrailingNewline = text.endsWith("\n") || text.endsWith("\r");
+  const hasTrailingNewline = text.endsWith('\n') || text.endsWith('\r');
 
   lines.forEach((line, index) => {
     if (!line && index === lines.length - 1 && hasTrailingNewline) {

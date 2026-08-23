@@ -1,5 +1,8 @@
 import { defineAuthorization } from './definition.js';
-import type { AuthorizationDefinition, AuthorizationDefinitionInput } from './definition.js';
+import type {
+  AuthorizationDefinition,
+  AuthorizationDefinitionInput,
+} from './definition.js';
 import type {
   ActionPermission,
   Assignment,
@@ -54,10 +57,15 @@ export class PermissionSetDefinitionBuilder {
   }
 
   resource(resource: string, input: ObjectPermissionInput): this;
-  resource(resource: string, define: (permission: ObjectPermissionDefinitionBuilder) => void): this;
   resource(
     resource: string,
-    input: ObjectPermissionInput | ((permission: ObjectPermissionDefinitionBuilder) => void),
+    define: (permission: ObjectPermissionDefinitionBuilder) => void,
+  ): this;
+  resource(
+    resource: string,
+    input:
+      | ObjectPermissionInput
+      | ((permission: ObjectPermissionDefinitionBuilder) => void),
   ): this {
     if (typeof input === 'function') {
       const builder = new ObjectPermissionDefinitionBuilder(resource);
@@ -96,7 +104,11 @@ export class PermissionSetGroupDefinitionBuilder {
   }
 
   build(): PermissionSetGroup {
-    return { key: this.key, ...this.value, permissionSets: [...this.permissionSets] };
+    return {
+      key: this.key,
+      ...this.value,
+      permissionSets: [...this.permissionSets],
+    };
   }
 }
 
@@ -105,7 +117,10 @@ export class AuthorizationDefinitionBuilder {
   private readonly permissionSets: PermissionSet[];
   private readonly permissionSetGroups: PermissionSetGroup[];
   private readonly assignments: Assignment[];
-  private readonly organizationWideDefaults: Record<string, OrganizationWideDefault>;
+  private readonly organizationWideDefaults: Record<
+    string,
+    OrganizationWideDefault
+  >;
   private readonly sharingRules: SharingRule[];
   private readonly restrictionRules: RestrictionRule[];
 
@@ -113,16 +128,23 @@ export class AuthorizationDefinitionBuilder {
     this.permissionSets = [...(input.permissionSets ?? [])];
     this.permissionSetGroups = [...(input.permissionSetGroups ?? [])];
     this.assignments = [...(input.assignments ?? [])];
-    this.organizationWideDefaults = { ...(input.organizationWideDefaults ?? {}) };
+    this.organizationWideDefaults = {
+      ...(input.organizationWideDefaults ?? {}),
+    };
     this.sharingRules = [...(input.sharingRules ?? [])];
     this.restrictionRules = [...(input.restrictionRules ?? [])];
   }
 
   permissionSet(key: string, input: PermissionSetInput): this;
-  permissionSet(key: string, define: (permissionSet: PermissionSetDefinitionBuilder) => void): this;
   permissionSet(
     key: string,
-    input: PermissionSetInput | ((permissionSet: PermissionSetDefinitionBuilder) => void),
+    define: (permissionSet: PermissionSetDefinitionBuilder) => void,
+  ): this;
+  permissionSet(
+    key: string,
+    input:
+      | PermissionSetInput
+      | ((permissionSet: PermissionSetDefinitionBuilder) => void),
   ): this {
     if (typeof input === 'function') {
       const builder = new PermissionSetDefinitionBuilder(key);
@@ -135,10 +157,15 @@ export class AuthorizationDefinitionBuilder {
   }
 
   permissionSetGroup(key: string, input: PermissionSetGroupInput): this;
-  permissionSetGroup(key: string, define: (group: PermissionSetGroupDefinitionBuilder) => void): this;
   permissionSetGroup(
     key: string,
-    input: PermissionSetGroupInput | ((group: PermissionSetGroupDefinitionBuilder) => void),
+    define: (group: PermissionSetGroupDefinitionBuilder) => void,
+  ): this;
+  permissionSetGroup(
+    key: string,
+    input:
+      | PermissionSetGroupInput
+      | ((group: PermissionSetGroupDefinitionBuilder) => void),
   ): this {
     if (typeof input === 'function') {
       const builder = new PermissionSetGroupDefinitionBuilder(key);
@@ -155,7 +182,10 @@ export class AuthorizationDefinitionBuilder {
     return this;
   }
 
-  organizationWideDefault(resource: string, value: OrganizationWideDefault): this {
+  organizationWideDefault(
+    resource: string,
+    value: OrganizationWideDefault,
+  ): this {
     this.organizationWideDefaults[resource] = value;
     return this;
   }
@@ -182,4 +212,6 @@ export class AuthorizationDefinitionBuilder {
   }
 }
 
-export type AuthorizationDefinitionCallback = (definition: AuthorizationDefinitionBuilder) => void;
+export type AuthorizationDefinitionCallback = (
+  definition: AuthorizationDefinitionBuilder,
+) => void;

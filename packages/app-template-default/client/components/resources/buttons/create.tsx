@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import React from "react";
-import { type BaseKey, useCreateButton } from "@refinedev/core";
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React from 'react';
+import { type BaseKey, useCreateButton } from '@refinedev/core';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 type CreateButtonProps = {
   /**
@@ -58,13 +58,13 @@ export const CreateButton = React.forwardRef<
       }}
     >
       {children ?? (
-        <div className="flex items-center gap-2 font-semibold">
-          <Plus className="w-4 h-4" />
-          <span>{label ?? "Create"}</span>
+        <div className='flex items-center gap-2 font-semibold'>
+          <Plus className='w-4 h-4' />
+          <span>{label ?? 'Create'}</span>
         </div>
       )}
     </Button>
   );
 });
 
-CreateButton.displayName = "CreateButton";
+CreateButton.displayName = 'CreateButton';

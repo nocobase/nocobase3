@@ -8,7 +8,9 @@ export interface NocoBaseApiProxyOptions {
   nocoBaseApiUrl: URL | undefined;
 }
 
-export function resolveNocoBaseApiUrl(value: string | false | undefined): URL | undefined {
+export function resolveNocoBaseApiUrl(
+  value: string | false | undefined,
+): URL | undefined {
   if (value === false) {
     return undefined;
   }
@@ -21,7 +23,10 @@ export function resolveNocoBaseApiUrl(value: string | false | undefined): URL | 
   return new URL(normalized);
 }
 
-export function registerNocoBaseApiProxyRoutes(app: Hono, options: NocoBaseApiProxyOptions): void {
+export function registerNocoBaseApiProxyRoutes(
+  app: Hono,
+  options: NocoBaseApiProxyOptions,
+): void {
   const apiProxyPath = normalizeBasePath(options.apiProxyPath);
   if (!apiProxyPath) {
     return;
@@ -32,11 +37,18 @@ export function registerNocoBaseApiProxyRoutes(app: Hono, options: NocoBaseApiPr
     apiProxyPath,
   };
 
-  app.all(apiProxyPath, (context) => proxyToNocoBaseApi(context.req.raw, proxyOptions));
-  app.all(`${apiProxyPath}/*`, (context) => proxyToNocoBaseApi(context.req.raw, proxyOptions));
+  app.all(apiProxyPath, (context) =>
+    proxyToNocoBaseApi(context.req.raw, proxyOptions),
+  );
+  app.all(`${apiProxyPath}/*`, (context) =>
+    proxyToNocoBaseApi(context.req.raw, proxyOptions),
+  );
 }
 
-export async function proxyToNocoBaseApi(request: Request, options: NocoBaseApiProxyOptions): Promise<Response> {
+export async function proxyToNocoBaseApi(
+  request: Request,
+  options: NocoBaseApiProxyOptions,
+): Promise<Response> {
   if (!options.nocoBaseApiUrl) {
     return Response.json(
       {
@@ -48,19 +60,36 @@ export async function proxyToNocoBaseApi(request: Request, options: NocoBaseApiP
     );
   }
 
-  const targetUrl = createNocoBaseApiTargetUrl(request, options.apiProxyPath, options.nocoBaseApiUrl);
+  const targetUrl = createNocoBaseApiTargetUrl(
+    request,
+    options.apiProxyPath,
+    options.nocoBaseApiUrl,
+  );
 
   return proxyRequest(request, targetUrl, {
-    headers: createNocoBaseApiProxyHeaders(request, options.apiProxyPath, options.nocoBaseApiUrl),
+    headers: createNocoBaseApiProxyHeaders(
+      request,
+      options.apiProxyPath,
+      options.nocoBaseApiUrl,
+    ),
     unavailableMessage: 'NocoBase API server is unavailable.',
   });
 }
 
-export function createNocoBaseApiTargetUrl(request: Request, apiProxyPath: string, nocoBaseApiUrl: URL): URL {
+export function createNocoBaseApiTargetUrl(
+  request: Request,
+  apiProxyPath: string,
+  nocoBaseApiUrl: URL,
+): URL {
   const requestUrl = new URL(request.url);
-  const normalizedProxyPath = normalizeBasePath(apiProxyPath).replace(/\/$/, '');
+  const normalizedProxyPath = normalizeBasePath(apiProxyPath).replace(
+    /\/$/,
+    '',
+  );
   const apiBasePath = nocoBaseApiUrl.pathname.replace(/\/$/, '');
-  const suffix = requestUrl.pathname.slice(normalizedProxyPath.length).replace(/^\/+/, '');
+  const suffix = requestUrl.pathname
+    .slice(normalizedProxyPath.length)
+    .replace(/^\/+/, '');
   const pathname = suffix ? `${apiBasePath}/${suffix}` : apiBasePath || '/';
   const targetUrl = new URL(nocoBaseApiUrl);
   targetUrl.pathname = pathname;
@@ -103,5 +132,7 @@ export function createNocoBaseApiProxyHeaders(
 }
 
 function isCrossSiteUpstream(nocoBaseApiUrl: URL): boolean {
-  return !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(nocoBaseApiUrl.hostname);
+  return !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(
+    nocoBaseApiUrl.hostname,
+  );
 }

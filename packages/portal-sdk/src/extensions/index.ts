@@ -1,7 +1,7 @@
-import type { ResourceProps } from "@refinedev/core";
-import type { ComponentType, PropsWithChildren } from "react";
-import type { AuthenticatorAdapter } from "../auth/index.ts";
-import type { AppRouteDefinition } from "../routing/index.ts";
+import type { ResourceProps } from '@refinedev/core';
+import type { ComponentType, PropsWithChildren } from 'react';
+import type { AuthenticatorAdapter } from '../auth/index.ts';
+import type { AppRouteDefinition } from '../routing/index.ts';
 
 export type AppExtension = {
   id: string;
@@ -38,7 +38,7 @@ export const sortAppExtensions = (extensions: AppExtension[]): AppExtension[] =>
   [...extensions].sort(
     (left, right) =>
       (left.priority ?? 100) - (right.priority ?? 100) ||
-      left.id.localeCompare(right.id)
+      left.id.localeCompare(right.id),
   );
 
 export const collectAppExtensionContributions = ({
@@ -59,7 +59,9 @@ export const collectAppExtensionContributions = ({
       ...appRoutes,
       ...routeExtensions.flatMap((extension) => extension.routes ?? []),
     ],
-    resources: routeExtensions.flatMap((extension) => extension.resources ?? []),
+    resources: routeExtensions.flatMap(
+      (extension) => extension.resources ?? [],
+    ),
     userMenuItems: sortedExtensions
       .filter((extension) => extension.UserMenuItems)
       .map((extension) => ({
@@ -67,17 +69,18 @@ export const collectAppExtensionContributions = ({
         Component: extension.UserMenuItems!,
       })),
     authAdapters: sortedExtensions.flatMap(
-      (extension) => extension.authAdapters ?? []
+      (extension) => extension.authAdapters ?? [],
     ),
     providerExtensions: sortedExtensions.filter(
-      (extension) => extension.Provider
+      (extension) => extension.Provider,
     ),
     authRuntimeExtensions: [...sortedExtensions]
       .filter((extension) => extension.AuthRuntimeProvider)
       .sort(
         (left, right) =>
           (left.authRuntimePriority ?? 100) -
-            (right.authRuntimePriority ?? 100) || left.id.localeCompare(right.id)
+            (right.authRuntimePriority ?? 100) ||
+          left.id.localeCompare(right.id),
       ),
   };
 };

@@ -3,7 +3,8 @@
 `where` 参考 Kysely 风格。简单条件使用三参形式：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('orders')
   .where('tenantId', '=', tenantId)
   .where('status', '=', 'paid')
@@ -35,7 +36,8 @@ type ComparisonOperator =
 `in`、`null`、`like` 等条件通过 operator 表达，不提供额外的 `whereIn()`、`whereNull()`、`whereLike()`：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('orders')
   .where('type', 'in', ['normal', 'vip'])
   .where('status', 'not in', ['draft', 'cancelled'])
@@ -52,17 +54,15 @@ V1 不提供 `ilike`、JSON operator、raw where。需要这类能力时，应�
 复杂条件使用 `where((eb) => expression)`：
 
 ```ts
-const rows = await db.query()
+const rows = await db
+  .query()
   .selectFrom('orders')
   .where(({ eb, and, or, not }) =>
     and([
       eb('tenantId', '=', tenantId),
-      or([
-        eb('status', '=', 'paid'),
-        eb('status', '=', 'completed'),
-      ]),
+      or([eb('status', '=', 'paid'), eb('status', '=', 'completed')]),
       not(eb.between('amount', 500, 700)),
-    ])
+    ]),
   )
   .execute();
 ```
@@ -84,13 +84,14 @@ eb('amount', '>=', 100);
 对象等值条件只作为 `eb.and()` / `eb.or()` 的便捷语法：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('users')
   .where((eb) =>
     eb.and({
       firstName: 'Jennifer',
       lastName: 'Aniston',
-    })
+    }),
   )
   .execute();
 ```
@@ -109,7 +110,8 @@ db.query().selectFrom('users').where({ firstName: 'Jennifer' });
 字段和字段比较使用 `whereRef()`：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('payments')
   .whereRef('payments.orderId', '=', 'orders.id')
   .execute();
@@ -118,11 +120,10 @@ await db.query()
 也可以在 `eb` 中用 `ref()`：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('payments')
-  .where((eb) =>
-    eb('payments.orderId', '=', eb.ref('orders.id'))
-  )
+  .where((eb) => eb('payments.orderId', '=', eb.ref('orders.id')))
   .execute();
 ```
 
@@ -131,7 +132,8 @@ await db.query()
 V1 不提供 `whereExists()` / `whereNotExists()`，而是通过 `eb.exists()` 和 `eb.not()` 组合：
 
 ```ts
-const orders = await db.query()
+const orders = await db
+  .query()
   .selectFrom('orders')
   .select('orderNo')
   .where(({ exists, selectFrom }) =>
@@ -139,23 +141,24 @@ const orders = await db.query()
       selectFrom('payments')
         .select('id')
         .whereRef('payments.orderId', '=', 'orders.id')
-        .where('payments.status', '=', 'paid')
-    )
+        .where('payments.status', '=', 'paid'),
+    ),
   )
   .execute();
 ```
 
 ```ts
-const orders = await db.query()
+const orders = await db
+  .query()
   .selectFrom('orders')
   .where(({ not, exists, selectFrom }) =>
     not(
       exists(
         selectFrom('payments')
           .select('id')
-          .whereRef('payments.orderId', '=', 'orders.id')
-      )
-    )
+          .whereRef('payments.orderId', '=', 'orders.id'),
+      ),
+    ),
   )
   .execute();
 ```
@@ -165,14 +168,15 @@ const orders = await db.query()
 子查询通过 `eb.selectFrom()` 创建，可以用于 `in`、`not in`、`exists`，也可以作为 select 标量子查询：
 
 ```ts
-const orders = await db.query()
+const orders = await db
+  .query()
   .selectFrom('orders')
   .where((eb) =>
-    eb('id', 'in',
-      eb.selectFrom('payments')
-        .select('orderId')
-        .where('status', '=', 'paid')
-    )
+    eb(
+      'id',
+      'in',
+      eb.selectFrom('payments').select('orderId').where('status', '=', 'paid'),
+    ),
   )
   .execute();
 ```

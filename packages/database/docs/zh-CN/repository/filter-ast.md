@@ -62,9 +62,7 @@ export interface FilterAst {
 }
 
 export type FilterNode =
-  | FilterGroupNode
-  | FilterConditionNode
-  | FilterRelationNode;
+  FilterGroupNode | FilterConditionNode | FilterRelationNode;
 
 export interface FilterGroupNode {
   kind: 'group';
@@ -82,13 +80,7 @@ export interface FilterConditionNode {
 export interface FilterRelationNode {
   kind: 'relation';
   path: readonly string[];
-  quantifier:
-    | 'exists'
-    | 'notExists'
-    | 'some'
-    | 'none'
-    | 'empty'
-    | 'notEmpty';
+  quantifier: 'exists' | 'notExists' | 'some' | 'none' | 'empty' | 'notEmpty';
   filter?: FilterGroupNode;
 }
 
@@ -127,9 +119,7 @@ export type FilterOperator =
 export type FilterScalar = string | number | boolean | null;
 
 export type FilterValue =
-  | FilterScalar
-  | FilterVariable
-  | readonly (FilterScalar | FilterVariable)[];
+  FilterScalar | FilterVariable | readonly (FilterScalar | FilterVariable)[];
 
 export interface FilterVariable {
   kind: 'variable';
@@ -256,14 +246,14 @@ To-many relation 使用 `relation` 节点，不能直接降级成普通 dot path
 
 Relation quantifier 的语义：
 
-| quantifier | 语义 | 是否需要 `filter` |
-| --- | --- | --- |
-| `some` | 至少一个关联记录满足条件 | 是 |
-| `none` | 没有任何关联记录满足条件 | 是 |
-| `exists` | 关联存在 | 否 |
-| `notExists` | 关联不存在 | 否 |
-| `empty` | 关联为空 | 否 |
-| `notEmpty` | 关联不为空 | 否 |
+| quantifier  | 语义                     | 是否需要 `filter` |
+| ----------- | ------------------------ | ----------------- |
+| `some`      | 至少一个关联记录满足条件 | 是                |
+| `none`      | 没有任何关联记录满足条件 | 是                |
+| `exists`    | 关联存在                 | 否                |
+| `notExists` | 关联不存在               | 否                |
+| `empty`     | 关联为空                 | 否                |
+| `notEmpty`  | 关联不为空               | 否                |
 
 V1 不设计 `every`，避免空关联集合语义不直观。
 
@@ -287,8 +277,7 @@ await db.repository('orders').findMany({
       id: 1,
     },
   },
-  filter: (filter) =>
-    filter.id('createdBy.id').eq(filter.variable('$user.id')),
+  filter: (filter) => filter.id('createdBy.id').eq(filter.variable('$user.id')),
 });
 ```
 
@@ -339,12 +328,14 @@ const users = await db.repository('users').findMany({
   filter: (filter) =>
     filter.and([
       filter.boolean('enabled').isTrue(),
-      filter.relation('roles').none((role) =>
-        role.or([
-          role.string('name').eq('root'),
-          role.string('name').eq('admin'),
-        ])
-      ),
+      filter
+        .relation('roles')
+        .none((role) =>
+          role.or([
+            role.string('name').eq('root'),
+            role.string('name').eq('admin'),
+          ]),
+        ),
       filter.id('createdBy.id').eq(filter.variable('$user.id')),
     ]),
 });

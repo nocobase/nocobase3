@@ -1,24 +1,20 @@
-import type { AccessControlProvider } from "@refinedev/core";
+import type { AccessControlProvider } from '@refinedev/core';
 
-import {
-  aclStore,
-  getAclState,
-  loadAcl,
-} from "./store.ts";
-import { evaluateAccess } from "./evaluator.ts";
-import type { AclAccessRequest, RoleConstraint } from "./types.ts";
+import { aclStore, getAclState, loadAcl } from './store.ts';
+import { evaluateAccess } from './evaluator.ts';
+import type { AclAccessRequest, RoleConstraint } from './types.ts';
 
 const toAclAccessRequest = ({
   resource,
   action,
   params,
-}: Parameters<AccessControlProvider["can"]>[0]): AclAccessRequest => ({
+}: Parameters<AccessControlProvider['can']>[0]): AclAccessRequest => ({
   resource,
   action,
   id: params?.id,
-  field: typeof params?.field === "string" ? params.field : undefined,
+  field: typeof params?.field === 'string' ? params.field : undefined,
   dataSourceKey:
-    typeof params?.dataSourceKey === "string"
+    typeof params?.dataSourceKey === 'string'
       ? params.dataSourceKey
       : undefined,
   roles: params?.roles as RoleConstraint | undefined,
@@ -30,11 +26,11 @@ export const accessControlProvider: AccessControlProvider = {
   can: async (request) => {
     const state = await loadAcl();
     const can =
-      state.status === "ready" &&
+      state.status === 'ready' &&
       evaluateAccess(
         state.permissions,
         toAclAccessRequest(request),
-        aclStore.recordPermissions.getPermission
+        aclStore.recordPermissions.getPermission,
       );
 
     return {
@@ -58,11 +54,11 @@ export const accessControlProvider: AccessControlProvider = {
 export const canAccessCurrentAcl = (request: AclAccessRequest): boolean => {
   const state = getAclState();
   return (
-    state.status === "ready" &&
+    state.status === 'ready' &&
     evaluateAccess(
       state.permissions,
       request,
-      aclStore.recordPermissions.getPermission
+      aclStore.recordPermissions.getPermission,
     )
   );
 };

@@ -4,18 +4,18 @@ import type {
   FileUploadFieldValue,
   NocoBaseFileRecord,
   SerializedFileFieldValue,
-} from "./types";
+} from './types';
 
 export function isMultipleFileRelation(relation: FileRelationType) {
   return (
-    relation === "belongsToMany" ||
-    relation === "hasMany" ||
-    relation === "belongsToArray"
+    relation === 'belongsToMany' ||
+    relation === 'hasMany' ||
+    relation === 'belongsToArray'
   );
 }
 
 export function allowsMultipleFiles(
-  descriptor: Pick<FileFieldDescriptor, "relation">
+  descriptor: Pick<FileFieldDescriptor, 'relation'>,
 ) {
   return isMultipleFileRelation(descriptor.relation);
 }
@@ -27,16 +27,13 @@ export function normalizeFileFieldValue(value: FileUploadFieldValue) {
 
 export function serializeFileFieldValue(
   descriptor: FileFieldDescriptor,
-  value: FileUploadFieldValue
+  value: FileUploadFieldValue,
 ): SerializedFileFieldValue {
   const references = normalizeFileFieldValue(value).map((record) => ({
     id: record.id,
   }));
 
-  if (
-    descriptor.relation === "belongsTo" ||
-    descriptor.relation === "hasOne"
-  ) {
+  if (descriptor.relation === 'belongsTo' || descriptor.relation === 'hasOne') {
     return references[0] ?? null;
   }
 
@@ -44,14 +41,14 @@ export function serializeFileFieldValue(
 }
 
 export function serializeFileFieldValues<
-  TValues extends Record<string, unknown>
+  TValues extends Record<string, unknown>,
 >(values: TValues, descriptors: FileFieldDescriptor[]) {
   const payload: Record<string, unknown> = { ...values };
 
   for (const descriptor of descriptors) {
     payload[descriptor.fieldName] = serializeFileFieldValue(
       descriptor,
-      values[descriptor.fieldName] as FileUploadFieldValue
+      values[descriptor.fieldName] as FileUploadFieldValue,
     );
   }
 
@@ -63,8 +60,8 @@ export function getFileFieldAppends(descriptors: FileFieldDescriptor[]) {
 }
 
 export function toFileFieldValue(
-  descriptor: Pick<FileFieldDescriptor, "relation">,
-  records: NocoBaseFileRecord[]
+  descriptor: Pick<FileFieldDescriptor, 'relation'>,
+  records: NocoBaseFileRecord[],
 ): FileUploadFieldValue {
-  return allowsMultipleFiles(descriptor) ? records : records[0] ?? null;
+  return allowsMultipleFiles(descriptor) ? records : (records[0] ?? null);
 }

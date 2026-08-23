@@ -1,13 +1,10 @@
-import {
-  AIProvider,
-  type AIProviderProps,
-} from "../providers/ai-provider";
-import { AIPageElementProvider } from "./page-elements/page-element-provider";
+import { AIProvider, type AIProviderProps } from '../providers/ai-provider';
+import { AIPageElementProvider } from './page-elements/page-element-provider';
 import {
   AIToolRendererProvider,
   type AIToolRendererMap,
-} from "./tools/tool-renderer-provider";
-import type { AIPageContextFailurePolicy } from "./page-elements/page-element-provider";
+} from './tools/tool-renderer-provider';
+import type { AIPageContextFailurePolicy } from './page-elements/page-element-provider';
 
 export type NocoBaseAIRootProviderProps = AIProviderProps & {
   toolRenderers?: AIToolRendererMap;

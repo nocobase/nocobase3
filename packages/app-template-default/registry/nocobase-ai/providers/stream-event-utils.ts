@@ -1,4 +1,4 @@
-import type { NocoBaseStreamEvent } from "./stream-parser";
+import type { NocoBaseStreamEvent } from './stream-parser';
 
 export type NocoBaseToolCall = {
   id?: string;
@@ -19,7 +19,7 @@ export type NocoBaseToolCall = {
 };
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === "object" && !Array.isArray(value);
+  !!value && typeof value === 'object' && !Array.isArray(value);
 
 export const toolCallsFromEvent = (event: NocoBaseStreamEvent) => {
   if (Array.isArray(event.body)) return event.body as NocoBaseToolCall[];
@@ -28,7 +28,7 @@ export const toolCallsFromEvent = (event: NocoBaseStreamEvent) => {
 };
 
 export const parseToolInput = (input: unknown) => {
-  if (typeof input !== "string") return input;
+  if (typeof input !== 'string') return input;
   try {
     return JSON.parse(input) as unknown;
   } catch {
@@ -36,18 +36,18 @@ export const parseToolInput = (input: unknown) => {
   }
 };
 
-const completedToolStatus = new Set(["success", "done", "confirmed"]);
-const failedToolStatus = new Set(["error", "failed", "rejected"]);
+const completedToolStatus = new Set(['success', 'done', 'confirmed']);
+const failedToolStatus = new Set(['error', 'failed', 'rejected']);
 const pendingInvokeStatus = new Set([
-  "interrupted",
-  "waiting",
-  "pending",
-  "running",
+  'interrupted',
+  'waiting',
+  'pending',
+  'running',
 ]);
 
 export const getToolCallState = (toolCall: NocoBaseToolCall) => {
-  const invokeStatus = String(toolCall.invokeStatus ?? "").toLowerCase();
-  const resultStatus = String(toolCall.status ?? "").toLowerCase();
+  const invokeStatus = String(toolCall.invokeStatus ?? '').toLowerCase();
+  const resultStatus = String(toolCall.status ?? '').toLowerCase();
   const failed =
     failedToolStatus.has(invokeStatus) || failedToolStatus.has(resultStatus);
   const completed =
@@ -68,12 +68,12 @@ export const getToolProviderMetadata = (toolCall: NocoBaseToolCall) => {
   return {
     nocobase: {
       requiresApproval:
-        (invokeStatus === "interrupted" ||
+        (invokeStatus === 'interrupted' ||
           (!invokeStatus && toolCall.willInterrupt === true)) &&
         toolCall.auto !== true,
-      autoApprove: invokeStatus === "interrupted" && toolCall.auto === true,
+      autoApprove: invokeStatus === 'interrupted' && toolCall.auto === true,
       invokeStatus,
-      ...(typeof toolCall.selectedSuggestion === "string"
+      ...(typeof toolCall.selectedSuggestion === 'string'
         ? { selectedSuggestion: toolCall.selectedSuggestion }
         : {}),
       status: resultStatus,

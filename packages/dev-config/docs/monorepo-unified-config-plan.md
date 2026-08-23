@@ -201,11 +201,11 @@ TypeScript 默认采用 `recommendedTypeChecked`，通过 `parserOptions.project
 每个 package 保留薄 `eslint.config.js`：
 
 ```js
-import { createNodeLibraryConfig } from "@nocobase/dev-config/eslint";
+import { createNodeLibraryConfig } from '@nocobase/dev-config/eslint';
 
 export default createNodeLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
-  ignores: ["generated/**"],
+  ignores: ['generated/**'],
 });
 ```
 
@@ -230,13 +230,14 @@ export default {
   tabWidth: 2,
   useTabs: false,
   semi: true,
-  singleQuote: false,
-  quoteProps: "as-needed",
-  trailingComma: "all",
+  singleQuote: true,
+  jsxSingleQuote: true,
+  quoteProps: 'as-needed',
+  trailingComma: 'all',
   bracketSpacing: true,
   bracketSameLine: false,
-  arrowParens: "always",
-  endOfLine: "lf",
+  arrowParens: 'always',
+  endOfLine: 'lf',
 };
 ```
 

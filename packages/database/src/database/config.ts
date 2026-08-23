@@ -44,15 +44,12 @@ export type MysqlConnectionConfig = BaseConnectionConfig & {
 } & MysqlConnectionTargetConfig;
 
 export type ConnectionConfig =
-  | SqliteConnectionConfig
-  | PostgresConnectionConfig
-  | MysqlConnectionConfig;
+  SqliteConnectionConfig | PostgresConnectionConfig | MysqlConnectionConfig;
 
 export type DatabaseDriver = NonNullable<ConnectionConfig['driver']>;
 
 type MysqlConnectionTargetConfig =
-  | (HostConnectionConfig & { socketPath?: never })
-  | SocketConnectionConfig;
+  (HostConnectionConfig & { socketPath?: never }) | SocketConnectionConfig;
 
 interface HostConnectionConfig {
   host?: string;

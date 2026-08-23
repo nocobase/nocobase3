@@ -1,5 +1,5 @@
-import type { DatabaseConnection } from "../database/index.js";
-import type { MigrationContext, MigrationConnection } from "./types.js";
+import type { DatabaseConnection } from '../database/index.js';
+import type { MigrationContext, MigrationConnection } from './types.js';
 
 export function createMigrationContext(
   connection: DatabaseConnection,

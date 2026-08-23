@@ -1,8 +1,8 @@
-import { DriveManager } from "flydrive";
-import { FSDriver } from "flydrive/drivers/fs";
-import { S3Driver } from "flydrive/drivers/s3";
-import type { S3DriverOptions } from "flydrive/drivers/s3/types";
-import type { DriverContract } from "flydrive/types";
+import { DriveManager } from 'flydrive';
+import { FSDriver } from 'flydrive/drivers/fs';
+import { S3Driver } from 'flydrive/drivers/s3';
+import type { S3DriverOptions } from 'flydrive/drivers/s3/types';
+import type { DriverContract } from 'flydrive/types';
 
 import type {
   AppDriveConfig,
@@ -11,8 +11,8 @@ import type {
   FsDriveDiskConfig,
   NocoBaseDriveManager,
   S3DriveDiskConfig,
-} from "./types.js";
-import { joinDriveUrl } from "./url.js";
+} from './types.js';
+import { joinDriveUrl } from './url.js';
 
 export function createDriveManager(
   config: AppDriveConfig,
@@ -41,7 +41,7 @@ export function assertDefaultDisk(config: AppDriveConfig): void {
 }
 
 function createDriver(disk: AppDriveDiskConfig): DriverContract {
-  if (disk.driver === "fs") {
+  if (disk.driver === 'fs') {
     return createFsDriver(disk);
   }
 

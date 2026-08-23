@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore } from 'react';
 
-export type LocaleDirection = "ltr" | "rtl";
+export type LocaleDirection = 'ltr' | 'rtl';
 
 export type LocaleDefinition = {
   locale: string;
@@ -13,7 +13,7 @@ export type PortalLocaleConfiguration = {
   locales: LocaleDefinition[];
 };
 
-let defaultLocale = "en-US";
+let defaultLocale = 'en-US';
 const localeDefinitions = new Map<string, LocaleDefinition>();
 const listeners = new Set<() => void>();
 let enabledLocaleCodes: string[] = [];
@@ -32,7 +32,7 @@ function refreshSnapshot() {
   const nextSnapshot = enabledLocaleCodes
     .map((locale) => localeDefinitions.get(locale))
     .filter((definition): definition is LocaleDefinition =>
-      Boolean(definition)
+      Boolean(definition),
     );
   const changed =
     nextSnapshot.length !== enabledLocaleSnapshot.length ||
@@ -51,7 +51,7 @@ function refreshSnapshot() {
 }
 
 export function getLocaleDirection(locale: string): LocaleDirection {
-  return /^(ar|fa|he|ku|ur)(-|$)/i.test(locale) ? "rtl" : "ltr";
+  return /^(ar|fa|he|ku|ur)(-|$)/i.test(locale) ? 'rtl' : 'ltr';
 }
 
 export function getLocaleLabel(locale: string): string {
@@ -60,7 +60,7 @@ export function getLocaleLabel(locale: string): string {
 
   try {
     return (
-      new Intl.DisplayNames([locale], { type: "language" }).of(locale) ?? locale
+      new Intl.DisplayNames([locale], { type: 'language' }).of(locale) ?? locale
     );
   } catch {
     return locale;
@@ -78,7 +78,7 @@ export function registerLocale(definition: LocaleDefinition): void {
     label:
       definition.label && definition.label !== definition.locale
         ? definition.label
-        : currentLabel ?? getLocaleLabel(definition.locale),
+        : (currentLabel ?? getLocaleLabel(definition.locale)),
     direction:
       definition.direction ??
       current?.direction ??
@@ -97,7 +97,10 @@ export function configurePortalLocales({
 
   for (const definition of locales) registerLocale(definition);
   if (!localeDefinitions.has(defaultLocale)) {
-    registerLocale({ locale: defaultLocale, label: getLocaleLabel(defaultLocale) });
+    registerLocale({
+      locale: defaultLocale,
+      label: getLocaleLabel(defaultLocale),
+    });
   }
 
   setEnabledLocales(locales.map((definition) => definition.locale));
@@ -129,7 +132,7 @@ export function useEnabledLocales(): LocaleDefinition[] {
   return useSyncExternalStore(
     subscribe,
     getLocaleDefinitions,
-    getLocaleDefinitions
+    getLocaleDefinitions,
   );
 }
 
@@ -137,18 +140,20 @@ export function resolveSupportedLocale(locale?: string): string {
   if (!locale) return defaultLocale;
 
   const exact = [...localeDefinitions.keys()].find(
-    (candidate) => candidate.toLowerCase() === locale.toLowerCase()
+    (candidate) => candidate.toLowerCase() === locale.toLowerCase(),
   );
   if (exact) return exact;
 
-  const language = locale.split("-")[0]?.toLowerCase();
+  const language = locale.split('-')[0]?.toLowerCase();
   return (
     [...localeDefinitions.keys()].find(
-      (candidate) => candidate.split("-")[0]?.toLowerCase() === language
+      (candidate) => candidate.split('-')[0]?.toLowerCase() === language,
     ) ?? defaultLocale
   );
 }
 
-export function getLocaleDefinition(locale: string): LocaleDefinition | undefined {
+export function getLocaleDefinition(
+  locale: string,
+): LocaleDefinition | undefined {
   return localeDefinitions.get(locale);
 }

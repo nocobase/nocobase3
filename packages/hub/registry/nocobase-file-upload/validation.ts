@@ -2,15 +2,15 @@ import type {
   FileFieldDescriptor,
   FileStorageInfo,
   FileUploadMessages,
-} from "./types";
+} from './types';
 
 export type FileValidationResult =
   | { valid: true }
-  | { valid: false; code: "size" | "mimetype"; message: string };
+  | { valid: false; code: 'size' | 'mimetype'; message: string };
 
 export function resolveMaxFileSize(
   descriptor: FileFieldDescriptor,
-  storage: FileStorageInfo
+  storage: FileStorageInfo,
 ) {
   const storageSize = storage.rules?.size;
   const fieldSize = descriptor.maxSize;
@@ -25,7 +25,7 @@ export function resolveMaxFileSize(
 function normalizeRules(rules?: string | string[]) {
   if (!rules) return [];
 
-  return (Array.isArray(rules) ? rules : rules.split(","))
+  return (Array.isArray(rules) ? rules : rules.split(','))
     .map((rule) => rule.trim().toLowerCase())
     .filter(Boolean);
 }
@@ -38,9 +38,9 @@ export function matchesFileRules(file: File, rules?: string | string[]) {
   const filename = file.name.toLowerCase();
 
   return normalized.some((rule) => {
-    if (rule === "*" || rule === "*/*") return true;
-    if (rule.startsWith(".")) return filename.endsWith(rule);
-    if (rule.endsWith("/*")) {
+    if (rule === '*' || rule === '*/*') return true;
+    if (rule.startsWith('.')) return filename.endsWith(rule);
+    if (rule.endsWith('/*')) {
       return mimetype.startsWith(rule.slice(0, -1));
     }
     return mimetype === rule;
@@ -53,15 +53,15 @@ export function validateFileBeforeUpload(
   storage: FileStorageInfo,
   messages: Pick<
     FileUploadMessages,
-    "fileSizeExceeded" | "storageMimeTypeRejected" | "fieldMimeTypeRejected"
-  >
+    'fileSizeExceeded' | 'storageMimeTypeRejected' | 'fieldMimeTypeRejected'
+  >,
 ): FileValidationResult {
   const maxSize = resolveMaxFileSize(descriptor, storage);
 
   if (maxSize !== undefined && file.size > maxSize) {
     return {
       valid: false,
-      code: "size",
+      code: 'size',
       message: messages.fileSizeExceeded(maxSize),
     };
   }
@@ -69,7 +69,7 @@ export function validateFileBeforeUpload(
   if (!matchesFileRules(file, storage.rules?.mimetype)) {
     return {
       valid: false,
-      code: "mimetype",
+      code: 'mimetype',
       message: messages.storageMimeTypeRejected,
     };
   }
@@ -77,7 +77,7 @@ export function validateFileBeforeUpload(
   if (!matchesFileRules(file, descriptor.accept)) {
     return {
       valid: false,
-      code: "mimetype",
+      code: 'mimetype',
       message: messages.fieldMimeTypeRejected,
     };
   }
@@ -88,12 +88,15 @@ export function validateFileBeforeUpload(
 export function validateFileForField(
   file: File,
   descriptor: FileFieldDescriptor,
-  messages: Pick<FileUploadMessages, "fileSizeExceeded" | "fieldMimeTypeRejected">
+  messages: Pick<
+    FileUploadMessages,
+    'fileSizeExceeded' | 'fieldMimeTypeRejected'
+  >,
 ): FileValidationResult {
   if (descriptor.maxSize !== undefined && file.size > descriptor.maxSize) {
     return {
       valid: false,
-      code: "size",
+      code: 'size',
       message: messages.fileSizeExceeded(descriptor.maxSize),
     };
   }
@@ -101,7 +104,7 @@ export function validateFileForField(
   if (!matchesFileRules(file, descriptor.accept)) {
     return {
       valid: false,
-      code: "mimetype",
+      code: 'mimetype',
       message: messages.fieldMimeTypeRejected,
     };
   }
@@ -111,5 +114,5 @@ export function validateFileForField(
 
 export function getAcceptAttribute(accept?: string | string[]) {
   if (!accept) return undefined;
-  return Array.isArray(accept) ? accept.join(",") : accept;
+  return Array.isArray(accept) ? accept.join(',') : accept;
 }

@@ -5,7 +5,8 @@
 在 `underscored: true` 时，它允许用 camelCase 写数据库表名和列名，并把它们归一化为小写下划线：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('tblOrderItems')
   .where('orderNumber', '=', 'SO-001')
   .execute();
@@ -14,7 +15,8 @@ await db.query()
 等价于：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('tbl_order_items')
   .where('order_number', '=', 'SO-001')
   .execute();
@@ -25,7 +27,8 @@ await db.query()
 `select()` 会按调用方传入的字段 key 返回结果：
 
 ```ts
-const row = await db.query()
+const row = await db
+  .query()
   .selectFrom('tblOrderItems')
   .select('createdAt')
   .executeTakeFirst();
@@ -38,12 +41,10 @@ SQL 中会查询 `created_at`，结果集 key 是 `createdAt`。
 显式 alias 也遵循这个规则：
 
 ```ts
-await db.query()
+await db
+  .query()
   .selectFrom('orders as o')
-  .select([
-    'o.orderNo as order_no',
-    'o.createdAt as created_at',
-  ])
+  .select(['o.orderNo as order_no', 'o.createdAt as created_at'])
   .execute();
 ```
 
@@ -54,10 +55,7 @@ await db.query()
 `selectAll()` 会把未显式命名的下划线字段映射回驼峰：
 
 ```ts
-const rows = await db.query()
-  .selectFrom('order_items')
-  .selectAll()
-  .execute();
+const rows = await db.query().selectFrom('order_items').selectAll().execute();
 ```
 
 如果数据库返回 `created_at`，结果 key 会是 `createdAt`。
@@ -88,10 +86,7 @@ await builder.createCollection('orders', (collection) => {
   collection.string('orderNo').columnName('order_number');
 });
 
-await db.query()
-  .selectFrom('orders')
-  .where('orderNo', '=', 'SO-001')
-  .execute();
+await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 ```
 
 上面的 `orderNo` 会被归一化为 `order_no`，不会知道它应该映射到显式 `columnName: 'order_number'`。

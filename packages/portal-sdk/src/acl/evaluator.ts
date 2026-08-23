@@ -1,7 +1,7 @@
-import ignore from "ignore";
+import ignore from 'ignore';
 
-import { resolveAclDataSourceKey } from "./data-source.ts";
-import { getRecordActionPermission } from "./record-permissions.ts";
+import { resolveAclDataSourceKey } from './data-source.ts';
+import { getRecordActionPermission } from './record-permissions.ts';
 import type {
   AclAccessRequest,
   AclActionParams,
@@ -9,15 +9,15 @@ import type {
   AclResourcePermissions,
   ResourceAcl,
   RoleConstraint,
-} from "./types.ts";
+} from './types.ts';
 
 const REFINE_ACTION_MAP: Record<string, string> = {
-  list: "list",
-  show: "get",
-  create: "create",
-  edit: "update",
-  delete: "destroy",
-  clone: "create",
+  list: 'list',
+  show: 'get',
+  create: 'create',
+  edit: 'update',
+  delete: 'destroy',
+  clone: 'create',
 };
 
 const getResourceAcl = (request: AclAccessRequest): ResourceAcl | undefined =>
@@ -28,7 +28,7 @@ export const mapRefineAction = (action: string): string =>
 
 export const getPermissionsForDataSource = (
   permissions: AclPermissionSet,
-  dataSourceKey = "main",
+  dataSourceKey = 'main',
 ): AclResourcePermissions => {
   const dataSourcePermissions = permissions.dataSources?.[dataSourceKey];
   return dataSourcePermissions
@@ -44,7 +44,7 @@ export const resolveActionPermission = ({
   permissions,
   resource,
   action,
-  dataSourceKey = "main",
+  dataSourceKey = 'main',
 }: {
   permissions: AclPermissionSet;
   resource: string;
@@ -64,13 +64,13 @@ export const resolveActionPermission = ({
   }
 
   const strategyAllowed = data.strategy?.actions?.some(
-    (item) => item.split(":")[0] === canonicalAction,
+    (item) => item.split(':')[0] === canonicalAction,
   );
   return strategyAllowed ? {} : null;
 };
 
 const matchesSnippet = (snippets: string[], target: string): boolean =>
-  !target || target === "*" || ignore().add(snippets).ignores(target);
+  !target || target === '*' || ignore().add(snippets).ignores(target);
 
 export const getEffectiveRoles = (permissions: AclPermissionSet): string[] =>
   permissions.roles;
@@ -111,18 +111,18 @@ export const evaluateAccess = (
     return false;
   }
 
-  if (resourceAcl === false || resourceAcl?.type === "authenticated") {
+  if (resourceAcl === false || resourceAcl?.type === 'authenticated') {
     return true;
   }
 
-  if (resourceAcl?.type === "snippet") {
+  if (resourceAcl?.type === 'snippet') {
     return (
       permissions.allowAll ||
       matchesSnippet(permissions.snippets ?? [], resourceAcl.name)
     );
   }
 
-  if (resourceAcl?.type === "route") {
+  if (resourceAcl?.type === 'route') {
     return (
       permissions.allowAll ||
       (permissions.allowMenuItemIds ?? [])
@@ -132,7 +132,7 @@ export const evaluateAccess = (
   }
 
   const targetResource =
-    resourceAcl?.type === "collection" && resourceAcl.resource
+    resourceAcl?.type === 'collection' && resourceAcl.resource
       ? resourceAcl.resource
       : request.resource;
   if (!targetResource) return true;
@@ -143,10 +143,10 @@ export const evaluateAccess = (
       request.meta,
       request.resourceItem?.meta as
         { dataSourceKey?: unknown; acl?: ResourceAcl } | undefined,
-    ) ?? "main";
-  const requestedAction = request.action ?? "list";
+    ) ?? 'main';
+  const requestedAction = request.action ?? 'list';
   const mappedAction =
-    (resourceAcl?.type === "collection" &&
+    (resourceAcl?.type === 'collection' &&
       resourceAcl.actionMap?.[requestedAction]) ||
     mapRefineAction(requestedAction);
   const permission = resolveActionPermission({

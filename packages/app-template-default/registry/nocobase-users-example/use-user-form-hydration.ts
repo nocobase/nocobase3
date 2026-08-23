@@ -1,15 +1,15 @@
-import { useEffect, useRef } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { useEffect, useRef } from 'react';
+import type { UseFormReturn } from 'react-hook-form';
 
-import { getUserFormValues } from "./form-context";
-import type { UserFormValues, UserRecord } from "./types";
+import { getUserFormValues } from './form-context';
+import type { UserFormValues, UserRecord } from './types';
 
 export function useUserFormHydration({
   form,
   id,
   record,
 }: {
-  form: Pick<UseFormReturn<UserFormValues>, "reset">;
+  form: Pick<UseFormReturn<UserFormValues>, 'reset'>;
   id?: string;
   record?: UserRecord;
 }) {

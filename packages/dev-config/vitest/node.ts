@@ -1,10 +1,10 @@
-import type { ViteUserConfig } from "vitest/config";
-import { mergeConfig } from "vitest/config";
+import type { ViteUserConfig } from 'vitest/config';
+import { mergeConfig } from 'vitest/config';
 
 const nodeConfig: ViteUserConfig = {
   test: {
-    environment: "node",
-    exclude: ["**/node_modules/**", "**/dist/**", "**/build/**"],
+    environment: 'node',
+    exclude: ['**/node_modules/**', '**/dist/**', '**/build/**'],
   },
 };
 

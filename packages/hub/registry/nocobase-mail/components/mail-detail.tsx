@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { format, parseISO } from "date-fns";
+import { useEffect, useRef, useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import {
   ChevronDown,
   Circle,
@@ -13,41 +13,41 @@ import {
   Paperclip,
   Trash2,
   Undo2,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   isLocalMailDraft,
   MailBoxType,
   type MailLabel,
   type MailMessage,
   type MailNote,
-} from "./types";
-import { MailAttachmentList } from "./mail-attachment-list";
-import { MailLabelsEditor } from "./mail-labels-editor";
-import { MailNoteEditor } from "./mail-note-editor";
+} from './types';
+import { MailAttachmentList } from './mail-attachment-list';
+import { MailLabelsEditor } from './mail-labels-editor';
+import { MailNoteEditor } from './mail-note-editor';
 import {
   collectInlineContentIds,
   filterInlineAttachments,
   replaceInlineImageSources,
-} from "./mail-inline-images";
-import { mailApi } from "./mail-api";
-import { canReplyAll } from "./use-mail-compose";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+} from './mail-inline-images';
+import { mailApi } from './mail-api';
+import { canReplyAll } from './use-mail-compose';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 function formatFullDate(dateStr?: string) {
-  if (!dateStr) return "";
+  if (!dateStr) return '';
   try {
-    return format(parseISO(dateStr), "MMM d, yyyy · HH:mm");
+    return format(parseISO(dateStr), 'MMM d, yyyy · HH:mm');
   } catch {
     return dateStr;
   }
 }
 
 function displayName(message: MailMessage) {
-  return message.fromUser?.name || message.from || "Unknown";
+  return message.fromUser?.name || message.from || 'Unknown';
 }
 
 function formatAddressList(
@@ -55,9 +55,9 @@ function formatAddressList(
   raw?: string,
 ) {
   if (users?.length) {
-    return users.map((u) => u.name || u.address).join(", ");
+    return users.map((u) => u.name || u.address).join(', ');
   }
-  return raw || "";
+  return raw || '';
 }
 
 function initials(name: string) {
@@ -66,27 +66,27 @@ function initials(name: string) {
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
-    .join("");
+    .join('');
 }
 
 const MAIL_QUOTE_SELECTORS = [
   '[data-role="reply-quote"]',
-  ".gmail_quote",
+  '.gmail_quote',
   'blockquote[type="cite"]',
   // 163 Mail
-  "#divNeteaseMailCard",
-  ".nui-mail-quote",
+  '#divNeteaseMailCard',
+  '.nui-mail-quote',
   // QQ Mail and Foxmail
-  "#isForwardContent",
-  "#isReplyContent",
-  "#foxmail_quote",
+  '#isForwardContent',
+  '#isReplyContent',
+  '#foxmail_quote',
   // Outlook and Hotmail
-  "#divRplyFwdMsg",
-  ".OutlookMessageHeader",
+  '#divRplyFwdMsg',
+  '.OutlookMessageHeader',
   // Yahoo Mail
-  "#yahoo_quoted",
+  '#yahoo_quoted',
   // Common quote and reply containers
-  "blockquote",
+  'blockquote',
   '[class*="quote"]',
   '[id*="quote"]',
   '[class*="reply"]',
@@ -94,10 +94,10 @@ const MAIL_QUOTE_SELECTORS = [
 ];
 
 function collapseQuotedContent(doc: Document, onHeightChange: () => void) {
-  if (doc.querySelector(".mail-quote")) return;
+  if (doc.querySelector('.mail-quote')) return;
 
   const nodes = Array.from(
-    doc.querySelectorAll(MAIL_QUOTE_SELECTORS.join(",")),
+    doc.querySelectorAll(MAIL_QUOTE_SELECTORS.join(',')),
   );
   const topLevelNodes = nodes.filter(
     (node) =>
@@ -108,7 +108,7 @@ function collapseQuotedContent(doc: Document, onHeightChange: () => void) {
   const quotedContent = topLevelNodes[0];
   if (!quotedContent?.parentNode) return;
 
-  const style = doc.createElement("style");
+  const style = doc.createElement('style');
   style.textContent = `
     img { max-width: 100%; height: auto; }
     .mail-quote { margin-top: 12px; }
@@ -138,26 +138,26 @@ function collapseQuotedContent(doc: Document, onHeightChange: () => void) {
   `;
   doc.head.appendChild(style);
 
-  const wrapper = doc.createElement("div");
-  wrapper.className = "mail-quote is-collapsed";
-  const toggle = doc.createElement("button");
-  toggle.type = "button";
-  toggle.className = "mail-quote-toggle";
-  toggle.setAttribute("aria-expanded", "false");
-  toggle.title = "Show quoted content";
-  toggle.append("Replied message");
-  const icon = doc.createElement("span");
-  icon.className = "toggle-icon";
-  icon.setAttribute("aria-hidden", "true");
-  icon.textContent = "▼";
+  const wrapper = doc.createElement('div');
+  wrapper.className = 'mail-quote is-collapsed';
+  const toggle = doc.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'mail-quote-toggle';
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.title = 'Show quoted content';
+  toggle.append('Replied message');
+  const icon = doc.createElement('span');
+  icon.className = 'toggle-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '▼';
   toggle.appendChild(icon);
 
   quotedContent.parentNode.insertBefore(wrapper, quotedContent);
   wrapper.append(toggle, quotedContent);
-  toggle.addEventListener("click", () => {
-    const collapsed = wrapper.classList.toggle("is-collapsed");
-    toggle.setAttribute("aria-expanded", String(!collapsed));
-    toggle.title = collapsed ? "Show quoted content" : "Hide quoted content";
+  toggle.addEventListener('click', () => {
+    const collapsed = wrapper.classList.toggle('is-collapsed');
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.title = collapsed ? 'Show quoted content' : 'Hide quoted content';
     requestAnimationFrame(onHeightChange);
   });
 }
@@ -224,7 +224,7 @@ function MailHtmlBody({
         if (!doc?.body) return;
         collapseQuotedContent(doc, resize);
         frame.style.height = `${doc.body.scrollHeight + 32}px`;
-        if (!observer && typeof ResizeObserver !== "undefined") {
+        if (!observer && typeof ResizeObserver !== 'undefined') {
           observer = new ResizeObserver(() => {
             try {
               frame.style.height = `${doc.body.scrollHeight + 32}px`;
@@ -239,11 +239,11 @@ function MailHtmlBody({
       }
     };
 
-    frame.addEventListener("load", resize);
+    frame.addEventListener('load', resize);
     const fallback = setTimeout(resize, 150);
 
     return () => {
-      frame.removeEventListener("load", resize);
+      frame.removeEventListener('load', resize);
       clearTimeout(fallback);
       observer?.disconnect();
     };
@@ -252,10 +252,10 @@ function MailHtmlBody({
   return (
     <iframe
       ref={frameRef}
-      title="Email content"
-      sandbox="allow-same-origin"
+      title='Email content'
+      sandbox='allow-same-origin'
       srcDoc={resolvedHtml}
-      className="w-full border-0 bg-white transition-[height] duration-200"
+      className='w-full border-0 bg-white transition-[height] duration-200'
       style={{ minHeight: 48 }}
     />
   );
@@ -277,11 +277,11 @@ function buildThread(message: MailMessage): MailMessage[] {
 }
 
 function formatShortDate(dateStr?: string) {
-  if (!dateStr) return "";
+  if (!dateStr) return '';
   try {
-    return format(parseISO(dateStr), "MMM d");
+    return format(parseISO(dateStr), 'MMM d');
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -303,45 +303,45 @@ function MailThreadMessage({
   onForward?: (message: MailMessage) => void;
 }) {
   const name = displayName(message);
-  const body = message.bodyHtml || message.bodyText || "";
+  const body = message.bodyHtml || message.bodyText || '';
   const visibleAttachments = filterInlineAttachments(
     message.attachments ?? [],
-    message.bodyHtml || "",
+    message.bodyHtml || '',
   );
   const isPlainText = !message.bodyHtml && Boolean(message.bodyText);
-  const snippet = (message.bodyText || "")
-    .replace(/\s+/g, " ")
+  const snippet = (message.bodyText || '')
+    .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 90);
   const isExpanded = collapsible ? expanded : true;
 
   const headerContent = (
     <>
-      <Avatar size="sm">
-        <AvatarFallback className="bg-primary/15 text-[10px] font-semibold text-primary">
+      <Avatar size='sm'>
+        <AvatarFallback className='bg-primary/15 text-[10px] font-semibold text-primary'>
           {initials(name)}
         </AvatarFallback>
       </Avatar>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline gap-2">
-          <span className="shrink-0 text-sm font-semibold text-foreground">
+      <span className='min-w-0 flex-1'>
+        <span className='flex items-baseline gap-2'>
+          <span className='shrink-0 text-sm font-semibold text-foreground'>
             {name}
           </span>
           {!isExpanded && snippet && (
-            <span className="truncate text-xs text-muted-foreground">
+            <span className='truncate text-xs text-muted-foreground'>
               {snippet}
             </span>
           )}
         </span>
         {isExpanded && (
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            <span className="font-medium text-foreground/80">
+          <span className='mt-0.5 block truncate text-xs text-muted-foreground'>
+            <span className='font-medium text-foreground/80'>
               {message.from}
             </span>
             <span> · to {formatAddressList(message.toUsers, message.to)}</span>
             {message.cc && (
               <span>
-                {" "}
+                {' '}
                 · cc {formatAddressList(message.ccUsers, message.cc)}
               </span>
             )}
@@ -349,9 +349,9 @@ function MailThreadMessage({
         )}
       </span>
       {visibleAttachments.length ? (
-        <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+        <Paperclip className='size-3.5 shrink-0 text-muted-foreground' />
       ) : null}
-      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+      <span className='shrink-0 text-xs tabular-nums text-muted-foreground'>
         {isExpanded
           ? formatFullDate(message.date)
           : formatShortDate(message.date)}
@@ -359,8 +359,8 @@ function MailThreadMessage({
       {collapsible && (
         <ChevronDown
           className={cn(
-            "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
-            isExpanded && "rotate-180",
+            'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
+            isExpanded && 'rotate-180',
           )}
         />
       )}
@@ -368,37 +368,37 @@ function MailThreadMessage({
   );
 
   return (
-    <div className="border-b border-border/60 last:border-0">
+    <div className='border-b border-border/60 last:border-0'>
       {collapsible ? (
         <button
-          type="button"
+          type='button'
           onClick={onToggle}
           aria-expanded={isExpanded}
           className={cn(
-            "flex w-full items-center gap-3 px-6 py-3.5 text-left transition-colors hover:bg-muted/40",
-            isExpanded && "bg-muted/25",
+            'flex w-full items-center gap-3 px-6 py-3.5 text-left transition-colors hover:bg-muted/40',
+            isExpanded && 'bg-muted/25',
           )}
         >
           {headerContent}
         </button>
       ) : (
-        <div className="flex w-full items-center gap-3 px-6 py-3.5 text-left">
+        <div className='flex w-full items-center gap-3 px-6 py-3.5 text-left'>
           {headerContent}
         </div>
       )}
 
       {isExpanded && (
-        <div className="px-6 pb-5">
+        <div className='px-6 pb-5'>
           {body ? (
             isPlainText ? (
-              <pre className="font-sans text-sm leading-6 whitespace-pre-wrap text-foreground">
+              <pre className='font-sans text-sm leading-6 whitespace-pre-wrap text-foreground'>
                 {message.bodyText}
               </pre>
             ) : (
               <MailHtmlBody html={body} messageId={message.id} />
             )
           ) : (
-            <p className="py-2 text-sm text-muted-foreground">
+            <p className='py-2 text-sm text-muted-foreground'>
               This message has no content.
             </p>
           )}
@@ -407,16 +407,16 @@ function MailThreadMessage({
             <MailAttachmentList
               messageId={message.id}
               attachments={visibleAttachments}
-              className="mt-4"
+              className='mt-4'
             />
           ) : null}
 
           {(onReply || onReplyAll || onForward) && (
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className='mt-5 flex flex-wrap items-center gap-2'>
               {onReply && (
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant='outline'
+                  size='sm'
                   onClick={() => onReply(message)}
                 >
                   <CornerUpLeft /> Reply
@@ -424,8 +424,8 @@ function MailThreadMessage({
               )}
               {onReplyAll && canReplyAll(message) && (
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant='outline'
+                  size='sm'
                   onClick={() => onReplyAll(message)}
                 >
                   <CornerUpRight /> Reply all
@@ -433,8 +433,8 @@ function MailThreadMessage({
               )}
               {onForward && (
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant='outline'
+                  size='sm'
                   onClick={() => onForward(message)}
                 >
                   <Forward /> Forward
@@ -502,20 +502,20 @@ export function MailDetail({
 
   if (loading) {
     return (
-      <div className={cn("flex flex-col gap-4 p-6", className)}>
-        <Skeleton className="h-7 w-2/3" />
-        <div className="flex items-center gap-3">
-          <Skeleton className="size-9 rounded-full" />
-          <div className="space-y-1.5">
-            <Skeleton className="h-3.5 w-40" />
-            <Skeleton className="h-3 w-56" />
+      <div className={cn('flex flex-col gap-4 p-6', className)}>
+        <Skeleton className='h-7 w-2/3' />
+        <div className='flex items-center gap-3'>
+          <Skeleton className='size-9 rounded-full' />
+          <div className='space-y-1.5'>
+            <Skeleton className='h-3.5 w-40' />
+            <Skeleton className='h-3 w-56' />
           </div>
         </div>
         <Separator />
-        <Skeleton className="h-3 w-full" />
-        <Skeleton className="h-3 w-5/6" />
-        <Skeleton className="h-3 w-4/6" />
-        <Skeleton className="h-3 w-3/6" />
+        <Skeleton className='h-3 w-full' />
+        <Skeleton className='h-3 w-5/6' />
+        <Skeleton className='h-3 w-4/6' />
+        <Skeleton className='h-3 w-3/6' />
       </div>
     );
   }
@@ -528,50 +528,50 @@ export function MailDetail({
   const isProviderDraft = message.isDraft && !isLocalMailDraft(message);
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn('flex flex-col', className)}>
       {isScheduled && (
-        <div className="flex items-center gap-3 border-b border-amber-500/20 bg-amber-500/10 px-6 py-3 text-sm">
-          <Clock3 className="size-4 text-amber-600" />
-          <span className="flex-1">
+        <div className='flex items-center gap-3 border-b border-amber-500/20 bg-amber-500/10 px-6 py-3 text-sm'>
+          <Clock3 className='size-4 text-amber-600' />
+          <span className='flex-1'>
             Scheduled for {formatFullDate(message.scheduleSendAt)}
           </span>
           {!message.mailId ? (
             <Button
-              variant="outline"
-              size="sm"
+              variant='outline'
+              size='sm'
               onClick={() => onCancelScheduled?.(message)}
             >
               Cancel and edit
             </Button>
           ) : (
-            <span className="text-xs text-muted-foreground">
+            <span className='text-xs text-muted-foreground'>
               Cancel this message in the original mail provider.
             </span>
           )}
         </div>
       )}
       {isProviderDraft && (
-        <div className="border-b border-blue-500/20 bg-blue-500/10 px-6 py-3 text-sm">
+        <div className='border-b border-blue-500/20 bg-blue-500/10 px-6 py-3 text-sm'>
           This draft is stored by the original mail provider and is read-only
           here. Edit or delete it in that mailbox to preserve provider
           attachments and state.
         </div>
       )}
-      <div className="border-b border-border/60 py-5 pl-6 pr-14">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-              <h2 className="min-w-0 text-xl font-semibold tracking-[-0.02em] text-foreground">
-                {message.subject || "(no subject)"}
+      <div className='border-b border-border/60 py-5 pl-6 pr-14'>
+        <div className='flex items-start justify-between gap-4'>
+          <div className='min-w-0'>
+            <div className='flex flex-wrap items-center gap-x-2.5 gap-y-1.5'>
+              <h2 className='min-w-0 text-xl font-semibold tracking-[-0.02em] text-foreground'>
+                {message.subject || '(no subject)'}
               </h2>
               {thread.length > 1 && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                  <MessagesSquare className="size-3" />
+                <span className='inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary'>
+                  <MessagesSquare className='size-3' />
                   {thread.length} messages
                 </span>
               )}
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className='mt-2 flex flex-wrap items-center gap-1.5'>
               <MailLabelsEditor
                 message={message}
                 onChange={(labels) => onLabelsChange?.(message, labels)}
@@ -584,50 +584,50 @@ export function MailDetail({
           </div>
 
           {!isScheduled && !isProviderDraft && (
-            <div className="flex shrink-0 items-center gap-1">
+            <div className='flex shrink-0 items-center gap-1'>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                title="Reply"
+                variant='ghost'
+                size='icon-sm'
+                title='Reply'
                 onClick={() => onReply?.(message)}
               >
                 <CornerUpLeft />
               </Button>
               {canReplyAll(message) && (
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  title="Reply all"
+                  variant='ghost'
+                  size='icon-sm'
+                  title='Reply all'
                   onClick={() => onReplyAll?.(message)}
                 >
                   <CornerUpRight />
                 </Button>
               )}
               <Button
-                variant="ghost"
-                size="icon-sm"
-                title="Forward"
+                variant='ghost'
+                size='icon-sm'
+                title='Forward'
                 onClick={() => onForward?.(message)}
               >
                 <Forward />
               </Button>
               <Button
-                variant="ghost"
-                size="icon-sm"
+                variant='ghost'
+                size='icon-sm'
                 aria-pressed={Boolean(message.isTodo)}
-                title={message.isTodo ? "Remove from todo" : "Add to todo"}
+                title={message.isTodo ? 'Remove from todo' : 'Add to todo'}
                 onClick={() => onToggleTodo?.(message)}
               >
                 {message.isTodo ? (
-                  <CircleCheckBig className="text-primary" />
+                  <CircleCheckBig className='text-primary' />
                 ) : (
                   <Circle />
                 )}
               </Button>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                title="Mark as unread"
+                variant='ghost'
+                size='icon-sm'
+                title='Mark as unread'
                 onClick={() => onMarkUnread?.(message)}
               >
                 <MailX />
@@ -635,18 +635,18 @@ export function MailDetail({
               {isTrash ? (
                 <>
                   <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    title="Put back"
+                    variant='ghost'
+                    size='icon-sm'
+                    title='Put back'
                     onClick={() => onRestore?.(message)}
                   >
                     <Undo2 />
                   </Button>
                   <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    title="Permanently delete"
-                    className="text-destructive hover:text-destructive"
+                    variant='ghost'
+                    size='icon-sm'
+                    title='Permanently delete'
+                    className='text-destructive hover:text-destructive'
                     onClick={() => onDeleteForever?.(message)}
                   >
                     <Trash2 />
@@ -654,9 +654,9 @@ export function MailDetail({
                 </>
               ) : (
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  title="Move to trash"
+                  variant='ghost'
+                  size='icon-sm'
+                  title='Move to trash'
                   onClick={() => onTrash?.(message)}
                 >
                   <Trash2 />
@@ -667,7 +667,7 @@ export function MailDetail({
         </div>
       </div>
 
-      <div className="flex flex-col">
+      <div className='flex flex-col'>
         {thread.map((threadMessage) => (
           <MailThreadMessage
             key={threadMessage.id}

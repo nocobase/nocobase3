@@ -13,7 +13,8 @@ db.query().deleteFrom('orders');
 插入单行：
 
 ```ts
-await db.query()
+await db
+  .query()
   .insertInto('orders')
   .values({
     orderNo: 'SO-001',
@@ -26,7 +27,8 @@ await db.query()
 插入多行：
 
 ```ts
-await db.query()
+await db
+  .query()
   .insertInto('orders')
   .values([
     { orderNo: 'SO-001', status: 'draft' },
@@ -40,7 +42,8 @@ await db.query()
 ## updateTable
 
 ```ts
-await db.query()
+await db
+  .query()
   .updateTable('orders')
   .set({ status: 'completed' })
   .where('orderNo', '=', 'SO-001')
@@ -50,14 +53,12 @@ await db.query()
 `where()` 也支持 expression callback：
 
 ```ts
-await db.query()
+await db
+  .query()
   .updateTable('orders')
   .set({ status: 'settled' })
   .where(({ eb }) =>
-    eb.and([
-      eb('status', '=', 'paid'),
-      eb('paidAt', 'is not', null),
-    ])
+    eb.and([eb('status', '=', 'paid'), eb('paidAt', 'is not', null)]),
   )
   .execute();
 ```
@@ -65,7 +66,8 @@ await db.query()
 为了避免误操作，`updateTable()` 没有 `where()` 时会抛错。确实要更新全表时，必须显式写 `allowAllRows()`：
 
 ```ts
-await db.query()
+await db
+  .query()
   .updateTable('orders')
   .set({ archived: true })
   .allowAllRows()
@@ -75,19 +77,13 @@ await db.query()
 ## deleteFrom
 
 ```ts
-await db.query()
-  .deleteFrom('orders')
-  .where('status', '=', 'draft')
-  .execute();
+await db.query().deleteFrom('orders').where('status', '=', 'draft').execute();
 ```
 
 `deleteFrom()` 同样要求 `where()` 或 `allowAllRows()`：
 
 ```ts
-await db.query()
-  .deleteFrom('orders')
-  .allowAllRows()
-  .execute();
+await db.query().deleteFrom('orders').allowAllRows().execute();
 ```
 
 ## 返回值

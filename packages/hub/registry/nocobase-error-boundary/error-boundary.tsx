@@ -1,16 +1,16 @@
-import type { ErrorInfo, PropsWithChildren } from "react";
-import { useCallback, useState } from "react";
-import { ErrorBoundary } from "react-error-boundary";
+import type { ErrorInfo, PropsWithChildren } from 'react';
+import { useCallback, useState } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import {
   NocoBaseErrorFallback,
   type ErrorBoundaryVariant,
-} from "./error-fallback";
-import type { PortalErrorDiagnosticContext } from "./error-diagnostics";
-import type { ErrorBoundaryLabels } from "./labels";
+} from './error-fallback';
+import type { PortalErrorDiagnosticContext } from './error-diagnostics';
+import type { ErrorBoundaryLabels } from './labels';
 
 export type NocoBaseErrorBoundaryProps = PropsWithChildren<{
-  context?: Omit<PortalErrorDiagnosticContext, "componentStack" | "occurredAt">;
+  context?: Omit<PortalErrorDiagnosticContext, 'componentStack' | 'occurredAt'>;
   labels?: Partial<ErrorBoundaryLabels>;
   locale?: string;
   onBackHome?: () => void;
@@ -31,7 +31,7 @@ export function NocoBaseErrorBoundary({
   onReload,
   onReset,
   resetKeys,
-  variant = "page",
+  variant = 'page',
 }: NocoBaseErrorBoundaryProps) {
   const [componentStack, setComponentStack] = useState<string | null>();
   const handleError = useCallback(
@@ -40,10 +40,10 @@ export function NocoBaseErrorBoundary({
       if (onError) {
         onError(error, info);
       } else {
-        console.error("Portal runtime error", error, info);
+        console.error('Portal runtime error', error, info);
       }
     },
-    [onError]
+    [onError],
   );
 
   return (
@@ -65,7 +65,7 @@ export function NocoBaseErrorBoundary({
           onRetry={resetErrorBoundary}
           onReload={
             onReload ??
-            (variant === "region" || typeof window === "undefined"
+            (variant === 'region' || typeof window === 'undefined'
               ? undefined
               : () => window.location.reload())
           }

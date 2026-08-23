@@ -4,10 +4,10 @@ import {
   useMemo,
   type ComponentType,
   type PropsWithChildren,
-} from "react";
-import type { ToolCallPart } from "../chat/tool-call-card";
-import { builtInToolRenderers } from "./builtin-tool-renderers";
-import { BusinessReportDialogProvider } from "./business-report-dialog";
+} from 'react';
+import type { ToolCallPart } from '../chat/tool-call-card';
+import { builtInToolRenderers } from './builtin-tool-renderers';
+import { BusinessReportDialogProvider } from './business-report-dialog';
 
 export type AIToolRendererProps = {
   part: ToolCallPart;
@@ -36,7 +36,7 @@ export function AIToolRendererProvider({
 }: PropsWithChildren<{ renderers?: AIToolRendererMap }>) {
   const value = useMemo(
     () => ({ ...builtInToolRenderers, ...renderers }),
-    [renderers]
+    [renderers],
   );
 
   return (
@@ -51,5 +51,5 @@ export function AIToolRendererProvider({
 export function useAIToolRenderer(toolName: string) {
   const entry = useContext(AIToolRendererContext)[toolName];
   if (!entry) return undefined;
-  return typeof entry === "function" ? { component: entry } : entry;
+  return typeof entry === 'function' ? { component: entry } : entry;
 }

@@ -45,22 +45,37 @@ export interface RealtimeServiceOptions {
 }
 
 export interface RealtimeService {
-  connect(ws: AppWebSocket, context?: RealtimeConnectionContext): RealtimeConnection;
+  connect(
+    ws: AppWebSocket,
+    context?: RealtimeConnectionContext,
+  ): RealtimeConnection;
   disconnect(connection: RealtimeConnection): void;
-  subscribe(connection: RealtimeConnection, topic: string): RealtimeSubscription;
+  subscribe(
+    connection: RealtimeConnection,
+    topic: string,
+  ): RealtimeSubscription;
   unsubscribe(
     connection: RealtimeConnection,
     selector: { subscriptionId?: string; topic?: string },
   ): RealtimeSubscription[];
-  handleClientMessage(connection: RealtimeConnection, data: AppWebSocketMessageData): void;
+  handleClientMessage(
+    connection: RealtimeConnection,
+    data: AppWebSocketMessageData,
+  ): void;
   publish(topic: string, payload: unknown): RealtimePublishResult;
   subscriptionCount(topic: string): number;
-  onTopicSubscriptionChange(topic: string, listener: (count: number) => void): () => void;
+  onTopicSubscriptionChange(
+    topic: string,
+    listener: (count: number) => void,
+  ): () => void;
   close(): void;
 }
 
-export function createRealtimeService(options: RealtimeServiceOptions = {}): RealtimeService {
-  const maxSubscriptionsPerConnection = options.maxSubscriptionsPerConnection ?? 64;
+export function createRealtimeService(
+  options: RealtimeServiceOptions = {},
+): RealtimeService {
+  const maxSubscriptionsPerConnection =
+    options.maxSubscriptionsPerConnection ?? 64;
   const connections = new Map<string, RealtimeConnection>();
   const subscriptions = new Map<string, RealtimeSubscription>();
   const subscriptionsByTopic = new Map<string, Set<string>>();
@@ -208,8 +223,14 @@ export function createRealtimeService(options: RealtimeServiceOptions = {}): Rea
 
       for (const subscriptionId of Array.from(subscriptionIds)) {
         const subscription = subscriptions.get(subscriptionId);
-        const connection = subscription ? connections.get(subscription.connectionId) : undefined;
-        if (!subscription || !connection || sentConnections.has(connection.id)) {
+        const connection = subscription
+          ? connections.get(subscription.connectionId)
+          : undefined;
+        if (
+          !subscription ||
+          !connection ||
+          sentConnections.has(connection.id)
+        ) {
           continue;
         }
 
@@ -235,7 +256,8 @@ export function createRealtimeService(options: RealtimeServiceOptions = {}): Rea
     onTopicSubscriptionChange(topic, listener) {
       validateRealtimeTopic(topic);
 
-      const listeners = listenersByTopic.get(topic) ?? new Set<(count: number) => void>();
+      const listeners =
+        listenersByTopic.get(topic) ?? new Set<(count: number) => void>();
       listeners.add(listener);
       listenersByTopic.set(topic, listeners);
 
@@ -281,14 +303,16 @@ export function createRealtimeService(options: RealtimeServiceOptions = {}): Rea
     selector: { subscriptionId?: string; topic?: string },
   ): boolean {
     return (
-      (selector.subscriptionId === undefined || subscription.id === selector.subscriptionId) &&
+      (selector.subscriptionId === undefined ||
+        subscription.id === selector.subscriptionId) &&
       (selector.topic === undefined || subscription.topic === selector.topic)
     );
   }
 
   function addTopicSubscription(subscription: RealtimeSubscription): void {
     const previousCount = service.subscriptionCount(subscription.topic);
-    const topicSubscriptions = subscriptionsByTopic.get(subscription.topic) ?? new Set<string>();
+    const topicSubscriptions =
+      subscriptionsByTopic.get(subscription.topic) ?? new Set<string>();
     topicSubscriptions.add(subscription.id);
     subscriptionsByTopic.set(subscription.topic, topicSubscriptions);
     notifyTopicSubscriptionChange(subscription.topic, previousCount);
@@ -303,7 +327,10 @@ export function createRealtimeService(options: RealtimeServiceOptions = {}): Rea
     }
   }
 
-  function removeSubscription(connection: RealtimeConnection, subscription: RealtimeSubscription): void {
+  function removeSubscription(
+    connection: RealtimeConnection,
+    subscription: RealtimeSubscription,
+  ): void {
     const previousCount = service.subscriptionCount(subscription.topic);
     connection.subscriptions.delete(subscription.id);
     subscriptions.delete(subscription.id);
@@ -316,7 +343,10 @@ export function createRealtimeService(options: RealtimeServiceOptions = {}): Rea
     notifyTopicSubscriptionChange(subscription.topic, previousCount);
   }
 
-  function notifyTopicSubscriptionChange(topic: string, previousCount: number): void {
+  function notifyTopicSubscriptionChange(
+    topic: string,
+    previousCount: number,
+  ): void {
     const count = service.subscriptionCount(topic);
     if (count === previousCount) {
       return;
@@ -336,9 +366,14 @@ export function createRealtimeService(options: RealtimeServiceOptions = {}): Rea
     }
   }
 
-  function sendProtocolError(connection: RealtimeConnection, error: unknown): void {
-    const code = error instanceof RealtimeProtocolError ? error.code : 'REALTIME_ERROR';
-    const message = error instanceof Error ? error.message : 'Realtime message failed.';
+  function sendProtocolError(
+    connection: RealtimeConnection,
+    error: unknown,
+  ): void {
+    const code =
+      error instanceof RealtimeProtocolError ? error.code : 'REALTIME_ERROR';
+    const message =
+      error instanceof Error ? error.message : 'Realtime message failed.';
     send(connection, {
       type: 'error',
       code,
@@ -346,7 +381,10 @@ export function createRealtimeService(options: RealtimeServiceOptions = {}): Rea
     });
   }
 
-  function send(connection: RealtimeConnection, message: RealtimeServerMessage): void {
+  function send(
+    connection: RealtimeConnection,
+    message: RealtimeServerMessage,
+  ): void {
     if (connection.ws.readyState !== WEB_SOCKET_OPEN) {
       service.disconnect(connection);
       return;

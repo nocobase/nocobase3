@@ -1,4 +1,4 @@
-import type { Role } from "@nocobase/portal-sdk/acl";
+import type { Role } from '@nocobase/portal-sdk/acl';
 
 export type UserRecord = {
   id: string | number;

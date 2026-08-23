@@ -22,7 +22,9 @@ export interface RequestLoggerOptions {
   requestHeaders?: readonly string[];
 }
 
-export function requestLogger(options: RequestLoggerOptions): MiddlewareHandler {
+export function requestLogger(
+  options: RequestLoggerOptions,
+): MiddlewareHandler {
   return createMiddleware(async (context, next): Promise<void> => {
     if (options.skip?.(context)) {
       await next();
@@ -119,12 +121,12 @@ function completionBindings(
 
 function statusFromError(error: unknown): number {
   if (
-    typeof error === 'object'
-    && error !== null
-    && 'status' in error
-    && typeof error.status === 'number'
-    && error.status >= 400
-    && error.status <= 599
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    typeof error.status === 'number' &&
+    error.status >= 400 &&
+    error.status <= 599
   ) {
     return error.status;
   }

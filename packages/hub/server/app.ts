@@ -23,12 +23,17 @@ export type ClientHandler = (request: Request) => Response | Promise<Response>;
 export function createApp(options: CreateAppOptions = {}): Hono {
   const appName = resolveAppName(options.appName);
   const basePath = resolveBasePath(options.basePath, appName);
-  const browserBasePath = resolveBrowserBasePath(options.browserBasePath, basePath);
+  const browserBasePath = resolveBrowserBasePath(
+    options.browserBasePath,
+    basePath,
+  );
   const apiProxyPath = resolveApiProxyPath(options.apiProxyPath, basePath);
-  const browserApiUrl = options.browserApiUrl ?? joinBasePath(browserBasePath, '/v2/api');
+  const browserApiUrl =
+    options.browserApiUrl ?? joinBasePath(browserBasePath, '/v2/api');
   const nocoBaseApiUrl = resolveNocoBaseApiUrl(options.nocoBaseApiUrl);
   const clientHandler = options.clientHandler;
-  const clientIndexPath = options.clientIndexPath ?? path.resolve(process.cwd(), 'index.html');
+  const clientIndexPath =
+    options.clientIndexPath ?? path.resolve(process.cwd(), 'index.html');
   const clientRootDir = path.dirname(clientIndexPath);
   const app = new Hono();
 
@@ -43,8 +48,12 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   });
 
   if (apiProxyPath) {
-    app.all(apiProxyPath, (context) => proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl));
-    app.all(`${apiProxyPath}/*`, (context) => proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl));
+    app.all(apiProxyPath, (context) =>
+      proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl),
+    );
+    app.all(`${apiProxyPath}/*`, (context) =>
+      proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl),
+    );
   }
 
   const api = new Hono();
@@ -71,8 +80,12 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     app.all(basePath || '/', (context) => clientHandler(context.req.raw));
     app.all(`${basePath}/*`, (context) => clientHandler(context.req.raw));
   } else {
-    app.all(`${basePath}/assets`, (context) => serveClientAsset(context.req.raw, clientRootDir, basePath));
-    app.all(`${basePath}/assets/*`, (context) => serveClientAsset(context.req.raw, clientRootDir, basePath));
+    app.all(`${basePath}/assets`, (context) =>
+      serveClientAsset(context.req.raw, clientRootDir, basePath),
+    );
+    app.all(`${basePath}/assets/*`, (context) =>
+      serveClientAsset(context.req.raw, clientRootDir, basePath),
+    );
     app.get(basePath || '/', () =>
       serveClient(clientIndexPath, {
         appBasePath: browserBasePath,
@@ -105,11 +118,17 @@ function resolveBasePath(value: string | undefined, appName: string): string {
   return normalizeBasePath(value ?? `/${appName}`);
 }
 
-function resolveBrowserBasePath(value: string | undefined, basePath: string): string {
+function resolveBrowserBasePath(
+  value: string | undefined,
+  basePath: string,
+): string {
   return normalizeBasePath(value ?? basePath);
 }
 
-function resolveApiProxyPath(value: string | undefined, basePath: string): string {
+function resolveApiProxyPath(
+  value: string | undefined,
+  basePath: string,
+): string {
   if (!value) {
     return joinBasePath(basePath, '/v2/api');
   }
@@ -133,7 +152,9 @@ export function joinBasePath(basePath: string, pathInsideBase: string): string {
   return `${normalizedBasePath}${normalizedPath}` || '/';
 }
 
-function resolveNocoBaseApiUrl(value: string | false | undefined): URL | undefined {
+function resolveNocoBaseApiUrl(
+  value: string | false | undefined,
+): URL | undefined {
   if (value === false) {
     return undefined;
   }
@@ -166,16 +187,26 @@ async function proxyToNocoBaseApi(
   const targetUrl = createApiTargetUrl(request, apiProxyPath, nocoBaseApiUrl);
 
   return proxyRequest(request, targetUrl, {
-    headers: createNocoBaseApiProxyHeaders(request, apiProxyPath, nocoBaseApiUrl),
+    headers: createNocoBaseApiProxyHeaders(
+      request,
+      apiProxyPath,
+      nocoBaseApiUrl,
+    ),
     unavailableMessage: 'NocoBase API server is unavailable.',
   });
 }
 
-function createApiTargetUrl(request: Request, apiProxyPath: string, nocoBaseApiUrl: URL): URL {
+function createApiTargetUrl(
+  request: Request,
+  apiProxyPath: string,
+  nocoBaseApiUrl: URL,
+): URL {
   const requestUrl = new URL(request.url);
   const normalizedProxyPath = apiProxyPath.replace(/\/$/, '');
   const apiBasePath = nocoBaseApiUrl.pathname.replace(/\/$/, '');
-  const suffix = requestUrl.pathname.slice(normalizedProxyPath.length).replace(/^\/+/, '');
+  const suffix = requestUrl.pathname
+    .slice(normalizedProxyPath.length)
+    .replace(/^\/+/, '');
   const pathname = suffix ? `${apiBasePath}/${suffix}` : apiBasePath || '/';
   const targetUrl = new URL(nocoBaseApiUrl);
   targetUrl.pathname = pathname;
@@ -202,7 +233,10 @@ async function proxyRequest(
     const response = await fetch(targetUrl, {
       method: request.method,
       headers,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+      body:
+        request.method === 'GET' || request.method === 'HEAD'
+          ? undefined
+          : request.body,
       redirect: 'manual',
       duplex: 'half',
     } as RequestInit & { duplex: 'half' });
@@ -278,7 +312,11 @@ function removeHopByHopHeaders(headers: Headers): void {
  */
 // Exported for tests only: the cross-site branch requires a non-loopback upstream, and a stub HTTP
 // server can only bind loopback -- so that branch cannot be exercised through `createApp`.
-export function createNocoBaseApiProxyHeaders(request: Request, apiProxyPath: string, nocoBaseApiUrl: URL): Headers {
+export function createNocoBaseApiProxyHeaders(
+  request: Request,
+  apiProxyPath: string,
+  nocoBaseApiUrl: URL,
+): Headers {
   const headers = new Headers(request.headers);
   const sourceUrl = new URL(request.url);
 
@@ -357,7 +395,9 @@ export function createNocoBaseApiProxyHeaders(request: Request, apiProxyPath: st
  * `127.0.0.1`, so matching the literal forms below is sufficient.
  */
 function isCrossSiteUpstream(nocoBaseApiUrl: URL): boolean {
-  return !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(nocoBaseApiUrl.hostname);
+  return !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(
+    nocoBaseApiUrl.hostname,
+  );
 }
 
 interface ClientRuntimeConfig {
@@ -391,21 +431,33 @@ const contentTypes: Record<string, string> = {
   '.woff2': 'font/woff2',
 };
 
-async function serveClientAsset(request: Request, clientRootDir: string, basePath: string): Promise<Response> {
+async function serveClientAsset(
+  request: Request,
+  clientRootDir: string,
+  basePath: string,
+): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return methodNotAllowed('GET, HEAD');
   }
 
   const requestUrl = new URL(request.url);
   const pathInsideClient = getPathInsideClient(requestUrl.pathname, basePath);
-  const response = await serveFileIfExists(clientRootDir, pathInsideClient, request.method, {
-    cacheControl: `public, max-age=${oneYearSeconds}, immutable`,
-  });
+  const response = await serveFileIfExists(
+    clientRootDir,
+    pathInsideClient,
+    request.method,
+    {
+      cacheControl: `public, max-age=${oneYearSeconds}, immutable`,
+    },
+  );
 
   return response ?? notFound();
 }
 
-async function serveClient(clientIndexPath: string, runtimeConfig: ClientRuntimeConfig): Promise<Response> {
+async function serveClient(
+  clientIndexPath: string,
+  runtimeConfig: ClientRuntimeConfig,
+): Promise<Response> {
   const html = await readFile(clientIndexPath, 'utf8');
   return new Response(injectRuntimeConfig(html, runtimeConfig), {
     headers: {
@@ -415,7 +467,10 @@ async function serveClient(clientIndexPath: string, runtimeConfig: ClientRuntime
   });
 }
 
-function injectRuntimeConfig(html: string, runtimeConfig: ClientRuntimeConfig): string {
+function injectRuntimeConfig(
+  html: string,
+  runtimeConfig: ClientRuntimeConfig,
+): string {
   const cleanHtml = stripExistingRuntimeConfig(html);
   const moduleScriptPattern = /<script\s+[^>]*type=["']module["'][^>]*>/i;
   const moduleScriptMatch = cleanHtml.match(moduleScriptPattern);
@@ -429,11 +484,20 @@ function injectRuntimeConfig(html: string, runtimeConfig: ClientRuntimeConfig): 
 }
 
 function stripExistingRuntimeConfig(html: string): string {
-  const pattern = new RegExp(`${runtimeConfigStartMarker}[\\s\\S]*?${runtimeConfigEndMarker}\\s*`, 'g');
+  const pattern = new RegExp(
+    `${runtimeConfigStartMarker}[\\s\\S]*?${runtimeConfigEndMarker}\\s*`,
+    'g',
+  );
   return html.replace(pattern, '');
 }
 
-function createRuntimeConfigHtml({ appBasePath, apiUrl, storagePrefix, storageType, shareToken }: ClientRuntimeConfig): string {
+function createRuntimeConfigHtml({
+  appBasePath,
+  apiUrl,
+  storagePrefix,
+  storageType,
+  shareToken,
+}: ClientRuntimeConfig): string {
   const normalizedStoragePrefix = storagePrefix?.trim() || 'NOCOBASE_';
   const normalizedStorageType = storageType?.trim() || 'localStorage';
   const normalizedShareToken = shareToken ?? false;
@@ -491,16 +555,24 @@ async function serveFileIfExists(
   const body =
     method === 'HEAD'
       ? null
-      : (Readable.toWeb(createReadStream(filePath)) as ConstructorParameters<typeof Response>[0]);
+      : (Readable.toWeb(createReadStream(filePath)) as ConstructorParameters<
+          typeof Response
+        >[0]);
   return new Response(body, { headers });
 }
 
 function getPathInsideClient(pathname: string, basePath: string): string {
-  const pathInside = basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) : pathname;
+  const pathInside =
+    basePath && pathname.startsWith(basePath)
+      ? pathname.slice(basePath.length)
+      : pathname;
   return pathInside.startsWith('/') ? pathInside : `/${pathInside}`;
 }
 
-function resolveClientFile(rootDir: string, requestPath: string): string | null {
+function resolveClientFile(
+  rootDir: string,
+  requestPath: string,
+): string | null {
   let decodedPath: string;
   try {
     decodedPath = decodeURIComponent(requestPath);
@@ -524,7 +596,10 @@ function resolveClientFile(rootDir: string, requestPath: string): string | null 
 }
 
 function contentTypeFor(filePath: string): string {
-  return contentTypes[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+  return (
+    contentTypes[path.extname(filePath).toLowerCase()] ??
+    'application/octet-stream'
+  );
 }
 
 function methodNotAllowed(allow: string): Response {

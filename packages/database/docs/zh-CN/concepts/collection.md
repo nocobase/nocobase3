@@ -47,9 +47,7 @@ const collection = {
     { name: 'id', type: 'increments', primaryKey: true },
     { name: 'amount', type: 'decimal', precision: 12, scale: 2 },
   ],
-  indexes: [
-    { fields: ['amount'] },
-  ],
+  indexes: [{ fields: ['amount'] }],
   constraints: [
     { type: 'unique', fields: ['amount'], name: 'uk_orders_amount' },
   ],

@@ -4,15 +4,17 @@ Migration 用于把数据库变更按顺序应用到目标连接。每个 migrat
 
 Migration 的写法刻意保持简单：结构变更用 `builder`，数据变更用 `query`，特殊底层能力才用 `connection.client()`。
 
+一个应用可以同时加载多个 package 的 migration。每个插件 package 提供自己的 migration 目录，runner 会把它们合并成一个全局序列。`packageName` 用于记录来源和诊断，执行顺序与唯一性仍然只由 `name` 决定。
+
 ## 先选入口
 
 写 migration 前先判断变更类型：
 
-| 场景 | 入口 | 说明 |
-| --- | --- | --- |
-| 创建、修改、删除 Collection 或字段 | `builder` | 走 Collection DSL、命名策略和 metadata 同步 |
-| 添加、删除索引或约束 | `builder` | 让 Builder 负责数据库能力检查和稳定命名 |
-| 回填、修正或清理数据 | `query` | 使用物理查询名，不读取 Collection metadata |
+| 场景                                     | 入口         | 说明                                                           |
+| ---------------------------------------- | ------------ | -------------------------------------------------------------- |
+| 创建、修改、删除 Collection 或字段       | `builder`    | 走 Collection DSL、命名策略和 metadata 同步                    |
+| 添加、删除索引或约束                     | `builder`    | 让 Builder 负责数据库能力检查和稳定命名                        |
+| 回填、修正或清理数据                     | `query`      | 使用物理查询名，不读取 Collection metadata                     |
 | 需要数据库方言或底层 adapter client 能力 | `connection` | 先判断 `dialect` 或 `capabilities`，再用 `connection.client()` |
 
 常规 migration 不需要接触 `database`、`schema` 或底层 adapter client。只有 `builder` 和 `query` 表达不了时，才使用 `connection.client()`。
@@ -80,7 +82,7 @@ export default defineMigration({
 ```
 
 ```ts
-name: '202608180001_create_users'
+name: '202608180001_create_users';
 ```
 
 推荐命名格式：
@@ -125,15 +127,15 @@ interface MigrationConnection {
 
 选择规则：
 
-| 要做什么 | 用什么 |
-| --- | --- |
-| 创建、修改、删除 Collection | `builder` |
-| 添加、修改、删除字段 | `builder` |
-| 添加、删除索引或约束 | `builder` |
-| 回填数据、修正数据 | `query` |
-| 判断数据库类型 | `connection.dialect` |
-| 判断数据库能力 | `connection.capabilities` |
-| 使用底层 adapter client 能力 | `connection.client()` |
+| 要做什么                     | 用什么                    |
+| ---------------------------- | ------------------------- |
+| 创建、修改、删除 Collection  | `builder`                 |
+| 添加、修改、删除字段         | `builder`                 |
+| 添加、删除索引或约束         | `builder`                 |
+| 回填数据、修正数据           | `query`                   |
+| 判断数据库类型               | `connection.dialect`      |
+| 判断数据库能力               | `connection.capabilities` |
+| 使用底层 adapter client 能力 | `connection.client()`     |
 
 Migration context 顶层没有 `database`、`schema`、`client` 或 `dialect`。
 
@@ -202,7 +204,7 @@ export default defineMigration({
 很多数据迁移没有可靠的反向操作。没有可靠 `down` 时，必须声明：
 
 ```ts
-irreversible: true
+irreversible: true;
 ```
 
 不要为了通过校验而写一个不真实的 `down`。
@@ -251,11 +253,32 @@ import { createMigrator } from '@nocobase/database';
 const migrator = createMigrator({
   database,
   connection: 'main',
-  directory: './server/migrations',
+  directory: './database/migrations',
 });
 
 await migrator.latest();
 ```
+
+插件系统需要加载多个 package 时，使用 `sources`：
+
+```ts
+const migrator = createMigrator({
+  database,
+  connection: 'main',
+  sources: [
+    {
+      packageName: '@nocobase/plugin-users',
+      directory: './plugins/users/database/migrations',
+    },
+    {
+      packageName: '@nocobase/plugin-workflow',
+      directory: './plugins/workflow/database/migrations',
+    },
+  ],
+});
+```
+
+旧的 `directory` 写法仍然有效，未指定 `packageName` 时记录为 `app`。同一 runner 中所有来源的 migration `name` 必须全局唯一；不能因为属于不同 package 就使用相同的 name。
 
 `database` 只用于 runner 找到目标连接。Migration 文件里不会收到 `database`。
 
@@ -289,18 +312,18 @@ Migration 作者不手动管理主事务。Runner 会根据 `transaction` 选项
 默认事务策略是：
 
 ```ts
-transaction: 'auto'
+transaction: 'auto';
 ```
 
 普通 migration 不需要显式写 `transaction`。
 
 可选值：
 
-| 值 | 含义 |
-| --- | --- |
+| 值       | 含义                        |
+| -------- | --------------------------- |
 | `'auto'` | 默认值，runner 尽量使用事务 |
-| `true` | 要求使用事务 |
-| `false` | 不使用事务 |
+| `true`   | 要求使用事务                |
+| `false`  | 不使用事务                  |
 
 事务内执行时，runner 必须用事务连接创建 context：
 
@@ -329,6 +352,7 @@ Runner 使用执行记录表保存已经成功执行的 migration：
 ```text
 __nocobase_migrations
 - id
+- package_name
 - name
 - batch
 - checksum
@@ -337,6 +361,8 @@ __nocobase_migrations
 ```
 
 `checksum` 用于检测已经执行过的 migration 文件是否被修改。检测到变化时，runner 会停止执行并报错。
+
+已有的旧历史表没有 `package_name` 时，runner 会自动增加该字段，并把旧记录归类为 `app`。已执行判断仍按全局 `name` 进行，不会因为 `packageName` 变化而重复执行。
 
 ## Lock
 
@@ -379,7 +405,7 @@ interface MigrationRollbackResult {
 ```ts
 import { validateMigrations } from '@nocobase/database';
 
-await validateMigrations('./server/migrations');
+await validateMigrations('./database/migrations');
 ```
 
 校验规则：

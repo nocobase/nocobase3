@@ -1,4 +1,8 @@
-import type { CollectionDefinition, CollectionMetadataPatch, FieldMetadataPatch } from '../collection/types.js';
+import type {
+  CollectionDefinition,
+  CollectionMetadataPatch,
+  FieldMetadataPatch,
+} from '../collection/types.js';
 
 export interface CollectionMetadataStore {
   getCollection(name: string): Promise<CollectionDefinition | undefined>;
@@ -6,5 +10,9 @@ export interface CollectionMetadataStore {
   removeCollection(name: string): Promise<void>;
   renameCollection(from: string, to: string): Promise<void>;
   patchCollection(name: string, patch: CollectionMetadataPatch): Promise<void>;
-  patchField(collection: string, field: string, patch: FieldMetadataPatch): Promise<void>;
+  patchField(
+    collection: string,
+    field: string,
+    patch: FieldMetadataPatch,
+  ): Promise<void>;
 }
