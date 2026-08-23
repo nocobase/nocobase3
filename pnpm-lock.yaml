@@ -605,6 +605,9 @@ importers:
       '@nocobase/database':
         specifier: workspace:^
         version: link:../database
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
