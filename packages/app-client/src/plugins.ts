@@ -1,8 +1,7 @@
 import type { AppClient } from '@nocobase/app-sdk';
-import type { AuthProvider } from '@refinedev/core';
 import type { ComponentType } from 'react';
 
-import type { AppClientProvider } from './config.js';
+import type { AppClientProvider, AppClientRefineConfig } from './config.js';
 
 const CONTRIBUTION_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
 
@@ -36,9 +35,28 @@ export interface AppClientRegisteredProvider extends AppClientProviderDefinition
   readonly packageName: string;
 }
 
-export interface AppClientRefineRegistry {
-  setAuthProvider(provider: AuthProvider): void;
-}
+export type AppClientRefineSetterValue<
+  Property extends keyof AppClientRefineConfig,
+> = Property extends 'children'
+  ? Exclude<AppClientRefineConfig[Property], undefined>
+  : NonNullable<AppClientRefineConfig[Property]>;
+
+export type AppClientRefineSetters = {
+  [
+    Property in keyof AppClientRefineConfig as `set${Capitalize<
+      Property & string
+    >}`
+  ]-?: (value: AppClientRefineSetterValue<Property>) => void;
+};
+
+export type AppClientRefineRegistry = AppClientRefineSetters & {
+  addResources(
+    resources: NonNullable<AppClientRefineConfig['resources']>,
+  ): void;
+  addLiveEventHandler(
+    handler: NonNullable<AppClientRefineConfig['onLiveEvent']>,
+  ): void;
+};
 
 export interface AppClientPluginBootstrapContext {
   readonly appClient: AppClient;

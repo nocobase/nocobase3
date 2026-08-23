@@ -101,6 +101,11 @@ Basic username or email and password login is built in. The default login page
 also renders enabled NocoBase authentication methods when their frontend
 Registry adapters are installed.
 
+The Refine data provider is registered by the enabled
+`@nocobase/app-plugin-data-provider` client bootstrap. The template runtime does
+not provide an implicit fallback, so disabling that plugin produces an explicit
+startup error instead of starting with incomplete data access.
+
 Customize `client/pages/login/index.tsx` to replace the whole login page, or use
 `DefaultSignInPage` to keep dynamic authentication while overriding individual
 authenticator UI.

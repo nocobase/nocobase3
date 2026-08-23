@@ -7,16 +7,21 @@ import {
   type AppClientRegisteredRoute,
   type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
+import type { AppClientRefineConfig } from '@nocobase/app-client';
 import { createAppClient, type AppClient } from '@nocobase/app-sdk';
-import { dataProvider } from '@nocobase/portal-sdk/data';
 import { getPortalBase } from '@nocobase/portal-sdk/runtime';
-import type { AuthProvider, DataProvider } from '@refinedev/core';
+
+import { createRefineConfigCollector } from './refine-runtime';
+
+export type AppClientRuntimeRefineConfig = Readonly<AppClientRefineConfig> & {
+  readonly authProvider: NonNullable<AppClientRefineConfig['authProvider']>;
+  readonly dataProvider: NonNullable<AppClientRefineConfig['dataProvider']>;
+};
 
 export interface AppClientRuntime {
   readonly appClient: AppClient;
-  readonly authProvider: AuthProvider;
   readonly basename: string;
-  readonly dataProvider: DataProvider;
+  readonly refine: AppClientRuntimeRefineConfig;
   readonly providers: readonly AppClientRegisteredProvider[];
   readonly routes: readonly AppClientRegisteredRoute[];
 }
@@ -39,8 +44,13 @@ export async function createAppRuntime(
   const loadedPlugins = await Promise.all(
     options.plugins.map(loadClientPlugin),
   );
-  let authProvider: AuthProvider | undefined;
-  let authProviderOwner: string | undefined;
+  const refineCollector = createRefineConfigCollector({
+    options: {
+      title: {
+        text: 'NocoBase',
+      },
+    },
+  });
 
   for (const plugin of loadedPlugins) {
     if (!plugin.bootstrap) {
@@ -50,17 +60,7 @@ export async function createAppRuntime(
       await plugin.bootstrap({
         appClient,
         packageName: plugin.packageName,
-        refine: {
-          setAuthProvider(provider): void {
-            if (authProvider) {
-              throw new Error(
-                `Auth provider is already registered by "${authProviderOwner}".`,
-              );
-            }
-            authProvider = provider;
-            authProviderOwner = plugin.packageName;
-          },
-        },
+        refine: refineCollector.forPlugin(plugin.packageName),
       });
     } catch (error) {
       throw new Error(
@@ -70,18 +70,27 @@ export async function createAppRuntime(
     }
   }
 
-  if (!authProvider) {
+  const refine = refineCollector.finalize();
+  if (!refine.authProvider) {
     throw new Error(
       'Default App requires an enabled client plugin that registers an auth provider.',
+    );
+  }
+  if (!refine.dataProvider) {
+    throw new Error(
+      'Default App requires an enabled client plugin that registers a data provider.',
     );
   }
 
   const contributions = resolveAppClientContributions(loadedPlugins);
   return Object.freeze({
     appClient,
-    authProvider,
     basename: getPortalBase(),
-    dataProvider,
+    refine: Object.freeze({
+      ...refine,
+      authProvider: refine.authProvider,
+      dataProvider: refine.dataProvider,
+    }),
     providers: contributions.providers,
     routes: contributions.routes,
   });

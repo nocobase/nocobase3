@@ -4,12 +4,16 @@ import type {
   AppClientProviderDefinition,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
+import dataProviderBootstrap from '@nocobase/app-plugin-data-provider/client/bootstrap';
 import type { AuthProvider } from '@refinedev/core';
 import type { ComponentType, PropsWithChildren } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../client/app.ts';
-import { createAppRuntime } from '../../client/runtime.ts';
+import {
+  createAppRuntime as createRawAppRuntime,
+  type CreateAppRuntimeOptions,
+} from '../../client/runtime.ts';
 
 const authProvider: AuthProvider = {
   check: vi.fn(),
@@ -62,7 +66,9 @@ describe('app client runtime', () => {
 
     const runtime = await createAppRuntime({ plugins });
 
-    expect(runtime.authProvider).toBe(authProvider);
+    expect(runtime.refine.authProvider).toBe(authProvider);
+    expect(runtime.refine.dataProvider).toBeDefined();
+    expect(createApp(runtime).refine).toBe(runtime.refine);
     expect(runtime.routes).toEqual([]);
     expect(runtime.providers).toEqual([]);
     expect(calls.slice(0, 3)).toEqual([
@@ -90,6 +96,16 @@ describe('app client runtime', () => {
   it('requires an authentication plugin', async () => {
     await expect(createAppRuntime({ plugins: [] })).rejects.toThrow(
       'requires an enabled client plugin that registers an auth provider',
+    );
+  });
+
+  it('requires a data provider plugin', async () => {
+    await expect(
+      createRawAppRuntime({
+        plugins: [createAuthPlugin('@nocobase/app-plugin-authentication')],
+      }),
+    ).rejects.toThrow(
+      'requires an enabled client plugin that registers a data provider',
     );
   });
 
@@ -266,6 +282,21 @@ describe('app client runtime', () => {
     ).rejects.toThrow('Circular client provider order detected');
   });
 });
+
+function createAppRuntime(
+  options: CreateAppRuntimeOptions,
+): ReturnType<typeof createRawAppRuntime> {
+  return createRawAppRuntime({
+    plugins: [...options.plugins, createDataProviderPlugin()],
+  });
+}
+
+function createDataProviderPlugin(): AppClientPluginLoader {
+  return {
+    packageName: '@nocobase/app-plugin-data-provider',
+    loadBootstrap: async () => ({ default: dataProviderBootstrap }),
+  };
+}
 
 function createAuthPlugin(packageName: string): AppClientPluginLoader {
   return {

@@ -9,15 +9,7 @@ export function createApp(runtime: AppClientRuntime): AppClientConfig {
   return defineAppClient({
     basename: runtime.basename,
     providers: runtime.providers.map((provider) => provider.component),
-    refine: {
-      authProvider: runtime.authProvider,
-      dataProvider: runtime.dataProvider,
-      options: {
-        title: {
-          text: 'NocoBase',
-        },
-      },
-    },
+    refine: runtime.refine,
     routes: createElement(AppRoutes, {
       pluginRoutes: createRenderablePluginRoutes(runtime.routes),
     }),

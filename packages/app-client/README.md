@@ -45,7 +45,7 @@ import {
   type AppClientProviderDefinition,
 } from '@nocobase/app-client/plugins';
 
-import { ExampleProvider } from './providers/example-provider';
+import { ExampleProvider } from './components/example-provider';
 
 const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
   [
@@ -83,3 +83,35 @@ The plugin manifest declares each optional entry explicitly:
 The application owns route placement, authentication, loading, error UI, and
 the final provider tree. `bootstrap` remains the imperative initialization
 entry; routes and providers remain inspectable declarations.
+
+The bootstrap context exposes a plugin-scoped Refine registry. Its setters are
+derived from `RefineProps`, so every Refine prop has a required `setXxx()`
+method:
+
+```ts
+import type { AppClientPluginBootstrap } from '@nocobase/app-client/plugins';
+
+const bootstrap: AppClientPluginBootstrap = ({ refine }) => {
+  refine.setChildren(customAppContent);
+  refine.setAuthProvider(authProvider);
+  refine.setDataProvider(dataProvider);
+  refine.setRouterProvider(routerProvider);
+  refine.setLiveProvider(liveProvider);
+  refine.setNotificationProvider(notificationProvider);
+  refine.setAccessControlProvider(accessControlProvider);
+  refine.setAuditLogProvider(auditLogProvider);
+  refine.setI18nProvider(i18nProvider);
+  refine.setOnLiveEvent(onLiveEvent);
+  refine.setOptions({ mutationMode: 'optimistic' });
+  refine.setResources([{ name: 'records' }]);
+};
+
+export default bootstrap;
+```
+
+Each `setXxx()` property may be claimed by only one plugin. Duplicate claims
+fail with both package names. Multiple plugins can instead contribute resources
+with `addResources()` and live event listeners with `addLiveEventHandler()`.
+The resolved configuration is frozen as `runtime.refine` before rendering.
+Application routes are the default Refine children; calling `setChildren()`
+explicitly replaces them.

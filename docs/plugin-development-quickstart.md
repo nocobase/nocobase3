@@ -149,7 +149,7 @@ GET /audit-log
 
 三个入口都是可选的：
 
-- `client/bootstrap.ts` 处理认证等命令式初始化；
+- `client/bootstrap.ts` 通过 Refine Registry 处理认证、数据源和其他命令式初始化；
 - `client/routes.ts` 使用 `defineClientRoutes()` 声明路由，页面通过
   `componentLoader` 按 URL 访问加载；
 - `client/providers.ts` 使用 `defineClientProviders()` 声明同步 Provider。
@@ -178,6 +178,56 @@ client/
 
 不要同时使用 `client/providers.ts` 和 `client/providers/`。虽然内核会校验入口必须是文件，
 但同名文件和目录容易让人混淆，也可能给文件解析工具带来歧义。
+
+Bootstrap 中的 `refine` 为每个可配置的 Refine Prop 提供对应的 `setXxx()`。例如：
+
+```ts
+import type { AppClientPluginBootstrap } from '@nocobase/app-client/plugins';
+
+const bootstrap: AppClientPluginBootstrap = ({ refine }) => {
+  refine.setChildren(customAppContent);
+  refine.setAuthProvider(authProvider);
+  refine.setDataProvider(dataProvider);
+  refine.setRouterProvider(routerProvider);
+  refine.setLiveProvider(liveProvider);
+  refine.setNotificationProvider(notificationProvider);
+  refine.setAccessControlProvider(accessControlProvider);
+  refine.setAuditLogProvider(auditLogProvider);
+  refine.setI18nProvider(i18nProvider);
+  refine.setOnLiveEvent(onLiveEvent);
+  refine.setOptions({ mutationMode: 'optimistic' });
+  refine.setResources([{ name: 'auditLogs' }]);
+};
+
+export default bootstrap;
+```
+
+默认使用 App 路由树作为 Refine `children`；显式调用 `setChildren()` 会替换它。同一个
+Refine Prop 只能由一个插件调用 `setXxx()`；重复注册会显示已有插件和冲突插件。多个插件
+需要追加资源或 live event 处理器时，分别使用 `addResources()` 和
+`addLiveEventHandler()`。bootstrap 全部完成后，配置会固化为 `runtime.refine`，并直接传给
+App client。
+
+默认 App 不在自身的 runtime 中硬编码 `dataProvider`，而是启用独立的
+`@nocobase/app-plugin-data-provider`：
+
+```json
+{
+  "nocobase": {
+    "plugins": {
+      "@nocobase/app-plugin-data-provider": {
+        "enabled": true
+      }
+    }
+  },
+  "devDependencies": {
+    "@nocobase/app-plugin-data-provider": "workspace:^"
+  }
+}
+```
+
+该插件只有客户端 bootstrap，负责调用
+`refine.setDataProvider(dataProvider)`；它不管理数据库连接、schema 或服务端数据源。
 
 路由示例：
 

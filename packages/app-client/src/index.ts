@@ -22,6 +22,8 @@ export type {
   AppClientProvidersLoader,
   AppClientProvidersModule,
   AppClientRefineRegistry,
+  AppClientRefineSetterValue,
+  AppClientRefineSetters,
   AppClientRegisteredProvider,
   AppClientRegisteredRoute,
   AppClientRouteComponentLoader,

@@ -1,6 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { useGo } from '@refinedev/core';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { type ReactElement } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 
-import { defineAppClient, normalizeAppClientBasename } from '../src/index.js';
+import {
+  AppClientRoot,
+  defineAppClient,
+  normalizeAppClientBasename,
+} from '../src/index.js';
+
+function RouterConsumer(): ReactElement {
+  const go = useGo();
+  return <button onClick={() => go({ to: '/configured' })}>Navigate</button>;
+}
 
 describe('app client', () => {
   it('normalizes router basenames', () => {
@@ -19,5 +31,45 @@ describe('app client', () => {
       basename: '/portal/',
       routes: 'Application content',
     });
+  });
+
+  it('uses a configured Refine router provider instead of the default', () => {
+    const go = vi.fn();
+
+    render(
+      <AppClientRoot
+        config={{
+          refine: {
+            routerProvider: {
+              go: () => go,
+            },
+          },
+          routes: <RouterConsumer />,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Navigate' }));
+
+    expect(go).toHaveBeenCalledExactlyOnceWith({ to: '/configured' });
+  });
+
+  it('uses configured Refine children instead of the default routes', () => {
+    render(
+      <AppClientRoot
+        config={{
+          refine: {
+            children: 'Configured Refine content',
+            routerProvider: {},
+          },
+          routes: 'Default application routes',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Configured Refine content')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Default application routes'),
+    ).not.toBeInTheDocument();
   });
 });

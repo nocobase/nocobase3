@@ -3,10 +3,7 @@ import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
 
 export type AppClientProvider = ComponentType<PropsWithChildren>;
 
-export type AppClientRefineConfig = Omit<
-  RefineProps,
-  'children' | 'routerProvider'
->;
+export type AppClientRefineConfig = RefineProps;
 
 export interface AppClientConfig {
   basename?: string;

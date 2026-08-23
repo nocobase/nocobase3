@@ -28,6 +28,7 @@ export default createReactVitestConfig({
     include: [
       'tests/logic/app-server.test.ts',
       'tests/logic/client-plugins.test.ts',
+      'tests/logic/client-refine-runtime.test.ts',
       'tests/logic/client-runtime.test.ts',
       'tests/logic/config.test.ts',
       'tests/logic/e2e-support.test.ts',

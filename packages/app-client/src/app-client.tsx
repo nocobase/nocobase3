@@ -11,19 +11,22 @@ export interface AppClientRootProps {
 
 export function AppClientRoot({ config }: AppClientRootProps): ReactElement {
   const refine = config.refine ?? {};
+  const configuredChildren =
+    refine.children === undefined ? config.routes : refine.children;
+  const configuredRouterProvider = refine.routerProvider ?? routerProvider;
   const providers = config.providers ?? [];
   const content = providers.reduceRight<ReactNode>(
     (children, Provider) => <Provider>{children}</Provider>,
     <Refine
       {...refine}
-      routerProvider={routerProvider}
+      routerProvider={configuredRouterProvider}
       options={{
         syncWithLocation: true,
         disableTelemetry: true,
         ...refine.options,
       }}
     >
-      {config.routes}
+      {configuredChildren}
     </Refine>,
   );
 
