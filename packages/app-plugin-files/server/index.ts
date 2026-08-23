@@ -1,3 +1,5 @@
+export { resolveFilesConfig } from './config.js';
+export type { FilesConfig, ResolveFilesConfigOptions } from './config.js';
 export type {
   CreateFileRouteOptions,
   FileConstraints,
