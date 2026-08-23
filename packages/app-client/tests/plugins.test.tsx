@@ -66,6 +66,7 @@ describe('client plugin definitions', () => {
     ]);
 
     expect(resolved.routes[0]).toMatchObject({
+      auth: 'required',
       id: '@nocobase/app-plugin-feature:index',
       path: '/feature',
     });
@@ -73,6 +74,47 @@ describe('client plugin definitions', () => {
       '@nocobase/app-plugin-foundation:first',
       '@nocobase/app-plugin-feature:second',
     ]);
+  });
+
+  it('supports guest and optional routes while protecting reserved paths', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-authentication',
+        routes: defineClientRoutes([
+          {
+            name: 'login',
+            path: '/login',
+            auth: 'guest',
+            componentLoader: async () => ({ default: () => null }),
+          },
+          {
+            name: 'help',
+            path: '/help',
+            auth: 'optional',
+            componentLoader: async () => ({ default: () => null }),
+          },
+        ]),
+      },
+    ]);
+
+    expect(resolved.routes.map((route) => route.auth)).toEqual([
+      'guest',
+      'optional',
+    ]);
+    expect(() =>
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-feature',
+          routes: defineClientRoutes([
+            {
+              name: 'login',
+              path: '/login',
+              componentLoader: async () => ({ default: () => null }),
+            },
+          ]),
+        },
+      ]),
+    ).toThrow('unless auth is "guest"');
   });
 
   it('keeps registration order when providers have no constraints', () => {

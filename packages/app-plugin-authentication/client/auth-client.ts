@@ -48,6 +48,13 @@ export class AuthClient {
     });
   }
 
+  async resetPassword(newPassword: string, token: string): Promise<void> {
+    await this.send('reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ newPassword, token }),
+    });
+  }
+
   private async send<T>(path: string, init: RequestInit = {}): Promise<T> {
     return this.options.client.request<T>(`auth/${path}`, {
       ...init,

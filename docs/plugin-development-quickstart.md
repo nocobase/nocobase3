@@ -176,6 +176,15 @@ client/
 - `contexts/` 存放 React Context、相关类型和 hooks；
 - `pages/` 存放由路由按需加载的页面组件。
 
+路由的 `auth` 可选值为：
+
+- `required`：默认值，只允许已登录用户访问；
+- `guest`：只允许匿名用户访问，适合登录、注册等认证页面；
+- `optional`：登录和匿名用户均可访问。
+
+`/login`、`/register`、`/forgot-password` 和 `/reset-password` 是认证协议路径，
+插件声明这些路径时必须显式使用 `auth: 'guest'`；应用根路径 `/` 不允许由插件覆盖。
+
 不要同时使用 `client/providers.ts` 和 `client/providers/`。虽然内核会校验入口必须是文件，
 但同名文件和目录容易让人混淆，也可能给文件解析工具带来歧义。
 
@@ -229,6 +238,28 @@ App client。
 该插件只有客户端 bootstrap，负责调用
 `refine.setDataProvider(dataProvider)`；它不管理数据库连接、schema 或服务端数据源。
 
+通知也由独立的客户端插件提供：
+
+```json
+{
+  "nocobase": {
+    "plugins": {
+      "@nocobase/app-plugin-notification-provider": {
+        "enabled": true
+      }
+    }
+  },
+  "devDependencies": {
+    "@nocobase/app-plugin-notification-provider": "workspace:^"
+  }
+}
+```
+
+它的 `client/bootstrap.ts` 注册 Refine `notificationProvider`，
+`client/providers.ts` 挂载 Sonner 通知宿主；Undoable mutation 的通知 UI
+由插件内部负责，不依赖 `client-old/`。插件还通过 `client/routes.ts` 提供
+`/notification-provider` 测试页面，可以触发 success、error 和 undoable 通知。
+
 路由示例：
 
 ```ts
@@ -241,6 +272,7 @@ const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
   {
     name: 'list',
     path: '/audit-log',
+    auth: 'required',
     componentLoader: () => import('./pages/audit-log-list.js'),
   },
 ]);
@@ -278,7 +310,7 @@ const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
     {
       name: 'audit-log',
       component: AuditLogProvider,
-      after: ['@nocobase/app-plugin-theme:theme'],
+      after: ['@nocobase/app-plugin-foundation:foundation'],
     },
   ],
 );
@@ -287,6 +319,9 @@ export default providers;
 ```
 
 内核会检查重复名称、缺失引用和循环依赖，并执行稳定拓扑排序。
+默认 App 的应用级 ThemeProvider 位于所有插件 Provider 外层，所以插件 Provider 和
+插件路由页面会自动继承 `light`、`dark` 或 `system` 主题，不需要把主题写入插件间的
+`before`/`after` 依赖。
 
 ### Migration 和 Seed
 

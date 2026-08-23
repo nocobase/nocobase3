@@ -5,47 +5,70 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
 
 import { HomePage } from './pages/home';
-import { LoginPage } from './pages/login';
-import type { AppClientRenderableRoute } from './plugin-routes';
+import {
+  groupRenderablePluginRoutes,
+  type AppClientRenderableRoute,
+} from './plugin-routes';
+import { ThemeSettings } from './theme';
 
 export interface AppRoutesProps {
   pluginRoutes: readonly AppClientRenderableRoute[];
 }
 
 export function AppRoutes({ pluginRoutes }: AppRoutesProps): ReactElement {
+  const routeGroups = groupRenderablePluginRoutes(pluginRoutes);
+
   return (
-    <Routes>
-      <Route
-        element={
-          <Authenticated
-            key='authenticated-inner'
-            fallback={<Navigate to='/login' replace />}
-          >
-            <Outlet />
-          </Authenticated>
-        }
-      >
-        <Route index element={<HomePage />} />
-        {pluginRoutes.map((route) => (
+    <div className='relative min-h-svh'>
+      <ThemeSettings />
+      <Routes>
+        <Route
+          element={
+            <Authenticated
+              key='authenticated-inner'
+              fallback={<Navigate to='/login' replace />}
+            >
+              <Outlet />
+            </Authenticated>
+          }
+        >
+          <Route index element={<HomePage />} />
+          {routeGroups.required.map((route) => (
+            <Route
+              key={route.id}
+              path={route.path}
+              element={<PluginRoute route={route} />}
+            />
+          ))}
+        </Route>
+
+        <Route
+          element={
+            <Authenticated key='authenticated-outer' fallback={<Outlet />}>
+              <Navigate to='/' replace />
+            </Authenticated>
+          }
+        >
+          {routeGroups.guest.map((route) => (
+            <Route
+              key={route.id}
+              path={route.path}
+              element={<PluginRoute route={route} />}
+            />
+          ))}
+        </Route>
+
+        {routeGroups.optional.map((route) => (
           <Route
             key={route.id}
             path={route.path}
             element={<PluginRoute route={route} />}
           />
         ))}
-      </Route>
 
-      <Route
-        path='/login'
-        element={
-          <Authenticated key='authenticated-outer' fallback={<LoginPage />}>
-            <Navigate to='/' replace />
-          </Authenticated>
-        }
-      />
-
-      <Route path='*' element={<Navigate to='/' replace />} />
-    </Routes>
+        <Route path='*' element={<Navigate to='/' replace />} />
+      </Routes>
+    </div>
   );
 }
 

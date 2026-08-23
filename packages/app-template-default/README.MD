@@ -61,6 +61,12 @@ locale labels, i18next options, and post-switch behavior remain customizable in
 `client/providers/i18n/runtime.ts`. Shared UI components live in
 `client/components/ui` and follow the shadcn Base UI conventions.
 
+The new client mounts a shared `next-themes` provider around the default routes
+and all enabled client plugins. Its top-right theme selector supports System,
+Light, and Dark modes. Plugin pages should use semantic classes such as
+`bg-background`, `text-foreground`, and `border-border` so they follow the
+selected theme automatically.
+
 Stable NocoBase runtime behavior is provided by `@nocobase/portal-sdk`.
 The template records its inherited base version in
 `nocobase.defaultTemplateVersion`; SDK installation, development, and builds
@@ -97,18 +103,25 @@ npm template contains the default extensions under `client/extensions` instead.
 
 ## Authentication
 
-Basic username or email and password login is built in. The default login page
-also renders enabled NocoBase authentication methods when their frontend
-Registry adapters are installed.
+Basic username or email and password authentication is provided by the enabled
+`@nocobase/app-plugin-authentication` client plugin. Its independent routes
+entry lazy-loads `/login`, `/register`, `/forgot-password`, and
+`/reset-password` as guest-only pages. The template intentionally has no
+hardcoded login-page fallback; startup fails with an actionable error when no
+enabled plugin contributes a guest `/login` route.
 
 The Refine data provider is registered by the enabled
 `@nocobase/app-plugin-data-provider` client bootstrap. The template runtime does
 not provide an implicit fallback, so disabling that plugin produces an explicit
 startup error instead of starting with incomplete data access.
 
-Customize `client/pages/login/index.tsx` to replace the whole login page, or use
-`DefaultSignInPage` to keep dynamic authentication while overriding individual
-authenticator UI.
+Refine notifications are provided by the enabled
+`@nocobase/app-plugin-notification-provider` plugin. It owns the Sonner host and
+undoable mutation UI instead of the archived `client-old` tree.
+
+Password-reset pages do not provide an email transport. Configure Better Auth's
+server-side `emailAndPassword.sendResetPassword` callback before exposing the
+forgot-password flow in production.
 
 ## Testing
 

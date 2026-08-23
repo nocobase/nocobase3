@@ -14,6 +14,7 @@ import {
   createAppRuntime as createRawAppRuntime,
   type CreateAppRuntimeOptions,
 } from '../../client/runtime.ts';
+import { AppThemeProvider } from '../../client/theme/index.ts';
 
 const authProvider: AuthProvider = {
   check: vi.fn(),
@@ -61,6 +62,9 @@ describe('app client runtime', () => {
             },
           };
         },
+        loadRoutes: async () => ({
+          default: [createRoute('login', '/login', undefined, 'guest')],
+        }),
       },
     ];
 
@@ -69,7 +73,13 @@ describe('app client runtime', () => {
     expect(runtime.refine.authProvider).toBe(authProvider);
     expect(runtime.refine.dataProvider).toBeDefined();
     expect(createApp(runtime).refine).toBe(runtime.refine);
-    expect(runtime.routes).toEqual([]);
+    expect(runtime.routes).toMatchObject([
+      {
+        auth: 'guest',
+        name: 'login',
+        path: '/login',
+      },
+    ]);
     expect(runtime.providers).toEqual([]);
     expect(calls.slice(0, 3)).toEqual([
       'load:first',
@@ -109,6 +119,21 @@ describe('app client runtime', () => {
     );
   });
 
+  it('requires an authentication plugin to contribute the guest login route', async () => {
+    const plugin: AppClientPluginLoader = {
+      packageName: '@nocobase/app-plugin-authentication',
+      loadBootstrap: async () => ({
+        default: ({ refine }) => {
+          refine.setAuthProvider(authProvider);
+        },
+      }),
+    };
+
+    await expect(createAppRuntime({ plugins: [plugin] })).rejects.toThrow(
+      'requires an enabled client plugin that registers a guest /login route',
+    );
+  });
+
   it('collects declarative plugin routes in plugin order', async () => {
     const firstPage: ComponentType = () => null;
     const secondPage: ComponentType = () => null;
@@ -126,16 +151,25 @@ describe('app client runtime', () => {
 
     expect(runtime.routes).toMatchObject([
       {
+        auth: 'required',
         id: '@nocobase/app-plugin-first:list',
         name: 'list',
         packageName: '@nocobase/app-plugin-first',
         path: '/first',
       },
       {
+        auth: 'required',
         id: '@nocobase/app-plugin-second:list',
         name: 'list',
         packageName: '@nocobase/app-plugin-second',
         path: '/second',
+      },
+      {
+        auth: 'guest',
+        id: '@nocobase/app-plugin-authentication:login',
+        name: 'login',
+        packageName: '@nocobase/app-plugin-authentication',
+        path: '/login',
       },
     ]);
     await expect(runtime.routes[0].componentLoader()).resolves.toEqual({
@@ -236,6 +270,7 @@ describe('app client runtime', () => {
       '@nocobase/app-plugin-feature:inner',
     ]);
     expect(createApp(runtime).providers).toEqual([
+      AppThemeProvider,
       OuterProvider,
       InnerProvider,
     ]);
@@ -306,6 +341,9 @@ function createAuthPlugin(packageName: string): AppClientPluginLoader {
         refine.setAuthProvider(authProvider);
       },
     }),
+    loadRoutes: async () => ({
+      default: [createRoute('login', '/login', undefined, 'guest')],
+    }),
   };
 }
 
@@ -327,8 +365,10 @@ function createRoute(
   name: string,
   path: string,
   module?: AppClientRouteComponentModule,
-) {
+  auth?: AppClientRouteDefinition['auth'],
+): AppClientRouteDefinition {
   return {
+    auth,
     name,
     path,
     componentLoader: module

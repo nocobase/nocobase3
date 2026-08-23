@@ -10,7 +10,10 @@ describe('app client plugin loaders', () => {
     const source = createAppClientPluginLoadersSource([
       createPlugin({
         packageName: '@nocobase/app-plugin-authentication',
-        client: { bootstrap: './client/bootstrap' },
+        client: {
+          bootstrap: './client/bootstrap',
+          routes: './client/routes',
+        },
         enabled: true,
       }),
       createPlugin({
@@ -34,6 +37,9 @@ describe('app client plugin loaders', () => {
 
     expect(source).toContain(
       'loadBootstrap: () => import("@nocobase/app-plugin-authentication/client/bootstrap")',
+    );
+    expect(source).toContain(
+      'loadRoutes: () => import("@nocobase/app-plugin-authentication/client/routes")',
     );
     expect(source).toContain(
       'loadRoutes: () => import("@nocobase/app-plugin-routes-example/client/routes")',

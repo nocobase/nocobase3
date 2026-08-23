@@ -37,6 +37,7 @@ describe('client bootstrap', () => {
       login: expect.any(Function),
       register: expect.any(Function),
       forgotPassword: expect.any(Function),
+      updatePassword: expect.any(Function),
       logout: expect.any(Function),
       check: expect.any(Function),
       getIdentity: expect.any(Function),

@@ -83,6 +83,16 @@ export async function createAppRuntime(
   }
 
   const contributions = resolveAppClientContributions(loadedPlugins);
+  if (
+    !contributions.routes.some(
+      (route) =>
+        route.path.toLowerCase() === '/login' && route.auth === 'guest',
+    )
+  ) {
+    throw new Error(
+      'Default App requires an enabled client plugin that registers a guest /login route.',
+    );
+  }
   return Object.freeze({
     appClient,
     basename: getPortalBase(),

@@ -4,6 +4,14 @@ import type { ComponentType } from 'react';
 import type { AppClientProvider, AppClientRefineConfig } from './config.js';
 
 const CONTRIBUTION_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
+const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+]);
+
+export type AppClientRouteAuth = 'required' | 'guest' | 'optional';
 
 export interface AppClientRouteComponentModule {
   default: ComponentType;
@@ -15,10 +23,12 @@ export type AppClientRouteComponentLoader =
 export interface AppClientRouteDefinition {
   readonly name: string;
   readonly path: string;
+  readonly auth?: AppClientRouteAuth;
   readonly componentLoader: AppClientRouteComponentLoader;
 }
 
 export interface AppClientRegisteredRoute extends AppClientRouteDefinition {
+  readonly auth: AppClientRouteAuth;
   readonly id: string;
   readonly packageName: string;
 }
@@ -200,6 +210,20 @@ function createRegisteredRoute(
 ): AppClientRegisteredRoute {
   const name = normalizeContributionName(route.name, packageName, 'route');
   const path = normalizeRoutePath(route.path, packageName, name);
+  const auth = normalizeRouteAuth(route.auth, packageName, name);
+  if (path === '/') {
+    throw new Error(
+      `Client route "${name}" from plugin "${packageName}" cannot use reserved application root path "/".`,
+    );
+  }
+  if (
+    RESERVED_APPLICATION_ROUTE_PATHS.has(path.toLowerCase()) &&
+    auth !== 'guest'
+  ) {
+    throw new Error(
+      `Client route "${name}" from plugin "${packageName}" cannot use reserved path "${path}" unless auth is "guest".`,
+    );
+  }
   if (typeof route.componentLoader !== 'function') {
     throw new Error(
       `Client route "${name}" from plugin "${packageName}" must define a componentLoader function.`,
@@ -208,12 +232,31 @@ function createRegisteredRoute(
 
   const id = `${packageName}:${name}`;
   return Object.freeze({
+    auth,
     componentLoader: wrapRouteComponentLoader(route.componentLoader, id),
     id,
     name,
     packageName,
     path,
   });
+}
+
+function normalizeRouteAuth(
+  auth: AppClientRouteAuth | undefined,
+  packageName: string,
+  routeName: string,
+): AppClientRouteAuth {
+  const normalized = auth ?? 'required';
+  if (
+    normalized !== 'required' &&
+    normalized !== 'guest' &&
+    normalized !== 'optional'
+  ) {
+    throw new Error(
+      `Client route "${routeName}" from plugin "${packageName}" must use auth "required", "guest", or "optional".`,
+    );
+  }
+  return normalized;
 }
 
 function createRegisteredProvider(
@@ -306,11 +349,6 @@ function normalizeRoutePath(
     trimmed === '/'
       ? '/'
       : trimmed.replace(/\/+$/g, '').replace(/\/{2,}/g, '/');
-  if (normalized === '/' || normalized.toLowerCase() === '/login') {
-    throw new Error(
-      `Client route "${routeName}" from plugin "${packageName}" cannot use reserved path "${normalized}".`,
-    );
-  }
   return normalized;
 }
 

@@ -34,9 +34,35 @@ test('inspects configured client routes and providers', async () => {
 
   assert.equal(inspection.app, '@nocobase/app-template-default');
   assert.deepEqual(
-    inspection.routes.map(({ id, path }) => ({ id, path })),
+    inspection.routes.map(({ auth, id, path }) => ({ auth, id, path })),
     [
       {
+        auth: 'guest',
+        id: '@nocobase/app-plugin-authentication:login',
+        path: '/login',
+      },
+      {
+        auth: 'guest',
+        id: '@nocobase/app-plugin-authentication:register',
+        path: '/register',
+      },
+      {
+        auth: 'guest',
+        id: '@nocobase/app-plugin-authentication:forgot-password',
+        path: '/forgot-password',
+      },
+      {
+        auth: 'guest',
+        id: '@nocobase/app-plugin-authentication:reset-password',
+        path: '/reset-password',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-notification-provider:demo',
+        path: '/notification-provider',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-routes-example:index',
         path: '/routes-example',
       },
@@ -46,14 +72,19 @@ test('inspects configured client routes and providers', async () => {
     inspection.providers.map(({ id, order }) => ({ id, order })),
     [
       {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 1,
+      },
+      {
+        id: '@nocobase/app-plugin-routes-example:routes-example',
+        order: 2,
       },
     ],
   );
 
   const output = formatAppClientInspection(inspection);
   assert.match(output, /Routes/u);
+  assert.match(output, /auth: guest/u);
   assert.match(output, /Providers \(outer -> inner\)/u);
 
   assert.deepEqual(selectAppClientInspection(inspection, 'routes'), {

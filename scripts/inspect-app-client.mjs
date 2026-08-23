@@ -91,6 +91,7 @@ export async function inspectAppClient({
   return {
     app: resolvedApp.appPackageName,
     routes: resolved.routes.map((route) => ({
+      auth: route.auth,
       id: route.id,
       name: route.name,
       packageName: route.packageName,
@@ -169,7 +170,7 @@ function formatRoutes(routes) {
   return `Routes\n${routes
     .map(
       (route) =>
-        `  ${route.path}\n    id: ${route.id}\n    entry: ${route.entry}`,
+        `  ${route.path}\n    id: ${route.id}\n    auth: ${route.auth}\n    entry: ${route.entry}`,
     )
     .join('\n')}`;
 }

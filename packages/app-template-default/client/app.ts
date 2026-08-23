@@ -4,11 +4,15 @@ import { createElement } from 'react';
 import { createRenderablePluginRoutes } from './plugin-routes';
 import { AppRoutes } from './routes';
 import type { AppClientRuntime } from './runtime';
+import { AppThemeProvider } from './theme';
 
 export function createApp(runtime: AppClientRuntime): AppClientConfig {
   return defineAppClient({
     basename: runtime.basename,
-    providers: runtime.providers.map((provider) => provider.component),
+    providers: [
+      AppThemeProvider,
+      ...runtime.providers.map((provider) => provider.component),
+    ],
     refine: runtime.refine,
     routes: createElement(AppRoutes, {
       pluginRoutes: createRenderablePluginRoutes(runtime.routes),

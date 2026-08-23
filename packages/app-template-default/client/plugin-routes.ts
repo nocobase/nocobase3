@@ -5,6 +5,12 @@ export interface AppClientRenderableRoute extends AppClientRegisteredRoute {
   readonly Component: LazyExoticComponent<ComponentType>;
 }
 
+export interface AppClientRenderableRouteGroups {
+  readonly guest: readonly AppClientRenderableRoute[];
+  readonly optional: readonly AppClientRenderableRoute[];
+  readonly required: readonly AppClientRenderableRoute[];
+}
+
 export function createRenderablePluginRoutes(
   routes: readonly AppClientRegisteredRoute[],
 ): readonly AppClientRenderableRoute[] {
@@ -16,4 +22,18 @@ export function createRenderablePluginRoutes(
       }),
     ),
   );
+}
+
+export function groupRenderablePluginRoutes(
+  routes: readonly AppClientRenderableRoute[],
+): AppClientRenderableRouteGroups {
+  return Object.freeze({
+    guest: Object.freeze(routes.filter((route) => route.auth === 'guest')),
+    optional: Object.freeze(
+      routes.filter((route) => route.auth === 'optional'),
+    ),
+    required: Object.freeze(
+      routes.filter((route) => route.auth === 'required'),
+    ),
+  });
 }

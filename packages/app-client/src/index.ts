@@ -26,6 +26,7 @@ export type {
   AppClientRefineSetters,
   AppClientRegisteredProvider,
   AppClientRegisteredRoute,
+  AppClientRouteAuth,
   AppClientRouteComponentLoader,
   AppClientRouteComponentModule,
   AppClientRouteDefinition,
