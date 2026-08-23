@@ -1,6 +1,6 @@
-import { defineConfig } from 'vitest/config';
+import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
 
-export default defineConfig({
+export default createNodeVitestConfig({
   test: {
     coverage: {
       provider: 'v8',
@@ -8,7 +8,7 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: [
         'dist/**',
-        'test/**',
+        'tests/**',
         'src/**/index.ts',
         'src/**/types.ts',
         'src/database/connection.ts',

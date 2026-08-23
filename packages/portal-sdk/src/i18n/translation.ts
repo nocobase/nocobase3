@@ -6,7 +6,7 @@ export type TranslationOptions = Record<string, unknown> & {
 export type TranslationResolver = (
   key: string,
   options?: TranslationOptions,
-  defaultMessage?: string
+  defaultMessage?: string,
 ) => string;
 
 export type TranslationExpression = {
@@ -20,16 +20,25 @@ export type TranslationResourceBundle = Record<string, TranslationResource>;
 
 type TranslationResourceListener = (
   namespace: string,
-  resources: TranslationResourceBundle
+  resources: TranslationResourceBundle,
 ) => void;
+
+type Stringifiable = {
+  toString(): string;
+};
 
 let translationResolver: TranslationResolver | undefined;
 const translationResources = new Map<string, TranslationResourceBundle>();
 const translationResourceListeners = new Set<TranslationResourceListener>();
 
+const hasStringifier = (value: object): value is Stringifiable =>
+  'toString' in value && typeof value.toString === 'function';
+
+const stringify = (value: Stringifiable): string => value.toString();
+
 const quotedValuePattern = `(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*')`;
 const translationExpressionPattern = new RegExp(
-  `^\\s*\\{\\{\\s*t\\(\\s*(${quotedValuePattern})\\s*(?:,\\s*(\\{[\\s\\S]*\\}))?\\s*\\)\\s*\\}\\}\\s*$`
+  `^\\s*\\{\\{\\s*t\\(\\s*(${quotedValuePattern})\\s*(?:,\\s*(\\{[\\s\\S]*\\}))?\\s*\\)\\s*\\}\\}\\s*$`,
 );
 
 function decodeQuotedValue(value: string) {
@@ -45,10 +54,10 @@ function decodeQuotedValue(value: string) {
     .slice(1, -1)
     .replace(/\\'/g, "'")
     .replace(/\\"/g, '"')
-    .replace(/\\n/g, "\n")
-    .replace(/\\r/g, "\r")
-    .replace(/\\t/g, "\t")
-    .replace(/\\\\/g, "\\");
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\\\/g, '\\');
 }
 
 function parsePrimitive(value: string): unknown {
@@ -56,9 +65,9 @@ function parsePrimitive(value: string): unknown {
   if (normalized.startsWith('"') || normalized.startsWith("'")) {
     return decodeQuotedValue(normalized);
   }
-  if (normalized === "true") return true;
-  if (normalized === "false") return false;
-  if (normalized === "null") return null;
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  if (normalized === 'null') return null;
   if (/^-?\d+(?:\.\d+)?$/.test(normalized)) return Number(normalized);
   return undefined;
 }
@@ -69,18 +78,18 @@ function parseOptions(source?: string): TranslationOptions | undefined {
   const options: TranslationOptions = {};
   const propertyPattern = new RegExp(
     `([A-Za-z_$][\\w$]*)\\s*:\\s*(${quotedValuePattern}|-?\\d+(?:\\.\\d+)?|true|false|null)`,
-    "g"
+    'g',
   );
 
   for (const match of source.matchAll(propertyPattern)) {
     const value = parsePrimitive(match[2]);
-    if (typeof value !== "undefined") options[match[1]] = value;
+    if (typeof value !== 'undefined') options[match[1]] = value;
   }
 
   const namespaceArray = source.match(/\bns\s*:\s*\[([^\]]*)\]/);
   if (namespaceArray) {
     const namespaces = [
-      ...namespaceArray[1].matchAll(new RegExp(quotedValuePattern, "g")),
+      ...namespaceArray[1].matchAll(new RegExp(quotedValuePattern, 'g')),
     ].map((match) => decodeQuotedValue(match[0]));
     if (namespaces.length) options.ns = namespaces;
   }
@@ -89,7 +98,7 @@ function parseOptions(source?: string): TranslationOptions | undefined {
 }
 
 export function parseTranslationExpression(
-  value: string
+  value: string,
 ): TranslationExpression | undefined {
   const match = translationExpressionPattern.exec(value);
   if (!match) return undefined;
@@ -101,7 +110,7 @@ export function parseTranslationExpression(
 }
 
 export function setTranslationResolver(
-  resolver?: TranslationResolver
+  resolver?: TranslationResolver,
 ): () => void {
   translationResolver = resolver;
   return () => {
@@ -111,7 +120,7 @@ export function setTranslationResolver(
 
 export function registerTranslationResources(
   namespace: string,
-  resources: TranslationResourceBundle
+  resources: TranslationResourceBundle,
 ): void {
   const current = translationResources.get(namespace) ?? {};
   const merged = Object.fromEntries(
@@ -122,13 +131,13 @@ export function registerTranslationResources(
           ...(current[locale] ?? {}),
           ...(resources[locale] ?? {}),
         },
-      ]
-    )
+      ],
+    ),
   );
 
   translationResources.set(namespace, merged);
   translationResourceListeners.forEach((listener) =>
-    listener(namespace, resources)
+    listener(namespace, resources),
   );
 }
 
@@ -139,7 +148,7 @@ export function getTranslationResources(): Array<
 }
 
 export function subscribeTranslationResources(
-  listener: TranslationResourceListener
+  listener: TranslationResourceListener,
 ): () => void {
   translationResourceListeners.add(listener);
   return () => translationResourceListeners.delete(listener);
@@ -147,9 +156,21 @@ export function subscribeTranslationResources(
 
 export function resolveTranslatableText(
   value: unknown,
-  options?: TranslationOptions
+  options?: TranslationOptions,
 ): string {
-  if (typeof value !== "string") return value == null ? "" : String(value);
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'string') {
+    if (typeof value === 'object') {
+      return hasStringifier(value)
+        ? stringify(value)
+        : Object.prototype.toString.call(value);
+    }
+    if (typeof value === 'function') return value.toString();
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    if (typeof value === 'number') return Number.prototype.toString.call(value);
+    if (typeof value === 'bigint') return BigInt.prototype.toString.call(value);
+    return Symbol.prototype.toString.call(value);
+  }
 
   const expression = parseTranslationExpression(value);
   if (!expression) {

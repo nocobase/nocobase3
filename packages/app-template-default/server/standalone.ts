@@ -4,7 +4,10 @@ import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
-import { createAppRuntime, type AppRuntime } from '@nocobase/app-server/runtime';
+import {
+  createAppRuntime,
+  type AppRuntime,
+} from '@nocobase/app-server/runtime';
 import {
   acceptWebSocketUpgrade,
   createWebSocketUpgradeRequest,
@@ -59,33 +62,39 @@ export async function createStandaloneServer(
     const runtime = createStandaloneRuntime(options.moduleUrl);
     const websocketAbortController = new AbortController();
 
-    lifecycle.registerDisposer('runtime', onceAsync(() => runtime.dispose()));
+    lifecycle.registerDisposer(
+      'runtime',
+      onceAsync(() => runtime.dispose()),
+    );
     await prepareAppRuntime(runtime);
 
-    const app = createAppFromRuntime(runtime, {
-      ...options,
+    const app = await createStandaloneAppFromRuntime(
+      runtime,
       lifecycle,
-    });
-    await startAppWorkflow(runtime);
-    const server = createStandaloneServerAdapter(app, runtime, lifecycle, websocketAbortController.signal);
+      websocketAbortController.signal,
+      options,
+    );
     lifecycle.registerDisposer('websocket-connections', () => {
       websocketAbortController.abort(new Error('app server closed'));
     });
 
-    return server;
+    return app;
   } catch (error) {
-    return disposeAfterStartupFailure(lifecycle.disposeAll, error);
+    return disposeAfterStartupFailure(() => lifecycle.disposeAll(), error);
   }
 }
 
 export function startServer(options: StandaloneServerOptions = {}): void {
-  void startServerAsync(options).catch((error) => {
+  const startPromise = startServerAsync(options);
+  startPromise.catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });
 }
 
-async function startServerAsync(options: StandaloneServerOptions): Promise<void> {
+async function startServerAsync(
+  options: StandaloneServerOptions,
+): Promise<void> {
   const app = await createStandaloneServer(options);
 
   try {
@@ -97,7 +106,9 @@ async function startServerAsync(options: StandaloneServerOptions): Promise<void>
       },
       (info) => {
         if (app.listenOptions.startLog) {
-          console.log(`App server listening on http://${info.address}:${info.port}`);
+          console.log(
+            `App server listening on http://${info.address}:${info.port}`,
+          );
         }
       },
     );
@@ -105,21 +116,31 @@ async function startServerAsync(options: StandaloneServerOptions): Promise<void>
     registerStandaloneWebSocketUpgradeHandler(app, server);
     registerShutdownHandlers(app, server);
   } catch (error) {
-    await disposeAfterStartupFailure(app.close, error);
+    await disposeAfterStartupFailure(() => app.close(), error);
   }
 }
 
-export function createStandaloneRuntime(moduleUrl: string = import.meta.url): AppRuntime<AppConfig> {
+export function createStandaloneRuntime(
+  moduleUrl: string = import.meta.url,
+): AppRuntime<AppConfig> {
   return createAppRuntime(loadStandaloneAppConfig(moduleUrl));
 }
 
-function createStandaloneServerAdapter(
-  app: AppServer,
+async function createStandaloneAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
   lifecycle: AppDisposerRegistry,
   signal: AbortSignal,
-): StandaloneServer {
-  const mounted = createPublicBasePathAdapter(app, runtime.config.app.publicBasePath);
+  options: StandaloneServerOptions = {},
+): Promise<StandaloneServer> {
+  const app = await createAppFromRuntime(runtime, {
+    ...options,
+    lifecycle,
+  });
+  await startAppWorkflow(runtime);
+  const mounted = createPublicBasePathAdapter(
+    app,
+    runtime.config.app.publicBasePath,
+  );
 
   return Object.assign(mounted, {
     listenOptions: {
@@ -136,8 +157,9 @@ export function registerStandaloneWebSocketUpgradeHandler(
   app: StandaloneServer,
   server: ReturnType<typeof serve>,
 ): void {
-  server.on('upgrade', (req, socket, head) => {
-    void dispatchStandaloneWebSocket(req, socket, head, app).catch((error) => {
+  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const dispatchPromise = dispatchStandaloneWebSocket(req, socket, head, app);
+    dispatchPromise.catch((error) => {
       console.error(error);
       rejectWebSocketUpgrade(socket, 500);
     });
@@ -186,13 +208,18 @@ async function dispatchStandaloneWebSocket(
   });
 }
 
-function registerShutdownHandlers(app: StandaloneServer, server: ReturnType<typeof serve>): void {
+function registerShutdownHandlers(
+  app: StandaloneServer,
+  server: ReturnType<typeof serve>,
+): void {
   let shuttingDown = false;
   let shutdownPromise: Promise<void> | undefined;
 
   const handleShutdown = (signal: NodeJS.Signals): void => {
     if (shuttingDown) {
-      console.error(`Received ${signal} during app server shutdown; forcing exit.`);
+      console.error(
+        `Received ${signal} during app server shutdown; forcing exit.`,
+      );
       closeAllConnections(server);
       process.exit(1);
     }
@@ -215,7 +242,9 @@ async function shutdownAppServer(
   signal: NodeJS.Signals,
 ): Promise<void> {
   const forceExitTimer = setTimeout(() => {
-    console.error(`App server shutdown after ${signal} exceeded ${FORCE_EXIT_TIMEOUT_MS}ms; forcing exit.`);
+    console.error(
+      `App server shutdown after ${signal} exceeded ${FORCE_EXIT_TIMEOUT_MS}ms; forcing exit.`,
+    );
     closeAllConnections(server);
     process.exit(1);
   }, FORCE_EXIT_TIMEOUT_MS);
@@ -232,7 +261,10 @@ async function shutdownAppServer(
   }
 }
 
-async function closeServerWithGracePeriod(server: ReturnType<typeof serve>, timeoutMs: number): Promise<void> {
+async function closeServerWithGracePeriod(
+  server: ReturnType<typeof serve>,
+  timeoutMs: number,
+): Promise<void> {
   const closePromise = closeServer(server);
   let timeout: NodeJS.Timeout | undefined;
   let timedOut = false;
@@ -242,7 +274,9 @@ async function closeServerWithGracePeriod(server: ReturnType<typeof serve>, time
   const timeoutPromise = new Promise<void>((resolve) => {
     timeout = setTimeout(() => {
       timedOut = true;
-      console.error(`HTTP server did not drain within ${timeoutMs}ms; closing active connections.`);
+      console.error(
+        `HTTP server did not drain within ${timeoutMs}ms; closing active connections.`,
+      );
       closeAllConnections(server);
       resolve();
     }, timeoutMs);
@@ -254,7 +288,10 @@ async function closeServerWithGracePeriod(server: ReturnType<typeof serve>, time
 
     if (timedOut) {
       closePromise.catch((error) => {
-        console.error('HTTP server close failed after the drain timeout.', error);
+        console.error(
+          'HTTP server close failed after the drain timeout.',
+          error,
+        );
       });
     }
   } finally {
@@ -272,7 +309,9 @@ function closeAllConnections(server: ReturnType<typeof serve>): void {
   getNodeHttpConnectionControls(server).closeAllConnections?.();
 }
 
-function getNodeHttpConnectionControls(server: ReturnType<typeof serve>): NodeHttpConnectionControls {
+function getNodeHttpConnectionControls(
+  server: ReturnType<typeof serve>,
+): NodeHttpConnectionControls {
   return server as unknown as NodeHttpConnectionControls;
 }
 
@@ -289,11 +328,18 @@ function closeServer(server: ReturnType<typeof serve>): Promise<void> {
   });
 }
 
-async function disposeAfterStartupFailure(dispose: () => Promise<void>, startupError: unknown): Promise<never> {
+async function disposeAfterStartupFailure(
+  dispose: () => Promise<void>,
+  startupError: unknown,
+): Promise<never> {
   try {
     await dispose();
   } catch (disposeError) {
-    throw new AggregateError([startupError, disposeError], 'Failed to start server and dispose resources');
+    throw new AggregateError(
+      [startupError, disposeError],
+      'Failed to start server and dispose resources',
+      { cause: disposeError },
+    );
   }
 
   throw startupError;
@@ -309,7 +355,7 @@ export function startServerIfEntrypoint(
 
   const isEntrypoint = Boolean(
     (entry && path.resolve(entry) === modulePath) ||
-      (pm2Entry && path.resolve(pm2Entry) === modulePath),
+    (pm2Entry && path.resolve(pm2Entry) === modulePath),
   );
 
   if (isEntrypoint) {

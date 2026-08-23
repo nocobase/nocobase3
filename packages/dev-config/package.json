@@ -1,0 +1,145 @@
+{
+  "name": "@nocobase/dev-config",
+  "version": "0.1.0",
+  "description": "Shared TypeScript, ESLint, Prettier, Vitest, and Vite configuration for NocoBase packages.",
+  "type": "module",
+  "sideEffects": [
+    "./dist/vitest/react-setup.js"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/dev-config"
+  },
+  "files": [
+    "README.md",
+    "docs",
+    "dist",
+    "eslint/README.md",
+    "prettier/README.md",
+    "tsconfig",
+    "vite/README.md",
+    "vitest/README.md"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/client.json": "./tsconfig/client.json",
+    "./tsconfig/client-library.json": "./tsconfig/client-library.json",
+    "./tsconfig/server.json": "./tsconfig/server.json",
+    "./tsconfig/server-library.json": "./tsconfig/server-library.json",
+    "./tsconfig/node-tooling.json": "./tsconfig/node-tooling.json",
+    "./eslint": {
+      "types": "./dist/eslint/index.d.ts",
+      "import": "./dist/eslint/index.js"
+    },
+    "./prettier": {
+      "types": "./dist/prettier/index.d.ts",
+      "import": "./dist/prettier/index.js"
+    },
+    "./vitest/node": {
+      "types": "./dist/vitest/node.d.ts",
+      "import": "./dist/vitest/node.js"
+    },
+    "./vitest/react": {
+      "types": "./dist/vitest/react.d.ts",
+      "import": "./dist/vitest/react.js"
+    },
+    "./vitest/react-setup": {
+      "types": "./dist/vitest/react-setup.d.ts",
+      "import": "./dist/vitest/react-setup.js"
+    },
+    "./vite/portal": {
+      "types": "./dist/vite/portal.d.ts",
+      "import": "./dist/vite/portal.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "node ./scripts/clean-dist.ts",
+    "build": "pnpm clean && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "fix": "pnpm lint:fix && pnpm format",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build",
+    "prepack": "pnpm build",
+    "pack:check": "node ./scripts/pack-check.ts"
+  },
+  "dependencies": {
+    "@eslint/js": "catalog:",
+    "@eslint-react/eslint-plugin": "catalog:",
+    "@vitest/eslint-plugin": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "eslint-plugin-react-hooks": "catalog:",
+    "eslint-plugin-react-refresh": "catalog:",
+    "globals": "catalog:",
+    "typescript-eslint": "catalog:"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/node": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "publint": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "eslint": "catalog:",
+    "jsdom": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@tailwindcss/vite": {
+      "optional": true
+    },
+    "@testing-library/jest-dom": {
+      "optional": true
+    },
+    "@testing-library/react": {
+      "optional": true
+    },
+    "@vitejs/plugin-react": {
+      "optional": true
+    },
+    "jsdom": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  }
+}

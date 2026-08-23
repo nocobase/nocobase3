@@ -58,7 +58,9 @@ class CapabilityPlanner {
   }
 
   plan(schemaOperations: SchemaOperation[]): CapabilityPlan {
-    const planned = schemaOperations.flatMap((operation) => this.planOperation(operation, []));
+    const planned = schemaOperations.flatMap((operation) =>
+      this.planOperation(operation, []),
+    );
     return {
       schemaOperations: planned,
       warnings: this.warnings,
@@ -66,15 +68,23 @@ class CapabilityPlanner {
     };
   }
 
-  private planOperation(operation: SchemaOperation, path: Array<string | number>): SchemaOperation[] {
+  private planOperation(
+    operation: SchemaOperation,
+    path: Array<string | number>,
+  ): SchemaOperation[] {
     switch (operation.type) {
       case 'createTable': {
         const table = this.planTable(operation.table, [...path, 'table']);
         return [{ ...operation, table }];
       }
       case 'alterTable': {
-        const operations = operation.operations.flatMap((tableOperation, index) =>
-          this.planTableAlterOperation(tableOperation, [...path, 'operations', index]),
+        const operations = operation.operations.flatMap(
+          (tableOperation, index) =>
+            this.planTableAlterOperation(tableOperation, [
+              ...path,
+              'operations',
+              index,
+            ]),
         );
         if (operations.length === 0) {
           return [];
@@ -96,7 +106,11 @@ class CapabilityPlanner {
             path,
             message: `${this.dialect} does not support refreshing materialized views. The refresh operation will be skipped.`,
           });
-          this.addImpact('warning', operation.type, 'The materialized view refresh will be skipped because there is no safe fallback.');
+          this.addImpact(
+            'warning',
+            operation.type,
+            'The materialized view refresh will be skipped because there is no safe fallback.',
+          );
           return [];
         }
         return [operation];
@@ -118,7 +132,11 @@ class CapabilityPlanner {
         path,
         message: `${this.dialect} does not support views. The view will not be created.`,
       });
-      this.addImpact('warning', operation.type, 'The view operation will be skipped because there is no safe fallback.');
+      this.addImpact(
+        'warning',
+        operation.type,
+        'The view operation will be skipped because there is no safe fallback.',
+      );
       return [];
     }
 
@@ -131,7 +149,11 @@ class CapabilityPlanner {
         path,
         message: `${this.dialect} does not support materialized views. The materialized view will not be created.`,
       });
-      this.addImpact('warning', operation.type, 'The materialized view operation will be skipped because there is no safe fallback.');
+      this.addImpact(
+        'warning',
+        operation.type,
+        'The materialized view operation will be skipped because there is no safe fallback.',
+      );
       return [];
     }
 
@@ -146,26 +168,40 @@ class CapabilityPlanner {
         path,
         message: `${this.dialect} does not support replacing views. The operation will be compiled as a regular create view.`,
       });
-      this.addImpact('warning', operation.type, 'The replace view operation will be downgraded to create view.');
+      this.addImpact(
+        'warning',
+        operation.type,
+        'The replace view operation will be downgraded to create view.',
+      );
       return [{ ...operation, view, orReplace: false }];
     }
 
     return [{ ...operation, view }];
   }
 
-  private planTable(table: TableSchemaDefinition, path: Array<string | number>): TableSchemaDefinition {
+  private planTable(
+    table: TableSchemaDefinition,
+    path: Array<string | number>,
+  ): TableSchemaDefinition {
     return {
       ...table,
       db: this.planDbOptions(table.db, path),
-      columns: table.columns.map((column, index) => this.planColumn(column, [...path, 'columns', index])),
-      indexes: table.indexes.map((index, indexPosition) => this.planIndex(index, [...path, 'indexes', indexPosition])),
+      columns: table.columns.map((column, index) =>
+        this.planColumn(column, [...path, 'columns', index]),
+      ),
+      indexes: table.indexes.map((index, indexPosition) =>
+        this.planIndex(index, [...path, 'indexes', indexPosition]),
+      ),
       constraints: table.constraints.flatMap((constraint, index) =>
         this.planConstraint(constraint, [...path, 'constraints', index]),
       ),
     };
   }
 
-  private planView(view: ViewSchemaDefinition, path: Array<string | number>): ViewSchemaDefinition {
+  private planView(
+    view: ViewSchemaDefinition,
+    path: Array<string | number>,
+  ): ViewSchemaDefinition {
     return {
       ...view,
       db: this.planDbOptions(view.db, path),
@@ -181,13 +217,34 @@ class CapabilityPlanner {
   ): TableAlterSchemaOperation[] {
     switch (operation.type) {
       case 'addColumn':
-        return [{ ...operation, column: this.planColumn(operation.column, [...path, 'column']) }];
+        return [
+          {
+            ...operation,
+            column: this.planColumn(operation.column, [...path, 'column']),
+          },
+        ];
       case 'alterColumn':
-        return [{ ...operation, changes: this.planColumn(operation.changes as ColumnSchemaDefinition, [...path, 'changes']) }];
+        return [
+          {
+            ...operation,
+            changes: this.planColumn(
+              operation.changes as ColumnSchemaDefinition,
+              [...path, 'changes'],
+            ),
+          },
+        ];
       case 'addIndex':
-        return [{ ...operation, index: this.planIndex(operation.index, [...path, 'index']) }];
+        return [
+          {
+            ...operation,
+            index: this.planIndex(operation.index, [...path, 'index']),
+          },
+        ];
       case 'addConstraint':
-        return this.planConstraint(operation.constraint, [...path, 'constraint']).map((constraint) => ({
+        return this.planConstraint(operation.constraint, [
+          ...path,
+          'constraint',
+        ]).map((constraint) => ({
           ...operation,
           constraint,
         }));
@@ -200,7 +257,10 @@ class CapabilityPlanner {
     }
   }
 
-  private planColumn(column: ColumnSchemaDefinition, path: Array<string | number>): ColumnSchemaDefinition {
+  private planColumn(
+    column: ColumnSchemaDefinition,
+    path: Array<string | number>,
+  ): ColumnSchemaDefinition {
     let next: ColumnSchemaDefinition = {
       ...column,
       db: this.planDbOptions(column.db, path),
@@ -221,21 +281,24 @@ class CapabilityPlanner {
         path: [...path, 'db', 'nativeType'],
         message: `${this.dialect} does not support native types. Column ${next.name} will use ${next.type} instead.`,
       });
-      this.addImpact('warning', 'nativeType', `Column ${next.name} native type will be downgraded to ${next.type}.`);
+      this.addImpact(
+        'warning',
+        'nativeType',
+        `Column ${next.name} native type will be downgraded to ${next.type}.`,
+      );
     }
 
     return next;
   }
 
-  private planDbOptions<T extends { schema?: string; comment?: string } | undefined>(
-    db: T,
-    path: Array<string | number>,
-  ): T {
+  private planDbOptions<
+    T extends { schema?: string; comment?: string } | undefined,
+  >(db: T, path: Array<string | number>): T {
     if (!db) {
       return db;
     }
 
-    let next = { ...db };
+    const next = { ...db };
 
     if (next.schema && !this.capability('schemas')) {
       const schema = next.schema;
@@ -248,7 +311,11 @@ class CapabilityPlanner {
         path: [...path, 'db', 'schema'],
         message: `${this.dialect} does not support database schemas. Schema "${schema}" will be ignored.`,
       });
-      this.addImpact('warning', 'schema', `Database schema "${schema}" will be ignored.`);
+      this.addImpact(
+        'warning',
+        'schema',
+        `Database schema "${schema}" will be ignored.`,
+      );
     }
 
     if (next.comment && !this.capability('comments')) {
@@ -261,13 +328,20 @@ class CapabilityPlanner {
         path: [...path, 'db', 'comment'],
         message: `${this.dialect} does not support database comments. The database comment will be skipped.`,
       });
-      this.addImpact('warning', 'comment', 'A database comment will be skipped.');
+      this.addImpact(
+        'warning',
+        'comment',
+        'A database comment will be skipped.',
+      );
     }
 
     return pruneEmptyObject(next) as T;
   }
 
-  private planIndex(index: PhysicalIndexDefinition, path: Array<string | number>): PhysicalIndexDefinition {
+  private planIndex(
+    index: PhysicalIndexDefinition,
+    path: Array<string | number>,
+  ): PhysicalIndexDefinition {
     if (index.predicate && !this.capability('partialIndexes')) {
       const { predicate: _predicate, ...next } = index;
       this.warn({
@@ -278,7 +352,11 @@ class CapabilityPlanner {
         path: [...path, 'predicate'],
         message: `${this.dialect} does not support partial indexes. The index will be created without a predicate.`,
       });
-      this.addImpact('warning', 'partialIndex', 'An index predicate will be ignored.');
+      this.addImpact(
+        'warning',
+        'partialIndex',
+        'An index predicate will be ignored.',
+      );
       return next;
     }
 
@@ -304,7 +382,11 @@ class CapabilityPlanner {
             path,
             message: `${this.dialect} does not support foreign keys. The foreign key constraint will be skipped.`,
           });
-          this.addImpact('warning', constraint.type, 'A foreign key constraint will be skipped because there is no safe fallback.');
+          this.addImpact(
+            'warning',
+            constraint.type,
+            'A foreign key constraint will be skipped because there is no safe fallback.',
+          );
           return [];
         }
         return [this.planDeferrableConstraint(constraint, path)];
@@ -315,9 +397,14 @@ class CapabilityPlanner {
           fallback: 'skip',
           severity: 'unsafe',
           path,
-          message: 'Check constraints are modeled in the DSL but are not compiled by the current schema adapter. The check constraint will be skipped.',
+          message:
+            'Check constraints are modeled in the DSL but are not compiled by the current schema adapter. The check constraint will be skipped.',
         });
-        this.addImpact('warning', constraint.type, 'A check constraint will be skipped because it is not compiled yet.');
+        this.addImpact(
+          'warning',
+          constraint.type,
+          'A check constraint will be skipped because it is not compiled yet.',
+        );
         return [];
       default:
         return assertNever(constraint);
@@ -339,17 +426,20 @@ class CapabilityPlanner {
         path: [...path, 'predicate'],
         message: `${this.dialect} does not support partial unique constraints. The unique constraint will be skipped because there is no safe automatic fallback.`,
       });
-      this.addImpact('warning', next.type, 'A partial unique constraint will be skipped because there is no safe fallback.');
+      this.addImpact(
+        'warning',
+        next.type,
+        'A partial unique constraint will be skipped because there is no safe fallback.',
+      );
       return [];
     }
 
     return [next];
   }
 
-  private planDeferrableConstraint<T extends Extract<PhysicalConstraintDefinition, { deferrable?: unknown }>>(
-    constraint: T,
-    path: Array<string | number>,
-  ): T {
+  private planDeferrableConstraint<
+    T extends Extract<PhysicalConstraintDefinition, { deferrable?: unknown }>,
+  >(constraint: T, path: Array<string | number>): T {
     if (!constraint.deferrable || this.capability('deferrableConstraints')) {
       return constraint;
     }
@@ -363,7 +453,11 @@ class CapabilityPlanner {
       path: [...path, 'deferrable'],
       message: `${this.dialect} does not support deferrable constraints. The constraint will be created without deferrable behavior.`,
     });
-    this.addImpact('warning', constraint.type, 'A deferrable constraint will be created without deferrable behavior.');
+    this.addImpact(
+      'warning',
+      constraint.type,
+      'A deferrable constraint will be created without deferrable behavior.',
+    );
     return next as T;
   }
 
@@ -378,7 +472,11 @@ class CapabilityPlanner {
     });
   }
 
-  private addImpact(level: BuilderImpact['level'], operation: string, message: string): void {
+  private addImpact(
+    level: BuilderImpact['level'],
+    operation: string,
+    message: string,
+  ): void {
     this.impact.push({ level, operation, message });
   }
 }
@@ -387,12 +485,18 @@ function fallbackNativeColumnType(type: string): string {
   return type === 'native' ? 'text' : type;
 }
 
-function pruneEmptyObject<T extends Record<string, unknown>>(value: T): T | undefined {
+function pruneEmptyObject<T extends Record<string, unknown>>(
+  value: T,
+): T | undefined {
   return Object.keys(value).length > 0 ? value : undefined;
 }
 
-function createUnsupportedCapabilityMessage(warnings: BuilderWarning[]): string {
-  const unsafeWarnings = warnings.filter((warning) => warning.severity === 'unsafe');
+function createUnsupportedCapabilityMessage(
+  warnings: BuilderWarning[],
+): string {
+  const unsafeWarnings = warnings.filter(
+    (warning) => warning.severity === 'unsafe',
+  );
   const selected = unsafeWarnings.length > 0 ? unsafeWarnings : warnings;
   return selected.map((warning) => warning.message).join('\n');
 }

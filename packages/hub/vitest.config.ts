@@ -1,36 +1,32 @@
-import fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { createReactVitestConfig } from '@nocobase/dev-config/vitest/react';
 
-const root = fileURLToPath(new URL(".", import.meta.url));
-const registryRoot = fileURLToPath(new URL("./registry", import.meta.url));
+const root = fileURLToPath(new URL('.', import.meta.url));
+const registryRoot = fileURLToPath(new URL('./registry', import.meta.url));
 const extensionsRoot = fs.existsSync(registryRoot)
   ? registryRoot
-  : fileURLToPath(new URL("./client/extensions", import.meta.url));
+  : fileURLToPath(new URL('./client/extensions', import.meta.url));
 
-export default defineConfig({
-  plugins: [react()],
+export default createReactVitestConfig({
   resolve: {
     alias: {
-      "@/extensions": extensionsRoot,
-      "@": fileURLToPath(new URL("./client", import.meta.url)),
+      '@/extensions': extensionsRoot,
+      '@': fileURLToPath(new URL('./client', import.meta.url)),
     },
   },
   test: {
     root,
-    environment: "jsdom",
-    setupFiles: ["./tests/setup/vitest.ts"],
     include: [
-      "tests/logic/**/*.test.{ts,tsx}",
-      "tests/components/**/*.test.{ts,tsx}",
-      "registry/*/tests/**/*.test.{ts,tsx}",
+      'tests/logic/**/*.test.{ts,tsx}',
+      'tests/components/**/*.test.{ts,tsx}',
+      'registry/*/tests/**/*.test.{ts,tsx}',
     ],
     coverage: {
-      provider: "v8",
-      reportsDirectory: "./coverage",
-      reporter: ["text", "html"],
+      provider: 'v8',
+      reportsDirectory: './coverage',
+      reporter: ['text', 'html'],
     },
   },
 });

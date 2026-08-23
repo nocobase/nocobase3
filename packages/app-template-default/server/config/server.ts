@@ -1,12 +1,18 @@
-import { defineConfig, type ConfigEnv, type ConfigFactory } from '@nocobase/app-server/config';
+import {
+  defineConfig,
+  type ConfigEnv,
+  type ConfigFactory,
+} from '@nocobase/app-server/config';
 import type { AppServerConfig } from './types.js';
 
-const serverConfig: ConfigFactory<AppServerConfig> = defineConfig(({ env }): AppServerConfig => ({
-  host: env.string('APP_SERVER_HOST', '127.0.0.1'),
-  port: env.number('APP_SERVER_PORT', 13000),
-  startLog: env.boolean('APP_SERVER_START_LOG', true),
-  viteDevUrl: resolveViteDevUrl(env),
-}));
+const serverConfig: ConfigFactory<AppServerConfig> = defineConfig(
+  ({ env }): AppServerConfig => ({
+    host: env.string('APP_SERVER_HOST', '127.0.0.1'),
+    port: env.number('APP_SERVER_PORT', 13000),
+    startLog: env.boolean('APP_SERVER_START_LOG', true),
+    viteDevUrl: resolveViteDevUrl(env),
+  }),
+);
 
 export default serverConfig;
 

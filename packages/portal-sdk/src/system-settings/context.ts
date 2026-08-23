@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext } from 'react';
 
 export type SystemSettings = Record<string, unknown> & {
   appLang?: string | null;
@@ -19,7 +19,7 @@ export function useSystemSettings(): SystemSettingsContextValue {
   const value = useContext(SystemSettingsContext);
   if (!value) {
     throw new Error(
-      "useSystemSettings must be used inside SystemSettingsProvider"
+      'useSystemSettings must be used inside SystemSettingsProvider',
     );
   }
   return value;

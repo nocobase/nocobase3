@@ -3,7 +3,11 @@ export interface ProxyRequestOptions {
   unavailableMessage: string;
 }
 
-export async function proxyRequest(request: Request, targetUrl: URL, options: ProxyRequestOptions): Promise<Response> {
+export async function proxyRequest(
+  request: Request,
+  targetUrl: URL,
+  options: ProxyRequestOptions,
+): Promise<Response> {
   const headers = options.headers ?? new Headers(request.headers);
   headers.set('host', targetUrl.host);
   headers.set('accept-encoding', 'identity');
@@ -14,10 +18,13 @@ export async function proxyRequest(request: Request, targetUrl: URL, options: Pr
       method: request.method,
       headers,
       signal: request.signal,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+      body:
+        request.method === 'GET' || request.method === 'HEAD'
+          ? undefined
+          : request.body,
       redirect: 'manual',
       duplex: 'half',
-    } as RequestInit & { duplex: 'half' });
+    });
 
     return new Response(response.body, {
       status: response.status,

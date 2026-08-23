@@ -98,3 +98,7 @@ nb app deploy
 ## 架构介绍
 
 - [应用服务分层架构](./architecture.md)
+
+## 插件开发
+
+- [插件开发快速开始](./plugin-development-quickstart.md)

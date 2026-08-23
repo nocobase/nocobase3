@@ -20,15 +20,15 @@ the relation field on the business collection, and build the descriptor from the
 field metadata:
 
 ```ts
-import type { FileFieldDescriptor } from "@/extensions/nocobase-file-upload";
+import type { FileFieldDescriptor } from '@/extensions/nocobase-file-upload';
 
 export const contractDocumentsDescriptor = {
-  sourceCollection: "contracts",
-  fieldName: "documents",
-  fileCollection: "contractFiles",
-  dataSourceKey: "main",
-  relation: "belongsToMany",
-  accept: ["application/pdf", ".docx", ".xlsx"],
+  sourceCollection: 'contracts',
+  fieldName: 'documents',
+  fileCollection: 'contractFiles',
+  dataSourceKey: 'main',
+  relation: 'belongsToMany',
+  accept: ['application/pdf', '.docx', '.xlsx'],
 } satisfies FileFieldDescriptor;
 ```
 
@@ -73,7 +73,7 @@ when submitting to NocoBase:
 import {
   FileUploadField,
   serializeFileFieldValues,
-} from "@/extensions/nocobase-file-upload";
+} from '@/extensions/nocobase-file-upload';
 
 const fileDescriptors = [contractDocumentsDescriptor];
 
@@ -82,12 +82,12 @@ const fileDescriptors = [contractDocumentsDescriptor];
   value={field.value ?? []}
   onChange={field.onChange}
   messages={{
-    chooseFiles: "Choose files",
-    noFiles: "No files",
+    chooseFiles: 'Choose files',
+    noFiles: 'No files',
   }}
   previewMessages={{
-    preview: "Preview",
-    download: "Download",
+    preview: 'Preview',
+    download: 'Download',
   }}
 />;
 
@@ -108,7 +108,7 @@ Add file relation fields to `meta.appends` when loading records for edit pages,
 so the form receives full file records instead of only relation ids:
 
 ```ts
-import { getFileFieldAppends } from "@/extensions/nocobase-file-upload";
+import { getFileFieldAppends } from '@/extensions/nocobase-file-upload';
 
 const meta = {
   appends: getFileFieldAppends(fileDescriptors),
@@ -120,7 +120,7 @@ const meta = {
 Readonly pages can render the same file value with `FilePreviewField`:
 
 ```tsx
-import { FilePreviewField } from "@/extensions/nocobase-file-upload";
+import { FilePreviewField } from '@/extensions/nocobase-file-upload';
 
 <FilePreviewField
   value={record?.documents ?? []}
@@ -128,9 +128,9 @@ import { FilePreviewField } from "@/extensions/nocobase-file-upload";
   size={80}
   showFileName
   messages={{
-    preview: "Preview",
-    download: "Download",
-    noFiles: "No files",
+    preview: 'Preview',
+    download: 'Download',
+    noFiles: 'No files',
   }}
 />;
 ```
@@ -151,12 +151,12 @@ metadata for preview type detection:
 ```ts
 const mockFiles = [
   {
-    id: "mock-photo",
-    title: "Workspace photo",
-    filename: "workspace.jpg",
-    extname: ".jpg",
-    mimetype: "image/jpeg",
-    url: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
+    id: 'mock-photo',
+    title: 'Workspace photo',
+    filename: 'workspace.jpg',
+    extname: '.jpg',
+    mimetype: 'image/jpeg',
+    url: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72',
   },
 ];
 ```

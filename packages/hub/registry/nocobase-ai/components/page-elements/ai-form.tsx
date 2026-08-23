@@ -1,6 +1,6 @@
-import { useEffect, useRef, type RefCallback } from "react";
-import { useAIFormRegistry, type AIFormField } from "../../providers";
-import { useAIPageElement } from "./page-element-provider";
+import { useEffect, useRef, type RefCallback } from 'react';
+import { useAIFormRegistry, type AIFormField } from '../../providers';
+import { useAIPageElement } from './page-element-provider';
 
 export type AIFormDescriptor = {
   id: string;
@@ -11,7 +11,7 @@ export type AIFormDescriptor = {
 };
 
 export function useAIForm(
-  descriptor: AIFormDescriptor
+  descriptor: AIFormDescriptor,
 ): RefCallback<HTMLElement> {
   const registry = useAIFormRegistry();
   const descriptorRef = useRef(descriptor);
@@ -26,13 +26,13 @@ export function useAIForm(
         getValues: () => descriptorRef.current.getValues(),
         setValues: (values) => descriptorRef.current.setValues(values),
       }),
-    [descriptor.fields, descriptor.id, descriptor.title, registry]
+    [descriptor.fields, descriptor.id, descriptor.title, registry],
   );
 
   return useAIPageElement({
     id: descriptor.id,
     title: descriptor.title,
-    kind: "form",
+    kind: 'form',
     getContext: async () => ({
       form: descriptor.id,
       title: descriptor.title,

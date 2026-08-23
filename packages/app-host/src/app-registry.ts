@@ -61,7 +61,9 @@ export interface RegistryHealth {
 
 export interface AppRuntimeRegistryOptions {
   backend?: AppActivationBackend;
-  resolveFactory?: (definition: AppDefinition) => Promise<AppFactory> | AppFactory;
+  resolveFactory?: (
+    definition: AppDefinition,
+  ) => Promise<AppFactory> | AppFactory;
   maxActiveApps?: number;
   idleTtlMs?: number;
   evictionIntervalMs?: number;
@@ -89,7 +91,9 @@ export class AppRuntimeRegistry {
   private readonly runtimes = new Map<string, ActiveAppHandle>();
   private readonly operations = new Map<string, Promise<unknown>>();
   private readonly backend: AppActivationBackend;
-  private readonly resolveFactory: (definition: AppDefinition) => Promise<AppFactory> | AppFactory;
+  private readonly resolveFactory: (
+    definition: AppDefinition,
+  ) => Promise<AppFactory> | AppFactory;
   private readonly maxActiveApps: number;
   private readonly idleTtlMs: number;
   private readonly evictionIntervalMs: number;
@@ -125,7 +129,10 @@ export class AppRuntimeRegistry {
     }
   }
 
-  async create(id: string, options: CreateAppDefinitionOptions = {}): Promise<AppSnapshot> {
+  async create(
+    id: string,
+    options: CreateAppDefinitionOptions = {},
+  ): Promise<AppSnapshot> {
     return this.withAppLock(id, async () => {
       if (this.definitions.has(id)) {
         throw new AppAlreadyExistsError(id);
@@ -137,7 +144,10 @@ export class AppRuntimeRegistry {
     });
   }
 
-  async register(id: string, options: CreateAppDefinitionOptions = {}): Promise<AppDefinition> {
+  async register(
+    id: string,
+    options: CreateAppDefinitionOptions = {},
+  ): Promise<AppDefinition> {
     return this.withAppLock(id, async () => {
       if (this.definitions.has(id)) {
         throw new AppAlreadyExistsError(id);
@@ -149,7 +159,10 @@ export class AppRuntimeRegistry {
     });
   }
 
-  async updateDefinition(id: string, options: CreateAppDefinitionOptions = {}): Promise<AppDefinition> {
+  async updateDefinition(
+    id: string,
+    options: CreateAppDefinitionOptions = {},
+  ): Promise<AppDefinition> {
     return this.withAppLock(id, async () => {
       this.requireDefinition(id);
       const definition = this.createDefinition(id, options);
@@ -158,7 +171,10 @@ export class AppRuntimeRegistry {
     });
   }
 
-  async unregister(id: string, options: DestroyAppOptions = {}): Promise<boolean> {
+  async unregister(
+    id: string,
+    options: DestroyAppOptions = {},
+  ): Promise<boolean> {
     return this.destroy(id, { ...options, removeDefinition: true });
   }
 
@@ -166,7 +182,10 @@ export class AppRuntimeRegistry {
     return this.withAppLock(id, () => this.ensureActiveUnlocked(id));
   }
 
-  async evict(id: string, options: string | AppDestroyOptions = {}): Promise<boolean> {
+  async evict(
+    id: string,
+    options: string | AppDestroyOptions = {},
+  ): Promise<boolean> {
     return this.evictWithSource(id, options, 'manual');
   }
 
@@ -193,7 +212,10 @@ export class AppRuntimeRegistry {
     return evicted;
   }
 
-  async reload(id: string, options: ReloadAppOptions = {}): Promise<AppSnapshot> {
+  async reload(
+    id: string,
+    options: ReloadAppOptions = {},
+  ): Promise<AppSnapshot> {
     return this.withAppLock(id, async () => {
       const definition = this.requireDefinition(id);
       const oldRuntime = this.runtimes.get(id);
@@ -204,7 +226,8 @@ export class AppRuntimeRegistry {
 
         if (oldRuntime) {
           await oldRuntime.destroy({
-            reason: options.reason ?? `reloaded by version ${newRuntime.version}`,
+            reason:
+              options.reason ?? `reloaded by version ${newRuntime.version}`,
             timeoutMs: options.destroyTimeoutMs,
           });
         }
@@ -217,20 +240,28 @@ export class AppRuntimeRegistry {
     });
   }
 
-  async deploy(id: string, options: DeployAppOptions = {}): Promise<AppDeploymentResult> {
+  async deploy(
+    id: string,
+    options: DeployAppOptions = {},
+  ): Promise<AppDeploymentResult> {
     return this.withAppLock(id, async () => {
       const currentDefinition = this.requireDefinition(id);
       const oldRuntime = this.runtimes.get(id);
       const oldSnapshot = oldRuntime?.snapshot() ?? null;
-      const desiredVersion = options.version ?? currentDefinition.desiredVersion;
+      const desiredVersion =
+        options.version ?? currentDefinition.desiredVersion;
       let definition = currentDefinition;
 
       if (desiredVersion !== currentDefinition.desiredVersion) {
         definition = this.createDefinition(id, {
           ...currentDefinition,
           desiredVersion,
-          code: currentDefinition.code ? { ...currentDefinition.code, version: desiredVersion } : undefined,
-          release: currentDefinition.release ? { ...currentDefinition.release, version: desiredVersion } : undefined,
+          code: currentDefinition.code
+            ? { ...currentDefinition.code, version: desiredVersion }
+            : undefined,
+          release: currentDefinition.release
+            ? { ...currentDefinition.release, version: desiredVersion }
+            : undefined,
         });
         this.definitions.set(id, definition);
       }
@@ -271,9 +302,13 @@ export class AppRuntimeRegistry {
     });
   }
 
-  async destroy(id: string, options: string | DestroyAppOptions = {}): Promise<boolean> {
+  async destroy(
+    id: string,
+    options: string | DestroyAppOptions = {},
+  ): Promise<boolean> {
     return this.withAppLock(id, async () => {
-      const destroyOptions = typeof options === 'string' ? { reason: options } : options;
+      const destroyOptions =
+        typeof options === 'string' ? { reason: options } : options;
       const runtime = this.runtimes.get(id);
       const hadDefinition = this.definitions.has(id);
 
@@ -293,13 +328,21 @@ export class AppRuntimeRegistry {
 
   async destroyAll(options: string | DestroyAppOptions = {}): Promise<void> {
     this.stopEvictionLoop();
-    const ids = [...new Set([...this.definitions.keys(), ...this.runtimes.keys()])];
-    const results = await Promise.allSettled(ids.map((id) => this.destroy(id, options)));
+    const ids = [
+      ...new Set([...this.definitions.keys(), ...this.runtimes.keys()]),
+    ];
+    const results = await Promise.allSettled(
+      ids.map((id) => this.destroy(id, options)),
+    );
     const failures = results.filter((result) => result.status === 'rejected');
 
     if (failures.length > 0) {
+      const failureReasons: unknown[] = [];
+      for (const failure of failures) {
+        failureReasons.push(failure.reason);
+      }
       throw new AggregateError(
-        failures.map((failure) => (failure as PromiseRejectedResult).reason),
+        failureReasons,
         `Failed to destroy ${failures.length} app(s)`,
       );
     }
@@ -399,7 +442,11 @@ export class AppRuntimeRegistry {
     this.evictionLoop = null;
   }
 
-  async dispatch(id: string, request: Request, metadata: AppRequestMetadata = {}): Promise<Response> {
+  async dispatch(
+    id: string,
+    request: Request,
+    metadata: AppRequestMetadata = {},
+  ): Promise<Response> {
     const runtime = await this.ensureActiveHandle(id);
     return runtime.dispatch(request, metadata);
   }
@@ -434,7 +481,9 @@ export class AppRuntimeRegistry {
     return runtime.snapshot();
   }
 
-  private async activateDefinition(definition: AppDefinition): Promise<ActiveAppHandle> {
+  private async activateDefinition(
+    definition: AppDefinition,
+  ): Promise<ActiveAppHandle> {
     if (!definition.enabled) {
       throw new AppNotFoundError(definition.id);
     }
@@ -463,7 +512,9 @@ export class AppRuntimeRegistry {
       });
 
       // In-process runtimes emit `created` only after activation.
-      const activatableRuntime = runtime as ActiveAppHandle & { activate?: () => void };
+      const activatableRuntime = runtime as ActiveAppHandle & {
+        activate?: () => void;
+      };
       if (typeof activatableRuntime.activate === 'function') {
         activatableRuntime.activate();
       }
@@ -547,7 +598,10 @@ export class AppRuntimeRegistry {
   private getEvictableSnapshots(): AppSnapshot[] {
     return [...this.runtimes.values()]
       .map((runtime) => runtime.snapshot())
-      .filter((snapshot) => snapshot.activeRequests === 0 && snapshot.tier !== 'dedicated');
+      .filter(
+        (snapshot) =>
+          snapshot.activeRequests === 0 && snapshot.tier !== 'dedicated',
+      );
   }
 
   private isIdle(snapshot: AppSnapshot, now: number): boolean {
@@ -555,7 +609,10 @@ export class AppRuntimeRegistry {
     return now - Date.parse(lastTouchedAt) >= this.idleTtlMs;
   }
 
-  private createDefinition(id: string, options: CreateAppDefinitionOptions): AppDefinition {
+  private createDefinition(
+    id: string,
+    options: CreateAppDefinitionOptions,
+  ): AppDefinition {
     this.assertAppId(id);
     const server =
       options.server ??
@@ -578,7 +635,11 @@ export class AppRuntimeRegistry {
       isolation: options.isolation ?? options.backend ?? 'in-process',
       tier: options.tier ?? 'warm',
       desiredVersion:
-        options.desiredVersion ?? options.code?.version ?? options.release?.version ?? options.configVersion ?? 'v1',
+        options.desiredVersion ??
+        options.code?.version ??
+        options.release?.version ??
+        options.configVersion ??
+        'v1',
       rootDir: options.rootDir,
       dataDir: options.dataDir,
       client: options.client,
@@ -601,7 +662,10 @@ export class AppRuntimeRegistry {
     return definition;
   }
 
-  private async withAppLock<T>(id: string, operation: () => Promise<T>): Promise<T> {
+  private async withAppLock<T>(
+    id: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
     const previous = this.operations.get(id) ?? Promise.resolve();
     const current = previous.catch(() => undefined).then(operation);
     this.operations.set(id, current);
@@ -623,7 +687,11 @@ export class AppRuntimeRegistry {
 }
 
 function sortByLastAccessed(a: AppSnapshot, b: AppSnapshot): number {
-  const aTime = a.lastAccessedAt ? Date.parse(a.lastAccessedAt) : Date.parse(a.createdAt);
-  const bTime = b.lastAccessedAt ? Date.parse(b.lastAccessedAt) : Date.parse(b.createdAt);
+  const aTime = a.lastAccessedAt
+    ? Date.parse(a.lastAccessedAt)
+    : Date.parse(a.createdAt);
+  const bTime = b.lastAccessedAt
+    ? Date.parse(b.lastAccessedAt)
+    : Date.parse(b.createdAt);
   return aTime - bTime;
 }

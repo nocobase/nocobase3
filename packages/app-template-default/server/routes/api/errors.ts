@@ -1,11 +1,11 @@
 import type { Context } from 'hono';
 
-import type { NocoBaseLogger } from '@nocobase/logger';
+import type { Logger } from '@nocobase/logging';
 
 import { AppServiceError } from '../../services/errors.js';
 
 export interface ApiErrorHandlerOptions {
-  logger: NocoBaseLogger;
+  logger: Logger;
 }
 
 export function createApiErrorHandler(options: ApiErrorHandlerOptions) {

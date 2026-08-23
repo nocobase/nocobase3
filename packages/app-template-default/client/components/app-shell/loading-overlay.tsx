@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { cn } from "@/lib/utils";
-import { LoadingState } from "@/components/app-shell/loading-state";
+import * as React from 'react';
+import { cn } from '@/lib/utils';
+import { LoadingState } from '@/components/app-shell/loading-state';
 
 interface LoadingOverlayProps extends React.HTMLAttributes<HTMLDivElement> {
   loading?: boolean;
@@ -16,13 +16,13 @@ export const LoadingOverlay = React.forwardRef<
   if (!loading) return children;
 
   return (
-    <div className="relative" ref={ref} {...props}>
+    <div className='relative' ref={ref} {...props}>
       {children}
       <div
         className={cn(
-          "absolute inset-0 z-50 flex items-center justify-center",
-          "bg-background/60",
-          className
+          'absolute inset-0 z-50 flex items-center justify-center',
+          'bg-background/60',
+          className,
         )}
       >
         <LoadingState />
@@ -31,4 +31,4 @@ export const LoadingOverlay = React.forwardRef<
   );
 });
 
-LoadingOverlay.displayName = "LoadingOverlay";
+LoadingOverlay.displayName = 'LoadingOverlay';

@@ -1,7 +1,9 @@
 import type { DatabaseConnection } from '../database/index.js';
 import type { MigrationContext, MigrationConnection } from './types.js';
 
-export function createMigrationContext(connection: DatabaseConnection): MigrationContext {
+export function createMigrationContext(
+  connection: DatabaseConnection,
+): MigrationContext {
   return {
     builder: connection.builder,
     query: connection.query,
@@ -9,12 +11,14 @@ export function createMigrationContext(connection: DatabaseConnection): Migratio
   };
 }
 
-export function createMigrationConnection(connection: DatabaseConnection): MigrationConnection {
+export function createMigrationConnection(
+  connection: DatabaseConnection,
+): MigrationConnection {
   return {
     name: connection.name,
     driver: connection.driver,
     dialect: connection.dialect,
     capabilities: connection.capabilities,
-    client: connection.client.bind(connection) as MigrationConnection['client'],
+    client: connection.client.bind(connection),
   };
 }

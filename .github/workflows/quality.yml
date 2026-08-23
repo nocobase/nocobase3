@@ -1,0 +1,141 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changed-files:
+    name: Changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared development config
+        run: pnpm dev-config:build
+
+      - name: Check changed files
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA="$(git rev-list --max-parents=0 "$HEAD_SHA")"
+          fi
+
+          eslint_files=()
+          prettier_files=()
+
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              *.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts)
+                eslint_files+=("$file")
+                prettier_files+=("$file")
+                ;;
+              *.json|*.json5|*.jsonc|*.md|*.mdx|*.yml|*.yaml|*.css|*.scss|*.less|*.html)
+                prettier_files+=("$file")
+                ;;
+            esac
+          done < <(git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA")
+
+          if ((${#eslint_files[@]})); then
+            pnpm exec eslint --no-warn-ignored --max-warnings 0 -- "${eslint_files[@]}"
+          fi
+
+          if ((${#prettier_files[@]})); then
+            pnpm exec prettier --check -- "${prettier_files[@]}"
+          fi
+
+  validation:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Typecheck
+            script: typecheck
+            pack_check: false
+          - name: Test
+            script: test
+            pack_check: false
+          - name: Build
+            script: build
+            pack_check: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: ${{ matrix.name }}
+        run: pnpm ${{ matrix.script }}
+
+      - name: Check package tarballs
+        if: ${{ matrix.pack_check }}
+        env:
+          PACK_DIR: ${{ runner.temp }}/nocobase-pack-check
+        run: pnpm pack:check
+
+  quality:
+    name: quality
+    if: ${{ always() }}
+    needs:
+      - changed-files
+      - validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify parallel jobs
+        env:
+          CHANGED_FILES_RESULT: ${{ needs.changed-files.result }}
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: |
+          if [[ "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" ]]; then
+            echo "One or more quality jobs failed or were cancelled."
+            exit 1
+          fi

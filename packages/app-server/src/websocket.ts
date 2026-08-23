@@ -23,7 +23,10 @@ export interface AppWebSocket {
   readonly url: URL;
   readonly protocol: string | null;
   readonly readyState: AppWebSocketReadyState;
-  send(data: string | ArrayBuffer | Uint8Array, options?: AppWebSocketSendOptions): void;
+  send(
+    data: string | ArrayBuffer | Uint8Array,
+    options?: AppWebSocketSendOptions,
+  ): void;
   close(code?: number, reason?: string): void;
 }
 
@@ -49,13 +52,26 @@ export interface AppWebSocketErrorEvent {
 }
 
 export interface AppWebSocketEvents {
-  onOpen?: (event: AppWebSocketOpenEvent, ws: AppWebSocket) => void | Promise<void>;
-  onMessage?: (event: AppWebSocketMessageEvent, ws: AppWebSocket) => void | Promise<void>;
-  onClose?: (event: AppWebSocketCloseEvent, ws: AppWebSocket) => void | Promise<void>;
-  onError?: (event: AppWebSocketErrorEvent, ws: AppWebSocket) => void | Promise<void>;
+  onOpen?: (
+    event: AppWebSocketOpenEvent,
+    ws: AppWebSocket,
+  ) => void | Promise<void>;
+  onMessage?: (
+    event: AppWebSocketMessageEvent,
+    ws: AppWebSocket,
+  ) => void | Promise<void>;
+  onClose?: (
+    event: AppWebSocketCloseEvent,
+    ws: AppWebSocket,
+  ) => void | Promise<void>;
+  onError?: (
+    event: AppWebSocketErrorEvent,
+    ws: AppWebSocket,
+  ) => void | Promise<void>;
 }
 
-export type AppWebSocketAcceptResult = AppWebSocketEvents | Response | null | undefined;
+export type AppWebSocketAcceptResult =
+  AppWebSocketEvents | Response | null | undefined;
 
 export type AppWebSocketHandler = (
   request: Request,
@@ -116,7 +132,11 @@ export function createWebSocketUpgradeRequest(
   });
 }
 
-export function rejectWebSocketUpgrade(socket: Duplex, status: number = 404, headers?: Headers): void {
+export function rejectWebSocketUpgrade(
+  socket: Duplex,
+  status: number = 404,
+  headers?: Headers,
+): void {
   const responseLines = ['Connection: close', 'Content-Length: 0'];
   appendResponseHeaders(responseLines, headers);
 
@@ -198,7 +218,10 @@ function requestProtocol(req: IncomingMessage): string {
   return socket.encrypted ? 'https' : 'http';
 }
 
-function appendResponseHeaders(responseLines: string[], headers?: Headers): void {
+function appendResponseHeaders(
+  responseLines: string[],
+  headers?: Headers,
+): void {
   if (!headers) {
     return;
   }
@@ -219,7 +242,9 @@ function selectSubprotocol(req: IncomingMessage): string | null {
   return header?.split(',')[0]?.trim() || null;
 }
 
-function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+function firstHeaderValue(
+  value: string | string[] | undefined,
+): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -281,7 +306,10 @@ class NodeAppWebSocket implements AppWebSocket {
     }
   }
 
-  send(data: string | ArrayBuffer | Uint8Array, _options?: AppWebSocketSendOptions): void {
+  send(
+    data: string | ArrayBuffer | Uint8Array,
+    _options?: AppWebSocketSendOptions,
+  ): void {
     if (this.state !== 1) {
       return;
     }
@@ -302,7 +330,10 @@ class NodeAppWebSocket implements AppWebSocket {
   }
 
   private readonly handleData = (chunk: Buffer | string): void => {
-    this.buffered = Buffer.concat([this.buffered, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
+    this.buffered = Buffer.concat([
+      this.buffered,
+      Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk),
+    ]);
 
     while (this.buffered.length > 0) {
       let frame: ParsedWebSocketFrame | null;
@@ -310,7 +341,10 @@ class NodeAppWebSocket implements AppWebSocket {
         frame = parseWebSocketFrame(this.buffered);
       } catch (error) {
         this.emitError(error);
-        this.close(CLOSE_PROTOCOL_ERROR, error instanceof Error ? error.message : 'invalid WebSocket frame');
+        this.close(
+          CLOSE_PROTOCOL_ERROR,
+          error instanceof Error ? error.message : 'invalid WebSocket frame',
+        );
         return;
       }
 
@@ -350,11 +384,11 @@ class NodeAppWebSocket implements AppWebSocket {
     }
 
     if (frame.opcode === 0x9) {
-      this.socket.write(encodeWebSocketFrame(0xA, frame.payload));
+      this.socket.write(encodeWebSocketFrame(0xa, frame.payload));
       return;
     }
 
-    if (frame.opcode === 0xA) {
+    if (frame.opcode === 0xa) {
       return;
     }
 
@@ -377,7 +411,11 @@ class NodeAppWebSocket implements AppWebSocket {
     this.finished = true;
     this.state = 3;
     this.socket.off('data', this.handleData);
-    this.invoke(this.events.onClose, { type: 'close', code, reason, wasClean }, this);
+    this.invoke(
+      this.events.onClose,
+      { type: 'close', code, reason, wasClean },
+      this,
+    );
   }
 
   private sendCloseFrame(code: number, reason: string): void {
@@ -386,11 +424,20 @@ class NodeAppWebSocket implements AppWebSocket {
     }
 
     this.closeSent = true;
-    this.socket.write(encodeWebSocketFrame(0x8, createClosePayload(code, reason)));
+    this.socket.write(
+      encodeWebSocketFrame(0x8, createClosePayload(code, reason)),
+    );
   }
 
-  private invoke<TEvent extends AppWebSocketOpenEvent | AppWebSocketMessageEvent | AppWebSocketCloseEvent | AppWebSocketErrorEvent>(
-    handler: ((event: TEvent, ws: AppWebSocket) => void | Promise<void>) | undefined,
+  private invoke<
+    TEvent extends
+      | AppWebSocketOpenEvent
+      | AppWebSocketMessageEvent
+      | AppWebSocketCloseEvent
+      | AppWebSocketErrorEvent,
+  >(
+    handler:
+      ((event: TEvent, ws: AppWebSocket) => void | Promise<void>) | undefined,
     event: TEvent,
     ws: AppWebSocket,
   ): void {
@@ -399,14 +446,17 @@ class NodeAppWebSocket implements AppWebSocket {
     }
 
     try {
-      void Promise.resolve(handler(event, ws)).catch((error) => this.emitError(error));
+      const handlerPromise = Promise.resolve(handler(event, ws));
+      handlerPromise.catch((error: unknown) => this.emitError(error));
     } catch (error) {
       this.emitError(error);
     }
   }
 }
 
-function normalizeOutgoingData(data: string | ArrayBuffer | Uint8Array): Buffer {
+function normalizeOutgoingData(
+  data: string | ArrayBuffer | Uint8Array,
+): Buffer {
   if (typeof data === 'string') {
     return Buffer.from(data);
   }
@@ -426,9 +476,9 @@ function parseWebSocketFrame(buffer: Buffer): ParsedWebSocketFrame | null {
   const firstByte = buffer[0];
   const secondByte = buffer[1];
   const fin = (firstByte & 0x80) !== 0;
-  const opcode = firstByte & 0x0F;
+  const opcode = firstByte & 0x0f;
   const masked = (secondByte & 0x80) !== 0;
-  let payloadLength = secondByte & 0x7F;
+  let payloadLength = secondByte & 0x7f;
   let offset = 2;
 
   if (payloadLength === 126) {

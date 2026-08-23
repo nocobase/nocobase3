@@ -3,7 +3,8 @@
 `compile()` 用于把 Query 编译成 SQL 和参数，适合调试、dry-run、测试断言和 Agent 解释。
 
 ```ts
-const compiled = db.query()
+const compiled = db
+  .query()
   .selectFrom('orders')
   .select(['id', 'orderNo'])
   .where('status', '=', 'paid')
@@ -25,9 +26,7 @@ createdAt -> created_at
 Query Builder 是 immutable 的。链式方法返回新的 query，不修改原对象。
 
 ```ts
-const base = db.query()
-  .selectFrom('orders')
-  .where('tenantId', '=', tenantId);
+const base = db.query().selectFrom('orders').where('tenantId', '=', tenantId);
 
 const paid = base.where('status', '=', 'paid');
 const draft = base.where('status', '=', 'draft');
@@ -55,7 +54,8 @@ const draft = base.where('status', '=', 'draft');
 示例：
 
 ```ts
-const base = db.query()
+const base = db
+  .query()
   .selectFrom('orders')
   .select('status')
   .where('status', '=', 'paid')
@@ -75,10 +75,7 @@ const orderNos = await base
 `offset()` 要求同时存在 `orderBy()`，否则会抛错：
 
 ```ts
-db.query()
-  .selectFrom('orders')
-  .offset(20)
-  .compile();
+db.query().selectFrom('orders').offset(20).compile();
 
 // Error: offset() requires orderBy() for portable pagination.
 ```

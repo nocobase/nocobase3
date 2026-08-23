@@ -1,12 +1,12 @@
 export enum MailBoxType {
-  IN = "in",
-  OUT = "out",
-  DRAFT = "draft",
-  TRASH = "trash",
-  SPAM = "spam",
-  ARCHIVE = "archive",
-  MASS = "mass",
-  SCHEDULED = "scheduled",
+  IN = 'in',
+  OUT = 'out',
+  DRAFT = 'draft',
+  TRASH = 'trash',
+  SPAM = 'spam',
+  ARCHIVE = 'archive',
+  MASS = 'mass',
+  SCHEDULED = 'scheduled',
 }
 
 export interface MailUser {
@@ -45,39 +45,39 @@ export interface MailLabel {
 }
 
 export const LABEL_COLOR_OPTIONS = [
-  "default",
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
+  'default',
+  'red',
+  'orange',
+  'yellow',
+  'green',
+  'blue',
+  'purple',
 ] as const;
 
 export const LABEL_BADGE_CLASSES: Record<string, string> = {
-  default: "bg-muted text-muted-foreground",
-  blue: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  green: "bg-green-500/15 text-green-600 dark:text-green-400",
-  red: "bg-red-500/15 text-red-600 dark:text-red-400",
-  orange: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-  yellow: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400",
-  gold: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  cyan: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400",
-  purple: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
-  magenta: "bg-pink-500/15 text-pink-600 dark:text-pink-400",
+  default: 'bg-muted text-muted-foreground',
+  blue: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  green: 'bg-green-500/15 text-green-600 dark:text-green-400',
+  red: 'bg-red-500/15 text-red-600 dark:text-red-400',
+  orange: 'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+  yellow: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400',
+  gold: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  cyan: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
+  purple: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
+  magenta: 'bg-pink-500/15 text-pink-600 dark:text-pink-400',
 };
 
 export const LABEL_SWATCH_CLASSES: Record<string, string> = {
-  default: "bg-muted-foreground/40",
-  blue: "bg-blue-500",
-  green: "bg-green-500",
-  red: "bg-red-500",
-  orange: "bg-orange-500",
-  yellow: "bg-yellow-500",
-  gold: "bg-amber-500",
-  cyan: "bg-cyan-500",
-  purple: "bg-purple-500",
-  magenta: "bg-pink-500",
+  default: 'bg-muted-foreground/40',
+  blue: 'bg-blue-500',
+  green: 'bg-green-500',
+  red: 'bg-red-500',
+  orange: 'bg-orange-500',
+  yellow: 'bg-yellow-500',
+  gold: 'bg-amber-500',
+  cyan: 'bg-cyan-500',
+  purple: 'bg-purple-500',
+  magenta: 'bg-pink-500',
 };
 
 export interface MailNote {
@@ -91,8 +91,8 @@ export interface MailMessage {
   email: string;
   mailId: string;
   rawId: string;
-  boxType: MailBoxType | "";
-  originalBoxType?: MailBoxType | "";
+  boxType: MailBoxType | '';
+  originalBoxType?: MailBoxType | '';
   isRead: boolean;
   isDraft: boolean;
   from: string;
@@ -131,7 +131,7 @@ export interface MailMessage {
 }
 
 export function isLocalMailDraft(
-  message: Pick<MailMessage, "isDraft" | "mailId" | "rawId">
+  message: Pick<MailMessage, 'isDraft' | 'mailId' | 'rawId'>,
 ) {
   return Boolean(message.isDraft && !message.mailId && !message.rawId);
 }
@@ -209,12 +209,12 @@ export interface MailSendPayload {
 }
 
 export enum MailMassMessageStatus {
-  PENDING = "pending",
-  SENDING = "sending",
-  SENT = "sent",
-  FAILED = "failed",
-  CANCELED = "canceled",
-  SOME_SENT = "some_sent",
+  PENDING = 'pending',
+  SENDING = 'sending',
+  SENT = 'sent',
+  FAILED = 'failed',
+  CANCELED = 'canceled',
+  SOME_SENT = 'some_sent',
 }
 
 export interface MailMassMessage {
@@ -242,7 +242,7 @@ export interface MailMassSendSettings {
   interval?: number;
 }
 
-export type MailScope = "all" | "personal";
+export type MailScope = 'all' | 'personal';
 
 export interface MailListParams {
   page?: number;
@@ -263,35 +263,35 @@ export interface MailListResponse {
 }
 
 export type MailColumnId =
-  | "from"
-  | "to"
-  | "subject"
-  | "date"
-  | "boxType"
-  | "isRead"
-  | "email"
-  | "user"
-  | "labels"
-  | "attachments";
+  | 'from'
+  | 'to'
+  | 'subject'
+  | 'date'
+  | 'boxType'
+  | 'isRead'
+  | 'email'
+  | 'user'
+  | 'labels'
+  | 'attachments';
 
 export const MAIL_COLUMN_LABELS: Record<MailColumnId, string> = {
-  from: "From",
-  to: "To",
-  subject: "Subject",
-  date: "Date",
-  boxType: "Folder",
-  isRead: "Status",
-  email: "Mailbox",
-  user: "Owner",
-  labels: "Labels",
-  attachments: "Attachments",
+  from: 'From',
+  to: 'To',
+  subject: 'Subject',
+  date: 'Date',
+  boxType: 'Folder',
+  isRead: 'Status',
+  email: 'Mailbox',
+  user: 'Owner',
+  labels: 'Labels',
+  attachments: 'Attachments',
 };
 
 export const DEFAULT_MAIL_COLUMNS: MailColumnId[] = [
-  "from",
-  "subject",
-  "boxType",
-  "date",
-  "isRead",
-  "labels",
+  'from',
+  'subject',
+  'boxType',
+  'date',
+  'isRead',
+  'labels',
 ];

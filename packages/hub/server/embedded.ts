@@ -32,20 +32,30 @@ export async function createServer(scope: AppScope): Promise<Hono> {
     browserBasePath,
     browserApiUrl: joinBasePath(browserBasePath, apiProxyPath),
     apiProxyPath,
-    clientIndexPath: scope.clientDir ? path.join(scope.clientDir, 'index.html') : undefined,
-    nocoBaseApiUrl: getScopeConfigString(scope.config, 'nocoBaseApiUrl') ?? getEnvString(env, 'NOCOBASE_API_PROXY_TARGET'),
+    clientIndexPath: scope.clientDir
+      ? path.join(scope.clientDir, 'index.html')
+      : undefined,
+    nocoBaseApiUrl:
+      getScopeConfigString(scope.config, 'nocoBaseApiUrl') ??
+      getEnvString(env, 'NOCOBASE_API_PROXY_TARGET'),
     apiClientStoragePrefix:
-      getScopeConfigString(scope.config, 'apiClientStoragePrefix') ?? getEnvString(env, 'API_CLIENT_STORAGE_PREFIX'),
+      getScopeConfigString(scope.config, 'apiClientStoragePrefix') ??
+      getEnvString(env, 'API_CLIENT_STORAGE_PREFIX'),
     apiClientStorageType:
-      getScopeConfigString(scope.config, 'apiClientStorageType') ?? getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
+      getScopeConfigString(scope.config, 'apiClientStorageType') ??
+      getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
     apiClientShareToken:
-      getScopeConfigBoolean(scope.config, 'apiClientShareToken') ?? getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
+      getScopeConfigBoolean(scope.config, 'apiClientShareToken') ??
+      getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
   });
 }
 
 export default createServer;
 
-function getScopeConfigString(config: unknown, key: string): string | undefined {
+function getScopeConfigString(
+  config: unknown,
+  key: string,
+): string | undefined {
   if (!config || typeof config !== 'object') {
     return undefined;
   }
@@ -54,7 +64,10 @@ function getScopeConfigString(config: unknown, key: string): string | undefined 
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function getScopeConfigBoolean(config: unknown, key: string): boolean | undefined {
+function getScopeConfigBoolean(
+  config: unknown,
+  key: string,
+): boolean | undefined {
   if (!config || typeof config !== 'object') {
     return undefined;
   }

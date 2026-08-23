@@ -1,19 +1,15 @@
-import type { AuthProvider } from "@refinedev/core";
+import type { AuthProvider, RefineError } from '@refinedev/core';
 
-import { nocobaseClient } from "../client/index.ts";
-import {
-  clearAcl,
-  loadAcl,
-  type Role,
-} from "../acl/index.ts";
+import { nocobaseClient } from '../client/index.ts';
+import { clearAcl, loadAcl, type Role } from '../acl/index.ts';
 import {
   getNocoBaseErrorMessage,
   isNocoBaseServiceError,
   NocoBaseHttpError,
   type NocoBaseRuntimeError,
   normalizeNocoBaseRuntimeError,
-} from "../client/index.ts";
-import { portalRuntimeStore } from "../runtime/store.ts";
+} from '../client/index.ts';
+import { portalRuntimeStore } from '../runtime/store.ts';
 
 type NocoBaseUser = {
   id: number | string;
@@ -39,30 +35,56 @@ type CurrentUserCache = {
   expiresAt: number;
 };
 
+type AuthInput = Record<string, unknown>;
+
 const CURRENT_USER_CACHE_MS = 30_000;
 const STALE_ROLE_ERROR_CODES = new Set([
-  "ROLE_NOT_FOUND_ERR",
-  "ROLE_NOT_FOUND_FOR_USER",
+  'ROLE_NOT_FOUND_ERR',
+  'ROLE_NOT_FOUND_FOR_USER',
 ]);
-const NO_ROLE_ERROR_CODE = "USER_HAS_NO_ROLES_ERR";
+const NO_ROLE_ERROR_CODE = 'USER_HAS_NO_ROLES_ERR';
 const AUTHENTICATION_ERROR_CODES = new Set([
-  "BLOCKED_TOKEN",
-  "EMPTY_TOKEN",
-  "EXPIRED_SESSION",
-  "EXPIRED_TOKEN",
-  "INVALID_TOKEN",
-  "NOT_EXIST_USER",
-  "SKIP_TOKEN_RENEW",
-  "TOKEN_INVALID",
-  "TOKEN_RENEW_FAILED",
-  "USER_LOCKED",
+  'BLOCKED_TOKEN',
+  'EMPTY_TOKEN',
+  'EXPIRED_SESSION',
+  'EXPIRED_TOKEN',
+  'INVALID_TOKEN',
+  'NOT_EXIST_USER',
+  'SKIP_TOKEN_RENEW',
+  'TOKEN_INVALID',
+  'TOKEN_RENEW_FAILED',
+  'USER_LOCKED',
 ]);
 let currentUserCache: CurrentUserCache | undefined;
 let currentUserRequest: Promise<NocoBaseUser> | undefined;
 
+const isAuthInput = (value: unknown): value is AuthInput =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const toAuthInput = (value: unknown): AuthInput =>
+  isAuthInput(value) ? value : {};
+
+const getAuthenticator = (value: unknown): string | null =>
+  typeof value === 'string' || value === null
+    ? value
+    : nocobaseClient.getAuthenticator();
+
+const getRedirectTo = (value: unknown, fallback: string): string =>
+  typeof value === 'string' ? value : fallback;
+
+const isRefineError = (value: unknown): value is RefineError =>
+  isAuthInput(value) &&
+  typeof value.message === 'string' &&
+  typeof value.statusCode === 'number';
+
 const getErrorMessage = (payload: unknown, fallback: string) => {
   if (payload instanceof NocoBaseHttpError) return payload.message;
   return getNocoBaseErrorMessage(payload, fallback);
+};
+
+const getAuthProviderError = (error: unknown): RefineError | Error => {
+  if (error instanceof Error || isRefineError(error)) return error;
+  return new Error(getErrorMessage(error, 'NocoBase request failed.'));
 };
 
 const clearCurrentUserCache = () => {
@@ -79,9 +101,26 @@ const clearCurrentRole = () => {
 const reportRuntimeError = (error: NocoBaseRuntimeError) =>
   portalRuntimeStore.setError(error);
 
+const requestCurrentUser = async (
+  token: string | undefined,
+): Promise<NocoBaseUser> => {
+  const user = await nocobaseClient.action<NocoBaseUser>('auth', 'check', {
+    token,
+    // A default authenticator header would override the server's
+    // authenticator cookie during a Cookie-only SSO session.
+    authenticator: token ? undefined : null,
+  });
+  currentUserCache = {
+    sessionKey: nocobaseClient.getToken() ?? 'cookie',
+    user,
+    expiresAt: Date.now() + CURRENT_USER_CACHE_MS,
+  };
+  return user;
+};
+
 const getCurrentUser = async (): Promise<NocoBaseUser> => {
   const token = nocobaseClient.getToken();
-  const sessionKey = token ?? "cookie";
+  const sessionKey = token ?? 'cookie';
 
   const cached = currentUserCache;
   if (
@@ -94,20 +133,7 @@ const getCurrentUser = async (): Promise<NocoBaseUser> => {
 
   if (currentUserRequest) return currentUserRequest;
 
-  currentUserRequest = (async () => {
-    const user = await nocobaseClient.action<NocoBaseUser>("auth", "check", {
-      token,
-      // A default authenticator header would override the server's
-      // authenticator cookie during a Cookie-only SSO session.
-      authenticator: token ? undefined : null,
-    });
-    currentUserCache = {
-      sessionKey: nocobaseClient.getToken() ?? "cookie",
-      user,
-      expiresAt: Date.now() + CURRENT_USER_CACHE_MS,
-    };
-    return user;
-  })();
+  currentUserRequest = requestCurrentUser(token);
 
   try {
     return await currentUserRequest;
@@ -117,14 +143,16 @@ const getCurrentUser = async (): Promise<NocoBaseUser> => {
 };
 
 export const authProvider: AuthProvider = {
-  login: async (params) => {
+  login: async (params: unknown) => {
     const {
-      authenticator = nocobaseClient.getAuthenticator(),
+      authenticator: authenticatorValue,
       username,
       email,
-      redirectTo = "/",
+      redirectTo: redirectToValue,
       ...values
-    } = params ?? {};
+    } = toAuthInput(params);
+    const authenticator = getAuthenticator(authenticatorValue);
+    const redirectTo = getRedirectTo(redirectToValue, '/');
     const account = values.account ?? username ?? email;
     const body = {
       ...values,
@@ -135,28 +163,28 @@ export const authProvider: AuthProvider = {
       return {
         success: false,
         error: {
-          name: "LoginError",
-          message: "Please enter your sign-in details.",
+          name: 'LoginError',
+          message: 'Please enter your sign-in details.',
         },
       };
     }
 
     try {
       const result = await nocobaseClient.action<NocoBaseSignInResponse>(
-        "auth",
-        "signIn",
+        'auth',
+        'signIn',
         {
-          method: "POST",
+          method: 'POST',
           authenticator,
           body,
-        }
+        },
       );
       if (!result.token) {
         return {
           success: false,
           error: {
-            name: "LoginError",
-            message: "NocoBase did not return an access token.",
+            name: 'LoginError',
+            message: 'NocoBase did not return an access token.',
           },
         };
       }
@@ -172,26 +200,28 @@ export const authProvider: AuthProvider = {
         success: false,
         error: {
           name:
-            error instanceof NocoBaseHttpError ? "LoginError" : "NetworkError",
+            error instanceof NocoBaseHttpError ? 'LoginError' : 'NetworkError',
           message: getErrorMessage(
             error,
-            "Unable to reach the NocoBase server. If this is a remote NocoBase from localhost, enable backend CORS for X-Authenticator or use the Vite proxy."
+            'Unable to reach the NocoBase server. If this is a remote NocoBase from localhost, enable backend CORS for X-Authenticator or use the Vite proxy.',
           ),
         },
       };
     }
   },
 
-  register: async (params) => {
+  register: async (params: unknown) => {
     const {
-      authenticator = nocobaseClient.getAuthenticator(),
-      redirectTo = "/login",
+      authenticator: authenticatorValue,
+      redirectTo: redirectToValue,
       ...values
-    } = params ?? {};
+    } = toAuthInput(params);
+    const authenticator = getAuthenticator(authenticatorValue);
+    const redirectTo = getRedirectTo(redirectToValue, '/login');
 
     try {
-      await nocobaseClient.action("auth", "signUp", {
-        method: "POST",
+      await nocobaseClient.action('auth', 'signUp', {
+        method: 'POST',
         authenticator,
         body: values,
       });
@@ -199,50 +229,49 @@ export const authProvider: AuthProvider = {
         success: true,
         redirectTo,
         successNotification: {
-          message: "Account created",
-          description: "You can now sign in with your new account.",
+          message: 'Account created',
+          description: 'You can now sign in with your new account.',
         },
       };
     } catch (error) {
       return {
         success: false,
         error: {
-          name: "RegistrationError",
-          message: getErrorMessage(error, "Unable to create the account."),
+          name: 'RegistrationError',
+          message: getErrorMessage(error, 'Unable to create the account.'),
         },
       };
     }
   },
 
-  forgotPassword: async (params) => {
-    const {
-      authenticator = nocobaseClient.getAuthenticator(),
-      ...values
-    } = params ?? {};
+  forgotPassword: async (params: unknown) => {
+    const { authenticator: authenticatorValue, ...values } =
+      toAuthInput(params);
+    const authenticator = getAuthenticator(authenticatorValue);
     const baseURL =
-      typeof window === "undefined"
+      typeof window === 'undefined'
         ? undefined
-        : window.location.href.split("/forgot-password")[0];
+        : window.location.href.split('/forgot-password')[0];
 
     try {
-      await nocobaseClient.action("auth", "lostPassword", {
-        method: "POST",
+      await nocobaseClient.action('auth', 'lostPassword', {
+        method: 'POST',
         authenticator,
         body: { ...values, baseURL },
       });
       return {
         success: true,
         successNotification: {
-          message: "Reset link sent",
-          description: "Check your inbox for password reset instructions.",
+          message: 'Reset link sent',
+          description: 'Check your inbox for password reset instructions.',
         },
       };
     } catch (error) {
       return {
         success: false,
         error: {
-          name: "PasswordResetError",
-          message: getErrorMessage(error, "Unable to send the reset link."),
+          name: 'PasswordResetError',
+          message: getErrorMessage(error, 'Unable to send the reset link.'),
         },
       };
     }
@@ -253,13 +282,13 @@ export const authProvider: AuthProvider = {
     let redirect: string | undefined;
     try {
       const result = await nocobaseClient.action<NocoBaseSignOutResponse>(
-        "auth",
-        "signOut",
+        'auth',
+        'signOut',
         {
-          method: "POST",
+          method: 'POST',
           token,
           authenticator: token ? undefined : null,
-        }
+        },
       );
       redirect = result?.redirect;
     } finally {
@@ -268,12 +297,12 @@ export const authProvider: AuthProvider = {
       clearAcl();
     }
 
-    if (redirect && typeof window !== "undefined") {
+    if (redirect && typeof window !== 'undefined') {
       window.location.assign(nocobaseClient.resolveUrl(redirect));
       return { success: true };
     }
 
-    return { success: true, redirectTo: "/login" };
+    return { success: true, redirectTo: '/login' };
   },
 
   check: async () => {
@@ -281,18 +310,15 @@ export const authProvider: AuthProvider = {
       await getCurrentUser();
       return { authenticated: true };
     } catch (error) {
-      let runtimeError = normalizeNocoBaseRuntimeError(error, "http");
+      let runtimeError = normalizeNocoBaseRuntimeError(error, 'http');
 
-      if (
-        runtimeError.code &&
-        STALE_ROLE_ERROR_CODES.has(runtimeError.code)
-      ) {
+      if (runtimeError.code && STALE_ROLE_ERROR_CODES.has(runtimeError.code)) {
         clearCurrentRole();
         try {
           await getCurrentUser();
           return { authenticated: true };
         } catch (retryError) {
-          runtimeError = normalizeNocoBaseRuntimeError(retryError, "http");
+          runtimeError = normalizeNocoBaseRuntimeError(retryError, 'http');
           if (
             runtimeError.code === NO_ROLE_ERROR_CODE ||
             isNocoBaseServiceError(runtimeError)
@@ -323,7 +349,7 @@ export const authProvider: AuthProvider = {
       nocobaseClient.clearAuthentication();
       clearCurrentUserCache();
       clearAcl();
-      return { authenticated: false, redirectTo: "/login" };
+      return { authenticated: false, redirectTo: '/login' };
     }
   },
 
@@ -339,13 +365,13 @@ export const authProvider: AuthProvider = {
     try {
       const user = await getCurrentUser();
       const fullName =
-        user.nickname ?? user.username ?? user.email ?? "NocoBase user";
+        user.nickname ?? user.username ?? user.email ?? 'NocoBase user';
       return {
         id: user.id,
         firstName: fullName,
-        lastName: "",
+        lastName: '',
         fullName,
-        email: user.email ?? "",
+        email: user.email ?? '',
         avatar: user.avatar,
         roles: user.roles ?? [],
       };
@@ -354,12 +380,9 @@ export const authProvider: AuthProvider = {
     }
   },
 
-  onError: async (error) => {
-    const runtimeError = normalizeNocoBaseRuntimeError(error, "http");
-    if (
-      runtimeError.code &&
-      STALE_ROLE_ERROR_CODES.has(runtimeError.code)
-    ) {
+  onError: async (error: unknown) => {
+    const runtimeError = normalizeNocoBaseRuntimeError(error, 'http');
+    if (runtimeError.code && STALE_ROLE_ERROR_CODES.has(runtimeError.code)) {
       clearCurrentRole();
       reportRuntimeError(runtimeError);
       return {};
@@ -381,9 +404,9 @@ export const authProvider: AuthProvider = {
       nocobaseClient.clearAuthentication();
       clearCurrentUserCache();
       clearAcl();
-      return { logout: true, redirectTo: "/login" };
+      return { logout: true, redirectTo: '/login' };
     }
 
-    return { error };
+    return { error: getAuthProviderError(error) };
   },
 };

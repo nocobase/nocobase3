@@ -1,19 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useAI } from "./ai-provider";
-import type { AIChatAttachment } from "./types";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAI } from './ai-provider';
+import type { AIChatAttachment } from './types';
 
 const EMPTY_ATTACHMENTS: AIChatAttachment[] = [];
 
 const disposeRemovedAttachmentPreviews = (
   current: AIChatAttachment[],
-  next: AIChatAttachment[]
+  next: AIChatAttachment[],
 ) => {
   const retainedPreviews = new Set(
-    next.map((attachment) => attachment.preview).filter(Boolean)
+    next.map((attachment) => attachment.preview).filter(Boolean),
   );
   for (const attachment of current) {
     if (
-      attachment.preview?.startsWith("blob:") &&
+      attachment.preview?.startsWith('blob:') &&
       !retainedPreviews.has(attachment.preview)
     ) {
       URL.revokeObjectURL(attachment.preview);
@@ -21,9 +21,10 @@ const disposeRemovedAttachmentPreviews = (
   }
 };
 
-const disposeAttachmentDrafts = (
-  drafts: Record<string, AIChatAttachment[]>
-) => Object.values(drafts).forEach((items) => disposeRemovedAttachmentPreviews(items, []));
+const disposeAttachmentDrafts = (drafts: Record<string, AIChatAttachment[]>) =>
+  Object.values(drafts).forEach((items) =>
+    disposeRemovedAttachmentPreviews(items, []),
+  );
 
 export function useChatAttachments(activeConversationId: string) {
   const ai = useAI();
@@ -36,16 +37,16 @@ export function useChatAttachments(activeConversationId: string) {
       conversationId: string,
       value:
         | AIChatAttachment[]
-        | ((current: AIChatAttachment[]) => AIChatAttachment[])
+        | ((current: AIChatAttachment[]) => AIChatAttachment[]),
     ) => {
       setDrafts((current) => {
         const previous = current[conversationId] ?? [];
-        const next = typeof value === "function" ? value(previous) : value;
+        const next = typeof value === 'function' ? value(previous) : value;
         disposeRemovedAttachmentPreviews(previous, next);
         return { ...current, [conversationId]: next };
       });
     },
-    []
+    [],
   );
 
   const uploadFiles = useCallback(
@@ -55,10 +56,10 @@ export function useChatAttachments(activeConversationId: string) {
       const pending = files.map((file) => ({
         uid: `upload-${crypto.randomUUID()}`,
         filename: file.name || `pasted-image-${Date.now()}`,
-        status: "uploading" as const,
+        status: 'uploading' as const,
         size: file.size,
         mimetype: file.type,
-        preview: file.type.startsWith("image/")
+        preview: file.type.startsWith('image/')
           ? URL.createObjectURL(file)
           : undefined,
         progress: 0,
@@ -74,11 +75,11 @@ export function useChatAttachments(activeConversationId: string) {
           try {
             const response = await ai.uploadFile(attachment.file);
             const meta =
-              response.meta && typeof response.meta === "object"
+              response.meta && typeof response.meta === 'object'
                 ? (response.meta as Record<string, unknown>)
                 : undefined;
             const source =
-              meta?.source && typeof meta.source === "object"
+              meta?.source && typeof meta.source === 'object'
                 ? meta.source
                 : response.source;
             setConversationAttachments(conversationId, (current) =>
@@ -90,33 +91,33 @@ export function useChatAttachments(activeConversationId: string) {
                       filename: String(
                         response.filename ??
                           response.title ??
-                          attachment.filename
+                          attachment.filename,
                       ),
-                      status: "done",
+                      status: 'done',
                       size:
-                        typeof response.size === "number"
+                        typeof response.size === 'number'
                           ? response.size
                           : attachment.size,
                       mimetype:
-                        typeof response.mimetype === "string"
+                        typeof response.mimetype === 'string'
                           ? response.mimetype
                           : attachment.mimetype,
                       url:
-                        typeof response.url === "string"
+                        typeof response.url === 'string'
                           ? response.url
                           : undefined,
                       preview:
-                        typeof response.preview === "string"
+                        typeof response.preview === 'string'
                           ? response.preview
-                          : attachment.mimetype?.startsWith("image/") &&
-                            typeof response.url === "string"
-                          ? response.url
-                          : attachment.preview,
+                          : attachment.mimetype?.startsWith('image/') &&
+                              typeof response.url === 'string'
+                            ? response.url
+                            : attachment.preview,
                       progress: 100,
                       source,
                     }
-                  : item
-              )
+                  : item,
+              ),
             );
           } catch (error) {
             setConversationAttachments(conversationId, (current) =>
@@ -124,20 +125,20 @@ export function useChatAttachments(activeConversationId: string) {
                 item.uid === attachment.uid
                   ? {
                       ...item,
-                      status: "error",
+                      status: 'error',
                       error:
                         error instanceof Error
                           ? error.message
-                          : "File upload failed",
+                          : 'File upload failed',
                     }
-                  : item
-              )
+                  : item,
+              ),
             );
           }
-        })
+        }),
       );
     },
-    [activeConversationId, ai, setConversationAttachments]
+    [activeConversationId, ai, setConversationAttachments],
   );
 
   const removeAttachment = useCallback(
@@ -146,7 +147,7 @@ export function useChatAttachments(activeConversationId: string) {
         return current.filter((attachment) => attachment.uid !== uid);
       });
     },
-    [activeConversationId, setConversationAttachments]
+    [activeConversationId, setConversationAttachments],
   );
 
   const moveAttachments = useCallback((from: string, to: string) => {
@@ -168,7 +169,7 @@ export function useChatAttachments(activeConversationId: string) {
         return next;
       });
     },
-    []
+    [],
   );
 
   const clearAttachments = useCallback(
@@ -177,7 +178,7 @@ export function useChatAttachments(activeConversationId: string) {
         disposeAttachmentDrafts(current);
         return {};
       }),
-    []
+    [],
   );
   // Falls back to the shared EMPTY_ATTACHMENTS rather than a fresh `[]`: callers compare the
   // result by identity across an await to detect "the user changed the attachments mid-send", and
@@ -186,19 +187,16 @@ export function useChatAttachments(activeConversationId: string) {
   const getConversationAttachments = useCallback(
     (conversationId: string) =>
       draftsRef.current[conversationId] ?? EMPTY_ATTACHMENTS,
-    []
+    [],
   );
   const attachments = drafts[activeConversationId] ?? EMPTY_ATTACHMENTS;
 
-  useEffect(
-    () => () => disposeAttachmentDrafts(draftsRef.current),
-    []
-  );
+  useEffect(() => () => disposeAttachmentDrafts(draftsRef.current), []);
 
   return {
     attachments,
     uploadingAttachments: attachments.some(
-      (attachment) => attachment.status === "uploading"
+      (attachment) => attachment.status === 'uploading',
     ),
     uploadFiles,
     removeAttachment,

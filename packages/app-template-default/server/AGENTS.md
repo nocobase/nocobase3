@@ -19,7 +19,7 @@ verify them at the route, service, and configuration boundary that changed.
 - `config/*` owns environment parsing and defaults. Prefer adding config there
   instead of reading `process.env` in routes or services.
 - `routes/*` owns HTTP shape. Keep business logic in `services/*`.
-- `migrations/*` owns database shape. Add or update a focused migration when a
+- `../database/migrations/*` owns database shape. Add or update a focused migration when a
   service needs durable storage.
 
 ## Runtime Contract
@@ -28,10 +28,10 @@ Standalone and embedded may differ only in their adapter layer. After adapter
 normalization, app routes, SPA runtime globals, API proxy behavior, database
 setup, migrations, and services must use the shared runtime path.
 
-| Mode | Public base path | App-local incoming path | Internal base path | Public API URL | Internal proxy route |
-| --- | --- | --- | --- | --- | --- |
-| standalone | `APP_BASE_PATH` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<APP_BASE_PATH>/v2/api` | `/v2/api` |
-| embedded | `scope.basePath` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<scope.basePath>/v2/api` | `/v2/api` |
+| Mode       | Public base path | App-local incoming path            | Internal base path    | Public API URL            | Internal proxy route |
+| ---------- | ---------------- | ---------------------------------- | --------------------- | ------------------------- | -------------------- |
+| standalone | `APP_BASE_PATH`  | `/settings` from `/<app>/settings` | app-local root (`''`) | `<APP_BASE_PATH>/v2/api`  | `/v2/api`            |
+| embedded   | `scope.basePath` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<scope.basePath>/v2/api` | `/v2/api`            |
 
 `APP_BASE_PATH` and `scope.basePath` are public mount paths. Do not use them as
 app-local route prefixes. App-local routes should be written as `/api/*`,
@@ -60,7 +60,7 @@ debugging path, proxy, database, or SPA index issues.
 5. Add a node test under `tests/logic`. Prefer `createApp()` with a small fake
    service or fake `DatabaseManager` for local API behavior.
 6. Run `pnpm test -- tests/logic/app-server.test.ts` for route/proxy/SPA
-   behavior, and add `tests/logic/database-config.test.ts` when config or
+   behavior, and add `tests/logic/config.test.ts` when config or
    migrations changed.
 
 ## Workflow Or Backend Code
@@ -104,7 +104,7 @@ the function's return value, choose Service + Route.
 
 ## Adding Storage
 
-1. Create a migration under `server/migrations` with a timestamped name.
+1. Create a migration under `database/migrations` with a timestamped name.
 2. Keep `up` and `down` focused on one schema change.
 3. Add a service that uses the configured `DatabaseManager`; do not open an
    extra database connection inside the service.
@@ -128,6 +128,6 @@ the function's return value, choose Service + Route.
 ```bash
 pnpm server:config
 pnpm server:config -- --json
-pnpm test -- tests/logic/app-server.test.ts tests/logic/database-config.test.ts
+pnpm test -- tests/logic/app-server.test.ts tests/logic/config.test.ts
 pnpm typecheck
 ```

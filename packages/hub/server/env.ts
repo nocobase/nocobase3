@@ -2,7 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 
 export type EnvMap = Record<string, string | undefined>;
 
-export function readEnvFiles(files: string[], baseEnv: EnvMap = {}): Record<string, string> {
+export function readEnvFiles(
+  files: string[],
+  baseEnv: EnvMap = {},
+): Record<string, string> {
   const env: Record<string, string> = {};
 
   for (const envFile of files) {
@@ -46,7 +49,8 @@ export function getEnvBoolean(env: EnvMap, key: string): boolean | undefined {
 
 function parseEnv(content: string): Record<string, string> {
   const parsed: Record<string, string> = {};
-  const linePattern = /^\s*(?:export\s+)?([\w.-]+)\s*=\s*('(?:\\'|[^'])*'|"(?:\\"|[^"])*"|[^#\r\n]*)?\s*(?:#.*)?$/;
+  const linePattern =
+    /^\s*(?:export\s+)?([\w.-]+)\s*=\s*('(?:\\'|[^'])*'|"(?:\\"|[^"])*"|[^#\r\n]*)?\s*(?:#.*)?$/;
 
   for (const line of content.split(/\r?\n/)) {
     const match = line.match(linePattern);
@@ -58,7 +62,11 @@ function parseEnv(content: string): Record<string, string> {
     const quote = rawValue[0];
     let value = rawValue.trim();
 
-    if ((quote === '"' || quote === "'") && value.endsWith(quote) && value.length >= 2) {
+    if (
+      (quote === '"' || quote === "'") &&
+      value.endsWith(quote) &&
+      value.length >= 2
+    ) {
       value = value.slice(1, -1);
     }
 
@@ -69,11 +77,14 @@ function parseEnv(content: string): Record<string, string> {
 }
 
 function expandEnvValue(value: string, env: EnvMap): string {
-  return value.replace(/\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g, (match, key) => {
-    if (match.startsWith('\\')) {
-      return match.slice(1);
-    }
+  return value.replace(
+    /\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g,
+    (match: string, key: string) => {
+      if (match.startsWith('\\')) {
+        return match.slice(1);
+      }
 
-    return env[key] ?? '';
-  });
+      return env[key] ?? '';
+    },
+  );
 }

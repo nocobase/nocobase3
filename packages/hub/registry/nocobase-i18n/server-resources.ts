@@ -1,4 +1,4 @@
-import { nocobaseClient } from "@nocobase/portal-sdk/client";
+import { nocobaseClient } from '@nocobase/portal-sdk/client';
 import {
   type LocaleSystemSettings,
   applyDocumentLocale,
@@ -6,17 +6,17 @@ import {
   i18n,
   registerLocale,
   setEnabledLocales,
-} from "@nocobase/portal-sdk/i18n";
+} from '@nocobase/portal-sdk/i18n';
 
 type ServerLanguagePayload = {
   lang?: string;
   resources?: Record<string, Record<string, string>>;
 };
 
-const serverResourceNamespaces = new Set(["lm-collections"]);
+const serverResourceNamespaces = new Set(['lm-collections']);
 const loadedServerResourceNamespaces = new Set<string>();
 const namespaceLoadPromises = new Map<string, Promise<void>>();
-let cachedServerResources: ServerLanguagePayload["resources"] = {};
+let cachedServerResources: ServerLanguagePayload['resources'] = {};
 let serverResourcesPromise: Promise<void> | undefined;
 let bootstrapStarted = false;
 let bootstrapComplete = false;
@@ -31,20 +31,20 @@ function mergeNamespace(namespace: string, locale?: string) {
 
 async function requestServerResources(
   namespaces: string[],
-  requestedLocale?: string
+  requestedLocale?: string,
 ) {
   const payload = await nocobaseClient.action<ServerLanguagePayload>(
-    "app",
-    "getLang",
+    'app',
+    'getLang',
     {
-      method: "GET",
+      method: 'GET',
       query: {
         ...(requestedLocale ? { locale: requestedLocale } : {}),
-        ...(namespaces.length ? { ns: namespaces.join(",") } : {}),
+        ...(namespaces.length ? { ns: namespaces.join(',') } : {}),
       },
       includeRole: false,
       withAclMeta: false,
-    }
+    },
   );
 
   cachedServerResources = {
@@ -74,7 +74,7 @@ async function ensureServerResourceNamespaces(namespaces: string[]) {
   if (missing.length) {
     const request = requestServerResources(
       missing,
-      nocobaseClient.getStoredLocale() ?? getCurrentLocale()
+      nocobaseClient.getStoredLocale() ?? getCurrentLocale(),
     ).then(() => undefined);
     for (const namespace of missing) {
       namespaceLoadPromises.set(namespace, request);
@@ -108,7 +108,7 @@ export function registerServerResourceNamespace(namespace: string) {
   void ensureServerResourceNamespaces([namespace]).catch((error) => {
     console.warn(
       `Unable to load NocoBase locale namespace ${namespace}`,
-      error
+      error,
     );
   });
 }
@@ -129,7 +129,7 @@ export function loadServerLocaleResources(settings?: LocaleSystemSettings) {
   if (configuredLocales.length) setEnabledLocales(configuredLocales);
   const languagePromise = requestServerResources(
     initialNamespaces,
-    requestedLocale
+    requestedLocale,
   );
 
   serverResourcesPromise = languagePromise
@@ -149,7 +149,7 @@ export function loadServerLocaleResources(settings?: LocaleSystemSettings) {
 
       bootstrapComplete = true;
       const lateNamespaces = [...serverResourceNamespaces].filter(
-        (namespace) => !loadedServerResourceNamespaces.has(namespace)
+        (namespace) => !loadedServerResourceNamespaces.has(namespace),
       );
       if (lateNamespaces.length) {
         await ensureServerResourceNamespaces(lateNamespaces);

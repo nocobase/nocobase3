@@ -1,24 +1,24 @@
-import type { Chat } from "@ai-sdk/react";
+import type { Chat } from '@ai-sdk/react';
 import {
   useCallback,
   type Dispatch,
   type MutableRefObject,
   type SetStateAction,
-} from "react";
-import type { AIChatAction, AIChatState } from "./chat-reducer";
-import { findChatMessage, isAIToolPart } from "./chat-message-utils";
-import { getAIWorkContextToolScope } from "./page-context";
-import type { NocoBaseChatTransport } from "./chat-transport";
-import type { useAI } from "./ai-provider";
-import type { AIConversationRuntimeContext } from "./use-chat-runtime";
-import { useAutomaticToolApproval } from "./use-automatic-tool-approval";
+} from 'react';
+import type { AIChatAction, AIChatState } from './chat-reducer';
+import { findChatMessage, isAIToolPart } from './chat-message-utils';
+import { getAIWorkContextToolScope } from './page-context';
+import type { NocoBaseChatTransport } from './chat-transport';
+import type { useAI } from './ai-provider';
+import type { AIConversationRuntimeContext } from './use-chat-runtime';
+import { useAutomaticToolApproval } from './use-automatic-tool-approval';
 import type {
   AIChatAttachment,
   AIChatMessage,
   AIToolCallDecision,
   AIToolCallInvocationContext,
   AIWorkContextItem,
-} from "./types";
+} from './types';
 
 type AIContextValue = ReturnType<typeof useAI>;
 
@@ -32,11 +32,11 @@ export type AIMessageEditingSnapshot = {
 type RefreshConversationMessages = (
   conversationId: string,
   targetChat: Chat<AIChatMessage>,
-  options?: { updateRead?: boolean }
+  options?: { updateRead?: boolean },
 ) => Promise<AIChatMessage[]>;
 
 const isChatRunning = (chat: Chat<AIChatMessage>) =>
-  chat.status === "streaming" || chat.status === "submitted";
+  chat.status === 'streaming' || chat.status === 'submitted';
 
 const getToolInvocationContext = ({
   conversationId,
@@ -60,7 +60,7 @@ const getToolInvocationContext = ({
   const userContext = messages
     .slice(0, rootIndex + 1)
     .reverse()
-    .find((message) => message.role === "user")?.metadata?.workContext;
+    .find((message) => message.role === 'user')?.metadata?.workContext;
   return {
     sessionId: conversationId,
     messageId,
@@ -97,9 +97,7 @@ export function useChatMessageActions({
   stateRef: MutableRefObject<AIChatState>;
   chatSurfaceOpenRef: MutableRefObject<boolean>;
   transportsRef: MutableRefObject<Map<string, NocoBaseChatTransport>>;
-  getRuntimeContext: (
-    conversationId: string
-  ) => AIConversationRuntimeContext;
+  getRuntimeContext: (conversationId: string) => AIConversationRuntimeContext;
   refreshConversationMessages: RefreshConversationMessages;
   setHistoryError: Dispatch<SetStateAction<Error | undefined>>;
   editingSnapshotRef: MutableRefObject<AIMessageEditingSnapshot | undefined>;
@@ -108,11 +106,11 @@ export function useChatMessageActions({
   getConversationWorkContext: (conversationId: string) => AIWorkContextItem[];
   setConversationAttachments: (
     conversationId: string,
-    attachments: AIChatAttachment[]
+    attachments: AIChatAttachment[],
   ) => void;
   setConversationWorkContext: (
     conversationId: string,
-    context: AIWorkContextItem[]
+    context: AIWorkContextItem[],
   ) => void;
   dispatch: Dispatch<AIChatAction>;
   requestComposerFocus: () => void;
@@ -121,13 +119,13 @@ export function useChatMessageActions({
     async (
       conversationId: string,
       targetChat: Chat<AIChatMessage>,
-      message: AIChatMessage
+      message: AIChatMessage,
     ) => {
       let messages = targetChat.messages;
       const resolvedMessage = findChatMessage(messages, message.id);
       if (!resolvedMessage) {
         throw new Error(
-          "The message is no longer available in this conversation."
+          'The message is no longer available in this conversation.',
         );
       }
       let { targetMessage, rootIndex } = resolvedMessage;
@@ -140,13 +138,13 @@ export function useChatMessageActions({
             updateRead:
               stateRef.current.activeConversationId === conversationId &&
               chatSurfaceOpenRef.current,
-          }
+          },
         );
         const refreshedMatch = findChatMessage(messages, message.id);
         const refreshedTarget = refreshedMatch?.targetMessage;
         if (!refreshedTarget) {
           throw new Error(
-            "Unable to resolve the server message for this action."
+            'Unable to resolve the server message for this action.',
           );
         }
         targetMessage = refreshedTarget;
@@ -161,19 +159,15 @@ export function useChatMessageActions({
         serverMessageId: targetMessage.metadata?.serverMessageId,
       };
     },
-    [
-      chatSurfaceOpenRef,
-      refreshConversationMessages,
-      stateRef,
-    ]
+    [chatSurfaceOpenRef, refreshConversationMessages, stateRef],
   );
 
   const retryMessage = useCallback(
     async (message: AIChatMessage) => {
       if (
-        message.role !== "assistant" ||
-        activeChat.status === "streaming" ||
-        activeChat.status === "submitted"
+        message.role !== 'assistant' ||
+        activeChat.status === 'streaming' ||
+        activeChat.status === 'submitted'
       ) {
         return;
       }
@@ -183,14 +177,14 @@ export function useChatMessageActions({
         const resolved = await resolveServerMessage(
           stateRef.current.activeConversationId,
           activeChat,
-          message
+          message,
         );
         if (!resolved.serverMessageId) {
-          throw new Error("The server message id is unavailable for retry.");
+          throw new Error('The server message id is unavailable for retry.');
         }
         const transport = transportsRef.current.get(resolved.conversationId);
         if (!transport) {
-          throw new Error("The NocoBase chat transport is unavailable.");
+          throw new Error('The NocoBase chat transport is unavailable.');
         }
         transport.prepareResend(resolved.serverMessageId);
         try {
@@ -201,7 +195,7 @@ export function useChatMessageActions({
         }
       } catch (error) {
         setHistoryError(
-          error instanceof Error ? error : new Error("Unable to retry message")
+          error instanceof Error ? error : new Error('Unable to retry message'),
         );
       }
     },
@@ -211,7 +205,7 @@ export function useChatMessageActions({
       setHistoryError,
       stateRef,
       transportsRef,
-    ]
+    ],
   );
 
   const decideConversationToolCall = useCallback(
@@ -219,7 +213,7 @@ export function useChatMessageActions({
       conversationId: string,
       targetChat: Chat<AIChatMessage>,
       decision: AIToolCallDecision,
-      options: { automatic?: boolean } = {}
+      options: { automatic?: boolean } = {},
     ) => {
       if (isChatRunning(targetChat)) return;
 
@@ -227,30 +221,30 @@ export function useChatMessageActions({
       try {
         const message = findChatMessage(
           targetChat.messages,
-          decision.messageId
+          decision.messageId,
         )?.targetMessage;
         if (!message) {
-          throw new Error("The tool-call message is no longer available.");
+          throw new Error('The tool-call message is no longer available.');
         }
         const resolved = await resolveServerMessage(
           conversationId,
           targetChat,
-          message
+          message,
         );
         if (!resolved.serverMessageId) {
           throw new Error(
-            "The server message id is unavailable for this tool decision."
+            'The server message id is unavailable for this tool decision.',
           );
         }
         const toolPart = resolved.targetMessage.parts
           .filter(isAIToolPart)
           .find((part) => part.toolCallId === decision.toolCallId);
         const toolName =
-          toolPart?.type === "dynamic-tool"
+          toolPart?.type === 'dynamic-tool'
             ? toolPart.toolName
-            : toolPart?.type.startsWith("tool-")
-            ? toolPart.type.slice(5)
-            : decision.toolName;
+            : toolPart?.type.startsWith('tool-')
+              ? toolPart.type.slice(5)
+              : decision.toolName;
         const runtimeContext = getRuntimeContext(resolved.conversationId);
         const invocationContext = getToolInvocationContext({
           conversationId: resolved.conversationId,
@@ -267,14 +261,14 @@ export function useChatMessageActions({
           !ai.canAutoApproveToolCall(
             toolName,
             toolPart?.input ?? decision.input,
-            invocationContext
+            invocationContext,
           )
         ) {
-          if (toolPart && "callProviderMetadata" in toolPart) {
+          if (toolPart && 'callProviderMetadata' in toolPart) {
             const providerMetadata = toolPart.callProviderMetadata ?? {};
             const nocobase =
               providerMetadata.nocobase &&
-              typeof providerMetadata.nocobase === "object"
+              typeof providerMetadata.nocobase === 'object'
                 ? providerMetadata.nocobase
                 : {};
             toolPart.callProviderMetadata = {
@@ -290,19 +284,19 @@ export function useChatMessageActions({
           return;
         }
         const userDecision =
-          decision.decision === "approve"
-            ? ({ type: "approve" } as const)
-            : decision.decision === "reject"
-            ? ({
-                type: "reject",
-                ...(typeof decision.input === "string"
-                  ? { message: decision.input }
-                  : {}),
-              } as const)
-            : ({
-                type: "edit",
-                editedAction: { name: toolName, args: decision.input },
-              } as const);
+          decision.decision === 'approve'
+            ? ({ type: 'approve' } as const)
+            : decision.decision === 'reject'
+              ? ({
+                  type: 'reject',
+                  ...(typeof decision.input === 'string'
+                    ? { message: decision.input }
+                    : {}),
+                } as const)
+              : ({
+                  type: 'edit',
+                  editedAction: { name: toolName, args: decision.input },
+                } as const);
         const result = await ai.updateToolCallDecision({
           sessionId: resolved.conversationId,
           messageId: resolved.serverMessageId,
@@ -317,7 +311,7 @@ export function useChatMessageActions({
               updateRead:
                 stateRef.current.activeConversationId ===
                   resolved.conversationId && chatSurfaceOpenRef.current,
-            }
+            },
           );
           return;
         }
@@ -325,14 +319,14 @@ export function useChatMessageActions({
         const interruptingToolCalls = result.toolCalls.filter(
           (toolCall) =>
             toolCall.willInterrupt === true ||
-            toolCall.execution === "frontend" ||
-            toolCall.auto === false
+            toolCall.execution === 'frontend' ||
+            toolCall.auto === false,
         );
         const allWaiting =
           interruptingToolCalls.length > 0 &&
           interruptingToolCalls.every(
             (toolCall) =>
-              String(toolCall.invokeStatus).toLowerCase() === "waiting"
+              String(toolCall.invokeStatus).toLowerCase() === 'waiting',
           );
         if (!allWaiting) return;
 
@@ -346,7 +340,7 @@ export function useChatMessageActions({
               ...invocationContext,
               toolCallId: toolCall.id,
               toolName: toolCall.name,
-            }
+            },
           );
           if (invocation.handled) {
             toolCallResults.push({
@@ -358,12 +352,12 @@ export function useChatMessageActions({
 
         const transport = transportsRef.current.get(resolved.conversationId);
         if (!transport) {
-          throw new Error("The NocoBase chat transport is unavailable.");
+          throw new Error('The NocoBase chat transport is unavailable.');
         }
         if (resolved.rootIndex !== targetChat.messages.length - 1) {
           targetChat.messages = resolved.messages.slice(
             0,
-            resolved.rootIndex + 1
+            resolved.rootIndex + 1,
           );
         }
         const responseMessageId = `assistant-${crypto.randomUUID()}`;
@@ -371,7 +365,7 @@ export function useChatMessageActions({
           ...targetChat.messages,
           {
             id: responseMessageId,
-            role: "assistant",
+            role: 'assistant',
             metadata: {
               createdAt: new Date().toISOString(),
               employeeUsername: runtimeContext.employeeUsername,
@@ -383,14 +377,14 @@ export function useChatMessageActions({
           resolved.serverMessageId,
           responseMessageId,
           toolCallIds,
-          toolCallResults
+          toolCallResults,
         );
         try {
           await targetChat.resumeStream();
         } catch (error) {
           transport.cancelToolResume(resolved.serverMessageId);
           targetChat.messages = targetChat.messages.filter(
-            (item) => item.id !== responseMessageId
+            (item) => item.id !== responseMessageId,
           );
           throw error;
         }
@@ -398,7 +392,7 @@ export function useChatMessageActions({
         setHistoryError(
           error instanceof Error
             ? error
-            : new Error("Unable to process the tool decision")
+            : new Error('Unable to process the tool decision'),
         );
         throw error;
       }
@@ -412,7 +406,7 @@ export function useChatMessageActions({
       setHistoryError,
       stateRef,
       transportsRef,
-    ]
+    ],
   );
 
   const decideToolCall = useCallback(
@@ -420,9 +414,9 @@ export function useChatMessageActions({
       decideConversationToolCall(
         stateRef.current.activeConversationId,
         activeChat,
-        decision
+        decision,
       ),
-    [activeChat, decideConversationToolCall, stateRef]
+    [activeChat, decideConversationToolCall, stateRef],
   );
 
   const {
@@ -436,9 +430,9 @@ export function useChatMessageActions({
   const startEditingMessage = useCallback(
     async (message: AIChatMessage) => {
       if (
-        message.role !== "user" ||
-        activeChat.status === "streaming" ||
-        activeChat.status === "submitted"
+        message.role !== 'user' ||
+        activeChat.status === 'streaming' ||
+        activeChat.status === 'submitted'
       ) {
         return;
       }
@@ -449,24 +443,24 @@ export function useChatMessageActions({
       const conversationId = stateRef.current.activeConversationId;
       if (!message.metadata?.serverMessageId) {
         const userMessageIndex =
-          messages.slice(0, index + 1).filter((item) => item.role === "user")
+          messages.slice(0, index + 1).filter((item) => item.role === 'user')
             .length - 1;
         try {
           messages = await refreshConversationMessages(
             conversationId,
             activeChat,
-            { updateRead: true }
+            { updateRead: true },
           );
         } catch (error) {
           setHistoryError(
             error instanceof Error
               ? error
-              : new Error("Unable to refresh conversation messages")
+              : new Error('Unable to refresh conversation messages'),
           );
           return;
         }
         if (stateRef.current.activeConversationId !== conversationId) return;
-        targetMessage = messages.filter((item) => item.role === "user")[
+        targetMessage = messages.filter((item) => item.role === 'user')[
           userMessageIndex
         ];
         if (!targetMessage?.metadata?.serverMessageId) return;
@@ -484,19 +478,19 @@ export function useChatMessageActions({
       activeChat.messages = messages.slice(0, index);
       setConversationAttachments(
         conversationId,
-        targetMessage.metadata?.attachments ?? []
+        targetMessage.metadata?.attachments ?? [],
       );
       setConversationWorkContext(
         conversationId,
-        targetMessage.metadata?.workContext ?? []
+        targetMessage.metadata?.workContext ?? [],
       );
       dispatch({
-        type: "set-draft",
+        type: 'set-draft',
         conversationId,
         value: targetMessage.parts
-          .filter((part) => part.type === "text")
+          .filter((part) => part.type === 'text')
           .map((part) => part.text)
-          .join("\n"),
+          .join('\n'),
       });
       requestComposerFocus();
     },
@@ -513,7 +507,7 @@ export function useChatMessageActions({
       setEditingMessageId,
       setHistoryError,
       stateRef,
-    ]
+    ],
   );
 
   const cancelEditingMessage = useCallback(() => {
@@ -526,9 +520,9 @@ export function useChatMessageActions({
       setConversationAttachments(snapshot.conversationId, snapshot.attachments);
       setConversationWorkContext(snapshot.conversationId, snapshot.workContext);
       dispatch({
-        type: "set-draft",
+        type: 'set-draft',
         conversationId: snapshot.conversationId,
-        value: "",
+        value: '',
       });
     }
     setEditingMessageId(undefined);

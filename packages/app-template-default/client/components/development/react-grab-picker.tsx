@@ -1,7 +1,7 @@
-import { useEffect } from "react";
-import type { ReactGrabAPI } from "react-grab";
+import { useEffect } from 'react';
+import type { ReactGrabAPI } from 'react-grab';
 
-import { configureReactGrabPicker } from "./react-grab-picker-customization";
+import { configureReactGrabPicker } from './react-grab-picker-customization';
 
 export default function ReactGrabPicker() {
   useEffect(() => {
@@ -9,7 +9,7 @@ export default function ReactGrabPicker() {
     let currentApi: ReactGrabAPI | null = null;
     let removeCustomizations: (() => void) | null = null;
 
-    void import("react-grab/core")
+    void import('react-grab/core')
       .then(({ init }) => {
         if (disposed) return;
 
@@ -20,7 +20,7 @@ export default function ReactGrabPicker() {
       })
       .catch((error) => {
         if (!disposed) {
-          console.error("Unable to initialize the component picker", error);
+          console.error('Unable to initialize the component picker', error);
         }
       });
 

@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
 import { Job, Locator, QueueManager, Worker } from '@boringnode/queue';
-import type { DispatchManyResult, DispatchResult } from '@boringnode/queue/types';
+import type {
+  DispatchManyResult,
+  DispatchResult,
+} from '@boringnode/queue/types';
 
 import { assertDefaultConnection } from './config.js';
 import { createBoringQueueConfig } from './drivers.js';
@@ -49,10 +52,12 @@ export function createQueueManager(
 
   const init = async (): Promise<void> => {
     if (!initPromise) {
-      initPromise = createBoringQueueConfig(config, managerOptions).then(async (boringConfig) => {
-        await QueueManager.init(boringConfig);
-        activeManagerId = managerId;
-      });
+      initPromise = createBoringQueueConfig(config, managerOptions).then(
+        async (boringConfig) => {
+          await QueueManager.init(boringConfig);
+          activeManagerId = managerId;
+        },
+      );
     }
 
     return initPromise;
@@ -80,7 +85,10 @@ export function createQueueManager(
     ) {
       await init();
       registerJob(JobClass);
-      return applyDispatchOptions(JobClass.dispatch(payload) as DispatchBuilder, options).run();
+      return applyDispatchOptions(
+        JobClass.dispatch(payload) as DispatchBuilder,
+        options,
+      ).run();
     },
 
     async dispatchMany<T extends Job>(
@@ -90,7 +98,10 @@ export function createQueueManager(
     ) {
       await init();
       registerJob(JobClass);
-      return applyBatchDispatchOptions(JobClass.dispatchMany(payloads) as BatchDispatchBuilder, options).run();
+      return applyBatchDispatchOptions(
+        JobClass.dispatchMany(payloads) as BatchDispatchBuilder,
+        options,
+      ).run();
     },
 
     createWorker(options?: AppQueueWorkerConfig): NocoBaseQueueWorker {
@@ -100,14 +111,21 @@ export function createQueueManager(
         worker: {
           ...config.worker,
           ...options,
-          gracefulShutdown: options?.gracefulShutdown ?? config.worker?.gracefulShutdown ?? false,
+          gracefulShutdown:
+            options?.gracefulShutdown ??
+            config.worker?.gracefulShutdown ??
+            false,
         },
       };
       let worker: Worker | undefined;
-      let workerConfigPromise: ReturnType<typeof createBoringQueueConfig> | undefined;
+      let workerConfigPromise:
+        ReturnType<typeof createBoringQueueConfig> | undefined;
       const getWorker = async (): Promise<Worker> => {
         if (!workerConfigPromise) {
-          workerConfigPromise = createBoringQueueConfig(workerConfig, managerOptions);
+          workerConfigPromise = createBoringQueueConfig(
+            workerConfig,
+            managerOptions,
+          );
         }
 
         worker ??= new Worker(await workerConfigPromise);
@@ -117,7 +135,9 @@ export function createQueueManager(
         get id() {
           return worker?.id ?? workerId;
         },
-        start: async (queues = options?.queues ?? config.worker?.queues ?? ['default']) => {
+        start: async (
+          queues = options?.queues ?? config.worker?.queues ?? ['default'],
+        ) => {
           activeManagerId = managerId;
           return (await getWorker()).start(queues);
         },

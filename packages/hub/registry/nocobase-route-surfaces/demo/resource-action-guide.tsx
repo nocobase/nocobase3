@@ -1,4 +1,4 @@
-import { PromptOutput } from "@/components/demo/prompt-output";
+import { PromptOutput } from '@/components/demo/prompt-output';
 
 const overlayExample = `export const appRoutes = defineAppRoutes([
   {
@@ -98,43 +98,43 @@ const contextualExample = `export const appRoutes = defineAppRoutes([
 
 export function ResourceActionGuide() {
   return (
-    <section className="space-y-4">
-      <div className="space-y-1">
-        <h2 className="font-heading text-xl font-semibold">
+    <section className='space-y-4'>
+      <div className='space-y-1'>
+        <h2 className='font-heading text-xl font-semibold'>
           Refine resource actions
         </h2>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          <code>resourceAction</code> registers the action URL. The resolved route
-          component still decides whether that URL opens an overlay or replaces
-          the list. Load page modules through the route&apos;s <code>lazy</code> field,
-          and add ACL and unsaved-change handling as shown in the installed
-          Users example.
+        <p className='max-w-3xl text-sm text-muted-foreground'>
+          <code>resourceAction</code> registers the action URL. The resolved
+          route component still decides whether that URL opens an overlay or
+          replaces the list. Load page modules through the route&apos;s{' '}
+          <code>lazy</code> field, and add ACL and unsaved-change handling as
+          shown in the installed Users example.
         </p>
       </div>
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className='grid gap-4 xl:grid-cols-3'>
         <PromptOutput
-          title="List + routed drawer"
-          description="Use the automatic resource outlet and let the child own RouteDrawer."
+          title='List + routed drawer'
+          description='Use the automatic resource outlet and let the child own RouteDrawer.'
           prompt={overlayExample}
-          copyLabel="Copy example"
-          copiedLabel="Copied"
-          promptClassName="min-h-96"
+          copyLabel='Copy example'
+          copiedLabel='Copied'
+          promptClassName='min-h-96'
         />
         <PromptOutput
-          title="Full page replaces the list"
-          description="Use a manual resource outlet when the action is a standalone page."
+          title='Full page replaces the list'
+          description='Use a manual resource outlet when the action is a standalone page.'
           prompt={pageExample}
-          copyLabel="Copy example"
-          copiedLabel="Copied"
-          promptClassName="min-h-96"
+          copyLabel='Copy example'
+          copiedLabel='Copied'
+          promptClassName='min-h-96'
         />
         <PromptOutput
-          title="Contextual child surfaces"
-          description="Reuse create, edit, and detail content while each host owns its nested route."
+          title='Contextual child surfaces'
+          description='Reuse create, edit, and detail content while each host owns its nested route.'
           prompt={contextualExample}
-          copyLabel="Copy example"
-          copiedLabel="Copied"
-          promptClassName="min-h-96"
+          copyLabel='Copy example'
+          copiedLabel='Copied'
+          promptClassName='min-h-96'
         />
       </div>
     </section>

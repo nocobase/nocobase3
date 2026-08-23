@@ -1,7 +1,3 @@
-import { defineConfig } from 'vitest/config';
+import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
 
-export default defineConfig({
-  test: {
-    environment: 'node',
-  },
-});
+export default createNodeVitestConfig();

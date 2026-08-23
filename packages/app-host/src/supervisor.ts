@@ -71,7 +71,10 @@ const DEFAULT_APP_HOST_PORT = 13010;
 const DEFAULT_START_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_HEALTH_PATH = '/__health';
-const APP_HOST_CHILD_DENIED_NODE_OPTIONS = ['--preserve-symlinks', '--preserve-symlinks-main'];
+const APP_HOST_CHILD_DENIED_NODE_OPTIONS = [
+  '--preserve-symlinks',
+  '--preserve-symlinks-main',
+];
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 export class AppHostSupervisor {
@@ -94,17 +97,31 @@ export class AppHostSupervisor {
 
   private constructor(options: AppHostSupervisorOptions = {}) {
     this.enabled = options.enabled ?? process.env.APP_HOST_ENABLED !== 'false';
-    this.externalUrl = normalizeUrl(options.targetUrl ?? process.env.APP_HOST_URL);
+    this.externalUrl = normalizeUrl(
+      options.targetUrl ?? process.env.APP_HOST_URL,
+    );
     this.driver = this.resolveDriver(options);
     this.appDistDir = options.appDistDir ?? process.env.APP_DIST_DIR;
     this.host = options.host ?? process.env.APP_HOST_BIND ?? '127.0.0.1';
     this.configuredPort = options.port ?? numberFromEnv('APP_HOST_PORT');
     this.startTimeoutMs =
-      options.startTimeoutMs ?? numberFromEnv('APP_HOST_START_TIMEOUT_MS') ?? DEFAULT_START_TIMEOUT_MS;
+      options.startTimeoutMs ??
+      numberFromEnv('APP_HOST_START_TIMEOUT_MS') ??
+      DEFAULT_START_TIMEOUT_MS;
     this.shutdownTimeoutMs =
-      options.shutdownTimeoutMs ?? numberFromEnv('APP_HOST_SHUTDOWN_TIMEOUT_MS') ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
-    this.healthPath = options.healthPath ?? process.env.APP_HOST_HEALTH_PATH ?? DEFAULT_HEALTH_PATH;
-    this.status = !this.enabled || this.driver === 'disabled' ? 'disabled' : this.externalUrl ? 'external' : 'stopped';
+      options.shutdownTimeoutMs ??
+      numberFromEnv('APP_HOST_SHUTDOWN_TIMEOUT_MS') ??
+      DEFAULT_SHUTDOWN_TIMEOUT_MS;
+    this.healthPath =
+      options.healthPath ??
+      process.env.APP_HOST_HEALTH_PATH ??
+      DEFAULT_HEALTH_PATH;
+    this.status =
+      !this.enabled || this.driver === 'disabled'
+        ? 'disabled'
+        : this.externalUrl
+          ? 'external'
+          : 'stopped';
 
     process.once('SIGINT', () => {
       this.shutdown().catch((error) => {
@@ -124,7 +141,9 @@ export class AppHostSupervisor {
     }
   }
 
-  static getInstance(options: AppHostSupervisorOptions = {}): AppHostSupervisor {
+  static getInstance(
+    options: AppHostSupervisorOptions = {},
+  ): AppHostSupervisor {
     if (!AppHostSupervisor.instance) {
       AppHostSupervisor.instance = new AppHostSupervisor(options);
     }
@@ -144,7 +163,8 @@ export class AppHostSupervisor {
     return {
       driver: this.driver,
       status: this.status,
-      targetUrl: this.externalUrl?.toString() ?? this.managedChild?.targetUrl.toString(),
+      targetUrl:
+        this.externalUrl?.toString() ?? this.managedChild?.targetUrl.toString(),
       pid: this.managedChild?.child.pid,
       activeLeases: this.activeLeases,
       appDistDir: this.appDistDir,
@@ -208,7 +228,9 @@ export class AppHostSupervisor {
 
   async restart(reason = 'app-host restarted'): Promise<URL> {
     if (this.externalUrl || this.driver === 'external') {
-      throw new Error('App host is external and cannot be restarted by the supervisor');
+      throw new Error(
+        'App host is external and cannot be restarted by the supervisor',
+      );
     }
     if (!this.enabled || this.driver === 'disabled') {
       throw new Error('App host is disabled');
@@ -256,7 +278,9 @@ export class AppHostSupervisor {
       this.managedChild = null;
       this.status = wasStopping ? 'stopped' : 'failed';
       if (!wasStopping) {
-        console.error(`app-host exited unexpectedly; code=${code ?? 'null'} signal=${signal ?? 'null'}`);
+        console.error(
+          `app-host exited unexpectedly; code=${code ?? 'null'} signal=${signal ?? 'null'}`,
+        );
       }
     });
 
@@ -283,8 +307,8 @@ export class AppHostSupervisor {
     const exitPromise = waitForChildExit(managed.child, this.shutdownTimeoutMs);
     managed.child.kill('SIGTERM');
 
-    await exitPromise.catch((error) => {
-      console.warn(error.message);
+    await exitPromise.catch((error: unknown) => {
+      console.warn(error instanceof Error ? error.message : String(error));
       managed.child.kill('SIGKILL');
     });
 
@@ -339,7 +363,9 @@ export class AppHostSupervisor {
     const entrypoint = resolveNodeAppHostEntrypoint();
     if (!entrypoint) {
       this.status = 'failed';
-      throw new Error('The app-host code is not compiled. Please run pnpm build first.');
+      throw new Error(
+        'The app-host code is not compiled. Please run pnpm build first.',
+      );
     }
 
     return {
@@ -359,10 +385,13 @@ export class AppHostSupervisor {
     }
     if (!tsxCli) {
       this.status = 'failed';
-      throw new Error('The tsx runtime is not installed. Please run pnpm install first.');
+      throw new Error(
+        'The tsx runtime is not installed. Please run pnpm install first.',
+      );
     }
 
-    const tsconfig = process.env.APP_HOST_TSCONFIG ?? process.env.SERVER_TSCONFIG_PATH;
+    const tsconfig =
+      process.env.APP_HOST_TSCONFIG ?? process.env.SERVER_TSCONFIG_PATH;
     const args = [tsxCli, 'watch', '--clear-screen=false'];
     if (tsconfig) {
       args.push('--tsconfig', tsconfig);
@@ -390,10 +419,10 @@ export class AppHostSupervisor {
   }
 
   private pipeChildLogs(child: ChildProcess): void {
-    child.stdout?.on('data', (chunk) => {
+    child.stdout?.on('data', (chunk: unknown) => {
       writePrefixedChunk('app-host', chunk, process.stdout);
     });
-    child.stderr?.on('data', (chunk) => {
+    child.stderr?.on('data', (chunk: unknown) => {
       writePrefixedChunk('app-host', chunk, process.stderr);
     });
   }
@@ -416,7 +445,9 @@ export class AppHostSupervisor {
       }
     }
 
-    throw new Error(`app-host did not become ready within ${this.startTimeoutMs}ms: ${lastError?.message ?? ''}`);
+    throw new Error(
+      `app-host did not become ready within ${this.startTimeoutMs}ms: ${lastError?.message ?? ''}`,
+    );
   }
 }
 
@@ -471,14 +502,16 @@ function normalizeUrl(value?: string): URL | undefined {
 }
 
 export function sanitizeAppHostChildNodeOptions(value: unknown): string {
-  return String(value ?? '')
+  const source = typeof value === 'string' ? value : '';
+  return source
     .trim()
     .split(/\s+/)
     .filter(Boolean)
     .filter(
       (option) =>
         !APP_HOST_CHILD_DENIED_NODE_OPTIONS.some(
-          (deniedOption) => option === deniedOption || option.startsWith(`${deniedOption}=`),
+          (deniedOption) =>
+            option === deniedOption || option.startsWith(`${deniedOption}=`),
         ),
     )
     .join(' ');
@@ -494,7 +527,10 @@ function numberFromEnv(name: string): number | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-async function findAvailablePort(startPort: number, host: string): Promise<number> {
+async function findAvailablePort(
+  startPort: number,
+  host: string,
+): Promise<number> {
   let port = startPort;
   while (!(await isPortAvailable(port, host))) {
     port += 1;
@@ -523,7 +559,11 @@ function requestHealth(url: URL): Promise<void> {
         return;
       }
 
-      reject(new Error(`health check returned ${res.statusCode ?? 'unknown status'}`));
+      reject(
+        new Error(
+          `health check returned ${res.statusCode ?? 'unknown status'}`,
+        ),
+      );
     });
 
     req.setTimeout(1000, () => {
@@ -533,7 +573,10 @@ function requestHealth(url: URL): Promise<void> {
   });
 }
 
-function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<void> {
+function waitForChildExit(
+  child: ChildProcess,
+  timeoutMs: number,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();
@@ -560,7 +603,15 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function writePrefixedChunk(prefix: string, chunk: Buffer, writer: NodeJS.WriteStream): void {
+function writePrefixedChunk(
+  prefix: string,
+  chunk: unknown,
+  writer: NodeJS.WriteStream,
+): void {
+  if (!Buffer.isBuffer(chunk)) {
+    return;
+  }
+
   const text = chunk.toString();
   const lines = text.split(/\r?\n/);
   const hasTrailingNewline = text.endsWith('\n') || text.endsWith('\r');

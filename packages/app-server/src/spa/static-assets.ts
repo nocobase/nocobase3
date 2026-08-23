@@ -13,16 +13,28 @@ export interface ServeSpaAssetOptions {
   cacheControl?: string;
 }
 
-export async function serveSpaAsset(request: Request, options: ServeSpaAssetOptions): Promise<Response> {
+export async function serveSpaAsset(
+  request: Request,
+  options: ServeSpaAssetOptions,
+): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return methodNotAllowed('GET, HEAD');
   }
 
   const requestUrl = new URL(request.url);
-  const pathInsideRoot = getPathInsideRoot(requestUrl.pathname, options.basePath);
-  const response = await serveFileIfExists(options.rootDir, pathInsideRoot, request.method, {
-    cacheControl: options.cacheControl ?? `public, max-age=${oneYearSeconds}, immutable`,
-  });
+  const pathInsideRoot = getPathInsideRoot(
+    requestUrl.pathname,
+    options.basePath,
+  );
+  const response = await serveFileIfExists(
+    options.rootDir,
+    pathInsideRoot,
+    request.method,
+    {
+      cacheControl:
+        options.cacheControl ?? `public, max-age=${oneYearSeconds}, immutable`,
+    },
+  );
 
   return response ?? notFound();
 }
@@ -64,12 +76,17 @@ async function serveFileIfExists(
   const body =
     method === 'HEAD'
       ? null
-      : (Readable.toWeb(createReadStream(filePath)) as ConstructorParameters<typeof Response>[0]);
+      : (Readable.toWeb(createReadStream(filePath)) as ConstructorParameters<
+          typeof Response
+        >[0]);
   return new Response(body, { headers });
 }
 
 function getPathInsideRoot(pathname: string, basePath: string): string {
-  const pathInside = basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) : pathname;
+  const pathInside =
+    basePath && pathname.startsWith(basePath)
+      ? pathname.slice(basePath.length)
+      : pathname;
   return pathInside.startsWith('/') ? pathInside : `/${pathInside}`;
 }
 

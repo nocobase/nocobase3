@@ -1,26 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { AIFormRegistry, createFormFillerInvoker } from "../providers/form-registry";
+import {
+  AIFormRegistry,
+  createFormFillerInvoker,
+} from '../providers/form-registry';
 
 const invocationContext = {
-  sessionId: "session-1",
-  messageId: "message-1",
-  toolCallId: "tool-call-1",
-  toolName: "formFiller",
-  allowedFormIds: ["lead-form"],
+  sessionId: 'session-1',
+  messageId: 'message-1',
+  toolCallId: 'tool-call-1',
+  toolName: 'formFiller',
+  allowedFormIds: ['lead-form'],
 };
 
-describe("AI form filler", () => {
-  it("fills only declared editable fields available in the context", async () => {
+describe('AI form filler', () => {
+  it('fills only declared editable fields available in the context', async () => {
     const registry = new AIFormRegistry();
     const applied: Array<Record<string, unknown>> = [];
     registry.register({
-      id: "lead-form",
-      title: "Lead form",
+      id: 'lead-form',
+      title: 'Lead form',
       fields: [
-        { name: "company", type: "string" },
-        { name: "priority", type: "string", enum: ["normal", "high"] },
-        { name: "owner", type: "string", readonly: true },
+        { name: 'company', type: 'string' },
+        { name: 'priority', type: 'string', enum: ['normal', 'high'] },
+        { name: 'owner', type: 'string', readonly: true },
       ],
       getValues: () => ({}),
       setValues: (values) => {
@@ -32,55 +35,55 @@ describe("AI form filler", () => {
 
     await expect(
       invoke(
-        { form: "lead-form", data: { company: "Acme", priority: "high" } },
-        context
-      )
+        { form: 'lead-form', data: { company: 'Acme', priority: 'high' } },
+        context,
+      ),
     ).resolves.toMatchObject({
-      status: "success",
-      appliedFields: ["company", "priority"],
+      status: 'success',
+      appliedFields: ['company', 'priority'],
       skippedFields: [],
     });
-    expect(applied).toEqual([{ company: "Acme", priority: "high" }]);
+    expect(applied).toEqual([{ company: 'Acme', priority: 'high' }]);
 
     await expect(
       invoke(
-        { form: "lead-form", data: { company: 42, owner: "Ada" } },
-        context
-      )
+        { form: 'lead-form', data: { company: 42, owner: 'Ada' } },
+        context,
+      ),
     ).resolves.toMatchObject({
-      status: "error",
+      status: 'error',
       skippedFields: [
-        expect.objectContaining({ name: "company", reason: "invalid" }),
-        expect.objectContaining({ name: "owner", reason: "readonly" }),
+        expect.objectContaining({ name: 'company', reason: 'invalid' }),
+        expect.objectContaining({ name: 'owner', reason: 'readonly' }),
       ],
     });
   });
 
-  it("rejects duplicate registrations and inaccessible forms", async () => {
+  it('rejects duplicate registrations and inaccessible forms', async () => {
     const registry = new AIFormRegistry();
     const unregister = registry.register({
-      id: "lead-form",
-      title: "Lead form",
+      id: 'lead-form',
+      title: 'Lead form',
       fields: [],
       getValues: () => ({}),
       setValues: () => undefined,
     });
     expect(() =>
       registry.register({
-        id: "lead-form",
-        title: "Duplicate",
+        id: 'lead-form',
+        title: 'Duplicate',
         fields: [],
         getValues: () => ({}),
         setValues: () => undefined,
-      })
+      }),
     ).toThrow(/already registered/);
     unregister();
 
     await expect(
       createFormFillerInvoker(registry)(
-        { form: "lead-form", data: {} },
-        invocationContext
-      )
-    ).resolves.toMatchObject({ status: "error" });
+        { form: 'lead-form', data: {} },
+        invocationContext,
+      ),
+    ).resolves.toMatchObject({ status: 'error' });
   });
 });

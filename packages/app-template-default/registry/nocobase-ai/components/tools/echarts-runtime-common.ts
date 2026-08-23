@@ -6,8 +6,8 @@ import {
   LineChart,
   PictorialBarChart,
   ScatterChart,
-} from "echarts/charts";
-import { use as registerEChartsModules } from "echarts/core";
+} from 'echarts/charts';
+import { use as registerEChartsModules } from 'echarts/core';
 
 registerEChartsModules([
   BarChart,

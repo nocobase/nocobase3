@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: NocoBase V3 应用架构：HTTP server 与 CLI 入口、embedded / standalone、runtime、service、jobs、route、middleware、frontend、migration 与 seed 的职责边界
+description: NocoBase V3 应用架构：HTTP server 与 CLI 入口、embedded / standalone、runtime、service、jobs、realtime、route、middleware、websocket、frontend、migration 与 seed 的职责边界
 ---
 
 # Architecture
@@ -27,22 +27,22 @@ description: NocoBase V3 应用架构：HTTP server 与 CLI 入口、embedded / 
                 │                 └──────────────────────┘
                 │
                 ▼
-┌──────────────────────────────┐
-│        Business Logic        │
-│   ┌──────────┐ ┌──────────┐  │
-│   │ Service  │ │  Jobs    │  │
-│   │ business │ │ async    │  │
-│   └──────────┘ └──────────┘  │
-└───────────────┬──────────────┘
+┌──────────────────────────────────────────────┐
+│               Business Logic                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │
+│  │ Service  │ │  Jobs    │ │  Realtime    │  │
+│  │ sync     │ │ async    │ │ subscriptions│  │
+│  └──────────┘ └──────────┘ └──────────────┘  │
+└───────────────┬──────────────────────────────┘
                 │
                 ▼
-┌──────────────────────────────┐
-│        HTTP Interface        │
-│   ┌──────────┐ ┌──────────┐  │
-│   │  Route   │ │Middleware│  │
-│   │ endpoint │ │  hooks   │  │
-│   └──────────┘ └──────────┘  │
-└───────────────┬──────────────┘
+┌──────────────────────────────────────────────┐
+│              HTTP Interface                  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │
+│  │  Route   │ │Middleware│ │ WebSocket    │  │
+│  │ endpoint │ │  hooks   │ │ upgrade      │  │
+│  └──────────┘ └──────────┘ └──────────────┘  │
+└───────────────┬──────────────────────────────┘
                 │
                 ▼
 ┌──────────────────────────────┐
@@ -76,18 +76,26 @@ runtime 的直接入口有两类：`HTTP Server` 和 `CLI`。
 
 ### Business Logic
 
-`Service` and `Jobs` are peer parts of the business logic.
+`Service`、`Jobs` 和 `Realtime` 是平级的业务逻辑部分。
 
 - `Service`：同步业务逻辑。
 - `Jobs`：异步业务执行。
+- `Realtime`：连接、订阅、发布和实时消息协议处理。
 
 ### HTTP Interface
 
-`Route` 和 `Middleware` 是平级的 HTTP 边界。
+`Route`、`Middleware` 和 `WebSocket` 是平级的 HTTP 边界。
 
 - `Route`：对外暴露 endpoint 和响应结构。
 - `Middleware`：处理请求进入 route 前后的横切逻辑。
+- `WebSocket`：处理 upgrade、连接生命周期和 transport 适配，把消息交给 realtime service。
 
 ### Frontend
 
 这一层包含服务端渲染的 HTML 界面、SPA 形态的界面和前端 assets 资源。这些界面可以直接调用 HTTP API；服务端通过 HTTP interface 暴露能力并注入必要的 browser runtime 信息。
+
+## 插件包设计
+
+如果你想看更具体的 package-based 插件架构，包括 `config`、`registry`、`database/migrations`、`remove/purge` 和 App 安装后的落地路径，可以看这份设计草案：
+
+- [插件包架构](./plugin-architecture.md)

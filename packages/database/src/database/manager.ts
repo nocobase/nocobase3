@@ -26,9 +26,12 @@ export interface DatabaseManager {
 }
 
 export function createDatabaseManager(config: DatabaseConfig): DatabaseManager {
-  return new DefaultDatabaseManager(config, new DefaultConnectionFactory({
-    knex: new KnexConnectionAdapter(),
-  }));
+  return new DefaultDatabaseManager(
+    config,
+    new DefaultConnectionFactory({
+      knex: new KnexConnectionAdapter(),
+    }),
+  );
 }
 
 export class DefaultDatabaseManager implements DatabaseManager {
@@ -39,7 +42,9 @@ export class DefaultDatabaseManager implements DatabaseManager {
     private readonly factory: ConnectionFactory,
   ) {}
 
-  connection(name: string = this.getDefaultConnectionName()): DatabaseConnection {
+  connection(
+    name: string = this.getDefaultConnectionName(),
+  ): DatabaseConnection {
     const existing = this.connections.get(name);
     if (existing) {
       return existing;
@@ -53,7 +58,10 @@ export class DefaultDatabaseManager implements DatabaseManager {
     const connection = this.factory.create({
       name,
       config: connectionConfig,
-      metadataStore: connectionConfig.metadataStore ?? this.config.metadataStore ?? new InMemoryCollectionMetadataStore(),
+      metadataStore:
+        connectionConfig.metadataStore ??
+        this.config.metadataStore ??
+        new InMemoryCollectionMetadataStore(),
     });
     this.connections.set(name, connection);
     return connection;
@@ -78,7 +86,9 @@ export class DefaultDatabaseManager implements DatabaseManager {
     return this.connection(name).transaction(fn);
   }
 
-  async disconnect(name: string = this.getDefaultConnectionName()): Promise<void> {
+  async disconnect(
+    name: string = this.getDefaultConnectionName(),
+  ): Promise<void> {
     const connection = this.connections.get(name);
     if (!connection) {
       return;
@@ -86,13 +96,19 @@ export class DefaultDatabaseManager implements DatabaseManager {
     await connection.disconnect();
   }
 
-  async reconnect(name: string = this.getDefaultConnectionName()): Promise<DatabaseConnection> {
+  async reconnect(
+    name: string = this.getDefaultConnectionName(),
+  ): Promise<DatabaseConnection> {
     const connection = this.connection(name);
     return connection.reconnect();
   }
 
   async destroy(): Promise<void> {
-    await Promise.all([...this.connections.values()].map((connection) => connection.disconnect()));
+    await Promise.all(
+      [...this.connections.values()].map((connection) =>
+        connection.disconnect(),
+      ),
+    );
     this.connections.clear();
   }
 

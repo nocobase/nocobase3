@@ -7,7 +7,13 @@ export {
   type CreateAppOptions,
   type SpaHandler,
 } from './app.js';
-export { createServer, default, type AppDisposer, type AppScope, type EmbeddedServer } from './embedded.js';
+export {
+  createServer,
+  default,
+  type AppDisposer,
+  type AppScope,
+  type EmbeddedServer,
+} from './embedded.js';
 export {
   createStandaloneRuntime,
   createStandaloneServer,
@@ -17,7 +23,6 @@ export {
   type StandaloneServerListenOptions,
   type StandaloneServerOptions,
 } from './standalone.js';
-export { registerStandaloneWebSocketUpgradeHandler } from './standalone.js';
 export {
   createAppFromRuntime,
   createPublicBasePathAdapter,
@@ -29,6 +34,8 @@ export {
   loadEmbeddedAppConfig,
   loadStandaloneAppConfig,
 } from './runtime/config.js';
-export type { AppConfig } from './config/index.js';
 export { runAppMigrations } from './migrate.js';
-export { default as QueueDemoJob, queueDemoExecutions, type QueueDemoPayload } from './jobs/queue-demo.js';
+export {
+  createStandaloneDatabaseTaskRuntime,
+  type DatabaseTaskRuntime,
+} from './database-task.js';

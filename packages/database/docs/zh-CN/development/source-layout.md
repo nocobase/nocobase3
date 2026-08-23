@@ -65,6 +65,16 @@ src/
     lock.ts
     migrator.ts
 
+  seed/
+    index.ts
+    types.ts
+    define.ts
+    context.ts
+    loader.ts
+    history.ts
+    lock.ts
+    seeder.ts
+
   schema/
     index.ts
     adapter.ts
@@ -87,6 +97,10 @@ src/
 
 `migration/` 是版本化数据库变更层。它负责 `defineMigration()`、文件加载、history、lock、事务执行和 rollback。Migration context 只暴露 `builder`、`query`、`connection`，不在顶层暴露 `schema`。
 
+Package 的 migration 文件通常位于 package 自己的 `database/migrations/` 目录，由上层插件系统以 `MigrationSource` 传给 runner。数据库包不负责扫描或识别插件 package。
+
+`seed/` 是一次性安装数据初始化层。Package 的 seed 通常位于自己的 `database/seeds/`，由上层插件安装器在 migrations 成功后执行。Seed context 只暴露 `query` 和 `connection`。
+
 `metadata/` 是 Collection metadata 存储接口与默认内存实现。
 
 `naming/` 是逻辑名和数据库 identifier 之间的命名策略，例如 `underscored`、`tablePrefix`、索引名和外键名生成。
@@ -94,11 +108,12 @@ src/
 ## 测试目录
 
 ```text
-test/
+tests/
   unit/
     builder/
     database/
     migration/
+    seed/
     metadata/
     naming/
     schema/
@@ -136,26 +151,30 @@ test/
       rollback.test.ts
       transactions.test.ts
       checksum.test.ts
+    seed/
+      seeder.test.ts
 ```
 
 ## 测试分层说明
 
-`test/unit/` 测纯逻辑和编译结果，可以使用 recording adapter 或内存实现，但不应该依赖真实数据库状态。
+`tests/unit/` 测纯逻辑和编译结果，可以使用 recording adapter 或内存实现，但不应该依赖真实数据库状态。
 
-`test/integration/` 测真实数据库连接，不是 SQLite 专属。默认跑 SQLite，设置 `INTEGRATION_DB_CONNECTIONS=all` 后同一批用例会跑 SQLite、PostgreSQL、MySQL。
+`tests/integration/` 测真实数据库连接，不是 SQLite 专属。默认跑 SQLite，设置 `INTEGRATION_DB_CONNECTIONS=all` 后同一批用例会跑 SQLite、PostgreSQL、MySQL。
 
-`test/integration/builder/` 覆盖 Collection Builder 到真实 DDL 的行为。
+`tests/integration/builder/` 覆盖 Collection Builder 到真实 DDL 的行为。
 
-`test/integration/query/` 覆盖 QueryAdapter 到真实 SQL 执行的行为。Query 测试按能力拆分，例如 select、where、join、subquery、aggregate、mutation，而不是按内部实现类拆分。
+`tests/integration/query/` 覆盖 QueryAdapter 到真实 SQL 执行的行为。Query 测试按能力拆分，例如 select、where、join、subquery、aggregate、mutation，而不是按内部实现类拆分。
 
-`test/integration/migration/` 覆盖 migration runner 到真实数据库的行为，重点验证 history、事务、rollback、checksum 和 lock。
+`tests/integration/migration/` 覆盖 migration runner 到真实数据库的行为，重点验证 history、事务、rollback、checksum 和 lock。
 
-`test/unit/migration/` 覆盖 `defineMigration()`、loader、validator 等不需要真实数据库的行为。
+`tests/unit/migration/` 覆盖 `defineMigration()`、loader、validator 等不需要真实数据库的行为。
+
+`tests/unit/seed/` 覆盖 `defineSeed()`、loader 和 validator；`tests/integration/seed/` 覆盖 history、事务、失败重试和 checksum。
 
 ## Agent 注意事项
 
 - 新增 public API 时，优先在对应分层的 `index.ts` 暴露，避免让调用方依赖深层实现文件。
-- 新增 Builder 行为时，通常需要同时补 `test/unit/builder/` 和 `test/integration/builder/`。
-- 新增 Query 行为时，优先补 `test/integration/query/`，因为 QueryAdapter 的价值在真实数据库行为。
-- 新增 Migration 行为时，优先补 `test/unit/migration/` 和 `test/integration/migration/`，并验证 context 来自事务连接。
+- 新增 Builder 行为时，通常需要同时补 `tests/unit/builder/` 和 `tests/integration/builder/`。
+- 新增 Query 行为时，优先补 `tests/integration/query/`，因为 QueryAdapter 的价值在真实数据库行为。
+- 新增 Migration 行为时，优先补 `tests/unit/migration/` 和 `tests/integration/migration/`，并验证 context 来自事务连接。
 - 不要在 `db.query()` 测试中假设它会读取 Collection metadata；这属于未来 Repository 的职责。

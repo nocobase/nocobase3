@@ -9,7 +9,8 @@
 
 import { EventEmitter } from 'node:events';
 
-export type AppState = 'creating' | 'active' | 'draining' | 'destroying' | 'destroyed' | 'failed';
+export type AppState =
+  'creating' | 'active' | 'draining' | 'destroying' | 'destroyed' | 'failed';
 
 export type AppEvent =
   | 'app:beforeCreate'
@@ -44,19 +45,23 @@ export interface AppEventPayload {
   metadata?: Record<string, unknown>;
 }
 
-export type AppEventHandler = (payload: AppEventPayload) => void | Promise<void>;
+export type AppEventHandler = (
+  payload: AppEventPayload,
+) => void | Promise<void>;
 
 export class AppEventBus {
   private readonly emitter = new EventEmitter();
 
   on(event: AppEvent, handler: AppEventHandler): () => void {
-    this.emitter.on(event, handler);
-    return () => this.emitter.off(event, handler);
+    const listener = this.createListener(handler);
+    this.emitter.on(event, listener);
+    return () => this.emitter.off(event, listener);
   }
 
   once(event: AppEvent, handler: AppEventHandler): () => void {
-    this.emitter.once(event, handler);
-    return () => this.emitter.off(event, handler);
+    const listener = this.createListener(handler);
+    this.emitter.once(event, listener);
+    return () => this.emitter.off(event, listener);
   }
 
   emit(event: AppEvent, payload: AppEventPayload): void {
@@ -65,5 +70,20 @@ export class AppEventBus {
 
   removeAllListeners(): void {
     this.emitter.removeAllListeners();
+  }
+
+  private createListener(
+    handler: AppEventHandler,
+  ): (payload: AppEventPayload) => void {
+    return (payload: AppEventPayload): void => {
+      const handlerResult = handler(payload);
+      if (handlerResult) {
+        handlerResult.catch((error: unknown) => {
+          queueMicrotask(() => {
+            throw error;
+          });
+        });
+      }
+    };
   }
 }

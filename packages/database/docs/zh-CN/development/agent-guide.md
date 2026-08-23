@@ -53,6 +53,21 @@ Agent 的推荐 DSL 取决于输出载体：
 - 使用 `connection.client()` 的特殊 migration 应显式判断 `connection.dialect` 或 `connection.capabilities`。
 - 没有 `down` 时必须声明 `irreversible: true`，不要生成虚假的 rollback。
 - Runner 应在事务连接内创建 context，确保 `builder`、`query`、`connection.client()` 和 history 写入共享同一个事务。
+- 插件 package 的 migration 通过 `sources` 注册，并使用 package 的 `package.json.name` 作为 `packageName`。
+- 所有来源的 migration 按全局 `name` 排序，`name` 必须全局唯一；`packageName` 只用于归属、历史记录和诊断。
+- 旧的单目录 `directory` API 默认使用 `packageName: 'app'`。
+
+## Seed 规则
+
+- 插件安装默认数据放在 package 自己的 `database/seeds/`。
+- 上层安装器必须先执行 migrations，再执行 seeds。
+- 只生成 `export default defineSeed({})`，文件名主体和 `name` 完全一致。
+- Seed 使用 `query` 写数据，不使用 `builder` 修改数据库结构。
+- Seed context 顶层只使用 `query` 和 `connection`。
+- 所有 package 的 seed `name` 全局唯一，并按 `name` 排序；`packageName` 只用于归属和历史。
+- 已发布 seed 不修改、不插队；默认数据变化时新增更晚的 seed。
+- Seed 应幂等，并以稳定业务 key 和数据库唯一约束防止重复数据。
+- Seed 失败时不写历史；不要生成 rollback、refresh 或 truncate 行为。
 
 ## Query 规则
 
@@ -87,9 +102,9 @@ Repository 和 Repository Filter Builder 当前是规划设计，尚未实现。
 
 ## 测试规则
 
-- 新增 Builder 行为时，通常需要同时补 `test/unit/builder/` 和 `test/integration/builder/`。
-- 新增 Query 行为时，优先补 `test/integration/query/`，因为 QueryAdapter 的价值在真实数据库行为。
-- `test/integration` 是真实数据库连接测试，不是 SQLite 专属。
+- 新增 Builder 行为时，通常需要同时补 `tests/unit/builder/` 和 `tests/integration/builder/`。
+- 新增 Query 行为时，优先补 `tests/integration/query/`，因为 QueryAdapter 的价值在真实数据库行为。
+- `tests/integration` 是真实数据库连接测试，不是 SQLite 专属。
 - 修改 Builder 编译或 adapter 行为后，应跑 `npm run test:integration:all`。
 - SQLite 通过不代表 PostgreSQL/MySQL 一定通过。
 
@@ -100,6 +115,7 @@ Repository 和 Repository Filter Builder 当前是规划设计，尚未实现。
 - Collection Builder 用法放 `builder/`。
 - QueryAdapter 用法放 `query/`。
 - Migration 用法和维护清单放 `migration/`。
+- Seed 用法和维护清单放 `seed/`。
 - Repository 和 Repository Filter 规划放 `repository/`。
 - 开发维护说明放 `development/`。
 - 纯 API 签名和类型说明放 `reference/`。

@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext } from 'react';
 import type {
   AIChatAttachment,
   AIChatMessage,
@@ -9,12 +9,12 @@ import type {
   AIModel,
   AIToolCallDecision,
   AIWorkContextItem,
-} from "./types";
+} from './types';
 
 export type AIChatContextValue = {
   id: string;
   messages: AIChatMessage[];
-  status: "submitted" | "streaming" | "ready" | "error";
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
   error?: Error;
   employees: AIEmployee[];
   models: AIModel[];
@@ -63,10 +63,10 @@ export type AIChatContextValue = {
   focusComposer: () => void;
 };
 
-export type AIChatMessagesContextValue = Pick<AIChatContextValue, "messages">;
+export type AIChatMessagesContextValue = Pick<AIChatContextValue, 'messages'>;
 export type AIChatStatusContextValue = Pick<
   AIChatContextValue,
-  "status" | "error"
+  'status' | 'error'
 >;
 export type AIChatBaseContextValue = Omit<
   AIChatContextValue,
@@ -81,14 +81,15 @@ export const AIChatStatusContext =
 
 export function useAIChatBase() {
   const value = useContext(AIChatContext);
-  if (!value) throw new Error("useAIChatBase must be used inside AIChatProvider");
+  if (!value)
+    throw new Error('useAIChatBase must be used inside AIChatProvider');
   return value;
 }
 
 export function useAIChatMessages() {
   const value = useContext(AIChatMessagesContext);
   if (!value) {
-    throw new Error("useAIChatMessages must be used inside AIChatProvider");
+    throw new Error('useAIChatMessages must be used inside AIChatProvider');
   }
   return value;
 }
@@ -96,7 +97,7 @@ export function useAIChatMessages() {
 export function useAIChatStatus() {
   const value = useContext(AIChatStatusContext);
   if (!value) {
-    throw new Error("useAIChatStatus must be used inside AIChatProvider");
+    throw new Error('useAIChatStatus must be used inside AIChatProvider');
   }
   return value;
 }

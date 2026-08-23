@@ -24,7 +24,10 @@ const unitMilliseconds: Record<string, number> = {
   weeks: 7 * 24 * 60 * 60 * 1000,
 };
 
-export function parseSessionDuration(value: SessionDuration, label: string): number {
+export function parseSessionDuration(
+  value: SessionDuration,
+  label: string,
+): number {
   if (typeof value === 'number') {
     assertPositiveDuration(value, label);
     return value;
@@ -50,7 +53,9 @@ export function parseSessionDuration(value: SessionDuration, label: string): num
   const unit = match[2].toLowerCase();
   const multiplier = unitMilliseconds[unit];
   if (!multiplier) {
-    throw new Error(`${label} session duration unit "${match[2]}" is unsupported.`);
+    throw new Error(
+      `${label} session duration unit "${match[2]}" is unsupported.`,
+    );
   }
 
   const milliseconds = amount * multiplier;

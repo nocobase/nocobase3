@@ -1,9 +1,8 @@
-import { defineConfig } from "vitest/config";
+import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
 
-export default defineConfig({
+export default createNodeVitestConfig({
   test: {
-    environment: "node",
-    include: ["tests/**/*.test.ts"],
+    include: ['tests/**/*.test.ts'],
     restoreMocks: true,
   },
 });

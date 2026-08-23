@@ -69,7 +69,7 @@ type BuilderImpactLevel = 'safe' | 'warning' | 'destructive';
     operation: 'dropField',
     message: 'Dropping field users.name may remove existing data.',
   },
-]
+];
 ```
 
 ## warnings

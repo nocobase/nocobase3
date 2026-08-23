@@ -1,11 +1,11 @@
-import { createContext } from "react";
+import { createContext } from 'react';
 
 export type RouteSurfaceCloseOptions = {
   skipBeforeClose?: boolean;
 };
 
 export type RouteSurfaceClose = (
-  options?: RouteSurfaceCloseOptions
+  options?: RouteSurfaceCloseOptions,
 ) => Promise<boolean>;
 
 export const RouteSurfaceContext: React.Context<RouteSurfaceClose | null> =

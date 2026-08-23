@@ -5,45 +5,53 @@ import { fileURLToPath } from 'node:url';
 import { loadStandaloneAppConfig } from '../server/runtime/config.ts';
 
 type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 type ObjectValue = Record<string, unknown>;
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
 const envFiles = [path.join(rootDir, '.env'), path.join(rootDir, '.env.local')];
-const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url).href;
+const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url)
+  .href;
 
 const config = loadStandaloneAppConfig(standaloneModuleUrl);
 
-const activeLoggerName = config.logger.default;
-const loggerChannels: Record<string, unknown> = config.logger.channels;
-const activeLogger =
-  activeLoggerName ? loggerChannels[activeLoggerName] : undefined;
-const activeCacheName = config.cache.default;
-const cacheStores: Record<string, unknown> = config.cache.stores;
-const activeCache =
-  activeCacheName ? cacheStores[activeCacheName] : undefined;
+const activeLoggerName = config.logging.default;
+const configuredLogger = activeLoggerName
+  ? config.logging.loggers?.[activeLoggerName]
+  : undefined;
+const activeLogger = {
+  ...config.logging,
+  ...configuredLogger,
+  base: mergeObject(config.logging.base, configuredLogger?.base),
+};
+const activeCachingProviderName = config.caching.default;
+const cachingProviders: Record<string, unknown> = config.caching.providers;
+const activeCachingProvider = activeCachingProviderName
+  ? cachingProviders[activeCachingProviderName]
+  : undefined;
 const activeDatabaseName = config.database.default;
-const databaseConnections: Record<string, unknown> = config.database.connections;
-const activeDatabase =
-  activeDatabaseName ? databaseConnections[activeDatabaseName] : undefined;
+const databaseConnections: Record<string, unknown> =
+  config.database.connections;
+const activeDatabase = activeDatabaseName
+  ? databaseConnections[activeDatabaseName]
+  : undefined;
 const activeDriveName = config.drive.default;
 const driveDisks: Record<string, unknown> = config.drive.disks;
-const activeDrive =
-  activeDriveName ? driveDisks[activeDriveName] : undefined;
+const activeDrive = activeDriveName ? driveDisks[activeDriveName] : undefined;
 const activeQueueName = config.queue.default;
 const queueConnections: Record<string, unknown> = config.queue.connections;
-const activeQueue =
-  activeQueueName ? queueConnections[activeQueueName] : undefined;
+const activeQueue = activeQueueName
+  ? queueConnections[activeQueueName]
+  : undefined;
 const activeSessionName = config.session.default;
 const sessionStores: Record<string, unknown> = config.session.stores;
-const activeSession =
-  activeSessionName ? sessionStores[activeSessionName] : undefined;
+const activeSession = activeSessionName
+  ? sessionStores[activeSessionName]
+  : undefined;
 const report = {
   mode: 'standalone',
   envFiles: envFiles.map((file) => ({
@@ -69,13 +77,13 @@ const report = {
     indexExists: existsSync(config.spa.indexPath),
     runtime: config.spa.runtime,
   },
-  logger: {
+  logging: {
     default: activeLoggerName || '(none)',
-    active: summarizeLoggerChannel(activeLogger),
+    active: summarizeLogger(activeLogger),
   },
-  cache: {
-    default: activeCacheName || '(none)',
-    active: summarizeCacheStore(activeCache),
+  caching: {
+    default: activeCachingProviderName || '(none)',
+    active: summarizeCachingProvider(activeCachingProvider),
   },
   database: {
     default: activeDatabaseName || '(none)',
@@ -87,7 +95,24 @@ const report = {
       tableName: config.database.migrations.tableName ?? '(default)',
       lockTableName: config.database.migrations.lockTableName ?? '(default)',
     },
+    seeds: {
+      directory: config.database.seeds?.directory ?? '(not configured)',
+      directoryExists: config.database.seeds
+        ? existsSync(config.database.seeds.directory)
+        : false,
+      autoRun: config.database.seeds?.autoRun ?? false,
+      tableName: config.database.seeds?.tableName ?? '(default)',
+      lockTableName: config.database.seeds?.lockTableName ?? '(default)',
+    },
   },
+  plugins: config.plugins.map((plugin) => ({
+    packageName: plugin.packageName,
+    version: plugin.version,
+    enabled: plugin.enabled,
+    migrationsDirectory: plugin.migrationsDirectory ?? '(none)',
+    seedsDirectory: plugin.seedsDirectory ?? '(none)',
+    routesEntry: plugin.routesEntry ?? '(none)',
+  })),
   drive: {
     default: activeDriveName || '(none)',
     active: summarizeDriveDisk(activeDrive),
@@ -101,7 +126,9 @@ const report = {
       queues: config.queue.worker?.queues ?? [],
       concurrency: config.queue.worker?.concurrency ?? 1,
       idleDelay: String(config.queue.worker?.idleDelay ?? '2s'),
-      timeout: config.queue.worker?.timeout ? String(config.queue.worker.timeout) : '(none)',
+      timeout: config.queue.worker?.timeout
+        ? String(config.queue.worker.timeout)
+        : '(none)',
     },
     jobs: {
       locations: config.queue.jobs?.locations ?? [],
@@ -128,7 +155,9 @@ const report = {
     },
     lifetime: {
       absolute: String(config.session.lifetime.absolute),
-      inactivity: config.session.lifetime.inactivity ? String(config.session.lifetime.inactivity) : '(none)',
+      inactivity: config.session.lifetime.inactivity
+        ? String(config.session.lifetime.inactivity)
+        : '(none)',
       rolling: config.session.lifetime.rolling ?? true,
     },
     secret: config.session.secret ? '<configured>' : '(missing)',
@@ -161,9 +190,16 @@ function summarizeDatabaseConnection(connection: unknown): JsonValue {
 
   for (const key of ['host', 'port', 'database', 'username', 'schema', 'ssl']) {
     const value = connection[key];
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
       summary[key] = value;
-    } else if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    } else if (
+      Array.isArray(value) &&
+      value.every((item) => typeof item === 'string')
+    ) {
       summary[key] = value;
     }
   }
@@ -171,65 +207,75 @@ function summarizeDatabaseConnection(connection: unknown): JsonValue {
   return summary;
 }
 
-function summarizeLoggerChannel(channel: unknown): JsonValue {
-  if (!isObject(channel)) {
+function summarizeLogger(logger: unknown): JsonValue {
+  if (!isObject(logger)) {
     return null;
   }
 
-  const driver = stringValue(channel.driver) ?? 'unknown';
-  const summary: Record<string, JsonValue> = {
-    driver,
-  };
+  const summary: Record<string, JsonValue> = {};
 
   for (const key of ['name', 'level']) {
-    const value = stringValue(channel[key]);
+    const value = stringValue(logger[key]);
     if (value) {
       summary[key] = value;
     }
   }
 
-  const pretty = booleanValue(channel.pretty);
-  if (pretty !== undefined) {
-    summary.pretty = pretty;
+  const enabled = booleanValue(logger.enabled);
+  if (enabled !== undefined) {
+    summary.enabled = enabled;
   }
 
-  if (isObject(channel.base)) {
-    summary.base = jsonObject(channel.base);
+  if (isObject(logger.base)) {
+    summary.base = jsonObject(logger.base);
   }
 
-  if (Array.isArray(channel.redact)) {
-    summary.redactPaths = channel.redact.length;
+  if (Array.isArray(logger.redact)) {
+    summary.redactPaths = logger.redact.length;
+  }
+
+  if (isObject(logger.transport)) {
+    summary.transport = jsonObject(logger.transport);
   }
 
   return summary;
 }
 
-function summarizeCacheStore(store: unknown): JsonValue {
-  if (!isObject(store)) {
+function mergeObject(
+  base: Readonly<Record<string, unknown>> | null | undefined,
+  override: Readonly<Record<string, unknown>> | null | undefined,
+): Record<string, unknown> | null | undefined {
+  if (override === undefined) {
+    return base;
+  }
+  if (!isObject(base) || !isObject(override)) {
+    return override;
+  }
+  return {
+    ...base,
+    ...override,
+  };
+}
+
+function summarizeCachingProvider(provider: unknown): JsonValue {
+  if (!isObject(provider)) {
     return null;
   }
 
-  const driver = stringValue(store.driver) ?? 'unknown';
+  const driver = stringValue(provider.driver) ?? 'unknown';
   const summary: Record<string, JsonValue> = {
     driver,
   };
 
-  for (const key of ['ttl', 'maxTtl', 'namespace']) {
-    const value = store[key];
+  for (const key of ['defaultTtl', 'maxTtl', 'maxSize', 'checkInterval']) {
+    const value = provider[key];
     if (typeof value === 'string' || typeof value === 'number') {
       summary[key] = value;
     }
   }
 
-  for (const key of ['lruSize', 'checkInterval']) {
-    const value = numberValue(store[key]);
-    if (value !== undefined) {
-      summary[key] = value;
-    }
-  }
-
-  for (const key of ['useClone', 'stats', 'tags']) {
-    const value = booleanValue(store[key]);
+  for (const key of ['useClone']) {
+    const value = booleanValue(provider[key]);
     if (value !== undefined) {
       summary[key] = value;
     }
@@ -249,7 +295,15 @@ function summarizeDriveDisk(disk: unknown): JsonValue {
     visibility: stringValue(disk.visibility) ?? 'private',
   };
 
-  for (const key of ['location', 'bucket', 'region', 'endpoint', 'url', 'cdnUrl', 'encryption']) {
+  for (const key of [
+    'location',
+    'bucket',
+    'region',
+    'endpoint',
+    'url',
+    'cdnUrl',
+    'encryption',
+  ]) {
     const value = disk[key];
     if (typeof value === 'string' && value) {
       summary[key] = value;
@@ -265,8 +319,12 @@ function summarizeDriveDisk(disk: unknown): JsonValue {
 
   if (isObject(disk.credentials)) {
     summary.credentials = {
-      accessKeyId: stringValue(disk.credentials.accessKeyId) ? '<configured>' : '(missing)',
-      secretAccessKey: stringValue(disk.credentials.secretAccessKey) ? '<configured>' : '(missing)',
+      accessKeyId: stringValue(disk.credentials.accessKeyId)
+        ? '<configured>'
+        : '(missing)',
+      secretAccessKey: stringValue(disk.credentials.secretAccessKey)
+        ? '<configured>'
+        : '(missing)',
     };
   }
 
@@ -283,7 +341,15 @@ function summarizeQueueConnection(connection: unknown): JsonValue {
     driver,
   };
 
-  for (const key of ['host', 'port', 'db', 'keyPrefix', 'connection', 'table', 'schedulesTable']) {
+  for (const key of [
+    'host',
+    'port',
+    'db',
+    'keyPrefix',
+    'connection',
+    'table',
+    'schedulesTable',
+  ]) {
     const value = connection[key];
     if (typeof value === 'string' || typeof value === 'number') {
       summary[key] = value;
@@ -344,13 +410,21 @@ function printReport(value: typeof report): void {
   printPair('Mode', value.mode);
   printPair(
     'Env files',
-    value.envFiles.map((file) => `${path.relative(rootDir, file.path)}:${file.exists ? 'found' : 'missing'}`).join(', '),
+    value.envFiles
+      .map(
+        (file) =>
+          `${path.relative(rootDir, file.path)}:${file.exists ? 'found' : 'missing'}`,
+      )
+      .join(', '),
   );
 
   printSection('App routing');
   printPair('App name', value.app.name);
   printPair('Public base path', value.app.publicBasePath);
-  printPair('Internal base path', value.app.internalBasePath || '(app-local root)');
+  printPair(
+    'Internal base path',
+    value.app.internalBasePath || '(app-local root)',
+  );
   printPair('Internal API proxy', value.app.internalApiProxyPath);
   printPair('Public API URL', value.app.publicApiUrl);
   printPair('Upstream NocoBase API', value.app.nocoBaseApiUrl);
@@ -362,18 +436,21 @@ function printReport(value: typeof report): void {
   printPair('Vite dev proxy', value.server.viteDevUrl);
 
   printSection('SPA runtime');
-  printPair('Index path', `${value.spa.indexPath} (${value.spa.indexExists ? 'exists' : 'missing'})`);
+  printPair(
+    'Index path',
+    `${value.spa.indexPath} (${value.spa.indexExists ? 'exists' : 'missing'})`,
+  );
   printPair('Storage prefix', value.spa.runtime.storagePrefix);
   printPair('Storage type', value.spa.runtime.storageType);
   printPair('Share token', String(value.spa.runtime.shareToken));
 
   printSection('Logger');
-  printPair('Default channel', value.logger.default);
-  printJson('Active channel', value.logger.active);
+  printPair('Default logger', value.logging.default);
+  printJson('Active logger', value.logging.active);
 
-  printSection('Cache');
-  printPair('Default store', value.cache.default);
-  printJson('Active store', value.cache.active);
+  printSection('Caching');
+  printPair('Default provider', value.caching.default);
+  printJson('Active provider', value.caching.active);
 
   printSection('Database');
   printPair('Default connection', value.database.default);
@@ -385,6 +462,16 @@ function printReport(value: typeof report): void {
   printPair('Auto-run migrations', String(value.database.migrations.autoRun));
   printPair('Migration table', value.database.migrations.tableName);
   printPair('Migration lock table', value.database.migrations.lockTableName);
+  printPair(
+    'Seeds directory',
+    `${value.database.seeds.directory} (${value.database.seeds.directoryExists ? 'exists' : 'missing'})`,
+  );
+  printPair('Auto-run seeds', String(value.database.seeds.autoRun));
+  printPair('Seed table', value.database.seeds.tableName);
+  printPair('Seed lock table', value.database.seeds.lockTableName);
+
+  printSection('Plugins');
+  printJson('Registered plugins', value.plugins);
 
   printSection('Drive');
   printPair('Default disk', value.drive.default);
@@ -426,7 +513,10 @@ function printReport(value: typeof report): void {
   printPair('GC lottery', value.session.gcLottery.join('/'));
 
   printSection('Useful checks');
-  printPair('Server-focused tests', 'pnpm test -- tests/logic/app-server.test.ts tests/logic/database-config.test.ts');
+  printPair(
+    'Server-focused tests',
+    'pnpm test -- tests/logic/app-server.test.ts tests/logic/config.test.ts',
+  );
   printPair('Typecheck', 'pnpm typecheck');
   printPair('JSON output', 'pnpm server:config -- --json');
 }
@@ -467,10 +557,6 @@ function stringValue(value: unknown): string | undefined {
 
 function booleanValue(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
-}
-
-function numberValue(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
 }
 
 function jsonObject(value: ObjectValue): Record<string, JsonValue> {

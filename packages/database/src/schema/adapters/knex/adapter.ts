@@ -43,14 +43,18 @@ export class KnexSchemaAdapter implements SchemaAdapter {
 
   private async executeOperation(operation: SchemaOperation): Promise<void> {
     if (operation.type === 'createTable' && operation.ifNotExists) {
-      if (await this.hasTable(operation.table.name, operation.table.db?.schema)) {
+      if (
+        await this.hasTable(operation.table.name, operation.table.db?.schema)
+      ) {
         return;
       }
       await this.createTable(operation.table);
       return;
     }
     if (operation.type === 'dropTable' && operation.ifExists) {
-      await this.withSchema(operation.db?.schema).dropTableIfExists(operation.tableName);
+      await this.withSchema(operation.db?.schema).dropTableIfExists(
+        operation.tableName,
+      );
       return;
     }
     await this.toKnexBuilder(operation);
@@ -61,24 +65,37 @@ export class KnexSchemaAdapter implements SchemaAdapter {
       case 'createTable':
         return this.createTable(operation.table);
       case 'alterTable':
-        return this.withSchema(operation.db?.schema).alterTable(operation.tableName, (table) => {
-          for (const tableOperation of operation.operations) {
-            this.buildTableAlterOperation(table, tableOperation);
-          }
-        });
+        return this.withSchema(operation.db?.schema).alterTable(
+          operation.tableName,
+          (table) => {
+            for (const tableOperation of operation.operations) {
+              this.buildTableAlterOperation(table, tableOperation);
+            }
+          },
+        );
       case 'dropTable':
         return operation.ifExists
-          ? this.withSchema(operation.db?.schema).dropTableIfExists(operation.tableName)
-          : this.withSchema(operation.db?.schema).dropTable(operation.tableName);
+          ? this.withSchema(operation.db?.schema).dropTableIfExists(
+              operation.tableName,
+            )
+          : this.withSchema(operation.db?.schema).dropTable(
+              operation.tableName,
+            );
       case 'renameTable':
-        return this.withSchema(operation.db?.schema).renameTable(operation.from, operation.to);
-      case 'createView':
-        return this.createView(operation.view, operation.orReplace, operation.materialized);
-      case 'refreshMaterializedView':
-        return (this.withSchema(operation.db?.schema) as any).refreshMaterializedView(
-          operation.viewName,
-          operation.concurrently,
+        return this.withSchema(operation.db?.schema).renameTable(
+          operation.from,
+          operation.to,
         );
+      case 'createView':
+        return this.createView(
+          operation.view,
+          operation.orReplace,
+          operation.materialized,
+        );
+      case 'refreshMaterializedView':
+        return (
+          this.withSchema(operation.db?.schema) as any
+        ).refreshMaterializedView(operation.viewName, operation.concurrently);
       default:
         return assertNever(operation);
     }
@@ -99,7 +116,10 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     });
   }
 
-  private buildTable(table: Knex.CreateTableBuilder, definition: TableSchemaDefinition): void {
+  private buildTable(
+    table: Knex.CreateTableBuilder,
+    definition: TableSchemaDefinition,
+  ): void {
     for (const column of definition.columns) {
       this.buildColumn(table, column);
     }
@@ -111,13 +131,19 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     }
   }
 
-  private buildTableAlterOperation(table: Knex.AlterTableBuilder, operation: TableAlterSchemaOperation): void {
+  private buildTableAlterOperation(
+    table: Knex.AlterTableBuilder,
+    operation: TableAlterSchemaOperation,
+  ): void {
     switch (operation.type) {
       case 'addColumn':
         this.buildColumn(table, operation.column);
         break;
       case 'alterColumn':
-        this.buildColumn(table, operation.changes as ColumnSchemaDefinition).alter();
+        this.buildColumn(
+          table,
+          operation.changes as ColumnSchemaDefinition,
+        ).alter();
         break;
       case 'dropColumn':
         table.dropColumn(operation.column);
@@ -139,14 +165,20 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     }
   }
 
-  private buildColumn(table: Knex.CreateTableBuilder | Knex.AlterTableBuilder, column: ColumnSchemaDefinition): Knex.ColumnBuilder {
+  private buildColumn(
+    table: Knex.CreateTableBuilder | Knex.AlterTableBuilder,
+    column: ColumnSchemaDefinition,
+  ): Knex.ColumnBuilder {
     let builder: Knex.ColumnBuilder;
     const nativeType = column.db?.nativeType;
 
     if (nativeType) {
       builder = table.specificType(column.name, nativeType);
     } else if (column.autoIncrement || column.type === 'increments') {
-      builder = column.type === 'bigInt' ? table.bigIncrements(column.name) : table.increments(column.name);
+      builder =
+        column.type === 'bigInt'
+          ? table.bigIncrements(column.name)
+          : table.increments(column.name);
     } else {
       switch (column.type) {
         case 'integer':
@@ -219,35 +251,54 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     return builder;
   }
 
-  private buildIndex(table: Knex.CreateTableBuilder | Knex.AlterTableBuilder, index: PhysicalIndexDefinition): void {
+  private buildIndex(
+    table: Knex.CreateTableBuilder | Knex.AlterTableBuilder,
+    index: PhysicalIndexDefinition,
+  ): void {
     if (!index.columns?.length) {
       return;
     }
     table.index(index.columns, index.name, {
       indexType: index.type,
-      predicate: index.predicate ? this.buildPredicate(index.predicate) : undefined,
+      predicate: index.predicate
+        ? this.buildPredicate(index.predicate)
+        : undefined,
     });
   }
 
-  private buildConstraint(table: Knex.CreateTableBuilder | Knex.AlterTableBuilder, constraint: PhysicalConstraintDefinition): void {
+  private buildConstraint(
+    table: Knex.CreateTableBuilder | Knex.AlterTableBuilder,
+    constraint: PhysicalConstraintDefinition,
+  ): void {
     switch (constraint.type) {
       case 'primary':
-        addPrimaryConstraint(table, constraint.columns, constraintOptions({
-          constraintName: constraint.name,
-          deferrable: normalizeDeferrable(constraint.deferrable),
-        }));
+        addPrimaryConstraint(
+          table,
+          constraint.columns,
+          constraintOptions({
+            constraintName: constraint.name,
+            deferrable: normalizeDeferrable(constraint.deferrable),
+          }),
+        );
         break;
       case 'unique':
-        addUniqueConstraint(table, constraint.columns, indexOptions({
-          indexName: constraint.name,
-          deferrable: normalizeDeferrable(constraint.deferrable),
-          storageEngineIndexType: constraint.indexType,
-          useConstraint: constraint.mode === 'constraint' ? true : undefined,
-          predicate: constraint.predicate ? this.buildPredicate(constraint.predicate) : undefined,
-        }));
+        addUniqueConstraint(
+          table,
+          constraint.columns,
+          indexOptions({
+            indexName: constraint.name,
+            deferrable: normalizeDeferrable(constraint.deferrable),
+            storageEngineIndexType: constraint.indexType,
+            useConstraint: constraint.mode === 'constraint' ? true : undefined,
+            predicate: constraint.predicate
+              ? this.buildPredicate(constraint.predicate)
+              : undefined,
+          }),
+        );
         break;
       case 'foreignKey': {
-        const foreign = table.foreign(constraint.columns, constraint.name)
+        const foreign = table
+          .foreign(constraint.columns, constraint.name)
           .references(constraint.references.columns)
           .inTable(constraint.references.table);
         if (constraint.onDelete) {
@@ -309,7 +360,9 @@ export class KnexSchemaAdapter implements SchemaAdapter {
   }
 }
 
-function normalizeDeferrable(value: unknown): 'not deferrable' | 'immediate' | 'deferred' | undefined {
+function normalizeDeferrable(
+  value: unknown,
+): 'not deferrable' | 'immediate' | 'deferred' | undefined {
   if (value === true) {
     return 'deferred';
   }
@@ -322,16 +375,19 @@ function normalizeDeferrable(value: unknown): 'not deferrable' | 'immediate' | '
   return undefined;
 }
 
-function cleanOptions<T extends Record<string, unknown>>(options: T): T | undefined {
+function cleanOptions<T extends Record<string, unknown>>(
+  options: T,
+): T | undefined {
   const cleaned = Object.fromEntries(
     Object.entries(options).filter(([, value]) => value !== undefined),
   ) as T;
   return Object.keys(cleaned).length > 0 ? cleaned : undefined;
 }
 
-function constraintOptions(
-  options: { constraintName?: string; deferrable?: 'not deferrable' | 'immediate' | 'deferred' },
-): string | typeof options | undefined {
+function constraintOptions(options: {
+  constraintName?: string;
+  deferrable?: 'not deferrable' | 'immediate' | 'deferred';
+}): string | typeof options | undefined {
   if (options.deferrable) {
     return cleanOptions(options);
   }
@@ -352,7 +408,12 @@ function indexOptions<T extends { indexName?: string; deferrable?: unknown }>(
 function addPrimaryConstraint(
   table: Knex.CreateTableBuilder | Knex.AlterTableBuilder,
   columns: string[],
-  options?: string | { constraintName?: string; deferrable?: 'not deferrable' | 'immediate' | 'deferred' },
+  options?:
+    | string
+    | {
+        constraintName?: string;
+        deferrable?: 'not deferrable' | 'immediate' | 'deferred';
+      },
 ): void {
   if (typeof options === 'string' || options === undefined) {
     table.primary(columns, options);
@@ -364,13 +425,15 @@ function addPrimaryConstraint(
 function addUniqueConstraint(
   table: Knex.CreateTableBuilder | Knex.AlterTableBuilder,
   columns: string[],
-  options?: string | {
-    indexName?: string;
-    deferrable?: unknown;
-    storageEngineIndexType?: string;
-    useConstraint?: boolean;
-    predicate?: Knex.QueryBuilder;
-  },
+  options?:
+    | string
+    | {
+        indexName?: string;
+        deferrable?: unknown;
+        storageEngineIndexType?: string;
+        useConstraint?: boolean;
+        predicate?: Knex.QueryBuilder;
+      },
 ): void {
   if (typeof options === 'string' || options === undefined) {
     table.unique(columns, options);
@@ -384,14 +447,25 @@ function extractSql(commands: unknown): string[] {
     return [];
   }
   const commandObject = commands as { sql?: Array<string | { sql?: string }> };
-  return commandObject.sql?.map((item) => typeof item === 'string' ? item : item.sql).filter((sql): sql is string => Boolean(sql)) ?? [];
+  return (
+    commandObject.sql
+      ?.map((item) => (typeof item === 'string' ? item : item.sql))
+      .filter((sql): sql is string => Boolean(sql)) ?? []
+  );
 }
 
-function isOperatorExpression(value: unknown): value is Record<string, unknown> {
+function isOperatorExpression(
+  value: unknown,
+): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function applyWhere(builder: Knex.QueryBuilder, field: string, operator: string, value: unknown): void {
+function applyWhere(
+  builder: Knex.QueryBuilder,
+  field: string,
+  operator: string,
+  value: unknown,
+): void {
   switch (operator) {
     case '$gt':
       builder.where(field, '>', value as any);
@@ -425,7 +499,10 @@ function applyWhere(builder: Knex.QueryBuilder, field: string, operator: string,
   }
 }
 
-function applyFilter(builder: Knex.QueryBuilder, filter: FilterExpression): void {
+function applyFilter(
+  builder: Knex.QueryBuilder,
+  filter: FilterExpression,
+): void {
   for (const [field, expression] of Object.entries(filter)) {
     if (isOperatorExpression(expression)) {
       for (const [operator, value] of Object.entries(expression)) {
@@ -437,7 +514,10 @@ function applyFilter(builder: Knex.QueryBuilder, filter: FilterExpression): void
   }
 }
 
-function applyIdempotentSql(operation: SchemaOperation, sql: string[]): string[] {
+function applyIdempotentSql(
+  operation: SchemaOperation,
+  sql: string[],
+): string[] {
   if (operation.type !== 'createTable' || !operation.ifNotExists) {
     return sql;
   }

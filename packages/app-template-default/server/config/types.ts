@@ -1,9 +1,11 @@
-import type { AppCacheConfig } from '@nocobase/cache';
+import type { CachingConfig } from '@nocobase/caching';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 import type { AppDriveConfig } from '@nocobase/drive';
-import type { AppLoggerConfig } from '@nocobase/logger';
+import type { LoggingConfig } from '@nocobase/logging';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
+import type { AppAuthConfig } from './auth.js';
+import type { ResolvedAppPlugin } from '../plugins/index.js';
 
 export interface AppWorkflowConfig {
   sourceRoot: string;
@@ -40,10 +42,12 @@ export interface AppSpaConfig {
 
 export interface AppConfig {
   app: AppRoutingConfig;
-  cache: AppCacheConfig;
+  plugins: readonly ResolvedAppPlugin[];
+  auth: AppAuthConfig;
+  caching: CachingConfig;
   database: AppDatabaseConfig;
   drive: AppDriveConfig;
-  logger: AppLoggerConfig;
+  logging: LoggingConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
   workflow: AppWorkflowConfig;

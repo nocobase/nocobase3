@@ -3,20 +3,31 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createApp, joinBasePath, normalizeBasePath } from './app.js';
-import { type EnvMap, getEnvBoolean, getEnvString, readEnvFiles } from './env.js';
+import {
+  type EnvMap,
+  getEnvBoolean,
+  getEnvString,
+  readEnvFiles,
+} from './env.js';
 
 export interface StandaloneServerOptions {
   viteDevUrl?: string | false;
 }
 
-export function createStandaloneServer(options: StandaloneServerOptions = {}): ReturnType<typeof createApp> {
+export function createStandaloneServer(
+  options: StandaloneServerOptions = {},
+): ReturnType<typeof createApp> {
   const env = loadServerEnv();
 
   const viteDevUrl = resolveViteDevUrl(options.viteDevUrl, env);
   const packageRoot = getPackageRoot();
-  const appName = getEnvString(env, 'APP_NAME') ?? 'app';
-  const basePath = normalizeBasePath(getEnvString(env, 'APP_BASE_PATH') ?? `/${appName}`);
-  const browserBasePath = normalizeBasePath(getEnvString(env, 'APP_BROWSER_BASE_PATH') ?? basePath);
+  const appName = getEnvString(env, 'APP_NAME') ?? 'hub';
+  const basePath = normalizeBasePath(
+    getEnvString(env, 'APP_BASE_PATH') ?? `/${appName}`,
+  );
+  const browserBasePath = normalizeBasePath(
+    getEnvString(env, 'APP_BROWSER_BASE_PATH') ?? basePath,
+  );
   const apiProxyPath = resolveApiProxyPathFromEnv(env, basePath);
 
   return createApp({
@@ -25,8 +36,12 @@ export function createStandaloneServer(options: StandaloneServerOptions = {}): R
     browserBasePath,
     apiProxyPath,
     browserApiUrl: apiProxyPath,
-    clientHandler: viteDevUrl ? (request) => proxyToViteDevServer(request, viteDevUrl) : undefined,
-    clientIndexPath: getEnvString(env, 'APP_CLIENT_INDEX') ?? path.join(packageRoot, 'dist/client/index.html'),
+    clientHandler: viteDevUrl
+      ? (request) => proxyToViteDevServer(request, viteDevUrl)
+      : undefined,
+    clientIndexPath:
+      getEnvString(env, 'APP_CLIENT_INDEX') ??
+      path.join(packageRoot, 'dist/client/index.html'),
     nocoBaseApiUrl: getEnvString(env, 'NOCOBASE_API_PROXY_TARGET'),
     apiClientStoragePrefix: getEnvString(env, 'API_CLIENT_STORAGE_PREFIX'),
     apiClientStorageType: getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
@@ -48,18 +63,26 @@ export function startServer(): void {
     },
     (info) => {
       if (getEnvString(env, 'APP_SERVER_START_LOG') !== 'false') {
-        console.log(`App server listening on http://${info.address}:${info.port}`);
+        console.log(
+          `App server listening on http://${info.address}:${info.port}`,
+        );
       }
     },
   );
 }
 
-function resolveViteDevUrl(value: string | false | undefined, env: EnvMap): URL | undefined {
+function resolveViteDevUrl(
+  value: string | false | undefined,
+  env: EnvMap,
+): URL | undefined {
   if (value === false || getEnvString(env, 'NODE_ENV') === 'production') {
     return undefined;
   }
 
-  const raw = value ?? getEnvString(env, 'APP_VITE_DEV_URL') ?? resolveViteDevUrlFromEnv(env);
+  const raw =
+    value ??
+    getEnvString(env, 'APP_VITE_DEV_URL') ??
+    resolveViteDevUrlFromEnv(env);
   if (!raw) {
     return undefined;
   }
@@ -82,9 +105,15 @@ function resolveViteDevUrlFromEnv(env: EnvMap): string | undefined {
   return `http://${host ?? '127.0.0.1'}:${port ?? '5173'}`;
 }
 
-async function proxyToViteDevServer(request: Request, viteDevUrl: URL): Promise<Response> {
+async function proxyToViteDevServer(
+  request: Request,
+  viteDevUrl: URL,
+): Promise<Response> {
   const requestUrl = new URL(request.url);
-  const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, viteDevUrl);
+  const targetUrl = new URL(
+    `${requestUrl.pathname}${requestUrl.search}`,
+    viteDevUrl,
+  );
   const headers = new Headers(request.headers);
   headers.set('host', targetUrl.host);
   headers.set('accept-encoding', 'identity');
@@ -94,7 +123,10 @@ async function proxyToViteDevServer(request: Request, viteDevUrl: URL): Promise<
     const response = await fetch(targetUrl, {
       method: request.method,
       headers,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+      body:
+        request.method === 'GET' || request.method === 'HEAD'
+          ? undefined
+          : request.body,
       redirect: 'manual',
       duplex: 'half',
     } as RequestInit & { duplex: 'half' });
@@ -170,7 +202,9 @@ function numberFromEnv(env: EnvMap, name: string): number | undefined {
 }
 
 function resolveApiProxyPathFromEnv(env: EnvMap, basePath: string): string {
-  const raw = getEnvString(env, 'NOCOBASE_API_URL') ?? getEnvString(env, 'NOCOBASE_API_PROXY_PATH');
+  const raw =
+    getEnvString(env, 'NOCOBASE_API_URL') ??
+    getEnvString(env, 'NOCOBASE_API_PROXY_PATH');
   if (!raw) {
     return joinBasePath(basePath, '/v2/api');
   }
@@ -189,5 +223,7 @@ if (isEntrypoint()) {
 
 function isEntrypoint(): boolean {
   const entry = process.argv[1];
-  return Boolean(entry && path.resolve(entry) === fileURLToPath(import.meta.url));
+  return Boolean(
+    entry && path.resolve(entry) === fileURLToPath(import.meta.url),
+  );
 }

@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,6 +22,10 @@
     "./database": {
       "types": "./src/database/index.ts",
       "import": "./src/database/index.ts"
+    },
+    "./plugins": {
+      "types": "./src/plugins/index.ts",
+      "import": "./src/plugins/index.ts"
     },
     "./runtime": {
       "types": "./src/runtime/index.ts",
@@ -54,6 +62,10 @@
         "types": "./dist/database/index.d.ts",
         "import": "./dist/database/index.js"
       },
+      "./plugins": {
+        "types": "./dist/plugins/index.d.ts",
+        "import": "./dist/plugins/index.js"
+      },
       "./runtime": {
         "types": "./dist/runtime/index.d.ts",
         "import": "./dist/runtime/index.js"
@@ -79,15 +91,24 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
     "@nocobase/database": "workspace:^",
-    "hono": "^4.13.2"
+    "hono": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.8.3",
-    "vitest": "^4.1.10"
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

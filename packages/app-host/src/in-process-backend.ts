@@ -8,7 +8,11 @@
  */
 
 import { AppRuntime } from './app-runtime.ts';
-import type { ActiveAppHandle, AppActivationBackend, AppActivationRequest } from './app-types.ts';
+import type {
+  ActiveAppHandle,
+  AppActivationBackend,
+  AppActivationRequest,
+} from './app-types.ts';
 import { AppEventBus } from './events.ts';
 
 export class InProcessAppBackend implements AppActivationBackend {

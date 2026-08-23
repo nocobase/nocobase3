@@ -5,8 +5,8 @@ import {
   MapChart,
   ParallelChart,
   ThemeRiverChart,
-} from "echarts/charts";
-import { use as registerEChartsModules } from "echarts/core";
+} from 'echarts/charts';
+import { use as registerEChartsModules } from 'echarts/core';
 
 registerEChartsModules([
   CustomChart,

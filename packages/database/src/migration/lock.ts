@@ -15,7 +15,9 @@ export async function withMigrationLock<T>(
   const tableName = options.tableName ?? DEFAULT_MIGRATION_LOCK_TABLE;
   const lockKey = `${connection.name}:${tableName}`;
   if (inProcessLocks.has(lockKey)) {
-    throw new Error(`Migration lock "${tableName}" is already held for connection "${connection.name}".`);
+    throw new Error(
+      `Migration lock "${tableName}" is already held for connection "${connection.name}".`,
+    );
   }
 
   inProcessLocks.add(lockKey);
@@ -49,11 +51,14 @@ export async function ensureMigrationLockTable(
   }
 
   try {
-    await knex.schema.createTable(tableName, (table: Knex.CreateTableBuilder) => {
-      table.integer('id').primary();
-      table.string('locked_by', 191).notNullable();
-      table.dateTime('locked_at').notNullable();
-    });
+    await knex.schema.createTable(
+      tableName,
+      (table: Knex.CreateTableBuilder) => {
+        table.integer('id').primary();
+        table.string('locked_by', 191).notNullable();
+        table.dateTime('locked_at').notNullable();
+      },
+    );
   } catch (error) {
     if (await knex.schema.hasTable(tableName)) {
       return;
@@ -77,7 +82,9 @@ async function acquireDatabaseLock(
   } catch (error) {
     const existing = await knex(tableName).where({ id: 1 }).first();
     if (existing) {
-      throw new Error(`Migration lock "${tableName}" is already held.`);
+      throw new Error(`Migration lock "${tableName}" is already held.`, {
+        cause: error,
+      });
     }
     throw error;
   }

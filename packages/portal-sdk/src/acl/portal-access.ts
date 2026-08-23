@@ -1,17 +1,17 @@
-import { NocoBaseHttpError } from "../client/error.ts";
-import type { PortalAccessDeniedData, RoleMode } from "./types.ts";
+import { NocoBaseHttpError } from '../client/error.ts';
+import type { PortalAccessDeniedData, RoleMode } from './types.ts';
 
 const roleModes = new Set<RoleMode>([
-  "default",
-  "allow-use-union",
-  "only-use-union",
+  'default',
+  'allow-use-union',
+  'only-use-union',
 ]);
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 export const getPortalAccessDeniedData = (
-  error: unknown
+  error: unknown,
 ): PortalAccessDeniedData | undefined => {
   if (!(error instanceof NocoBaseHttpError) || error.status !== 403) {
     return undefined;
@@ -22,7 +22,7 @@ export const getPortalAccessDeniedData = (
   if (
     !Array.isArray(errors) ||
     !errors.some(
-      (item) => isObject(item) && item.code === "PORTAL_ACCESS_DENIED"
+      (item) => isObject(item) && item.code === 'PORTAL_ACCESS_DENIED',
     )
   ) {
     return undefined;
@@ -30,28 +30,28 @@ export const getPortalAccessDeniedData = (
 
   const data = error.payload.data;
   if (!isObject(data)) return undefined;
-  if (typeof data.portalName !== "string" || !data.portalName.trim()) {
+  if (typeof data.portalName !== 'string' || !data.portalName.trim()) {
     return undefined;
   }
-  if (data.role !== undefined && typeof data.role !== "string") {
+  if (data.role !== undefined && typeof data.role !== 'string') {
     return undefined;
   }
   if (
     !Array.isArray(data.roles) ||
-    !data.roles.every((role) => typeof role === "string")
+    !data.roles.every((role) => typeof role === 'string')
   ) {
     return undefined;
   }
   if (
     data.roleMode !== undefined &&
-    (typeof data.roleMode !== "string" ||
+    (typeof data.roleMode !== 'string' ||
       !roleModes.has(data.roleMode as RoleMode))
   ) {
     return undefined;
   }
   if (
     data.allowAnonymous !== undefined &&
-    typeof data.allowAnonymous !== "boolean"
+    typeof data.allowAnonymous !== 'boolean'
   ) {
     return undefined;
   }
@@ -59,7 +59,7 @@ export const getPortalAccessDeniedData = (
   return {
     portalName: data.portalName,
     role:
-      typeof data.role === "string" && data.role.trim()
+      typeof data.role === 'string' && data.role.trim()
         ? data.role.trim()
         : undefined,
     roles: [...data.roles],

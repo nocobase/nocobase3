@@ -1,58 +1,58 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { useMemo, useState } from "react";
-import { useAI } from "../providers";
-import { PromptCard } from "./prompt-card";
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { useMemo, useState } from 'react';
+import { useAI } from '../providers';
+import { PromptCard } from './prompt-card';
 
-type ContextPattern = "shortcut" | "preset" | "scope" | "manual";
-type PageCapability = "context" | "form-filler" | "custom-tool";
+type ContextPattern = 'shortcut' | 'preset' | 'scope' | 'manual';
+type PageCapability = 'context' | 'form-filler' | 'custom-tool';
 
 const isBusinessEmployee = (username: string) =>
-  !["nathan", "dara"].includes(username.toLowerCase());
+  !['nathan', 'dara'].includes(username.toLowerCase());
 
 export function PageContextPromptGenerator() {
   const { employees } = useAI();
   const availableEmployees = employees.filter((employee) =>
-    isBusinessEmployee(employee.username)
+    isBusinessEmployee(employee.username),
   );
   const [employeeUsername, setEmployeeUsername] = useState(
-    availableEmployees[0]?.username ?? employees[0]?.username ?? ""
+    availableEmployees[0]?.username ?? employees[0]?.username ?? '',
   );
-  const [sceneTitle, setSceneTitle] = useState("Customer renewal workspace");
+  const [sceneTitle, setSceneTitle] = useState('Customer renewal workspace');
   const [sceneBrief, setSceneBrief] = useState(
-    "Show a customer renewal detail with account health, contract value, renewal date, owner, recent activity, and a working AI conversation beside it."
+    'Show a customer renewal detail with account health, contract value, renewal date, owner, recent activity, and a working AI conversation beside it.',
   );
-  const [taskTitle, setTaskTitle] = useState("Review renewal risk");
+  const [taskTitle, setTaskTitle] = useState('Review renewal risk');
   const [taskMessage, setTaskMessage] = useState(
-    "Review this customer renewal, identify risks, and recommend the next action."
+    'Review this customer renewal, identify risks, and recommend the next action.',
   );
   const [autoSend, setAutoSend] = useState(false);
-  const [pattern, setPattern] = useState<ContextPattern>("shortcut");
-  const [contextId, setContextId] = useState("renewal-detail");
-  const [contextTitle, setContextTitle] = useState("Customer renewal detail");
-  const [capability, setCapability] = useState<PageCapability>("context");
-  const [toolName, setToolName] = useState("update_renewal_plan");
+  const [pattern, setPattern] = useState<ContextPattern>('shortcut');
+  const [contextId, setContextId] = useState('renewal-detail');
+  const [contextTitle, setContextTitle] = useState('Customer renewal detail');
+  const [capability, setCapability] = useState<PageCapability>('context');
+  const [toolName, setToolName] = useState('update_renewal_plan');
   const [toolAction, setToolAction] = useState(
-    "Update the renewal risk level and the visible follow-up note on the page."
+    'Update the renewal risk level and the visible follow-up note on the page.',
   );
-  const [toolPermission, setToolPermission] = useState<"ASK" | "ALLOW">("ASK");
+  const [toolPermission, setToolPermission] = useState<'ASK' | 'ALLOW'>('ASK');
 
   const prompt = useMemo(() => {
     const employee =
       employees.find((item) => item.username === employeeUsername)?.nickname ??
       employeeUsername;
     const contextReference = `{ type: "page-element", id: "${contextId}", title: "${contextTitle}" }`;
-    const taskAutoSend = pattern === "manual" ? false : autoSend;
+    const taskAutoSend = pattern === 'manual' ? false : autoSend;
     const patternInstructions = {
       shortcut: `Place an AIEmployeeShortcut in the page header, visually separated from the registered business element. Target the embedded chat controller and configure this task on its tasks prop:
 - Title: ${taskTitle}
@@ -82,10 +82,10 @@ Show "${taskMessage}" as a suggested prompt near the chat, but keep it in the co
 
     const capabilityInstructions = {
       context: `Build the primary work area as a polished, read-only business detail view based on the scene brief. Include at least five realistic fields, a status indicator, and a short recent-activity section. Register the complete detail region with useAIPageElementHandle and return its current serializable values from getContext. Reuse handle.ref on the visible element and handle.context wherever the scene needs a context reference.`,
-      "form-filler": `Build the primary work area with two connected parts: realistic source material and an editable business form derived from the scene brief. Use React Hook Form and register the form with useAIForm using id "${contextId}", meaningful field definitions, getValues, and setValues.
+      'form-filler': `Build the primary work area with two connected parts: realistic source material and an editable business form derived from the scene brief. Use React Hook Form and register the form with useAIForm using id "${contextId}", meaningful field definitions, getValues, and setValues.
 
 Use the fixed built-in formFiller Tool. Do not register Form filler as a custom frontend Tool and do not add formFiller manually to task.skillSettings: the Registry activates it automatically when a registered form context is sent. The Tool may fill declared editable values only and must never submit or save the form. Include a visible reset action and import applyReactHookFormValues from the optional adapters/react-hook-form Registry item for setValues.`,
-      "custom-tool": `Register a custom frontend Tool on the useAIPageElement descriptor:
+      'custom-tool': `Register a custom frontend Tool on the useAIPageElement descriptor:
 - Name: ${toolName}
 - Business action: ${toolAction}
 - Permission: ${toolPermission}
@@ -155,39 +155,39 @@ Implementation requirements
   ]);
 
   return (
-    <div className="grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-4">
+    <div className='grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]'>
+      <Card className='gap-0 py-0'>
+        <CardHeader className='border-b py-4'>
           <CardTitle>Scene settings</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5 py-5">
-          <div className="space-y-2">
-            <Label htmlFor="context-generator-scene-title">Scene title</Label>
+        <CardContent className='space-y-5 py-5'>
+          <div className='space-y-2'>
+            <Label htmlFor='context-generator-scene-title'>Scene title</Label>
             <Input
-              id="context-generator-scene-title"
+              id='context-generator-scene-title'
               value={sceneTitle}
               onChange={(event) => setSceneTitle(event.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="context-generator-scene-brief">
+          <div className='space-y-2'>
+            <Label htmlFor='context-generator-scene-brief'>
               Business scene
             </Label>
             <Textarea
-              id="context-generator-scene-brief"
+              id='context-generator-scene-brief'
               value={sceneBrief}
               onChange={(event) => setSceneBrief(event.target.value)}
-              className="min-h-28"
+              className='min-h-28'
             />
           </div>
 
-          <div className="space-y-2">
+          <div className='space-y-2'>
             <Label>AI employee</Label>
             <Select
               value={employeeUsername}
               onValueChange={(value) => value && setEmployeeUsername(value)}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className='w-full'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -203,44 +203,44 @@ Implementation requirements
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="context-generator-task-title">Task title</Label>
+          <div className='space-y-2'>
+            <Label htmlFor='context-generator-task-title'>Task title</Label>
             <Input
-              id="context-generator-task-title"
+              id='context-generator-task-title'
               value={taskTitle}
               onChange={(event) => setTaskTitle(event.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="context-generator-task-message">Task message</Label>
+          <div className='space-y-2'>
+            <Label htmlFor='context-generator-task-message'>Task message</Label>
             <Textarea
-              id="context-generator-task-message"
+              id='context-generator-task-message'
               value={taskMessage}
               onChange={(event) => setTaskMessage(event.target.value)}
-              className="min-h-24"
+              className='min-h-24'
             />
           </div>
-          <label className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+          <label className='flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5'>
             <span>
-              <span className="block text-sm font-medium">Auto send</span>
-              <span className="block text-xs text-muted-foreground">
+              <span className='block text-sm font-medium'>Auto send</span>
+              <span className='block text-xs text-muted-foreground'>
                 Otherwise fill the composer for review.
               </span>
             </span>
             <Switch
-              checked={pattern === "manual" ? false : autoSend}
-              disabled={pattern === "manual"}
+              checked={pattern === 'manual' ? false : autoSend}
+              disabled={pattern === 'manual'}
               onCheckedChange={setAutoSend}
             />
           </label>
-          {pattern === "manual" ? (
-            <p className="-mt-3 text-xs leading-5 text-muted-foreground">
+          {pattern === 'manual' ? (
+            <p className='-mt-3 text-xs leading-5 text-muted-foreground'>
               Manual Pick keeps the message in the composer so context can be
               selected before sending.
             </p>
           ) : null}
 
-          <div className="space-y-2">
+          <div className='space-y-2'>
             <Label>Context integration</Label>
             <Select
               value={pattern}
@@ -248,38 +248,38 @@ Implementation requirements
                 value && setPattern(value as ContextPattern)
               }
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className='w-full'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="shortcut">Shortcut task</SelectItem>
-                <SelectItem value="preset">Conversation preset task</SelectItem>
-                <SelectItem value="scope">Scope inheritance</SelectItem>
-                <SelectItem value="manual">Manual Pick</SelectItem>
+                <SelectItem value='shortcut'>Shortcut task</SelectItem>
+                <SelectItem value='preset'>Conversation preset task</SelectItem>
+                <SelectItem value='scope'>Scope inheritance</SelectItem>
+                <SelectItem value='manual'>Manual Pick</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-            <div className="space-y-2">
-              <Label htmlFor="context-generator-id">Context id</Label>
+          <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-1'>
+            <div className='space-y-2'>
+              <Label htmlFor='context-generator-id'>Context id</Label>
               <Input
-                id="context-generator-id"
+                id='context-generator-id'
                 value={contextId}
                 onChange={(event) => setContextId(event.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="context-generator-title">Context title</Label>
+            <div className='space-y-2'>
+              <Label htmlFor='context-generator-title'>Context title</Label>
               <Input
-                id="context-generator-title"
+                id='context-generator-title'
                 value={contextTitle}
                 onChange={(event) => setContextTitle(event.target.value)}
               />
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className='space-y-2'>
             <Label>Page capability</Label>
             <Select
               value={capability}
@@ -287,56 +287,56 @@ Implementation requirements
                 value && setCapability(value as PageCapability)
               }
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className='w-full'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="context">Context only</SelectItem>
-                <SelectItem value="form-filler">
+                <SelectItem value='context'>Context only</SelectItem>
+                <SelectItem value='form-filler'>
                   Built-in Form filler
                 </SelectItem>
-                <SelectItem value="custom-tool">
+                <SelectItem value='custom-tool'>
                   Custom frontend Tool
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {capability === "custom-tool" ? (
-            <div className="space-y-4 rounded-lg border p-3">
-              <div className="space-y-2">
-                <Label htmlFor="context-generator-tool-name">Tool name</Label>
+          {capability === 'custom-tool' ? (
+            <div className='space-y-4 rounded-lg border p-3'>
+              <div className='space-y-2'>
+                <Label htmlFor='context-generator-tool-name'>Tool name</Label>
                 <Input
-                  id="context-generator-tool-name"
+                  id='context-generator-tool-name'
                   value={toolName}
                   onChange={(event) => setToolName(event.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="context-generator-tool-action">
+              <div className='space-y-2'>
+                <Label htmlFor='context-generator-tool-action'>
                   Business action
                 </Label>
                 <Textarea
-                  id="context-generator-tool-action"
+                  id='context-generator-tool-action'
                   value={toolAction}
                   onChange={(event) => setToolAction(event.target.value)}
-                  className="min-h-20"
+                  className='min-h-20'
                 />
               </div>
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <Label>Permission</Label>
                 <Select
                   value={toolPermission}
                   onValueChange={(value) =>
-                    value && setToolPermission(value as "ASK" | "ALLOW")
+                    value && setToolPermission(value as 'ASK' | 'ALLOW')
                   }
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className='w-full'>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ASK">ASK</SelectItem>
-                    <SelectItem value="ALLOW">ALLOW</SelectItem>
+                    <SelectItem value='ASK'>ASK</SelectItem>
+                    <SelectItem value='ALLOW'>ALLOW</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -346,8 +346,8 @@ Implementation requirements
       </Card>
 
       <PromptCard
-        title="Complete page context scene prompt"
-        description="Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene."
+        title='Complete page context scene prompt'
+        description='Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.'
         prompt={prompt}
       />
     </div>

@@ -14,13 +14,19 @@ export type { AppDisposer, AppScope } from './runtime/index.js';
 
 export type EmbeddedServer = AppServer;
 
-export async function createServer(scope: AppScope, moduleUrl: string = import.meta.url): Promise<EmbeddedServer> {
+export async function createServer(
+  scope: AppScope,
+  moduleUrl: string = import.meta.url,
+): Promise<EmbeddedServer> {
   const runtime = createAppRuntime(loadEmbeddedAppConfig(scope, moduleUrl));
 
-  scope.registerDisposer('runtime', onceAsync(() => runtime.dispose()));
+  scope.registerDisposer(
+    'runtime',
+    onceAsync(() => runtime.dispose()),
+  );
   await prepareAppRuntime(runtime);
 
-  const app = createAppFromRuntime(runtime, {
+  const app = await createAppFromRuntime(runtime, {
     viteDevUrl: false,
     lifecycle: scope,
   });

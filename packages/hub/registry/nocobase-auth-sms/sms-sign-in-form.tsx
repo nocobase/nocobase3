@@ -1,16 +1,12 @@
-import { useState } from "react";
+import { useState } from 'react';
 
-import type { AuthenticatorComponentProps } from "@nocobase/portal-sdk/auth";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import type { AuthenticatorComponentProps } from '@nocobase/portal-sdk/auth';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
-import { useSmsSignIn } from "./use-sms-sign-in";
+import { useSmsSignIn } from './use-sms-sign-in';
 
 export default function SmsSignInForm({
   authenticator,
@@ -20,14 +16,14 @@ export default function SmsSignInForm({
   onSendCode?: (phone: string) => void;
   onSignIn?: (values: { phone: string; code: string }) => void;
 }) {
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
   const sms = useSmsSignIn(authenticator);
   const autoSignup = authenticator.options?.autoSignup === true;
 
   return (
     <form
-      className="space-y-5"
+      className='space-y-5'
       onSubmit={(event) => {
         event.preventDefault();
         if (onSignIn) {
@@ -38,38 +34,36 @@ export default function SmsSignInForm({
       }}
     >
       {sms.error && (
-        <Alert variant="destructive">
+        <Alert variant='destructive'>
           <AlertTitle>SMS sign-in failed</AlertTitle>
           <AlertDescription>{sms.error.message}</AlertDescription>
         </Alert>
       )}
-      <div className="space-y-2">
+      <div className='space-y-2'>
         <Label htmlFor={`${authenticator.name}-phone`}>Phone</Label>
         <Input
           id={`${authenticator.name}-phone`}
-          type="tel"
+          type='tel'
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
-          autoComplete="tel"
+          autoComplete='tel'
           required
         />
       </div>
-      <div className="space-y-2">
-        <Label htmlFor={`${authenticator.name}-code`}>
-          Verification code
-        </Label>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+      <div className='space-y-2'>
+        <Label htmlFor={`${authenticator.name}-code`}>Verification code</Label>
+        <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
           <Input
             id={`${authenticator.name}-code`}
-            inputMode="numeric"
+            inputMode='numeric'
             value={code}
             onChange={(event) => setCode(event.target.value)}
-            autoComplete="one-time-code"
+            autoComplete='one-time-code'
             required
           />
           <Button
-            type="button"
-            variant="outline"
+            type='button'
+            variant='outline'
             disabled={
               (!onSendCode && (sms.isSendingCode || sms.retryAfter > 0)) ||
               !phone
@@ -83,22 +77,22 @@ export default function SmsSignInForm({
             }}
           >
             {!onSendCode && sms.isSendingCode
-              ? "Sending…"
+              ? 'Sending…'
               : !onSendCode && sms.retryAfter > 0
                 ? `Retry in ${sms.retryAfter}s`
-                : "Send code"}
+                : 'Send code'}
           </Button>
         </div>
       </div>
       <Button
-        type="submit"
-        className="w-full"
+        type='submit'
+        className='w-full'
         disabled={!onSignIn && sms.isSigningIn}
       >
-        {!onSignIn && sms.isSigningIn ? "Signing in…" : "Sign in"}
+        {!onSignIn && sms.isSigningIn ? 'Signing in…' : 'Sign in'}
       </Button>
       {autoSignup && (
-        <p className="text-xs leading-5 text-muted-foreground">
+        <p className='text-xs leading-5 text-muted-foreground'>
           An account will be created automatically if this phone number is new.
         </p>
       )}

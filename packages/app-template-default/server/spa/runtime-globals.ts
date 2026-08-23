@@ -8,12 +8,16 @@ export interface PortalSpaRuntimeConfig {
   shareToken?: boolean;
 }
 
-export function createPortalSpaRuntimeGlobals(config: PortalSpaRuntimeConfig): SpaRuntimeGlobals {
+export function createPortalSpaRuntimeGlobals(
+  config: PortalSpaRuntimeConfig,
+): SpaRuntimeGlobals {
   return {
     NOCOBASE_PORTAL_BASE: toBrowserBasePath(config.appBasePath),
     NOCOBASE_API_URL: config.apiUrl,
-    __nocobase_api_client_storage_prefix__: config.storagePrefix?.trim() || 'NOCOBASE_',
-    __nocobase_api_client_storage_type__: config.storageType?.trim() || 'localStorage',
+    __nocobase_api_client_storage_prefix__:
+      config.storagePrefix?.trim() || 'NOCOBASE_',
+    __nocobase_api_client_storage_type__:
+      config.storageType?.trim() || 'localStorage',
     __nocobase_api_client_share_token__: config.shareToken ?? false,
   };
 }

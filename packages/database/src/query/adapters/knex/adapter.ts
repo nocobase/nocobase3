@@ -36,7 +36,9 @@ export class KnexQueryAdapter implements QueryAdapter {
     private readonly naming: NamingStrategy,
   ) {}
 
-  selectFrom<TRecord extends Row = Row>(table: string): SelectQuery<TRecord, Row> {
+  selectFrom<TRecord extends Row = Row>(
+    table: string,
+  ): SelectQuery<TRecord, Row> {
     return new KnexSelectQuery<TRecord>(this.getClient, this.naming, table);
   }
 
@@ -111,24 +113,26 @@ class KnexSelectQuery<
     private readonly state: SelectState = emptySelectState(),
   ) {}
 
-  select(input: SelectionExpression | readonly SelectionExpression[] | SelectionFactory): SelectQuery<TRecord, Row> {
+  select(
+    input:
+      SelectionExpression | readonly SelectionExpression[] | SelectionFactory,
+  ): SelectQuery<TRecord, Row> {
     return this.clone<Row>({
       selections: [
         ...this.state.selections,
-        ...normalizeSelectionInput(input, this.createExpressionBuilder()).map((selection) => ({
-          type: 'selection' as const,
-          selection,
-        })),
+        ...normalizeSelectionInput(input, this.createExpressionBuilder()).map(
+          (selection) => ({
+            type: 'selection' as const,
+            selection,
+          }),
+        ),
       ],
     });
   }
 
   selectAll(table?: string): SelectQuery<TRecord, Row> {
     return this.clone<Row>({
-      selections: [
-        ...this.state.selections,
-        { type: 'all', table },
-      ],
+      selections: [...this.state.selections, { type: 'all', table }],
     });
   }
 
@@ -137,23 +141,38 @@ class KnexSelectQuery<
   }
 
   where(
-    lhsOrExpression: ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
+    lhsOrExpression:
+      ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
     op?: ComparisonOperator,
     rhs?: OperandValueExpressionOrList,
   ): SelectQuery<TRecord, TResult> {
     return this.clone({
       where: [
         ...this.state.where,
-        resolveConditionArguments(arguments, lhsOrExpression, op, rhs, this.createExpressionBuilder()),
+        resolveConditionArguments(
+          arguments,
+          lhsOrExpression,
+          op,
+          rhs,
+          this.createExpressionBuilder(),
+        ),
       ],
     });
   }
 
-  whereRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): SelectQuery<TRecord, TResult> {
+  whereRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult> {
     return this.clone({
       where: [
         ...this.state.where,
-        binaryExpressionNode(lhs, op, createExpression({ type: 'ref', reference: rhs })),
+        binaryExpressionNode(
+          lhs,
+          op,
+          createExpression({ type: 'ref', reference: rhs }),
+        ),
       ],
     });
   }
@@ -184,50 +203,59 @@ class KnexSelectQuery<
 
   crossJoin(table: string): SelectQuery<TRecord, TResult> {
     return this.clone({
-      joins: [
-        ...this.state.joins,
-        { type: 'cross', table, conditions: [] },
-      ],
+      joins: [...this.state.joins, { type: 'cross', table, conditions: [] }],
     });
   }
 
   groupBy(input: string | readonly string[]): SelectQuery<TRecord, TResult> {
     return this.clone({
-      groupBy: [
-        ...this.state.groupBy,
-        ...normalizeStringList(input),
-      ],
+      groupBy: [...this.state.groupBy, ...normalizeStringList(input)],
     });
   }
 
   having(
-    lhsOrExpression: ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
+    lhsOrExpression:
+      ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
     op?: ComparisonOperator,
     rhs?: OperandValueExpressionOrList,
   ): SelectQuery<TRecord, TResult> {
     return this.clone({
       having: [
         ...this.state.having,
-        resolveConditionArguments(arguments, lhsOrExpression, op, rhs, this.createExpressionBuilder()),
+        resolveConditionArguments(
+          arguments,
+          lhsOrExpression,
+          op,
+          rhs,
+          this.createExpressionBuilder(),
+        ),
       ],
     });
   }
 
-  havingRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): SelectQuery<TRecord, TResult> {
+  havingRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): SelectQuery<TRecord, TResult> {
     return this.clone({
       having: [
         ...this.state.having,
-        binaryExpressionNode(lhs, op, createExpression({ type: 'ref', reference: rhs })),
+        binaryExpressionNode(
+          lhs,
+          op,
+          createExpression({ type: 'ref', reference: rhs }),
+        ),
       ],
     });
   }
 
-  orderBy(column: string, direction: OrderDirection = 'asc'): SelectQuery<TRecord, TResult> {
+  orderBy(
+    column: string,
+    direction: OrderDirection = 'asc',
+  ): SelectQuery<TRecord, TResult> {
     return this.clone({
-      orderBy: [
-        ...this.state.orderBy,
-        { column, direction },
-      ],
+      orderBy: [...this.state.orderBy, { column, direction }],
     });
   }
 
@@ -274,7 +302,9 @@ class KnexSelectQuery<
   async execute<T = TResult>(): Promise<T[]> {
     const { query, resultMap } = this.buildSelectQuery();
     const rows = await query;
-    return normalizeRows(rows).map((row) => mapResultRow(row, resultMap, this.naming)) as T[];
+    return normalizeRows(rows).map((row) =>
+      mapResultRow(row, resultMap, this.naming),
+    ) as T[];
   }
 
   async executeTakeFirst<T = TResult>(): Promise<T | undefined> {
@@ -282,7 +312,7 @@ class KnexSelectQuery<
     const row = await query.first();
     return row === undefined
       ? undefined
-      : mapResultRow(row as Row, resultMap, this.naming) as T;
+      : (mapResultRow(row as Row, resultMap, this.naming) as T);
   }
 
   async executeTakeFirstOrThrow<T = TResult>(): Promise<T> {
@@ -327,23 +357,32 @@ class KnexSelectQuery<
     leftRefOrCallback: ReferenceExpression | JoinCallback,
     rightRef?: ReferenceExpression,
   ): SelectQuery<TRecord, TResult> {
-    const conditions = typeof leftRefOrCallback === 'function'
-      ? (leftRefOrCallback(new KnexJoinBuilder(this.createExpressionBuilder())) as KnexJoinBuilder).conditions
-      : [binaryExpressionNode(
-        leftRefOrCallback,
-        '=',
-        createExpression({ type: 'ref', reference: assertRightJoinReference(rightRef) }),
-      )];
+    const conditions =
+      typeof leftRefOrCallback === 'function'
+        ? (
+            leftRefOrCallback(
+              new KnexJoinBuilder(this.createExpressionBuilder()),
+            ) as KnexJoinBuilder
+          ).conditions
+        : [
+            binaryExpressionNode(
+              leftRefOrCallback,
+              '=',
+              createExpression({
+                type: 'ref',
+                reference: assertRightJoinReference(rightRef),
+              }),
+            ),
+          ];
 
     return this.clone({
-      joins: [
-        ...this.state.joins,
-        { type, table, conditions },
-      ],
+      joins: [...this.state.joins, { type, table, conditions }],
     });
   }
 
-  private clone<TNextResult extends Row = TResult>(patch: Partial<SelectState>): KnexSelectQuery<TRecord, TNextResult> {
+  private clone<TNextResult extends Row = TResult>(
+    patch: Partial<SelectState>,
+  ): KnexSelectQuery<TRecord, TNextResult> {
     return new KnexSelectQuery<TRecord, TNextResult>(
       this.getClient,
       this.naming,
@@ -356,13 +395,20 @@ class KnexSelectQuery<
         groupBy: patch.groupBy ?? this.state.groupBy,
         having: patch.having ?? this.state.having,
         orderBy: patch.orderBy ?? this.state.orderBy,
-        limit: Object.prototype.hasOwnProperty.call(patch, 'limit') ? patch.limit : this.state.limit,
-        offset: Object.prototype.hasOwnProperty.call(patch, 'offset') ? patch.offset : this.state.offset,
+        limit: Object.prototype.hasOwnProperty.call(patch, 'limit')
+          ? patch.limit
+          : this.state.limit,
+        offset: Object.prototype.hasOwnProperty.call(patch, 'offset')
+          ? patch.offset
+          : this.state.offset,
       },
     );
   }
 
-  private buildSelectQuery(): { query: Knex.QueryBuilder; resultMap: ResultMap } {
+  private buildSelectQuery(): {
+    query: Knex.QueryBuilder;
+    resultMap: ResultMap;
+  } {
     this.assertPortablePagination();
 
     const client = this.getClient();
@@ -432,7 +478,9 @@ class KnexSelectQuery<
   }
 }
 
-class KnexInsertQuery<TRecord extends Row = Row> implements InsertQuery<TRecord> {
+class KnexInsertQuery<
+  TRecord extends Row = Row,
+> implements InsertQuery<TRecord> {
   constructor(
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
@@ -441,7 +489,12 @@ class KnexInsertQuery<TRecord extends Row = Row> implements InsertQuery<TRecord>
   ) {}
 
   values(data: TRecord | readonly TRecord[]): InsertQuery<TRecord> {
-    return new KnexInsertQuery(this.getClient, this.naming, this.tableName, data);
+    return new KnexInsertQuery(
+      this.getClient,
+      this.naming,
+      this.tableName,
+      data,
+    );
   }
 
   async execute(): Promise<InsertResult> {
@@ -459,8 +512,9 @@ class KnexInsertQuery<TRecord extends Row = Row> implements InsertQuery<TRecord>
   }
 
   private buildQuery(data: TRecord | readonly TRecord[]): Knex.QueryBuilder {
-    return this.getClient()(mapTableExpression(this.tableName, this.naming))
-      .insert(mapData(data, this.naming) as any);
+    return this.getClient()(
+      mapTableExpression(this.tableName, this.naming),
+    ).insert(mapData(data, this.naming) as any);
   }
 
   private requireValues(): TRecord | readonly TRecord[] {
@@ -471,7 +525,9 @@ class KnexInsertQuery<TRecord extends Row = Row> implements InsertQuery<TRecord>
   }
 }
 
-class KnexUpdateQuery<TRecord extends Row = Row> implements UpdateQuery<TRecord> {
+class KnexUpdateQuery<
+  TRecord extends Row = Row,
+> implements UpdateQuery<TRecord> {
   constructor(
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
@@ -481,27 +537,48 @@ class KnexUpdateQuery<TRecord extends Row = Row> implements UpdateQuery<TRecord>
   ) {}
 
   set(data: Partial<TRecord>): UpdateQuery<TRecord> {
-    return new KnexUpdateQuery(this.getClient, this.naming, this.tableName, data, this.state);
+    return new KnexUpdateQuery(
+      this.getClient,
+      this.naming,
+      this.tableName,
+      data,
+      this.state,
+    );
   }
 
   where(
-    lhsOrExpression: ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
+    lhsOrExpression:
+      ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
     op?: ComparisonOperator,
     rhs?: OperandValueExpressionOrList,
   ): UpdateQuery<TRecord> {
     return this.clone({
       where: [
         ...this.state.where,
-        resolveConditionArguments(arguments, lhsOrExpression, op, rhs, this.createExpressionBuilder()),
+        resolveConditionArguments(
+          arguments,
+          lhsOrExpression,
+          op,
+          rhs,
+          this.createExpressionBuilder(),
+        ),
       ],
     });
   }
 
-  whereRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): UpdateQuery<TRecord> {
+  whereRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): UpdateQuery<TRecord> {
     return this.clone({
       where: [
         ...this.state.where,
-        binaryExpressionNode(lhs, op, createExpression({ type: 'ref', reference: rhs })),
+        binaryExpressionNode(
+          lhs,
+          op,
+          createExpression({ type: 'ref', reference: rhs }),
+        ),
       ],
     });
   }
@@ -528,18 +605,25 @@ class KnexUpdateQuery<TRecord extends Row = Row> implements UpdateQuery<TRecord>
   }
 
   private clone(patch: Partial<MutationState>): KnexUpdateQuery<TRecord> {
-    return new KnexUpdateQuery(this.getClient, this.naming, this.tableName, this.data, {
-      where: patch.where ?? this.state.where,
-      allowAllRows: patch.allowAllRows ?? this.state.allowAllRows,
-    });
+    return new KnexUpdateQuery(
+      this.getClient,
+      this.naming,
+      this.tableName,
+      this.data,
+      {
+        where: patch.where ?? this.state.where,
+        allowAllRows: patch.allowAllRows ?? this.state.allowAllRows,
+      },
+    );
   }
 
   private buildQuery(): Knex.QueryBuilder {
     const client = this.getClient();
     const data = this.requireSetData();
     this.assertWhereSafety('updateTable().execute()');
-    const query = client(mapTableExpression(this.tableName, this.naming))
-      .update(mapData(data, this.naming) as any);
+    const query = client(
+      mapTableExpression(this.tableName, this.naming),
+    ).update(mapData(data, this.naming) as any);
     applyWhereExpressions(query, this.state.where, {
       client,
       naming: this.naming,
@@ -567,7 +651,9 @@ class KnexUpdateQuery<TRecord extends Row = Row> implements UpdateQuery<TRecord>
   }
 }
 
-class KnexDeleteQuery<TRecord extends Row = Row> implements DeleteQuery<TRecord> {
+class KnexDeleteQuery<
+  TRecord extends Row = Row,
+> implements DeleteQuery<TRecord> {
   constructor(
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
@@ -576,23 +662,38 @@ class KnexDeleteQuery<TRecord extends Row = Row> implements DeleteQuery<TRecord>
   ) {}
 
   where(
-    lhsOrExpression: ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
+    lhsOrExpression:
+      ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
     op?: ComparisonOperator,
     rhs?: OperandValueExpressionOrList,
   ): DeleteQuery<TRecord> {
     return this.clone({
       where: [
         ...this.state.where,
-        resolveConditionArguments(arguments, lhsOrExpression, op, rhs, this.createExpressionBuilder()),
+        resolveConditionArguments(
+          arguments,
+          lhsOrExpression,
+          op,
+          rhs,
+          this.createExpressionBuilder(),
+        ),
       ],
     });
   }
 
-  whereRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): DeleteQuery<TRecord> {
+  whereRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): DeleteQuery<TRecord> {
     return this.clone({
       where: [
         ...this.state.where,
-        binaryExpressionNode(lhs, op, createExpression({ type: 'ref', reference: rhs })),
+        binaryExpressionNode(
+          lhs,
+          op,
+          createExpression({ type: 'ref', reference: rhs }),
+        ),
       ],
     });
   }
@@ -628,7 +729,9 @@ class KnexDeleteQuery<TRecord extends Row = Row> implements DeleteQuery<TRecord>
   private buildQuery(): Knex.QueryBuilder {
     const client = this.getClient();
     this.assertWhereSafety('deleteFrom().execute()');
-    const query = client(mapTableExpression(this.tableName, this.naming)).delete();
+    const query = client(
+      mapTableExpression(this.tableName, this.naming),
+    ).delete();
     applyWhereExpressions(query, this.state.where, {
       client,
       naming: this.naming,
@@ -649,7 +752,9 @@ class KnexDeleteQuery<TRecord extends Row = Row> implements DeleteQuery<TRecord>
   }
 }
 
-class KnexSubqueryBuilder<TResult extends Row = Row> implements SubqueryBuilder<TResult> {
+class KnexSubqueryBuilder<
+  TResult extends Row = Row,
+> implements SubqueryBuilder<TResult> {
   constructor(
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
@@ -657,24 +762,26 @@ class KnexSubqueryBuilder<TResult extends Row = Row> implements SubqueryBuilder<
     private readonly state: SelectState = emptySelectState(),
   ) {}
 
-  select(input: SelectionExpression | readonly SelectionExpression[] | SelectionFactory): SubqueryBuilder<TResult> {
+  select(
+    input:
+      SelectionExpression | readonly SelectionExpression[] | SelectionFactory,
+  ): SubqueryBuilder<TResult> {
     return this.clone({
       selections: [
         ...this.state.selections,
-        ...normalizeSelectionInput(input, this.createExpressionBuilder()).map((selection) => ({
-          type: 'selection' as const,
-          selection,
-        })),
+        ...normalizeSelectionInput(input, this.createExpressionBuilder()).map(
+          (selection) => ({
+            type: 'selection' as const,
+            selection,
+          }),
+        ),
       ],
     });
   }
 
   selectAll(table?: string): SubqueryBuilder<TResult> {
     return this.clone({
-      selections: [
-        ...this.state.selections,
-        { type: 'all', table },
-      ],
+      selections: [...this.state.selections, { type: 'all', table }],
     });
   }
 
@@ -683,33 +790,48 @@ class KnexSubqueryBuilder<TResult extends Row = Row> implements SubqueryBuilder<
   }
 
   where(
-    lhsOrExpression: ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
+    lhsOrExpression:
+      ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
     op?: ComparisonOperator,
     rhs?: OperandValueExpressionOrList,
   ): SubqueryBuilder<TResult> {
     return this.clone({
       where: [
         ...this.state.where,
-        resolveConditionArguments(arguments, lhsOrExpression, op, rhs, this.createExpressionBuilder()),
+        resolveConditionArguments(
+          arguments,
+          lhsOrExpression,
+          op,
+          rhs,
+          this.createExpressionBuilder(),
+        ),
       ],
     });
   }
 
-  whereRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): SubqueryBuilder<TResult> {
+  whereRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): SubqueryBuilder<TResult> {
     return this.clone({
       where: [
         ...this.state.where,
-        binaryExpressionNode(lhs, op, createExpression({ type: 'ref', reference: rhs })),
+        binaryExpressionNode(
+          lhs,
+          op,
+          createExpression({ type: 'ref', reference: rhs }),
+        ),
       ],
     });
   }
 
-  orderBy(column: string, direction: OrderDirection = 'asc'): SubqueryBuilder<TResult> {
+  orderBy(
+    column: string,
+    direction: OrderDirection = 'asc',
+  ): SubqueryBuilder<TResult> {
     return this.clone({
-      orderBy: [
-        ...this.state.orderBy,
-        { column, direction },
-      ],
+      orderBy: [...this.state.orderBy, { column, direction }],
     });
   }
 
@@ -722,10 +844,13 @@ class KnexSubqueryBuilder<TResult extends Row = Row> implements SubqueryBuilder<
   }
 
   as<TAlias extends string>(alias: TAlias): AliasedExpression<TResult, TAlias> {
-    return createAliasedExpression<TResult, TAlias>({
-      type: 'subquery',
-      query: this,
-    }, alias);
+    return createAliasedExpression<TResult, TAlias>(
+      {
+        type: 'subquery',
+        query: this,
+      },
+      alias,
+    );
   }
 
   buildQuery(client = this.getClient()): Knex.QueryBuilder {
@@ -774,8 +899,12 @@ class KnexSubqueryBuilder<TResult extends Row = Row> implements SubqueryBuilder<
         groupBy: patch.groupBy ?? this.state.groupBy,
         having: patch.having ?? this.state.having,
         orderBy: patch.orderBy ?? this.state.orderBy,
-        limit: Object.prototype.hasOwnProperty.call(patch, 'limit') ? patch.limit : this.state.limit,
-        offset: Object.prototype.hasOwnProperty.call(patch, 'offset') ? patch.offset : this.state.offset,
+        limit: Object.prototype.hasOwnProperty.call(patch, 'limit')
+          ? patch.limit
+          : this.state.limit,
+        offset: Object.prototype.hasOwnProperty.call(patch, 'offset')
+          ? patch.offset
+          : this.state.offset,
       },
     );
   }
@@ -796,15 +925,34 @@ class KnexJoinBuilder implements JoinBuilder {
   }
 
   on(
-    lhsOrExpression: ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
+    lhsOrExpression:
+      ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
     op?: ComparisonOperator,
     rhs?: OperandValueExpressionOrList,
   ): JoinBuilder {
-    return this.add(resolveConditionArguments(arguments, lhsOrExpression, op, rhs, this.expressionBuilder));
+    return this.add(
+      resolveConditionArguments(
+        arguments,
+        lhsOrExpression,
+        op,
+        rhs,
+        this.expressionBuilder,
+      ),
+    );
   }
 
-  onRef(lhs: ReferenceExpression, op: ComparisonOperator, rhs: ReferenceExpression): JoinBuilder {
-    return this.add(binaryExpressionNode(lhs, op, createExpression({ type: 'ref', reference: rhs })));
+  onRef(
+    lhs: ReferenceExpression,
+    op: ComparisonOperator,
+    rhs: ReferenceExpression,
+  ): JoinBuilder {
+    return this.add(
+      binaryExpressionNode(
+        lhs,
+        op,
+        createExpression({ type: 'ref', reference: rhs }),
+      ),
+    );
   }
 
   private add(expression: ExpressionNode): KnexJoinBuilder {
@@ -815,10 +963,16 @@ class KnexJoinBuilder implements JoinBuilder {
   }
 }
 
-type AggregateFunctionName = 'count' | 'countAll' | 'sum' | 'avg' | 'min' | 'max';
+type AggregateFunctionName =
+  'count' | 'countAll' | 'sum' | 'avg' | 'min' | 'max';
 
 type ExpressionNode =
-  | { type: 'binary'; lhs: OperandNode; op: ComparisonOperator; rhs: OperandNode }
+  | {
+      type: 'binary';
+      lhs: OperandNode;
+      op: ComparisonOperator;
+      rhs: OperandNode;
+    }
   | { type: 'and'; expressions: ExpressionNode[] }
   | { type: 'or'; expressions: ExpressionNode[] }
   | { type: 'not'; expression: ExpressionNode }
@@ -826,7 +980,13 @@ type ExpressionNode =
   | { type: 'exists'; query: KnexSubqueryBuilder }
   | { type: 'ref'; reference: ReferenceExpression }
   | { type: 'val'; value: unknown }
-  | { type: 'aggregate'; fn: AggregateFunctionName; operand?: OperandNode; distinct: boolean; table?: string }
+  | {
+      type: 'aggregate';
+      fn: AggregateFunctionName;
+      operand?: OperandNode;
+      distinct: boolean;
+      table?: string;
+    }
   | { type: 'parens'; expression: ExpressionNode }
   | { type: 'subquery'; query: KnexSubqueryBuilder }
   | { type: 'aliasedExpression'; expression: ExpressionNode; alias: string };
@@ -879,16 +1039,20 @@ function createAggregateExpression<T = unknown>(
   node: Extract<ExpressionNode, { type: 'aggregate' }>,
 ): AggregateExpression<T> {
   const expression = createExpression<T>(node) as AggregateExpression<T>;
-  expression.as = (alias) => createAliasedExpression<T, typeof alias>(node, alias);
-  expression.distinct = () => createAggregateExpression<T>({ ...node, distinct: true });
+  expression.as = (alias) =>
+    createAliasedExpression<T, typeof alias>(node, alias);
+  expression.distinct = () =>
+    createAggregateExpression<T>({ ...node, distinct: true });
   return expression;
 }
 
 function isExpression(value: unknown): value is InternalExpression {
-  return value !== null
-    && value !== undefined
-    && typeof value === 'object'
-    && expressionNodeSymbol in value;
+  return (
+    value !== null &&
+    value !== undefined &&
+    typeof value === 'object' &&
+    expressionNodeSymbol in value
+  );
 }
 
 function getExpressionNode(expression: Expression<unknown>): ExpressionNode {
@@ -898,12 +1062,18 @@ function getExpressionNode(expression: Expression<unknown>): ExpressionNode {
   return expression[expressionNodeSymbol];
 }
 
-function createExpressionBuilder(getClient: () => Knex, naming: NamingStrategy): ExpressionBuilder {
+function createExpressionBuilder(
+  getClient: () => Knex,
+  naming: NamingStrategy,
+): ExpressionBuilder {
   const builder = ((
     lhs: ReferenceExpression | Expression<unknown>,
     op: ComparisonOperator,
     rhs: OperandValueExpressionOrList,
-  ) => createExpression<SqlBool>(binaryExpressionNode(lhs, op, rhs))) as ExpressionBuilder;
+  ) =>
+    createExpression<SqlBool>(
+      binaryExpressionNode(lhs, op, rhs),
+    )) as ExpressionBuilder;
 
   Object.defineProperty(builder, 'eb', {
     enumerable: true,
@@ -917,96 +1087,120 @@ function createExpressionBuilder(getClient: () => Knex, naming: NamingStrategy):
 
   builder.ref = (reference) => createExpression({ type: 'ref', reference });
   builder.val = (value) => createExpression({ type: 'val', value });
-  builder.and = (expressions) => createExpression({
-    type: 'and',
-    expressions: expressionListFromInput(expressions, builder),
-  });
-  builder.or = (expressions) => createExpression({
-    type: 'or',
-    expressions: expressionListFromInput(expressions, builder),
-  });
-  builder.not = (expression) => createExpression({
-    type: 'not',
-    expression: resolveExpressionInput(expression, builder),
-  });
-  builder.between = (expression, start, end) => createExpression({
-    type: 'between',
-    expression: referenceOperandNode(expression),
-    start,
-    end,
-  });
+  builder.and = (expressions) =>
+    createExpression({
+      type: 'and',
+      expressions: expressionListFromInput(expressions, builder),
+    });
+  builder.or = (expressions) =>
+    createExpression({
+      type: 'or',
+      expressions: expressionListFromInput(expressions, builder),
+    });
+  builder.not = (expression) =>
+    createExpression({
+      type: 'not',
+      expression: resolveExpressionInput(expression, builder),
+    });
+  builder.between = (expression, start, end) =>
+    createExpression({
+      type: 'between',
+      expression: referenceOperandNode(expression),
+      start,
+      end,
+    });
   builder.exists = (query) => {
     if (!(query instanceof KnexSubqueryBuilder)) {
-      throw new Error('exists() expects a subquery created by eb.selectFrom().');
+      throw new Error(
+        'exists() expects a subquery created by eb.selectFrom().',
+      );
     }
     return createExpression({ type: 'exists', query });
   };
-  builder.selectFrom = (table) => new KnexSubqueryBuilder(getClient, naming, table);
-  builder.parens = (expression) => createExpression({
-    type: 'parens',
-    expression: resolveExpressionInput(expression, builder),
-  });
+  builder.selectFrom = (table) =>
+    new KnexSubqueryBuilder(getClient, naming, table);
+  builder.parens = (expression) =>
+    createExpression({
+      type: 'parens',
+      expression: resolveExpressionInput(expression, builder),
+    });
 
   return builder;
 }
 
 function createFunctionModule(): FunctionModule {
   return {
-    count: (column) => createAggregateExpression({
-      type: 'aggregate',
-      fn: 'count',
-      operand: referenceOperandNode(column),
-      distinct: false,
-    }),
-    countAll: (table) => createAggregateExpression({
-      type: 'aggregate',
-      fn: 'countAll',
-      distinct: false,
-      table,
-    }),
-    sum: (column) => createAggregateExpression({
-      type: 'aggregate',
-      fn: 'sum',
-      operand: referenceOperandNode(column),
-      distinct: false,
-    }),
-    avg: (column) => createAggregateExpression({
-      type: 'aggregate',
-      fn: 'avg',
-      operand: referenceOperandNode(column),
-      distinct: false,
-    }),
-    min: (column) => createAggregateExpression({
-      type: 'aggregate',
-      fn: 'min',
-      operand: referenceOperandNode(column),
-      distinct: false,
-    }),
-    max: (column) => createAggregateExpression({
-      type: 'aggregate',
-      fn: 'max',
-      operand: referenceOperandNode(column),
-      distinct: false,
-    }),
+    count: (column) =>
+      createAggregateExpression({
+        type: 'aggregate',
+        fn: 'count',
+        operand: referenceOperandNode(column),
+        distinct: false,
+      }),
+    countAll: (table) =>
+      createAggregateExpression({
+        type: 'aggregate',
+        fn: 'countAll',
+        distinct: false,
+        table,
+      }),
+    sum: (column) =>
+      createAggregateExpression({
+        type: 'aggregate',
+        fn: 'sum',
+        operand: referenceOperandNode(column),
+        distinct: false,
+      }),
+    avg: (column) =>
+      createAggregateExpression({
+        type: 'aggregate',
+        fn: 'avg',
+        operand: referenceOperandNode(column),
+        distinct: false,
+      }),
+    min: (column) =>
+      createAggregateExpression({
+        type: 'aggregate',
+        fn: 'min',
+        operand: referenceOperandNode(column),
+        distinct: false,
+      }),
+    max: (column) =>
+      createAggregateExpression({
+        type: 'aggregate',
+        fn: 'max',
+        operand: referenceOperandNode(column),
+        distinct: false,
+      }),
   };
 }
 
 function resolveConditionArguments(
   args: IArguments,
-  lhsOrExpression: ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
+  lhsOrExpression:
+    ReferenceExpression | Expression<unknown> | ExpressionFactory<SqlBool>,
   op: ComparisonOperator | undefined,
   rhs: OperandValueExpressionOrList | undefined,
   builder: ExpressionBuilder,
 ): ExpressionNode {
   if (args.length === 1) {
-    return resolveExpressionInput(lhsOrExpression as Expression<SqlBool> | ExpressionFactory<SqlBool>, builder);
+    return resolveExpressionInput(
+      lhsOrExpression as Expression<SqlBool> | ExpressionFactory<SqlBool>,
+      builder,
+    );
   }
 
   if (args.length !== 3 || op === undefined) {
-    throw new Error('where() expects either an expression callback or (lhs, operator, rhs).');
+    throw new Error(
+      'where() expects either an expression callback or (lhs, operator, rhs).',
+    );
   }
 
-  return binaryExpressionNode(lhsOrExpression as ReferenceExpression | Expression<unknown>, op, rhs);
+  return binaryExpressionNode(
+    lhsOrExpression as ReferenceExpression | Expression<unknown>,
+    op,
+    rhs,
+  );
 }
 
 function resolveExpressionInput<T>(
@@ -1024,7 +1218,9 @@ function expressionListFromInput(
   builder: ExpressionBuilder,
 ): ExpressionNode[] {
   if (Array.isArray(expressions)) {
-    return expressions.map((expression) => resolveExpressionInput(expression, builder));
+    return expressions.map((expression) =>
+      resolveExpressionInput(expression, builder),
+    );
   }
 
   return Object.entries(expressions).map(([field, value]) =>
@@ -1045,14 +1241,18 @@ function binaryExpressionNode(
   };
 }
 
-function referenceOperandNode(value: ReferenceExpression | Expression<unknown>): OperandNode {
+function referenceOperandNode(
+  value: ReferenceExpression | Expression<unknown>,
+): OperandNode {
   if (typeof value === 'string') {
     return { type: 'ref', reference: value };
   }
   return operandNode(value);
 }
 
-function operandNode(value: OperandValueExpressionOrList | Expression<unknown>): OperandNode {
+function operandNode(
+  value: OperandValueExpressionOrList | Expression<unknown>,
+): OperandNode {
   if (isExpression(value)) {
     const expression = getExpressionNode(value);
     if (expression.type === 'ref') {
@@ -1064,7 +1264,10 @@ function operandNode(value: OperandValueExpressionOrList | Expression<unknown>):
     if (expression.type === 'subquery') {
       return { type: 'subquery', query: expression.query };
     }
-    if (expression.type === 'aliasedExpression' && expression.expression.type === 'subquery') {
+    if (
+      expression.type === 'aliasedExpression' &&
+      expression.expression.type === 'subquery'
+    ) {
       return { type: 'subquery', query: expression.expression.query };
     }
     return { type: 'expression', expression };
@@ -1104,7 +1307,11 @@ function applySelections(
   for (const selection of selections) {
     if (selection.type === 'all') {
       resultMap.mapUnmatchedColumns = true;
-      query.select(selection.table ? `${mapTableExpression(selection.table, context.naming)}.*` : '*');
+      query.select(
+        selection.table
+          ? `${mapTableExpression(selection.table, context.naming)}.*`
+          : '*',
+      );
       continue;
     }
 
@@ -1141,7 +1348,9 @@ function applySelectionExpression(
   const logicalAlias = node.alias;
   const physicalAlias = mapIdentifier(logicalAlias, context.naming);
   resultMap.explicit.set(physicalAlias, logicalAlias);
-  query.select(expressionNodeToSelectRaw(context, node.expression, physicalAlias) as any);
+  query.select(
+    expressionNodeToSelectRaw(context, node.expression, physicalAlias) as any,
+  );
 }
 
 function applyExpressionNode(
@@ -1170,14 +1379,22 @@ function applyExpressionNode(
       applyExistsExpression(query, expression, context, bool, false);
       break;
     case 'parens':
-      applyExpressionGroup(query, [expression.expression], context, bool, 'and');
+      applyExpressionGroup(
+        query,
+        [expression.expression],
+        context,
+        bool,
+        'and',
+      );
       break;
     case 'ref':
     case 'val':
     case 'aggregate':
     case 'subquery':
     case 'aliasedExpression':
-      throw new Error(`Expression "${expression.type}" cannot be used directly as a condition.`);
+      throw new Error(
+        `Expression "${expression.type}" cannot be used directly as a condition.`,
+      );
     default:
       assertNever(expression);
   }
@@ -1194,12 +1411,22 @@ function applyExpressionGroup(
     return;
   }
 
-  const method = context.clause === 'having'
-    ? (bool === 'or' ? 'orHaving' : 'having')
-    : (bool === 'or' ? 'orWhere' : 'where');
+  const method =
+    context.clause === 'having'
+      ? bool === 'or'
+        ? 'orHaving'
+        : 'having'
+      : bool === 'or'
+        ? 'orWhere'
+        : 'where';
   (query as any)[method](function group(this: Knex.QueryBuilder) {
     expressions.forEach((expression, index) => {
-      applyExpressionNode(this, expression, context, groupBool === 'or' && index > 0 ? 'or' : 'and');
+      applyExpressionNode(
+        this,
+        expression,
+        context,
+        groupBool === 'or' && index > 0 ? 'or' : 'and',
+      );
     });
   });
 }
@@ -1219,16 +1446,26 @@ function applyNotExpression(
     return;
   }
   if (expression.type === 'binary') {
-    applyBinaryExpression(query, {
-      ...expression,
-      op: invertComparisonOperator(expression.op),
-    }, context, bool);
+    applyBinaryExpression(
+      query,
+      {
+        ...expression,
+        op: invertComparisonOperator(expression.op),
+      },
+      context,
+      bool,
+    );
     return;
   }
 
-  const method = context.clause === 'having'
-    ? (bool === 'or' ? 'orHavingNot' : 'havingNot')
-    : (bool === 'or' ? 'orWhereNot' : 'whereNot');
+  const method =
+    context.clause === 'having'
+      ? bool === 'or'
+        ? 'orHavingNot'
+        : 'havingNot'
+      : bool === 'or'
+        ? 'orWhereNot'
+        : 'whereNot';
   (query as any)[method](function notGroup(this: Knex.QueryBuilder) {
     applyExpressionNode(this, expression, context);
   });
@@ -1245,17 +1482,38 @@ function applyBinaryExpression(
   const rhs = expression.rhs;
 
   if (rhs.type === 'ref') {
-    callColumnComparison(query, context, bool, lhs, op, mapReference(rhs.reference, context.naming));
+    callColumnComparison(
+      query,
+      context,
+      bool,
+      lhs,
+      op,
+      mapReference(rhs.reference, context.naming),
+    );
     return;
   }
 
   if (rhs.type === 'subquery') {
-    callSubqueryComparison(query, context, bool, lhs, op, rhs.query.buildQuery(context.client));
+    callSubqueryComparison(
+      query,
+      context,
+      bool,
+      lhs,
+      op,
+      rhs.query.buildQuery(context.client),
+    );
     return;
   }
 
   if (rhs.type === 'expression') {
-    callBasicComparison(query, context, bool, lhs, op, expressionNodeToRaw(context, rhs.expression));
+    callBasicComparison(
+      query,
+      context,
+      bool,
+      lhs,
+      op,
+      expressionNodeToRaw(context, rhs.expression),
+    );
     return;
   }
 
@@ -1270,10 +1528,18 @@ function applyBetweenExpression(
   not: boolean,
 ): void {
   const lhs = compileOperand(context, expression.expression);
-  const method = context.clause === 'having'
-    ? (not ? 'havingNotBetween' : 'havingBetween')
-    : (not ? 'whereNotBetween' : 'whereBetween');
-  callBooleanMethod(query, bool, method, lhs, [expression.start, expression.end]);
+  const method =
+    context.clause === 'having'
+      ? not
+        ? 'havingNotBetween'
+        : 'havingBetween'
+      : not
+        ? 'whereNotBetween'
+        : 'whereBetween';
+  callBooleanMethod(query, bool, method, lhs, [
+    expression.start,
+    expression.end,
+  ]);
 }
 
 function applyExistsExpression(
@@ -1283,10 +1549,20 @@ function applyExistsExpression(
   bool: 'and' | 'or',
   not: boolean,
 ): void {
-  const method = context.clause === 'having'
-    ? (not ? 'havingNotExists' : 'havingExists')
-    : (not ? 'whereNotExists' : 'whereExists');
-  callBooleanMethod(query, bool, method, expression.query.buildQuery(context.client));
+  const method =
+    context.clause === 'having'
+      ? not
+        ? 'havingNotExists'
+        : 'havingExists'
+      : not
+        ? 'whereNotExists'
+        : 'whereExists';
+  callBooleanMethod(
+    query,
+    bool,
+    method,
+    expression.query.buildQuery(context.client),
+  );
 }
 
 function callSubqueryComparison(
@@ -1299,10 +1575,22 @@ function callSubqueryComparison(
 ): void {
   switch (op) {
     case 'in':
-      callBooleanMethod(query, bool, context.clause === 'having' ? 'havingIn' : 'whereIn', lhs, subquery);
+      callBooleanMethod(
+        query,
+        bool,
+        context.clause === 'having' ? 'havingIn' : 'whereIn',
+        lhs,
+        subquery,
+      );
       break;
     case 'not in':
-      callBooleanMethod(query, bool, context.clause === 'having' ? 'havingNotIn' : 'whereNotIn', lhs, subquery);
+      callBooleanMethod(
+        query,
+        bool,
+        context.clause === 'having' ? 'havingNotIn' : 'whereNotIn',
+        lhs,
+        subquery,
+      );
       break;
     default:
       callBasicComparison(query, context, bool, lhs, op, subquery);
@@ -1320,21 +1608,43 @@ function callValueComparison(
 ): void {
   switch (op) {
     case 'in':
-      callBooleanMethod(query, bool, context.clause === 'having' ? 'havingIn' : 'whereIn', lhs, value);
+      callBooleanMethod(
+        query,
+        bool,
+        context.clause === 'having' ? 'havingIn' : 'whereIn',
+        lhs,
+        value,
+      );
       break;
     case 'not in':
-      callBooleanMethod(query, bool, context.clause === 'having' ? 'havingNotIn' : 'whereNotIn', lhs, value);
+      callBooleanMethod(
+        query,
+        bool,
+        context.clause === 'having' ? 'havingNotIn' : 'whereNotIn',
+        lhs,
+        value,
+      );
       break;
     case 'is':
       if (value === null) {
-        callBooleanMethod(query, bool, context.clause === 'having' ? 'havingNull' : 'whereNull', lhs);
+        callBooleanMethod(
+          query,
+          bool,
+          context.clause === 'having' ? 'havingNull' : 'whereNull',
+          lhs,
+        );
       } else {
         callBasicComparison(query, context, bool, lhs, '=', value);
       }
       break;
     case 'is not':
       if (value === null) {
-        callBooleanMethod(query, bool, context.clause === 'having' ? 'havingNotNull' : 'whereNotNull', lhs);
+        callBooleanMethod(
+          query,
+          bool,
+          context.clause === 'having' ? 'havingNotNull' : 'whereNotNull',
+          lhs,
+        );
       } else {
         callBasicComparison(query, context, bool, lhs, '!=', value);
       }
@@ -1353,9 +1663,14 @@ function callBasicComparison(
   op: ComparisonOperator,
   rhs: unknown,
 ): void {
-  const method = context.clause === 'having'
-    ? (bool === 'or' ? 'orHaving' : 'having')
-    : (bool === 'or' ? 'orWhere' : 'where');
+  const method =
+    context.clause === 'having'
+      ? bool === 'or'
+        ? 'orHaving'
+        : 'having'
+      : bool === 'or'
+        ? 'orWhere'
+        : 'where';
   (query as any)[method](lhs, op, rhs);
 }
 
@@ -1375,9 +1690,14 @@ function callColumnComparison(
 
   const lhsSql = typeof lhs === 'string' ? '??' : '?';
   const bindings = typeof lhs === 'string' ? [lhs, rhs] : [lhs, rhs];
-  const method = context.clause === 'having'
-    ? (bool === 'or' ? 'orHavingRaw' : 'havingRaw')
-    : (bool === 'or' ? 'orWhereRaw' : 'whereRaw');
+  const method =
+    context.clause === 'having'
+      ? bool === 'or'
+        ? 'orHavingRaw'
+        : 'havingRaw'
+      : bool === 'or'
+        ? 'orWhereRaw'
+        : 'whereRaw';
   (query as any)[method](`${lhsSql} ${op} ??`, bindings);
 }
 
@@ -1387,9 +1707,8 @@ function callBooleanMethod(
   method: string,
   ...args: unknown[]
 ): void {
-  const methodName = bool === 'or'
-    ? `or${method[0]?.toUpperCase()}${method.slice(1)}`
-    : method;
+  const methodName =
+    bool === 'or' ? `or${method[0]?.toUpperCase()}${method.slice(1)}` : method;
   (query as any)[methodName](...args);
 }
 
@@ -1423,10 +1742,22 @@ function applyJoinExpressionNode(
       applyJoinBinaryExpression(clause, expression, context, bool);
       break;
     case 'and':
-      applyJoinExpressionGroup(clause, expression.expressions, context, bool, 'and');
+      applyJoinExpressionGroup(
+        clause,
+        expression.expressions,
+        context,
+        bool,
+        'and',
+      );
       break;
     case 'or':
-      applyJoinExpressionGroup(clause, expression.expressions, context, bool, 'or');
+      applyJoinExpressionGroup(
+        clause,
+        expression.expressions,
+        context,
+        bool,
+        'or',
+      );
       break;
     case 'not':
       applyJoinNotExpression(clause, expression.expression, context, bool);
@@ -1438,14 +1769,22 @@ function applyJoinExpressionNode(
       applyJoinExistsExpression(clause, expression, context, bool, false);
       break;
     case 'parens':
-      applyJoinExpressionGroup(clause, [expression.expression], context, bool, 'and');
+      applyJoinExpressionGroup(
+        clause,
+        [expression.expression],
+        context,
+        bool,
+        'and',
+      );
       break;
     case 'ref':
     case 'val':
     case 'aggregate':
     case 'subquery':
     case 'aliasedExpression':
-      throw new Error(`Expression "${expression.type}" cannot be used directly as a join condition.`);
+      throw new Error(
+        `Expression "${expression.type}" cannot be used directly as a join condition.`,
+      );
     default:
       assertNever(expression);
   }
@@ -1464,7 +1803,12 @@ function applyJoinExpressionGroup(
 
   callJoinMethod(clause, bool, 'on', function group(this: Knex.JoinClause) {
     expressions.forEach((expression, index) => {
-      applyJoinExpressionNode(this, expression, context, groupBool === 'or' && index > 0 ? 'or' : 'and');
+      applyJoinExpressionNode(
+        this,
+        expression,
+        context,
+        groupBool === 'or' && index > 0 ? 'or' : 'and',
+      );
     });
   });
 }
@@ -1484,16 +1828,26 @@ function applyJoinNotExpression(
     return;
   }
   if (expression.type === 'binary') {
-    applyJoinBinaryExpression(clause, {
-      ...expression,
-      op: invertComparisonOperator(expression.op),
-    }, context, bool);
+    applyJoinBinaryExpression(
+      clause,
+      {
+        ...expression,
+        op: invertComparisonOperator(expression.op),
+      },
+      context,
+      bool,
+    );
     return;
   }
 
-  callJoinMethod(clause, bool, 'on', context.client.raw('not (?)', [
-    expressionNodeToConditionRaw(context, expression),
-  ] as any));
+  callJoinMethod(
+    clause,
+    bool,
+    'on',
+    context.client.raw('not (?)', [
+      expressionNodeToConditionRaw(context, expression),
+    ] as any),
+  );
 }
 
 function applyJoinBinaryExpression(
@@ -1507,7 +1861,14 @@ function applyJoinBinaryExpression(
   const op = expression.op;
 
   if (rhs.type === 'ref') {
-    callJoinMethod(clause, bool, 'on', lhs, op, mapReference(rhs.reference, context.naming));
+    callJoinMethod(
+      clause,
+      bool,
+      'on',
+      lhs,
+      op,
+      mapReference(rhs.reference, context.naming),
+    );
     return;
   }
 
@@ -1517,13 +1878,25 @@ function applyJoinBinaryExpression(
   }
 
   if (rhs.type === 'subquery') {
-    callJoinMethod(clause, bool, 'on', lhs, op, context.client.raw('(?)', [
-      rhs.query.buildQuery(context.client),
-    ] as any));
+    callJoinMethod(
+      clause,
+      bool,
+      'on',
+      lhs,
+      op,
+      context.client.raw('(?)', [rhs.query.buildQuery(context.client)] as any),
+    );
     return;
   }
 
-  callJoinMethod(clause, bool, 'on', lhs, op, expressionNodeToRaw(context, rhs.expression));
+  callJoinMethod(
+    clause,
+    bool,
+    'on',
+    lhs,
+    op,
+    expressionNodeToRaw(context, rhs.expression),
+  );
 }
 
 function applyJoinValueComparison(
@@ -1569,7 +1942,10 @@ function applyJoinBetweenExpression(
   not: boolean,
 ): void {
   const lhs = compileOperand(context, expression.expression);
-  callJoinMethod(clause, bool, not ? 'onNotBetween' : 'onBetween', lhs, [expression.start, expression.end]);
+  callJoinMethod(clause, bool, not ? 'onNotBetween' : 'onBetween', lhs, [
+    expression.start,
+    expression.end,
+  ]);
 }
 
 function applyJoinExistsExpression(
@@ -1579,9 +1955,14 @@ function applyJoinExistsExpression(
   bool: 'and' | 'or',
   not: boolean,
 ): void {
-  callJoinMethod(clause, bool, 'on', context.client.raw(`${not ? 'not ' : ''}exists (?)`, [
-    expression.query.buildQuery(context.client),
-  ] as any));
+  callJoinMethod(
+    clause,
+    bool,
+    'on',
+    context.client.raw(`${not ? 'not ' : ''}exists (?)`, [
+      expression.query.buildQuery(context.client),
+    ] as any),
+  );
 }
 
 function callJoinMethod(
@@ -1590,9 +1971,8 @@ function callJoinMethod(
   method: string,
   ...args: unknown[]
 ): void {
-  const methodName = bool === 'or'
-    ? `or${method[0]?.toUpperCase()}${method.slice(1)}`
-    : method;
+  const methodName =
+    bool === 'or' ? `or${method[0]?.toUpperCase()}${method.slice(1)}` : method;
   (clause as any)[methodName](...args);
 }
 
@@ -1610,10 +1990,16 @@ function expressionNodeToConditionRaw(
   if (whereIndex === -1) {
     throw new Error('Unable to compile query expression.');
   }
-  return context.client.raw(compiled.sql.slice(whereIndex + ' where '.length), compiled.bindings as any);
+  return context.client.raw(
+    compiled.sql.slice(whereIndex + ' where '.length),
+    compiled.bindings as any,
+  );
 }
 
-function compileOperand(context: ExpressionCompileContext, operand: OperandNode): string | Knex.Raw {
+function compileOperand(
+  context: ExpressionCompileContext,
+  operand: OperandNode,
+): string | Knex.Raw {
   switch (operand.type) {
     case 'ref':
       return mapReference(operand.reference, context.naming);
@@ -1621,7 +2007,9 @@ function compileOperand(context: ExpressionCompileContext, operand: OperandNode)
       return expressionNodeToRaw(context, operand.expression);
     case 'value':
     case 'subquery':
-      throw new Error(`Operand "${operand.type}" cannot be used on the left side of a comparison.`);
+      throw new Error(
+        `Operand "${operand.type}" cannot be used on the left side of a comparison.`,
+      );
     default:
       return assertNever(operand);
   }
@@ -1633,17 +2021,25 @@ function expressionNodeToRaw(
 ): Knex.Raw {
   switch (expression.type) {
     case 'ref':
-      return context.client.ref(mapReference(expression.reference, context.naming)) as unknown as Knex.Raw;
+      return context.client.ref(
+        mapReference(expression.reference, context.naming),
+      );
     case 'val':
       return context.client.raw('?', [expression.value] as any);
     case 'aggregate':
       return aggregateNodeToRaw(context, expression);
     case 'subquery':
-      return context.client.raw('(?)', [expression.query.buildQuery(context.client)] as any);
+      return context.client.raw('(?)', [
+        expression.query.buildQuery(context.client),
+      ] as any);
     case 'parens':
-      return context.client.raw('(?)', [expressionNodeToRaw(context, expression.expression)] as any);
+      return context.client.raw('(?)', [
+        expressionNodeToRaw(context, expression.expression),
+      ] as any);
     default:
-      throw new Error(`Expression "${expression.type}" cannot be used as a value operand.`);
+      throw new Error(
+        `Expression "${expression.type}" cannot be used as a value operand.`,
+      );
   }
 }
 
@@ -1696,7 +2092,8 @@ function aggregateNodeToRaw(
 }
 
 function normalizeSelectionInput(
-  input: SelectionExpression | readonly SelectionExpression[] | SelectionFactory,
+  input:
+    SelectionExpression | readonly SelectionExpression[] | SelectionFactory,
   builder: ExpressionBuilder,
 ): SelectionExpression[] {
   if (typeof input === 'function' && !isExpression(input)) {
@@ -1712,7 +2109,10 @@ function normalizeStringList(input: string | readonly string[]): string[] {
   return typeof input === 'string' ? [input] : [...input];
 }
 
-function mapStringSelection(selection: string, naming: NamingStrategy): {
+function mapStringSelection(
+  selection: string,
+  naming: NamingStrategy,
+): {
   selection: unknown;
   result?: { physical: string; logical: string };
   mapUnmatchedColumns?: boolean;
@@ -1747,7 +2147,10 @@ function logicalResultKeyForSelection(selection: string): string {
   return parsed.alias ?? lastReferenceSegment(parsed.identifier);
 }
 
-function mapTableExpression(tableExpression: string, naming: NamingStrategy): string {
+function mapTableExpression(
+  tableExpression: string,
+  naming: NamingStrategy,
+): string {
   const parsed = parseAliasedIdentifier(tableExpression);
   const tableName = mapReference(parsed.identifier, naming);
   if (!parsed.alias) {
@@ -1763,7 +2166,7 @@ function mapReference(reference: string, naming: NamingStrategy): string {
 
   return reference
     .split('.')
-    .map((part) => part === '*' ? part : mapIdentifier(part, naming))
+    .map((part) => (part === '*' ? part : mapIdentifier(part, naming)))
     .join('.');
 }
 
@@ -1771,34 +2174,48 @@ function mapIdentifier(identifier: string, naming: NamingStrategy): string {
   return naming.fieldToColumnName(identifier);
 }
 
-function mapData(data: Row | readonly Row[], naming: NamingStrategy): Row | Row[] {
+function mapData(
+  data: Row | readonly Row[],
+  naming: NamingStrategy,
+): Row | Row[] {
   if (Array.isArray(data)) {
     return data.map((item) => mapData(item, naming) as Row);
   }
   return Object.fromEntries(
-    Object.entries(data).map(([key, value]) => [mapIdentifier(key, naming), value]),
+    Object.entries(data).map(([key, value]) => [
+      mapIdentifier(key, naming),
+      value,
+    ]),
   );
 }
 
-function parseAliasedIdentifier(value: string): { identifier: string; alias?: string } {
+function parseAliasedIdentifier(value: string): {
+  identifier: string;
+  alias?: string;
+} {
   const trimmed = value.trim();
   const asMatch = trimmed.match(/^(.+?)\s+as\s+([A-Za-z_][A-Za-z0-9_]*)$/i);
   if (asMatch) {
     return {
-      identifier: asMatch[1]!.trim(),
-      alias: asMatch[2]!.trim(),
+      identifier: asMatch[1].trim(),
+      alias: asMatch[2].trim(),
     };
   }
 
   return { identifier: trimmed };
 }
 
-function mapResultRow(row: Row, resultMap: ResultMap, naming: NamingStrategy): Row {
-  const shouldCamelCaseUnmatched = resultMap.mapUnmatchedColumns && isUnderscoredNaming(naming);
+function mapResultRow(
+  row: Row,
+  resultMap: ResultMap,
+  naming: NamingStrategy,
+): Row {
+  const shouldCamelCaseUnmatched =
+    resultMap.mapUnmatchedColumns && isUnderscoredNaming(naming);
   return Object.fromEntries(
     Object.entries(row).map(([key, value]) => [
-      resultMap.explicit.get(key)
-        ?? (shouldCamelCaseUnmatched ? camelCase(key) : key),
+      resultMap.explicit.get(key) ??
+        (shouldCamelCaseUnmatched ? camelCase(key) : key),
       value,
     ]),
   );
@@ -1811,7 +2228,9 @@ function normalizeRows(rows: unknown): Row[] {
   return rows as Row[];
 }
 
-function normalizeComparisonOperator(operator: ComparisonOperator): ComparisonOperator {
+function normalizeComparisonOperator(
+  operator: ComparisonOperator,
+): ComparisonOperator {
   const normalized = operator.toLowerCase().trim() as ComparisonOperator;
   switch (normalized) {
     case '=':
@@ -1829,11 +2248,15 @@ function normalizeComparisonOperator(operator: ComparisonOperator): ComparisonOp
     case 'not like':
       return normalized;
     default:
-      throw new Error(`Unsupported portable comparison operator "${operator}".`);
+      throw new Error(
+        `Unsupported portable comparison operator "${operator}".`,
+      );
   }
 }
 
-function invertComparisonOperator(operator: ComparisonOperator): ComparisonOperator {
+function invertComparisonOperator(
+  operator: ComparisonOperator,
+): ComparisonOperator {
   switch (operator) {
     case '=':
       return '!=';
@@ -1865,11 +2288,14 @@ function invertComparisonOperator(operator: ComparisonOperator): ComparisonOpera
   }
 }
 
-function normalizeInsertResult(result: unknown, data: Row | readonly Row[]): InsertResult {
+function normalizeInsertResult(
+  result: unknown,
+  data: Row | readonly Row[],
+): InsertResult {
   const insertedCount = Array.isArray(data) ? data.length : 1;
   if (Array.isArray(result)) {
     if (result.every(isPlainObject)) {
-      return { insertedCount, rows: result as Row[] };
+      return { insertedCount, rows: result };
     }
     return { insertedCount, insertId: result[0] };
   }
@@ -1879,7 +2305,7 @@ function normalizeInsertResult(result: unknown, data: Row | readonly Row[]): Ins
 function normalizeUpdateResult(result: unknown): UpdateResult {
   if (Array.isArray(result)) {
     if (result.every(isPlainObject)) {
-      return { updatedCount: result.length, rows: result as Row[] };
+      return { updatedCount: result.length, rows: result };
     }
     return { updatedCount: result.length };
   }
@@ -1892,7 +2318,7 @@ function normalizeUpdateResult(result: unknown): UpdateResult {
 function normalizeDeleteResult(result: unknown): DeleteResult {
   if (Array.isArray(result)) {
     if (result.every(isPlainObject)) {
-      return { deletedCount: result.length, rows: result as Row[] };
+      return { deletedCount: result.length, rows: result };
     }
     return { deletedCount: result.length };
   }
@@ -1903,14 +2329,16 @@ function normalizeDeleteResult(result: unknown): DeleteResult {
 }
 
 function isPlainObject(value: unknown): value is Row {
-  return Boolean(value)
-    && typeof value === 'object'
-    && !Array.isArray(value);
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function assertRightJoinReference(reference: ReferenceExpression | undefined): ReferenceExpression {
+function assertRightJoinReference(
+  reference: ReferenceExpression | undefined,
+): ReferenceExpression {
   if (reference === undefined) {
-    throw new Error('join() expects either a callback or (table, leftRef, rightRef).');
+    throw new Error(
+      'join() expects either a callback or (table, leftRef, rightRef).',
+    );
   }
   return reference;
 }
@@ -1920,7 +2348,9 @@ function isUnderscoredNaming(naming: NamingStrategy): boolean {
 }
 
 function camelCase(value: string): string {
-  return value.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase());
+  return value.replace(/_([a-z0-9])/g, (_, letter: string) =>
+    letter.toUpperCase(),
+  );
 }
 
 function lastReferenceSegment(reference: string): string {

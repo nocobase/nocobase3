@@ -1,19 +1,19 @@
-import { Chat } from "@ai-sdk/react";
+import { Chat } from '@ai-sdk/react';
 import {
   useCallback,
   useRef,
   type Dispatch,
   type MutableRefObject,
-} from "react";
-import type { AIChatAction, AIChatState } from "./chat-reducer";
-import { NocoBaseChatTransport } from "./chat-transport";
-import { findAIModel, getAIModelKey } from "./model";
-import type { useAI } from "./ai-provider";
+} from 'react';
+import type { AIChatAction, AIChatState } from './chat-reducer';
+import { NocoBaseChatTransport } from './chat-transport';
+import { findAIModel, getAIModelKey } from './model';
+import type { useAI } from './ai-provider';
 import {
   AI_DRAFT_CONVERSATION_ID,
   type AIChatMessage,
   type AIChatTaskRuntime,
-} from "./types";
+} from './types';
 
 type AIContextValue = ReturnType<typeof useAI>;
 
@@ -50,7 +50,7 @@ export function useChatRuntime({
   const chatsRef = useRef(new Map<string, Chat<AIChatMessage>>());
   const transportsRef = useRef(new Map<string, NocoBaseChatTransport>());
   const runtimeContextsRef = useRef(
-    new Map<string, AIConversationRuntimeContext>()
+    new Map<string, AIConversationRuntimeContext>(),
   );
 
   const getRuntimeContext = useCallback(
@@ -60,14 +60,14 @@ export function useChatRuntime({
 
       const latestState = stateRef.current;
       const conversation = latestState.conversations.find(
-        (item) => item.id === conversationId
+        (item) => item.id === conversationId,
       );
       const conversationModel = conversation?.model
         ? ai.models.find(
             (item) =>
               item.value === conversation.model?.model &&
               (!conversation.model.llmService ||
-                item.llmService === conversation.model.llmService)
+                item.llmService === conversation.model.llmService),
           )
         : undefined;
       const context = {
@@ -85,7 +85,7 @@ export function useChatRuntime({
       runtimeContextsRef.current.set(conversationId, context);
       return context;
     },
-    [ai.models, stateRef, taskRuntimeRef]
+    [ai.models, stateRef, taskRuntimeRef],
   );
 
   const getChat = useCallback(
@@ -100,13 +100,13 @@ export function useChatRuntime({
           const runtimeContext = getRuntimeContext(runtimeConversationId);
           const employee =
             ai.employees.find(
-              (item) => item.username === runtimeContext.employeeUsername
+              (item) => item.username === runtimeContext.employeeUsername,
             ) ?? ai.employees[0];
           const model =
             findAIModel(ai.models, runtimeContext.model) ?? ai.models[0];
           if (!employee || !model) {
             throw new Error(
-              "AIProvider requires at least one employee and model"
+              'AIProvider requires at least one employee and model',
             );
           }
           const task = runtimeContext.task;
@@ -123,8 +123,8 @@ export function useChatRuntime({
                   webSearch: task.webSearch ?? webSearchRef.current,
                 }
               : webSearchRef.current
-              ? { workContext: [], webSearch: true }
-              : undefined,
+                ? { workContext: [], webSearch: true }
+                : undefined,
           };
         },
         onSessionCreated: (sessionId) => {
@@ -136,7 +136,7 @@ export function useChatRuntime({
             transportsRef.current.set(sessionId, transport);
           }
           const runtimeContext = runtimeContextsRef.current.get(
-            previousConversationId
+            previousConversationId,
           );
           if (runtimeContext) {
             runtimeContextsRef.current.delete(previousConversationId);
@@ -145,7 +145,7 @@ export function useChatRuntime({
           moveAttachments(previousConversationId, sessionId);
           moveWorkContext(previousConversationId, sessionId);
           dispatch({
-            type: "replace-conversation-id",
+            type: 'replace-conversation-id',
             from: runtimeConversationId,
             to: sessionId,
           });
@@ -163,7 +163,7 @@ export function useChatRuntime({
           queueMicrotask(() => {
             void conversationFinishedHandlerRef.current?.(
               finishedConversationId,
-              chat
+              chat,
             );
           });
         },
@@ -184,12 +184,12 @@ export function useChatRuntime({
       moveAttachments,
       moveWorkContext,
       webSearchRef,
-    ]
+    ],
   );
 
   const getTransport = useCallback(
     (conversationId: string) => transportsRef.current.get(conversationId),
-    []
+    [],
   );
 
   const remove = useCallback((conversationId: string) => {

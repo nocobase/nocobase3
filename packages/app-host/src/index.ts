@@ -7,15 +7,33 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from 'node:http';
 import type { Duplex } from 'node:stream';
 import { AppRegistryError } from './errors.ts';
-import { applyFetchResponse, isClientResponseClose, requestPath, toFetchRequest } from './http-adapter.ts';
+import {
+  applyFetchResponse,
+  isClientResponseClose,
+  requestPath,
+  toFetchRequest,
+} from './http-adapter.ts';
 import { DirectoryAppCatalog } from './app-catalog.ts';
 import { AppRuntimeRegistry } from './app-registry.ts';
 import { writeAppSystemLog } from './app-system-log.ts';
-import { getPathInsideApp, isAppAssetPath, serveAppAssets } from './static-client.ts';
-import { acceptWebSocketUpgrade, isWebSocketUpgrade, rejectWebSocketUpgrade } from './websocket.ts';
+import {
+  getPathInsideApp,
+  isAppAssetPath,
+  serveAppAssets,
+} from './static-client.ts';
+import {
+  acceptWebSocketUpgrade,
+  isWebSocketUpgrade,
+  rejectWebSocketUpgrade,
+} from './websocket.ts';
 
 export * from './errors.ts';
 export * from './events.ts';
@@ -57,10 +75,18 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
     evictionIntervalMs: options.evictionIntervalMs,
   });
 
-  const server = createServer(async (req, res) => {
+  const handleRequest = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> => {
     try {
       const path = requestPath(req);
-      const managementResponse = await managementApi(req, path, registry, appCatalog);
+      const managementResponse = await managementApi(
+        req,
+        path,
+        registry,
+        appCatalog,
+      );
       if (managementResponse) {
         await applyFetchResponse(res, managementResponse);
         return;
@@ -78,7 +104,11 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         const pathInside = getPathInsideApp(definition, path);
 
         if (isAppAssetPath(pathInside)) {
-          const assetResponse = await serveAppAssets(definition, req, pathInside);
+          const assetResponse = await serveAppAssets(
+            definition,
+            req,
+            pathInside,
+          );
           await applyFetchResponse(res, assetResponse ?? notFoundResponse());
           return;
         }
@@ -104,16 +134,34 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         }
 
         if (!res.destroyed) {
-          res.destroy(handleErrorError instanceof Error ? handleErrorError : new Error(String(handleErrorError)));
+          res.destroy(
+            handleErrorError instanceof Error
+              ? handleErrorError
+              : new Error(String(handleErrorError)),
+          );
         }
       }
     }
+  };
+
+  const server = createServer((req, res) => {
+    const requestPromise = handleRequest(req, res);
+    requestPromise.catch((error: unknown) => {
+      console.error(error);
+      if (!res.destroyed) {
+        res.destroy(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
   });
 
   server.on('upgrade', (req, socket, head) => {
-    void dispatchAppWebSocket(req, socket, head, registry).catch((error) => {
+    const upgradePromise = dispatchAppWebSocket(req, socket, head, registry);
+    upgradePromise.catch((error: unknown) => {
       console.error(error);
-      rejectWebSocketUpgrade(socket, error instanceof AppRegistryError ? error.status : 500);
+      rejectWebSocketUpgrade(
+        socket,
+        error instanceof AppRegistryError ? error.status : 500,
+      );
     });
   });
 
@@ -126,11 +174,18 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       attachAppEventLogs(registry);
 
       await new Promise<void>((resolve) => {
-        server.listen(options.port ?? 3000, options.host ?? '127.0.0.1', resolve);
+        server.listen(
+          options.port ?? 3000,
+          options.host ?? '127.0.0.1',
+          resolve,
+        );
       });
 
       const address = server.address();
-      const bind = typeof address === 'object' && address ? `${address.address}:${address.port}` : String(address);
+      const bind =
+        typeof address === 'object' && address
+          ? `${address.address}:${address.port}`
+          : String(address);
       console.log(`App host listening on http://${bind}`);
       console.log(`App dist directory: ${appCatalog.appsDir}`);
       console.log(
@@ -264,19 +319,28 @@ function attachAppEventLogs(registry: AppRuntimeRegistry): void {
         basePath: event.basePath,
       },
     });
-    console.error(`[app] failed to create ${event.appId}@v${event.version} at ${event.basePath}`, event.error);
+    console.error(
+      `[app] failed to create ${event.appId}@v${event.version} at ${event.basePath}`,
+      event.error,
+    );
   });
 
   registry.events.on('app:created', (event) => {
-    console.log(`[app] created ${event.appId}@v${event.version} at ${event.basePath}`);
+    console.log(
+      `[app] created ${event.appId}@v${event.version} at ${event.basePath}`,
+    );
   });
 
   registry.events.on('app:draining', (event) => {
-    console.log(`[app] draining ${event.appId}@v${event.version}; activeRequests=${event.activeRequests}`);
+    console.log(
+      `[app] draining ${event.appId}@v${event.version}; activeRequests=${event.activeRequests}`,
+    );
   });
 
   registry.events.on('app:resourceDisposed', (event) => {
-    console.log(`[app] disposed ${event.appId}@v${event.version}: ${event.resourceName}`);
+    console.log(
+      `[app] disposed ${event.appId}@v${event.version}: ${event.resourceName}`,
+    );
   });
 
   registry.events.on('app:destroyed', (event) => {
@@ -347,7 +411,9 @@ async function managementApi(
     return jsonResponse({ evicted });
   }
 
-  const actionMatch = path.match(/^\/__apps\/([^/]+)\/(activate|deploy|evict|reload)$/);
+  const actionMatch = path.match(
+    /^\/__apps\/([^/]+)\/(activate|deploy|evict|reload)$/,
+  );
   if (actionMatch) {
     if (method !== 'POST') {
       return methodNotAllowed('POST');
@@ -366,10 +432,17 @@ async function managementApi(
       const input = await readJsonBody(req);
       return jsonResponse({
         deployment: await registry.deploy(id, {
-          version: typeof input.version === 'string' ? input.version : undefined,
-          strategy: input.strategy === 'restart' || input.strategy === 'blue-green' ? input.strategy : undefined,
+          version:
+            typeof input.version === 'string' ? input.version : undefined,
+          strategy:
+            input.strategy === 'restart' || input.strategy === 'blue-green'
+              ? input.strategy
+              : undefined,
           destroyTimeoutMs: numberFromValue(input.destroyTimeoutMs),
-          waitForReady: typeof input.waitForReady === 'boolean' ? input.waitForReady : undefined,
+          waitForReady:
+            typeof input.waitForReady === 'boolean'
+              ? input.waitForReady
+              : undefined,
           reason: 'deploy API',
         }),
       });
@@ -420,7 +493,10 @@ async function managementApi(
   return methodNotAllowed('GET, DELETE');
 }
 
-function resolveAppId(path: string, registry: AppRuntimeRegistry): string | null {
+function resolveAppId(
+  path: string,
+  registry: AppRuntimeRegistry,
+): string | null {
   const match = parseAppPath(path);
   if (!match) {
     return null;
@@ -496,11 +572,20 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJsonBody(
+  req: IncomingMessage,
+): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
 
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  for await (const streamedChunk of req) {
+    const chunk: unknown = streamedChunk;
+    if (Buffer.isBuffer(chunk)) {
+      chunks.push(chunk);
+    } else if (typeof chunk === 'string') {
+      chunks.push(Buffer.from(chunk));
+    } else {
+      throw new TypeError('Request body contained an unsupported chunk type');
+    }
   }
 
   if (chunks.length === 0) {
@@ -513,7 +598,9 @@ async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknow
   }
 
   const value = JSON.parse(text) as unknown;
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 async function handleError(error: unknown, res: ServerResponse): Promise<void> {
@@ -529,7 +616,10 @@ async function handleError(error: unknown, res: ServerResponse): Promise<void> {
   const response = jsonResponse(
     {
       error: error instanceof Error ? error.message : String(error),
-      code: error instanceof AppRegistryError ? error.code : 'INTERNAL_SERVER_ERROR',
+      code:
+        error instanceof AppRegistryError
+          ? error.code
+          : 'INTERNAL_SERVER_ERROR',
     },
     {
       status: error instanceof AppRegistryError ? error.status : 500,
@@ -540,7 +630,9 @@ async function handleError(error: unknown, res: ServerResponse): Promise<void> {
 }
 
 function numberFromValue(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function numberFromEnv(name: string): number | undefined {

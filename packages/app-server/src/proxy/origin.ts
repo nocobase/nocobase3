@@ -16,11 +16,18 @@ export function createOriginProxyHandler(
     });
 }
 
-export function proxyToOrigin(request: Request, options: OriginProxyOptions): Promise<Response> {
+export function proxyToOrigin(
+  request: Request,
+  options: OriginProxyOptions,
+): Promise<Response> {
   const requestUrl = new URL(request.url);
-  const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, options.targetOrigin);
+  const targetUrl = new URL(
+    `${requestUrl.pathname}${requestUrl.search}`,
+    options.targetOrigin,
+  );
 
   return proxyRequest(request, targetUrl, {
-    unavailableMessage: options.unavailableMessage ?? 'Upstream server is unavailable.',
+    unavailableMessage:
+      options.unavailableMessage ?? 'Upstream server is unavailable.',
   });
 }

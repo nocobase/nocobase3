@@ -2,22 +2,22 @@ import { randomUUID } from 'node:crypto';
 
 import { Hono } from 'hono';
 
-import type { NocoBaseCacheManager } from '@nocobase/cache';
+import type { Caching } from '@nocobase/caching';
 
-const cacheDemoKey = 'examples:cache:demo';
-const cacheDemoTtl = '30s';
+const cacheDemoKey = 'demo';
+const cacheDemoTtl = 30_000;
 
 export interface CacheRoutesOptions {
-  cacheManager: NocoBaseCacheManager;
+  caching: Caching;
 }
 
 export function createCacheRoutes(options: CacheRoutesOptions): Hono {
   const routes = new Hono();
+  const cache = options.caching.getCache({ namespace: 'examples:cache' });
 
   routes.get('/demo', async (c) => {
-    const cache = options.cacheManager.use();
     let cached = true;
-    const value = await cache.getOrSet(
+    const value = await cache.wrap(
       cacheDemoKey,
       async () => {
         cached = false;
@@ -26,7 +26,7 @@ export function createCacheRoutes(options: CacheRoutesOptions): Hono {
           generatedAt: new Date().toISOString(),
         };
       },
-      { ttl: cacheDemoTtl },
+      cacheDemoTtl,
     );
 
     return c.json({
@@ -38,8 +38,6 @@ export function createCacheRoutes(options: CacheRoutesOptions): Hono {
   });
 
   routes.delete('/demo', async (c) => {
-    const cache = options.cacheManager.use();
-
     return c.json({
       key: cacheDemoKey,
       deleted: await cache.delete(cacheDemoKey),

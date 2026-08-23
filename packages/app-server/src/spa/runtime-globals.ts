@@ -3,7 +3,10 @@ import type { SpaRuntimeGlobalValue, SpaRuntimeGlobals } from './types.js';
 const runtimeGlobalsStartMarker = '<!-- nocobase-spa-runtime:start -->';
 const runtimeGlobalsEndMarker = '<!-- nocobase-spa-runtime:end -->';
 
-export function injectSpaRuntimeGlobals(html: string, runtimeGlobals: SpaRuntimeGlobals = {}): string {
+export function injectSpaRuntimeGlobals(
+  html: string,
+  runtimeGlobals: SpaRuntimeGlobals = {},
+): string {
   const cleanHtml = stripExistingRuntimeGlobals(html);
   const runtimeGlobalsHtml = createSpaRuntimeGlobalsHtml(runtimeGlobals);
   if (!runtimeGlobalsHtml) {
@@ -20,14 +23,25 @@ export function injectSpaRuntimeGlobals(html: string, runtimeGlobals: SpaRuntime
 }
 
 function stripExistingRuntimeGlobals(html: string): string {
-  const pattern = new RegExp(`${runtimeGlobalsStartMarker}[\\s\\S]*?${runtimeGlobalsEndMarker}\\s*`, 'g');
+  const pattern = new RegExp(
+    `${runtimeGlobalsStartMarker}[\\s\\S]*?${runtimeGlobalsEndMarker}\\s*`,
+    'g',
+  );
   return html.replace(pattern, '');
 }
 
-function createSpaRuntimeGlobalsHtml(runtimeGlobals: SpaRuntimeGlobals): string {
+function createSpaRuntimeGlobalsHtml(
+  runtimeGlobals: SpaRuntimeGlobals,
+): string {
   const assignments = Object.entries(runtimeGlobals)
-    .filter((entry): entry is [string, SpaRuntimeGlobalValue] => entry[1] !== undefined)
-    .map(([key, value]) => `  ${windowGlobalExpression(key)} = ${serializeRuntimeGlobalValue(value)};`);
+    .filter(
+      (entry): entry is [string, SpaRuntimeGlobalValue] =>
+        entry[1] !== undefined,
+    )
+    .map(
+      ([key, value]) =>
+        `  ${windowGlobalExpression(key)} = ${serializeRuntimeGlobalValue(value)};`,
+    );
 
   if (assignments.length === 0) {
     return '';

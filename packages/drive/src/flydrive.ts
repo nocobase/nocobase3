@@ -28,13 +28,15 @@ export function createDriveManager(
         name,
         () => createDriver(disk),
       ]),
-    ) as Record<string, () => DriverContract>,
+    ),
   });
 }
 
 export function assertDefaultDisk(config: AppDriveConfig): void {
   if (!config.disks[config.default]) {
-    throw new Error(`Default drive disk "${config.default}" is not configured.`);
+    throw new Error(
+      `Default drive disk "${config.default}" is not configured.`,
+    );
   }
 }
 
@@ -90,7 +92,9 @@ function createS3Credentials(
   };
 }
 
-function compactObject<TValue extends Record<string, unknown>>(value: TValue): TValue {
+function compactObject<TValue extends Record<string, unknown>>(
+  value: TValue,
+): TValue {
   for (const key of Object.keys(value)) {
     if (value[key] === undefined) {
       delete value[key];
