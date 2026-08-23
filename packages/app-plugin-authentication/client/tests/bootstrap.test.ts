@@ -14,7 +14,6 @@ describe('client bootstrap', () => {
       appClient,
       packageName: '@nocobase/app-plugin-authentication',
       refine: { setAuthProvider },
-      routes: { add: vi.fn() },
     });
 
     expect(setAuthProvider).toHaveBeenCalledExactlyOnceWith({

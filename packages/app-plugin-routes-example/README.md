@@ -4,9 +4,25 @@ This full-stack routes example demonstrates both sides of an application
 plugin:
 
 - `server/routes/index.ts` registers `GET /api/routes-example`;
-- `client/bootstrap.ts` registers the authenticated `/routes-example` page;
+- `client/routes.ts` declares the authenticated `/routes-example` page with
+  `defineClientRoutes`;
+- `client/providers.ts` contributes a synchronous application Provider with
+  `defineClientProviders`;
+- `client/components/` contains Provider component implementations;
+- `client/contexts/` contains shared React contexts and their hooks;
 - `client/pages/routes-example-page.tsx` is loaded only when that page route is
   visited and calls the server route through `@nocobase/app-sdk`.
+
+The plugin manifest exposes the client contributions independently:
+
+```json
+{
+  "client": {
+    "routes": "./client/routes",
+    "providers": "./client/providers"
+  }
+}
+```
 
 The page and API are both authenticated. The App's shared `/api/*` middleware
 remains authoritative for the server route; the client route guard is only the

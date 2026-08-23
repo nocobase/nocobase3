@@ -2,6 +2,8 @@ import { Button } from '@nocobase/app-client/ui';
 import { createAppClient } from '@nocobase/app-sdk';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
+import { useRoutesExample } from '../contexts/routes-example-context.js';
+
 interface RoutesExampleResponse {
   message: string;
   plugin: string;
@@ -10,6 +12,7 @@ interface RoutesExampleResponse {
 const appClient = createAppClient();
 
 export default function RoutesExamplePage(): ReactElement {
+  const { description } = useRoutesExample();
   const [result, setResult] = useState<RoutesExampleResponse>();
   const [error, setError] = useState<string>();
   const [isLoading, setIsLoading] = useState(true);
@@ -68,8 +71,8 @@ export default function RoutesExamplePage(): ReactElement {
         <p className='text-sm text-muted-foreground'>Client route example</p>
         <h1 className='text-2xl font-semibold'>Routes example</h1>
         <p className='text-sm text-muted-foreground'>
-          This page was lazy-loaded by a client plugin and reads a response from
-          the same plugin's server route.
+          {description} It was lazy-loaded and reads a response from the same
+          plugin's server route.
         </p>
       </header>
 

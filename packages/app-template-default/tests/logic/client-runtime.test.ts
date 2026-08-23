@@ -1,12 +1,14 @@
 import type {
   AppClientPluginBootstrap,
   AppClientPluginLoader,
+  AppClientProviderDefinition,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
-import type { ComponentType } from 'react';
 import type { AuthProvider } from '@refinedev/core';
+import type { ComponentType, PropsWithChildren } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { createApp } from '../../client/app.ts';
 import { createAppRuntime } from '../../client/runtime.ts';
 
 const authProvider: AuthProvider = {
@@ -18,7 +20,7 @@ const authProvider: AuthProvider = {
 };
 
 describe('app client runtime', () => {
-  it('loads modules in parallel and bootstraps them in registration order', async () => {
+  it('loads contribution modules in parallel and bootstraps in plugin order', async () => {
     const calls: string[] = [];
     let resolveFirst:
       ((module: { default: AppClientPluginBootstrap }) => void) | undefined;
@@ -30,14 +32,18 @@ describe('app client runtime', () => {
     const plugins: AppClientPluginLoader[] = [
       {
         packageName: '@nocobase/app-plugin-first',
-        load: async () => {
+        loadBootstrap: async () => {
           calls.push('load:first');
           return firstModule;
+        },
+        loadRoutes: async () => {
+          calls.push('load:routes');
+          return { default: [] };
         },
       },
       {
         packageName: '@nocobase/app-plugin-authentication',
-        load: async () => {
+        loadBootstrap: async () => {
           calls.push('load:authentication');
           resolveFirst?.({
             default: () => {
@@ -58,9 +64,13 @@ describe('app client runtime', () => {
 
     expect(runtime.authProvider).toBe(authProvider);
     expect(runtime.routes).toEqual([]);
-    expect(calls).toEqual([
+    expect(runtime.providers).toEqual([]);
+    expect(calls.slice(0, 3)).toEqual([
       'load:first',
+      'load:routes',
       'load:authentication',
+    ]);
+    expect(calls.slice(3)).toEqual([
       'bootstrap:first',
       'bootstrap:authentication',
     ]);
@@ -83,7 +93,7 @@ describe('app client runtime', () => {
     );
   });
 
-  it('collects plugin routes in bootstrap order', async () => {
+  it('collects declarative plugin routes in plugin order', async () => {
     const firstPage: ComponentType = () => null;
     const secondPage: ComponentType = () => null;
     const plugins: AppClientPluginLoader[] = [
@@ -118,31 +128,43 @@ describe('app client runtime', () => {
     expect(Object.isFrozen(runtime.routes)).toBe(true);
   });
 
-  it('rejects duplicate route names from the same plugin', async () => {
-    const plugins: AppClientPluginLoader[] = [
-      {
-        packageName: '@nocobase/app-plugin-routes',
-        load: async () => ({
-          default: ({ routes }) => {
-            routes.add({
-              name: 'list',
-              path: '/first',
-              componentLoader: async () => ({ default: () => null }),
-            });
-            routes.add({
-              name: 'list',
-              path: '/second',
-              componentLoader: async () => ({ default: () => null }),
-            });
-          },
-        }),
-      },
-      createAuthPlugin('@nocobase/app-plugin-authentication'),
-    ];
+  it('rejects invalid routes module exports', async () => {
+    const plugin: AppClientPluginLoader = {
+      packageName: '@nocobase/app-plugin-routes',
+      loadRoutes: async () => ({ default: undefined }) as never,
+    };
 
-    await expect(createAppRuntime({ plugins })).rejects.toThrow(
-      'Failed to bootstrap client plugin "@nocobase/app-plugin-routes".',
+    await expect(
+      createAppRuntime({
+        plugins: [
+          plugin,
+          createAuthPlugin('@nocobase/app-plugin-authentication'),
+        ],
+      }),
+    ).rejects.toThrow(
+      'Failed to load client routes for plugin "@nocobase/app-plugin-routes".',
     );
+  });
+
+  it('rejects duplicate route names from the same plugin', async () => {
+    const plugin: AppClientPluginLoader = {
+      packageName: '@nocobase/app-plugin-routes',
+      loadRoutes: async () => ({
+        default: [
+          createRoute('list', '/first'),
+          createRoute('list', '/second'),
+        ],
+      }),
+    };
+
+    await expect(
+      createAppRuntime({
+        plugins: [
+          plugin,
+          createAuthPlugin('@nocobase/app-plugin-authentication'),
+        ],
+      }),
+    ).rejects.toThrow('defined duplicate client route name "list"');
   });
 
   it('rejects semantically conflicting route paths', async () => {
@@ -157,53 +179,98 @@ describe('app client runtime', () => {
     ];
 
     await expect(createAppRuntime({ plugins })).rejects.toThrow(
-      'Failed to bootstrap client plugin "@nocobase/app-plugin-second".',
+      'conflicts with route "@nocobase/app-plugin-first:detail"',
     );
   });
 
-  it('rejects route registration after bootstrap completes', async () => {
-    let registerLater: (() => void) | undefined;
-    const plugins: AppClientPluginLoader[] = [
-      {
-        packageName: '@nocobase/app-plugin-routes',
-        load: async () => ({
-          default: ({ routes }) => {
-            registerLater = () => {
-              routes.add({
-                name: 'late',
-                path: '/late',
-                componentLoader: async () => ({ default: () => null }),
-              });
-            };
-          },
-        }),
-      },
-      createAuthPlugin('@nocobase/app-plugin-authentication'),
-    ];
-
-    await createAppRuntime({ plugins });
-
-    expect(registerLater).toBeDefined();
-    expect(registerLater).toThrow('can only be registered during bootstrap');
-  });
-
   it('wraps route component loading failures with the route id', async () => {
-    const plugins: AppClientPluginLoader[] = [
-      createRoutePlugin('@nocobase/app-plugin-routes', 'broken', '/broken'),
-      createAuthPlugin('@nocobase/app-plugin-authentication'),
-    ];
-    const runtime = await createAppRuntime({ plugins });
+    const runtime = await createAppRuntime({
+      plugins: [
+        createRoutePlugin('@nocobase/app-plugin-routes', 'broken', '/broken'),
+        createAuthPlugin('@nocobase/app-plugin-authentication'),
+      ],
+    });
 
     await expect(runtime.routes[0].componentLoader()).rejects.toThrow(
       'Failed to load client route "@nocobase/app-plugin-routes:broken".',
     );
+  });
+
+  it('sorts providers outer to inner using explicit constraints', async () => {
+    const OuterProvider = createProvider();
+    const InnerProvider = createProvider();
+    const plugins: AppClientPluginLoader[] = [
+      createProviderPlugin('@nocobase/app-plugin-feature', [
+        {
+          name: 'inner',
+          component: InnerProvider,
+          after: ['@nocobase/app-plugin-foundation:outer'],
+        },
+      ]),
+      createProviderPlugin('@nocobase/app-plugin-foundation', [
+        { name: 'outer', component: OuterProvider },
+      ]),
+      createAuthPlugin('@nocobase/app-plugin-authentication'),
+    ];
+
+    const runtime = await createAppRuntime({ plugins });
+
+    expect(runtime.providers.map((provider) => provider.id)).toEqual([
+      '@nocobase/app-plugin-foundation:outer',
+      '@nocobase/app-plugin-feature:inner',
+    ]);
+    expect(createApp(runtime).providers).toEqual([
+      OuterProvider,
+      InnerProvider,
+    ]);
+    expect(Object.isFrozen(runtime.providers)).toBe(true);
+  });
+
+  it('rejects missing provider references and cycles', async () => {
+    const Provider = createProvider();
+    const auth = createAuthPlugin('@nocobase/app-plugin-authentication');
+
+    await expect(
+      createAppRuntime({
+        plugins: [
+          createProviderPlugin('@nocobase/app-plugin-feature', [
+            {
+              name: 'feature',
+              component: Provider,
+              after: ['@nocobase/app-plugin-missing:provider'],
+            },
+          ]),
+          auth,
+        ],
+      }),
+    ).rejects.toThrow('references missing provider');
+
+    await expect(
+      createAppRuntime({
+        plugins: [
+          createProviderPlugin('@nocobase/app-plugin-cycle', [
+            {
+              name: 'first',
+              component: Provider,
+              after: ['@nocobase/app-plugin-cycle:second'],
+            },
+            {
+              name: 'second',
+              component: Provider,
+              after: ['@nocobase/app-plugin-cycle:first'],
+            },
+          ]),
+          auth,
+        ],
+      }),
+    ).rejects.toThrow('Circular client provider order detected');
   });
 });
 
 function createAuthPlugin(packageName: string): AppClientPluginLoader {
   return {
     packageName,
-    load: async () => ({
+    loadBootstrap: async () => ({
       default: ({ refine }) => {
         refine.setAuthProvider(authProvider);
       },
@@ -219,18 +286,38 @@ function createRoutePlugin(
 ): AppClientPluginLoader {
   return {
     packageName,
-    load: async () => ({
-      default: ({ routes }) => {
-        routes.add({
-          name,
-          path,
-          componentLoader: module
-            ? async () => module
-            : async () => {
-                throw new Error('Unable to load route module.');
-              },
-        });
-      },
+    loadRoutes: async () => ({
+      default: [createRoute(name, path, module)],
     }),
   };
+}
+
+function createRoute(
+  name: string,
+  path: string,
+  module?: AppClientRouteComponentModule,
+) {
+  return {
+    name,
+    path,
+    componentLoader: module
+      ? async () => module
+      : async () => {
+          throw new Error('Unable to load route module.');
+        },
+  };
+}
+
+function createProviderPlugin(
+  packageName: string,
+  providers: readonly AppClientProviderDefinition[],
+): AppClientPluginLoader {
+  return {
+    packageName,
+    loadProviders: async () => ({ default: providers }),
+  };
+}
+
+function createProvider(): ComponentType<PropsWithChildren> {
+  return ({ children }) => children;
 }

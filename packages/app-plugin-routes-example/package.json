@@ -10,18 +10,26 @@
   },
   "exports": {
     "./package.json": "./package.json",
-    "./client/bootstrap": {
-      "types": "./client/bootstrap.ts",
-      "import": "./client/bootstrap.ts"
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./client/providers": {
+      "types": "./client/providers.ts",
+      "import": "./client/providers.ts"
     }
   },
   "publishConfig": {
     "access": "public",
     "exports": {
       "./package.json": "./package.json",
-      "./client/bootstrap": {
-        "types": "./dist/client/bootstrap.d.ts",
-        "import": "./dist/client/bootstrap.js"
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./client/providers": {
+        "types": "./dist/client/providers.d.ts",
+        "import": "./dist/client/providers.js"
       }
     }
   },
@@ -30,11 +38,15 @@
   ],
   "nocobase": {
     "plugin": {
-      "client": "./client/bootstrap"
+      "client": {
+        "routes": "./client/routes",
+        "providers": "./client/providers"
+      }
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint . --max-warnings 0",
@@ -52,11 +64,14 @@
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "@types/react": "catalog:",
     "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

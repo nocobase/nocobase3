@@ -6,21 +6,24 @@ import { createAppClientPluginLoadersSource } from '../../scripts/client-plugins
 import type { ResolvedAppPlugin } from '../../server/plugins/index.ts';
 
 describe('app client plugin loaders', () => {
-  it('generates static imports only for enabled client plugins', () => {
+  it('generates independent loaders only for enabled client contributions', () => {
     const source = createAppClientPluginLoadersSource([
       createPlugin({
         packageName: '@nocobase/app-plugin-authentication',
-        client: './client/bootstrap',
+        client: { bootstrap: './client/bootstrap' },
         enabled: true,
       }),
       createPlugin({
         packageName: '@nocobase/app-plugin-routes-example',
-        client: './client/bootstrap',
+        client: {
+          routes: './client/routes',
+          providers: './client/providers',
+        },
         enabled: true,
       }),
       createPlugin({
         packageName: '@nocobase/app-plugin-disabled',
-        client: './client/bootstrap',
+        client: { bootstrap: './client/bootstrap' },
         enabled: false,
       }),
       createPlugin({
@@ -30,31 +33,34 @@ describe('app client plugin loaders', () => {
     ]);
 
     expect(source).toContain(
-      'import("@nocobase/app-plugin-authentication/client/bootstrap")',
+      'loadBootstrap: () => import("@nocobase/app-plugin-authentication/client/bootstrap")',
     );
     expect(source).toContain(
-      'import("@nocobase/app-plugin-routes-example/client/bootstrap")',
+      'loadRoutes: () => import("@nocobase/app-plugin-routes-example/client/routes")',
+    );
+    expect(source).toContain(
+      'loadProviders: () => import("@nocobase/app-plugin-routes-example/client/providers")',
     );
     expect(source).not.toContain('@nocobase/app-plugin-disabled');
     expect(source).not.toContain('@nocobase/app-plugin-server-only');
   });
 
-  it('rejects an unsafe client entry', () => {
+  it('rejects an unsafe client contribution entry', () => {
     expect(() =>
       createAppClientPluginLoadersSource([
         createPlugin({
           packageName: '@nocobase/app-plugin-invalid',
-          client: '../client/bootstrap',
+          client: { routes: '../client/routes' },
           enabled: true,
         }),
       ]),
-    ).toThrow('client entry must be a safe package subpath');
+    ).toThrow('client routes entry must be a safe package subpath');
   });
 });
 
 function createPlugin(options: {
   packageName: string;
-  client?: string;
+  client?: ResolvedAppPlugin['manifest']['client'];
   enabled: boolean;
 }): ResolvedAppPlugin {
   return {

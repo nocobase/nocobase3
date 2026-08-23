@@ -707,6 +707,9 @@ describe('app plugins', () => {
     expect(authenticationPlugin?.seedsDirectory).toMatch(
       /app-plugin-authentication\/database\/seeds$/,
     );
+    expect(authenticationPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+    });
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
       version: '0.1.0',
@@ -726,7 +729,10 @@ describe('app plugins', () => {
     });
     expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
     expect(routesExamplePlugin?.seedsDirectory).toBeUndefined();
-    expect(routesExamplePlugin?.manifest.client).toBe('./client/bootstrap');
+    expect(routesExamplePlugin?.manifest.client).toEqual({
+      routes: './client/routes',
+      providers: './client/providers',
+    });
     expect(routesExamplePlugin?.routesEntry).toMatch(
       /app-plugin-routes-example\/server\/routes\/index\.ts$/,
     );

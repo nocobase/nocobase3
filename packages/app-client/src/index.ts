@@ -6,15 +6,28 @@ export {
   type AppClientProvider,
   type AppClientRefineConfig,
 } from './config.js';
+export {
+  defineClientProviders,
+  defineClientRoutes,
+  resolveAppClientContributions,
+} from './plugins.js';
 export type {
   AppClientPluginBootstrap,
   AppClientPluginBootstrapContext,
+  AppClientPluginBootstrapLoader,
   AppClientPluginBootstrapModule,
+  AppClientPluginContributions,
   AppClientPluginLoader,
+  AppClientProviderDefinition,
+  AppClientProvidersLoader,
+  AppClientProvidersModule,
   AppClientRefineRegistry,
+  AppClientRegisteredProvider,
   AppClientRegisteredRoute,
   AppClientRouteComponentLoader,
   AppClientRouteComponentModule,
-  AppClientRouteRegistration,
-  AppClientRouteRegistry,
+  AppClientRouteDefinition,
+  AppClientRoutesLoader,
+  AppClientRoutesModule,
+  ResolvedAppClientContributions,
 } from './plugins.js';

@@ -39,23 +39,56 @@ export function createAppClientPluginLoadersSource(
   plugins: readonly ResolvedAppPlugin[],
 ): string {
   const loaders = plugins.flatMap((plugin) => {
-    const clientEntry = plugin.manifest.client;
-    if (!plugin.enabled || !clientEntry) {
+    const client = plugin.manifest.client;
+    if (!plugin.enabled || !client) {
       return [];
     }
 
     return [
       {
         packageName: plugin.packageName,
-        moduleId: resolveClientModuleId(plugin.packageName, clientEntry),
+        bootstrapModuleId: resolveOptionalClientModuleId(
+          plugin.packageName,
+          client.bootstrap,
+          'bootstrap',
+        ),
+        routesModuleId: resolveOptionalClientModuleId(
+          plugin.packageName,
+          client.routes,
+          'routes',
+        ),
+        providersModuleId: resolveOptionalClientModuleId(
+          plugin.packageName,
+          client.providers,
+          'providers',
+        ),
       },
     ];
   });
   const entries = loaders
     .map(
-      ({ packageName, moduleId }) => `  {
-    packageName: ${JSON.stringify(packageName)},
-    load: () => import(${JSON.stringify(moduleId)}),
+      ({
+        bootstrapModuleId,
+        packageName,
+        providersModuleId,
+        routesModuleId,
+      }) => `  {
+    packageName: ${JSON.stringify(packageName)},${
+      bootstrapModuleId
+        ? `
+    loadBootstrap: () => import(${JSON.stringify(bootstrapModuleId)}),`
+        : ''
+    }${
+      routesModuleId
+        ? `
+    loadRoutes: () => import(${JSON.stringify(routesModuleId)}),`
+        : ''
+    }${
+      providersModuleId
+        ? `
+    loadProviders: () => import(${JSON.stringify(providersModuleId)}),`
+        : ''
+    }
   }`,
     )
     .join(',\n');
@@ -63,17 +96,21 @@ export function createAppClientPluginLoadersSource(
   return `export const appClientPluginLoaders = [\n${entries}\n];\n`;
 }
 
-function resolveClientModuleId(
+function resolveOptionalClientModuleId(
   packageName: string,
-  clientEntry: string,
+  clientEntry: string | undefined,
+  contribution: string,
 ): string {
+  if (clientEntry === undefined) {
+    return '';
+  }
   if (
     !clientEntry.startsWith('./') ||
     clientEntry.includes('\\') ||
     clientEntry.split('/').includes('..')
   ) {
     throw new Error(
-      `Plugin "${packageName}" client entry must be a safe package subpath beginning with "./".`,
+      `Plugin "${packageName}" client ${contribution} entry must be a safe package subpath beginning with "./".`,
     );
   }
 

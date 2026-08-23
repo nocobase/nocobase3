@@ -1,4 +1,4 @@
-import { Button } from '@nocobase/app-client/ui';
+import { Button, Loading } from '@nocobase/app-client/ui';
 import { Authenticated } from '@refinedev/core';
 import { Suspense, type ReactElement } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -66,15 +66,7 @@ function PluginRoute({ route }: PluginRouteProps): ReactElement {
 }
 
 function PluginRouteLoading(): ReactElement {
-  return (
-    <main
-      className='grid min-h-svh place-items-center px-6'
-      role='status'
-      aria-label='Loading page'
-    >
-      <p className='text-sm text-muted-foreground'>Loading page…</p>
-    </main>
-  );
+  return <Loading fullscreen label='Loading page' />;
 }
 
 function PluginRouteError({ route }: PluginRouteProps): ReactElement {

@@ -1,6 +1,6 @@
 # 插件开发快速开始
 
-本文介绍如何在当前 monorepo 中创建一个 NocoBase 服务端插件，并将它注册到指定 App。所有命令都应在仓库根目录执行。
+本文介绍如何在当前 monorepo 中创建一个 NocoBase 插件，并将它注册到指定 App。所有命令都应在仓库根目录执行。
 
 ## 1. 创建插件
 
@@ -115,6 +115,129 @@ GET /audit-log
 
 启动 App 后，可以使用浏览器或 `curl` 访问该 endpoint。实际主机和端口以 `pnpm app:dev` 的启动输出为准。
 
+### Client Bootstrap、Routes 和 Providers
+
+客户端贡献在插件 `package.json` 中分别声明：
+
+```json
+{
+  "exports": {
+    "./client/bootstrap": {
+      "types": "./client/bootstrap.ts",
+      "import": "./client/bootstrap.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./client/providers": {
+      "types": "./client/providers.ts",
+      "import": "./client/providers.ts"
+    }
+  },
+  "nocobase": {
+    "plugin": {
+      "client": {
+        "bootstrap": "./client/bootstrap",
+        "routes": "./client/routes",
+        "providers": "./client/providers"
+      }
+    }
+  }
+}
+```
+
+三个入口都是可选的：
+
+- `client/bootstrap.ts` 处理认证等命令式初始化；
+- `client/routes.ts` 使用 `defineClientRoutes()` 声明路由，页面通过
+  `componentLoader` 按 URL 访问加载；
+- `client/providers.ts` 使用 `defineClientProviders()` 声明同步 Provider。
+
+推荐让三个协议入口保持在 `client/` 根目录，并按职责存放具体实现：
+
+```text
+client/
+├── bootstrap.ts
+├── routes.ts
+├── providers.ts
+├── components/
+│   └── audit-log-provider.tsx
+├── contexts/
+│   └── audit-log-context.ts
+└── pages/
+    └── audit-log-list.tsx
+```
+
+其中：
+
+- `bootstrap.ts`、`routes.ts` 和 `providers.ts` 是插件协议入口，只负责声明或组装贡献；
+- `components/` 存放 Provider 等 React 组件实现；
+- `contexts/` 存放 React Context、相关类型和 hooks；
+- `pages/` 存放由路由按需加载的页面组件。
+
+不要同时使用 `client/providers.ts` 和 `client/providers/`。虽然内核会校验入口必须是文件，
+但同名文件和目录容易让人混淆，也可能给文件解析工具带来歧义。
+
+路由示例：
+
+```ts
+import {
+  defineClientRoutes,
+  type AppClientRouteDefinition,
+} from '@nocobase/app-client/plugins';
+
+const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
+  {
+    name: 'list',
+    path: '/audit-log',
+    componentLoader: () => import('./pages/audit-log-list.js'),
+  },
+]);
+
+export default routes;
+```
+
+Provider 示例：
+
+```ts
+import {
+  defineClientProviders,
+  type AppClientProviderDefinition,
+} from '@nocobase/app-client/plugins';
+
+import { AuditLogProvider } from './components/audit-log-provider.js';
+
+const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
+  [
+    {
+      name: 'audit-log',
+      component: AuditLogProvider,
+    },
+  ],
+);
+
+export default providers;
+```
+
+Provider 数组按“外层到内层”解释。存在依赖关系时使用完整 ID：
+
+```ts
+const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
+  [
+    {
+      name: 'audit-log',
+      component: AuditLogProvider,
+      after: ['@nocobase/app-plugin-theme:theme'],
+    },
+  ],
+);
+
+export default providers;
+```
+
+内核会检查重复名称、缺失引用和循环依赖，并执行稳定拓扑排序。
+
 ### Migration 和 Seed
 
 脚手架生成的数据库文件以 `.ts.example` 结尾，因此默认不会被 NocoBase 加载或执行：
@@ -190,7 +313,31 @@ pnpm plugin:unregister --help
 pnpm plugin:remove --help
 ```
 
-## 6. 删除插件
+## 6. 检查 App 客户端贡献
+
+读取指定 App 已启用插件的 routes 和最终 Provider 顺序：
+
+```bash
+pnpm app:client:inspect --app app-template-default
+```
+
+只查看其中一种贡献：
+
+```bash
+pnpm app:client:inspect --app app-template-default --type routes
+pnpm app:client:inspect --app app-template-default --type providers
+```
+
+输出机器可读 JSON：
+
+```bash
+pnpm app:client:inspect --app app-template-default --json
+```
+
+CLI 与浏览器 runtime 复用相同的路由校验和 Provider 排序逻辑。它不会执行
+`bootstrap.ts`，也不会调用路由的 `componentLoader` 或渲染 Provider。
+
+## 7. 删除插件
 
 `plugin:remove` 会拒绝删除仍被 workspace App 引用的插件。先解除指定 App 的注册：
 

@@ -1,8 +1,8 @@
 import { appClientPluginLoaders } from 'virtual:nocobase-app-client-plugins';
+import { AppClientRoot } from '@nocobase/app-client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { App } from './app-root';
 import { createApp } from './app';
 import { createAppRuntime } from './runtime';
 import { AppStartupError } from './startup';
@@ -25,7 +25,7 @@ async function start(): Promise<void> {
 
     root.render(
       <StrictMode>
-        <App config={app} />
+        <AppClientRoot config={app} />
       </StrictMode>,
     );
   } catch (error) {

@@ -1,9 +1,11 @@
-import type {
-  AppClientPluginLoader,
-  AppClientRegisteredRoute,
-  AppClientRouteComponentLoader,
-  AppClientRouteRegistration,
-  AppClientRouteRegistry,
+import {
+  resolveAppClientContributions,
+  type AppClientPluginBootstrap,
+  type AppClientPluginLoader,
+  type AppClientProviderDefinition,
+  type AppClientRegisteredProvider,
+  type AppClientRegisteredRoute,
+  type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
 import { createAppClient, type AppClient } from '@nocobase/app-sdk';
 import { dataProvider } from '@nocobase/portal-sdk/data';
@@ -15,6 +17,7 @@ export interface AppClientRuntime {
   readonly authProvider: AuthProvider;
   readonly basename: string;
   readonly dataProvider: DataProvider;
+  readonly providers: readonly AppClientRegisteredProvider[];
   readonly routes: readonly AppClientRegisteredRoute[];
 }
 
@@ -22,42 +25,27 @@ export interface CreateAppRuntimeOptions {
   readonly plugins: readonly AppClientPluginLoader[];
 }
 
+interface LoadedClientPlugin {
+  readonly packageName: string;
+  readonly bootstrap?: AppClientPluginBootstrap;
+  readonly providers?: readonly AppClientProviderDefinition[];
+  readonly routes?: readonly AppClientRouteDefinition[];
+}
+
 export async function createAppRuntime(
   options: CreateAppRuntimeOptions,
 ): Promise<AppClientRuntime> {
   const appClient = createAppClient();
   const loadedPlugins = await Promise.all(
-    options.plugins.map(async (plugin) => {
-      try {
-        const module = await plugin.load();
-        if (typeof module.default !== 'function') {
-          throw new Error(
-            'The bootstrap module must default-export a function.',
-          );
-        }
-        return { packageName: plugin.packageName, bootstrap: module.default };
-      } catch (error) {
-        throw new Error(
-          `Failed to load client plugin "${plugin.packageName}".`,
-          { cause: error },
-        );
-      }
-    }),
+    options.plugins.map(loadClientPlugin),
   );
   let authProvider: AuthProvider | undefined;
   let authProviderOwner: string | undefined;
-  const registeredRoutes: AppClientRegisteredRoute[] = [];
-  const routeIds = new Set<string>();
-  const routePaths = new Map<string, AppClientRegisteredRoute>();
 
   for (const plugin of loadedPlugins) {
-    const routeRegistry = createPluginRouteRegistry({
-      packageName: plugin.packageName,
-      registeredRoutes,
-      routeIds,
-      routePaths,
-    });
-
+    if (!plugin.bootstrap) {
+      continue;
+    }
     try {
       await plugin.bootstrap({
         appClient,
@@ -73,15 +61,12 @@ export async function createAppRuntime(
             authProviderOwner = plugin.packageName;
           },
         },
-        routes: routeRegistry.registry,
       });
     } catch (error) {
       throw new Error(
         `Failed to bootstrap client plugin "${plugin.packageName}".`,
         { cause: error },
       );
-    } finally {
-      routeRegistry.close();
     }
   }
 
@@ -91,164 +76,108 @@ export async function createAppRuntime(
     );
   }
 
-  return {
+  const contributions = resolveAppClientContributions(loadedPlugins);
+  return Object.freeze({
     appClient,
     authProvider,
     basename: getPortalBase(),
     dataProvider,
-    routes: Object.freeze([...registeredRoutes]),
-  };
-}
-
-interface CreatePluginRouteRegistryOptions {
-  readonly packageName: string;
-  readonly registeredRoutes: AppClientRegisteredRoute[];
-  readonly routeIds: Set<string>;
-  readonly routePaths: Map<string, AppClientRegisteredRoute>;
-}
-
-interface PluginRouteRegistryController {
-  readonly registry: AppClientRouteRegistry;
-  close(): void;
-}
-
-function createPluginRouteRegistry(
-  options: CreatePluginRouteRegistryOptions,
-): PluginRouteRegistryController {
-  let open = true;
-
-  return {
-    registry: {
-      add(route): void {
-        if (!open) {
-          throw new Error(
-            `Client routes for plugin "${options.packageName}" can only be registered during bootstrap.`,
-          );
-        }
-
-        const registeredRoute = createRegisteredRoute(
-          options.packageName,
-          route,
-        );
-        if (options.routeIds.has(registeredRoute.id)) {
-          throw new Error(
-            `Plugin "${options.packageName}" registered duplicate route name "${registeredRoute.name}".`,
-          );
-        }
-
-        const pathSignature = createRoutePathSignature(registeredRoute.path);
-        const existingRoute = options.routePaths.get(pathSignature);
-        if (existingRoute) {
-          throw new Error(
-            `Client route path "${registeredRoute.path}" from plugin "${options.packageName}" conflicts with route "${existingRoute.id}" at "${existingRoute.path}".`,
-          );
-        }
-
-        options.routeIds.add(registeredRoute.id);
-        options.routePaths.set(pathSignature, registeredRoute);
-        options.registeredRoutes.push(registeredRoute);
-      },
-    },
-    close(): void {
-      open = false;
-    },
-  };
-}
-
-function createRegisteredRoute(
-  packageName: string,
-  route: AppClientRouteRegistration,
-): AppClientRegisteredRoute {
-  const name = normalizeRouteName(route.name, packageName);
-  const path = normalizeRoutePath(route.path, packageName, name);
-  if (typeof route.componentLoader !== 'function') {
-    throw new Error(
-      `Client route "${name}" from plugin "${packageName}" must define a componentLoader function.`,
-    );
-  }
-
-  const id = `${packageName}:${name}`;
-  const componentLoader = wrapRouteComponentLoader(route.componentLoader, id);
-
-  return Object.freeze({
-    componentLoader,
-    id,
-    name,
-    packageName,
-    path,
+    providers: contributions.providers,
+    routes: contributions.routes,
   });
 }
 
-function normalizeRouteName(name: string, packageName: string): string {
-  const normalized = name.trim();
-  if (!normalized) {
-    throw new Error(
-      `Client route from plugin "${packageName}" must define a non-empty name.`,
-    );
-  }
-  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(normalized)) {
-    throw new Error(
-      `Client route name "${name}" from plugin "${packageName}" contains unsupported characters.`,
-    );
-  }
-  return normalized;
+async function loadClientPlugin(
+  plugin: AppClientPluginLoader,
+): Promise<LoadedClientPlugin> {
+  const [bootstrap, routes, providers] = await Promise.all([
+    loadBootstrap(plugin),
+    loadRoutes(plugin),
+    loadProviders(plugin),
+  ]);
+
+  return Object.freeze({
+    packageName: plugin.packageName,
+    bootstrap,
+    routes,
+    providers,
+  });
 }
 
-function normalizeRoutePath(
-  routePath: string,
-  packageName: string,
-  routeName: string,
-): string {
-  const trimmed = routePath.trim();
-  if (
-    !trimmed.startsWith('/') ||
-    trimmed.includes('\\') ||
-    trimmed.includes('?') ||
-    trimmed.includes('#') ||
-    trimmed.includes('*') ||
-    trimmed.split('/').some((segment) => segment === '.' || segment === '..')
-  ) {
-    throw new Error(
-      `Client route "${routeName}" from plugin "${packageName}" must use an absolute application path without query, hash, wildcard, or traversal segments.`,
-    );
+async function loadBootstrap(
+  plugin: AppClientPluginLoader,
+): Promise<AppClientPluginBootstrap | undefined> {
+  if (!plugin.loadBootstrap) {
+    return undefined;
   }
-
-  const normalized =
-    trimmed === '/'
-      ? '/'
-      : trimmed.replace(/\/+$/g, '').replace(/\/{2,}/g, '/');
-  if (normalized === '/' || normalized.toLowerCase() === '/login') {
-    throw new Error(
-      `Client route "${routeName}" from plugin "${packageName}" cannot use reserved path "${normalized}".`,
-    );
-  }
-  return normalized;
-}
-
-function createRoutePathSignature(routePath: string): string {
-  return routePath
-    .split('/')
-    .map((segment) => (segment.startsWith(':') ? ':' : segment.toLowerCase()))
-    .join('/');
-}
-
-function wrapRouteComponentLoader(
-  componentLoader: AppClientRouteComponentLoader,
-  routeId: string,
-): AppClientRouteComponentLoader {
-  return async () => {
-    try {
-      const module = await componentLoader();
-      if (typeof module.default !== 'function') {
-        throw new Error(
-          'The route component module must default-export a React component.',
-        );
-      }
-      return module;
-    } catch (error) {
-      throw new Error(`Failed to load client route "${routeId}".`, {
-        cause: error,
-      });
+  try {
+    const module = await plugin.loadBootstrap();
+    if (typeof module.default !== 'function') {
+      throw new Error('The bootstrap entry must default-export a function.');
     }
-  };
+    return module.default;
+  } catch (error) {
+    throw new Error(
+      `Failed to load client bootstrap for plugin "${plugin.packageName}".`,
+      { cause: error },
+    );
+  }
+}
+
+async function loadRoutes(
+  plugin: AppClientPluginLoader,
+): Promise<readonly AppClientRouteDefinition[] | undefined> {
+  if (!plugin.loadRoutes) {
+    return undefined;
+  }
+  try {
+    const module = await plugin.loadRoutes();
+    const definitions: unknown = module.default;
+    if (!isRouteDefinitions(definitions)) {
+      throw new Error(
+        'The client routes entry must default-export a route definition array.',
+      );
+    }
+    return definitions;
+  } catch (error) {
+    throw new Error(
+      `Failed to load client routes for plugin "${plugin.packageName}".`,
+      { cause: error },
+    );
+  }
+}
+
+async function loadProviders(
+  plugin: AppClientPluginLoader,
+): Promise<readonly AppClientProviderDefinition[] | undefined> {
+  if (!plugin.loadProviders) {
+    return undefined;
+  }
+  try {
+    const module = await plugin.loadProviders();
+    const definitions: unknown = module.default;
+    if (!isProviderDefinitions(definitions)) {
+      throw new Error(
+        'The client providers entry must default-export a provider definition array.',
+      );
+    }
+    return definitions;
+  } catch (error) {
+    throw new Error(
+      `Failed to load client providers for plugin "${plugin.packageName}".`,
+      { cause: error },
+    );
+  }
+}
+
+function isRouteDefinitions(
+  value: unknown,
+): value is readonly AppClientRouteDefinition[] {
+  return Array.isArray(value);
+}
+
+function isProviderDefinitions(
+  value: unknown,
+): value is readonly AppClientProviderDefinition[] {
+  return Array.isArray(value);
 }
