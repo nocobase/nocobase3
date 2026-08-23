@@ -11,7 +11,7 @@ const rootPackagePath = path.join(rootDir, 'package.json');
 const distPackagePath = path.join(distDir, 'package.json');
 const workspacePackagesDir = path.resolve(rootDir, '..');
 const vendorDir = path.join(distDir, 'vendor');
-const serverRuntimeDirs = ['server', 'scripts'];
+const runtimeDirs = ['server', 'database', 'scripts'];
 const databaseRuntimeDrivers = ['better-sqlite3', 'pg', 'mysql2'];
 
 const toPosix = (value) => value.split(path.sep).join('/');
@@ -117,6 +117,8 @@ const getVendorPackagePath = (packageName) =>
 
 const createRuntimePackageJson = (packageJson) => ({
   name: packageJson.name,
+  displayName: packageJson.displayName,
+  description: packageJson.description,
   version: packageJson.version ?? '0.0.0',
   private: true,
   type: packageJson.type,
@@ -124,6 +126,7 @@ const createRuntimePackageJson = (packageJson) => ({
   types: packageJson.types,
   exports: packageJson.publishConfig?.exports ?? packageJson.exports,
   engines: packageJson.engines,
+  nocobase: packageJson.nocobase,
 });
 
 const copyWorkspacePackage = (packageName, packageDir) => {
@@ -151,8 +154,9 @@ if (!fs.existsSync(path.join(distDir, 'server'))) {
 }
 
 const rootPackage = readJson(rootPackagePath);
+const configuredPluginNames = Object.keys(rootPackage.nocobase?.plugins ?? {});
 const workspacePackages = listWorkspacePackages();
-const files = serverRuntimeDirs.flatMap((runtimeDir) =>
+const files = runtimeDirs.flatMap((runtimeDir) =>
   walkFiles(path.join(distDir, runtimeDir)).filter((file) =>
     /\.[cm]?js$/.test(file),
   ),
@@ -222,6 +226,10 @@ for (const file of files) {
   }
 }
 
+for (const packageName of configuredPluginNames) {
+  addPackage(packageName);
+}
+
 for (const packageName of workspacePackageNames) {
   copyWorkspacePackage(packageName, workspacePackages.get(packageName));
 }
@@ -247,6 +255,7 @@ const distPackage = {
   version: rootPackage.version ?? '0.0.0',
   private: true,
   type: 'module',
+  nocobase: rootPackage.nocobase,
   main: './server/embedded.js',
   exports: {
     '.': './server/embedded.js',
@@ -256,6 +265,7 @@ const distPackage = {
   scripts: {
     start: 'node ./server/standalone.js',
     migrate: 'node ./scripts/migrate.js',
+    seed: 'node ./scripts/seed.js',
   },
   engines: rootPackage.engines ?? {
     node: '>=20',

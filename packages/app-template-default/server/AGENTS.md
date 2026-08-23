@@ -19,7 +19,7 @@ verify them at the route, service, and configuration boundary that changed.
 - `config/*` owns environment parsing and defaults. Prefer adding config there
   instead of reading `process.env` in routes or services.
 - `routes/*` owns HTTP shape. Keep business logic in `services/*`.
-- `migrations/*` owns database shape. Add or update a focused migration when a
+- `../database/migrations/*` owns database shape. Add or update a focused migration when a
   service needs durable storage.
 
 ## Runtime Contract
@@ -76,7 +76,7 @@ debugging path, proxy, database, or SPA index issues.
 
 ## Adding Storage
 
-1. Create a migration under `server/migrations` with a timestamped name.
+1. Create a migration under `database/migrations` with a timestamped name.
 2. Keep `up` and `down` focused on one schema change.
 3. Add a service that uses the configured `DatabaseManager`; do not open an
    extra database connection inside the service.

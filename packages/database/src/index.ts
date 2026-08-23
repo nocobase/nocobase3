@@ -6,3 +6,4 @@ export * from './migration/index.js';
 export * from './naming/index.js';
 export * from './query/index.js';
 export * from './schema/index.js';
+export * from './seed/index.js';

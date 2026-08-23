@@ -23,6 +23,10 @@
       "types": "./src/database/index.ts",
       "import": "./src/database/index.ts"
     },
+    "./plugins": {
+      "types": "./src/plugins/index.ts",
+      "import": "./src/plugins/index.ts"
+    },
     "./runtime": {
       "types": "./src/runtime/index.ts",
       "import": "./src/runtime/index.ts"
@@ -57,6 +61,10 @@
       "./database": {
         "types": "./dist/database/index.d.ts",
         "import": "./dist/database/index.js"
+      },
+      "./plugins": {
+        "types": "./dist/plugins/index.d.ts",
+        "import": "./dist/plugins/index.js"
       },
       "./runtime": {
         "types": "./dist/runtime/index.d.ts",

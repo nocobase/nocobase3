@@ -8,6 +8,7 @@ import type {
   LoadedMigration,
   LoadMigrationsOptions,
   MigrationDefinition,
+  MigrationSource,
 } from './types.js';
 
 export const DEFAULT_MIGRATION_EXTENSIONS = [
@@ -16,27 +17,15 @@ export const DEFAULT_MIGRATION_EXTENSIONS = [
   '.cjs',
   '.ts',
 ] as const;
+export const DEFAULT_MIGRATION_PACKAGE_NAME = 'app';
 
 export async function loadMigrations(
   options: LoadMigrationsOptions,
 ): Promise<LoadedMigration[]> {
-  const directory = resolve(options.directory);
-  const entries = await readMigrationDirectory(directory);
-  const extensions = new Set(
-    options.extensions ?? DEFAULT_MIGRATION_EXTENSIONS,
-  );
-  const files = entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name)
-    .filter((fileName) => isMigrationFile(fileName, extensions))
-    .sort();
-
-  const migrations: LoadedMigration[] = [];
-  for (const fileName of files) {
-    migrations.push(
-      await loadMigrationFile(join(directory, fileName), fileName),
-    );
-  }
+  const sources = normalizeMigrationSources(options);
+  const migrations = (
+    await Promise.all(sources.map((source) => loadMigrationSource(source)))
+  ).flat();
 
   validateUniqueMigrationNames(migrations);
   return migrations.sort((a, b) => a.name.localeCompare(b.name));
@@ -48,6 +37,78 @@ export async function validateMigrations(
   return loadMigrations(
     typeof options === 'string' ? { directory: options } : options,
   );
+}
+
+async function loadMigrationSource(
+  source: MigrationSource,
+): Promise<LoadedMigration[]> {
+  const directory = resolve(source.directory);
+  const entries = await readMigrationDirectory(directory);
+  const extensions = new Set(source.extensions ?? DEFAULT_MIGRATION_EXTENSIONS);
+  const files = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((fileName) => isMigrationFile(fileName, extensions))
+    .sort();
+
+  const migrations: LoadedMigration[] = [];
+  for (const fileName of files) {
+    migrations.push(
+      await loadMigrationFile(
+        source.packageName,
+        join(directory, fileName),
+        fileName,
+      ),
+    );
+  }
+
+  return migrations;
+}
+
+function normalizeMigrationSources(
+  options: LoadMigrationsOptions,
+): MigrationSource[] {
+  if (options.directory !== undefined && options.sources !== undefined) {
+    throw new Error(
+      'Migration options cannot define both directory and sources.',
+    );
+  }
+
+  if (options.sources !== undefined) {
+    return options.sources.map((source) => ({
+      packageName: validatePackageName(source.packageName),
+      directory: validateDirectory(source.directory),
+      extensions: source.extensions ?? options.extensions,
+    }));
+  }
+
+  if (options.directory === undefined) {
+    throw new Error('Migration options must define directory or sources.');
+  }
+
+  return [
+    {
+      packageName: validatePackageName(
+        options.packageName ?? DEFAULT_MIGRATION_PACKAGE_NAME,
+      ),
+      directory: validateDirectory(options.directory),
+      extensions: options.extensions,
+    },
+  ];
+}
+
+function validateDirectory(directory: unknown): string {
+  if (!isNonEmptyString(directory)) {
+    throw new Error('Migration directory must be a non-empty string.');
+  }
+  return directory;
+}
+
+function validatePackageName(packageName: unknown): string {
+  if (!isNonEmptyString(packageName)) {
+    throw new Error('Migration packageName must be a non-empty string.');
+  }
+  return packageName;
 }
 
 async function readMigrationDirectory(directory: string): Promise<Dirent[]> {
@@ -62,6 +123,7 @@ async function readMigrationDirectory(directory: string): Promise<Dirent[]> {
 }
 
 async function loadMigrationFile(
+  packageName: string,
   filePath: string,
   fileName: string,
 ): Promise<LoadedMigration> {
@@ -74,6 +136,7 @@ async function loadMigrationFile(
   validateMigrationDefinition(migration, filePath, fileName);
 
   return {
+    packageName,
     name: migration.name,
     filePath,
     fileName,

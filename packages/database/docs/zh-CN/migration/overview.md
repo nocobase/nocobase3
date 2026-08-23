@@ -4,6 +4,8 @@ Migration 用于把数据库变更按顺序应用到目标连接。每个 migrat
 
 Migration 的写法刻意保持简单：结构变更用 `builder`，数据变更用 `query`，特殊底层能力才用 `connection.client()`。
 
+一个应用可以同时加载多个 package 的 migration。每个插件 package 提供自己的 migration 目录，runner 会把它们合并成一个全局序列。`packageName` 用于记录来源和诊断，执行顺序与唯一性仍然只由 `name` 决定。
+
 ## 先选入口
 
 写 migration 前先判断变更类型：
@@ -251,11 +253,32 @@ import { createMigrator } from '@nocobase/database';
 const migrator = createMigrator({
   database,
   connection: 'main',
-  directory: './server/migrations',
+  directory: './database/migrations',
 });
 
 await migrator.latest();
 ```
+
+插件系统需要加载多个 package 时，使用 `sources`：
+
+```ts
+const migrator = createMigrator({
+  database,
+  connection: 'main',
+  sources: [
+    {
+      packageName: '@nocobase/plugin-users',
+      directory: './plugins/users/database/migrations',
+    },
+    {
+      packageName: '@nocobase/plugin-workflow',
+      directory: './plugins/workflow/database/migrations',
+    },
+  ],
+});
+```
+
+旧的 `directory` 写法仍然有效，未指定 `packageName` 时记录为 `app`。同一 runner 中所有来源的 migration `name` 必须全局唯一；不能因为属于不同 package 就使用相同的 name。
 
 `database` 只用于 runner 找到目标连接。Migration 文件里不会收到 `database`。
 
@@ -329,6 +352,7 @@ Runner 使用执行记录表保存已经成功执行的 migration：
 ```text
 __nocobase_migrations
 - id
+- package_name
 - name
 - batch
 - checksum
@@ -337,6 +361,8 @@ __nocobase_migrations
 ```
 
 `checksum` 用于检测已经执行过的 migration 文件是否被修改。检测到变化时，runner 会停止执行并报错。
+
+已有的旧历史表没有 `package_name` 时，runner 会自动增加该字段，并把旧记录归类为 `app`。已执行判断仍按全局 `name` 进行，不会因为 `packageName` 变化而重复执行。
 
 ## Lock
 
@@ -379,7 +405,7 @@ interface MigrationRollbackResult {
 ```ts
 import { validateMigrations } from '@nocobase/database';
 
-await validateMigrations('./server/migrations');
+await validateMigrations('./database/migrations');
 ```
 
 校验规则：

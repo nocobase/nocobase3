@@ -40,10 +40,19 @@ const databaseConfig: ConfigFactory<AppDatabaseConfig> = defineDatabaseConfig(
     },
 
     migrations: {
-      directory: paths.server('migrations'),
+      directory: paths.database('migrations'),
+      packageName: '@nocobase/app-template-default',
       autoRun: env.boolean('DB_MIGRATIONS_AUTO_RUN', false),
       tableName: env.string('DB_MIGRATIONS_TABLE'),
       lockTableName: env.string('DB_MIGRATIONS_LOCK_TABLE'),
+    },
+
+    seeds: {
+      directory: paths.database('seeds'),
+      packageName: '@nocobase/app-template-default',
+      autoRun: env.boolean('DB_SEEDS_AUTO_RUN', false),
+      tableName: env.string('DB_SEEDS_TABLE'),
+      lockTableName: env.string('DB_SEEDS_LOCK_TABLE'),
     },
   }),
 );
