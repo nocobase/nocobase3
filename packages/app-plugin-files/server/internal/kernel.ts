@@ -84,6 +84,21 @@ export interface PublicAccessState {
   disposition: PublicDisposition | null;
 }
 
+export interface CleanupExpiredUploadsOptions {
+  limit: number;
+  now?: Date;
+  deadline?: number;
+}
+
+export interface CleanupExpiredUploadsResult {
+  scanned: number;
+  failed: number;
+  deleted: number;
+  purged: number;
+  deletionFailures: number;
+  hasMore: boolean;
+}
+
 export class FileKernel {
   readonly #repository: FilesRepository;
   readonly #storage: FileKernelStorage;
@@ -471,6 +486,71 @@ export class FileKernel {
       limit,
     );
     return records.map(toStoredFile);
+  }
+
+  async cleanupExpiredUploads(
+    options: CleanupExpiredUploadsOptions,
+  ): Promise<CleanupExpiredUploadsResult> {
+    if (!Number.isSafeInteger(options.limit) || options.limit <= 0) {
+      throw new Error('Files cleanup limit must be a positive integer.');
+    }
+    const now = options.now ?? this.#now();
+    const records = await this.#repository.findExpiredCleanupCandidates(
+      now,
+      options.limit,
+    );
+    let failed = 0;
+    let deleted = 0;
+    let purged = 0;
+    let deletionFailures = 0;
+    let processed = 0;
+
+    for (const record of records) {
+      if (options.deadline !== undefined && Date.now() >= options.deadline) {
+        break;
+      }
+      processed += 1;
+      const current = await this.#repository.get(record.id);
+      if (!current || current.storageKey !== null) {
+        continue;
+      }
+      if (current.status === 'pending') {
+        const transitioned = await this.#repository.failPending(
+          current.id,
+          now,
+        );
+        if (transitioned) {
+          failed += 1;
+        }
+      }
+      const afterTransition = await this.#repository.get(current.id);
+      if (!afterTransition || afterTransition.status === 'pending') {
+        continue;
+      }
+      try {
+        await this.#storage.delete(pendingStorageKey(afterTransition.id));
+        deleted += 1;
+      } catch {
+        deletionFailures += 1;
+        continue;
+      }
+      try {
+        if (await this.#repository.deleteExact(afterTransition)) {
+          purged += 1;
+        }
+      } catch {
+        // A relation reservation may still reference this failed file.
+      }
+    }
+
+    return {
+      scanned: processed,
+      failed,
+      deleted,
+      purged,
+      deletionFailures,
+      hasMore: processed < records.length || records.length === options.limit,
+    };
   }
 
   async deleteStorageObject(storageKey: string): Promise<void> {

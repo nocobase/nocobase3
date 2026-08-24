@@ -351,6 +351,76 @@ describe('file metadata kernel', () => {
     );
   });
 
+  it('cleans expired pending uploads idempotently without touching ready or active files', async () => {
+    const expired = await kernel.createPending({ name: 'expired.txt' });
+    storage.put(expired.candidateKey, {
+      contentLength: 7,
+      contentType: 'text/plain',
+    });
+    const ready = await createReadyFile(kernel, storage, 'ready.txt');
+    now = new Date('2026-08-24T00:10:00.000Z');
+    const active = await kernel.createPending({ name: 'active.txt' });
+    storage.put(active.candidateKey, {
+      contentLength: 6,
+      contentType: 'text/plain',
+    });
+    now = new Date('2026-08-24T00:16:00.000Z');
+
+    await expect(kernel.cleanupExpiredUploads({ limit: 1 })).resolves.toEqual({
+      scanned: 1,
+      failed: 1,
+      deleted: 1,
+      purged: 1,
+      deletionFailures: 0,
+      hasMore: true,
+    });
+    await expect(repository.get(expired.file.id)).resolves.toBeUndefined();
+    expect(storage.has(expired.candidateKey)).toBe(false);
+    expect((await repository.getRequired(ready.file.id)).status).toBe('ready');
+    expect((await repository.getRequired(active.file.id)).status).toBe(
+      'pending',
+    );
+    expect(storage.has(active.candidateKey)).toBe(true);
+
+    await expect(
+      kernel.cleanupExpiredUploads({ limit: 10 }),
+    ).resolves.toMatchObject({ scanned: 0, failed: 0, hasMore: false });
+  });
+
+  it('durably fails expired pending state when temporary deletion is unavailable', async () => {
+    const expired = await kernel.createPending({ name: 'retry-cleanup.txt' });
+    storage.put(expired.candidateKey, {
+      contentLength: 4,
+      contentType: 'text/plain',
+    });
+    storage.failNextDelete();
+    now = new Date('2026-08-24T00:16:00.000Z');
+
+    await expect(
+      kernel.cleanupExpiredUploads({ limit: 10 }),
+    ).resolves.toMatchObject({
+      scanned: 1,
+      failed: 1,
+      deleted: 0,
+      deletionFailures: 1,
+    });
+    expect((await repository.getRequired(expired.file.id)).status).toBe(
+      'failed',
+    );
+    expect(storage.has(expired.candidateKey)).toBe(true);
+
+    await expect(
+      kernel.cleanupExpiredUploads({ limit: 10 }),
+    ).resolves.toMatchObject({
+      scanned: 1,
+      failed: 0,
+      deleted: 1,
+      purged: 1,
+      deletionFailures: 0,
+    });
+    await expect(repository.get(expired.file.id)).resolves.toBeUndefined();
+  });
+
   it('purges records internally without exposing purge through FileService', async () => {
     const upload = await createReadyFile(kernel, storage, 'purge.txt');
     const readyKey = (await repository.getRequired(upload.file.id)).storageKey;
@@ -404,6 +474,7 @@ class FakeFilesStorage {
   readonly #objects = new Map<string, StorageObjectMetadata>();
   #barrier: FinalizationBarrier | undefined;
   #nextPause: DeferredFinalization | undefined;
+  #failNextDelete = false;
 
   put(key: string, metadata: StorageObjectMetadata): void {
     this.#objects.set(key, metadata);
@@ -444,7 +515,15 @@ class FakeFilesStorage {
   }
 
   async delete(key: string): Promise<void> {
+    if (this.#failNextDelete) {
+      this.#failNextDelete = false;
+      throw new Error('simulated storage deletion failure');
+    }
     this.#objects.delete(key);
+  }
+
+  failNextDelete(): void {
+    this.#failNextDelete = true;
   }
 
   pauseFinalizations(count: number): void {

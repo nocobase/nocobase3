@@ -817,6 +817,9 @@ describe('app plugins', () => {
     expect(filesPlugin?.routesEntry).toMatch(
       /app-plugin-files\/server\/routes\/index\.ts$/,
     );
+    expect(filesPlugin?.jobsDirectory).toMatch(
+      /app-plugin-files\/server\/jobs$/,
+    );
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
       version: '0.1.0',
@@ -863,6 +866,9 @@ describe('app plugins', () => {
     );
     expect(runtime.config.queue.jobs?.locations).toEqual([
       expect.stringMatching(/app-template-default\/server\/jobs/),
+      expect.stringMatching(
+        /app-plugin-files\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+      ),
       expect.stringMatching(
         /app-plugin-queue-example\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
       ),

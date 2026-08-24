@@ -314,6 +314,9 @@ importers:
       '@nocobase/database':
         specifier: workspace:^
         version: link:../database
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../queue
       hono:
         specifier: 'catalog:'
         version: 4.13.2

@@ -26,6 +26,7 @@ import filesMigration from '../database/migrations/202608221000_files_create_fil
 import {
   createOpaqueFilesRuntime,
   getFilesRuntimeKernel,
+  runFilesCleanup,
 } from '../server/internal/runtime.js';
 import type {
   S3Provider,
@@ -151,6 +152,70 @@ describe('relation binding scoped file routes', () => {
     expect(
       (await createUpload(fixture, ORDER_ONE, 'next.txt', 4)).file.id,
     ).not.toBe(pending.file.id);
+  });
+
+  it('releases expired reservation slots in bounded cleanup while preserving ready and active rows', async () => {
+    let now = new Date('2026-08-24T00:00:00.000Z');
+    const fixture = await createFixture({ maxFiles: 3, clock: () => now });
+    const ready = await uploadAndComplete(
+      fixture,
+      ORDER_ONE,
+      'ready.txt',
+      'ready',
+    );
+    await fixture.database
+      .query()
+      .updateTable('purchaseOrderAttachments')
+      .set({ reservationExpiresAt: now })
+      .where('fileId', '=', ready.file.id)
+      .execute();
+    const expired = await createUpload(fixture, ORDER_ONE, 'expired.txt', 7);
+    now = new Date('2026-08-24T00:10:00.000Z');
+    const active = await createUpload(fixture, ORDER_ONE, 'active.txt', 6);
+    now = new Date('2026-08-24T00:16:00.000Z');
+
+    await expect(
+      runFilesCleanup(fixture.runtime, {
+        batchSize: 3,
+        timeBudgetMs: 5_000,
+      }),
+    ).resolves.toMatchObject({
+      pending: { scanned: 1, failed: 1 },
+      reservationsReleased: 1,
+    });
+    const rows = await relationRows(fixture, ORDER_ONE);
+    expect(rows.map((row) => row.fileId).sort()).toEqual(
+      [active.file.id, ready.file.id].sort(),
+    );
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(expired.file.id),
+    ).toMatchObject({ status: 'failed' });
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(ready.file.id),
+    ).toMatchObject({ status: 'ready' });
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(active.file.id),
+    ).toMatchObject({ status: 'pending' });
+
+    await expect(
+      runFilesCleanup(fixture.runtime, {
+        batchSize: 3,
+        timeBudgetMs: 5_000,
+      }),
+    ).resolves.toMatchObject({
+      pending: { scanned: 1, purged: 1 },
+      reservationsReleased: 0,
+    });
+    await expect(
+      getFilesRuntimeKernel(fixture.runtime).getFile(expired.file.id),
+    ).resolves.toBeUndefined();
+
+    const reused = await createUpload(fixture, ORDER_ONE, 'reused.txt', 6);
+    expect(
+      (await relationRows(fixture, ORDER_ONE)).find(
+        (row) => row.fileId === reused.file.id,
+      )?.slot,
+    ).toBe(2);
   });
 
   it('replaces at full capacity while preserving the internal row and slot', async () => {
@@ -305,6 +370,7 @@ interface CreateFixtureOptions {
   maxFiles?: number;
   publicAccess?: boolean;
   provider?: FakeS3Provider;
+  clock?: () => Date;
 }
 
 async function createFixture(
@@ -370,7 +436,12 @@ async function createFixture(
       audience: 'relation-route-test',
       secret: 'relation-route-test-secret-at-least-32-characters',
     },
-    options.provider ? { s3Provider: options.provider } : {},
+    {
+      ...(options.provider === undefined
+        ? {}
+        : { s3Provider: options.provider }),
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
+    },
   );
   const route = createFileService({ runtime }).createFileRoute({
     binding: {

@@ -240,6 +240,28 @@ export class FilesRepository {
     return rows.map(readFileRecord);
   }
 
+  async findExpiredCleanupCandidates(
+    before: Date,
+    limit: number,
+    connection?: DatabaseConnection,
+  ): Promise<FileRecord[]> {
+    const pending = await this.findExpiredPending(before, limit, connection);
+    if (pending.length >= limit) {
+      return pending;
+    }
+    const failedRows = await this.#query(connection)
+      .selectFrom(FILES_TABLE)
+      .selectAll()
+      .where('status', '=', 'failed')
+      .where('storageKey', 'is', null)
+      .where('uploadExpiresAt', '<=', before)
+      .orderBy('uploadExpiresAt', 'asc')
+      .orderBy('id', 'asc')
+      .limit(limit - pending.length)
+      .execute<Record<string, unknown>>();
+    return [...pending, ...failedRows.map(readFileRecord)];
+  }
+
   async deleteExact(
     record: FileRecord,
     connection?: DatabaseConnection,

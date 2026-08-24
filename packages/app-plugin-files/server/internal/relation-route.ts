@@ -96,6 +96,9 @@ export function createRelationFileRoute(
     capabilityCodec: input.state.scopedCapabilityCodec,
     clock: input.state.clock,
   };
+  input.state.registerCleanupHandler(({ now, limit, deadline }) =>
+    state.repository.cleanupExpiredReservations(now, limit, deadline),
+  );
   const routes = new Hono();
 
   routes.get(
