@@ -57,6 +57,12 @@ export interface CreateFileUploadPlanInput {
   constraints?: FileConstraints;
 }
 
+export interface CreatedFileUploadAttempt {
+  plan: FileUploadPlan;
+  file: StoredFile;
+  candidateKey: string;
+}
+
 export interface FileReadAccess {
   url: string;
   expiresAt: string;
@@ -131,6 +137,12 @@ export class FilesDataPlane {
   async createUploadPlan(
     input: CreateFileUploadPlanInput,
   ): Promise<FileUploadPlan> {
+    return (await this.createUploadAttempt(input)).plan;
+  }
+
+  async createUploadAttempt(
+    input: CreateFileUploadPlanInput,
+  ): Promise<CreatedFileUploadAttempt> {
     const name = normalizeFileName(input.name);
     const policy = normalizeUploadPolicy(input, this.#config.upload.maxBytes);
     assertUploadPolicy(name, policy);
@@ -150,7 +162,7 @@ export class FilesDataPlane {
           ...commonCapability,
           action: 'upload',
         });
-        return {
+        const plan: FileUploadPlan = {
           fileId: pending.fileId,
           expiresAt: pending.expiresAt,
           upload: {
@@ -160,6 +172,11 @@ export class FilesDataPlane {
               ? {}
               : { headers: { 'content-type': policy.contentType } }),
           },
+        };
+        return {
+          plan,
+          file: pending.file,
+          candidateKey: pending.candidateKey,
         };
       }
 
@@ -177,7 +194,7 @@ export class FilesDataPlane {
         ...commonCapability,
         action: 'complete',
       });
-      return {
+      const plan: FileUploadPlan = {
         fileId: pending.fileId,
         expiresAt: pending.expiresAt,
         upload,
@@ -185,6 +202,11 @@ export class FilesDataPlane {
           method: 'POST',
           url: this.#accessUrl(pending.fileId, 'complete', completeAccess),
         },
+      };
+      return {
+        plan,
+        file: pending.file,
+        candidateKey: pending.candidateKey,
       };
     } catch (error) {
       await this.#kernel.cancelUpload(pending.fileId, pending.candidateKey);

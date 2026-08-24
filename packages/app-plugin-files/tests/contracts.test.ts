@@ -2,6 +2,10 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type { FileUploadPlan } from '@nocobase/app-plugin-files/client';
 import type {
+  CreateFileUploadResponse,
+  FileReference,
+} from '@nocobase/app-plugin-files/protocol';
+import type {
   FileService,
   FilesRuntime,
 } from '@nocobase/app-plugin-files/server';
@@ -18,9 +22,9 @@ describe('@nocobase/app-plugin-files contracts', () => {
     expect(serverEntry).toBeDefined();
     expect(clientEntry).toBeDefined();
     expect(Object.keys(serverEntry)).toContain('createFilesRuntime');
+    expect(Object.keys(serverEntry)).toContain('createFileService');
     expect(Object.keys(serverEntry)).not.toEqual(
       expect.arrayContaining([
-        'createFileService',
         'createFileKernel',
         'createFilesRepository',
         'createInternalFilesStorage',
@@ -50,5 +54,13 @@ describe('@nocobase/app-plugin-files contracts', () => {
   it('keeps FileService and FilesRuntime public contracts narrow', () => {
     expectTypeOf<keyof FileService>().toEqualTypeOf<'createFileRoute'>();
     expectTypeOf<keyof FilesRuntime>().toEqualTypeOf<'dispose'>();
+  });
+
+  it('shares one normalized route protocol between server and client consumers', () => {
+    expectTypeOf<CreateFileUploadResponse['upload']>().toHaveProperty(
+      'bindingCredential',
+    );
+    expectTypeOf<FileReference['referenceId']>().toEqualTypeOf<string>();
+    expectTypeOf<FileReference['file']>().toHaveProperty('status');
   });
 });

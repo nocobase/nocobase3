@@ -47,6 +47,17 @@ export interface CollectionBuilderOptions {
   namingStrategy?: NamingStrategy;
 }
 
+export interface InspectedCollectionField {
+  definition: AnyFieldDefinition;
+  columnName: string;
+}
+
+export interface InspectedCollection {
+  definition: CollectionDefinition;
+  tableName: string;
+  fields: InspectedCollectionField[];
+}
+
 export class CollectionBuilder {
   private readonly schemaAdapter: SchemaAdapter;
   private readonly metadataStore: CollectionMetadataStore;
@@ -60,6 +71,30 @@ export class CollectionBuilder {
       naming: options.naming,
       namingStrategy: options.namingStrategy,
     });
+  }
+
+  inspectCollection(name: string): InspectedCollection | undefined {
+    if (!this.metadataStore.getCollectionSync) {
+      throw new Error(
+        'The configured collection metadata store does not support synchronous inspection.',
+      );
+    }
+    const definition = this.metadataStore.getCollectionSync(name);
+    if (!definition) {
+      return undefined;
+    }
+    return {
+      definition,
+      tableName: this.compiler.effectiveTableName(name, definition),
+      fields: (definition.fields ?? []).map((field) => ({
+        definition: field,
+        columnName: this.compiler.effectiveColumnName(
+          field.name,
+          field,
+          definition,
+        ),
+      })),
+    };
   }
 
   async createCollection(

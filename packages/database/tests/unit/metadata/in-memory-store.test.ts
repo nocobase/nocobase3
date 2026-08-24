@@ -13,6 +13,7 @@ describe('InMemoryCollectionMetadataStore', () => {
     definition.fields[0].type = 'text';
 
     const saved = await store.getCollection('orders');
+    expect(store.getCollectionSync('orders')).toEqual(saved);
     expect(saved).toMatchObject({
       name: 'orders',
       fields: [{ name: 'status', type: 'string' }],

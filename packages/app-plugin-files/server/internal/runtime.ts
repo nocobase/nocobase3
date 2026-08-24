@@ -1,4 +1,8 @@
 import type { CreateFilesRuntimeOptions, FilesRuntime } from '../runtime.js';
+import {
+  createFileBindingCredentialCodec,
+  type FileBindingCredentialCodec,
+} from './binding-credential.js';
 import { createFileCapabilityCodec } from './capability.js';
 import { createFilesDataPlane, type FilesDataPlane } from './data-plane.js';
 import { createFileKernel, type FileKernel } from './kernel.js';
@@ -7,7 +11,11 @@ import { createInternalFilesStorage } from './storage/index.js';
 import type { InternalFilesStorage, S3Provider } from './storage/types.js';
 
 interface FilesRuntimeState {
+  bindingCredentialCodec: FileBindingCredentialCodec;
   dataPlane: FilesDataPlane;
+  database: CreateFilesRuntimeOptions['database'];
+  connection: string | undefined;
+  publicAccessEnabled: boolean;
   kernel: FileKernel;
   storage: InternalFilesStorage;
 }
@@ -65,6 +73,13 @@ export function createOpaqueFilesRuntime(
       ? {}
       : { clock: internalOptions.clock }),
   });
+  const bindingCredentialCodec = createFileBindingCredentialCodec({
+    audience: options.audience,
+    secret: options.secret,
+    ...(internalOptions.clock === undefined
+      ? {}
+      : { clock: internalOptions.clock }),
+  });
   const dataPlane = createFilesDataPlane({
     config: options.config,
     kernel,
@@ -78,8 +93,42 @@ export function createOpaqueFilesRuntime(
       : { basePath: internalOptions.basePath }),
   });
   const runtime = new OpaqueFilesRuntime();
-  runtimeStates.set(runtime, { dataPlane, kernel, storage });
+  runtimeStates.set(runtime, {
+    bindingCredentialCodec,
+    dataPlane,
+    database: options.database,
+    connection: options.connection,
+    publicAccessEnabled: options.config.publicAccess.enabled,
+    kernel,
+    storage,
+  });
   return runtime;
+}
+
+export interface FilesRuntimeServiceState {
+  bindingCredentialCodec: FileBindingCredentialCodec;
+  dataPlane: FilesDataPlane;
+  database: CreateFilesRuntimeOptions['database'];
+  connection: string | undefined;
+  publicAccessEnabled: boolean;
+  kernel: FileKernel;
+}
+
+export function getFilesRuntimeServiceState(
+  runtime: FilesRuntime,
+): FilesRuntimeServiceState {
+  const state = runtimeStates.get(runtime);
+  if (!state) {
+    throw new Error('Files runtime is invalid or disposed.');
+  }
+  return {
+    bindingCredentialCodec: state.bindingCredentialCodec,
+    dataPlane: state.dataPlane,
+    database: state.database,
+    connection: state.connection,
+    publicAccessEnabled: state.publicAccessEnabled,
+    kernel: state.kernel,
+  };
 }
 
 export function getFilesRuntimeKernel(runtime: FilesRuntime): FileKernel {

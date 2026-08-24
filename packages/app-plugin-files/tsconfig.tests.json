@@ -6,5 +6,11 @@
     "isolatedDeclarations": false,
     "noEmit": true
   },
-  "include": ["index.ts", "server/**/*.ts", "client/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "index.ts",
+    "protocol.ts",
+    "server/**/*.ts",
+    "client/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

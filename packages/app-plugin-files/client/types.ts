@@ -1,27 +1,4 @@
-export interface StoredFile {
-  id: string;
-  status: 'pending' | 'ready' | 'failed';
-  name: string;
-  size: number | null;
-  contentType: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface FileUploadPlan {
-  fileId: string;
-  expiresAt: string;
-  upload: {
-    method: 'PUT';
-    url: string;
-    headers?: Record<string, string>;
-  };
-  complete?: {
-    method: 'POST';
-    url: string;
-    headers?: Record<string, string>;
-  };
-}
+export type { FileUploadPlan, StoredFile } from '../protocol.js';
 
 export interface FileUploadProgress {
   loaded: number;

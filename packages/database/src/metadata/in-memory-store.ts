@@ -8,8 +8,12 @@ import type { CollectionMetadataStore } from './store.js';
 export class InMemoryCollectionMetadataStore implements CollectionMetadataStore {
   private readonly collections = new Map<string, CollectionDefinition>();
 
-  async getCollection(name: string): Promise<CollectionDefinition | undefined> {
+  getCollectionSync(name: string): CollectionDefinition | undefined {
     return clone(this.collections.get(name));
+  }
+
+  async getCollection(name: string): Promise<CollectionDefinition | undefined> {
+    return this.getCollectionSync(name);
   }
 
   async saveCollection(
