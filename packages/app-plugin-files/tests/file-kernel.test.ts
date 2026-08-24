@@ -178,8 +178,7 @@ describe('file metadata kernel', () => {
     expect(loser.cleanupStorageKeys[0]).not.toBe(winner.storageKey);
     expect(storage.has(winner.storageKey ?? '')).toBe(true);
 
-    await kernel.deleteStorageObject(loser.cleanupStorageKeys[0] ?? 'missing');
-    expect(storage.has(winner.storageKey ?? '')).toBe(true);
+    expect(storage.has(loser.cleanupStorageKeys[0] ?? 'missing')).toBe(true);
   });
 
   it('returns the finalized object key when the database CAS throws', async () => {
@@ -213,8 +212,7 @@ describe('file metadata kernel', () => {
     ) {
       throw new Error('Expected persistence failure compensation result.');
     }
-    await failingKernel.deleteStorageObject(result.cleanupStorageKeys[0]);
-    expect(storage.has(upload.readyKey)).toBe(false);
+    expect(storage.has(result.cleanupStorageKeys[0])).toBe(true);
   });
 
   it('rolls back file readiness and business writes in one transaction', async () => {
@@ -306,10 +304,10 @@ describe('file metadata kernel', () => {
     expect(storage.has(second.candidateKey)).toBe(true);
   });
 
-  it('writes and clears public token state atomically on ready files', async () => {
+  it('manages public token state atomically on ready files', async () => {
     const upload = await createReadyFile(kernel, storage, 'public.txt');
 
-    await kernel.setPublicAccess(
+    await kernel.enablePublicAccess(
       upload.file.id,
       'sha256:token-one',
       'attachment',
@@ -319,122 +317,30 @@ describe('file metadata kernel', () => {
       disposition: 'attachment',
     });
 
-    await Promise.all([
-      kernel.setPublicAccess(upload.file.id, 'sha256:token-two', 'inline'),
-      kernel.clearPublicAccess(upload.file.id),
-    ]);
-    const state = await kernel.getPublicAccessState(upload.file.id);
-    expect([
-      { tokenHash: 'sha256:token-two', disposition: 'inline' },
-      { tokenHash: null, disposition: null },
-    ]).toContainEqual(state);
-    expect((state.tokenHash === null) === (state.disposition === null)).toBe(
-      true,
+    await kernel.resetPublicAccess(
+      upload.file.id,
+      'sha256:token-two',
+      'inline',
     );
+    await expect(kernel.getPublicAccessState(upload.file.id)).resolves.toEqual({
+      tokenHash: 'sha256:token-two',
+      disposition: 'inline',
+    });
+    await kernel.disablePublicAccess(upload.file.id);
+    await expect(kernel.getPublicAccessState(upload.file.id)).resolves.toEqual({
+      tokenHash: null,
+      disposition: null,
+    });
 
     const pending = await kernel.createPending({ name: 'pending.txt' });
     await expect(
-      kernel.setPublicAccess(pending.file.id, 'sha256:nope', 'attachment'),
+      kernel.enablePublicAccess(pending.file.id, 'sha256:nope', 'attachment'),
     ).rejects.toThrow('requires an existing ready file');
-  });
-
-  it('selects expired pending files in stable batches', async () => {
-    const first = await kernel.createPending({ name: 'first.txt' });
-    now = new Date('2026-08-24T00:05:00.000Z');
-    const second = await kernel.createPending({ name: 'second.txt' });
-    now = new Date('2026-08-24T00:16:00.000Z');
-
-    await expect(kernel.findExpiredPending(1)).resolves.toEqual([first.file]);
-    await expect(kernel.findExpiredPending(10)).resolves.toEqual([first.file]);
-    expect((await repository.getRequired(second.file.id)).status).toBe(
-      'pending',
-    );
-  });
-
-  it('cleans expired pending uploads idempotently without touching ready or active files', async () => {
-    const expired = await kernel.createPending({ name: 'expired.txt' });
-    storage.put(expired.candidateKey, {
-      contentLength: 7,
-      contentType: 'text/plain',
-    });
-    const ready = await createReadyFile(kernel, storage, 'ready.txt');
-    now = new Date('2026-08-24T00:10:00.000Z');
-    const active = await kernel.createPending({ name: 'active.txt' });
-    storage.put(active.candidateKey, {
-      contentLength: 6,
-      contentType: 'text/plain',
-    });
-    now = new Date('2026-08-24T00:16:00.000Z');
-
-    await expect(kernel.cleanupExpiredUploads({ limit: 1 })).resolves.toEqual({
-      scanned: 1,
-      failed: 1,
-      deleted: 1,
-      purged: 1,
-      deletionFailures: 0,
-      hasMore: true,
-    });
-    await expect(repository.get(expired.file.id)).resolves.toBeUndefined();
-    expect(storage.has(expired.candidateKey)).toBe(false);
-    expect((await repository.getRequired(ready.file.id)).status).toBe('ready');
-    expect((await repository.getRequired(active.file.id)).status).toBe(
-      'pending',
-    );
-    expect(storage.has(active.candidateKey)).toBe(true);
-
-    await expect(
-      kernel.cleanupExpiredUploads({ limit: 10 }),
-    ).resolves.toMatchObject({ scanned: 0, failed: 0, hasMore: false });
-  });
-
-  it('durably fails expired pending state when temporary deletion is unavailable', async () => {
-    const expired = await kernel.createPending({ name: 'retry-cleanup.txt' });
-    storage.put(expired.candidateKey, {
-      contentLength: 4,
-      contentType: 'text/plain',
-    });
-    storage.failNextDelete();
-    now = new Date('2026-08-24T00:16:00.000Z');
-
-    await expect(
-      kernel.cleanupExpiredUploads({ limit: 10 }),
-    ).resolves.toMatchObject({
-      scanned: 1,
-      failed: 1,
-      deleted: 0,
-      deletionFailures: 1,
-    });
-    expect((await repository.getRequired(expired.file.id)).status).toBe(
-      'failed',
-    );
-    expect(storage.has(expired.candidateKey)).toBe(true);
-
-    await expect(
-      kernel.cleanupExpiredUploads({ limit: 10 }),
-    ).resolves.toMatchObject({
-      scanned: 1,
-      failed: 0,
-      deleted: 1,
-      purged: 1,
-      deletionFailures: 0,
-    });
-    await expect(repository.get(expired.file.id)).resolves.toBeUndefined();
-  });
-
-  it('purges records internally without exposing purge through FileService', async () => {
-    const upload = await createReadyFile(kernel, storage, 'purge.txt');
-    const readyKey = (await repository.getRequired(upload.file.id)).storageKey;
-    expect(readyKey).not.toBeNull();
-
-    await expect(kernel.purgeFile(upload.file.id)).resolves.toBe(true);
-    await expect(kernel.getFile(upload.file.id)).resolves.toBeUndefined();
-    expect(storage.has(readyKey ?? '')).toBe(false);
-    await expect(kernel.purgeFile(upload.file.id)).resolves.toBe(false);
   });
 
   it('keeps public DTO queries independent from internal columns', async () => {
     const upload = await createReadyFile(kernel, storage, 'safe.txt');
-    await kernel.setPublicAccess(
+    await kernel.enablePublicAccess(
       upload.file.id,
       'sha256:secret-token-hash',
       'inline',

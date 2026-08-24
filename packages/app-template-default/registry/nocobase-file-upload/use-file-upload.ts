@@ -1,7 +1,7 @@
 import { executeFileUploadPlan } from '@nocobase/app-plugin-files/client';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { appFileClient } from './app-client';
 import { normalizeFileBasePath } from './base-path';
 import { validateFile } from './validation';
 import type {
@@ -121,18 +121,18 @@ export function useFileUpload({
           error: undefined,
           progress: { loaded: 0, total: source.size, percentage: 0 },
         }));
-        const created = await nocobaseClient.request<CreateScopedFileResponse>(
+        const created = await appFileClient.request<CreateScopedFileResponse>(
           path,
           {
             method: 'POST',
-            body: {
+            body: JSON.stringify({
               name: source.name,
               size: source.size,
               ...(source.type ? { contentType: source.type } : {}),
               ...(item.replaceFileId
                 ? { replaceFileId: item.replaceFileId }
                 : {}),
-            },
+            }),
             signal: controller.signal,
           },
         );
@@ -292,9 +292,11 @@ export function useFileUpload({
 
       setOperationError(null);
       try {
-        await nocobaseClient.request(
+        await appFileClient.request(
           `${path}/${encodeURIComponent(item.record.id)}`,
-          { method: 'DELETE', unwrap: 'none' },
+          {
+            method: 'DELETE',
+          },
         );
         const nextRecords = recordsRef.current.filter(
           (record) => record.id !== item.record?.id,

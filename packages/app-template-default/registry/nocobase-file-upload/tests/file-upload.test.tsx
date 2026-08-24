@@ -1,5 +1,4 @@
 import { executeFileUploadPlan } from '@nocobase/app-plugin-files/client';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
 import {
   act,
   fireEvent,
@@ -17,6 +16,7 @@ import type {
 } from '@/lib/field-validation';
 
 import { normalizeFileBasePath } from '../base-path';
+import { appFileClient } from '../app-client';
 import { FilePreviewField } from '../file-preview-field';
 import { FileUploadField } from '../file-upload-field';
 import {
@@ -140,11 +140,11 @@ describe('V3 file upload Registry', () => {
       'orders/order-1/files',
       expect.objectContaining({
         method: 'POST',
-        body: {
+        body: JSON.stringify({
           name: 'report.pdf',
           size: 8,
           contentType: 'application/pdf',
-        },
+        }),
       }),
     );
     expect(onUploadProgress).toHaveBeenCalledWith(progress, file);
@@ -175,7 +175,7 @@ describe('V3 file upload Registry', () => {
     await waitFor(() => expect(request).toHaveBeenCalledOnce());
     expect(request.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
-        body: expect.objectContaining({ replaceFileId: 'old-1' }),
+        body: expect.stringContaining('"replaceFileId":"old-1"'),
       }),
     );
     expect(
@@ -217,7 +217,7 @@ describe('V3 file upload Registry', () => {
 
     expect(request.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
-        body: expect.objectContaining({ replaceFileId: 'second' }),
+        body: expect.stringContaining('"replaceFileId":"second"'),
       }),
     );
     expect(onChange).toHaveBeenCalledWith([
@@ -300,7 +300,7 @@ describe('V3 file upload Registry', () => {
   it('detaches ready files through DELETE basePath/:fileId', async () => {
     const existing = readyFile('ready/delete', 'report.txt', 'text/plain');
     const request = vi
-      .spyOn(nocobaseClient, 'request')
+      .spyOn(appFileClient, 'request')
       .mockResolvedValue({ success: true });
     const onChange = vi.fn();
     const { result } = renderHook(() =>
@@ -316,13 +316,13 @@ describe('V3 file upload Registry', () => {
 
     expect(request).toHaveBeenCalledWith(
       'orders/order-1/files/ready%2Fdelete',
-      { method: 'DELETE', unwrap: 'none' },
+      { method: 'DELETE' },
     );
     expect(onChange).toHaveBeenCalledWith([]);
   });
 
   it('enforces maxBytes and accept before creating an upload', async () => {
-    const request = vi.spyOn(nocobaseClient, 'request');
+    const request = vi.spyOn(appFileClient, 'request');
     const onUploadError = vi.fn();
     const { result } = renderHook(() =>
       useFileUpload({
@@ -441,8 +441,15 @@ describe('V3 file upload Registry', () => {
 
   it('builds preview GET and download HEAD paths through the current App client', async () => {
     const file = readyFile('file/1', 'image.png', 'image/png');
-    const previewUrl = new URL(getPreviewFileUrl('orders/order-1/files', file));
-    const downloadUrl = new URL(getDownloadUrl('orders/order-1/files', file));
+    const previewUrl = new URL(
+      getPreviewFileUrl('orders/order-1/files', file),
+      'http://localhost',
+    );
+    const downloadUrl = new URL(
+      getDownloadUrl('orders/order-1/files', file),
+      'http://localhost',
+    );
+    expect(previewUrl.pathname).toContain('/api/');
     expect(previewUrl.pathname).toContain(
       '/orders/order-1/files/file%2F1/content',
     );
@@ -457,7 +464,7 @@ describe('V3 file upload Registry', () => {
       .mockImplementation(() => undefined);
     await triggerFileDownload('orders/order-1/files', file);
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.any(URL),
+      expect.stringContaining('/api/orders/order-1/files/file%2F1/content'),
       expect.objectContaining({ method: 'HEAD', credentials: 'include' }),
     );
     expect(click).toHaveBeenCalledOnce();
@@ -534,7 +541,7 @@ function pendingUpload(id: string): CreateScopedFileResponse {
 
 function mockCreateRequests(ids: string[]) {
   let index = 0;
-  return vi.spyOn(nocobaseClient, 'request').mockImplementation(async () => {
+  return vi.spyOn(appFileClient, 'request').mockImplementation(async () => {
     const id = ids[index++];
     if (!id) throw new Error('Unexpected request');
     return pendingUpload(id);

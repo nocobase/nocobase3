@@ -46,7 +46,7 @@ export function uploadExpired(): FilesDataPlaneError {
   );
 }
 
-export function storageUnavailable(_cause?: unknown): FilesDataPlaneError {
+export function storageUnavailable(): FilesDataPlaneError {
   return new FilesDataPlaneError(
     'STORAGE_UNAVAILABLE',
     503,

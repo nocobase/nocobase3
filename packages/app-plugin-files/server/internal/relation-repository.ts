@@ -122,63 +122,6 @@ export class RelationBindingRepository {
     }, this.#connectionName);
   }
 
-  async cleanupExpiredReservations(
-    now: Date,
-    limit: number,
-    deadline?: number,
-  ): Promise<{ scanned: number; released: number; hasMore: boolean }> {
-    if (!Number.isSafeInteger(limit) || limit <= 0) {
-      throw new Error('Files reservation cleanup limit must be positive.');
-    }
-    return this.#database.transaction(async (connection) => {
-      const candidates = await connection.query
-        .selectFrom(this.#table)
-        .select([this.#idColumn, this.#recordColumn, this.#fileColumn])
-        .where(this.#reservationColumn, 'is not', null)
-        .where(this.#reservationColumn, '<=', now)
-        .orderBy(this.#reservationColumn, 'asc')
-        .orderBy(this.#idColumn, 'asc')
-        .limit(limit)
-        .execute<Record<string, unknown>>();
-      let released = 0;
-      let processed = 0;
-      for (const candidate of candidates) {
-        if (deadline !== undefined && Date.now() >= deadline) {
-          break;
-        }
-        processed += 1;
-        const result = await connection.query
-          .deleteFrom(this.#table)
-          .where(this.#idColumn, '=', readId(candidate[this.#idColumn]))
-          .where(
-            this.#recordColumn,
-            '=',
-            readRecordId(candidate[this.#recordColumn]),
-          )
-          .where(this.#fileColumn, '=', readFileId(candidate[this.#fileColumn]))
-          .where(this.#reservationColumn, '<=', now)
-          .where((expression) =>
-            expression.not(
-              expression.exists(
-                expression
-                  .selectFrom('files')
-                  .select('id')
-                  .where('id', '=', readFileId(candidate[this.#fileColumn]))
-                  .where('status', '=', 'ready'),
-              ),
-            ),
-          )
-          .execute();
-        released += result.deletedCount ?? 0;
-      }
-      return {
-        scanned: processed,
-        released,
-        hasMore: processed < candidates.length || candidates.length === limit,
-      };
-    }, this.#connectionName);
-  }
-
   async list(recordId: string): Promise<RelationBindingRow[]> {
     const rows = await this.#query()
       .selectFrom(this.#table)
@@ -502,13 +445,6 @@ function readId(value: unknown): string {
 function readFileId(value: unknown): string {
   if (typeof value !== 'string' || !value || value.length > 64) {
     throw new Error('A relation binding row contains an invalid fileId.');
-  }
-  return value;
-}
-
-function readRecordId(value: unknown): string {
-  if (typeof value !== 'string' || !value || value.length > 64) {
-    throw new Error('A relation binding row contains an invalid recordId.');
   }
   return value;
 }

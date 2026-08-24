@@ -1,6 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import path from 'node:path';
-import { Readable, Transform, type TransformCallback } from 'node:stream';
+import { Readable } from 'node:stream';
 
 import { Hono, type Context } from 'hono';
 import type { DatabaseConnection } from '@nocobase/database';
@@ -29,27 +27,39 @@ import type {
   CompleteFileResult,
   FileKernel,
 } from './kernel.js';
+import { PublicAccessKernelError } from './kernel.js';
+import {
+  assertInlineAllowed,
+  createContentDisposition,
+  createContentHeaders,
+  resolveContentDisposition,
+} from './content-delivery.js';
 import {
   toStoredFile,
   type FileRecord,
   type PublicDisposition,
 } from './model.js';
-import type {
-  InternalFilesStorage,
-  StorageObjectMetadata,
-} from './storage/types.js';
-
-const PUBLIC_TOKEN_PREFIX = 'fp1_';
-const DEFAULT_CONTENT_TYPE = 'application/octet-stream';
-const INLINE_CONTENT_TYPES = new Set([
-  'application/pdf',
-  'image/avif',
-  'image/gif',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'text/plain',
-]);
+import {
+  createPublicToken,
+  hashPublicToken,
+  isPublicToken,
+  matchesPublicToken,
+} from './public-access.js';
+import type { InternalFilesStorage } from './storage/types.js';
+import {
+  assertStreamUploadPolicy,
+  assertUploadPolicy,
+  ByteLimitTransform,
+  normalizeFileName,
+  normalizeOptionalContentType,
+  normalizeStreamUploadPolicy,
+  normalizeUploadPolicy,
+  toNodeReadable,
+  validateContentLength,
+  validateContentType,
+  validateStorageMetadata,
+  validateStreamStorageMetadata,
+} from './upload-policy.js';
 
 export interface CreateFilesDataPlaneOptions {
   config: FilesConfig;
@@ -110,25 +120,8 @@ export interface PublicFileAccess {
   disposition: PublicDisposition;
 }
 
-interface UploadPolicy {
-  maxBytes: number;
-  expectedSize: number;
-  contentType: string | null;
-  allowedExtensions: readonly string[];
-  allowedContentTypes: readonly string[];
-}
-
-interface StreamUploadPolicy {
-  maxBytes: number;
-  expectedSize: number | undefined;
-  contentType: string | null;
-  allowedExtensions: readonly string[];
-  allowedContentTypes: readonly string[];
-}
-
 interface AuthorizedContent {
   disposition: FileCapabilityDisposition;
-  publicAccess: boolean;
 }
 
 interface FileResponseBody {
@@ -169,11 +162,8 @@ export class FilesDataPlane {
     routes.post('/:fileId/complete', async (context) =>
       this.#handleComplete(context),
     );
-    routes.get('/:fileId/content', async (context) =>
-      this.#handleContent(context, false),
-    );
-    routes.on('HEAD', '/:fileId/content', async (context) =>
-      this.#handleContent(context, true),
+    routes.on(['GET', 'HEAD'], '/:fileId/content', async (context) =>
+      this.#handleContent(context, context.req.method === 'HEAD'),
     );
     routes.onError((error, context) => this.#errorResponse(error, context));
 
@@ -202,6 +192,7 @@ export class FilesDataPlane {
       throw error;
     }
     const byteLimit = new ByteLimitTransform(policy.maxBytes);
+    byteLimit.on('error', () => undefined);
     source.once('error', (error) => byteLimit.destroy(error));
     source.pipe(byteLimit);
 
@@ -246,12 +237,12 @@ export class FilesDataPlane {
       try {
         await this.#kernel.cancelPendingUpload(pending.fileId);
       } catch {
-        // Preserve the stable upload error; failed cleanup can be retried later.
+        // Preserve the stable upload error after best-effort cancellation.
       }
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
-      throw storageUnavailable(error);
+      throw storageUnavailable();
     } finally {
       source.destroy();
     }
@@ -268,8 +259,8 @@ export class FilesDataPlane {
         file: toStoredFile(record),
         stream: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
       };
-    } catch (error) {
-      throw storageUnavailable(error);
+    } catch {
+      throw storageUnavailable();
     }
   }
 
@@ -338,7 +329,7 @@ export class FilesDataPlane {
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
-      throw storageUnavailable(error);
+      throw storageUnavailable();
     }
   }
 
@@ -440,6 +431,7 @@ export class FilesDataPlane {
       body as import('node:stream/web').ReadableStream<Uint8Array>,
     );
     const byteLimit = new ByteLimitTransform(transfer.maxBytes);
+    byteLimit.on('error', () => undefined);
     source.once('error', (error) => byteLimit.destroy(error));
     source.pipe(byteLimit);
     let candidateWritten = false;
@@ -466,7 +458,7 @@ export class FilesDataPlane {
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
-      throw uploadFailed('The file upload could not be received.', error);
+      throw uploadFailed('The file upload could not be received.');
     } finally {
       source.destroy();
     }
@@ -515,7 +507,7 @@ export class FilesDataPlane {
       if (isMissingStorageObject(error)) {
         throw uploadFailed('The uploaded object could not be found.');
       }
-      throw storageUnavailable(error);
+      throw storageUnavailable();
     }
 
     await Promise.all(
@@ -537,10 +529,7 @@ export class FilesDataPlane {
       case 'failed':
         throw uploadFailed('The pending upload was cancelled.');
       case 'persistence-failed':
-        throw uploadFailed(
-          'The uploaded file could not be committed.',
-          result.error,
-        );
+        throw uploadFailed('The uploaded file could not be committed.');
     }
   }
 
@@ -575,14 +564,9 @@ export class FilesDataPlane {
     disposition?: PublicDisposition,
   ): Promise<Response> {
     const record = await this.#requireReadyFile(fileId);
-    const resolvedDisposition =
-      disposition ??
-      (record.contentType !== null &&
-      INLINE_CONTENT_TYPES.has(record.contentType.toLowerCase())
-        ? 'inline'
-        : 'attachment');
+    const resolvedDisposition = resolveContentDisposition(record, disposition);
     assertInlineAllowed(record.contentType, resolvedDisposition);
-    return this.#deliverContent(record, head, resolvedDisposition, false);
+    return this.#deliverContent(record, head, resolvedDisposition);
   }
 
   async #handleLocalUpload(context: Context): Promise<Response> {
@@ -621,7 +605,7 @@ export class FilesDataPlane {
   async #handleContent(context: Context, head: boolean): Promise<Response> {
     const fileId = readFileIdParam(context);
     const access = readAccess(context);
-    const capabilityDisposition = access.startsWith(PUBLIC_TOKEN_PREFIX)
+    const capabilityDisposition = isPublicToken(access)
       ? undefined
       : this.#verifyReadCapability(fileId, access);
     const record = await this.#kernel.getRecord(fileId);
@@ -637,21 +621,15 @@ export class FilesDataPlane {
     const authorized =
       capabilityDisposition === undefined
         ? this.#authorizePublicContent(record, access)
-        : { disposition: capabilityDisposition, publicAccess: false };
+        : { disposition: capabilityDisposition };
     assertInlineAllowed(record.contentType, authorized.disposition);
-    return this.#deliverContent(
-      record,
-      head,
-      authorized.disposition,
-      authorized.publicAccess,
-    );
+    return this.#deliverContent(record, head, authorized.disposition);
   }
 
   async #deliverContent(
     record: FileRecord,
     head: boolean,
     disposition: PublicDisposition,
-    publicAccess: boolean,
   ): Promise<Response> {
     if (record.storageKey === null || record.size === null) {
       throw fileNotReady();
@@ -661,12 +639,11 @@ export class FilesDataPlane {
       disposition,
       record.name,
     );
-    const headers = createContentHeaders(
-      record,
-      contentDisposition,
-      publicAccess,
-    );
+    const headers = createContentHeaders(record, contentDisposition);
     try {
+      if (head) {
+        return new Response(null, { status: 200, headers });
+      }
       if (this.#storage.driver === 's3') {
         const location = await this.#storage.createReadUrl(record.storageKey, {
           expiresInSeconds: this.#config.access.providerUrlExpiresInSeconds,
@@ -677,14 +654,11 @@ export class FilesDataPlane {
         return new Response(null, { status: 302, headers });
       }
 
-      if (head) {
-        return new Response(null, { status: 200, headers });
-      }
       const stream = await this.#storage.openRead(record.storageKey);
       const body = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
       return new Response(body, { status: 200, headers });
-    } catch (error) {
-      throw storageUnavailable(error);
+    } catch {
+      throw storageUnavailable();
     }
   }
 
@@ -708,7 +682,6 @@ export class FilesDataPlane {
     }
     return {
       disposition: record.publicDisposition,
-      publicAccess: true,
     };
   }
 
@@ -808,13 +781,13 @@ export class FilesDataPlane {
     try {
       await this.#storage.delete(storageKey);
     } catch {
-      // The file state is authoritative; cleanup jobs can retry safe leftovers.
+      // The file state is authoritative; object deletion is best-effort.
     }
   }
 
   #errorResponse(error: Error, context: Context): Response {
     const mapped =
-      error instanceof FilesDataPlaneError ? error : storageUnavailable(error);
+      error instanceof FilesDataPlaneError ? error : storageUnavailable();
     return context.json<FilesErrorResponseBody>(
       { error: mapped.message, code: mapped.code },
       mapped.status,
@@ -836,258 +809,6 @@ export function createFilesDataPlane(
   return new FilesDataPlane(options);
 }
 
-function normalizeUploadPolicy(
-  input: CreateFileUploadPlanInput,
-  configuredMaxBytes: number,
-): UploadPolicy {
-  if (!Number.isSafeInteger(input.size) || input.size < 0) {
-    throw uploadFailed('The declared file size is invalid.');
-  }
-  const requestedMax = input.constraints?.maxBytes;
-  if (
-    requestedMax !== undefined &&
-    (!Number.isSafeInteger(requestedMax) || requestedMax <= 0)
-  ) {
-    throw uploadFailed('The file size constraint is invalid.');
-  }
-  const maxBytes = Math.min(
-    requestedMax ?? configuredMaxBytes,
-    configuredMaxBytes,
-  );
-  if (input.size > maxBytes) {
-    throw new FilesDataPlaneError(
-      'UPLOAD_SIZE_EXCEEDED',
-      413,
-      'The file exceeds the upload size limit.',
-    );
-  }
-
-  const contentType = normalizeOptionalContentType(input.contentType);
-  return {
-    maxBytes,
-    expectedSize: input.size,
-    contentType,
-    allowedExtensions: normalizeExtensions(
-      input.constraints?.allowedExtensions ?? [],
-    ),
-    allowedContentTypes: normalizeContentTypes(
-      input.constraints?.allowedContentTypes ?? [],
-    ),
-  };
-}
-
-function normalizeStreamUploadPolicy(
-  input: CreateFileInput,
-  configuredMaxBytes: number,
-): StreamUploadPolicy {
-  if (
-    input.size !== undefined &&
-    (!Number.isSafeInteger(input.size) || input.size < 0)
-  ) {
-    throw uploadFailed('The declared file size is invalid.');
-  }
-  const requestedMax = input.constraints?.maxBytes;
-  if (
-    requestedMax !== undefined &&
-    (!Number.isSafeInteger(requestedMax) || requestedMax <= 0)
-  ) {
-    throw uploadFailed('The file size constraint is invalid.');
-  }
-  return {
-    maxBytes: Math.min(requestedMax ?? configuredMaxBytes, configuredMaxBytes),
-    expectedSize: input.size,
-    contentType: normalizeOptionalContentType(input.contentType),
-    allowedExtensions: normalizeExtensions(
-      input.constraints?.allowedExtensions ?? [],
-    ),
-    allowedContentTypes: normalizeContentTypes(
-      input.constraints?.allowedContentTypes ?? [],
-    ),
-  };
-}
-
-function assertStreamUploadPolicy(
-  name: string,
-  policy: StreamUploadPolicy,
-): void {
-  if (
-    policy.expectedSize !== undefined &&
-    policy.expectedSize > policy.maxBytes
-  ) {
-    throw new FilesDataPlaneError(
-      'UPLOAD_SIZE_EXCEEDED',
-      413,
-      'The file exceeds the upload size limit.',
-    );
-  }
-  assertUploadType(name, policy);
-}
-
-function assertUploadPolicy(name: string, policy: UploadPolicy): void {
-  if (policy.expectedSize > policy.maxBytes) {
-    throw new FilesDataPlaneError(
-      'UPLOAD_SIZE_EXCEEDED',
-      413,
-      'The file exceeds the upload size limit.',
-    );
-  }
-  assertUploadType(name, policy);
-}
-
-function assertUploadType(
-  name: string,
-  policy: Pick<
-    UploadPolicy,
-    'allowedExtensions' | 'allowedContentTypes' | 'contentType'
-  >,
-): void {
-  if (policy.allowedExtensions.length > 0) {
-    const extension = path.extname(name).toLowerCase();
-    if (!policy.allowedExtensions.includes(extension)) {
-      throw uploadTypeNotAllowed();
-    }
-  }
-  if (
-    policy.allowedContentTypes.length > 0 &&
-    (policy.contentType === null ||
-      !policy.allowedContentTypes.includes(policy.contentType))
-  ) {
-    throw uploadTypeNotAllowed();
-  }
-}
-
-function validateStreamStorageMetadata(
-  metadata: StorageObjectMetadata,
-  policy: StreamUploadPolicy,
-): void {
-  if (metadata.contentLength > policy.maxBytes) {
-    throw new FilesDataPlaneError(
-      'UPLOAD_SIZE_EXCEEDED',
-      413,
-      'The file exceeds the upload size limit.',
-    );
-  }
-  if (
-    policy.expectedSize !== undefined &&
-    metadata.contentLength !== policy.expectedSize
-  ) {
-    throw uploadFailed('The streamed byte count does not match size.');
-  }
-  validateContentType(
-    normalizeOptionalContentType(metadata.contentType),
-    policy,
-  );
-}
-
-function validateContentType(
-  contentType: string | null,
-  policy: Pick<UploadPolicy, 'contentType' | 'allowedContentTypes'>,
-): void {
-  if (contentType !== policy.contentType) {
-    throw uploadTypeNotAllowed();
-  }
-  if (
-    policy.allowedContentTypes.length > 0 &&
-    (contentType === null || !policy.allowedContentTypes.includes(contentType))
-  ) {
-    throw uploadTypeNotAllowed();
-  }
-}
-
-function validateContentLength(
-  value: string | undefined,
-  policy: UploadPolicy,
-): void {
-  if (value === undefined) {
-    return;
-  }
-  const contentLength = Number(value);
-  if (!Number.isSafeInteger(contentLength) || contentLength < 0) {
-    throw uploadFailed('The Content-Length header is invalid.');
-  }
-  if (contentLength > policy.maxBytes) {
-    throw new FilesDataPlaneError(
-      'UPLOAD_SIZE_EXCEEDED',
-      413,
-      'The file exceeds the upload size limit.',
-    );
-  }
-  if (contentLength !== policy.expectedSize) {
-    throw uploadFailed('The Content-Length header does not match the plan.');
-  }
-}
-
-function validateStorageMetadata(
-  metadata: StorageObjectMetadata,
-  policy: UploadPolicy,
-): void {
-  if (metadata.contentLength > policy.maxBytes) {
-    throw new FilesDataPlaneError(
-      'UPLOAD_SIZE_EXCEEDED',
-      413,
-      'The file exceeds the upload size limit.',
-    );
-  }
-  if (metadata.contentLength !== policy.expectedSize) {
-    throw uploadFailed('The uploaded byte count does not match the plan.');
-  }
-  validateContentType(
-    normalizeOptionalContentType(metadata.contentType),
-    policy,
-  );
-}
-
-function normalizeExtensions(values: readonly string[]): readonly string[] {
-  return [...new Set(values.map((value) => normalizeExtension(value)))];
-}
-
-function normalizeExtension(value: string): string {
-  const normalized = value.trim().toLowerCase();
-  if (!/^\.[a-z0-9][a-z0-9._+-]{0,31}$/.test(normalized)) {
-    throw uploadFailed('A file extension constraint is invalid.');
-  }
-  return normalized;
-}
-
-function normalizeContentTypes(values: readonly string[]): readonly string[] {
-  return [
-    ...new Set(values.map((value) => normalizeRequiredContentType(value))),
-  ];
-}
-
-function normalizeRequiredContentType(value: string): string {
-  const normalized = normalizeOptionalContentType(value);
-  if (normalized === null) {
-    throw uploadFailed('A content type constraint is invalid.');
-  }
-  return normalized;
-}
-
-function normalizeOptionalContentType(
-  value: string | undefined,
-): string | null {
-  if (value === undefined || !value.trim()) {
-    return null;
-  }
-  const normalized = value.split(';', 1)[0]?.trim().toLowerCase() ?? '';
-  if (
-    !normalized ||
-    normalized.length > 255 ||
-    !/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(normalized)
-  ) {
-    throw uploadTypeNotAllowed();
-  }
-  return normalized;
-}
-
-function normalizeFileName(value: string): string {
-  const name = value.trim();
-  if (!name || name.length > 255) {
-    throw uploadFailed('The file name is invalid.');
-  }
-  return name;
-}
-
 function normalizeBasePath(value: string): string {
   const pathValue = value.trim();
   if (
@@ -1106,68 +827,6 @@ function assertBeforeUploadDeadline(record: FileRecord, now: number): void {
   }
 }
 
-function assertInlineAllowed(
-  contentType: string | null,
-  disposition: PublicDisposition,
-): void {
-  if (
-    disposition === 'inline' &&
-    (contentType === null ||
-      !INLINE_CONTENT_TYPES.has(contentType.toLowerCase()))
-  ) {
-    throw invalidAccess();
-  }
-}
-
-function createContentDisposition(
-  disposition: PublicDisposition,
-  name: string,
-): string {
-  const sourceName = name.replace(/\\/g, '/').split('/').pop() ?? 'file';
-  const normalizedName =
-    [...sourceName]
-      .map((character) =>
-        isSafeDispositionCharacter(character) ? character : '_',
-      )
-      .join('')
-      .trim()
-      .slice(0, 200) || 'file';
-  const fallback =
-    [...normalizedName]
-      .map((character) =>
-        isSafeFallbackCharacter(character) ? character : '_',
-      )
-      .join('')
-      .replace(/[^\x20-\x7e]/g, '_')
-      .trim()
-      .slice(0, 150) || 'file';
-  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encodeDispositionFileName(normalizedName)}`;
-}
-
-function isSafeDispositionCharacter(character: string): boolean {
-  const code = character.charCodeAt(0);
-  return code >= 32 && code !== 127;
-}
-
-function isSafeFallbackCharacter(character: string): boolean {
-  const code = character.charCodeAt(0);
-  return code >= 32 && code !== 127 && character !== '"' && character !== ';';
-}
-
-function createContentHeaders(
-  record: FileRecord,
-  contentDisposition: string,
-  publicAccess: boolean,
-): Headers {
-  return new Headers({
-    'cache-control': publicAccess ? 'private, no-store' : 'private, no-store',
-    'content-disposition': contentDisposition,
-    'content-length': String(record.size ?? 0),
-    'content-type': record.contentType ?? DEFAULT_CONTENT_TYPE,
-    'x-content-type-options': 'nosniff',
-  });
-}
-
 function readAccess(context: Context): string {
   const access = context.req.query('access');
   if (!access || access.length > 4096) {
@@ -1184,20 +843,6 @@ function readFileIdParam(context: Context): string {
   return fileId;
 }
 
-function createPublicToken(): string {
-  return `${PUBLIC_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
-}
-
-function hashPublicToken(token: string): string {
-  return `sha256:${createHash('sha256').update(token).digest('hex')}`;
-}
-
-function matchesPublicToken(expectedHash: string, token: string): boolean {
-  const actual = Buffer.from(hashPublicToken(token), 'utf8');
-  const expected = Buffer.from(expectedHash, 'utf8');
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
 function secondsUntil(expiresAt: number, now: number): number {
   return Math.max(1, Math.ceil((expiresAt - now) / 1_000));
 }
@@ -1209,66 +854,18 @@ function normalizeTemporaryExpiry(value: number, configured: number): number {
   return Math.min(value, configured);
 }
 
-function toNodeReadable(source: CreateFileInput['content']): Readable {
-  try {
-    if (isWebReadableStream(source)) {
-      return Readable.fromWeb(
-        source as import('node:stream/web').ReadableStream<Uint8Array>,
-      );
-    }
-    if (
-      source &&
-      typeof source === 'object' &&
-      Symbol.asyncIterator in source &&
-      typeof source[Symbol.asyncIterator] === 'function'
-    ) {
-      return Readable.from(source);
-    }
-  } catch {
-    throw uploadFailed('The file content source is invalid.');
-  }
-  throw uploadFailed('The file content source is invalid.');
-}
-
-function isWebReadableStream(
-  value: CreateFileInput['content'],
-): value is ReadableStream<Uint8Array> {
-  return (
-    Boolean(value) &&
-    typeof value === 'object' &&
-    'getReader' in value &&
-    typeof value.getReader === 'function'
-  );
-}
-
-function uploadTypeNotAllowed(): FilesDataPlaneError {
-  return new FilesDataPlaneError(
-    'UPLOAD_TYPE_NOT_ALLOWED',
-    415,
-    'The file type is not allowed.',
-  );
-}
-
-function encodeDispositionFileName(value: string): string {
-  return encodeURIComponent(value).replace(
-    /[!'()*]/g,
-    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-}
-
-function uploadFailed(message: string, _cause?: unknown): FilesDataPlaneError {
+function uploadFailed(message: string): FilesDataPlaneError {
   return new FilesDataPlaneError('UPLOAD_FAILED', 409, message);
 }
 
 function mapPublicAccessKernelError(error: unknown): FilesDataPlaneError {
-  const message = error instanceof Error ? error.message : '';
-  if (message.includes('existing ready file')) {
+  if (!(error instanceof PublicAccessKernelError)) {
+    return storageUnavailable();
+  }
+  if (error.reason === 'file-not-ready') {
     return fileNotReady();
   }
-  if (message.includes('already enabled') || message.includes('not enabled')) {
-    return new FilesDataPlaneError('INVALID_ACCESS', 409, message);
-  }
-  return storageUnavailable(error);
+  return new FilesDataPlaneError('INVALID_ACCESS', 409, error.message);
 }
 
 function isMissingStorageObject(error: unknown): boolean {
@@ -1277,37 +874,4 @@ function isMissingStorageObject(error: unknown): boolean {
   }
   const code = String(error.code);
   return code === 'ENOENT' || code === 'NoSuchKey' || code === 'NotFound';
-}
-
-class ByteLimitTransform extends Transform {
-  readonly #maxBytes: number;
-  bytesRead = 0;
-
-  constructor(maxBytes: number) {
-    super();
-    this.#maxBytes = maxBytes;
-  }
-
-  override _transform(
-    chunk: Buffer | string,
-    encoding: BufferEncoding,
-    callback: TransformCallback,
-  ): void {
-    const chunkBytes =
-      typeof chunk === 'string'
-        ? Buffer.byteLength(chunk, encoding)
-        : chunk.byteLength;
-    this.bytesRead += chunkBytes;
-    if (this.bytesRead > this.#maxBytes) {
-      callback(
-        new FilesDataPlaneError(
-          'UPLOAD_SIZE_EXCEEDED',
-          413,
-          'The file exceeds the upload size limit.',
-        ),
-      );
-      return;
-    }
-    callback(null, chunk);
-  }
 }

@@ -1,11 +1,7 @@
 import type { CreateFilesRuntimeOptions, FilesRuntime } from '../runtime.js';
 import { createFileCapabilityCodec } from './capability.js';
 import { createFilesDataPlane, type FilesDataPlane } from './data-plane.js';
-import {
-  createFileKernel,
-  type CleanupExpiredUploadsResult,
-  type FileKernel,
-} from './kernel.js';
+import { createFileKernel, type FileKernel } from './kernel.js';
 import { createFilesRepository } from './repository.js';
 import {
   createScopedFileCapabilityCodec,
@@ -15,6 +11,7 @@ import { createInternalFilesStorage } from './storage/index.js';
 import type { InternalFilesStorage, S3Provider } from './storage/types.js';
 
 interface FilesRuntimeState {
+  audience: string;
   scopedCapabilityCodec: ScopedFileCapabilityCodec;
   dataPlane: FilesDataPlane;
   database: CreateFilesRuntimeOptions['database'];
@@ -22,24 +19,7 @@ interface FilesRuntimeState {
   kernel: FileKernel;
   storage: InternalFilesStorage;
   clock: () => Date;
-  cleanupHandlers: Set<FilesCleanupHandler>;
 }
-
-export interface FilesCleanupHandlerInput {
-  now: Date;
-  limit: number;
-  deadline?: number;
-}
-
-export interface FilesCleanupHandlerResult {
-  scanned: number;
-  released: number;
-  hasMore: boolean;
-}
-
-export type FilesCleanupHandler = (
-  input: FilesCleanupHandlerInput,
-) => Promise<FilesCleanupHandlerResult>;
 
 export interface CreateOpaqueFilesRuntimeInternalOptions {
   basePath?: string;
@@ -108,6 +88,7 @@ export function createOpaqueFilesRuntime(
   });
   const runtime = new OpaqueFilesRuntime();
   runtimeStates.set(runtime, {
+    audience: options.audience,
     scopedCapabilityCodec,
     dataPlane,
     database: options.database,
@@ -115,19 +96,18 @@ export function createOpaqueFilesRuntime(
     kernel,
     storage,
     clock,
-    cleanupHandlers: new Set(),
   });
   return runtime;
 }
 
 export interface FilesRuntimeServiceState {
+  audience: string;
   scopedCapabilityCodec: ScopedFileCapabilityCodec;
   dataPlane: FilesDataPlane;
   database: CreateFilesRuntimeOptions['database'];
   connection: string | undefined;
   kernel: FileKernel;
   clock: () => Date;
-  registerCleanupHandler(handler: FilesCleanupHandler): () => void;
 }
 
 export function getFilesRuntimeServiceState(
@@ -138,70 +118,14 @@ export function getFilesRuntimeServiceState(
     throw new Error('Files runtime is invalid or disposed.');
   }
   return {
+    audience: state.audience,
     scopedCapabilityCodec: state.scopedCapabilityCodec,
     dataPlane: state.dataPlane,
     database: state.database,
     connection: state.connection,
     kernel: state.kernel,
     clock: state.clock,
-    registerCleanupHandler(handler: FilesCleanupHandler): () => void {
-      state.cleanupHandlers.add(handler);
-      return () => state.cleanupHandlers.delete(handler);
-    },
   };
-}
-
-export interface RunFilesCleanupOptions {
-  batchSize?: number;
-  timeBudgetMs?: number;
-}
-
-export interface RunFilesCleanupResult {
-  pending: CleanupExpiredUploadsResult;
-  reservationsReleased: number;
-  hasMore: boolean;
-}
-
-export async function runFilesCleanup(
-  runtime: FilesRuntime,
-  options: RunFilesCleanupOptions = {},
-): Promise<RunFilesCleanupResult> {
-  const state = runtimeStates.get(runtime);
-  if (!state) {
-    throw new Error('Files runtime is invalid or disposed.');
-  }
-  const batchSize = options.batchSize ?? 100;
-  const timeBudgetMs = options.timeBudgetMs ?? 5_000;
-  if (!Number.isSafeInteger(batchSize) || batchSize <= 0) {
-    throw new Error('Files cleanup batch size must be a positive integer.');
-  }
-  if (!Number.isSafeInteger(timeBudgetMs) || timeBudgetMs <= 0) {
-    throw new Error('Files cleanup time budget must be a positive integer.');
-  }
-  const deadline = Date.now() + timeBudgetMs;
-  const pending = await state.kernel.cleanupExpiredUploads({
-    limit: batchSize,
-    now: state.clock(),
-    deadline,
-  });
-  let reservationsReleased = 0;
-  let hasMore = pending.hasMore;
-  let reservationBudget = Math.max(0, batchSize - pending.scanned);
-  for (const handler of state.cleanupHandlers) {
-    if (Date.now() >= deadline || reservationBudget <= 0) {
-      hasMore = true;
-      break;
-    }
-    const result = await handler({
-      now: state.clock(),
-      limit: reservationBudget,
-      deadline,
-    });
-    reservationBudget -= result.scanned;
-    reservationsReleased += result.released;
-    hasMore ||= result.hasMore;
-  }
-  return { pending, reservationsReleased, hasMore };
 }
 
 export function getFilesRuntimeKernel(runtime: FilesRuntime): FileKernel {

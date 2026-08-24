@@ -84,19 +84,20 @@ export interface PublicAccessState {
   disposition: PublicDisposition | null;
 }
 
-export interface CleanupExpiredUploadsOptions {
-  limit: number;
-  now?: Date;
-  deadline?: number;
-}
+export type PublicAccessKernelErrorReason =
+  'file-not-ready' | 'already-enabled' | 'not-enabled';
 
-export interface CleanupExpiredUploadsResult {
-  scanned: number;
-  failed: number;
-  deleted: number;
-  purged: number;
-  deletionFailures: number;
-  hasMore: boolean;
+export class PublicAccessKernelError extends Error {
+  constructor(readonly reason: PublicAccessKernelErrorReason) {
+    super(
+      reason === 'file-not-ready'
+        ? 'Public access requires an existing ready file.'
+        : reason === 'already-enabled'
+          ? 'Public access is already enabled.'
+          : 'Public access is not enabled.',
+    );
+    this.name = new.target.name;
+  }
 }
 
 export class FileKernel {
@@ -377,26 +378,6 @@ export class FileKernel {
     );
   }
 
-  async setPublicAccess(
-    fileId: string,
-    tokenHash: string,
-    disposition: PublicDisposition,
-  ): Promise<StoredFile> {
-    const normalizedFileId = readFileId(fileId);
-    const normalizedTokenHash = readTokenHash(tokenHash);
-    const normalizedDisposition = readDisposition(disposition);
-    const updated = await this.#repository.setPublicAccess({
-      id: normalizedFileId,
-      tokenHash: normalizedTokenHash,
-      disposition: normalizedDisposition,
-      now: this.#now(),
-    });
-    if (!updated) {
-      throw new Error('Public access requires an existing ready file.');
-    }
-    return toStoredFile(await this.#repository.getRequired(normalizedFileId));
-  }
-
   async enablePublicAccess(
     fileId: string,
     tokenHash: string,
@@ -415,9 +396,9 @@ export class FileKernel {
 
     const current = await this.#repository.get(normalizedFileId);
     if (!current || current.status !== 'ready') {
-      throw new Error('Public access requires an existing ready file.');
+      throw new PublicAccessKernelError('file-not-ready');
     }
-    throw new Error('Public access is already enabled.');
+    throw new PublicAccessKernelError('already-enabled');
   }
 
   async resetPublicAccess(
@@ -438,16 +419,16 @@ export class FileKernel {
 
     const current = await this.#repository.get(normalizedFileId);
     if (!current || current.status !== 'ready') {
-      throw new Error('Public access requires an existing ready file.');
+      throw new PublicAccessKernelError('file-not-ready');
     }
-    throw new Error('Public access is not enabled.');
+    throw new PublicAccessKernelError('not-enabled');
   }
 
   async disablePublicAccess(fileId: string): Promise<StoredFile> {
     const normalizedFileId = readFileId(fileId);
     const current = await this.#repository.get(normalizedFileId);
     if (!current || current.status !== 'ready') {
-      throw new Error('Public access requires an existing ready file.');
+      throw new PublicAccessKernelError('file-not-ready');
     }
     if (current.publicTokenHash === null) {
       return toStoredFile(current);
@@ -457,122 +438,12 @@ export class FileKernel {
     return toStoredFile(await this.#repository.getRequired(normalizedFileId));
   }
 
-  async clearPublicAccess(fileId: string): Promise<StoredFile> {
-    const normalizedFileId = readFileId(fileId);
-    const updated = await this.#repository.clearPublicAccess(
-      normalizedFileId,
-      this.#now(),
-    );
-    if (!updated) {
-      throw new Error('Public access requires an existing ready file.');
-    }
-    return toStoredFile(await this.#repository.getRequired(normalizedFileId));
-  }
-
   async getPublicAccessState(fileId: string): Promise<PublicAccessState> {
     const record = await this.#repository.getRequired(readFileId(fileId));
     return {
       tokenHash: record.publicTokenHash,
       disposition: record.publicDisposition,
     };
-  }
-
-  async findExpiredPending(limit = 100): Promise<StoredFile[]> {
-    if (!Number.isSafeInteger(limit) || limit <= 0) {
-      throw new Error('Files expiry query limit must be a positive integer.');
-    }
-    const records = await this.#repository.findExpiredPending(
-      this.#now(),
-      limit,
-    );
-    return records.map(toStoredFile);
-  }
-
-  async cleanupExpiredUploads(
-    options: CleanupExpiredUploadsOptions,
-  ): Promise<CleanupExpiredUploadsResult> {
-    if (!Number.isSafeInteger(options.limit) || options.limit <= 0) {
-      throw new Error('Files cleanup limit must be a positive integer.');
-    }
-    const now = options.now ?? this.#now();
-    const records = await this.#repository.findExpiredCleanupCandidates(
-      now,
-      options.limit,
-    );
-    let failed = 0;
-    let deleted = 0;
-    let purged = 0;
-    let deletionFailures = 0;
-    let processed = 0;
-
-    for (const record of records) {
-      if (options.deadline !== undefined && Date.now() >= options.deadline) {
-        break;
-      }
-      processed += 1;
-      const current = await this.#repository.get(record.id);
-      if (!current || current.storageKey !== null) {
-        continue;
-      }
-      if (current.status === 'pending') {
-        const transitioned = await this.#repository.failPending(
-          current.id,
-          now,
-        );
-        if (transitioned) {
-          failed += 1;
-        }
-      }
-      const afterTransition = await this.#repository.get(current.id);
-      if (!afterTransition || afterTransition.status === 'pending') {
-        continue;
-      }
-      try {
-        await this.#storage.delete(pendingStorageKey(afterTransition.id));
-        deleted += 1;
-      } catch {
-        deletionFailures += 1;
-        continue;
-      }
-      try {
-        if (await this.#repository.deleteExact(afterTransition)) {
-          purged += 1;
-        }
-      } catch {
-        // A relation reservation may still reference this failed file.
-      }
-    }
-
-    return {
-      scanned: processed,
-      failed,
-      deleted,
-      purged,
-      deletionFailures,
-      hasMore: processed < records.length || records.length === options.limit,
-    };
-  }
-
-  async deleteStorageObject(storageKey: string): Promise<void> {
-    await this.#storage.delete(normalizeStorageKey(storageKey));
-  }
-
-  async purgeFile(fileId: string): Promise<boolean> {
-    const normalizedFileId = readFileId(fileId);
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const record = await this.#repository.get(normalizedFileId);
-      if (!record) {
-        return false;
-      }
-      if (!(await this.#repository.deleteExact(record))) {
-        continue;
-      }
-      if (record.storageKey !== null) {
-        await this.#storage.delete(record.storageKey);
-      }
-      return true;
-    }
-    throw new Error('Files purge could not acquire a stable record state.');
   }
 
   async #resolvePersistenceFailure(

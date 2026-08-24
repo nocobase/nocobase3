@@ -37,6 +37,11 @@ import {
 } from './relation-repository.js';
 import type { FilesRuntimeServiceState } from './runtime.js';
 import {
+  createScopedCapabilityScope,
+  createScopedRouteIdentity,
+  readScopedRoutePath,
+} from './scoped-route.js';
+import {
   ExpiredScopedFileCapabilityError,
   InvalidScopedFileCapabilityError,
   type ScopedFileCapability,
@@ -78,7 +83,17 @@ export function createRelationFileRoute(
   const binding = validateRelationBinding(input.binding, input.state);
   validateOptions(input.options);
   const state: RelationRouteState = {
-    scope: `relation:${randomBytes(16).toString('hex')}`,
+    scope: createScopedRouteIdentity(input.state.audience, 'relation', {
+      collection:
+        binding.collection.definition.name ?? binding.collection.tableName,
+      parentCollection:
+        binding.parentCollection.definition.name ??
+        binding.parentCollection.tableName,
+      parentField: binding.parentField,
+      recordField: binding.recordField,
+      recordParam: binding.recordParam,
+      maxFiles: binding.maxFiles,
+    }),
     binding,
     repository: createRelationBindingRepository({
       database: input.state.database,
@@ -96,9 +111,6 @@ export function createRelationFileRoute(
     capabilityCodec: input.state.scopedCapabilityCodec,
     clock: input.state.clock,
   };
-  input.state.registerCleanupHandler(({ now, limit, deadline }) =>
-    state.repository.cleanupExpiredReservations(now, limit, deadline),
-  );
   const routes = new Hono();
 
   routes.get(
@@ -121,14 +133,12 @@ export function createRelationFileRoute(
     '/:fileId/complete',
     withFileRouteErrors((context) => handleComplete(state, context)),
   );
-  routes.get(
-    '/:fileId/content',
-    withFileRouteErrors((context) => handleContent(state, context, false)),
-  );
   routes.on(
-    'HEAD',
+    ['GET', 'HEAD'],
     '/:fileId/content',
-    withFileRouteErrors((context) => handleContent(state, context, true)),
+    withFileRouteErrors((context) =>
+      handleContent(state, context, context.req.method === 'HEAD'),
+    ),
   );
   routes.delete(
     '/:fileId',
@@ -847,24 +857,23 @@ function readOptionalDisposition(
 }
 
 function readMountedBasePath(context: Context): string {
-  const path = context.req.path.replace(/\/+$/, '');
-  if (!path) {
-    throw invalidFileRoute('Mounted file route path is invalid.');
+  try {
+    return readScopedRoutePath(context);
+  } catch (error) {
+    throw invalidFileRoute(
+      error instanceof Error ? error.message : 'Mounted file route is invalid.',
+    );
   }
-  const fileId = context.req.param('fileId');
-  if (fileId) {
-    const marker = `/${fileId}/`;
-    const index = path.lastIndexOf(marker);
-    if (index <= 0) {
-      throw invalidFileRoute('Mounted file route scope is invalid.');
-    }
-    return path.slice(0, index);
-  }
-  return path;
 }
 
 function readCapabilityScope(scope: string, context: Context): string {
-  return `${scope}:${readMountedBasePath(context)}`;
+  try {
+    return createScopedCapabilityScope(scope, context);
+  } catch (error) {
+    throw invalidFileRoute(
+      error instanceof Error ? error.message : 'Mounted file route is invalid.',
+    );
+  }
 }
 
 function now(state: RelationRouteState): Date {

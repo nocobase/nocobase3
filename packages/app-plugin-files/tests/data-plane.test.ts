@@ -299,7 +299,11 @@ describe('Files Local data plane', () => {
       name: 'missing.txt',
       size: 1,
     });
-    await fixture.kernel.purgeFile(missingPlan.fileId);
+    await fixture.database
+      .query()
+      .deleteFrom('files')
+      .where('id', '=', missingPlan.fileId)
+      .execute();
     const missing = await fixture.app.request(missingPlan.upload.url, {
       method: 'PUT',
       body: 'x',
@@ -362,7 +366,7 @@ describe('Files Local data plane', () => {
 });
 
 describe('Files S3-compatible data plane', () => {
-  it('returns Presigned PUT plus platform complete and redirects GET/HEAD', async () => {
+  it('redirects S3 GET while answering HEAD from stored metadata', async () => {
     const provider = new FakeS3Provider();
     const fixture = await createTestRuntime(
       {
@@ -407,17 +411,21 @@ describe('Files S3-compatible data plane', () => {
     });
 
     const access = await fixture.dataPlane.createReadAccess(plan.fileId);
-    for (const method of ['GET', 'HEAD'] as const) {
-      const response = await fixture.app.request(access.url, { method });
-      expect(response.status).toBe(302);
-      expect(response.headers.get('location')).toMatch(
-        /^https:\/\/read\.invalid\//,
-      );
-      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-      expect(response.body).toBeNull();
-    }
+    const head = await fixture.app.request(access.url, { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(head.headers.get('location')).toBeNull();
+    expect(head.headers.get('content-length')).toBe('4');
+    expect(head.headers.get('content-type')).toBe('application/pdf');
+    expect(head.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(head.body).toBeNull();
+
+    const get = await fixture.app.request(access.url);
+    expect(get.status).toBe(302);
+    expect(get.headers.get('location')).toMatch(/^https:\/\/read\.invalid\//);
+    expect(get.headers.get('content-length')).toBeNull();
+    expect(get.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(get.body).toBeNull();
     expect(provider.readOptions).toEqual([
-      expect.objectContaining({ expiresInSeconds: 7 }),
       expect.objectContaining({ expiresInSeconds: 7 }),
     ]);
   });

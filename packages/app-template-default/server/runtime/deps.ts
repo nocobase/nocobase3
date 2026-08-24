@@ -82,7 +82,6 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       logger: queueLogger,
       jobFactory: createAppJobFactory({
         database: runtime.database,
-        filesRuntime,
         logger: queueLogger,
       }),
     },

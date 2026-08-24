@@ -3,10 +3,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppRuntime } from '@nocobase/app-server/runtime';
-import { Job } from '@nocobase/queue';
 
 import type { AppConfig } from '../../server/config/index.ts';
-import { createAppJobFactory } from '../../server/jobs/dependencies.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import {
   createAppDeps,
@@ -17,6 +15,8 @@ import { onceAsync } from '../../server/runtime/disposers.ts';
 import { createAppServices } from '../../server/services/index.ts';
 import { createStandaloneRuntime } from '../../server/standalone.ts';
 
+process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
+
 const runtimes: Array<AppRuntime<AppConfig>> = [];
 const dependencies: AppDeps[] = [];
 
@@ -26,7 +26,7 @@ afterEach(async () => {
 });
 
 describe('Files app composition', () => {
-  it('shares one runtime and one FileService with services and jobs', () => {
+  it('shares one runtime with the application FileService', () => {
     const runtime = trackRuntime(createStandaloneRuntime());
     const deps = trackDeps(createAppDeps(runtime));
     const realtime = createRealtimeService();
@@ -35,14 +35,6 @@ describe('Files app composition', () => {
     expect(deps.filesRuntime).toBeDefined();
     expect(services.fileService).toBeDefined();
 
-    const factory = createAppJobFactory({
-      database: runtime.database,
-      filesRuntime: deps.filesRuntime,
-      logger: deps.logging.getLogger(),
-    });
-    const job = factory(CapturingJob) as CapturingJob;
-
-    expect(job.dependencies.filesRuntime).toBe(deps.filesRuntime);
     realtime.close();
   });
 
@@ -86,18 +78,6 @@ describe('Files app composition', () => {
     dependencies.splice(dependencies.indexOf(deps), 1);
   });
 });
-
-class CapturingJob extends Job {
-  constructor(
-    readonly dependencies: {
-      filesRuntime?: AppDeps['filesRuntime'];
-    },
-  ) {
-    super();
-  }
-
-  async execute(): Promise<void> {}
-}
 
 function trackRuntime(runtime: AppRuntime<AppConfig>): AppRuntime<AppConfig> {
   runtimes.push(runtime);

@@ -1,5 +1,4 @@
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
-
+import { buildAppFileUrl } from './app-client';
 import { normalizeFileBasePath } from './base-path';
 import type { StoredFile } from './types';
 
@@ -12,15 +11,13 @@ export function getFileContentPath(basePath: string, file: StoredFile): string {
 }
 
 export function getPreviewFileUrl(basePath: string, file: StoredFile): string {
-  return nocobaseClient.buildUrl(getFileContentPath(basePath, file)).toString();
+  return buildAppFileUrl(getFileContentPath(basePath, file));
 }
 
 export function getDownloadUrl(basePath: string, file: StoredFile): string {
-  return nocobaseClient
-    .buildUrl(getFileContentPath(basePath, file), {
-      disposition: 'attachment',
-    })
-    .toString();
+  return buildAppFileUrl(getFileContentPath(basePath, file), {
+    disposition: 'attachment',
+  });
 }
 
 export function getThumbnailUrl(basePath: string, file: StoredFile): string {
@@ -34,14 +31,13 @@ export function fetchFileContent(
 ): Promise<Response> {
   const method = options.method ?? 'GET';
   return fetch(
-    nocobaseClient.buildUrl(
+    buildAppFileUrl(
       getFileContentPath(basePath, file),
       method === 'HEAD' ? { disposition: 'attachment' } : undefined,
     ),
     {
       method,
       credentials: 'include',
-      headers: nocobaseClient.getHeaders({ method: 'GET' }),
       signal: options.signal,
     },
   ).then((response) => {

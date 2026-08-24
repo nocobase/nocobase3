@@ -193,6 +193,91 @@ describe('field binding scoped file routes', () => {
     ).toBe(404);
   });
 
+  it('accepts an existing plan after rebuilding the runtime and route', async () => {
+    const fixture = await createFixture();
+    const upload = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'restart.txt',
+      size: 7,
+      contentType: 'text/plain',
+    });
+    await fixture.runtime.dispose();
+    const rebuiltRuntime = createOpaqueFilesRuntime({
+      database: fixture.database,
+      config: resolveFilesConfig({
+        appStorageRoot: fixture.storageRoot,
+      }),
+      audience: 'field-route-test',
+      secret: 'field-route-test-secret-at-least-32-characters',
+    });
+    try {
+      const rebuiltRoute = createFileService({
+        runtime: rebuiltRuntime,
+      }).createFileRoute({
+        binding: {
+          type: 'field',
+          collection: 'employees',
+          recordParam: 'employeeId',
+          fileField: 'avatarId',
+        },
+        constraints: {
+          maxBytes: 1024,
+          allowedExtensions: ['.txt'],
+          allowedContentTypes: ['text/plain'],
+        },
+        authorize() {},
+      });
+      const rebuiltApp = new Hono();
+      rebuiltApp.route('/employees/:employeeId/avatar', rebuiltRoute);
+      expect(
+        (
+          await rebuiltApp.request(upload.plan.upload.url, {
+            method: 'PUT',
+            headers: { 'content-length': '7', 'content-type': 'text/plain' },
+            body: 'restart',
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await rebuiltApp.request(upload.plan.complete.url, {
+            method: 'POST',
+          })
+        ).status,
+      ).toBe(200);
+      expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(upload.file.id);
+    } finally {
+      await rebuiltRuntime.dispose();
+    }
+  });
+
+  it('isolates plans from routes with a different binding identity', async () => {
+    const fixture = await createFixture();
+    const upload = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'isolated.txt',
+      size: 1,
+      contentType: 'text/plain',
+    });
+    const isolatedRoute = fixture.service.createFileRoute({
+      binding: {
+        type: 'field',
+        collection: 'employees',
+        recordParam: 'workerId',
+        fileField: 'avatarId',
+      },
+      authorize() {},
+    });
+    const isolatedApp = new Hono();
+    isolatedApp.route('/employees/:workerId/avatar', isolatedRoute);
+    expect(
+      (
+        await isolatedApp.request(upload.plan.upload.url, {
+          method: 'PUT',
+          body: 'x',
+        })
+      ).status,
+    ).toBe(403);
+  });
+
   it('keeps the old file when concurrent replacements conflict', async () => {
     const fixture = await createFixture();
     const original = await uploadAndComplete(fixture, EMPLOYEE_ONE, {

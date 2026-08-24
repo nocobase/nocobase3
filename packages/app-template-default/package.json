@@ -148,7 +148,7 @@
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
-    "test": "vitest run --maxWorkers=1",
+    "test": "vitest run --exclude tests/logic/react-grab-picker.test.ts && vitest run --maxWorkers=1 tests/logic/react-grab-picker.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:sdk": "pnpm --filter @nocobase/portal-sdk test",

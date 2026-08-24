@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 import type {
   ConstraintDefinition,
   InspectedCollection,
@@ -34,6 +32,11 @@ import {
   invalidFileRoute,
 } from './route-errors.js';
 import type { FilesRuntimeServiceState } from './runtime.js';
+import {
+  createScopedCapabilityScope,
+  createScopedRouteIdentity,
+  readScopedRoutePath,
+} from './scoped-route.js';
 import {
   ExpiredScopedFileCapabilityError,
   InvalidScopedFileCapabilityError,
@@ -71,7 +74,13 @@ export function createFieldFileRoute(input: CreateFieldFileRouteInput): Hono {
   const binding = validateFieldBinding(input.binding, input.state);
   validateOptions(input.options);
   const state: FieldRouteState = {
-    scope: `field:${randomBytes(16).toString('hex')}`,
+    scope: createScopedRouteIdentity(input.state.audience, 'field', {
+      collection:
+        binding.collection.definition.name ?? binding.collection.tableName,
+      recordField: binding.recordField,
+      recordParam: binding.recordParam,
+      fileField: binding.fileField,
+    }),
     binding,
     repository: createFieldBindingRepository({
       database: input.state.database,
@@ -109,14 +118,12 @@ export function createFieldFileRoute(input: CreateFieldFileRouteInput): Hono {
     '/:fileId/complete',
     withFileRouteErrors((context) => handleComplete(state, context)),
   );
-  routes.get(
-    '/:fileId/content',
-    withFileRouteErrors((context) => handleContent(state, context, false)),
-  );
   routes.on(
-    'HEAD',
+    ['GET', 'HEAD'],
     '/:fileId/content',
-    withFileRouteErrors((context) => handleContent(state, context, true)),
+    withFileRouteErrors((context) =>
+      handleContent(state, context, context.req.method === 'HEAD'),
+    ),
   );
   routes.delete(
     '/:fileId',
@@ -742,24 +749,23 @@ function readOptionalDisposition(
 }
 
 function readMountedBasePath(context: Context): string {
-  const path = context.req.path.replace(/\/+$/, '');
-  if (!path) {
-    throw invalidFileRoute('Mounted file route path is invalid.');
+  try {
+    return readScopedRoutePath(context);
+  } catch (error) {
+    throw invalidFileRoute(
+      error instanceof Error ? error.message : 'Mounted file route is invalid.',
+    );
   }
-  const fileId = context.req.param('fileId');
-  if (fileId) {
-    const marker = `/${fileId}/`;
-    const index = path.lastIndexOf(marker);
-    if (index <= 0) {
-      throw invalidFileRoute('Mounted file route scope is invalid.');
-    }
-    return path.slice(0, index);
-  }
-  return path;
 }
 
 function readCapabilityScope(scope: string, context: Context): string {
-  return `${scope}:${readMountedBasePath(context)}`;
+  try {
+    return createScopedCapabilityScope(scope, context);
+  } catch (error) {
+    throw invalidFileRoute(
+      error instanceof Error ? error.message : 'Mounted file route is invalid.',
+    );
+  }
 }
 
 async function readJson<T>(context: Context): Promise<T> {

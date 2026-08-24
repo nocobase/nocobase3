@@ -26,7 +26,6 @@ import filesMigration from '../database/migrations/202608221000_files_create_fil
 import {
   createOpaqueFilesRuntime,
   getFilesRuntimeKernel,
-  runFilesCleanup,
 } from '../server/internal/runtime.js';
 import type {
   S3Provider,
@@ -154,7 +153,7 @@ describe('relation binding scoped file routes', () => {
     ).not.toBe(pending.file.id);
   });
 
-  it('releases expired reservation slots in bounded cleanup while preserving ready and active rows', async () => {
+  it('releases expired reservation slots lazily without touching ready rows', async () => {
     let now = new Date('2026-08-24T00:00:00.000Z');
     const fixture = await createFixture({ maxFiles: 3, clock: () => now });
     const ready = await uploadAndComplete(
@@ -174,41 +173,21 @@ describe('relation binding scoped file routes', () => {
     const active = await createUpload(fixture, ORDER_ONE, 'active.txt', 6);
     now = new Date('2026-08-24T00:16:00.000Z');
 
-    await expect(
-      runFilesCleanup(fixture.runtime, {
-        batchSize: 3,
-        timeBudgetMs: 5_000,
-      }),
-    ).resolves.toMatchObject({
-      pending: { scanned: 1, failed: 1 },
-      reservationsReleased: 1,
-    });
+    const listed = await fixture.app.request(`/orders/${ORDER_ONE}/files`);
+    expect(listed.status).toBe(200);
     const rows = await relationRows(fixture, ORDER_ONE);
     expect(rows.map((row) => row.fileId).sort()).toEqual(
       [active.file.id, ready.file.id].sort(),
     );
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getFile(expired.file.id),
-    ).toMatchObject({ status: 'failed' });
+    ).toMatchObject({ status: 'pending' });
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getFile(ready.file.id),
     ).toMatchObject({ status: 'ready' });
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getFile(active.file.id),
     ).toMatchObject({ status: 'pending' });
-
-    await expect(
-      runFilesCleanup(fixture.runtime, {
-        batchSize: 3,
-        timeBudgetMs: 5_000,
-      }),
-    ).resolves.toMatchObject({
-      pending: { scanned: 1, purged: 1 },
-      reservationsReleased: 0,
-    });
-    await expect(
-      getFilesRuntimeKernel(fixture.runtime).getFile(expired.file.id),
-    ).resolves.toBeUndefined();
 
     const reused = await createUpload(fixture, ORDER_ONE, 'reused.txt', 6);
     expect(
@@ -290,6 +269,13 @@ describe('relation binding scoped file routes', () => {
     expect(content.headers.get('location')).toMatch(
       /^https:\/\/read\.invalid\//,
     );
+    const head = await fixture.app.request(
+      `/orders/${ORDER_ONE}/files/${upload.file.id}/content`,
+      { method: 'HEAD' },
+    );
+    expect(head.status).toBe(200);
+    expect(head.headers.get('location')).toBeNull();
+    expect(head.headers.get('content-length')).toBe('4');
   });
 
   it('resolves scoped complete/cancel races to failed plus released reservation', async () => {
@@ -341,6 +327,90 @@ describe('relation binding scoped file routes', () => {
         (await fixture.app.request(route, { method: 'POST' })).status,
       ).toBe(404);
     }
+  });
+
+  it('accepts an existing relation plan after rebuilding runtime and route', async () => {
+    const fixture = await createFixture();
+    const upload = await createUpload(fixture, ORDER_ONE, 'restart.txt', 7);
+    await fixture.runtime.dispose();
+    const rebuiltRuntime = createOpaqueFilesRuntime({
+      database: fixture.database,
+      config: resolveFilesConfig({
+        appStorageRoot: fixture.storageRoot,
+        config: { storage: { driver: 'local', root: fixture.storageRoot } },
+      }),
+      audience: 'relation-route-test',
+      secret: 'relation-route-test-secret-at-least-32-characters',
+    });
+    try {
+      const rebuiltRoute = createFileService({
+        runtime: rebuiltRuntime,
+      }).createFileRoute({
+        binding: {
+          type: 'relation',
+          collection: 'purchaseOrderAttachments',
+          recordParam: 'orderId',
+          recordField: 'purchaseOrderId',
+          maxFiles: 2,
+        },
+        constraints: {
+          maxBytes: 1024,
+          allowedExtensions: ['.txt'],
+          allowedContentTypes: ['text/plain'],
+        },
+        authorize() {},
+      });
+      const rebuiltApp = new Hono();
+      rebuiltApp.route('/orders/:orderId/files', rebuiltRoute);
+      expect(
+        (
+          await rebuiltApp.request(upload.plan.upload.url, {
+            method: 'PUT',
+            headers: { 'content-length': '7', 'content-type': 'text/plain' },
+            body: 'restart',
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await rebuiltApp.request(upload.plan.complete.url, {
+            method: 'POST',
+          })
+        ).status,
+      ).toBe(200);
+      expect((await relationRows(fixture, ORDER_ONE))[0]?.fileId).toBe(
+        upload.file.id,
+      );
+    } finally {
+      await rebuiltRuntime.dispose();
+    }
+  });
+
+  it('isolates relation plans from a different maxFiles binding', async () => {
+    const fixture = await createFixture();
+    const upload = await createUpload(fixture, ORDER_ONE, 'isolated.txt', 1);
+    const isolatedRoute = createFileService({
+      runtime: fixture.runtime,
+    }).createFileRoute({
+      binding: {
+        type: 'relation',
+        collection: 'purchaseOrderAttachments',
+        recordParam: 'orderId',
+        recordField: 'purchaseOrderId',
+        maxFiles: 3,
+      },
+      authorize() {},
+    });
+    const isolatedApp = new Hono();
+    isolatedApp.route('/orders/:orderId/files', isolatedRoute);
+    expect(
+      (
+        await isolatedApp.request(upload.plan.upload.url, {
+          method: 'PUT',
+          body: 'x',
+        })
+      ).status,
+    ).toBe(403);
   });
 
   it('detaches a ready relation without purging the file', async () => {

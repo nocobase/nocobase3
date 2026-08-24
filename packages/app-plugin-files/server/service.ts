@@ -179,5 +179,5 @@ async function runDirectService<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 function mapDirectServiceError(error: unknown): FileServiceError {
-  return error instanceof FileServiceError ? error : storageUnavailable(error);
+  return error instanceof FileServiceError ? error : storageUnavailable();
 }

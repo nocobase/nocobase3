@@ -3,7 +3,6 @@
   "displayName": "Files App Plugin",
   "description": "Managed file contracts and runtime for NocoBase applications.",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -71,6 +70,7 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-plugin-files.tgz\" && pnpm exec publint .",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
@@ -79,7 +79,6 @@
     "@aws-sdk/s3-request-presigner": "^3.577.0",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/database": "workspace:^",
-    "@nocobase/queue": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

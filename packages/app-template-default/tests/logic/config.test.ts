@@ -207,6 +207,7 @@ describe('app config', () => {
         config: {
           authSecret: 'local-auth-secret-at-least-32-characters',
           filesUploadMaxBytes: 1024,
+          filesTemporaryAccessExpiresInSeconds: 45,
         },
       },
       new URL('../../server/embedded.ts', import.meta.url).href,
@@ -228,6 +229,8 @@ describe('app config', () => {
           filesS3AccessKeyId: 'tenant-access-key',
           filesS3SecretAccessKey: 'tenant-secret-key',
           filesS3SessionToken: 'tenant-session-token',
+          filesTemporaryAccessExpiresInSeconds: 120,
+          filesProviderUrlExpiresInSeconds: 15,
           filesPublicAccessEnabled: true,
         },
       },
@@ -240,6 +243,7 @@ describe('app config', () => {
         root: path.join(localRoot, 'data/app/private/files'),
       },
       upload: { maxBytes: 1024 },
+      access: { temporaryExpiresInSeconds: 45 },
     });
     expect(s3.files).toEqual({
       storage: {
@@ -257,8 +261,8 @@ describe('app config', () => {
       },
       upload: { maxBytes: 52_428_800, expiresInSeconds: 900 },
       access: {
-        temporaryExpiresInSeconds: 300,
-        providerUrlExpiresInSeconds: 60,
+        temporaryExpiresInSeconds: 120,
+        providerUrlExpiresInSeconds: 15,
       },
       publicAccess: { enabled: true },
     });
@@ -728,6 +732,8 @@ describe('files config', () => {
         FILES_S3_PREFIX: 'tenant-a',
         FILES_S3_FORCE_PATH_STYLE: 'true',
         FILES_UPLOAD_MAX_BYTES: '2048',
+        FILES_TEMPORARY_ACCESS_EXPIRES_IN_SECONDS: '90',
+        FILES_PROVIDER_URL_EXPIRES_IN_SECONDS: '12',
         FILES_PUBLIC_ACCESS_ENABLED: 'true',
       }),
       paths: createConfigPaths({
@@ -750,8 +756,8 @@ describe('files config', () => {
       },
       upload: { maxBytes: 2048, expiresInSeconds: 900 },
       access: {
-        temporaryExpiresInSeconds: 300,
-        providerUrlExpiresInSeconds: 60,
+        temporaryExpiresInSeconds: 90,
+        providerUrlExpiresInSeconds: 12,
       },
       publicAccess: { enabled: true },
     });

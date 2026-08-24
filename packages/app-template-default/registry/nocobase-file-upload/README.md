@@ -1,7 +1,7 @@
 # NocoBase File Upload
 
 V3 controlled upload and preview fields for a standard Scoped Files Route.
-The Registry uses the current App `nocobaseClient` internally and keeps
+The Registry uses the current App-local client internally and keeps
 `StoredFile[]` as the only field value shape, including single-file fields.
 
 `basePath` is relative to the current App API base and must not contain `/api`,
@@ -9,7 +9,7 @@ an absolute URL, a query string, a hash, or a parent path segment.
 
 ```tsx
 import type { StoredFile } from '@nocobase/app-plugin-files/client';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
+import { appFileClient } from '@/extensions/nocobase-file-upload';
 import { useEffect, useState } from 'react';
 
 import {
@@ -28,7 +28,7 @@ export function PurchaseOrderAttachments({
   const [files, setFiles] = useState<StoredFile[]>([]);
 
   useEffect(() => {
-    void nocobaseClient.request<StoredFile[]>(basePath).then(setFiles);
+    void appFileClient.request<StoredFile[]>(basePath).then(setFiles);
   }, [basePath]);
 
   if (readOnly) {

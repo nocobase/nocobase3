@@ -1,18 +1,12 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-} from 'node:crypto';
-
 import type { FileTransferDescriptor } from './capability.js';
+import {
+  createSealedCredentialCodec,
+  type SealedCredentialCodec,
+} from './sealed-credential.js';
 
 const CAPABILITY_PREFIX = 'fs1';
 const CAPABILITY_VERSION = 1;
-const AUTHENTICATED_CONTEXT = Buffer.from(
-  'nocobase-files-scoped-capability-v1',
-  'utf8',
-);
+const AUTHENTICATED_CONTEXT = 'nocobase-files-scoped-capability-v1';
 
 export type ScopedFileCapabilityAction = 'upload' | 'cancel' | 'complete';
 
@@ -59,12 +53,20 @@ export class ExpiredScopedFileCapabilityError extends Error {
 
 export class ScopedFileCapabilityCodec {
   readonly #audience: string;
-  readonly #key: Buffer;
+  readonly #credentialCodec: SealedCredentialCodec;
   readonly #clock: () => Date;
 
   constructor(options: CreateScopedFileCapabilityCodecOptions) {
     this.#audience = readRequiredString(options.audience);
-    this.#key = deriveKey(options.secret);
+    this.#credentialCodec = createSealedCredentialCodec({
+      prefix: CAPABILITY_PREFIX,
+      authenticatedContext: AUTHENTICATED_CONTEXT,
+      keyPurpose: 'nocobase-files-scoped-capability-key-v1',
+      secret: options.secret,
+      secretError:
+        'Scoped Files capability secret must contain at least 32 characters.',
+      invalidCredential: () => new InvalidScopedFileCapabilityError(),
+    });
     this.#clock = options.clock ?? (() => new Date());
   }
 
@@ -74,19 +76,7 @@ export class ScopedFileCapabilityCodec {
       version: CAPABILITY_VERSION,
       audience: this.#audience,
     });
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', this.#key, iv);
-    cipher.setAAD(AUTHENTICATED_CONTEXT);
-    const encrypted = Buffer.concat([
-      cipher.update(JSON.stringify(payload), 'utf8'),
-      cipher.final(),
-    ]);
-    return [
-      CAPABILITY_PREFIX,
-      iv.toString('base64url'),
-      encrypted.toString('base64url'),
-      cipher.getAuthTag().toString('base64url'),
-    ].join('.');
+    return this.#credentialCodec.seal(payload);
   }
 
   verify(
@@ -110,37 +100,7 @@ export class ScopedFileCapabilityCodec {
   }
 
   #decrypt(credential: string): ScopedFileCapability {
-    try {
-      const parts = credential.split('.');
-      if (
-        parts.length !== 4 ||
-        parts[0] !== CAPABILITY_PREFIX ||
-        !parts[1] ||
-        !parts[2] ||
-        !parts[3]
-      ) {
-        throw new InvalidScopedFileCapabilityError();
-      }
-      const iv = Buffer.from(parts[1], 'base64url');
-      const encrypted = Buffer.from(parts[2], 'base64url');
-      const tag = Buffer.from(parts[3], 'base64url');
-      if (iv.length !== 12 || encrypted.length === 0 || tag.length !== 16) {
-        throw new InvalidScopedFileCapabilityError();
-      }
-      const decipher = createDecipheriv('aes-256-gcm', this.#key, iv);
-      decipher.setAAD(AUTHENTICATED_CONTEXT);
-      decipher.setAuthTag(tag);
-      const decrypted = Buffer.concat([
-        decipher.update(encrypted),
-        decipher.final(),
-      ]).toString('utf8');
-      return readCapability(JSON.parse(decrypted) as unknown);
-    } catch (error) {
-      if (error instanceof InvalidScopedFileCapabilityError) {
-        throw error;
-      }
-      throw new InvalidScopedFileCapabilityError();
-    }
+    return readCapability(this.#credentialCodec.unseal(credential));
   }
 
   #now(): number {
@@ -244,16 +204,4 @@ function readStringArray(value: unknown): readonly string[] {
     throw new InvalidScopedFileCapabilityError();
   }
   return value.map(readRequiredString);
-}
-
-function deriveKey(secret: string): Buffer {
-  if (secret.length < 32) {
-    throw new Error(
-      'Scoped Files capability secret must contain at least 32 characters.',
-    );
-  }
-  return createHash('sha256')
-    .update('nocobase-files-scoped-capability-key-v1\0')
-    .update(secret)
-    .digest();
 }

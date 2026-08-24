@@ -226,13 +226,13 @@ function createScopeEnv(scope: AppScope): EnvMap {
       scope.config,
       'filesUploadExpiresInSeconds',
     )?.toString(),
-    FILES_ACCESS_TEMPORARY_EXPIRES_IN_SECONDS: getScopeConfigNumber(
+    FILES_TEMPORARY_ACCESS_EXPIRES_IN_SECONDS: getScopeConfigNumber(
       scope.config,
-      'filesAccessTemporaryExpiresInSeconds',
+      'filesTemporaryAccessExpiresInSeconds',
     )?.toString(),
-    FILES_ACCESS_PROVIDER_URL_EXPIRES_IN_SECONDS: getScopeConfigNumber(
+    FILES_PROVIDER_URL_EXPIRES_IN_SECONDS: getScopeConfigNumber(
       scope.config,
-      'filesAccessProviderUrlExpiresInSeconds',
+      'filesProviderUrlExpiresInSeconds',
     )?.toString(),
     FILES_PUBLIC_ACCESS_ENABLED: getScopeConfigBoolean(
       scope.config,

@@ -46,10 +46,10 @@ const filesConfig: ConfigFactory<FilesConfig> = defineConfig(
         },
         access: {
           temporaryExpiresInSeconds: env.number(
-            'FILES_ACCESS_TEMPORARY_EXPIRES_IN_SECONDS',
+            'FILES_TEMPORARY_ACCESS_EXPIRES_IN_SECONDS',
           ),
           providerUrlExpiresInSeconds: env.number(
-            'FILES_ACCESS_PROVIDER_URL_EXPIRES_IN_SECONDS',
+            'FILES_PROVIDER_URL_EXPIRES_IN_SECONDS',
           ),
         },
         publicAccess: {

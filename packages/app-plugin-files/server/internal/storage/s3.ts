@@ -76,7 +76,7 @@ export class ProviderS3FilesStorage implements S3FilesStorage {
       try {
         await this.#provider.deleteObject(destinationKey);
       } catch {
-        // Preserve the source failure while cleanup retries later.
+        // Preserve the source deletion failure after best-effort rollback.
       }
       throw error;
     }
