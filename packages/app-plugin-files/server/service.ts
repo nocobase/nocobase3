@@ -3,6 +3,7 @@ import type { Hono } from 'hono';
 import type { FilesRuntime } from './runtime.js';
 import type { CreateFileRouteOptions, FileService } from './types.js';
 import { createFieldFileRoute } from './internal/field-route.js';
+import { createRelationFileRoute } from './internal/relation-route.js';
 import { invalidFileRoute } from './internal/route-errors.js';
 import { getFilesRuntimeServiceState } from './internal/runtime.js';
 
@@ -21,16 +22,25 @@ class RuntimeFileService implements FileService {
     if (!options || typeof options !== 'object') {
       throw invalidFileRoute('File route options are required.');
     }
-    if (!options.binding || options.binding.type !== 'field') {
-      throw invalidFileRoute(
-        'Relation file bindings are not available in this Files version.',
-      );
+    if (!options.binding) {
+      throw invalidFileRoute('File route binding is required.');
     }
-    return createFieldFileRoute({
-      options,
-      binding: options.binding,
-      state: getFilesRuntimeServiceState(this.#runtime),
-    });
+    const state = getFilesRuntimeServiceState(this.#runtime);
+    if (options.binding.type === 'field') {
+      return createFieldFileRoute({
+        options,
+        binding: options.binding,
+        state,
+      });
+    }
+    if (options.binding.type === 'relation') {
+      return createRelationFileRoute({
+        options,
+        binding: options.binding,
+        state,
+      });
+    }
+    throw invalidFileRoute('File route binding type is invalid.');
   }
 }
 

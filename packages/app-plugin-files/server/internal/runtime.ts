@@ -18,6 +18,7 @@ interface FilesRuntimeState {
   publicAccessEnabled: boolean;
   kernel: FileKernel;
   storage: InternalFilesStorage;
+  clock: () => Date;
 }
 
 export interface CreateOpaqueFilesRuntimeInternalOptions {
@@ -49,6 +50,7 @@ export function createOpaqueFilesRuntime(
   options: CreateFilesRuntimeOptions,
   internalOptions: CreateOpaqueFilesRuntimeInternalOptions = {},
 ): FilesRuntime {
+  const clock = internalOptions.clock ?? (() => new Date());
   const storage = createInternalFilesStorage(options.config, {
     ...(internalOptions.s3Provider === undefined
       ? {}
@@ -62,32 +64,24 @@ export function createOpaqueFilesRuntime(
     repository,
     storage,
     uploadExpiresInSeconds: options.config.upload.expiresInSeconds,
-    ...(internalOptions.clock === undefined
-      ? {}
-      : { clock: internalOptions.clock }),
+    clock,
   });
   const capabilityCodec = createFileCapabilityCodec({
     audience: options.audience,
     secret: options.secret,
-    ...(internalOptions.clock === undefined
-      ? {}
-      : { clock: internalOptions.clock }),
+    clock,
   });
   const bindingCredentialCodec = createFileBindingCredentialCodec({
     audience: options.audience,
     secret: options.secret,
-    ...(internalOptions.clock === undefined
-      ? {}
-      : { clock: internalOptions.clock }),
+    clock,
   });
   const dataPlane = createFilesDataPlane({
     config: options.config,
     kernel,
     storage,
+    clock,
     capabilityCodec,
-    ...(internalOptions.clock === undefined
-      ? {}
-      : { clock: internalOptions.clock }),
     ...(internalOptions.basePath === undefined
       ? {}
       : { basePath: internalOptions.basePath }),
@@ -101,6 +95,7 @@ export function createOpaqueFilesRuntime(
     publicAccessEnabled: options.config.publicAccess.enabled,
     kernel,
     storage,
+    clock,
   });
   return runtime;
 }
@@ -112,6 +107,7 @@ export interface FilesRuntimeServiceState {
   connection: string | undefined;
   publicAccessEnabled: boolean;
   kernel: FileKernel;
+  clock: () => Date;
 }
 
 export function getFilesRuntimeServiceState(
@@ -128,6 +124,7 @@ export function getFilesRuntimeServiceState(
     connection: state.connection,
     publicAccessEnabled: state.publicAccessEnabled,
     kernel: state.kernel,
+    clock: state.clock,
   };
 }
 

@@ -3,6 +3,7 @@ export type FileRouteErrorCode =
   | 'FILE_NOT_FOUND'
   | 'FILE_NOT_READY'
   | 'FILE_BINDING_CONFLICT'
+  | 'FILE_LIMIT_EXCEEDED'
   | 'UPLOAD_EXPIRED'
   | 'UPLOAD_FAILED'
   | 'INVALID_ACCESS';
@@ -34,6 +35,14 @@ export function fileBindingConflict(): FileRouteError {
     'FILE_BINDING_CONFLICT',
     409,
     'The file binding no longer matches the business record.',
+  );
+}
+
+export function fileLimitExceeded(): FileRouteError {
+  return new FileRouteError(
+    'FILE_LIMIT_EXCEEDED',
+    409,
+    'The business record has reached its file limit.',
   );
 }
 
