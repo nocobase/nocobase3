@@ -47,6 +47,8 @@ describe('files runtime composition', () => {
     const runtime = createFilesRuntime({
       database,
       config: resolveFilesConfig({ appStorageRoot: storageRoot }),
+      audience: 'test-app',
+      secret: 'test-files-secret-at-least-32-characters',
     });
     expect(Object.keys(runtime)).toEqual([]);
     expect(runtime).not.toHaveProperty('kernel');

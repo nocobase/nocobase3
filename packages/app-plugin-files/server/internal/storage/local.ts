@@ -103,7 +103,15 @@ export class NodeLocalFilesStorage implements LocalFilesStorage {
       throw error;
     }
 
-    await Promise.all([unlink(candidatePath), unlink(candidateMetadataPath)]);
+    try {
+      await Promise.all([unlink(candidatePath), unlink(candidateMetadataPath)]);
+    } catch (error) {
+      await Promise.all([
+        rm(readyPath, { force: true }),
+        rm(readyMetadataPath, { force: true }),
+      ]);
+      throw error;
+    }
   }
 
   async openRead(key: string): Promise<Readable> {

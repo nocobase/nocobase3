@@ -164,6 +164,44 @@ export class FilesRepository {
     return result.updatedCount === 1;
   }
 
+  async enablePublicAccess(
+    input: PublicAccessRecordInput,
+    connection?: DatabaseConnection,
+  ): Promise<boolean> {
+    const result = await this.#query(connection)
+      .updateTable(FILES_TABLE)
+      .set({
+        publicTokenHash: input.tokenHash,
+        publicDisposition: input.disposition,
+        updatedAt: input.now,
+      })
+      .where('id', '=', input.id)
+      .where('status', '=', 'ready')
+      .where('publicTokenHash', 'is', null)
+      .where('publicDisposition', 'is', null)
+      .execute();
+    return result.updatedCount === 1;
+  }
+
+  async resetPublicAccess(
+    input: PublicAccessRecordInput,
+    connection?: DatabaseConnection,
+  ): Promise<boolean> {
+    const result = await this.#query(connection)
+      .updateTable(FILES_TABLE)
+      .set({
+        publicTokenHash: input.tokenHash,
+        publicDisposition: input.disposition,
+        updatedAt: input.now,
+      })
+      .where('id', '=', input.id)
+      .where('status', '=', 'ready')
+      .where('publicTokenHash', 'is not', null)
+      .where('publicDisposition', 'is not', null)
+      .execute();
+    return result.updatedCount === 1;
+  }
+
   async clearPublicAccess(
     id: string,
     now: Date,

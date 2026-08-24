@@ -30,11 +30,19 @@ describe('createLogger', () => {
     const output = createMemoryDestination();
     const logger = createLogger({}, output);
 
-    logger.info({ password: 'secret', token: 'session-token' }, 'credentials');
+    logger.info(
+      {
+        password: 'secret',
+        token: 'session-token',
+        req: { query: { access: 'file-capability' } },
+      },
+      'credentials',
+    );
 
     expect(output.records()[0]).toMatchObject({
       password: '[REDACTED]',
       token: '[REDACTED]',
+      req: { query: { access: '[REDACTED]' } },
     });
   });
 

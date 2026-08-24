@@ -145,6 +145,33 @@ describe('S3-compatible Files storage', () => {
       'Files storage has been disposed.',
     );
   });
+
+  it('removes a copied destination when source cleanup fails', async () => {
+    const provider = new FakeS3Provider();
+    const storage = createInternalFilesStorage(
+      resolveFilesConfig({
+        appStorageRoot,
+        config: {
+          storage: { driver: 's3', bucket: 'managed-files' },
+        },
+      }),
+      { s3Provider: provider },
+    );
+    provider.failNextDelete();
+
+    await expect(
+      storage.finalizeCandidate('pending/file-1', 'ready/file-1'),
+    ).rejects.toThrow('simulated delete failure');
+    expect(provider.calls.slice(-3)).toEqual([
+      {
+        operation: 'copy',
+        sourceKey: 'pending/file-1',
+        destinationKey: 'ready/file-1',
+      },
+      { operation: 'delete', key: 'pending/file-1' },
+      { operation: 'delete', key: 'ready/file-1' },
+    ]);
+  });
 });
 
 type FakeS3Call =
@@ -157,6 +184,7 @@ type FakeS3Call =
 class FakeS3Provider implements S3Provider {
   readonly calls: FakeS3Call[] = [];
   disposeCount = 0;
+  #deleteFailures = 0;
 
   async createUploadUrl(
     key: string,
@@ -189,9 +217,17 @@ class FakeS3Provider implements S3Provider {
 
   async deleteObject(key: string): Promise<void> {
     this.calls.push({ operation: 'delete', key });
+    if (this.#deleteFailures > 0) {
+      this.#deleteFailures -= 1;
+      throw new Error('simulated delete failure');
+    }
   }
 
   dispose(): void {
     this.disposeCount += 1;
+  }
+
+  failNextDelete(): void {
+    this.#deleteFailures += 1;
   }
 }

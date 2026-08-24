@@ -6,6 +6,8 @@ import { createOpaqueFilesRuntime } from './internal/runtime.js';
 export interface CreateFilesRuntimeOptions {
   database: DatabaseManager;
   config: FilesConfig;
+  audience: string;
+  secret: string;
   connection?: string;
 }
 

@@ -29,6 +29,7 @@ export const defaultRedactPaths: readonly string[] = [
   'req.headers.Authorization',
   'req.headers.cookie',
   'req.headers.Cookie',
+  'req.query.access',
 ];
 
 function resolveRedact(

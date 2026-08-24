@@ -39,6 +39,7 @@ export interface CompleteFileInput {
   fileId: string;
   candidateKey: string;
   readyKey: string;
+  validateMetadata?: (metadata: StorageObjectMetadata) => void;
 }
 
 export type CompleteFileResult =
@@ -124,6 +125,11 @@ export class FileKernel {
     return records.map(toStoredFile);
   }
 
+  async getRecord(fileId: string): Promise<FileRecord | undefined> {
+    const record = await this.#repository.get(readFileId(fileId));
+    return record ? cloneFileRecord(record) : undefined;
+  }
+
   async completeUpload(input: CompleteFileInput): Promise<CompleteFileResult> {
     const fileId = readFileId(input.fileId);
     const candidateKey = normalizeStorageKey(input.candidateKey);
@@ -153,6 +159,7 @@ export class FileKernel {
     const metadata = normalizeStorageMetadata(
       await this.#storage.head(candidateKey),
     );
+    input.validateMetadata?.(metadata);
     await this.#storage.finalizeCandidate(candidateKey, readyKey);
     let completed: boolean;
     try {
@@ -267,6 +274,66 @@ export class FileKernel {
     if (!updated) {
       throw new Error('Public access requires an existing ready file.');
     }
+    return toStoredFile(await this.#repository.getRequired(normalizedFileId));
+  }
+
+  async enablePublicAccess(
+    fileId: string,
+    tokenHash: string,
+    disposition: PublicDisposition,
+  ): Promise<StoredFile> {
+    const normalizedFileId = readFileId(fileId);
+    const updated = await this.#repository.enablePublicAccess({
+      id: normalizedFileId,
+      tokenHash: readTokenHash(tokenHash),
+      disposition: readDisposition(disposition),
+      now: this.#now(),
+    });
+    if (updated) {
+      return toStoredFile(await this.#repository.getRequired(normalizedFileId));
+    }
+
+    const current = await this.#repository.get(normalizedFileId);
+    if (!current || current.status !== 'ready') {
+      throw new Error('Public access requires an existing ready file.');
+    }
+    throw new Error('Public access is already enabled.');
+  }
+
+  async resetPublicAccess(
+    fileId: string,
+    tokenHash: string,
+    disposition: PublicDisposition,
+  ): Promise<StoredFile> {
+    const normalizedFileId = readFileId(fileId);
+    const updated = await this.#repository.resetPublicAccess({
+      id: normalizedFileId,
+      tokenHash: readTokenHash(tokenHash),
+      disposition: readDisposition(disposition),
+      now: this.#now(),
+    });
+    if (updated) {
+      return toStoredFile(await this.#repository.getRequired(normalizedFileId));
+    }
+
+    const current = await this.#repository.get(normalizedFileId);
+    if (!current || current.status !== 'ready') {
+      throw new Error('Public access requires an existing ready file.');
+    }
+    throw new Error('Public access is not enabled.');
+  }
+
+  async disablePublicAccess(fileId: string): Promise<StoredFile> {
+    const normalizedFileId = readFileId(fileId);
+    const current = await this.#repository.get(normalizedFileId);
+    if (!current || current.status !== 'ready') {
+      throw new Error('Public access requires an existing ready file.');
+    }
+    if (current.publicTokenHash === null) {
+      return toStoredFile(current);
+    }
+
+    await this.#repository.clearPublicAccess(normalizedFileId, this.#now());
     return toStoredFile(await this.#repository.getRequired(normalizedFileId));
   }
 
@@ -433,4 +500,13 @@ function randomHex(byteLength: number): string {
 
 function toError(value: unknown, message: string): Error {
   return value instanceof Error ? value : new Error(message, { cause: value });
+}
+
+function cloneFileRecord(record: FileRecord): FileRecord {
+  return {
+    ...record,
+    uploadExpiresAt: new Date(record.uploadExpiresAt.getTime()),
+    createdAt: new Date(record.createdAt.getTime()),
+    updatedAt: new Date(record.updatedAt.getTime()),
+  };
 }
