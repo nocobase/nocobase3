@@ -1,24 +1,16 @@
-export type FileRouteErrorCode =
-  | 'FILE_ROUTE_INVALID'
-  | 'FILE_NOT_FOUND'
-  | 'FILE_NOT_READY'
-  | 'FILE_BINDING_CONFLICT'
-  | 'FILE_LIMIT_EXCEEDED'
-  | 'UPLOAD_EXPIRED'
-  | 'UPLOAD_FAILED'
-  | 'INVALID_ACCESS';
+import {
+  FileServiceError,
+  type FileServiceErrorCode,
+  type FileServiceErrorStatus,
+} from '../error.js';
 
-export type FileRouteErrorStatus = 400 | 403 | 404 | 409 | 410 | 500;
-
-export class FileRouteError extends Error {
+export class FileRouteError extends FileServiceError {
   constructor(
-    readonly code: FileRouteErrorCode,
-    readonly status: FileRouteErrorStatus,
+    code: FileServiceErrorCode,
+    status: FileServiceErrorStatus,
     message: string,
-    options?: ErrorOptions,
   ) {
-    super(message, options);
-    this.name = new.target.name;
+    super(code, status, message);
   }
 }
 

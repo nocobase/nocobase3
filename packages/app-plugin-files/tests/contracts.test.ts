@@ -12,8 +12,11 @@ import type {
   StoredFile,
 } from '@nocobase/app-plugin-files/protocol';
 import type {
+  CreateFileInput,
+  FileContentSource,
   FileService,
   FilesRuntime,
+  OpenedFile,
 } from '@nocobase/app-plugin-files/server';
 
 describe('@nocobase/app-plugin-files contracts', () => {
@@ -45,6 +48,25 @@ describe('@nocobase/app-plugin-files contracts', () => {
         'FilesRepository',
         'NodeLocalFilesStorage',
         'ProviderS3FilesStorage',
+      ]),
+    );
+  });
+
+  it('keeps internal server modules outside package exports and declarations', async () => {
+    const packageJson = await import('../package.json', {
+      with: { type: 'json' },
+    });
+    expect(Object.keys(packageJson.default.exports)).toEqual([
+      '.',
+      './server',
+      './client',
+      './protocol',
+      './package.json',
+    ]);
+    expect(packageJson.default.files).toEqual(
+      expect.arrayContaining([
+        '!dist/server/internal/**/*.d.ts',
+        '!dist/server/internal/**/*.d.ts.map',
       ]),
     );
   });
@@ -85,8 +107,26 @@ describe('@nocobase/app-plugin-files contracts', () => {
   });
 
   it('keeps FileService and FilesRuntime public contracts narrow', () => {
-    expectTypeOf<keyof FileService>().toEqualTypeOf<'createFileRoute'>();
+    expectTypeOf<keyof FileService>().toEqualTypeOf<
+      | 'createFileRoute'
+      | 'createUpload'
+      | 'createFile'
+      | 'getFile'
+      | 'getFiles'
+      | 'openFile'
+      | 'createTemporaryAccessUrl'
+      | 'cancelUpload'
+      | 'enablePublicAccess'
+      | 'resetPublicAccess'
+      | 'disablePublicAccess'
+    >();
     expectTypeOf<keyof FilesRuntime>().toEqualTypeOf<'dispose'>();
+    expectTypeOf<
+      CreateFileInput['content']
+    >().toEqualTypeOf<FileContentSource>();
+    expectTypeOf<OpenedFile['stream']>().toEqualTypeOf<
+      ReadableStream<Uint8Array>
+    >();
   });
 
   it('shares one normalized route protocol between server and client consumers', () => {

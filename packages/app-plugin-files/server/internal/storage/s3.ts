@@ -1,7 +1,10 @@
+import type { Readable } from 'node:stream';
+
 import type { FilesS3StorageConfig } from '../../config.js';
 import { AwsS3Provider } from './aws-s3-provider.js';
 import { normalizeStorageKey } from './key.js';
 import type {
+  LocalCandidateWriteOptions,
   S3FilesStorage,
   S3Provider,
   SignedReadOptions,
@@ -42,6 +45,18 @@ export class ProviderS3FilesStorage implements S3FilesStorage {
     };
   }
 
+  async putCandidate(
+    key: string,
+    contents: Readable,
+    options: LocalCandidateWriteOptions = {},
+  ): Promise<void> {
+    this.#assertActive();
+    if (!this.#provider.putObject) {
+      throw new Error('The S3 provider does not support streamed writes.');
+    }
+    await this.#provider.putObject(this.#resolveKey(key), contents, options);
+  }
+
   async head(key: string): Promise<StorageObjectMetadata> {
     this.#assertActive();
     return this.#provider.headObject(this.#resolveKey(key));
@@ -65,6 +80,14 @@ export class ProviderS3FilesStorage implements S3FilesStorage {
       }
       throw error;
     }
+  }
+
+  async openRead(key: string): Promise<Readable> {
+    this.#assertActive();
+    if (!this.#provider.openRead) {
+      throw new Error('The S3 provider does not support streamed reads.');
+    }
+    return this.#provider.openRead(this.#resolveKey(key));
   }
 
   async createReadUrl(

@@ -8,9 +8,11 @@ import {
   type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'node:stream';
 
 import type { FilesS3StorageConfig } from '../../config.js';
 import type {
+  LocalCandidateWriteOptions,
   S3Provider,
   SignedReadOptions,
   SignedUploadOptions,
@@ -68,6 +70,27 @@ export class AwsS3Provider implements S3Provider {
     });
   }
 
+  async putObject(
+    key: string,
+    contents: Readable,
+    options: LocalCandidateWriteOptions,
+  ): Promise<void> {
+    await this.#client.send(
+      new PutObjectCommand({
+        Bucket: this.#bucket,
+        Key: key,
+        Body: contents,
+        IfNoneMatch: '*',
+        ...(options.contentLength === undefined
+          ? {}
+          : { ContentLength: options.contentLength }),
+        ...(options.contentType === undefined
+          ? {}
+          : { ContentType: options.contentType }),
+      }),
+    );
+  }
+
   async headObject(key: string): Promise<StorageObjectMetadata> {
     const result = await this.#client.send(
       new HeadObjectCommand({ Bucket: this.#bucket, Key: key }),
@@ -97,6 +120,16 @@ export class AwsS3Provider implements S3Provider {
         IfNoneMatch: '*',
       }),
     );
+  }
+
+  async openRead(key: string): Promise<Readable> {
+    const result = await this.#client.send(
+      new GetObjectCommand({ Bucket: this.#bucket, Key: key }),
+    );
+    if (!(result.Body instanceof Readable)) {
+      throw new Error('S3 object response is missing a readable body.');
+    }
+    return result.Body;
   }
 
   async createReadUrl(

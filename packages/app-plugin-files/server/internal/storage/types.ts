@@ -9,6 +9,7 @@ export interface StorageObjectMetadata {
 
 export interface LocalCandidateWriteOptions {
   contentType?: string;
+  contentLength?: number;
 }
 
 export interface SignedUploadOptions {
@@ -29,20 +30,20 @@ export interface SignedStorageRequest {
 }
 
 interface CommonFilesStorage {
+  putCandidate(
+    key: string,
+    contents: Readable,
+    options?: LocalCandidateWriteOptions,
+  ): Promise<void>;
   head(key: string): Promise<StorageObjectMetadata>;
   finalizeCandidate(candidateKey: string, readyKey: string): Promise<void>;
+  openRead(key: string): Promise<Readable>;
   delete(key: string): Promise<void>;
   dispose(): Promise<void>;
 }
 
 export interface LocalFilesStorage extends CommonFilesStorage {
   readonly driver: 'local';
-  putCandidate(
-    key: string,
-    contents: Readable,
-    options?: LocalCandidateWriteOptions,
-  ): Promise<void>;
-  openRead(key: string): Promise<Readable>;
 }
 
 export interface S3FilesStorage extends CommonFilesStorage {
@@ -58,8 +59,14 @@ export type InternalFilesStorage = LocalFilesStorage | S3FilesStorage;
 
 export interface S3Provider {
   createUploadUrl(key: string, options: SignedUploadOptions): Promise<string>;
+  putObject?(
+    key: string,
+    contents: Readable,
+    options: LocalCandidateWriteOptions,
+  ): Promise<void>;
   headObject(key: string): Promise<StorageObjectMetadata>;
   copyObject(sourceKey: string, destinationKey: string): Promise<void>;
+  openRead?(key: string): Promise<Readable>;
   createReadUrl(key: string, options: SignedReadOptions): Promise<string>;
   deleteObject(key: string): Promise<void>;
   dispose(): void;

@@ -52,7 +52,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/server/internal/**/*.d.ts",
+    "!dist/server/internal/**/*.d.ts.map"
   ],
   "nocobase": {
     "plugin": {

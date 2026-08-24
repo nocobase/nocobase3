@@ -65,7 +65,7 @@ describe('file metadata kernel', () => {
     expect(first.candidateKey).not.toBe(second.candidateKey);
     expect(first.readyKey).not.toBe(second.readyKey);
     expect(first.candidateKey).toMatch(
-      new RegExp(`^pending/${first.file.id}/[a-f0-9]{48}$`),
+      new RegExp(`^pending/${first.file.id}/candidate$`),
     );
     expect(first.readyKey).toMatch(
       new RegExp(`^ready/${first.file.id}/[a-f0-9]{48}$`),
@@ -94,7 +94,7 @@ describe('file metadata kernel', () => {
 
     await expect(
       kernel.getFiles([second.file.id, 'missing', first.file.id]),
-    ).resolves.toEqual([second.file, first.file]);
+    ).resolves.toEqual([second.file, null, first.file]);
   });
 
   it('completes pending files once and keeps ready metadata immutable', async () => {

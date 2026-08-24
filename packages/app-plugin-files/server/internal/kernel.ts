@@ -118,7 +118,7 @@ export class FileKernel {
       uploadExpiresAt,
       now,
     });
-    const candidateKey = `pending/${fileId}/${randomHex(24)}`;
+    const candidateKey = pendingStorageKey(fileId);
     const readyKey = `ready/${fileId}/${randomHex(24)}`;
 
     return {
@@ -141,12 +141,12 @@ export class FileKernel {
   async getFiles(
     fileIds: readonly string[],
     connection?: DatabaseConnection,
-  ): Promise<StoredFile[]> {
+  ): Promise<Array<StoredFile | null>> {
     const records = await this.#repository.getMany(
       fileIds.map(readFileId),
       connection,
     );
-    return records.map(toStoredFile);
+    return records.map((record) => (record ? toStoredFile(record) : null));
   }
 
   async getRecord(
@@ -352,6 +352,14 @@ export class FileKernel {
       }
     }
     return result;
+  }
+
+  async cancelPendingUpload(fileId: string): Promise<CancelFileResult> {
+    const normalizedFileId = readFileId(fileId);
+    return this.cancelUpload(
+      normalizedFileId,
+      pendingStorageKey(normalizedFileId),
+    );
   }
 
   async setPublicAccess(
@@ -598,6 +606,10 @@ function assertStorageKeyOwnership(
 
 function randomHex(byteLength: number): string {
   return randomBytes(byteLength).toString('hex');
+}
+
+function pendingStorageKey(fileId: string): string {
+  return `pending/${fileId}/candidate`;
 }
 
 function toError(value: unknown, message: string): Error {

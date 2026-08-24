@@ -1,25 +1,16 @@
-export type FilesErrorCode =
-  | 'FILE_NOT_FOUND'
-  | 'FILE_NOT_READY'
-  | 'UPLOAD_EXPIRED'
-  | 'UPLOAD_SIZE_EXCEEDED'
-  | 'UPLOAD_TYPE_NOT_ALLOWED'
-  | 'UPLOAD_FAILED'
-  | 'INVALID_ACCESS'
-  | 'PUBLIC_ACCESS_DISABLED'
-  | 'STORAGE_UNAVAILABLE';
+import {
+  FileServiceError,
+  type FileServiceErrorCode,
+  type FileServiceErrorStatus,
+} from '../error.js';
 
-export type FilesErrorStatus = 403 | 404 | 409 | 410 | 413 | 415 | 503;
-
-export class FilesDataPlaneError extends Error {
+export class FilesDataPlaneError extends FileServiceError {
   constructor(
-    readonly code: FilesErrorCode,
-    readonly status: FilesErrorStatus,
+    code: FileServiceErrorCode,
+    status: FileServiceErrorStatus,
     message: string,
-    options?: ErrorOptions,
   ) {
-    super(message, options);
-    this.name = new.target.name;
+    super(code, status, message);
   }
 }
 
@@ -55,11 +46,10 @@ export function uploadExpired(): FilesDataPlaneError {
   );
 }
 
-export function storageUnavailable(cause?: unknown): FilesDataPlaneError {
+export function storageUnavailable(_cause?: unknown): FilesDataPlaneError {
   return new FilesDataPlaneError(
     'STORAGE_UNAVAILABLE',
     503,
     'File storage is temporarily unavailable.',
-    cause === undefined ? undefined : { cause },
   );
 }

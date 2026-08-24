@@ -168,7 +168,9 @@ async function handleList(
   }
   const rows = await state.repository.list(recordId);
   const files = await state.kernel.getFiles(rows.map((row) => row.fileId));
-  const filesById = new Map(files.map((file) => [file.id, file]));
+  const filesById = new Map(
+    files.flatMap((file) => (file ? [[file.id, file] as const] : [])),
+  );
   return context.json<StoredFile[]>(
     rows.flatMap((row) => {
       const file = filesById.get(row.fileId);

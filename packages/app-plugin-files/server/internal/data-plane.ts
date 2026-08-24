@@ -7,7 +7,7 @@ import type { DatabaseConnection } from '@nocobase/database';
 
 import type { FileUploadPlan, StoredFile } from '../../client/types.js';
 import type { FilesConfig } from '../config.js';
-import type { FileConstraints } from '../types.js';
+import type { CreateFileInput, FileConstraints, OpenedFile } from '../types.js';
 import {
   ExpiredFileCapabilityError,
   FileCapabilityCodec,
@@ -29,7 +29,11 @@ import type {
   CompleteFileResult,
   FileKernel,
 } from './kernel.js';
-import type { FileRecord, PublicDisposition } from './model.js';
+import {
+  toStoredFile,
+  type FileRecord,
+  type PublicDisposition,
+} from './model.js';
 import type {
   InternalFilesStorage,
   StorageObjectMetadata,
@@ -114,6 +118,14 @@ interface UploadPolicy {
   allowedContentTypes: readonly string[];
 }
 
+interface StreamUploadPolicy {
+  maxBytes: number;
+  expectedSize: number | undefined;
+  contentType: string | null;
+  allowedExtensions: readonly string[];
+  allowedContentTypes: readonly string[];
+}
+
 interface AuthorizedContent {
   disposition: FileCapabilityDisposition;
   publicAccess: boolean;
@@ -172,6 +184,93 @@ export class FilesDataPlane {
     input: CreateFileUploadPlanInput,
   ): Promise<FileUploadPlan> {
     return (await this.createUploadAttempt(input)).plan;
+  }
+
+  async createFile(input: CreateFileInput): Promise<StoredFile> {
+    const name = normalizeFileName(input.name);
+    const policy = normalizeStreamUploadPolicy(
+      input,
+      this.#config.upload.maxBytes,
+    );
+    assertStreamUploadPolicy(name, policy);
+    const source = toNodeReadable(input.content);
+    let pending;
+    try {
+      pending = await this.#kernel.createPending({ name });
+    } catch (error) {
+      source.destroy();
+      throw error;
+    }
+    const byteLimit = new ByteLimitTransform(policy.maxBytes);
+    source.once('error', (error) => byteLimit.destroy(error));
+    source.pipe(byteLimit);
+
+    try {
+      await this.#storage.putCandidate(pending.candidateKey, byteLimit, {
+        ...(policy.contentType === null
+          ? {}
+          : { contentType: policy.contentType }),
+        ...(policy.expectedSize === undefined
+          ? {}
+          : { contentLength: policy.expectedSize }),
+      });
+      if (
+        policy.expectedSize !== undefined &&
+        byteLimit.bytesRead !== policy.expectedSize
+      ) {
+        throw uploadFailed('The streamed byte count does not match size.');
+      }
+      const result = await this.#kernel.completeUpload({
+        fileId: pending.fileId,
+        candidateKey: pending.candidateKey,
+        readyKey: pending.readyKey,
+        validateMetadata: (metadata) =>
+          validateStreamStorageMetadata(metadata, policy),
+      });
+      await Promise.all(
+        result.cleanupStorageKeys.map((storageKey) =>
+          this.#deleteBestEffort(storageKey),
+        ),
+      );
+      if (result.outcome === 'completed' || result.outcome === 'ready') {
+        return result.file;
+      }
+      if (result.outcome === 'missing') {
+        throw fileNotFound();
+      }
+      if (result.outcome === 'failed') {
+        throw fileNotReady();
+      }
+      throw uploadFailed('The streamed file could not be committed.');
+    } catch (error) {
+      try {
+        await this.#kernel.cancelPendingUpload(pending.fileId);
+      } catch {
+        // Preserve the stable upload error; failed cleanup can be retried later.
+      }
+      if (error instanceof FilesDataPlaneError) {
+        throw error;
+      }
+      throw storageUnavailable(error);
+    } finally {
+      source.destroy();
+    }
+  }
+
+  async openFile(fileId: string): Promise<OpenedFile> {
+    const record = await this.#requireReadyFile(fileId);
+    if (record.storageKey === null) {
+      throw fileNotReady();
+    }
+    try {
+      const stream = await this.#storage.openRead(record.storageKey);
+      return {
+        file: toStoredFile(record),
+        stream: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+      };
+    } catch (error) {
+      throw storageUnavailable(error);
+    }
   }
 
   async createUploadAttempt(
@@ -246,11 +345,17 @@ export class FilesDataPlane {
   async createReadAccess(
     fileId: string,
     disposition: PublicDisposition = 'attachment',
+    expiresInSeconds: number = this.#config.access.temporaryExpiresInSeconds,
   ): Promise<FileReadAccess> {
     const record = await this.#requireReadyFile(fileId);
     assertInlineAllowed(record.contentType, disposition);
     const expiresAt =
-      this.#now() + this.#config.access.temporaryExpiresInSeconds * 1_000;
+      this.#now() +
+      normalizeTemporaryExpiry(
+        expiresInSeconds,
+        this.#config.access.temporaryExpiresInSeconds,
+      ) *
+        1_000;
     const access = this.#capabilityCodec.issue({
       action: 'read',
       fileId: record.id,
@@ -771,6 +876,53 @@ function normalizeUploadPolicy(
   };
 }
 
+function normalizeStreamUploadPolicy(
+  input: CreateFileInput,
+  configuredMaxBytes: number,
+): StreamUploadPolicy {
+  if (
+    input.size !== undefined &&
+    (!Number.isSafeInteger(input.size) || input.size < 0)
+  ) {
+    throw uploadFailed('The declared file size is invalid.');
+  }
+  const requestedMax = input.constraints?.maxBytes;
+  if (
+    requestedMax !== undefined &&
+    (!Number.isSafeInteger(requestedMax) || requestedMax <= 0)
+  ) {
+    throw uploadFailed('The file size constraint is invalid.');
+  }
+  return {
+    maxBytes: Math.min(requestedMax ?? configuredMaxBytes, configuredMaxBytes),
+    expectedSize: input.size,
+    contentType: normalizeOptionalContentType(input.contentType),
+    allowedExtensions: normalizeExtensions(
+      input.constraints?.allowedExtensions ?? [],
+    ),
+    allowedContentTypes: normalizeContentTypes(
+      input.constraints?.allowedContentTypes ?? [],
+    ),
+  };
+}
+
+function assertStreamUploadPolicy(
+  name: string,
+  policy: StreamUploadPolicy,
+): void {
+  if (
+    policy.expectedSize !== undefined &&
+    policy.expectedSize > policy.maxBytes
+  ) {
+    throw new FilesDataPlaneError(
+      'UPLOAD_SIZE_EXCEEDED',
+      413,
+      'The file exceeds the upload size limit.',
+    );
+  }
+  assertUploadType(name, policy);
+}
+
 function assertUploadPolicy(name: string, policy: UploadPolicy): void {
   if (policy.expectedSize > policy.maxBytes) {
     throw new FilesDataPlaneError(
@@ -779,6 +931,16 @@ function assertUploadPolicy(name: string, policy: UploadPolicy): void {
       'The file exceeds the upload size limit.',
     );
   }
+  assertUploadType(name, policy);
+}
+
+function assertUploadType(
+  name: string,
+  policy: Pick<
+    UploadPolicy,
+    'allowedExtensions' | 'allowedContentTypes' | 'contentType'
+  >,
+): void {
   if (policy.allowedExtensions.length > 0) {
     const extension = path.extname(name).toLowerCase();
     if (!policy.allowedExtensions.includes(extension)) {
@@ -794,9 +956,32 @@ function assertUploadPolicy(name: string, policy: UploadPolicy): void {
   }
 }
 
+function validateStreamStorageMetadata(
+  metadata: StorageObjectMetadata,
+  policy: StreamUploadPolicy,
+): void {
+  if (metadata.contentLength > policy.maxBytes) {
+    throw new FilesDataPlaneError(
+      'UPLOAD_SIZE_EXCEEDED',
+      413,
+      'The file exceeds the upload size limit.',
+    );
+  }
+  if (
+    policy.expectedSize !== undefined &&
+    metadata.contentLength !== policy.expectedSize
+  ) {
+    throw uploadFailed('The streamed byte count does not match size.');
+  }
+  validateContentType(
+    normalizeOptionalContentType(metadata.contentType),
+    policy,
+  );
+}
+
 function validateContentType(
   contentType: string | null,
-  policy: UploadPolicy,
+  policy: Pick<UploadPolicy, 'contentType' | 'allowedContentTypes'>,
 ): void {
   if (contentType !== policy.contentType) {
     throw uploadTypeNotAllowed();
@@ -1017,6 +1202,45 @@ function secondsUntil(expiresAt: number, now: number): number {
   return Math.max(1, Math.ceil((expiresAt - now) / 1_000));
 }
 
+function normalizeTemporaryExpiry(value: number, configured: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw invalidAccess();
+  }
+  return Math.min(value, configured);
+}
+
+function toNodeReadable(source: CreateFileInput['content']): Readable {
+  try {
+    if (isWebReadableStream(source)) {
+      return Readable.fromWeb(
+        source as import('node:stream/web').ReadableStream<Uint8Array>,
+      );
+    }
+    if (
+      source &&
+      typeof source === 'object' &&
+      Symbol.asyncIterator in source &&
+      typeof source[Symbol.asyncIterator] === 'function'
+    ) {
+      return Readable.from(source);
+    }
+  } catch {
+    throw uploadFailed('The file content source is invalid.');
+  }
+  throw uploadFailed('The file content source is invalid.');
+}
+
+function isWebReadableStream(
+  value: CreateFileInput['content'],
+): value is ReadableStream<Uint8Array> {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    'getReader' in value &&
+    typeof value.getReader === 'function'
+  );
+}
+
 function uploadTypeNotAllowed(): FilesDataPlaneError {
   return new FilesDataPlaneError(
     'UPLOAD_TYPE_NOT_ALLOWED',
@@ -1032,13 +1256,8 @@ function encodeDispositionFileName(value: string): string {
   );
 }
 
-function uploadFailed(message: string, cause?: unknown): FilesDataPlaneError {
-  return new FilesDataPlaneError(
-    'UPLOAD_FAILED',
-    409,
-    message,
-    cause === undefined ? undefined : { cause },
-  );
+function uploadFailed(message: string, _cause?: unknown): FilesDataPlaneError {
+  return new FilesDataPlaneError('UPLOAD_FAILED', 409, message);
 }
 
 function mapPublicAccessKernelError(error: unknown): FilesDataPlaneError {

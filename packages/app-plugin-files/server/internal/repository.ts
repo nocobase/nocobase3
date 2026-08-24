@@ -99,7 +99,7 @@ export class FilesRepository {
   async getMany(
     ids: readonly string[],
     connection?: DatabaseConnection,
-  ): Promise<FileRecord[]> {
+  ): Promise<Array<FileRecord | undefined>> {
     if (ids.length === 0) {
       return [];
     }
@@ -114,10 +114,7 @@ export class FilesRepository {
         return [record.id, record] as const;
       }),
     );
-    return ids.flatMap((id) => {
-      const record = recordsById.get(id);
-      return record ? [record] : [];
-    });
+    return ids.map((id) => recordsById.get(id));
   }
 
   async completePending(
