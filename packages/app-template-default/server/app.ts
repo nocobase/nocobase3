@@ -14,7 +14,6 @@ import {
   resolveAppName,
 } from '@nocobase/app-server/support';
 import type { AppConfig } from './config/index.js';
-import { startClockPublisher } from './realtime/publishers/clock.js';
 import { createRealtimeService } from './realtime/service.js';
 import { createAppDeps, disposeAppDeps } from './runtime/deps.js';
 import { createAppServices } from './services/index.js';
@@ -55,18 +54,28 @@ export function createApp(
     'app-deps',
     onceAsync(() => disposeAppDeps(deps)),
   );
-  const services = createAppServices(runtime, deps);
   const realtime = createRealtimeService();
   options.lifecycle.registerDisposer(
     'realtime-service',
     onceAsync(() => realtime.close()),
   );
-  const stopClockPublisher = startClockPublisher(realtime);
-  options.lifecycle.registerDisposer(
-    'clock-publisher',
-    onceAsync(stopClockPublisher),
-  );
+  const services = createAppServices(runtime, deps, { realtime });
   const app = new Hono();
+
+  for (const plugin of options.pluginBootstraps ?? []) {
+    plugin.bootstrap({
+      deps,
+      services,
+      lifecycle: {
+        registerDisposer(name, dispose): void {
+          options.lifecycle.registerDisposer(
+            `plugin:${plugin.packageName}:${name}`,
+            onceAsync(dispose),
+          );
+        },
+      },
+    });
+  }
 
   registerAppRoutes(app, {
     appName,
@@ -74,6 +83,10 @@ export function createApp(
     deps,
     services,
   });
+
+  for (const plugin of options.pluginRoutes ?? []) {
+    plugin.registerRoutes({ app, deps, services });
+  }
 
   registerNocoBaseApiProxyRoutes(app, {
     apiProxyPath: internalApiProxyPath,

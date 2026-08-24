@@ -1,0 +1,10 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/server-library.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["index.ts", "server/**/*.ts", "client/**/*.ts"],
+  "exclude": ["server/tests", "client/tests", "ui/tests"]
+}

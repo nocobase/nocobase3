@@ -66,7 +66,7 @@ export async function createStandaloneServer(
     );
     await prepareAppRuntime(runtime);
 
-    const app = createStandaloneAppFromRuntime(
+    const app = await createStandaloneAppFromRuntime(
       runtime,
       lifecycle,
       websocketAbortController.signal,
@@ -120,13 +120,13 @@ export function createStandaloneRuntime(): AppRuntime<AppConfig> {
   return createAppRuntime(loadStandaloneAppConfig(import.meta.url));
 }
 
-function createStandaloneAppFromRuntime(
+async function createStandaloneAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
   lifecycle: AppDisposerRegistry,
   signal: AbortSignal,
   options: StandaloneServerOptions = {},
-): StandaloneServer {
-  const app = createAppFromRuntime(runtime, {
+): Promise<StandaloneServer> {
+  const app = await createAppFromRuntime(runtime, {
     ...options,
     lifecycle,
   });

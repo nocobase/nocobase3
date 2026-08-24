@@ -95,7 +95,24 @@ const report = {
       tableName: config.database.migrations.tableName ?? '(default)',
       lockTableName: config.database.migrations.lockTableName ?? '(default)',
     },
+    seeds: {
+      directory: config.database.seeds?.directory ?? '(not configured)',
+      directoryExists: config.database.seeds
+        ? existsSync(config.database.seeds.directory)
+        : false,
+      autoRun: config.database.seeds?.autoRun ?? false,
+      tableName: config.database.seeds?.tableName ?? '(default)',
+      lockTableName: config.database.seeds?.lockTableName ?? '(default)',
+    },
   },
+  plugins: config.plugins.map((plugin) => ({
+    packageName: plugin.packageName,
+    version: plugin.version,
+    enabled: plugin.enabled,
+    migrationsDirectory: plugin.migrationsDirectory ?? '(none)',
+    seedsDirectory: plugin.seedsDirectory ?? '(none)',
+    routesEntry: plugin.routesEntry ?? '(none)',
+  })),
   drive: {
     default: activeDriveName || '(none)',
     active: summarizeDriveDisk(activeDrive),
@@ -442,6 +459,16 @@ function printReport(value: typeof report): void {
   printPair('Auto-run migrations', String(value.database.migrations.autoRun));
   printPair('Migration table', value.database.migrations.tableName);
   printPair('Migration lock table', value.database.migrations.lockTableName);
+  printPair(
+    'Seeds directory',
+    `${value.database.seeds.directory} (${value.database.seeds.directoryExists ? 'exists' : 'missing'})`,
+  );
+  printPair('Auto-run seeds', String(value.database.seeds.autoRun));
+  printPair('Seed table', value.database.seeds.tableName);
+  printPair('Seed lock table', value.database.seeds.lockTableName);
+
+  printSection('Plugins');
+  printJson('Registered plugins', value.plugins);
 
   printSection('Drive');
   printPair('Default disk', value.drive.default);

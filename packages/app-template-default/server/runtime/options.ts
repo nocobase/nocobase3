@@ -43,6 +43,7 @@ export interface AppRoutingOptions {
 export interface AppRuntimePathOptions {
   rootDir: string;
   serverDir: string;
+  databaseDir?: string;
   clientDir?: string;
   storageDir?: string;
 }
@@ -72,6 +73,7 @@ export function resolveStandaloneRuntimeOptions(
     paths: {
       rootDir,
       serverDir,
+      databaseDir: path.join(rootDir, 'database'),
     },
     routing: createAppRouting({
       name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
@@ -95,6 +97,7 @@ export function resolveEmbeddedRuntimeOptions(
     paths: {
       rootDir: paths.rootDir,
       serverDir: paths.serverDir,
+      databaseDir: paths.databaseDir,
       clientDir: paths.clientDir,
       storageDir: paths.storageDir,
     },
@@ -144,6 +147,7 @@ function resolveEmbeddedPaths(
       rootDir,
       distRoot,
       serverDir: path.join(distRoot, 'server'),
+      databaseDir: path.join(distRoot, 'database'),
       clientDir: scope.clientDir ?? path.join(distRoot, 'client'),
       storageDir: scope.dataDir ?? path.join(rootDir, 'data'),
     };
@@ -155,11 +159,16 @@ function resolveEmbeddedPaths(
     path.basename(moduleRoot) === 'dist'
       ? moduleRoot
       : path.join(moduleRoot, 'dist');
+  const databaseDir =
+    path.basename(moduleRoot) === 'dist'
+      ? path.join(distRoot, 'database')
+      : path.join(moduleRoot, 'database');
 
   return {
     rootDir: moduleRoot,
     distRoot,
     serverDir,
+    databaseDir,
     clientDir: scope.clientDir ?? path.join(distRoot, 'client'),
     storageDir: scope.dataDir,
   };

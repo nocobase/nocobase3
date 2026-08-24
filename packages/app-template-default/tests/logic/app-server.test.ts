@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 import {
   mkdirSync,
@@ -44,12 +44,10 @@ import {
   createServer as createEmbeddedServer,
   createStandaloneRuntime,
   createStandaloneServer,
-  queueDemoExecutions,
   type StandaloneServer,
 } from '../../server/index.ts';
 import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalone.ts';
 import type { AppConfig } from '../../server/config/index.ts';
-import { CLOCK_TOPIC } from '../../server/realtime/publishers/clock.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
@@ -70,8 +68,10 @@ interface RegisteredTestDisposer {
 const apps: CloseableResource[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
+const TEST_REALTIME_TOPIC = 'test:realtime';
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(apps.splice(0).map((app) => app.close()));
 
   for (const dir of tempDirs.splice(0)) {
@@ -164,23 +164,6 @@ describe('app server', () => {
     expect(missingEvents).toBeNull();
   });
 
-  it('serves an app-local realtime demo page', async () => {
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-    });
-
-    const response = await app.request('http://localhost/realtime');
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('text/html');
-    expect(html).toContain('id="now-time"');
-    expect(html).toContain('/app-template-default/ws');
-    expect(html).toContain(CLOCK_TOPIC);
-    expect(html).toContain("type: 'subscribe'");
-  });
-
   it('subscribes, publishes, and unsubscribes realtime messages', () => {
     const realtime = createRealtimeService();
     const websocket = createTestWebSocket();
@@ -190,24 +173,24 @@ describe('app server', () => {
       connection,
       JSON.stringify({
         type: 'subscribe',
-        id: 'subscribe-clock',
-        topic: CLOCK_TOPIC,
+        id: 'subscribe-test-topic',
+        topic: TEST_REALTIME_TOPIC,
       }),
     );
     const subscribed = websocket.messages[0];
 
     expect(subscribed).toMatchObject({
       type: 'subscribed',
-      id: 'subscribe-clock',
-      topic: CLOCK_TOPIC,
+      id: 'subscribe-test-topic',
+      topic: TEST_REALTIME_TOPIC,
       subscriptionId: expect.any(String),
     });
 
-    realtime.publish(CLOCK_TOPIC, 'tick');
+    realtime.publish(TEST_REALTIME_TOPIC, 'tick');
 
     expect(websocket.messages[1]).toMatchObject({
       type: 'event',
-      topic: CLOCK_TOPIC,
+      topic: TEST_REALTIME_TOPIC,
       payload: 'tick',
       publishedAt: expect.any(String),
     });
@@ -216,18 +199,18 @@ describe('app server', () => {
       connection,
       JSON.stringify({
         type: 'unsubscribe',
-        id: 'unsubscribe-clock',
+        id: 'unsubscribe-test-topic',
         subscriptionId: (subscribed as { subscriptionId: string })
           .subscriptionId,
       }),
     );
-    realtime.publish(CLOCK_TOPIC, 'after unsubscribe');
+    realtime.publish(TEST_REALTIME_TOPIC, 'after unsubscribe');
 
     expect(websocket.messages[2]).toMatchObject({
       type: 'unsubscribed',
-      id: 'unsubscribe-clock',
+      id: 'unsubscribe-test-topic',
       subscriptionId: (subscribed as { subscriptionId: string }).subscriptionId,
-      topic: CLOCK_TOPIC,
+      topic: TEST_REALTIME_TOPIC,
     });
     expect(websocket.messages).toHaveLength(3);
 
@@ -251,7 +234,7 @@ describe('app server', () => {
       'runtime',
       'app-deps',
       'realtime-service',
-      'clock-publisher',
+      'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
     ]);
 
     for (const disposer of [...registeredDisposers].reverse()) {
@@ -638,100 +621,6 @@ describe('app server', () => {
     });
   });
 
-  it('serves a queue API example with the sync connection', async () => {
-    queueDemoExecutions.length = 0;
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      queue: {
-        default: 'sync',
-        connections: {
-          sync: {
-            driver: 'sync',
-          },
-        },
-        jobs: {
-          locations: [],
-          autoLoad: false,
-        },
-      },
-    });
-
-    const response = await app.request('http://localhost/api/queue/demo', {
-      method: 'POST',
-    });
-    const payload = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(payload).toMatchObject({
-      jobId: expect.any(String),
-      job: 'QueueDemo',
-      queue: 'default',
-      syncExecutions: 1,
-    });
-    expect(queueDemoExecutions).toHaveLength(1);
-    expect(queueDemoExecutions[0]).toMatchObject({
-      message: 'Hello from NocoBase queue',
-      requestedAt: expect.any(String),
-      executedAt: expect.any(String),
-    });
-
-    await app.close();
-  });
-
-  it('writes a queue demo database log when database is configured', async () => {
-    queueDemoExecutions.length = 0;
-    const insertedRows: unknown[] = [];
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      database: createMockDatabase([], insertedRows),
-      queue: {
-        default: 'sync',
-        connections: {
-          sync: {
-            driver: 'sync',
-          },
-        },
-        jobs: {
-          locations: [],
-          autoLoad: false,
-        },
-      },
-    });
-
-    const response = await app.request('http://localhost/api/queue/demo', {
-      method: 'POST',
-    });
-    const payload = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(payload).toMatchObject({
-      jobId: expect.any(String),
-      job: 'QueueDemo',
-      queue: 'default',
-      syncExecutions: 1,
-    });
-    expect(insertedRows).toHaveLength(1);
-    expect(insertedRows[0]).toMatchObject({
-      key: `queue.demo.${payload.jobId}`,
-      value: expect.any(String),
-      createdAt: expect.any(String),
-      updatedAt: expect.any(String),
-    });
-
-    const value = JSON.parse(
-      (insertedRows[0] as { value: string }).value,
-    ) as Record<string, unknown>;
-    expect(value).toMatchObject({
-      message: 'Hello from NocoBase queue',
-      requestedAt: expect.any(String),
-      executedAt: expect.any(String),
-    });
-
-    await app.close();
-  });
-
   it('returns a JSON error when upload is requested without file drive', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
@@ -865,6 +754,41 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
+  it('loads routes from enabled app plugins', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(
+      await createStandaloneServer({ viteDevUrl: false }),
+    );
+    const response = await app.request(
+      `http://localhost${runtime.config.app.publicBasePath}/routes-example`,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      plugin: '@nocobase/app-plugin-routes-example',
+      message: 'Hello from the routes example plugin',
+    });
+  });
+
+  it('dispatches jobs from enabled app plugins', async () => {
+    vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(
+      await createStandaloneServer({ viteDevUrl: false }),
+    );
+    const response = await app.request(
+      `http://localhost${runtime.config.app.publicBasePath}/queue-example`,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      jobId: expect.any(String),
+      job: 'QueueExample',
+      queue: 'default',
+      syncExecutions: 1,
+    });
+  });
+
   it('mounts standalone app-local routes behind the public base path', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
@@ -927,30 +851,19 @@ describe('app server', () => {
       websocket,
       (message) => message.type === 'subscribed',
     );
-    const event = waitForWebSocketJsonMessage(
-      websocket,
-      (message) => message.type === 'event' && message.topic === CLOCK_TOPIC,
-    );
-
     websocket.send(
       JSON.stringify({
         type: 'subscribe',
-        id: 'clock',
-        topic: CLOCK_TOPIC,
+        id: 'test-topic',
+        topic: TEST_REALTIME_TOPIC,
       }),
     );
 
     await expect(subscribed).resolves.toMatchObject({
       type: 'subscribed',
-      id: 'clock',
-      topic: CLOCK_TOPIC,
+      id: 'test-topic',
+      topic: TEST_REALTIME_TOPIC,
       subscriptionId: expect.any(String),
-    });
-    await expect(event).resolves.toMatchObject({
-      type: 'event',
-      topic: CLOCK_TOPIC,
-      payload: expect.any(String),
-      publishedAt: expect.any(String),
     });
 
     const close = waitForWebSocketClose(websocket);
@@ -1346,6 +1259,10 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         directory: '',
         autoRun: false,
       },
+      seeds: {
+        directory: '',
+        autoRun: false,
+      },
     },
     drive: options.drive,
     logging: createSilentLoggingConfig(),
@@ -1374,6 +1291,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         ? undefined
         : (options.database ?? createMockDatabase([])),
     runMigrations: () => Promise.resolve(undefined),
+    runSeeds: () => Promise.resolve(undefined),
     dispose: () => Promise.resolve(),
   };
   const lifecycle = createAppDisposerRegistry();

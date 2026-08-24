@@ -45,6 +45,22 @@ interface MigrationConnection {
 - 不把 `dialect` 放进 `MigrationContext` 顶层。
 - 底层兜底只通过 `connection.client()`。
 
+Migration 来源支持单目录和多 package 两种写法：
+
+```ts
+{ directory: './database/migrations', packageName: 'app' }
+```
+
+```ts
+{
+  sources: [
+    { packageName: '@nocobase/plugin-users', directory: './plugins/users/database/migrations' },
+  ],
+}
+```
+
+`packageName` 是 migration 来源的 package name，不写在 migration 定义中。多个来源会被合并后按全局 `name` 排序；`name` 在所有来源中必须唯一，`packageName` 不参与排序、checksum 或唯一性判断。单目录未传 `packageName` 时默认为 `app`。
+
 ## 文件加载器
 
 文件加载器负责以下校验：
@@ -132,6 +148,7 @@ __nocobase_migrations
 
 ```text
 id
+package_name
 name
 batch
 checksum
@@ -140,6 +157,8 @@ duration_ms
 ```
 
 Runner 在执行 pending migration 前校验已执行记录的 checksum。checksum 变化时停止执行。
+
+如果 runner 发现已有历史表缺少 `package_name`，会自动补列并将既有记录设置为 `app`。历史表仍以 `name` 作为唯一 migration identity。
 
 ## Lock
 

@@ -5,6 +5,7 @@ import type { LoggingConfig } from '@nocobase/logging';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 import type { AppAuthConfig } from './auth.js';
+import type { ResolvedAppPlugin } from '../plugins/index.js';
 
 export interface AppRoutingConfig {
   name: string;
@@ -33,6 +34,7 @@ export interface AppSpaConfig {
 
 export interface AppConfig {
   app: AppRoutingConfig;
+  plugins: readonly ResolvedAppPlugin[];
   auth: AppAuthConfig;
   caching: CachingConfig;
   database: AppDatabaseConfig;
