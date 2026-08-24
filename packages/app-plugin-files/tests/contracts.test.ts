@@ -1,6 +1,12 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import type { FileUploadPlan } from '@nocobase/app-plugin-files/client';
+import {
+  createFileAdapter,
+  executeFileUploadPlan,
+  FileClientError,
+  type FileUploadAdapter,
+  type FileUploadPlan,
+} from '@nocobase/app-plugin-files/client';
 import type {
   CreateBusinessFileResponse,
   FileReference,
@@ -23,6 +29,13 @@ describe('@nocobase/app-plugin-files contracts', () => {
     expect(clientEntry).toBeDefined();
     expect(Object.keys(serverEntry)).toContain('createFilesRuntime');
     expect(Object.keys(serverEntry)).toContain('createFileService');
+    expect(Object.keys(clientEntry)).toEqual(
+      expect.arrayContaining([
+        'createFileAdapter',
+        'executeFileUploadPlan',
+        'FileClientError',
+      ]),
+    );
     expect(Object.keys(serverEntry)).not.toEqual(
       expect.arrayContaining([
         'createFileKernel',
@@ -49,6 +62,18 @@ describe('@nocobase/app-plugin-files contracts', () => {
     };
 
     expect(plan.upload.method).toBe('PUT');
+  });
+
+  it('publishes the default client runtime and adapter contracts', () => {
+    expectTypeOf(createFileAdapter).returns.toEqualTypeOf<FileUploadAdapter>();
+    expectTypeOf(executeFileUploadPlan).returns.toEqualTypeOf<
+      Promise<import('@nocobase/app-plugin-files/protocol').StoredFile>
+    >();
+    expectTypeOf(FileClientError).toBeConstructibleWith('failed', {
+      code: 'UPLOAD_FAILED',
+      status: 409,
+      operation: 'upload',
+    });
   });
 
   it('keeps FileService and FilesRuntime public contracts narrow', () => {
