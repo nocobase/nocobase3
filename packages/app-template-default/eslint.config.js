@@ -155,16 +155,5 @@ export default createPortalConfig({
         'no-useless-assignment': 'off',
       },
     },
-    {
-      name: 'app-template-default/browser-regression-script',
-      files: ['tests/react-grab-picker-regression.mjs'],
-      languageOptions: {
-        globals: {
-          console: 'readonly',
-          performance: 'readonly',
-          URL: 'readonly',
-        },
-      },
-    },
   ],
 });
