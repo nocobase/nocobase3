@@ -15,7 +15,7 @@
     "@base-ui/react": "^1.6.0",
     "@dicebear/core": "^9.4.3",
     "@fontsource-variable/geist": "^5.3.0",
-    "@gchust/agent-annotations": "0.1.0",
+    "@gchust/agent-annotations": "0.1.x",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/portal-sdk": "workspace:^",
