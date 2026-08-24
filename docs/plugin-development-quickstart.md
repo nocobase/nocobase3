@@ -21,12 +21,16 @@ packages/app-plugin-audit-log/
 ├── server/
 │   ├── bootstrap.ts
 │   └── routes/index.ts
+├── client/
+│   ├── bootstrap.ts
+│   ├── routes.ts
+│   └── providers.ts
 ├── tests/
 ├── package.json
 └── tsconfig.json
 ```
 
-脚手架不生成 `src/` 和客户端目录。可以在创建时指定展示名称和描述：
+脚手架不生成 `src/`。Client 的三个入口默认都是空贡献，注册插件后不会自动增加页面或 Provider。可以在创建时指定展示名称和描述：
 
 ```bash
 pnpm plugin:create audit-log \
@@ -107,15 +111,15 @@ GET /audit-log
 
 启动 App 后即可访问，实际主机、端口和 App base path 以 `pnpm app:dev` 的输出为准。
 
-### Client（可选）
+### Client
 
-脚手架默认不生成客户端代码。需要浏览器能力时，可以按需添加：
+脚手架生成三个相互独立的客户端入口：
 
 - `client/bootstrap.ts`：注册 Refine 等命令式客户端能力；
 - `client/routes.ts`：声明按需加载的页面路由；
 - `client/providers.ts`：声明同步 React Provider。
 
-三个入口彼此独立，使用哪个就在插件 `package.json` 中声明对应的 export 和 `nocobase.plugin.client` 配置。完整协议参见 [app-client README](../packages/app-client/README.md)，可运行的前后端示例参见 [routes example](../packages/app-plugin-routes-example/README.md)。
+脚手架已经在 `package.json` 中声明对应的 export、`nocobase.plugin.client` 配置和依赖。没有对应能力时保持空数组或空函数即可。完整协议参见 [app-client README](../packages/app-client/README.md)，可运行的前后端示例参见 [routes example](../packages/app-plugin-routes-example/README.md)。
 
 ## 4. 检查和启动
 
