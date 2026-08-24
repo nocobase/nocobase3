@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyClientRouteComponentOverrides,
+  defineClientApplication,
   defineClientProviders,
   defineClientRouteComponentOverrides,
   defineClientRoutes,
@@ -19,6 +20,9 @@ function SecondProvider({ children }: PropsWithChildren): ReactElement {
 
 describe('client plugin definitions', () => {
   it('freezes route and provider definitions', () => {
+    const application = defineClientApplication({
+      packageName: '@nocobase/app-template-default',
+    });
     const routes = defineClientRoutes([
       {
         name: 'index',
@@ -38,6 +42,8 @@ describe('client plugin definitions', () => {
     expect(Object.isFrozen(routes[0])).toBe(true);
     expect(Object.isFrozen(providers)).toBe(true);
     expect(Object.isFrozen(providers[0].before)).toBe(true);
+    expect(application).toMatchObject({ source: 'application' });
+    expect(Object.isFrozen(application)).toBe(true);
   });
 
   it('resolves routes and sorts providers from outer to inner', () => {
@@ -71,6 +77,7 @@ describe('client plugin definitions', () => {
       auth: 'required',
       id: '@nocobase/app-plugin-feature:index',
       path: '/feature',
+      source: 'plugin',
     });
     expect(resolved.providers.map((provider) => provider.id)).toEqual([
       '@nocobase/app-plugin-foundation:first',
@@ -117,6 +124,25 @@ describe('client plugin definitions', () => {
         },
       ]),
     ).toThrow('unless auth is "guest"');
+
+    const application = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-template-default',
+        source: 'application',
+        routes: defineClientRoutes([
+          {
+            name: 'home',
+            path: '/',
+            componentLoader: async () => ({ default: () => null }),
+          },
+        ]),
+      },
+    ]);
+    expect(application.routes[0]).toMatchObject({
+      id: '@nocobase/app-template-default:home',
+      path: '/',
+      source: 'application',
+    });
   });
 
   it('overrides only a registered route component loader', async () => {
@@ -226,6 +252,102 @@ describe('client plugin definitions', () => {
       'first',
       'second',
     ]);
+    expect(resolved.providers.map((provider) => provider.layer)).toEqual([
+      'extension',
+      'extension',
+    ]);
+  });
+
+  it('sorts provider layers before applying same-layer constraints', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-feature',
+        providers: defineClientProviders([
+          { name: 'extension', component: SecondProvider },
+        ]),
+      },
+      {
+        packageName: '@nocobase/app-template-default',
+        source: 'application',
+        providers: defineClientProviders([
+          {
+            name: 'workspace',
+            component: SecondProvider,
+            layer: 'application',
+          },
+          {
+            name: 'theme',
+            component: FirstProvider,
+            layer: 'root',
+          },
+        ]),
+      },
+    ]);
+
+    expect(
+      resolved.providers.map(({ id, layer, source }) => ({
+        id,
+        layer,
+        source,
+      })),
+    ).toEqual([
+      {
+        id: '@nocobase/app-template-default:theme',
+        layer: 'root',
+        source: 'application',
+      },
+      {
+        id: '@nocobase/app-template-default:workspace',
+        layer: 'application',
+        source: 'application',
+      },
+      {
+        id: '@nocobase/app-plugin-feature:extension',
+        layer: 'extension',
+        source: 'plugin',
+      },
+    ]);
+  });
+
+  it('rejects invalid provider layers and cross-layer constraints', () => {
+    expect(() =>
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-feature',
+          providers: defineClientProviders([
+            {
+              name: 'feature',
+              component: FirstProvider,
+              layer: 'root',
+            },
+          ]),
+        },
+      ]),
+    ).toThrow('plugin providers must use layer "extension"');
+
+    expect(() =>
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-template-default',
+          source: 'application',
+          providers: defineClientProviders([
+            {
+              name: 'theme',
+              component: FirstProvider,
+              layer: 'root',
+            },
+            {
+              name: 'workspace',
+              component: SecondProvider,
+              layer: 'application',
+              after: ['@nocobase/app-template-default:theme'],
+            },
+          ]),
+        },
+      ]),
+    ).toThrow(
+      'before/after constraints may only reference providers in the same layer',
+    );
   });
 
   it('rejects missing references and circular provider ordering', () => {

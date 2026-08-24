@@ -59,15 +59,19 @@ The active browser source is `client/`:
 
 ```text
 client/
+├── application.ts          application contribution loader
+├── bootstrap.ts            application Refine defaults
+├── routes.ts               application-owned route declarations
+├── providers.ts            application Provider declarations
+├── route-overrides.ts      application component replacements
+├── routing/                route placement, lazy loading, and error UI
 ├── auth/                    application authentication presentation
 ├── pages/                   application-owned pages
+├── shell/                   authenticated application shell
 ├── theme/                   app-wide theme and selector
 ├── app.ts                   final AppClient composition
 ├── index.tsx                async startup entry
-├── plugin-routes.ts         React.lazy route rendering
 ├── refine-runtime.ts        plugin Refine contribution collector
-├── route-overrides.ts       application component replacements
-├── routes.tsx               auth groups and React Router placement
 └── runtime.ts               plugin loading and runtime validation
 ```
 
@@ -82,15 +86,27 @@ Enabled client plugins contribute independently:
 - `client/routes`: inspectable route path/auth metadata and lazy page loaders;
 - `client/providers`: synchronous React providers with explicit ordering.
 
+The Default App contributes through the same three protocols, wired by
+`client/application.ts`. Its bootstrap runs before plugin bootstraps. Its `/`
+home route is declared in `client/routes.ts`, while `client/routing/` only
+renders the resolved routes.
+
+Providers are composed outer-to-inner in fixed layer order:
+`root -> application -> extension`. The app Theme Provider uses `root`;
+application providers otherwise default to `application`, and plugin providers
+use `extension`. `before` and `after` can refine order only within the same
+layer.
+
 Inspect the final client composition with:
 
 ```bash
 pnpm app:client:inspect --app app-template-default
 pnpm app:client:inspect --app app-template-default --json
+pnpm app:client:inspect --app app-template-default --type bootstrap
 ```
 
-The route output distinguishes plugin route ownership from the final component
-source after application overrides.
+The output shows bootstrap order, route ownership and final component source,
+and Provider source/layer/order.
 
 ## Authentication UI
 

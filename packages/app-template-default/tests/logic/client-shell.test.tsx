@@ -5,8 +5,7 @@ import type { ComponentType, ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createRenderablePluginRoutes } from '../../client/plugin-routes.ts';
-import { AppRoutes } from '../../client/routes.tsx';
+import { AppRouter } from '../../client/routing/app-router.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
 describe('application shell', () => {
@@ -75,6 +74,10 @@ function renderApplication(
   authProvider: AuthProvider,
   routes: readonly AppClientRegisteredRoute[] = [],
 ): void {
+  const clientRoutes = [
+    createRoute('home', '/', 'required', HomePage, 'application'),
+    ...routes,
+  ];
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
@@ -95,7 +98,7 @@ function renderApplication(
           }}
           options={{ disableTelemetry: true }}
         >
-          <AppRoutes pluginRoutes={createRenderablePluginRoutes(routes)} />
+          <AppRouter clientRoutes={clientRoutes} />
         </Refine>
       </AppThemeProvider>
     </MemoryRouter>,
@@ -124,15 +127,25 @@ function createRoute(
   path: string,
   auth: AppClientRegisteredRoute['auth'],
   Component: ComponentType,
+  source: AppClientRegisteredRoute['source'] = 'plugin',
 ): AppClientRegisteredRoute {
+  const packageName =
+    source === 'application'
+      ? '@nocobase/app-template-default'
+      : '@nocobase/app-plugin-test';
   return {
     auth,
     componentLoader: async () => ({ default: Component }),
-    id: `@nocobase/app-plugin-test:${name}`,
+    id: `${packageName}:${name}`,
     name,
-    packageName: '@nocobase/app-plugin-test',
+    packageName,
     path,
+    source,
   };
+}
+
+function HomePage(): ReactElement {
+  return <h2>App client is ready</h2>;
 }
 
 function GuestPage(): ReactElement {

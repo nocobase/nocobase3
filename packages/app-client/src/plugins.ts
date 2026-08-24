@@ -13,6 +13,10 @@ const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
 
 export type AppClientRouteAuth = 'required' | 'guest' | 'optional';
 
+export type AppClientContributionSource = 'application' | 'plugin';
+
+export type AppClientProviderLayer = 'root' | 'application' | 'extension';
+
 export interface AppClientRouteComponentModule {
   default: ComponentType;
 }
@@ -31,6 +35,7 @@ export interface AppClientRegisteredRoute extends AppClientRouteDefinition {
   readonly auth: AppClientRouteAuth;
   readonly id: string;
   readonly packageName: string;
+  readonly source: AppClientContributionSource;
 }
 
 export interface AppClientRouteComponentOverrideDefinition {
@@ -42,13 +47,16 @@ export interface AppClientRouteComponentOverrideDefinition {
 export interface AppClientProviderDefinition {
   readonly name: string;
   readonly component: AppClientProvider;
+  readonly layer?: AppClientProviderLayer;
   readonly before?: readonly string[];
   readonly after?: readonly string[];
 }
 
 export interface AppClientRegisteredProvider extends AppClientProviderDefinition {
   readonly id: string;
+  readonly layer: AppClientProviderLayer;
   readonly packageName: string;
+  readonly source: AppClientContributionSource;
 }
 
 export type AppClientRefineSetterValue<
@@ -74,19 +82,26 @@ export type AppClientRefineRegistry = AppClientRefineSetters & {
   ): void;
 };
 
-export interface AppClientPluginBootstrapContext {
+export interface AppClientBootstrapContext {
   readonly appClient: AppClient;
   readonly packageName: string;
   readonly refine: AppClientRefineRegistry;
+  readonly source: AppClientContributionSource;
 }
 
-export type AppClientPluginBootstrap = (
-  context: AppClientPluginBootstrapContext,
+export type AppClientBootstrap = (
+  context: AppClientBootstrapContext,
 ) => void | Promise<void>;
 
-export interface AppClientPluginBootstrapModule {
-  default: AppClientPluginBootstrap;
+export type AppClientPluginBootstrapContext = AppClientBootstrapContext;
+
+export type AppClientPluginBootstrap = AppClientBootstrap;
+
+export interface AppClientBootstrapModule {
+  default: AppClientBootstrap;
 }
+
+export type AppClientPluginBootstrapModule = AppClientBootstrapModule;
 
 export interface AppClientRoutesModule {
   default: readonly AppClientRouteDefinition[];
@@ -96,29 +111,47 @@ export interface AppClientProvidersModule {
   default: readonly AppClientProviderDefinition[];
 }
 
-export type AppClientPluginBootstrapLoader =
-  () => Promise<AppClientPluginBootstrapModule>;
+export type AppClientBootstrapLoader = () => Promise<AppClientBootstrapModule>;
+
+export type AppClientPluginBootstrapLoader = AppClientBootstrapLoader;
 
 export type AppClientRoutesLoader = () => Promise<AppClientRoutesModule>;
 
 export type AppClientProvidersLoader = () => Promise<AppClientProvidersModule>;
 
-export interface AppClientPluginLoader {
+export interface AppClientContributionLoader {
   readonly packageName: string;
-  readonly loadBootstrap?: AppClientPluginBootstrapLoader;
+  readonly loadBootstrap?: AppClientBootstrapLoader;
   readonly loadRoutes?: AppClientRoutesLoader;
   readonly loadProviders?: AppClientProvidersLoader;
 }
 
-export interface AppClientPluginContributions {
+export interface AppClientApplicationLoader extends AppClientContributionLoader {
+  readonly source: 'application';
+}
+
+export interface AppClientPluginLoader extends AppClientContributionLoader {
+  readonly source?: 'plugin';
+}
+
+export interface AppClientContributions {
   readonly packageName: string;
+  readonly source?: AppClientContributionSource;
   readonly routes?: readonly AppClientRouteDefinition[];
   readonly providers?: readonly AppClientProviderDefinition[];
 }
 
+export type AppClientPluginContributions = AppClientContributions;
+
 export interface ResolvedAppClientContributions {
   readonly routes: readonly AppClientRegisteredRoute[];
   readonly providers: readonly AppClientRegisteredProvider[];
+}
+
+export function defineClientApplication(
+  application: AppClientContributionLoader,
+): AppClientApplicationLoader {
+  return Object.freeze({ ...application, source: 'application' });
 }
 
 export function defineClientRoutes(
@@ -169,7 +202,7 @@ export function defineClientProviders(
 }
 
 export function resolveAppClientContributions(
-  contributions: readonly AppClientPluginContributions[],
+  contributions: readonly AppClientContributions[],
 ): ResolvedAppClientContributions {
   const routes: AppClientRegisteredRoute[] = [];
   const routeIds = new Set<string>();
@@ -179,9 +212,10 @@ export function resolveAppClientContributions(
 
   for (const contribution of contributions) {
     const packageName = normalizePackageName(contribution.packageName);
+    const source = normalizeContributionSource(contribution.source);
 
     for (const route of contribution.routes ?? []) {
-      const registeredRoute = createRegisteredRoute(packageName, route);
+      const registeredRoute = createRegisteredRoute(packageName, source, route);
       if (routeIds.has(registeredRoute.id)) {
         throw new Error(
           `Plugin "${packageName}" defined duplicate client route name "${registeredRoute.name}".`,
@@ -204,6 +238,7 @@ export function resolveAppClientContributions(
     for (const provider of contribution.providers ?? []) {
       const registeredProvider = createRegisteredProvider(
         packageName,
+        source,
         provider,
       );
       if (providerIds.has(registeredProvider.id)) {
@@ -301,14 +336,21 @@ function normalizePackageName(packageName: string): string {
   return normalized;
 }
 
+function normalizeContributionSource(
+  source: AppClientContributionSource | undefined,
+): AppClientContributionSource {
+  return source ?? 'plugin';
+}
+
 function createRegisteredRoute(
   packageName: string,
+  source: AppClientContributionSource,
   route: AppClientRouteDefinition,
 ): AppClientRegisteredRoute {
   const name = normalizeContributionName(route.name, packageName, 'route');
   const path = normalizeRoutePath(route.path, packageName, name);
   const auth = normalizeRouteAuth(route.auth, packageName, name);
-  if (path === '/') {
+  if (path === '/' && source !== 'application') {
     throw new Error(
       `Client route "${name}" from plugin "${packageName}" cannot use reserved application root path "/".`,
     );
@@ -335,6 +377,7 @@ function createRegisteredRoute(
     name,
     packageName,
     path,
+    source,
   });
 }
 
@@ -358,6 +401,7 @@ function normalizeRouteAuth(
 
 function createRegisteredProvider(
   packageName: string,
+  source: AppClientContributionSource,
   provider: AppClientProviderDefinition,
 ): AppClientRegisteredProvider {
   const name = normalizeContributionName(
@@ -370,15 +414,53 @@ function createRegisteredProvider(
       `Client provider "${name}" from plugin "${packageName}" must define a component.`,
     );
   }
+  const layer = normalizeProviderLayer(
+    provider.layer,
+    source,
+    packageName,
+    name,
+  );
 
   return Object.freeze({
     id: `${packageName}:${name}`,
     name,
     packageName,
+    source,
+    layer,
     component: provider.component,
     before: normalizeProviderTargets(provider.before, packageName, name),
     after: normalizeProviderTargets(provider.after, packageName, name),
   });
+}
+
+function normalizeProviderLayer(
+  layer: AppClientProviderLayer | undefined,
+  source: AppClientContributionSource,
+  packageName: string,
+  providerName: string,
+): AppClientProviderLayer {
+  const normalized =
+    layer ?? (source === 'application' ? 'application' : 'extension');
+  if (
+    normalized !== 'root' &&
+    normalized !== 'application' &&
+    normalized !== 'extension'
+  ) {
+    throw new Error(
+      `Client provider "${providerName}" from "${packageName}" uses unsupported layer "${String(layer)}".`,
+    );
+  }
+  if (source === 'plugin' && normalized !== 'extension') {
+    throw new Error(
+      `Client provider "${providerName}" from plugin "${packageName}" cannot use layer "${normalized}"; plugin providers must use layer "extension".`,
+    );
+  }
+  if (source === 'application' && normalized === 'extension') {
+    throw new Error(
+      `Client provider "${providerName}" from application "${packageName}" cannot use layer "extension"; application providers must use layer "root" or "application".`,
+    );
+  }
+  return normalized;
 }
 
 function normalizeContributionName(
@@ -478,6 +560,38 @@ function wrapRouteComponentLoader(
 }
 
 function sortProviders(
+  providers: readonly AppClientRegisteredProvider[],
+): readonly AppClientRegisteredProvider[] {
+  const providersById = new Map(
+    providers.map((provider) => [provider.id, provider]),
+  );
+  for (const provider of providers) {
+    for (const targetId of [
+      ...(provider.before ?? []),
+      ...(provider.after ?? []),
+    ]) {
+      assertProviderTarget(providersById, provider.id, targetId);
+      const target = providersById.get(targetId);
+      if (target && target.layer !== provider.layer) {
+        throw new Error(
+          `Client provider "${provider.id}" in layer "${provider.layer}" cannot declare ordering against provider "${target.id}" in layer "${target.layer}"; before/after constraints may only reference providers in the same layer.`,
+        );
+      }
+    }
+  }
+
+  const layerOrder: readonly AppClientProviderLayer[] = [
+    'root',
+    'application',
+    'extension',
+  ];
+  const sorted = layerOrder.flatMap((layer) =>
+    sortProviderLayer(providers.filter((provider) => provider.layer === layer)),
+  );
+  return Object.freeze(sorted);
+}
+
+function sortProviderLayer(
   providers: readonly AppClientRegisteredProvider[],
 ): readonly AppClientRegisteredProvider[] {
   const providersById = new Map(

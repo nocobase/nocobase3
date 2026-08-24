@@ -27,6 +27,10 @@ test('parses app client inspection options', () => {
       type: 'providers',
     },
   );
+  assert.equal(
+    parseInspectAppClientArgs(['--type', 'bootstrap']).type,
+    'bootstrap',
+  );
 });
 
 test('inspects configured client routes and providers', async () => {
@@ -36,6 +40,11 @@ test('inspects configured client routes and providers', async () => {
   assert.deepEqual(
     inspection.routes.map(({ auth, id, path }) => ({ auth, id, path })),
     [
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-default:home',
+        path: '/',
+      },
       {
         auth: 'guest',
         id: '@nocobase/app-plugin-authentication:login',
@@ -72,23 +81,95 @@ test('inspects configured client routes and providers', async () => {
     inspection.providers.map(({ id, order }) => ({ id, order })),
     [
       {
-        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        id: '@nocobase/app-template-default:theme',
         order: 1,
       },
       {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 2,
+      },
+      {
+        id: '@nocobase/app-plugin-routes-example:routes-example',
+        order: 3,
+      },
+    ],
+  );
+  assert.deepEqual(
+    inspection.bootstraps.map(({ order, packageName, source }) => ({
+      order,
+      packageName,
+      source,
+    })),
+    [
+      {
+        order: 1,
+        packageName: '@nocobase/app-template-default',
+        source: 'application',
+      },
+      {
+        order: 2,
+        packageName: '@nocobase/app-plugin-authentication',
+        source: 'plugin',
+      },
+      {
+        order: 3,
+        packageName: '@nocobase/app-plugin-data-provider',
+        source: 'plugin',
+      },
+      {
+        order: 4,
+        packageName: '@nocobase/app-plugin-notification-provider',
+        source: 'plugin',
       },
     ],
   );
 
   const output = formatAppClientInspection(inspection);
+  assert.match(output, /Bootstrap order/u);
   assert.match(output, /Routes/u);
   assert.match(output, /auth: guest/u);
   assert.match(output, /route source: plugin/u);
   assert.match(output, /component source: application/u);
   assert.match(output, /client\/auth\/pages\/login-page/u);
   assert.match(output, /Providers \(outer -> inner\)/u);
+  assert.match(output, /layer: root/u);
+
+  assert.deepEqual(inspection.routes[0], {
+    auth: 'required',
+    id: '@nocobase/app-template-default:home',
+    name: 'home',
+    packageName: '@nocobase/app-template-default',
+    path: '/',
+    entry: './client/routes',
+    routeSource: 'application',
+    routeEntry: './client/routes',
+    componentSource: 'application',
+    componentEntry: undefined,
+  });
+  assert.deepEqual(
+    inspection.providers.map(({ id, layer, source }) => ({
+      id,
+      layer,
+      source,
+    })),
+    [
+      {
+        id: '@nocobase/app-template-default:theme',
+        layer: 'root',
+        source: 'application',
+      },
+      {
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        layer: 'extension',
+        source: 'plugin',
+      },
+      {
+        id: '@nocobase/app-plugin-routes-example:routes-example',
+        layer: 'extension',
+        source: 'plugin',
+      },
+    ],
+  );
 
   assert.deepEqual(
     inspection.routes
@@ -115,5 +196,9 @@ test('inspects configured client routes and providers', async () => {
   assert.deepEqual(selectAppClientInspection(inspection, 'routes'), {
     app: '@nocobase/app-template-default',
     routes: inspection.routes,
+  });
+  assert.deepEqual(selectAppClientInspection(inspection, 'bootstrap'), {
+    app: '@nocobase/app-template-default',
+    bootstraps: inspection.bootstraps,
   });
 });

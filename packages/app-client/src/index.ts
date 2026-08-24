@@ -8,12 +8,21 @@ export {
 } from './config.js';
 export {
   applyClientRouteComponentOverrides,
+  defineClientApplication,
   defineClientProviders,
   defineClientRouteComponentOverrides,
   defineClientRoutes,
   resolveAppClientContributions,
 } from './plugins.js';
 export type {
+  AppClientApplicationLoader,
+  AppClientBootstrap,
+  AppClientBootstrapContext,
+  AppClientBootstrapLoader,
+  AppClientBootstrapModule,
+  AppClientContributionLoader,
+  AppClientContributions,
+  AppClientContributionSource,
   AppClientPluginBootstrap,
   AppClientPluginBootstrapContext,
   AppClientPluginBootstrapLoader,
@@ -21,6 +30,7 @@ export type {
   AppClientPluginContributions,
   AppClientPluginLoader,
   AppClientProviderDefinition,
+  AppClientProviderLayer,
   AppClientProvidersLoader,
   AppClientProvidersModule,
   AppClientRefineRegistry,

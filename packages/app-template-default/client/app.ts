@@ -1,21 +1,16 @@
 import { defineAppClient, type AppClientConfig } from '@nocobase/app-client';
 import { createElement } from 'react';
 
-import { createRenderablePluginRoutes } from './plugin-routes';
-import { AppRoutes } from './routes';
+import { AppRouter } from './routing/app-router.js';
 import type { AppClientRuntime } from './runtime';
-import { AppThemeProvider } from './theme';
 
 export function createApp(runtime: AppClientRuntime): AppClientConfig {
   return defineAppClient({
     basename: runtime.basename,
-    providers: [
-      AppThemeProvider,
-      ...runtime.providers.map((provider) => provider.component),
-    ],
+    providers: runtime.providers.map((provider) => provider.component),
     refine: runtime.refine,
-    routes: createElement(AppRoutes, {
-      pluginRoutes: createRenderablePluginRoutes(runtime.routes),
+    routes: createElement(AppRouter, {
+      clientRoutes: runtime.routes,
     }),
   });
 }

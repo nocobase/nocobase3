@@ -1,7 +1,9 @@
 import {
   applyClientRouteComponentOverrides,
   resolveAppClientContributions,
-  type AppClientPluginBootstrap,
+  type AppClientApplicationLoader,
+  type AppClientBootstrap,
+  type AppClientContributionSource,
   type AppClientPluginLoader,
   type AppClientProviderDefinition,
   type AppClientRegisteredProvider,
@@ -29,13 +31,15 @@ export interface AppClientRuntime {
 }
 
 export interface CreateAppRuntimeOptions {
+  readonly application: AppClientApplicationLoader;
   readonly plugins: readonly AppClientPluginLoader[];
   readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
 }
 
-interface LoadedClientPlugin {
+interface LoadedClientContribution {
   readonly packageName: string;
-  readonly bootstrap?: AppClientPluginBootstrap;
+  readonly source: AppClientContributionSource;
+  readonly bootstrap?: AppClientBootstrap;
   readonly providers?: readonly AppClientProviderDefinition[];
   readonly routes?: readonly AppClientRouteDefinition[];
 }
@@ -44,30 +48,28 @@ export async function createAppRuntime(
   options: CreateAppRuntimeOptions,
 ): Promise<AppClientRuntime> {
   const appClient = createAppClient();
-  const loadedPlugins = await Promise.all(
-    options.plugins.map(loadClientPlugin),
-  );
-  const refineCollector = createRefineConfigCollector({
-    options: {
-      title: {
-        text: 'NocoBase',
-      },
-    },
-  });
+  const loadedContributions = await Promise.all([
+    loadClientContribution(options.application),
+    ...options.plugins.map((plugin) =>
+      loadClientContribution({ ...plugin, source: 'plugin' }),
+    ),
+  ]);
+  const refineCollector = createRefineConfigCollector({});
 
-  for (const plugin of loadedPlugins) {
-    if (!plugin.bootstrap) {
+  for (const contribution of loadedContributions) {
+    if (!contribution.bootstrap) {
       continue;
     }
     try {
-      await plugin.bootstrap({
+      await contribution.bootstrap({
         appClient,
-        packageName: plugin.packageName,
-        refine: refineCollector.forPlugin(plugin.packageName),
+        packageName: contribution.packageName,
+        refine: refineCollector.forContribution(contribution.packageName),
+        source: contribution.source,
       });
     } catch (error) {
       throw new Error(
-        `Failed to bootstrap client plugin "${plugin.packageName}".`,
+        `Failed to bootstrap client ${contribution.source} "${contribution.packageName}".`,
         { cause: error },
       );
     }
@@ -85,7 +87,7 @@ export async function createAppRuntime(
     );
   }
 
-  const contributions = resolveAppClientContributions(loadedPlugins);
+  const contributions = resolveAppClientContributions(loadedContributions);
   const routes = applyClientRouteComponentOverrides(
     contributions.routes,
     options.routeComponentOverrides ?? [],
@@ -113,17 +115,20 @@ export async function createAppRuntime(
   });
 }
 
-async function loadClientPlugin(
-  plugin: AppClientPluginLoader,
-): Promise<LoadedClientPlugin> {
+async function loadClientContribution(
+  contribution:
+    | AppClientApplicationLoader
+    | (AppClientPluginLoader & { readonly source: 'plugin' }),
+): Promise<LoadedClientContribution> {
   const [bootstrap, routes, providers] = await Promise.all([
-    loadBootstrap(plugin),
-    loadRoutes(plugin),
-    loadProviders(plugin),
+    loadBootstrap(contribution),
+    loadRoutes(contribution),
+    loadProviders(contribution),
   ]);
 
   return Object.freeze({
-    packageName: plugin.packageName,
+    packageName: contribution.packageName,
+    source: contribution.source,
     bootstrap,
     routes,
     providers,
@@ -131,33 +136,37 @@ async function loadClientPlugin(
 }
 
 async function loadBootstrap(
-  plugin: AppClientPluginLoader,
-): Promise<AppClientPluginBootstrap | undefined> {
-  if (!plugin.loadBootstrap) {
+  contribution:
+    | AppClientApplicationLoader
+    | (AppClientPluginLoader & { readonly source: 'plugin' }),
+): Promise<AppClientBootstrap | undefined> {
+  if (!contribution.loadBootstrap) {
     return undefined;
   }
   try {
-    const module = await plugin.loadBootstrap();
+    const module = await contribution.loadBootstrap();
     if (typeof module.default !== 'function') {
       throw new Error('The bootstrap entry must default-export a function.');
     }
     return module.default;
   } catch (error) {
     throw new Error(
-      `Failed to load client bootstrap for plugin "${plugin.packageName}".`,
+      `Failed to load client bootstrap for ${contribution.source} "${contribution.packageName}".`,
       { cause: error },
     );
   }
 }
 
 async function loadRoutes(
-  plugin: AppClientPluginLoader,
+  contribution:
+    | AppClientApplicationLoader
+    | (AppClientPluginLoader & { readonly source: 'plugin' }),
 ): Promise<readonly AppClientRouteDefinition[] | undefined> {
-  if (!plugin.loadRoutes) {
+  if (!contribution.loadRoutes) {
     return undefined;
   }
   try {
-    const module = await plugin.loadRoutes();
+    const module = await contribution.loadRoutes();
     const definitions: unknown = module.default;
     if (!isRouteDefinitions(definitions)) {
       throw new Error(
@@ -167,20 +176,22 @@ async function loadRoutes(
     return definitions;
   } catch (error) {
     throw new Error(
-      `Failed to load client routes for plugin "${plugin.packageName}".`,
+      `Failed to load client routes for ${contribution.source} "${contribution.packageName}".`,
       { cause: error },
     );
   }
 }
 
 async function loadProviders(
-  plugin: AppClientPluginLoader,
+  contribution:
+    | AppClientApplicationLoader
+    | (AppClientPluginLoader & { readonly source: 'plugin' }),
 ): Promise<readonly AppClientProviderDefinition[] | undefined> {
-  if (!plugin.loadProviders) {
+  if (!contribution.loadProviders) {
     return undefined;
   }
   try {
-    const module = await plugin.loadProviders();
+    const module = await contribution.loadProviders();
     const definitions: unknown = module.default;
     if (!isProviderDefinitions(definitions)) {
       throw new Error(
@@ -190,7 +201,7 @@ async function loadProviders(
     return definitions;
   } catch (error) {
     throw new Error(
-      `Failed to load client providers for plugin "${plugin.packageName}".`,
+      `Failed to load client providers for ${contribution.source} "${contribution.packageName}".`,
       { cause: error },
     );
   }

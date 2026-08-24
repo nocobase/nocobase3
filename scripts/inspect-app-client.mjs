@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 import { DEFAULT_APP, resolveApplication } from './register-plugin.mjs';
 
-const help = `Inspect resolved client routes and providers for an application.
+const help = `Inspect resolved client bootstrap, routes, and providers for an application.
 
 Usage:
   pnpm app:client:inspect [options]
@@ -12,7 +12,7 @@ Usage:
 Options:
   --app <app>        Application directory or package name
                      (default: app-template-default)
-  --type <type>      all, routes, or providers (default: all)
+  --type <type>      all, bootstrap, routes, or providers (default: all)
   --json             Print machine-readable JSON
   -h, --help         Show this help
 
@@ -20,6 +20,7 @@ Examples:
   pnpm app:client:inspect
   pnpm app:client:inspect --app app-template-default
   pnpm app:client:inspect --app @nocobase/app-template-default --json
+  pnpm app:client:inspect --type bootstrap
   pnpm app:client:inspect --type providers`;
 
 export function parseInspectAppClientArgs(args) {
@@ -48,8 +49,10 @@ export function parseInspectAppClientArgs(args) {
       if (argument === '--app') {
         options.app = value;
       } else {
-        if (!['all', 'routes', 'providers'].includes(value)) {
-          throw new Error('--type must be all, routes, or providers.');
+        if (!['all', 'bootstrap', 'routes', 'providers'].includes(value)) {
+          throw new Error(
+            '--type must be all, bootstrap, routes, or providers.',
+          );
         }
         options.type = value;
       }
@@ -79,13 +82,29 @@ export async function inspectAppClient({
   const clientPlugins = resolvedApp.plugins.filter(
     (plugin) => plugin.enabled && plugin.manifest.client,
   );
-  const contributions = await Promise.all(
+  const [applicationRoutes, applicationProviders, applicationBootstrapEntry] =
+    await Promise.all([
+      loadApplicationDefinitions(appRoot, 'routes'),
+      loadApplicationDefinitions(appRoot, 'providers'),
+      findApplicationEntry(appRoot, 'bootstrap'),
+    ]);
+  const pluginContributions = await Promise.all(
     clientPlugins.map(async (plugin) => ({
       packageName: plugin.packageName,
+      source: 'plugin',
       routes: await loadDefinitions(plugin, 'routes'),
       providers: await loadDefinitions(plugin, 'providers'),
     })),
   );
+  const contributions = [
+    {
+      packageName: resolvedApp.appPackageName,
+      source: 'application',
+      routes: applicationRoutes,
+      providers: applicationProviders,
+    },
+    ...pluginContributions,
+  ];
   const resolved = resolveAppClientContributions(contributions);
   const routeComponentOverrides =
     await loadApplicationRouteComponentOverrides(appRoot);
@@ -96,26 +115,60 @@ export async function inspectAppClient({
   const entries = new Map(
     clientPlugins.map((plugin) => [plugin.packageName, plugin.manifest.client]),
   );
+  const applicationEntries = {
+    bootstrap: applicationBootstrapEntry ? './client/bootstrap' : undefined,
+    providers: applicationProviders ? './client/providers' : undefined,
+    routes: applicationRoutes ? './client/routes' : undefined,
+  };
 
   return {
     app: resolvedApp.appPackageName,
+    bootstraps: [
+      ...(applicationEntries.bootstrap
+        ? [
+            {
+              order: 1,
+              packageName: resolvedApp.appPackageName,
+              source: 'application',
+              entry: applicationEntries.bootstrap,
+            },
+          ]
+        : []),
+      ...clientPlugins
+        .filter((plugin) => plugin.manifest.client?.bootstrap)
+        .map((plugin, index) => ({
+          order: index + (applicationEntries.bootstrap ? 2 : 1),
+          packageName: plugin.packageName,
+          source: 'plugin',
+          entry: formatPluginClientEntry(
+            plugin.packageName,
+            plugin.manifest.client.bootstrap,
+          ),
+        })),
+    ],
     routes: finalRoutes.map((route) => ({
       auth: route.auth,
       id: route.id,
       name: route.name,
       packageName: route.packageName,
       path: route.path,
-      entry: entries.get(route.packageName)?.routes,
-      routeSource: 'plugin',
-      routeEntry: formatPluginClientEntry(
-        route.packageName,
-        entries.get(route.packageName)?.routes,
-      ),
+      entry:
+        route.source === 'application'
+          ? applicationEntries.routes
+          : entries.get(route.packageName)?.routes,
+      routeSource: route.source,
+      routeEntry:
+        route.source === 'application'
+          ? applicationEntries.routes
+          : formatPluginClientEntry(
+              route.packageName,
+              entries.get(route.packageName)?.routes,
+            ),
       componentSource: routeComponentOverrides.some(
         (override) => override.routeId === route.id,
       )
         ? 'application'
-        : 'plugin',
+        : route.source,
       componentEntry: routeComponentOverrides.find(
         (override) => override.routeId === route.id,
       )?.componentEntry,
@@ -125,7 +178,15 @@ export async function inspectAppClient({
       id: provider.id,
       name: provider.name,
       packageName: provider.packageName,
-      entry: entries.get(provider.packageName)?.providers,
+      source: provider.source,
+      layer: provider.layer,
+      entry:
+        provider.source === 'application'
+          ? applicationEntries.providers
+          : formatPluginClientEntry(
+              provider.packageName,
+              entries.get(provider.packageName)?.providers,
+            ),
       before: provider.before ?? [],
       after: provider.after ?? [],
     })),
@@ -166,6 +227,36 @@ async function loadApplicationRouteComponentOverrides(appRoot) {
   }
 }
 
+async function findApplicationEntry(appRoot, contribution) {
+  const candidates = ['ts', 'tsx', 'js'].map((extension) =>
+    path.join(appRoot, `client/${contribution}.${extension}`),
+  );
+  return candidates.find(
+    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+  );
+}
+
+async function loadApplicationDefinitions(appRoot, contribution) {
+  const entry = await findApplicationEntry(appRoot, contribution);
+  if (!entry) {
+    return undefined;
+  }
+
+  try {
+    const module = await import(pathToFileURL(entry).href);
+    if (!Array.isArray(module.default)) {
+      throw new Error('the default export must be a definition array');
+    }
+    return module.default;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to inspect application client ${contribution}: ${reason}`,
+      { cause: error },
+    );
+  }
+}
+
 async function loadDefinitions(plugin, contribution) {
   const configuredEntry = plugin.manifest.client?.[contribution];
   if (!configuredEntry) {
@@ -198,6 +289,9 @@ async function loadDefinitions(plugin, contribution) {
 
 export function formatAppClientInspection(inspection, type = 'all') {
   const sections = [`App: ${inspection.app}`];
+  if (type === 'all' || type === 'bootstrap') {
+    sections.push(formatBootstraps(inspection.bootstraps));
+  }
   if (type === 'all' || type === 'routes') {
     sections.push(formatRoutes(inspection.routes));
   }
@@ -210,6 +304,9 @@ export function formatAppClientInspection(inspection, type = 'all') {
 export function selectAppClientInspection(inspection, type = 'all') {
   return {
     app: inspection.app,
+    ...(type === 'all' || type === 'bootstrap'
+      ? { bootstraps: inspection.bootstraps }
+      : {}),
     ...(type === 'all' || type === 'routes'
       ? { routes: inspection.routes }
       : {}),
@@ -217,6 +314,21 @@ export function selectAppClientInspection(inspection, type = 'all') {
       ? { providers: inspection.providers }
       : {}),
   };
+}
+
+function formatBootstraps(bootstraps) {
+  if (bootstraps.length === 0) {
+    return 'Bootstrap order\n  (none)';
+  }
+  return `Bootstrap order\n${bootstraps
+    .map((bootstrap) =>
+      [
+        `  ${bootstrap.order}. ${bootstrap.packageName}`,
+        `    source: ${bootstrap.source}`,
+        `    entry: ${bootstrap.entry}`,
+      ].join('\n'),
+    )
+    .join('\n')}`;
 }
 
 function formatRoutes(routes) {
@@ -256,6 +368,8 @@ function formatProviders(providers) {
       ].filter(Boolean);
       return [
         `  ${provider.order}. ${provider.id}`,
+        `    layer: ${provider.layer}`,
+        `    source: ${provider.source}`,
         `    entry: ${provider.entry}`,
         ...constraints,
       ].join('\n');

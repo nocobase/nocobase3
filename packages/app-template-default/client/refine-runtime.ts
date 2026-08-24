@@ -12,6 +12,8 @@ interface ResourceContribution {
 }
 
 export interface AppClientRefineConfigCollector {
+  forContribution(packageName: string): AppClientRefineRegistry;
+  /** @deprecated Use forContribution(). */
   forPlugin(packageName: string): AppClientRefineRegistry;
   finalize(): AppClientRefineConfig;
 }
@@ -54,7 +56,7 @@ export function createRefineConfigCollector(
     owners.set(property, packageName);
   }
 
-  function forPlugin(packageName: string): AppClientRefineRegistry {
+  function forContribution(packageName: string): AppClientRefineRegistry {
     assertOpen();
     return Object.freeze({
       setChildren(
@@ -184,7 +186,11 @@ export function createRefineConfigCollector(
     });
   }
 
-  return Object.freeze({ forPlugin, finalize });
+  return Object.freeze({
+    forContribution,
+    forPlugin: forContribution,
+    finalize,
+  });
 }
 
 function freezeResources(resources: RefineResources): RefineResources {

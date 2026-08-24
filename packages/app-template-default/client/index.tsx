@@ -3,6 +3,7 @@ import { AppClientRoot } from '@nocobase/app-client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import application from './application';
 import { createApp } from './app';
 import routeComponentOverrides from './route-overrides';
 import { createAppRuntime } from './runtime';
@@ -20,6 +21,7 @@ const root = createRoot(container);
 async function start(): Promise<void> {
   try {
     const runtime = await createAppRuntime({
+      application,
       plugins: appClientPluginLoaders,
       routeComponentOverrides,
     });

@@ -16,6 +16,24 @@ Plugin discovery and loading, Registry discovery, ACL UI, and the complete
 application shell stay in the application package until those boundaries are
 shared by more than one application.
 
+Applications use the same contribution contracts as plugins without
+pretending to be plugins. An application loader explicitly identifies the
+application-owned bootstrap, routes, and providers:
+
+```ts
+import { defineClientApplication } from '@nocobase/app-client/plugins';
+
+export default defineClientApplication({
+  packageName: '@nocobase/app-template-default',
+  loadBootstrap: () => import('./bootstrap.js'),
+  loadRoutes: () => import('./routes.js'),
+  loadProviders: () => import('./providers.js'),
+});
+```
+
+The application bootstrap runs first, followed by enabled plugin bootstraps in
+configured plugin order. The application may own `/`; plugins may not.
+
 Client plugins declare authenticated routes in a dedicated entry. Route pages
 use a second dynamic import so their code is only loaded when the URL is
 rendered:
@@ -60,9 +78,13 @@ export default providers;
 ```
 
 Provider definitions may use full provider IDs in `before` and `after`.
-Provider arrays are ordered from outer to inner with stable topological
-sorting. Missing references, duplicate IDs, and cycles fail before the first
-React render.
+Provider arrays are ordered from outer to inner by the fixed layers
+`root -> application -> extension`, with stable topological sorting inside
+each layer. Application providers default to `application` and may explicitly
+use `root`; plugin providers always use `extension`. Ordering constraints may
+only reference another provider in the same layer. Missing references,
+cross-layer constraints, duplicate IDs, and cycles fail before the first React
+render.
 
 The plugin manifest declares each optional entry explicitly:
 
@@ -104,7 +126,8 @@ const overrides = defineClientRouteComponentOverrides([
 const finalRoutes = applyClientRouteComponentOverrides(routes, overrides);
 ```
 
-Overrides are applied after route normalization and before `React.lazy()`.
+Overrides are applied after route normalization and before the route module is
+loaded.
 They can replace only the loader. Missing targets, duplicate overrides, invalid
 loaders, and invalid component modules fail with the stable route ID.
 

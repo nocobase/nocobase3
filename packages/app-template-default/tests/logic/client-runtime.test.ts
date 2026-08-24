@@ -9,6 +9,7 @@ import type { AuthProvider } from '@refinedev/core';
 import type { ComponentType, PropsWithChildren } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import application from '../../client/application.ts';
 import { createApp } from '../../client/app.ts';
 import {
   createAppRuntime as createRawAppRuntime,
@@ -75,12 +76,25 @@ describe('app client runtime', () => {
     expect(createApp(runtime).refine).toBe(runtime.refine);
     expect(runtime.routes).toMatchObject([
       {
+        auth: 'required',
+        name: 'home',
+        path: '/',
+        source: 'application',
+      },
+      {
         auth: 'guest',
         name: 'login',
         path: '/login',
+        source: 'plugin',
       },
     ]);
-    expect(runtime.providers).toEqual([]);
+    expect(runtime.providers).toMatchObject([
+      {
+        id: '@nocobase/app-template-default:theme',
+        layer: 'root',
+        source: 'application',
+      },
+    ]);
     expect(calls.slice(0, 3)).toEqual([
       'load:first',
       'load:routes',
@@ -112,6 +126,7 @@ describe('app client runtime', () => {
   it('requires a data provider plugin', async () => {
     await expect(
       createRawAppRuntime({
+        application,
         plugins: [createAuthPlugin('@nocobase/app-plugin-authentication')],
       }),
     ).rejects.toThrow(
@@ -152,10 +167,19 @@ describe('app client runtime', () => {
     expect(runtime.routes).toMatchObject([
       {
         auth: 'required',
+        id: '@nocobase/app-template-default:home',
+        name: 'home',
+        packageName: '@nocobase/app-template-default',
+        path: '/',
+        source: 'application',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-first:list',
         name: 'list',
         packageName: '@nocobase/app-plugin-first',
         path: '/first',
+        source: 'plugin',
       },
       {
         auth: 'required',
@@ -163,6 +187,7 @@ describe('app client runtime', () => {
         name: 'list',
         packageName: '@nocobase/app-plugin-second',
         path: '/second',
+        source: 'plugin',
       },
       {
         auth: 'guest',
@@ -170,9 +195,10 @@ describe('app client runtime', () => {
         name: 'login',
         packageName: '@nocobase/app-plugin-authentication',
         path: '/login',
+        source: 'plugin',
       },
     ]);
-    await expect(runtime.routes[0].componentLoader()).resolves.toEqual({
+    await expect(runtime.routes[1].componentLoader()).resolves.toEqual({
       default: firstPage,
     });
     expect(Object.isFrozen(runtime.routes)).toBe(true);
@@ -196,13 +222,16 @@ describe('app client runtime', () => {
       ],
     });
 
-    expect(runtime.routes[0]).toMatchObject({
+    const loginRoute = runtime.routes.find(
+      (route) => route.id === '@nocobase/app-plugin-authentication:login',
+    );
+    expect(loginRoute).toMatchObject({
       auth: 'guest',
       id: '@nocobase/app-plugin-authentication:login',
       packageName: '@nocobase/app-plugin-authentication',
       path: '/login',
     });
-    await expect(runtime.routes[0].componentLoader()).resolves.toEqual({
+    await expect(loginRoute?.componentLoader()).resolves.toEqual({
       default: ApplicationLoginPage,
     });
   });
@@ -270,7 +299,10 @@ describe('app client runtime', () => {
       ],
     });
 
-    await expect(runtime.routes[0].componentLoader()).rejects.toThrow(
+    const brokenRoute = runtime.routes.find(
+      (route) => route.id === '@nocobase/app-plugin-routes:broken',
+    );
+    await expect(brokenRoute?.componentLoader()).rejects.toThrow(
       'Failed to load client route "@nocobase/app-plugin-routes:broken".',
     );
   });
@@ -295,6 +327,7 @@ describe('app client runtime', () => {
     const runtime = await createAppRuntime({ plugins });
 
     expect(runtime.providers.map((provider) => provider.id)).toEqual([
+      '@nocobase/app-template-default:theme',
       '@nocobase/app-plugin-foundation:outer',
       '@nocobase/app-plugin-feature:inner',
     ]);
@@ -348,10 +381,11 @@ describe('app client runtime', () => {
 });
 
 function createAppRuntime(
-  options: CreateAppRuntimeOptions,
+  options: Omit<CreateAppRuntimeOptions, 'application'>,
 ): ReturnType<typeof createRawAppRuntime> {
   return createRawAppRuntime({
     ...options,
+    application,
     plugins: [...options.plugins, createDataProviderPlugin()],
   });
 }

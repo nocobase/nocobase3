@@ -7,7 +7,7 @@ interface AppIdentity {
   id: string | number;
 }
 
-export function HomePage(): ReactElement {
+export default function HomePage(): ReactElement {
   const { data: identity } = useGetIdentity<AppIdentity>();
 
   return (
