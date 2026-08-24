@@ -1,4 +1,4 @@
-export type AppServiceErrorStatus = 400 | 503;
+export type AppServiceErrorStatus = 400 | 409 | 503;
 
 export class AppServiceError extends Error {
   constructor(
@@ -13,6 +13,12 @@ export class AppServiceError extends Error {
 export class BadRequestError extends AppServiceError {
   constructor(message: string) {
     super(message, 400);
+  }
+}
+
+export class ConflictError extends AppServiceError {
+  constructor(message: string) {
+    super(message, 409);
   }
 }
 

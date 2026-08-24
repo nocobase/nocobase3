@@ -68,8 +68,17 @@ export default function bootstrapWorkflowPlugin({
     runtime.database,
     workflowRuntime,
   );
-  lifecycle.registerStarter('runtime', () => workflowRuntime.start());
-  lifecycle.registerDisposer('runtime', () => workflowRuntime.stop());
+  const startup = workflowRuntime.start().catch((error: unknown) => {
+    deps.logging
+      .getLogger()
+      .warn(
+        `Workflow Engine background startup failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+  });
+  lifecycle.registerDisposer('runtime', async () => {
+    await startup;
+    await workflowRuntime.stop();
+  });
 }
 
 function resolveWorkflowArtifactDisk(

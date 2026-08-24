@@ -135,7 +135,6 @@ async function createStandaloneAppFromRuntime(
     ...options,
     lifecycle,
   });
-  await app.startPlugins();
   const mounted = createPublicBasePathAdapter(
     app,
     runtime.config.app.publicBasePath,

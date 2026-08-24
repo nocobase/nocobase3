@@ -55,7 +55,7 @@ describe('workflow publisher', () => {
         .map((root) => fs.rm(root, { recursive: true, force: true })),
     );
   });
-  it('is idempotent, replaces without a run, mints after a run, and preserves the historical hash', async () => {
+  it('is idempotent, keeps revisions immutable, and preserves historical hashes', async () => {
     const publisher = new WorkflowPublisher({ database, artifactStore: store });
     const v1 = await artifact(storage, 'x', 'v1');
     await store.commit(v1.key, v1.digest, v1.directory);
@@ -65,12 +65,10 @@ describe('workflow publisher', () => {
     const v2 = await artifact(storage, 'x', 'v2');
     await store.commit(v2.key, v2.digest, v2.directory);
     const second = await publisher.registerArtifact(v2);
-    expect(second).toMatchObject({
-      action: 'replaced',
-      workflowId: first.workflowId,
-    });
+    expect(second.action).toBe('created');
+    expect(second.workflowId).not.toBe(first.workflowId);
     const oldRunId = await insertTestRun(database, {
-      workflowId: first.workflowId,
+      workflowId: second.workflowId,
       workflowKey: 'x',
       eventKey: 'pinned',
       hash: v2.digest,
@@ -79,7 +77,7 @@ describe('workflow publisher', () => {
     await store.commit(v3.key, v3.digest, v3.directory);
     const third = await publisher.registerArtifact(v3);
     expect(third.action).toBe('created');
-    expect(third.workflowId).not.toBe(first.workflowId);
+    expect(third.workflowId).not.toBe(second.workflowId);
     await publisher.activate(third.workflowId);
     await expect(
       database
@@ -88,7 +86,7 @@ describe('workflow publisher', () => {
         .select(['workflowId', 'hash'])
         .where('id', '=', oldRunId)
         .executeTakeFirstOrThrow<Row>(),
-    ).resolves.toEqual({ workflowId: first.workflowId, hash: v2.digest });
+    ).resolves.toEqual({ workflowId: second.workflowId, hash: v2.digest });
   });
   it('rolls back DB registration after a consistency failure while leaving the imported orphan safe', async () => {
     const value = await artifact(storage, 'bad', 'bad');

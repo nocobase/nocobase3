@@ -100,28 +100,9 @@ describe('app server', () => {
   it('starts without optional plugins or workflow routes', async () => {
     const app = createTestApp();
 
-    await expect(app.startPlugins()).resolves.toBeUndefined();
     expect(app.routes.some((route) => route.path.includes('/workflows'))).toBe(
       false,
     );
-  });
-
-  it('defers plugin startup until the host explicitly starts plugins', async () => {
-    const start = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
-    const app = createTestApp({
-      pluginBootstraps: [
-        {
-          packageName: '@nocobase/app-plugin-test',
-          bootstrap: ({ lifecycle }): void => {
-            lifecycle.registerStarter('runtime', start);
-          },
-        },
-      ],
-    });
-
-    expect(start).not.toHaveBeenCalled();
-    await app.startPlugins();
-    expect(start).toHaveBeenCalledOnce();
   });
 
   it('creates embedded apps from a scope', async () => {

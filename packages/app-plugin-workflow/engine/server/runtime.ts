@@ -368,7 +368,7 @@ export default class WorkflowRuntime {
     };
     if (this.queueAdapter) await this.queueAdapter.publish(task);
     else await this.dispatchTrigger(task);
-    return { eventKey };
+    return { status: 'accepted', eventKey };
   }
 
   async resume(

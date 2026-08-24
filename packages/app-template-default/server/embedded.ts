@@ -29,7 +29,6 @@ export async function createServer(
     viteDevUrl: false,
     lifecycle: scope,
   });
-  await app.startPlugins();
   return app;
 }
 

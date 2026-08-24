@@ -27,17 +27,64 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       meta: { page: 1, pageSize: 20, total: 0 },
     });
   });
+
+  it('passes workflow filters and pagination to the service', async () => {
+    const app = new Hono();
+    const workflow = createWorkflowService();
+    registerWorkflowRoutes({
+      app,
+      deps: { auth: { required: () => async (_context, next) => next() } },
+      services: { plugins: { workflow } },
+    });
+
+    await app.request(
+      '/api/workflows?q=approval&enabled=false&page=2&pageSize=10',
+    );
+
+    expect(workflow.list).toHaveBeenCalledWith({
+      query: 'approval',
+      enabled: false,
+      page: 2,
+      pageSize: 10,
+    });
+  });
+
+  it('passes execution filters and pagination to the service', async () => {
+    const app = new Hono();
+    const workflow = createWorkflowService();
+    registerWorkflowRoutes({
+      app,
+      deps: { auth: { required: () => async (_context, next) => next() } },
+      services: { plugins: { workflow } },
+    });
+
+    await app.request(
+      '/api/workflow-runs?workflowKey=leave&workflowTitle=Leave&status=-1&page=3&pageSize=5',
+    );
+
+    expect(workflow.runs).toHaveBeenCalledWith({
+      workflowKey: 'leave',
+      workflowTitle: 'Leave',
+      status: -1,
+      page: 3,
+      pageSize: 5,
+    });
+  });
 });
 
 function createWorkflowService(): WorkflowService {
   return {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi
+      .fn()
+      .mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 }),
     enable: vi.fn(),
     disable: vi.fn(),
     setStatus: vi.fn(),
     getInputs: vi.fn(),
     updateInputs: vi.fn(),
-    runs: vi.fn(),
+    runs: vi
+      .fn()
+      .mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 }),
     runsForWorkflow: vi.fn(),
     getWorkflow: vi.fn(),
     revisions: vi.fn(),

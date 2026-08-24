@@ -184,7 +184,7 @@ describe('workflow runtime', () => {
       ).rejects.toMatchObject({ code: 'INVALID_CONTEXT' });
       await expect(
         runtime.trigger('invocation', { enabled: true }, { eventKey: 'once' }),
-      ).resolves.toEqual({ eventKey: 'once' });
+      ).resolves.toEqual({ status: 'accepted', eventKey: 'once' });
       const generated = await runtime.trigger('invocation', { enabled: true });
       expect(generated.eventKey).toMatch(/^[0-9a-f-]{36}$/);
       await expect(

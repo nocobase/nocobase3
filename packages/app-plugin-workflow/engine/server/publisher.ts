@@ -4,7 +4,11 @@ import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/database';
 import type { Knex } from 'knex';
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 import type { WorkflowFlatIr } from '../workflow-source/core.js';
-import type { WorkflowArtifactDefinition } from './artifact-builder.js';
+import {
+  computeWorkflowArtifactDigest,
+  type WorkflowArtifactDefinition,
+  type WorkflowArtifactDigestFile,
+} from './artifact-builder.js';
 import type { WorkflowArtifactStore } from './artifact-store.js';
 import {
   activateWorkflowSource,
@@ -12,7 +16,7 @@ import {
 } from './source-materializer.js';
 import { validateWorkflowFlatIrTopology } from './source-compiler.js';
 import type { WorkflowId } from './types.js';
-import { asId, serializeJson } from './utils.js';
+import { asId } from './utils.js';
 
 export interface WorkflowPublishLock {
   release(): Promise<void>;
@@ -94,41 +98,6 @@ export class WorkflowPublisher {
             workflowId: asId(same.id),
             digest: artifact.digest,
           };
-        const target =
-          revisions.find((row) => Boolean(row.current)) ?? revisions[0];
-        if (target) {
-          const referenced = await connection.query
-            .selectFrom(WORKFLOW_COLLECTIONS.runs)
-            .where('workflowId', '=', asId(target.id))
-            .exists();
-          if (!referenced) {
-            const workflowId = asId(target.id);
-            await connection.query
-              .updateTable(WORKFLOW_COLLECTIONS.workflows)
-              .set({
-                hash: artifact.digest,
-                title: built.title,
-                description: built.description ?? null,
-                contextSchema: serializeJson(built.contextSchema),
-                options: serializeJson(built.options ?? {}),
-                inputSchema: serializeJson(built.inputs ?? {}),
-              })
-              .where('id', '=', workflowId)
-              .execute();
-            await connection.query
-              .deleteFrom(WORKFLOW_COLLECTIONS.nodes)
-              .where('workflowId', '=', workflowId)
-              .execute();
-            await this.insertNodes(connection.query, workflowId, built);
-            await this.options.afterMaterialize?.(workflowId, connection.query);
-            await this.validateMaterialization(
-              connection.query,
-              workflowId,
-              built,
-            );
-            return { action: 'replaced', workflowId, digest: artifact.digest };
-          }
-        }
         const materialized = await materializeWorkflowSource(
           {
             key: artifact.key,
@@ -155,30 +124,6 @@ export class WorkflowPublisher {
       },
       this.options.connectionName,
     );
-  }
-
-  private async insertNodes(
-    query: QueryAdapter,
-    workflowId: WorkflowId,
-    built: WorkflowFlatIr,
-  ): Promise<void> {
-    if (built.nodes.length === 0) return;
-    await query
-      .insertInto(WORKFLOW_COLLECTIONS.nodes)
-      .values(
-        built.nodes.map((node) => ({
-          workflowId,
-          key: node.key,
-          title: node.title ?? null,
-          description: node.description ?? null,
-          type: node.type,
-          config: serializeJson(node.config),
-          upstreamKey: node.upstreamKey,
-          downstreamKey: node.downstreamKey,
-          branchKey: node.branchKey,
-        })),
-      )
-      .execute();
   }
 
   private async validateMaterialization(
@@ -232,6 +177,7 @@ export async function discoverWorkflowDistArtifacts(
   try {
     keyEntries = await fs.readdir(distRoot, { withFileTypes: true });
   } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(
       `Workflow dist Artifact root "${distRoot}" cannot be read: ${error instanceof Error ? error.message : String(error)}`,
     );
@@ -249,6 +195,10 @@ export async function discoverWorkflowDistArtifacts(
         `Workflow "${keyEntry.name}" at "${keyRoot}" must contain exactly one digest directory; found ${digestEntries.length}`,
       );
     const digest = digestEntries[0].name;
+    if (!/^[a-f0-9]{64}$/.test(digest))
+      throw new Error(
+        `Workflow "${keyEntry.name}" at "${keyRoot}" has invalid digest directory "${digest}"`,
+      );
     const directory = path.join(keyRoot, digest);
     let workflow: WorkflowArtifactDefinition;
     try {
@@ -260,6 +210,25 @@ export async function discoverWorkflowDistArtifacts(
         `Workflow "${keyEntry.name}" Artifact at "${directory}" has no readable workflow.json: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+    if (workflow.formatVersion !== 1 || workflow.key !== keyEntry.name)
+      throw new Error(
+        `Workflow "${keyEntry.name}" Artifact at "${directory}" has an invalid workflow.json`,
+      );
+    const files: WorkflowArtifactDigestFile[] = [];
+    const visit = async (current: string, relative: string): Promise<void> => {
+      for (const entry of await fs.readdir(current, { withFileTypes: true })) {
+        const next = relative ? `${relative}/${entry.name}` : entry.name;
+        const target = path.join(current, entry.name);
+        if (entry.isDirectory()) await visit(target, next);
+        else if (entry.isFile())
+          files.push({ path: next, content: await fs.readFile(target) });
+      }
+    };
+    await visit(directory, '');
+    if (computeWorkflowArtifactDigest(files) !== digest)
+      throw new Error(
+        `Workflow "${keyEntry.name}" Artifact at "${directory}" bytes do not match its digest`,
+      );
     artifacts.push({ key: keyEntry.name, digest, directory, workflow });
   }
   return artifacts;

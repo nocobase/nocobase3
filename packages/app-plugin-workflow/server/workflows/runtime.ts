@@ -4,11 +4,12 @@ import {
   LocalWorkflowArtifactStore,
   WorkflowPublisher,
   WorkflowRuntime,
-  syncWorkflowDeployment,
+  discoverWorkflowDistArtifacts,
   type JsonObject,
   type WorkflowArtifactStore,
   type WorkflowDefinition,
   type WorkflowEventOptions,
+  type WorkflowDistArtifact,
 } from '../../engine/index.js';
 import type { FsDriveDiskConfig } from '@nocobase/drive';
 import { appWorkflowInstructions } from './instructions.js';
@@ -17,6 +18,8 @@ export interface AppWorkflowRuntime {
   start(): Promise<void>;
   stop(): Promise<void>;
   refreshSourceResolvers(): Promise<void>;
+  discoverArtifacts(): Promise<readonly WorkflowDistArtifact[]>;
+  publishArtifact(key: string, reason: 'enable' | 'trigger'): Promise<void>;
 }
 export interface CreateAppWorkflowRuntimeOptions {
   database: DatabaseManager;
@@ -107,18 +110,86 @@ export function createAppWorkflowRuntime(
         }
       : {}),
   });
-  let synchronized = false;
+  let discovered: Promise<readonly WorkflowDistArtifact[]> | undefined;
+  let startPromise: Promise<void> | undefined;
+  const locks = new Map<string, Promise<void>>();
+  const withKeyLock = async (
+    key: string,
+    task: () => Promise<void>,
+  ): Promise<void> => {
+    const previous = locks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    locks.set(key, current);
+    await previous;
+    try {
+      await task();
+    } finally {
+      release();
+      if (locks.get(key) === current) locks.delete(key);
+    }
+  };
   const runtime: AppWorkflowRuntime = {
-    start: async (): Promise<void> => {
-      if (!synchronized) {
-        await syncWorkflowDeployment(options.distRoot, publisher, store);
-        synchronized = true;
-      }
-      await engine.start();
+    start: (): Promise<void> => {
+      startPromise ??= engine.start().catch((error: unknown) => {
+        startPromise = undefined;
+        throw error;
+      });
+      return startPromise;
     },
-    stop: (): Promise<void> => engine.stop(),
+    stop: async (): Promise<void> => {
+      try {
+        await startPromise;
+      } catch {
+        // A failed start resets startPromise and leaves stop() safe to call.
+      }
+      await engine.stop();
+    },
     refreshSourceResolvers: (): Promise<void> =>
       engine.refreshSourceResolvers(),
+    discoverArtifacts: async (): Promise<readonly WorkflowDistArtifact[]> => {
+      discovered ??= discoverWorkflowDistArtifacts(options.distRoot);
+      return discovered;
+    },
+    publishArtifact: async (
+      key: string,
+      reason: 'enable' | 'trigger',
+    ): Promise<void> => {
+      await withKeyLock(key, async () => {
+        const current = await options.database
+          .query()
+          .selectFrom('workflows')
+          .select(['id', 'enabled', 'current'])
+          .where('key', '=', key)
+          .where('current', '=', true)
+          .executeTakeFirst<Record<string, unknown>>();
+        if (reason === 'trigger' && !current?.enabled) return;
+        const artifacts = await runtime.discoverArtifacts();
+        const artifact = artifacts.find((item) => item.key === key);
+        if (!artifact) return;
+        const registered = await options.database
+          .query()
+          .selectFrom('workflows')
+          .select('id')
+          .where('key', '=', key)
+          .where('hash', '=', artifact.digest)
+          .executeTakeFirst();
+        if (registered) return;
+        await store.commit(key, artifact.digest, artifact.directory);
+        const result = await publisher.registerArtifact(artifact);
+        await publisher.activate(result.workflowId);
+        if (reason === 'enable')
+          await options.database
+            .query()
+            .updateTable('workflows')
+            .set({ enabled: true })
+            .where('id', '=', result.workflowId)
+            .execute();
+        await engine.refreshSourceResolvers();
+      });
+    },
   };
   workflowEngines.set(runtime, engine);
   workflowStores.set(runtime, store);

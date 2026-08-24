@@ -38,9 +38,11 @@ export interface WorkflowTriggerOptions {
   parentRunId?: WorkflowId;
 }
 
-export interface WorkflowTriggerReceipt {
-  eventKey: string;
-}
+export type WorkflowTriggerSkipReason = 'not-found' | 'disabled';
+
+export type WorkflowTriggerReceipt =
+  | { status: 'accepted'; eventKey: string }
+  | { status: 'skipped'; reason: WorkflowTriggerSkipReason; eventKey?: never };
 
 export const WORKFLOW_CONTEXT_SCHEMA_DIALECT: 'https://json-schema.org/draft/2020-12/schema' =
   'https://json-schema.org/draft/2020-12/schema';

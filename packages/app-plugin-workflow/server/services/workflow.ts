@@ -1,4 +1,4 @@
-import type { DatabaseManager, Row } from '@nocobase/database';
+import type { DatabaseManager, Row, SelectQuery } from '@nocobase/database';
 import {
   WORKFLOW_COLLECTIONS,
   activateWorkflowSource,
@@ -12,9 +12,17 @@ import {
   type WorkflowTriggerReceipt,
 } from '../../engine/index.js';
 
-import { BadRequestError, ServiceUnavailableError } from './errors.js';
+import {
+  BadRequestError,
+  ConflictError,
+  ServiceUnavailableError,
+} from './errors.js';
 import type { AppWorkflowRuntime } from '../workflows/runtime.js';
-import { triggerAppWorkflow } from '../workflows/runtime.js';
+import {
+  getWorkflowArtifactStore,
+  getWorkflowEngine,
+  triggerAppWorkflow,
+} from '../workflows/runtime.js';
 
 export interface WorkflowListItem {
   id: WorkflowId;
@@ -28,6 +36,10 @@ export interface WorkflowListItem {
   hash: string | null;
   activeRunCount: number;
   latestRun: { id: string; status: number | null; createdAt: string } | null;
+  registered: boolean;
+  canEnable: boolean;
+  deployedHash: string | null;
+  currentHash: string | null;
 }
 
 export interface WorkflowRunListItem extends Pick<
@@ -45,6 +57,20 @@ export interface WorkflowPage<T> {
   page: number;
   pageSize: number;
   total: number;
+}
+export interface WorkflowListOptions {
+  key?: string;
+  query?: string;
+  enabled?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+export interface WorkflowRunListOptions {
+  workflowKey?: string;
+  workflowTitle?: string;
+  status?: number | null;
+  page?: number;
+  pageSize?: number;
 }
 export interface WorkflowRunDetail extends WorkflowRunListItem {
   hash: string | null;
@@ -80,13 +106,18 @@ export interface WorkflowInputSettings {
 }
 
 export interface WorkflowService {
-  list(): Promise<WorkflowListItem[]>;
-  enable(id: WorkflowId): Promise<WorkflowListItem>;
+  list(options?: WorkflowListOptions): Promise<WorkflowPage<WorkflowListItem>>;
+  enable(
+    id: WorkflowId,
+    expectedDeployedHash?: string,
+  ): Promise<WorkflowListItem>;
   disable(id: WorkflowId): Promise<WorkflowListItem>;
   setStatus(id: WorkflowId, enabled: boolean): Promise<WorkflowListItem>;
   getInputs(id: WorkflowId): Promise<WorkflowInputSettings>;
   updateInputs(id: WorkflowId, values: unknown): Promise<WorkflowInputSettings>;
-  runs(): Promise<WorkflowRunListItem[]>;
+  runs(
+    options?: WorkflowRunListOptions,
+  ): Promise<WorkflowPage<WorkflowRunListItem>>;
   runsForWorkflow(id: WorkflowId): Promise<WorkflowRunListItem[]>;
   getWorkflow(id: WorkflowId): Promise<WorkflowDefinitionView>;
   revisions(id: WorkflowId): Promise<WorkflowDefinitionView[]>;
@@ -143,8 +174,11 @@ export class DatabaseWorkflowService implements WorkflowService {
     private readonly runtime: AppWorkflowRuntime,
   ) {}
 
-  async list(): Promise<WorkflowListItem[]> {
-    const [rows, statRows, runRows] = await Promise.all([
+  async list(
+    options: WorkflowListOptions = {},
+  ): Promise<WorkflowPage<WorkflowListItem>> {
+    const { page, pageSize, offset } = normalizePage(options);
+    const [rows, statRows, runRows, deployed] = await Promise.all([
       this.database
         .query()
         .selectFrom(WORKFLOW_COLLECTIONS.workflows)
@@ -172,6 +206,7 @@ export class DatabaseWorkflowService implements WorkflowService {
         .select(['id', 'workflowKey', 'status', 'createdAt'])
         .orderBy('id', 'desc')
         .execute<Row>(),
+      this.runtime.discoverArtifacts(),
     ]);
     const executedByKey = new Map(
       statRows.map((row) => [String(row.key), Number(row.executed ?? 0)]),
@@ -184,17 +219,89 @@ export class DatabaseWorkflowService implements WorkflowService {
       if (run.status == null || Number(run.status) === 0)
         activeByKey.set(key, (activeByKey.get(key) ?? 0) + 1);
     }
-    return rows.map((row) =>
-      toWorkflowListItem(
-        row,
-        executedByKey.get(String(row.key)) ?? 0,
-        activeByKey.get(String(row.key)) ?? 0,
-        latestByKey.get(String(row.key)),
-      ),
+    const deployedByKey = new Map(
+      deployed.map((artifact) => [artifact.key, artifact]),
     );
+    const items = rows.map((row) => {
+      const key = String(row.key);
+      const item = toWorkflowListItem(
+        row,
+        executedByKey.get(key) ?? 0,
+        activeByKey.get(key) ?? 0,
+        latestByKey.get(key),
+      );
+      const artifact = deployedByKey.get(key);
+      deployedByKey.delete(key);
+      return {
+        ...item,
+        deployedHash: artifact?.digest ?? null,
+        currentHash: item.hash,
+      };
+    });
+    for (const artifact of deployedByKey.values()) {
+      items.push({
+        id: artifact.key,
+        key: artifact.key,
+        title: artifact.workflow.title ?? null,
+        enabled: false,
+        current: null,
+        hasInputs: Object.keys(artifact.workflow.inputs ?? {}).length > 0,
+        executed: 0,
+        version: null,
+        hash: null,
+        activeRunCount: 0,
+        latestRun: null,
+        registered: false,
+        canEnable: true,
+        deployedHash: artifact.digest,
+        currentHash: null,
+      });
+    }
+    const query = options.query?.toLowerCase();
+    const filtered = items.filter(
+      (item) =>
+        (!options.key || item.key === options.key) &&
+        (!query ||
+          item.key.toLowerCase().includes(query) ||
+          item.title?.toLowerCase().includes(query)) &&
+        (options.enabled === undefined || item.enabled === options.enabled),
+    );
+    return {
+      data: filtered.slice(offset, offset + pageSize),
+      page,
+      pageSize,
+      total: filtered.length,
+    };
   }
 
-  async enable(id: WorkflowId): Promise<WorkflowListItem> {
+  async enable(
+    id: WorkflowId,
+    expectedDeployedHash?: string,
+  ): Promise<WorkflowListItem> {
+    const existing = await this.findCurrentRow(id);
+    const key = existing ? String(existing.key) : String(id);
+    const deployed = (await this.runtime.discoverArtifacts()).find(
+      (artifact) => artifact.key === key,
+    );
+    if (
+      expectedDeployedHash !== undefined &&
+      deployed?.digest !== expectedDeployedHash
+    )
+      throw new ConflictError('deployment-changed');
+    if (!existing) {
+      if (!deployed)
+        throw new BadRequestError(`Workflow ${String(id)} was not found.`);
+      if (expectedDeployedHash === undefined)
+        throw new BadRequestError('deployedHash is required.');
+      await this.runtime.publishArtifact(key, 'enable');
+      const created = await this.findCurrentRow(key);
+      if (!created) throw new BadRequestError(`Workflow ${key} was not found.`);
+      return this.listItemFromRow(created);
+    }
+    if (deployed) await this.runtime.publishArtifact(key, 'enable');
+    const current = await this.findCurrentRow(key);
+    if (!current) throw new BadRequestError(`Workflow ${key} was not found.`);
+    id = current.id as WorkflowId;
     const workflow = await this.database.transaction(
       async (connection): Promise<WorkflowListItem> => {
         const selected = await connection.query
@@ -267,22 +374,30 @@ export class DatabaseWorkflowService implements WorkflowService {
     };
   }
 
-  async runs(): Promise<WorkflowRunListItem[]> {
-    return this.listRuns();
+  async runs(
+    options: WorkflowRunListOptions = {},
+  ): Promise<WorkflowPage<WorkflowRunListItem>> {
+    return this.listRuns(options);
   }
 
   async runsForWorkflow(id: WorkflowId): Promise<WorkflowRunListItem[]> {
     const workflow = await this.loadCurrentWorkflow(id);
-    return this.listRuns(workflow.key);
+    return (await this.listRuns({ workflowKey: workflow.key, pageSize: 50 }))
+      .data;
   }
 
   async getWorkflow(id: WorkflowId): Promise<WorkflowDefinitionView> {
     const workflow = await loadWorkflow(this.database.query(), id);
-    if (!workflow)
-      throw new BadRequestError(`Workflow ${String(id)} was not found.`);
-    const summary = (await this.list()).find(
-      (item) => item.key === workflow.key,
-    );
+    if (!workflow) {
+      const artifact = (await this.runtime.discoverArtifacts()).find(
+        (candidate) => candidate.key === String(id),
+      );
+      if (!artifact)
+        throw new BadRequestError(`Workflow ${String(id)} was not found.`);
+      return toDiscoveredWorkflowDefinition(artifact);
+    }
+    const summary = (await this.list({ key: workflow.key, pageSize: 1 }))
+      .data[0];
     return {
       ...toWorkflowDefinitionView(workflow),
       executed: summary?.executed ?? 0,
@@ -430,16 +545,45 @@ export class DatabaseWorkflowService implements WorkflowService {
     };
   }
 
-  private async listRuns(workflowKey?: string): Promise<WorkflowRunListItem[]> {
-    let query = this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .selectAll()
-      .orderBy('id', 'desc');
-    if (workflowKey !== undefined)
-      query = query.where('workflowKey', '=', workflowKey);
-    const [rows, workflows] = await Promise.all([
-      query.limit(50).execute<Row>(),
+  private async listRuns(
+    options: WorkflowRunListOptions,
+  ): Promise<WorkflowPage<WorkflowRunListItem>> {
+    const { page, pageSize, offset } = normalizePage(options);
+    let titleKeys: string[] | undefined;
+    if (options.workflowTitle) {
+      titleKeys = await this.database
+        .query()
+        .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+        .where('current', '=', true)
+        .where('title', 'like', `%${options.workflowTitle}%`)
+        .distinct()
+        .pluck<string>('key');
+      if (titleKeys.length === 0) return { data: [], page, pageSize, total: 0 };
+    }
+    const applyFilters = (
+      query: SelectQuery<Row, Row>,
+    ): SelectQuery<Row, Row> => {
+      let filtered = query;
+      if (options.workflowKey)
+        filtered = filtered.where('workflowKey', '=', options.workflowKey);
+      if (titleKeys) filtered = filtered.where('workflowKey', 'in', titleKeys);
+      if (options.status !== undefined)
+        filtered =
+          options.status === null
+            ? filtered.where('status', 'is', null)
+            : filtered.where('status', '=', options.status);
+      return filtered;
+    };
+    const [rows, countRow, workflows] = await Promise.all([
+      applyFilters(this.database.query().selectFrom(WORKFLOW_COLLECTIONS.runs))
+        .selectAll()
+        .orderBy('id', 'desc')
+        .limit(pageSize)
+        .offset(offset)
+        .execute<Row>(),
+      applyFilters(this.database.query().selectFrom(WORKFLOW_COLLECTIONS.runs))
+        .select(({ fn }) => [fn.countAll().as('total')])
+        .executeTakeFirst<{ total: number | string }>(),
       this.database
         .query()
         .selectFrom(WORKFLOW_COLLECTIONS.workflows)
@@ -458,13 +602,18 @@ export class DatabaseWorkflowService implements WorkflowService {
         row.version == null ? null : String(row.version),
       ]),
     );
-    return rows.map((row) =>
-      toRunItem(
-        row,
-        currentTitles.get(String(row.workflowKey)) ?? null,
-        versions.get(String(row.workflowId)) ?? null,
+    return {
+      data: rows.map((row) =>
+        toRunItem(
+          row,
+          currentTitles.get(String(row.workflowKey)) ?? null,
+          versions.get(String(row.workflowId)) ?? null,
+        ),
       ),
-    );
+      page,
+      pageSize,
+      total: Number(countRow?.total ?? 0),
+    };
   }
 
   async trigger(
@@ -472,10 +621,25 @@ export class DatabaseWorkflowService implements WorkflowService {
     context: JsonObject,
     options: import('../../engine/index.js').WorkflowTriggerOptions = {},
   ): Promise<WorkflowTriggerReceipt> {
-    const runtime = (await import('../workflows/runtime.js')).getWorkflowEngine(
-      this.runtime,
+    let current = await this.findCurrentRow(workflowKey);
+    if (!current) return { status: 'skipped', reason: 'not-found' };
+    if (!current.enabled) return { status: 'skipped', reason: 'disabled' };
+    await this.runtime.publishArtifact(workflowKey, 'trigger');
+    current = await this.findCurrentRow(workflowKey);
+    if (!current) return { status: 'skipped', reason: 'not-found' };
+    if (!current.enabled) return { status: 'skipped', reason: 'disabled' };
+    const hash = typeof current.hash === 'string' ? current.hash : null;
+    const store = getWorkflowArtifactStore(this.runtime);
+    if (!hash || !store || !(await store.has(workflowKey, hash)))
+      throw new Error(
+        `Workflow Artifact ${workflowKey}/${String(hash)} is missing`,
+      );
+    await this.runtime.start();
+    return getWorkflowEngine(this.runtime).trigger(
+      workflowKey,
+      context,
+      options,
     );
-    return runtime.trigger(workflowKey, context, options);
   }
 
   async run(
@@ -497,6 +661,9 @@ export class DatabaseWorkflowService implements WorkflowService {
       .where('eventKey', '=', eventKey)
       .executeTakeFirst<Row>();
     if (existing) return toRunItem(existing);
+    if (!workflow.enabled)
+      throw new BadRequestError(`Workflow ${workflow.key} is disabled.`);
+    await this.runtime.start();
     await triggerAppWorkflow(
       this.runtime,
       workflow,
@@ -549,6 +716,36 @@ export class DatabaseWorkflowService implements WorkflowService {
       .where('key', '=', key)
       .value('executed');
     return Number(executed ?? 0);
+  }
+
+  private async findCurrentRow(idOrKey: WorkflowId): Promise<Row | undefined> {
+    const byId = await this.database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .selectAll()
+      .where('current', '=', true)
+      .where('id', '=', idOrKey)
+      .executeTakeFirst<Row>();
+    if (byId) return byId;
+    return this.database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .selectAll()
+      .where('current', '=', true)
+      .where('key', '=', String(idOrKey))
+      .executeTakeFirst<Row>();
+  }
+
+  private async listItemFromRow(row: Row): Promise<WorkflowListItem> {
+    const key = String(row.key);
+    const deployed = (await this.runtime.discoverArtifacts()).find(
+      (artifact) => artifact.key === key,
+    );
+    return {
+      ...toWorkflowListItem(row, await this.getExecutedCount(key)),
+      deployedHash: deployed?.digest ?? null,
+      currentHash: row.hash == null ? null : String(row.hash),
+    };
   }
 
   private async loadCurrentWorkflow(
@@ -619,7 +816,56 @@ function toWorkflowListItem(
               : String(latestRun.createdAt ?? ''),
         }
       : null,
+    registered: true,
+    canEnable: !(
+      row.enabled === true ||
+      row.enabled === 1 ||
+      row.enabled === '1'
+    ),
+    deployedHash: null,
+    currentHash: row.hash == null ? null : String(row.hash),
   };
+}
+
+function toDiscoveredWorkflowDefinition(
+  artifact: import('../../engine/index.js').WorkflowDistArtifact,
+): WorkflowDefinitionView {
+  return {
+    id: artifact.key,
+    key: artifact.key,
+    title: artifact.workflow.title ?? null,
+    description: artifact.workflow.description ?? null,
+    hash: artifact.digest,
+    version: null,
+    enabled: false,
+    current: null,
+    executed: 0,
+    latestRun: null,
+    contextSchema: artifact.workflow.contextSchema,
+    inputSchema: artifact.workflow.inputs ?? {},
+    inputValues: {},
+    nodes: artifact.workflow.nodes.map((node, index) => ({
+      id: `${artifact.key}:${index}`,
+      key: node.key,
+      title: node.title ?? null,
+      description: node.description ?? null,
+      type: node.type,
+      config: node.config,
+      upstreamKey: node.upstreamKey,
+      downstreamKey: node.downstreamKey,
+      branchKey: node.branchKey,
+    })),
+  };
+}
+
+function normalizePage(options: { page?: number; pageSize?: number }): {
+  page: number;
+  pageSize: number;
+  offset: number;
+} {
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 20));
+  return { page, pageSize, offset: (page - 1) * pageSize };
 }
 
 function hasObjectKeys(value: unknown): boolean {
@@ -670,7 +916,9 @@ function isJsonValue(
 }
 
 export class UnavailableWorkflowService implements WorkflowService {
-  async list(): Promise<WorkflowListItem[]> {
+  async list(
+    _options?: WorkflowListOptions,
+  ): Promise<WorkflowPage<WorkflowListItem>> {
     throw new ServiceUnavailableError('Workflow runtime is not configured.');
   }
 
@@ -699,7 +947,9 @@ export class UnavailableWorkflowService implements WorkflowService {
     throw new ServiceUnavailableError('Workflow runtime is not configured.');
   }
 
-  async runs(): Promise<WorkflowRunListItem[]> {
+  async runs(
+    _options?: WorkflowRunListOptions,
+  ): Promise<WorkflowPage<WorkflowRunListItem>> {
     throw new ServiceUnavailableError('Workflow runtime is not configured.');
   }
 

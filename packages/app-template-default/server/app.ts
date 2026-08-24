@@ -34,7 +34,6 @@ export { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
 
 export type AppServer = Hono & {
   websocket?: AppWebSocketHandler;
-  startPlugins(): Promise<void>;
 };
 
 export function createApp(
@@ -62,8 +61,6 @@ export function createApp(
   );
   const services = createAppServices(runtime, deps, { realtime });
   const app = new Hono();
-  const pluginStarters: Array<() => void | Promise<void>> = [];
-
   for (const plugin of options.pluginBootstraps ?? []) {
     plugin.bootstrap({
       deps,
@@ -74,9 +71,6 @@ export function createApp(
             `plugin:${plugin.packageName}:${name}`,
             onceAsync(dispose),
           );
-        },
-        registerStarter(_name, start): void {
-          pluginStarters.push(start);
         },
       },
     });
@@ -115,8 +109,5 @@ export function createApp(
 
   return Object.assign(app, {
     websocket: createWebSocketHandler({ realtime }),
-    async startPlugins(): Promise<void> {
-      for (const start of pluginStarters) await start();
-    },
   });
 }

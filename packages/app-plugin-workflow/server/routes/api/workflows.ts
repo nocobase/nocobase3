@@ -55,22 +55,13 @@ export function createWorkflowRoutes(options: WorkflowRouteOptions): Hono {
   routes.get('/workflows', async (c) => {
     const denied = await allowed(c.req.raw, 'workflow:list');
     if (denied) return denied;
-    const items = await options.workflow.list();
-    const q = c.req.query('q')?.toLowerCase();
-    const enabled = c.req.query('enabled');
-    const filtered = items.filter(
-      (item) =>
-        (!q ||
-          item.key.toLowerCase().includes(q) ||
-          item.title?.toLowerCase().includes(q)) &&
-        (enabled === undefined || item.enabled === (enabled === 'true')),
-    );
-    const page = pageItems(
-      filtered,
-      c.req.query('page'),
-      c.req.query('pageSize'),
-    );
-    return c.json(page);
+    const enabled = parseBoolean(c.req.query('enabled'));
+    const page = await options.workflow.list({
+      query: c.req.query('q'),
+      ...(enabled === undefined ? {} : { enabled }),
+      ...readPage(c.req.query('page'), c.req.query('pageSize')),
+    });
+    return c.json(toPageResponse(page));
   });
   routes.get(
     '/workflows/:id',
@@ -87,20 +78,14 @@ export function createWorkflowRoutes(options: WorkflowRouteOptions): Hono {
   routes.get('/workflow-runs', async (c) => {
     const denied = await allowed(c.req.raw, 'workflowRun:list');
     if (denied) return denied;
-    const items = await options.workflow.runs();
-    const workflowKey = c.req.query('workflowKey');
-    const workflowTitle = c.req.query('workflowTitle')?.toLowerCase();
-    const status = c.req.query('status');
-    const filtered = items.filter(
-      (item) =>
-        (!workflowKey || item.workflowKey === workflowKey) &&
-        (!workflowTitle ||
-          item.workflowTitle?.toLowerCase().includes(workflowTitle)) &&
-        (status === undefined || String(item.status) === status),
-    );
-    return c.json(
-      pageItems(filtered, c.req.query('page'), c.req.query('pageSize')),
-    );
+    const status = parseStatus(c.req.query('status'));
+    const page = await options.workflow.runs({
+      workflowKey: c.req.query('workflowKey'),
+      workflowTitle: c.req.query('workflowTitle'),
+      ...(status === undefined ? {} : { status }),
+      ...readPage(c.req.query('page'), c.req.query('pageSize')),
+    });
+    return c.json(toPageResponse(page));
   });
   routes.get(
     '/workflow-runs/:id',
@@ -187,12 +172,21 @@ export function createWorkflowRoutes(options: WorkflowRouteOptions): Hono {
     );
     return c.json({ data });
   });
-  routes.post(
-    '/workflows/:id/enable',
-    async (c) =>
-      (await allowed(c.req.raw, 'workflow:updateStatus')) ??
-      c.json({ data: await options.workflow.enable(c.req.param('id')) }),
-  );
+  routes.post('/workflows/:id/enable', async (c) => {
+    const denied = await allowed(c.req.raw, 'workflow:updateStatus');
+    if (denied) return denied;
+    const body = await readBody(c.req.raw);
+    const deployedHash =
+      body !== null &&
+      typeof body === 'object' &&
+      'deployedHash' in body &&
+      typeof Reflect.get(body, 'deployedHash') === 'string'
+        ? String(Reflect.get(body, 'deployedHash'))
+        : undefined;
+    return c.json({
+      data: await options.workflow.enable(c.req.param('id'), deployedHash),
+    });
+  });
   routes.post(
     '/workflows/:id/disable',
     async (c) =>
@@ -277,20 +271,36 @@ async function readContext(request: Request): Promise<unknown> {
     ? Reflect.get(body, 'context')
     : body;
 }
-function pageItems<T>(
-  items: T[],
+function readPage(
   pageValue?: string,
   pageSizeValue?: string,
-): { data: T[]; meta: { page: number; pageSize: number; total: number } } {
+): { page: number; pageSize: number } {
   const page = Math.max(1, Number(pageValue ?? 1) || 1);
   const pageSize = Math.min(
     100,
     Math.max(1, Number(pageSizeValue ?? 20) || 20),
   );
+  return { page, pageSize };
+}
+function toPageResponse<T>(page: {
+  data: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+}): { data: T[]; meta: { page: number; pageSize: number; total: number } } {
   return {
-    data: items.slice((page - 1) * pageSize, page * pageSize),
-    meta: { page, pageSize, total: items.length },
+    data: page.data,
+    meta: { page: page.page, pageSize: page.pageSize, total: page.total },
   };
+}
+function parseBoolean(value?: string): boolean | undefined {
+  return value === 'true' ? true : value === 'false' ? false : undefined;
+}
+function parseStatus(value?: string): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === 'null') return null;
+  const status = Number(value);
+  return Number.isFinite(status) ? status : undefined;
 }
 function auditEvent(
   action: WorkflowAuditEvent['action'],
