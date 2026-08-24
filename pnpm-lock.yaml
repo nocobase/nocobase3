@@ -308,6 +308,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.577.0
         version: 3.1111.0
+      '@nocobase/database':
+        specifier: workspace:^
+        version: link:../database
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -318,9 +321,15 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 12.11.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
+      knex:
+        specifier: 'catalog:'
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6

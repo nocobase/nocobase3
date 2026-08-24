@@ -1,5 +1,7 @@
 export { resolveFilesConfig } from './config.js';
 export type { FilesConfig, ResolveFilesConfigOptions } from './config.js';
+export { createFilesRuntime } from './runtime.js';
+export type { CreateFilesRuntimeOptions, FilesRuntime } from './runtime.js';
 export type {
   CreateFileRouteOptions,
   FileConstraints,

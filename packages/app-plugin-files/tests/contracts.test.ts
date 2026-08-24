@@ -1,6 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type { FileUploadPlan } from '@nocobase/app-plugin-files/client';
+import type {
+  FileService,
+  FilesRuntime,
+} from '@nocobase/app-plugin-files/server';
 
 describe('@nocobase/app-plugin-files contracts', () => {
   it('exposes importable package entry points', async () => {
@@ -13,6 +17,19 @@ describe('@nocobase/app-plugin-files contracts', () => {
     expect(rootEntry).toBeDefined();
     expect(serverEntry).toBeDefined();
     expect(clientEntry).toBeDefined();
+    expect(Object.keys(serverEntry)).toContain('createFilesRuntime');
+    expect(Object.keys(serverEntry)).not.toEqual(
+      expect.arrayContaining([
+        'createFileService',
+        'createFileKernel',
+        'createFilesRepository',
+        'createInternalFilesStorage',
+        'FileKernel',
+        'FilesRepository',
+        'NodeLocalFilesStorage',
+        'ProviderS3FilesStorage',
+      ]),
+    );
   });
 
   it('restricts upload plans to PUT byte transfers', () => {
@@ -28,5 +45,10 @@ describe('@nocobase/app-plugin-files contracts', () => {
     };
 
     expect(plan.upload.method).toBe('PUT');
+  });
+
+  it('keeps FileService and FilesRuntime public contracts narrow', () => {
+    expectTypeOf<keyof FileService>().toEqualTypeOf<'createFileRoute'>();
+    expectTypeOf<keyof FilesRuntime>().toEqualTypeOf<'dispose'>();
   });
 });
