@@ -903,18 +903,36 @@ describe('app server', () => {
 
   it('proxies standalone SPA routes to Vite dev server with the public base path restored', async () => {
     const viteDevUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'text/plain; charset=utf-8');
-      response.end(`vite:${_request.method}:${_request.url}`);
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({
+          method: _request.method,
+          url: _request.url,
+          origin: _request.headers.origin,
+          referer: _request.headers.referer,
+        }),
+      );
     });
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
     const publicBasePath = runtime.config.app.publicBasePath;
     const requestPath = `${publicBasePath}/settings?tab=apps`;
 
-    const response = await app.request(`http://localhost${requestPath}`);
+    const response = await app.request(`http://localhost${requestPath}`, {
+      headers: {
+        origin: 'http://localhost',
+        referer: `http://localhost${publicBasePath}/`,
+      },
+    });
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe(`vite:GET:${requestPath}`);
+    const viteOrigin = new URL(viteDevUrl).origin;
+    await expect(response.json()).resolves.toEqual({
+      method: 'GET',
+      url: requestPath,
+      origin: viteOrigin,
+      referer: `${viteOrigin}${publicBasePath}/`,
+    });
     await app.close();
   });
 
