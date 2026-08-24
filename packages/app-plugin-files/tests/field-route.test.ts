@@ -12,10 +12,10 @@ import {
   type DatabaseManager,
 } from '@nocobase/database';
 import type {
-  CreateFileUploadResponse,
+  CreateBusinessFileResponse,
   FileAccessResponse,
   FileErrorResponse,
-  FileReferenceResponse,
+  FileReference,
   ListFileReferencesResponse,
   PublicFileAccessResponse,
 } from '@nocobase/app-plugin-files/protocol';
@@ -85,21 +85,52 @@ describe('field binding file routes', () => {
     });
     const commit = await commitUpload(fixture, EMPLOYEE_ONE, upload);
     expect(commit.status).toBe(200);
-    const committed = await json<FileReferenceResponse>(commit);
-    expect(committed.reference).toMatchObject({
-      referenceId: upload.upload.plan.fileId,
-      file: { status: 'ready', name: 'avatar.png', size: 6 },
+    const committed = await json<FileReference>(commit);
+    expect(committed).toMatchObject({
+      file: {
+        id: upload.uploadPlan.fileId,
+        status: 'ready',
+        name: 'avatar.png',
+        size: 6,
+      },
     });
     const repeated = await commitUpload(fixture, EMPLOYEE_ONE, upload);
     expect(repeated.status).toBe(200);
-    expect(await json<FileReferenceResponse>(repeated)).toEqual(committed);
+    expect(await json<FileReference>(repeated)).toEqual(committed);
 
     const listed = await fixture.app.request(
       `/employees/${EMPLOYEE_ONE}/avatar`,
     );
     expect(await json<ListFileReferencesResponse>(listed)).toEqual({
-      references: [committed.reference],
+      references: [committed],
     });
+  });
+
+  it('registers only the resource-oriented standard route table', async () => {
+    const fixture = await createFixture({ publicAccess: true });
+    const child = fixture.service.createFileRoute({
+      binding: {
+        type: 'field',
+        collection: 'employees',
+        recordParam: 'employeeId',
+        fileField: 'avatarId',
+      },
+      publicAccess: true,
+      authorize() {},
+    });
+
+    expect(
+      child.routes.map(({ method, path: routePath }) => [method, routePath]),
+    ).toEqual([
+      ['GET', '/'],
+      ['POST', '/'],
+      ['POST', '/:fileId/commit'],
+      ['DELETE', '/:fileId'],
+      ['POST', '/:fileId/access'],
+      ['POST', '/:fileId/public-access'],
+      ['POST', '/:fileId/public-access/reset'],
+      ['DELETE', '/:fileId/public-access'],
+    ]);
   });
 
   it('keeps the old ready avatar readable until replacement commit', async () => {
@@ -115,24 +146,24 @@ describe('field binding file routes', () => {
       name: 'new.png',
       size: 4,
       contentType: 'image/png',
-      replaceReferenceId: first.upload.plan.fileId,
+      replaceFileId: first.uploadPlan.fileId,
     });
     const oldAccess = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${first.upload.plan.fileId}/access`,
+      `/employees/${EMPLOYEE_ONE}/avatar/${first.uploadPlan.fileId}/access`,
       { method: 'POST' },
     );
     expect(oldAccess.status).toBe(200);
     expect((await json<FileAccessResponse>(oldAccess)).access.url).toContain(
-      `/api/files/${first.upload.plan.fileId}/content`,
+      `/api/files/${first.uploadPlan.fileId}/content`,
     );
 
     const beforeCommit = await fixture.app.request(
       `/employees/${EMPLOYEE_ONE}/avatar`,
     );
     expect(
-      (await json<ListFileReferencesResponse>(beforeCommit)).references[0]
-        ?.referenceId,
-    ).toBe(first.upload.plan.fileId);
+      (await json<ListFileReferencesResponse>(beforeCommit)).references[0]?.file
+        .id,
+    ).toBe(first.uploadPlan.fileId);
 
     await uploadBytes(fixture, replacement, 'next');
     expect(
@@ -154,13 +185,13 @@ describe('field binding file routes', () => {
         name: 'left.txt',
         size: 4,
         contentType: 'text/plain',
-        replaceReferenceId: first.upload.plan.fileId,
+        replaceFileId: first.uploadPlan.fileId,
       }),
       createReadyUpload(fixture, EMPLOYEE_ONE, {
         name: 'right.txt',
         size: 5,
         contentType: 'text/plain',
-        replaceReferenceId: first.upload.plan.fileId,
+        replaceFileId: first.uploadPlan.fileId,
       }),
     ]);
     const results = await Promise.all([
@@ -177,9 +208,8 @@ describe('field binding file routes', () => {
     const listed = await fixture.app.request(
       `/employees/${EMPLOYEE_ONE}/avatar`,
     );
-    expect([left.upload.plan.fileId, right.upload.plan.fileId]).toContain(
-      (await json<ListFileReferencesResponse>(listed)).references[0]
-        ?.referenceId,
+    expect([left.uploadPlan.fileId, right.uploadPlan.fileId]).toContain(
+      (await json<ListFileReferencesResponse>(listed)).references[0]?.file.id,
     );
   });
 
@@ -195,28 +225,107 @@ describe('field binding file routes', () => {
       name: 'cancel.txt',
       size: 5,
       contentType: 'text/plain',
-      replaceReferenceId: first.upload.plan.fileId,
+      replaceFileId: first.uploadPlan.fileId,
     });
 
     const cancelled = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/uploads/${replacement.upload.plan.fileId}`,
+      `/employees/${EMPLOYEE_ONE}/avatar/${replacement.uploadPlan.fileId}`,
       {
         method: 'DELETE',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          bindingCredential: replacement.upload.bindingCredential,
+          bindingCredential: replacement.bindingCredential,
         }),
       },
     );
     expect(cancelled.status).toBe(200);
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getFile(
-        replacement.upload.plan.fileId,
+        replacement.uploadPlan.fileId,
       ),
     ).toMatchObject({ status: 'failed' });
     expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(
-      first.upload.plan.fileId,
+      first.uploadPlan.fileId,
     );
+
+    const repeated = await fixture.app.request(
+      `/employees/${EMPLOYEE_ONE}/avatar/${replacement.uploadPlan.fileId}`,
+      jsonRequest('DELETE', {
+        bindingCredential: replacement.bindingCredential,
+      }),
+    );
+    expect(repeated.status).toBe(200);
+  });
+
+  it('requires the matching binding credential to delete a pending attempt', async () => {
+    const fixture = await createFixture();
+    const pending = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'pending.txt',
+      size: 3,
+      contentType: 'text/plain',
+    });
+    const other = await createUpload(fixture, EMPLOYEE_TWO, {
+      name: 'other.txt',
+      size: 3,
+      contentType: 'text/plain',
+    });
+
+    const withoutCredential = await fixture.app.request(
+      `/employees/${EMPLOYEE_ONE}/avatar/${pending.uploadPlan.fileId}`,
+      { method: 'DELETE' },
+    );
+    expect(withoutCredential.status).toBe(409);
+    const wrongCredential = await fixture.app.request(
+      `/employees/${EMPLOYEE_ONE}/avatar/${pending.uploadPlan.fileId}`,
+      jsonRequest('DELETE', {
+        bindingCredential: other.bindingCredential,
+      }),
+    );
+    expect(wrongCredential.status).toBe(403);
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(
+        pending.uploadPlan.fileId,
+      ),
+    ).toMatchObject({ status: 'pending' });
+    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
+  });
+
+  it('does not register legacy uploads routes', async () => {
+    const fixture = await createFixture();
+    const create = await fixture.app.request(
+      `/employees/${EMPLOYEE_ONE}/avatar/uploads`,
+      jsonRequest('POST', { name: 'legacy.txt', size: 1 }),
+    );
+    const remove = await fixture.app.request(
+      `/employees/${EMPLOYEE_ONE}/avatar/uploads/${'a'.repeat(64)}`,
+      { method: 'DELETE' },
+    );
+
+    expect(create.status).toBe(404);
+    expect(remove.status).toBe(404);
+    expect(await fileCount(fixture)).toBe(0);
+  });
+
+  it('rejects access and public access for an uncommitted ready file', async () => {
+    const fixture = await createFixture({ publicAccess: true });
+    const ready = await createReadyUpload(fixture, EMPLOYEE_ONE, {
+      name: 'uncommitted.txt',
+      size: 3,
+      contentType: 'text/plain',
+    });
+    const base = `/employees/${EMPLOYEE_ONE}/avatar/${ready.uploadPlan.fileId}`;
+
+    expect(
+      (await fixture.app.request(`${base}/access`, { method: 'POST' })).status,
+    ).toBe(404);
+    expect(
+      (
+        await fixture.app.request(`${base}/public-access`, {
+          method: 'POST',
+        })
+      ).status,
+    ).toBe(404);
+    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
   });
 
   it('does not expose pending field values through the committed list', async () => {
@@ -229,7 +338,7 @@ describe('field binding file routes', () => {
     await fixture.database
       .query()
       .updateTable('employees')
-      .set({ avatarId: pending.upload.plan.fileId })
+      .set({ avatarId: pending.uploadPlan.fileId })
       .where('id', '=', EMPLOYEE_ONE)
       .execute();
 
@@ -244,7 +353,7 @@ describe('field binding file routes', () => {
   it('rejects route constraints before creating a pending file', async () => {
     const fixture = await createFixture();
     const response = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/uploads`,
+      `/employees/${EMPLOYEE_ONE}/avatar`,
       jsonRequest('POST', {
         name: 'blocked.exe',
         size: 3,
@@ -262,7 +371,7 @@ describe('field binding file routes', () => {
     const fixture = await createFixture({ publicAccess: true });
     fixture.deniedActions.add('write');
     const deniedUpload = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/uploads`,
+      `/employees/${EMPLOYEE_ONE}/avatar`,
       jsonRequest('POST', { name: 'denied.txt', size: 1 }),
     );
     expect(deniedUpload.status).toBe(403);
@@ -278,20 +387,20 @@ describe('field binding file routes', () => {
 
     fixture.deniedActions.add('read');
     const deniedRead = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${upload.upload.plan.fileId}/access`,
+      `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}/access`,
       { method: 'POST' },
     );
     expect(deniedRead.status).toBe(403);
 
     fixture.deniedActions.add('share');
     const deniedShare = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${upload.upload.plan.fileId}/public-access`,
+      `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}/public-access`,
       { method: 'POST' },
     );
     expect(deniedShare.status).toBe(403);
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getPublicAccessState(
-        upload.upload.plan.fileId,
+        upload.uploadPlan.fileId,
       ),
     ).toEqual({ tokenHash: null, disposition: null });
   });
@@ -313,9 +422,9 @@ describe('field binding file routes', () => {
       contentType: 'text/plain',
     });
     const arbitrary = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/uploads/${unrelated.upload.plan.fileId}/commit`,
+      `/employees/${EMPLOYEE_ONE}/avatar/${unrelated.uploadPlan.fileId}/commit`,
       jsonRequest('POST', {
-        bindingCredential: upload.upload.bindingCredential,
+        bindingCredential: upload.bindingCredential,
       }),
     );
     expect(arbitrary.status).toBe(403);
@@ -341,9 +450,9 @@ describe('field binding file routes', () => {
     });
 
     const response = await fixture.app.request(
-      `/employee-files/${EMPLOYEE_ONE}/uploads/${upload.upload.plan.fileId}/commit`,
+      `/employee-files/${EMPLOYEE_ONE}/${upload.uploadPlan.fileId}/commit`,
       jsonRequest('POST', {
-        bindingCredential: upload.upload.bindingCredential,
+        bindingCredential: upload.bindingCredential,
       }),
     );
     expect(response.status).toBe(403);
@@ -361,18 +470,18 @@ describe('field binding file routes', () => {
     const before = await fileCount(fixture);
 
     const response = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/uploads`,
+      `/employees/${EMPLOYEE_ONE}/avatar`,
       jsonRequest('POST', {
         name: 'stale.txt',
         size: 3,
         contentType: 'text/plain',
-        replaceReferenceId: 'a'.repeat(64),
+        replaceFileId: 'a'.repeat(64),
       }),
     );
     expect(response.status).toBe(409);
     expect(await fileCount(fixture)).toBe(before);
     expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(
-      first.upload.plan.fileId,
+      first.uploadPlan.fileId,
     );
   });
 
@@ -405,7 +514,7 @@ describe('field binding file routes', () => {
       name: 'replacement.txt',
       size: 4,
       contentType: 'text/plain',
-      replaceReferenceId: current.upload.plan.fileId,
+      replaceFileId: current.uploadPlan.fileId,
     });
     fixture.deniedActions.add('write');
 
@@ -415,13 +524,13 @@ describe('field binding file routes', () => {
     expect(
       (
         await fixture.app.request(
-          `/employees/${EMPLOYEE_ONE}/avatar/${current.upload.plan.fileId}`,
+          `/employees/${EMPLOYEE_ONE}/avatar/${current.uploadPlan.fileId}`,
           { method: 'DELETE' },
         )
       ).status,
     ).toBe(403);
     expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(
-      current.upload.plan.fileId,
+      current.uploadPlan.fileId,
     );
   });
 
@@ -435,16 +544,24 @@ describe('field binding file routes', () => {
     await commitUpload(fixture, EMPLOYEE_ONE, upload);
 
     const detached = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${upload.upload.plan.fileId}`,
+      `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}`,
       { method: 'DELETE' },
     );
     expect(detached.status).toBe(200);
     expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getFile(
-        upload.upload.plan.fileId,
+        upload.uploadPlan.fileId,
       ),
     ).toMatchObject({ status: 'ready' });
+    expect(
+      (
+        await fixture.app.request(
+          `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}`,
+          { method: 'DELETE' },
+        )
+      ).status,
+    ).toBe(200);
   });
 
   it('enables, resets, and disables public access when both gates allow it', async () => {
@@ -455,7 +572,7 @@ describe('field binding file routes', () => {
       contentType: 'text/plain',
     });
     await commitUpload(fixture, EMPLOYEE_ONE, upload);
-    const base = `/employees/${EMPLOYEE_ONE}/avatar/${upload.upload.plan.fileId}/public-access`;
+    const base = `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}/public-access`;
 
     const enabled = await fixture.app.request(
       base,
@@ -488,7 +605,7 @@ describe('field binding file routes', () => {
     );
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getPublicAccessState(
-        upload.upload.plan.fileId,
+        upload.uploadPlan.fileId,
       ),
     ).toEqual({ tokenHash: null, disposition: null });
   });
@@ -720,15 +837,15 @@ async function createUpload(
     name: string;
     size: number;
     contentType?: string;
-    replaceReferenceId?: string;
+    replaceFileId?: string;
   },
-): Promise<CreateFileUploadResponse> {
+): Promise<CreateBusinessFileResponse> {
   const response = await fixture.app.request(
-    `/employees/${employeeId}/avatar/uploads`,
+    `/employees/${employeeId}/avatar`,
     jsonRequest('POST', input),
   );
   expect(response.status).toBe(201);
-  return json<CreateFileUploadResponse>(response);
+  return json<CreateBusinessFileResponse>(response);
 }
 
 async function createReadyUpload(
@@ -738,9 +855,9 @@ async function createReadyUpload(
     name: string;
     size: number;
     contentType?: string;
-    replaceReferenceId?: string;
+    replaceFileId?: string;
   },
-): Promise<CreateFileUploadResponse> {
+): Promise<CreateBusinessFileResponse> {
   const upload = await createUpload(fixture, employeeId, input);
   await uploadBytes(fixture, upload, 'x'.repeat(input.size));
   return upload;
@@ -748,13 +865,13 @@ async function createReadyUpload(
 
 async function uploadBytes(
   fixture: TestFixture,
-  upload: CreateFileUploadResponse,
+  upload: CreateBusinessFileResponse,
   body: string,
 ): Promise<void> {
-  const response = await fixture.app.request(upload.upload.plan.upload.url, {
+  const response = await fixture.app.request(upload.uploadPlan.upload.url, {
     method: 'PUT',
     headers: {
-      ...upload.upload.plan.upload.headers,
+      ...upload.uploadPlan.upload.headers,
       'content-length': String(Buffer.byteLength(body)),
     },
     body,
@@ -765,12 +882,12 @@ async function uploadBytes(
 async function commitUpload(
   fixture: TestFixture,
   employeeId: string,
-  upload: CreateFileUploadResponse,
+  upload: CreateBusinessFileResponse,
 ): Promise<Response> {
   return fixture.app.request(
-    `/employees/${employeeId}/avatar/uploads/${upload.upload.plan.fileId}/commit`,
+    `/employees/${employeeId}/avatar/${upload.uploadPlan.fileId}/commit`,
     jsonRequest('POST', {
-      bindingCredential: upload.upload.bindingCredential,
+      bindingCredential: upload.bindingCredential,
     }),
   );
 }

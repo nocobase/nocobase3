@@ -7,16 +7,15 @@ import type {
 import { Hono, type Context } from 'hono';
 
 import type {
-  CancelFileUploadRequest,
-  CommitFileUploadRequest,
-  CreateFileUploadRequest,
-  CreateFileUploadResponse,
+  CommitBusinessFileRequest,
+  CreateBusinessFileRequest,
+  CreateBusinessFileResponse,
+  DeleteBusinessFileRequest,
   FileAccessRequest,
   FileAccessResponse,
   FileErrorResponse,
   FileOperationResponse,
   FileReference,
-  FileReferenceResponse,
   ListFileReferencesResponse,
   PublicFileAccessRequest,
   PublicFileAccessResponse,
@@ -100,39 +99,35 @@ export function createFieldFileRoute(input: CreateFieldFileRouteInput): Hono {
     withFileRouteErrors((context) => handleList(state, context)),
   );
   routes.post(
-    '/uploads',
+    '/',
     withFileRouteErrors((context) => handleCreateUpload(state, context)),
   );
   routes.post(
-    '/uploads/:fileId/commit',
+    '/:fileId/commit',
     withFileRouteErrors((context) => handleCommit(state, context)),
   );
   routes.delete(
-    '/uploads/:fileId',
-    withFileRouteErrors((context) => handleCancel(state, context)),
+    '/:fileId',
+    withFileRouteErrors((context) => handleDelete(state, context)),
   );
   routes.post(
-    '/:referenceId/access',
+    '/:fileId/access',
     withFileRouteErrors((context) => handleAccess(state, context)),
-  );
-  routes.delete(
-    '/:referenceId',
-    withFileRouteErrors((context) => handleDetach(state, context)),
   );
 
   if (input.options.publicAccess && input.state.publicAccessEnabled) {
     routes.post(
-      '/:referenceId/public-access',
+      '/:fileId/public-access',
       withFileRouteErrors((context) =>
         handleEnablePublicAccess(state, context),
       ),
     );
     routes.post(
-      '/:referenceId/public-access/reset',
+      '/:fileId/public-access/reset',
       withFileRouteErrors((context) => handleResetPublicAccess(state, context)),
     );
     routes.delete(
-      '/:referenceId/public-access',
+      '/:fileId/public-access',
       withFileRouteErrors((context) =>
         handleDisablePublicAccess(state, context),
       ),
@@ -167,13 +162,13 @@ async function handleCreateUpload(
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
   await state.options.authorize({ context, action: 'write', recordId });
-  const body = await readJson<CreateFileUploadRequest>(context);
+  const body = await readJson<CreateBusinessFileRequest>(context);
   const snapshot = await state.repository.get(recordId);
   if (!snapshot.recordExists) {
     throw businessRecordNotFound();
   }
-  const replaceReferenceId = readOptionalFileId(body.replaceReferenceId);
-  if (replaceReferenceId !== snapshot.fileId) {
+  const replaceFileId = readOptionalFileId(body.replaceFileId);
+  if (replaceFileId !== snapshot.fileId) {
     throw fileBindingConflict();
   }
   const attempt = await state.dataPlane.createUploadAttempt({
@@ -190,17 +185,15 @@ async function handleCreateUpload(
     routeId: state.routeId,
     recordId,
     fileId: attempt.plan.fileId,
-    replaceReferenceId,
+    replaceFileId,
     candidateKey: attempt.candidateKey,
     expiresAt: new Date(attempt.plan.expiresAt).getTime(),
   });
-  return context.json<CreateFileUploadResponse>(
+  return context.json<CreateBusinessFileResponse>(
     {
-      upload: {
-        file: attempt.file,
-        plan: attempt.plan,
-        bindingCredential,
-      },
+      file: attempt.file,
+      uploadPlan: attempt.plan,
+      bindingCredential,
     },
     201,
   );
@@ -213,7 +206,7 @@ async function handleCommit(
   const recordId = readRecordId(state, context);
   await state.options.authorize({ context, action: 'write', recordId });
   const fileId = readRouteFileId(context, 'fileId');
-  const body = await readJson<CommitFileUploadRequest>(context);
+  const body = await readJson<CommitBusinessFileRequest>(context);
   const credential = verifyCredential(
     state,
     recordId,
@@ -235,7 +228,7 @@ async function handleCommit(
   if (snapshot.fileId !== fileId) {
     const updated = await state.repository.compareAndSet(
       recordId,
-      credential.replaceReferenceId,
+      credential.replaceFileId,
       fileId,
     );
     if (!updated) {
@@ -248,27 +241,48 @@ async function handleCommit(
       }
     }
   }
-  return context.json<FileReferenceResponse>({
-    reference: toReference(file),
-  });
+  return context.json<FileReference>(toReference(file));
 }
 
-async function handleCancel(
+async function handleDelete(
   state: FieldRouteState,
   context: Context,
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
   await state.options.authorize({ context, action: 'write', recordId });
   const fileId = readRouteFileId(context, 'fileId');
-  const body = await readJson<CancelFileUploadRequest>(context);
-  const credential = verifyCredential(
-    state,
-    recordId,
-    fileId,
-    body.bindingCredential,
-  );
-  await state.kernel.cancelUpload(fileId, credential.candidateKey);
-  return context.json<FileOperationResponse>({ success: true });
+  const snapshot = await state.repository.get(recordId);
+  if (!snapshot.recordExists) {
+    throw businessRecordNotFound();
+  }
+  const file = await state.kernel.getFile(fileId);
+
+  if (snapshot.fileId === fileId) {
+    if (!file || file.status !== 'ready') {
+      throw fileReferenceNotFound();
+    }
+    if (!(await state.repository.compareAndSet(recordId, fileId, null))) {
+      throw fileBindingConflict();
+    }
+    return context.json<FileOperationResponse>({ success: true });
+  }
+
+  const body = await readOptionalJson<DeleteBusinessFileRequest>(context);
+  if (body?.bindingCredential !== undefined) {
+    const credential = verifyCredential(
+      state,
+      recordId,
+      fileId,
+      body.bindingCredential,
+    );
+    await state.kernel.cancelUpload(fileId, credential.candidateKey);
+    return context.json<FileOperationResponse>({ success: true });
+  }
+
+  if (snapshot.fileId === null && file?.status === 'ready') {
+    return context.json<FileOperationResponse>({ success: true });
+  }
+  throw fileBindingConflict();
 }
 
 async function handleAccess(
@@ -277,37 +291,14 @@ async function handleAccess(
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
   await state.options.authorize({ context, action: 'read', recordId });
-  const referenceId = readRouteFileId(context, 'referenceId');
-  await requireCurrentReference(state, recordId, referenceId);
+  const fileId = readRouteFileId(context, 'fileId');
+  await requireCurrentReference(state, recordId, fileId);
   const body = await readOptionalJson<FileAccessRequest>(context);
   const disposition = readDisposition(body?.disposition);
-  const access = await state.dataPlane.createReadAccess(
-    referenceId,
-    disposition,
-  );
+  const access = await state.dataPlane.createReadAccess(fileId, disposition);
   return context.json<FileAccessResponse>({
     access: { ...access, disposition },
   });
-}
-
-async function handleDetach(
-  state: FieldRouteState,
-  context: Context,
-): Promise<Response> {
-  const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'write', recordId });
-  const referenceId = readRouteFileId(context, 'referenceId');
-  const snapshot = await state.repository.get(recordId);
-  if (!snapshot.recordExists) {
-    throw businessRecordNotFound();
-  }
-  if (snapshot.fileId !== referenceId) {
-    throw fileBindingConflict();
-  }
-  if (!(await state.repository.compareAndSet(recordId, referenceId, null))) {
-    throw fileBindingConflict();
-  }
-  return context.json<FileOperationResponse>({ success: true });
 }
 
 async function handleEnablePublicAccess(
@@ -330,12 +321,10 @@ async function handleDisablePublicAccess(
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
   await state.options.authorize({ context, action: 'share', recordId });
-  const referenceId = readRouteFileId(context, 'referenceId');
-  await requireCurrentReference(state, recordId, referenceId);
-  const file = await state.dataPlane.disablePublicAccess(referenceId);
-  return context.json<FileReferenceResponse>({
-    reference: toReference(file),
-  });
+  const fileId = readRouteFileId(context, 'fileId');
+  await requireCurrentReference(state, recordId, fileId);
+  const file = await state.dataPlane.disablePublicAccess(fileId);
+  return context.json<FileReference>(toReference(file));
 }
 
 async function handlePublicAccess(
@@ -345,14 +334,14 @@ async function handlePublicAccess(
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
   await state.options.authorize({ context, action: 'share', recordId });
-  const referenceId = readRouteFileId(context, 'referenceId');
-  await requireCurrentReference(state, recordId, referenceId);
+  const fileId = readRouteFileId(context, 'fileId');
+  await requireCurrentReference(state, recordId, fileId);
   const body = await readOptionalJson<PublicFileAccessRequest>(context);
   const disposition = readDisposition(body?.disposition);
   const result =
     operation === 'enable'
-      ? await state.dataPlane.enablePublicAccess(referenceId, disposition)
-      : await state.dataPlane.resetPublicAccess(referenceId, disposition);
+      ? await state.dataPlane.enablePublicAccess(fileId, disposition)
+      : await state.dataPlane.resetPublicAccess(fileId, disposition);
   return context.json<PublicFileAccessResponse>({
     reference: toReference(result.file),
     access: {
@@ -366,16 +355,16 @@ async function handlePublicAccess(
 async function requireCurrentReference(
   state: FieldRouteState,
   recordId: string,
-  referenceId: string,
+  fileId: string,
 ): Promise<FileReference> {
   const snapshot = await state.repository.get(recordId);
   if (!snapshot.recordExists) {
     throw businessRecordNotFound();
   }
-  if (snapshot.fileId !== referenceId) {
+  if (snapshot.fileId !== fileId) {
     throw fileReferenceNotFound();
   }
-  const reference = await getReadyReference(state, referenceId, true);
+  const reference = await getReadyReference(state, fileId, true);
   if (!reference) {
     throw fileReferenceNotFound();
   }
@@ -398,7 +387,7 @@ async function getReadyReference(
 }
 
 function toReference(file: StoredFile): FileReference {
-  return { referenceId: file.id, file };
+  return { file };
 }
 
 function verifyCredential(
@@ -589,7 +578,7 @@ function readOptionalFileId(value: unknown): string | null {
     return null;
   }
   if (typeof value !== 'string' || !value || value.length > 64) {
-    throw invalidFileRequest('replaceReferenceId is invalid.');
+    throw invalidFileRequest('replaceFileId is invalid.');
   }
   return value;
 }

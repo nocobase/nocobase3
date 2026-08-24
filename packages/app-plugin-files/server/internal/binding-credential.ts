@@ -18,7 +18,7 @@ export interface FileBindingCredential {
   routeId: string;
   recordId: string;
   fileId: string;
-  replaceReferenceId: string | null;
+  replaceFileId: string | null;
   candidateKey: string;
   expiresAt: number;
 }
@@ -167,7 +167,7 @@ function readCredential(value: unknown): FileBindingCredential {
     routeId: readRequiredString(record.routeId),
     recordId: readRequiredString(record.recordId),
     fileId: readFileId(record.fileId),
-    replaceReferenceId: readNullableFileId(record.replaceReferenceId),
+    replaceFileId: readNullableFileId(record.replaceFileId),
     candidateKey: readRequiredString(record.candidateKey),
     expiresAt: readPositiveSafeInteger(record.expiresAt),
   };

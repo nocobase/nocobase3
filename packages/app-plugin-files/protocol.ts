@@ -26,41 +26,33 @@ export interface FileUploadPlan {
 }
 
 export interface FileReference {
-  referenceId: string;
   file: StoredFile;
+  slot?: number;
 }
 
 export interface ListFileReferencesResponse {
   references: FileReference[];
 }
 
-export interface CreateFileUploadRequest {
+export interface CreateBusinessFileRequest {
   name: string;
   size: number;
   contentType?: string;
-  replaceReferenceId?: string;
+  replaceFileId?: string;
 }
 
-export interface FileUploadAttempt {
+export interface CreateBusinessFileResponse {
   file: StoredFile;
-  plan: FileUploadPlan;
+  uploadPlan: FileUploadPlan;
   bindingCredential: string;
 }
 
-export interface CreateFileUploadResponse {
-  upload: FileUploadAttempt;
-}
-
-export interface CommitFileUploadRequest {
+export interface CommitBusinessFileRequest {
   bindingCredential: string;
 }
 
-export interface FileReferenceResponse {
-  reference: FileReference;
-}
-
-export interface CancelFileUploadRequest {
-  bindingCredential: string;
+export interface DeleteBusinessFileRequest {
+  bindingCredential?: string;
 }
 
 export interface FileAccessRequest {

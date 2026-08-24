@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type { FileUploadPlan } from '@nocobase/app-plugin-files/client';
 import type {
-  CreateFileUploadResponse,
+  CreateBusinessFileResponse,
   FileReference,
 } from '@nocobase/app-plugin-files/protocol';
 import type {
@@ -57,10 +57,10 @@ describe('@nocobase/app-plugin-files contracts', () => {
   });
 
   it('shares one normalized route protocol between server and client consumers', () => {
-    expectTypeOf<CreateFileUploadResponse['upload']>().toHaveProperty(
+    expectTypeOf<CreateBusinessFileResponse>().toHaveProperty(
       'bindingCredential',
     );
-    expectTypeOf<FileReference['referenceId']>().toEqualTypeOf<string>();
+    expectTypeOf<CreateBusinessFileResponse>().toHaveProperty('uploadPlan');
     expectTypeOf<FileReference['file']>().toHaveProperty('status');
   });
 });
