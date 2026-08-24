@@ -59,7 +59,22 @@ afterEach(async () => {
 });
 
 describe('Files Local data plane', () => {
-  it('mounts the fixed PUT/GET/HEAD routes and streams Local content', async () => {
+  it('registers the exact Core data plane route table', async () => {
+    const fixture = await createTestRuntime();
+    expect(
+      fixture.dataPlane
+        .createRoute()
+        .routes.map(({ method, path: routePath }) => [method, routePath]),
+    ).toEqual([
+      ['PUT', '/:fileId/upload'],
+      ['DELETE', '/:fileId/upload'],
+      ['POST', '/:fileId/complete'],
+      ['GET', '/:fileId/content'],
+      ['HEAD', '/:fileId/content'],
+    ]);
+  });
+
+  it('mounts PUT/cancel/complete/content and keeps Local PUT pending', async () => {
     const fixture = await createTestRuntime();
     const plan = await fixture.dataPlane.createUploadPlan({
       name: 'quarterly\nreport.txt',
@@ -78,8 +93,15 @@ describe('Files Local data plane', () => {
         url: expect.stringMatching(/^\/api\/files\/.+\/upload\?access=/),
         headers: { 'content-type': 'text/plain' },
       },
+      complete: {
+        method: 'POST',
+        url: expect.stringMatching(/^\/api\/files\/.+\/complete\?access=/),
+      },
+      cancel: {
+        method: 'DELETE',
+        url: expect.stringMatching(/^\/api\/files\/.+\/upload\?access=/),
+      },
     });
-    expect(plan.complete).toBeUndefined();
 
     const upload = await fixture.app.request(plan.upload.url, {
       method: 'PUT',
@@ -88,6 +110,21 @@ describe('Files Local data plane', () => {
     });
     expect(upload.status).toBe(200);
     await expect(upload.json()).resolves.toMatchObject({
+      file: {
+        id: plan.fileId,
+        status: 'pending',
+        size: null,
+      },
+    });
+    await expect(fixture.kernel.getFile(plan.fileId)).resolves.toMatchObject({
+      status: 'pending',
+    });
+
+    const complete = await fixture.app.request(plan.complete.url, {
+      method: 'POST',
+    });
+    expect(complete.status).toBe(200);
+    await expect(complete.json()).resolves.toMatchObject({
       file: {
         id: plan.fileId,
         status: 'ready',
@@ -114,6 +151,35 @@ describe('Files Local data plane', () => {
     expect(content.status).toBe(200);
     expect(content.headers.get('content-type')).toBe('text/plain');
     await expect(content.text()).resolves.toBe('managed files');
+  });
+
+  it('cancels pending Local uploads through the Core route idempotently', async () => {
+    const fixture = await createTestRuntime();
+    const plan = await fixture.dataPlane.createUploadPlan({
+      name: 'cancel.txt',
+      size: 4,
+      contentType: 'text/plain',
+    });
+    expect(
+      (
+        await fixture.app.request(plan.upload.url, {
+          method: 'PUT',
+          headers: plan.upload.headers,
+          body: 'data',
+        })
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (await fixture.app.request(plan.cancel.url, { method: 'DELETE' })).status,
+    ).toBe(200);
+    expect(
+      (await fixture.app.request(plan.cancel.url, { method: 'DELETE' })).status,
+    ).toBe(200);
+    await expect(fixture.kernel.getFile(plan.fileId)).resolves.toMatchObject({
+      status: 'failed',
+    });
+    expect(await listFiles(fixture.storageRoot)).toEqual([]);
   });
 
   it('enforces the actual streaming byte limit without consuming the full body', async () => {
@@ -662,6 +728,14 @@ async function uploadLocalReady(
       `Expected Local upload to succeed: ${await response.text()}`,
     );
   }
+  const complete = await fixture.app.request(plan.complete.url, {
+    method: 'POST',
+  });
+  if (!complete.ok) {
+    throw new Error(
+      `Expected Local completion to succeed: ${await complete.text()}`,
+    );
+  }
   return plan;
 }
 
@@ -697,9 +771,6 @@ async function listFiles(root: string): Promise<string[]> {
 }
 
 function requiredCompleteUrl(plan: FileUploadPlan): string {
-  if (!plan.complete) {
-    throw new Error('Expected an S3 complete URL.');
-  }
   return plan.complete.url;
 }
 

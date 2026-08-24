@@ -18,20 +18,16 @@ export interface FileUploadPlan {
     url: string;
     headers?: Record<string, string>;
   };
-  complete?: {
+  complete: {
     method: 'POST';
     url: string;
     headers?: Record<string, string>;
   };
-}
-
-export interface FileReference {
-  file: StoredFile;
-  slot?: number;
-}
-
-export interface ListFileReferencesResponse {
-  references: FileReference[];
+  cancel: {
+    method: 'DELETE';
+    url: string;
+    headers?: Record<string, string>;
+  };
 }
 
 export interface CreateBusinessFileRequest {
@@ -43,30 +39,11 @@ export interface CreateBusinessFileRequest {
 
 export interface CreateBusinessFileResponse {
   file: StoredFile;
-  uploadPlan: FileUploadPlan;
-  bindingCredential: string;
+  plan: FileUploadPlan;
 }
 
-export interface CommitBusinessFileRequest {
-  bindingCredential: string;
-}
-
-export interface DeleteBusinessFileRequest {
-  bindingCredential?: string;
-}
-
-export interface FileAccessRequest {
-  disposition?: FileDisposition;
-}
-
-export interface TemporaryFileAccess {
-  url: string;
-  expiresAt: string;
-  disposition: FileDisposition;
-}
-
-export interface FileAccessResponse {
-  access: TemporaryFileAccess;
+export interface FileResponse {
+  file: StoredFile;
 }
 
 export interface PublicFileAccessRequest {
@@ -80,7 +57,7 @@ export interface PublicFileAccess {
 }
 
 export interface PublicFileAccessResponse {
-  reference: FileReference;
+  file: StoredFile;
   access: PublicFileAccess;
 }
 

@@ -9,7 +9,7 @@ import {
 } from '@nocobase/app-plugin-files/client';
 import type {
   CreateBusinessFileResponse,
-  FileReference,
+  StoredFile,
 } from '@nocobase/app-plugin-files/protocol';
 import type {
   FileService,
@@ -59,6 +59,14 @@ describe('@nocobase/app-plugin-files contracts', () => {
         method: 'PUT',
         url: '/api/files/file-1/upload',
       },
+      complete: {
+        method: 'POST',
+        url: '/api/files/file-1/complete',
+      },
+      cancel: {
+        method: 'DELETE',
+        url: '/api/files/file-1/upload',
+      },
     };
 
     expect(plan.upload.method).toBe('PUT');
@@ -82,10 +90,8 @@ describe('@nocobase/app-plugin-files contracts', () => {
   });
 
   it('shares one normalized route protocol between server and client consumers', () => {
-    expectTypeOf<CreateBusinessFileResponse>().toHaveProperty(
-      'bindingCredential',
-    );
-    expectTypeOf<CreateBusinessFileResponse>().toHaveProperty('uploadPlan');
-    expectTypeOf<FileReference['file']>().toHaveProperty('status');
+    expectTypeOf<CreateBusinessFileResponse>().toHaveProperty('file');
+    expectTypeOf<CreateBusinessFileResponse>().toHaveProperty('plan');
+    expectTypeOf<StoredFile>().toHaveProperty('status');
   });
 });

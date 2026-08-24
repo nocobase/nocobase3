@@ -7,38 +7,26 @@ import type {
 import { Hono, type Context } from 'hono';
 
 import type {
-  CommitBusinessFileRequest,
   CreateBusinessFileRequest,
   CreateBusinessFileResponse,
-  DeleteBusinessFileRequest,
-  FileAccessRequest,
-  FileAccessResponse,
   FileErrorResponse,
   FileOperationResponse,
-  FileReference,
-  ListFileReferencesResponse,
   PublicFileAccessRequest,
   PublicFileAccessResponse,
   StoredFile,
 } from '../../protocol.js';
 import type { CreateFileRouteOptions, FileRelationBinding } from '../types.js';
-import {
-  ExpiredFileBindingCredentialError,
-  FileBindingCredentialCodec,
-  InvalidFileBindingCredentialError,
-} from './binding-credential.js';
 import type { FilesDataPlane } from './data-plane.js';
 import { FilesDataPlaneError } from './errors.js';
 import type { FileKernel } from './kernel.js';
 import {
-  businessFileNotReady,
   businessRecordNotFound,
-  expiredBindingCredential,
+  expiredScopedCapability,
   fileBindingConflict,
   fileLimitExceeded,
   fileReferenceNotFound,
   FileRouteError,
-  invalidBindingCredential,
+  invalidScopedCapability,
   invalidFileRequest,
   invalidFileRoute,
 } from './route-errors.js';
@@ -48,6 +36,13 @@ import {
   type RelationBindingRow,
 } from './relation-repository.js';
 import type { FilesRuntimeServiceState } from './runtime.js';
+import {
+  ExpiredScopedFileCapabilityError,
+  InvalidScopedFileCapabilityError,
+  type ScopedFileCapability,
+  type ScopedFileCapabilityAction,
+  type ScopedFileCapabilityCodec,
+} from './scoped-capability.js';
 
 export interface CreateRelationFileRouteInput {
   options: CreateFileRouteOptions;
@@ -65,13 +60,13 @@ interface NormalizedRelationBinding {
 }
 
 interface RelationRouteState {
-  routeId: string;
+  scope: string;
   binding: NormalizedRelationBinding;
   repository: RelationBindingRepository;
   options: CreateFileRouteOptions;
   dataPlane: FilesDataPlane;
   kernel: FileKernel;
-  credentialCodec: FileBindingCredentialCodec;
+  capabilityCodec: ScopedFileCapabilityCodec;
   clock: () => Date;
 }
 
@@ -83,7 +78,7 @@ export function createRelationFileRoute(
   const binding = validateRelationBinding(input.binding, input.state);
   validateOptions(input.options);
   const state: RelationRouteState = {
-    routeId: randomBytes(16).toString('hex'),
+    scope: `relation:${randomBytes(16).toString('hex')}`,
     binding,
     repository: createRelationBindingRepository({
       database: input.state.database,
@@ -98,7 +93,7 @@ export function createRelationFileRoute(
     options: input.options,
     dataPlane: input.state.dataPlane,
     kernel: input.state.kernel,
-    credentialCodec: input.state.bindingCredentialCodec,
+    capabilityCodec: input.state.scopedCapabilityCodec,
     clock: input.state.clock,
   };
   const routes = new Hono();
@@ -111,20 +106,33 @@ export function createRelationFileRoute(
     '/',
     withFileRouteErrors((context) => handleCreateUpload(state, context)),
   );
+  routes.put(
+    '/:fileId/upload',
+    withFileRouteErrors((context) => handleUpload(state, context)),
+  );
+  routes.delete(
+    '/:fileId/upload',
+    withFileRouteErrors((context) => handleCancel(state, context)),
+  );
   routes.post(
-    '/:fileId/commit',
-    withFileRouteErrors((context) => handleCommit(state, context)),
+    '/:fileId/complete',
+    withFileRouteErrors((context) => handleComplete(state, context)),
+  );
+  routes.get(
+    '/:fileId/content',
+    withFileRouteErrors((context) => handleContent(state, context, false)),
+  );
+  routes.on(
+    'HEAD',
+    '/:fileId/content',
+    withFileRouteErrors((context) => handleContent(state, context, true)),
   );
   routes.delete(
     '/:fileId',
     withFileRouteErrors((context) => handleDelete(state, context)),
   );
-  routes.post(
-    '/:fileId/access',
-    withFileRouteErrors((context) => handleAccess(state, context)),
-  );
 
-  if (input.options.publicAccess && input.state.publicAccessEnabled) {
+  if (input.options.publicAccess) {
     routes.post(
       '/:fileId/public-access',
       withFileRouteErrors((context) =>
@@ -161,11 +169,12 @@ async function handleList(
   const rows = await state.repository.list(recordId);
   const files = await state.kernel.getFiles(rows.map((row) => row.fileId));
   const filesById = new Map(files.map((file) => [file.id, file]));
-  const references = rows.flatMap((row) => {
-    const file = filesById.get(row.fileId);
-    return file?.status === 'ready' ? [toReference(file, row.slot)] : [];
-  });
-  return context.json<ListFileReferencesResponse>({ references });
+  return context.json<StoredFile[]>(
+    rows.flatMap((row) => {
+      const file = filesById.get(row.fileId);
+      return file?.status === 'ready' ? [file] : [];
+    }),
+  );
 }
 
 async function handleCreateUpload(
@@ -180,31 +189,45 @@ async function handleCreateUpload(
   if (!(await state.repository.parentExists(recordId))) {
     throw businessRecordNotFound();
   }
-  if (replaceFileId !== null) {
-    const current = await getReadyRow(state, recordId, replaceFileId);
-    if (!current) {
-      throw fileBindingConflict();
-    }
+  if (
+    replaceFileId !== null &&
+    !(await getReadyRow(state, recordId, replaceFileId))
+  ) {
+    throw fileBindingConflict();
   }
-  const attempt = await state.dataPlane.createUploadAttempt({
-    name: readRequiredString(body.name, 'name'),
-    size: readFileSize(body.size),
-    ...(body.contentType === undefined
-      ? {}
-      : { contentType: readRequiredString(body.contentType, 'contentType') }),
-    ...(state.options.constraints === undefined
-      ? {}
-      : { constraints: state.options.constraints }),
-  });
-  const expiresAt = new Date(attempt.plan.expiresAt);
+
+  const attempt = await state.dataPlane.createUploadAttempt(
+    {
+      name: readRequiredString(body.name, 'name'),
+      size: readFileSize(body.size),
+      ...(body.contentType === undefined
+        ? {}
+        : { contentType: readRequiredString(body.contentType, 'contentType') }),
+      ...(state.options.constraints === undefined
+        ? {}
+        : { constraints: state.options.constraints }),
+    },
+    {
+      basePath: readMountedBasePath(context),
+      issueCapability: (action, transfer) =>
+        state.capabilityCodec.issue({
+          ...transfer,
+          scope: readCapabilityScope(state.scope, context),
+          recordId,
+          replaceFileId,
+          action,
+        }),
+    },
+  );
+
   try {
     if (replaceFileId === null) {
       const reservation = await state.repository.reserve(
         {
           id: randomBytes(32).toString('hex'),
           recordId,
-          fileId: attempt.plan.fileId,
-          reservationExpiresAt: expiresAt,
+          fileId: attempt.file.id,
+          reservationExpiresAt: new Date(attempt.plan.expiresAt),
           now: now(state),
         },
         state.binding.maxFiles,
@@ -217,62 +240,131 @@ async function handleCreateUpload(
       }
     }
   } catch (error) {
-    await bestEffortCancel(state, attempt.plan.fileId, attempt.candidateKey);
+    await bestEffortCancel(state, attempt.transfer);
     throw error;
   }
-  const bindingCredential = state.credentialCodec.issue({
-    routeId: state.routeId,
-    recordId,
-    fileId: attempt.plan.fileId,
-    replaceFileId,
-    candidateKey: attempt.candidateKey,
-    expiresAt: expiresAt.getTime(),
-  });
+
   return context.json<CreateBusinessFileResponse>(
-    {
-      file: attempt.file,
-      uploadPlan: attempt.plan,
-      bindingCredential,
-    },
+    { file: attempt.file, plan: attempt.plan },
     201,
   );
 }
 
-async function handleCommit(
+async function handleUpload(
   state: RelationRouteState,
   context: Context,
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'write', recordId });
-  await cleanupExpired(state, recordId);
   const fileId = readRouteFileId(context, 'fileId');
-  const body = await readJson<CommitBusinessFileRequest>(context);
-  const credential = verifyCredential(
+  await state.options.authorize({
+    context,
+    action: 'write',
+    recordId,
+    fileId,
+  });
+  const capability = verifyCapability(
     state,
+    context,
     recordId,
     fileId,
-    body.bindingCredential,
+    'upload',
   );
-  const file = await state.kernel.getFile(fileId);
-  if (!file) {
-    throw fileReferenceNotFound();
-  }
-  if (file.status !== 'ready') {
-    throw businessFileNotReady();
-  }
-  const result = await state.repository.commit(
+  const file = await state.dataPlane.receiveLocalUpload(context, capability);
+  return context.json({ file });
+}
+
+async function handleCancel(
+  state: RelationRouteState,
+  context: Context,
+): Promise<Response> {
+  const recordId = readRecordId(state, context);
+  const fileId = readRouteFileId(context, 'fileId');
+  await state.options.authorize({
+    context,
+    action: 'write',
     recordId,
     fileId,
-    credential.replaceFileId,
-    now(state),
+  });
+  await cleanupExpired(state, recordId);
+  const capability = verifyCapability(
+    state,
+    context,
+    recordId,
+    fileId,
+    'cancel',
   );
-  if (result.outcome === 'record-missing') {
+  await state.dataPlane.cancelUpload(capability, {
+    cancel: async ({ connection }) => {
+      await state.repository.cancelPending(
+        recordId,
+        fileId,
+        capability.replaceFileId,
+        connection,
+      );
+      return { released: true as const };
+    },
+  });
+  return context.json<FileOperationResponse>({ success: true });
+}
+
+async function handleComplete(
+  state: RelationRouteState,
+  context: Context,
+): Promise<Response> {
+  const recordId = readRecordId(state, context);
+  const fileId = readRouteFileId(context, 'fileId');
+  await state.options.authorize({
+    context,
+    action: 'write',
+    recordId,
+    fileId,
+  });
+  await cleanupExpired(state, recordId);
+  const capability = verifyCapability(
+    state,
+    context,
+    recordId,
+    fileId,
+    'complete',
+  );
+  const completed = await state.dataPlane.completeUpload(capability, {
+    commit: (connection) =>
+      state.repository.commit(
+        recordId,
+        fileId,
+        capability.replaceFileId,
+        now(state),
+        connection,
+      ),
+  });
+  if (completed.binding?.outcome === 'record-missing') {
     throw businessRecordNotFound();
   }
-  if (result.outcome === 'conflict') {
+  if (completed.binding?.outcome !== 'committed') {
     throw fileBindingConflict();
   }
-  return context.json<FileReference>(toReference(file, result.row.slot));
+  return context.json({ file: completed.file });
+}
+
+async function handleContent(
+  state: RelationRouteState,
+  context: Context,
+  head: boolean,
+): Promise<Response> {
+  const recordId = readRecordId(state, context);
+  const fileId = readRouteFileId(context, 'fileId');
+  await state.options.authorize({
+    context,
+    action: 'read',
+    recordId,
+    fileId,
+  });
+  await requireReadyFile(state, recordId, fileId);
+  return state.dataPlane.createScopedContentResponse(
+    fileId,
+    head,
+    readOptionalDisposition(context.req.query('disposition')),
+  );
 }
 
 async function handleDelete(
@@ -280,13 +372,16 @@ async function handleDelete(
   context: Context,
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'write', recordId });
-  await cleanupExpired(state, recordId);
+  const fileId = readRouteFileId(context, 'fileId');
+  await state.options.authorize({
+    context,
+    action: 'write',
+    recordId,
+    fileId,
+  });
   if (!(await state.repository.parentExists(recordId))) {
     throw businessRecordNotFound();
   }
-  const fileId = readRouteFileId(context, 'fileId');
-  const body = await readOptionalJson<DeleteBusinessFileRequest>(context);
   const row = await state.repository.get(recordId, fileId);
   const file = await state.kernel.getFile(fileId);
   if (
@@ -296,49 +391,16 @@ async function handleDelete(
   ) {
     return context.json<FileOperationResponse>({ success: true });
   }
-  if (body?.bindingCredential !== undefined) {
-    const credential = verifyCredential(
-      state,
-      recordId,
-      fileId,
-      body.bindingCredential,
-    );
-    await state.repository.cancelPending(
-      recordId,
-      fileId,
-      credential.replaceFileId,
-    );
-    await bestEffortCancel(state, fileId, credential.candidateKey);
-    return context.json<FileOperationResponse>({ success: true });
-  }
-
   if (row) {
     throw fileBindingConflict();
   }
-
   if (file?.status === 'ready') {
     if (await state.repository.hasForOtherRecord(recordId, fileId)) {
       throw fileReferenceNotFound();
     }
     return context.json<FileOperationResponse>({ success: true });
   }
-  throw fileBindingConflict();
-}
-
-async function handleAccess(
-  state: RelationRouteState,
-  context: Context,
-): Promise<Response> {
-  const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'read', recordId });
-  const fileId = readRouteFileId(context, 'fileId');
-  await requireReadyReference(state, recordId, fileId);
-  const body = await readOptionalJson<FileAccessRequest>(context);
-  const disposition = readDisposition(body?.disposition);
-  const access = await state.dataPlane.createReadAccess(fileId, disposition);
-  return context.json<FileAccessResponse>({
-    access: { ...access, disposition },
-  });
+  throw fileReferenceNotFound();
 }
 
 async function handlePublicAccess(
@@ -347,9 +409,14 @@ async function handlePublicAccess(
   operation: 'enable' | 'reset',
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'share', recordId });
   const fileId = readRouteFileId(context, 'fileId');
-  const reference = await requireReadyReference(state, recordId, fileId);
+  await state.options.authorize({
+    context,
+    action: 'share',
+    recordId,
+    fileId,
+  });
+  await requireReadyFile(state, recordId, fileId);
   const body = await readOptionalJson<PublicFileAccessRequest>(context);
   const disposition = readDisposition(body?.disposition);
   const result =
@@ -357,7 +424,7 @@ async function handlePublicAccess(
       ? await state.dataPlane.enablePublicAccess(fileId, disposition)
       : await state.dataPlane.resetPublicAccess(fileId, disposition);
   return context.json<PublicFileAccessResponse>({
-    reference: toReference(result.file, readReferenceSlot(reference)),
+    file: result.file,
     access: {
       url: result.url,
       token: result.token,
@@ -371,13 +438,16 @@ async function handleDisablePublicAccess(
   context: Context,
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'share', recordId });
   const fileId = readRouteFileId(context, 'fileId');
-  const reference = await requireReadyReference(state, recordId, fileId);
+  await state.options.authorize({
+    context,
+    action: 'share',
+    recordId,
+    fileId,
+  });
+  await requireReadyFile(state, recordId, fileId);
   const file = await state.dataPlane.disablePublicAccess(fileId);
-  return context.json<FileReference>(
-    toReference(file, readReferenceSlot(reference)),
-  );
+  return context.json({ file });
 }
 
 async function cleanupExpired(
@@ -393,68 +463,66 @@ async function getReadyRow(
   fileId: string,
 ): Promise<RelationBindingRow | undefined> {
   const row = await state.repository.get(recordId, fileId);
-  if (!row) {
-    return undefined;
-  }
-  if (row.reservationExpiresAt !== null) {
+  if (!row || row.reservationExpiresAt !== null) {
     return undefined;
   }
   const file = await state.kernel.getFile(fileId);
   return file?.status === 'ready' ? row : undefined;
 }
 
-async function requireReadyReference(
+async function requireReadyFile(
   state: RelationRouteState,
   recordId: string,
   fileId: string,
-): Promise<FileReference> {
-  const row = await getReadyRow(state, recordId, fileId);
-  if (!row) {
+): Promise<StoredFile> {
+  if (!(await getReadyRow(state, recordId, fileId))) {
     throw fileReferenceNotFound();
   }
   const file = await state.kernel.getFile(fileId);
   if (!file || file.status !== 'ready') {
     throw fileReferenceNotFound();
   }
-  return toReference(file, row.slot);
+  return file;
 }
 
 async function bestEffortCancel(
   state: RelationRouteState,
-  fileId: string,
-  candidateKey: string,
+  transfer: Parameters<FilesDataPlane['cancelUpload']>[0],
 ): Promise<void> {
   try {
-    await state.kernel.cancelUpload(fileId, candidateKey);
+    await state.dataPlane.cancelUpload(transfer);
   } catch {
-    // The business reservation has already been released.
+    // The failed create response does not expose the orphaned attempt.
   }
 }
 
-function toReference(file: StoredFile, slot: number): FileReference {
-  return { file, slot };
-}
-
-function verifyCredential(
+function verifyCapability(
   state: RelationRouteState,
+  context: Context,
   recordId: string,
   fileId: string,
-  value: unknown,
-): ReturnType<FileBindingCredentialCodec['verify']> {
-  if (typeof value !== 'string' || !value) {
-    throw invalidBindingCredential();
+  action: ScopedFileCapabilityAction,
+): ScopedFileCapability {
+  const value = context.req.query('access');
+  if (!value || value.length > 4096) {
+    throw invalidScopedCapability();
   }
   try {
-    return state.credentialCodec.verify(
-      { routeId: state.routeId, recordId, fileId },
+    return state.capabilityCodec.verify(
+      {
+        scope: readCapabilityScope(state.scope, context),
+        recordId,
+        fileId,
+        action,
+      },
       value,
     );
   } catch (error) {
-    if (error instanceof ExpiredFileBindingCredentialError) {
-      throw expiredBindingCredential();
+    if (error instanceof ExpiredScopedFileCapabilityError) {
+      throw expiredScopedCapability();
     }
-    if (error instanceof InvalidFileBindingCredentialError) {
-      throw invalidBindingCredential();
+    if (error instanceof InvalidScopedFileCapabilityError) {
+      throw invalidScopedCapability();
     }
     throw error;
   }
@@ -477,7 +545,7 @@ function validateRelationBinding(
       .builder(state.connection)
       .inspectCollection(collectionName);
     files = state.database.builder(state.connection).inspectCollection('files');
-  } catch (_error) {
+  } catch {
     throw invalidFileRoute(
       `Collection "${collectionName}" cannot be inspected for a file route.`,
     );
@@ -524,9 +592,14 @@ function validateRelationBinding(
       `Collection "${collectionName}" field "fileId" must reference files.id with ON DELETE RESTRICT.`,
     );
   }
-  if (!hasRecordSlotUnique(collection, recordField)) {
+  if (!hasUniquePair(collection, recordField, 'slot')) {
     throw invalidFileRoute(
       `Collection "${collectionName}" must have a unique constraint on (${recordField}, slot).`,
+    );
+  }
+  if (!hasUniquePair(collection, recordField, 'fileId')) {
+    throw invalidFileRoute(
+      `Collection "${collectionName}" must have a unique constraint on (${recordField}, fileId).`,
     );
   }
   const parentReference = findRecordForeignKey(collection, recordField);
@@ -667,16 +740,17 @@ function hasSinglePrimaryKey(
   return names.size === 1 && names.has(fieldName);
 }
 
-function hasRecordSlotUnique(
+function hasUniquePair(
   collection: InspectedCollection,
-  recordField: string,
+  first: string,
+  second: string,
 ): boolean {
   return (collection.definition.constraints ?? []).some(
     (constraint) =>
       constraint.type === 'unique' &&
       constraint.fields.length === 2 &&
-      constraint.fields[0] === recordField &&
-      constraint.fields[1] === 'slot',
+      constraint.fields[0] === first &&
+      constraint.fields[1] === second,
   );
 }
 
@@ -761,11 +835,31 @@ function readDisposition(value: unknown): 'inline' | 'attachment' {
   throw invalidFileRequest('Request field "disposition" is invalid.');
 }
 
-function readReferenceSlot(reference: FileReference): number {
-  if (!Number.isSafeInteger(reference.slot) || Number(reference.slot) <= 0) {
-    throw new Error('A relation file reference is missing its slot.');
+function readOptionalDisposition(
+  value: string | undefined,
+): 'inline' | 'attachment' | undefined {
+  return value === undefined ? undefined : readDisposition(value);
+}
+
+function readMountedBasePath(context: Context): string {
+  const path = context.req.path.replace(/\/+$/, '');
+  if (!path) {
+    throw invalidFileRoute('Mounted file route path is invalid.');
   }
-  return Number(reference.slot);
+  const fileId = context.req.param('fileId');
+  if (fileId) {
+    const marker = `/${fileId}/`;
+    const index = path.lastIndexOf(marker);
+    if (index <= 0) {
+      throw invalidFileRoute('Mounted file route scope is invalid.');
+    }
+    return path.slice(0, index);
+  }
+  return path;
+}
+
+function readCapabilityScope(scope: string, context: Context): string {
+  return `${scope}:${readMountedBasePath(context)}`;
 }
 
 function now(state: RelationRouteState): Date {
@@ -779,7 +873,7 @@ function now(state: RelationRouteState): Date {
 async function readJson<T>(context: Context): Promise<T> {
   try {
     return await context.req.json<T>();
-  } catch (_error) {
+  } catch {
     throw invalidFileRequest('The request body must be valid JSON.');
   }
 }

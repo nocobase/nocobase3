@@ -100,13 +100,17 @@ afterEach(() => {
 });
 
 describe('executeFileUploadPlan', () => {
-  it('uses one Local PUT and reports multiple byte progress events', async () => {
+  it('uses Local PUT then complete and reports byte progress events', async () => {
     const file = testFile();
     const ready = storedFile('local-1');
     FakeXMLHttpRequest.enqueue({
       status: 200,
-      responseText: JSON.stringify({ file: ready }),
+      responseText: JSON.stringify({ file: { ...ready, status: 'pending' } }),
       progress: [2, 7, 10],
+    });
+    FakeXMLHttpRequest.enqueue({
+      status: 200,
+      responseText: JSON.stringify({ file: ready }),
     });
     const progress: FileUploadProgress[] = [];
 
@@ -121,12 +125,18 @@ describe('executeFileUploadPlan', () => {
       { loaded: 7, total: 10, percentage: 70 },
       { loaded: 10, total: 10, percentage: 100 },
     ]);
-    expect(FakeXMLHttpRequest.requests).toHaveLength(1);
+    expect(FakeXMLHttpRequest.requests).toHaveLength(2);
     expect(FakeXMLHttpRequest.requests[0]).toMatchObject({
       method: 'PUT',
       url: '/mounted/api/files/local-1/upload?access=opaque-local',
       withCredentials: true,
       body: file,
+    });
+    expect(FakeXMLHttpRequest.requests[1]).toMatchObject({
+      method: 'POST',
+      url: '/mounted/api/files/local-1/complete?access=opaque-complete',
+      withCredentials: true,
+      body: null,
     });
     expect(FakeXMLHttpRequest.requests[0]?.headers.get('content-type')).toBe(
       'text/plain',
@@ -161,6 +171,7 @@ describe('executeFileUploadPlan', () => {
 
   it('aborts the active PUT through AbortSignal', async () => {
     FakeXMLHttpRequest.enqueue({ autoRespond: false });
+    FakeXMLHttpRequest.enqueue({ status: 200 });
     const controller = new AbortController();
     const pending = executeFileUploadPlan(localPlan('abort-1'), testFile(), {
       signal: controller.signal,
@@ -173,6 +184,10 @@ describe('executeFileUploadPlan', () => {
       operation: 'upload',
     });
     expect(FakeXMLHttpRequest.requests[0]?.aborted).toBe(true);
+    expect(FakeXMLHttpRequest.requests[1]).toMatchObject({
+      method: 'DELETE',
+      url: '/mounted/api/files/abort-1/upload?access=opaque-cancel',
+    });
   });
 
   it('maps stable platform errors without exposing the signed URL', async () => {
@@ -183,6 +198,7 @@ describe('executeFileUploadPlan', () => {
         code: 'UPLOAD_EXPIRED',
       }),
     });
+    FakeXMLHttpRequest.enqueue({ status: 200 });
     const plan = localPlan('expired-1');
 
     let caught: unknown;
@@ -228,6 +244,14 @@ function localPlan(fileId: string): FileUploadPlan {
       url: `/mounted/api/files/${fileId}/upload?access=opaque-local`,
       headers: { 'content-type': 'text/plain' },
     },
+    complete: {
+      method: 'POST',
+      url: `/mounted/api/files/${fileId}/complete?access=opaque-complete`,
+    },
+    cancel: {
+      method: 'DELETE',
+      url: `/mounted/api/files/${fileId}/upload?access=opaque-cancel`,
+    },
   };
 }
 
@@ -243,6 +267,10 @@ function s3Plan(fileId: string): FileUploadPlan {
     complete: {
       method: 'POST',
       url: `/mounted/api/files/${fileId}/complete?access=opaque-complete`,
+    },
+    cancel: {
+      method: 'DELETE',
+      url: `/mounted/api/files/${fileId}/upload?access=opaque-cancel`,
     },
   };
 }

@@ -130,7 +130,7 @@ describe('file metadata kernel', () => {
       }),
     ).resolves.toMatchObject({
       outcome: 'ready',
-      cleanupStorageKey: retryCandidate,
+      cleanupStorageKeys: [retryCandidate],
       file: { size: 13, contentType: 'text/plain' },
     });
     expect((await repository.getRequired(upload.file.id)).storageKey).toBe(
@@ -166,19 +166,19 @@ describe('file metadata kernel', () => {
       results.filter((result) => result.outcome === 'completed'),
     ).toHaveLength(1);
     const loser = results.find(
-      (
-        result,
-      ): result is Extract<(typeof results)[number], { outcome: 'ready' }> =>
-        result.outcome === 'ready' && result.cleanupStorageKey !== undefined,
+      (result) =>
+        result.outcome === 'ready' && result.cleanupStorageKeys.length > 0,
     );
-    expect(loser).toBeDefined();
+    if (!loser || !('file' in loser)) {
+      throw new Error('Expected a completion loser.');
+    }
     const winner = await repository.getRequired(upload.file.id);
     expect(winner.status).toBe('ready');
     expect([upload.readyKey, secondReady]).toContain(winner.storageKey);
-    expect(loser?.cleanupStorageKey).not.toBe(winner.storageKey);
+    expect(loser.cleanupStorageKeys[0]).not.toBe(winner.storageKey);
     expect(storage.has(winner.storageKey ?? '')).toBe(true);
 
-    await kernel.deleteStorageObject(loser?.cleanupStorageKey ?? 'missing');
+    await kernel.deleteStorageObject(loser.cleanupStorageKeys[0] ?? 'missing');
     expect(storage.has(winner.storageKey ?? '')).toBe(true);
   });
 
@@ -197,7 +197,7 @@ describe('file metadata kernel', () => {
     expect(result).toMatchObject({
       outcome: 'persistence-failed',
       candidateStorageKey: upload.readyKey,
-      cleanupStorageKey: upload.readyKey,
+      cleanupStorageKeys: [upload.readyKey],
       cleanupSafe: true,
       error: new Error('simulated CAS failure'),
     });
@@ -209,12 +209,44 @@ describe('file metadata kernel', () => {
     if (
       result.outcome !== 'persistence-failed' ||
       !result.cleanupSafe ||
-      result.cleanupStorageKey === undefined
+      result.cleanupStorageKeys[0] === undefined
     ) {
       throw new Error('Expected persistence failure compensation result.');
     }
-    await failingKernel.deleteStorageObject(result.cleanupStorageKey);
+    await failingKernel.deleteStorageObject(result.cleanupStorageKeys[0]);
     expect(storage.has(upload.readyKey)).toBe(false);
+  });
+
+  it('rolls back file readiness and business writes in one transaction', async () => {
+    await database.builder().createCollection('fileBindings', (collection) => {
+      collection.string('id', { length: 64 }).notNull().primary();
+      collection.string('fileId', { length: 64 }).notNull();
+    });
+    const upload = await kernel.createPending({ name: 'atomic.bin' });
+    storage.put(upload.candidateKey, { contentLength: 6 });
+
+    const result = await kernel.completeUpload({
+      ...upload,
+      commitBinding: async (connection, file) => {
+        await connection.query
+          .insertInto('fileBindings')
+          .values({ id: 'binding-one', fileId: file.id })
+          .execute();
+        throw new Error('simulated business write failure');
+      },
+    });
+
+    expect(result).toMatchObject({
+      outcome: 'persistence-failed',
+      cleanupStorageKeys: [upload.readyKey],
+      cleanupSafe: true,
+    });
+    expect((await repository.getRequired(upload.file.id)).status).toBe(
+      'pending',
+    );
+    expect(
+      await database.query().selectFrom('fileBindings').selectAll().execute(),
+    ).toEqual([]);
   });
 
   it('resolves complete and cancel competition to one terminal state', async () => {
@@ -233,12 +265,11 @@ describe('file metadata kernel', () => {
 
     expect(cancellation).toMatchObject({
       outcome: 'failed',
-      cleanupStorageKey: upload.candidateKey,
     });
     expect(storage.has(upload.candidateKey)).toBe(false);
     expect(completionResult).toMatchObject({
       outcome: 'failed',
-      cleanupStorageKey: upload.readyKey,
+      cleanupStorageKeys: [upload.readyKey],
     });
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'failed',
@@ -247,7 +278,7 @@ describe('file metadata kernel', () => {
     storage.put(upload.candidateKey, { contentLength: 99 });
     await expect(kernel.completeUpload(upload)).resolves.toMatchObject({
       outcome: 'failed',
-      cleanupStorageKey: upload.candidateKey,
+      cleanupStorageKeys: [upload.candidateKey],
     });
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'failed',

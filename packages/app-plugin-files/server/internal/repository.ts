@@ -43,6 +43,12 @@ export class FilesRepository {
     this.#connectionName = connectionName;
   }
 
+  transaction<T>(
+    callback: (connection: DatabaseConnection) => Promise<T>,
+  ): Promise<T> {
+    return this.#database.transaction(callback, this.#connectionName);
+  }
+
   async createPending(
     input: CreatePendingRecordInput,
     connection?: DatabaseConnection,

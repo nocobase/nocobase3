@@ -12,7 +12,7 @@ const AUTHENTICATED_CONTEXT = Buffer.from(
   'utf8',
 );
 
-export type FileCapabilityAction = 'upload' | 'complete' | 'read';
+export type FileCapabilityAction = 'upload' | 'cancel' | 'complete' | 'read';
 export type FileCapabilityDisposition = 'inline' | 'attachment';
 
 interface CapabilityBase {
@@ -23,8 +23,9 @@ interface CapabilityBase {
   expiresAt: number;
 }
 
-export interface FileUploadCapability extends CapabilityBase {
-  action: 'upload' | 'complete';
+export interface FileTransferDescriptor {
+  fileId: string;
+  expiresAt: number;
   candidateKey: string;
   readyKey: string;
   maxBytes: number;
@@ -32,6 +33,11 @@ export interface FileUploadCapability extends CapabilityBase {
   contentType: string | null;
   allowedExtensions: readonly string[];
   allowedContentTypes: readonly string[];
+}
+
+export interface FileUploadCapability
+  extends CapabilityBase, FileTransferDescriptor {
+  action: 'upload' | 'cancel' | 'complete';
 }
 
 export interface FileReadCapability extends CapabilityBase {
@@ -225,7 +231,12 @@ function readVersion(value: unknown): 1 {
 }
 
 function readAction(value: unknown): FileCapabilityAction {
-  if (value === 'upload' || value === 'complete' || value === 'read') {
+  if (
+    value === 'upload' ||
+    value === 'cancel' ||
+    value === 'complete' ||
+    value === 'read'
+  ) {
     return value;
   }
   throw new InvalidFileCapabilityError();

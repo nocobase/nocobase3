@@ -46,19 +46,19 @@ export function fileLimitExceeded(): FileRouteError {
   );
 }
 
-export function invalidBindingCredential(): FileRouteError {
+export function invalidScopedCapability(): FileRouteError {
   return new FileRouteError(
     'INVALID_ACCESS',
     403,
-    'The file binding credential is invalid.',
+    'The scoped file capability is invalid.',
   );
 }
 
-export function expiredBindingCredential(): FileRouteError {
+export function expiredScopedCapability(): FileRouteError {
   return new FileRouteError(
     'UPLOAD_EXPIRED',
     410,
-    'The file binding credential has expired.',
+    'The scoped file capability has expired.',
   );
 }
 

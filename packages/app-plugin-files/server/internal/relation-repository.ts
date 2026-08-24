@@ -1,4 +1,5 @@
 import type {
+  DatabaseConnection,
   DatabaseManager,
   InspectedCollection,
   QueryAdapter,
@@ -74,8 +75,11 @@ export class RelationBindingRepository {
     this.#updatedAtColumn = findColumn(options.collection, 'updatedAt');
   }
 
-  async parentExists(recordId: string): Promise<boolean> {
-    return this.#query()
+  async parentExists(
+    recordId: string,
+    connection?: DatabaseConnection,
+  ): Promise<boolean> {
+    return this.#query(connection)
       .selectFrom(this.#parentTable)
       .select(this.#parentColumn)
       .where(this.#parentColumn, '=', recordId)
@@ -137,8 +141,13 @@ export class RelationBindingRepository {
   async get(
     recordId: string,
     fileId: string,
+    connection?: DatabaseConnection,
   ): Promise<RelationBindingRow | undefined> {
-    const row = await this.#selectRow(this.#query(), recordId, fileId);
+    const row = await this.#selectRow(
+      this.#query(connection),
+      recordId,
+      fileId,
+    );
     return row === undefined ? undefined : this.#readRow(row);
   }
 
@@ -206,76 +215,79 @@ export class RelationBindingRepository {
     fileId: string,
     replaceFileId: string | null,
     now: Date,
+    connection?: DatabaseConnection,
   ): Promise<CommitRelationBindingResult> {
-    return this.#database.transaction(
-      async (connection): Promise<CommitRelationBindingResult> => {
-        if (!(await this.#parentExists(connection.query, recordId))) {
-          return { outcome: 'record-missing' };
+    const commit = async (
+      activeConnection: DatabaseConnection,
+    ): Promise<CommitRelationBindingResult> => {
+      if (!(await this.#parentExists(activeConnection.query, recordId))) {
+        return { outcome: 'record-missing' };
+      }
+      const current = await this.#selectRow(
+        activeConnection.query,
+        recordId,
+        fileId,
+      );
+      if (current) {
+        const row = this.#readRow(current);
+        if (row.reservationExpiresAt !== null) {
+          await activeConnection.query
+            .updateTable(this.#table)
+            .set({
+              [this.#reservationColumn]: null,
+              [this.#updatedAtColumn]: now,
+            })
+            .where(this.#recordColumn, '=', recordId)
+            .where(this.#fileColumn, '=', fileId)
+            .execute();
+          return {
+            outcome: 'committed',
+            row: { ...row, reservationExpiresAt: null },
+          };
         }
-        const current = await this.#selectRow(
-          connection.query,
-          recordId,
+        return { outcome: 'committed', row };
+      }
+      if (replaceFileId === null) {
+        return { outcome: 'conflict' };
+      }
+      const replacement = await this.#selectRow(
+        activeConnection.query,
+        recordId,
+        replaceFileId,
+      );
+      if (!replacement) {
+        return { outcome: 'conflict' };
+      }
+      const replacementRow = this.#readRow(replacement);
+      if (replacementRow.reservationExpiresAt !== null) {
+        return { outcome: 'conflict' };
+      }
+      const updated = await activeConnection.query
+        .updateTable(this.#table)
+        .set({
+          [this.#fileColumn]: fileId,
+          [this.#reservationColumn]: null,
+          [this.#updatedAtColumn]: now,
+        })
+        .where(this.#recordColumn, '=', recordId)
+        .where(this.#fileColumn, '=', replaceFileId)
+        .where(this.#idColumn, '=', replacementRow.id)
+        .execute();
+      if (updated.updatedCount !== 1) {
+        return { outcome: 'conflict' };
+      }
+      return {
+        outcome: 'committed',
+        row: {
+          ...replacementRow,
           fileId,
-        );
-        if (current) {
-          const row = this.#readRow(current);
-          if (row.reservationExpiresAt !== null) {
-            await connection.query
-              .updateTable(this.#table)
-              .set({
-                [this.#reservationColumn]: null,
-                [this.#updatedAtColumn]: now,
-              })
-              .where(this.#recordColumn, '=', recordId)
-              .where(this.#fileColumn, '=', fileId)
-              .execute();
-            return {
-              outcome: 'committed',
-              row: { ...row, reservationExpiresAt: null },
-            };
-          }
-          return { outcome: 'committed', row };
-        }
-        if (replaceFileId === null) {
-          return { outcome: 'conflict' };
-        }
-        const replacement = await this.#selectRow(
-          connection.query,
-          recordId,
-          replaceFileId,
-        );
-        if (!replacement) {
-          return { outcome: 'conflict' };
-        }
-        const replacementRow = this.#readRow(replacement);
-        if (replacementRow.reservationExpiresAt !== null) {
-          return { outcome: 'conflict' };
-        }
-        const updated = await connection.query
-          .updateTable(this.#table)
-          .set({
-            [this.#fileColumn]: fileId,
-            [this.#reservationColumn]: null,
-            [this.#updatedAtColumn]: now,
-          })
-          .where(this.#recordColumn, '=', recordId)
-          .where(this.#fileColumn, '=', replaceFileId)
-          .where(this.#idColumn, '=', replacementRow.id)
-          .execute();
-        if (updated.updatedCount !== 1) {
-          return { outcome: 'conflict' };
-        }
-        return {
-          outcome: 'committed',
-          row: {
-            ...replacementRow,
-            fileId,
-            reservationExpiresAt: null,
-          },
-        };
-      },
-      this.#connectionName,
-    );
+          reservationExpiresAt: null,
+        },
+      };
+    };
+    return connection
+      ? commit(connection)
+      : this.#database.transaction(commit, this.#connectionName);
   }
 
   async delete(
@@ -300,10 +312,13 @@ export class RelationBindingRepository {
     recordId: string,
     fileId: string,
     replaceFileId: string | null,
+    connection?: DatabaseConnection,
   ): Promise<void> {
-    await this.#database.transaction(async (connection) => {
+    const cancel = async (
+      activeConnection: DatabaseConnection,
+    ): Promise<void> => {
       if (replaceFileId === null) {
-        await connection.query
+        await activeConnection.query
           .deleteFrom(this.#table)
           .where(this.#recordColumn, '=', recordId)
           .where(this.#fileColumn, '=', fileId)
@@ -311,7 +326,12 @@ export class RelationBindingRepository {
           .execute();
         return;
       }
-    }, this.#connectionName);
+    };
+    if (connection) {
+      await cancel(connection);
+      return;
+    }
+    await this.#database.transaction(cancel, this.#connectionName);
   }
 
   async hasForOtherRecord(recordId: string, fileId: string): Promise<boolean> {
@@ -323,8 +343,8 @@ export class RelationBindingRepository {
       .exists();
   }
 
-  #query(): QueryAdapter {
-    return this.#database.query(this.#connectionName);
+  #query(connection?: DatabaseConnection): QueryAdapter {
+    return connection?.query ?? this.#database.query(this.#connectionName);
   }
 
   #parentExists(query: QueryAdapter, recordId: string): Promise<boolean> {

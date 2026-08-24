@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { Hono } from 'hono';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createDatabaseManager,
@@ -13,8 +13,8 @@ import {
 import type {
   CreateBusinessFileResponse,
   FileErrorResponse,
-  FileReference,
-  ListFileReferencesResponse,
+  FileUploadPlan,
+  StoredFile,
 } from '@nocobase/app-plugin-files/protocol';
 import {
   createFileService,
@@ -25,9 +25,14 @@ import {
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
 import {
   createOpaqueFilesRuntime,
-  getFilesRuntimeDataPlane,
   getFilesRuntimeKernel,
 } from '../server/internal/runtime.js';
+import type {
+  S3Provider,
+  SignedReadOptions,
+  SignedUploadOptions,
+  StorageObjectMetadata,
+} from '../server/internal/storage/types.js';
 
 const ORDER_ONE = 'order-1';
 const ORDER_TWO = 'order-2';
@@ -37,7 +42,7 @@ interface RelationFixture {
   database: DatabaseManager;
   runtime: FilesRuntime;
   storageRoot: string;
-  advance(milliseconds: number): void;
+  provider?: FakeS3Provider;
 }
 
 interface RelationRow {
@@ -51,7 +56,6 @@ interface RelationRow {
 const fixtures: RelationFixture[] = [];
 
 afterEach(async () => {
-  vi.restoreAllMocks();
   await Promise.all(
     fixtures.splice(0).map(async (fixture) => {
       await fixture.runtime.dispose();
@@ -61,11 +65,12 @@ afterEach(async () => {
   );
 });
 
-describe('relation binding file routes', () => {
-  it('mounts the shared resource contract without relation identifiers', async () => {
+describe('relation binding scoped file routes', () => {
+  it('registers the unified fileId-only route table', async () => {
     const fixture = await createFixture({ publicAccess: true });
-    const service = createFileService({ runtime: fixture.runtime });
-    const child = service.createFileRoute({
+    const child = createFileService({
+      runtime: fixture.runtime,
+    }).createFileRoute({
       binding: {
         type: 'relation',
         collection: 'purchaseOrderAttachments',
@@ -82,9 +87,12 @@ describe('relation binding file routes', () => {
     ).toEqual([
       ['GET', '/'],
       ['POST', '/'],
-      ['POST', '/:fileId/commit'],
+      ['PUT', '/:fileId/upload'],
+      ['DELETE', '/:fileId/upload'],
+      ['POST', '/:fileId/complete'],
+      ['GET', '/:fileId/content'],
+      ['HEAD', '/:fileId/content'],
       ['DELETE', '/:fileId'],
-      ['POST', '/:fileId/access'],
       ['POST', '/:fileId/public-access'],
       ['POST', '/:fileId/public-access/reset'],
       ['DELETE', '/:fileId/public-access'],
@@ -94,223 +102,68 @@ describe('relation binding file routes', () => {
         routePath.includes('reference'),
       ),
     ).toBe(false);
-    expect(
-      child.routes.some(({ path: routePath }) => routePath.includes('uploads')),
-    ).toBe(false);
   });
 
-  it('creates reservations, commits idempotently, and lists ready files by stable slot', async () => {
+  it('reserves, completes, and lists Local files without exposing slots or row IDs', async () => {
     const fixture = await createFixture();
-    const first = await createReadyUpload(fixture, ORDER_ONE, 'first.txt', 5);
-    const second = await createReadyUpload(fixture, ORDER_ONE, 'second.txt', 6);
-    expect(Object.keys(first).sort()).toEqual([
-      'bindingCredential',
-      'file',
-      'uploadPlan',
-    ]);
+    const upload = await createUpload(fixture, ORDER_ONE, 'first.txt', 5);
+    const before = await relationRows(fixture, ORDER_ONE);
+    expect(before).toHaveLength(1);
+    expect(before[0]?.reservationExpiresAt).not.toBeNull();
 
-    const firstCommit = await commitUpload(fixture, ORDER_ONE, first);
-    const secondCommit = await commitUpload(fixture, ORDER_ONE, second);
-    expect(firstCommit.status).toBe(200);
-    expect(secondCommit.status).toBe(200);
-    const firstReference = await json<FileReference>(firstCommit);
-    const secondReference = await json<FileReference>(secondCommit);
-    expect(firstReference.slot).toBe(1);
-    expect(secondReference.slot).toBe(2);
-    expect(
-      await json<FileReference>(await commitUpload(fixture, ORDER_ONE, first)),
-    ).toEqual(firstReference);
+    const put = await putLocal(fixture, upload, 'first');
+    expect(put.status).toBe(200);
+    await expect(put.json()).resolves.toMatchObject({
+      file: { id: upload.file.id, status: 'pending' },
+    });
+    const complete = await completeUpload(fixture, upload);
+    expect(complete.status).toBe(200);
+    await expect(complete.json()).resolves.toMatchObject({
+      file: { id: upload.file.id, status: 'ready', size: 5 },
+    });
 
-    const listed = await fixture.app.request(`/orders/${ORDER_ONE}/files`);
-    const body = await json<ListFileReferencesResponse>(listed);
-    expect(body.references).toEqual([firstReference, secondReference]);
     const rows = await relationRows(fixture, ORDER_ONE);
-    expect(rows.map((row) => row.reservationExpiresAt)).toEqual([null, null]);
-    for (const row of rows) {
-      expect(JSON.stringify(body)).not.toContain(row.id);
-    }
-  });
-
-  it('enforces maxFiles with persisted slots and keeps records independent', async () => {
-    const fixture = await createFixture({ maxFiles: 2 });
-    await createUpload(fixture, ORDER_ONE, 'one.txt', 1);
-    await createUpload(fixture, ORDER_ONE, 'two.txt', 1);
-    const exceeded = await fixture.app.request(
+    expect(rows[0]?.reservationExpiresAt).toBeNull();
+    const listedResponse = await fixture.app.request(
       `/orders/${ORDER_ONE}/files`,
-      jsonRequest('POST', {
-        name: 'three.txt',
-        size: 1,
-        contentType: 'text/plain',
-      }),
     );
-    expect(exceeded.status).toBe(409);
-    expect(await json<FileErrorResponse>(exceeded)).toMatchObject({
-      code: 'FILE_LIMIT_EXCEEDED',
+    const listed = await json<StoredFile[]>(listedResponse);
+    expect(listed).toEqual([
+      expect.objectContaining({ id: upload.file.id, status: 'ready' }),
+    ]);
+    expect(JSON.stringify(listed)).not.toContain(rows[0]?.id);
+    expect(listed[0]).not.toHaveProperty('slot');
+  });
+
+  it('releases a reservation during scoped cancel and permits slot reuse', async () => {
+    const fixture = await createFixture({ maxFiles: 1 });
+    const pending = await createUpload(fixture, ORDER_ONE, 'pending.txt', 4);
+    await putLocal(fixture, pending, 'data');
+
+    const cancelled = await fixture.app.request(pending.plan.cancel.url, {
+      method: 'DELETE',
     });
-
-    const other = await createUpload(fixture, ORDER_TWO, 'other.txt', 1);
-    expect(other.uploadPlan.fileId).toHaveLength(64);
+    expect(cancelled.status).toBe(200);
+    expect(await relationRows(fixture, ORDER_ONE)).toEqual([]);
     expect(
-      (await relationRows(fixture, ORDER_ONE)).map((row) => row.slot),
-    ).toEqual([1, 2]);
+      await getFilesRuntimeKernel(fixture.runtime).getFile(pending.file.id),
+    ).toMatchObject({ status: 'failed' });
     expect(
-      (await relationRows(fixture, ORDER_TWO)).map((row) => row.slot),
-    ).toEqual([1]);
+      (await createUpload(fixture, ORDER_ONE, 'next.txt', 4)).file.id,
+    ).not.toBe(pending.file.id);
   });
 
-  it('uses real transactions and the unique slot constraint under concurrent reservation', async () => {
-    const fixture = await createFixture({ maxFiles: 3 });
-    const results = await Promise.all(
-      Array.from({ length: 8 }, (_, index) =>
-        fixture.app.request(
-          `/orders/${ORDER_ONE}/files`,
-          jsonRequest('POST', {
-            name: `concurrent-${index}.txt`,
-            size: 1,
-            contentType: 'text/plain',
-          }),
-        ),
-      ),
-    );
-    expect(results.filter((response) => response.status === 201)).toHaveLength(
-      3,
-    );
-    expect(results.filter((response) => response.status === 409)).toHaveLength(
-      5,
-    );
-    const rows = await relationRows(fixture, ORDER_ONE);
-    expect(rows).toHaveLength(3);
-    expect(rows.map((row) => row.slot).sort()).toEqual([1, 2, 3]);
-    const fileId = required(rows[0]).fileId;
-    await expect(
-      fixture.database
-        .query()
-        .insertInto('purchaseOrderAttachments')
-        .values({
-          id: 'f'.repeat(64),
-          purchaseOrderId: ORDER_ONE,
-          fileId,
-          slot: 1,
-          reservationExpiresAt: new Date('2026-08-24T00:05:00.000Z'),
-          createdAt: new Date('2026-08-24T00:00:00.000Z'),
-          updatedAt: new Date('2026-08-24T00:00:00.000Z'),
-        })
-        .execute(),
-    ).rejects.toThrow();
-  });
-
-  it('releases expired non-ready reservations on the next record access', async () => {
+  it('replaces at full capacity while preserving the internal row and slot', async () => {
     const fixture = await createFixture({ maxFiles: 1 });
-    const expired = await createUpload(fixture, ORDER_ONE, 'abandoned.txt', 2);
-    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(1);
-    fixture.advance(301_000);
-
-    const listed = await fixture.app.request(`/orders/${ORDER_ONE}/files`);
-    expect(await json<ListFileReferencesResponse>(listed)).toEqual({
-      references: [],
-    });
-    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(0);
-    expect(
-      (await createUpload(fixture, ORDER_ONE, 'next.txt', 2)).uploadPlan.fileId,
-    ).not.toBe(expired.uploadPlan.fileId);
-  });
-
-  it('requires the binding credential for pending DELETE and releases the slot before cancel', async () => {
-    const fixture = await createFixture({ maxFiles: 1 });
-    const pending = await createUpload(fixture, ORDER_ONE, 'pending.txt', 2);
-    const withoutCredential = await fixture.app.request(
-      `/orders/${ORDER_ONE}/files/${pending.uploadPlan.fileId}`,
-      { method: 'DELETE' },
-    );
-    expect(withoutCredential.status).toBe(409);
-    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(1);
-
-    vi.spyOn(
-      getFilesRuntimeKernel(fixture.runtime),
-      'cancelUpload',
-    ).mockRejectedValueOnce(new Error('storage cancel failed'));
-    const deleted = await fixture.app.request(
-      `/orders/${ORDER_ONE}/files/${pending.uploadPlan.fileId}`,
-      jsonRequest('DELETE', { bindingCredential: pending.bindingCredential }),
-    );
-    expect(deleted.status).toBe(200);
-    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(0);
-    expect(
-      (await createUpload(fixture, ORDER_ONE, 'replacement.txt', 2)).uploadPlan
-        .fileId,
-    ).toHaveLength(64);
-  });
-
-  it('still requires the credential after bytes are ready but before relation commit', async () => {
-    const fixture = await createFixture({ maxFiles: 1 });
-    const pending = await createReadyUpload(
+    const original = await uploadAndComplete(
       fixture,
       ORDER_ONE,
-      'ready-uncommitted.txt',
-      2,
+      'old.txt',
+      'old',
     );
-    const withoutCredential = await fixture.app.request(
-      `/orders/${ORDER_ONE}/files/${pending.uploadPlan.fileId}`,
-      { method: 'DELETE' },
-    );
-    expect(withoutCredential.status).toBe(409);
-    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(1);
-
-    const deleted = await fixture.app.request(
-      `/orders/${ORDER_ONE}/files/${pending.uploadPlan.fileId}`,
-      jsonRequest('DELETE', { bindingCredential: pending.bindingCredential }),
-    );
-    expect(deleted.status).toBe(200);
-    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(0);
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getFile(
-        pending.uploadPlan.fileId,
-      ),
-    ).toMatchObject({
-      status: 'ready',
-    });
-  });
-
-  it('does not allow a pending credential or fileId to cross record boundaries', async () => {
-    const fixture = await createFixture();
-    const pending = await createUpload(fixture, ORDER_ONE, 'private.txt', 2);
-    const crossDelete = await fixture.app.request(
-      `/orders/${ORDER_TWO}/files/${pending.uploadPlan.fileId}`,
-      jsonRequest('DELETE', { bindingCredential: pending.bindingCredential }),
-    );
-    expect(crossDelete.status).toBe(403);
-    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(1);
-
-    await uploadBytes(fixture, pending, 'xx');
-    await commitUpload(fixture, ORDER_ONE, pending);
-    const crossAccess = await fixture.app.request(
-      `/orders/${ORDER_TWO}/files/${pending.uploadPlan.fileId}/access`,
-      { method: 'POST' },
-    );
-    expect(crossAccess.status).toBe(404);
-  });
-
-  it('replaces at capacity while preserving the internal row id and slot', async () => {
-    const fixture = await createFixture({ maxFiles: 1 });
-    const original = await createReadyUpload(fixture, ORDER_ONE, 'old.txt', 3);
-    await commitUpload(fixture, ORDER_ONE, original);
     const before = required((await relationRows(fixture, ORDER_ONE))[0]);
 
-    const replacement = await createUpload(
-      fixture,
-      ORDER_ONE,
-      'new.txt',
-      4,
-      original.uploadPlan.fileId,
-    );
-    const beforeCommit = await fixture.app.request(
-      `/orders/${ORDER_ONE}/files`,
-    );
-    expect(
-      (await json<ListFileReferencesResponse>(beforeCommit)).references[0]?.file
-        .id,
-    ).toBe(original.uploadPlan.fileId);
-    const extra = await fixture.app.request(
+    const blocked = await fixture.app.request(
       `/orders/${ORDER_ONE}/files`,
       jsonRequest('POST', {
         name: 'extra.txt',
@@ -318,129 +171,140 @@ describe('relation binding file routes', () => {
         contentType: 'text/plain',
       }),
     );
-    expect((await json<FileErrorResponse>(extra)).code).toBe(
-      'FILE_LIMIT_EXCEEDED',
-    );
+    expect(await json<FileErrorResponse>(blocked)).toMatchObject({
+      code: 'FILE_LIMIT_EXCEEDED',
+    });
 
-    await uploadBytes(fixture, replacement, 'next');
-    const committed = await commitUpload(fixture, ORDER_ONE, replacement);
-    expect(committed.status).toBe(200);
-    expect((await json<FileReference>(committed)).slot).toBe(before.slot);
+    const replacement = await createUpload(
+      fixture,
+      ORDER_ONE,
+      'new.txt',
+      4,
+      original.file.id,
+    );
+    await putLocal(fixture, replacement, 'next');
+    expect((await completeUpload(fixture, replacement)).status).toBe(200);
     const after = required((await relationRows(fixture, ORDER_ONE))[0]);
     expect(after).toMatchObject({
       id: before.id,
       slot: before.slot,
-      fileId: replacement.uploadPlan.fileId,
+      fileId: replacement.file.id,
       reservationExpiresAt: null,
     });
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(original.file.id),
+    ).toMatchObject({ status: 'ready' });
   });
 
-  it('keeps the old reference when replacement is cancelled', async () => {
-    const fixture = await createFixture({ maxFiles: 1 });
-    const original = await createReadyUpload(fixture, ORDER_ONE, 'old.txt', 3);
-    await commitUpload(fixture, ORDER_ONE, original);
-    const before = required((await relationRows(fixture, ORDER_ONE))[0]);
-    const replacement = await createUpload(
+  it('runs Provider PUT simulation then scoped S3 complete and binds', async () => {
+    const provider = new FakeS3Provider();
+    const fixture = await createFixture({ provider });
+    const upload = await createUpload(fixture, ORDER_ONE, 's3.txt', 4);
+
+    expect(upload.plan.upload.url).toMatch(/^https:\/\/upload\.invalid\//);
+    expect(upload.plan.complete.url).toMatch(
+      /^\/orders\/order-1\/files\/.+\/complete\?access=/,
+    );
+    expect(upload.plan.cancel.url).toMatch(
+      /^\/orders\/order-1\/files\/.+\/upload\?access=/,
+    );
+    provider.putUpload(upload.plan, {
+      contentLength: 4,
+      contentType: 'text/plain',
+    });
+
+    const complete = await completeUpload(fixture, upload);
+    expect(complete.status).toBe(200);
+    expect((await relationRows(fixture, ORDER_ONE))[0]?.fileId).toBe(
+      upload.file.id,
+    );
+    const content = await fixture.app.request(
+      `/orders/${ORDER_ONE}/files/${upload.file.id}/content`,
+    );
+    expect(content.status).toBe(302);
+    expect(content.headers.get('location')).toMatch(
+      /^https:\/\/read\.invalid\//,
+    );
+  });
+
+  it('resolves scoped complete/cancel races to failed plus released reservation', async () => {
+    const provider = new FakeS3Provider();
+    const fixture = await createFixture({ provider, maxFiles: 1 });
+    const upload = await createUpload(fixture, ORDER_ONE, 'race.txt', 4);
+    provider.putUpload(upload.plan, {
+      contentLength: 4,
+      contentType: 'text/plain',
+    });
+    const pause = provider.pauseNextCopy();
+    const completion = completeUpload(fixture, upload);
+    await pause.started;
+
+    const cancellation = await fixture.app.request(upload.plan.cancel.url, {
+      method: 'DELETE',
+    });
+    expect(cancellation.status).toBe(200);
+    pause.release();
+    const completed = await completion;
+    expect(completed.status).toBe(409);
+    expect(await json<FileErrorResponse>(completed)).toMatchObject({
+      code: 'UPLOAD_FAILED',
+    });
+    expect(await relationRows(fixture, ORDER_ONE)).toEqual([]);
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(upload.file.id),
+    ).toMatchObject({ status: 'failed' });
+    expect(provider.keys()).toEqual([]);
+  });
+
+  it('rejects cross-record capabilities and removed business actions', async () => {
+    const fixture = await createFixture();
+    const upload = await createUpload(fixture, ORDER_ONE, 'private.txt', 2);
+    const tampered = upload.plan.cancel.url.replace(
+      `/orders/${ORDER_ONE}/`,
+      `/orders/${ORDER_TWO}/`,
+    );
+    expect(
+      (await fixture.app.request(tampered, { method: 'DELETE' })).status,
+    ).toBe(403);
+
+    for (const route of [
+      `/orders/${ORDER_ONE}/files/${upload.file.id}/commit`,
+      `/orders/${ORDER_ONE}/files/${upload.file.id}/access`,
+      `/orders/${ORDER_ONE}/files/uploads`,
+    ]) {
+      expect(
+        (await fixture.app.request(route, { method: 'POST' })).status,
+      ).toBe(404);
+    }
+  });
+
+  it('detaches a ready relation without purging the file', async () => {
+    const fixture = await createFixture();
+    const upload = await uploadAndComplete(
       fixture,
       ORDER_ONE,
-      'cancelled.txt',
-      2,
-      original.uploadPlan.fileId,
+      'detach.txt',
+      'data',
     );
-
-    const deleted = await fixture.app.request(
-      `/orders/${ORDER_ONE}/files/${replacement.uploadPlan.fileId}`,
-      jsonRequest('DELETE', {
-        bindingCredential: replacement.bindingCredential,
-      }),
-    );
-    expect(deleted.status).toBe(200);
-    expect(required((await relationRows(fixture, ORDER_ONE))[0])).toEqual(
-      before,
-    );
-    const listed = await fixture.app.request(`/orders/${ORDER_ONE}/files`);
-    expect(
-      (await json<ListFileReferencesResponse>(listed)).references[0]?.file.id,
-    ).toBe(original.uploadPlan.fileId);
-  });
-
-  it('detaches ready files without deleting them and leaves FK protection to the database', async () => {
-    const fixture = await createFixture();
-    const upload = await createReadyUpload(fixture, ORDER_ONE, 'bound.txt', 4);
-    await commitUpload(fixture, ORDER_ONE, upload);
-    const kernel = getFilesRuntimeKernel(fixture.runtime);
-    await expect(kernel.purgeFile(upload.uploadPlan.fileId)).rejects.toThrow();
-    expect(await kernel.getFile(upload.uploadPlan.fileId)).toBeDefined();
-
-    const detached = await fixture.app.request(
-      `/orders/${ORDER_ONE}/files/${upload.uploadPlan.fileId}`,
-      { method: 'DELETE' },
-    );
-    expect(detached.status).toBe(200);
-    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(0);
-    expect(await kernel.getFile(upload.uploadPlan.fileId)).toMatchObject({
-      status: 'ready',
-    });
     expect(
       (
         await fixture.app.request(
-          `/orders/${ORDER_ONE}/files/${upload.uploadPlan.fileId}`,
+          `/orders/${ORDER_ONE}/files/${upload.file.id}`,
           { method: 'DELETE' },
         )
       ).status,
     ).toBe(200);
-    await expect(kernel.purgeFile(upload.uploadPlan.fileId)).resolves.toBe(
-      true,
-    );
-  });
-
-  it('fails fast for malformed relation collections and options', async () => {
-    const fixture = await createFixture();
-    const service = createFileService({ runtime: fixture.runtime });
-    expect(() =>
-      service.createFileRoute({
-        binding: {
-          type: 'relation',
-          collection: 'purchaseOrderAttachmentsWithoutUnique',
-          recordParam: 'orderId',
-          recordField: 'purchaseOrderId',
-          maxFiles: 2,
-        },
-        authorize() {},
-      }),
-    ).toThrow(/unique constraint/i);
-    expect(() =>
-      service.createFileRoute({
-        binding: {
-          type: 'relation',
-          collection: 'purchaseOrderAttachments',
-          recordParam: 'orderId',
-          recordField: 'purchaseOrderId',
-          maxFiles: 0,
-        },
-        authorize() {},
-      }),
-    ).toThrow(/maxFiles.*positive integer/i);
-    const missingAuthorize = {
-      binding: {
-        type: 'relation' as const,
-        collection: 'purchaseOrderAttachments',
-        recordParam: 'orderId',
-        recordField: 'purchaseOrderId',
-        maxFiles: 2,
-      },
-      authorize() {},
-    };
-    Reflect.deleteProperty(missingAuthorize, 'authorize');
-    expect(() => service.createFileRoute(missingAuthorize)).toThrow(
-      /authorize.*function/i,
-    );
+    expect(await relationRows(fixture, ORDER_ONE)).toEqual([]);
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(upload.file.id),
+    ).toMatchObject({ status: 'ready' });
   });
 });
 
 interface CreateFixtureOptions {
   maxFiles?: number;
   publicAccess?: boolean;
+  provider?: FakeS3Provider;
 }
 
 async function createFixture(
@@ -449,14 +313,13 @@ async function createFixture(
   const storageRoot = await mkdtemp(
     path.join(tmpdir(), 'files-relation-route-'),
   );
-  const databaseFile = path.join(storageRoot, 'test.sqlite');
   const database = createDatabaseManager({
     default: 'sqlite',
     connections: {
       sqlite: {
         dialect: 'sqlite',
         driver: 'better-sqlite3',
-        filename: databaseFile,
+        filename: ':memory:',
         pool: { min: 1, max: 1 },
       },
     },
@@ -464,41 +327,52 @@ async function createFixture(
   await filesMigration.up(createMigrationContext(database.connection()));
   await database.builder().createCollection('purchaseOrders', (collection) => {
     collection.string('id', { length: 64 }).notNull().primary();
-    collection.string('title', { length: 255 }).notNull();
   });
-  await createRelationCollection(database, 'purchaseOrderAttachments', true);
-  await createRelationCollection(
-    database,
-    'purchaseOrderAttachmentsWithoutUnique',
-    false,
-  );
+  await database
+    .builder()
+    .createCollection('purchaseOrderAttachments', (collection) => {
+      collection.string('id', { length: 64 }).notNull().primary();
+      collection.string('purchaseOrderId', { length: 64 }).notNull();
+      collection.string('fileId', { length: 64 }).notNull();
+      collection.integer('slot').notNull();
+      collection.datetime('reservationExpiresAt').nullable();
+      collection.datetime('createdAt').notNull();
+      collection.datetime('updatedAt').notNull();
+      collection.unique(['purchaseOrderId', 'slot']);
+      collection.unique(['purchaseOrderId', 'fileId']);
+      collection.foreignKey('fileId', {
+        references: { collection: 'files', fields: ['id'] },
+        onDelete: 'restrict',
+      });
+      collection.foreignKey('purchaseOrderId', {
+        references: { collection: 'purchaseOrders', fields: ['id'] },
+        onDelete: 'cascade',
+      });
+    });
   await database
     .query()
     .insertInto('purchaseOrders')
-    .values([
-      { id: ORDER_ONE, title: 'Order One' },
-      { id: ORDER_TWO, title: 'Order Two' },
-    ])
+    .values([{ id: ORDER_ONE }, { id: ORDER_TWO }])
     .execute();
 
-  let currentTime = new Date('2026-08-24T00:00:00.000Z');
   const runtime = createOpaqueFilesRuntime(
     {
       database,
       config: resolveFilesConfig({
         appStorageRoot: storageRoot,
         config: {
-          upload: { expiresInSeconds: 300 },
+          storage: options.provider
+            ? { driver: 's3', bucket: 'managed-files' }
+            : { driver: 'local', root: storageRoot },
           publicAccess: { enabled: options.publicAccess ?? false },
         },
       }),
       audience: 'relation-route-test',
       secret: 'relation-route-test-secret-at-least-32-characters',
     },
-    { clock: () => currentTime },
+    options.provider ? { s3Provider: options.provider } : {},
   );
-  const service = createFileService({ runtime });
-  const route = service.createFileRoute({
+  const route = createFileService({ runtime }).createFileRoute({
     binding: {
       type: 'relation',
       collection: 'purchaseOrderAttachments',
@@ -506,57 +380,25 @@ async function createFixture(
       recordField: 'purchaseOrderId',
       maxFiles: options.maxFiles ?? 2,
     },
-    publicAccess: options.publicAccess,
     constraints: {
       maxBytes: 1024,
       allowedExtensions: ['.txt'],
       allowedContentTypes: ['text/plain'],
     },
+    publicAccess: options.publicAccess,
     authorize() {},
   });
   const app = new Hono();
-  app.route('/api/files', getFilesRuntimeDataPlane(runtime).createRoute());
   app.route('/orders/:orderId/files', route);
-  const fixture: RelationFixture = {
+  const fixture = {
     app,
     database,
     runtime,
     storageRoot,
-    advance(milliseconds) {
-      currentTime = new Date(currentTime.getTime() + milliseconds);
-    },
+    ...(options.provider === undefined ? {} : { provider: options.provider }),
   };
   fixtures.push(fixture);
   return fixture;
-}
-
-async function createRelationCollection(
-  database: DatabaseManager,
-  name: string,
-  uniqueSlots: boolean,
-): Promise<void> {
-  await database.builder().createCollection(name, (collection) => {
-    collection.string('id', { length: 64 }).notNull().primary();
-    collection.string('purchaseOrderId', { length: 64 }).notNull();
-    collection.string('fileId', { length: 64 }).notNull();
-    collection.integer('slot').notNull();
-    collection.datetime('reservationExpiresAt').nullable();
-    collection.datetime('createdAt').notNull();
-    collection.datetime('updatedAt').notNull();
-    if (uniqueSlots) {
-      collection.unique(['purchaseOrderId', 'slot'], {
-        name: `uq_${name}_record_slot`,
-      });
-    }
-    collection.foreignKey('fileId', {
-      references: { collection: 'files', fields: ['id'] },
-      onDelete: 'restrict',
-    });
-    collection.foreignKey('purchaseOrderId', {
-      references: { collection: 'purchaseOrders', fields: ['id'] },
-      onDelete: 'cascade',
-    });
-  });
 }
 
 async function createUpload(
@@ -579,47 +421,50 @@ async function createUpload(
   return json<CreateBusinessFileResponse>(response);
 }
 
-async function createReadyUpload(
+async function uploadAndComplete(
   fixture: RelationFixture,
   orderId: string,
   name: string,
-  size: number,
+  contents: string,
 ): Promise<CreateBusinessFileResponse> {
-  const upload = await createUpload(fixture, orderId, name, size);
-  await uploadBytes(fixture, upload, 'x'.repeat(size));
+  const upload = await createUpload(
+    fixture,
+    orderId,
+    name,
+    Buffer.byteLength(contents),
+  );
+  expect((await putLocal(fixture, upload, contents)).status).toBe(200);
+  expect((await completeUpload(fixture, upload)).status).toBe(200);
   return upload;
 }
 
-async function uploadBytes(
+function putLocal(
   fixture: RelationFixture,
   upload: CreateBusinessFileResponse,
   body: string,
-): Promise<void> {
-  const response = await fixture.app.request(upload.uploadPlan.upload.url, {
-    method: 'PUT',
-    headers: {
-      ...upload.uploadPlan.upload.headers,
-      'content-length': String(Buffer.byteLength(body)),
-    },
-    body,
-  });
-  expect(response.status).toBe(200);
-}
-
-function commitUpload(
-  fixture: RelationFixture,
-  orderId: string,
-  upload: CreateBusinessFileResponse,
 ): Promise<Response> {
   return Promise.resolve(
-    fixture.app.request(
-      `/orders/${orderId}/files/${upload.uploadPlan.fileId}/commit`,
-      jsonRequest('POST', { bindingCredential: upload.bindingCredential }),
-    ),
+    fixture.app.request(upload.plan.upload.url, {
+      method: 'PUT',
+      headers: {
+        ...upload.plan.upload.headers,
+        'content-length': String(Buffer.byteLength(body)),
+      },
+      body,
+    }),
   );
 }
 
-async function relationRows(
+function completeUpload(
+  fixture: RelationFixture,
+  upload: CreateBusinessFileResponse,
+): Promise<Response> {
+  return Promise.resolve(
+    fixture.app.request(upload.plan.complete.url, { method: 'POST' }),
+  );
+}
+
+function relationRows(
   fixture: RelationFixture,
   orderId: string,
 ): Promise<RelationRow[]> {
@@ -649,4 +494,96 @@ function required<T>(value: T | undefined): T {
     throw new Error('Expected a value.');
   }
   return value;
+}
+
+class FakeS3Provider implements S3Provider {
+  readonly #objects = new Map<string, StorageObjectMetadata>();
+  #copyPause: DeferredCopy | undefined;
+
+  async createUploadUrl(
+    key: string,
+    _options: SignedUploadOptions,
+  ): Promise<string> {
+    return `https://upload.invalid/${encodeURIComponent(key)}`;
+  }
+
+  async headObject(key: string): Promise<StorageObjectMetadata> {
+    const metadata = this.#objects.get(key);
+    if (!metadata) {
+      const error = new Error('missing object') as NodeJS.ErrnoException;
+      error.code = 'NoSuchKey';
+      throw error;
+    }
+    return { ...metadata };
+  }
+
+  async copyObject(sourceKey: string, destinationKey: string): Promise<void> {
+    if (this.#copyPause) {
+      const pause = this.#copyPause;
+      this.#copyPause = undefined;
+      pause.markStarted();
+      await pause.waitForRelease();
+    }
+    this.#objects.set(destinationKey, await this.headObject(sourceKey));
+  }
+
+  async createReadUrl(
+    key: string,
+    _options: SignedReadOptions,
+  ): Promise<string> {
+    await this.headObject(key);
+    return `https://read.invalid/${encodeURIComponent(key)}?signature=secret`;
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    this.#objects.delete(key);
+  }
+
+  dispose(): void {}
+
+  putUpload(plan: FileUploadPlan, metadata: StorageObjectMetadata): void {
+    const key = decodeURIComponent(new URL(plan.upload.url).pathname.slice(1));
+    this.#objects.set(key, { ...metadata });
+  }
+
+  keys(): string[] {
+    return [...this.#objects.keys()].sort();
+  }
+
+  pauseNextCopy(): { started: Promise<void>; release(): void } {
+    const pause = new DeferredCopy();
+    this.#copyPause = pause;
+    return {
+      started: pause.started,
+      release: () => pause.release(),
+    };
+  }
+}
+
+class DeferredCopy {
+  readonly started: Promise<void>;
+  readonly #released: Promise<void>;
+  #markStarted!: () => void;
+  #release!: () => void;
+
+  constructor() {
+    this.started = new Promise<void>((resolve) => {
+      this.#markStarted = resolve;
+    });
+    this.#released = new Promise<void>((resolve) => {
+      this.#release = resolve;
+    });
+  }
+
+  markStarted(): void {
+    this.#markStarted();
+  }
+
+  release(): void {
+    this.#release();
+  }
+
+  async waitForRelease(): Promise<void> {
+    await this.#released;
+  }
 }

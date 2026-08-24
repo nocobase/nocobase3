@@ -5,6 +5,11 @@ import {
   ExpiredFileCapabilityError,
   InvalidFileCapabilityError,
 } from '../server/internal/capability.js';
+import {
+  createScopedFileCapabilityCodec,
+  ExpiredScopedFileCapabilityError,
+  InvalidScopedFileCapabilityError,
+} from '../server/internal/scoped-capability.js';
 
 const secret = 'test-files-capability-secret-at-least-32-characters';
 const now = new Date('2026-08-24T00:00:00.000Z');
@@ -99,5 +104,120 @@ describe('Files capability codec', () => {
     expect(() =>
       codec.verify({ fileId: 'file-one', action: 'read' }, expired),
     ).toThrow(ExpiredFileCapabilityError);
+  });
+
+  it('supports a distinct Core cancel action', () => {
+    const codec = createFileCapabilityCodec({
+      audience: 'app-one',
+      secret,
+      clock: () => now,
+    });
+    const credential = codec.issue({
+      action: 'cancel',
+      fileId: 'file-one',
+      expiresAt: now.getTime() + 60_000,
+      candidateKey: 'pending/file-one/candidate',
+      readyKey: 'ready/file-one/final',
+      maxBytes: 100,
+      expectedSize: 13,
+      contentType: null,
+      allowedExtensions: [],
+      allowedContentTypes: [],
+    });
+    expect(
+      codec.verify({ fileId: 'file-one', action: 'cancel' }, credential),
+    ).toMatchObject({ action: 'cancel', fileId: 'file-one' });
+    expect(() =>
+      codec.verify({ fileId: 'file-one', action: 'complete' }, credential),
+    ).toThrow(InvalidFileCapabilityError);
+  });
+});
+
+describe('Scoped Files capability codec', () => {
+  it('binds scope, record, file, replace target, action, audience, and expiry', () => {
+    const codec = createScopedFileCapabilityCodec({
+      audience: 'app-one',
+      secret,
+      clock: () => now,
+    });
+    const credential = codec.issue({
+      scope: 'relation:attachments',
+      recordId: 'order-one',
+      fileId: 'file-one',
+      replaceFileId: 'old-file',
+      action: 'complete',
+      expiresAt: now.getTime() + 60_000,
+      candidateKey: 'pending/file-one/candidate',
+      readyKey: 'ready/file-one/final',
+      maxBytes: 100,
+      expectedSize: 13,
+      contentType: 'text/plain',
+      allowedExtensions: ['.txt'],
+      allowedContentTypes: ['text/plain'],
+    });
+
+    expect(credential).toMatch(
+      /^fs1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
+    );
+    expect(credential).not.toContain('order-one');
+    expect(
+      codec.verify(
+        {
+          scope: 'relation:attachments',
+          recordId: 'order-one',
+          fileId: 'file-one',
+          action: 'complete',
+        },
+        credential,
+      ),
+    ).toMatchObject({ replaceFileId: 'old-file' });
+
+    for (const input of [
+      {
+        scope: 'relation:other',
+        recordId: 'order-one',
+        fileId: 'file-one',
+        action: 'complete' as const,
+      },
+      {
+        scope: 'relation:attachments',
+        recordId: 'order-two',
+        fileId: 'file-one',
+        action: 'complete' as const,
+      },
+      {
+        scope: 'relation:attachments',
+        recordId: 'order-one',
+        fileId: 'file-two',
+        action: 'complete' as const,
+      },
+      {
+        scope: 'relation:attachments',
+        recordId: 'order-one',
+        fileId: 'file-one',
+        action: 'cancel' as const,
+      },
+    ]) {
+      expect(() => codec.verify(input, credential)).toThrow(
+        InvalidScopedFileCapabilityError,
+      );
+    }
+
+    const expired = createScopedFileCapabilityCodec({
+      audience: 'app-one',
+      secret,
+      clock: () => new Date(now.getTime() + 120_000),
+    });
+    expect(() =>
+      expired.verify(
+        {
+          scope: 'relation:attachments',
+          recordId: 'order-one',
+          fileId: 'file-one',
+          action: 'complete',
+        },
+        credential,
+      ),
+    ).toThrow(ExpiredScopedFileCapabilityError);
   });
 });

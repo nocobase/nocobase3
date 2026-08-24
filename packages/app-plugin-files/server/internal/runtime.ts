@@ -1,21 +1,20 @@
 import type { CreateFilesRuntimeOptions, FilesRuntime } from '../runtime.js';
-import {
-  createFileBindingCredentialCodec,
-  type FileBindingCredentialCodec,
-} from './binding-credential.js';
 import { createFileCapabilityCodec } from './capability.js';
 import { createFilesDataPlane, type FilesDataPlane } from './data-plane.js';
 import { createFileKernel, type FileKernel } from './kernel.js';
 import { createFilesRepository } from './repository.js';
+import {
+  createScopedFileCapabilityCodec,
+  type ScopedFileCapabilityCodec,
+} from './scoped-capability.js';
 import { createInternalFilesStorage } from './storage/index.js';
 import type { InternalFilesStorage, S3Provider } from './storage/types.js';
 
 interface FilesRuntimeState {
-  bindingCredentialCodec: FileBindingCredentialCodec;
+  scopedCapabilityCodec: ScopedFileCapabilityCodec;
   dataPlane: FilesDataPlane;
   database: CreateFilesRuntimeOptions['database'];
   connection: string | undefined;
-  publicAccessEnabled: boolean;
   kernel: FileKernel;
   storage: InternalFilesStorage;
   clock: () => Date;
@@ -71,7 +70,7 @@ export function createOpaqueFilesRuntime(
     secret: options.secret,
     clock,
   });
-  const bindingCredentialCodec = createFileBindingCredentialCodec({
+  const scopedCapabilityCodec = createScopedFileCapabilityCodec({
     audience: options.audience,
     secret: options.secret,
     clock,
@@ -88,11 +87,10 @@ export function createOpaqueFilesRuntime(
   });
   const runtime = new OpaqueFilesRuntime();
   runtimeStates.set(runtime, {
-    bindingCredentialCodec,
+    scopedCapabilityCodec,
     dataPlane,
     database: options.database,
     connection: options.connection,
-    publicAccessEnabled: options.config.publicAccess.enabled,
     kernel,
     storage,
     clock,
@@ -101,11 +99,10 @@ export function createOpaqueFilesRuntime(
 }
 
 export interface FilesRuntimeServiceState {
-  bindingCredentialCodec: FileBindingCredentialCodec;
+  scopedCapabilityCodec: ScopedFileCapabilityCodec;
   dataPlane: FilesDataPlane;
   database: CreateFilesRuntimeOptions['database'];
   connection: string | undefined;
-  publicAccessEnabled: boolean;
   kernel: FileKernel;
   clock: () => Date;
 }
@@ -118,11 +115,10 @@ export function getFilesRuntimeServiceState(
     throw new Error('Files runtime is invalid or disposed.');
   }
   return {
-    bindingCredentialCodec: state.bindingCredentialCodec,
+    scopedCapabilityCodec: state.scopedCapabilityCodec,
     dataPlane: state.dataPlane,
     database: state.database,
     connection: state.connection,
-    publicAccessEnabled: state.publicAccessEnabled,
     kernel: state.kernel,
     clock: state.clock,
   };

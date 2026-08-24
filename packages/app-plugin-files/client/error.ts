@@ -35,7 +35,7 @@ export function toFileClientError(
 }
 
 export function createTransportError(
-  operation: 'upload' | 'complete',
+  operation: 'upload' | 'complete' | 'cancel',
   status: number,
   responseText: string,
   stableResponse: boolean,

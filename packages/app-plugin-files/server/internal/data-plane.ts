@@ -3,6 +3,7 @@ import path from 'node:path';
 import { Readable, Transform, type TransformCallback } from 'node:stream';
 
 import { Hono, type Context } from 'hono';
+import type { DatabaseConnection } from '@nocobase/database';
 
 import type { FileUploadPlan, StoredFile } from '../../client/types.js';
 import type { FilesConfig } from '../config.js';
@@ -12,6 +13,7 @@ import {
   FileCapabilityCodec,
   InvalidFileCapabilityError,
   type FileCapabilityDisposition,
+  type FileTransferDescriptor,
   type FileUploadCapability,
 } from './capability.js';
 import {
@@ -22,7 +24,11 @@ import {
   storageUnavailable,
   uploadExpired,
 } from './errors.js';
-import type { FileKernel } from './kernel.js';
+import type {
+  CancelFileBindingInput,
+  CompleteFileResult,
+  FileKernel,
+} from './kernel.js';
 import type { FileRecord, PublicDisposition } from './model.js';
 import type {
   InternalFilesStorage,
@@ -60,7 +66,32 @@ export interface CreateFileUploadPlanInput {
 export interface CreatedFileUploadAttempt {
   plan: FileUploadPlan;
   file: StoredFile;
-  candidateKey: string;
+  transfer: FileTransferDescriptor;
+}
+
+export interface CreateUploadAttemptTarget {
+  basePath: string;
+  issueCapability(
+    action: 'upload' | 'cancel' | 'complete',
+    transfer: FileTransferDescriptor,
+  ): string;
+}
+
+export interface CompleteUploadBinding<TBinding> {
+  commit(connection: DatabaseConnection, file: StoredFile): Promise<TBinding>;
+}
+
+export interface CancelUploadBinding<TBinding> {
+  cancel(input: CancelFileBindingInput): Promise<TBinding>;
+}
+
+export interface CompletedFileUpload<TBinding = undefined> {
+  file: StoredFile;
+  binding?: TBinding;
+}
+
+export interface CancelledFileUpload<TBinding = undefined> {
+  binding?: TBinding;
 }
 
 export interface FileReadAccess {
@@ -120,6 +151,9 @@ export class FilesDataPlane {
     routes.put('/:fileId/upload', async (context) =>
       this.#handleLocalUpload(context),
     );
+    routes.delete('/:fileId/upload', async (context) =>
+      this.#handleCancel(context),
+    );
     routes.post('/:fileId/complete', async (context) =>
       this.#handleComplete(context),
     );
@@ -142,71 +176,63 @@ export class FilesDataPlane {
 
   async createUploadAttempt(
     input: CreateFileUploadPlanInput,
+    target?: CreateUploadAttemptTarget,
   ): Promise<CreatedFileUploadAttempt> {
     const name = normalizeFileName(input.name);
     const policy = normalizeUploadPolicy(input, this.#config.upload.maxBytes);
     assertUploadPolicy(name, policy);
     const pending = await this.#kernel.createPending({ name });
     const expiresAt = new Date(pending.expiresAt).getTime();
-    const commonCapability = {
+    const transfer: FileTransferDescriptor = {
       fileId: pending.fileId,
       expiresAt,
       candidateKey: pending.candidateKey,
       readyKey: pending.readyKey,
       ...policy,
-    } as const;
+    };
 
     try {
-      if (this.#storage.driver === 'local') {
-        const access = this.#capabilityCodec.issue({
-          ...commonCapability,
-          action: 'upload',
-        });
-        const plan: FileUploadPlan = {
-          fileId: pending.fileId,
-          expiresAt: pending.expiresAt,
-          upload: {
-            method: 'PUT',
-            url: this.#accessUrl(pending.fileId, 'upload', access),
-            ...(policy.contentType === null
-              ? {}
-              : { headers: { 'content-type': policy.contentType } }),
-          },
-        };
-        return {
-          plan,
-          file: pending.file,
-          candidateKey: pending.candidateKey,
-        };
-      }
-
-      const upload = await this.#storage.createCandidateUpload(
-        pending.candidateKey,
-        {
-          expiresInSeconds: secondsUntil(expiresAt, this.#now()),
-          contentLength: policy.expectedSize,
-          ...(policy.contentType === null
-            ? {}
-            : { contentType: policy.contentType }),
-        },
-      );
-      const completeAccess = this.#capabilityCodec.issue({
-        ...commonCapability,
-        action: 'complete',
-      });
+      const actionUrl = (action: 'upload' | 'cancel' | 'complete'): string => {
+        const access = target
+          ? target.issueCapability(action, transfer)
+          : this.#capabilityCodec.issue({ ...transfer, action });
+        const basePath = normalizeBasePath(target?.basePath ?? this.#basePath);
+        const suffix = action === 'cancel' ? 'upload' : action;
+        return `${basePath}/${encodeURIComponent(pending.fileId)}/${suffix}?access=${encodeURIComponent(access)}`;
+      };
+      const upload =
+        this.#storage.driver === 'local'
+          ? {
+              method: 'PUT' as const,
+              url: actionUrl('upload'),
+              ...(policy.contentType === null
+                ? {}
+                : { headers: { 'content-type': policy.contentType } }),
+            }
+          : await this.#storage.createCandidateUpload(pending.candidateKey, {
+              expiresInSeconds: secondsUntil(expiresAt, this.#now()),
+              contentLength: policy.expectedSize,
+              ...(policy.contentType === null
+                ? {}
+                : { contentType: policy.contentType }),
+            });
       const plan: FileUploadPlan = {
         fileId: pending.fileId,
         expiresAt: pending.expiresAt,
         upload,
         complete: {
           method: 'POST',
-          url: this.#accessUrl(pending.fileId, 'complete', completeAccess),
+          url: actionUrl('complete'),
+        },
+        cancel: {
+          method: 'DELETE',
+          url: actionUrl('cancel'),
         },
       };
       return {
         plan,
         file: pending.file,
-        candidateKey: pending.candidateKey,
+        transfer,
       };
     } catch (error) {
       await this.#kernel.cancelUpload(pending.fileId, pending.candidateKey);
@@ -285,24 +311,21 @@ export class FilesDataPlane {
     }
   }
 
-  async #handleLocalUpload(context: Context): Promise<Response> {
+  async receiveLocalUpload(
+    context: Context,
+    transfer: FileTransferDescriptor,
+  ): Promise<StoredFile> {
     if (this.#storage.driver !== 'local') {
       throw invalidAccess();
     }
-    const fileId = readFileIdParam(context);
-    const capability = this.#verifyUploadCapability(
-      fileId,
-      'upload',
-      readAccess(context),
-    );
-    const record = await this.#requirePendingUpload(fileId);
+    const record = await this.#requirePendingUpload(transfer.fileId);
     assertBeforeUploadDeadline(record, this.#now());
-    assertUploadPolicy(record.name, capability);
+    assertUploadPolicy(record.name, transfer);
     const contentType = normalizeOptionalContentType(
       context.req.header('content-type'),
     );
-    validateContentType(contentType, capability);
-    validateContentLength(context.req.header('content-length'), capability);
+    validateContentType(contentType, transfer);
+    validateContentLength(context.req.header('content-length'), transfer);
     const body = context.req.raw.body;
     if (!body) {
       throw uploadFailed('The upload request body is required.');
@@ -311,31 +334,172 @@ export class FilesDataPlane {
     const source = Readable.fromWeb(
       body as import('node:stream/web').ReadableStream<Uint8Array>,
     );
-    const byteLimit = new ByteLimitTransform(capability.maxBytes);
+    const byteLimit = new ByteLimitTransform(transfer.maxBytes);
     source.once('error', (error) => byteLimit.destroy(error));
     source.pipe(byteLimit);
     let candidateWritten = false;
     try {
-      await this.#storage.putCandidate(capability.candidateKey, byteLimit, {
+      await this.#storage.putCandidate(transfer.candidateKey, byteLimit, {
         ...(contentType === null ? {} : { contentType }),
       });
       candidateWritten = true;
-      if (byteLimit.bytesRead !== capability.expectedSize) {
+      if (byteLimit.bytesRead !== transfer.expectedSize) {
         throw uploadFailed('The uploaded byte count does not match the plan.');
       }
-      const file = await this.#completeCandidate(capability);
-      return context.json<FileResponseBody>({ file });
+      const current = await this.#kernel.getFile(transfer.fileId);
+      if (!current) {
+        throw fileNotFound();
+      }
+      if (current.status !== 'pending') {
+        throw uploadFailed('The pending upload was cancelled.');
+      }
+      return current;
     } catch (error) {
       if (candidateWritten) {
-        await this.#deleteBestEffort(capability.candidateKey);
+        await this.#deleteBestEffort(transfer.candidateKey);
       }
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
-      throw uploadFailed('The file upload could not be completed.', error);
+      throw uploadFailed('The file upload could not be received.', error);
     } finally {
       source.destroy();
     }
+  }
+
+  async completeUpload<TBinding = undefined>(
+    transfer: FileTransferDescriptor,
+    binding?: CompleteUploadBinding<TBinding>,
+  ): Promise<CompletedFileUpload<TBinding>> {
+    const record = await this.#kernel.getRecord(transfer.fileId);
+    if (!record) {
+      await this.#deleteBestEffort(transfer.candidateKey);
+      throw fileNotFound();
+    }
+    if (record.status === 'pending') {
+      assertBeforeUploadDeadline(record, this.#now());
+      assertUploadPolicy(record.name, transfer);
+    }
+    if (record.status === 'failed') {
+      await this.#deleteBestEffort(transfer.candidateKey);
+      throw fileNotReady();
+    }
+
+    let result: CompleteFileResult<TBinding>;
+    try {
+      result = await this.#kernel.completeUpload({
+        fileId: transfer.fileId,
+        candidateKey: transfer.candidateKey,
+        readyKey: transfer.readyKey,
+        validateMetadata: (metadata) =>
+          validateStorageMetadata(metadata, transfer),
+        ...(binding === undefined
+          ? {}
+          : {
+              commitBinding: (
+                connection: DatabaseConnection,
+                file: StoredFile,
+              ): Promise<TBinding> => binding.commit(connection, file),
+            }),
+      });
+    } catch (error) {
+      if (error instanceof FilesDataPlaneError) {
+        await this.#deleteBestEffort(transfer.candidateKey);
+        throw error;
+      }
+      if (isMissingStorageObject(error)) {
+        throw uploadFailed('The uploaded object could not be found.');
+      }
+      throw storageUnavailable(error);
+    }
+
+    await Promise.all(
+      result.cleanupStorageKeys.map((storageKey) =>
+        this.#deleteBestEffort(storageKey),
+      ),
+    );
+    switch (result.outcome) {
+      case 'completed':
+      case 'ready':
+        return {
+          file: result.file,
+          ...(!('binding' in result) || result.binding === undefined
+            ? {}
+            : { binding: result.binding }),
+        };
+      case 'missing':
+        throw fileNotFound();
+      case 'failed':
+        throw uploadFailed('The pending upload was cancelled.');
+      case 'persistence-failed':
+        throw uploadFailed(
+          'The uploaded file could not be committed.',
+          result.error,
+        );
+    }
+  }
+
+  async cancelUpload<TBinding = undefined>(
+    transfer: FileTransferDescriptor,
+    binding?: CancelUploadBinding<TBinding>,
+  ): Promise<CancelledFileUpload<TBinding>> {
+    const result = await this.#kernel.cancelUpload(
+      transfer.fileId,
+      transfer.candidateKey,
+      binding === undefined
+        ? undefined
+        : (input: CancelFileBindingInput): Promise<TBinding> =>
+            binding.cancel(input),
+    );
+    if (result.outcome === 'ready') {
+      throw fileNotReady();
+    }
+    if (result.outcome === 'missing') {
+      throw fileNotFound();
+    }
+    return {
+      ...(!('binding' in result) || result.binding === undefined
+        ? {}
+        : { binding: result.binding }),
+    };
+  }
+
+  async createScopedContentResponse(
+    fileId: string,
+    head: boolean,
+    disposition?: PublicDisposition,
+  ): Promise<Response> {
+    const record = await this.#requireReadyFile(fileId);
+    const resolvedDisposition =
+      disposition ??
+      (record.contentType !== null &&
+      INLINE_CONTENT_TYPES.has(record.contentType.toLowerCase())
+        ? 'inline'
+        : 'attachment');
+    assertInlineAllowed(record.contentType, resolvedDisposition);
+    return this.#deliverContent(record, head, resolvedDisposition, false);
+  }
+
+  async #handleLocalUpload(context: Context): Promise<Response> {
+    const fileId = readFileIdParam(context);
+    const capability = this.#verifyUploadCapability(
+      fileId,
+      'upload',
+      readAccess(context),
+    );
+    const file = await this.receiveLocalUpload(context, capability);
+    return context.json<FileResponseBody>({ file });
+  }
+
+  async #handleCancel(context: Context): Promise<Response> {
+    const fileId = readFileIdParam(context);
+    const capability = this.#verifyUploadCapability(
+      fileId,
+      'cancel',
+      readAccess(context),
+    );
+    await this.cancelUpload(capability);
+    return context.json({ success: true });
   }
 
   async #handleComplete(context: Context): Promise<Response> {
@@ -345,32 +509,8 @@ export class FilesDataPlane {
       'complete',
       readAccess(context),
     );
-    const record = await this.#kernel.getRecord(fileId);
-    if (!record) {
-      await this.#deleteBestEffort(capability.candidateKey);
-      throw fileNotFound();
-    }
-    if (record.status === 'pending') {
-      assertBeforeUploadDeadline(record, this.#now());
-      assertUploadPolicy(record.name, capability);
-    }
-    if (record.status === 'failed') {
-      await this.#deleteBestEffort(capability.candidateKey);
-      throw fileNotReady();
-    }
-
-    try {
-      const file = await this.#completeCandidate(capability);
-      return context.json<FileResponseBody>({ file });
-    } catch (error) {
-      if (error instanceof FilesDataPlaneError) {
-        throw error;
-      }
-      if (isMissingStorageObject(error)) {
-        throw uploadFailed('The uploaded object could not be found.');
-      }
-      throw storageUnavailable(error);
-    }
+    const result = await this.completeUpload(capability);
+    return context.json<FileResponseBody>({ file: result.file });
   }
 
   async #handleContent(context: Context, head: boolean): Promise<Response> {
@@ -394,18 +534,32 @@ export class FilesDataPlane {
         ? this.#authorizePublicContent(record, access)
         : { disposition: capabilityDisposition, publicAccess: false };
     assertInlineAllowed(record.contentType, authorized.disposition);
+    return this.#deliverContent(
+      record,
+      head,
+      authorized.disposition,
+      authorized.publicAccess,
+    );
+  }
+
+  async #deliverContent(
+    record: FileRecord,
+    head: boolean,
+    disposition: PublicDisposition,
+    publicAccess: boolean,
+  ): Promise<Response> {
     if (record.storageKey === null || record.size === null) {
       throw fileNotReady();
     }
 
     const contentDisposition = createContentDisposition(
-      authorized.disposition,
+      disposition,
       record.name,
     );
     const headers = createContentHeaders(
       record,
       contentDisposition,
-      authorized.publicAccess,
+      publicAccess,
     );
     try {
       if (this.#storage.driver === 's3') {
@@ -426,45 +580,6 @@ export class FilesDataPlane {
       return new Response(body, { status: 200, headers });
     } catch (error) {
       throw storageUnavailable(error);
-    }
-  }
-
-  async #completeCandidate(
-    capability: FileUploadCapability,
-  ): Promise<StoredFile> {
-    let result;
-    try {
-      result = await this.#kernel.completeUpload({
-        fileId: capability.fileId,
-        candidateKey: capability.candidateKey,
-        readyKey: capability.readyKey,
-        validateMetadata: (metadata) =>
-          validateStorageMetadata(metadata, capability),
-      });
-    } catch (error) {
-      await this.#deleteBestEffort(capability.candidateKey);
-      throw error;
-    }
-
-    if (
-      'cleanupStorageKey' in result &&
-      result.cleanupStorageKey !== undefined
-    ) {
-      await this.#deleteBestEffort(result.cleanupStorageKey);
-    }
-    switch (result.outcome) {
-      case 'completed':
-      case 'ready':
-        return result.file;
-      case 'missing':
-        throw fileNotFound();
-      case 'failed':
-        throw uploadFailed('The pending upload was cancelled.');
-      case 'persistence-failed':
-        throw uploadFailed(
-          'The uploaded file could not be committed.',
-          result.error,
-        );
     }
   }
 
@@ -512,7 +627,7 @@ export class FilesDataPlane {
 
   #verifyUploadCapability(
     fileId: string,
-    action: 'upload' | 'complete',
+    action: 'upload' | 'cancel' | 'complete',
     access: string,
   ): FileUploadCapability {
     try {

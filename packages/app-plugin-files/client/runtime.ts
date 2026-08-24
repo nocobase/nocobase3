@@ -10,14 +10,14 @@ interface FileResponseBody {
 }
 
 interface XhrRequestOptions {
-  method: 'PUT' | 'POST';
+  method: 'PUT' | 'POST' | 'DELETE';
   url: string;
   headers?: Record<string, string>;
   body?: Blob;
   signal?: AbortSignal;
   withCredentials: boolean;
   stableErrors: boolean;
-  operation: 'upload' | 'complete';
+  operation: 'upload' | 'complete' | 'cancel';
   onProgress?(progress: FileUploadProgress): void;
 }
 
@@ -32,40 +32,54 @@ export async function executeFileUploadPlan(
   options: ExecuteFileUploadPlanOptions = {},
 ): Promise<StoredFile> {
   assertUploadPlan(plan);
-  const uploadResponse = await sendXhrRequest({
-    method: 'PUT',
-    url: plan.upload.url,
-    headers: plan.upload.headers,
-    body: file,
-    signal: options.signal,
-    withCredentials: plan.complete === undefined,
-    stableErrors: plan.complete === undefined,
-    operation: 'upload',
-    onProgress:
-      options.onProgress === undefined
-        ? undefined
-        : (progress: FileUploadProgress): void =>
-            options.onProgress?.(progress),
-  });
+  try {
+    await sendXhrRequest({
+      method: 'PUT',
+      url: plan.upload.url,
+      headers: plan.upload.headers,
+      body: file,
+      signal: options.signal,
+      withCredentials: !isAbsoluteUrl(plan.upload.url),
+      stableErrors: !isAbsoluteUrl(plan.upload.url),
+      operation: 'upload',
+      onProgress:
+        options.onProgress === undefined
+          ? undefined
+          : (progress: FileUploadProgress): void =>
+              options.onProgress?.(progress),
+    });
+    return readReadyFile(
+      await sendXhrRequest({
+        method: 'POST',
+        url: plan.complete.url,
+        headers: plan.complete.headers,
+        signal: options.signal,
+        withCredentials: true,
+        stableErrors: true,
+        operation: 'complete',
+      }),
+      plan.fileId,
+      'complete',
+    );
+  } catch (error) {
+    await cancelBestEffort(plan);
+    throw error;
+  }
+}
 
-  const readyFile =
-    plan.complete === undefined
-      ? readReadyFile(uploadResponse, plan.fileId, 'upload')
-      : readReadyFile(
-          await sendXhrRequest({
-            method: 'POST',
-            url: plan.complete.url,
-            headers: plan.complete.headers,
-            signal: options.signal,
-            withCredentials: true,
-            stableErrors: true,
-            operation: 'complete',
-          }),
-          plan.fileId,
-          'complete',
-        );
-
-  return readyFile;
+async function cancelBestEffort(plan: FileUploadPlan): Promise<void> {
+  try {
+    await sendXhrRequest({
+      method: 'DELETE',
+      url: plan.cancel.url,
+      headers: plan.cancel.headers,
+      withCredentials: true,
+      stableErrors: true,
+      operation: 'cancel',
+    });
+  } catch {
+    // Cancellation must not replace the upload or completion failure.
+  }
 }
 
 function sendXhrRequest(options: XhrRequestOptions): Promise<XhrResponse> {
@@ -192,7 +206,9 @@ function invalidReadyResponse(
   );
 }
 
-function createAbortError(operation: 'upload' | 'complete'): FileClientError {
+function createAbortError(
+  operation: 'upload' | 'complete' | 'cancel',
+): FileClientError {
   return new FileClientError('File upload was aborted.', {
     code: 'UPLOAD_ABORTED',
     status: 0,
@@ -203,9 +219,12 @@ function createAbortError(operation: 'upload' | 'complete'): FileClientError {
 function assertUploadPlan(plan: FileUploadPlan): void {
   if (
     plan.upload.method !== 'PUT' ||
+    plan.complete.method !== 'POST' ||
+    plan.cancel.method !== 'DELETE' ||
     !plan.fileId ||
     !plan.upload.url ||
-    (plan.complete !== undefined && plan.complete.method !== 'POST')
+    !plan.complete.url ||
+    !plan.cancel.url
   ) {
     throw new FileClientError('The file upload plan is invalid.', {
       code: 'UPLOAD_PLAN_INVALID',
@@ -213,6 +232,10 @@ function assertUploadPlan(plan: FileUploadPlan): void {
       operation: 'upload',
     });
   }
+}
+
+function isAbsoluteUrl(value: string): boolean {
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value);
 }
 
 function isStoredFile(value: unknown): value is StoredFile {

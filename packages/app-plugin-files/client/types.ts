@@ -3,7 +3,6 @@ import type {
   FileDisposition,
   PublicFileAccess,
   StoredFile,
-  TemporaryFileAccess,
 } from '../protocol.js';
 
 export interface FileUploadProgress {
@@ -22,9 +21,8 @@ export type FileClientOperation =
   | 'create'
   | 'upload'
   | 'complete'
-  | 'commit'
   | 'cancel'
-  | 'access'
+  | 'content'
   | 'detach'
   | 'public-access';
 
@@ -44,9 +42,7 @@ export interface FileAppClient {
   request<T = unknown>(path: string, init?: RequestInit): Promise<T>;
 }
 
-export interface FileAdapterItem extends StoredFile {
-  slot?: number;
-}
+export type FileAdapterItem = StoredFile;
 
 export type FileAdapterUploadOptions = ExecuteFileUploadPlanOptions;
 
@@ -70,10 +66,7 @@ export interface FileUploadAdapter {
     file: File,
     options?: FileAdapterUploadOptions,
   ): Promise<FileAdapterItem>;
-  access(
-    fileId: string,
-    disposition?: FileDisposition,
-  ): Promise<TemporaryFileAccess>;
+  access(fileId: string, disposition?: FileDisposition): Promise<string>;
   detach(fileId: string): Promise<void>;
   enablePublicAccess(
     fileId: string,

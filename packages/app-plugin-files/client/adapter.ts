@@ -1,17 +1,12 @@
 import type {
-  CommitBusinessFileRequest,
   CreateBusinessFileRequest,
   CreateBusinessFileResponse,
-  DeleteBusinessFileRequest,
-  FileAccessRequest,
-  FileAccessResponse,
   FileDisposition,
   FileOperationResponse,
-  FileReference,
-  ListFileReferencesResponse,
+  FileResponse,
   PublicFileAccessRequest,
   PublicFileAccessResponse,
-  TemporaryFileAccess,
+  StoredFile,
 } from '../protocol.js';
 import { FileClientError, toFileClientError } from './error.js';
 import { executeFileUploadPlan } from './runtime.js';
@@ -40,21 +35,6 @@ export function createFileAdapter(
       return await options.client.request<T>(path, init);
     } catch (error) {
       throw toFileClientError(error, operation, 'The file request failed.');
-    }
-  };
-
-  const removeAttempt = async (
-    fileId: string,
-    bindingCredential: string,
-  ): Promise<void> => {
-    const body: DeleteBusinessFileRequest = { bindingCredential };
-    try {
-      await options.client.request<FileOperationResponse>(itemPath(fileId), {
-        method: 'DELETE',
-        body: JSON.stringify(body),
-      });
-    } catch {
-      // Cleanup failure must not replace the upload or commit error.
     }
   };
 
@@ -87,24 +67,11 @@ export function createFileAdapter(
     assertCreateResponse(created);
 
     try {
-      await executeFileUploadPlan(created.uploadPlan, file, uploadOptions);
-      const commitBody: CommitBusinessFileRequest = {
-        bindingCredential: created.bindingCredential,
-      };
       return toAdapterItem(
-        await request<FileReference>(
-          `${itemPath(created.file.id)}/commit`,
-          'commit',
-          {
-            method: 'POST',
-            body: JSON.stringify(commitBody),
-            signal: uploadOptions.signal,
-          },
-        ),
-        'commit',
+        await executeFileUploadPlan(created.plan, file, uploadOptions),
+        'complete',
       );
     } catch (error) {
-      await removeAttempt(created.file.id, created.bindingCredential);
       throw toFileClientError(
         error,
         readFailureOperation(error),
@@ -115,16 +82,11 @@ export function createFileAdapter(
 
   return {
     async list(): Promise<FileAdapterItem[]> {
-      const response = await request<ListFileReferencesResponse>(
-        basePath,
-        'list',
-      );
-      if (!Array.isArray(response.references)) {
+      const response = await request<StoredFile[]>(basePath, 'list');
+      if (!Array.isArray(response)) {
         throw invalidBusinessResponse('list');
       }
-      return response.references.map((reference) =>
-        toAdapterItem(reference, 'list'),
-      );
+      return response.map((file) => toAdapterItem(file, 'list'));
     },
 
     upload(
@@ -152,19 +114,11 @@ export function createFileAdapter(
     async access(
       fileId: string,
       disposition?: FileDisposition,
-    ): Promise<TemporaryFileAccess> {
-      const body: FileAccessRequest = {
-        ...(disposition === undefined ? {} : { disposition }),
-      };
-      const response = await request<FileAccessResponse>(
-        `${itemPath(fileId)}/access`,
-        'access',
-        { method: 'POST', body: JSON.stringify(body) },
-      );
-      if (!isTemporaryAccess(response.access)) {
-        throw invalidBusinessResponse('access');
-      }
-      return response.access;
+    ): Promise<string> {
+      const path = `${itemPath(fileId)}/content`;
+      return disposition === undefined
+        ? path
+        : `${path}?disposition=${encodeURIComponent(disposition)}`;
     },
 
     async detach(fileId: string): Promise<void> {
@@ -189,11 +143,13 @@ export function createFileAdapter(
 
     async disablePublicAccess(fileId: string): Promise<FileAdapterItem> {
       return toAdapterItem(
-        await request<FileReference>(
-          `${itemPath(fileId)}/public-access`,
-          'public-access',
-          { method: 'DELETE' },
-        ),
+        (
+          await request<FileResponse>(
+            `${itemPath(fileId)}/public-access`,
+            'public-access',
+            { method: 'DELETE' },
+          )
+        ).file,
         'public-access',
       );
     },
@@ -216,7 +172,7 @@ export function createFileAdapter(
       throw invalidBusinessResponse('public-access');
     }
     return {
-      item: toAdapterItem(response.reference, 'public-access'),
+      item: toAdapterItem(response.file, 'public-access'),
       access: response.access,
     };
   }
@@ -252,7 +208,7 @@ function readFileId(value: string): string {
     throw new FileClientError('The fileId is invalid.', {
       code: 'FILE_ADAPTER_INVALID',
       status: 0,
-      operation: 'access',
+      operation: 'content',
     });
   }
   return normalized;
@@ -265,40 +221,21 @@ function assertCreateResponse(
     !isRecord(response) ||
     !isStoredFile(response.file) ||
     response.file.status !== 'pending' ||
-    !isRecord(response.uploadPlan) ||
-    response.uploadPlan.fileId !== response.file.id ||
-    typeof response.bindingCredential !== 'string' ||
-    !response.bindingCredential
+    !isRecord(response.plan) ||
+    response.plan.fileId !== response.file.id
   ) {
     throw invalidBusinessResponse('create');
   }
 }
 
 function toAdapterItem(
-  reference: FileReference,
+  file: StoredFile,
   operation: FileClientOperation,
 ): FileAdapterItem {
-  if (
-    !isRecord(reference) ||
-    !isStoredFile(reference.file) ||
-    reference.file.status !== 'ready' ||
-    (reference.slot !== undefined && typeof reference.slot !== 'number')
-  ) {
+  if (!isStoredFile(file) || file.status !== 'ready') {
     throw invalidBusinessResponse(operation);
   }
-  return {
-    ...reference.file,
-    ...(reference.slot === undefined ? {} : { slot: reference.slot }),
-  };
-}
-
-function isTemporaryAccess(value: unknown): value is TemporaryFileAccess {
-  return (
-    isRecord(value) &&
-    typeof value.url === 'string' &&
-    typeof value.expiresAt === 'string' &&
-    (value.disposition === 'inline' || value.disposition === 'attachment')
-  );
+  return file;
 }
 
 function isPublicAccess(
@@ -330,7 +267,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isStoredFile(value: unknown): value is FileReference['file'] {
+function isStoredFile(value: unknown): value is StoredFile {
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&

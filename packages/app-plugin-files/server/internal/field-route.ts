@@ -7,26 +7,15 @@ import type {
 import { Hono, type Context } from 'hono';
 
 import type {
-  CommitBusinessFileRequest,
   CreateBusinessFileRequest,
   CreateBusinessFileResponse,
-  DeleteBusinessFileRequest,
-  FileAccessRequest,
-  FileAccessResponse,
   FileErrorResponse,
   FileOperationResponse,
-  FileReference,
-  ListFileReferencesResponse,
   PublicFileAccessRequest,
   PublicFileAccessResponse,
   StoredFile,
 } from '../../protocol.js';
 import type { CreateFileRouteOptions, FileFieldBinding } from '../types.js';
-import {
-  ExpiredFileBindingCredentialError,
-  FileBindingCredentialCodec,
-  InvalidFileBindingCredentialError,
-} from './binding-credential.js';
 import type { FilesDataPlane } from './data-plane.js';
 import { FilesDataPlaneError } from './errors.js';
 import {
@@ -35,17 +24,23 @@ import {
 } from './field-repository.js';
 import type { FileKernel } from './kernel.js';
 import {
-  businessFileNotReady,
   businessRecordNotFound,
-  expiredBindingCredential,
+  expiredScopedCapability,
   fileBindingConflict,
   fileReferenceNotFound,
   FileRouteError,
-  invalidBindingCredential,
+  invalidScopedCapability,
   invalidFileRequest,
   invalidFileRoute,
 } from './route-errors.js';
 import type { FilesRuntimeServiceState } from './runtime.js';
+import {
+  ExpiredScopedFileCapabilityError,
+  InvalidScopedFileCapabilityError,
+  type ScopedFileCapability,
+  type ScopedFileCapabilityAction,
+  type ScopedFileCapabilityCodec,
+} from './scoped-capability.js';
 
 export interface CreateFieldFileRouteInput {
   options: CreateFileRouteOptions;
@@ -61,13 +56,13 @@ interface NormalizedFieldBinding {
 }
 
 interface FieldRouteState {
-  routeId: string;
+  scope: string;
   binding: NormalizedFieldBinding;
   repository: FieldBindingRepository;
   options: CreateFileRouteOptions;
   dataPlane: FilesDataPlane;
   kernel: FileKernel;
-  credentialCodec: FileBindingCredentialCodec;
+  capabilityCodec: ScopedFileCapabilityCodec;
 }
 
 type FileRouteHandler = (context: Context) => Promise<Response>;
@@ -76,7 +71,7 @@ export function createFieldFileRoute(input: CreateFieldFileRouteInput): Hono {
   const binding = validateFieldBinding(input.binding, input.state);
   validateOptions(input.options);
   const state: FieldRouteState = {
-    routeId: randomBytes(16).toString('hex'),
+    scope: `field:${randomBytes(16).toString('hex')}`,
     binding,
     repository: createFieldBindingRepository({
       database: input.state.database,
@@ -90,7 +85,7 @@ export function createFieldFileRoute(input: CreateFieldFileRouteInput): Hono {
     options: input.options,
     dataPlane: input.state.dataPlane,
     kernel: input.state.kernel,
-    credentialCodec: input.state.bindingCredentialCodec,
+    capabilityCodec: input.state.scopedCapabilityCodec,
   };
   const routes = new Hono();
 
@@ -102,20 +97,33 @@ export function createFieldFileRoute(input: CreateFieldFileRouteInput): Hono {
     '/',
     withFileRouteErrors((context) => handleCreateUpload(state, context)),
   );
+  routes.put(
+    '/:fileId/upload',
+    withFileRouteErrors((context) => handleUpload(state, context)),
+  );
+  routes.delete(
+    '/:fileId/upload',
+    withFileRouteErrors((context) => handleCancel(state, context)),
+  );
   routes.post(
-    '/:fileId/commit',
-    withFileRouteErrors((context) => handleCommit(state, context)),
+    '/:fileId/complete',
+    withFileRouteErrors((context) => handleComplete(state, context)),
+  );
+  routes.get(
+    '/:fileId/content',
+    withFileRouteErrors((context) => handleContent(state, context, false)),
+  );
+  routes.on(
+    'HEAD',
+    '/:fileId/content',
+    withFileRouteErrors((context) => handleContent(state, context, true)),
   );
   routes.delete(
     '/:fileId',
     withFileRouteErrors((context) => handleDelete(state, context)),
   );
-  routes.post(
-    '/:fileId/access',
-    withFileRouteErrors((context) => handleAccess(state, context)),
-  );
 
-  if (input.options.publicAccess && input.state.publicAccessEnabled) {
+  if (input.options.publicAccess) {
     routes.post(
       '/:fileId/public-access',
       withFileRouteErrors((context) =>
@@ -148,12 +156,10 @@ async function handleList(
     throw businessRecordNotFound();
   }
   if (snapshot.fileId === null) {
-    return context.json<ListFileReferencesResponse>({ references: [] });
+    return context.json<StoredFile[]>([]);
   }
-  const reference = await getReadyReference(state, snapshot.fileId, false);
-  return context.json<ListFileReferencesResponse>({
-    references: reference ? [reference] : [],
-  });
+  const file = await getReadyFile(state, snapshot.fileId, false);
+  return context.json<StoredFile[]>(file ? [file] : []);
 }
 
 async function handleCreateUpload(
@@ -171,77 +177,164 @@ async function handleCreateUpload(
   if (replaceFileId !== snapshot.fileId) {
     throw fileBindingConflict();
   }
-  const attempt = await state.dataPlane.createUploadAttempt({
-    name: readRequiredString(body.name, 'name'),
-    size: readFileSize(body.size),
-    ...(body.contentType === undefined
-      ? {}
-      : { contentType: readRequiredString(body.contentType, 'contentType') }),
-    ...(state.options.constraints === undefined
-      ? {}
-      : { constraints: state.options.constraints }),
-  });
-  const bindingCredential = state.credentialCodec.issue({
-    routeId: state.routeId,
-    recordId,
-    fileId: attempt.plan.fileId,
-    replaceFileId,
-    candidateKey: attempt.candidateKey,
-    expiresAt: new Date(attempt.plan.expiresAt).getTime(),
-  });
+  const attempt = await state.dataPlane.createUploadAttempt(
+    {
+      name: readRequiredString(body.name, 'name'),
+      size: readFileSize(body.size),
+      ...(body.contentType === undefined
+        ? {}
+        : { contentType: readRequiredString(body.contentType, 'contentType') }),
+      ...(state.options.constraints === undefined
+        ? {}
+        : { constraints: state.options.constraints }),
+    },
+    {
+      basePath: readMountedBasePath(context),
+      issueCapability: (action, transfer) =>
+        state.capabilityCodec.issue({
+          ...transfer,
+          scope: readCapabilityScope(state.scope, context),
+          recordId,
+          replaceFileId,
+          action,
+        }),
+    },
+  );
   return context.json<CreateBusinessFileResponse>(
     {
       file: attempt.file,
-      uploadPlan: attempt.plan,
-      bindingCredential,
+      plan: attempt.plan,
     },
     201,
   );
 }
 
-async function handleCommit(
+async function handleUpload(
   state: FieldRouteState,
   context: Context,
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'write', recordId });
   const fileId = readRouteFileId(context, 'fileId');
-  const body = await readJson<CommitBusinessFileRequest>(context);
-  const credential = verifyCredential(
-    state,
+  await state.options.authorize({
+    context,
+    action: 'write',
     recordId,
     fileId,
-    body.bindingCredential,
+  });
+  const capability = verifyCapability(
+    state,
+    context,
+    recordId,
+    fileId,
+    'upload',
   );
-  const file = await state.kernel.getFile(fileId);
-  if (!file) {
-    throw fileReferenceNotFound();
-  }
-  if (file.status !== 'ready') {
-    throw businessFileNotReady();
-  }
+  const file = await state.dataPlane.receiveLocalUpload(context, capability);
+  return context.json({ file });
+}
 
-  const snapshot = await state.repository.get(recordId);
-  if (!snapshot.recordExists) {
+async function handleCancel(
+  state: FieldRouteState,
+  context: Context,
+): Promise<Response> {
+  const recordId = readRecordId(state, context);
+  const fileId = readRouteFileId(context, 'fileId');
+  await state.options.authorize({
+    context,
+    action: 'write',
+    recordId,
+    fileId,
+  });
+  const capability = verifyCapability(
+    state,
+    context,
+    recordId,
+    fileId,
+    'cancel',
+  );
+  await state.dataPlane.cancelUpload(capability);
+  return context.json<FileOperationResponse>({ success: true });
+}
+
+async function handleComplete(
+  state: FieldRouteState,
+  context: Context,
+): Promise<Response> {
+  const recordId = readRecordId(state, context);
+  const fileId = readRouteFileId(context, 'fileId');
+  await state.options.authorize({
+    context,
+    action: 'write',
+    recordId,
+    fileId,
+  });
+  const capability = verifyCapability(
+    state,
+    context,
+    recordId,
+    fileId,
+    'complete',
+  );
+  const completed = await state.dataPlane.completeUpload(capability, {
+    commit: async (connection, file) => {
+      const snapshot = await state.repository.get(recordId, connection);
+      if (!snapshot.recordExists) {
+        return { outcome: 'record-missing' as const };
+      }
+      if (snapshot.fileId === file.id) {
+        return { outcome: 'committed' as const };
+      }
+      if (snapshot.fileId !== capability.replaceFileId) {
+        return { outcome: 'conflict' as const };
+      }
+      const updated = await state.repository.compareAndSet(
+        recordId,
+        capability.replaceFileId,
+        file.id,
+        connection,
+      );
+      if (updated) {
+        return { outcome: 'committed' as const };
+      }
+      const winner = await state.repository.get(recordId, connection);
+      if (!winner.recordExists) {
+        return { outcome: 'record-missing' as const };
+      }
+      return {
+        outcome:
+          winner.fileId === file.id
+            ? ('committed' as const)
+            : ('conflict' as const),
+      };
+    },
+  });
+  if (completed.binding?.outcome === 'record-missing') {
     throw businessRecordNotFound();
   }
-  if (snapshot.fileId !== fileId) {
-    const updated = await state.repository.compareAndSet(
-      recordId,
-      credential.replaceFileId,
-      fileId,
-    );
-    if (!updated) {
-      const winner = await state.repository.get(recordId);
-      if (!winner.recordExists) {
-        throw businessRecordNotFound();
-      }
-      if (winner.fileId !== fileId) {
-        throw fileBindingConflict();
-      }
-    }
+  if (completed.binding?.outcome !== 'committed') {
+    throw fileBindingConflict();
   }
-  return context.json<FileReference>(toReference(file));
+  return context.json({ file: completed.file });
+}
+
+async function handleContent(
+  state: FieldRouteState,
+  context: Context,
+  head: boolean,
+): Promise<Response> {
+  const recordId = readRecordId(state, context);
+  const fileId = readRouteFileId(context, 'fileId');
+  await state.options.authorize({
+    context,
+    action: 'read',
+    recordId,
+    fileId,
+  });
+  await requireCurrentFile(state, recordId, fileId);
+  return state.dataPlane.createScopedContentResponse(
+    fileId,
+    head,
+    readOptionalDisposition(context.req.query('disposition')),
+  );
 }
 
 async function handleDelete(
@@ -249,8 +342,13 @@ async function handleDelete(
   context: Context,
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'write', recordId });
   const fileId = readRouteFileId(context, 'fileId');
+  await state.options.authorize({
+    context,
+    action: 'write',
+    recordId,
+    fileId,
+  });
   const snapshot = await state.repository.get(recordId);
   if (!snapshot.recordExists) {
     throw businessRecordNotFound();
@@ -267,38 +365,76 @@ async function handleDelete(
     return context.json<FileOperationResponse>({ success: true });
   }
 
-  const body = await readOptionalJson<DeleteBusinessFileRequest>(context);
-  if (body?.bindingCredential !== undefined) {
-    const credential = verifyCredential(
-      state,
-      recordId,
-      fileId,
-      body.bindingCredential,
-    );
-    await state.kernel.cancelUpload(fileId, credential.candidateKey);
-    return context.json<FileOperationResponse>({ success: true });
-  }
-
   if (snapshot.fileId === null && file?.status === 'ready') {
     return context.json<FileOperationResponse>({ success: true });
   }
   throw fileBindingConflict();
 }
 
-async function handleAccess(
+async function requireCurrentFile(
+  state: FieldRouteState,
+  recordId: string,
+  fileId: string,
+): Promise<StoredFile> {
+  const snapshot = await state.repository.get(recordId);
+  if (!snapshot.recordExists) {
+    throw businessRecordNotFound();
+  }
+  if (snapshot.fileId !== fileId) {
+    throw fileReferenceNotFound();
+  }
+  const file = await getReadyFile(state, fileId, true);
+  if (!file) {
+    throw fileReferenceNotFound();
+  }
+  return file;
+}
+
+async function getReadyFile(
+  state: FieldRouteState,
+  fileId: string,
+  required: boolean,
+): Promise<StoredFile | undefined> {
+  const file = await state.kernel.getFile(fileId);
+  if (!file || file.status !== 'ready') {
+    if (required) {
+      throw fileReferenceNotFound();
+    }
+    return undefined;
+  }
+  return file;
+}
+
+function verifyCapability(
   state: FieldRouteState,
   context: Context,
-): Promise<Response> {
-  const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'read', recordId });
-  const fileId = readRouteFileId(context, 'fileId');
-  await requireCurrentReference(state, recordId, fileId);
-  const body = await readOptionalJson<FileAccessRequest>(context);
-  const disposition = readDisposition(body?.disposition);
-  const access = await state.dataPlane.createReadAccess(fileId, disposition);
-  return context.json<FileAccessResponse>({
-    access: { ...access, disposition },
-  });
+  recordId: string,
+  fileId: string,
+  action: ScopedFileCapabilityAction,
+): ScopedFileCapability {
+  const value = context.req.query('access');
+  if (!value || value.length > 4096) {
+    throw invalidScopedCapability();
+  }
+  try {
+    return state.capabilityCodec.verify(
+      {
+        scope: readCapabilityScope(state.scope, context),
+        recordId,
+        fileId,
+        action,
+      },
+      value,
+    );
+  } catch (error) {
+    if (error instanceof ExpiredScopedFileCapabilityError) {
+      throw expiredScopedCapability();
+    }
+    if (error instanceof InvalidScopedFileCapabilityError) {
+      throw invalidScopedCapability();
+    }
+    throw error;
+  }
 }
 
 async function handleEnablePublicAccess(
@@ -320,11 +456,16 @@ async function handleDisablePublicAccess(
   context: Context,
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'share', recordId });
   const fileId = readRouteFileId(context, 'fileId');
-  await requireCurrentReference(state, recordId, fileId);
+  await state.options.authorize({
+    context,
+    action: 'share',
+    recordId,
+    fileId,
+  });
+  await requireCurrentFile(state, recordId, fileId);
   const file = await state.dataPlane.disablePublicAccess(fileId);
-  return context.json<FileReference>(toReference(file));
+  return context.json({ file });
 }
 
 async function handlePublicAccess(
@@ -333,9 +474,14 @@ async function handlePublicAccess(
   operation: 'enable' | 'reset',
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
-  await state.options.authorize({ context, action: 'share', recordId });
   const fileId = readRouteFileId(context, 'fileId');
-  await requireCurrentReference(state, recordId, fileId);
+  await state.options.authorize({
+    context,
+    action: 'share',
+    recordId,
+    fileId,
+  });
+  await requireCurrentFile(state, recordId, fileId);
   const body = await readOptionalJson<PublicFileAccessRequest>(context);
   const disposition = readDisposition(body?.disposition);
   const result =
@@ -343,76 +489,13 @@ async function handlePublicAccess(
       ? await state.dataPlane.enablePublicAccess(fileId, disposition)
       : await state.dataPlane.resetPublicAccess(fileId, disposition);
   return context.json<PublicFileAccessResponse>({
-    reference: toReference(result.file),
+    file: result.file,
     access: {
       url: result.url,
       token: result.token,
       disposition: result.disposition,
     },
   });
-}
-
-async function requireCurrentReference(
-  state: FieldRouteState,
-  recordId: string,
-  fileId: string,
-): Promise<FileReference> {
-  const snapshot = await state.repository.get(recordId);
-  if (!snapshot.recordExists) {
-    throw businessRecordNotFound();
-  }
-  if (snapshot.fileId !== fileId) {
-    throw fileReferenceNotFound();
-  }
-  const reference = await getReadyReference(state, fileId, true);
-  if (!reference) {
-    throw fileReferenceNotFound();
-  }
-  return reference;
-}
-
-async function getReadyReference(
-  state: FieldRouteState,
-  fileId: string,
-  required: boolean,
-): Promise<FileReference | undefined> {
-  const file = await state.kernel.getFile(fileId);
-  if (!file || file.status !== 'ready') {
-    if (required) {
-      throw fileReferenceNotFound();
-    }
-    return undefined;
-  }
-  return toReference(file);
-}
-
-function toReference(file: StoredFile): FileReference {
-  return { file };
-}
-
-function verifyCredential(
-  state: FieldRouteState,
-  recordId: string,
-  fileId: string,
-  value: unknown,
-): ReturnType<FileBindingCredentialCodec['verify']> {
-  if (typeof value !== 'string' || !value) {
-    throw invalidBindingCredential();
-  }
-  try {
-    return state.credentialCodec.verify(
-      { routeId: state.routeId, recordId, fileId },
-      value,
-    );
-  } catch (error) {
-    if (error instanceof ExpiredFileBindingCredentialError) {
-      throw expiredBindingCredential();
-    }
-    if (error instanceof InvalidFileBindingCredentialError) {
-      throw invalidBindingCredential();
-    }
-    throw error;
-  }
 }
 
 function validateFieldBinding(
@@ -468,10 +551,23 @@ function validateFieldBinding(
       `Collection "${collectionName}" field "${fileField}" must reference files.id with ON DELETE RESTRICT.`,
     );
   }
-  const recordField = findPrimaryField(collection);
+  const recordField = binding.recordKey
+    ? readConfigName(binding.recordKey, 'recordKey')
+    : findPrimaryField(collection);
   if (!recordField) {
     throw invalidFileRoute(
       `Collection "${collectionName}" must have one primary key field for recordParam "${recordParam}".`,
+    );
+  }
+  const recordKeyField = findField(collection, recordField);
+  if (!recordKeyField || isRelationField(recordKeyField.definition)) {
+    throw invalidFileRoute(
+      `Collection "${collectionName}" recordKey "${recordField}" does not exist or is not scalar.`,
+    );
+  }
+  if (binding.recordKey && !hasUniqueRecordKey(collection, recordField)) {
+    throw invalidFileRoute(
+      `Collection "${collectionName}" recordKey "${recordField}" must be unique.`,
     );
   }
   return {
@@ -522,6 +618,14 @@ function findField(collection: InspectedCollection, name: string) {
   return collection.fields.find((field) => field.definition.name === name);
 }
 
+function isRelationField(
+  definition: InspectedCollection['fields'][number]['definition'],
+): boolean {
+  return ['belongsTo', 'hasOne', 'hasMany', 'belongsToMany'].includes(
+    definition.type,
+  );
+}
+
 function findPrimaryField(collection: InspectedCollection): string | undefined {
   const direct = collection.fields.filter(
     (field) => field.definition.primaryKey === true,
@@ -537,6 +641,22 @@ function findPrimaryField(collection: InspectedCollection): string | undefined {
     ...constraints.flatMap((constraint) => constraint.fields),
   ]);
   return names.size === 1 ? [...names][0] : undefined;
+}
+
+function hasUniqueRecordKey(
+  collection: InspectedCollection,
+  fieldName: string,
+): boolean {
+  const field = findField(collection, fieldName);
+  if (field?.definition.primaryKey || field?.definition.unique) {
+    return true;
+  }
+  return (collection.definition.constraints ?? []).some(
+    (constraint) =>
+      (constraint.type === 'primary' || constraint.type === 'unique') &&
+      constraint.fields.length === 1 &&
+      constraint.fields[0] === fieldName,
+  );
 }
 
 function hasRestrictFilesForeignKey(
@@ -613,6 +733,33 @@ function readDisposition(value: unknown): 'inline' | 'attachment' {
     return value;
   }
   throw invalidFileRequest('Request field "disposition" is invalid.');
+}
+
+function readOptionalDisposition(
+  value: string | undefined,
+): 'inline' | 'attachment' | undefined {
+  return value === undefined ? undefined : readDisposition(value);
+}
+
+function readMountedBasePath(context: Context): string {
+  const path = context.req.path.replace(/\/+$/, '');
+  if (!path) {
+    throw invalidFileRoute('Mounted file route path is invalid.');
+  }
+  const fileId = context.req.param('fileId');
+  if (fileId) {
+    const marker = `/${fileId}/`;
+    const index = path.lastIndexOf(marker);
+    if (index <= 0) {
+      throw invalidFileRoute('Mounted file route scope is invalid.');
+    }
+    return path.slice(0, index);
+  }
+  return path;
+}
+
+function readCapabilityScope(scope: string, context: Context): string {
+  return `${scope}:${readMountedBasePath(context)}`;
 }
 
 async function readJson<T>(context: Context): Promise<T> {

@@ -15,6 +15,7 @@ export interface FileRouteAuthorizationInput {
   context: Context;
   action: 'read' | 'write' | 'share';
   recordId: string;
+  fileId?: string;
 }
 
 export interface FileFieldBinding {
@@ -22,6 +23,7 @@ export interface FileFieldBinding {
   collection: string;
   recordParam: string;
   fileField: string;
+  recordKey?: string;
 }
 
 export interface FileRelationBinding {

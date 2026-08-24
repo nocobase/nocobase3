@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
+import type { DatabaseConnection } from '@nocobase/database';
+
 import type { StoredFile } from '../../client/types.js';
 import { normalizeStorageKey } from './storage/key.js';
 import type { StorageObjectMetadata } from './storage/types.js';
@@ -35,34 +37,47 @@ export interface PendingFileUpload {
   readyKey: string;
 }
 
-export interface CompleteFileInput {
+export interface CompleteFileInput<TBinding = undefined> {
   fileId: string;
   candidateKey: string;
   readyKey: string;
   validateMetadata?: (metadata: StorageObjectMetadata) => void;
+  commitBinding?(
+    connection: DatabaseConnection,
+    file: StoredFile,
+  ): Promise<TBinding>;
 }
 
-export type CompleteFileResult =
-  | { outcome: 'completed'; file: StoredFile }
+export type CompleteFileResult<TBinding = undefined> =
   | {
-      outcome: 'ready';
+      outcome: 'completed' | 'ready';
       file: StoredFile;
-      cleanupStorageKey?: string;
+      binding?: TBinding;
+      cleanupStorageKeys: readonly string[];
     }
-  | { outcome: 'failed'; file: StoredFile; cleanupStorageKey: string }
-  | { outcome: 'missing'; cleanupStorageKey: string }
+  | {
+      outcome: 'failed';
+      file: StoredFile;
+      cleanupStorageKeys: readonly string[];
+    }
+  | { outcome: 'missing'; cleanupStorageKeys: readonly string[] }
   | {
       outcome: 'persistence-failed';
       candidateStorageKey: string;
-      cleanupStorageKey?: string;
+      cleanupStorageKeys: readonly string[];
       cleanupSafe: boolean;
       error: Error;
     };
 
-export type CancelFileResult =
-  | { outcome: 'failed'; file: StoredFile; cleanupStorageKey: string }
+export interface CancelFileBindingInput {
+  connection: DatabaseConnection;
+  file: StoredFile | undefined;
+}
+
+export type CancelFileResult<TBinding = undefined> =
+  | { outcome: 'failed'; file: StoredFile; binding?: TBinding }
   | { outcome: 'ready'; file: StoredFile }
-  | { outcome: 'missing'; cleanupStorageKey: string };
+  | { outcome: 'missing'; binding?: TBinding };
 
 export interface PublicAccessState {
   tokenHash: string | null;
@@ -115,61 +130,160 @@ export class FileKernel {
     };
   }
 
-  async getFile(fileId: string): Promise<StoredFile | undefined> {
-    const record = await this.#repository.get(readFileId(fileId));
+  async getFile(
+    fileId: string,
+    connection?: DatabaseConnection,
+  ): Promise<StoredFile | undefined> {
+    const record = await this.#repository.get(readFileId(fileId), connection);
     return record ? toStoredFile(record) : undefined;
   }
 
-  async getFiles(fileIds: readonly string[]): Promise<StoredFile[]> {
-    const records = await this.#repository.getMany(fileIds.map(readFileId));
+  async getFiles(
+    fileIds: readonly string[],
+    connection?: DatabaseConnection,
+  ): Promise<StoredFile[]> {
+    const records = await this.#repository.getMany(
+      fileIds.map(readFileId),
+      connection,
+    );
     return records.map(toStoredFile);
   }
 
-  async getRecord(fileId: string): Promise<FileRecord | undefined> {
-    const record = await this.#repository.get(readFileId(fileId));
+  async getRecord(
+    fileId: string,
+    connection?: DatabaseConnection,
+  ): Promise<FileRecord | undefined> {
+    const record = await this.#repository.get(readFileId(fileId), connection);
     return record ? cloneFileRecord(record) : undefined;
   }
 
-  async completeUpload(input: CompleteFileInput): Promise<CompleteFileResult> {
+  async completeUpload<TBinding = undefined>(
+    input: CompleteFileInput<TBinding>,
+  ): Promise<CompleteFileResult<TBinding>> {
     const fileId = readFileId(input.fileId);
     const candidateKey = normalizeStorageKey(input.candidateKey);
     const readyKey = normalizeStorageKey(input.readyKey);
     assertStorageKeyOwnership(fileId, candidateKey, 'pending');
     assertStorageKeyOwnership(fileId, readyKey, 'ready');
+    const commitBinding = input.commitBinding?.bind(input);
     const current = await this.#repository.get(fileId);
 
     if (!current) {
-      return { outcome: 'missing', cleanupStorageKey: candidateKey };
+      return { outcome: 'missing', cleanupStorageKeys: [candidateKey] };
     }
     if (current.status === 'ready') {
+      const file = toStoredFile(current);
+      let binding: TBinding | undefined;
+      try {
+        binding = commitBinding
+          ? await this.#repository.transaction((connection) =>
+              commitBinding(connection, file),
+            )
+          : undefined;
+      } catch (error) {
+        return {
+          outcome: 'persistence-failed',
+          candidateStorageKey: candidateKey,
+          cleanupStorageKeys: [candidateKey],
+          cleanupSafe: true,
+          error: toError(error, 'Files binding persistence failed.'),
+        };
+      }
       return {
         outcome: 'ready',
-        file: toStoredFile(current),
-        cleanupStorageKey: candidateKey,
+        file,
+        ...(binding === undefined ? {} : { binding }),
+        cleanupStorageKeys: [candidateKey],
       };
     }
     if (current.status === 'failed') {
       return {
         outcome: 'failed',
         file: toStoredFile(current),
-        cleanupStorageKey: candidateKey,
+        cleanupStorageKeys: [candidateKey],
       };
     }
 
-    const metadata = normalizeStorageMetadata(
-      await this.#storage.head(candidateKey),
-    );
-    input.validateMetadata?.(metadata);
-    await this.#storage.finalizeCandidate(candidateKey, readyKey);
-    let completed: boolean;
+    let metadata: StorageObjectMetadata;
     try {
-      completed = await this.#repository.completePending({
-        id: fileId,
-        storageKey: readyKey,
-        size: metadata.contentLength,
-        contentType: metadata.contentType ?? null,
-        now: this.#now(),
-      });
+      metadata = normalizeStorageMetadata(
+        await this.#storage.head(candidateKey),
+      );
+      input.validateMetadata?.(metadata);
+      await this.#storage.finalizeCandidate(candidateKey, readyKey);
+    } catch (error) {
+      try {
+        metadata = normalizeStorageMetadata(await this.#storage.head(readyKey));
+        input.validateMetadata?.(metadata);
+      } catch {
+        throw error;
+      }
+    }
+    try {
+      return await this.#repository.transaction(
+        async (connection): Promise<CompleteFileResult<TBinding>> => {
+          const transactionCurrent = await this.#repository.get(
+            fileId,
+            connection,
+          );
+          if (!transactionCurrent) {
+            return { outcome: 'missing', cleanupStorageKeys: [readyKey] };
+          }
+          if (transactionCurrent.status === 'failed') {
+            return {
+              outcome: 'failed',
+              file: toStoredFile(transactionCurrent),
+              cleanupStorageKeys: [readyKey],
+            };
+          }
+
+          let outcome: 'completed' | 'ready' = 'ready';
+          let readyRecord = transactionCurrent;
+          if (transactionCurrent.status === 'pending') {
+            const completed = await this.#repository.completePending(
+              {
+                id: fileId,
+                storageKey: readyKey,
+                size: metadata.contentLength,
+                contentType: metadata.contentType ?? null,
+                now: this.#now(),
+              },
+              connection,
+            );
+            readyRecord = await this.#repository.getRequired(
+              fileId,
+              connection,
+            );
+            if (completed) {
+              outcome = 'completed';
+            }
+          }
+          if (readyRecord.status === 'pending') {
+            throw new Error(
+              'Files completion CAS ended without a terminal state.',
+            );
+          }
+          if (readyRecord.status === 'failed') {
+            return {
+              outcome: 'failed',
+              file: toStoredFile(readyRecord),
+              cleanupStorageKeys: [readyKey],
+            };
+          }
+
+          const file = toStoredFile(readyRecord);
+          const binding: TBinding | undefined = commitBinding
+            ? await commitBinding(connection, file)
+            : undefined;
+          return {
+            outcome,
+            file,
+            ...(binding === undefined ? {} : { binding }),
+            cleanupStorageKeys:
+              readyRecord.storageKey === readyKey ? [] : [readyKey],
+          };
+        },
+      );
     } catch (error) {
       return this.#resolvePersistenceFailure(
         fileId,
@@ -177,50 +291,13 @@ export class FileKernel {
         toError(error, 'Files completion persistence failed.'),
       );
     }
-    if (completed) {
-      return {
-        outcome: 'completed',
-        file: toStoredFile(await this.#repository.getRequired(fileId)),
-      };
-    }
-
-    let winner: FileRecord | undefined;
-    try {
-      winner = await this.#repository.get(fileId);
-    } catch (error) {
-      return {
-        outcome: 'persistence-failed',
-        candidateStorageKey: readyKey,
-        cleanupSafe: false,
-        error: toError(error, 'Files completion winner lookup failed.'),
-      };
-    }
-    if (!winner) {
-      return { outcome: 'missing', cleanupStorageKey: readyKey };
-    }
-    if (winner.status === 'failed') {
-      return {
-        outcome: 'failed',
-        file: toStoredFile(winner),
-        cleanupStorageKey: readyKey,
-      };
-    }
-    if (winner.status === 'ready') {
-      return {
-        outcome: 'ready',
-        file: toStoredFile(winner),
-        ...(winner.storageKey === readyKey
-          ? {}
-          : { cleanupStorageKey: readyKey }),
-      };
-    }
-    throw new Error('Files completion CAS ended without a terminal state.');
   }
 
-  async cancelUpload(
+  async cancelUpload<TBinding = undefined>(
     fileId: string,
     candidateKey: string,
-  ): Promise<CancelFileResult> {
+    cancelBinding?: (input: CancelFileBindingInput) => Promise<TBinding>,
+  ): Promise<CancelFileResult<TBinding>> {
     const normalizedFileId = readFileId(fileId);
     const normalizedCandidateKey = normalizeStorageKey(candidateKey);
     assertStorageKeyOwnership(
@@ -228,33 +305,53 @@ export class FileKernel {
       normalizedCandidateKey,
       'pending',
     );
-    const failed = await this.#repository.failPending(
-      normalizedFileId,
-      this.#now(),
+    const result = await this.#repository.transaction(
+      async (connection): Promise<CancelFileResult<TBinding>> => {
+        const failed = await this.#repository.failPending(
+          normalizedFileId,
+          this.#now(),
+          connection,
+        );
+        const current = await this.#repository.get(
+          normalizedFileId,
+          connection,
+        );
+        if (!current) {
+          const binding = cancelBinding
+            ? await cancelBinding({ connection, file: undefined })
+            : undefined;
+          return {
+            outcome: 'missing',
+            ...(binding === undefined ? {} : { binding }),
+          };
+        }
+        if (failed || current.status === 'failed') {
+          const file = toStoredFile(current);
+          const binding = cancelBinding
+            ? await cancelBinding({ connection, file })
+            : undefined;
+          return {
+            outcome: 'failed',
+            file,
+            ...(binding === undefined ? {} : { binding }),
+          };
+        }
+        if (current.status === 'ready') {
+          return { outcome: 'ready', file: toStoredFile(current) };
+        }
+        throw new Error(
+          'Files cancellation CAS ended without a terminal state.',
+        );
+      },
     );
-    const current = await this.#repository.get(normalizedFileId);
-    if (!current) {
-      return {
-        outcome: 'missing',
-        cleanupStorageKey: normalizedCandidateKey,
-      };
-    }
-    if (failed || current.status === 'failed') {
+    if (result.outcome !== 'ready') {
       try {
         await this.#storage.delete(normalizedCandidateKey);
       } catch {
-        // The result retains the exact candidate key for best-effort cleanup.
+        // Cleanup is best-effort; failed state and reservation release are durable.
       }
-      return {
-        outcome: 'failed',
-        file: toStoredFile(current),
-        cleanupStorageKey: normalizedCandidateKey,
-      };
     }
-    if (current.status === 'ready') {
-      return { outcome: 'ready', file: toStoredFile(current) };
-    }
-    throw new Error('Files cancellation CAS ended without a terminal state.');
+    return result;
   }
 
   async setPublicAccess(
@@ -398,12 +495,16 @@ export class FileKernel {
     try {
       const current = await this.#repository.get(fileId);
       if (current?.status === 'ready' && current.storageKey === readyKey) {
-        return { outcome: 'ready', file: toStoredFile(current) };
+        return {
+          outcome: 'ready',
+          file: toStoredFile(current),
+          cleanupStorageKeys: [],
+        };
       }
       return {
         outcome: 'persistence-failed',
         candidateStorageKey: readyKey,
-        cleanupStorageKey: readyKey,
+        cleanupStorageKeys: [readyKey],
         cleanupSafe: true,
         error,
       };
@@ -411,6 +512,7 @@ export class FileKernel {
       return {
         outcome: 'persistence-failed',
         candidateStorageKey: readyKey,
+        cleanupStorageKeys: [],
         cleanupSafe: false,
         error,
       };

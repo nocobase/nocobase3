@@ -1,4 +1,9 @@
-import type { DatabaseManager, InspectedCollection } from '@nocobase/database';
+import type {
+  DatabaseConnection,
+  DatabaseManager,
+  InspectedCollection,
+  QueryAdapter,
+} from '@nocobase/database';
 
 export interface CreateFieldBindingRepositoryOptions {
   database: DatabaseManager;
@@ -11,18 +16,6 @@ export interface CreateFieldBindingRepositoryOptions {
 export type FieldReferenceSnapshot =
   | { recordExists: false; fileId: null }
   | { recordExists: true; fileId: string | null };
-
-interface NativeQuery {
-  select(column: string): NativeQuery;
-  where(column: string, value: unknown): NativeQuery;
-  whereNull(column: string): NativeQuery;
-  first(): Promise<Record<string, unknown> | undefined>;
-  update(values: Record<string, unknown>): Promise<number | unknown[]>;
-}
-
-interface NativeQueryClient {
-  (table: string): NativeQuery;
-}
 
 export class FieldBindingRepository {
   readonly #database: DatabaseManager;
@@ -39,12 +32,15 @@ export class FieldBindingRepository {
     this.#fileColumn = findColumn(options.collection, options.fileField);
   }
 
-  async get(recordId: string): Promise<FieldReferenceSnapshot> {
-    const client = await this.#client();
-    const row = await client(this.#table)
+  async get(
+    recordId: string,
+    connection?: DatabaseConnection,
+  ): Promise<FieldReferenceSnapshot> {
+    const row = await this.#query(connection)
+      .selectFrom(this.#table)
       .select(this.#fileColumn)
-      .where(this.#recordColumn, recordId)
-      .first();
+      .where(this.#recordColumn, '=', recordId)
+      .executeTakeFirst<Record<string, unknown>>();
     if (!row) {
       return { recordExists: false, fileId: null };
     }
@@ -58,21 +54,22 @@ export class FieldBindingRepository {
     recordId: string,
     expectedFileId: string | null,
     nextFileId: string | null,
+    connection?: DatabaseConnection,
   ): Promise<boolean> {
-    const client = await this.#client();
-    let query = client(this.#table).where(this.#recordColumn, recordId);
+    let query = this.#query(connection)
+      .updateTable(this.#table)
+      .set({ [this.#fileColumn]: nextFileId })
+      .where(this.#recordColumn, '=', recordId);
     query =
       expectedFileId === null
-        ? query.whereNull(this.#fileColumn)
-        : query.where(this.#fileColumn, expectedFileId);
-    const result = await query.update({ [this.#fileColumn]: nextFileId });
-    return (typeof result === 'number' ? result : result.length) === 1;
+        ? query.where(this.#fileColumn, 'is', null)
+        : query.where(this.#fileColumn, '=', expectedFileId);
+    const result = await query.execute();
+    return result.updatedCount === 1;
   }
 
-  #client(): Promise<NativeQueryClient> {
-    return this.#database
-      .connection(this.#connection)
-      .client<NativeQueryClient>();
+  #query(connection?: DatabaseConnection): QueryAdapter {
+    return connection?.query ?? this.#database.query(this.#connection);
   }
 }
 

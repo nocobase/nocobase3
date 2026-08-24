@@ -13,11 +13,9 @@ import {
 } from '@nocobase/database';
 import type {
   CreateBusinessFileResponse,
-  FileAccessResponse,
   FileErrorResponse,
-  FileReference,
-  ListFileReferencesResponse,
   PublicFileAccessResponse,
+  StoredFile,
 } from '@nocobase/app-plugin-files/protocol';
 import {
   createFileService,
@@ -28,9 +26,9 @@ import {
 
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
 import {
+  createOpaqueFilesRuntime,
   getFilesRuntimeDataPlane,
   getFilesRuntimeKernel,
-  createOpaqueFilesRuntime,
 } from '../server/internal/runtime.js';
 
 const EMPLOYEE_ONE = 'employee-1';
@@ -46,8 +44,8 @@ interface TestFixture {
   authorizeCalls: Array<{
     action: 'read' | 'write' | 'share';
     recordId: string;
+    fileId?: string;
   }>;
-  advance(milliseconds: number): void;
 }
 
 const fixtures: TestFixture[] = [];
@@ -62,51 +60,8 @@ afterEach(async () => {
   );
 });
 
-describe('field binding file routes', () => {
-  it('explicitly mounts one complete child route using employeeId', async () => {
-    const fixture = await createFixture();
-
-    const empty = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-    );
-    expect(empty.status).toBe(200);
-    expect(await json<ListFileReferencesResponse>(empty)).toEqual({
-      references: [],
-    });
-    expect(fixture.authorizeCalls).toContainEqual({
-      action: 'read',
-      recordId: EMPLOYEE_ONE,
-    });
-
-    const upload = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'avatar.png',
-      size: 6,
-      contentType: 'image/png',
-    });
-    const commit = await commitUpload(fixture, EMPLOYEE_ONE, upload);
-    expect(commit.status).toBe(200);
-    const committed = await json<FileReference>(commit);
-    expect(committed).toMatchObject({
-      file: {
-        id: upload.uploadPlan.fileId,
-        status: 'ready',
-        name: 'avatar.png',
-        size: 6,
-      },
-    });
-    const repeated = await commitUpload(fixture, EMPLOYEE_ONE, upload);
-    expect(repeated.status).toBe(200);
-    expect(await json<FileReference>(repeated)).toEqual(committed);
-
-    const listed = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-    );
-    expect(await json<ListFileReferencesResponse>(listed)).toEqual({
-      references: [committed],
-    });
-  });
-
-  it('registers only the resource-oriented standard route table', async () => {
+describe('field binding scoped file routes', () => {
+  it('registers the exact unified route table without commit/access/uploads', async () => {
     const fixture = await createFixture({ publicAccess: true });
     const child = fixture.service.createFileRoute({
       binding: {
@@ -124,595 +79,306 @@ describe('field binding file routes', () => {
     ).toEqual([
       ['GET', '/'],
       ['POST', '/'],
-      ['POST', '/:fileId/commit'],
+      ['PUT', '/:fileId/upload'],
+      ['DELETE', '/:fileId/upload'],
+      ['POST', '/:fileId/complete'],
+      ['GET', '/:fileId/content'],
+      ['HEAD', '/:fileId/content'],
       ['DELETE', '/:fileId'],
-      ['POST', '/:fileId/access'],
       ['POST', '/:fileId/public-access'],
       ['POST', '/:fileId/public-access/reset'],
       ['DELETE', '/:fileId/public-access'],
     ]);
-  });
-
-  it('keeps the old ready avatar readable until replacement commit', async () => {
-    const fixture = await createFixture();
-    const first = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'old.png',
-      size: 3,
-      contentType: 'image/png',
-    });
-    await commitUpload(fixture, EMPLOYEE_ONE, first);
-
-    const replacement = await createUpload(fixture, EMPLOYEE_ONE, {
-      name: 'new.png',
-      size: 4,
-      contentType: 'image/png',
-      replaceFileId: first.uploadPlan.fileId,
-    });
-    const oldAccess = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${first.uploadPlan.fileId}/access`,
-      { method: 'POST' },
-    );
-    expect(oldAccess.status).toBe(200);
-    expect((await json<FileAccessResponse>(oldAccess)).access.url).toContain(
-      `/api/files/${first.uploadPlan.fileId}/content`,
-    );
-
-    const beforeCommit = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-    );
     expect(
-      (await json<ListFileReferencesResponse>(beforeCommit)).references[0]?.file
-        .id,
-    ).toBe(first.uploadPlan.fileId);
-
-    await uploadBytes(fixture, replacement, 'next');
+      child.routes.some(({ path: value }) => value.includes('commit')),
+    ).toBe(false);
     expect(
-      (await commitUpload(fixture, EMPLOYEE_ONE, replacement)).status,
-    ).toBe(200);
-  });
-
-  it('allows only one concurrent replacement for the same old snapshot', async () => {
-    const fixture = await createFixture();
-    const first = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'old.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    await commitUpload(fixture, EMPLOYEE_ONE, first);
-
-    const [left, right] = await Promise.all([
-      createReadyUpload(fixture, EMPLOYEE_ONE, {
-        name: 'left.txt',
-        size: 4,
-        contentType: 'text/plain',
-        replaceFileId: first.uploadPlan.fileId,
-      }),
-      createReadyUpload(fixture, EMPLOYEE_ONE, {
-        name: 'right.txt',
-        size: 5,
-        contentType: 'text/plain',
-        replaceFileId: first.uploadPlan.fileId,
-      }),
-    ]);
-    const results = await Promise.all([
-      commitUpload(fixture, EMPLOYEE_ONE, left),
-      commitUpload(fixture, EMPLOYEE_ONE, right),
-    ]);
-    expect(results.map((response) => response.status).sort()).toEqual([
-      200, 409,
-    ]);
-    const conflict = results.find((response) => response.status === 409);
-    expect(await json<FileErrorResponse>(required(conflict))).toMatchObject({
-      code: 'FILE_BINDING_CONFLICT',
-    });
-    const listed = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-    );
-    expect([left.uploadPlan.fileId, right.uploadPlan.fileId]).toContain(
-      (await json<ListFileReferencesResponse>(listed)).references[0]?.file.id,
-    );
-  });
-
-  it('cancels pending attempts without clearing the old ready avatar', async () => {
-    const fixture = await createFixture();
-    const first = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'old.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    await commitUpload(fixture, EMPLOYEE_ONE, first);
-    const replacement = await createUpload(fixture, EMPLOYEE_ONE, {
-      name: 'cancel.txt',
-      size: 5,
-      contentType: 'text/plain',
-      replaceFileId: first.uploadPlan.fileId,
-    });
-
-    const cancelled = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${replacement.uploadPlan.fileId}`,
-      {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          bindingCredential: replacement.bindingCredential,
-        }),
-      },
-    );
-    expect(cancelled.status).toBe(200);
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getFile(
-        replacement.uploadPlan.fileId,
+      child.routes.some(
+        ({ path: value }) =>
+          value.includes('access') && !value.includes('public-access'),
       ),
-    ).toMatchObject({ status: 'failed' });
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(
-      first.uploadPlan.fileId,
-    );
-
-    const repeated = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${replacement.uploadPlan.fileId}`,
-      jsonRequest('DELETE', {
-        bindingCredential: replacement.bindingCredential,
-      }),
-    );
-    expect(repeated.status).toBe(200);
+    ).toBe(false);
+    expect(
+      child.routes.some(({ path: value }) => value.includes('uploads')),
+    ).toBe(false);
   });
 
-  it('requires the matching binding credential to delete a pending attempt', async () => {
+  it('runs POST, scoped Local PUT, scoped complete, and binds atomically', async () => {
     const fixture = await createFixture();
-    const pending = await createUpload(fixture, EMPLOYEE_ONE, {
-      name: 'pending.txt',
-      size: 3,
+    const upload = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'avatar.txt',
+      size: 6,
+      contentType: 'text/plain',
+    });
+
+    expect(Object.keys(upload).sort()).toEqual(['file', 'plan']);
+    expect(upload.plan.upload.url).toMatch(
+      /^\/employees\/employee-1\/avatar\/.+\/upload\?access=/,
+    );
+    expect(upload.plan.complete.url).toMatch(
+      /^\/employees\/employee-1\/avatar\/.+\/complete\?access=/,
+    );
+    expect(upload.plan.cancel.url).toMatch(
+      /^\/employees\/employee-1\/avatar\/.+\/upload\?access=/,
+    );
+
+    const put = await putBytes(fixture, upload, 'avatar');
+    expect(put.status).toBe(200);
+    await expect(put.json()).resolves.toMatchObject({
+      file: { id: upload.file.id, status: 'pending', size: null },
+    });
+    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
+
+    const complete = await completeUpload(fixture, upload);
+    expect(complete.status).toBe(200);
+    await expect(complete.json()).resolves.toMatchObject({
+      file: { id: upload.file.id, status: 'ready', size: 6 },
+    });
+    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(upload.file.id);
+    expect(await json<StoredFile[]>(await list(fixture, EMPLOYEE_ONE))).toEqual(
+      [expect.objectContaining({ id: upload.file.id, status: 'ready' })],
+    );
+
+    const retry = await completeUpload(fixture, upload);
+    expect(retry.status).toBe(200);
+    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(upload.file.id);
+  });
+
+  it('binds capabilities to scope, record, file, action, and expiry', async () => {
+    const fixture = await createFixture();
+    const first = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'first.txt',
+      size: 1,
       contentType: 'text/plain',
     });
     const other = await createUpload(fixture, EMPLOYEE_TWO, {
       name: 'other.txt',
-      size: 3,
+      size: 1,
       contentType: 'text/plain',
     });
 
-    const withoutCredential = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${pending.uploadPlan.fileId}`,
-      { method: 'DELETE' },
-    );
-    expect(withoutCredential.status).toBe(409);
-    const wrongCredential = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${pending.uploadPlan.fileId}`,
-      jsonRequest('DELETE', {
-        bindingCredential: other.bindingCredential,
-      }),
-    );
-    expect(wrongCredential.status).toBe(403);
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getFile(
-        pending.uploadPlan.fileId,
-      ),
-    ).toMatchObject({ status: 'pending' });
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
-  });
-
-  it('does not register legacy uploads routes', async () => {
-    const fixture = await createFixture();
-    const create = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/uploads`,
-      jsonRequest('POST', { name: 'legacy.txt', size: 1 }),
-    );
-    const remove = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/uploads/${'a'.repeat(64)}`,
-      { method: 'DELETE' },
-    );
-
-    expect(create.status).toBe(404);
-    expect(remove.status).toBe(404);
-    expect(await fileCount(fixture)).toBe(0);
-  });
-
-  it('rejects access and public access for an uncommitted ready file', async () => {
-    const fixture = await createFixture({ publicAccess: true });
-    const ready = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'uncommitted.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    const base = `/employees/${EMPLOYEE_ONE}/avatar/${ready.uploadPlan.fileId}`;
-
-    expect(
-      (await fixture.app.request(`${base}/access`, { method: 'POST' })).status,
-    ).toBe(404);
     expect(
       (
-        await fixture.app.request(`${base}/public-access`, {
-          method: 'POST',
+        await fixture.app.request(
+          replacePathRecord(first.plan.upload.url, EMPLOYEE_TWO),
+          { method: 'PUT', body: 'x' },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await fixture.app.request(
+          first.plan.upload.url.replace(
+            `/employees/${EMPLOYEE_ONE}/avatar/`,
+            `/employee-files/${EMPLOYEE_ONE}/`,
+          ),
+          { method: 'PUT', body: 'x' },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await fixture.app.request(
+          replacePathFile(first.plan.upload.url, other.file.id),
+          { method: 'PUT', body: 'x' },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await fixture.app.request(first.plan.complete.url, {
+          method: 'DELETE',
         })
       ).status,
     ).toBe(404);
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
   });
 
-  it('does not expose pending field values through the committed list', async () => {
+  it('keeps the old file when concurrent replacements conflict', async () => {
     const fixture = await createFixture();
-    const pending = await createUpload(fixture, EMPLOYEE_ONE, {
-      name: 'pending.txt',
+    const original = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
+      name: 'old.txt',
       size: 3,
       contentType: 'text/plain',
     });
-    await fixture.database
-      .query()
-      .updateTable('employees')
-      .set({ avatarId: pending.uploadPlan.fileId })
-      .where('id', '=', EMPLOYEE_ONE)
-      .execute();
-
-    const response = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-    );
-    expect(await json<ListFileReferencesResponse>(response)).toEqual({
-      references: [],
-    });
-  });
-
-  it('rejects route constraints before creating a pending file', async () => {
-    const fixture = await createFixture();
-    const response = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-      jsonRequest('POST', {
-        name: 'blocked.exe',
-        size: 3,
-        contentType: 'application/octet-stream',
-      }),
-    );
-    expect(response.status).toBe(415);
-    expect(await json<FileErrorResponse>(response)).toMatchObject({
-      code: 'UPLOAD_TYPE_NOT_ALLOWED',
-    });
-    expect(await fileCount(fixture)).toBe(0);
-  });
-
-  it('rejects unauthorized read, write, and share before side effects', async () => {
-    const fixture = await createFixture({ publicAccess: true });
-    fixture.deniedActions.add('write');
-    const deniedUpload = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-      jsonRequest('POST', { name: 'denied.txt', size: 1 }),
-    );
-    expect(deniedUpload.status).toBe(403);
-    expect(await fileCount(fixture)).toBe(0);
-
-    fixture.deniedActions.delete('write');
-    const upload = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'allowed.txt',
-      size: 7,
-      contentType: 'text/plain',
-    });
-    await commitUpload(fixture, EMPLOYEE_ONE, upload);
-
-    fixture.deniedActions.add('read');
-    const deniedRead = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}/access`,
-      { method: 'POST' },
-    );
-    expect(deniedRead.status).toBe(403);
-
-    fixture.deniedActions.add('share');
-    const deniedShare = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}/public-access`,
-      { method: 'POST' },
-    );
-    expect(deniedShare.status).toBe(403);
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getPublicAccessState(
-        upload.uploadPlan.fileId,
-      ),
-    ).toEqual({ tokenHash: null, disposition: null });
-  });
-
-  it('rejects cross-record credential reuse and arbitrary ready files', async () => {
-    const fixture = await createFixture();
-    const upload = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'one.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    const crossRecord = await commitUpload(fixture, EMPLOYEE_TWO, upload);
-    expect(crossRecord.status).toBe(403);
-    expect(await currentAvatar(fixture, EMPLOYEE_TWO)).toBeNull();
-
-    const unrelated = await createReadyUpload(fixture, EMPLOYEE_TWO, {
-      name: 'two.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    const arbitrary = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${unrelated.uploadPlan.fileId}/commit`,
-      jsonRequest('POST', {
-        bindingCredential: upload.bindingCredential,
-      }),
-    );
-    expect(arbitrary.status).toBe(403);
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
-  });
-
-  it('rejects credential reuse on another route instance', async () => {
-    const fixture = await createFixture();
-    const secondRoute = fixture.service.createFileRoute({
-      binding: {
-        type: 'field',
-        collection: 'employees',
-        recordParam: 'employeeId',
-        fileField: 'avatarId',
-      },
-      authorize() {},
-    });
-    fixture.app.route('/employee-files/:employeeId', secondRoute);
-    const upload = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'route.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-
-    const response = await fixture.app.request(
-      `/employee-files/${EMPLOYEE_ONE}/${upload.uploadPlan.fileId}/commit`,
-      jsonRequest('POST', {
-        bindingCredential: upload.bindingCredential,
-      }),
-    );
-    expect(response.status).toBe(403);
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
-  });
-
-  it('rejects stale replacement snapshots before creating pending files', async () => {
-    const fixture = await createFixture();
-    const first = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'current.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    await commitUpload(fixture, EMPLOYEE_ONE, first);
-    const before = await fileCount(fixture);
-
-    const response = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-      jsonRequest('POST', {
-        name: 'stale.txt',
-        size: 3,
-        contentType: 'text/plain',
-        replaceFileId: 'a'.repeat(64),
-      }),
-    );
-    expect(response.status).toBe(409);
-    expect(await fileCount(fixture)).toBe(before);
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(
-      first.uploadPlan.fileId,
-    );
-  });
-
-  it('rejects expired binding credentials before changing the field', async () => {
-    const fixture = await createFixture();
-    const upload = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'expired.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    fixture.advance(16 * 60 * 1000);
-
-    const response = await commitUpload(fixture, EMPLOYEE_ONE, upload);
-    expect(response.status).toBe(410);
-    expect(await json<FileErrorResponse>(response)).toMatchObject({
-      code: 'UPLOAD_EXPIRED',
-    });
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
-  });
-
-  it('does not detach or commit when write authorization fails', async () => {
-    const fixture = await createFixture();
-    const current = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'current.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    await commitUpload(fixture, EMPLOYEE_ONE, current);
-    const replacement = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'replacement.txt',
+    const left = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'left.txt',
       size: 4,
       contentType: 'text/plain',
-      replaceFileId: current.uploadPlan.fileId,
+      replaceFileId: original.file.id,
     });
-    fixture.deniedActions.add('write');
-
-    expect(
-      (await commitUpload(fixture, EMPLOYEE_ONE, replacement)).status,
-    ).toBe(403);
-    expect(
-      (
-        await fixture.app.request(
-          `/employees/${EMPLOYEE_ONE}/avatar/${current.uploadPlan.fileId}`,
-          { method: 'DELETE' },
-        )
-      ).status,
-    ).toBe(403);
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(
-      current.uploadPlan.fileId,
-    );
-  });
-
-  it('detaches only the matching reference and retains the ready file', async () => {
-    const fixture = await createFixture();
-    const upload = await createReadyUpload(fixture, EMPLOYEE_ONE, {
-      name: 'detach.txt',
-      size: 3,
+    const right = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'right.txt',
+      size: 5,
       contentType: 'text/plain',
+      replaceFileId: original.file.id,
     });
-    await commitUpload(fixture, EMPLOYEE_ONE, upload);
+    await putBytes(fixture, left, 'left');
+    await putBytes(fixture, right, 'right');
 
-    const detached = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}`,
-      { method: 'DELETE' },
-    );
-    expect(detached.status).toBe(200);
-    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
+    const [leftResult, rightResult] = await Promise.all([
+      completeUpload(fixture, left),
+      completeUpload(fixture, right),
+    ]);
+    expect([leftResult.status, rightResult.status].sort()).toEqual([200, 409]);
+    const conflict = leftResult.status === 409 ? leftResult : rightResult;
+    expect(await json<FileErrorResponse>(conflict)).toMatchObject({
+      code: 'FILE_BINDING_CONFLICT',
+    });
+    const winner = await currentAvatar(fixture, EMPLOYEE_ONE);
+    expect([left.file.id, right.file.id]).toContain(winner);
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getFile(
-        upload.uploadPlan.fileId,
+        leftResult.status === 409 ? left.file.id : right.file.id,
       ),
     ).toMatchObject({ status: 'ready' });
     expect(
-      (
-        await fixture.app.request(
-          `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}`,
-          { method: 'DELETE' },
-        )
-      ).status,
-    ).toBe(200);
+      await getFilesRuntimeKernel(fixture.runtime).getFile(original.file.id),
+    ).toMatchObject({ status: 'ready' });
   });
 
-  it('enables, resets, and disables public access when both gates allow it', async () => {
+  it('cancels pending attempts without detaching a ready replacement target', async () => {
+    const fixture = await createFixture();
+    const original = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
+      name: 'old.txt',
+      size: 3,
+      contentType: 'text/plain',
+    });
+    const replacement = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'new.txt',
+      size: 3,
+      contentType: 'text/plain',
+      replaceFileId: original.file.id,
+    });
+    await putBytes(fixture, replacement, 'new');
+
+    const cancelled = await fixture.app.request(replacement.plan.cancel.url, {
+      method: 'DELETE',
+    });
+    expect(cancelled.status).toBe(200);
+    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBe(original.file.id);
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(replacement.file.id),
+    ).toMatchObject({ status: 'failed' });
+  });
+
+  it('checks read authorization and current binding for every GET/HEAD content', async () => {
+    const fixture = await createFixture();
+    const upload = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
+      name: 'private.txt',
+      size: 7,
+      contentType: 'text/plain',
+    });
+    const path = `/employees/${EMPLOYEE_ONE}/avatar/${upload.file.id}/content`;
+
+    const head = await fixture.app.request(path, { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(head.body).toBeNull();
+    expect(head.headers.get('content-length')).toBe('7');
+    const content = await fixture.app.request(path);
+    expect(content.status).toBe(200);
+    await expect(content.text()).resolves.toBe('xxxxxxx');
+    expect(fixture.authorizeCalls).toContainEqual({
+      action: 'read',
+      recordId: EMPLOYEE_ONE,
+      fileId: upload.file.id,
+    });
+
+    fixture.deniedActions.add('read');
+    expect((await fixture.app.request(path)).status).toBe(403);
+    fixture.deniedActions.delete('read');
+    expect(
+      (
+        await fixture.app.request(
+          `/employees/${EMPLOYEE_TWO}/avatar/${upload.file.id}/content`,
+        )
+      ).status,
+    ).toBe(404);
+  });
+
+  it('returns 404 for removed commit/access/uploads routes', async () => {
+    const fixture = await createFixture();
+    const fileId = 'a'.repeat(64);
+    for (const [method, route] of [
+      ['POST', `/employees/${EMPLOYEE_ONE}/avatar/${fileId}/commit`],
+      ['POST', `/employees/${EMPLOYEE_ONE}/avatar/${fileId}/access`],
+      ['POST', `/employees/${EMPLOYEE_ONE}/avatar/uploads`],
+    ] as const) {
+      expect((await fixture.app.request(route, { method })).status).toBe(404);
+    }
+  });
+
+  it('enables, resets, and disables Public Access by fileId', async () => {
     const fixture = await createFixture({ publicAccess: true });
-    const upload = await createReadyUpload(fixture, EMPLOYEE_ONE, {
+    const upload = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
       name: 'public.txt',
       size: 6,
       contentType: 'text/plain',
     });
-    await commitUpload(fixture, EMPLOYEE_ONE, upload);
-    const base = `/employees/${EMPLOYEE_ONE}/avatar/${upload.uploadPlan.fileId}/public-access`;
+    const base = `/employees/${EMPLOYEE_ONE}/avatar/${upload.file.id}/public-access`;
 
     const enabled = await fixture.app.request(
       base,
       jsonRequest('POST', { disposition: 'inline' }),
     );
     expect(enabled.status).toBe(200);
-    const firstAccess = await json<PublicFileAccessResponse>(enabled);
-    expect(firstAccess.access).toMatchObject({ disposition: 'inline' });
-    expect((await fixture.app.request(firstAccess.access.url)).status).toBe(
-      200,
-    );
+    const first = await json<PublicFileAccessResponse>(enabled);
+    expect(first.file.id).toBe(upload.file.id);
+    expect((await fixture.app.request(first.access.url)).status).toBe(200);
 
     const reset = await fixture.app.request(
       `${base}/reset`,
       jsonRequest('POST', { disposition: 'attachment' }),
     );
-    const secondAccess = await json<PublicFileAccessResponse>(reset);
-    expect(secondAccess.access.token).not.toBe(firstAccess.access.token);
-    expect((await fixture.app.request(firstAccess.access.url)).status).toBe(
-      403,
-    );
-    expect((await fixture.app.request(secondAccess.access.url)).status).toBe(
+    const second = await json<PublicFileAccessResponse>(reset);
+    expect(second.access.token).not.toBe(first.access.token);
+    expect((await fixture.app.request(first.access.url)).status).toBe(403);
+    expect((await fixture.app.request(second.access.url)).status).toBe(200);
+
+    expect((await fixture.app.request(base, { method: 'DELETE' })).status).toBe(
       200,
     );
-
-    const disabled = await fixture.app.request(base, { method: 'DELETE' });
-    expect(disabled.status).toBe(200);
-    expect((await fixture.app.request(secondAccess.access.url)).status).toBe(
-      403,
-    );
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getPublicAccessState(
-        upload.uploadPlan.fileId,
-      ),
-    ).toEqual({ tokenHash: null, disposition: null });
+    expect((await fixture.app.request(second.access.url)).status).toBe(403);
   });
 
-  it('omits public routes unless route and global configuration both enable them', async () => {
+  it('keeps configured Public Access routes and returns the stable global gate error', async () => {
     const fixture = await createFixture({ routePublicAccess: true });
+    const upload = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
+      name: 'private-public.txt',
+      size: 4,
+      contentType: 'text/plain',
+    });
     const response = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar/missing/public-access`,
+      `/employees/${EMPLOYEE_ONE}/avatar/${upload.file.id}/public-access`,
       { method: 'POST' },
     );
-    expect(response.status).toBe(404);
-    expect(fixture.authorizeCalls).not.toContainEqual({
-      action: 'share',
-      recordId: EMPLOYEE_ONE,
-    });
-  });
-
-  it('fails clearly when the caller mount path omits the configured recordParam', async () => {
-    const fixture = await createFixture({ mountParam: 'personId' });
-    const response = await fixture.app.request(
-      `/employees/${EMPLOYEE_ONE}/avatar`,
-    );
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(403);
     expect(await json<FileErrorResponse>(response)).toMatchObject({
-      code: 'FILE_ROUTE_INVALID',
-      error: expect.stringContaining(':employeeId'),
+      code: 'PUBLIC_ACCESS_DISABLED',
     });
-    expect(fixture.authorizeCalls).toHaveLength(0);
   });
 
-  it('fails fast for invalid field metadata and constraints without secrets', async () => {
-    const fixture = await createFixture({ mount: false });
-    expect(() =>
-      fixture.service.createFileRoute({
-        binding: {
-          type: 'field',
-          collection: 'employees',
-          recordParam: 'employeeId',
-          fileField: 'displayName',
-        },
-        authorize() {},
-      }),
-    ).toThrow(/employees.*displayName.*nullable string\(64\)/i);
-    expect(() =>
-      fixture.service.createFileRoute({
-        binding: {
-          type: 'field',
-          collection: 'missingCollection',
-          recordParam: 'employeeId',
-          fileField: 'avatarId',
-        },
-        authorize() {},
-      }),
-    ).toThrow(/missingCollection.*does not exist/i);
-    expect(() =>
-      fixture.service.createFileRoute({
-        binding: {
-          type: 'field',
-          collection: 'employees',
-          recordParam: 'employeeId',
-          fileField: 'avatarId',
-        },
-        constraints: { maxBytes: 0 },
-        authorize() {},
-      }),
-    ).toThrow(/maxBytes.*positive/i);
-    expect(() =>
-      fixture.service.createFileRoute({
-        binding: {
-          type: 'field',
-          collection: 'employees',
-          recordParam: 'employeeId',
-          fileField: 'unconstrainedFileId',
-        },
-        authorize() {},
-      }),
-    ).toThrow(/unconstrainedFileId.*ON DELETE RESTRICT/i);
-    expect(() =>
-      fixture.service.createFileRoute({
-        binding: {
-          type: 'field',
-          collection: 'employeesWithRequiredFile',
-          recordParam: 'employeeId',
-          fileField: 'requiredFileId',
-        },
-        authorize() {},
-      }),
-    ).toThrow(/requiredFileId.*nullable string\(64\)/i);
-    expect(() =>
-      fixture.service.createFileRoute({
-        binding: {
-          type: 'field',
-          collection: 'employees',
-          recordParam: '',
-          fileField: 'avatarId',
-        },
-        authorize() {},
-      }),
-    ).toThrow(/recordParam.*invalid/i);
+  it('detaches only ready bindings and preserves physical files', async () => {
+    const fixture = await createFixture();
+    const upload = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
+      name: 'detach.txt',
+      size: 6,
+      contentType: 'text/plain',
+    });
+    const response = await fixture.app.request(
+      `/employees/${EMPLOYEE_ONE}/avatar/${upload.file.id}`,
+      { method: 'DELETE' },
+    );
+    expect(response.status).toBe(200);
+    expect(await currentAvatar(fixture, EMPLOYEE_ONE)).toBeNull();
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(upload.file.id),
+    ).toMatchObject({ status: 'ready' });
   });
 });
 
 interface CreateFixtureOptions {
   publicAccess?: boolean;
   routePublicAccess?: boolean;
-  mountParam?: string;
-  mount?: boolean;
 }
 
 async function createFixture(
@@ -725,68 +391,42 @@ async function createFixture(
         dialect: 'sqlite',
         driver: 'better-sqlite3',
         filename: ':memory:',
+        pool: { min: 1, max: 1 },
       },
     },
   });
   await filesMigration.up(createMigrationContext(database.connection()));
   await database.builder().createCollection('employees', (collection) => {
     collection.string('id', { length: 64 }).notNull().primary();
-    collection.string('displayName', { length: 255 }).notNull();
     collection.string('avatarId', { length: 64 }).nullable();
-    collection.string('unconstrainedFileId', { length: 64 }).nullable();
     collection.foreignKey('avatarId', {
       references: { collection: 'files', fields: ['id'] },
       onDelete: 'restrict',
     });
   });
   await database
-    .builder()
-    .createCollection('employeesWithRequiredFile', (collection) => {
-      collection.string('id', { length: 64 }).notNull().primary();
-      collection.string('requiredFileId', { length: 64 }).notNull();
-      collection.foreignKey('requiredFileId', {
-        references: { collection: 'files', fields: ['id'] },
-        onDelete: 'restrict',
-      });
-    });
-  await database
     .query()
     .insertInto('employees')
     .values([
-      {
-        id: EMPLOYEE_ONE,
-        displayName: 'Employee One',
-        avatarId: null,
-        unconstrainedFileId: null,
-      },
-      {
-        id: EMPLOYEE_TWO,
-        displayName: 'Employee Two',
-        avatarId: null,
-        unconstrainedFileId: null,
-      },
+      { id: EMPLOYEE_ONE, avatarId: null },
+      { id: EMPLOYEE_TWO, avatarId: null },
     ])
     .execute();
+
   const storageRoot = await mkdtemp(path.join(tmpdir(), 'files-field-route-'));
-  let now = new Date('2026-08-24T00:00:00.000Z');
-  const runtime = createOpaqueFilesRuntime(
-    {
-      database,
-      config: resolveFilesConfig({
-        appStorageRoot: storageRoot,
-        config: { publicAccess: { enabled: options.publicAccess ?? false } },
-      }),
-      audience: 'field-route-test',
-      secret: 'field-route-test-secret-at-least-32-characters',
-    },
-    {
-      clock: () => now,
-    },
-  );
+  const runtime = createOpaqueFilesRuntime({
+    database,
+    config: resolveFilesConfig({
+      appStorageRoot: storageRoot,
+      config: { publicAccess: { enabled: options.publicAccess ?? false } },
+    }),
+    audience: 'field-route-test',
+    secret: 'field-route-test-secret-at-least-32-characters',
+  });
   const service = createFileService({ runtime });
   const deniedActions = new Set<'read' | 'write' | 'share'>();
   const authorizeCalls: TestFixture['authorizeCalls'] = [];
-  const child = service.createFileRoute({
+  const route = service.createFileRoute({
     binding: {
       type: 'field',
       collection: 'employees',
@@ -795,12 +435,16 @@ async function createFixture(
     },
     constraints: {
       maxBytes: 1024,
-      allowedExtensions: ['.png', '.txt'],
-      allowedContentTypes: ['image/png', 'text/plain'],
+      allowedExtensions: ['.txt'],
+      allowedContentTypes: ['text/plain'],
     },
     publicAccess: options.routePublicAccess ?? options.publicAccess,
-    authorize({ action, recordId }) {
-      authorizeCalls.push({ action, recordId });
+    authorize({ action, recordId, fileId }) {
+      authorizeCalls.push({
+        action,
+        recordId,
+        ...(fileId === undefined ? {} : { fileId }),
+      });
       if (deniedActions.has(action)) {
         throw new HTTPException(403, { message: 'Forbidden' });
       }
@@ -808,13 +452,9 @@ async function createFixture(
   });
   const app = new Hono();
   app.route('/api/files', getFilesRuntimeDataPlane(runtime).createRoute());
-  if (options.mount !== false) {
-    app.route(
-      `/employees/:${options.mountParam ?? 'employeeId'}/avatar`,
-      child,
-    );
-  }
-  const fixture: TestFixture = {
+  app.route('/employees/:employeeId/avatar', route);
+  app.route('/employee-files/:employeeId', route);
+  const fixture = {
     app,
     database,
     runtime,
@@ -822,9 +462,6 @@ async function createFixture(
     storageRoot,
     deniedActions,
     authorizeCalls,
-    advance(milliseconds) {
-      now = new Date(now.getTime() + milliseconds);
-    },
   };
   fixtures.push(fixture);
   return fixture;
@@ -848,7 +485,7 @@ async function createUpload(
   return json<CreateBusinessFileResponse>(response);
 }
 
-async function createReadyUpload(
+async function uploadAndComplete(
   fixture: TestFixture,
   employeeId: string,
   input: {
@@ -859,36 +496,42 @@ async function createReadyUpload(
   },
 ): Promise<CreateBusinessFileResponse> {
   const upload = await createUpload(fixture, employeeId, input);
-  await uploadBytes(fixture, upload, 'x'.repeat(input.size));
+  expect((await putBytes(fixture, upload, 'x'.repeat(input.size))).status).toBe(
+    200,
+  );
+  expect((await completeUpload(fixture, upload)).status).toBe(200);
   return upload;
 }
 
-async function uploadBytes(
+function putBytes(
   fixture: TestFixture,
   upload: CreateBusinessFileResponse,
   body: string,
-): Promise<void> {
-  const response = await fixture.app.request(upload.uploadPlan.upload.url, {
-    method: 'PUT',
-    headers: {
-      ...upload.uploadPlan.upload.headers,
-      'content-length': String(Buffer.byteLength(body)),
-    },
-    body,
-  });
-  expect(response.status).toBe(200);
+): Promise<Response> {
+  return Promise.resolve(
+    fixture.app.request(upload.plan.upload.url, {
+      method: 'PUT',
+      headers: {
+        ...upload.plan.upload.headers,
+        'content-length': String(Buffer.byteLength(body)),
+      },
+      body,
+    }),
+  );
 }
 
-async function commitUpload(
+function completeUpload(
   fixture: TestFixture,
-  employeeId: string,
   upload: CreateBusinessFileResponse,
 ): Promise<Response> {
-  return fixture.app.request(
-    `/employees/${employeeId}/avatar/${upload.uploadPlan.fileId}/commit`,
-    jsonRequest('POST', {
-      bindingCredential: upload.bindingCredential,
-    }),
+  return Promise.resolve(
+    fixture.app.request(upload.plan.complete.url, { method: 'POST' }),
+  );
+}
+
+function list(fixture: TestFixture, employeeId: string): Promise<Response> {
+  return Promise.resolve(
+    fixture.app.request(`/employees/${employeeId}/avatar`),
   );
 }
 
@@ -905,10 +548,12 @@ async function currentAvatar(
   return typeof row?.avatarId === 'string' ? row.avatarId : null;
 }
 
-async function fileCount(fixture: TestFixture): Promise<number> {
-  return (
-    await fixture.database.query().selectFrom('files').select('id').execute()
-  ).length;
+function replacePathRecord(url: string, recordId: string): string {
+  return url.replace('/employees/employee-1/', `/employees/${recordId}/`);
+}
+
+function replacePathFile(url: string, fileId: string): string {
+  return url.replace(/\/avatar\/[^/]+\//, `/avatar/${fileId}/`);
 }
 
 function jsonRequest(method: string, body: object): RequestInit {
@@ -921,11 +566,4 @@ function jsonRequest(method: string, body: object): RequestInit {
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
-}
-
-function required<T>(value: T | undefined): T {
-  if (value === undefined) {
-    throw new Error('Expected a value.');
-  }
-  return value;
 }
