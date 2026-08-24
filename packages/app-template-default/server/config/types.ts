@@ -1,6 +1,6 @@
 import type { CachingConfig } from '@nocobase/caching';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
-import type { AppDriveConfig } from '@nocobase/drive';
+import type { FilesConfig } from '@nocobase/app-plugin-files/server';
 import type { LoggingConfig } from '@nocobase/logging';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
@@ -38,7 +38,7 @@ export interface AppConfig {
   auth: AppAuthConfig;
   caching: CachingConfig;
   database: AppDatabaseConfig;
-  drive: AppDriveConfig;
+  files: FilesConfig;
   logging: LoggingConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;

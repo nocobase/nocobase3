@@ -4,7 +4,7 @@ import { createSessionMiddleware } from '@nocobase/session';
 
 import type { AppDeps } from '../runtime/deps.js';
 import type { AppServices } from '../services/index.js';
-import { createApiRoutes } from './api/index.js';
+import { createApiRoutes, type ApiRoutes } from './api/index.js';
 import { createHelloPageHandler } from './hello.js';
 
 export interface RegisterAppRoutesOptions {
@@ -17,18 +17,15 @@ export interface RegisterAppRoutesOptions {
 export function registerAppRoutes(
   app: Hono,
   options: RegisterAppRoutesOptions,
-): void {
+): ApiRoutes {
   app.use('*', createSessionMiddleware(options.deps.sessionManager));
 
   app.get('/hello', createHelloPageHandler());
 
-  app.route(
-    '/api',
-    createApiRoutes({
-      appName: options.appName,
-      publicBasePath: options.publicBasePath,
-      deps: options.deps,
-      services: options.services,
-    }),
-  );
+  return createApiRoutes({
+    appName: options.appName,
+    publicBasePath: options.publicBasePath,
+    deps: options.deps,
+    services: options.services,
+  });
 }

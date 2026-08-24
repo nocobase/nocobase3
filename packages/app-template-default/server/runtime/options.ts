@@ -193,6 +193,51 @@ function createScopeEnv(scope: AppScope): EnvMap {
       'apiClientShareToken',
     )?.toString(),
     AUTH_SECRET: getScopeConfigString(scope.config, 'authSecret'),
+    FILES_STORAGE_DRIVER: getScopeConfigString(
+      scope.config,
+      'filesStorageDriver',
+    ),
+    FILES_LOCAL_ROOT: getScopeConfigString(scope.config, 'filesLocalRoot'),
+    FILES_S3_BUCKET: getScopeConfigString(scope.config, 'filesS3Bucket'),
+    FILES_S3_REGION: getScopeConfigString(scope.config, 'filesS3Region'),
+    FILES_S3_ENDPOINT: getScopeConfigString(scope.config, 'filesS3Endpoint'),
+    FILES_S3_PREFIX: getScopeConfigString(scope.config, 'filesS3Prefix'),
+    FILES_S3_FORCE_PATH_STYLE: getScopeConfigBoolean(
+      scope.config,
+      'filesS3ForcePathStyle',
+    )?.toString(),
+    FILES_S3_ACCESS_KEY_ID: getScopeConfigString(
+      scope.config,
+      'filesS3AccessKeyId',
+    ),
+    FILES_S3_SECRET_ACCESS_KEY: getScopeConfigString(
+      scope.config,
+      'filesS3SecretAccessKey',
+    ),
+    FILES_S3_SESSION_TOKEN: getScopeConfigString(
+      scope.config,
+      'filesS3SessionToken',
+    ),
+    FILES_UPLOAD_MAX_BYTES: getScopeConfigNumber(
+      scope.config,
+      'filesUploadMaxBytes',
+    )?.toString(),
+    FILES_UPLOAD_EXPIRES_IN_SECONDS: getScopeConfigNumber(
+      scope.config,
+      'filesUploadExpiresInSeconds',
+    )?.toString(),
+    FILES_ACCESS_TEMPORARY_EXPIRES_IN_SECONDS: getScopeConfigNumber(
+      scope.config,
+      'filesAccessTemporaryExpiresInSeconds',
+    )?.toString(),
+    FILES_ACCESS_PROVIDER_URL_EXPIRES_IN_SECONDS: getScopeConfigNumber(
+      scope.config,
+      'filesAccessProviderUrlExpiresInSeconds',
+    )?.toString(),
+    FILES_PUBLIC_ACCESS_ENABLED: getScopeConfigBoolean(
+      scope.config,
+      'filesPublicAccessEnabled',
+    )?.toString(),
   });
 }
 
@@ -224,6 +269,20 @@ function getScopeConfigBoolean(
 
   const value = (config as Record<string, unknown>)[key];
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function getScopeConfigNumber(
+  config: unknown,
+  key: string,
+): number | undefined {
+  if (!config || typeof config !== 'object') {
+    return undefined;
+  }
+
+  const value = (config as Record<string, unknown>)[key];
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function stringFromEnv(env: EnvMap, key: string): string | undefined {

@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 
 export interface AppPluginRoutesContext<TDeps = unknown, TServices = unknown> {
   readonly app: Hono;
+  readonly api?: Hono;
   readonly deps: TDeps;
   readonly services: TServices;
 }

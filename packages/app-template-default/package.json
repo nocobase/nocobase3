@@ -13,6 +13,9 @@
       "@nocobase/app-plugin-authentication": {
         "enabled": true
       },
+      "@nocobase/app-plugin-files": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-database-example": {
         "enabled": true
       },
@@ -36,6 +39,7 @@
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-files": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
@@ -44,7 +48,6 @@
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/database": "workspace:^",
-    "@nocobase/drive": "workspace:^",
     "@nocobase/id-generator": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/portal-sdk": "workspace:^",

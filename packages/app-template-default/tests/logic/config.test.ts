@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { validateMigrations, validateSeeds } from '@nocobase/database';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createConfigEnv,
@@ -18,7 +18,7 @@ import app from '../../server/config/app.ts';
 import caching from '../../server/config/caching.ts';
 import configFactories from '../../server/config/index.ts';
 import database from '../../server/config/database.ts';
-import drive from '../../server/config/drive.ts';
+import files from '../../server/config/files.ts';
 import logging from '../../server/config/logging.ts';
 import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
@@ -30,6 +30,7 @@ import {
 import {
   loadDatabaseTaskConfig,
   loadEmbeddedAppConfig,
+  loadStandaloneAppConfig,
 } from '../../server/runtime/config.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
@@ -37,6 +38,7 @@ process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 const tempDirs: string[] = [];
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -63,7 +65,10 @@ describe('config registry', () => {
     });
     expect(config.caching.default).toBe('memory');
     expect(config.database.default).toBe('sqlite');
-    expect(config.drive.default).toBe('local');
+    expect(config.files.storage).toEqual({
+      driver: 'local',
+      root: '/tmp/app-template-default/storage/app/private/files',
+    });
     expect(config.logging.default).toBe('system');
     expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
@@ -153,11 +158,9 @@ describe('app config', () => {
     expect(config.database.seeds?.directory).toBe(
       path.join(root, 'dist', 'database', 'seeds'),
     );
-    expect(config.drive.disks.local).toMatchObject({
-      location: path.join(dataDir, 'app/private'),
-    });
-    expect(config.drive.links).toEqual({
-      [path.join(root, 'public/storage')]: path.join(dataDir, 'app/public'),
+    expect(config.files.storage).toEqual({
+      driver: 'local',
+      root: path.join(dataDir, 'app/private/files'),
     });
     expect(config.logging).toMatchObject({
       default: 'system',
@@ -166,6 +169,125 @@ describe('app config', () => {
     expect(config.queue.jobs?.locations).toEqual([
       path.join(root, 'dist/server/jobs/**/*.{ts,js}'),
     ]);
+  });
+
+  it('keeps Files config isolated between embedded apps and ignores host process env', () => {
+    vi.stubEnv('FILES_STORAGE_DRIVER', 's3');
+    vi.stubEnv('FILES_S3_BUCKET', 'host-bucket-must-not-leak');
+    vi.stubEnv('FILES_S3_SECRET_ACCESS_KEY', 'host-secret-must-not-leak');
+    const localRoot = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-files-embedded-local-'),
+    );
+    const s3Root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-files-embedded-s3-'),
+    );
+    tempDirs.push(localRoot, s3Root);
+    mkdirSync(path.join(localRoot, 'dist'), { recursive: true });
+    mkdirSync(path.join(s3Root, 'dist'), { recursive: true });
+    writeFileSync(
+      path.join(localRoot, 'dist/.env'),
+      'FILES_UPLOAD_MAX_BYTES=512\n',
+    );
+    writeFileSync(
+      path.join(s3Root, 'dist/.env'),
+      [
+        'FILES_STORAGE_DRIVER=s3',
+        'FILES_S3_BUCKET=dist-bucket',
+        'FILES_S3_ACCESS_KEY_ID=dist-access-key',
+        'FILES_S3_SECRET_ACCESS_KEY=dist-secret-key',
+      ].join('\n'),
+    );
+
+    const local = loadEmbeddedAppConfig(
+      {
+        id: 'local-app',
+        basePath: '/local-app',
+        rootDir: localRoot,
+        dataDir: path.join(localRoot, 'data'),
+        config: {
+          authSecret: 'local-auth-secret-at-least-32-characters',
+          filesUploadMaxBytes: 1024,
+        },
+      },
+      new URL('../../server/embedded.ts', import.meta.url).href,
+    );
+    const s3 = loadEmbeddedAppConfig(
+      {
+        id: 's3-app',
+        basePath: '/s3-app',
+        rootDir: s3Root,
+        dataDir: path.join(s3Root, 'data'),
+        config: {
+          authSecret: 's3-auth-secret-at-least-32-characters',
+          filesStorageDriver: 's3',
+          filesS3Bucket: 'app-bucket',
+          filesS3Region: 'auto',
+          filesS3Endpoint: 'https://tenant.r2.example.com',
+          filesS3Prefix: 'tenant-b',
+          filesS3ForcePathStyle: false,
+          filesS3AccessKeyId: 'tenant-access-key',
+          filesS3SecretAccessKey: 'tenant-secret-key',
+          filesS3SessionToken: 'tenant-session-token',
+          filesPublicAccessEnabled: true,
+        },
+      },
+      new URL('../../server/embedded.ts', import.meta.url).href,
+    );
+
+    expect(local.files).toMatchObject({
+      storage: {
+        driver: 'local',
+        root: path.join(localRoot, 'data/app/private/files'),
+      },
+      upload: { maxBytes: 1024 },
+    });
+    expect(s3.files).toEqual({
+      storage: {
+        driver: 's3',
+        bucket: 'app-bucket',
+        region: 'auto',
+        endpoint: 'https://tenant.r2.example.com',
+        prefix: 'tenant-b',
+        forcePathStyle: false,
+        credentials: {
+          accessKeyId: 'tenant-access-key',
+          secretAccessKey: 'tenant-secret-key',
+          sessionToken: 'tenant-session-token',
+        },
+      },
+      upload: { maxBytes: 52_428_800, expiresInSeconds: 900 },
+      access: {
+        temporaryExpiresInSeconds: 300,
+        providerUrlExpiresInSeconds: 60,
+      },
+      publicAccess: { enabled: true },
+    });
+  });
+
+  it('uses .env, then .env.local, then process.env for standalone Files config', () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-files-standalone-precedence-'),
+    );
+    tempDirs.push(root);
+    mkdirSync(path.join(root, 'server'), { recursive: true });
+    writeFileSync(
+      path.join(root, '.env'),
+      [
+        'AUTH_SECRET=file-auth-secret-at-least-32-characters',
+        'FILES_UPLOAD_MAX_BYTES=100',
+      ].join('\n'),
+    );
+    writeFileSync(
+      path.join(root, '.env.local'),
+      'FILES_UPLOAD_MAX_BYTES=200\n',
+    );
+    vi.stubEnv('FILES_UPLOAD_MAX_BYTES', '300');
+
+    const config = loadStandaloneAppConfig(
+      new URL(`file://${path.join(root, 'server/standalone.js')}`).href,
+    );
+
+    expect(config.files.upload.maxBytes).toBe(300);
   });
 });
 
@@ -571,94 +693,68 @@ describe('database config', () => {
   });
 });
 
-describe('drive config', () => {
-  it('declares Laravel-style local, public, and S3 disks for Flydrive adapters', () => {
-    const config = drive({
+describe('files config', () => {
+  it('defaults to private Local storage', () => {
+    const config = files({
       env: createConfigEnv({}),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
       }),
     });
 
-    expect(config.default).toBe('local');
-    expect(config.disks.local).toEqual({
-      driver: 'fs',
-      location: '/tmp/app-template-default/storage/app/private',
-      visibility: 'private',
-    });
-    expect(config.disks.public).toEqual({
-      driver: 'fs',
-      location: '/tmp/app-template-default/storage/app/public',
-      visibility: 'public',
-      url: '/storage',
-    });
-    expect(config.disks.s3).toMatchObject({
-      driver: 's3',
-      bucket: '',
-      region: 'us-east-1',
-      forcePathStyle: false,
-      supportsACL: true,
-      credentials: {
-        accessKeyId: undefined,
-        secretAccessKey: undefined,
+    expect(config).toEqual({
+      storage: {
+        driver: 'local',
+        root: '/tmp/app-template-default/storage/app/private/files',
       },
-      visibility: 'private',
-    });
-    expect(config.links).toEqual({
-      '/tmp/app-template-default/public/storage':
-        '/tmp/app-template-default/storage/app/public',
+      upload: { maxBytes: 52_428_800, expiresInSeconds: 900 },
+      access: {
+        temporaryExpiresInSeconds: 300,
+        providerUrlExpiresInSeconds: 60,
+      },
+      publicAccess: { enabled: false },
     });
   });
 
-  it('maps drive env values into the S3 disk', () => {
-    const config = drive({
+  it('maps Files env values into private S3-compatible storage', () => {
+    const config = files({
       env: createConfigEnv({
-        DRIVE_DISK: 's3',
-        AWS_BUCKET: 'portal-assets',
-        AWS_DEFAULT_REGION: 'ap-southeast-1',
-        AWS_ACCESS_KEY_ID: 'access-key',
-        AWS_SECRET_ACCESS_KEY: 'secret-key',
-        AWS_ENDPOINT: 'https://s3.example.com',
-        AWS_URL: 'https://cdn.example.com',
-        AWS_USE_PATH_STYLE_ENDPOINT: 'true',
-        AWS_SUPPORTS_ACL: 'false',
-        AWS_SERVER_SIDE_ENCRYPTION: 'AES256',
-        AWS_VISIBILITY: 'public',
+        FILES_STORAGE_DRIVER: 's3',
+        FILES_S3_BUCKET: 'portal-files',
+        FILES_S3_REGION: 'ap-southeast-1',
+        FILES_S3_ACCESS_KEY_ID: 'access-key',
+        FILES_S3_SECRET_ACCESS_KEY: 'secret-key',
+        FILES_S3_ENDPOINT: 'https://s3.example.com',
+        FILES_S3_PREFIX: 'tenant-a',
+        FILES_S3_FORCE_PATH_STYLE: 'true',
+        FILES_UPLOAD_MAX_BYTES: '2048',
+        FILES_PUBLIC_ACCESS_ENABLED: 'true',
       }),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
       }),
     });
 
-    expect(config.default).toBe('s3');
-    expect(config.disks.s3).toEqual({
-      driver: 's3',
-      bucket: 'portal-assets',
-      region: 'ap-southeast-1',
-      endpoint: 'https://s3.example.com',
-      cdnUrl: 'https://cdn.example.com',
-      forcePathStyle: true,
-      supportsACL: false,
-      encryption: 'AES256',
-      credentials: {
-        accessKeyId: 'access-key',
-        secretAccessKey: 'secret-key',
+    expect(config).toEqual({
+      storage: {
+        driver: 's3',
+        bucket: 'portal-files',
+        region: 'ap-southeast-1',
+        endpoint: 'https://s3.example.com',
+        prefix: 'tenant-a',
+        forcePathStyle: true,
+        credentials: {
+          accessKeyId: 'access-key',
+          secretAccessKey: 'secret-key',
+        },
       },
-      visibility: 'public',
+      upload: { maxBytes: 2048, expiresInSeconds: 900 },
+      access: {
+        temporaryExpiresInSeconds: 300,
+        providerUrlExpiresInSeconds: 60,
+      },
+      publicAccess: { enabled: true },
     });
-  });
-
-  it('falls back to private visibility for unsupported S3 visibility values', () => {
-    const config = drive({
-      env: createConfigEnv({
-        AWS_VISIBILITY: 'team',
-      }),
-      paths: createConfigPaths({
-        rootDir: '/tmp/app-template-default',
-      }),
-    });
-
-    expect(config.disks.s3.visibility).toBe('private');
   });
 });
 
@@ -683,6 +779,9 @@ describe('app plugins', () => {
     const authenticationPlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-authentication',
     );
+    const filesPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-files',
+    );
     const databaseExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-database-example',
     );
@@ -706,6 +805,17 @@ describe('app plugins', () => {
     );
     expect(authenticationPlugin?.seedsDirectory).toMatch(
       /app-plugin-authentication\/database\/seeds$/,
+    );
+    expect(filesPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-files',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(filesPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-files\/database\/migrations$/,
+    );
+    expect(filesPlugin?.routesEntry).toMatch(
+      /app-plugin-files\/server\/routes\/index\.ts$/,
     );
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
@@ -766,6 +876,9 @@ describe('app plugins', () => {
           packageName: '@nocobase/app-plugin-authentication',
         }),
         expect.objectContaining({
+          packageName: '@nocobase/app-plugin-files',
+        }),
+        expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
         }),
       ]),
@@ -793,6 +906,10 @@ describe('app plugins', () => {
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-authentication',
           name: '202608200001_create_authentication_tables',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-files',
+          name: '202608221000_files_create_files',
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',

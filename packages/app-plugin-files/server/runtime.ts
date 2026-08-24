@@ -9,6 +9,7 @@ export interface CreateFilesRuntimeOptions {
   audience: string;
   secret: string;
   connection?: string;
+  basePath?: string;
 }
 
 export interface FilesRuntime {

@@ -15,7 +15,10 @@ import {
 } from '@nocobase/app-plugin-files/server';
 
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
-import { getFilesRuntimeKernel } from '../server/internal/runtime.js';
+import {
+  getFilesRuntimeDataPlane,
+  getFilesRuntimeKernel,
+} from '../server/internal/runtime.js';
 
 let database: DatabaseManager | undefined;
 let storageRoot: string | undefined;
@@ -49,6 +52,7 @@ describe('files runtime composition', () => {
       config: resolveFilesConfig({ appStorageRoot: storageRoot }),
       audience: 'test-app',
       secret: 'test-files-secret-at-least-32-characters',
+      basePath: '/tenant/api/files',
     });
     expect(Object.keys(runtime)).toEqual([]);
     expect(runtime).not.toHaveProperty('kernel');
@@ -59,6 +63,14 @@ describe('files runtime composition', () => {
       name: 'runtime.txt',
     });
     expect(pending.file.status).toBe('pending');
+    const plan = await getFilesRuntimeDataPlane(runtime).createUploadPlan({
+      name: 'base-path.txt',
+      size: 4,
+      contentType: 'text/plain',
+    });
+    expect(plan.upload.url).toMatch(
+      new RegExp(`^/tenant/api/files/${plan.fileId}/upload\\?access=`),
+    );
 
     await runtime.dispose();
     await runtime.dispose();

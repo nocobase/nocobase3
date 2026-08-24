@@ -3,7 +3,10 @@ import {
   createAuthStorage,
   createAuthentication,
 } from '@nocobase/app-plugin-authentication';
-import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
+import {
+  createFilesRuntime,
+  type FilesRuntime,
+} from '@nocobase/app-plugin-files/server';
 import { SnowflakeIdGenerator } from '@nocobase/id-generator';
 import { createLogging, type Logging } from '@nocobase/logging';
 import {
@@ -17,6 +20,7 @@ import {
   type NocoBaseSessionManager,
 } from '@nocobase/session';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
+import { joinBasePath } from '@nocobase/app-server/support';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 
 import { createAppJobFactory } from '../jobs/dependencies.js';
@@ -26,7 +30,7 @@ import { createCookiePrefix } from './utils.js';
 export interface AppDeps {
   auth: Auth;
   caching: Caching;
-  driveManager?: NocoBaseDriveManager;
+  filesRuntime?: FilesRuntime;
   idGenerator: SnowflakeIdGenerator;
   logging: Logging;
   queueManager: NocoBaseQueueManager;
@@ -57,8 +61,14 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       },
     },
   });
-  const driveManager = config.drive
-    ? createDriveManager(config.drive)
+  const filesRuntime = isFilesPluginEnabled(config)
+    ? createFilesRuntime({
+        database: requireDatabase(runtime),
+        config: config.files,
+        audience: config.app.name,
+        secret: requireAuthSecret(config),
+        basePath: joinBasePath(config.app.publicBasePath, '/api/files'),
+      })
     : undefined;
   const logging = createLogging(config.logging);
   const sessionManager = createSessionManager(
@@ -72,6 +82,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       logger: queueLogger,
       jobFactory: createAppJobFactory({
         database: runtime.database,
+        filesRuntime,
         logger: queueLogger,
       }),
     },
@@ -80,7 +91,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   return {
     caching,
     auth,
-    driveManager,
+    filesRuntime,
     idGenerator,
     logging,
     queueManager,
@@ -92,7 +103,30 @@ export async function disposeAppDeps(deps: AppDeps): Promise<void> {
   await deps.queueManager.close();
   await Promise.all([
     deps.caching.dispose(),
+    deps.filesRuntime?.dispose(),
     deps.logging.flush(),
     deps.sessionManager.dispose(),
   ]);
+}
+
+function isFilesPluginEnabled(config: AppConfig): boolean {
+  return (config.plugins ?? []).some(
+    (plugin) =>
+      plugin.packageName === '@nocobase/app-plugin-files' && plugin.enabled,
+  );
+}
+
+function requireDatabase(runtime: AppRuntime<AppConfig>) {
+  if (!runtime.database) {
+    throw new Error('The Files plugin requires a database connection.');
+  }
+  return runtime.database;
+}
+
+function requireAuthSecret(config: AppConfig): string {
+  const secret = config.auth.secret?.trim();
+  if (!secret) {
+    throw new Error('The Files plugin requires the application auth secret.');
+  }
+  return secret;
 }

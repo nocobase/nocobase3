@@ -82,9 +82,9 @@ export function createOpaqueFilesRuntime(
     storage,
     clock,
     capabilityCodec,
-    ...(internalOptions.basePath === undefined
+    ...((internalOptions.basePath ?? options.basePath) === undefined
       ? {}
-      : { basePath: internalOptions.basePath }),
+      : { basePath: internalOptions.basePath ?? options.basePath }),
   });
   const runtime = new OpaqueFilesRuntime();
   runtimeStates.set(runtime, {

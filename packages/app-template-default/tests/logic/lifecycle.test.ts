@@ -10,11 +10,6 @@ const prepareAppDatabaseStorageMock = vi.hoisted(() =>
     calls.push('prepare-database');
   }),
 );
-const prepareDriveStorageMock = vi.hoisted(() =>
-  vi.fn(async () => {
-    calls.push('prepare-drive');
-  }),
-);
 const runConfiguredAppMigrationsMock = vi.hoisted(() =>
   vi.fn(async () => {
     calls.push('migrate');
@@ -35,16 +30,11 @@ vi.mock('@nocobase/app-server/runtime', () => ({
   runConfiguredAppSeeds: runConfiguredAppSeedsMock,
 }));
 
-vi.mock('@nocobase/drive', () => ({
-  prepareDriveStorage: prepareDriveStorageMock,
-}));
-
 import { prepareAppRuntime } from '../../server/runtime/lifecycle.ts';
 
 beforeEach(() => {
   calls.length = 0;
   prepareAppDatabaseStorageMock.mockClear();
-  prepareDriveStorageMock.mockClear();
   runConfiguredAppMigrationsMock.mockClear();
   runConfiguredAppSeedsMock.mockClear();
 });
@@ -53,12 +43,7 @@ describe('app runtime preparation', () => {
   it('runs migrations before seeds', async () => {
     await prepareAppRuntime(createRuntime());
 
-    expect(calls).toEqual([
-      'prepare-database',
-      'prepare-drive',
-      'migrate',
-      'seed',
-    ]);
+    expect(calls).toEqual(['prepare-database', 'migrate', 'seed']);
   });
 
   it('does not run seeds when migrations fail', async () => {
@@ -74,7 +59,6 @@ function createRuntime(): AppRuntime<AppConfig> {
   return {
     config: {
       database: {},
-      drive: {},
     },
   } as AppRuntime<AppConfig>;
 }

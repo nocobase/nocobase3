@@ -19,7 +19,6 @@ const nodeLibraryRoots = [
   'packages/authorization',
   'packages/caching',
   'packages/database',
-  'packages/drive',
   'packages/app-host',
   'packages/id-generator',
   'packages/logging',

@@ -2,13 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -24,7 +18,6 @@ import type {
   AppWebSocketReadyState,
 } from '@nocobase/app-server/websocket';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
-import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import {
@@ -119,6 +112,15 @@ describe('app server', () => {
     });
     expect(websocketEvents).toMatchObject({
       onMessage: expect.any(Function),
+    });
+
+    const filesResponse = await app.request(
+      'http://localhost/api/files/missing/content?access=embedded-secret',
+    );
+    expect(filesResponse.status).toBe(403);
+    await expect(filesResponse.json()).resolves.toEqual({
+      error: 'The file access credential is invalid.',
+      code: 'INVALID_ACCESS',
     });
   });
 
@@ -257,7 +259,13 @@ describe('app server', () => {
       createEmbeddedTestScope({
         id: 'app-template-default',
         basePath: '/app-template-default',
-        config: { authSecret: 'test-auth-secret-at-least-32-characters' },
+        config: {
+          authSecret: 'test-auth-secret-at-least-32-characters',
+          filesStorageDriver: 's3',
+          filesS3Bucket: 'private-files',
+          filesS3AccessKeyId: 'browser-hidden-access-key',
+          filesS3SecretAccessKey: 'browser-hidden-secret-key',
+        },
         clientDir: root,
       }),
     );
@@ -272,6 +280,8 @@ describe('app server', () => {
     expect(html).toContain(
       'window.NOCOBASE_API_URL = "/app-template-default/v2/api";',
     );
+    expect(html).not.toContain('browser-hidden-access-key');
+    expect(html).not.toContain('browser-hidden-secret-key');
   });
 
   it('reads embedded runtime config from dist/.env without using process.env', async () => {
@@ -621,85 +631,17 @@ describe('app server', () => {
     });
   });
 
-  it('returns a JSON error when upload is requested without file drive', async () => {
+  it('does not expose the removed upload endpoint', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
     });
-    const body = new FormData();
-    body.set(
-      'file',
-      new File(['Hello world'], 'hello.txt', { type: 'text/plain' }),
-    );
 
     const response = await app.request('http://localhost/api/upload', {
       method: 'POST',
-      body,
     });
 
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      error: 'File drive is not configured.',
-    });
-  });
-
-  it('requires a file for uploads', async () => {
-    const root = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-app-template-default-upload-'),
-    );
-    tempDirs.push(root);
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      drive: createTestDrive(root),
-    });
-    const body = new FormData();
-    body.set('file', 'not-a-file');
-
-    const response = await app.request('http://localhost/api/upload', {
-      method: 'POST',
-      body,
-    });
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: 'File is required',
-    });
-  });
-
-  it('uploads files with the configured file drive', async () => {
-    const root = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-app-template-default-upload-'),
-    );
-    tempDirs.push(root);
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      drive: createTestDrive(root),
-    });
-    const body = new FormData();
-    body.set(
-      'file',
-      new File(['Hello world'], 'hello world.txt', { type: 'text/plain' }),
-    );
-
-    const response = await app.request('http://localhost/api/upload', {
-      method: 'POST',
-      body,
-    });
-    const payload = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(payload).toMatchObject({
-      name: 'hello world.txt',
-      size: 11,
-      type: 'text/plain',
-    });
-    expect(payload.key).toMatch(/^uploads\/[0-9a-f-]+-hello-world\.txt$/);
-    expect(payload.url).toBe(`/storage/${payload.key}`);
-    expect(
-      readFileSync(path.join(root, 'storage/app/public', payload.key), 'utf8'),
-    ).toBe('Hello world');
+    expect(response.status).toBe(404);
   });
 
   it('strips compressed upstream response headers before returning proxied API responses', async () => {
@@ -809,8 +751,21 @@ describe('app server', () => {
       `http://localhost${publicBasePath}/api/healthz`,
     );
     const bareLocalApi = await app.request('http://localhost/api/healthz');
+    const files = await app.request(
+      `http://localhost${publicBasePath}/api/files/missing/content?access=standalone-secret`,
+    );
+    const oldUpload = await app.request(
+      `http://localhost${publicBasePath}/api/upload`,
+      { method: 'POST' },
+    );
 
     await expect(appHealth.json()).resolves.toEqual(expectedHealth);
+    expect(files.status).toBe(403);
+    await expect(files.json()).resolves.toEqual({
+      error: 'The file access credential is invalid.',
+      code: 'INVALID_ACCESS',
+    });
+    expect(oldUpload.status).toBe(404);
     expect(rootHealth.status).toBe(404);
     expect(bareLocalApi.status).toBe(404);
     await app.close();
@@ -1159,26 +1114,6 @@ function startHttpStub(
   });
 }
 
-function createTestDrive(root: string): AppDriveConfig {
-  return {
-    default: 'public',
-    disks: {
-      public: {
-        driver: 'fs',
-        location: path.join(root, 'storage/app/public'),
-        visibility: 'public',
-        url: '/storage',
-      },
-    },
-    links: {
-      [path.join(root, 'public/storage')]: path.join(
-        root,
-        'storage/app/public',
-      ),
-    },
-  };
-}
-
 function createTestCaching(): CachingConfig {
   return {
     default: 'memory',
@@ -1221,7 +1156,6 @@ interface CreateTestAppOptions {
   nocoBaseApiUrl?: string | false;
   database?: DatabaseManager | false;
   caching?: CachingConfig;
-  drive?: AppDriveConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
   spa?: {
@@ -1264,7 +1198,19 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         autoRun: false,
       },
     },
-    drive: options.drive,
+    files: {
+      storage: {
+        driver: 'local',
+        root: path.resolve(process.cwd(), 'storage/test-files'),
+      },
+      upload: { maxBytes: 1024, expiresInSeconds: 60 },
+      access: {
+        temporaryExpiresInSeconds: 60,
+        providerUrlExpiresInSeconds: 30,
+      },
+      publicAccess: { enabled: false },
+    },
+    plugins: [],
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),

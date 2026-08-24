@@ -1,5 +1,8 @@
 import type { AppRuntime } from '@nocobase/app-server/runtime';
-import type { AppDriveConfig } from '@nocobase/drive';
+import {
+  createFileService,
+  type FileService,
+} from '@nocobase/app-plugin-files/server';
 
 import type { AppConfig } from '../config/index.js';
 import type { RealtimeService } from '../realtime/service.js';
@@ -9,15 +12,10 @@ import {
   UnavailableAppSettingsService,
   type AppSettings,
 } from './app-settings-store.js';
-import {
-  FileUploadsService,
-  UnavailableFileUploadsService,
-  type FileUploads,
-} from './public-file-storage.js';
 
 export interface AppServices {
   appSettingsStore: AppSettings;
-  publicFileStorage: FileUploads;
+  fileService?: FileService;
   realtime: RealtimeService;
 }
 
@@ -34,24 +32,11 @@ export function createAppServices(
     appSettingsStore: runtime.database
       ? new AppSettingsService(runtime.database)
       : new UnavailableAppSettingsService(),
-    publicFileStorage:
-      deps.driveManager && runtime.config.drive?.disks.public
-        ? new FileUploadsService(deps.driveManager)
-        : new UnavailableFileUploadsService(
-            resolveFileUploadsUnavailableMessage(runtime.config.drive),
-          ),
+    fileService: deps.filesRuntime
+      ? createFileService({ runtime: deps.filesRuntime })
+      : undefined,
     realtime: options.realtime,
   };
-}
-
-function resolveFileUploadsUnavailableMessage(
-  drive: AppDriveConfig | undefined,
-): string {
-  if (!drive) {
-    return 'File drive is not configured.';
-  }
-
-  return 'Upload drive disk "public" is not configured.';
 }
 
 export {
@@ -59,11 +44,6 @@ export {
   type AppSetting,
   type AppSettings,
 } from './app-settings-store.js';
-export {
-  FileUploadsService,
-  type FileUploads,
-  type UploadResult,
-} from './public-file-storage.js';
 export {
   AppServiceError,
   BadRequestError,

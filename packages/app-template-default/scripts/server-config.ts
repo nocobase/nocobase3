@@ -39,9 +39,6 @@ const databaseConnections: Record<string, unknown> =
 const activeDatabase = activeDatabaseName
   ? databaseConnections[activeDatabaseName]
   : undefined;
-const activeDriveName = config.drive.default;
-const driveDisks: Record<string, unknown> = config.drive.disks;
-const activeDrive = activeDriveName ? driveDisks[activeDriveName] : undefined;
 const activeQueueName = config.queue.default;
 const queueConnections: Record<string, unknown> = config.queue.connections;
 const activeQueue = activeQueueName
@@ -113,10 +110,11 @@ const report = {
     seedsDirectory: plugin.seedsDirectory ?? '(none)',
     routesEntry: plugin.routesEntry ?? '(none)',
   })),
-  drive: {
-    default: activeDriveName || '(none)',
-    active: summarizeDriveDisk(activeDrive),
-    links: config.drive.links,
+  files: {
+    storage: summarizeFilesStorage(config.files.storage),
+    upload: config.files.upload,
+    access: config.files.access,
+    publicAccess: config.files.publicAccess,
   },
   queue: {
     default: activeQueueName || '(none)',
@@ -281,45 +279,39 @@ function summarizeCachingProvider(provider: unknown): JsonValue {
   return summary;
 }
 
-function summarizeDriveDisk(disk: unknown): JsonValue {
-  if (!isObject(disk)) {
+function summarizeFilesStorage(storage: unknown): JsonValue {
+  if (!isObject(storage)) {
     return null;
   }
 
-  const driver = stringValue(disk.driver) ?? 'unknown';
+  const driver = stringValue(storage.driver) ?? 'unknown';
   const summary: Record<string, JsonValue> = {
     driver,
-    visibility: stringValue(disk.visibility) ?? 'private',
   };
 
-  for (const key of [
-    'location',
-    'bucket',
-    'region',
-    'endpoint',
-    'url',
-    'cdnUrl',
-    'encryption',
-  ]) {
-    const value = disk[key];
+  for (const key of ['root', 'bucket', 'region', 'endpoint', 'prefix']) {
+    const value = storage[key];
     if (typeof value === 'string' && value) {
       summary[key] = value;
     }
   }
 
-  for (const key of ['forcePathStyle', 'supportsACL']) {
-    const value = booleanValue(disk[key]);
+  for (const key of ['forcePathStyle']) {
+    const value = booleanValue(storage[key]);
     if (value !== undefined) {
       summary[key] = value;
     }
   }
 
-  if (isObject(disk.credentials)) {
+  if (isObject(storage.credentials)) {
     summary.credentials = {
-      accessKeyId: stringValue(disk.credentials.accessKeyId)
+      accessKeyId: stringValue(storage.credentials.accessKeyId)
         ? '<configured>'
         : '(missing)',
-      secretAccessKey: stringValue(disk.credentials.secretAccessKey)
+      secretAccessKey: stringValue(storage.credentials.secretAccessKey)
+        ? '<configured>'
+        : '(missing)',
+      sessionToken: stringValue(storage.credentials.sessionToken)
         ? '<configured>'
         : '(missing)',
     };
@@ -470,10 +462,11 @@ function printReport(value: typeof report): void {
   printSection('Plugins');
   printJson('Registered plugins', value.plugins);
 
-  printSection('Drive');
-  printPair('Default disk', value.drive.default);
-  printJson('Active disk', value.drive.active);
-  printJson('Links', value.drive.links);
+  printSection('Files');
+  printJson('Storage', value.files.storage);
+  printJson('Upload', value.files.upload);
+  printJson('Access', value.files.access);
+  printJson('Public access', value.files.publicAccess);
 
   printSection('Queue');
   printPair('Default connection', value.queue.default);

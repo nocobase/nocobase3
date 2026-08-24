@@ -9,7 +9,6 @@ import { createCacheRoutes } from './cache.js';
 import { createApiErrorHandler } from './errors.js';
 import { createHealthzHandler } from './healthz.js';
 import { createSessionRoutes } from './session.js';
-import { createUploadRoutes } from './upload.js';
 import { createAuthRoutes } from './auth.js';
 
 export interface ApiRouteOptions {
@@ -19,12 +18,18 @@ export interface ApiRouteOptions {
   services: AppServices;
 }
 
+export interface ApiRoutes {
+  app: Hono;
+  plugins: Hono;
+  finalize(): Hono;
+}
+
 export function createApiRoutes({
   appName,
   publicBasePath,
   deps,
   services,
-}: ApiRouteOptions): Hono {
+}: ApiRouteOptions): ApiRoutes {
   const api = new Hono();
 
   api.use(
@@ -47,22 +52,23 @@ export function createApiRoutes({
     '/app-settings',
     createAppSettingsRoutes({ appSettingsStore: services.appSettingsStore }),
   );
-  publicRoutes.route(
-    '/upload',
-    createUploadRoutes({ publicFileStorage: services.publicFileStorage }),
-  );
-
+  const pluginRoutes = new Hono();
   const protectedRoutes = new Hono();
-  protectedRoutes.use('*', deps.auth.required());
-  protectedRoutes.get('/apps', createAppsHandler());
+  protectedRoutes.get('/apps', deps.auth.required(), createAppsHandler());
 
   api.onError(
     createApiErrorHandler({
       logger: deps.logging.getLogger().child({ module: 'api' }),
     }),
   );
-  api.route('/', publicRoutes);
-  api.route('/', protectedRoutes);
-
-  return api;
+  return {
+    app: api,
+    plugins: pluginRoutes,
+    finalize(): Hono {
+      api.route('/', publicRoutes);
+      api.route('/', pluginRoutes);
+      api.route('/', protectedRoutes);
+      return api;
+    },
+  };
 }

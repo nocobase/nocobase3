@@ -2,7 +2,7 @@ import app from './app.js';
 import auth from './auth.js';
 import caching from './caching.js';
 import database from './database.js';
-import drive from './drive.js';
+import files from './files.js';
 import logging from './logging.js';
 import queue from './queue.js';
 import session from './session.js';
@@ -15,7 +15,7 @@ const config: {
   auth: typeof auth;
   caching: typeof caching;
   database: typeof database;
-  drive: typeof drive;
+  files: typeof files;
   logging: typeof logging;
   queue: typeof queue;
   session: typeof session;
@@ -26,7 +26,7 @@ const config: {
   auth: auth,
   caching: caching,
   database: database,
-  drive: drive,
+  files: files,
   logging: logging,
   queue: queue,
   session: session,
