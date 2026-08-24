@@ -1,11 +1,255 @@
 ---
 title: Branch and Release
-description: NocoBase 3 的分支晋级、Changesets 独立版本和单入口发布设计
+description: NocoBase 3 的分支模型、Changesets 独立版本和发布流程设计
 ---
 
 # Branch and Release
 
 > 状态：提案。本文描述 NocoBase 3 的目标流程；对应 Changesets 配置和 GitHub Actions 尚未落地。
+>
+> 文中标注「已验证」的行为，都在 `test-branch-version` 沙盒仓库用 `@changesets/cli` 3.0.1 实测过。该仓库的依赖形状对齐本仓库，实验脚本可重复运行。
+
+## 快速上手：你实际要敲什么
+
+先看命令，模型和取舍在后面章节。
+
+### 普通开发者只需要一条命令
+
+```bash
+pnpm changeset
+```
+
+写一张纸条，声明这次改动该升 patch / minor / major，跟代码一起提交。**其余命令都由 CI 执行，日常开发不需要敲。**
+
+完整的命令分工：
+
+| 命令                       | 干什么                         | 改版本号吗 | 谁来跑                 |
+| -------------------------- | ------------------------------ | ---------- | ---------------------- |
+| `pnpm changeset`           | 写纸条，声明 bump 级别         | 否         | **开发者**，每个 PR    |
+| `pnpm changeset version`   | 吃掉所有纸条，算出并写入版本号 | **是**     | CI，发版时             |
+| `pnpm changeset publish`   | 推 npm，打 package tag         | 否         | CI，发版时             |
+| `pnpm changeset pre enter` | 让分支进入预发布模式           | 否         | CI，每次转正后自动重进 |
+| `pnpm changeset pre exit`  | 准备退出预发布模式             | 否         | CI，转正时             |
+
+唯一需要人工执行 `pre enter` 的时刻是**仓库最初启用这套流程时**——在 `develop` 上跑一次并提交，之后 `merge-beta-to-stable.yml` 会在每次转正后自动重新进入：
+
+```yaml
+# merge-beta-to-stable.yml 的最后一步
+- name: Re-enter pre mode on develop
+  run: |
+    git checkout develop
+    git merge --no-ff main
+    pnpm changeset pre enter beta
+    git commit -m "chore: re-enter pre mode for the next line"
+    git push origin develop
+```
+
+所以从开发者视角看，`develop` 永远处于 pre 模式，`main` 永远不在——这两个状态由 CI 维持，不需要关心。
+
+### 日常开发（每个 PR）
+
+```bash
+# 1. 写代码
+vim packages/core/src/index.js
+git commit -am "feat: 新增导出能力"
+
+# 2. 加 changeset —— 就在同一个 PR 里
+pnpm changeset
+#    交互式：选包 -> 选 patch/minor/major -> 写说明
+#    生成 .changeset/tasty-pandas-shake.md
+git add .changeset && git commit -m "chore: add changeset"
+```
+
+生成的文件长这样：
+
+```md
+---
+"@nocobase/core": minor
+---
+
+新增导出能力。
+```
+
+**这一步版本号不变。** changeset 只是一张纸条，会一直攒着：
+
+```text
+.changeset/
+  tasty-pandas-shake.md    <- PR #1 留下的
+  quiet-moons-jump.md      <- PR #2 留下的
+```
+
+### 第一次发稳定版
+
+**所有稳定版都从 `develop` 转正而来，第一次也不例外。** 代码先在 `develop` 上以 beta 形式发布验证，再转正合进 `main`。
+
+```text
+develop  发若干轮 beta         0.2.0-beta.0 -> 0.2.0-beta.1
+   |
+   |  转正（pre exit + version）
+   v
+main     首个稳定版            0.2.0
+```
+
+所以 `main` 在第一次转正之前是空的——它不发任何版本，也不应该有人直接在上面跑 `changeset version`。这条线上的稳定版全部来自 `develop`。
+
+**首次也走 `merge-beta-to-stable.yml`**，流程与后续每次转正完全相同，没有特殊步骤。
+
+首次转正时 `main` 会远远落后于 `develop`（可能几十上百个 commit），但这不构成问题，已验证：
+
+```text
+main 停在初始代码，develop 已发三轮 beta
+main 落后 develop 7 个 commit
+
+转正后：core=0.2.0  ui=0.2.0，pre.json 已删除
+合进 main：无冲突，main 上 core=0.2.0  ui=0.2.0
+main 有 pre.json 吗：没有
+```
+
+因为 `main` 是 `develop` 的祖先，这是一次快进合并，不会有冲突。
+
+合并完成后点 `release-stable.yml` 发布到 `latest`。
+
+第一次转正之后，`main` 才开始承担它的日常职责——接收线上问题的补丁修复（见「线上出 bug，在 main 上修」）。
+
+### 在 develop 发预览版
+
+**点一次 `release-beta.yml` 的运行按钮即可**，不需要在本地敲命令。
+
+它内部执行的是：
+
+```bash
+git checkout -b "release-beta/2026-08-24.1"   # 临时发版分支，避免推送竞争
+pnpm changeset version                       # 消费 changeset，算版本号
+git commit -am "chore: release 2026-08-24.1"
+git push origin "$BRANCH_NAME"
+pnpm changeset publish                       # dist-tag 由 pre.json 决定
+gh pr merge --merge --delete-branch          # 合回 develop
+```
+
+`version` 实际做的事：
+
+```text
+core  1.2.0 -> 1.3.0-beta.0     吃掉 minor changeset
+ui    3.1.0 -> 3.1.1-beta.0     吃掉 patch changeset
+.changeset/*.md 移进 .changeset/pre/，生成 CHANGELOG
+```
+
+用户安装：`pnpm add @nocobase/core@beta`
+
+再发下一轮还是点同一个按钮，序号自动 `beta.0` → `beta.1`。
+
+> 仓库最初启用时需要有人在 `develop` 上跑一次 `pnpm changeset pre enter beta` 并提交。之后每次转正后 CI 会自动重新进入，不需要再手工执行。
+
+### 预览版转正成稳定版
+
+分两步：**先点 `merge-beta-to-stable.yml` 完成转正和合并，再人工发布。**
+
+第一步，点一次运行按钮，它内部执行：
+
+```bash
+git checkout -b "release/2026-08-24.1"   # 临时发版分支
+pnpm changeset pre exit                  # 只改 pre.json 的 mode，版本号不动
+pnpm changeset version                   # 这一步才脱掉 -beta 后缀
+git commit -am "chore: release 2026-08-24.1"
+git tag "release/2026-08-24.1"
+# 合进 main，然后 develop 重新 pre enter
+```
+
+实测：
+
+```text
+pre exit 后：  core 仍是 1.3.0-beta.1，pre.json mode=exit
+version 后：   core = 1.3.0，pre.json 被自动删除
+```
+
+**`pre.json` 不需要手工删**，`version` 会处理。
+
+workflow 接着完成后半段——合进 `main`，`develop` 重新进 pre：
+
+```bash
+git checkout main && git merge develop      # 版本号取 develop 的
+git checkout develop
+git merge main
+pnpm changeset pre enter beta               # 重新进 pre，下一轮开始
+```
+
+下一轮从 `1.3.0` 起算，得到 `1.4.0-beta.0`。**不用重切分支。**
+
+第二步，**点一次 `release-stable.yml`**（输入保持默认：`branch=main`）。
+
+它检测到 `main` 上没有待消费的 changeset，就知道版本号已经就绪，直接发布到 `latest`。
+
+**两步分开是有意的。** 合并涉及三条分支的状态变更，需要自动化保证一致；「什么时候把版本推到 npm」是发布决策，由人掌握时机。延后发布是安全的——`changeset publish` 读的是 package.json 的版本号，逐个查 registry 有没有 `name@version`，与 changeset 是否还在无关。
+
+唯一可能需要人介入的是 `develop` 合进 `main` 时出现**源码冲突**——这时 workflow 会停下并报错，由维护者解决后重跑。仅 `package.json` / `CHANGELOG.md` 冲突时规则固定，workflow 会自动处理。
+
+### 线上出 bug，在 main 上修
+
+开发者手上只做两件事：
+
+```bash
+git checkout main
+vim ...                        # 修复
+pnpm changeset                 # 选 patch
+```
+
+提 PR 合进 `main`，然后**点一次 `release-stable.yml`**（输入保持默认）。
+
+它检测到有待消费的 changeset，就先算版本号再发布：
+
+```bash
+git checkout -b "release/2026-08-24.2"   # 临时发版分支
+pnpm changeset version                   # 1.3.0 -> 1.3.1
+git commit -am "chore: release 2026-08-24.2"
+git tag "release/2026-08-24.2"
+pnpm changeset publish                   # -> dist-tag latest
+gh pr merge --merge --delete-branch      # 合回 main
+gh pr create --base develop              # 另开一个 PR 同步到 develop
+```
+
+`main` 全程不进 pre 模式，所以发的是干净的稳定版号。workflow 里有一条反向校验：一旦在 `main` 上发现 `pre.json`，说明 `develop` 的预发布状态被误合进来了，直接中止。
+
+**补丁必须同步回 `develop`**，否则下一次转正会覆盖掉它。workflow 直接 merge 并推送，不走 PR——冲突的解法是确定的，没有需要人 review 的内容。解不了才停下发飞书通知。详见「同步冲突怎么解」。
+
+修复的**代码**同步过去了，会包含在下一个 beta 里；但这份 changeset 已被 `main` 消费，不会在 `develop` 重复发一遍。
+
+### 在旧版本上修 bug
+
+如果要修的是**已经不是最新**的版本（例如 `main` 已到 2.0，但用户还在用 1.3.x）：
+
+```bash
+git checkout -b 1.3 release/2026-08-20.1   # 从当时的批次 tag 切
+# 修 bug + pnpm changeset（选 patch）
+git push origin 1.3
+```
+
+然后**点 `release-stable.yml`**，填 `branch=1.3` 并勾上 `keep_latest`。
+
+勾上之后发布到 dist-tag `legacy` 而不是 `latest`，`latest` 指针保持指向主线版本。详见「在已发布的旧版本上修 bug」。
+
+### 没有 changeset 时发版会怎样
+
+已验证（`test-branch-version/experiments/empty-changeset-release.sh`）。
+
+```bash
+$ pnpm changeset pre enter beta
+$ pnpm changeset version
+
+No unreleased changesets found.
+🦋 Exited with code 1
+```
+
+版本号不变，`package.json` 无 diff。就算硬跑 `publish` 也发不出东西——它逐包查 registry 里有没有 `name@version`，版本号没变就全部命中「已存在」而跳过。
+
+**但有两个「静默成功」的路径**，退出码是 0 却什么都没做：
+
+| 情况                  | exit code | 实际结果                               |
+| --------------------- | --------- | -------------------------------------- |
+| 无 changeset 发预览版 | 1         | 安全，直接失败                         |
+| 只有 empty changeset  | 0         | 版本号不变，publish 零个包             |
+| 转正时这轮从未发过版  | 0         | 版本号不变，**但 `pre.json` 被删掉了** |
+
+第三种最麻烦：自动化流程如果只看退出码，会继续发布零个包、把「什么都没发生」的状态合进 `main`，并让 `develop` 白白退出 pre 模式。所以两个发版 workflow 都在 `version` 前后做版本号快照比对，没有实际变化就中止。
 
 ## 背景
 
@@ -17,7 +261,7 @@ NocoBase 2 使用三条长期分支承载三个发布渠道：
 | `next`    | Beta     | `beta`       |
 | `develop` | Alpha    | `alpha`      |
 
-代码通常在 `develop` 或 `next` 开发，并按 `develop -> next -> main` 的方向逐步晋级。稳定分支上的修复则按 `main -> next -> develop` 的方向回灌。
+代码在 `develop` 或 `next` 开发，按 `develop -> next -> main` 逐步晋级；稳定分支上的修复按反方向回灌。
 
 NocoBase 2 的实现同时耦合了以下操作：
 
@@ -25,7 +269,6 @@ NocoBase 2 的实现同时耦合了以下操作：
 - Lerna 通过 `forcePublish` 给所有 workspace package 写入同一个版本。
 - release workflow 在多个仓库和多条长期分支之间直接执行 `git merge` 和 `git push`。
 - 版本提交、Git tag、分支同步、全仓构建和 npm publish 位于同一条长工作流中。
-- 发布全部 package 后，再根据 Git tag 中的 alpha/beta 字样选择 npm dist-tag。
 
 这种设计能保持所有包和分支版本一致，但也带来了几个问题：
 
@@ -33,939 +276,378 @@ NocoBase 2 的实现同时耦合了以下操作：
 2. package 数量增加后，发布越来越慢，单包失败也会使整批发布难以恢复。
 3. workflow 会直接修改并推送长期分支；发布期间的新提交可能改变构建输入或造成 CI、merge 冲突。
 4. 版本号既表达产品发布阶段，又被用来同步整个 monorepo，无法反映单个 package 的真实兼容性。
-5. 预发布版本提交会在 `main`、`next`、`develop` 之间传播，持续制造 package.json 和 lockfile 冲突。
+5. 预发布版本提交会在三条分支之间传播，持续制造 package.json 和 lockfile 冲突。
 
-NocoBase 3 保留团队熟悉的三条渠道分支，但需要解除“分支同步、版本计算、制品发布”之间的绑定。
+## 为什么不继续用三条长期分支
 
-## 目标
+本方案曾设计过「保留 develop/next/main 三条长期分支，各自承载 alpha/beta/stable」的形态。在沙盒仓库实测后放弃了该方向，原因是三条常驻分支装同样的内容、算同样的版本基线，会持续产生结构性问题。
 
-- 保留 `main`、`next`、`develop` 对应 stable、beta、alpha 的认知。
-- package 默认使用独立版本，只发布实际变化的 package 和必要的依赖方。
-- 发布输入必须是不可变的 Git commit/tag，不能在发布期间跟随分支移动。
-- Alpha/Beta 发布不能在长期分支中留下临时版本修改。
-- 稳定版本号、changelog 和内部依赖范围必须经过可审阅的 Pull Request。
-- npm publish 保持人工触发，但版本计算、构建顺序和上传由 CI 执行。
-- 部分发布失败后可以从同一 release ref 幂等重试。
-- 长期分支之间的晋级和回灌与发版解耦；Bot 在临时 ref 验证 merge result，通过 CI 后使用带 lease 的原子 push 更新目标分支。
+### 代价一：预发布模式的连带发布
 
-## 非目标
+Changesets 的 prerelease mode（`changeset pre enter`）在计算 release plan 时，会把所有通过 `dependencies`、`optionalDependencies`、`peerDependencies` 依赖本批 package 的下游**无条件拉进来**，与 bump 大小无关，且沿依赖链传递到底。
 
-- 不要求所有 package 使用相同版本号。
-- 不要求每次产品发布都重新发布全部 package。
-- 不使用分支名代替 package 兼容性声明。
-- 不在第一阶段同时重构 Docker、商业插件和外部仓库的全部发布流程；这些制品后续可以消费同一个不可变 release ref。
+在对齐本仓库依赖形状的沙盒中实测（`test-branch-version/experiments/single-branch-model.sh`），依赖图为 `core <- store <- server <- host`、`core <- ui`、`core <- auth`，只给 `core` 一个 patch changeset：
+
+| 模式       | 被版本化的 package 数 | 实际结果                                        |
+| ---------- | --------------------- | ----------------------------------------------- |
+| stable     | 1                     | 只有 core                                       |
+| snapshot   | 1                     | 只有 core                                       |
+| prerelease | 6                     | core、store、auth、server、ui、host 全部 beta.0 |
+
+`core` 改为 major 时，stable 和 snapshot 各变成 4 个（因 `^` 范围失配带一层直接依赖），prerelease 仍是 6 个。
+
+这个行为无法通过配置关闭。`bumpVersionsWithWorkspaceProtocolOnly`、`onlyUpdatePeerDependentsWhenOutOfRange`、`updateInternalDependents` 以及各种 `workspace:` 写法都试过，均无效。根因是 SemVer 语义：预发布版本不满足普通范围（`1.2.1-alpha.0` 不满足 `^1.2.0`），而 `getDependencyVersionRanges` 在判断前会先把 `workspace:^` 展开成 `^1.2.0`。
+
+`devDependencies` 完全免疫，major 也不会级联。所以 `app-template-default` 这类通过 devDependencies 聚合内部包的形态是安全的。
+
+### 代价二：两条线共用基线时争夺同一个版本号
+
+`test-branch-version/experiments/two-branch-cost.sh` 复现：稳定线和测试线从**同一个基线、同一份 changeset** 出发，会算出同一个目标版本。
+
+```text
+测试线（pre 模式）发布：core = 1.3.0-beta.0
+稳定线发布：          core = 1.3.0
+
+1.3.0-beta.0 < 1.3.0
+```
+
+下一轮测试线若仍从 `1.2.0` 基线计算，会得到 `1.3.0-beta.1`，而 `1.3.0` 已作为稳定版发出——更超前的测试线版本号反而落后于稳定版。
+
+修复这个问题需要额外实现「基线推进」：每次稳定线发布后，把测试线上对应 package 的 version 字段改写到新基线。这是纯粹为了对抗模型缺陷而存在的机械补丁。
+
+注意问题的根源是**共用基线**，不是「存在两条分支」。本方案的 `develop` 走下一个版本的号段（`1.3.0-beta.N`），`main` 走当前版本的补丁号（`1.2.x`），两者基线不同，因此不触发这个问题。
+
+### 代价三：pre 状态文件污染
+
+进入 prerelease mode 会在分支上产生 `.changeset/pre.json` 和 `.changeset/pre/` 目录。这些文件一旦随 merge 流回稳定分支，稳定分支也会进入 pre 模式，之后所有发布都变成预发布版本。必须写 CI 规则专门拦截。
+
+### 结论
+
+三项代价同源于一个决定：**让三条常驻分支装同样的内容、算同样的版本基线**。
+
+本方案保留两条常驻分支，但让它们装不同的内容、走不同的号段：代价二消失，代价三降为一条明确的 CI 规则，代价一（连带发布）只影响 `develop`。
 
 ## 核心决策
 
-### 保留三条长期分支，但只负责代码成熟度
+### 两条常驻分支
 
-| 分支      | 代码含义        | 版本落库策略          | npm dist-tag |
-| --------- | --------------- | --------------------- | ------------ |
-| `develop` | 最新集成代码    | Alpha prerelease line | `alpha`      |
-| `next`    | Beta 稳定化代码 | Beta prerelease line  | `beta`       |
-| `main`    | 稳定代码        | Frozen Release PR     | `latest`     |
-
-分支决定“从哪一份代码发布”，Changesets 决定“哪些 package 发布以及各自是什么版本”。
-
-三条分支并没有使用三套 package 发布机制：它们都根据同一批 changeset 计算 release plan，也都只构建和发布计划内的 package。区别仅在版本是否写回 Git：
-
-- Alpha/Beta 在独立 release line 中使用 Changesets prerelease mode 持久记录预发布消费状态，不把预发布版本写回长期分支。
-- Stable 是对用户的正式版本承诺，因此通过可审阅的 Frozen Release PR 持久化版本、依赖范围和 changelog。
-
-```mermaid
-flowchart LR
-  feature["Feature / Fix PR"] --> develop["develop<br/>Alpha channel"]
-  develop -->|"受控晋级 Action<br/>不触发发版"| next["next<br/>Beta stabilization"]
-  next -->|"Stable Release PR"| main["main<br/>Stable channel"]
-
-  main -.->|"自动回灌；失败时通知"| next
-  next -.->|"自动回灌；失败时通知"| develop
-
-  develop --> alpha["Prerelease publish<br/>npm dist-tag: alpha"]
-  next --> beta["Prerelease publish<br/>npm dist-tag: beta"]
-  main --> stable["Frozen Release PR<br/>npm dist-tag: latest"]
+```text
+main      稳定版   -> dist-tag latest
+develop   预览版   -> dist-tag beta
 ```
 
-实线表示代码从不稳定渠道向稳定渠道晋级；虚线表示稳定修复和正式版本元数据向不稳定分支自动回灌。`develop -> next` 只改变 Beta 稳定化范围，不创建产品 tag，也不发布 npm。代码进入 `next` 后可以测试数天或数周，维护者确认某个 `next` SHA 已完成验证时，再单独发起 Beta release request。
+`main` 承载已发布版本的补丁修复，`develop` 承载下一个版本的新功能开发。
+
+合并 PR 不修改任何 package 的 `version` 字段——版本号只在发布时由 Changesets 计算。
+
+需要说明一个容易误判的参照：Backstage 的文档描述了「main release line」和「next release line」两条发布线，容易让人以为是两条分支；实际查其 `deploy_packages.yml` 只监听 `master` 和 `patch/*`，`master` 上没有 `pre.json`——**它的 next line 是 npm dist-tag，不是分支**。所以「两条发布渠道」不必然对应「两条分支」；本方案选择用分支承载，是因为新功能开发确实需要一个独立的代码线。
+
+### `develop` 常驻，发预览版
+
+`develop` 是第二条常驻分支，承载下一个版本的新功能开发，发布 `X.Y.0-beta.N`，对应 npm dist-tag `beta`。
+
+它与 `main` 的关系：
+
+- **占据不同的版本号段。** `main` 走当前版本的补丁号（`1.2.x`），`develop` 走下一个版本的预发布号（`1.3.0-beta.N`）。两者不争夺版本号，因此不需要任何基线推进补丁。
+- **单向为主。** 新功能只进 `develop`；`main` 上的热修复合进 `develop`。`develop` 只在一个版本转正时合回 `main`。
+- **只有 `develop` 使用 prerelease mode。** `main` 上永远不存在 `.changeset/pre.json`。
+
+这正是 Vue 的做法。`vuejs/core` 有 `main` 和 `minor` 两条常驻分支：
+
+```text
+main   package.json version = 3.5.41      -> dist-tag latest
+minor  package.json version = 3.6.0-rc.5  -> dist-tag alpha/beta/rc
+```
+
+实测 `minor...v3.6.0-rc.5` 为 `identical`，`minor...v3.6.0-beta.17` 为 `behind 189`——alpha、beta、rc 三个 dist-tag 不是三条分支，而是同一条 `minor` 分支在时间上的三个阶段。
+
+Vue 的 `minor` 分支从未重切：`v3.4.0`、`v3.5.0`、`v3.5.41` 全部是它的祖先（`behind`、`ahead=0`），说明这条分支跨越多个大版本一直复用。
+
+关键区别在于它与被放弃的 develop/next 三分支方案不同：
+
+| 维度         | 本方案的 develop       | 已放弃的 next 分支     |
+| ------------ | ---------------------- | ---------------------- |
+| 装什么       | 只装下一个版本的新功能 | 主线全部内容，滚动同步 |
+| 与主线关系   | 各走各的，转正时合一次 | 持续双向同步           |
+| 版本号段     | 独立（`1.3.0-beta.N`） | 与主线争同一个号       |
+| 基线推进补丁 | 不需要                 | 必需                   |
+
+差别不在「有几条分支」，而在**两条分支是否装同样的内容、算同样的基线**。
+
+### snapshot 用于一次性预览，不用于持续测试线
+
+Changesets 还提供 snapshot release（`changeset version --snapshot <tag>`）。它产出的版本号形如：
+
+```text
+0.0.0-canary-20260822005740
+```
+
+实测（`test-branch-version/experiments/what-is-snapshot.sh`）：
+
+```text
+0.0.0-canary-20260822005740 > 1.3.0            -> false
+satisfies('0.0.0-canary-...', '^1.2.0')        -> false
+```
+
+永远以 `0.0.0` 开头，比任何稳定版都小，不参与版本号序列，只能靠 dist-tag 安装。
+
+因此 snapshot 的定位是**「这个 PR 你装一下试试」**——一次性、用完即弃的预览，适合 PR 预览和 nightly 构建。它不能承担「测试版持续迭代、用户长期使用」的职责，因为版本号不递增，用户无法判断新旧，也无法书写依赖范围。
+
+snapshot 的级联规则与 stable 完全一致（共用同一套范围判断），且结果不回写任何分支。
 
 ### package 默认独立版本
 
-Changesets 使用 independent versioning：
+每个 package 的版本号只表达自身的兼容性，不表达产品发布批次。不使用 `fixed` 或 `linked` 强制统一版本。
 
-- `fixed: []`
-- `linked: []`
-- 每个 package 独立选择 patch、minor 或 major。
-- 内部依赖的新版本超出当前 SemVer range 时，Changesets 自动更新依赖方并至少发布一个 patch。
-- 一次重大变更可以在同一个 changeset 中声明多个 package，但不要求它们的新版本号相同。
-
-只有存在强制同步兼容约束的小型 package 集合，未来才考虑加入 `fixed`。不能仅因为两个 package 当前版本相同就将它们设置为 fixed。
-
-### 产品版本与 package 版本分层
-
-NocoBase 3 使用两层独立版本：
-
-- **产品版本**：主仓库 GitHub Release/tag，对用户表达一次完整的 NocoBase 发布，例如 `v2.1.0-alpha.1`、`v2.1.0-beta.1`、`v2.1.0`。
-- **package 版本**：每个 npm package 按自身 SemVer 独立演进，例如同一次 `v2.1.0` 产品发布包含 `@nocobase/portal-sdk@2.2.0` 和 `@nocobase/database@0.2.0`。
-
-三条分支使用同一条产品版本线：
-
-```text
-develop  v2.1.0-alpha.1 -> v2.1.0-alpha.2
-next     v2.1.0-beta.1  -> v2.1.0-beta.2
-main     v2.1.0
-```
-
-主仓库根 package.json 的 `version` 作为不发布到 npm 的产品稳定版本，只在 Stable Release PR 中更新。Alpha/Beta 产品版本、package prerelease versions 和 pre state 都不写回长期分支。
-
-发起新产品版本线的第一次 Alpha release request 时，维护者输入目标产品版本，例如 `2.1.0`。后续阶段自动继承：
-
-1. 后续 Alpha 从 `develop` 可达的最新 `v2.1.0-alpha.N` 推导产品版本并递增 N。
-2. 第一次 Beta release request 继承当前 Alpha 产品线的 `2.1.0`，从 `v2.1.0-beta.1` 开始；如果同时存在多条活跃产品线，维护者需要明确选择目标版本。
-3. Stable release request 继承 Beta 的 `2.1.0`，最终创建 `v2.1.0`。
-4. Stable hotfix 可以从根稳定版本自动执行 patch bump，也允许维护者显式指定目标版本。
-
-workflow 必须校验产品版本单调递增、渠道与分支匹配，并禁止同一个产品 tag 指向不同 commit。
-
-例如 `main` 发布产品 `v2.0.1` 并同步到 `next` 后，`next` 根 package.json 的稳定基线会更新为 `2.0.1`，但正在进行的 `v2.1.0-beta.N` 产品线不会丢失。它记录在 `next` 可达的产品 prerelease tags 和 active release request metadata 中；下一次 Beta 继续创建 `v2.1.0-beta.N+1`。这与单个 package 的“稳定基线 + 未消费 changeset”计算方式一致。
-
-### 点击发布时冻结源码快照
-
-`release-packages.yml` 启动后的第一步不是继续在移动的长期分支上工作，而是原子地读取渠道对应的分支 HEAD SHA，并创建不可变的 batch source ref：
-
-```text
-alpha   develop@D1 -> release-2.1.0-alpha.1
-beta    next@N2    -> release-2.1.0-beta.1
-stable  next@N1    -> release-2.1.0
-```
-
-从这一刻开始，`develop`、`next` 或 `main` 的新提交都不会改变本批发布的源码输入。所有 release plan、构建、测试、pack 和 publish 都显式 checkout 已记录的 candidate SHA，不再读取分支 HEAD。
-
-release request 保存三个锚点：
-
-- `sourceSha`：点击 Action 后读取到的原分支 commit，后续永不改变。
-- `releaseHeadSha`：release source branch 的当前 head。Alpha/Beta source ref 默认不可人工修改，因此它与 `sourceSha` 相同；Stable 允许维护者按后文规则追加经过审阅的特殊修复，每次变化都会更新该值。
-- `candidateSha`：Bot 从当前 `releaseHeadSha` 重新生成版本文件后的发布 commit；只有最新 generation 通过全部检查后才 seal。
-
-release branch 的命名直接表达产品版本和渠道：
-
-```text
-release-2.1.0-alpha.1
-release-2.1.0-beta.1
-release-2.1.0
-```
-
-release source branch 与 Bot 生成的 candidate 分开：
-
-```text
-release-2.1.0-beta.1            # 从已测试 next SHA 创建的只读批次快照
-release-line-2.1.0-beta         # Bot 持久维护该产品线 Beta pre state
-
-release-2.1.0                   # Stable source snapshot
-release-candidate-2.1.0         # Stable Release PR head
-```
-
-这样 Changesets 生成和移动 changeset 文件的操作不会污染长期分支或本批 source ref。Alpha/Beta release line 跨多个预发布批次保留 package prerelease versions 和 `.changeset/pre/`；Stable candidate 是单次发布分支。
-
-两类分支的职责不同：
-
-| 分支或 ref                  | 内容                                                                            | 谁可以修改               | 生命周期                                                       |
-| --------------------------- | ------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------- |
-| `release-2.1.0-beta.1`      | 从已测试 `next` SHA 冻结的业务源码和原始 changeset，不含生成版本文件            | 仅 Release Bot，人工只读 | 本批发布完成后删除                                             |
-| `release-line-2.1.0-beta`   | Bot 持久维护的 Beta package versions、`.changeset/pre/`、lockfile 和 manifests  | 仅 Release Bot，人工只读 | 持续到该产品线 Stable 完成；每个产品 tag 指向对应 batch commit |
-| `v2.1.0-beta.1` 对应 commit | 本批通过 CI 并 seal 的不可变 candidate，位于 `release-line-2.1.0-beta` 的历史中 | 无                       | 永久，由产品 tag 保持可达                                      |
-
-source ref 回答“本批要带哪些代码”，release line 回答“该产品预发布线已经消费过哪些 changeset、当前各 package 是什么版本”。Beta 修复先进入 `next`，再自动回灌到 `develop`。request 冻结后如果还要纳入修复，维护者需要先把修复合入 `next`，然后在创建产品 tag 前取消旧 request，并从新的 `next` SHA 重建同一预留批次；不能只修改 source ref 或 release line，留下 `next` 不包含的 Beta 代码。
-
-candidate 生成 workflow 同时提供自动和手动入口：
-
-- 自动：`push` 到匹配 `release-*` 的 source branch 时触发，使用 Actions `concurrency` 取消同一 request 的旧 generation 并重建 candidate。
-- 手动：`workflow_dispatch` 选择现有 release request，可执行 `rebuild`、`retry-checks` 或 `resume-publish`。手动模式仍从已记录的 `releaseHeadSha`/`candidateSha` 工作，不能偷偷改用最新长期分支。
-- 两种入口调用同一个 reusable workflow 和同一套校验，避免自动、手动生成不同结果。
-
-自动重建用于 Stable release branch 追加修复，以及 Bot 重新生成 Alpha/Beta batch source ref；手动入口用于 Actions 故障、外部 registry 暂时失败或需要审计式重跑，不用于绕过失败检查。
-
-```mermaid
-flowchart LR
-  next["经过稳定化测试的 next@N2"] --> source["release-2.1.0-beta.1<br/>冻结源码 + 原始 changesets"]
-  source -->|"应用代码增量 + Changesets pre version"| candidate["release-line-2.1.0-beta<br/>持久 pre state + versions + manifest"]
-  fix["冻结后发现修复"] --> next
-  fix -.->|"取消旧 request<br/>从新 next SHA 重建"| candidate
-  candidate --> ci["CI / build / pack"]
-  ci --> tag["v2.1.0-beta.1"]
-  tag --> npm["npm publish @beta"]
-```
-
-最终发布确实基于 candidate，而不是 source branch、长期分支 HEAD 或 PR merge commit：
-
-```text
-source ref       用于收集本批代码
-candidate commit 用于生成并审阅发布产物；Alpha/Beta 位于 release line，Stable 位于 candidate branch
-candidateSha     用于 build / pack / tags / npm publish / manifest
-```
-
-candidate 全部检查通过后被 seal。发布 workflow 校验当前 release line/candidate branch HEAD、release request 中的 `candidateSha`、tag target 和 manifest commit 四者完全一致，任何一项变化都会拒绝发布。
-
-source ref 更新或 candidate 重试都必须保持可审计，自动化规则如下：
-
-1. Bot 更新 release source ref 后，Actions `concurrency` 自动取消该 request 仍在运行的旧 candidate jobs。
-2. Bot 从上一个已发布 candidate commit 创建临时 generation，重新应用本批 source 增量并生成 release manifest 和动态构建矩阵。
-3. required checks 全部重跑；Stable Release PR 同时更新 head SHA。
-4. 旧 candidate 没有发布权限，也不会创建正式产品 tag；只有最新 generation 可以 seal 和 publish。
-5. Stable Release PR 已合并或产品 tag 已创建后，release branch 转为只读；后续修复必须创建新的 release request。
-
-Alpha/Beta request 冻结后，普通 `develop`、`next` 提交不会自动进入本批。如果必须纳入长期分支上的新修复，维护者取消旧 request，再从新的渠道 HEAD 重建；只要产品 tag 尚未创建，就复用已经预留的产品批次序号，不额外消耗一个 `alpha.N`/`beta.N`。
-
-Stable 的特殊修复可以通过 PR 合入 release source branch，也可以在 `release-packages.yml` 的“更新现有 request”模式中提供 commit SHA，由 Bot 自动 cherry-pick。无冲突时自动更新 branch 和 candidate；有冲突时创建待处理 PR并暂停发布，不能跳过冲突继续。Alpha/Beta 不走这条旁路，修复必须先进入 `develop`/`next`，避免预发布源码和后续 Stable 源码分叉。
-
-Stable Release PR 的分支规则必须开启“新提交后撤销旧审批”。candidate 更新时 GitHub 会把 PR 移出 Merge Queue，等待新一轮 CI 和 review；不能沿用旧 candidate 的批准自动合并新内容。Alpha/Beta 没有晋级 PR，但重建 source ref 后同样必须撤销旧 candidate 的 seal 状态并重跑检查。
-
-不同渠道对快照的处理如下：
-
-- **Alpha**：将 `develop` 快照增量应用到 `release-line-X.Y.Z-alpha`；`vX.Y.Z-alpha.N` 指向本批 candidate commit。release line 持续保留 pre state，source batch branch 发布后可删除。
-- **Beta**：`develop -> next` 已在发版前通过独立的受控晋级 Action 完成，`next` 可以继续稳定化测试并接收修复。Beta release request 只冻结维护者确认通过的 `next` SHA，并将相对上一批 Beta checkpoint 的增量应用到 `release-line-X.Y.Z-beta`。`vX.Y.Z-beta.N` 指向本批 candidate commit，release line 不合入 `next`。
-- **Stable**：从 `next` 快照创建 `release-X.Y.Z` source branch；Bot 从它生成 `release-candidate-X.Y.Z`，运行 `changeset version` 并更新根产品版本。这条 candidate branch 是 Release PR 的 head，目标为 `main`。`vX.Y.Z` 和本批 package tags 都指向最终 candidate commit。
-
-Alpha/Beta release line 是 Bot 管理的产品版本线状态，不属于长期开发分支；产品完成 Stable 后可以删除 branch，历史 batch commits 继续由产品 tags 保持可达。`develop`、`next`、`main` 始终只保存稳定 package versions 和原始 changesets，避免把 `*-alpha.N`、`*-beta.N` 或 `.changeset/pre/` 带入代码晋级和回灌。
-
-```mermaid
-flowchart LR
-  click["点击 Release Action"] --> capture["原子读取源分支 HEAD<br/>记录 source SHA"]
-  capture --> frozen["创建受保护的<br/>release request branch"]
-  frozen --> plan["计算固定 release plan"]
-  plan --> candidate["生成 release candidate commit"]
-  candidate --> ci["CI + build + pack"]
-  ci --> tag["产品 tag 指向 candidate"]
-  tag --> publish["从 candidate publish"]
-
-  source["原分支持续合入新提交"] -.->|"不影响"| frozen
-```
-
-如果 Stable Release PR 等待期间 `main` 发生变化，Merge Queue 负责验证 release candidate 与最新目标分支能否共存，但不能把 `main` 的新提交加入 npm 发布输入。Alpha/Beta request 冻结后，`develop` 或 `next` 的新提交同样不能静默进入本批；它们由后续 request 处理，或者在产品 tag 创建前取消当前 request 并从新 SHA 重建同一预留批次。出现冲突时暂停请求，维护者选择取消并从新 SHA 重建，或显式解决冲突后形成新的 candidate SHA 并重新跑完 CI。
-
-### Alpha/Beta 使用 Changesets prerelease mode
-
-长期 Alpha/Beta 渠道不使用 Snapshot。Snapshot 每次都会重新读取长期分支中全部未 Stable 的 changeset，无法知道某个 package 已在上一次 Alpha 发布过。NocoBase 的渠道发布需要“没有新 changeset 的 package 不重发”，因此使用 Changesets prerelease mode，并将状态持久化在产品版本线的 release line。
-
-这是对早期 Snapshot 方案的修正。两种模式的差别是：
-
-| 模式            | 是否持久记录已处理 changeset                        | 下次发布 A 没有新变化时       |
-| --------------- | --------------------------------------------------- | ----------------------------- |
-| Snapshot        | 否；每次从长期分支重新读取全部文件                  | A 会再次进入 release plan     |
-| Prerelease mode | 是；release line 将已处理文件移入 `.changeset/pre/` | A 不进入 release plan，不重发 |
-
-仅有 prerelease mode 状态还不够，workflow 同时记录 `lastSourceSha`。每一批只把长期分支从上一个 source checkpoint 到当前 source SHA 的 Git 增量应用到 release line：
-
-```text
-release line:
-  package versions
-  .changeset/pre/     # 已经预发布的 changeset IDs
-  lastSourceSha       # 上一批已经吸收到了 develop/next 的哪个 commit
-
-下一批：
-  计算 lastSourceSha..currentSourceSha
-  只应用新增代码和新增 changeset
-  已存在于 .changeset/pre/ 的旧文件不会重新加入根 .changeset/
-```
-
-每条 release line 的 checkpoint 固定来自一条长期分支：
-
-| Release line               | Canonical source | `lastSourceSha` 的含义                       |
-| -------------------------- | ---------------- | -------------------------------------------- |
-| `release-line-X.Y.Z-alpha` | `develop`        | 上一批 Alpha 已吸收的 `develop` commit       |
-| `release-line-X.Y.Z-beta`  | `next`           | 上一批 Beta 已吸收并完成测试的 `next` commit |
-
-Bot 必须验证 `lastSourceSha` 是当前 `sourceSha` 的祖先，再计算增量。`develop -> next` 晋级和 `next -> develop` 回灌都保留 merge ancestry，因此 Beta checkpoint 始终位于同一条 `next` 历史上。不能把短命 `release-X.Y.Z-beta.N` 的 head 或 squash commit 当作下一批 checkpoint；祖先校验失败时停止并通知，不能退回到 `merge-base` 猜测增量。
-
-changeset 文件合入长期分支后不可原地修改，也是为了让这个增量同步保持确定性。
-
-实现上不对 release line 执行 `git merge develop/next`，否则长期分支仍存在的旧 changeset 可能被重新加回根 `.changeset/`。Bot 只应用 `lastSourceSha..currentSourceSha` 之间的新 commits/diff，并校验 changeset ID：
-
-- 新增且未出现在 `.changeset/pre/` 的文件进入根 `.changeset/`；
-- 已记录在 `.changeset/pre/` 的 ID 不重新加入；
-- 修改已记录 ID 视为非法，要求在 source branch 新建 changeset；
-- 删除长期分支 changeset 时必须有明确取消记录，不能静默改写 pre state。
-
-源码增量和生成状态的文件所有权不同，不能使用一次 `ours`/`theirs` 覆盖完成同步：
-
-| 内容                                      | 同步规则                                                              |
-| ----------------------------------------- | --------------------------------------------------------------------- |
-| 业务源码和普通配置                        | 对 `lastSourceSha..sourceSha` 应用三方增量，真实冲突时停止            |
-| 新 `.changeset/*.md`                      | 按 ID 加入根目录；已经存在于 `pre/` 的 ID 不得重新加入或修改          |
-| `package.json`                            | 语义合并业务字段和依赖变化，保留 release line 的 prerelease `version` |
-| `.changeset/pre.json`、`.changeset/pre/*` | 只由 release line 和 Changesets v3 维护，长期分支不能覆盖             |
-| changelog                                 | 按版本段语义合并，再由 Changesets 追加本批记录                        |
-| `pnpm-lock.yaml`                          | 不应用长期分支版本差异；完成语义合并和 version 后重新生成             |
-| manifest、checkpoint                      | 只由 Release Bot 生成                                                 |
-
-这层 path-aware/semantic overlay 是 NocoBase release workflow 的能力，不是 Changesets CLI 自带功能。生成结束后，Bot 还要校验业务源码投影与冻结 source 一致、pre state 未回退、checkpoint 单调前进，然后才能提交新的 candidate。
-
-每个产品版本线分别维护 Alpha、Beta prerelease state：
-
-```text
-release-line-2.1.0-alpha
-  .changeset/pre.json       { "mode": "pre", "tag": "alpha" }
-  .changeset/pre/           已参与 Alpha 的 changesets
-  package.json              已发布的 package prerelease versions
-
-release-line-2.1.0-beta
-  .changeset/pre.json       { "mode": "pre", "tag": "beta" }
-  .changeset/pre/           已参与 Beta 的 changesets
-  package.json              已发布的 package prerelease versions
-```
-
-这些文件只存在于 Bot 管理的 prerelease release line：
-
-```text
-develop                              无 pre.json、无 .changeset/pre/
-next                                 无 pre.json、无 .changeset/pre/
-main                                 无 pre.json、无 .changeset/pre/
-release-X.Y.Z-alpha.N / beta.N       无 pre state；用于本批冻结代码快照
-release-line-X.Y.Z-alpha/beta        持有 pre.json 和 .changeset/pre/
-```
-
-任何代码晋级、自动回灌或 Stable Release PR 都不得以 prerelease release line 为源码。面向 `develop`、`next`、`main` 的 PR/merge result 如果出现 `.changeset/pre.json` 或 `.changeset/pre/`，CI 直接失败。
-
-#### 长期分支没有 pre state 时如何识别增量
-
-识别过程由 Changesets state 和 workflow checkpoint 共同完成，不是只靠 Changesets：
-
-```text
-Changesets pre state  记录哪些 changeset IDs 已经参与预发布
-lastSourceSha         记录 release line 已同步到长期分支的哪个 commit
-```
-
-例如 Alpha 1 完成后：
-
-```text
-develop@D10
-  change-a.md                 # 长期分支仍保留
-
-release-line-X.Y.Z-alpha
-  A@1.2.0-alpha.0
-  .changeset/pre/change-a.md  # Changesets 记为已处理
-  lastSourceSha = D10         # workflow 记为已同步到 D10
-```
-
-随后 `develop@D11` 新增 B 的代码和 `change-b.md`。下一批不是把整个 D11 覆盖到 candidate，也不是重新执行一次完整 merge，而是：
-
-```text
-1. 从上一个 Alpha candidate commit 开始
-2. 计算 Git diff D10..D11
-3. 只应用这段增量中的业务代码和新 changeset IDs
-4. 根 .changeset/ 得到 change-b.md
-5. .changeset/pre/change-a.md 保持不变
-6. Changesets version 只看到尚未处理的 change-b.md
-7. 成功后将 lastSourceSha 更新为 D11
-```
-
-所以 A 不重发不是因为 `develop` 知道 A 已经发过，而是 release line 同时保留了 A 的 prerelease version 和 `change-a` 的消费记录。`develop` 只负责保存最终 Stable 仍需要的原始发布记录。
-
-该增量应用是 NocoBase release workflow 的编排能力，不是 Changesets CLI 单独提供的功能。workflow 必须保证 checkpoint 单调前进、changeset ID 不重复，并在 Git diff 无法干净应用时停止，而不是退回到复制整个长期分支。
-
-第一次进入渠道时执行：
-
-```bash
-pnpm changeset pre enter alpha # Beta 使用 beta
-pnpm changeset version
-CI=true pnpm install --no-frozen-lockfile
-pnpm changeset publish --tag alpha
-```
-
-Changesets v3 在 prerelease version 时会把已应用文件从 `.changeset/*.md` 移到 `.changeset/pre/`。下一批只读取新进入根 `.changeset/` 的文件，因此不会仅因为旧 changeset 仍要在最终 Stable 使用，就重复发布没有变化的 package。
-
-这里不需要 NocoBase 自己猜哪些 changeset 已经发布。Changesets 直接用文件 ID 记录状态。假设 release line 第一次运行前有：
-
-```text
-.changeset/
-  fix-login.md
-  add-sso.md
-  pre.json             # { "mode": "pre", "tag": "alpha" }
-```
-
-执行 `pnpm changeset version` 后：
-
-```text
-.changeset/
-  pre.json
-  pre/
-    fix-login.md       # 本批已经应用
-    add-sso.md         # 本批已经应用
-```
-
-下一批同步进来一个新文件：
-
-```text
-.changeset/
-  fix-session.md       # 尚未应用
-  pre.json
-  pre/
-    fix-login.md       # 已应用
-    add-sso.md         # 已应用
-```
-
-Changesets 读取 release line 时能够看到根目录和 `pre/` 两处文件，但在 `mode: pre` 下会把 `pre/` 中的 changeset 排除出本轮 release plan，因此本轮只处理 `fix-session.md`。处理成功后，它也会被移动到 `pre/`。
-
-也就是说：
-
-```text
-文件仍在根 .changeset/  = 尚未在该 prerelease line 发布
-文件已经位于 pre/       = 已经在该 prerelease line 发布
-```
-
-这个状态必须随 release line commit 并持久保存。如果每次都从长期分支重新创建状态，或删除 `.changeset/pre/`，Changesets 就会失去记忆并重复发布旧 package。
-
-产品版本号和 package prerelease 序号是两层计数，不要求相同：
-
-```text
-产品 Release v2.1.0-alpha.1
-  发布 A@1.2.0-alpha.0
-
-产品 Release v2.1.0-alpha.2
-  只有 B 出现新 changeset
-  发布 B@3.0.1-alpha.0
-  A 不重发，仍使用 A@1.2.0-alpha.0
-
-产品 Release v2.1.0-alpha.3
-  A 出现新 changeset
-  发布 A@1.2.0-alpha.1
-```
-
-产品 tag 的 `.1/.2/.3` 表示全仓产品发布批次；package 的 prerelease counter 只在该 package 再次进入 release plan 时递增。GitHub Prerelease manifest 同时列出本批新发布的 delta 和当前产品版本线的完整 package mapping。
-
-#### 完整例子
-
-初始状态：
-
-```text
-develop@D10
-A 的稳定基线：1.1.0
-change-a.md：A minor
-```
-
-发布产品 `v2.1.0-alpha.1`：
-
-```text
-建立 Alpha release line
-pnpm changeset pre enter alpha
-pnpm changeset version
-
-结果：
-A = 1.2.0-alpha.0
-change-a.md -> .changeset/pre/change-a.md
-lastSourceSha = D10
-```
-
-随后 `develop@D11` 只增加了 B 和 `change-b.md`，A 没有变化。发布产品 `v2.1.0-alpha.2`：
-
-```text
-应用 D10..D11 增量
-根 .changeset/ 只有 change-b.md
-.changeset/pre/ 已记录 change-a.md
-
-结果：
-本批只发布 B
-A 仍为 1.2.0-alpha.0，不重新发布
-lastSourceSha = D11
-```
-
-随后 `develop@D12` 为 A 新增三个 patch changesets。发布产品 `v2.1.0-alpha.3`：
-
-```text
-应用 D11..D12 增量
-Changesets 将 A 的三个 patch 合并为一个 release
-
-结果：
-A = 1.2.0-alpha.1
-不是 alpha.4
-三个新 changeset 移入 .changeset/pre/
-lastSourceSha = D12
-```
-
-这里 `alpha.0 -> alpha.1` 是 A 自己的 prerelease counter；产品则从 `v2.1.0-alpha.1 -> alpha.2 -> alpha.3`。两者没有一一对应关系。
-
-第一次从 Alpha 晋级 Beta 时，会建立独立的 Beta release line。因为 Beta 是一个新渠道，它会基于 `next` 的完整原始 changesets 生成首批 Beta，所以 A 可能发布一次 `1.2.0-beta.0`；之后的 Beta 批次同样只处理相对 Beta `lastSourceSha` 的新增 changesets。最终 Stable 不读取 Alpha/Beta 的 `.changeset/pre/`，而是从 `next` 的原始 changesets 一次性计算正式版本。
-
-同一批里 A 有多个 patch changeset，只会产生一次 SemVer bump/一个新的 prerelease：
-
-```text
-A 当前为 1.2.0-alpha.1
-本批新增 3 个 A patch changesets
-结果为 1.2.0-alpha.2
-```
-
-不会因为三个 patch 直接跳到 `alpha.4`。若新 changeset 将下一稳定目标提升到更高 minor/major，Changesets会按合并后的最高 bump 计算新的预发布目标。
-
-Alpha 与 Beta 使用独立 pre cycle。第一次 Beta 从已经晋级到 `next` 并完成稳定化测试的源码和原始 changesets 建立 `release-line-X.Y.Z-beta`，因此会生成完整的首批 Beta release set；后续 Beta 只发布新的 changesets。最终 Stable 从 `next` 的原始 changesets 运行普通 `changeset version`，一次性生成正式 versions/changelog 并删除长期分支中的已消费文件。
-
-`develop`、`next` 长期分支仍保存稳定 package version 和原始 changesets；prerelease versions、`.changeset/pre/` 和预发布消费记录只存在于 release line，不自动回写长期分支。
-
-#### Stable 不需要执行 `pre exit`
-
-Changesets 的 `pre exit` 用于在同一个工作分支上从 prerelease 状态切回 stable。本方案没有让 `develop`、`next`、`main` 进入 pre mode，所以 Stable 不从 Alpha/Beta release line 退出，也不合并它们的 pre state。
-
-Stable 独立计算：
-
-```text
-next
-  package.json = 最近 Stable 版本
-  .changeset/*.md = 本产品线全部原始 changesets
-  无 pre.json
-        ↓ 普通 changeset version（不是 pre exit）
-release-candidate-X.Y.Z
-  正式 package versions
-  changelog
-  删除已消费 changesets
-        ↓ Release PR
-main
-```
-
-例如 Beta candidate 已发布到 `A@1.2.0-beta.3`，而 `next` 仍是 `A@1.1.0 + A minor changeset`，Stable 普通 version 会计算出 `A@1.2.0`。
-
-避免冲突依靠状态隔离，而不是自动合并 pre state：Alpha/Beta release lines 互不 merge，也永远不进入长期分支。产品完成 Stable 后可删除 release lines；产品 tags 和 release manifests 保留预发布历史。
-
-Snapshot 只用于 PR preview、nightly 或 canary；它不承担正式 Alpha/Beta 渠道版本管理。
-
-### 稳定版使用 Frozen Release PR
-
-只有 `main` 会持久化正式版本号。
-
-Stable release request 在点击时冻结 `next` 的 SHA，创建 `release-X.Y.Z` source branch，并在 Bot 管理的 `release-candidate-X.Y.Z` 上运行 `changeset version`。candidate branch 形成一次性的 Release PR，包含快照中尚未消费的 changeset，以及：
-
-- 每个受影响 package 的新版本。
-- 内部 workspace 依赖范围更新。
-- package changelog。
-- `pnpm-lock.yaml` 更新。
-- 已消费 changeset 文件的删除。
-
-一个 changeset 不会对应一个 Release PR；一次 Stable release request 对应一个冻结的 Release PR。该 PR 创建后，`next`、`main` 新增的提交不会自动加入。如果维护者希望纳入新变化，应取消当前请求并从新的 SHA 重建，而不是静默更新已经 review 的 candidate。
-
-Release PR 合并后，`main` 中才正式出现新版本号。发布使用 release branch 上已经通过 CI 的 candidate SHA；PR 合并本身只触发后续 publish，不重新计算版本或构建输入。
-
-#### Frozen Release PR 的并发保护
-
-Release PR 不能使用“PR 分支检查通过后直接合并”的普通模式。假设 candidate 是 `C1`，在 CI 运行期间新代码 `M2` 进入 `main`；`M2` 不应被加入 npm 发布内容，但仍需要确认 `C1` 可以安全合入最新 `main`。
-
-稳定发布使用 GitHub Merge Queue：
-
-1. Release PR 的 candidate SHA 先完成自身 release plan、Quality、构建和 pack 检查。
-2. review 完成后进入 Merge Queue。
-3. GitHub 基于当时最新的 `main` 和 Release PR 创建临时 `merge_group` commit，运行集成 required checks。
-4. 只有 candidate 检查和 merge group 检查都通过，GitHub 才允许合并。
-5. workflow 必须先收到 Release PR `closed + merged=true` 事件，才获得 publish 权限；PR 冲突或合并失败时绝不创建正式 tag、不执行 npm publish。
-6. 合并事件校验 PR head SHA 等于 request 中 seal 的 candidate SHA，然后创建产品/package tags并发布该 candidate。
-
-产品 tag 和 package tags都基于 `candidateSha` 创建，不基于 PR 的 squash/merge commit。发布前必须同时满足：
-
-```text
-Release PR 已合入 main
-AND merged PR head SHA == sealed candidateSha
-AND candidate checks 全部通过
-```
-
-如果从 candidate 通过 CI 到 PR 合入之间，release source branch 又增加了提交，Bot 会生成新的 candidate、更新 PR head、撤销旧审批并重跑检查；旧 candidate 不能获得 tag 或 publish 权限。因此最终 tag 必然指向“实际合入前最后一版、且通过检查”的 candidate。
-
-所以 Stable 的顺序固定为：
-
-```text
-冻结 release branch
-  -> 生成 candidate
-  -> Release PR CI/review
-  -> Merge Queue
-  -> Release PR 成功合入 main
-  -> 创建 tags
-  -> npm publish
-```
-
-支持团队现有的 squash merge 习惯。使用 squash 时，candidate SHA 不会成为 `main` 的祖先，但它的改动会被 squash commit 表达；产品 tag、package tags 和 npm publish 仍指向已验证的 candidate SHA，并由 tag 永久保存。workflow 在发布前同时记录：
-
-- `candidateSha`：实际构建和发布的源码；
-- `mergedSha`：Release PR 在 `main` 上的 squash commit；
-- PR number 和 merge-group checks。
-
-这样既能从 tag 还原准确制品源码，也能从 `main` 历史定位对应的 squash commit。如果希望产品 tag 必须位于 `main` 祖先链，则只能改用 merge commit；这不是正确发布所必需的约束。
-
-`main` 的新提交是否有 changeset不影响本批 release plan，因为它们不属于冻结的 candidate：
-
-- 它们会进入 merge group 的集成验证，确保 release branch 能合入最新 main。
-- 它们不会进入 `vX.Y.Z` 的 package 清单，也不会改变 candidate SHA。
-- 它们留待下一次 Stable release request 处理。
-
-`release-plan-complete` 只验证 frozen candidate 自己的 changeset 是否全部进入版本计划，不要求消费 candidate 创建以后进入 `main` 的 changeset。
-
-```mermaid
-sequenceDiagram
-  participant VP as Frozen Release PR
-  participant Main as main
-  participant MQ as Merge Queue
-  participant CI as Required CI
-  participant DR as Draft Release
-
-  VP->>CI: candidate C1 checks
-  Main->>Main: 新提交 M2 合入
-  VP->>MQ: 进入队列
-  MQ->>CI: 检查 main@M2 + Version PR 的 merge_group
-  alt C1 与最新 main 冲突或集成失败
-    CI-->>VP: 阻止合并
-    VP->>VP: 取消或显式重建 candidate
-  else 全部检查通过
-    CI-->>MQ: success
-    MQ->>Main: 合并 Release PR
-    VP->>DR: 产品/package tags 指向 C1
-  end
-```
-
-因此，`main` 在 CI 期间继续开发没有问题；真正的 npm 发布候选始终是点击发布后生成并验证过的 `C1`，Merge Queue 只负责验证它可以安全进入最新 `main`。
-
-```mermaid
-flowchart TD
-  changes["功能 PR<br/>代码 + changeset"] --> develop["合入 develop"]
-  develop --> alphaRelease["发起一次 Alpha release request<br/>自动锁定 SHA 和创建 vX.Y.Z-alpha.N"]
-  alphaRelease --> alphaPre["Alpha release line 执行<br/>Changesets pre version"]
-  alphaPre --> alphaNpm["按需发布 npm @alpha"]
-  alphaPre --> keepAlpha["pre state 持久保留<br/>不合回 develop"]
-
-  develop -->|"受控晋级 Action<br/>CI 后原子 merge"| next["Beta 稳定化测试"]
-  next --> betaFreeze["Beta request 冻结<br/>已测试的 next SHA"]
-  betaFreeze --> betaRelease["从冻结快照创建<br/>vX.Y.Z-beta.N candidate"]
-  betaRelease --> betaPre["Beta release line 执行<br/>Changesets pre version"]
-  betaPre --> betaNpm["按需发布 npm @beta"]
-  betaPre --> keepBeta["pre state 持久保留<br/>不合回 next"]
-  next -.->|"hotfix 自动回灌"| develop
-
-  next --> stableFreeze["Stable request 冻结<br/>next SHA"]
-  stableFreeze --> versionPR["release-candidate-X.Y.Z<br/>版本 + 依赖 + changelog"]
-  versionPR -->|"Release PR + 人工 review"| mergeQueue["Merge Queue 验证<br/>candidate + 最新 main"]
-  mergeQueue --> main["Release PR 合入 main"]
-  main --> stableDraft["vX.Y.Z 和 package tags<br/>指向 candidate SHA"]
-  stableDraft --> stableNpm["沿用最初 stable request 授权<br/>按需发布到 npm @latest"]
-  main -->|"自动回灌"| next
-```
-
-Alpha/Beta 和 Stable 使用同一批 changeset，但只有 Stable 会消费 changeset 并把正式版本写回 Git 历史。
+产品层面的版本（例如 `v3.1.0`）由主仓库 Git tag 和 GitHub Release 表达，与单个 package 的 npm 版本解耦。
 
 ## 分支规则
 
-### 正常开发和代码晋级
+### 常驻分支
 
-默认开发方向：
+| 分支      | 承载               | 版本号形态     | dist-tag | pre 模式 |
+| --------- | ------------------ | -------------- | -------- | -------- |
+| `main`    | 已发布版本的修复   | `1.2.x`        | `latest` | 永不进入 |
+| `develop` | 下一个版本的新功能 | `1.3.0-beta.N` | `beta`   | 常驻     |
 
-```text
-feature/* -> develop -> next -> main
-```
+两条分支都受保护：禁止直接推送，PR 必须通过 CI 和 review。
 
-规则如下：
+**`main` 上永远不存在 `.changeset/pre.json`。** 这是稳定线被污染的唯一信号，CI 必须有一条阻塞规则校验。
 
-1. 普通功能和修复默认向 `develop` 提交 PR。
-2. 需要扩大 Beta 测试范围时，维护者单独运行 `promote-branches.yml`，选择 `develop-to-next`。这个动作与 Beta release request 无关，可以在发版前执行多次。
-3. Bot 原子读取 `develop` 和 `next` HEAD，在临时 ref 创建保留双亲的 merge commit并运行 required CI。检查通过且 `next` 没有漂移时，使用 GitHub App 和带 lease 的原子 push 更新 `next`。
-4. `develop -> next` 不使用 squash、cherry-pick 或 rebase。长期分支间保留真实 merge ancestry，确保 `next` hotfix 回灌后不会在下一轮晋级中被重复引入。
-5. 代码进入 `next` 后可以测试数天或数周，也可以继续接收面向当前 Beta 的 hotfix；这些变化本身不触发产品 tag 或 npm publish。
-6. `next` 的 hotfix 仍通过 PR 合入；合入后自动运行 `next -> develop` 回灌，确保修复进入后续开发。
-7. Beta 测试完成后，维护者单独运行 `release-packages.yml` 并选择 `beta`。workflow 只冻结当时确认通过的 `next` SHA，不再执行 `develop -> next`。
-8. Stable 仍通过从冻结 `next` SHA 生成的 Release PR 进入 `main`，因为正式版本号、依赖范围和 changelog 需要人工审阅。
+### 临时分支
 
-`promote-branches.yml` 与 `sync-branches.yml` 使用同一个 reusable merge workflow。前者是人工触发的 `develop -> next` 晋级，后者是自动或手动执行的 `main -> next -> develop` 回灌；两者都必须在临时 ref 计算 merge result、运行 CI，并用 expected target SHA 做原子更新。Actions run summary 记录 source、target、merge result 和最终 push SHA。
+| 分支形态     | 用途               | 生命周期                 |
+| ------------ | ------------------ | ------------------------ |
+| `hotfix/*`   | 紧急修复已发布版本 | 发布后合回 `main` 并删除 |
+| `vX` / `X.Y` | 老版本长期维护     | 该版本 EOL 前保留        |
 
-发版 request 与代码晋级分开以后，`next` 可以包含多次 `develop` 晋级 merge 和多次 hotfix：
+### 日常流转
 
 ```text
-next@N1  上一批 Beta checkpoint
-   |
-   +-- develop 晋级 merge
-   +-- next hotfix
-   +-- develop 晋级 merge
-   +-- next hotfix
-   v
-next@N5  本轮测试通过
-   |
-   +-- Beta release request 冻结 N5
-   v
-vX.Y.Z-beta.N
+新功能 PR ──────────────> develop ──(定期发 beta)──> npm @beta
+                             ^
+                             │ 合并（同步修复）
+                             │
+修复 PR ────────────────> main ──(发 Version PR)──> npm @latest
 ```
 
-中间每次 merge 只改变 `next` 的测试范围，不分配新的产品 Beta 序号。只有实际发起并成功完成 Beta release request，才创建新的 `vX.Y.Z-beta.N`。
+- 新功能只进 `develop`。
+- 修复进 `main`，发布后合进 `develop`。
+- `develop` 只在版本转正时合回 `main`（见下节）。
 
-Stable 的一次 `workflow_dispatch` 就是本次 npm publish 的人工授权。Frozen Release PR 仍需要 review，以确认最终源码快照、package 列表和版本计划；PR 经 Merge Queue 合并后自动继续 publish，不再增加 Environment 人工批准。GitHub Environment 只用于隔离 npm 凭据和限制 workflow 来源，不配置 required reviewers。
-
-### 稳定分支修复和回灌
-
-必要时可以直接向 `main` 或 `next` 提交 hotfix PR。合并后，机器人自动执行回灌：
+`test-branch-version/experiments/develop-to-main-cycle.sh` 完整验证了这条流转，包括中途 `main` 发热修复的情况：
 
 ```text
-main -> next -> develop
+① develop 进 pre 模式        core = 1.3.0-beta.0   -> beta
+② main 热修复                core = 1.2.1          -> latest
+   （main 的 pre 模式：否）
+③ develop 继续开发           core = 1.3.0-beta.1   -> beta
+④ 把 main 合进 develop       core = 1.3.0-beta.1（版本号保持自己的）
 ```
 
-默认不创建同步 PR。Bot 在临时 ref 中计算保留双亲的 merge result 并运行 required CI；检查通过、没有冲突且目标分支 HEAD 仍等于计算时记录的 SHA 时，使用有 Ruleset bypass 权限的 GitHub App 将 merge commit 原子 push 到目标分支。`main -> next` 成功后，再以同样方式执行 `next -> develop`。如果 hotfix 直接进入 `next`，则只执行 `next -> develop`。
+### 版本转正：develop 合进 main
 
-以下情况直接失败，不修改目标分支：
+这是整个流程中最需要注意的一步，已验证。
 
-- Git 冲突或 changeset modify/delete 冲突；
-- 临时 merge result 的 required CI 失败；
-- 验证期间目标分支发生新提交，带 lease 的原子 push 被拒绝；
-- 分支规则或 GitHub App 权限不允许直接更新。
+```bash
+git checkout -b "release/2026-08-24.1"   # 临时发版分支
+pnpm changeset pre exit                  # 只记录「打算退出」，不改版本号
+pnpm changeset version                   # 真正脱掉 -beta.N 后缀，并删除 pre.json
+git commit -am "chore: release 2026-08-24.1"
+git tag "release/2026-08-24.1"
+```
 
-workflow 失败后调用现有 `scripts/feishu-notify.sh`，通知内容包含 source/target SHA、冲突或失败检查、Actions run URL 和手动重试命令。不会自动创建同步 PR；维护者修复分支状态后手动重跑 `sync-branches.yml`。这样保持 NocoBase 2 的“无需人工 PR”体验，也避免产生无人处理的 PR。原始 hotfix 仍应通过 PR 进入 `main`，因为它需要在影响稳定用户前完成 CI。
+合进 `main` 之后，点 `release-stable.yml` 发布到 `latest`。
 
-这样既保留“稳定修复自动向不稳定分支传播”的便利，也避免发布 workflow 和开发者同时修改长期分支。
+两条命令的分工必须理解清楚：
 
-### 分支保护
+| 命令       | 做什么                                     | 之后 `pre.json`      | 版本号                   |
+| ---------- | ------------------------------------------ | -------------------- | ------------------------ |
+| `pre exit` | 把 `mode` 从 `pre` 改成 `exit`，仅记录意图 | 仍存在，`mode: exit` | 不变                     |
+| `version`  | 消费所有 changeset，脱掉预发布后缀         | **被自动删除**       | `1.3.0-beta.1` → `1.3.0` |
 
-三条长期分支均应：
+实测输出：
 
-- 禁止 force push。
-- 默认要求 Pull Request，不允许日常开发直接 push。
-- 要求 Quality 和 Changeset Check 通过。
-- `promote-branches.yml`、hotfix PR 和自动回灌 workflow 使用明确标识，便于 CI 采用对应规则。
-- 只允许受保护的晋级/回灌 GitHub App 绕过 PR 要求更新 `develop` 或 `next`；`main` 的稳定版本仍必须通过 Release PR 和 Merge Queue。
+```text
+预览版：      core = 1.3.0-beta.0   pre.json: mode=pre tag=beta
+pre exit 后： pre.json: mode=exit   版本号还没变: core = 1.3.0-beta.0
+version 后：  core = 1.3.0          pre.json: 不存在
+```
 
-为避免分支保护阻塞线上紧急修复，GitHub Ruleset 可以给少数 Release Maintainer / Incident Responder 配置可审计的 bypass。紧急路径允许直接 push，但必须满足：
+**关键：`pre.json` 由 `changeset version` 自动删除，不需要手工处理。** 所以转正后的 `develop` 已经是干净的非 pre 状态，可以安全合进 `main`。
 
-1. 仅用于正在发生的生产事故，不能代替日常 PR。
-2. 禁止 force push，提交必须签名并关联事故记录。
-3. 修复提交应携带 changeset；来不及添加时，必须在发布前补一个 changeset-only PR。
-4. push 后立即运行 Quality CI，并自动启动 `main -> next -> develop` 回灌。
-5. 发布仍基于固定 GitHub Release tag；直接 push 不会改变已经开始的发布批次。
+合并时 `package.json` 会冲突，此时版本号取 **develop 的**——它才是转正后的稳定版号，而 `main` 上还是转正前的旧版本。
+
+这与日常 `main` → `develop` 的同步规则一致：两边都是**取较大者**。转正时 develop 刚脱掉 `-beta` 后缀，必然大于 `main` 的旧版本；日常同步时则可能是 `main` 更大（它连发了 hotfix），那就接受 `main` 的。详见「同步冲突怎么解」。
+
+合并后必须验证 `main` 上没有 `pre.json`。
+
+### develop 不需要重新切出来
+
+转正合并后，`develop` **直接复用，不重切**，已验证（`test-branch-version/experiments/develop-reuse.sh`）。
+
+`changeset version` 已经删掉了 `pre.json`，分支回到干净状态。开下一轮只需：
+
+```bash
+git merge main                # 同步转正结果
+pnpm changeset pre enter beta # 重新进入 pre 模式
+```
+
+实测第二轮从新的稳定基线继续计算，顺序天然正确：
+
+```text
+第一轮转正：      core = 1.3.0
+重新 pre enter：  pre.json: mode=pre tag=beta
+第二轮预览版：    core = 1.4.0-beta.0
+1.4.0-beta.0 > 1.3.0
+```
+
+Vue 的做法是同样的：`v3.4.0`、`v3.5.0`、`v3.5.41` 全部是 `minor` 分支的祖先，说明这条分支跨多个大版本一直复用，从未重切。
+
+一个细节：`pre exit` 之后 `.changeset/pre/` 会残留一个**空目录**（记录文件已被 `version` 消费清空）。它不影响下一轮，删不删都可以。
+
+### 忘记 pre exit 的后果
+
+如果 `develop` 在 pre 模式下直接合进 `main`：
+
+- `main` 的 package.json 会带上 `-beta.N` 版本号；
+- `pre.json` 进入 `main`，此后 `main` 上所有发布都变成预发布版本。
+
+这是必须用 CI 拦截的场景，也是「`main` 上不得出现 `pre.json`」这条规则存在的原因。
+
+### 稳定版修复同步到 develop
+
+`main` 发布修复后 merge 回 `develop`，必然在两类文件上冲突：
+
+```text
+packages/<name>/package.json     版本号
+packages/<name>/CHANGELOG.md     发布记录
+```
+
+`main` 发布时已经消费掉了修复的 changeset 文件，合过来时 `.changeset/` 里没有它，因此**不会在 develop 上重复发布**。但代码修复合过来了，会包含在下一个 beta 中。
+
+#### 同步冲突怎么解
+
+由 `scripts/resolve-sync-conflicts.mjs` 自动处理，已验证（`test-branch-version/experiments/sync-conflict-resolution.sh`）：
+
+| 文件           | 规则                                            |
+| -------------- | ----------------------------------------------- |
+| `package.json` | 版本号**取较大者**，其余字段走 git 正常三方合并 |
+| `CHANGELOG.md` | union，两边条目都保留                           |
+| 其它任何文件   | 不碰，中止并发飞书通知                          |
+
+**为什么版本号取较大者而不是无条件保留 develop 的。** 如果 `main` 连发几个 hotfix，develop 会落后并且永远追不上，已验证：
+
+```text
+develop 发一轮 beta        1.3.1-beta.0
+main 连发两个 hotfix       1.3.2
+                           1.3.1-beta.0 < 1.3.2   <- beta 渠道低于 latest
+
+保留 develop 自己的（--ours）：
+  下一轮                   1.3.1-beta.1 < 1.3.2   <- 仍然倒挂
+
+取较大者（接受 main 的 1.3.2）：
+  下一轮                   1.3.3-beta.0 > 1.3.2   <- 顺序恢复
+```
+
+原因在于基线钉死时只有序号在涨。接受 `main` 的版本号后基线抬到 `1.3.2`，序号也自然从 `.0` 重新开始（`1.3.2` 里没有预发布序号可读）。
+
+develop 领先时则保留自己的：
+
+```text
+develop 1.4.0-beta.0  vs  main 1.3.2  ->  保留 1.4.0-beta.0
+```
+
+不需要区分 minor 还是 patch，semver 比较本身涵盖了这一点。
+
+**为什么不整个文件取一边。** `package.json` 可能同时有版本号之外的改动。脚本的做法是把 base/ours/theirs 三份的 `version` 都改写成胜出值，再跑 `git merge-file` 做三方合并——版本号不再是冲突点，其余字段照常合并。实测：
+
+```text
+develop: version=1.3.1-beta.0，新增 dependencies.lodash
+main:    version=1.3.2
+结果:    version=1.3.2  deps={"lodash":"^4.0.0"}    <- 两个都对
+```
+
+如果合并后仍有冲突标记，说明真有别的字段冲突，交给人。
+
+**已发布的 beta 不受影响。** develop 版本号跳变后，之前发的 `1.3.1-beta.0` 在 npm 上照常存在，它的 tag 也仍指向当时的 commit 且在 develop 历史里。只是版本号序列不连续——`1.3.1` 那条线被 `main` 的 hotfix 接管了，develop 让开是正确行为。
+
+### 在已发布的旧版本上修 bug
+
+场景：`main` 已经走到 `2.0.0`，但线上还有用户在用 `1.3.x`，需要给 `1.3.x` 出补丁。已验证（`test-branch-version/experiments/patch-old-version.sh`）。
+
+```bash
+# ① 从当时的批次 tag 切分支 —— 不是从 main 切
+git checkout -b 1.3 release/2026-08-20.1
+
+# ② 修 bug + changeset（选 patch）
+pnpm changeset
+
+# ③ 推分支
+git push origin 1.3
+```
+
+然后点 `release-stable.yml`，填 `branch=1.3` 并**勾上 `keep_latest`**。
+
+**`keep_latest` 是必须勾的。** 不勾的话 `1.3.1` 会抢走 `latest`，用户 `pnpm add @nocobase/core` 会从 `2.0.0` 退回 `1.3.1`。workflow 里有一条校验：从非 `main` 分支发版却没勾 `keep_latest` 时直接报错，不会让你误发。
+
+勾上之后发布到 dist-tag `legacy`，两条线互不干扰：
+
+```text
+latest  -> 2.0.0      npm install @nocobase/core 拿到这个
+legacy  -> 1.3.1      旧版本线的最新补丁
+```
+
+#### dist-tag 只影响一种人
+
+这一点容易误解：**dist-tag 只对 `npm install <pkg>` 不写版本号的人生效。**
+
+写了 range 的用户按 semver 从版本列表解析，根本不看 dist-tag：
+
+```text
+registry 上 @nocobase/core 的版本：1.2.0, 1.2.4, 1.3.0, 1.3.1, 2.0.0
+
+用户 package.json 写法      解析到
+  ^1.3.0                    1.3.1     <- 拿到 hotfix
+  ~1.3.0                    1.3.1     <- 拿到 hotfix
+  1.3.x                     1.3.1     <- 拿到 hotfix
+  ^2.0.0                    2.0.0
+```
+
+所以老用户不管 dist-tag 叫什么都能正常升级到补丁版本。`legacy` 这个值本身没有语义要求，它的唯一作用是**给这次发布一个不是 `latest` 的落点**，避免 `latest` 指针倒退。
+
+这也是为什么不需要按版本线设计 `v1-latest`、`v2-latest` 这类名字——各 package 独立版本，同一批发布里 core 可能是 1.x 而 hub 是 2.x，一个按主版本号命名的 tag 套不住它们。
+
+维护分支的特点：
+
+- 从**批次 tag** 切出，不是从 `main` 切
+- **不进 pre 模式**，直接发该号段的稳定版号
+- 发版时**必须勾 `keep_latest`**
+- 与 `main` 各走各的号段，不需要同步
+- 该版本 EOL 后删除分支即可
+
+### 旧版本的修复要不要合回 main
+
+分两种情况：
+
+| 情况                 | 做法                                                 |
+| -------------------- | ---------------------------------------------------- |
+| 问题在新版本已不存在 | 不用合，维护分支自己留着                             |
+| 问题在新版本依然存在 | cherry-pick 代码，在 `main` 上**新写一个 changeset** |
+
+**不要直接 merge 维护分支到 `main`。** 它带着 `1.3.1` 这个版本号，合过去会与 `main` 的 `2.0.0` 冲突；而且那份 changeset 已经被维护分支消费掉了，不会在 `main` 上再产生一次版本变更。
+
+正确做法：
+
+```bash
+git checkout main
+git cherry-pick -n <fix-sha>
+rm .changeset/fix.md          # 丢掉维护分支带过来的 changeset（如果有）
+pnpm changeset                # 在 main 上重新写一份
+# -> 2.0.0 -> 2.0.1
+```
 
 ## Changeset 开发流程
-
-### Changesets 如何计算版本
-
-Changesets 不通过 Git tag 猜测单个 package 的当前版本。它的输入是 release candidate 中的三类数据：
-
-1. 每个 package.json 当前提交的稳定版本。
-2. candidate 中尚未消费的 `.changeset/*.md`。
-3. workspace package 之间的 dependencies、optionalDependencies 和 peerDependencies 关系。
-
-假设当前 package 版本为：
-
-```text
-A = 1.2.3
-B = 2.0.0，依赖 A@^1.2.0
-```
-
-candidate 中积累了：
-
-```yaml
-# change-1.md
-A: patch
-
-# change-2.md
-A: minor
-```
-
-Changesets 会按 package 取这一批声明中的最高 bump，因此 A 的 stable release plan 是 `1.3.0`，不是先 patch 再 minor。随后它检查依赖图：B 的 `^1.2.0` 仍覆盖 A@1.3.0，因此 B 不必发布；如果 A 变为 `2.0.0`、越出 B 的范围，Changesets 会更新 B 的依赖范围并把 B 加入 release plan。
-
-执行 stable version step 后，candidate 中发生以下变化：
-
-```text
-packages/A/package.json      1.2.3 -> 1.3.0
-packages/A/CHANGELOG.md      追加本批说明
-.changeset/change-1.md       删除
-.changeset/change-2.md       删除
-pnpm-lock.yaml               按需更新
-```
-
-这里的“删除”就是消费标记。Changesets 没有单独的发布数据库；某个 changeset 文件还存在，就代表尚未进入 stable version；它在 Stable Release PR 中被删除，就代表已由该 candidate 消费。
-
-Stable candidate 中的删除会作为普通 Git diff 包含在 Release PR 中：
-
-```text
-release-candidate-X.Y.Z
-  packages/A/package.json      修改
-  packages/A/CHANGELOG.md      修改
-  .changeset/change-1.md       删除
-  .changeset/change-2.md       删除
-```
-
-Release PR squash/merge 到 `main` 后，这些文件在 `main` 中也会被删除，表示 Stable 已消费。发布成功后，`sync-branches.yml` 再通过自动回灌传播相同删除，并保留 release cut 之后新增加的其他 changeset；自动 merge 无法安全完成时只报错并发送飞书通知，不创建同步 PR。
-
-Alpha/Beta release line 不同：它们不会合入长期分支。prerelease mode 将已参与预发布的 changeset 移入 release line 的 `.changeset/pre/`，但不会回写 `develop` 或 `next`。长期分支原始 changeset 会继续等待 Stable 消费。
-
-因此可以把长期分支的删除规则概括为：
-
-```text
-develop/next 中的 changeset
-  -> 在每条 prerelease line 中只触发一次，长期分支不删除
-  -> 被冻结进 Stable candidate
-  -> Stable Release PR 成功合入 main，main 中删除
-  -> 自动回灌到 next/develop，对应文件才从这些分支删除
-```
-
-只删除本次 Stable candidate 实际包含并消费的文件。若某个 changeset 只存在于 `develop`、尚未晋级到本次冻结的 `next`，它不会被删除；它会留给后续 Beta/Stable。
-
-### Release cut 之后出现新 changeset
-
-创建 Stable release source branch时会冻结当时的文件集合。例如：
-
-```text
-next@N1
-  A@1.2.3
-  .changeset/change-a.md  # A minor
-
-release-2.1.0 从 N1 切出
-  -> candidate 将 A 更新为 1.3.0
-  -> candidate 删除 change-a.md
-```
-
-随后 `next` 继续开发：
-
-```text
-next@N2
-  新增 .changeset/change-b.md  # A patch
-```
-
-`change-b.md` 不会自动进入已经冻结的 `release-2.1.0`，也不会阻塞本批发布。Stable Release PR 合入 `main` 并回灌 `next` 后，预期状态是：
-
-```text
-next
-  A@1.3.0                    # 接收新 stable 基线
-  change-a.md 已删除         # 已被 2.1.0 消费
-  change-b.md 仍然存在       # 留给下一批
-```
-
-下一次 release plan 从 A@1.3.0 读取当前版本，再应用 `change-b.md`，得到 A@1.3.1。它不会把 `change-a.md` 再算一次，也不会遗漏 `change-b.md`。
-
-```mermaid
-flowchart LR
-  nextN1["next@N1<br/>A 1.2.3 + change-a(minor)"] --> cut["切出 release-2.1.0"]
-  cut --> candidate["candidate<br/>A 1.3.0<br/>删除 change-a"]
-  nextN1 --> nextN2["next@N2<br/>新增 change-b(patch)"]
-  candidate --> main["Release PR 合入 main"]
-  main --> sync["main → next 自动回灌"]
-  nextN2 --> sync
-  sync --> nextFinal["next<br/>A 1.3.0<br/>保留 change-b"]
-  nextFinal --> nextRelease["下一批 A 1.3.1"]
-```
-
-如果业务上确实要把 `next@N2` 的新变化加入当前发布，不能让 workflow 静默吸收最新 `next`。维护者应把对应 commit 或 changeset 显式 cherry-pick/PR 到 `release-X.Y.Z` source branch；Bot 随后重建 candidate、更新 Release PR并重跑全部检查。
-
-### 长期不发 Stable 时的累积行为
-
-如果 `develop`、`next` 长期没有进入 Stable，原始 changeset 文件确实会一直累积，因为它们代表相对最近稳定版尚未正式发布的变化。Changesets prerelease mode 解决的是“预发布不要重复发包”，不是提前删除 Stable 所需的发布记录。
-
-同一产品 prerelease line 中，已参与过 Alpha/Beta 的文件会被移动到 release line 的 `.changeset/pre/`，所以不会再次触发 package 发布：
-
-```text
-Stable 基线：A@1.0.0、B@1.0.0
-
-Alpha 1：change-a(A minor)
-  发布 A@1.1.0-alpha.0
-  Alpha release line 将 change-a 移入 .changeset/pre/
-
-Alpha 2：新增 change-b(B patch)
-  只发布 B@1.0.1-alpha.0
-  A 不发布
-
-Alpha 3：新增 change-c(A patch)
-  只发布 A@1.1.0-alpha.1
-```
-
-与此同时，`develop` 的原始 `change-a/change-b/change-c` 都继续保留。首次建立 Beta line 时，它从 `next` 的完整原始 changeset 集合计算首批 Beta；后续 Beta 再依靠自己的 `.changeset/pre/` 只处理增量。Stable 最终从 `next` 的完整原始集合计算正式版本和 changelog。
-
-多个 changeset 不会让 stable 版本机械连加。例如 A 相对上次 Stable 累积三个 patch changeset，本次 Stable 仍只从 `1.0.0` bump 到 `1.0.1`，同时在 changelog 中列出三项；若其中有一个 minor，则结果为 `1.1.0`。
-
-长期积累的成本主要是 changeset 文件数量和最终 changelog review，而不是每次预发布重复发布所有包。治理措施：
-
-1. Actions summary 显示长期分支 pending changeset 数、涉及 package 数、最老日期。
-2. 同时显示当前 prerelease line 根 `.changeset/` 中尚未预发布的增量数量。
-3. 超过阈值时告警，提醒安排 Stable release train。
-4. 已经不需要发布的 changeset必须通过 PR 明确删除并说明原因，不能由 CI猜测。
-5. Stable 消费并自动回灌后，长期分支的累计集合才会缩小。
-
-Changesets pre mode 的状态只保存在 release line。不能在 Alpha、Beta 两条 release line 间随意 merge `.changeset/pre/`，也不能把它回灌到 `develop/next`；每条渠道在自己的 pre cycle 中独立记录增量，Stable 始终以长期分支原始 changesets 为准。
-
-### Changeset 冲突处理
-
-changeset 文件并不是创建后立即删除。它的生命周期通常是：
-
-```text
-功能 PR 创建文件
-  -> 合入 develop/next/main
-  -> 等待数天或数周
-  -> 被某次 Stable Release candidate 消费并删除
-  -> 删除随 Release PR/自动回灌进入长期分支
-```
-
-“合入长期分支后不可修改”约束的是中间等待发版的阶段。原因是 Stable release cut 可能已经复制并消费了旧内容；此时再原地修改同一个文件，会让 Git 无法判断修改属于已发布部分还是下一批变化。
-
-#### 场景一：两个 PR 都给 A 添加 changeset
-
-PR 1 新增：
-
-```text
-.changeset/fix-login.md    A: patch
-```
-
-PR 2 新增：
-
-```text
-.changeset/add-sso.md      A: minor
-```
-
-这不是冲突。两个文件都保留，Changesets 在同一批发布时给 A 取最高 bump `minor`，并把两段说明都写进 changelog。
-
-#### 场景二：两个 PR 碰巧创建了同名文件
-
-如果两个人手写文件名，可能都新增：
-
-```text
-.changeset/update-auth.md
-```
-
-Git 会产生 add/add 内容冲突。不要选择 ours/theirs，也不要丢掉其中一个变更。处理方式是保留一个文件，并把另一个重命名：
-
-```text
-.changeset/update-auth.md
-.changeset/update-auth-session.md
-```
-
-两个文件各自保留原 package bump 和说明。正常使用 `pnpm changeset` 会生成随机文件名，这类冲突非常少见。
-
-#### 场景三：Stable 删除旧文件，next 修改了同一个文件
-
-假设 release cut 时 `next@N1` 已有：
-
-```md
----
-"A": patch
----
-
-Fix login redirect.
-```
-
-Stable candidate 将 A 从 `1.2.3` 更新为 `1.2.4`，把这段说明写进 changelog，并删除该文件。release cut 之后，有人在 `next` 上把同一个文件改成：
-
-```md
----
-"A": patch
----
-
-Fix login redirect and refresh-token retry.
-```
-
-`main -> next` 同步时会出现 modify/delete conflict：Stable 一侧认为文件已消费并删除，next 一侧认为文件仍需保留。
-
-正确处理取决于新增内容：
-
-- `refresh-token retry` 对应 release cut 后的新代码：删除旧文件，再新增一个只描述新代码的文件，例如 `.changeset/fix-refresh-token.md`。下一批从 A@1.2.4 继续 bump。
-- 只是修改已发布说明的措辞，没有新代码需要发版：保留删除，不创建新 changeset；如有必要，单独修正 GitHub Release notes。
-- 原 Stable candidate 实际没有包含 login fix：停止自动同步/发布，检查 release manifest；不能靠保留旧文件猜测结果。
-
-也就是说，不把两段文本机械合并回旧文件，因为这样会在下一批再次发布已经包含于 A@1.2.4 的 login fix。
-
-#### 场景四：release branch 上需要补充变化
-
-如果文件是在 release source branch 尚未 seal 时修改，Bot 会废弃旧 candidate并完整重建。新的 candidate 会使用更新后的 changeset，然后再次消费并删除它；这不会与长期分支同步混在一起。
-
-团队约定：
-
-1. 使用 `pnpm changeset` 生成随机文件名。
-2. changeset 合入长期分支后不原地编辑；补充代码或说明时新增文件。
-3. package version 和 Changesets 管理的 changelog 不在普通 PR 中手改。
-4. 同名 add/add 冲突通过重命名保留两份语义；modify/delete 冲突通过“删除已消费文件 + 为未发布部分新增文件”解决。
-5. sync workflow 遇到冲突只保留 PR并通知维护者，不能使用 `-X ours/theirs` 自动吞掉 changeset。
-
-在这些约束下，`main -> next` 回灌是集合运算：删除本批冻结并已消费的文件，同时保留 release cut 后新增加的文件。
 
 ### 普通变更
 
@@ -986,89 +668,88 @@ pnpm changeset
 Add a new Portal extension API and update the built-in Hub integration.
 ```
 
-changeset 描述的是本次代码变更的发布影响，不是一次实际发布操作。多个功能 PR 的 changeset 可以被同一个 alpha、beta 或 stable 发布批次消费。
+changeset 描述的是本次代码变更的发布影响，不是一次实际发布操作。多个功能 PR 的 changeset 会被同一个发布批次一起消费。
 
-changeset 的推荐粒度是“每个需要发布的 PR 一份”，不是每个 commit 一份。一个修复 PR 可以包含多个 commit，只需要在合并前补一份 patch changeset；一个复杂 PR 同时修改多个 package 时，也可以在同一份文件中声明多个 package。
+推荐粒度是「每个需要发布的 PR 一份」，不是每个 commit 一份。
 
-开发者不修改 package.json 的 `version`。例如在 `main` 修复一个 bug，但计划跟随后续批次发布，只需要在该 hotfix PR 中记录：
+**开发者不修改 package.json 的 `version` 字段。** 添加 changeset 不等于立即发版；它可以在仓库中等待数天，与其他 PR 的 changeset 一起被后续发布批次汇总。
 
-```md
----
-"@nocobase/portal-sdk": patch
----
+### 版本号是怎么算出来的
 
-Fix session refresh after the access token expires.
-```
-
-它可以在仓库中等待数天，并与其他 PR 的 changeset 一起被后续 Stable Release PR 汇总；添加 changeset 不等于立即发版。
-
-`changeset-check` 不能仅靠“是否存在任意 `.changeset/*.md`”判断。它需要比较 PR base/head，并执行以下规则：
-
-1. 将 `packages/<dir>/**` 变化映射到对应 package.json。
-2. 忽略明确不影响产物的路径，例如 package 内纯测试和文档；规则不确定时按影响产物处理。
-3. 对 `private: false` package 的源码、exports、构建配置或发布文件变化，检查 release plan 是否包含该 package；没有时给出非阻塞提醒。
-4. 对 private 但会被 vendor 的 package，提醒实际发布它的 Template/聚合 package 可能需要 changeset。
-5. 根构建配置、workspace 依赖策略等跨包文件使用显式影响规则，不能只按目录判断。
-6. `release:skip` 可以用于主动关闭提醒，并在 CI summary 中记录“不发版”的决定和原因；不添加该 label 也不会导致检查失败。
-
-CI 可以判断“哪些 package 很可能需要发布声明”，但不能可靠判断本次重构是否值得发版，也不能判断 patch、minor 或 major。因此缺少 changeset 的检测是 advisory check，始终以成功状态结束；无效 YAML、未知 package、非法 bump 等已经提交的 changeset 本身有错误时，validation check 才失败。
-
-### 发版时自动补全遗漏 changeset
-
-可以自动补，但这是 NocoBase 在 Changesets 之上的编排，不是 Changesets 原生命令自动理解源码语义。
-
-release request 冻结 source branch 后，`prepare-release-plan` 比较发布基线与本批 source SHA：
+一条公式：
 
 ```text
-Alpha/Beta：lastSourceSha..currentSourceSha
-Stable：上一个 Stable 产品 tag 对应源码..currentSourceSha
+目标版本 = 稳定基线 + 本条 pre 线上累积的最高 bump
+预发布号 = 当前版本里的序号 + 1
 ```
 
-脚本生成 changed package set，并与本批人工 changesets覆盖的 package 做差集：
+**不是**「上一个 beta 版本 + 这次的 bump」。理解这一点能解释后面所有看起来奇怪的行为。
+
+「稳定基线」是 package.json 里那个不带预发布后缀的版本号——它只在转正时被改写。「累积的最高 bump」来自 `.changeset/pre/` 目录，那里存着本条 pre 线上所有已消费的 changeset，每次 `version` 都重新读一遍。
+
+起点 `A = 1.3.0`（刚转正完，重新进入 pre 模式），已验证（`test-branch-version/experiments/version-calculation.sh`）：
+
+| 轮次 | 本轮新增 changeset | `.changeset/pre/` 累积 | 最高 bump | 结果           |
+| ---- | ------------------ | ---------------------- | --------- | -------------- |
+| 1    | patch              | p1                     | patch     | `1.3.1-beta.0` |
+| 2    | patch              | p1 p2                  | patch     | `1.3.1-beta.1` |
+| 3    | patch              | p1 p2 p3               | patch     | `1.3.1-beta.2` |
+| 4    | minor              | p1 p2 p3 m1            | minor     | `1.4.0-beta.3` |
+
+几个直接推论：
+
+**连续发 patch，`x.y.z` 不会一直往上走。** 第 2 轮是 `1.3.1-beta.1` 而不是 `1.3.2-beta.0`——基线还是 `1.3.0`，最高 bump 还是 patch，目标版本仍然是 `1.3.1`，只有序号递增。
+
+**加再多 changeset 也不会抬高目标版本。** 三个 patch 的效果和一个 patch 完全相同。这正是早期方案里需要「基线推进」补丁的原因：只要基线不动，目标版本就钉死在那里。
+
+**换 bump 类型时 `x.y.z` 跳变，序号不归零。** 第 4 轮从 `1.3.1-beta.2` 变成 `1.4.0-beta.3`，`1.4.0-beta.0/1/2` 被永久跳过。
+
+**转正会重置序号。** 转正后版本号里没有 `-beta.N` 了，`getPreVersion` 读到 `undefined`，下一轮从 `.0` 重新开始：
 
 ```text
-changed packages       = A, B, C
-manual changesets      = A minor, B patch
-uncovered packages     = C
+1.3.0-beta.1  --转正-->  1.3.0  --下一轮 patch-->  1.3.1-beta.0
 ```
 
-对于 C，Bot 在 release source branch 生成 synthetic changeset：
+**这一轮没改动的包原地不动。** 只给 B 写 changeset 时，A 保持转正后的稳定版号，不会因为同批发版而跟着进位。
 
-```md
----
-"@nocobase/C": patch
----
+最终转正的结果同样按这条公式算：
 
-Automated release entry for changes detected since <baseline-sha>.
+```text
+基线 1.3.0 + 累积的最高 bump（minor） = 1.4.0
 ```
 
-随后 candidate 使用人工和 synthetic changesets一起计算版本。这样某个同学忘记提交 changeset时，只要他的代码已经进入本次冻结 source SHA，对应 package 仍会进入发布集合。
+三个 patch 加一个 minor，最终是 `1.4.0`，不是累加四次的 `1.3.3` 或 `1.4.3`。
 
-自动补全规则：
+### 预发布序号的实现细节
 
-1. 只覆盖 `private: false` package，以及会影响聚合制品的 private/vendored package映射。
-2. package 内测试、文档等明确不影响产物的路径不自动补。
-3. `prepare-release-plan` 查询 baseline 以来合并 PR 的元数据；带 `release:skip` 的 PR 从自动补全输入中排除。无法关联 PR 的直接提交默认按需要发布处理。
-4. 同一 package 同时被 skip PR 和普通 PR 修改时，只忽略 skip PR 的文件变化；普通 PR 的未覆盖变化仍会生成 synthetic changeset。
-5. 人工 changeset优先；package 已被人工声明时不再生成 synthetic 文件。
-6. 所有未覆盖 package 统一自动补 `patch`；工具不猜 minor 或 major。
-7. TypeScript API diff、exports 删除、peer major 变化、迁移文件等高风险信号只在 Actions summary、飞书通知和 Release PR 中醒目标记，提醒维护者将 synthetic patch 替换为人工 minor/major；默认不阻止继续按 patch 发布。
-8. synthetic changeset、检测依据、关联 PR、baseline/source SHA 和生成者显示在 Actions summary、candidate manifest 和 Stable Release PR 中。
-9. 自动生成发生在 source/candidate 形成阶段，不反向提交到普通开发分支。Stable candidate 会正常消费 synthetic changeset 并把结果写入 changelog；Alpha/Beta release line 则将它记入 `.changeset/pre/`。
+changeset 里写的 `patch`/`minor`/`major` 指的永远是 SemVer 的三位，与预发布序号（`-beta.N` 里的 N）无关。
 
-不同渠道的覆盖判断必须基于增量：A 已在 Alpha 1 被人工或 synthetic changeset覆盖，Alpha 2 中 A 没有新代码时，A 不在 `lastSourceSha..currentSourceSha` 的 changed set，不会重新生成 synthetic changeset，也不会重发。
+序号由 Changesets 自己维护，不是 NocoBase 的逻辑。算法在 `@changesets/assemble-release-plan`：
 
-这套机制让日常 PR 可以保持“缺 changeset只提醒”，而发版时保证所有可发布代码变化都有 release entry。代价是遗漏项默认只能安全地按 patch 处理，因此公共 API 的 minor/major 判断仍需要开发者或 Release Maintainer负责。
+```text
+getPreVersion(version) = semverParse(version).prerelease[1] ?? -1，然后 +1
+```
+
+即「读当前 package.json 版本里的序号，加一」。这解释了上一节表格里的两个现象：
+
+- **不因 `x.y.z` 变化而归零**，所以换 bump 类型时会跳号
+- **转正后从 `.0` 重新开始**，因为转正后的版本号里没有序号可读，取到 `undefined`
+
+跳号不影响正确性（`1.4.0-beta.3 > 1.3.1-beta.2` 仍然成立），只是号段不连续。Changesets 选择不归零，是为了让同一 package 的预发布序号在整条 pre 线上单调递增，不依赖 base 版本的走向；否则删改 `.changeset/pre/` 中的文件导致 base 版本回退时，会与已发布版本冲突。
+
+序号按 package 各自计算，不同 package 之间互不影响。
 
 ### 不需要发布的变更
 
 纯文档、测试、内部工具或不影响发布产物的变更可以：
 
-- 什么也不做，接受 changeset advisory；
-- 添加 `release:skip` PR label 并记录原因，主动关闭提醒；或
+- 什么也不做，接受 changeset advisory 提醒；
+- 添加 `release:skip` PR label 并记录原因；或
 - 提交 empty changeset。
 
-CI 不应根据 diff 自动猜测 patch、minor 或 major。它可以自动发现缺少 changeset，但公开 API 是否 breaking 必须由开发者和 reviewer 决定。
+CI 不应根据 diff 自动猜测 bump 级别。它可以发现「缺少 changeset」，但公开 API 是否 breaking 必须由开发者和 reviewer 决定。
+
+因此缺少 changeset 的检测是 **advisory check，始终以成功状态结束**；只有已提交的 changeset 本身有错误（无效 YAML、未知 package、非法 bump）时，validation check 才失败。
 
 ### 多包协调变更
 
@@ -1079,358 +760,563 @@ CI 不应根据 diff 自动猜测 patch、minor 或 major。它可以自动发�
 "@nocobase/app-template-default": major
 "@nocobase/portal-sdk": major
 "@nocobase/hub": minor
-"@nocobase/database": minor
 ---
 
 Prepare app-template-default 3.0 and its supporting runtime APIs.
 ```
 
-Changesets 会合并同一发布批次中的所有声明，并按每个 package 的最高 bump 计算版本。
+Changesets 会合并同一批次中的所有声明，按每个 package 的最高 bump 计算版本。
 
 ### 依赖方是否自动发布
 
-假设 package B 依赖 package A，功能 PR 只给 A 添加 changeset：
+假设 package B 依赖 package A，功能 PR 只给 A 添加 changeset。**结论取决于发布渠道**。
 
-| 场景                                           | Changesets release plan                                                      | 构建与验证                                                |
-| ---------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
-| A 从 `1.2.0` patch 到 `1.2.1`，B 依赖 `^1.2.0` | 只发布 A；B 的范围仍满足，不需要新版本                                       | 构建 A 及其上游依赖；建议测试 B                           |
-| A 从 `1.2.0` minor 到 `1.3.0`，B 依赖 `^1.2.0` | 通常只发布 A；B 的范围仍满足                                                 | 构建 A；测试 B 的兼容性                                   |
-| A 从 `1.2.0` major 到 `2.0.0`，B 依赖 `^1.2.0` | A 超出 B 的范围，Changesets 自动更新 B 的依赖范围，并给 B 增加 patch release | 构建、pack、发布 A 和 B                                   |
-| B vendor、bundle 或再导出 A 的代码/类型        | package.json 依赖图未必能识别                                                | 必须显式给 B 添加 changeset，或由 NocoBase 自定义检查补入 |
+`main` 上的稳定发布，B 通过 `dependencies` 依赖 A（已验证）：
 
-因此“只写 A”不保证 B 一定发布，也不应该保证。只要 B 已发布的依赖范围仍兼容 A，新消费者可以解析到新版 A，重新发布 B 只是制造无意义版本。A 越出 B 的范围时，Changesets 才自动把 B 加入 release plan。
+| 场景                                           | release plan                                       |
+| ---------------------------------------------- | -------------------------------------------------- |
+| A 从 `1.2.0` patch 到 `1.2.1`，B 依赖 `^1.2.0` | 只发布 A；B 的范围仍满足                           |
+| A 从 `1.2.0` minor 到 `1.3.0`，B 依赖 `^1.2.0` | 只发布 A；B 的范围仍满足                           |
+| A 从 `1.2.0` major 到 `2.0.0`，B 依赖 `^1.2.0` | A 超出范围，自动更新 B 的依赖范围并给 B 一个 patch |
+| B vendor、bundle 或再导出 A 的代码/类型        | 依赖图无法识别，必须显式给 B 添加 changeset        |
 
-如果 A 的新行为要求 B 修改代码，即使依赖范围没有越界，也应由开发者在同一 PR 中给 B 添加 changeset，否则对 B 的修改不会进入本次 release plan。工具无法仅凭 SemVer range 判断业务兼容性。
+B 通过 `devDependencies` 依赖 A 时，以上四种情况都不会让 B 进入 release plan，major 也不例外。
 
-这不要求 B 的负责人提前知道每一次 A 的变化，但责任边界需要明确：
+stable 渠道的级联只在范围失配时发生，且**只传播一级**：
 
-- Changesets 能自动处理的是 manifest 范围越界；这种情况下不需要开发者手工把 B 加入 release plan。
-- A 的作者需要评估已知的行为、API 和类型影响；需要修改 B 时，在同一个 PR 中修改 B，并根据是否需要发布 B 决定是否添加 changeset，必要时请求 B 的 CODEOWNER review。
-- CI 根据依赖图自动把 B 和其他 dependents 加入 Verification set。即使 A 的作者漏判，只要 B 的类型检查、测试或构建能覆盖该兼容关系，PR 就会因兼容问题失败；如果只是修改了 B 但没有 changeset，CI 给出非阻塞提醒。
-- 如果依赖范围仍兼容、B 不需要改代码且验证通过，B 不发布是正确结果。
-- 如果依赖范围仍兼容，但真实行为不兼容且测试也没有覆盖，Changesets 无法自动发现。需要通过契约测试、集成测试和关键 package 的 CODEOWNERS 逐步补足，而不是无条件重发 B；重发未修复的 B 也不能解决兼容问题。
+```text
+依赖链：core -> store -> server -> host
+
+stable，core major：
+  core  1.2.0 -> 2.0.0
+  store 1.0.0 -> 1.0.1
+  server / host 不发布
+```
+
+`develop`（prerelease mode）上，只要 B 通过 `dependencies`、`optionalDependencies` 或 `peerDependencies` 依赖 A，**无论 bump 大小 B 都会被连带发布**，并沿依赖链传递到底：
+
+```text
+prerelease，core 任意 bump：
+  core、store、server、host 全部进入 release plan
+```
+
+这是选择「`develop` 用 pre 模式」必须接受的代价。相比三分支方案，危害小得多：`develop` 本来就是「一批新功能一起发」的性质，且每个版本转正时会清空一次预发布状态。但它确实意味着 `develop` 上每次发 beta 都会带上全部下游包，需要确认可接受。
+
+在 stable 渠道，「只写 A」不保证 B 一定发布，也不应该保证：只要 B 已发布的依赖范围仍兼容 A，重新发布 B 只是制造无意义版本。
+
+责任边界：
+
+- Changesets 能自动处理的是 manifest 范围越界。
+- A 的作者需要评估已知的行为、API 和类型影响；需要修改 B 时在同一个 PR 中修改，并根据是否需要发布决定是否添加 changeset。
+- CI 根据依赖图把 B 和其他 dependents 加入验证集合。即使 A 的作者漏判，只要 B 的类型检查、测试或构建能覆盖该兼容关系，PR 就会失败。
+- 依赖范围仍兼容、B 不需要改代码且验证通过时，B 不发布是正确结果。
 
 ## 发布流程
 
-```mermaid
-flowchart TD
-  choose{"发布类型"}
+稳定版有两种来源：
 
-  choose -->|"Alpha"| alphaRelease["手动运行 Release Action<br/>channel = alpha"]
-  alphaRelease --> alphaRef["冻结 develop HEAD<br/>创建 release request branch"]
-  alphaRef --> alphaPlan["Changesets 生成版本化 candidate<br/>创建 vX.Y.Z-alpha.N"]
-  alphaPlan --> alphaCheck["构建 + pack 校验"]
-  alphaCheck --> alphaPublish["按需发布 npm @alpha"]
-  alphaPublish --> alphaKeep["产品 tag 保留 candidate<br/>删除临时 branch"]
+| 来源              | 场景   | 前提                             |
+| ----------------- | ------ | -------------------------------- |
+| 从 `develop` 转正 | 新版本 | 该版本已在 `develop` 上发过 beta |
+| 在 `main` 上修复  | 补丁   | `main` 上已有至少一次转正结果    |
 
-  choose -->|"Beta"| betaFreeze["冻结已测试的 next HEAD<br/>创建 release request branch"]
-  betaFreeze --> betaPlan["Beta release line 生成 candidate<br/>创建 vX.Y.Z-beta.N"]
-  betaPlan --> betaCheck["构建 + pack 校验"]
-  betaCheck --> betaPublish["按需发布 npm @beta"]
-  betaPublish --> betaKeep["产品 tag 保留 candidate<br/>删除临时 branch"]
+**新代码永远先进 `develop`。** `main` 只承载「已发布版本的修复」，不承载新功能，也不是任何版本的起点——包括第一个版本（见「第一次发稳定版」）。
 
-  choose -->|"Stable"| stableFreeze["冻结 next HEAD<br/>创建 release-X.Y.Z"]
-  stableFreeze --> versionPR["Release PR → main<br/>正式版本 + 依赖 + changelog"]
-  versionPR --> stableCheck["Review + Quality CI + pack 校验"]
-  stableCheck --> mergeQueue["Merge Queue 验证<br/>candidate + 最新 main"]
-  mergeQueue --> releaseCommit["Release PR 合入 main"]
-  releaseCommit --> stableDraft["vX.Y.Z 与 package tags<br/>指向 candidate SHA"]
-  stableDraft --> stablePublish["使用已授权的 release request<br/>自动按需发布 npm @latest"]
-  stablePublish --> sync["临时 merge result + CI<br/>main → next → develop"]
-  sync --> autoMerge["CI 通过后原子 push<br/>失败则飞书通知"]
+### 预览版发布（develop）
 
-  choose -->|"Stable hotfix"| stableHotfix["Hotfix PR → main<br/>stable-hotfix request"]
-  stableHotfix --> versionPR
+```bash
+# 首次进入
+pnpm changeset pre enter beta
+
+# 每一轮发布
+pnpm changeset version
+git commit -am "chore: release 2026-08-24.1"
+pnpm changeset publish              # dist-tag 由 pre.json 决定
 ```
 
-所有发布路径最终都从不可变的 release candidate commit 构建。维护者不手工创建 commit 或 tag：Action 在点击发布时冻结 source SHA，并自动生成 candidate 和产品 tag。`develop -> next` 晋级 merge commit 只负责确定 Beta 测试范围；Alpha/Beta 不改变长期分支中的版本文件，Stable/Stable hotfix 通过 Release PR 固化正式版本。
+**pre 模式下不能带 `--tag`**，changeset 会直接拒绝：
 
-### Alpha
+```text
+Releasing under custom tag is not allowed in pre mode!
+```
 
-1. 功能 PR 合入 `develop`，changeset 随代码提交。
-2. CI 验证代码和 changeset。
-3. 维护者手动运行 `release-packages.yml`，选择 `alpha`；不需要手工创建 commit、tag 或 GitHub Release。
-4. workflow 读取一次 `develop` HEAD，立即记录准确 SHA 并创建 release request branch。
-5. workflow 在快照上生成 `*-alpha.N` 版本化 candidate commit，`vX.Y.Z-alpha.N` 指向该 commit。
-6. 只构建并发布 release plan 中的 package，使用 npm dist-tag `alpha`。
-7. 发布后删除临时 branch，不合回版本文件，也不创建 package tags；产品 tag 和 manifest永久保留。
+dist-tag 由 `.changeset/pre.json` 的 `tag` 字段决定——`pre enter beta` 时定的就是 `beta`，`publish` 自动用它。
 
-### Beta
+`publish` 会为实际发布成功的每个 package 打 `name@version` tag。不打产品级 tag，理由见「不打产品级 tag」。
 
-1. 维护者按需要运行 `promote-branches.yml`，将 `develop` 受控合入 `next`。代码晋级不触发 Beta 发布。
-2. `next` 进入稳定化测试，可以继续接收 hotfix；hotfix 合入后自动回灌 `next -> develop`。测试期间是否再次晋级 `develop` 由维护者决定，每次晋级都会扩大测试范围并需要重新评估验证周期。
-3. 维护者确认某个 `next` SHA 已通过测试后，运行一次 `release-packages.yml` 并选择 `beta`。
-4. workflow 原子读取并冻结该 `next` HEAD，创建 `release-X.Y.Z-beta.N`，将相对上一批 Beta checkpoint 的新增业务代码和 changesets 应用到 `release-line-X.Y.Z-beta`。
-5. Bot 在 release line 上执行 Changesets prerelease version、重新生成 lockfile 和 manifest，并从最新 generation 创建不可变 candidate。
-6. candidate 通过 CI、build 和 pack 后被 seal；workflow 创建 `vX.Y.Z-beta.N` tag，并使用 npm dist-tag `beta` 发布计划内 package。临时版本 commit 不合入 `next`。
-7. request 冻结后进入 `next` 的普通提交不改变本批制品，由下一次 Beta release request 处理。如果某个修复必须进入尚未创建产品 tag 的当前批次，则取消旧 request，从包含修复的新 `next` SHA 重建同一预留批次并重跑完整检查；不能只修改本批 source branch。
+### 稳定版补丁发布（main）
 
-### Stable
+首次转正之后，`main` 上的 hotfix 走 `release-stable.yml`，不涉及 pre 模式。
 
-1. 维护者只运行一次 `release-packages.yml` 并选择 `stable`。
-2. workflow 立即从 `next` HEAD 创建 `release-X.Y.Z` source branch；Bot 生成只读 `release-candidate-X.Y.Z`，运行 `changeset version` 并更新根产品版本。
-3. workflow 从 candidate branch 创建 Release PR 到 `main`；它同时承担代码晋级和正式 package 版本准备职责。
-4. review Release PR 中的源码快照、package 列表、版本、依赖范围和 changelog。
-5. Release source branch 的特殊修复会自动重建 candidate、更新 Release PR 并重跑检查；candidate SHA 执行 affected verification、构建和 pack，Merge Queue 验证它可以合入最新 `main`。
-6. Release PR 必须先成功合入 `main`；合并事件自动续跑，并验证合入的 PR head 等于 seal 的 candidate SHA。
-7. 合并成功后才创建 `vX.Y.Z`、package tags，并从 candidate 自动发布 registry 中尚不存在的新版本，使用 npm dist-tag `latest`。
-8. publish 成功后自动发布 GitHub Release；不再要求 Environment 人工批准或再次运行 workflow。
-9. 发布成功后，通过 `main -> next -> develop` 自动回灌传播稳定版本提交和 changeset 删除；失败则报错并发送飞书通知。
+开发者提交修复和 changeset 到 `main`，然后触发 workflow（输入保持默认）。它内部执行：
 
-### Hotfix
+```bash
+git checkout -b "release/2026-08-24.2"
+pnpm changeset version                   # 1.3.0 -> 1.3.1
+git commit -am "chore: release 2026-08-24.2"
+git tag "release/2026-08-24.2"
+pnpm changeset publish                   # -> dist-tag latest
+gh pr merge --merge --delete-branch      # 合回 main
+git checkout develop && git merge main   # 直接同步，不走 PR
+node scripts/resolve-sync-conflicts.mjs  # 自动解冲突
+git push origin develop
+```
 
-Beta hotfix 是 `next` 稳定化流程的一部分，不需要单独的 `beta-hotfix` 发布类型。修复通过 PR 进入 `next` 后自动回灌 `develop`；需要对外发布时，维护者按普通 Beta 流程冻结当前已测试的 `next` SHA，创建下一个 `vX.Y.Z-beta.N`。
+批次序号与转正共用 `release/` 前缀和序号空间——两者都发 `latest`，是同一条稳定线上的连续批次。
 
-Stable hotfix 直接向 `main` 提交 PR，并携带 changeset：
+守卫：
 
-1. 合并 hotfix PR。
-2. Stable-hotfix Release PR 计算受影响 package 的 patch 版本。
-3. 维护者需要发布时运行一次 `release-packages.yml` 并选择 `stable-hotfix`；workflow 从当时的 `main` SHA 创建冻结 release branch，并计算 patch 产品版本。
-4. Release PR 成功 squash/merge 到 `main` 后，才从 candidate SHA 创建 `vX.Y.Z`、package tags 并发布。
-5. 发布成功后，机器人自动回灌 `main -> next -> develop`，失败则发送飞书通知。
+- **不得存在 `pre.json`**：出现说明 `develop` 的预发布状态被误合进来，继续跑会把补丁发成预发布版本。
+- **不得产生预发布版本号**：出现说明 changeset 写错了或上游状态有问题。
+- **从非 `main` 分支发版必须勾 `keep_latest`**：否则旧版本会抢走 `latest` 指针。
 
-只有受 hotfix 影响的 package 和必要依赖方会发布，不重新发布全仓 package。
+### 版本转正（develop → main）
 
-## `app-template-default` 3.0 示例
+转正分两步：**合并由 `merge-beta-to-stable.yml` 完成，发布由人工执行。**
 
-以下使用假设版本说明 independent versioning，不代表仓库当前版本。假设目标是 `@nocobase/app-template-default@3.0.0`，但其他 package 不要求跟随 3.0：
+第一步，workflow 内部：
 
-1. Template 3.0 开发在 `develop` 完成，每个功能 PR 添加 changeset。
-2. 从 `develop` 运行多批 Alpha release request，Action 在 Alpha release line 增量发布 prerelease。
-3. 进入稳定阶段后，通过受控晋级 Action 将 `develop` 合入 `next`，随后进行一段时间的 Beta 稳定化测试。
-4. 测试期间的 Beta 修复进入 `next` 并自动回灌 `develop`；每次确认一个 `next` SHA 后，可以在 Beta release line 增量发布新的 prerelease 批次。
-5. 准备正式版时，从冻结的 `next` SHA 创建 Stable Release PR 到 `main`。
-6. Stable Release PR 可能生成如下版本：
+```bash
+# 在临时发版分支上
+pnpm changeset pre exit
+pnpm changeset version        # 脱掉 -beta.N，同时删除 pre.json
+git commit -am "chore: release 2026-08-24.1"
 
-   ```text
-   @nocobase/app-template-default  2.8.4 -> 3.0.0
-   @nocobase/portal-sdk           1.7.0 -> 2.0.0
-   @nocobase/database             0.1.0 -> 0.2.0
-   @nocobase/hub                  2.8.4 -> 2.9.0
-   ```
+# 合进 main（package.json 版本号取 develop 的）
+# 合并后校验 main 上没有 pre.json
 
-7. package 版本不同，但在同一个 release commit 上完成构建、集成测试和发布。
-8. 未变化且依赖范围仍然满足的 package 不发布。
+# develop 开下一轮，不重切分支
+git merge main
+pnpm changeset pre enter beta
+```
+
+第二步，点 `release-stable.yml`（输入保持默认）发布到 `latest`。
+
+**为什么分两步：** 转正合并涉及三条分支的状态变更（发版分支、`main`、`develop`），自动化能保证它们一致；而「什么时候把版本推到 npm」是发布决策，与代码状态无关，交给人掌握时机。
+
+延后发布是安全的——`changeset publish` 遍历 workspace 的 package.json 逐个查 registry 有没有 `name@version`，与 changeset 是否还在无关（源码 `getUnpublishedPackages`）。合并完成后随时可以发。
+
+详见[版本转正：develop 合进 main](#版本转正develop-合进-main)。
+
+### 一次性预览发布（snapshot）
+
+用于 PR 预览或 nightly：
+
+```bash
+pnpm changeset version --snapshot canary
+pnpm changeset publish --tag canary --no-git-tag
+```
+
+**结果不回写任何分支。** CI 在临时工作区执行 version、publish，然后丢弃工作树。
+
+用户安装：
+
+```bash
+pnpm add @nocobase/portal-sdk@canary
+```
+
+### 紧急 Hotfix（不走 main 直接发）
+
+绝大多数修复直接在 `main` 上做即可（见上文）。只有需要绕过 `main` 当前状态时才切临时分支：
+
+```text
+1. 从最近的发布 tag 切出 hotfix/<描述>
+2. 修复 + changeset（patch）
+3. changeset version && publish -> dist-tag latest
+4. 合回 main，删除分支
+5. 把 main 合进 develop（见「稳定版修复同步到 develop」）
+```
+
+## Changesets 如何做到按 package 独立发布
+
+机制很朴素，没有隐藏的发布数据库，已验证：
+
+1. `changeset version` 按 changeset 算出每个 package 各自的新版本，写进各自的 package.json。
+2. `changeset publish` 遍历所有非 private package，**逐个查询 registry 里存不存在 `name@version`**：已存在就跳过，不存在就 `npm publish` 该 package 目录。
+3. 每个发布成功的 package 各自创建一个 Git tag，格式由 `buildGitTag` 决定——monorepo 用 `name@version`，单包仓库用 `vX.Y.Z`。
+
+所以「只发变化的包」不是靠比对 changeset，而是靠 **registry 里已经存在的版本自动被跳过**。没有新 changeset 的 package 版本号没变，它的 `name@version` 已在 registry 中，于是被跳过。
+
+这也是失败重试天然幂等的原因：重跑时已成功的包再次命中「已存在」分支。
+
+### 为什么发版需要一条分支，而不是只打 tag
+
+tag 和分支在 Git 里都只是一个 40 字符的 commit 指针：
+
+```text
+tag    ->  8903772922b1d1bfe35c1f2432126d76a1b02aee
+branch ->  8903772922b1d1bfe35c1f2432126d76a1b02aee
+```
+
+唯一区别是 **branch 会跟着新 commit 移动，tag 不会**。两者解决的是不同问题：
+
+|      | 作用                               | 在发版流程里的角色 |
+| ---- | ---------------------------------- | ------------------ |
+| tag  | 事后标记「这个 commit 是某次发布」 | 记录结果           |
+| 分支 | 提供一个能容纳新 commit 的工作空间 | 隔离过程           |
+
+关键在于 **`changeset version` 会修改文件**：
+
+```text
+发版前 core=1.2.0
+跑完 changeset version 后 core=1.3.0-beta.0
+
+工作区改动：
+   D .changeset/a.md              <- 被消费的 changeset 移进 pre/
+   M packages/core/package.json   <- 版本号被改写
+```
+
+这些改动必须变成一个 commit，而且**必须落回 `develop`**——否则下次发版会从旧版本号重新起算。tag 只是指针，装不下改动。
+
+所以问题从来不是「要不要打 tag」，而是「`changeset version` 产生的那个 commit 提交到哪里」。
+
+#### 不切分支直接在 develop 上发会怎样
+
+已验证。develop 处于 pre 模式，CI 直接在它上面 `version` + `commit` + `tag`：
+
+```text
+① CI checkout develop，core=1.2.0
+② version + commit + tag，core=1.3.0-beta.0
+   接下来 build + test，耗时几分钟
+③ 这期间开发者合了 PR 到 develop
+④ CI 推送：
+     git push origin develop  -> exit=1  ! [rejected] (fetch first)
+     推 tag                   -> exit=0  <- tag 推上去了
+```
+
+**分支推送被拒，tag 却推成功了。** 留下的状态：
+
+```text
+origin/develop 上 core=1.2.0        <- 还是发版前
+tag 里 core=1.3.0-beta.0
+tag 在 develop 历史里吗：不在       <- 悬空
+```
+
+npm 已发布 `1.3.0-beta.0`，tag 也在，但 `develop` 上没有版本提交。下次发版仍从 `1.2.0` 起算，又算出 `1.3.0-beta.0`，`publish` 发现 registry 已存在就静默跳过——这批改动永远发不出去。
+
+比只推分支失败更糟：多了一个指向孤儿 commit 的 tag，追溯时会误导人。
+
+所以 **tag 要打，分支也要切**，两者不是二选一：分支的价值不在于「多一个分支」，而在于它的推送不与任何人竞争。`develop` 是共享的，随时可能被抢；`release-beta/2026-08-24.1` 只有这次发版在用。
+
+合并后分支删除、tag 留下——**分支是过程，tag 是结果**。
+
+### 发版流程
+
+上面那个失败正是 NocoBase 2 遇到的形态：`publish` 排在 `push` 之前，推送一旦被拒，npm 和仓库就此脱节。
+
+`--force-with-lease` 解决不了——实测同样被拒（`stale info`），它只保证不覆盖别人的提交，不能让推送成功。
+
+完整流程（已验证，`test-branch-version/experiments/concurrent-merge-during-release.sh`）：
+
+```bash
+git checkout -b "release-beta/2026-08-24.1"
+pnpm changeset version
+# build + test
+git commit -am "chore: release 2026-08-24.1"
+git tag "release-beta/2026-08-24.1"     # 与分支同名，合并前打好
+git push origin "refs/heads/$NAME:refs/heads/$NAME"   # 完整 refspec，避免同名歧义
+git push origin "refs/tags/$NAME:refs/tags/$NAME"
+pnpm changeset publish                  # dist-tag 由 pre.json 决定
+git push origin --tags                  # package 级 tag
+gh pr create --base develop --head "$BRANCH_NAME"
+gh pr merge "$PR_URL" --merge --delete-branch
+```
+
+实测对照：
+
+```text
+直接在 develop 上发    push -> exit 1（rejected），npm 已发布但仓库没同步
+临时发版分支          push -> exit 0，合回无冲突，开发者的 changeset 完好
+```
+
+### 合回用 merge，不用 squash，不加 --admin
+
+**`--merge` 而非 `--squash`：** squash 会产生一个新 commit，发版 commit 不在目标分支历史里，`git describe` 失效。发版分支本来只有一个 commit，squash 压缩不了什么。
+
+**不加 `--admin`：** 它会跳过 required checks，也会在冲突时强行合并。冲突虽然少见，但确实存在（见下），强合会把目标分支上刚改的东西冲掉。
+
+冲突时 workflow 停下并发飞书通知，PR 保留等人处理。此时 **npm 已发布成功，状态是安全的**——版本号已经落在 registry，PR 只负责把它写回仓库。
+
+### 合回什么时候会冲突
+
+发版分支只改 `package.json` 的 `version` 字段和 CHANGELOG，所以冲不冲突取决于目标分支这期间有没有碰同一个文件。已验证：
+
+| 目标分支期间做了什么              | 合回时     |
+| --------------------------------- | ---------- |
+| 只加 changeset + 改源码           | **无冲突** |
+| 改了某个包的 `package.json`       | 冲突       |
+| 从 `main` 合入 hotfix（版本号变） | 冲突       |
+
+第一种是绝大多数情况。第二种的冲突需要人判断——两边改的是同一个 JSON 对象的不同字段：
+
+```text
+<<<<<<< HEAD (develop)
+  "version": "1.2.0",
+  "dependencies": { "lodash": "^4.0.0" }
+=======
+  "version": "1.3.0-beta.0",
+>>>>>>> release-beta/2026-08-24.1
+```
+
+正确结果是两个都要——版本号取发版分支的，依赖取目标分支的。这不能无脑 `--ours` 或 `--theirs`，所以交给人处理。
+
+冲突窗口是「发版开始」到「PR 合回」这几分钟，要恰好有人改了同一个包的 `package.json` 才会撞上，实际发生率很低。
+
+### 不要用 `changeset git-tag` 代替 publish 自动打 tag
+
+两者的判断依据不同：
+
+|                      | 依据                                 | 结果                     |
+| -------------------- | ------------------------------------ | ------------------------ |
+| `publish` 内部打 tag | **发布成功的包**                     | tag 与 registry 一致     |
+| `changeset git-tag`  | 工作区 package.json + tag 是否已存在 | 可能给没发出去的包打 tag |
+
+`publish` 的顺序在源码里很清楚（`publish.mjs:183`）：
+
+```js
+if (successfulNpmPublishes.length !== 0) {
+  //  ↑ 只收集发布成功的
+  gitTagReleases.push(...successfulNpmPublishes.map(...))
+}
+if (unsuccessfulNpmPublishes.length !== 0) log.error('Some packages failed to publish')
+if (gitTagReleases.length > 0) await createGitTags({ releases: gitTagReleases })
+//  ↑ 到这一步才打 tag
+```
+
+**逐个发布 → 收集成功的 → 只给成功的打 tag → 有失败就 exit 1。**
+
+`git-tag` 则不看发布结果。日常增量发版时它表现正常——版本号没变的包 tag 已存在会被跳过：
+
+```text
+第二轮只改 core：
+  core=1.1.1  ui=1.1.0  idle=1.1.0
+  git-tag 后：3 -> 4 个（只新增 @nb/core@1.1.1）
+```
+
+但 publish 部分失败时就会出错，已验证：
+
+```text
+第三轮 core + ui 都要发：
+  版本算好： core=1.1.2  ui=1.1.1
+  publish： core 成功，ui 失败（npm 5xx / 网络中断）
+  registry： @nb/core@1.1.2 有，@nb/ui@1.1.1 无
+
+  跑 git-tag：
+    @nb/ui@1.1.1   <- 打上了，但 registry 上没有这个版本
+```
+
+后果是 tag 声称发布过、registry 上却没有：重试时容易误判已发，`git tag -l` 列出的版本与 npm 不符，从这个 tag 检出的版本在 npm 上装不到。
+
+既然 `publish` 已经打了准确的 tag，就没有理由再补一遍。
+
+### 不打产品级 tag
+
+各 package 独立版本，**不存在一个能代表整个仓库的版本号**。拿某个包的版本当仓库版本（例如取 `packages/core` 的版本打成 `v1.3.0`）会产生误导性的 tag：
+
+- `@nocobase/core` 是 `1.3.0` 时，`@nocobase/portal-sdk` 可能是 `2.2.0`
+- tag `v1.3.0` 只反映了其中一个包
+- 使用者看到 `v1.3.0` 会以为整个仓库是这个版本
+
+所以仓库里的 tag 分两类，都不是「仓库版本号」：
+
+```text
+@nocobase/portal-sdk@2.2.0          package 级，changeset publish 自动打
+release/2026-08-24.1                批次级，标记一次发布行为
+```
+
+> 如果产品侧需要一个对外版本号（例如官网、Docker 镜像标签），可以选定某个核心 package 的版本作为代表，但那属于产品发布物料，不要塞进自动发版流程——否则每次发版都要编一个仓库版本号。
+
+### 用日期标识发布批次
+
+没有统一版本号可以命名批次，日期是批次的自然标识。已验证（`test-branch-version/experiments/batch-naming.sh`）。
+
+|        | 发版分支                    | 批次 tag                    | merge log                     |
+| ------ | --------------------------- | --------------------------- | ----------------------------- |
+| 预览版 | `release-beta/2026-08-24.1` | `release-beta/2026-08-24.1` | `chore: release 2026-08-24.1` |
+| 稳定版 | `release/2026-08-24.1`      | `release/2026-08-24.1`      | `chore: release 2026-08-24.1` |
+
+tag 在合并前打在发版分支上，与分支同名。
+
+三个实现细节：
+
+**序号从 tag 推导，不是从分支。** 分支合并时被 `--delete-branch` 删掉，只看分支会让序号回退并与已发布批次重复：
+
+```text
+连发三批            -> .1 .2 .3
+删除全部分支后再发   -> .1      <- 重复
+改为从 tag 推导     -> .4      <- 正确
+```
+
+**同名期间必须用完整 refspec。** 分支和 tag 同名只持续到合并删分支为止，但在这几分钟里 `git push origin <name>` 会直接失败：
+
+```text
+$ git push origin release-beta/2026-08-24.1
+error: src refspec release-beta/2026-08-24.1 matches more than one
+
+$ git push origin refs/heads/<name>:refs/heads/<name>    # ok
+$ git push origin refs/tags/<name>:refs/tags/<name>      # ok
+```
+
+合并后分支被删除，tag 独占该名字，`git show <name>` 正常可用。
+
+**beta 与 stable 各自独立计数。** `git tag -l "release/*"` 不会匹配到 `release-beta/*`，两个前缀是分开的。跨天自动从 `.1` 重新开始。
+
+追溯：
+
+```bash
+git tag -l 'release-beta/*'                # 所有预览版批次
+git tag -l 'release/*'                     # 所有稳定版批次
+git show release/2026-08-24.1              # 某批发了什么
+git log --merges --grep="chore: release"   # 发布时间线
+```
+
+因为合回用的是 `--merge` 而非 `--squash`，发版 commit 保留在历史里，配合批次 tag 和 PR 记录能完整还原一次发布。
+
+### 预发布也打 package 级 tag
+
+早期方案用 `--no-git-tag` 关掉预发布的 package tag，担心 tag 数量爆炸。实测量很小，因为只给**版本号真的变了**的包打：
+
+```text
+5 个包，6 轮 beta（每轮只改 1-2 个包）
+  第 1 轮后累计 tag: 1 个
+  第 3 轮后累计 tag: 4 个
+  第 6 轮后累计 tag: 8 个
+```
+
+所以预发布不再使用 `--no-git-tag`，保留 package 级 tag 作为预览版的追溯锚点。
 
 ## GitHub Release 与 npm dist-tag
 
 需要区分三个概念：
 
-- `v2.1.0-alpha.1` 是主仓库产品 Git tag/GitHub Prerelease。
-- `2.2.0-alpha.1` 是某个 npm package version。
-- `alpha` 是 npm dist-tag，决定 `pnpm add <package>@alpha` 安装哪个版本。
+- `@nocobase/portal-sdk@2.2.0-beta.1` 是 Git tag，由 `changeset publish` 自动创建。
+- `2.2.0-beta.1` 是该 npm package 的 version。
+- `beta` 是 npm dist-tag，决定 `pnpm add <package>@beta` 安装哪个版本。
 
-分支和 npm dist-tag 保持约定映射，但发布 workflow 根据 GitHub Release tag 类型决定通道：
+| 来源          | Git tag               | package 版本形式 | npm dist-tag |
+| ------------- | --------------------- | ---------------- | ------------ |
+| `main`        | `<name>@X.Y.Z`        | 稳定 SemVer      | `latest`     |
+| `develop`     | `<name>@X.Y.0-beta.N` | `*-beta.M`       | `beta`       |
+| snapshot      | 无                    | `0.0.0-canary-*` | `canary`     |
+| 维护分支 `vN` | `<name>@vN.Y.Z`       | 稳定 SemVer      | `vN-latest`  |
 
-| 产品 GitHub Release tag | 允许的 commit                                | package 版本形式 | npm dist-tag |
-| ----------------------- | -------------------------------------------- | ---------------- | ------------ |
-| `vX.Y.Z-alpha.N`        | 基于冻结的 `develop` source batch            | `*-alpha.M`      | `alpha`      |
-| `vX.Y.Z-beta.N`         | 基于冻结且已经完成测试的 `next` source batch | `*-beta.M`       | `beta`       |
-| `vX.Y.Z`                | 已合入 `main` 的 release candidate           | 稳定 SemVer      | `latest`     |
-
-产品 GitHub Release tag 是一次发布批次的不可变标记和用户可见版本。Stable Changesets publish 还会为实际发布的每个 package 创建 package tag，例如：
-
-```text
-@nocobase/portal-sdk@3.0.0
-@nocobase/database@0.2.0
-```
-
-Prerelease publish 使用 `--no-git-tag` 避免为每个 Alpha/Beta package 产生大量临时 Git tags。预发布时只创建一个主仓库产品 tag，例如 `v2.1.0-alpha.1` 或 `v2.1.0-beta.3`，它指向本批 candidate commit。
-
-因此 `@nocobase/portal-sdk@2.2.0-alpha.1` 会作为 npm package name/version 出现，但不会创建同名 Git tag。workflow 在 GitHub Prerelease 和 manifest 中记录该批次实际产生的 package versions。
-
-产品批次序号由主仓库分配，package prerelease counter 由 Changesets pre state 分别维护：
-
-```text
-1. release-packages.yml 获得产品版本线 + alpha 渠道互斥锁
-2. 查询主仓库已有 vX.Y.Z-alpha.N，分配下一个产品批次 N
-3. 将本批新代码/changesets 应用到持久 Alpha release line
-4. 执行 changeset version；只处理尚未移入 .changeset/pre/ 的增量
-5. 每个进入计划的 package 独立递增自己的 alpha.M
-6. 在 candidate SHA 创建 vX.Y.Z-alpha.N，发布 delta package 并更新 manifest
-```
-
-例如主仓库的 `v2.1.0-alpha.4` 可以记录：
-
-```json
-{
-  "productVersion": "2.1.0-alpha.4",
-  "ref": "v2.1.0-alpha.4",
-  "commit": "<full-git-sha>",
-  "published": {
-    "@nocobase/portal-sdk": "2.2.0-alpha.1"
-  },
-  "activePackages": {
-    "@nocobase/portal-sdk": "2.2.0-alpha.1",
-    "@nocobase/database": "0.2.0-alpha.0"
-  }
-}
-```
-
-这样仅凭主仓库的 GitHub Prerelease 就能回答“NocoBase 产品版本是多少、Alpha 几、基于哪个 commit、本批新发布了哪些 package、当前整条产品线使用哪些 package versions”。产品 `N` 与 package `M` 不要求相同；某个 package 没有新 changeset时不会发布，也不会递增自己的 `M`。
-
-维护者和使用者从主仓库的 GitHub **Releases** 页面查看批次内容。`v2.1.0-beta.1` 对应一个标题为 `NocoBase 2.1.0 Beta 1` 的 GitHub Prerelease，正文由 workflow 自动生成，例如：
-
-| Package                | Version        | Registry         | Status    |
-| ---------------------- | -------------- | ---------------- | --------- |
-| `@nocobase/portal-sdk` | `2.2.0-beta.0` | npm package link | Published |
-| `@nocobase/database`   | `0.2.0-beta.0` | npm package link | Published |
-
-每个 GitHub Prerelease 同时附加机器可读的 `release-manifest.json`，记录：
-
-- batch tag 和完整 commit SHA；
-- npm dist-tag；
-- package name、version、registry 和 tarball integrity；
-- publish 状态和对应 Actions run URL。
-
-Actions 日志和 summary 只是诊断入口，不作为长期发布记录。发布生命周期为：
-
-1. workflow 创建 `vX.Y.Z-beta.N` tag 和 Draft GitHub Prerelease；
-2. 计算 release plan，将计划中的 package 写入 Draft 正文和 manifest；
-3. 每个 package 发布成功后更新状态；
-4. 全部成功才将 Draft 标记为正式 Prerelease；
-5. 部分失败时 Draft 保持未发布状态，使用同一个 tag、manifest 和 release request 重试。
-
-因此查看 `v2.1.0-beta.1` 的 GitHub Prerelease 页面，就能看到这批发布了哪些包；自动化工具则读取它附带的 manifest。
-
-序号分配必须按“产品版本线 + 渠道”使用 Actions `concurrency` 串行化。失败重试复用原 release request 和 `vX.Y.Z-alpha.N`，不能再次分配新序号；只有明确开始新的发布批次时才递增。
-
-Stable 发布则保留两类 tag：
-
-- 一个主仓库产品 tag，例如 `v2.1.0`，用于定位整批发布的 release commit，并承载面向用户的产品更新日志。
-- Changesets 为 Release set 中每个实际发布的 package 创建标准 package tag，例如 `@nocobase/portal-sdk@2.2.0`。
-
-没有进入本次 Release set 的 package 不重新发布，也不会创建新 package tag。因此 Stable 不是给全仓所有 package 打 tag。
-
-`v2.1.0` GitHub Release 正文会展示产品更新日志以及 package 版本映射，例如：
-
-```text
-NocoBase 2.1.0
-
-- @nocobase/portal-sdk: 2.2.0
-- @nocobase/database: 0.2.0
-```
+dist-tag 是 registry 上的指针，不是分支。一个包可以同时挂任意多个 dist-tag，各指向一个已发布的版本。多条渠道能共存，是因为它们指向不同时刻发布的不同版本，而不是因为存在多条分支。
 
 ## GitHub Actions 设计
 
-### 统一的手动接管原则
+沙盒仓库 `test-branch-version` 里有可运行的实现，全部通过 actionlint。
 
-所有与发版有关的 workflow 都同时提供正常自动触发和 `workflow_dispatch` 手动入口，避免事件丢失、GitHub 故障或外部服务失败后只能修改代码才能恢复：
+| Workflow                   | 触发               | 作用                                              |
+| -------------------------- | ------------------ | ------------------------------------------------- |
+| `changeset-check.yml`      | PR to main/develop | changeset 校验（阻塞）+ 缺失提醒（非阻塞）        |
+| `guard-main.yml`           | PR to main         | 拒绝 `pre.json`、`pre/`、预发布版本号进入 main    |
+| `release-beta.yml`         | 手动               | develop 发 beta                                   |
+| `merge-beta-to-stable.yml` | 手动               | 转正 + 合 main + develop 重新进 pre（**不发布**） |
+| `release-stable.yml`       | 手动               | 发稳定版（main 或旧版本分支）                     |
 
-| Workflow             | 自动触发                       | 手动接管                                    |
-| -------------------- | ------------------------------ | ------------------------------------------- |
-| Quality              | PR、push、`merge_group`        | 对指定 commit/ref 重跑 affected 或完整检查  |
-| Changeset Check      | PR                             | 指定 base/head 重新生成 validation/advisory |
-| Branch Promotion     | 无；由维护者决定 Beta cut 范围 | `develop-to-next`                           |
-| Candidate Build      | `release-*` source branch push | `rebuild`、`retry-checks`                   |
-| Release Continuation | Stable Release PR merged       | 按 release request ID 执行 `resume-publish` |
-| Branch Sync          | Stable 发布成功、稳定侧新提交  | `retry-auto`、指定同步方向                  |
+**开发者不需要在本地执行任何 changeset 发版命令。** 日常只写 `pnpm changeset`，发版一律点对应 workflow 的运行按钮。
 
-手动接管必须满足：
+两个发版 workflow 都有 `dry_run` 输入（默认 true），可以先空跑看算出的版本号再实发。共用 concurrency group `release-write`，不会并发写分支。
 
-- 使用已有 release request ID 或明确的 source/candidate SHA，不能默认读取最新长期分支。
-- 调用与自动路径相同的 reusable workflow，不复制一套逻辑。
-- 不能跳过 required CI、candidate seal、PR merged 等状态检查。
-- 所有操作幂等：已成功的 package、tag、merge 不重复执行。
-- workflow summary 记录触发人、模式、输入 SHA、原失败 run 和处理结果。
-
-手动入口是恢复和重试能力，不是绕过发布安全门禁的后门。
+它们都在**临时发版分支**上完成 `version` + `publish`，再通过 PR 合回，理由见「发版必须在临时分支上进行」。
 
 ### `changeset-check.yml`
 
-触发条件：面向 `main`、`next`、`develop` 的 Pull Request。
+PR 触发，两层检查，严格程度不同：
 
-职责：
+- **validation**（阻塞）：校验已提交的 changeset 文件——YAML 合法、package 名存在、bump 类型合法。这类问题机器能确定判断。
+- **advisory**（非阻塞，始终 exit 0）：检测可能遗漏 changeset 的 package，输出提醒。识别 `release:skip` label。bump 级别的取舍需要人判断，CI 猜不了。
 
-- Validation：changeset 格式、package 名称和 bump 类型非法时阻止合并。
-- Advisory：发布产物相关变更没有 changeset 时，通过 PR comment、annotation 和 Actions summary 提醒，但返回成功状态。
-- `release:skip` 用于记录并关闭 advisory，不是合并所必需的豁免。
-- Advisory 同时提示 NocoBase 特有的隐式依赖关系可能需要哪个聚合 package 的 changeset。
-- 不执行版本修改或发布。
+### `guard-main.yml`
 
-### `release-packages.yml`
+`main` 上永远不允许出现 `.changeset/pre.json`、`.changeset/pre/` 或预发布版本号。
 
-触发条件：
+这是整套流程唯一的致命失误点：它们一旦进入 `main`，之后所有从 `main` 发出的版本都会变成预发布版本，而且不容易被发现。所以单独一条阻塞规则守着。
 
-- `workflow_dispatch`：维护者发起唯一一次人工 release request，选择 `alpha`、`beta` 或 `stable`；开始新产品版本线时输入目标产品版本，后续阶段默认自动继承。
-- `push`：匹配 `release-*` 的 source branch 更新时，自动重建对应 candidate。
-- `pull_request: closed`：带 release request ID 的 Stable Release PR 合并后，自动续跑同一次请求。
-- 必要时使用内部 `repository_dispatch`/reusable workflow 连接长流程；不暴露第二个人工入口。
+### `release-beta.yml`
 
-workflow 创建 Stable Release PR 时必须使用 GitHub App token，而不是默认 `GITHUB_TOKEN`，确保 bot 创建的 PR 能正常触发 required PR workflows 和后续事件。release request ID 存在 PR label/body 和 GitHub Release metadata 中，不依赖某个 runner 持续运行。
+手动触发，在临时发版分支上执行 `changeset version` + `changeset publish`，再通过 PR 合回 `develop`。
 
-workflow 不使用 Actions 页面上可能变化的当前 checkout ref 来决定源码，而是按渠道解析并立即冻结明确分支：
+dist-tag 由 `.changeset/pre.json` 决定，不能显式传 `--tag`——pre 模式下 changeset 会拒绝。
 
-```text
-alpha          -> develop HEAD
-beta           -> next HEAD
-stable         -> next HEAD
-stable-hotfix  -> main HEAD
-```
+运行前校验分支处于 pre 模式——不在 pre 模式时发版会直接发出稳定版号并占掉 `latest` 该用的号段。
 
-解析出的 full SHA 会显示在 workflow summary 中，并在创建任何 PR、tag 或构建前写入 release request metadata。
+### `merge-beta-to-stable.yml`
 
-职责：
+把预览版转正并合进 `main`，**不发布 npm**：`pre exit` → `version` → 合进 `main` → `develop` 重新进 pre。
 
-- 启动时原子读取源分支 HEAD，创建受保护的 release request branch，并持久化 source/candidate SHA。
-- 自动 push 触发与手动 `rebuild`/`retry-checks`/`resume-publish` 操作调用同一个 reusable candidate workflow。
-- `prepare-release-plan` 比较 baseline/source SHA，自动为没有人工 changeset覆盖的 changed packages 生成 synthetic patch；高风险 API 信号则暂停并要求明确 bump。
-- Alpha 将 `develop` 批次 source 增量应用到持久的 `release-line-X.Y.Z-alpha`，并创建不可变 `vX.Y.Z-alpha.N` tag。
-- Beta 从经过稳定化测试的 `next` SHA 创建 `release-X.Y.Z-beta.N` source branch，将本批增量应用到持久的 `release-line-X.Y.Z-beta`，并创建 `vX.Y.Z-beta.N`。`release-packages.yml` 不执行 `develop -> next`。
-- Stable 从 `next` 创建 `release-X.Y.Z` source branch；Bot 生成 `release-candidate-X.Y.Z`，执行 `changeset version`、更新根产品版本并创建 Release PR 到 `main`。
-- Stable hotfix 以 `main` 为 source branch，其余规则相同。
-- 最终 build、pack、产品/package tags、npm publish 和 manifest 全部使用 sealed candidate SHA。
-- checkout 已记录的 source/candidate SHA，禁止在后续 job 中重新解析移动中的分支头或改用 Stable Release PR merge SHA。
-- Alpha/Beta 在各自 release line 执行 Changesets prerelease version，Stable 在 candidate branch 执行普通 stable version；只有 Stable candidate 会通过 Release PR 写入长期分支。
-- 生成 release manifest 和动态构建矩阵，展示计划发布、构建和验证的 package。
-- 构建发布集合及必要的上游依赖闭包，只 pack release manifest 中的 package。
-- stable 的初始 `workflow_dispatch` 记录发布授权和目标产品版本；后续 continuation run 校验 request ID、产品版本、渠道、发起人和固定 SHA 后，按依赖拓扑自动发布尚未存在的 `name@version`。
-- 使用 GitHub Environment 隔离 npm 凭据，但不配置 required reviewers，不产生第二次人工确认。
-- 保存成功清单，支持从同一 release ref 重试。
-- 发布成功后创建或发布对应的 GitHub Release。
+发布另点 `release-stable.yml`。合并涉及三条分支的状态变更，自动化保证一致性；发布时机是决策，交给人掌握。
 
-一次用户操作可能产生多个 Actions run，但不会产生第二次 Run workflow 操作：
+整个流程是确定性的，逐步验证过：
 
 ```text
-workflow_dispatch
-  -> capture source SHA / create release branch
-  -> Alpha/Beta: candidate checks -> publish
-  -> Stable: create Release PR -> pull_request merged event -> publish
+① 校验 develop 处于 pre 模式      读 pre.json 的 mode    确定性
+② changeset pre exit             固定命令               确定性
+③ changeset version              固定命令               确定性
+④ 校验无预发布残留                扫 package.json        确定性
+⑤ 合进 main                      可能冲突               <- 唯一变数
+⑥ develop 重新 pre enter          固定命令               确定性
 ```
 
-Quality workflow 必须监听 `pull_request` 和 `merge_group`。candidate 自身检查决定“将要发布的内容是否通过”，merge group 检查只决定“candidate 能否安全合入最新目标分支”；npm 发布输入始终是 candidate SHA。
+只有第 ⑤ 步有变数，而它的冲突分两种：仅 `package.json` / `CHANGELOG.md` 冲突时规则固定（版本号取 develop 的），可自动解；出现源码冲突说明两条线真的分叉了，workflow 停下交给人。
 
-### `promote-branches.yml`
+守卫链：
 
-触发条件：仅提供 `workflow_dispatch`，由维护者决定何时将一批 `develop` 代码纳入 `next` 的 Beta 测试范围。晋级完成后不触发 `release-packages.yml`。
+```text
+① develop 必须处于 pre 模式          否则说明上轮没走完
+② version 后版本号必须真的变了        防「静默成功」
+③ 无预发布版本号残留                  否则说明 version 没生效
+④ pre.json 必须已被删除              否则会污染 main
+⑤ 合并冲突仅限 package.json/CHANGELOG 源码冲突就停下交给人
+⑥ 推送 main 前再查一次 pre.json      最后一道闸
+```
 
-职责：
+第 ② 条针对退出码看不出来的坑，见「没有 changeset 时发版会怎样」。
 
-- 只允许 `develop-to-next`，不承担 `next -> main`；Stable 仍通过 Release PR 进入 `main`。
-- 原子读取 source/target SHA，在临时 ref 创建保留双亲的 merge commit并运行 required CI。
-- 禁止 squash、cherry-pick、rebase 和 force push；长期分支之间依赖真实 merge ancestry识别已经双向同步的提交。
-- 检查通过后使用 GitHub App 和 expected `next` SHA 原子 push；目标漂移时重新计算一次，连续漂移或冲突时失败并通知。
-- 与 `sync-branches.yml` 复用同一个 merge/check/push 实现，并在 workflow summary 中记录 source、target、merge result 和最终 SHA。
+### `release-stable.yml`
 
-### `sync-branches.yml`
+手动触发，发稳定版。两个输入：
 
-触发条件：Stable 发布成功，或 `main`/`next` 获得需要向下游传播的新提交；同时提供 `workflow_dispatch` 手动接管。`next` hotfix 合入后自动执行 `next -> develop`，不需要等待 Beta 发布。`promote-branches.yml` 产生的 `develop -> next` merge 不再反向触发同步，避免仅传播 merge 元数据形成无意义的往返提交。
+| 输入          | 默认   | 说明                                               |
+| ------------- | ------ | -------------------------------------------------- |
+| `branch`      | `main` | 从哪个分支发。给旧版本发 hotfix 时填该版本的分支名 |
+| `keep_latest` | 否     | 勾上则发到 dist-tag `legacy`，不动 `latest` 指针   |
 
-职责：
+它覆盖三种场景，靠**待消费 changeset 的数量**自动分流：
 
-- 自动模式按顺序执行 `main -> next`、`next -> develop`。
-- 根据触发来源区分需要回灌的 `next` 提交：hotfix PR 和 `main -> next` 结果需要继续传播；`develop -> next` 晋级结果跳过，因为其业务代码已经来自 `develop`。
-- 在临时 ref 计算 merge result 并运行 required CI；通过后使用 GitHub App 和 expected target SHA 原子 push merge commit。
-- 目标分支漂移时重新计算一次；冲突、检查失败或连续漂移时失败退出，不创建 PR。
-- 失败时调用 `scripts/feishu-notify.sh`，发送 source/target SHA、失败原因、run URL 和重试提示。
-- 手动模式支持选择 `main-to-next`、`next-to-develop`、`all` 和 `retry-auto`，但不能跳过 CI。
-- 所有自动和手动路径调用同一个 reusable sync workflow，并记录 source/target SHA、merge result SHA 和最终 push 结果。
+```text
+0 个   转正结果刚合进 main，版本号已就绪   -> 直接 publish
+N 个   分支上有新 changeset                -> 先 version，再 PR 合回
+```
+
+第二种又分两类：从 `main` 发就是主线补丁，从旧版本分支发就是 hotfix。
+
+从 `main` 发布后会自动把补丁 merge 回 `develop` 并推送——不同步的话，下一次转正会覆盖掉这个补丁。不走 PR，因为冲突的解法是确定的（见「同步冲突怎么解」）；解不了才中止并发飞书通知。
+
+从旧版本分支发时不做这一步：那条线与主线已经分叉，是否同步由人判断。
+
+一条防误发的校验：**从非 `main` 分支发版却没勾 `keep_latest` 时直接报错**。忘了勾会让旧版本抢走 `latest` 指针，用户 `npm install` 拿到退回的版本。
+
+### 需要配置的 secrets
+
+```text
+RELEASE_TOKEN     能推 main 和 develop 的 PAT
+                  GITHUB_TOKEN 推受保护分支会被拒
+NPM_TOKEN         npm 发布令牌
+FEISHU_WEBHOOK    飞书通知（可选）
+```
+
+发布凭据放在受保护的 GitHub Environment 中，建议开人工 approve。
+
+首次使用需要有人在本地跑一次 `changeset pre enter beta` 并提交，之后由 workflow 接管。
+
+### `snapshot.yml`（可选）
+
+手动触发或定时。在临时工作区执行 snapshot version + publish，**不提交、不推送任何分支**。
 
 ## package 发布边界
 
 ### 开源 package
-
-准备发布到公共 npm 的 package：
 
 ```json
 {
@@ -1455,11 +1341,9 @@ Quality workflow 必须监听 `pull_request` 和 `merge_group`。candidate 自�
 }
 ```
 
-公共 npm 和私有 registry 应使用不同的 GitHub Environment 和凭据。Changesets 负责统一计算版本，publish workflow 可以按 registry 分 job 执行。
+公共 npm 和私有 registry 使用不同的 GitHub Environment 和凭据。Changesets 统一计算版本，publish workflow 按 registry 分 job 执行。
 
 ### 不发布的内部 package
-
-不形成独立制品的 package 保持：
 
 ```json
 {
@@ -1469,139 +1353,131 @@ Quality workflow 必须监听 `pull_request` 和 `merge_group`。candidate 自�
 
 Changesets 默认不 version、不 tag、不 publish 这类 package。
 
+### private 与可发布 package 不能混在同一条运行时依赖链上
+
+这是引入 Changesets 之前必须先解决的硬阻塞，已验证。
+
+`private: false` 的 package 通过 `dependencies` 依赖 `private: true` 的 package 时，Changesets 直接报错退出，**任何 `changeset version` 都无法执行**：
+
+```text
+Invalid tree: "@nocobase/app-host" depends on the skipped package
+"@nocobase/app-server", but "@nocobase/app-host" is not skipped.
+Please add "@nocobase/app-host" to the "ignore" option.
+```
+
+本仓库当前就处于这个状态：`app-host` 是 `private: false`，但依赖 `private: true` 的 `app-server`。三个可选处理方式：
+
+1. `app-host` 改为 `private: true`；
+2. `app-server` 及其依赖链一并转为可发布；
+3. 把 `app-host` 加入 `.changeset/config.json` 的 `ignore`。
+
+`devDependencies` 不受这条约束，所以 `app-template-default` 依赖大量 private package 是安全的。
+
 ## NocoBase 特殊依赖规则
 
 ### Vendored server package
 
 `@nocobase/app-template-default` 的构建会把部分 workspace server package 复制到 `dist/vendor`，并写成 `file:` 依赖。这些关系在源码 package.json 中主要表现为 devDependencies，Changesets 不会自动将其视为需要发布的运行时 dependent。
 
-如果 vendored package 的变化需要随 Template 发版，相关 PR 应同时给 `@nocobase/app-template-default` 添加 changeset。CI 根据 vendor 清单给出非阻塞提醒；如果确认只是重构且暂不发布，可以不添加。
+如果 vendored package 的变化需要随 Template 发版，相关 PR 应同时给 `@nocobase/app-template-default` 添加 changeset。CI 根据 vendor 清单给出非阻塞提醒。
 
 ### Portal SDK 兼容元数据
 
-`@nocobase/portal-sdk` 使用 `supportedDefaultTemplateRange`，Template 和 Hub 使用 `defaultTemplateVersion`，Registry 配置中还包含 Portal SDK SemVer 范围。
+`@nocobase/portal-sdk` 使用 `supportedDefaultTemplateRange`，Template 和 Hub 使用 `defaultTemplateVersion`。
 
-Portal SDK major 或 Template major 变更时，CI 必须校验：
-
-- SDK 与 Template 兼容范围。
-- Template 和 Hub 的 `defaultTemplateVersion`。
-- Registry 中的 SDK range。
-- 是否需要给 Template、Hub 或迁移文档添加 changeset。
-
-这些是文件级和协议级依赖，不能只依赖 Changesets 的 package.json 依赖图。
-
-## 并发和版本冲突
-
-package.json 版本只由 Stable Release PR 中的 Changesets version step 修改。开发者不得在功能 PR 中手工修改版本号。
-
-发布始终使用 GitHub Release tag 指向的固定 commit：
-
-```text
-C1  从 next@N1 的 release-2.1.0 生成 candidate：package A = 1.3.0
-N2  新功能继续合入 next：不改变 C1
-M2  其他提交继续合入 main：不改变 C1
-v2.1.0 与 package A@1.3.0：都指向并发布 C1
-```
-
-即使快照创建后有新代码合入长期分支，C1 的发布输入也不会变化。
-
-约束：
-
-- 同一 release ref 只允许一个 publish workflow，使用 Actions `concurrency` 防重。
-- 同一产品版本线同一时间只允许一个 active release request。
-- npm 中的 `name@version` 不可覆盖；部分失败时从原 ref 重试，不创建新版本规避失败。
-- 发布前查询 registry，已存在的 `name@version` 记录为成功并跳过。
-- release tag 必须指向准确 commit SHA，不能在 workflow 中重新解析最新分支头。
+Portal SDK major 或 Template major 变更时，CI 必须校验 SDK 与 Template 的兼容范围。
 
 ## 构建与验证
 
-每个 publishable package 必须具备可靠的 `prepack` 或等价发布构建生命周期。release workflow 先生成机器可读的 manifest，并区分三个集合：
+发布前必须完成：
 
-1. **Release set**：Changesets 计算出需要升版和 publish 的 package。
-2. **Build set**：Release set 加上构建它们所需的上游 workspace dependency closure；这些上游依赖会参与构建，但不一定发布。
-3. **Verification set**：Release set 的下游 dependents，以及 NocoBase 隐式依赖规则补充的 package；用于 typecheck/test/build 验证，不一定发布。
+1. `pnpm install --frozen-lockfile`
+2. 受影响 package 及其 dependents 的 `lint`、`typecheck`、`test`、`build`
+3. `pnpm pack` 产物检查（发布内容是否符合 `files` 声明）
 
-例如只发布 A，而 B 以兼容范围依赖 A：A 属于 Release set；A 的构建依赖进入 Build set；B 可以进入 Verification set 验证兼容性，但 B 不会被 pack 或 publish。如果 A major 越出 B 的依赖范围，Changesets 将 B 加入 Release set，此时 A、B 都会被 build、pack 和 publish。
-
-实现时根据 manifest 生成 pnpm filter 或 job matrix：
-
-```text
-build:   pnpm --filter <release-package>... build
-verify:  pnpm --filter ...<release-package> typecheck/test
-pack:    仅对 Release set 中的 package 执行
-publish: 仅对 Release set 中 registry 尚不存在的 name@version 执行
-```
-
-这里的 `...` 表示 pnpm 的 dependency/dependent 选择器，实际 workflow 由脚本生成参数，不拼接未经校验的用户输入。
-
-因此 release Action 可以避免全仓构建，但“只构建 A 和 B”不是正确边界：为了得到 A、B 的产物可能必须先构建它们的内部依赖；为了确认兼容性也可能需要验证依赖 A、B 的下游 package。真正严格限制的是只有 Release set 会被 pack 和 publish。
-
-质量门禁分为两层：
-
-1. 普通 PR、受控晋级/自动回灌的临时 ref 和 Stable Release PR 至少运行 affected verification；Release PR 的 candidate 和 `merge_group` 分别运行发布内容门禁与最终集成门禁。
-2. release workflow 从已通过 CI 的固定 ref 只处理 manifest 中的 Build/Verification/Release set，不重复无关 package 的测试和构建。
-
-Template 等聚合产物仍需要构建其 vendored dependency closure，但这不意味着重新发布这些内部 package。
+`main` 上的每次发布都应基于已通过完整 CI 的 commit。
 
 ## 失败恢复
 
 ### package 部分发布成功
 
-1. 保留原 GitHub Release 和 release ref。
-2. 查询每个计划内 `name@version` 是否已存在。
-3. 跳过已存在版本，只重试缺失版本。
-4. 不重新运行 stable version 计算。
-5. 不通过修改 package version 掩盖基础设施失败。
+直接重跑同一个 workflow。`changeset publish` 逐个查询 registry，已发布的 package 会被跳过，只补发失败的部分。
 
-### 分支同步失败
-
-自动回灌在任何检查失败时都不会改变目标分支。workflow 保留临时 merge 结果并发送飞书通知；维护者修复冲突或分支状态后，手动运行 `sync-branches.yml` 重试。这不影响已经绑定 immutable ref 的发布。
+不需要手工修改版本号或删除 changeset。
 
 ### 错误版本已发布
 
-npm 版本不可覆盖。处理方式为：
+npm 不允许覆盖已发布版本。处理方式：
 
-- 发布更高的修复版本。
-- 必要时 `npm deprecate` 错误版本。
-- 必要时将 dist-tag 移回已知可用版本。
+1. `npm deprecate` 标记该版本；
+2. 发布一个修正版本；
+3. 必要时调整 dist-tag 指向。
 
-移动 dist-tag 不会让使用 SemVer range 和已有 lockfile 的消费者自动回滚，因此不能把它当作唯一恢复手段。
+不使用 `npm unpublish`——它会破坏已经依赖该版本的下游。
+
+### 转正中途失败
+
+`merge-beta-to-stable.yml` 的守卫会在推送前拦截问题，所以失败时通常没有任何东西被推出去。按失败位置处理：
+
+| 失败在哪                 | 状态       | 怎么办                                                   |
+| ------------------------ | ---------- | -------------------------------------------------------- |
+| 守卫 ①～④                | 什么都没推 | 修掉根因重跑                                             |
+| 合进 main 时源码冲突     | 什么都没推 | 人工解决冲突后重跑                                       |
+| publish 之后、推分支之前 | npm 已发布 | 手工推 `develop` 和 `main`，或重跑（publish 幂等会跳过） |
+
+最后一种最需要注意：npm 上已有稳定版但仓库还没更新。重跑时 `changeset publish` 会跳过已发布的包，剩下的推送步骤正常完成。
+
+### 预览版需要废弃
+
+如果 `develop` 上的某个版本决定不发布，执行 `changeset pre exit` + `changeset version` 清除 pre 状态，然后 `git reset` 回退版本提交，重新 `pre enter`。已发布的 `beta` 版本保留在 registry 中，调整 `beta` dist-tag 指向即可。
+
+### develop 意外退出了 pre 模式
+
+症状：`develop` 上没有 `pre.json`，但版本号还是 `-beta.N`，或者本该发 beta 却发出了稳定版号。
+
+直接 `pnpm changeset pre enter beta` 重新进入即可，不需要重切分支。序号从当前版本号里的数字继续递增，不会与已发布版本冲突。
 
 ## 迁移步骤
 
-### 阶段一：建立版本声明
+### 阶段零：解除前置阻塞
 
-1. 引入 Changesets 和 GitHub changelog adapter。
-2. 添加 `.changeset/config.json` 和开发文档。
-3. 添加 `changeset-check.yml`。
-4. 梳理每个 package 的 public/private/registry 状态。
-5. 未准备发布的 package 显式保持 `private: true`。
+1. 处理 private 与可发布 package 的混合依赖链（见上文），确保 `changeset version` 能执行。
+2. 清理 `packages/logger`、`packages/storage` 等遗留目录。
+3. 为 `main` 配置 Merge Queue 和分支保护。
+4. 移植飞书通知脚本。
 
-### 阶段二：启用 Alpha/Beta prerelease mode
+### 阶段一：建立 Changesets 基础设施
 
-1. 建立独立 Alpha/Beta release lines、`.changeset/pre/` 状态和产品批次校验。
-2. 添加单入口 `release-packages.yml`、release request 状态和事件续跑机制。
-3. 验证 prerelease versions 和 `.changeset/pre/` 不会被提交回长期分支。
-4. 用单个低风险 package 完成首次发布和重试演练。
+1. 安装 `@changesets/cli`，初始化 `.changeset/config.json`。
+2. 落地 `changeset-check.yml` 和 `guard-main.yml`。
+3. 团队开始在 PR 中提交 changeset，但暂不自动发布。
 
-### 阶段三：启用 Stable Release PR
+这一阶段先让团队习惯「改代码就写 changeset」，发布仍走原有流程。
 
-1. 对照 registry 检查所有当前 public `name@version` 的基线。
-2. 在 `release-packages.yml` 中启用从冻结 `next` SHA 创建 `release-X.Y.Z` source/candidate 的流程。
-3. 合并第一份 Stable Release PR，并确认 candidate commit 原样进入 `main` 历史。
-4. 从准确 candidate SHA 自动创建 Stable Draft GitHub Release。
-5. Release PR 合并后自动发布，验证 selective publish 和 package tags。
+### 阶段二：启用 develop 预览版
 
-### 阶段四：建立受控的长期分支同步
+1. 在 `develop` 上执行一次 `changeset pre enter beta` 并提交。
+2. 落地 `release-beta.yml`，先用 `dry_run` 空跑确认版本号。
+3. 完成第一轮真实的 beta 发布。
 
-1. 添加手动 `promote-branches.yml`，通过临时 merge result、CI 和原子 push 执行 `develop -> next`，且不触发发版。
-2. 添加 `sync-branches.yml`，自动执行 `main -> next` 和 `next -> develop` 回灌。
-3. 两条 workflow 复用同一个 merge/check/push 实现，使用 GitHub App、expected target SHA 和带 lease 更新；停用维护者本地直接 `git merge && git push` 的路径。
-4. 分别演练一次 `develop -> next` 晋级、`next` hotfix 回灌和 `main -> next -> develop` 回灌。
+### 阶段三：走通一次完整转正
+
+1. 落地 `merge-beta-to-stable.yml`，同样先 `dry_run`。
+2. 完成一次 `pre exit` → `version` → 发布 `latest` → 合进 `main` → `develop` 重新进 pre 的全流程。
+3. 验证冲突处理规则和守卫链是否符合预期。
+
+这是 `main` 的**第一个稳定版**。在此之前 `main` 不发任何版本，它落后 `develop` 多少个 commit 都不要紧——首次合并是快进合并，不会冲突。
+
+这一步跑通之后，整套流程就闭环了：`develop` 持续发 beta，需要时转正到 `main`，`main` 上出问题就地打补丁。
+
+### 阶段四：按需补充
+
+- `snapshot.yml`：为 PR 预览和 nightly 提供 `canary` 渠道。
+- 老版本维护分支：确实需要长期维护旧版本时再开。
 
 ## 待确认事项
 
-- `app-host` 在依赖的 server package 可分发前是否改为 `private: true`。
-- 闭源 server package 是否发布到 `pkg.nocobase.com`，以及是否与公共 npm 同批发布。
-- `release:skip` label 的审批权限和适用范围。
-- Alpha 是否始终手动发起 release request，还是后续增加定时/nightly snapshot。
+1. **`develop` 上的连带发布是否可接受。** 一个 package 的 patch 会带动全部下游发布预发布版本。需要确认这在实际的 NocoBase 依赖图上影响多大——本仓库的 `app-template-default` 通过 devDependencies 聚合，已经规避了最坏情况。
+2. **多仓库协调。** pro-plugins 和各插件仓库如何跟随主仓库的 `develop`，需要单独设计。NocoBase 2 的做法是跨仓库直接 merge/push，本方案不再采用该形态。
+3. **老版本维护策略。** 何时开维护分支、维护多久、使用什么 dist-tag 命名，需要产品侧确认。
+4. **对外版本号的选取。** 各 package 独立版本，仓库不生成统一版本号。产品侧（官网、文档、Docker 镜像标签）如果需要一个对外版本，可以选定某个核心 package 的版本作为代表，具体选哪个待产品侧确认。
