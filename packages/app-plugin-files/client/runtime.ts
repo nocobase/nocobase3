@@ -39,8 +39,8 @@ export async function executeFileUploadPlan(
       headers: plan.upload.headers,
       body: file,
       signal: options.signal,
-      withCredentials: !isAbsoluteUrl(plan.upload.url),
-      stableErrors: !isAbsoluteUrl(plan.upload.url),
+      withCredentials: shouldSendCredentials(plan.upload.url),
+      stableErrors: shouldSendCredentials(plan.upload.url),
       operation: 'upload',
       onProgress:
         options.onProgress === undefined
@@ -54,8 +54,8 @@ export async function executeFileUploadPlan(
         url: plan.complete.url,
         headers: plan.complete.headers,
         signal: options.signal,
-        withCredentials: true,
-        stableErrors: true,
+        withCredentials: shouldSendCredentials(plan.complete.url),
+        stableErrors: shouldSendCredentials(plan.complete.url),
         operation: 'complete',
       }),
       plan.fileId,
@@ -73,8 +73,8 @@ async function cancelBestEffort(plan: FileUploadPlan): Promise<void> {
       method: 'DELETE',
       url: plan.cancel.url,
       headers: plan.cancel.headers,
-      withCredentials: true,
-      stableErrors: true,
+      withCredentials: shouldSendCredentials(plan.cancel.url),
+      stableErrors: shouldSendCredentials(plan.cancel.url),
       operation: 'cancel',
     });
   } catch {
@@ -109,61 +109,69 @@ function sendXhrRequest(options: XhrRequestOptions): Promise<XhrResponse> {
     };
     const abortRequest = (): void => xhr.abort();
 
-    xhr.open(options.method, options.url, true);
-    xhr.withCredentials = options.withCredentials;
-    for (const [name, value] of Object.entries(options.headers ?? {})) {
-      xhr.setRequestHeader(name, value);
-    }
-    if (options.onProgress) {
-      xhr.upload.addEventListener('progress', (event: ProgressEvent) => {
-        const total =
-          event.lengthComputable && event.total > 0
-            ? event.total
-            : (options.body?.size ?? 0);
-        const loaded = event.loaded;
-        options.onProgress?.({
-          loaded,
-          total,
-          percentage:
-            total === 0
-              ? 0
-              : Math.min(100, Math.max(0, (loaded / total) * 100)),
+    try {
+      xhr.open(options.method, options.url, true);
+      xhr.withCredentials = options.withCredentials;
+      for (const [name, value] of Object.entries(options.headers ?? {})) {
+        xhr.setRequestHeader(name, value);
+      }
+      if (options.onProgress) {
+        xhr.upload.addEventListener('progress', (event: ProgressEvent) => {
+          const total =
+            event.lengthComputable && event.total > 0
+              ? event.total
+              : (options.body?.size ?? 0);
+          const loaded = event.loaded;
+          options.onProgress?.({
+            loaded,
+            total,
+            percentage:
+              total === 0
+                ? 0
+                : Math.min(100, Math.max(0, (loaded / total) * 100)),
+          });
+        });
+      }
+      xhr.addEventListener('load', () => {
+        finish(() => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve({ status: xhr.status, text: xhr.responseText });
+            return;
+          }
+          reject(
+            createTransportError(
+              options.operation,
+              xhr.status,
+              xhr.responseText,
+              options.stableErrors,
+            ),
+          );
         });
       });
+      xhr.addEventListener('error', () => {
+        finish(() => {
+          reject(
+            createTransportError(
+              options.operation,
+              xhr.status,
+              '',
+              options.stableErrors,
+            ),
+          );
+        });
+      });
+      xhr.addEventListener('abort', () => {
+        finish(() => reject(createAbortError(options.operation)));
+      });
+      options.signal?.addEventListener('abort', abortRequest, { once: true });
+      xhr.send(options.body ?? null);
+    } catch {
+      finish(() =>
+        reject(
+          createTransportError(options.operation, 0, '', options.stableErrors),
+        ),
+      );
     }
-    xhr.addEventListener('load', () => {
-      finish(() => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve({ status: xhr.status, text: xhr.responseText });
-          return;
-        }
-        reject(
-          createTransportError(
-            options.operation,
-            xhr.status,
-            xhr.responseText,
-            options.stableErrors,
-          ),
-        );
-      });
-    });
-    xhr.addEventListener('error', () => {
-      finish(() => {
-        reject(
-          createTransportError(
-            options.operation,
-            xhr.status,
-            '',
-            options.stableErrors,
-          ),
-        );
-      });
-    });
-    xhr.addEventListener('abort', () => {
-      finish(() => reject(createAbortError(options.operation)));
-    });
-    options.signal?.addEventListener('abort', abortRequest, { once: true });
-    xhr.send(options.body ?? null);
   });
 }
 
@@ -218,13 +226,12 @@ function createAbortError(
 
 function assertUploadPlan(plan: FileUploadPlan): void {
   if (
-    plan.upload.method !== 'PUT' ||
-    plan.complete.method !== 'POST' ||
-    plan.cancel.method !== 'DELETE' ||
-    !plan.fileId ||
-    !plan.upload.url ||
-    !plan.complete.url ||
-    !plan.cancel.url
+    !isRecord(plan) ||
+    !isNonEmptyString(plan.fileId) ||
+    !isNonEmptyString(plan.expiresAt) ||
+    !isPlanRequest(plan.upload, 'PUT') ||
+    !isPlanRequest(plan.complete, 'POST') ||
+    !isPlanRequest(plan.cancel, 'DELETE')
   ) {
     throw new FileClientError('The file upload plan is invalid.', {
       code: 'UPLOAD_PLAN_INVALID',
@@ -234,8 +241,58 @@ function assertUploadPlan(plan: FileUploadPlan): void {
   }
 }
 
-function isAbsoluteUrl(value: string): boolean {
-  return /^[a-z][a-z\d+.-]*:\/\//i.test(value);
+function isPlanRequest(
+  value: unknown,
+  method: 'PUT' | 'POST' | 'DELETE',
+): boolean {
+  return (
+    isRecord(value) &&
+    value.method === method &&
+    isSafePlanUrl(value.url) &&
+    isStringRecordOrUndefined(value.headers)
+  );
+}
+
+function isStringRecordOrUndefined(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (isRecord(value) &&
+      !Array.isArray(value) &&
+      Object.values(value).every((entry) => typeof entry === 'string'))
+  );
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isSafePlanUrl(value: unknown): value is string {
+  if (
+    !isNonEmptyString(value) ||
+    Array.from(value).some((character) => character.charCodeAt(0) <= 0x20)
+  ) {
+    return false;
+  }
+  try {
+    const parsed = new URL(value, 'https://files.invalid');
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function shouldSendCredentials(value: string): boolean {
+  if (!/^[a-z][a-z\d+.-]*:/i.test(value) && !value.startsWith('//')) {
+    return true;
+  }
+  if (typeof location === 'undefined') {
+    return false;
+  }
+  try {
+    return new URL(value, location.href).origin === location.origin;
+  } catch {
+    return false;
+  }
 }
 
 function isStoredFile(value: unknown): value is StoredFile {

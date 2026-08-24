@@ -42,10 +42,6 @@ export interface CreateBusinessFileResponse {
   plan: FileUploadPlan;
 }
 
-export interface FileResponse {
-  file: StoredFile;
-}
-
 export interface PublicFileAccessRequest {
   disposition?: FileDisposition;
 }

@@ -17,23 +17,6 @@ export class FileClientError extends Error {
   }
 }
 
-export function toFileClientError(
-  error: unknown,
-  operation: FileClientOperation,
-  fallback: string,
-): FileClientError {
-  if (error instanceof FileClientError) {
-    return error;
-  }
-  const details = readErrorDetails(error);
-  return new FileClientError(details.message ?? fallback, {
-    code: details.code ?? 'FILE_REQUEST_FAILED',
-    status: details.status ?? 0,
-    operation,
-    cause: error,
-  });
-}
-
 export function createTransportError(
   operation: 'upload' | 'complete' | 'cancel',
   status: number,
@@ -56,28 +39,6 @@ export function createTransportError(
   );
 }
 
-interface ErrorDetails {
-  code?: string;
-  message?: string;
-  status?: number;
-}
-
-function readErrorDetails(error: unknown): ErrorDetails {
-  if (!isRecord(error)) {
-    return error instanceof Error ? { message: error.message } : {};
-  }
-  const payload = isRecord(error.payload) ? error.payload : error;
-  return {
-    ...(typeof payload.code === 'string' ? { code: payload.code } : {}),
-    ...(typeof payload.error === 'string'
-      ? { message: payload.error }
-      : typeof error.message === 'string'
-        ? { message: error.message }
-        : {}),
-    ...(typeof error.status === 'number' ? { status: error.status } : {}),
-  };
-}
-
 function readStableErrorResponse(value: string):
   | {
       code: string;
@@ -91,15 +52,32 @@ function readStableErrorResponse(value: string):
     const parsed: unknown = JSON.parse(value);
     if (
       isRecord(parsed) &&
-      typeof parsed.code === 'string' &&
+      isStableErrorCode(parsed.code) &&
       typeof parsed.error === 'string'
     ) {
-      return { code: parsed.code, message: parsed.error };
+      return {
+        code: parsed.code,
+        message: redactSensitiveDetails(parsed.error),
+      };
     }
   } catch {
     return undefined;
   }
   return undefined;
+}
+
+function isStableErrorCode(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Z][A-Z0-9_]*$/.test(value);
+}
+
+function redactSensitiveDetails(value: string): string {
+  return value
+    .replace(/\bhttps?:\/\/[^\s"'<>]+/giu, '[redacted-url]')
+    .replace(
+      /(\b(?:access|capability|credential|signature|token)=)[^&\s"'<>]*/giu,
+      '$1[redacted]',
+    )
+    .replace(/\bBearer\s+[^\s"'<>]+/giu, 'Bearer [redacted]');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

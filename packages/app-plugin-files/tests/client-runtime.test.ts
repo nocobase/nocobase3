@@ -171,7 +171,7 @@ describe('executeFileUploadPlan', () => {
 
   it('aborts the active PUT through AbortSignal', async () => {
     FakeXMLHttpRequest.enqueue({ autoRespond: false });
-    FakeXMLHttpRequest.enqueue({ status: 200 });
+    FakeXMLHttpRequest.enqueue({ status: 500 });
     const controller = new AbortController();
     const pending = executeFileUploadPlan(localPlan('abort-1'), testFile(), {
       signal: controller.signal,
@@ -188,6 +188,87 @@ describe('executeFileUploadPlan', () => {
       method: 'DELETE',
       url: '/mounted/api/files/abort-1/upload?access=opaque-cancel',
     });
+  });
+
+  it('cancels after an upload failure', async () => {
+    FakeXMLHttpRequest.enqueue({ status: 503 });
+    FakeXMLHttpRequest.enqueue({ status: 204 });
+
+    await expect(
+      executeFileUploadPlan(s3Plan('upload-failure'), testFile()),
+    ).rejects.toMatchObject({
+      code: 'UPLOAD_FAILED',
+      status: 503,
+      operation: 'upload',
+    });
+
+    expect(FakeXMLHttpRequest.requests).toHaveLength(2);
+    expect(FakeXMLHttpRequest.requests[1]).toMatchObject({
+      method: 'DELETE',
+      url: '/mounted/api/files/upload-failure/upload?access=opaque-cancel',
+      withCredentials: true,
+    });
+  });
+
+  it('cancels after a complete failure', async () => {
+    FakeXMLHttpRequest.enqueue({ status: 200 });
+    FakeXMLHttpRequest.enqueue({
+      status: 409,
+      responseText: JSON.stringify({
+        error: 'The file binding changed.',
+        code: 'FILE_BINDING_CONFLICT',
+      }),
+    });
+    FakeXMLHttpRequest.enqueue({ status: 204 });
+
+    await expect(
+      executeFileUploadPlan(localPlan('complete-failure'), testFile()),
+    ).rejects.toMatchObject({
+      code: 'FILE_BINDING_CONFLICT',
+      status: 409,
+      operation: 'complete',
+    });
+
+    expect(
+      FakeXMLHttpRequest.requests.map((request) => request.method),
+    ).toEqual(['PUT', 'POST', 'DELETE']);
+  });
+
+  it('preserves the original failure when cancel also fails', async () => {
+    FakeXMLHttpRequest.enqueue({
+      status: 410,
+      responseText: JSON.stringify({
+        error: 'The file upload plan has expired.',
+        code: 'UPLOAD_EXPIRED',
+      }),
+    });
+    FakeXMLHttpRequest.enqueue({ status: 500 });
+
+    await expect(
+      executeFileUploadPlan(localPlan('double-failure'), testFile()),
+    ).rejects.toMatchObject({
+      message: 'The file upload plan has expired.',
+      code: 'UPLOAD_EXPIRED',
+      status: 410,
+      operation: 'upload',
+    });
+
+    expect(FakeXMLHttpRequest.requests).toHaveLength(2);
+    expect(FakeXMLHttpRequest.requests[1]?.method).toBe('DELETE');
+  });
+
+  it('rejects malformed plans before starting transport', async () => {
+    const plan = localPlan('malformed');
+    plan.complete.url = 'javascript:alert(document.cookie)';
+
+    await expect(executeFileUploadPlan(plan, testFile())).rejects.toMatchObject(
+      {
+        code: 'UPLOAD_PLAN_INVALID',
+        status: 0,
+        operation: 'upload',
+      },
+    );
+    expect(FakeXMLHttpRequest.requests).toHaveLength(0);
   });
 
   it('maps stable platform errors without exposing the signed URL', async () => {
@@ -216,6 +297,37 @@ describe('executeFileUploadPlan', () => {
     });
     expect(String(caught)).not.toContain(plan.upload.url);
     expect(JSON.stringify(caught)).not.toContain('opaque-local');
+  });
+
+  it('redacts URLs, capabilities, and bearer credentials from platform errors', async () => {
+    const secretUrl =
+      'https://files.example/upload?signature=provider-secret&part=1';
+    FakeXMLHttpRequest.enqueue({ status: 200 });
+    FakeXMLHttpRequest.enqueue({
+      status: 400,
+      responseText: JSON.stringify({
+        error:
+          `Complete failed at ${secretUrl} with ` +
+          'Bearer opaque-bearer and /complete?access=opaque-capability',
+        code: 'UPLOAD_FAILED',
+      }),
+    });
+    FakeXMLHttpRequest.enqueue({ status: 204 });
+
+    let caught: unknown;
+    try {
+      await executeFileUploadPlan(localPlan('redacted'), testFile());
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(FileClientError);
+    const serialized = `${String(caught)} ${JSON.stringify(caught)}`;
+    expect(serialized).not.toContain(secretUrl);
+    expect(serialized).not.toContain('provider-secret');
+    expect(serialized).not.toContain('opaque-bearer');
+    expect(serialized).not.toContain('opaque-capability');
+    expect(serialized).toContain('[redacted-url]');
   });
 });
 
