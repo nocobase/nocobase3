@@ -11,5 +11,5 @@ export default function registerRoutes({ app }: AppPluginRoutesContext): void {
     }),
   );
 
-  app.route('/routes-example', routes);
+  app.route('/api/routes-example', routes);
 }

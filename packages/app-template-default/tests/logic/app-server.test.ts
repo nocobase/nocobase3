@@ -754,19 +754,18 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('loads routes from enabled app plugins', async () => {
+  it('protects API routes loaded from enabled app plugins', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
     const response = await app.request(
-      `http://localhost${runtime.config.app.publicBasePath}/routes-example`,
+      `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      plugin: '@nocobase/app-plugin-routes-example',
-      message: 'Hello from the routes example plugin',
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      message: expect.any(String),
     });
   });
 

@@ -84,7 +84,8 @@ provider，否则实例之间的一次性验证状态和限流计数可能不一
 
 1. 配置服务端发送重置邮件的 callback；
 2. 使用允许列表控制 redirect URL；
-3. 实现重置密码页面；
+3. 验证插件提供的 `/forgot-password` 和 `/reset-password` guest 路由可从应用公开
+   basename 正确访问；
 4. 避免通过响应泄露邮箱是否注册；
 5. 验证 token 过期和一次性消费行为；
 6. 对请求入口配置共享限流。

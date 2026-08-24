@@ -28,11 +28,28 @@ database/migrations/
   应用自己的认证扩展表结构
 
 client/auth/
-  用户自己的认证 client、页面和组件
+  应用自己的认证页面组合、品牌和 provider UI
+
+client/route-overrides.ts
+  只替换插件路由的最终页面组件
 ```
 
-新增认证方式时，可以把客户端实现放在 `client/auth/<provider>`，然后由应用的
-登录页、路由或其他组合入口直接引用。
+默认认证路由仍由 authentication 插件拥有。应用修改登录、注册、忘记密码和重置密码
+的视觉表现时，应在 `client/auth/` 中组合公开 UI，并通过
+`client/route-overrides.ts` 只替换 `componentLoader`，不要重复声明 `/login` 等路径。
+
+应用应只从稳定出口导入认证 UI：
+
+```ts
+import {
+  AuthLink,
+  LoginForm,
+} from '@nocobase/app-plugin-authentication/client/ui';
+```
+
+不要导入 authentication 包内部的 `client/forms`、`client/components` 或
+`client/pages` 路径。需要新增认证方式时，可以把该 provider 的客户端实现放在
+`client/auth/<provider>`，再由应用页面组合入口引用。
 
 开始前，Agent 可以先阅读这些应用文件，再查看：
 
@@ -167,6 +184,10 @@ import { MyProviderSignInButton } from '@/auth/my-provider/sign-in-button';
 
 如果 callback 需要独立页面，也可以直接在应用自己的路由配置中引用
 `client/auth/my-provider/callback-page.tsx`。
+
+如果只是在现有认证页面上增加按钮或文案，应保留插件的 guest route ID、path 和
+`auth`，并通过应用 route component override 替换页面。只有 provider callback
+确实需要新的 URL 时，才新增应用或插件路由。
 
 ## Agent 应交付哪些内容
 
