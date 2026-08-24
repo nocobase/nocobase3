@@ -119,8 +119,14 @@ export const authProvider = createAuthProvider(authClient);
 <Refine authProvider={authProvider}>{/* application routes */}</Refine>
 ```
 
-应用还需要自行定义 `/login`、`/reset-password` 等页面。可复制的初始密码表单在
-[`ui/password`](../../ui/password)；它们不是运行时包导出。
+插件注册到支持 Client Plugin 协议的应用后，会从独立的 `client/routes` 入口提供
+`/login`、`/register`、`/forgot-password` 和 `/reset-password`。这些路由均为
+`auth: 'guest'`，已登录用户访问时由应用路由层返回首页，页面模块仅在对应 URL
+被访问时按需加载。
+
+`/forgot-password` 只是调用密码重置协议。生产环境还必须在
+`emailAndPassword.sendResetPassword` 中接入真实邮件服务；未配置时 Better Auth
+不会发送重置链接。
 
 ## 下一步
 

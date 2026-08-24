@@ -27,27 +27,26 @@ extensions or other code that consumes SDK routing APIs.
 ### Lazy-load application pages
 
 Migrate application-owned page routes as part of the Template 3 source merge,
-not only Registry extension routes. Keep route, resource, menu, and access
-metadata synchronous in `client/routes.tsx`, but remove eager business-page imports
-and load their renderers through `lazy`:
+not only Registry extension routes. Keep route metadata synchronous in
+`client/routes.ts`, but remove eager business-page imports and load their
+renderers through `componentLoader`:
 
-```tsx
-{
-  name: "customers",
-  path: "/customers",
-  resource: { meta: { label: "Customers" } },
-  lazy: () =>
-    import("./pages/customers").then((module) => ({
-      default: module.CustomersPage,
-    })),
-}
+```ts
+const routes = defineClientRoutes([
+  {
+    name: 'customers',
+    path: '/customers',
+    auth: 'required',
+    componentLoader: () => import('./pages/customers.js'),
+  },
+]);
 ```
 
-When a route needs resource/action ACL, route params, or contextual composition,
-put that boundary in a small default-exported route component and lazy-load the
-component. Do not keep the business page eagerly imported in `client/routes.tsx`
-only to wrap it. `element` and `lazy` are mutually exclusive. Lightweight
-redirects, outlets, and inline layouts may continue to use `element`.
+The loaded module must default-export its page component. Keep route placement,
+authentication boundaries, loading, and error presentation in `client/routing/`;
+do not add product routes there. Plugin-owned routes continue to be declared by
+the plugin and may be customized by the application through
+`client/route-overrides.ts`.
 
 ### Keep loading feedback inside its surface
 
