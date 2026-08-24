@@ -35,13 +35,23 @@ export class AuthClient {
   }
 
   async signOut(): Promise<void> {
-    await this.send('sign-out', { method: 'POST' });
+    await this.send('sign-out', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
   }
 
   async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
     await this.send('request-password-reset', {
       method: 'POST',
       body: JSON.stringify({ email, redirectTo }),
+    });
+  }
+
+  async resetPassword(newPassword: string, token: string): Promise<void> {
+    await this.send('reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ newPassword, token }),
     });
   }
 

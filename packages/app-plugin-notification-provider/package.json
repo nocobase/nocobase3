@@ -1,0 +1,108 @@
+{
+  "name": "@nocobase/app-plugin-notification-provider",
+  "displayName": "Notification Provider App Plugin",
+  "description": "Registers a Sonner-backed Refine notification provider with the application client runtime.",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/bootstrap": {
+      "types": "./client/bootstrap.ts",
+      "import": "./client/bootstrap.ts"
+    },
+    "./client/providers": {
+      "types": "./client/providers.ts",
+      "import": "./client/providers.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/bootstrap": {
+        "types": "./dist/client/bootstrap.d.ts",
+        "import": "./dist/client/bootstrap.js"
+      },
+      "./client/providers": {
+        "types": "./dist/client/providers.d.ts",
+        "import": "./dist/client/providers.js"
+      },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "nocobase": {
+    "plugin": {
+      "client": {
+        "bootstrap": "./client/bootstrap",
+        "providers": "./client/providers",
+        "routes": "./client/routes"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "^0.1.0",
+    "@refinedev/core": "^5.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "sonner": "^2.0.3"
+  },
+  "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-sdk": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@refinedev/core": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

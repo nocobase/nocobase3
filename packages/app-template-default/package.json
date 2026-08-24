@@ -13,6 +13,12 @@
       "@nocobase/app-plugin-authentication": {
         "enabled": true
       },
+      "@nocobase/app-plugin-data-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-notification-provider": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-database-example": {
         "enabled": true
       },
@@ -35,8 +41,11 @@
     "@hono/node-server": "catalog:",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
+    "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-data-provider": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
@@ -114,7 +123,6 @@
     "recharts": "^3.8.0",
     "remark-gfm": "^4.0.1",
     "shadcn": "^4.13.1",
-    "sonner": "^2.0.3",
     "tailwind-merge": "^3.2.0",
     "tailwindcss": "catalog:",
     "tsc-alias": "^1.9.2",

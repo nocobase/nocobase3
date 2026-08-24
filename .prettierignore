@@ -8,3 +8,5 @@ playwright-report/
 pnpm-lock.yaml
 packages/app-host/fixtures/app-dist/**/dist/
 packages/app-host/fixtures/app-dist/main/
+packages/app-template-default/client-old/
+packages/app-template-default/registry/

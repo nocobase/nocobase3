@@ -63,12 +63,15 @@ await authClient.signOut();
 
 await authClient.requestPasswordReset(
   'alice@example.com',
-  `${window.location.origin}/reset-password`,
+  resolveAppUrl('/reset-password'),
 );
+
+await authClient.resetPassword(newPassword, token);
 ```
 
-应用必须配置服务端密码重置邮件发送能力，并实现 redirect target 页面；仅调用
-客户端方法不会自动提供邮件服务或页面。
+插件自带的 `/reset-password` 页面会读取 Better Auth 附加在 URL 上的 `token`。
+`resolveAppUrl()` 会保留 `/main/` 之类的应用 basename。应用仍必须配置服务端密码
+重置邮件发送能力；仅调用客户端方法不会自动提供邮件服务。
 
 ## Refine AuthProvider
 
@@ -89,6 +92,7 @@ const authProvider = createAuthProvider(authClient);
 | `login`          | 使用 identifier、email 或 username 登录，成功后默认跳转 `/` |
 | `register`       | 创建密码账号，成功后默认跳转 `/login`                       |
 | `forgotPassword` | 请求发送重置链接                                            |
+| `updatePassword` | 使用 URL 或调用参数中的 token 更新密码，成功后跳转 `/login` |
 | `logout`         | 退出并跳转 `/login`                                         |
 | `check`          | 有 session 时返回 authenticated，否则跳转 `/login`          |
 | `getIdentity`    | 将 session user 映射为 Refine identity                      |
@@ -97,17 +101,27 @@ const authProvider = createAuthProvider(authClient);
 provider 会合并并缓存并发的 session 查询。login、register、logout 和 HTTP 401
 会清除当前 identity 缓存，下一次读取重新请求服务端。
 
-## UI registry
+## 插件页面与路由
 
-包内 [`ui/password`](../../../ui/password) 提供可复制的登录和注册表单。registry
-声明位于 [`ui/registry.json`](../../../ui/registry.json)。
+客户端插件清单声明独立的 `bootstrap` 和 `routes` 入口：
 
-这些文件是应用源码模板，不属于 npm runtime export。模板依赖：
+```json
+{
+  "client": {
+    "bootstrap": "./client/bootstrap",
+    "routes": "./client/routes"
+  }
+}
+```
 
-- Refine hooks；
-- 应用的 `@/components/ui/button`；
-- 应用的 `@/components/ui/input`；
-- 应用的 `@/components/ui/label`。
+`bootstrap` 注册 Refine `authProvider`；`routes` 使用 `defineClientRoutes()` 声明
+四个 `auth: 'guest'` 的认证路由。每个页面通过 `componentLoader` 独立按需加载，
+不会进入初始客户端 bundle。页面只依赖 `@nocobase/app-client/ui`、Refine 和语义化
+主题 class，因此能跟随宿主应用主题。
 
-应用可以复制后修改布局和文案，不应从 `@nocobase/app-plugin-authentication/ui/*` 直接做
-运行时导入。
+默认页面使用响应式双栏布局：左侧放置品牌、标题和认证表单，桌面端右侧展示平台
+说明，窄屏时隐藏说明区域并让表单占满页面。品牌标记、说明面板和图标都由插件自身
+提供，不引用宿主应用的组件 alias、公开资源或 `client-old` 目录。
+
+需要品牌化时，应由应用或扩展插件提供明确的替换机制，不再维护一份与运行时页面
+重复的可复制 UI registry。

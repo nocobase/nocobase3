@@ -139,6 +139,7 @@ class AuthClient {
   ): Promise<AuthSession>;
   signOut(): Promise<void>;
   requestPasswordReset(email: string, redirectTo: string): Promise<void>;
+  resetPassword(newPassword: string, token: string): Promise<void>;
 }
 ```
 
@@ -187,10 +188,14 @@ interface AuthSession {
 function createAuthProvider(client: AuthClient): AuthProvider;
 ```
 
-返回 Refine `AuthProvider`，实现 login、register、forgotPassword、logout、
-check、getIdentity 和 onError。
+返回 Refine `AuthProvider`，实现 login、register、forgotPassword、updatePassword、
+logout、check、getIdentity 和 onError。
 
-## UI 文件
+## 客户端插件入口
 
-`ui/` 没有 package export。它是 registry 可复制源码，不属于上述 TypeScript
-API。
+- `@nocobase/app-plugin-authentication/client/bootstrap` 默认导出客户端插件
+  bootstrap，用于注册 Refine `authProvider`；
+- `@nocobase/app-plugin-authentication/client/routes` 默认导出登录、注册、忘记密码和
+  重置密码的 guest 路由定义。
+
+具体页面通过路由的 `componentLoader` 按需加载，不从 `client` 聚合入口导出。
