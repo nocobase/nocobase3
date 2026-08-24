@@ -72,6 +72,7 @@ export function createApp(
     plugin.bootstrap({
       deps,
       services,
+      config,
       lifecycle: {
         registerDisposer(name, dispose): void {
           options.lifecycle.registerDisposer(
@@ -102,9 +103,11 @@ export function createApp(
   registerWebSocketRoutes(app);
 
   if (services.notification) {
-    app.route(
+    // Channels add routes during service startup. mount() delegates at request
+    // time, so routes registered after createApp() remain reachable.
+    app.mount(
       joinBasePath(internalBasePath, '/api/notifications'),
-      services.notification.router,
+      services.notification.router.fetch,
     );
   }
 

@@ -2,17 +2,6 @@
 
 发送通知后，可以通过 `NotificationManager.logs` 或 HTTP API 查询结果。一次通知包含一个汇总记录和多个 Delivery；每个收件人和 Channel 对应一个 Delivery。
 
-## 使用默认界面
-
-默认应用提供两个通知页面：
-
-| 路径                    | 用途                                             |
-| ----------------------- | ------------------------------------------------ |
-| `/notifications`        | 查看 Email Delivery 和每次 Provider 尝试         |
-| `/notifications/in-app` | 查看当前用户的站内信，并执行已读、未读和删除操作 |
-
-站内信页面会显示未读数量。执行已读、未读或删除操作后，页面会重新查询当前未读数。
-
 ## 通过 Manager 查询
 
 查询最近的汇总记录：
@@ -33,7 +22,7 @@ const records = await notification.logs.listDetails();
 const details = await notification.logs.get(notificationId);
 
 if (!details) {
-  throw new Error("Notification not found.");
+  throw new Error('Notification not found.');
 }
 ```
 
@@ -41,42 +30,20 @@ if (!details) {
 
 ```ts
 interface NotificationLogDetails {
-  readonly log: NotificationLogRecord;
+  readonly log: Omit<NotificationLogRecord, 'messageSnapshot'>;
   readonly deliveries: readonly {
-    readonly delivery: NotificationDeliveryRecord;
+    readonly delivery: Omit<
+      NotificationDeliveryRecord,
+      | 'recipientKey'
+      | 'recipientSnapshot'
+      | 'messageSnapshot'
+      | 'leaseToken'
+      | 'leaseExpiresAt'
+    >;
     readonly attempts: readonly NotificationAttemptRecord[];
   }[];
 }
 ```
-
-## 通过 HTTP API 查询
-
-如果应用把 `notification.router` 挂载在 `/api/notifications`，可以使用：
-
-| 方法 | 路径                          | 返回内容                              |
-| ---- | ----------------------------- | ------------------------------------- |
-| GET  | `/api/notifications/logs`     | 最近 100 条通知及其 Delivery、Attempt |
-| GET  | `/api/notifications/logs/:id` | 指定通知的完整记录                    |
-
-比如：
-
-```ts
-const response = await fetch("/api/notifications/logs", {
-  credentials: "include",
-});
-
-if (!response.ok) {
-  throw new Error(`Notification log request failed (${response.status}).`);
-}
-
-const { data } = await response.json();
-```
-
-:::warning 注意
-
-日志中包含收件人和消息快照。宿主应用需要为日志 API 配置合适的认证和 ACL，不要直接开放给普通用户。
-
-:::
 
 ## 判断结果
 
@@ -110,20 +77,20 @@ Delivery 状态包括 `pending`、`sending`、`sent`、`failed` 和 `unknown`。
 修改单条站内信时，请先取得 CSRF token：
 
 ```ts
-const csrfResponse = await fetch("/api/notifications/in-app/csrf", {
-  credentials: "include",
+const csrfResponse = await fetch('/api/notifications/in-app/csrf', {
+  credentials: 'include',
 });
 const { token } = await csrfResponse.json();
 
 await fetch(`/api/notifications/in-app/${item.id}`, {
-  method: "POST",
-  credentials: "include",
+  method: 'POST',
+  credentials: 'include',
   headers: {
-    "content-type": "application/json",
-    "x-csrf-token": token,
+    'content-type': 'application/json',
+    'x-csrf-token': token,
   },
   body: JSON.stringify({
-    action: "read",
+    action: 'read',
     expectedVersion: item.version,
   }),
 });

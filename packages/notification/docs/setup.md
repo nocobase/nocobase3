@@ -10,14 +10,14 @@ Channel map 用于约束 `send()` 的收件人和消息类型：
 import type {
   EmailMessage,
   EmailRecipient,
-} from "@nocobase/notification-email";
+} from '@nocobase/app-plugin-notification-providers';
 import type {
   InAppMessage,
   InAppRecipient,
-} from "@nocobase/notification-in-app";
+} from '@nocobase/app-plugin-notification-in-app';
 
 export interface AppNotificationChannels {
-  readonly "in-app": {
+  readonly 'in-app': {
     readonly recipient: InAppRecipient;
     readonly message: InAppMessage;
   };
@@ -30,40 +30,30 @@ export interface AppNotificationChannels {
 
 TypeScript 会根据 `channel` 检查对应的 `recipient` 和 `message`。
 
-## 第二步：创建并注册 Channel
+## 第二步：创建 Manager 并注册扩展
 
 在应用服务初始化时创建 Manager：
 
 ```ts
-import { createNotificationManager } from "@nocobase/notification";
-import { createEmailChannelDefinition } from "@nocobase/notification-email";
-import { createInAppChannelDefinition } from "@nocobase/notification-in-app";
+import { createNotificationManager } from '@nocobase/notification';
 
 const notification = createNotificationManager<AppNotificationChannels>({
   database: runtime.database,
   queue: deps.queueManager,
-  logger: deps.logging.getLogger().child({ module: "notification" }),
+  logger: deps.logging.getLogger('notification'),
   config: runtime.config.notification,
-  allowNonPersistentStore: runtime.config.notification.allowNonPersistentStore,
 });
-
-notification.registerChannel(createInAppChannelDefinition());
-notification.registerChannel(createEmailChannelDefinition());
 ```
 
-`registerChannel()` 接收 Channel 定义。它必须在 `start()` 之前调用，不过配置中没有启用的 Channel 也可以提前注册。
+通知模块使用结构化 `event` 字段记录 Manager 生命周期、Channel/Provider
+装配、投递结果和 reconcile 恢复情况。日志不会包含收件地址或消息正文。使用独立的
+`notification` logger 后，可以通过应用的 logging 配置单独调整日志级别和输出目标；
+生命周期和恢复结果使用 `info`，投递失败使用 `warn`/`error`，逐次投递详情使用
+`debug`。
 
-如果 Email 收件人只提供 `userId`，可以注册邮件地址解析函数：
+`registerChannel()` 和 `registerProvider()` 必须在 `start()` 之前调用。站内信由启用的 `@nocobase/app-plugin-notification-in-app` 自动注册；Email Channel 和 SMTP Provider 由启用的 `@nocobase/app-plugin-notification-providers` 自动注册，应用服务不需要手动调用。
 
-```ts
-notification.registerChannel(
-  createEmailChannelDefinition({
-    async resolveUserEmail(userId): Promise<string | undefined> {
-      return users.findEmail(userId);
-    },
-  }),
-);
-```
+如果 Email 收件人只提供 `userId`，可以扩展 Provider 插件，在它的 bootstrap 中注册带邮箱解析器的 Email Channel 实现。
 
 ## 第三步：启动和关闭
 
@@ -83,36 +73,22 @@ await notification.close();
 
 ## 第四步：挂载通知 API
 
-如果应用需要日志查询和站内信 API，可以挂载 Manager 的 Hono router：
+如果应用需要站内信 API，可以挂载 Manager 的 Hono router：
 
 ```ts
-app.route("/api/notifications", notification.router);
+app.route('/api/notifications', notification.router);
 ```
 
-挂载后可使用：
-
-- `/api/notifications/logs`
-- `/api/notifications/logs/:id`
-- `/api/notifications/in-app/*`
-
-:::warning 注意
-
-核心日志路由不会替宿主应用配置 ACL。请在挂载层限制日志端点的访问权限。站内信端点会从 Session 中读取当前用户，并对修改操作检查 CSRF token。
-
-:::
+挂载后可使用 `/api/notifications/in-app/*`。站内信端点会从 Session 中读取当前用户，并对修改操作检查 CSRF token。
 
 ## 第五步：注册 migrations
 
 使用数据库存储通知日志时，应用需要包含核心 migration：
 
 ```ts
-export { default } from "@nocobase/notification/migrations/202608190001_create_notification_tables";
+export { default } from '@nocobase/notification/migrations/202608190001_create_notification_tables';
 ```
 
-使用站内信时，另外包含站内信 migration：
-
-```ts
-export { default } from "@nocobase/notification-in-app/migrations/202608190002_create_notification_in_app_items";
-```
+使用站内信时，`@nocobase/app-plugin-notification-in-app` 的 manifest 会自动提供站内信 migration。
 
 至此，业务服务可以从应用服务中取得 `NotificationManager<AppNotificationChannels>` 并发送通知。

@@ -1,62 +1,81 @@
-import type { AppExtension } from "@nocobase/portal-sdk/extensions";
-import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
-import { Bell, FileClock, Mail } from "lucide-react";
+import type { AppExtension } from '@nocobase/portal-sdk/extensions';
+import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
+import { Bell, Mail } from 'lucide-react';
 
-import { NotificationInAppProvider } from "./in-app/runtime.js";
+import { NotificationInAppProvider } from './in-app/runtime.js';
 
 const notificationExtension: AppExtension = {
-  id: "nocobase-notification",
+  id: 'nocobase-notification',
   Provider: NotificationInAppProvider,
+  dev: {
+    resources: [
+      {
+        name: 'notifications',
+        meta: {
+          label: 'Notifications',
+          icon: <Bell />,
+          description: 'Notification delivery and message center patterns.',
+        },
+      },
+      {
+        name: 'notification-in-app',
+        list: 'notifications',
+        meta: {
+          parent: 'notifications',
+          label: 'My notifications',
+          icon: <Mail />,
+        },
+      },
+    ],
+    routes: defineAppRoutes([
+      {
+        name: 'development.notifications',
+        path: 'notifications',
+        children: [
+          {
+            name: 'development.notifications.in-app',
+            index: true,
+            lazy: () =>
+              import('./in-app/page.js').then((module) => ({
+                default: module.NotificationInAppPage,
+              })),
+          },
+        ],
+      },
+    ]),
+  },
   resources: [
     {
-      name: "notifications",
-      list: "notifications",
+      name: 'notifications',
+      list: 'notifications',
       meta: {
-        label: "Notifications",
+        label: 'Notifications',
         icon: <Bell />,
-        acl: { type: "authenticated" },
+        acl: { type: 'authenticated' },
       },
     },
     {
-      name: "notification-email-logs",
-      list: "notifications",
+      name: 'notification-in-app',
+      list: 'notifications',
       meta: {
-        parent: "notifications",
-        label: "Email delivery logs",
-        icon: <FileClock />,
-        acl: { type: "authenticated" },
-      },
-    },
-    {
-      name: "notification-in-app",
-      list: "notifications/in-app",
-      meta: {
-        parent: "notifications",
-        label: "My notifications",
+        parent: 'notifications',
+        label: 'My notifications',
         icon: <Mail />,
-        acl: { type: "authenticated" },
+        acl: { type: 'authenticated' },
       },
     },
   ],
   routes: defineAppRoutes([
     {
-      name: "notifications",
-      path: "notifications",
-      meta: { acl: { type: "authenticated" } },
+      name: 'notifications',
+      path: 'notifications',
+      meta: { acl: { type: 'authenticated' } },
       children: [
         {
-          name: "notifications.email-logs",
+          name: 'notifications.in-app',
           index: true,
           lazy: () =>
-            import("./logs/page.js").then((module) => ({
-              default: module.NotificationEmailLogsPage,
-            })),
-        },
-        {
-          name: "notifications.in-app",
-          path: "in-app",
-          lazy: () =>
-            import("./in-app/page.js").then((module) => ({
+            import('./in-app/page.js').then((module) => ({
               default: module.NotificationInAppPage,
             })),
         },

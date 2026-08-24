@@ -5,8 +5,8 @@ import {
   useEffect,
   useMemo,
   useState,
-} from "react";
-import { fetchUnreadCount } from "./api.js";
+} from 'react';
+import { fetchUnreadCount } from './api.js';
 
 export interface NotificationInAppRuntimeValue {
   readonly unreadCount: number;
@@ -49,6 +49,6 @@ export function NotificationInAppProvider({
 
 export function useNotificationInAppRuntime(): NotificationInAppRuntimeValue {
   const value = useContext(NotificationInAppRuntimeContext);
-  if (!value) throw new Error("NotificationInAppProvider is required.");
+  if (!value) throw new Error('NotificationInAppProvider is required.');
   return value;
 }

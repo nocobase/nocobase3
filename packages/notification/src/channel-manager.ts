@@ -1,18 +1,18 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 
-import type { Logger } from "@nocobase/logging";
+import type { Logger } from '@nocobase/logging';
 
 import type {
   NotificationAttemptRecord,
   NotificationDeliveryRecord,
   NotificationStore,
-} from "./store.js";
+} from './store.js';
 import type {
   NotificationChannel,
   NotificationProvider,
   NotificationProviderSendError,
   ProviderSendResult,
-} from "./types.js";
+} from './types.js';
 
 export interface ChannelRuntime {
   readonly channel: NotificationChannel;
@@ -50,12 +50,12 @@ export class ChannelManager {
     deliveryId: string,
   ): Promise<NotificationDeliveryRecord | undefined> {
     const stored = await this.options.store.getDelivery(deliveryId);
-    if (!stored || stored.status !== "pending") return stored;
+    if (!stored || stored.status !== 'pending') return stored;
     const runtime = this.runtimes.get(stored.channel);
     if (!runtime || runtime.providers.length === 0) {
       this.options.logger.error(
         { deliveryId, channel: stored.channel },
-        "Notification Channel has no available Provider.",
+        'Notification Channel has no available Provider.',
       );
       return undefined;
     }
@@ -78,20 +78,50 @@ export class ChannelManager {
         message: claimed.messageSnapshot,
       });
     } catch (error) {
+      this.options.logger.error(
+        {
+          event: 'notification.delivery.prepare_failed',
+          err: error,
+          notificationId: claimed.notificationId,
+          deliveryId: claimed.id,
+          channel: claimed.channel,
+        },
+        'Failed to prepare notification Delivery.',
+      );
       return this.options.store.finishDelivery(
         claimed,
-        "failed",
-        normalizeError(error, "channel"),
+        'failed',
+        normalizeError(error, 'channel'),
       );
     }
 
     let current = claimed;
     for (
       let cursor = claimed.providerCursor;
-      cursor < runtime.providers.length;
+      cursor < claimed.providerChain.length;
       cursor += 1
     ) {
-      const provider = runtime.providers[cursor];
+      const providerName = claimed.providerChain[cursor];
+      const provider = runtime.providers.find(
+        (candidate) => candidate.name === providerName,
+      );
+      if (!provider) {
+        const error = {
+          code: 'provider_unavailable',
+          message: `Snapshotted notification Provider "${providerName}" is unavailable.`,
+          category: 'configuration',
+        };
+        this.options.logger.error(
+          {
+            event: 'notification.delivery.provider_unavailable',
+            deliveryId: claimed.id,
+            channel: claimed.channel,
+            provider: providerName,
+          },
+          'Snapshotted notification Provider is unavailable.',
+        );
+        return this.options.store.finishDelivery(current, 'failed', error);
+      }
       const startedAt = await this.options.store.now();
       const attempt: NotificationAttemptRecord = {
         id: randomUUID(),
@@ -99,7 +129,7 @@ export class ChannelManager {
         sequence: current.attemptCount + 1,
         providerName: provider.name,
         providerType: provider.type,
-        status: "sending",
+        status: 'sending',
         startedAt,
       };
       const started = await this.options.store.startAttempt(
@@ -108,45 +138,116 @@ export class ChannelManager {
       );
       if (!started) return undefined;
       current = started;
+      this.options.logger.debug(
+        {
+          event: 'notification.delivery.attempt_started',
+          notificationId: current.notificationId,
+          deliveryId: current.id,
+          channel: current.channel,
+          provider: provider.name,
+          providerType: provider.type,
+          attempt: attempt.sequence,
+        },
+        'Notification delivery attempt started.',
+      );
       const result = await invoke(provider, prepared);
       const finishedAt = await this.options.store.now();
 
-      if (result.status === "accepted") {
+      if (result.status === 'accepted') {
         await this.options.store.finishAttempt({
           ...attempt,
-          status: "sent",
+          status: 'sent',
           finishedAt,
           providerMessageId: result.providerMessageId,
         });
-        return this.options.store.finishDelivery(current, "sent");
+        const finished = await this.options.store.finishDelivery(
+          current,
+          'sent',
+        );
+        this.options.logger.debug(
+          {
+            event: 'notification.delivery.sent',
+            notificationId: current.notificationId,
+            deliveryId: current.id,
+            channel: current.channel,
+            provider: provider.name,
+            providerType: provider.type,
+            attempt: attempt.sequence,
+            providerMessageId: result.providerMessageId,
+          },
+          'Notification Delivery sent.',
+        );
+        return finished;
       }
-      if (result.status === "submission_unknown") {
+      if (result.status === 'submission_unknown') {
         await this.options.store.finishAttempt({
           ...attempt,
-          status: "unknown",
+          status: 'unknown',
           finishedAt,
           error: result.error,
         });
-        return this.options.store.finishDelivery(
+        const finished = await this.options.store.finishDelivery(
           current,
-          "unknown",
+          'unknown',
           result.error,
         );
+        this.options.logger.warn(
+          {
+            event: 'notification.delivery.submission_unknown',
+            notificationId: current.notificationId,
+            deliveryId: current.id,
+            channel: current.channel,
+            provider: provider.name,
+            providerType: provider.type,
+            attempt: attempt.sequence,
+            error: result.error,
+          },
+          'Notification Provider submission result is unknown.',
+        );
+        return finished;
       }
 
       await this.options.store.finishAttempt({
         ...attempt,
-        status: "failed",
+        status: 'failed',
         finishedAt,
         error: result.error,
       });
-      const hasNext = cursor + 1 < runtime.providers.length;
-      if (!result.allowNextProvider || !hasNext)
-        return this.options.store.finishDelivery(
+      const hasNext = cursor + 1 < claimed.providerChain.length;
+      if (!result.allowNextProvider || !hasNext) {
+        const finished = await this.options.store.finishDelivery(
           current,
-          "failed",
+          'failed',
           result.error,
         );
+        this.options.logger.warn(
+          {
+            event: 'notification.delivery.failed',
+            notificationId: current.notificationId,
+            deliveryId: current.id,
+            channel: current.channel,
+            provider: provider.name,
+            providerType: provider.type,
+            attempt: attempt.sequence,
+            error: result.error,
+          },
+          'Notification Delivery failed.',
+        );
+        return finished;
+      }
+      this.options.logger.debug(
+        {
+          event: 'notification.delivery.fallback',
+          notificationId: current.notificationId,
+          deliveryId: current.id,
+          channel: current.channel,
+          provider: provider.name,
+          providerType: provider.type,
+          attempt: attempt.sequence,
+          error: result.error,
+        },
+        'Notification Delivery is falling back to the next Provider.',
+      );
     }
     return current;
   }
@@ -160,8 +261,13 @@ export class ChannelManager {
         await provider.close?.();
       } catch (error) {
         this.options.logger.warn(
-          { error, provider: provider.name },
-          "Failed to close notification Provider.",
+          {
+            event: 'notification.provider.close_failed',
+            err: error,
+            provider: provider.name,
+            providerType: provider.type,
+          },
+          'Failed to close notification Provider.',
         );
       }
     }
@@ -177,8 +283,8 @@ async function invoke(
     return await provider.send(message);
   } catch (error) {
     return {
-      status: "failed",
-      error: normalizeError(error, "provider"),
+      status: 'failed',
+      error: normalizeError(error, 'provider'),
       allowNextProvider: false,
     };
   }

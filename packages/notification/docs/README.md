@@ -16,22 +16,21 @@
 
 ## 最小示例
 
-应用启动时创建 Manager，并注册 Channel 定义：
+应用启动时创建 Manager，并注册非插件化的 Channel/Provider 定义：
 
 ```ts
 const notification = createNotificationManager<AppNotificationChannels>({
   database: runtime.database,
   queue: deps.queueManager,
-  logger: deps.logging.getLogger().child({ module: "notification" }),
+  logger: deps.logging.getLogger().child({ module: 'notification' }),
   config: runtime.config.notification,
 });
 
-notification
-  .registerChannel(createInAppChannelDefinition())
-  .registerChannel(createEmailChannelDefinition());
-
+// 已启用的通知插件在应用 bootstrap 阶段完成注册。
 await notification.start();
 ```
+
+站内信由 `@nocobase/app-plugin-notification-in-app` 自动注册；Email Channel 和 SMTP Provider 由 `@nocobase/app-plugin-notification-providers` 自动注册。
 
 业务服务从应用服务中取得已经启动的 Manager：
 
@@ -39,16 +38,16 @@ await notification.start();
 await notification.send({
   recipients: [
     {
-      userId: "user-1",
+      userId: 'user-1',
       channels: [
-        { channel: "in-app", recipient: { userId: "user-1" } },
-        { channel: "email", recipient: { address: "user@example.com" } },
+        { channel: 'in-app', recipient: { userId: 'user-1' } },
+        { channel: 'email', recipient: { address: 'user@example.com' } },
       ],
     },
   ],
   message: {
-    "in-app": { title: "审批完成", body: "请查看审批结果。" },
-    email: { subject: "审批完成", text: "请查看审批结果。" },
+    'in-app': { title: '审批完成', body: '请查看审批结果。' },
+    email: { subject: '审批完成', text: '请查看审批结果。' },
   },
 });
 ```

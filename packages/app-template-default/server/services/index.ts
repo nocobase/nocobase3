@@ -1,19 +1,18 @@
 import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type { AppDriveConfig } from '@nocobase/drive';
-import {
-  createEmailChannelDefinition,
-  type EmailMessage,
-  type EmailRecipient,
-} from '@nocobase/notification-email';
-import {
-  createInAppChannelDefinition,
-  type InAppMessage,
-  type InAppRecipient,
-} from '@nocobase/notification-in-app';
+import type {
+  InAppMessage,
+  InAppRecipient,
+} from '@nocobase/app-plugin-notification-in-app';
+import type {
+  EmailMessage,
+  EmailRecipient,
+} from '@nocobase/app-plugin-notification-providers';
 import {
   createNotificationManager,
   type NotificationManager,
 } from '@nocobase/notification';
+import { createSessionMiddleware } from '@nocobase/session';
 
 import type { AppConfig } from '../config/index.js';
 import type { RealtimeService } from '../realtime/service.js';
@@ -59,17 +58,20 @@ export function createAppServices(
   options: CreateAppServicesOptions,
 ): AppServices {
   const config = runtime.config.notification;
-  const notification = config.enabled
-    ? createNotificationManager<AppNotificationChannels>({
-        database: runtime.database,
-        queue: deps.queueManager,
-        logger: deps.logging.getLogger().child({ module: 'notification' }),
-        config,
-        allowNonPersistentStore: config.allowNonPersistentStore,
-      })
-    : undefined;
-  notification?.registerChannel(createInAppChannelDefinition());
-  notification?.registerChannel(createEmailChannelDefinition());
+  const database = runtime.database;
+  let notification: NotificationManager<AppNotificationChannels> | undefined;
+  if (config.enabled) {
+    if (!database) {
+      throw new Error('Notifications require a configured database.');
+    }
+    notification = createNotificationManager<AppNotificationChannels>({
+      database,
+      queue: deps.queueManager,
+      logger: deps.logging.getLogger('notification'),
+      config,
+    });
+  }
+  notification?.router.use('*', createSessionMiddleware(deps.sessionManager));
 
   return {
     appSettingsStore: runtime.database

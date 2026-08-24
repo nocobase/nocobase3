@@ -234,6 +234,7 @@ describe('app server', () => {
       'runtime',
       'app-deps',
       'realtime-service',
+      'app-services',
       'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
     ]);
 
@@ -1268,9 +1269,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     logging: createSilentLoggingConfig(),
     notification: {
       enabled: false,
-      allowNonPersistentStore: false,
       channels: [],
-      logs: { enabled: true, retainDays: 90 },
     },
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),

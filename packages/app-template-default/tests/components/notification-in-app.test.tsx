@@ -1,26 +1,54 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router";
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
 
-import { NotificationInAppPage } from "../../registry/nocobase-notification/in-app/page.tsx";
-import { NotificationInAppProvider } from "../../registry/nocobase-notification/in-app/runtime.tsx";
+import { NotificationInAppPage } from '../../registry/nocobase-notification/in-app/page.tsx';
+import { NotificationInAppProvider } from '../../registry/nocobase-notification/in-app/runtime.tsx';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
-describe("notification Inbox page", () => {
-  it("renders HTTP state and optimistically reads an item before reconciling", async () => {
+describe('notification Inbox page', () => {
+  it('uses the Portal base path for the app-local notification API', async () => {
+    vi.stubEnv('BASE_URL', '/hub/');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      return url.endsWith('/unread-count')
+        ? json({ count: 0 })
+        : json({ data: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <MemoryRouter>
+        <NotificationInAppProvider>
+          <NotificationInAppPage />
+        </NotificationInAppProvider>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('You’re all caught up');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/hub/api/notifications/in-app/unread-count',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('renders HTTP state and optimistically reads an item before reconciling', async () => {
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url.endsWith("/unread-count")) return json({ count: 1 });
-        if (url.endsWith("/csrf")) return json({ token: "csrf-token" });
-        if (init?.method === "POST") {
+        if (url.endsWith('/unread-count')) return json({ count: 1 });
+        if (url.endsWith('/csrf')) return json({ token: 'csrf-token' });
+        if (init?.method === 'POST') {
           return json({
             data: {
               ...itemFixture(),
-              readAt: "2026-08-20T00:01:00.000Z",
+              readAt: '2026-08-20T00:01:00.000Z',
               version: 2,
             },
           });
@@ -38,25 +66,25 @@ describe("notification Inbox page", () => {
     );
 
     expect(
-      await screen.findByText("Approval request assigned"),
+      await screen.findByText('Approval request assigned'),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Mark read" }));
+    await user.click(screen.getByRole('button', { name: 'Mark read' }));
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
-        "/api/notifications/in-app/item-1",
-        expect.objectContaining({ method: "POST" }),
+        '/api/notifications/in-app/item-1',
+        expect.objectContaining({ method: 'POST' }),
       ),
     );
   });
 
-  it("renders multiple in-app items from the notification Channel", async () => {
+  it('renders multiple in-app items from the notification Channel', async () => {
     vi.stubGlobal(
-      "fetch",
+      'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.endsWith("/unread-count")) return json({ count: 2 });
+        if (url.endsWith('/unread-count')) return json({ count: 2 });
         return json({
-          data: [itemFixture(), { ...itemFixture(), id: "item-2" }],
+          data: [itemFixture(), { ...itemFixture(), id: 'item-2' }],
         });
       }),
     );
@@ -70,25 +98,50 @@ describe("notification Inbox page", () => {
     );
 
     expect(
-      await screen.findAllByText("Approval request assigned"),
+      await screen.findAllByText('Approval request assigned'),
     ).toHaveLength(2);
-    expect(screen.getAllByText("In-app")).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Mark read" })).toHaveLength(
+    expect(screen.getAllByText('In-app')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Mark read' })).toHaveLength(
       2,
     );
+  });
+
+  it('reports an invalid successful response instead of reading data from undefined', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        return url.endsWith('/unread-count')
+          ? json({ count: 0 })
+          : new Response(null, { status: 200 });
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <NotificationInAppProvider>
+          <NotificationInAppPage />
+        </NotificationInAppProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Inbox unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText('Inbox returned an invalid response.'),
+    ).toBeInTheDocument();
   });
 });
 
 function itemFixture(): object {
   return {
-    id: "item-1",
-    deliveryId: "delivery-1",
-    notificationId: "notification-1",
-    channel: "in-app",
-    title: "Approval request assigned",
-    body: "A purchase request is waiting for review.",
-    actionUrl: "/requests/1",
-    createdAt: "2026-08-20T00:00:00.000Z",
+    id: 'item-1',
+    deliveryId: 'delivery-1',
+    notificationId: 'notification-1',
+    channel: 'in-app',
+    title: 'Approval request assigned',
+    body: 'A purchase request is waiting for review.',
+    actionUrl: '/requests/1',
+    createdAt: '2026-08-20T00:00:00.000Z',
     version: 1,
   };
 }
@@ -96,6 +149,6 @@ function itemFixture(): object {
 function json(value: object, status = 200): Response {
   return new Response(JSON.stringify(value), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { 'content-type': 'application/json' },
   });
 }

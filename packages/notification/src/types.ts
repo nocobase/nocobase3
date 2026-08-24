@@ -1,9 +1,9 @@
-import type { DatabaseManager } from "@nocobase/database";
-import type { Logger } from "@nocobase/logging";
-import type { NocoBaseQueueManager } from "@nocobase/queue";
-import type { Hono } from "hono";
+import type { DatabaseManager } from '@nocobase/database';
+import type { Logger } from '@nocobase/logging';
+import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { Hono } from 'hono';
 
-import type { NotificationStore } from "./store.js";
+import type { NotificationStore } from './store.js';
 
 export interface NotificationChannelSchema {
   readonly recipient: object;
@@ -17,13 +17,13 @@ export type NotificationRecipientChannel<
 > = {
   readonly [TType in keyof TChannels & string]: {
     readonly channel: TType;
-    readonly recipient: TChannels[TType]["recipient"];
+    readonly recipient: TChannels[TType]['recipient'];
   };
 }[keyof TChannels & string];
 
 export type NotificationMessageInput<TChannels extends NotificationChannelMap> =
   Partial<{
-    readonly [TType in keyof TChannels & string]: TChannels[TType]["message"];
+    readonly [TType in keyof TChannels & string]: TChannels[TType]['message'];
   }>;
 
 export interface NotificationSendInput<
@@ -42,11 +42,11 @@ export interface NotificationSendInput<
 
 export interface NotificationSendResult {
   readonly notificationId: string;
-  readonly status: "pending";
+  readonly status: 'pending';
   readonly deliveries: readonly {
     readonly id: string;
     readonly channel: string;
-    readonly status: "pending";
+    readonly status: 'pending';
   }[];
 }
 
@@ -64,10 +64,6 @@ export interface NotificationChannelConfig {
 
 export interface NotificationConfig {
   readonly channels: readonly NotificationChannelConfig[];
-  readonly logs?: {
-    readonly enabled: boolean;
-    readonly retainDays?: number;
-  };
 }
 
 export interface NotificationProviderSendError {
@@ -78,16 +74,16 @@ export interface NotificationProviderSendError {
 
 export type ProviderSendResult =
   | {
-      readonly status: "accepted";
+      readonly status: 'accepted';
       readonly providerMessageId?: string;
     }
   | {
-      readonly status: "failed";
+      readonly status: 'failed';
       readonly error: NotificationProviderSendError;
       readonly allowNextProvider: boolean;
     }
   | {
-      readonly status: "submission_unknown";
+      readonly status: 'submission_unknown';
       readonly error: NotificationProviderSendError;
     };
 
@@ -129,7 +125,7 @@ export interface NotificationProviderDefinition<
     readonly enabled?: boolean;
   } = NotificationProviderConfig,
 > {
-  readonly type: TConfig["type"];
+  readonly type: TConfig['type'];
   createProvider(
     context: NotificationProviderContext,
     config: TConfig,
@@ -147,10 +143,7 @@ export interface NotificationChannelDefinition<
     }[];
   } = NotificationChannelConfig,
 > {
-  readonly type: TConfig["type"];
-  readonly providerDefinitions: readonly NotificationProviderDefinition<
-    TConfig["providers"][number]
-  >[];
+  readonly type: TConfig['type'];
   createChannel(
     context: NotificationChannelContext,
     config: TConfig,
@@ -162,12 +155,11 @@ export interface NotificationManagerOptions<
     readonly [TType in keyof TChannels]: NotificationChannelSchema;
   },
 > {
-  readonly database?: DatabaseManager;
+  readonly database: DatabaseManager;
   readonly queue: NocoBaseQueueManager;
   readonly logger: Logger;
   readonly config: NotificationConfig;
   readonly store?: NotificationStore;
-  readonly allowNonPersistentStore?: boolean;
   readonly reconcileIntervalMs?: number;
   readonly reconcileBatchSize?: number;
 }

@@ -1,4 +1,4 @@
-import { authProvider } from '@/extensions/password/auth';
+import { authProvider } from '@nocobase/portal-sdk/auth';
 import {
   isNocoBaseServiceError,
   nocobaseClient,

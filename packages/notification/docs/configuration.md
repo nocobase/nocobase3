@@ -5,24 +5,19 @@
 ## 配置结构
 
 ```ts
-import { defineConfig, type ConfigFactory } from "@nocobase/app-server/config";
+import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
 import {
   defineEmailChannelConfig,
   type EmailChannelConfig,
-} from "@nocobase/notification-email";
+} from '@nocobase/app-plugin-notification-providers';
 import {
   defineInAppChannelConfig,
   type InAppChannelConfig,
-} from "@nocobase/notification-in-app";
+} from '@nocobase/app-plugin-notification-in-app';
 
 export interface AppNotificationConfig {
   readonly enabled: boolean;
-  readonly allowNonPersistentStore: boolean;
   readonly channels: readonly [InAppChannelConfig, EmailChannelConfig];
-  readonly logs: {
-    readonly enabled: boolean;
-    readonly retainDays: number;
-  };
 }
 ```
 
@@ -32,11 +27,11 @@ export interface AppNotificationConfig {
 
 ```ts
 defineInAppChannelConfig({
-  enabled: env.boolean("NOTIFICATION_IN_APP_ENABLED", true),
+  enabled: env.boolean('NOTIFICATION_IN_APP_ENABLED', true),
   providers: [
     {
-      type: "database",
-      name: "primary",
+      type: 'database',
+      name: 'primary',
     },
   ],
 });
@@ -50,27 +45,57 @@ defineInAppChannelConfig({
 import {
   defineEmailChannelConfig,
   defineSmtpProviderConfig,
-} from "@nocobase/notification-email";
+} from '@nocobase/app-plugin-notification-providers';
 
 defineEmailChannelConfig({
-  enabled: env.boolean("NOTIFICATION_EMAIL_ENABLED", false),
+  enabled: env.boolean('NOTIFICATION_EMAIL_ENABLED', false),
   providers: [
     defineSmtpProviderConfig({
-      name: "primary-smtp",
-      host: env.string("SMTP_HOST", "127.0.0.1"),
-      port: env.number("SMTP_PORT", 587),
-      secure: env.boolean("SMTP_SECURE", false),
+      name: 'primary-smtp',
+      host: env.string('SMTP_HOST', '127.0.0.1'),
+      port: env.number('SMTP_PORT', 587),
+      secure: env.boolean('SMTP_SECURE', false),
       auth: {
-        user: env.string("SMTP_USER", ""),
-        pass: env.string("SMTP_PASSWORD", ""),
+        user: env.string('SMTP_USER', ''),
+        pass: env.string('SMTP_PASSWORD', ''),
       },
-      from: env.string("SMTP_FROM", "notifications@example.com"),
+      from: env.string('SMTP_FROM', 'notifications@example.com'),
     }),
   ],
 });
 ```
 
 `secure: true` 通常用于直接建立 TLS 的 SMTP 端口。具体端口和认证方式以邮件供应商提供的配置为准。
+
+### `name` 是 Provider 实例的稳定标识
+
+Provider 配置中的 `type` 和 `name` 用途不同：
+
+- `type` 用于选择 Provider 实现，比如 `smtp`
+- `name` 用于标识一个具体的 Provider 配置实例，比如 `primary-smtp`
+
+```ts
+defineSmtpProviderConfig({
+  name: 'primary-smtp', // 该 SMTP 配置实例的稳定标识
+  host: 'smtp.example.com',
+  port: 587,
+  from: 'notifications@example.com',
+});
+```
+
+`name` 在同一个 Channel 内必须唯一。同一种 Provider 实现可以配置多次，只要使用不同的 `name`。
+
+Notification Manager 在每次启动时都会根据配置重新创建 Provider Runtime。核心模块不会自动生成或单独持久化 `name`，因此重启后的身份一致性由配置文件保证。配置同一个 Provider 实例时，应始终使用同一个 `name`。
+
+:::warning 注意
+
+不要使用随机值、时间戳或 Provider 在数组中的位置生成 `name`。这会导致每次重启后都被视为不同的 Provider 实例，投递记录和 Attempt 日志也无法稳定关联到原配置。
+
+轮换密码、API key 或证书时，如果仍然是同一个逻辑 Provider 实例，保持 `name` 不变。如果改为另一个供应商账号或投递目标，建议使用新的 `name`。
+
+当还有 `pending` 或 `sending` Delivery 时，不要重命名 Provider 或调整 Provider 顺序。先等待已排队的投递完成，再修改配置。
+
+:::
 
 ## 配置多个 Provider
 
@@ -81,57 +106,43 @@ defineEmailChannelConfig({
   enabled: true,
   providers: [
     defineSmtpProviderConfig({
-      name: "primary-smtp",
-      host: "smtp-primary.example.com",
+      name: 'primary-smtp',
+      host: 'smtp-primary.example.com',
       port: 587,
-      from: "notifications@example.com",
+      from: 'notifications@example.com',
     }),
     defineSmtpProviderConfig({
-      name: "backup-smtp",
-      host: "smtp-backup.example.com",
+      name: 'backup-smtp',
+      host: 'smtp-backup.example.com',
       port: 587,
-      from: "notifications@example.com",
+      from: 'notifications@example.com',
     }),
   ],
 });
 ```
 
-Provider 的 `name` 在同一个 Channel 中必须唯一。当前 Provider 明确返回可继续的失败结果时，Manager 才会尝试下一个 Provider；不会重复调用同一个 Provider。
+Provider 的 `name` 在同一个 Channel 中必须唯一，并且需要在重启和配置发布之间保持稳定。当前 Provider 明确返回可继续的失败结果时，Manager 才会尝试下一个 Provider；不会重复调用同一个 Provider。
 
 ## 完整配置
 
 ```ts
 const notificationConfig: ConfigFactory<AppNotificationConfig> = defineConfig(
   ({ env }): AppNotificationConfig => ({
-    enabled: env.boolean("NOTIFICATION_ENABLED", false),
-    allowNonPersistentStore: env.boolean(
-      "NOTIFICATION_ALLOW_NON_PERSISTENT_STORE",
-      false,
-    ),
+    enabled: env.boolean('NOTIFICATION_ENABLED', false),
     channels: [
       defineInAppChannelConfig({
-        enabled: env.boolean("NOTIFICATION_IN_APP_ENABLED", true),
-        providers: [{ type: "database", name: "primary" }],
+        enabled: env.boolean('NOTIFICATION_IN_APP_ENABLED', true),
+        providers: [{ type: 'database', name: 'primary' }],
       }),
       defineEmailChannelConfig({
-        enabled: env.boolean("NOTIFICATION_EMAIL_ENABLED", false),
+        enabled: env.boolean('NOTIFICATION_EMAIL_ENABLED', false),
         providers: [],
       }),
     ],
-    logs: {
-      enabled: true,
-      retainDays: 90,
-    },
   }),
 );
 
 export default notificationConfig;
 ```
-
-:::warning 注意
-
-当前版本保留了 `logs.enabled` 和 `logs.retainDays` 配置字段，不过还没有根据它们关闭日志或自动清理历史记录。
-
-:::
 
 启用的 Channel 至少要配置一个启用的 Provider。否则 `start()` 会抛出错误。

@@ -86,17 +86,25 @@ describe('notification config', () => {
 
     expect(config).toMatchObject({
       enabled: false,
-      allowNonPersistentStore: false,
       channels: [
         {
           type: 'in-app',
           enabled: true,
-          providers: [{ type: 'database', name: 'primary' }],
+          providers: [{ type: 'database', name: 'in-app' }],
         },
         {
           type: 'email',
           enabled: false,
-          providers: [],
+          providers: [
+            {
+              type: 'smtp',
+              name: 'primary-smtp',
+              host: '127.0.0.1',
+              port: 587,
+              secure: false,
+              from: 'notifications@example.com',
+            },
+          ],
         },
       ],
     });
@@ -707,10 +715,6 @@ describe('database migrations', () => {
         name: '202608190001_create_notification_tables',
         fileName: '202608190001_create_notification_tables.ts',
       }),
-      expect.objectContaining({
-        name: '202608190002_create_notification_in_app_items',
-        fileName: '202608190002_create_notification_in_app_items.ts',
-      }),
     ]);
   });
 });
@@ -723,6 +727,13 @@ describe('app plugins', () => {
     );
     const databaseExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-database-example',
+    );
+    const inAppNotificationPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-notification-in-app',
+    );
+    const notificationProvidersPlugin = runtime.config.plugins.find(
+      (item) =>
+        item.packageName === '@nocobase/app-plugin-notification-providers',
     );
     const routesExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-routes-example',
@@ -757,6 +768,26 @@ describe('app plugins', () => {
       /app-plugin-database-example\/database\/seeds$/,
     );
     expect(databaseExamplePlugin?.routesEntry).toBeUndefined();
+    expect(inAppNotificationPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-notification-in-app',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(inAppNotificationPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-notification-in-app\/database\/migrations$/,
+    );
+    expect(inAppNotificationPlugin?.bootstrapEntry).toMatch(
+      /app-plugin-notification-in-app\/server\/bootstrap\.ts$/,
+    );
+    expect(notificationProvidersPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-notification-providers',
+      version: '0.1.0',
+      enabled: true,
+    });
+    expect(notificationProvidersPlugin?.migrationsDirectory).toBeUndefined();
+    expect(notificationProvidersPlugin?.bootstrapEntry).toMatch(
+      /app-plugin-notification-providers\/server\/bootstrap\.ts$/,
+    );
     expect(routesExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-routes-example',
       version: '0.1.0',
@@ -806,6 +837,9 @@ describe('app plugins', () => {
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
         }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-notification-in-app',
+        }),
       ]),
     );
     expect(runtime.config.database.seeds?.sources).toEqual(
@@ -835,6 +869,10 @@ describe('app plugins', () => {
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
           name: '202608220001_database_example_create_messages',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-notification-in-app',
+          name: '202608190002_create_notification_in_app_items',
         }),
       ]),
     );

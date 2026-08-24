@@ -16,6 +16,12 @@
       "@nocobase/app-plugin-database-example": {
         "enabled": true
       },
+      "@nocobase/app-plugin-notification-in-app": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-notification-providers": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-routes-example": {
         "enabled": true
       },
@@ -37,6 +43,8 @@
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-notification-in-app": "workspace:^",
+    "@nocobase/app-plugin-notification-providers": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
@@ -48,8 +56,6 @@
     "@nocobase/id-generator": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/notification": "workspace:^",
-    "@nocobase/notification-in-app": "workspace:^",
-    "@nocobase/notification-email": "workspace:^",
     "@nocobase/portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",

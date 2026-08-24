@@ -1,11 +1,11 @@
-import type { DatabaseManager, Row } from "@nocobase/database";
+import type { DatabaseManager, Row } from '@nocobase/database';
 
 export type NotificationLogStatus =
-  "pending" | "processing" | "completed" | "partial" | "failed" | "unknown";
+  'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';
 export type NotificationDeliveryStatus =
-  "pending" | "sending" | "sent" | "failed" | "unknown";
+  'pending' | 'sending' | 'sent' | 'failed' | 'unknown';
 export type NotificationAttemptStatus =
-  "sending" | "sent" | "failed" | "unknown";
+  'sending' | 'sent' | 'failed' | 'unknown';
 
 export interface NotificationErrorRecord {
   readonly code?: string;
@@ -85,184 +85,10 @@ export interface NotificationStore {
   finishAttempt(attempt: NotificationAttemptRecord): Promise<void>;
   finishDelivery(
     delivery: NotificationDeliveryRecord,
-    status: Exclude<NotificationDeliveryStatus, "pending" | "sending">,
+    status: Exclude<NotificationDeliveryStatus, 'pending' | 'sending'>,
     error?: NotificationErrorRecord,
   ): Promise<NotificationDeliveryRecord | undefined>;
   recoverExpired(now: string): Promise<number>;
-}
-
-export class MemoryNotificationStore implements NotificationStore {
-  private readonly logs = new Map<string, NotificationLogRecord>();
-  private readonly deliveries = new Map<string, NotificationDeliveryRecord>();
-  private readonly attempts = new Map<string, NotificationAttemptRecord[]>();
-
-  async now(): Promise<string> {
-    return new Date().toISOString();
-  }
-
-  async create(bundle: NotificationLogBundle): Promise<void> {
-    this.logs.set(bundle.log.id, bundle.log);
-    for (const delivery of bundle.deliveries)
-      this.deliveries.set(delivery.id, delivery);
-  }
-
-  async getLog(id: string): Promise<NotificationLogRecord | undefined> {
-    return this.logs.get(id);
-  }
-
-  async listLogs(
-    limit: number = 100,
-  ): Promise<readonly NotificationLogRecord[]> {
-    return [...this.logs.values()]
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-      .slice(0, limit);
-  }
-
-  async getDelivery(
-    id: string,
-  ): Promise<NotificationDeliveryRecord | undefined> {
-    return this.deliveries.get(id);
-  }
-
-  async listDeliveries(
-    notificationId: string,
-  ): Promise<readonly NotificationDeliveryRecord[]> {
-    return [...this.deliveries.values()].filter(
-      (item) => item.notificationId === notificationId,
-    );
-  }
-
-  async listPending(
-    limit: number = 100,
-  ): Promise<readonly NotificationDeliveryRecord[]> {
-    return [...this.deliveries.values()]
-      .filter((item) => item.status === "pending")
-      .slice(0, limit);
-  }
-
-  async listAttempts(
-    deliveryId: string,
-  ): Promise<readonly NotificationAttemptRecord[]> {
-    return this.attempts.get(deliveryId) ?? [];
-  }
-
-  async claimDelivery(
-    id: string,
-    leaseToken: string,
-    leaseExpiresAt: string,
-  ): Promise<NotificationDeliveryRecord | undefined> {
-    const delivery = this.deliveries.get(id);
-    if (!delivery || delivery.status !== "pending") return undefined;
-    const next: NotificationDeliveryRecord = {
-      ...delivery,
-      status: "sending",
-      leaseToken,
-      leaseExpiresAt,
-      updatedAt: await this.now(),
-      version: delivery.version + 1,
-    };
-    this.deliveries.set(id, next);
-    await this.refreshLog(next.notificationId);
-    return next;
-  }
-
-  async startAttempt(
-    delivery: NotificationDeliveryRecord,
-    attempt: NotificationAttemptRecord,
-  ): Promise<NotificationDeliveryRecord | undefined> {
-    const current = this.deliveries.get(delivery.id);
-    if (
-      !current ||
-      current.status !== "sending" ||
-      current.version !== delivery.version
-    )
-      return undefined;
-    this.attempts.set(delivery.id, [
-      ...(this.attempts.get(delivery.id) ?? []),
-      attempt,
-    ]);
-    const next: NotificationDeliveryRecord = {
-      ...current,
-      providerCursor: delivery.providerCursor,
-      attemptCount: attempt.sequence,
-      updatedAt: await this.now(),
-      version: current.version + 1,
-    };
-    this.deliveries.set(next.id, next);
-    return next;
-  }
-
-  async finishAttempt(attempt: NotificationAttemptRecord): Promise<void> {
-    const attempts = this.attempts.get(attempt.deliveryId) ?? [];
-    this.attempts.set(
-      attempt.deliveryId,
-      attempts.map((item) => (item.id === attempt.id ? attempt : item)),
-    );
-  }
-
-  async finishDelivery(
-    delivery: NotificationDeliveryRecord,
-    status: Exclude<NotificationDeliveryStatus, "pending" | "sending">,
-    error?: NotificationErrorRecord,
-  ): Promise<NotificationDeliveryRecord | undefined> {
-    const current = this.deliveries.get(delivery.id);
-    if (
-      !current ||
-      current.status !== "sending" ||
-      current.version !== delivery.version
-    )
-      return undefined;
-    const next: NotificationDeliveryRecord = {
-      ...current,
-      status,
-      lastError: error,
-      leaseToken: undefined,
-      leaseExpiresAt: undefined,
-      updatedAt: await this.now(),
-      version: current.version + 1,
-    };
-    this.deliveries.set(next.id, next);
-    await this.refreshLog(next.notificationId);
-    return next;
-  }
-
-  async recoverExpired(now: string): Promise<number> {
-    let count = 0;
-    for (const delivery of this.deliveries.values()) {
-      if (
-        delivery.status !== "sending" ||
-        !delivery.leaseExpiresAt ||
-        delivery.leaseExpiresAt > now
-      )
-        continue;
-      const next: NotificationDeliveryRecord = {
-        ...delivery,
-        status: "unknown",
-        leaseToken: undefined,
-        leaseExpiresAt: undefined,
-        lastError: {
-          code: "LEASE_EXPIRED",
-          message: "Provider result is unknown after worker interruption.",
-        },
-        updatedAt: now,
-        version: delivery.version + 1,
-      };
-      this.deliveries.set(next.id, next);
-      await this.refreshLog(next.notificationId);
-      count += 1;
-    }
-    return count;
-  }
-
-  private async refreshLog(notificationId: string): Promise<void> {
-    const log = this.logs.get(notificationId);
-    if (!log) return;
-    this.logs.set(notificationId, {
-      ...log,
-      status: summarize(await this.listDeliveries(notificationId)),
-      updatedAt: await this.now(),
-    });
-  }
 }
 
 interface NotificationRow extends Row {
@@ -285,23 +111,23 @@ interface DeliveryRow extends Row {
   notificationId: string;
   channel: string;
   recipientKey: string;
-  recipientSnapshot: object;
+  recipientSnapshot: object | string;
   recipientSchemaVersion: number;
-  contentSnapshot: object;
+  contentSnapshot: object | string;
   contentSchemaVersion: number;
-  providerChainSnapshot: readonly string[];
+  providerChainSnapshot: readonly string[] | string;
   providerChainSchemaVersion: number;
   providerCursor: number;
   currentAttempt: number;
   status: NotificationDeliveryStatus;
   statusChangedAt: string;
   nextRunAt?: string;
-  leaseToken?: string;
-  leaseOwner?: string;
-  leaseExpiresAt?: string;
+  leaseToken?: string | null;
+  leaseOwner?: string | null;
+  leaseExpiresAt?: string | null;
   version: number;
   lastAttemptId?: string;
-  lastError?: NotificationErrorRecord;
+  lastError?: NotificationErrorRecord | string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -333,12 +159,12 @@ export class DatabaseNotificationStore implements NotificationStore {
   async create(bundle: NotificationLogBundle): Promise<void> {
     await this.database.transaction(async (connection): Promise<void> => {
       await connection.query
-        .insertInto<NotificationRow>("notifications")
+        .insertInto<NotificationRow>('notifications')
         .values(toLogRow(bundle.log))
         .execute();
       if (bundle.deliveries.length > 0)
         await connection.query
-          .insertInto<DeliveryRow>("notificationDeliveries")
+          .insertInto<DeliveryRow>('notificationDeliveries')
           .values(bundle.deliveries.map(toDeliveryRow))
           .execute();
     });
@@ -347,9 +173,9 @@ export class DatabaseNotificationStore implements NotificationStore {
   async getLog(id: string): Promise<NotificationLogRecord | undefined> {
     const row = await this.database
       .query()
-      .selectFrom<NotificationRow>("notifications")
+      .selectFrom<NotificationRow>('notifications')
       .selectAll()
-      .where("id", "=", id)
+      .where('id', '=', id)
       .executeTakeFirst<NotificationRow>();
     return row ? fromLogRow(row, await this.listDeliveries(id)) : undefined;
   }
@@ -359,9 +185,9 @@ export class DatabaseNotificationStore implements NotificationStore {
   ): Promise<readonly NotificationLogRecord[]> {
     const rows = await this.database
       .query()
-      .selectFrom<NotificationRow>("notifications")
+      .selectFrom<NotificationRow>('notifications')
       .selectAll()
-      .orderBy("createdAt", "desc")
+      .orderBy('createdAt', 'desc')
       .limit(limit)
       .execute<NotificationRow>();
     return Promise.all(
@@ -376,9 +202,9 @@ export class DatabaseNotificationStore implements NotificationStore {
   ): Promise<NotificationDeliveryRecord | undefined> {
     const row = await this.database
       .query()
-      .selectFrom<DeliveryRow>("notificationDeliveries")
+      .selectFrom<DeliveryRow>('notificationDeliveries')
       .selectAll()
-      .where("id", "=", id)
+      .where('id', '=', id)
       .executeTakeFirst<DeliveryRow>();
     return row ? fromDeliveryRow(row) : undefined;
   }
@@ -388,9 +214,9 @@ export class DatabaseNotificationStore implements NotificationStore {
   ): Promise<readonly NotificationDeliveryRecord[]> {
     const rows = await this.database
       .query()
-      .selectFrom<DeliveryRow>("notificationDeliveries")
+      .selectFrom<DeliveryRow>('notificationDeliveries')
       .selectAll()
-      .where("notificationId", "=", notificationId)
+      .where('notificationId', '=', notificationId)
       .execute<DeliveryRow>();
     return rows.map(fromDeliveryRow);
   }
@@ -400,10 +226,10 @@ export class DatabaseNotificationStore implements NotificationStore {
   ): Promise<readonly NotificationDeliveryRecord[]> {
     const rows = await this.database
       .query()
-      .selectFrom<DeliveryRow>("notificationDeliveries")
+      .selectFrom<DeliveryRow>('notificationDeliveries')
       .selectAll()
-      .where("status", "=", "pending")
-      .orderBy("createdAt", "asc")
+      .where('status', '=', 'pending')
+      .orderBy('createdAt', 'asc')
       .limit(limit)
       .execute<DeliveryRow>();
     return rows.map(fromDeliveryRow);
@@ -414,10 +240,10 @@ export class DatabaseNotificationStore implements NotificationStore {
   ): Promise<readonly NotificationAttemptRecord[]> {
     const rows = await this.database
       .query()
-      .selectFrom<AttemptRow>("notificationDeliveryAttempts")
+      .selectFrom<AttemptRow>('notificationDeliveryAttempts')
       .selectAll()
-      .where("deliveryId", "=", deliveryId)
-      .orderBy("attemptSequence", "asc")
+      .where('deliveryId', '=', deliveryId)
+      .orderBy('attemptSequence', 'asc')
       .execute<AttemptRow>();
     return rows.map(fromAttemptRow);
   }
@@ -430,27 +256,27 @@ export class DatabaseNotificationStore implements NotificationStore {
     const now = await this.now();
     const current = await this.database
       .query()
-      .selectFrom<DeliveryRow>("notificationDeliveries")
+      .selectFrom<DeliveryRow>('notificationDeliveries')
       .selectAll()
-      .where("id", "=", id)
-      .where("status", "=", "pending")
+      .where('id', '=', id)
+      .where('status', '=', 'pending')
       .executeTakeFirst<DeliveryRow>();
     if (!current) return undefined;
     const result = await this.database
       .query()
-      .updateTable<DeliveryRow>("notificationDeliveries")
+      .updateTable<DeliveryRow>('notificationDeliveries')
       .set({
-        status: "sending",
+        status: 'sending',
         leaseToken,
-        leaseOwner: "notification-manager",
+        leaseOwner: 'notification-manager',
         leaseExpiresAt,
         statusChangedAt: now,
         updatedAt: now,
         version: current.version + 1,
       })
-      .where("id", "=", id)
-      .where("status", "=", "pending")
-      .where("version", "=", current.version)
+      .where('id', '=', id)
+      .where('status', '=', 'pending')
+      .where('version', '=', current.version)
       .execute();
     if (result.updatedCount !== 1) return undefined;
     const delivery = await this.getDelivery(id);
@@ -466,7 +292,7 @@ export class DatabaseNotificationStore implements NotificationStore {
     return this.database.transaction(
       async (connection): Promise<NotificationDeliveryRecord | undefined> => {
         const result = await connection.query
-          .updateTable<DeliveryRow>("notificationDeliveries")
+          .updateTable<DeliveryRow>('notificationDeliveries')
           .set({
             providerCursor: delivery.providerCursor,
             currentAttempt: attempt.sequence,
@@ -474,19 +300,19 @@ export class DatabaseNotificationStore implements NotificationStore {
             updatedAt: now,
             version: delivery.version + 1,
           })
-          .where("id", "=", delivery.id)
-          .where("status", "=", "sending")
-          .where("version", "=", delivery.version)
+          .where('id', '=', delivery.id)
+          .where('status', '=', 'sending')
+          .where('version', '=', delivery.version)
           .execute();
         if (result.updatedCount !== 1) return undefined;
         await connection.query
-          .insertInto<AttemptRow>("notificationDeliveryAttempts")
+          .insertInto<AttemptRow>('notificationDeliveryAttempts')
           .values(toAttemptRow(attempt))
           .execute();
         const row = await connection.query
-          .selectFrom<DeliveryRow>("notificationDeliveries")
+          .selectFrom<DeliveryRow>('notificationDeliveries')
           .selectAll()
-          .where("id", "=", delivery.id)
+          .where('id', '=', delivery.id)
           .executeTakeFirst<DeliveryRow>();
         return row ? fromDeliveryRow(row) : undefined;
       },
@@ -496,34 +322,34 @@ export class DatabaseNotificationStore implements NotificationStore {
   async finishAttempt(attempt: NotificationAttemptRecord): Promise<void> {
     await this.database
       .query()
-      .updateTable<AttemptRow>("notificationDeliveryAttempts")
+      .updateTable<AttemptRow>('notificationDeliveryAttempts')
       .set(toAttemptRow(attempt))
-      .where("id", "=", attempt.id)
+      .where('id', '=', attempt.id)
       .execute();
   }
 
   async finishDelivery(
     delivery: NotificationDeliveryRecord,
-    status: Exclude<NotificationDeliveryStatus, "pending" | "sending">,
+    status: Exclude<NotificationDeliveryStatus, 'pending' | 'sending'>,
     error?: NotificationErrorRecord,
   ): Promise<NotificationDeliveryRecord | undefined> {
     const now = await this.now();
     const result = await this.database
       .query()
-      .updateTable<DeliveryRow>("notificationDeliveries")
+      .updateTable<DeliveryRow>('notificationDeliveries')
       .set({
         status,
-        lastError: error,
-        leaseToken: undefined,
-        leaseOwner: undefined,
-        leaseExpiresAt: undefined,
+        lastError: error ? JSON.stringify(error) : null,
+        leaseToken: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
         statusChangedAt: now,
         updatedAt: now,
         version: delivery.version + 1,
       })
-      .where("id", "=", delivery.id)
-      .where("status", "=", "sending")
-      .where("version", "=", delivery.version)
+      .where('id', '=', delivery.id)
+      .where('status', '=', 'sending')
+      .where('version', '=', delivery.version)
       .execute();
     if (result.updatedCount !== 1) return undefined;
     const next = await this.getDelivery(delivery.id);
@@ -534,15 +360,15 @@ export class DatabaseNotificationStore implements NotificationStore {
   async recoverExpired(now: string): Promise<number> {
     const rows = await this.database
       .query()
-      .selectFrom<DeliveryRow>("notificationDeliveries")
+      .selectFrom<DeliveryRow>('notificationDeliveries')
       .selectAll()
-      .where("status", "=", "sending")
-      .where("leaseExpiresAt", "<=", now)
+      .where('status', '=', 'sending')
+      .where('leaseExpiresAt', '<=', now)
       .execute<DeliveryRow>();
     for (const row of rows)
-      await this.finishDelivery(fromDeliveryRow(row), "unknown", {
-        code: "LEASE_EXPIRED",
-        message: "Provider result is unknown after worker interruption.",
+      await this.finishDelivery(fromDeliveryRow(row), 'unknown', {
+        code: 'LEASE_EXPIRED',
+        message: 'Provider result is unknown after worker interruption.',
       });
     return rows.length;
   }
@@ -550,19 +376,16 @@ export class DatabaseNotificationStore implements NotificationStore {
   private async refreshLog(notificationId: string): Promise<void> {
     await this.database
       .query()
-      .updateTable<NotificationRow>("notifications")
+      .updateTable<NotificationRow>('notifications')
       .set({
         summaryStatus: summarize(await this.listDeliveries(notificationId)),
         updatedAt: await this.now(),
       })
-      .where("id", "=", notificationId)
+      .where('id', '=', notificationId)
       .execute();
   }
 }
 
-export function createMemoryNotificationStore(): NotificationStore {
-  return new MemoryNotificationStore();
-}
 export function createDatabaseNotificationStore(
   database: DatabaseManager,
 ): NotificationStore {
@@ -572,17 +395,17 @@ export function createDatabaseNotificationStore(
 function summarize(
   deliveries: readonly NotificationDeliveryRecord[],
 ): NotificationLogStatus {
-  if (deliveries.some((item) => item.status === "unknown")) return "unknown";
-  if (deliveries.every((item) => item.status === "pending")) return "pending";
+  if (deliveries.some((item) => item.status === 'unknown')) return 'unknown';
+  if (deliveries.every((item) => item.status === 'pending')) return 'pending';
   if (
     deliveries.some(
-      (item) => item.status === "pending" || item.status === "sending",
+      (item) => item.status === 'pending' || item.status === 'sending',
     )
   )
-    return "processing";
-  if (deliveries.every((item) => item.status === "sent")) return "completed";
-  if (deliveries.every((item) => item.status === "failed")) return "failed";
-  return "partial";
+    return 'processing';
+  if (deliveries.every((item) => item.status === 'sent')) return 'completed';
+  if (deliveries.every((item) => item.status === 'failed')) return 'failed';
+  return 'partial';
 }
 
 function toLogRow(record: NotificationLogRecord): NotificationRow {
@@ -590,9 +413,9 @@ function toLogRow(record: NotificationLogRecord): NotificationRow {
     id: record.id,
     sourceType: record.sourceType,
     sourceReferenceId: record.sourceReferenceId,
-    principalService: "notification-manager",
+    principalService: 'notification-manager',
     triggeredAt: record.createdAt,
-    messageMode: "direct",
+    messageMode: 'direct',
     summaryStatus: record.status,
     version: 1,
     createdAt: record.createdAt,
@@ -624,11 +447,14 @@ function toDeliveryRow(record: NotificationDeliveryRecord): DeliveryRow {
     notificationId: record.notificationId,
     channel: record.channel,
     recipientKey: record.recipientKey,
-    recipientSnapshot: record.recipientSnapshot,
+    recipientSnapshot: JSON.stringify(record.recipientSnapshot),
     recipientSchemaVersion: 1,
-    contentSnapshot: record.messageSnapshot,
+    contentSnapshot: JSON.stringify(record.messageSnapshot),
     contentSchemaVersion: 1,
-    providerChainSnapshot: record.providerChain,
+    // node-postgres serializes JavaScript arrays as PostgreSQL array literals,
+    // which are not valid input for a JSON column. Serialize explicitly at the
+    // persistence boundary so every dialect receives valid JSON.
+    providerChainSnapshot: JSON.stringify(record.providerChain),
     providerChainSchemaVersion: 1,
     providerCursor: record.providerCursor,
     currentAttempt: record.attemptCount,
@@ -649,19 +475,56 @@ function fromDeliveryRow(row: DeliveryRow): NotificationDeliveryRecord {
     notificationId: row.notificationId,
     channel: row.channel,
     recipientKey: row.recipientKey,
-    recipientSnapshot: row.recipientSnapshot,
-    messageSnapshot: row.contentSnapshot,
-    providerChain: row.providerChainSnapshot,
+    recipientSnapshot: parseObject(row.recipientSnapshot, 'recipient'),
+    messageSnapshot: parseObject(row.contentSnapshot, 'content'),
+    providerChain: parseProviderChain(row.providerChainSnapshot),
     providerCursor: row.providerCursor,
     attemptCount: row.currentAttempt,
     status: row.status,
-    leaseToken: row.leaseToken,
-    leaseExpiresAt: row.leaseExpiresAt,
-    lastError: row.lastError,
+    leaseToken: row.leaseToken ?? undefined,
+    leaseExpiresAt: row.leaseExpiresAt ?? undefined,
+    lastError: parseError(row.lastError),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     version: row.version,
   };
+}
+
+function parseProviderChain(
+  value: readonly string[] | string,
+): readonly string[] {
+  if (typeof value !== 'string') return value;
+  const parsed: unknown = JSON.parse(value);
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every((item) => typeof item === 'string')
+  )
+    throw new Error('Stored notification Provider chain is invalid.');
+  return parsed;
+}
+
+function parseObject(value: object | string, label: string): object {
+  if (typeof value !== 'string') return value;
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new Error(`Stored notification ${label} snapshot is invalid.`);
+  return parsed;
+}
+
+function parseError(
+  value: NotificationErrorRecord | string | null | undefined,
+): NotificationErrorRecord | undefined {
+  if (!value) return undefined;
+  if (typeof value !== 'string') return value;
+  const parsed: unknown = JSON.parse(value);
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !('message' in parsed) ||
+    typeof parsed.message !== 'string'
+  )
+    throw new Error('Stored notification error is invalid.');
+  return parsed as NotificationErrorRecord;
 }
 
 function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {

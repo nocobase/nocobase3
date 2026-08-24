@@ -3,12 +3,19 @@ import type {
   NotificationDeliveryRecord,
   NotificationLogRecord,
   NotificationStore,
-} from "./store.js";
+} from './store.js';
 
 export interface NotificationLogDetails {
-  readonly log: NotificationLogRecord;
+  readonly log: Omit<NotificationLogRecord, 'messageSnapshot'>;
   readonly deliveries: readonly {
-    readonly delivery: NotificationDeliveryRecord;
+    readonly delivery: Omit<
+      NotificationDeliveryRecord,
+      | 'recipientKey'
+      | 'recipientSnapshot'
+      | 'messageSnapshot'
+      | 'leaseToken'
+      | 'leaseExpiresAt'
+    >;
     readonly attempts: readonly NotificationAttemptRecord[];
   }[];
 }
@@ -16,8 +23,10 @@ export interface NotificationLogDetails {
 export class NotificationLogs {
   constructor(private readonly store: NotificationStore) {}
 
-  list(limit?: number): Promise<readonly NotificationLogRecord[]> {
-    return this.store.listLogs(limit);
+  async list(
+    limit?: number,
+  ): Promise<readonly Omit<NotificationLogRecord, 'messageSnapshot'>[]> {
+    return (await this.store.listLogs(limit)).map(redactLog);
   }
 
   async listDetails(
@@ -40,12 +49,33 @@ export class NotificationLogs {
       deliveryRecords.map(
         async (
           delivery,
-        ): Promise<NotificationLogDetails["deliveries"][number]> => ({
-          delivery,
+        ): Promise<NotificationLogDetails['deliveries'][number]> => ({
+          delivery: redactDelivery(delivery),
           attempts: await this.store.listAttempts(delivery.id),
         }),
       ),
     );
-    return { log, deliveries };
+    return { log: redactLog(log), deliveries };
   }
+}
+
+function redactLog(
+  record: NotificationLogRecord,
+): Omit<NotificationLogRecord, 'messageSnapshot'> {
+  const { messageSnapshot: _messageSnapshot, ...safe } = record;
+  return safe;
+}
+
+function redactDelivery(
+  record: NotificationDeliveryRecord,
+): NotificationLogDetails['deliveries'][number]['delivery'] {
+  const {
+    recipientKey: _recipientKey,
+    recipientSnapshot: _recipientSnapshot,
+    messageSnapshot: _messageSnapshot,
+    leaseToken: _leaseToken,
+    leaseExpiresAt: _leaseExpiresAt,
+    ...safe
+  } = record;
+  return safe;
 }

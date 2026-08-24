@@ -1,6 +1,7 @@
 # Logs
 
 logs
+!/registry/nocobase-notification/logs/
 _.log
 npm-debug.log_
 yarn-debug.log*

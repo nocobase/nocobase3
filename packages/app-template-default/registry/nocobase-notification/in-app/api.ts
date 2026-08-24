@@ -1,4 +1,7 @@
-export type InboxMutationAction = "read" | "unread" | "delete";
+import { getPortalBase } from '@nocobase/portal-sdk/runtime';
+import { nocobaseClient } from '@nocobase/portal-sdk/client';
+
+export type InboxMutationAction = 'read' | 'unread' | 'delete';
 
 export interface InboxItem {
   readonly id: string;
@@ -28,11 +31,20 @@ export async function fetchInbox(
   signal?: AbortSignal,
 ): Promise<InboxListResponse> {
   const query = new URLSearchParams({ limit: String(filters.limit ?? 25) });
-  if (filters.unreadOnly) query.set("unreadOnly", "true");
-  if (filters.cursor) query.set("cursor", filters.cursor);
-  return requestJson<InboxListResponse>(`${getInboxBaseUrl()}?${query}`, {
+  if (filters.unreadOnly) query.set('unreadOnly', 'true');
+  if (filters.cursor) query.set('cursor', filters.cursor);
+  const value = await requestJson<unknown>(`${getInboxBaseUrl()}?${query}`, {
     signal,
   });
+  if (Array.isArray(value)) return { data: value as readonly InboxItem[] };
+  if (isRecord(value) && Array.isArray(value.data)) {
+    return {
+      data: value.data as readonly InboxItem[],
+      nextCursor:
+        typeof value.nextCursor === 'string' ? value.nextCursor : undefined,
+    };
+  }
+  throw new Error('Inbox returned an invalid response.');
 }
 
 export async function fetchUnreadCount(signal?: AbortSignal): Promise<number> {
@@ -70,35 +82,64 @@ async function mutation<T>(url: string, body: object): Promise<T> {
     `${getInboxBaseUrl()}/csrf`,
   );
   return requestJson<T>(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-csrf-token": csrf.token },
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-csrf-token': csrf.token },
     body: JSON.stringify(body),
   });
 }
 
 function getInboxBaseUrl(): string {
-  const portalBase =
-    typeof window === "undefined" ? "" : (window.NOCOBASE_PORTAL_BASE ?? "");
-  return `${portalBase.replace(/\/$/, "")}/api/notifications/in-app`;
+  return `${getPortalBase().replace(/\/$/, '')}/api/notifications/in-app`;
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { credentials: "include", ...init });
+  const method = apiMethod(init?.method);
+  const headers = new Headers(
+    nocobaseClient.getHeaders({ method, withAclMeta: false, body: init?.body }),
+  );
+  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+  const response = await fetch(url, {
+    credentials: 'include',
+    ...init,
+    headers,
+  });
   const value: unknown = await response.json().catch(() => undefined);
   if (!response.ok) {
     const error =
       value &&
-      typeof value === "object" &&
-      "error" in value &&
+      typeof value === 'object' &&
+      'error' in value &&
       value.error &&
-      typeof value.error === "object"
+      typeof value.error === 'object'
         ? (value.error as { readonly message?: unknown })
         : undefined;
     throw new Error(
-      typeof error?.message === "string"
+      typeof error?.message === 'string'
         ? error.message
         : `Inbox request failed (${response.status}).`,
     );
   }
+  if (value === undefined) {
+    throw new Error('Inbox returned an invalid response.');
+  }
   return value as T;
+}
+
+function apiMethod(
+  method: string | undefined,
+): 'GET' | 'POST' | 'PUT' | 'DELETE' {
+  switch (method?.toUpperCase()) {
+    case 'POST':
+      return 'POST';
+    case 'PUT':
+      return 'PUT';
+    case 'DELETE':
+      return 'DELETE';
+    default:
+      return 'GET';
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
 }

@@ -9,29 +9,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type LoginVariables = {
-  identifier: string;
+  account: string;
   password: string;
 };
 
 export function BasicSignInForm() {
-  const [identifier, setIdentifier] = useState('');
+  const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const Link = useLink();
   const { mutate: login, isPending } = useLogin<LoginVariables>();
 
   const handleSignIn = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    login({ identifier, password });
+    login({ account, password });
   };
 
   return (
     <form onSubmit={handleSignIn} className='space-y-5'>
       <div className='space-y-2'>
-        <Label htmlFor='identifier'>Username or email</Label>
+        <Label htmlFor='account'>Username or email</Label>
         <Input
-          id='identifier'
-          value={identifier}
-          onChange={(event) => setIdentifier(event.target.value)}
+          id='account'
+          value={account}
+          onChange={(event) => setAccount(event.target.value)}
           autoComplete='username'
           autoFocus
           required
