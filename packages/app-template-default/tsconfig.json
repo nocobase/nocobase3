@@ -3,9 +3,9 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
     "paths": {
-      "@/extensions/*": ["./client/extensions/*", "./registry/*"],
       "@/*": ["./client/*"]
     }
   },
-  "include": ["client", "registry"]
+  "include": ["client"],
+  "exclude": ["client-old", "registry"]
 }

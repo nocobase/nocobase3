@@ -1,7 +1,7 @@
 # 概览
 
-`@nocobase/app-plugin-authentication` 负责把认证协议接入 NocoBase 应用运行时。它不负责
-应用页面、用户授权或业务资源访问控制；这些能力分别由应用 UI 和 ACL 模块承担。
+`@nocobase/app-plugin-authentication` 负责把密码认证协议和默认认证页面接入 NocoBase
+应用运行时。用户授权和业务资源访问控制仍由 ACL 模块承担。
 
 ## 模块边界
 
@@ -35,7 +35,7 @@ Better Auth
 - NocoBase Database 自定义 Better Auth adapter。
 - NocoBase Caching secondary storage 和限流计数器适配。
 - Refine `AuthProvider` 适配。
-- 可复制到应用源码的密码登录与注册 UI 模板。
+- 通过客户端插件路由按需加载登录、注册、忘记密码和重置密码页面。
 
 ## 默认行为
 
@@ -51,7 +51,7 @@ Better Auth
 
 ## 不属于本包的职责
 
-- 登录、注册、忘记密码等页面路由由应用定义。
+- 应用品牌化认证页面和其他认证方式的 UI 由相应插件或应用定义。
 - 密码重置邮件的发送能力由应用配置。
 - 角色、权限和记录级访问控制不由 authentication 判断。
 - 应用 migration 的发现和执行由应用数据库运行时负责。
