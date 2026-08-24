@@ -1,375 +1,403 @@
+import { executeFileUploadPlan } from '@nocobase/app-plugin-files/client';
+import { nocobaseClient } from '@nocobase/portal-sdk/client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  allowsMultipleFiles,
-  normalizeFileFieldValue,
-  toFileFieldValue,
-} from './form-value';
-import { uploadDirect } from './upload-direct';
-import { uploadMultipart } from './upload-multipart';
-import {
-  getAvailableFileCount,
-  resolveFileUploadMode,
-} from './upload-strategy';
-import { checkFileStorage } from './use-file-storage';
-import { validateFileBeforeUpload, validateFileForField } from './validation';
+import { normalizeFileBasePath } from './base-path';
+import { validateFile } from './validation';
 import type {
-  FileFieldDescriptor,
-  FileStorageInfo,
-  FileUploadFieldValue,
-  FileUploadHandler,
+  CreateScopedFileResponse,
   FileUploadItem,
   FileUploadMessages,
-  FileUploadMode,
-  NocoBaseFileRecord,
+  FileUploadProgress,
+  StoredFile,
 } from './types';
 
 export type UseFileUploadOptions = {
-  descriptor: FileFieldDescriptor;
-  value: FileUploadFieldValue;
-  onChange: (value: FileUploadFieldValue) => void;
+  basePath: string;
+  value: StoredFile[];
+  onChange: (value: StoredFile[]) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  multiple?: boolean;
   maxFiles?: number;
-  uploadMode?: FileUploadMode;
-  uploadFile?: FileUploadHandler;
+  maxBytes?: number;
+  accept?: string | readonly string[];
   messages: FileUploadMessages;
   onUploadStart?: (file: File) => void;
-  onUploadComplete?: (record: NocoBaseFileRecord, file: File) => void;
+  onUploadProgress?: (progress: FileUploadProgress, file: File) => void;
+  onUploadComplete?: (file: StoredFile) => void | Promise<void>;
   onUploadError?: (error: Error, file: File) => void;
 };
 
 let uploadKeySeed = 0;
 
-const createUploadKey = () => {
-  uploadKeySeed += 1;
-  return `${Date.now()}-${uploadKeySeed}-${Math.random()
-    .toString(36)
-    .slice(2)}`;
-};
-
-const getFileKey = (file: File) =>
-  `${file.name}-${file.size}-${file.lastModified}-${createUploadKey()}`;
-
-const isInProgress = (item: FileUploadItem) =>
-  item.status === 'pending' ||
-  item.status === 'checking' ||
-  item.status === 'uploading';
-
-function toError(value: unknown) {
-  return value instanceof Error ? value : new Error(String(value));
-}
-
-async function uploadOne(
-  file: File,
-  descriptor: FileFieldDescriptor,
-  storage: FileStorageInfo,
-  signal: AbortSignal,
-  messages: FileUploadMessages,
-  uploadMode: FileUploadMode,
-) {
-  const options = { file, descriptor, storage, signal };
-
-  return resolveFileUploadMode(storage, uploadMode) === 'direct'
-    ? uploadDirect(options, messages)
-    : uploadMultipart(options);
-}
-
 export function useFileUpload({
-  descriptor,
+  basePath,
   value,
   onChange,
   disabled,
   readOnly,
+  multiple = false,
   maxFiles,
-  uploadMode = 'auto',
-  uploadFile,
+  maxBytes,
+  accept,
   messages,
   onUploadStart,
+  onUploadProgress,
   onUploadComplete,
   onUploadError,
 }: UseFileUploadOptions) {
-  const recordsRef = useRef(normalizeFileFieldValue(value));
+  const path = useMemo(() => normalizeFileBasePath(basePath), [basePath]);
+  const controlledValue = useMemo(
+    () => (multiple ? value : value.slice(0, 1)),
+    [multiple, value],
+  );
+  const recordsRef = useRef(controlledValue);
   const controllersRef = useRef(new Map<string, AbortController>());
-  const reservationsRef = useRef(new Set<string>());
-  const [storageError, setStorageError] = useState<Error | null>(null);
+  const attemptsRef = useRef(new Map<string, string | undefined>());
+  const [operationError, setOperationError] = useState<Error | null>(null);
   const [items, setItems] = useState<FileUploadItem[]>(() =>
-    recordsRef.current.map((record) => ({
-      key: String(record.id),
-      displayName: record.title || record.filename,
-      status: 'done',
-      record,
-    })),
+    controlledValue.map(toReadyItem),
   );
   const canUpload = !disabled && !readOnly;
-  const multiple = allowsMultipleFiles(descriptor);
+  const activeCount = attemptsRef.current.size;
+  const additionCount = Array.from(attemptsRef.current.values()).filter(
+    (replaceFileId) => replaceFileId === undefined,
+  ).length;
+  const reachedLimit =
+    multiple &&
+    maxFiles !== undefined &&
+    recordsRef.current.length + additionCount >= maxFiles;
 
   useEffect(() => {
-    const records = normalizeFileFieldValue(value);
-    recordsRef.current = records;
+    recordsRef.current = controlledValue;
     setItems((current) => {
-      const localItems = current.filter(
-        (item) =>
-          isInProgress(item) ||
-          item.status === 'error' ||
-          item.status === 'cancelled',
-      );
-      const localKeys = new Set(localItems.map((item) => item.key));
-      return [
-        ...records
-          .filter((record) => !localKeys.has(String(record.id)))
-          .map((record) => ({
-            key: String(record.id),
-            displayName: record.title || record.filename,
-            status: 'done' as const,
-            record,
-          })),
-        ...localItems,
+      const next = [
+        ...controlledValue.map(toReadyItem),
+        ...current.filter((item) => item.status !== 'done'),
       ];
+      return hasSameItems(current, next) ? current : next;
     });
-  }, [value]);
+  }, [controlledValue]);
 
   useEffect(
     () => () => {
       controllersRef.current.forEach((controller) => controller.abort());
       controllersRef.current.clear();
-      reservationsRef.current.clear();
+      attemptsRef.current.clear();
     },
     [],
   );
 
-  const limit = useMemo(() => (multiple ? maxFiles : 1), [maxFiles, multiple]);
-  const reachedLimit =
-    limit !== undefined &&
-    recordsRef.current.length + reservationsRef.current.size >= limit;
-
-  const removeItem = useCallback(
-    (key: string) => {
-      controllersRef.current.get(key)?.abort();
-      controllersRef.current.delete(key);
-      reservationsRef.current.delete(key);
-      setItems((current) => current.filter((item) => item.key !== key));
-
-      const nextRecords = recordsRef.current.filter(
-        (record) => String(record.id) !== key,
+  const updateAttempt = useCallback(
+    (key: string, update: (item: FileUploadItem) => FileUploadItem) => {
+      setItems((current) =>
+        current.map((item) => (item.key === key ? update(item) : item)),
       );
-      recordsRef.current = nextRecords;
-      onChange(toFileFieldValue(descriptor, nextRecords));
     },
-    [descriptor, onChange],
+    [],
   );
 
-  const cancelItem = useCallback((key: string) => {
-    const controller = controllersRef.current.get(key);
-    if (!controller) return;
-    controller.abort();
-    controllersRef.current.delete(key);
-    reservationsRef.current.delete(key);
-    setItems((current) =>
-      current.map((item) =>
-        item.key === key ? { ...item, status: 'cancelled' } : item,
-      ),
-    );
-  }, []);
-
   const runUpload = useCallback(
-    async (item: FileUploadItem) => {
-      // A queued item may have been removed while an earlier file was uploading.
-      if (!item.rawFile || !reservationsRef.current.has(item.key)) return;
-
-      const file = item.rawFile;
+    async (item: FileUploadItem): Promise<void> => {
+      if (!item.rawFile || !attemptsRef.current.has(item.key)) return;
+      const source = item.rawFile;
       const controller = new AbortController();
       controllersRef.current.set(item.key, controller);
-      setStorageError(null);
+      setOperationError(null);
 
       try {
-        let record: NocoBaseFileRecord;
+        const validation = validateFile(source, {
+          maxBytes,
+          accept,
+          messages,
+        });
+        if (!validation.valid) throw new Error(validation.message);
 
-        if (uploadFile) {
-          const validation = validateFileForField(file, descriptor, messages);
-          if (!validation.valid) throw new Error(validation.message);
-
-          setItems((current) =>
-            current.map((currentItem) =>
-              currentItem.key === item.key
-                ? { ...currentItem, status: 'uploading', error: undefined }
-                : currentItem,
-            ),
-          );
-          onUploadStart?.(file);
-          record = await uploadFile({
-            file,
-            descriptor,
+        onUploadStart?.(source);
+        updateAttempt(item.key, (current) => ({
+          ...current,
+          status: 'uploading',
+          error: undefined,
+          progress: { loaded: 0, total: source.size, percentage: 0 },
+        }));
+        const created = await nocobaseClient.request<CreateScopedFileResponse>(
+          path,
+          {
+            method: 'POST',
+            body: {
+              name: source.name,
+              size: source.size,
+              ...(source.type ? { contentType: source.type } : {}),
+              ...(item.replaceFileId
+                ? { replaceFileId: item.replaceFileId }
+                : {}),
+            },
             signal: controller.signal,
-          });
-        } else {
-          setItems((current) =>
-            current.map((currentItem) =>
-              currentItem.key === item.key
-                ? { ...currentItem, status: 'checking', error: undefined }
-                : currentItem,
-            ),
-          );
-          let storage: FileStorageInfo;
-          try {
-            const storageResult = await checkFileStorage(descriptor, {
-              signal: controller.signal,
-            });
-            if (
-              !storageResult?.isSupportToUploadFiles ||
-              !storageResult.storage
-            ) {
-              throw new Error(messages.storageUnsupported);
-            }
-            storage = storageResult.storage;
-          } catch (caught) {
-            if (!controller.signal.aborted) setStorageError(toError(caught));
-            throw caught;
-          }
-
-          const validation = validateFileBeforeUpload(
-            file,
-            descriptor,
-            storage,
-            messages,
-          );
-          if (!validation.valid) throw new Error(validation.message);
-
-          setItems((current) =>
-            current.map((currentItem) =>
-              currentItem.key === item.key
-                ? { ...currentItem, status: 'uploading', error: undefined }
-                : currentItem,
-            ),
-          );
-          onUploadStart?.(file);
-          record = await uploadOne(
-            file,
-            descriptor,
-            storage,
-            controller.signal,
-            messages,
-            uploadMode,
-          );
-        }
-
+          },
+        );
+        assertCreatedUpload(created);
+        const ready = await executeFileUploadPlan(created.plan, source, {
+          signal: controller.signal,
+          onProgress: (progress) => {
+            updateAttempt(item.key, (current) => ({
+              ...current,
+              status: progress.percentage >= 100 ? 'completing' : 'uploading',
+              progress,
+            }));
+            onUploadProgress?.(progress, source);
+          },
+        });
         if (controller.signal.aborted) return;
 
-        controllersRef.current.delete(item.key);
-        reservationsRef.current.delete(item.key);
-        recordsRef.current = multiple
-          ? [...recordsRef.current, record]
-          : [record];
-        setItems((current) =>
-          current.map((currentItem) =>
-            currentItem.key === item.key
-              ? {
-                  ...currentItem,
-                  key: String(record.id),
-                  status: 'done',
-                  record,
-                  displayName: record.title || record.filename,
-                  rawFile: undefined,
-                }
-              : currentItem,
-          ),
+        const nextRecords = replaceRecord(
+          recordsRef.current,
+          ready,
+          item.replaceFileId,
+          multiple,
         );
-        onChange(toFileFieldValue(descriptor, recordsRef.current));
-        onUploadComplete?.(record, file);
-      } catch (caught) {
+        recordsRef.current = nextRecords;
+        attemptsRef.current.delete(item.key);
         controllersRef.current.delete(item.key);
-        reservationsRef.current.delete(item.key);
-        const error = toError(caught);
+        setItems((current) => [
+          ...current.filter(
+            (currentItem) =>
+              currentItem.key !== item.key &&
+              currentItem.record?.id !== item.replaceFileId,
+          ),
+          toReadyItem(ready),
+        ]);
+        onChange(nextRecords);
+        try {
+          await onUploadComplete?.(ready);
+        } catch (error) {
+          onUploadError?.(toError(error), source);
+        }
+      } catch (error) {
+        controllersRef.current.delete(item.key);
+        attemptsRef.current.delete(item.key);
         const cancelled = controller.signal.aborted;
-        setItems((current) =>
-          current.map((currentItem) =>
-            currentItem.key === item.key
-              ? {
-                  ...currentItem,
-                  status: cancelled ? 'cancelled' : 'error',
-                  error: cancelled ? undefined : error,
-                }
-              : currentItem,
-          ),
-        );
-        if (!cancelled) onUploadError?.(error, file);
+        const resolvedError = toError(error);
+        updateAttempt(item.key, (current) => ({
+          ...current,
+          status: cancelled ? 'cancelled' : 'error',
+          error: cancelled ? undefined : resolvedError,
+          progress: undefined,
+        }));
+        if (!cancelled) onUploadError?.(resolvedError, source);
       }
     },
     [
-      descriptor,
+      accept,
+      maxBytes,
       messages,
       multiple,
       onChange,
       onUploadComplete,
       onUploadError,
+      onUploadProgress,
       onUploadStart,
-      uploadFile,
-      uploadMode,
+      path,
+      updateAttempt,
     ],
   );
 
-  const addFiles = useCallback(
-    async (fileList: FileList | File[]) => {
+  const queueFiles = useCallback(
+    async (
+      fileList: FileList | readonly File[],
+      replaceFileId?: string,
+    ): Promise<void> => {
       if (!canUpload) return;
-
       const selected = Array.from(fileList);
-      const available = getAvailableFileCount(
-        limit,
-        recordsRef.current.length,
-        reservationsRef.current.size,
-        selected.length,
-      );
+      const replaceTarget =
+        replaceFileId ?? (!multiple ? recordsRef.current[0]?.id : undefined);
+      const available = replaceTarget
+        ? 1
+        : getAvailableFileCount(
+            multiple ? maxFiles : 1,
+            recordsRef.current.length,
+            additionCount,
+            selected.length,
+          );
       const additions = selected.slice(0, available).map((file) => ({
-        key: getFileKey(file),
+        key: createUploadKey(file),
         rawFile: file,
         displayName: file.name,
-        showStatus: true,
-        status: 'pending' as const,
+        status: 'queued' as const,
+        ...(replaceTarget ? { replaceFileId: replaceTarget } : {}),
       }));
       if (!additions.length) return;
 
-      additions.forEach((item) => reservationsRef.current.add(item.key));
-      setItems((current) =>
-        multiple
-          ? [...current, ...additions]
-          : current
-              .filter((entry) => entry.status !== 'done')
-              .concat(additions),
+      additions.forEach((item) =>
+        attemptsRef.current.set(item.key, item.replaceFileId),
       );
-
+      setItems((current) => [
+        ...current.filter(
+          (item) =>
+            item.status === 'done' ||
+            (item.status !== 'error' && item.status !== 'cancelled'),
+        ),
+        ...additions,
+      ]);
       for (const item of additions) await runUpload(item);
     },
-    [canUpload, limit, multiple, runUpload],
+    [additionCount, canUpload, maxFiles, multiple, runUpload],
+  );
+
+  const addFiles = useCallback(
+    (fileList: FileList | readonly File[]) => queueFiles(fileList),
+    [queueFiles],
+  );
+
+  const replaceFile = useCallback(
+    (replaceFileId: string, file: File) => queueFiles([file], replaceFileId),
+    [queueFiles],
+  );
+
+  const cancelItem = useCallback(
+    (key: string): void => {
+      const controller = controllersRef.current.get(key);
+      if (controller) {
+        controller.abort();
+        return;
+      }
+      attemptsRef.current.delete(key);
+      updateAttempt(key, (item) => ({ ...item, status: 'cancelled' }));
+    },
+    [updateAttempt],
   );
 
   const retryItem = useCallback(
-    async (key: string) => {
+    async (key: string): Promise<void> => {
       if (!canUpload) return;
       const item = items.find((current) => current.key === key);
       if (!item?.rawFile) return;
-
-      const available = getAvailableFileCount(
-        limit,
-        recordsRef.current.length,
-        reservationsRef.current.size,
-        1,
-      );
-      if (!available) return;
-      reservationsRef.current.add(key);
+      attemptsRef.current.set(key, item.replaceFileId);
       await runUpload(item);
     },
-    [canUpload, items, limit, runUpload],
+    [canUpload, items, runUpload],
+  );
+
+  const removeItem = useCallback(
+    async (key: string): Promise<void> => {
+      const item = items.find((current) => current.key === key);
+      if (!item) return;
+      if (item.status !== 'done' || !item.record) {
+        controllersRef.current.get(key)?.abort();
+        controllersRef.current.delete(key);
+        attemptsRef.current.delete(key);
+        setItems((current) => current.filter((entry) => entry.key !== key));
+        return;
+      }
+
+      setOperationError(null);
+      try {
+        await nocobaseClient.request(
+          `${path}/${encodeURIComponent(item.record.id)}`,
+          { method: 'DELETE', unwrap: 'none' },
+        );
+        const nextRecords = recordsRef.current.filter(
+          (record) => record.id !== item.record?.id,
+        );
+        recordsRef.current = nextRecords;
+        setItems((current) => current.filter((entry) => entry.key !== key));
+        onChange(nextRecords);
+      } catch (error) {
+        setOperationError(toError(error));
+      }
+    },
+    [items, onChange, path],
   );
 
   return {
     items,
     addFiles,
+    replaceFile,
     removeItem,
     cancelItem,
     retryItem,
-    storageError,
+    operationError,
     canUpload,
     multiple,
     reachedLimit,
+    uploadActive: activeCount > 0,
   };
+}
+
+function createUploadKey(file: File): string {
+  uploadKeySeed += 1;
+  return `${file.name}-${file.size}-${file.lastModified}-${uploadKeySeed}`;
+}
+
+function toReadyItem(record: StoredFile): FileUploadItem {
+  return {
+    key: record.id,
+    displayName: record.name,
+    status: 'done',
+    record,
+  };
+}
+
+function hasSameItems(
+  current: readonly FileUploadItem[],
+  next: readonly FileUploadItem[],
+): boolean {
+  return (
+    current.length === next.length &&
+    current.every((item, index) => {
+      const candidate = next[index];
+      return (
+        candidate !== undefined &&
+        item.key === candidate.key &&
+        item.status === candidate.status &&
+        item.record?.updatedAt === candidate.record?.updatedAt &&
+        item.rawFile === candidate.rawFile &&
+        item.error === candidate.error &&
+        item.progress === candidate.progress
+      );
+    })
+  );
+}
+
+function replaceRecord(
+  current: StoredFile[],
+  ready: StoredFile,
+  replaceFileId: string | undefined,
+  multiple: boolean,
+): StoredFile[] {
+  if (!multiple) return [ready];
+  if (!replaceFileId) return [...current, ready];
+  const index = current.findIndex((record) => record.id === replaceFileId);
+  if (index < 0) return [...current, ready];
+  return current.map((record, currentIndex) =>
+    currentIndex === index ? ready : record,
+  );
+}
+
+function getAvailableFileCount(
+  limit: number | undefined,
+  readyCount: number,
+  pendingCount: number,
+  selectedCount: number,
+): number {
+  if (limit === undefined) return selectedCount;
+  return Math.max(
+    0,
+    Math.min(selectedCount, limit - readyCount - pendingCount),
+  );
+}
+
+function assertCreatedUpload(value: CreateScopedFileResponse): void {
+  if (
+    !value ||
+    value.file?.status !== 'pending' ||
+    !value.file.id ||
+    value.plan?.fileId !== value.file.id
+  ) {
+    throw new Error('The Scoped Files route returned an invalid upload plan.');
+  }
+}
+
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
 }

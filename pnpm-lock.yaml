@@ -959,6 +959,9 @@ importers:
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
+      '@nocobase/app-plugin-files':
+        specifier: workspace:^
+        version: link:../app-plugin-files
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../dev-config

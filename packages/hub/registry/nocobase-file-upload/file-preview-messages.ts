@@ -7,6 +7,8 @@ export const defaultFilePreviewMessages: FilePreviewMessages = {
   next: 'Next file',
   close: 'Close',
   noFiles: 'No files',
+  loading: 'Loading file...',
+  loadError: 'Unable to load file',
   unsupportedTitle: 'Preview is not available',
   unsupportedDescription:
     'This file format is not supported for preview. Download the file to view it.',
@@ -15,7 +17,6 @@ export const defaultFilePreviewMessages: FilePreviewMessages = {
   textTitle: 'File preview',
   audioTitle: 'Audio preview',
   videoTitle: 'Video preview',
-  officeTitle: 'Office preview',
-  officeLoading: 'Preparing Office preview...',
-  officeError: 'Office preview is not available',
+  officeTitle: 'Office document',
+  officeError: 'Office documents are download-only in Files V1.',
 };

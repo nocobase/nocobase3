@@ -4,8 +4,9 @@ import {
   CircleX,
   Loader2,
   Plus,
-  Trash2,
+  RefreshCw,
   RotateCcw,
+  Trash2,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -14,206 +15,91 @@ import { useMemo, useRef, useState, type ComponentProps } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
-  useRegisterFieldValidationController,
-  type FieldValidationController,
-} from '@/lib/field-validation';
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  useRegisterFieldValidationController,
+  type FieldValidationController,
+} from '@/lib/field-validation';
 import { cn } from '@/lib/utils';
 
 import { FilePreviewDialog } from './file-preview-dialog';
 import { defaultFilePreviewMessages } from './file-preview-messages';
-import { getFileName } from './file-url';
 import { FileThumbnail } from './file-thumbnail';
+import { getFileName } from './file-url';
 import { useFileUpload } from './use-file-upload';
 import { getAcceptAttribute } from './validation';
 import type {
-  FileFieldDescriptor,
-  FileUploadFieldValue,
-  FileUploadHandler,
+  FilePreviewMessages,
   FileUploadItem,
   FileUploadMessages,
-  FileUploadMode,
-  FilePreviewMessages,
-  NocoBaseFileRecord,
+  FileUploadProgress,
+  StoredFile,
 } from './types';
 
 export type FileUploadFieldProps = Omit<ComponentProps<'div'>, 'onChange'> & {
-  descriptor: FileFieldDescriptor;
-  value: FileUploadFieldValue;
-  onChange: (value: FileUploadFieldValue) => void;
+  basePath: string;
+  value: StoredFile[];
+  onChange: (value: StoredFile[]) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  multiple?: boolean;
   maxFiles?: number;
-  uploadMode?: FileUploadMode;
-  uploadFile?: FileUploadHandler;
+  maxBytes?: number;
+  accept?: string | readonly string[];
   showRemoveTooltip?: boolean;
   messages?: Partial<FileUploadMessages>;
   previewMessages?: Partial<FilePreviewMessages>;
   onUploadStart?: (file: File) => void;
-  onUploadComplete?: (record: NocoBaseFileRecord, file: File) => void;
+  onUploadProgress?: (progress: FileUploadProgress, file: File) => void;
+  onUploadComplete?: (file: StoredFile) => void | Promise<void>;
   onUploadError?: (error: Error, file: File) => void;
 };
 
 const defaultMessages: FileUploadMessages = {
   chooseFiles: 'Choose files',
   chooseFile: 'Choose file',
+  replace: 'Replace',
   dragActive: 'Drop files here',
   dragInactive: 'Drag files here, or choose from your device.',
-  checkingStorage: 'Checking upload settings',
+  queued: 'Queued',
   uploading: 'Uploading',
+  completing: 'Completing',
   uploaded: 'Uploaded',
   failed: 'Failed',
   cancelled: 'Cancelled',
   retry: 'Retry',
   remove: 'Remove',
   cancel: 'Cancel',
-  storageUnsupported: 'This field is not connected to a file collection.',
   maxFilesReached: 'The file limit has been reached.',
   uploadDisabled: 'File upload is disabled.',
   noFiles: 'No files',
-  fileSizeExceeded: (maxSize) =>
-    `File size exceeds ${formatFileSize(maxSize)}.`,
-  storageMimeTypeRejected: 'File type is not allowed by storage.',
-  fieldMimeTypeRejected: 'File type is not allowed for this field.',
-  directUploadFailed: (status) => `Direct upload failed (${status}).`,
+  fileSizeExceeded: (maxBytes) =>
+    `File size exceeds ${formatFileSize(maxBytes)}.`,
+  fileTypeRejected: 'File type is not allowed.',
   uploadInProgress: 'Wait for all files to finish uploading.',
   uploadFailedValidation: 'Retry or remove files that failed to upload.',
 };
 
-function formatFileSize(size?: number) {
-  if (size === undefined) return '-';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function getStatusLabel(item: FileUploadItem, messages: FileUploadMessages) {
-  if (item.status === 'checking') return messages.checkingStorage;
-  if (item.status === 'pending' || item.status === 'uploading') {
-    return messages.uploading;
-  }
-  if (item.status === 'done') return messages.uploaded;
-  if (item.status === 'cancelled') return messages.cancelled;
-  return messages.failed;
-}
-
-function UploadStatusIcon({
-  item,
-  messages,
-}: {
-  item: FileUploadItem;
-  messages: FileUploadMessages;
-}) {
-  const label = getStatusLabel(item, messages);
-  const iconClassName = 'size-3.5';
-  const isPending =
-    item.status === 'pending' ||
-    item.status === 'checking' ||
-    item.status === 'uploading';
-
-  return (
-    <span
-      aria-label={label}
-      title={label}
-      className={cn(
-        'inline-flex size-6 items-center justify-center rounded-full border shadow-sm',
-        item.status === 'done' && 'border-green-600/20 bg-green-600 text-white',
-        item.status === 'error' &&
-          'border-destructive/20 bg-destructive text-destructive-foreground',
-        item.status === 'cancelled' &&
-          'border-muted-foreground/20 bg-muted text-muted-foreground',
-        isPending && 'border-primary/20 bg-primary text-primary-foreground',
-      )}
-    >
-      {item.status === 'done' ? (
-        <Check className={iconClassName} />
-      ) : item.status === 'error' ? (
-        <AlertCircle className={iconClassName} />
-      ) : item.status === 'cancelled' ? (
-        <CircleX className={iconClassName} />
-      ) : (
-        <Loader2 className={cn(iconClassName, 'animate-spin')} />
-      )}
-    </span>
-  );
-}
-
-function IconButton({
-  icon: Icon,
-  label,
-  onClick,
-  disabled,
-  showTooltip = true,
-}: {
-  icon: LucideIcon;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  showTooltip?: boolean;
-}) {
-  if (!showTooltip) {
-    return (
-      <Button
-        type='button'
-        variant='ghost'
-        size='icon-sm'
-        aria-label={label}
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClick();
-        }}
-        className='size-6 border border-border/60 bg-background/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-background hover:text-foreground'
-      >
-        <Icon />
-      </Button>
-    );
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            type='button'
-            variant='ghost'
-            size='icon-sm'
-            aria-label={label}
-            disabled={disabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClick();
-            }}
-            className='size-6 border border-border/60 bg-background/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-background hover:text-foreground'
-          />
-        }
-      >
-        <Icon />
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
 export function FileUploadField({
-  descriptor,
+  basePath,
   value,
   onChange,
   disabled,
   readOnly,
+  multiple = false,
   maxFiles,
-  uploadMode,
-  uploadFile,
+  maxBytes,
+  accept,
   showRemoveTooltip = true,
   className,
   messages: messageOverrides,
   previewMessages: previewMessageOverrides,
   onUploadStart,
+  onUploadProgress,
   onUploadComplete,
   onUploadError,
   ...rootProps
@@ -236,24 +122,27 @@ export function FileUploadField({
   const {
     items,
     addFiles,
+    replaceFile,
     removeItem,
     cancelItem,
     retryItem,
-    storageError,
+    operationError,
     canUpload,
-    multiple,
     reachedLimit,
+    uploadActive,
   } = useFileUpload({
-    descriptor,
+    basePath,
     value,
     onChange,
     disabled,
     readOnly,
+    multiple,
     maxFiles,
-    uploadMode,
-    uploadFile,
+    maxBytes,
+    accept,
     messages,
     onUploadStart,
+    onUploadProgress,
     onUploadComplete,
     onUploadError,
   });
@@ -264,18 +153,12 @@ export function FileUploadField({
   const validationController = useMemo<FieldValidationController>(
     () => ({
       validate: () => {
-        const validationItems = validationItemsRef.current;
-        if (
-          validationItems.some(
-            (item) =>
-              item.status === 'pending' ||
-              item.status === 'checking' ||
-              item.status === 'uploading',
-          )
-        ) {
+        if (validationItemsRef.current.some(isActiveItem)) {
           return validationMessagesRef.current.uploadInProgress;
         }
-        if (validationItems.some((item) => item.status === 'error')) {
+        if (
+          validationItemsRef.current.some((item) => item.status === 'error')
+        ) {
           return validationMessagesRef.current.uploadFailedValidation;
         }
         return true;
@@ -284,7 +167,8 @@ export function FileUploadField({
     [],
   );
   useRegisterFieldValidationController(validationController);
-  const uploadDisabled = !canUpload || reachedLimit;
+
+  const uploadDisabled = !canUpload || (multiple ? reachedLimit : uploadActive);
   const selectable = !readOnly && !uploadDisabled;
   const previewableFiles = useMemo(
     () =>
@@ -294,33 +178,23 @@ export function FileUploadField({
     [items],
   );
 
-  const handleSelectedFiles = (fileList: FileList | null) => {
-    if (!fileList?.length || uploadDisabled) return;
-    void addFiles(fileList);
-  };
-
-  const handleDrop = (event: React.DragEvent<HTMLElement>) => {
+  const handleDrop = (event: React.DragEvent<HTMLElement>): void => {
     event.preventDefault();
     event.stopPropagation();
     setIsDragging(false);
-    if (uploadDisabled) return;
-    void addFiles(event.dataTransfer.files);
+    if (!uploadDisabled) void addFiles(event.dataTransfer.files);
   };
 
   return (
     <div
       data-slot='file-upload-field'
       className={cn('space-y-3', className)}
-      aria-busy={
-        items.some(
-          (item) => item.status === 'checking' || item.status === 'uploading',
-        ) || undefined
-      }
+      aria-busy={uploadActive || undefined}
       {...rootProps}
     >
-      {storageError ? (
+      {operationError ? (
         <Alert variant='destructive'>
-          <AlertDescription>{storageError.message}</AlertDescription>
+          <AlertDescription>{operationError.message}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -334,16 +208,13 @@ export function FileUploadField({
           {items.map((item) => {
             const itemPreviewIndex = item.record
               ? previewableFiles.findIndex(
-                  (file) => String(file.id) === String(item.record?.id),
+                  (file) => file.id === item.record?.id,
                 )
               : -1;
             const canPreview = item.status === 'done' && itemPreviewIndex >= 0;
-            const canCancel =
-              item.status === 'checking' || item.status === 'uploading';
             const filename = item.record
               ? getFileName(item.record)
               : item.displayName;
-
             return (
               <div key={item.key} className='w-[104px]'>
                 <div
@@ -353,15 +224,24 @@ export function FileUploadField({
                     canPreview && 'hover:border-primary',
                   )}
                 >
-                  {item.status === 'uploading' || item.status === 'checking' ? (
-                    <div className='flex size-full items-center justify-center rounded-md bg-muted/40'>
+                  {isActiveItem(item) ? (
+                    <div className='flex size-full flex-col items-center justify-center gap-2 rounded-md bg-muted/40 px-2'>
                       <Loader2 className='size-6 animate-spin text-muted-foreground' />
+                      <div className='h-1.5 w-full overflow-hidden rounded bg-muted'>
+                        <div
+                          className='h-full bg-primary transition-[width]'
+                          style={{
+                            width: `${Math.round(item.progress?.percentage ?? 0)}%`,
+                          }}
+                        />
+                      </div>
                     </div>
                   ) : (
                     <FileThumbnail
+                      basePath={basePath}
                       file={item.record}
                       rawFile={item.rawFile}
-                      alt={item.record?.title || item.displayName}
+                      alt={item.record?.name || item.displayName}
                     />
                   )}
 
@@ -377,7 +257,7 @@ export function FileUploadField({
                     />
                   ) : null}
 
-                  {item.showStatus ? (
+                  {item.rawFile ? (
                     <div className='pointer-events-none absolute bottom-2 right-2 z-20'>
                       <UploadStatusIcon item={item} messages={messages} />
                     </div>
@@ -385,15 +265,25 @@ export function FileUploadField({
 
                   {!readOnly ? (
                     <div className='pointer-events-none absolute right-2 top-2 z-20 flex items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100'>
+                      {item.status === 'done' && item.record ? (
+                        <ReplaceButton
+                          accept={accept}
+                          disabled={disabled}
+                          label={messages.replace}
+                          onFile={(file) =>
+                            void replaceFile(item.record!.id, file)
+                          }
+                        />
+                      ) : null}
                       {item.status === 'error' && item.rawFile ? (
                         <IconButton
                           icon={RotateCcw}
                           label={messages.retry}
-                          disabled={disabled || reachedLimit}
+                          disabled={disabled}
                           onClick={() => void retryItem(item.key)}
                         />
                       ) : null}
-                      {canCancel ? (
+                      {isActiveItem(item) ? (
                         <IconButton
                           icon={X}
                           label={messages.cancel}
@@ -406,7 +296,7 @@ export function FileUploadField({
                           label={messages.remove}
                           disabled={disabled}
                           showTooltip={showRemoveTooltip}
-                          onClick={() => removeItem(item.key)}
+                          onClick={() => void removeItem(item.key)}
                         />
                       )}
                     </div>
@@ -457,13 +347,15 @@ export function FileUploadField({
               <input
                 type='file'
                 multiple={multiple}
-                accept={getAcceptAttribute(descriptor.accept)}
+                accept={getAcceptAttribute(accept)}
                 aria-label={
                   multiple ? messages.chooseFiles : messages.chooseFile
                 }
                 className='absolute inset-0 z-10 size-full cursor-pointer opacity-0'
                 onChange={(event) => {
-                  handleSelectedFiles(event.currentTarget.files);
+                  if (event.currentTarget.files?.length) {
+                    void addFiles(event.currentTarget.files);
+                  }
                   event.currentTarget.value = '';
                 }}
               />
@@ -480,18 +372,15 @@ export function FileUploadField({
 
       {!readOnly ? (
         <p className='text-xs text-muted-foreground'>
-          {reachedLimit
+          {multiple && reachedLimit
             ? messages.maxFilesReached
             : disabled
               ? messages.uploadDisabled
               : isDragging
                 ? messages.dragActive
-                : descriptor.accept
-                  ? getAcceptAttribute(descriptor.accept)
-                  : messages.dragInactive}
+                : getAcceptAttribute(accept) || messages.dragInactive}
         </p>
       ) : null}
-
       {readOnly && !items.length ? (
         <p className='text-sm text-muted-foreground'>{messages.noFiles}</p>
       ) : null}
@@ -505,13 +394,149 @@ export function FileUploadField({
       </div>
 
       <FilePreviewDialog
+        basePath={basePath}
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         files={previewableFiles}
         initialIndex={previewIndex}
-        descriptor={descriptor}
         messages={previewMessages}
       />
     </div>
+  );
+}
+
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function isActiveItem(item: FileUploadItem): boolean {
+  return (
+    item.status === 'queued' ||
+    item.status === 'uploading' ||
+    item.status === 'completing'
+  );
+}
+
+function getStatusLabel(
+  item: FileUploadItem,
+  messages: FileUploadMessages,
+): string {
+  if (item.status === 'queued') return messages.queued;
+  if (item.status === 'uploading') return messages.uploading;
+  if (item.status === 'completing') return messages.completing;
+  if (item.status === 'done') return messages.uploaded;
+  if (item.status === 'cancelled') return messages.cancelled;
+  return messages.failed;
+}
+
+function UploadStatusIcon({
+  item,
+  messages,
+}: {
+  item: FileUploadItem;
+  messages: FileUploadMessages;
+}) {
+  const label = getStatusLabel(item, messages);
+  const pending = isActiveItem(item);
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      className={cn(
+        'inline-flex size-6 items-center justify-center rounded-full border shadow-sm',
+        item.status === 'done' && 'border-green-600/20 bg-green-600 text-white',
+        item.status === 'error' &&
+          'border-destructive/20 bg-destructive text-destructive-foreground',
+        item.status === 'cancelled' &&
+          'border-muted-foreground/20 bg-muted text-muted-foreground',
+        pending && 'border-primary/20 bg-primary text-primary-foreground',
+      )}
+    >
+      {item.status === 'done' ? (
+        <Check className='size-3.5' />
+      ) : item.status === 'error' ? (
+        <AlertCircle className='size-3.5' />
+      ) : item.status === 'cancelled' ? (
+        <CircleX className='size-3.5' />
+      ) : (
+        <Loader2 className='size-3.5 animate-spin' />
+      )}
+    </span>
+  );
+}
+
+function ReplaceButton({
+  accept,
+  disabled,
+  label,
+  onFile,
+}: {
+  accept?: string | readonly string[];
+  disabled?: boolean;
+  label: string;
+  onFile: (file: File) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <IconButton
+        icon={RefreshCw}
+        label={label}
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+      />
+      <input
+        ref={inputRef}
+        type='file'
+        accept={getAcceptAttribute(accept)}
+        className='hidden'
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          if (file) onFile(file);
+          event.currentTarget.value = '';
+        }}
+      />
+    </>
+  );
+}
+
+function IconButton({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  showTooltip = true,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  showTooltip?: boolean;
+}) {
+  const button = (
+    <Button
+      type='button'
+      variant='ghost'
+      size='icon-sm'
+      aria-label={label}
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className='size-6 border border-border/60 bg-background/90 text-foreground shadow-sm backdrop-blur-sm hover:bg-background hover:text-foreground'
+    >
+      <Icon />
+    </Button>
+  );
+  if (!showTooltip) return button;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={button} />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }

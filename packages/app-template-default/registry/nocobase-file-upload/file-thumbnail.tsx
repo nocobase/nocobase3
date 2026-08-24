@@ -25,7 +25,7 @@ import {
   isPdfFile,
   isVideoFile,
 } from './file-preview-types';
-import type { NocoBaseFileRecord } from './types';
+import type { StoredFile } from './types';
 
 type FileThumbnailKind =
   | 'archive'
@@ -41,7 +41,8 @@ type FileThumbnailKind =
   | 'video';
 
 export type FileThumbnailProps = {
-  file?: NocoBaseFileRecord;
+  basePath?: string;
+  file?: StoredFile;
   rawFile?: File;
   alt?: string;
   className?: string;
@@ -158,13 +159,9 @@ function getNameExtension(value?: string) {
   return dotIndex >= 0 ? value.slice(dotIndex).toLowerCase() : '';
 }
 
-function getRecordExtension(file?: NocoBaseFileRecord) {
+function getRecordExtension(file?: StoredFile) {
   if (!file) return '';
-  return file.extname
-    ? file.extname.startsWith('.')
-      ? file.extname.toLowerCase()
-      : `.${file.extname.toLowerCase()}`
-    : getNameExtension(file.title) || getNameExtension(file.filename);
+  return getNameExtension(file.name);
 }
 
 function getRawFileExtension(file?: File) {
@@ -196,7 +193,7 @@ function getRawFileKind(file?: File): FileThumbnailKind {
   return 'default';
 }
 
-function getFileThumbnailKind(file: NocoBaseFileRecord): FileThumbnailKind {
+function getFileThumbnailKind(file: StoredFile): FileThumbnailKind {
   const extension = getRecordExtension(file) || getFileExtension(file);
   const mimetype = getFileMimeType(file);
 
@@ -217,6 +214,7 @@ function getFileThumbnailKind(file: NocoBaseFileRecord): FileThumbnailKind {
 }
 
 export function FileThumbnail({
+  basePath,
   file,
   rawFile,
   alt,
@@ -225,7 +223,7 @@ export function FileThumbnail({
   imageClassName,
   showExtensionBadge = true,
 }: FileThumbnailProps) {
-  const thumbnailUrl = file ? getThumbnailUrl(file) : '';
+  const thumbnailUrl = file && basePath ? getThumbnailUrl(basePath, file) : '';
   const [imageFailed, setImageFailed] = useState(false);
   const showImage = Boolean(
     file && isImageFile(file) && thumbnailUrl && !imageFailed,
@@ -238,7 +236,7 @@ export function FileThumbnail({
       <img
         data-slot='file-thumbnail'
         src={thumbnailUrl}
-        alt={alt ?? file?.title ?? file?.filename ?? ''}
+        alt={alt ?? file?.name ?? ''}
         className={cn('h-full w-full object-cover', imageClassName)}
         onError={() => setImageFailed(true)}
       />

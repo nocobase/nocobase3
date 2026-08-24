@@ -17,6 +17,7 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
+    "@nocobase/app-plugin-files": "workspace:^",
     "@nocobase/portal-sdk": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@playwright/test": "catalog:",

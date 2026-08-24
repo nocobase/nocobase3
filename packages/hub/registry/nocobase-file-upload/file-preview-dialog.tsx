@@ -11,30 +11,26 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-import { getFileName, triggerFileDownload } from './file-url';
 import { defaultFilePreviewMessages } from './file-preview-messages';
 import { getPreviewType } from './file-preview-types';
-import type {
-  FileFieldDescriptor,
-  FilePreviewMessages,
-  NocoBaseFileRecord,
-} from './types';
+import { getFileName, triggerFileDownload } from './file-url';
+import type { FilePreviewMessages, StoredFile } from './types';
 
 export type FilePreviewDialogProps = {
+  basePath: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  files: NocoBaseFileRecord[];
+  files: StoredFile[];
   initialIndex?: number;
-  descriptor?: FileFieldDescriptor;
   messages?: Partial<FilePreviewMessages>;
 };
 
 export function FilePreviewDialog({
+  basePath,
   open,
   onOpenChange,
   files,
   initialIndex = 0,
-  descriptor,
   messages: messageOverrides,
 }: FilePreviewDialogProps) {
   const [index, setIndex] = useState(initialIndex);
@@ -46,7 +42,6 @@ export function FilePreviewDialog({
   useEffect(() => {
     if (open) setIndex(initialIndex);
   }, [initialIndex, open]);
-
   useEffect(() => {
     setIndex((current) => Math.min(current, Math.max(0, files.length - 1)));
   }, [files.length]);
@@ -56,12 +51,12 @@ export function FilePreviewDialog({
     () => (file ? getPreviewType(file) : null),
     [file],
   );
-
   if (!file || !previewType) return null;
 
   const Previewer = previewType.Previewer;
-  const canGoPrevious = files.length > 1 && index > 0;
-  const canGoNext = files.length > 1 && index < files.length - 1;
+  const download = (downloadFile: StoredFile): void => {
+    void triggerFileDownload(basePath, downloadFile);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,10 +86,8 @@ export function FilePreviewDialog({
                     size='icon-sm'
                     aria-label={messages.previous}
                     title={messages.previous}
-                    disabled={!canGoPrevious}
-                    onClick={() =>
-                      setIndex((current) => Math.max(0, current - 1))
-                    }
+                    disabled={index === 0}
+                    onClick={() => setIndex((current) => current - 1)}
                   >
                     <ChevronLeft />
                   </Button>
@@ -104,12 +97,8 @@ export function FilePreviewDialog({
                     size='icon-sm'
                     aria-label={messages.next}
                     title={messages.next}
-                    disabled={!canGoNext}
-                    onClick={() =>
-                      setIndex((current) =>
-                        Math.min(files.length - 1, current + 1),
-                      )
-                    }
+                    disabled={index === files.length - 1}
+                    onClick={() => setIndex((current) => current + 1)}
                   >
                     <ChevronRight />
                   </Button>
@@ -121,7 +110,7 @@ export function FilePreviewDialog({
                 size='icon-sm'
                 aria-label={messages.download}
                 title={messages.download}
-                onClick={() => triggerFileDownload(file)}
+                onClick={() => download(file)}
               >
                 <Download />
               </Button>
@@ -143,12 +132,12 @@ export function FilePreviewDialog({
         </DialogHeader>
         <div className='h-[min(70vh,720px)] overflow-hidden'>
           <Previewer
+            basePath={basePath}
             file={file}
             index={index}
             list={files}
-            descriptor={descriptor}
             messages={messages}
-            onDownload={triggerFileDownload}
+            onDownload={download}
           />
         </div>
       </DialogContent>

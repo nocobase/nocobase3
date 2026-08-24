@@ -1,39 +1,33 @@
 import type { ComponentProps, ComponentType } from 'react';
 
 import { AudioPreviewer, VideoPreviewer } from './previewers/iframe';
-import { MarkdownPreviewer, TextPreviewer } from './previewers/text';
 import { ImagePreviewer } from './previewers/image';
 import { OfficePreviewer } from './previewers/office';
 import { PdfPreviewer } from './previewers/pdf';
+import { MarkdownPreviewer, TextPreviewer } from './previewers/text';
 import { UnsupportedPreviewer } from './previewers/unsupported';
-import type {
-  FileFieldDescriptor,
-  FilePreviewMessages,
-  FileUploadFieldValue,
-  NocoBaseFileRecord,
-} from './types';
+import type { FilePreviewMessages, StoredFile } from './types';
 
 export type FilePreviewFieldProps = Omit<ComponentProps<'div'>, 'children'> & {
-  value: FileUploadFieldValue;
-  descriptor?: FileFieldDescriptor;
+  basePath: string;
+  value: StoredFile[];
   size?: number;
   showFileName?: boolean;
   messages?: Partial<FilePreviewMessages>;
 };
 
 export type FilePreviewerProps = {
-  file: NocoBaseFileRecord;
+  basePath: string;
+  file: StoredFile;
   index: number;
-  list: NocoBaseFileRecord[];
-  descriptor?: FileFieldDescriptor;
+  list: StoredFile[];
   messages: FilePreviewMessages;
-  onDownload: (file: NocoBaseFileRecord) => void;
+  onDownload: (file: StoredFile) => void;
 };
 
 export type FilePreviewType = {
   key: string;
-  match: (file: NocoBaseFileRecord) => boolean;
-  getThumbnailUrl?: (file: NocoBaseFileRecord) => string | null;
+  match: (file: StoredFile) => boolean;
   Previewer: ComponentType<FilePreviewerProps>;
 };
 
@@ -48,7 +42,6 @@ const officeExtensions = new Set([
   '.ods',
   '.odp',
 ]);
-
 const officeMimeTypes = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -60,7 +53,6 @@ const officeMimeTypes = new Set([
   'application/vnd.oasis.opendocument.spreadsheet',
   'application/vnd.oasis.opendocument.presentation',
 ]);
-
 const activeContentExtensions = new Set([
   '.html',
   '.htm',
@@ -75,96 +67,63 @@ const activeContentMimeTypes = new Set([
   'image/svg+xml',
 ]);
 
-function normalizeExtname(value?: string) {
-  if (!value) return '';
-  const extname = value.trim().toLowerCase();
-  return extname.startsWith('.') ? extname : `.${extname}`;
+export function getFileExtension(file: StoredFile): string {
+  const name = file.name.split(/[?#]/, 1)[0];
+  const dotIndex = name.lastIndexOf('.');
+  return dotIndex >= 0 ? name.slice(dotIndex).toLowerCase() : '';
 }
 
-function getExtensionFromValue(value?: string) {
-  if (!value) return '';
-
-  const withoutQuery = value.split(/[?#]/, 1)[0];
-  const lastSegment = withoutQuery.split('/').filter(Boolean).at(-1) ?? '';
-  let decodedSegment = lastSegment;
-  try {
-    decodedSegment = decodeURIComponent(lastSegment);
-  } catch {
-    // Keep malformed URL segments unchanged and continue best-effort matching.
-  }
-
-  const dotIndex = decodedSegment.lastIndexOf('.');
-  return dotIndex >= 0 ? decodedSegment.slice(dotIndex).toLowerCase() : '';
+export function getFileMimeType(file: StoredFile): string {
+  return file.contentType?.split(';', 1)[0].trim().toLowerCase() ?? '';
 }
 
-export function getFileExtension(file: NocoBaseFileRecord) {
-  const explicit = normalizeExtname(file.extname);
-  if (explicit) return explicit;
-
-  for (const value of [
-    file.filename,
-    file.title,
-    file.url,
-    file.path,
-    file.preview,
-  ]) {
-    const extension = getExtensionFromValue(value);
-    if (extension) return extension;
-  }
-
-  return '';
-}
-
-export function getFileMimeType(file: NocoBaseFileRecord) {
-  return file.mimetype?.split(';', 1)[0].trim().toLowerCase() ?? '';
-}
-
-export function isOfficeFile(file: NocoBaseFileRecord) {
+export function isOfficeFile(file: StoredFile): boolean {
   return (
     officeMimeTypes.has(getFileMimeType(file)) ||
     officeExtensions.has(getFileExtension(file))
   );
 }
 
-export function isImageFile(file: NocoBaseFileRecord) {
-  const mimetype = getFileMimeType(file);
-  return mimetype.startsWith('image/') && !isActiveContentFile(file);
+export function isImageFile(file: StoredFile): boolean {
+  return (
+    getFileMimeType(file).startsWith('image/') && !isActiveContentFile(file)
+  );
 }
 
-export function isPdfFile(file: NocoBaseFileRecord) {
+export function isPdfFile(file: StoredFile): boolean {
   return (
     getFileMimeType(file) === 'application/pdf' ||
     getFileExtension(file) === '.pdf'
   );
 }
 
-export function isTextFile(file: NocoBaseFileRecord) {
-  const mimetype = getFileMimeType(file);
+export function isTextFile(file: StoredFile): boolean {
+  const contentType = getFileMimeType(file);
   const extension = getFileExtension(file);
-
   return (
-    mimetype.startsWith('text/') ||
-    mimetype === 'application/json' ||
+    contentType.startsWith('text/') ||
+    contentType === 'application/json' ||
     extension === '.txt' ||
     extension === '.json'
   );
 }
 
-export function isMarkdownFile(file: NocoBaseFileRecord) {
-  const mimetype = getFileMimeType(file);
-  const extension = getFileExtension(file);
-  return mimetype === 'text/markdown' || extension === '.md';
+export function isMarkdownFile(file: StoredFile): boolean {
+  return (
+    getFileMimeType(file) === 'text/markdown' ||
+    getFileExtension(file) === '.md'
+  );
 }
 
-export function isAudioFile(file: NocoBaseFileRecord) {
+export function isAudioFile(file: StoredFile): boolean {
   return getFileMimeType(file).startsWith('audio/');
 }
 
-export function isVideoFile(file: NocoBaseFileRecord) {
+export function isVideoFile(file: StoredFile): boolean {
   return getFileMimeType(file).startsWith('video/');
 }
 
-export function isActiveContentFile(file: NocoBaseFileRecord) {
+export function isActiveContentFile(file: StoredFile): boolean {
   return (
     activeContentMimeTypes.has(getFileMimeType(file)) ||
     activeContentExtensions.has(getFileExtension(file))
@@ -172,31 +131,11 @@ export function isActiveContentFile(file: NocoBaseFileRecord) {
 }
 
 export const defaultPreviewTypes: FilePreviewType[] = [
-  {
-    key: 'office',
-    match: isOfficeFile,
-    Previewer: OfficePreviewer,
-  },
-  {
-    key: 'image',
-    match: isImageFile,
-    Previewer: ImagePreviewer,
-  },
-  {
-    key: 'pdf',
-    match: isPdfFile,
-    Previewer: PdfPreviewer,
-  },
-  {
-    key: 'audio',
-    match: isAudioFile,
-    Previewer: AudioPreviewer,
-  },
-  {
-    key: 'video',
-    match: isVideoFile,
-    Previewer: VideoPreviewer,
-  },
+  { key: 'office', match: isOfficeFile, Previewer: OfficePreviewer },
+  { key: 'image', match: isImageFile, Previewer: ImagePreviewer },
+  { key: 'pdf', match: isPdfFile, Previewer: PdfPreviewer },
+  { key: 'audio', match: isAudioFile, Previewer: AudioPreviewer },
+  { key: 'video', match: isVideoFile, Previewer: VideoPreviewer },
   {
     key: 'markdown',
     match: (file) => isMarkdownFile(file) && !isActiveContentFile(file),
@@ -207,18 +146,9 @@ export const defaultPreviewTypes: FilePreviewType[] = [
     match: (file) => isTextFile(file) && !isActiveContentFile(file),
     Previewer: TextPreviewer,
   },
-  {
-    key: 'active-content',
-    match: isActiveContentFile,
-    Previewer: UnsupportedPreviewer,
-  },
-  {
-    key: 'unsupported',
-    match: () => true,
-    Previewer: UnsupportedPreviewer,
-  },
+  { key: 'unsupported', match: () => true, Previewer: UnsupportedPreviewer },
 ];
 
-export function getPreviewType(file: NocoBaseFileRecord) {
+export function getPreviewType(file: StoredFile): FilePreviewType {
   return defaultPreviewTypes.find((previewType) => previewType.match(file))!;
 }

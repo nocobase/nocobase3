@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import type { FilePreviewerProps } from '../file-preview-types';
-import { getPreviewFileUrl } from '../file-url';
+import { fetchFileContent } from '../file-url';
 
 const markdownComponents: Components = {
   h1: ({ className, ...props }) => (
@@ -123,7 +123,7 @@ function PreviewLabel({ children }: { children: ReactNode }) {
   );
 }
 
-function useTextFile(file: FilePreviewerProps['file']) {
+function useTextFile(basePath: string, file: FilePreviewerProps['file']) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -134,13 +134,8 @@ function useTextFile(file: FilePreviewerProps['file']) {
     setError(undefined);
     setLoading(true);
 
-    fetch(getPreviewFileUrl(file), { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Unable to load file (${response.status})`);
-        }
-        return response.text();
-      })
+    fetchFileContent(basePath, file, { signal: controller.signal })
+      .then((response) => response.text())
       .then(setContent)
       .catch((caught) => {
         if (!controller.signal.aborted) {
@@ -154,7 +149,7 @@ function useTextFile(file: FilePreviewerProps['file']) {
       });
 
     return () => controller.abort();
-  }, [file]);
+  }, [basePath, file]);
 
   return { content, loading, error };
 }
@@ -202,7 +197,7 @@ function TextPreviewLayout({
 }
 
 export function TextPreviewer(props: FilePreviewerProps) {
-  const state = useTextFile(props.file);
+  const state = useTextFile(props.basePath, props.file);
   return (
     <TextPreviewLayout
       {...props}
@@ -217,7 +212,7 @@ export function TextPreviewer(props: FilePreviewerProps) {
 }
 
 export function MarkdownPreviewer(props: FilePreviewerProps) {
-  const state = useTextFile(props.file);
+  const state = useTextFile(props.basePath, props.file);
   return (
     <TextPreviewLayout
       {...props}
