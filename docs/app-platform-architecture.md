@@ -152,6 +152,34 @@ export const createServer: AppFactory = (appScope) => {
 使用 Hono 或其他 HTTP 实现，`app-host` 只依赖统一的
 `{ fetch, websocket? }` 接口。
 
+### Server 与 Client 路由
+
+```text
+Browser request
+      │
+      ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ createAppServer() -> AppServer.fetch(request)                      │
+│                                                                    │
+│  /api/*          -> API routes       -> JSON response              │
+│  /<custom-route> -> Server route     -> Response                   │
+│  /*              -> SPA fallback     -> index.html                 │
+└────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  │ 仅 SPA fallback
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ createAppClient() -> Refine App (React App)                        │
+│                                                                    │
+│ BrowserRouter / AppRouter                                          │
+│  /<custom-page> -> Client route -> Page                            │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+Server Routes 按顺序匹配，`/*` 作为最后的 SPA fallback。首次直接访问
+`/<custom-page>` 时，Server 先返回 `index.html` 并注入
+`window.nb_config`；Client 启动后，再由 Refine App 中的前端路由渲染页面。
+
 ### Server 组装（createAppServer）
 
 ```text
@@ -210,34 +238,6 @@ Refine App（React App）
   </ReactProviderTree>
 </BrowserRouter>
 ```
-
-### Server 与 Client 路由
-
-```text
-Browser request
-      │
-      ▼
-┌────────────────────────────────────────────────────────────────────┐
-│ createAppServer() -> AppServer.fetch(request)                      │
-│                                                                    │
-│  /api/*          -> API routes       -> JSON response              │
-│  /<custom-route> -> Server route     -> Response                   │
-│  /*              -> SPA fallback     -> index.html                 │
-└────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  │ 仅 SPA fallback
-                                  ▼
-┌────────────────────────────────────────────────────────────────────┐
-│ createAppClient() -> Refine App (React App)                        │
-│                                                                    │
-│ BrowserRouter / AppRouter                                          │
-│  /<custom-page> -> Client route -> Page                            │
-└────────────────────────────────────────────────────────────────────┘
-```
-
-Server Routes 按顺序匹配，`/*` 作为最后的 SPA fallback。首次直接访问
-`/<custom-page>` 时，Server 先返回 `index.html` 并注入
-`window.nb_config`；Client 启动后，再由 Refine App 中的前端路由渲染页面。
 
 ## Server 的核心
 
