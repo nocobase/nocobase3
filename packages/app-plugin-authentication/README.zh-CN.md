@@ -21,11 +21,13 @@ Refine `AuthProvider` 适配器。
 
 ## 包入口
 
-| 入口                                         | 用途                                              |
-| -------------------------------------------- | ------------------------------------------------- |
-| `@nocobase/app-plugin-authentication`        | 服务端认证、存储适配、数据库适配和 migration      |
-| `@nocobase/app-plugin-authentication/server` | 显式的服务端入口，与根入口导出相同                |
-| `@nocobase/app-plugin-authentication/client` | 浏览器 `AuthClient` 和 Refine `AuthProvider` 适配 |
+| 入口                                                   | 用途                                              |
+| ------------------------------------------------------ | ------------------------------------------------- |
+| `@nocobase/app-plugin-authentication`                  | 服务端认证、存储适配、数据库适配和 migration      |
+| `@nocobase/app-plugin-authentication/server`           | 显式的服务端入口，与根入口导出相同                |
+| `@nocobase/app-plugin-authentication/client`           | 浏览器 `AuthClient` 和 Refine `AuthProvider` 适配 |
+| `@nocobase/app-plugin-authentication/client/bootstrap` | 注册 Refine `authProvider` 的插件入口             |
+| `@nocobase/app-plugin-authentication/client/routes`    | 按需加载默认密码认证页面的插件入口                |
 
 根入口是服务端入口，浏览器代码必须从 `@nocobase/app-plugin-authentication/client` 导入。
 

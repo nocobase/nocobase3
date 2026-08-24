@@ -4,6 +4,8 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
+
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -220,6 +222,7 @@ const workflowBuild = spawn.sync(
 );
 if (workflowBuild.error) throw workflowBuild.error;
 if (workflowBuild.status !== 0) process.exit(workflowBuild.status ?? 1);
+const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);
 
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);
@@ -243,12 +246,7 @@ spawnDevProcess(
     '--clear-screen=false',
     '--include',
     'package.json',
-    '--include',
-    '../app-plugin-*/package.json',
-    '--include',
-    '../app-plugin-*/database/**/*',
-    '--include',
-    '../app-plugin-*/server/**/*',
+    ...pluginWatchIncludes.flatMap((include) => ['--include', include]),
     'server/standalone.ts',
   ],
   {

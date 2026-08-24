@@ -6,6 +6,7 @@ playwright-report/
 .DS_Store
 .env.local
 .env.*.local
+.agent-annotations/
 
 !packages/app-host/fixtures/app-dist/**/dist/
 !packages/app-host/fixtures/app-dist/**/dist/**

@@ -129,7 +129,33 @@ function createPublicBasePathOriginProxyHandler(
   });
 
   return (request) =>
-    proxyToOrigin(addPublicBasePathToRequest(request, publicBasePath));
+    proxyToOrigin(
+      alignRequestOrigin(
+        addPublicBasePathToRequest(request, publicBasePath),
+        targetOrigin,
+      ),
+    );
+}
+
+function alignRequestOrigin(request: Request, targetOrigin: URL): Request {
+  const headers = new Headers(request.headers);
+  const requestOrigin = new URL(request.url).origin;
+  for (const name of ['origin', 'referer']) {
+    const value = headers.get(name);
+    if (!value) continue;
+
+    try {
+      const url = new URL(value);
+      if (url.origin !== requestOrigin) continue;
+      url.protocol = targetOrigin.protocol;
+      url.host = targetOrigin.host;
+      headers.set(name, name === 'origin' ? url.origin : url.toString());
+    } catch {
+      // Preserve malformed browser headers so the upstream can reject them.
+    }
+  }
+
+  return cloneRequestWithUrl(request, new URL(request.url), headers);
 }
 
 function addPublicBasePathToRequest(
@@ -157,10 +183,14 @@ function joinPublicPath(publicBasePath: string, appLocalPath: string): string {
   return localPath ? joinBasePath(basePath, localPath) : `${basePath}/`;
 }
 
-function cloneRequestWithUrl(request: Request, url: URL): Request {
+function cloneRequestWithUrl(
+  request: Request,
+  url: URL,
+  headers: Headers = request.headers,
+): Request {
   const init: RequestInitWithDuplex = {
     method: request.method,
-    headers: request.headers,
+    headers,
     signal: request.signal,
   };
 
