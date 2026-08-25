@@ -5,13 +5,6 @@ import {
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608190001_create_notification_tables',
-  checksum: 'eeb89f2971f7b67babbaf3ba3fb8198cbc8c110b6cea40e3e03529b192b87f20',
-  acceptedChecksums: [
-    // The default template previously exposed source and compiled wrappers.
-    'fcddce6190c241db557f05b677947be893ea691672311cde503797244935cc08',
-    'cb5a396bb56195bd0d84479364d5200490bbbb38dbbd6deef073fbc293005a36',
-    '1c416b603c266f105e0154a9f54c52e2d3f3c16aad4e7df085460f9a6b965541',
-  ],
   async up({ builder }) {
     await builder.createCollection('notifications', (table) => {
       table.string('id', { length: 36 }).primary();

@@ -23,11 +23,8 @@ export interface MigrationContext {
 
 export interface MigrationDefinition {
   readonly name: string;
-  /** Stable checksum used when source and compiled migration artifacts differ. */
-  readonly checksum?: string;
   readonly transaction?: MigrationTransactionMode;
   readonly irreversible?: boolean;
-  readonly acceptedChecksums?: readonly string[];
   up(context: MigrationContext): Promise<void>;
   down?(context: MigrationContext): Promise<void>;
 }

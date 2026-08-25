@@ -17,16 +17,8 @@ describe('in-app notification plugin bootstrap', () => {
     };
 
     bootstrap({
-      config: {
-        app: {},
-        server: {},
-      },
       deps: {
-        auth: {
-          async getSession() {
-            return null;
-          },
-        },
+        resolveRequestUserId: vi.fn(),
       },
       services: {
         notification: registry,
@@ -52,13 +44,8 @@ describe('in-app notification plugin bootstrap', () => {
   it('does nothing when notifications are disabled', () => {
     expect(() =>
       bootstrap({
-        config: { app: {}, server: {} },
         deps: {
-          auth: {
-            async getSession() {
-              return null;
-            },
-          },
+          resolveRequestUserId: vi.fn(),
         },
         services: {},
         lifecycle: { registerDisposer: vi.fn() },

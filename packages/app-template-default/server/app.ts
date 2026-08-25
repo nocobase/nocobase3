@@ -74,7 +74,6 @@ export function createApp(
     plugin.bootstrap({
       deps,
       services,
-      config,
       lifecycle: {
         registerDisposer(name, dispose): void {
           options.lifecycle.registerDisposer(

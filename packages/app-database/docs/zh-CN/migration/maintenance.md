@@ -75,7 +75,6 @@ Migration 来源支持单目录和多 package 两种写法：
 - 没有 `down` 时必须声明 `irreversible: true`。
 - `down` 和 `irreversible: true` 不能同时出现。
 - `transaction` 只能是 `true`、`false` 或 `'auto'`。
-- `acceptedChecksums` 只能包含 SHA-256 十六进制字符串，并且只用于已验证的 migration 文件搬迁兼容。
 
 文件加载器不根据文件名补齐 `name`，也不猜测 migration 形状。
 
@@ -157,7 +156,7 @@ executed_at
 duration_ms
 ```
 
-Runner 在执行 pending migration 前校验已执行记录的 checksum。checksum 变化时停止执行；如果当前 migration 明确声明了匹配的 `acceptedChecksums`，则允许该条历史记录继续参与校验，并把执行记录更新为当前 package 和 checksum。源码与编译产物字节不同时，可声明稳定的 `checksum`，使两种运行形态共享同一校验值。
+Runner 在执行 pending migration 前校验已执行记录的 checksum。checksum 变化时停止执行。
 
 如果 runner 发现已有历史表缺少 `package_name`，会自动补列并将既有记录设置为 `app`。历史表仍以 `name` 作为唯一 migration identity。
 

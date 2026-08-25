@@ -131,9 +131,9 @@ async function loadMigrationFile(
     readFile(filePath, 'utf8'),
     stat(filePath),
   ]);
+  const checksum = createMigrationChecksum(source);
   const migration = await importMigration(filePath, fileStat.mtimeMs);
   validateMigrationDefinition(migration, filePath, fileName);
-  const checksum = migration.checksum ?? createMigrationChecksum(source);
 
   return {
     packageName,
@@ -172,16 +172,6 @@ function validateMigrationDefinition(
     );
   }
 
-  if (
-    value.checksum !== undefined &&
-    (typeof value.checksum !== 'string' ||
-      !/^[a-f0-9]{64}$/.test(value.checksum))
-  ) {
-    throw new Error(
-      `Migration "${value.name}" checksum must be a SHA-256 hex string.`,
-    );
-  }
-
   const expectedName = migrationNameFromFileName(fileName);
   if (value.name !== expectedName) {
     throw new Error(
@@ -216,19 +206,6 @@ function validateMigrationDefinition(
   if (!isValidTransactionMode(value.transaction)) {
     throw new Error(
       `Migration "${value.name}" transaction must be true, false, or "auto".`,
-    );
-  }
-
-  if (
-    value.acceptedChecksums !== undefined &&
-    (!Array.isArray(value.acceptedChecksums) ||
-      value.acceptedChecksums.some(
-        (checksum) =>
-          typeof checksum !== 'string' || !/^[a-f0-9]{64}$/.test(checksum),
-      ))
-  ) {
-    throw new Error(
-      `Migration "${value.name}" acceptedChecksums must contain SHA-256 hex strings.`,
     );
   }
 }
