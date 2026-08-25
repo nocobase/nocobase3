@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_HUB_TEMPLATE,
+  DEFAULT_REGISTRY,
   DEFAULT_TEMPLATE,
   downloadTemplate,
   isLocalTemplateSource,
@@ -42,8 +44,19 @@ describe('isLocalTemplateSource', () => {
 });
 
 describe('DEFAULT_TEMPLATE', () => {
-  it('pins a version so a new release cannot change what create produces', () => {
-    expect(DEFAULT_TEMPLATE).toMatch(/@\d+\.\d+\.\d+$/);
+  // Pinning an exact version would make `create` reproducible, but there is no stable v3 release to pin to yet. Until
+  // one ships the defaults track the `beta` dist-tag, which means two runs a week apart can scaffold different code.
+  // The assertion below only guarantees the specifier carries an explicit channel or version — never a bare name that
+  // would silently resolve to `latest`.
+  it('carries an explicit channel so create never falls back to latest', () => {
+    expect(DEFAULT_TEMPLATE).toMatch(/@(?:\d+\.\d+\.\d+|beta|alpha|next)$/);
+    expect(DEFAULT_HUB_TEMPLATE).toMatch(/@(?:\d+\.\d+\.\d+|beta|alpha|next)$/);
+  });
+});
+
+describe('DEFAULT_REGISTRY', () => {
+  it('points at the self-hosted registry that carries the v3 packages', () => {
+    expect(DEFAULT_REGISTRY).toBe('https://npm.nocobase.ai');
   });
 });
 

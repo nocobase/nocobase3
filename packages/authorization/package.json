@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/authorization",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
