@@ -6,6 +6,7 @@ import type {
   ReleaseApprovalRecord,
   ReleaseOverview,
 } from './types.js';
+import { resolvePortalBase } from './portal-base.js';
 
 export class ReleaseApiError extends Error {
   constructor(
@@ -147,9 +148,10 @@ function resolveReleaseApiUrl(path: string): string {
 function getPortalBase(): string {
   if (typeof window === 'undefined') return '';
   const runtimeWindow = window as Window & { NOCOBASE_PORTAL_BASE?: unknown };
-  const configured = runtimeWindow.NOCOBASE_PORTAL_BASE;
-  if (typeof configured !== 'string') return '';
-  const normalized = configured.trim();
-  if (!normalized || normalized === '/') return '';
-  return `/${normalized.replace(/^\/+|\/+$/g, '')}`;
+  const viteBase = (
+    import.meta as ImportMeta & {
+      readonly env?: { readonly BASE_URL?: unknown };
+    }
+  ).env?.BASE_URL;
+  return resolvePortalBase(runtimeWindow.NOCOBASE_PORTAL_BASE, viteBase);
 }
