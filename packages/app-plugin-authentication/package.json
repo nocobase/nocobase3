@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-authentication",
   "displayName": "Authentication App Plugin",
   "description": "Authentication plugin for NocoBase applications.",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -121,8 +121,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
-    "@nocobase/app-client": "^0.1.0",
-    "@nocobase/ui": "^0.1.0",
+    "@nocobase/app-client": "workspace:^",
+    "@nocobase/ui": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0"
   },
