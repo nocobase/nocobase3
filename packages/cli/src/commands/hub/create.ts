@@ -1,4 +1,5 @@
-import { appendFile, mkdir } from 'node:fs/promises';
+import { appendFile, chmod, mkdir } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { Args, Command, Flags } from '@oclif/core';
 import {
@@ -17,6 +18,7 @@ import {
   DEFAULT_REGISTRY,
   downloadTemplate,
 } from '../../lib/template.ts';
+import { formatHubLocalEnvironment } from '../../lib/hub-runtime.ts';
 
 /** Runtime state a hub writes as it runs; none of it belongs in version control. */
 const GITIGNORE_ADDITIONS = [
@@ -92,6 +94,10 @@ export default class HubCreate extends Command {
           [path.join(HUB_STATE_DIR, 'hub.json')]:
             `${JSON.stringify(config, null, 2)}\n`,
           [path.join('app-dist', '.gitkeep')]: '',
+          '.env.local': formatHubLocalEnvironment(
+            config,
+            randomBytes(32).toString('hex'),
+          ),
         },
         name: args.name,
         targetDirectory: directory,
@@ -108,6 +114,7 @@ export default class HubCreate extends Command {
     ]) {
       await mkdir(path.join(directory, relative), { recursive: true });
     }
+    await chmod(path.join(directory, '.env.local'), 0o600);
 
     await this.appendGitignore(directory);
 

@@ -1,10 +1,11 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import fs, { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 import {
@@ -464,6 +465,33 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
+  it('discovers built default APP resources while running from source', async () => {
+    setEnv('HUB_ENABLED', 'false');
+    setEnv('HUB_DEFAULT_APP_RESOURCES_DIR', '');
+    const sourceResourcesMetadata = path.join(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'),
+      'resources/default-app/metadata.json',
+    );
+    const builtResourcesMetadata = path.join(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'),
+      'dist/resources/default-app/metadata.json',
+    );
+    const exists = vi
+      .spyOn(fs, 'existsSync')
+      .mockImplementation((candidate) => {
+        const value = String(candidate);
+        if (value === sourceResourcesMetadata) return false;
+        if (value === builtResourcesMetadata) return true;
+        return false;
+      });
+
+    const app = createStandaloneServer({ viteDevUrl: false });
+
+    expect(exists).toHaveBeenCalledWith(sourceResourcesMetadata);
+    expect(exists).toHaveBeenCalledWith(builtResourcesMetadata);
+    await app.close?.();
+  });
+
   it('wires approved Hub management storage and encryption environment', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-env-'));
     tempDirs.push(root);
@@ -474,6 +502,10 @@ describe('app server', () => {
     setEnv('HUB_DATABASE_PATH', path.join(root, 'hub.sqlite'));
     setEnv('HUB_SOURCE_ROOT', sourceRoot);
     setEnv('HUB_RELEASE_ROOT', path.join(root, 'releases'));
+    setEnv(
+      'HUB_DEFAULT_APP_RESOURCES_DIR',
+      path.join(root, 'missing-default-app-resources'),
+    );
     setEnv('APP_PUBLIC_ORIGIN', 'http://127.0.0.1:3000');
     setEnv(
       'AUTH_SECRET',

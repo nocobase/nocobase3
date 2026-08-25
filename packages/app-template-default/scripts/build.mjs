@@ -193,6 +193,8 @@ run('Build server workspace dependencies', 'pnpm', [
   '--filter',
   '@nocobase/app-sdk',
   '--filter',
+  '@nocobase/app-portal-sdk',
+  '--filter',
   '@nocobase/app-database',
   '--filter',
   '@nocobase/app-server-kit',
@@ -238,6 +240,7 @@ run('Install server production dependencies', 'npm', [
   'install',
   '--omit=dev',
   '--package-lock=false',
+  '--install-links=true',
   '--prefix',
   './dist',
 ]);

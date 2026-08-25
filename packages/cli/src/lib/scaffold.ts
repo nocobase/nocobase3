@@ -14,9 +14,13 @@ export const APP_STATE_DIR = '.nb3';
 
 export interface AppConfig {
   name: string;
-  template: string;
-  templateVersion: string;
+  /** Hub application identity for projects cloned with `nb3 app pull`. */
+  applicationId?: string;
   hub?: string;
+  slug?: string;
+  /** Template provenance exists for locally scaffolded apps, but not necessarily for Hub clones. */
+  template?: string;
+  templateVersion?: string;
 }
 
 async function isEmptyDirectory(directory: string): Promise<boolean> {

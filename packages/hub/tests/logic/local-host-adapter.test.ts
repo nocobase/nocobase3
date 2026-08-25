@@ -114,7 +114,7 @@ async function createFixture(): Promise<{
   );
   temporaryDirectories.push(releaseRoot);
   const application = applicationFixture();
-  const releaseDirectory = path.join(releaseRoot, application.slug, '1.0.0');
+  const releaseDirectory = path.join(releaseRoot, application.id, 'release-1');
   await mkdir(path.join(releaseDirectory, 'dist/server'), { recursive: true });
   await writeFile(
     path.join(releaseDirectory, 'dist/server/embedded.js'),
@@ -122,7 +122,7 @@ async function createFixture(): Promise<{
   );
   const release = releaseFixture(
     application.id,
-    `${application.slug}/1.0.0`,
+    `${application.id}/release-1`,
     await computeReleaseArtifactChecksum(releaseDirectory),
   );
   const activatedSecrets: string[] = [];

@@ -4,6 +4,7 @@ import { Command, Flags } from '@oclif/core';
 import { hubUrl, requireHubProject } from '../../lib/hub-project.ts';
 import { detectPackageManager } from '../../lib/package-manager.ts';
 import { runAttached } from '../../lib/run-command.ts';
+import { createHubRuntimeEnvironment } from '../../lib/hub-runtime.ts';
 
 export default class HubDev extends Command {
   static override summary = 'Start the hub in development mode.';
@@ -64,14 +65,12 @@ export default class HubDev extends Command {
 
     const exitCode = await runAttached(packageManager, ['run', 'dev'], {
       cwd: project.directory,
-      // See `hub start`: templates differ in which variable they read, so both conventions are provided.
       env: {
-        ...process.env,
+        ...createHubRuntimeEnvironment(
+          { ...project.config, host, port },
+          project.directory,
+        ),
         APP_DIST_DIR: portalsDirectory,
-        APP_SERVER_HOST: host,
-        APP_SERVER_PORT: String(port),
-        HOST: host,
-        PORT: String(port),
       },
     });
 

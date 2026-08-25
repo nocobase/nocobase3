@@ -94,12 +94,12 @@ Hub 仍处于预发布阶段，目前没有需要同时维护的多个稳定契�
 
 Hub 对外提供三个表面，对内保留一个 Host Adapter：
 
-| 表面           | 根路径                             | 认证                                       | 用途                     |
-| -------------- | ---------------------------------- | ------------------------------------------ | ------------------------ |
-| 浏览器管理 API | `<APP_BASE_PATH>/api/*`            | Hub Session Cookie                         | 管理界面                 |
-| Agent API      | `<APP_BASE_PATH>/api/*`            | Bearer access token                        | Coding Agent 和 `nb` CLI |
-| Git Smart HTTP | `<APP_BASE_PATH>/git/<slug>.git/*` | HTTP Basic，password 为 Agent access token | clone、fetch 和 push     |
-| Host Adapter   | 无 HTTP 路径                       | 进程内调用                                 | Hub 控制本地 App Host    |
+| 表面           | 根路径                             | 认证                                       | 用途                      |
+| -------------- | ---------------------------------- | ------------------------------------------ | ------------------------- |
+| 浏览器管理 API | `<APP_BASE_PATH>/api/*`            | Hub Session Cookie                         | 管理界面                  |
+| Agent API      | `<APP_BASE_PATH>/api/*`            | Bearer access token                        | Coding Agent 和 `nb3` CLI |
+| Git Smart HTTP | `<APP_BASE_PATH>/git/<slug>.git/*` | HTTP Basic，password 为 Agent access token | clone、fetch 和 push      |
+| Host Adapter   | 无 HTTP 路径                       | 进程内调用                                 | Hub 控制本地 App Host     |
 
 ```mermaid
 flowchart LR
@@ -515,7 +515,7 @@ Content-Type: application/json
 
 ```json
 {
-  "clientId": "nb-cli",
+  "clientId": "nb3-cli",
   "clientName": "Codex on Apple-MacBook",
   "scopes": [
     "profile",
@@ -553,9 +553,9 @@ Content-Type: application/json
 }
 ```
 
-`deviceCode` 和 `userCode` 都只在服务端存储 hash。`applicationScope.mode` 可以是 `selected` 或 `all-authorized`。`selected` 必须带非空 `applicationIds`；`all-authorized` 不带 `applicationIds`，表示动态访问当前用户有权使用的 APP。Hub 授权页必须把范围和「未来新增的授权也会生效」说明给用户。CLI 为单个已有 APP 发起登录时默认使用 `selected`，显式执行 `nb hub login` 时默认使用 `all-authorized`。
+`deviceCode` 和 `userCode` 都只在服务端存储 hash。`applicationScope.mode` 可以是 `selected` 或 `all-authorized`。`selected` 必须带非空 `applicationIds`；`all-authorized` 不带 `applicationIds`，表示动态访问当前用户有权使用的 APP。Hub 授权页必须把范围和「未来新增的授权也会生效」说明给用户。CLI 为单个已有 APP 发起登录时默认使用 `selected`，显式执行 `nb3 hub login` 时默认使用 `all-authorized`。
 
-`profile` 是全局 scope，不受 `applicationScope` 过滤。`apps:create` 只允许与 `all-authorized` 一起申请，并仍受用户当前的全局 `hub.app:create` capability 限制；`selected + apps:create` 返回 `422 INVALID_SCOPE_COMBINATION`，避免创建一个当前 credential 随后无权读取的新 APP。所有针对具体 APP 的 scope 都要再与 `applicationScope` 求交集。`nb app create` 在没有合适凭据时必须发起 all-authorized 授权，并在批准页单独标明全局创建权限。
+`profile` 是全局 scope，不受 `applicationScope` 过滤。`apps:create` 只允许与 `all-authorized` 一起申请，并仍受用户当前的全局 `hub.app:create` capability 限制；`selected + apps:create` 返回 `422 INVALID_SCOPE_COMBINATION`，避免创建一个当前 credential 随后无权读取的新 APP。所有针对具体 APP 的 scope 都要再与 `applicationScope` 求交集。`nb3 app create` 在没有合适凭据时必须发起 all-authorized 授权，并在批准页单独标明全局创建权限。
 
 #### 浏览器查看并批准
 
@@ -601,7 +601,7 @@ Content-Type: application/json
 ```json
 {
   "grantType": "urn:ietf:params:oauth:grant-type:device_code",
-  "clientId": "nb-cli",
+  "clientId": "nb3-cli",
   "deviceCode": "nbd_opaque_value"
 }
 ```
@@ -659,7 +659,7 @@ Bearer credential 使用 `profile` scope 调用同一个 `GET /me`。Agent 形�
 ```json
 {
   "grantType": "refresh_token",
-  "clientId": "nb-cli",
+  "clientId": "nb3-cli",
   "refreshToken": "nbr_opaque_value"
 }
 ```
@@ -678,7 +678,7 @@ Bearer credential 使用 `profile` scope 调用同一个 `GET /me`。Agent 形�
 
 ```json
 {
-  "clientId": "nb-cli",
+  "clientId": "nb3-cli",
   "refreshToken": "nbr_opaque_value"
 }
 ```
@@ -1880,26 +1880,26 @@ HostAdapter 是稳定错误边界：`APP_DEPLOYMENT_CONFLICT` 映射为 `ACTIVE_
 
 ## CLI 契约
 
-`docs/cli/nb-app.md` 和 `docs/cli/nb-hub.md` 中的 `nb app deploy --hub ...` 目前尚未实现。新 CLI 应该直接对应这份 API，不再要求开发者手动复制构建产物到 `app-dist`。
+CLI 使用 `nb3` 作为命令名。`docs/cli/nb3-app.md` 和 `docs/cli/nb3-hub.md` 记录当前用法；APP 的创建、拉取、发布、部署和状态命令直接对应这份 API，不要求开发者手动复制构建产物到 `app-dist`。
 
 ### 命令分工
 
-| 命令             | 作用                                            | 主要协议                 |
-| ---------------- | ----------------------------------------------- | ------------------------ |
-| `nb hub login`   | 用 Device Authorization 登录一个 Hub            | Agent Auth API           |
-| `nb hub logout`  | 撤销本地凭据                                    | Agent Auth API           |
-| `nb app list`    | 列出有权访问的 APP                              | `GET /apps`              |
-| `nb app create`  | 在 Hub 中创建 APP，然后 clone 到本地            | Applications API + Git   |
-| `nb app pull`    | clone 已有 APP 的 Hub Git 仓库                  | Repository API + Git     |
-| `nb app dev`     | 在本地安装依赖并启动开发服务                    | 本地脚本，不调 Hub API   |
-| `nb app publish` | push 源码、构建、上传并创建 Release             | Git + Release Upload API |
-| `nb app deploy`  | 把一个已有 Release 部署到 APP                   | Deployments API          |
-| `nb app status`  | 查看 Repository、Release、Deployment 和 Runtime | 多个只读 API             |
+| 命令              | 作用                                            | 主要协议                 |
+| ----------------- | ----------------------------------------------- | ------------------------ |
+| `nb3 hub login`   | 用 Device Authorization 登录一个 Hub            | Agent Auth API           |
+| `nb3 hub logout`  | 撤销本地凭据                                    | Agent Auth API           |
+| `nb3 app list`    | 列出有权访问的 APP                              | `GET /apps`              |
+| `nb3 app create`  | 在 Hub 中创建 APP，然后 clone 到本地            | Applications API + Git   |
+| `nb3 app pull`    | clone 已有 APP 的 Hub Git 仓库                  | Repository API + Git     |
+| `nb3 app dev`     | 在本地安装依赖并启动开发服务                    | 本地脚本，不调 Hub API   |
+| `nb3 app publish` | push 源码、构建、上传并创建 Release             | Git + Release Upload API |
+| `nb3 app deploy`  | 把一个已有 Release 部署到 APP                   | Deployments API          |
+| `nb3 app status`  | 查看 Repository、Release、Deployment 和 Runtime | 多个只读 API             |
 
 「发布 Release」和「部署 Release」是两个独立权限，因此 CLI 使用两个独立命令。如果用户需要一条命令完成两步，使用：
 
 ```bash
-nb app publish --deploy
+nb3 app publish --deploy
 ```
 
 它依次调用 Publish 和 Deployment，但不将两者在 API 中合并成一个不可拆分的操作。如果用户只有 Developer 权限，Release 发布成功而 Deployment 返回权限错误；CLI 必须明确告诉用户 Release ID 已经生成，不要误报为整体未发布。
@@ -1909,21 +1909,21 @@ nb app publish --deploy
 APP 详情页的「开发」标签只需生成一条不带密钥的指令：
 
 ```text
-请在本机使用 nb CLI 开发 Hub https://hub.example.com 中的 sales APP。
-如果尚未登录，先执行 nb hub login --hub https://hub.example.com；
-然后执行 nb app pull sales ./sales --hub https://hub.example.com，安装依赖并启动开发环境。
-开发完成后，push 源码并执行 nb app publish --bump patch --deploy --non-interactive。
+请在本机使用 nb3 CLI 开发 Hub https://hub.example.com 中的 sales APP。
+如果尚未登录，先执行 nb3 hub login --hub https://hub.example.com；
+然后执行 nb3 app pull sales ./sales --hub https://hub.example.com，安装依赖并启动开发环境。
+开发完成后，push 源码并执行 nb3 app publish --bump patch --deploy --non-interactive。
 ```
 
 Agent 自己负责执行登录、clone、依赖安装、开发和发布。Hub 页面不需要向用户解释 Git、上传会话或产物校验的每个内部步骤。
 
-### `nb app create`
+### `nb3 app create`
 
 ```bash
-nb app create sales \
-  --name "Sales CRM" \
+nb3 app create sales \
+  --display-name "Sales CRM" \
   --hub https://hub.example.com \
-  --directory ./sales \
+  --dir ./sales \
   --non-interactive \
   --json
 ```
@@ -1934,25 +1934,25 @@ nb app create sales \
 2. 检查 Hub 登录状态和 `hub.app:create`
 3. 使用持久化的 operation UUID 作为 `Idempotency-Key` 创建 APP
 4. 获取 `cloneUrl` 并 clone 到本地
-5. 写入被 `.gitignore` 排除的本地 `.nocobase/app.local.json`，其中只包含 Hub URL、application ID 和 slug
+5. 写入被 Git 本地 exclude 排除的 `.nb3/config.json`，其中包含 Hub URL、application ID、slug 和名称
 
-如果第 4 步本地 clone 失败，Hub 中的 APP 已经完整创建，CLI 不应自动归档它。CLI 返回 APP ID 和可重试的 `nb app pull` 命令。
+如果第 4 步本地 clone 失败，Hub 中的 APP 已经完整创建，CLI 不应自动归档它。CLI 返回 APP ID 和可重试的 `nb3 app pull` 命令。
 
-### `nb app pull`
+### `nb3 app pull`
 
 ```bash
-nb app pull sales ./sales \
+nb3 app pull sales ./sales \
   --hub https://hub.example.com \
   --non-interactive \
   --json
 ```
 
-命令查询 APP 和 Repository，通过 Git Smart HTTP clone `main`，然后写入被 `.gitignore` 排除的 `.nocobase/app.local.json`。它不在 Hub 服务器创建工作区，也不下载任何 Release 产物。
+命令查询 APP 和 Repository，通过 Git Smart HTTP clone `main`，然后写入被 Git 本地 exclude 排除的 `.nb3/config.json`。它不在 Hub 服务器创建工作区，也不下载任何 Release 产物。
 
-### `nb app publish`
+### `nb3 app publish`
 
 ```bash
-nb app publish \
+nb3 app publish \
   --version 1.4.0 \
   --deploy \
   --hub https://hub.example.com \
@@ -1973,10 +1973,10 @@ nb app publish \
 
 `--version <semver>` 与 `--bump patch|minor|major` 二选一。`--bump` 从服务端最新 SemVer 计算下一版本，发生并发 `RELEASE_VERSION_CONFLICT` 时刷新一次并给出新的可复制命令，不静默循环。交互模式两者都不带时可以询问；`--non-interactive` 下两者都缺少时必须立即失败并给出完整正确命令，不能卡在 prompt。
 
-### `nb app deploy`
+### `nb3 app deploy`
 
 ```bash
-nb app deploy \
+nb3 app deploy \
   --app sales \
   --release 1.4.0 \
   --hub https://hub.example.com \
@@ -1984,7 +1984,7 @@ nb app deploy \
   --json
 ```
 
-在 APP 工作区内可以从 `.nocobase/app.local.json` 推断 `--app`；目录外执行时 `--app` 必填。`--release` 可以是 Release ID 或一个在该 APP 内唯一的 version。`--rollback` 表示创建 `type: "rollback"`，`--redeploy` 表示重新部署当前活动 Release，且不能同时指定互斥模式。
+在 APP 工作区内可以从 `.nb3/config.json` 推断 `--app`；目录外执行时 `--app` 必填。`--release` 可以是 Release ID 或一个在该 APP 内唯一的 version。`--rollback` 表示创建 `type: "rollback"`，`--redeploy` 表示重新部署当前活动 Release，且不能同时指定互斥模式。
 
 高风险回滚在交互模式中需要确认。自动化中必须同时使用 `--non-interactive --yes`；`--dry-run` 只检查权限、目标 Release 和当前状态，不创建 Deployment。
 
@@ -2045,7 +2045,7 @@ JSON 失败结果示例：
     "message": "You can publish this release, but cannot deploy it.",
     "requestId": "af33cb3c-21da-49f3-96b8-b0dd54be28be",
     "retryable": false,
-    "hint": "Ask a Deployer to run: nb app deploy --release 1.4.0 --app sales --hub https://hub.example.com"
+    "hint": "Ask a Deployer to run: nb3 app deploy --release 1.4.0 --app sales --hub https://hub.example.com"
   },
   "release": {
     "id": "e8a11780-bdd7-4a3c-9601-761b47b55a31",
@@ -2117,18 +2117,18 @@ sequenceDiagram
   Web-->>User: 展示「复制给 Coding Agent」
 ```
 
-用户不在 Web 表单中填写「源码工作区」。Web 只创建远程权威仓库；开发者或 Agent 在执行 `nb app pull` 时选择本地目录。
+用户不在 Web 表单中填写「源码工作区」。Web 只创建远程权威仓库；开发者或 Agent 在执行 `nb3 app pull` 时选择本地目录。
 
 ### 本地 Coding Agent 开始开发
 
 ```mermaid
 sequenceDiagram
   participant Agent as Coding Agent
-  participant CLI as nb CLI
+  participant CLI as nb3 CLI
   participant Browser as 用户浏览器
   participant Hub as Hub API / Git
 
-  Agent->>CLI: nb hub login --hub ...
+  Agent->>CLI: nb3 hub login --hub ...
   CLI->>Hub: POST /agent-auth/device
   Hub-->>CLI: userCode + verificationUri
   CLI-->>Agent: 打开授权页
@@ -2136,10 +2136,10 @@ sequenceDiagram
   Browser->>Hub: approve(userCode)
   CLI->>Hub: 轮询 /agent-auth/token
   Hub-->>CLI: access + refresh token
-  Agent->>CLI: nb app pull sales ./sales
+  Agent->>CLI: nb3 app pull sales ./sales
   CLI->>Hub: GET APP + Repository
   CLI->>Hub: Git clone
-  Agent->>CLI: 安装依赖并运行 nb app dev
+  Agent->>CLI: 安装依赖并运行 nb3 app dev
 ```
 
 用户只需在首次登录或 scope 扩大时在浏览器确认。平时 pull、push 和 publish 都可以由 Agent 非交互执行。
@@ -2365,9 +2365,9 @@ Hub standalone 将 App Host catalog 固定为 `<HUB_RELEASE_ROOT>/.catalog`。�
 | Hub 把 `HUB_RELEASE_ROOT` 直接交给 DirectoryAppCatalog   | 改用隔离的空 `.catalog`                           | 避免手工目录成为第二套 APP 权威来源      |
 | App Host 只有 definition 更新和 deploy                   | 增加进程内 `configureInactive()`                  | 安全保存私有配置且不激活 Runtime         |
 | App Host `/__apps/*`                                     | 不作为 Hub 公开契约                               | 第一版继续进程内 Registry 调用           |
-| CLI 文档中的 `nb app create` 只创建本地源码              | 带 `--hub` 时先创建 Hub APP 再 clone              | Hub 是源码权威入口，本地目录只是工作副本 |
-| CLI 文档中的 `nb app deploy` 隐含构建和部署              | `publish` 创建 Release，`deploy` 选择已有 Release | 分离 Developer / Deployer 权限           |
-| CLI 文档中的 `nb app destroy`                            | 第一版不实现；管理端只 archive / restore          | 避免不可恢复地删除源码与运行数据         |
+| CLI 文档中的 `nb3 app create` 只创建本地源码             | 带 `--hub` 时先创建 Hub APP 再 clone              | Hub 是源码权威入口，本地目录只是工作副本 |
+| CLI 文档中的 `nb3 app deploy` 隐含构建和部署             | `publish` 创建 Release，`deploy` 选择已有 Release | 分离 Developer / Deployer 权限           |
+| CLI 文档中的 `nb3 app destroy`                           | 第一版不实现；管理端只 archive / restore          | 避免不可恢复地删除源码与运行数据         |
 
 由于 Hub 是未发布新功能，上述替换不需要为开发期临时请求和数据增加 legacy endpoint、双写或 backfill。
 
@@ -2411,8 +2411,8 @@ Hub standalone 将 App Host catalog 固定为 `<HUB_RELEASE_ROOT>/.catalog`。�
 
 ### Phase 5：CLI 和管理界面
 
-- `nb hub login/logout`
-- `nb app create/pull/dev/publish/deploy/status`
+- `nb3 hub login/logout`
+- `nb3 app create/pull/dev/publish/deploy/status`
 - `--json`、`--non-interactive`、`--dry-run`、退出码和端到端失败恢复
 - APP 列表 / 详情、部署、审计、成员角色和设置页对接
 
@@ -2507,4 +2507,4 @@ Hub standalone 将 App Host catalog 固定为 `<HUB_RELEASE_ROOT>/.catalog`。�
 - Hub 与 App Host 进程内组装：`packages/hub/server/standalone.ts`
 - App Host Runtime Registry：`packages/app-host/src/app-registry.ts`
 - APP build 输出：`packages/app-template-default/scripts/build.mjs`
-- 现有 CLI 设计文档：`docs/cli/nb-app.md` 和 `docs/cli/nb-hub.md`
+- 现有 CLI 设计文档：`docs/cli/nb3-app.md` 和 `docs/cli/nb3-hub.md`

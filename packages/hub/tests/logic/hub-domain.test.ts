@@ -420,7 +420,7 @@ describe('HubStore', () => {
       path.join(tmpdir(), 'nocobase-hub-recovery-'),
     );
     temporaryDirectories.push(releaseRoot);
-    const storageKey = `${application.slug}/2.0.0`;
+    const storageKey = `${application.id}/release-2.0.0`;
     const entrypointDirectory = path.join(
       releaseRoot,
       storageKey,
@@ -518,7 +518,7 @@ describe('HubStore', () => {
         version: '2.1.0',
         checksum: 'sha256:host-offline',
         manifest: {},
-        storageKey: `${application.slug}/2.1.0`,
+        storageKey: `${application.id}/release-2.1.0`,
       },
       'user-1',
     );
@@ -552,7 +552,7 @@ describe('LocalHostAdapter', () => {
       path.join(tmpdir(), 'nocobase-hub-readiness-contract-'),
     );
     temporaryDirectories.push(releaseRoot);
-    const storageKey = `${application.slug}/1.0.0`;
+    const storageKey = `${application.id}/release-1.0.0`;
     const serverDirectory = path.join(releaseRoot, storageKey, 'dist/server');
     await mkdir(serverDirectory, { recursive: true });
     await writeFile(path.join(serverDirectory, 'embedded.js'), 'export {};');
@@ -599,7 +599,7 @@ describe('LocalHostAdapter', () => {
       path.join(tmpdir(), 'nocobase-hub-local-host-'),
     );
     temporaryDirectories.push(releaseRoot);
-    const storageKey = `${application.slug}/1.0.0`;
+    const storageKey = `${application.id}/release-1.0.0`;
     const serverDirectory = path.join(releaseRoot, storageKey, 'dist/server');
     await mkdir(serverDirectory, { recursive: true });
     await writeFile(path.join(serverDirectory, 'embedded.js'), 'export {};');
@@ -675,7 +675,7 @@ describe('LocalHostAdapter', () => {
       path.join(tmpdir(), 'nocobase-hub-old-release-'),
     );
     temporaryDirectories.push(releaseRoot);
-    const firstStorageKey = `${application.slug}/1.0.0`;
+    const firstStorageKey = `${application.id}/release-1.0.0`;
     const firstServerDirectory = path.join(
       releaseRoot,
       firstStorageKey,
@@ -739,7 +739,7 @@ describe('LocalHostAdapter', () => {
         version: '2.0.0',
         checksum: 'sha256:missing-release',
         manifest: {},
-        storageKey: `${application.slug}/missing`,
+        storageKey: `${application.id}/missing`,
       },
       'user-1',
     );
@@ -773,7 +773,7 @@ describe('LocalHostAdapter', () => {
       path.join(tmpdir(), 'nocobase-hub-first-release-'),
     );
     temporaryDirectories.push(releaseRoot);
-    const storageKey = `${application.slug}/1.0.0`;
+    const storageKey = `${application.id}/release-1.0.0`;
     const serverDirectory = path.join(releaseRoot, storageKey, 'dist/server');
     await mkdir(serverDirectory, { recursive: true });
     await writeFile(path.join(serverDirectory, 'embedded.js'), 'export {};');
@@ -855,13 +855,13 @@ describe('LocalHostAdapter', () => {
 
     for (const [storageKey, version, expectedCode] of [
       [
-        `${application.slug}/missing`,
+        `${application.id}/missing`,
         '2.0.0',
         'RELEASE_SERVER_ENTRYPOINT_MISSING',
       ],
       ['../escape', '3.0.0', 'INVALID_RELEASE_PATH'],
       [
-        `${application.slug}/../other-application/1.0.0`,
+        `${application.id}/../other-application/1.0.0`,
         '4.0.0',
         'INVALID_RELEASE_STORAGE_KEY',
       ],
@@ -1700,7 +1700,7 @@ describe('createHubApi', () => {
       path.join(tmpdir(), 'nocobase-hub-post-host-commit-'),
     );
     temporaryDirectories.push(releaseRoot);
-    const storageKey = `${application.slug}/1.0.0`;
+    const storageKey = `${application.id}/release-1.0.0`;
     const serverDirectory = path.join(releaseRoot, storageKey, 'dist/server');
     await mkdir(serverDirectory, { recursive: true });
     await writeFile(path.join(serverDirectory, 'embedded.js'), 'export {};');
@@ -1770,7 +1770,7 @@ describe('createHubApi', () => {
       path.join(tmpdir(), 'nocobase-hub-safe-deployment-error-'),
     );
     temporaryDirectories.push(releaseRoot);
-    const storageKey = `${application.slug}/1.0.0`;
+    const storageKey = `${application.id}/release-1.0.0`;
     const serverDirectory = path.join(releaseRoot, storageKey, 'dist/server');
     await mkdir(serverDirectory, { recursive: true });
     await writeFile(path.join(serverDirectory, 'embedded.js'), 'export {};');
@@ -1937,7 +1937,7 @@ describe('createHubApi', () => {
         data: { id: string; createdBy: string };
       }
     ).data;
-    const storageKey = 'routes-app/1.0.0';
+    const storageKey = `${application.id}/release-1.0.0`;
     const releaseDirectory = path.join(releaseRoot, storageKey);
     await mkdir(releaseDirectory, { recursive: true });
     await writeFile(path.join(releaseDirectory, 'artifact.txt'), 'artifact');

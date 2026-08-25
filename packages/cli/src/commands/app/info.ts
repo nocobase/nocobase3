@@ -47,11 +47,16 @@ export default class AppInfo extends Command {
     const project = await requireAppProject(flags.dir);
     const installed = await this.hasDependencies(project.directory);
     const info = {
+      applicationId: project.config.applicationId ?? null,
       dependenciesInstalled: installed,
       directory: project.directory,
       hub: project.config.hub ?? null,
       name: project.config.name,
-      template: `${project.config.template}@${project.config.templateVersion}`,
+      slug: project.config.slug ?? null,
+      template:
+        project.config.template && project.config.templateVersion
+          ? `${project.config.template}@${project.config.templateVersion}`
+          : null,
     };
 
     if (flags.json) {
@@ -62,10 +67,12 @@ export default class AppInfo extends Command {
     const rows: Array<[string, string]> = [
       ['Name', info.name],
       ['Directory', info.directory],
-      ['Template', info.template],
+      ['Template', info.template ?? 'not recorded'],
       ['Hub', info.hub ?? 'not set'],
       ['Dependencies', installed ? 'installed' : 'not installed'],
     ];
+    if (info.applicationId) rows.push(['Application ID', info.applicationId]);
+    if (info.slug) rows.push(['Slug', info.slug]);
     const width = Math.max(...rows.map(([label]) => label.length));
 
     for (const [label, value] of rows) {

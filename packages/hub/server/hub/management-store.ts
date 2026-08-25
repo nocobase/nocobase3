@@ -486,6 +486,16 @@ export class HubManagementStore {
     return row ? toApplication(row) : undefined;
   }
 
+  /** Returns the single system-designated default application, if bootstrap has created it. */
+  async getDefaultApplication(): Promise<ManagedApplication | undefined> {
+    const row = await this.connection.query
+      .selectFrom<DbApplicationRow>('hubApplications')
+      .selectAll()
+      .where('isDefault', '=', true)
+      .executeTakeFirst<DbApplicationRow>();
+    return row ? toApplication(row) : undefined;
+  }
+
   async updateApplication(
     id: string,
     patch: ApplicationPatch,

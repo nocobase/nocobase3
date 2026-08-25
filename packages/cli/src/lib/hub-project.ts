@@ -16,7 +16,7 @@ export interface HubProject {
   config: HubConfig;
 }
 
-export const DEFAULT_HUB_PORT = 3000;
+export const DEFAULT_HUB_PORT = 13_000;
 export const DEFAULT_HUB_HOST = '127.0.0.1';
 
 function configPath(directory: string): string {
@@ -96,7 +96,9 @@ export function hubUrl(config: HubConfig): string {
   const host =
     config.host === '0.0.0.0' || config.host === '::'
       ? 'localhost'
-      : config.host;
+      : config.host.includes(':') && !config.host.startsWith('[')
+        ? `[${config.host}]`
+        : config.host;
 
-  return `http://${host}:${config.port}`;
+  return `http://${host}:${config.port}/hub`;
 }

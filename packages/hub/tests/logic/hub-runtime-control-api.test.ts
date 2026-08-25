@@ -364,7 +364,7 @@ async function createRuntimeFixture(): Promise<RuntimeFixture> {
     { slug: `runtime-${crypto.randomUUID().slice(0, 8)}`, name: 'Runtime APP' },
     ownerId,
   );
-  const storageKey = `${application.slug}/release-1`;
+  const storageKey = `${application.id}/release-1`;
   const releaseDirectory = path.join(root, 'releases', storageKey);
   await mkdir(path.join(releaseDirectory, 'dist/server'), { recursive: true });
   await writeFile(

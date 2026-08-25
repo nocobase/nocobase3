@@ -39,6 +39,7 @@ export function runCommand(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
+      env: options.env,
       shell: process.platform === 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
     });

@@ -1,70 +1,67 @@
 # @nocobase/nb3-cli
 
-NocoBase 3 命令行工具，命令名为 `nb3`。
+NocoBase 3 command-line tool. The executable name is `nb3`.
 
-命令文档见 [docs/cli](../../docs/cli)：[`nb3 app`](../../docs/cli/nb3-app.md) 和 [`nb3 hub`](../../docs/cli/nb3-hub.md)。
+See [`nb3 app`](../../docs/cli/nb3-app.md) and [`nb3 hub`](../../docs/cli/nb3-hub.md) for usage documentation.
 
-## 当前状态
+## Commands
 
-已实现：
+### App commands
 
-| 命令              | 说明                                                   |
-| ----------------- | ------------------------------------------------------ |
-| `nb3 app create`  | 从 npm 下载模板包并生成本地 App 项目                   |
-| `nb3 app dev`     | 用项目自身的包管理器运行其 `dev` 脚本                  |
-| `nb3 app info`    | 显示 App 名称、目录、模板来源、依赖是否已安装          |
-| `nb3 app config`  | 读写 `.nb3/config.json`                                |
-| `nb3 app destroy` | 删除本地 App 目录，带确认和路径防护                    |
-| `nb3 hub create`  | 下载模板包并生成 Hub 项目                              |
-| `nb3 hub start`   | 后台启动 Hub 并记录进程，`--foreground` 可留在当前终端 |
-| `nb3 hub dev`     | 开发模式启动，停留在当前终端                           |
-| `nb3 hub restart` | 停止后重新启动                                         |
-| `nb3 hub status`  | 显示运行状态、进程号、地址、已部署 App 数              |
-| `nb3 hub stop`    | 停止 Hub，先 SIGTERM 再 SIGKILL，并清理陈旧记录        |
-| `nb3 hub logs`    | 查看日志，支持 `--tail` 和 `--follow`                  |
-| `nb3 hub open`    | 打开 App Console                                       |
+| Command           | Purpose                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `nb3 app create`  | Create a local app, or create one in a Hub with `--hub` and clone its source repository |
+| `nb3 app pull`    | Clone an existing Hub app source repository                                             |
+| `nb3 app dev`     | Run the app project's `dev` script with its own package manager                         |
+| `nb3 app publish` | Push clean source, build and upload a Release, and optionally deploy it                 |
+| `nb3 app deploy`  | Deploy, roll back, or redeploy an existing Hub Release                                  |
+| `nb3 app status`  | Show Repository, Release, Deployment, and Runtime status                                |
+| `nb3 app list`    | List apps available to the current Hub credential                                       |
+| `nb3 app info`    | Show local app metadata and dependency status                                           |
+| `nb3 app config`  | Read or update `.nb3/config.json`                                                       |
+| `nb3 app destroy` | Delete a local app directory with confirmation and path checks                          |
 
-`nb3 app deploy`、`nb3 app pull`、`nb3 app list` 需要 Hub 提供 App 管理 API，而 v3 的 Hub 目前只有健康检查和一个 API 代理，因此这三条命令以退出码 3 明确报错，不打印占位输出——脚本里 deploy 返回成功却什么都没做，比直接失败危险得多。
+### Hub commands
 
-`nb3 hub` 的 8 条命令全部可用。
+| Command           | Purpose                                                   |
+| ----------------- | --------------------------------------------------------- |
+| `nb3 hub login`   | Authorize this device and save an Agent credential        |
+| `nb3 hub logout`  | Revoke and remove the saved credential                    |
+| `nb3 hub create`  | Create a local Hub project from the Hub package           |
+| `nb3 hub start`   | Start a Hub in the background, or use `--foreground`      |
+| `nb3 hub dev`     | Start a Hub in development mode                           |
+| `nb3 hub restart` | Stop and start a Hub                                      |
+| `nb3 hub status`  | Show the process, URL, and deployed app count             |
+| `nb3 hub stop`    | Stop the Hub process group and remove stale process state |
+| `nb3 hub logs`    | Read or follow Hub logs                                   |
+| `nb3 hub open`    | Open the Hub application console                          |
 
-停止 Hub 时终止的是整个进程组而不是单个进程：start 脚本通常是包管理器的包装进程，真正监听端口的服务是它的孙进程，只杀记录的 pid 会留下占着端口的孤儿。
+Hub workflow mutations use idempotency keys and a local operation journal. Agent-facing commands provide non-interactive and JSON output where applicable; publishing and deployment also support dry-run validation.
 
-`nb3 hub create` 的默认模板源是 `@nocobase/hub@beta`。
-
-退出码约定：`0` 成功或 stub，`1` 运行错误，`2` 参数错误，`3` 尚未实现。
-
-默认模板源是 `@nocobase/app-template-default@beta`，从自建 registry `https://npm.nocobase.ai` 下载。
-
-`@beta` 是因为目前只有预览版发布到了这条渠道；第一个稳定版发出后，把 `src/lib/template.ts` 里的 `DEFAULT_TEMPLATE` 和 `DEFAULT_HUB_TEMPLATE` 改成稳定范围即可。
-
-两个默认值都能覆盖：
+The default app template is `@nocobase/app-template-default@beta`, and the default Hub package is `@nocobase/hub@beta`. Both are downloaded from `https://npm.nocobase.ai`. Override either package or the registry when needed:
 
 ```bash
 nb3 app create crm --template @nocobase/app-template-default@0.0.1
 nb3 app create crm --registry https://registry.npmjs.org
-```
-
-开发模板本身时直接指向本地目录：
-
-```bash
 nb3 app create crm --template ./packages/app-template-default
+nb3 hub create my-hub --template ./packages/hub
 ```
 
-## 开发
+## Development
 
-命令源码在 `src/commands/` 下，目录结构即命令结构：`src/commands/app/create.ts` 对应 `nb3 app create`。
+Command files under `src/commands/` mirror the CLI hierarchy. For example, `src/commands/app/create.ts` implements `nb3 app create`.
 
 ```bash
-node ./bin/run.js app create crm     # 直接跑源码，Node 24 原生擦除类型，无需 loader
-pnpm --filter @nocobase/nb3-cli build   # 编译到 dist
-pnpm --filter @nocobase/nb3-cli check   # lint + format + typecheck + test + build
+node ./bin/run.js app create crm
+pnpm --filter @nocobase/nb3-cli build
+pnpm --filter @nocobase/nb3-cli check
 ```
 
-入口 `bin/run.js` 会自动判断运行模式：源码目录存在 `src/commands` 时加载 `src/`，发布安装后加载 `dist/`。发布产物必须走 `dist`，因为 Node 拒绝对 `node_modules` 内的 `.ts` 做类型擦除。设置 `NB3_CLI_USE_DIST=1` 可以在源码目录中强制使用 `dist` 验证发布形态。
+`bin/run.js` loads TypeScript sources inside the repository and compiled files from `dist` in a published installation. Set `NB3_CLI_USE_DIST=1` to exercise the compiled package from the source checkout.
 
-## 约定
+## Conventions
 
-- 全局目录 `~/.nb3/`，可通过 `NB3_CLI_ROOT` 覆盖。
-- 项目局部目录 `.nb3/`，App 和 Hub 一致。
-- 环境变量前缀 `NB3_`。
+- User state lives under `~/.nb3/`; set `NB3_CLI_ROOT` to override it
+- App- and Hub-local state lives under `.nb3/`
+- Environment variables use the `NB3_` prefix
+- Hub workflow exit codes are `2` for local input or artifact errors, `3` for authentication, `4` for authorization, `5` for Hub state conflicts, `6` for network or server failures, and `7` for app build failures

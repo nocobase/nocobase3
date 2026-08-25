@@ -10,6 +10,9 @@
   "nocobase": {
     "defaultTemplateVersion": "0.0.1"
   },
+  "files": [
+    "dist"
+  ],
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
     "@base-ui/react": "^1.6.0",
@@ -80,6 +83,7 @@
     "next-themes": "^0.4.6",
     "postcss": "catalog:",
     "prettier": "catalog:",
+    "publint": "catalog:",
     "react": "catalog:",
     "react-day-picker": "10.0.1",
     "react-dom": "catalog:",
@@ -102,7 +106,9 @@
     "zod": "^3.25.76"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "directory": "dist",
+    "linkDirectory": false
   },
   "repository": {
     "type": "git",
@@ -111,6 +117,7 @@
   "scripts": {
     "dev": "node ./scripts/dev.mjs",
     "build": "node ./scripts/build.mjs",
+    "prepack": "pnpm build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
@@ -126,11 +133,12 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:install": "playwright install chromium",
+    "test:pack": "node ./tests/pack/packed-hub-smoke.mjs",
     "test:all": "pnpm typecheck && pnpm test && pnpm test:sdk && pnpm build && pnpm test:e2e",
     "start": "node ./scripts/start.mjs",
     "refine": "refine",
     "sdk:check": "pnpm exec portal-sdk check",
-    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-hub.tgz\" && pnpm exec publint ."
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-hub.tgz\" && node ./tests/pack/packed-hub-smoke.mjs \"$PACK_DIR/nocobase-hub.tgz\" && node ./scripts/publint-packed-hub.mjs \"$PACK_DIR/nocobase-hub.tgz\""
   },
   "browserslist": {
     "production": [

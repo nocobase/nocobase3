@@ -239,7 +239,11 @@ const buildServerDistPackage = ({
     }
 
     fs.mkdirSync(targetDir, { recursive: true });
-    fs.cpSync(sourceDistDir, path.join(targetDir, 'dist'), { recursive: true });
+    fs.cpSync(sourceDistDir, path.join(targetDir, 'dist'), {
+      recursive: true,
+      filter: (source) =>
+        !isExcludedPackagedPath(path.relative(sourceDistDir, source)),
+    });
     writeJson(
       path.join(targetDir, 'package.json'),
       createRuntimePackageJson(packageJson, runtimeDependencies),
@@ -266,7 +270,6 @@ const buildServerDistPackage = ({
   const distPackage = {
     name: rootPackage.name,
     version: rootPackage.version ?? '0.0.0',
-    private: true,
     type: 'module',
     main: './server/embedded.js',
     exports: {
@@ -279,6 +282,10 @@ const buildServerDistPackage = ({
     },
     engines: rootPackage.engines ?? {
       node: '>=24.0.0',
+    },
+    files: ['client', 'server', 'vendor', 'resources/default-app'],
+    publishConfig: {
+      access: 'public',
     },
     dependencies,
   };
@@ -315,6 +322,20 @@ const listWorkspacePackages = (workspacePackagesDir) => {
 const toRelativeFileDependency = (fromPackageDir, targetPackageDir) => {
   const relativePath = toPosix(path.relative(fromPackageDir, targetPackageDir));
   return `file:${relativePath.startsWith('.') ? relativePath : `./${relativePath}`}`;
+};
+
+const isExcludedPackagedPath = (relativePath) => {
+  const normalized = toPosix(relativePath);
+  if (!normalized) return false;
+  const basename = path.posix.basename(normalized);
+  return (
+    basename === '.env' ||
+    basename.startsWith('.env.') ||
+    ['tests', 'e2e', 'coverage', 'test-results'].some(
+      (directory) =>
+        normalized === directory || normalized.startsWith(`${directory}/`),
+    )
+  );
 };
 
 buildServerDistPackage();

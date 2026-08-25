@@ -230,11 +230,25 @@ const buildServerWorkspaceFilters = [
   '@nocobase/app-host',
   '@nocobase/app-server-kit',
   '@nocobase/app-sdk',
+  '@nocobase/app-portal-sdk',
   '@nocobase/app-plugin-authentication',
   '@nocobase/authorization',
   '@nocobase/caching',
   '@nocobase/app-database',
 ];
+
+const defaultTemplateDir = path.resolve(rootDir, '../app-template-default');
+
+const readDefaultTemplateVersion = () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(defaultTemplateDir, 'package.json'), 'utf8'),
+  );
+  const version = manifest.version;
+  if (typeof version !== 'string' || !version.trim()) {
+    throw new Error('Default template package version is missing.');
+  }
+  return version;
+};
 
 const build = ({
   rootDir: buildRootDir = rootDir,
@@ -245,6 +259,22 @@ const build = ({
   run('Typecheck client', 'pnpm', ['exec', 'tsc']);
   run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
   run('Build client', 'pnpm', ['exec', 'refine', 'build']);
+  run('Build default application template', 'pnpm', [
+    '--filter',
+    '@nocobase/app-template-default',
+    'build',
+  ]);
+  run('Generate default application resources', 'node', [
+    './scripts/build-default-app-resources.mjs',
+    '--template-dir',
+    defaultTemplateDir,
+    '--build-dir',
+    path.join(defaultTemplateDir, 'dist'),
+    '--output-dir',
+    path.join(buildDistDir, 'resources/default-app'),
+    '--version',
+    readDefaultTemplateVersion(),
+  ]);
   run(
     'Build server workspace dependencies',
     'pnpm',

@@ -1,5 +1,6 @@
 import { createAdaptorServer, type ServerType } from '@hono/node-server';
 import { createAppHost, type AppHost } from '@nocobase/app-host';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +36,15 @@ function createStandaloneServerWithRegistry(
 ): HubApp {
   const viteDevUrl = resolveViteDevUrl(options.viteDevUrl, env);
   const packageRoot = getPackageRoot();
+  const defaultAppResourcesDirectory = resolveDefaultAppResourcesDirectory(
+    env,
+    packageRoot,
+  );
+  const repositorySeedPath =
+    getEnvString(env, 'HUB_REPOSITORY_SEED_PATH') ??
+    (defaultAppResourcesDirectory
+      ? path.join(defaultAppResourcesDirectory, 'source.bundle')
+      : undefined);
   const appName = getEnvString(env, 'APP_NAME') ?? 'hub';
   const basePath = normalizeBasePath(
     getEnvString(env, 'APP_BASE_PATH') ?? `/${appName}`,
@@ -64,6 +74,8 @@ function createStandaloneServerWithRegistry(
     databasePath: getEnvString(env, 'HUB_DATABASE_PATH'),
     releaseRoot: getEnvString(env, 'HUB_RELEASE_ROOT'),
     sourceRoot: getEnvString(env, 'HUB_SOURCE_ROOT'),
+    repositorySeedPath,
+    defaultAppResourcesDirectory,
     appPublicOrigin: getEnvString(env, 'APP_PUBLIC_ORIGIN'),
     runtimeSecretEncryptionKey: getEnvString(env, 'HUB_SECRET_ENCRYPTION_KEY'),
     runtimeSecretEncryptionKeyFile: getEnvString(
@@ -78,6 +90,24 @@ function createStandaloneServerWithRegistry(
     apiClientStorageType: getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
     apiClientShareToken: getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
   });
+}
+
+function resolveDefaultAppResourcesDirectory(
+  env: EnvMap,
+  packageRoot: string,
+): string | undefined {
+  const configured = getEnvString(env, 'HUB_DEFAULT_APP_RESOURCES_DIR');
+  if (configured) {
+    const candidate = path.resolve(configured);
+    return fs.existsSync(path.join(candidate, 'metadata.json'))
+      ? candidate
+      : undefined;
+  }
+
+  return [
+    path.join(packageRoot, 'resources', 'default-app'),
+    path.join(packageRoot, 'dist', 'resources', 'default-app'),
+  ].find((candidate) => fs.existsSync(path.join(candidate, 'metadata.json')));
 }
 
 export function startServer(): void {
@@ -452,7 +482,11 @@ if (isEntrypoint()) {
 
 function isEntrypoint(): boolean {
   const entry = process.argv[1];
-  return Boolean(
-    entry && path.resolve(entry) === fileURLToPath(import.meta.url),
-  );
+  if (!entry) return false;
+  const modulePath = fileURLToPath(import.meta.url);
+  try {
+    return fs.realpathSync(entry) === fs.realpathSync(modulePath);
+  } catch {
+    return path.resolve(entry) === modulePath;
+  }
 }

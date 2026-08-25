@@ -101,7 +101,7 @@ describe('writeHubConfig', () => {
 describe('hubUrl', () => {
   it('builds a url from the recorded host and port', () => {
     expect(hubUrl({ host: '127.0.0.1', name: 'h', port: 3000 })).toBe(
-      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3000/hub',
     );
   });
 
@@ -110,8 +110,14 @@ describe('hubUrl', () => {
     'turns the bind address %s into something openable',
     (host) => {
       expect(hubUrl({ host, name: 'h', port: 3000 })).toBe(
-        'http://localhost:3000',
+        'http://localhost:3000/hub',
       );
     },
   );
+
+  it('brackets a concrete IPv6 host', () => {
+    expect(hubUrl({ host: '::1', name: 'h', port: 13_000 })).toBe(
+      'http://[::1]:13000/hub',
+    );
+  });
 });

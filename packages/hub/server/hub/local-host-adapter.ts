@@ -265,7 +265,7 @@ export class LocalHostAdapter {
   ): string {
     return resolveReleaseArtifactDirectory({
       releaseRoot: this.releaseRoot,
-      applicationSlug: application.slug,
+      applicationId: application.id,
       storageKey: release.storageKey,
     });
   }

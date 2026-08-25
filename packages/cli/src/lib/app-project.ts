@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { APP_STATE_DIR, type AppConfig } from './scaffold.ts';
 
@@ -84,4 +84,36 @@ export async function writeAppConfig(
     `${JSON.stringify(config, null, 2)}\n`,
     'utf8',
   );
+}
+
+/**
+ * Records the remote Hub identity in the existing `.nb3/config.json` format used by every app command. The file is
+ * local working-copy state, so it is also excluded through Git's per-clone exclude file rather than committed.
+ */
+export async function writePulledAppConfig(
+  directory: string,
+  config: Pick<AppConfig, 'applicationId' | 'hub' | 'name' | 'slug'>,
+): Promise<void> {
+  const project: AppProject = {
+    directory: path.resolve(directory),
+    config: { ...config },
+  };
+  await mkdir(path.join(project.directory, APP_STATE_DIR), { recursive: true });
+  await writeAppConfig(project, project.config);
+  await excludeAppStateFromGit(project.directory);
+}
+
+async function excludeAppStateFromGit(directory: string): Promise<void> {
+  const excludePath = path.join(directory, '.git', 'info', 'exclude');
+  await mkdir(path.dirname(excludePath), { recursive: true });
+  let existing = '';
+  try {
+    existing = await readFile(excludePath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  const rule = `/${APP_STATE_DIR}/`;
+  if (existing.split(/\r?\n/).includes(rule)) return;
+  const prefix = existing && !existing.endsWith('\n') ? '\n' : '';
+  await appendFile(excludePath, `${prefix}${rule}\n`, 'utf8');
 }

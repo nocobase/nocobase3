@@ -11,7 +11,7 @@ const RECORD_SEPARATOR = Buffer.from([0]);
 
 export interface ReleaseArtifactLocation {
   releaseRoot?: string;
-  applicationSlug: string;
+  applicationId: string;
   storageKey?: string | null;
 }
 
@@ -35,7 +35,7 @@ export function resolveReleaseArtifactDirectory(
 
   const releaseRoot = path.resolve(location.releaseRoot);
   const resolved = resolveInside(releaseRoot, location.storageKey);
-  const applicationRoot = resolveInside(releaseRoot, location.applicationSlug);
+  const applicationRoot = resolveInside(releaseRoot, location.applicationId);
   const relativeStorageKey = path.relative(applicationRoot, resolved);
   if (
     relativeStorageKey === '..' ||
@@ -44,7 +44,7 @@ export function resolveReleaseArtifactDirectory(
   ) {
     throw new HubDomainError(
       'INVALID_RELEASE_STORAGE_KEY',
-      'Release storageKey must be scoped to the application slug.',
+      'Release storageKey must be scoped to the application ID.',
       { status: 422 },
     );
   }

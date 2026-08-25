@@ -27,6 +27,10 @@ export interface RunResult {
   lines: string[];
 }
 
+export interface FailedRunResult extends RunResult {
+  error: unknown;
+}
+
 /**
  * Runs a command in-process and captures what it printed. Commands report through `this.log`, which oclif routes to
  * `ux.stdout` and from there to `console.log` — patching `process.stdout.write` would not see it, because the test
@@ -51,4 +55,24 @@ export async function runCommand(
   }
 
   return { stdout: lines.join('\n'), lines };
+}
+
+export async function runCommandAllowFailure(
+  config: Config,
+  id: string,
+  argv: string[] = [],
+): Promise<FailedRunResult> {
+  const lines: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]): void => {
+    lines.push(args.map((arg) => String(arg)).join(' '));
+  };
+  try {
+    await config.runCommand(id, argv);
+  } catch (error) {
+    return { error, stdout: lines.join('\n'), lines };
+  } finally {
+    console.log = originalLog;
+  }
+  throw new Error(`Expected ${id} to fail.`);
 }

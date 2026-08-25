@@ -32,6 +32,8 @@ export interface CreateAppOptions {
   appPublicOrigin?: string;
   sourceRoot?: string;
   repositorySeedPath?: string;
+  /** Packaged deterministic resources used to initialize the system default APP. */
+  defaultAppResourcesDirectory?: string;
   runtimeSecretEncryptionKey?: string;
   runtimeSecretEncryptionKeyFile?: string;
   maxUploadBytes?: number;
@@ -160,6 +162,7 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
       appPublicOrigin: options.appPublicOrigin,
       sourceRoot: options.sourceRoot,
       repositorySeedPath: options.repositorySeedPath,
+      defaultAppResourcesDirectory: options.defaultAppResourcesDirectory,
       runtimeSecretEncryptionKey:
         options.runtimeSecretEncryptionKey ||
         options.runtimeSecretEncryptionKeyFile ||

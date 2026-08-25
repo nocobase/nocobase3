@@ -82,6 +82,10 @@ import {
   type InvitationStatus,
   type ManagedInvitation,
 } from './invitation-service.ts';
+import {
+  DefaultApplicationBootstrap,
+  type DefaultApplicationStatus,
+} from './default-application-bootstrap.ts';
 
 export interface HubApiDeps {
   database: HubDatabaseRuntime;
@@ -103,6 +107,8 @@ export interface HubApiDeps {
   sourceRoot?: string;
   /** Deterministic default-template bare repository or Git bundle. */
   repositorySeedPath?: string;
+  /** Directory containing metadata.json and the packaged initial Release. */
+  defaultAppResourcesDirectory?: string;
   /** Encryption key resolved by the composition root. */
   runtimeSecretEncryptionKey?:
     RuntimeSecretEncryptionKey | Promise<RuntimeSecretEncryptionKey>;
@@ -268,6 +274,7 @@ export function createHubApi(
     () => runtimeSecrets,
     controlLocks,
   );
+  let defaultApplicationBootstrap: DefaultApplicationBootstrap | undefined;
   const api = new Hono<HubApiEnvironment>() as HubApi;
   const startedAt = new Date().toISOString();
   let setupTail: Promise<void> = Promise.resolve();
@@ -476,14 +483,79 @@ export function createHubApi(
 
   api.get('/setup/status', async (context) => {
     const setupRequired = await store.isSetupRequired();
-    const defaultApplication = managementEnabled
-      ? await getDefaultApplicationStatus(managementStore)
-      : undefined;
+    const defaultApplication = defaultApplicationBootstrap
+      ? await defaultApplicationBootstrap.status()
+      : managementEnabled
+        ? await getDefaultApplicationStatus(managementStore, store)
+        : undefined;
     return successResponse(context, {
       setupRequired,
       ownerConfigured: !setupRequired,
       ...(defaultApplication ? { defaultApp: defaultApplication } : {}),
     });
+  });
+
+  api.post('/setup/default-app/retry', async (context) => {
+    const actor = await authenticateActor(context);
+    await authorization.require(actor.user.id, {
+      resource: 'hub.app',
+      action: 'create',
+    });
+    const body = await jsonBody(context);
+    rejectUnknownKeys(body, []);
+    const idempotencyKey = requireHeaderIdempotencyKey(context);
+    const bootstrap = defaultApplicationBootstrap;
+    if (!bootstrap) {
+      throw new HubDomainError(
+        'DEFAULT_APP_BOOTSTRAP_UNAVAILABLE',
+        'Default application bootstrap resources are unavailable.',
+        { status: 503, retryable: false },
+      );
+    }
+    const current = await bootstrap.status();
+    if (current.status === 'ready') {
+      return successResponse(
+        context,
+        { defaultApp: current },
+        { idempotent: true },
+      );
+    }
+    if (current.status === 'failed' && !current.retryable) {
+      throw new HubDomainError(
+        'DEFAULT_APP_BOOTSTRAP_NOT_RETRYABLE',
+        'The default application bootstrap failure is not retryable.',
+        { status: 409, retryable: false },
+      );
+    }
+    const execution = await idempotency.execute(
+      {
+        actorId: actor.user.id,
+        credentialId: actor.agent?.credentialId,
+        endpoint: 'POST /setup/default-app/retry',
+        scopeKey: 'default-application',
+        idempotencyKey,
+        payload: body,
+      },
+      async () => {
+        void bootstrap.retry().catch((error: unknown) => {
+          logServerError(error, { operation: 'default-app-bootstrap-retry' });
+        });
+        return {
+          defaultApp: {
+            status: 'preparing',
+            retryable: false,
+            errorCode: null,
+          } satisfies DefaultApplicationStatus,
+          status: 202 as const,
+        };
+      },
+    );
+    return successResponse(
+      context,
+      { defaultApp: execution.value.defaultApp },
+      { idempotent: execution.idempotent },
+      execution.value.status,
+    );
   });
 
   api.post('/setup/owner', async (context) => {
@@ -2513,9 +2585,32 @@ export function createHubApi(
         );
       }
     }
-    if (options.recoverDeployments === false) return;
-    await coordinator.recover();
-    await coordinator.reconcileActiveRuntimes();
+    if (options.recoverDeployments !== false) {
+      await coordinator.recover();
+    }
+    if (
+      repository &&
+      releaseUploads &&
+      runtimeSecrets &&
+      deps.defaultAppResourcesDirectory
+    ) {
+      defaultApplicationBootstrap = new DefaultApplicationBootstrap({
+        connection: deps.database.connection,
+        store,
+        managementStore,
+        repository,
+        runtimeSecrets,
+        releaseUploads,
+        host,
+        resourcesDirectory: deps.defaultAppResourcesDirectory,
+        scheduleDeployment: (deployment) => coordinator.schedule(deployment),
+        appName: deps.appName,
+      });
+      await defaultApplicationBootstrap.ensure();
+    }
+    if (options.recoverDeployments !== false) {
+      await coordinator.reconcileActiveRuntimes();
+    }
   });
   Object.defineProperties(api, {
     ready: { configurable: false, enumerable: false, value: ready },
@@ -3887,14 +3982,22 @@ function compactObject(
 
 async function getDefaultApplicationStatus(
   managementStore: HubManagementStore,
+  store: HubStore,
 ): Promise<{
   status: 'preparing' | 'ready' | 'failed';
   retryable: boolean;
   errorCode: string | null;
 }> {
-  const applications = await managementStore.listApplications({ limit: 100 });
-  if (applications.items.some((application) => application.isDefault)) {
-    return { status: 'ready', retryable: false, errorCode: null };
+  const application = await managementStore.getDefaultApplication();
+  if (application?.activeReleaseId) {
+    const deployments = await store.listDeployments({
+      applicationId: application.id,
+      statuses: ['succeeded'],
+      limit: 1,
+    });
+    if (deployments.items.length > 0) {
+      return { status: 'ready', retryable: false, errorCode: null };
+    }
   }
   return { status: 'preparing', retryable: false, errorCode: null };
 }

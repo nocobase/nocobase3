@@ -77,13 +77,13 @@ describe('release artifact integrity', () => {
     );
     temporaryDirectories.push(releaseRoot, outsideRoot);
     await mkdir(path.join(outsideRoot, '1.0.0'), { recursive: true });
-    await symlink(outsideRoot, path.join(releaseRoot, 'inventory'));
+    await symlink(outsideRoot, path.join(releaseRoot, 'app-1'));
 
     expect(() =>
       resolveReleaseArtifactDirectory({
         releaseRoot,
-        applicationSlug: 'inventory',
-        storageKey: 'inventory/1.0.0',
+        applicationId: 'app-1',
+        storageKey: 'app-1/release-1',
       }),
     ).toThrow(
       expect.objectContaining({
@@ -99,7 +99,7 @@ describe('release artifact integrity', () => {
     );
     temporaryDirectories.push(releaseRoot);
     const application = applicationFixture();
-    const storageKey = `${application.slug}/1.0.0`;
+    const storageKey = `${application.id}/release-1`;
     const artifact = path.join(releaseRoot, storageKey);
     await mkdir(path.dirname(artifact), { recursive: true });
     await createArtifact(artifact);
@@ -130,7 +130,7 @@ describe('release artifact integrity', () => {
     );
     temporaryDirectories.push(releaseRoot);
     const application = applicationFixture();
-    const storageKey = `${application.slug}/1.0.0`;
+    const storageKey = `${application.id}/release-1`;
     const artifact = path.join(releaseRoot, storageKey);
     await mkdir(path.join(artifact, 'dist/server'), { recursive: true });
     await writeFile(
