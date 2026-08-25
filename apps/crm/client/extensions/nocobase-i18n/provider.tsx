@@ -1,9 +1,9 @@
 import { useEffect, useState, type PropsWithChildren } from 'react';
 
 import { LoadingState } from '@/components/app-shell/loading-state';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
-import { setLocalePersistence } from '@nocobase/portal-sdk/i18n';
-import { useSystemSettings } from '@nocobase/portal-sdk/system-settings';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { setLocalePersistence } from '@nocobase/app-portal-sdk/i18n';
+import { useSystemSettings } from '@nocobase/app-portal-sdk/system-settings';
 import { loadServerLocaleResources } from './server-resources';
 
 export function NocoBaseI18nBootstrap({ children }: PropsWithChildren) {

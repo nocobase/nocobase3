@@ -1,4 +1,4 @@
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 import type { useTranslate } from '@refinedev/core';
 import type { UseFormReturn } from 'react-hook-form';
 

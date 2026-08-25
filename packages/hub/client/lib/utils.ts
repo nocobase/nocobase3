@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { getPortalBase } from '@nocobase/portal-sdk/runtime';
+import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

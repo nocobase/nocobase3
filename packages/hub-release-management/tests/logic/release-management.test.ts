@@ -74,7 +74,7 @@ describe('release management', () => {
                     kind: 'database',
                     name: 'Orders 主数据库',
                     status: 'active',
-                    provider: '@nocobase/database',
+                    provider: '@nocobase/app-database',
                     updatedAt: '2026-08-23T12:00:00.000Z',
                     error: null,
                   },
@@ -95,7 +95,7 @@ describe('release management', () => {
                   kind: 'database',
                   name: 'Orders 主数据库',
                   status: 'error',
-                  provider: '@nocobase/database',
+                  provider: '@nocobase/app-database',
                   updatedAt: '2026-08-23T12:05:00.000Z',
                   error: {
                     code: 'DATABASE_UNAVAILABLE',
@@ -165,7 +165,7 @@ describe('release management', () => {
                   kind: 'database',
                   name: 'CRM 主数据库',
                   status: 'active',
-                  provider: '@nocobase/database',
+                  provider: '@nocobase/app-database',
                   updatedAt: '2026-08-23T12:00:00.000Z',
                   details: {
                     connectionName: 'sqlite',

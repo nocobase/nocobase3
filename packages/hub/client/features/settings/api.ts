@@ -1,4 +1,4 @@
-import { getPortalBase } from '@nocobase/portal-sdk/runtime';
+import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 import type {
   StorageSettingsDraft,
   StorageSettingsResponse,

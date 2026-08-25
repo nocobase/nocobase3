@@ -1,4 +1,4 @@
-import type { BuilderResult, CollectionBuilder } from '@nocobase/database';
+import type { BuilderResult, CollectionBuilder } from '@nocobase/app-database';
 
 /** Stores the default record visibility for each resource. It never grants an Object capability. */
 export function createOrganizationWideDefaultCollection(

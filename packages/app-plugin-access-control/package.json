@@ -81,7 +81,7 @@
   "dependencies": {
     "@nocobase/app-plugin-settings": "workspace:^",
     "@nocobase/authorization": "workspace:^",
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "knex": "catalog:",
     "lucide-react": "^0.487.0"
   },

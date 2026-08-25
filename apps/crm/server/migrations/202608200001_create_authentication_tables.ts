@@ -2,7 +2,7 @@ import {
   defineMigration,
   type MigrationContext,
   type MigrationDefinition,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608200001_create_authentication_tables',

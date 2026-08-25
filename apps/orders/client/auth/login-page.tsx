@@ -1,6 +1,34 @@
-import { AuthPageShell } from '@nocobase/app-plugin-authentication/client/ui';
 import { useLogin } from '@refinedev/core';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import {
+  useState,
+  type FormEvent,
+  type PropsWithChildren,
+  type ReactElement,
+} from 'react';
+
+interface AppLoginLayoutProps extends PropsWithChildren {
+  readonly description: string;
+  readonly title: string;
+}
+
+function AppLoginLayout({
+  children,
+  description,
+  title,
+}: AppLoginLayoutProps): ReactElement {
+  return (
+    <main className='grid min-h-svh place-items-center bg-background px-6 py-10 text-foreground'>
+      <section className='w-full max-w-sm rounded-xl border bg-card p-8 text-card-foreground shadow-sm'>
+        <header className='mb-8'>
+          <p className='mb-8 text-lg font-semibold'>NocoBase</p>
+          <h1 className='text-2xl font-semibold tracking-tight'>{title}</h1>
+          <p className='mt-2 text-sm text-muted-foreground'>{description}</p>
+        </header>
+        {children}
+      </section>
+    </main>
+  );
+}
 
 export default function OrdersLoginPage(): ReactElement {
   const [identifier, setIdentifier] = useState('nocobase');
@@ -14,7 +42,7 @@ export default function OrdersLoginPage(): ReactElement {
     mutate({ identifier, password });
   };
   return (
-    <AuthPageShell
+    <AppLoginLayout
       description='登录后进入订单履约工作区，应用设置在独立设置中心管理。'
       title='登录订单运营中心'
     >
@@ -55,6 +83,6 @@ export default function OrdersLoginPage(): ReactElement {
           本地预览账号：nocobase / admin123
         </p>
       </form>
-    </AuthPageShell>
+    </AppLoginLayout>
   );
 }

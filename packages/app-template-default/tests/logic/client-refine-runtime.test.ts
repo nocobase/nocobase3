@@ -1,5 +1,5 @@
 import type { AppClientRefineConfig } from '@nocobase/app-client';
-import { dataProvider } from '@nocobase/portal-sdk/data';
+import { dataProvider } from '@nocobase/app-portal-sdk/data';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createRefineConfigCollector } from '../../client/refine-runtime.ts';

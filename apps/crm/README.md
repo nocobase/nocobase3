@@ -1,7 +1,7 @@
 # NocoBase CRM
 
 Agent-built CRM application based on `@nocobase/app-template-default` and
-`@nocobase/portal-sdk`.
+`@nocobase/app-portal-sdk`.
 
 ## Product scope
 

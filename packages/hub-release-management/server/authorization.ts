@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import type { DatabaseManager, Row } from '@nocobase/database';
+import type { DatabaseManager, Row } from '@nocobase/app-database';
 import { ReleaseManagementError } from './errors.js';
 import type { ReleaseActor } from './types.js';
 

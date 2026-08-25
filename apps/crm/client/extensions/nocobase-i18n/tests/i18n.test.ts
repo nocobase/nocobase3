@@ -7,7 +7,7 @@ import {
   registerTranslationResources,
   resolveTranslatableText,
   translate,
-} from '@nocobase/portal-sdk/i18n';
+} from '@nocobase/app-portal-sdk/i18n';
 import { portalI18nReady } from '@/providers/i18n/runtime';
 import '@/locales';
 

@@ -2,8 +2,8 @@ import type { Hono } from 'hono';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { getEnvString, readEnvFiles } from '@nocobase/app-server/config';
-import { resolvePublicAuthBaseUrl } from '@nocobase/app-server/support';
+import { getEnvString, readEnvFiles } from '@nocobase/app-server-kit/config';
+import { resolvePublicAuthBaseUrl } from '@nocobase/app-server-kit/support';
 
 import { createApp, joinBasePath, normalizeBasePath } from './app.js';
 import { createServiceDeskRuntime } from './runtime.js';

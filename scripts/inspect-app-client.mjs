@@ -75,7 +75,7 @@ export async function inspectAppClient({
     { resolveAppPlugins },
     { applyClientRouteComponentOverrides, resolveAppClientContributions },
   ] = await Promise.all([
-    import('../packages/app-server/src/plugins/index.js'),
+    import('../packages/app-server-kit/src/plugins/index.js'),
     import('../packages/app-client/src/plugins.js'),
   ]);
   const resolvedApp = resolveAppPlugins(appRoot);

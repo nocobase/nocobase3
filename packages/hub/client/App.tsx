@@ -3,11 +3,10 @@ import {
   createNotificationProvider,
   providers as notificationProviders,
 } from '@nocobase/app-plugin-notification-provider/client';
-import { i18nProvider } from '@nocobase/portal-sdk/i18n';
-import { getPortalBase } from '@nocobase/portal-sdk/runtime';
+import { i18nProvider } from '@nocobase/app-portal-sdk/i18n';
+import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 import { type ResourceProps } from '@refinedev/core';
 import { UnsavedChangesNotifier } from '@refinedev/react-router';
-
 import { DocumentTitleHandler } from './components/app-shell/document-title-handler';
 import { ThemeProvider } from './components/theme/theme-provider';
 import { TooltipProvider } from './components/ui/tooltip';
@@ -15,7 +14,7 @@ import { BrandLogo } from './components/app-shell/brand';
 import { configuredResources } from './app/extensions';
 import './App.css';
 import { AppRoutes } from './app/routes';
-import { authProvider } from './auth';
+import { appClient, authProvider } from './auth';
 
 const getResourcePriority = (resource: ResourceProps) =>
   typeof resource.meta?.priority === 'number' ? resource.meta.priority : 100;
@@ -38,6 +37,7 @@ function App() {
     <AppClientRoot
       config={{
         basename,
+        client: appClient,
         providers,
         refine: {
           notificationProvider,

@@ -1,1 +1,1 @@
-export * from '@nocobase/app-server/plugins';
+export * from '@nocobase/app-server-kit/plugins';

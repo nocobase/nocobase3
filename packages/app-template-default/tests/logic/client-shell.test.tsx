@@ -33,10 +33,34 @@ describe('application shell', () => {
       'page',
     );
     expect((await screen.findAllByText('Alice')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('combobox', { name: 'Theme' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: /Switch to .* theme/ }),
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
+    expect(screen.getByText('AI builds freely.')).toBeVisible();
+    expect(screen.getByText('Default Template v0.0.0')).toBeVisible();
     expect(
       screen.getByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
+  });
+
+  it('collapses and expands the desktop navigation', async () => {
+    renderApplication('/', createAuthProvider(true));
+
+    const sidebar = await screen.findByRole('complementary', {
+      name: 'Application navigation',
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse navigation' }),
+    );
+    expect(sidebar).toHaveClass('md:w-16');
+    expect(
+      screen.getByRole('button', { name: 'Expand navigation' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand navigation' }));
+    expect(sidebar).toHaveClass('md:w-64');
   });
 
   it('opens and closes the mobile navigation without changing the route', async () => {
@@ -65,7 +89,9 @@ describe('application shell', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Application navigation' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Theme' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: /Switch to .* theme/ }),
+    ).toBeVisible();
   });
 
   it('keeps authenticated standalone pages outside the application shell', async () => {

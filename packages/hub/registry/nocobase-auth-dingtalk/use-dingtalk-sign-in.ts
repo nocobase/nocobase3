@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
-import type { Authenticator } from '@nocobase/portal-sdk/auth';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
-import { resolvePortalUrl } from '@nocobase/portal-sdk/runtime';
+import type { Authenticator } from '@nocobase/app-portal-sdk/auth';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 
 type DingtalkAuthUrlResponse = {
   url?: string;

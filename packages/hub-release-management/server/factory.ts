@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import { AppHostClient } from './app-host-client.js';
 import {
   createNativeReleaseAuthorizer,

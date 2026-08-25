@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { Knex } from 'knex';
 
 import type { CrmSeedResult } from './crm.js';

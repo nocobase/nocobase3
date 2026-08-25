@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { writePortalDistEnv } from '../../app-server/scripts/write-portal-dist-env.mjs';
+import { writePortalDistEnv } from '../../app-server-kit/scripts/write-portal-dist-env.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -56,13 +56,13 @@ run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
 run('Build client', 'pnpm', ['exec', 'refine', 'build']);
 run('Build server workspace dependencies', 'pnpm', [
   '--filter',
-  '@nocobase/database',
+  '@nocobase/app-database',
   '--filter',
   '@nocobase/app-plugin-authentication',
   '--filter',
   '@nocobase/hub-release-management',
   '--filter',
-  '@nocobase/app-server',
+  '@nocobase/app-server-kit',
   'build',
 ]);
 run('Build server', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.server.json']);

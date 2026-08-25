@@ -1,4 +1,4 @@
-import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 import { Boxes, Rocket } from 'lucide-react';
 
 // Set this to false when the application no longer needs the example routes

@@ -7,7 +7,7 @@ import {
   getEnvBoolean,
   getEnvString,
   readEnvFiles,
-} from '@nocobase/app-server/config';
+} from '@nocobase/app-server-kit/config';
 import { createReleaseManagement } from '@nocobase/hub-release-management/server';
 import { createSettingsManagement } from './settings/index.js';
 import { createNativeAuthRuntime } from './native-auth/index.js';

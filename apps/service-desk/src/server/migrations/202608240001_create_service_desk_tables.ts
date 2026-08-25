@@ -2,7 +2,7 @@ import {
   defineMigration,
   type MigrationContext,
   type MigrationDefinition,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608240001_create_service_desk_tables',

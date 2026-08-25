@@ -8,8 +8,8 @@ import {
   getEnvBoolean,
   getEnvString,
   readEnvFiles,
-} from '@nocobase/app-server/config';
-import { resolvePublicAuthBaseUrl } from '@nocobase/app-server/support';
+} from '@nocobase/app-server-kit/config';
+import { resolvePublicAuthBaseUrl } from '@nocobase/app-server-kit/support';
 import { createCrmRuntime } from './runtime.js';
 import { resolvePersistentAuthSecret } from './secret.js';
 

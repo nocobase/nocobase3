@@ -6,9 +6,12 @@ import {
   getEnvString,
   readEnvFiles,
   type EnvMap,
-} from '@nocobase/app-server/config';
-import { createOriginProxyHandler } from '@nocobase/app-server/proxy';
-import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
+} from '@nocobase/app-server-kit/config';
+import { createOriginProxyHandler } from '@nocobase/app-server-kit/proxy';
+import {
+  joinBasePath,
+  normalizeBasePath,
+} from '@nocobase/app-server-kit/support';
 
 import { createApp } from './app.js';
 import { createOrdersRuntime } from './runtime.js';

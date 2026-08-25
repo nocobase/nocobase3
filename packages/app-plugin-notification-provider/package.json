@@ -2,8 +2,7 @@
   "name": "@nocobase/app-plugin-notification-provider",
   "displayName": "Notification Provider App Plugin",
   "description": "Registers a Sonner-backed Refine notification provider with the application client runtime.",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -53,7 +52,8 @@
         "import": "./dist/client/routes.js"
       },
       "./package.json": "./package.json"
-    }
+    },
+    "access": "public"
   },
   "files": [
     "dist",
@@ -80,7 +80,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
-    "@nocobase/app-client": "^0.1.0",
+    "@nocobase/app-client": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

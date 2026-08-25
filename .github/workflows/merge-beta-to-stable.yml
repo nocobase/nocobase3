@@ -1,0 +1,318 @@
+name: Merge Beta to Stable
+
+# 把 develop 上的预览版转正并合进 main —— 只做合并，不发布 npm。
+#
+# 做的事：
+#   1. 在临时分支上 pre exit + version，脱掉 -beta.N 后缀
+#   2. 合进 main（PR）
+#   3. 合回 develop 并重新进入 pre 模式（PR）
+#
+# 不做的事：
+#   npm publish。发布另点 release-stable.yml，时机自行掌握。
+#
+# 延后发布是安全的：changeset publish 读的是 package.json 的版本号，
+# 逐个查 registry 有没有 name@version，与 changeset 是否还在无关
+# （源码 getUnpublishedPackages）。所以合并完成后随时可以发。
+#
+# 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
+# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
+# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run: compute versions and run checks without pushing any branch'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    name: Promote beta and merge into main
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 不在 pre 模式说明上一次转正没走完，或有人手工动过状态。
+      - name: Verify develop is in pre mode
+        run: |
+          if [ ! -f .changeset/pre.json ]; then
+            echo "::error::develop 不在 pre 模式，没有可转正的预览版"
+            exit 1
+          fi
+          MODE=$(node -p "require('./.changeset/pre.json').mode")
+          if [ "$MODE" != "pre" ]; then
+            echo "::error::pre.json 的 mode 是 '$MODE'，期望 'pre'"
+            exit 1
+          fi
+          echo "pre tag: $(node -p "require('./.changeset/pre.json').tag")"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Snapshot versions before promotion
+        run: |
+          node scripts/list-package-versions.mjs > /tmp/versions-before.json
+
+      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支会被删除）。
+      - name: Create release branch
+        id: branch
+        run: |
+          git fetch --tags --force
+          DAY=$(date -u +%Y-%m-%d)
+          MAX=0
+          for t in $(git tag -l "release/${DAY}.*"); do
+            N="${t##*.}"
+            case "$N" in ''|*[!0-9]*) continue ;; esac
+            [ "$N" -gt "$MAX" ] && MAX="$N"
+          done
+          SEQ=$((MAX + 1))
+          BATCH="${DAY}.${SEQ}"
+          NAME="release/${BATCH}"
+          git checkout -b "$NAME"
+          {
+            echo "name=$NAME"
+            echo "batch=$BATCH"
+          } >> "$GITHUB_OUTPUT"
+          echo "本次版本：$BATCH"
+
+      # pre exit 只改状态，version 才真正脱后缀并删除 pre.json。
+      - name: Exit pre mode and version
+        run: |
+          pnpm changeset pre exit
+          pnpm changeset version
+
+      # 这一轮 pre 期间从没发过 beta 时，pre exit + version 会以 0 退出、
+      # 删掉 pre.json，但一个版本号都不改。
+      - name: Verify promotion actually changed versions
+        id: changed
+        run: |
+          CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
+          if [ -z "$CHANGED" ]; then
+            echo "::error::转正没有改动任何版本号——这一轮 pre 期间可能从未发过预览版"
+            exit 1
+          fi
+          echo "$CHANGED"
+
+          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
+          {
+            echo "released<<RELEASED_EOF"
+            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
+            echo "RELEASED_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # 转正后不允许残留预发布版本号，也不允许 pre.json 还在——
+      # 它会随合并流进 main 污染稳定线。
+      - name: Verify no prerelease residue
+        run: |
+          if [ -f .changeset/pre.json ]; then
+            echo "::error::pre.json 仍然存在，changeset version 未按预期清理"
+            exit 1
+          fi
+          LEFT=$(node scripts/list-package-versions.mjs --prerelease)
+          if [ -n "$LEFT" ]; then
+            echo "::error::以下 package 仍是预发布版本：$LEFT"
+            exit 1
+          fi
+
+      - name: Summarize
+        run: |
+          {
+            echo "### 待发布版本"
+            echo
+            echo "合并完成后，点 \`release-stable.yml\` 发布："
+            echo
+            echo "| Package | 版本 |"
+            echo "| --- | --- |"
+            node scripts/list-package-versions.mjs --table
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build and test
+        run: |
+          pnpm -r --if-present build
+          pnpm -r --if-present test
+
+      - name: Stop here on dry run
+        if: inputs.dry_run
+        run: echo "dry_run=true，到此为止。发版分支未推送。"
+
+      # 版本 tag 与发版分支同名。同名期间必须用完整 refspec ——
+      # `git push origin <name>` 会报 src refspec matches more than one。
+      - name: Commit, tag and push release branch
+        if: '!inputs.dry_run'
+        run: |
+          NAME="${{ steps.branch.outputs.name }}"
+          git add -A
+          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
+          git tag "$NAME"
+          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
+          git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
+
+      - name: Merge into main
+        if: '!inputs.dry_run'
+        id: merge_main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr create \
+            --title "chore: release ${{ steps.branch.outputs.batch }}" \
+            --body "预览版转正，版本号已脱掉 \`-beta\` 后缀。**尚未发布到 npm**，合并后点 \`release-stable.yml\` 发布。各 package 版本见 workflow summary。" \
+            --base main \
+            --head "${{ steps.branch.outputs.name }}")
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+          set +e
+          gh pr merge "$PR_URL" --merge
+          RC=$?
+          set -e
+          if [ $RC -ne 0 ]; then
+            echo "::warning::PR 合进 main 失败：$PR_URL"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 转正结果合回 develop，并重新进入 pre 模式。
+      # merge 必须在 pre enter 之前——反过来的话合并会把刚建的 pre.json 删掉。
+      - name: Merge back into develop and re-enter pre mode
+        if: "!inputs.dry_run && steps.merge_main.outputs.merged == 'true'"
+        id: merge_develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin develop
+          SYNC="chore/sync-${{ steps.branch.outputs.batch }}"
+          git checkout -B "$SYNC" origin/develop
+
+          set +e
+          git merge --no-ff "origin/${{ steps.branch.outputs.name }}" -m "chore: sync ${{ steps.branch.outputs.batch }} back to develop"
+          RC=$?
+          set -e
+          if [ $RC -ne 0 ]; then
+            echo "::warning::合回 develop 有冲突，需要人工处理"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          pnpm changeset pre enter beta
+          git add .changeset
+          git commit -m "chore: re-enter pre mode for the next line"
+          git push origin "$SYNC"
+
+          PR_URL=$(gh pr create \
+            --title "chore: sync ${{ steps.branch.outputs.batch }} back to develop" \
+            --body "把转正结果同步回 develop，并重新进入 pre 模式。" \
+            --base develop \
+            --head "$SYNC")
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+          set +e
+          gh pr merge "$PR_URL" --merge --delete-branch
+          RC2=$?
+          set -e
+          if [ $RC2 -ne 0 ]; then
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify main merge failure
+        if: "!inputs.dry_run && steps.merge_main.outputs.merged == 'false'"
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
+          TITLE: NocoBase 3 转正合并失败
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 需要人工介入
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            版本 **${{ steps.branch.outputs.batch }}** 的转正提交合进 `main` 时发生冲突：
+            ${{ steps.merge_main.outputs.url }}
+
+            npm 尚未发布，没有产生不一致状态。
+            发版分支 `${{ steps.branch.outputs.name }}` 已保留。
+
+            **注意**：`develop` 仍处于已退出 pre 模式的状态，解决后需要
+            合回 develop 并执行 `changeset pre enter beta`。
+        run: ./scripts/feishu-notify.sh
+
+      - name: Notify develop merge failure
+        if: "!inputs.dry_run && steps.merge_main.outputs.merged == 'true' && steps.merge_develop.outputs.merged != 'true'"
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
+          TITLE: NocoBase 3 已合进 main，但同步回 develop 失败
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 需要人工介入
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            版本 **${{ steps.branch.outputs.batch }}** 已合进 `main`，可以发布了。
+
+            但同步回 `develop` 失败，需要人工处理：
+            ${{ steps.merge_develop.outputs.url || '（合并阶段就失败了，没有创建 PR）' }}
+
+            **develop 目前不在 pre 模式**，处理完后需要执行：
+            `pnpm changeset pre enter beta` 并提交。
+        run: ./scripts/feishu-notify.sh
+
+      - name: Fail the run when any merge failed
+        if: "!inputs.dry_run && (steps.merge_main.outputs.merged == 'false' || steps.merge_develop.outputs.merged != 'true')"
+        run: exit 1
+
+      - name: Notify success
+        if: "!inputs.dry_run && steps.merge_main.outputs.merged == 'true' && steps.merge_develop.outputs.merged == 'true'"
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
+          TITLE: NocoBase 3 转正合并完成
+          STATUS: success
+          STATUS_TEXT_SUCCESS: 待发布
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            版本 **${{ steps.branch.outputs.batch }}** 已转正并合进 `main`，`develop` 已重新进入 pre 模式。
+
+            **尚未发布到 npm。** 点 `release-stable.yml` 完成发布（输入保持默认）。
+
+            待发布的 package：
+            ```
+            ${{ steps.changed.outputs.released }}
+            ```
+        run: ./scripts/feishu-notify.sh

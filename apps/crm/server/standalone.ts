@@ -8,9 +8,12 @@ import {
   getEnvBoolean,
   getEnvString,
   readEnvFiles,
-} from '@nocobase/app-server/config';
-import { createOriginProxyHandler } from '@nocobase/app-server/proxy';
-import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
+} from '@nocobase/app-server-kit/config';
+import { createOriginProxyHandler } from '@nocobase/app-server-kit/proxy';
+import {
+  joinBasePath,
+  normalizeBasePath,
+} from '@nocobase/app-server-kit/support';
 
 import { createApp, type CreateAppOptions } from './app.js';
 import { createCrmRuntime } from './runtime.js';

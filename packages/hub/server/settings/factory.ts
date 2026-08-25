@@ -7,7 +7,7 @@ import {
   type NativeSessionReader,
   type SettingsAuthorizer,
 } from './authorization.js';
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import { createSettingsSecretBox } from './crypto.js';
 import { JsonSettingsStore } from './store.js';
 import { SettingsService } from './service.js';

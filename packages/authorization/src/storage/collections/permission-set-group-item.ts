@@ -1,4 +1,4 @@
-import type { BuilderResult, CollectionBuilder } from '@nocobase/database';
+import type { BuilderResult, CollectionBuilder } from '@nocobase/app-database';
 
 /** Links a Permission Set Group to its Permission Sets. */
 export function createPermissionSetGroupItemCollection(

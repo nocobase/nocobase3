@@ -1,6 +1,6 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
-import { appClientPluginsPlugin } from '@nocobase/app-server/plugins';
-import { portalSdkCompatibilityPlugin } from '@nocobase/portal-sdk/vite';
+import { appClientPluginsPlugin } from '@nocobase/app-server-kit/plugins';
+import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import path from 'node:path';
 import { loadEnv } from 'vite';
 

@@ -2,11 +2,11 @@ import { Suspense, type PropsWithChildren, type ReactNode } from 'react';
 import {
   collectAppExtensionContributions,
   type AppExtension,
-} from '@nocobase/portal-sdk/extensions';
+} from '@nocobase/app-portal-sdk/extensions';
 import {
   buildRouteResources,
   renderAppRoutes,
-} from '@nocobase/portal-sdk/routing';
+} from '@nocobase/app-portal-sdk/routing';
 import { LoadingState } from '@/components/app-shell/loading-state';
 import {
   appRoutes,

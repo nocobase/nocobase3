@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 
 import type { AuthSession } from '@nocobase/app-plugin-authentication';
-import type { DatabaseManager, Row } from '@nocobase/database';
+import type { DatabaseManager, Row } from '@nocobase/app-database';
 
 import { SettingsError } from './errors.js';
 import type { SettingsActor } from './types.js';

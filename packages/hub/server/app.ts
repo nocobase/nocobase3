@@ -5,17 +5,17 @@ import {
   registerNocoBaseApiProxyRoutes,
   resolveNocoBaseApiUrl,
   createNocoBaseApiProxyHeaders,
-} from '@nocobase/app-server/proxy';
+} from '@nocobase/app-server-kit/proxy';
 import {
   createPortalSpaRuntimeGlobals,
   registerSpaRoutes,
-} from '@nocobase/app-server/spa';
+} from '@nocobase/app-server-kit/spa';
 import {
   joinBasePath,
   normalizeBasePath,
   resolveApiProxyPath,
   resolveAppName,
-} from '@nocobase/app-server/support';
+} from '@nocobase/app-server-kit/support';
 
 import {
   createReleaseManagementRoutes,

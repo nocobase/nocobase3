@@ -57,7 +57,7 @@ describe('AppResourceBindings', () => {
               kind: 'database',
               name: 'CRM 主数据库',
               status: 'active',
-              provider: '@nocobase/database',
+              provider: '@nocobase/app-database',
               updatedAt: '2026-08-23T12:00:00.000Z',
               details: {
                 connectionName: 'sqlite',

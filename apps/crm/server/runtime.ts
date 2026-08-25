@@ -3,14 +3,14 @@ import path from 'node:path';
 import {
   prepareAppDatabaseStorage,
   type AppDatabaseConfig,
-} from '@nocobase/app-server/database';
-import { createAppRuntime } from '@nocobase/app-server/runtime';
+} from '@nocobase/app-server-kit/database';
+import { createAppRuntime } from '@nocobase/app-server-kit/runtime';
 import {
   createAuthentication,
   type Auth,
   type AuthSession,
 } from '@nocobase/app-plugin-authentication';
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 
 import {
   createCrmAccessService,
@@ -39,7 +39,7 @@ export interface CrmDatabaseRuntimeResource {
   kind: 'database';
   name: string;
   status: 'active' | 'error';
-  provider: '@nocobase/database';
+  provider: '@nocobase/app-database';
   updatedAt: string;
   details?: {
     connectionName: string;
@@ -151,7 +151,7 @@ export function createCrmRuntime(options: CrmRuntimeOptions): CrmRuntime {
           kind: 'database',
           name: `${options.appName.toUpperCase()} 主数据库`,
           status: 'active',
-          provider: '@nocobase/database',
+          provider: '@nocobase/app-database',
           updatedAt,
           details: {
             connectionName: connection.name,
@@ -166,7 +166,7 @@ export function createCrmRuntime(options: CrmRuntimeOptions): CrmRuntime {
           kind: 'database',
           name: `${options.appName.toUpperCase()} 主数据库`,
           status: 'error',
-          provider: '@nocobase/database',
+          provider: '@nocobase/app-database',
           updatedAt,
           error: {
             code: 'DATABASE_UNAVAILABLE',

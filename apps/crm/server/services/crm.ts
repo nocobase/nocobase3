@@ -1,5 +1,5 @@
 import type { AuthSession } from '@nocobase/app-plugin-authentication';
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { Knex } from 'knex';
 
 export const CRM_RESOURCES = [

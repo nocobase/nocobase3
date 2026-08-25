@@ -70,7 +70,7 @@
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-hub-release-management.tgz\" && pnpm exec publint . && pnpm exec attw \"$PACK_DIR/nocobase-hub-release-management.tgz\" --profile esm-only"
   },
   "dependencies": {
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "hono": "catalog:",
     "sonner": "^2.0.3"
   },

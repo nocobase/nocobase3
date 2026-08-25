@@ -99,7 +99,7 @@ Scenario:
 - ${presentation}
 
 Implementation requirements:
-- Import RouteDrawer, RouteDialog, and RoutePage from @/extensions/nocobase-route-surfaces; import useRouteSurfaceClose from @nocobase/portal-sdk/routing when actions need to close the active surface.
+- Import RouteDrawer, RouteDialog, and RoutePage from @/extensions/nocobase-route-surfaces; import useRouteSurfaceClose from @nocobase/app-portal-sdk/routing when actions need to close the active surface.
 - Define application-owned resource routes once with defineAppRoutes. resourceAction only binds a child path to the parent Refine resource's create, edit, or show URL; it does not choose a presentation.
 - With the default automatic resource outlet, every resourceAction element must render a RouteDrawer or RouteDialog. Never place a plain full-page form or detail component there because it will render below the list.
 - When a resource action must replace the list as a full page, set outlet: "manual" on the resource route and use an application-owned layout that renders or consumes useOutlet().

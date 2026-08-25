@@ -1,9 +1,9 @@
 import { LogIn } from 'lucide-react';
 
-import type { AuthenticatorComponentProps } from '@nocobase/portal-sdk/auth';
+import type { AuthenticatorComponentProps } from '@nocobase/app-portal-sdk/auth';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { resolveTranslatableText } from '@nocobase/portal-sdk/i18n';
+import { resolveTranslatableText } from '@nocobase/app-portal-sdk/i18n';
 
 import { useCasSignIn } from './use-cas-sign-in';
 

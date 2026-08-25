@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { writePortalDistEnv } from '../../../packages/app-server/scripts/write-portal-dist-env.mjs';
+import { writePortalDistEnv } from '../../../packages/app-server-kit/scripts/write-portal-dist-env.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -49,9 +49,9 @@ run('Build server workspace dependencies', 'pnpm', [
   '--filter',
   '@nocobase/app-sdk',
   '--filter',
-  '@nocobase/database',
+  '@nocobase/app-database',
   '--filter',
-  '@nocobase/app-server',
+  '@nocobase/app-server-kit',
   '--filter',
   '@nocobase/caching',
   '--filter',

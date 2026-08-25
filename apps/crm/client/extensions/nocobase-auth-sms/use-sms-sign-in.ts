@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useAuthenticatorSignIn } from '@nocobase/portal-sdk/auth';
-import type { Authenticator } from '@nocobase/portal-sdk/auth';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
+import { useAuthenticatorSignIn } from '@nocobase/app-portal-sdk/auth';
+import type { Authenticator } from '@nocobase/app-portal-sdk/auth';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 
 type SmsCodeResponse = {
   expiresAt?: string;

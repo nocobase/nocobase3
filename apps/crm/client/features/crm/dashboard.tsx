@@ -1,5 +1,5 @@
 import { useList } from '@refinedev/core';
-import { useCanAccess } from '@nocobase/portal-sdk/acl';
+import { useCanAccess } from '@nocobase/app-portal-sdk/acl';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,

@@ -3,8 +3,8 @@ import path from 'node:path';
 import {
   prepareAppDatabaseStorage,
   type AppDatabaseConfig,
-} from '@nocobase/app-server/database';
-import { createAppRuntime } from '@nocobase/app-server/runtime';
+} from '@nocobase/app-server-kit/database';
+import { createAppRuntime } from '@nocobase/app-server-kit/runtime';
 import {
   AppAccessControlError,
   createAppAccessControlService,
@@ -17,7 +17,7 @@ import {
   type Auth,
   type AuthSession,
 } from '@nocobase/app-plugin-authentication';
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 
 import { ordersAccessControlDefinition } from './access-control.js';
 import { DatabaseOrdersStore } from './database-store.js';
@@ -38,7 +38,7 @@ export interface OrdersDatabaseRuntimeResource {
   kind: 'database';
   name: string;
   status: 'active' | 'error';
-  provider: '@nocobase/database';
+  provider: '@nocobase/app-database';
   updatedAt: string;
   details?: {
     connectionName: string;
@@ -167,7 +167,7 @@ export function createOrdersRuntime(
           kind: 'database',
           name: '订单 App 主数据库',
           status: 'active',
-          provider: '@nocobase/database',
+          provider: '@nocobase/app-database',
           updatedAt,
           details: {
             connectionName: connection.name,
@@ -182,7 +182,7 @@ export function createOrdersRuntime(
           kind: 'database',
           name: '订单 App 主数据库',
           status: 'error',
-          provider: '@nocobase/database',
+          provider: '@nocobase/app-database',
           updatedAt,
           error: {
             code: 'DATABASE_UNAVAILABLE',

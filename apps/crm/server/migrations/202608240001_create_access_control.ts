@@ -13,7 +13,7 @@ import {
   type CollectionDefinitionBuilder,
   type MigrationContext,
   type MigrationDefinition,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import type { Knex } from 'knex';
 
 const crmResources = [

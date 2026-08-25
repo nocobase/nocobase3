@@ -12,7 +12,7 @@ import {
   type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
 import { createAppClient, type AppClient } from '@nocobase/app-sdk';
-import { getPortalBase } from '@nocobase/portal-sdk/runtime';
+import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 import type { AuthProvider, ResourceProps } from '@refinedev/core';
 
 export interface ServiceDeskClientRuntime {

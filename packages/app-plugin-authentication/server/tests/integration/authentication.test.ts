@@ -6,7 +6,7 @@ import {
   createDatabaseManager,
   createMigrator,
   createSeeder,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 
-import { createOriginProxyHandler } from '@nocobase/app-server/proxy';
-import type { AppRuntime } from '@nocobase/app-server/runtime';
-import type { SpaHandler } from '@nocobase/app-server/spa';
-import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
+import { createOriginProxyHandler } from '@nocobase/app-server-kit/proxy';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import type { SpaHandler } from '@nocobase/app-server-kit/spa';
+import {
+  joinBasePath,
+  normalizeBasePath,
+} from '@nocobase/app-server-kit/support';
 
 import { createApp, type AppServer } from '../app.js';
 import type { AppLifecycle } from '../app-options.js';

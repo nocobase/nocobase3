@@ -6,8 +6,8 @@ import { spawnSync } from 'node:child_process';
 import {
   buildServerDistPackage,
   finalizeServerDistPackage,
-} from '../../../packages/app-server/scripts/build-server-dist-package.mjs';
-import { writePortalDistEnv } from '../../../packages/app-server/scripts/write-portal-dist-env.mjs';
+} from '../../../packages/app-server-kit/scripts/build-server-dist-package.mjs';
+import { writePortalDistEnv } from '../../../packages/app-server-kit/scripts/write-portal-dist-env.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -45,9 +45,9 @@ run('pnpm', [
   '--filter',
   '@nocobase/app-sdk',
   '--filter',
-  '@nocobase/database',
+  '@nocobase/app-database',
   '--filter',
-  '@nocobase/app-server',
+  '@nocobase/app-server-kit',
   '--filter',
   '@nocobase/authorization',
   '--filter',

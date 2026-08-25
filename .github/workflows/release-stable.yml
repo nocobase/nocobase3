@@ -1,0 +1,407 @@
+name: Release Stable
+
+# 发稳定版。默认从 main 发到 dist-tag latest；给旧版本发 hotfix 时
+# 填该版本的分支名并勾上 keep_latest，发到 dist-tag legacy。
+#
+# 覆盖两种场景，靠待消费 changeset 的数量自动分流：
+#
+#   A. merge-beta-to-stable 刚把转正结果合进 main
+#      版本号已经写好，changeset 是 0 个 -> 直接 publish
+#
+#   B. 分支上有新的 changeset（main 的补丁，或旧版本分支的 hotfix）
+#      changeset 是 N 个 -> 先在临时发版分支上 version，再 PR 合回
+#
+# 关于 dist-tag：它只影响 `npm install <pkg>` 不写版本号的人。写了
+# `^1.3.0` 这类 range 的用户按 semver 从版本列表解析，不看 dist-tag。
+# 所以给旧版本发补丁时，唯一要做的就是别让 latest 指针倒退。
+#
+# 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
+# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
+# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to release from'
+        type: string
+        default: main
+      keep_latest:
+        description: 'Keep the latest dist-tag untouched (check this for hotfixes on older versions; publishes to legacy)'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run: compute versions and run checks without publishing or pushing'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Publish from main
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://npm.nocobase.ai
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 出现 pre.json 说明 develop 的预发布状态被误合进来了。
+      # 继续跑会把稳定版发成预发布版本。
+      - name: Verify branch is not in pre mode
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          if [ -f .changeset/pre.json ]; then
+            echo "::error::$BRANCH 上存在 .changeset/pre.json，稳定线被污染，中止发布"
+            exit 1
+          fi
+
+      # develop 是 pre 模式常驻分支，发版走 release-beta.yml。
+      - name: Reject develop
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          if [ "$BRANCH" = "develop" ]; then
+            echo "::error::develop 发版请用 release-beta.yml"
+            exit 1
+          fi
+
+      # 从非 main 分支发版却没勾 keep_latest，多半是忘了 —— 那会让旧版本
+      # 抢走 latest 指针，用户 `npm install` 会拿到退回的版本。
+      - name: Resolve dist-tag
+        id: disttag
+        env:
+          BRANCH: ${{ inputs.branch }}
+          KEEP: ${{ inputs.keep_latest }}
+        run: |
+          if [ "$KEEP" = "true" ]; then
+            echo "value=legacy" >> "$GITHUB_OUTPUT"
+            echo "dist-tag: legacy（latest 指针保持不变）"
+          else
+            if [ "$BRANCH" != "main" ]; then
+              echo "::error::从 $BRANCH 发版但没有勾选 keep_latest。"
+              echo "如果这是给旧版本发的 hotfix，勾上 keep_latest 再跑。"
+              exit 1
+            fi
+            echo "value=" >> "$GITHUB_OUTPUT"
+            echo "dist-tag: latest"
+          fi
+
+      # 分流：有待消费 changeset 就要先 version，没有则说明版本号已就绪。
+      - name: Decide mode
+        id: mode
+        run: |
+          COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
+          if [ "$COUNT" = "0" ]; then
+            echo "changeset 0 个 —— 版本号已由 merge-beta-to-stable 写好，直接发布"
+            echo "needs_version=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changeset $COUNT 个 —— 需要先计算版本号"
+            echo "needs_version=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 场景 A：版本号已就绪，检查是否真有东西可发。
+      # 全部 package 的 name@version 都已在 registry 时，publish 会静默跳过，
+      # 白跑一轮。这里提前发现。
+      - name: Verify there is something to publish
+        if: steps.mode.outputs.needs_version == 'false'
+        run: |
+          echo "待发布候选："
+          node scripts/list-package-versions.mjs --candidates
+          echo "publish 会逐个查 registry，已存在的自动跳过"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # ── 场景 B：需要计算版本号 ────────────────────────────────────
+      - name: Snapshot versions before versioning
+        if: steps.mode.outputs.needs_version == 'true'
+        run: |
+          node scripts/list-package-versions.mjs > /tmp/versions-before.json
+
+      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支合并后会被删除）。
+      - name: Create release branch
+        if: steps.mode.outputs.needs_version == 'true'
+        id: branch
+        run: |
+          git fetch --tags --force
+          DAY=$(date -u +%Y-%m-%d)
+          MAX=0
+          for t in $(git tag -l "release/${DAY}.*"); do
+            N="${t##*.}"
+            case "$N" in ''|*[!0-9]*) continue ;; esac
+            [ "$N" -gt "$MAX" ] && MAX="$N"
+          done
+          SEQ=$((MAX + 1))
+          BATCH="${DAY}.${SEQ}"
+          NAME="release/${BATCH}"
+          git checkout -b "$NAME"
+          {
+            echo "name=$NAME"
+            echo "batch=$BATCH"
+          } >> "$GITHUB_OUTPUT"
+          echo "本次版本：$BATCH"
+
+      - name: Version
+        if: steps.mode.outputs.needs_version == 'true'
+        run: pnpm changeset version
+
+      - name: Verify versions actually changed
+        if: steps.mode.outputs.needs_version == 'true'
+        id: changed
+        run: |
+          CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
+          if [ -z "$CHANGED" ]; then
+            echo "::error::changeset version 没有改动任何版本号（可能都是 empty changeset）"
+            exit 1
+          fi
+          echo "$CHANGED"
+
+          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
+          {
+            echo "released<<RELEASED_EOF"
+            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
+            echo "RELEASED_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # main 上不应产生预发布版本号。出现了说明 changeset 写错了。
+      - name: Verify no prerelease versions
+        run: |
+          LEFT=$(node scripts/list-package-versions.mjs --prerelease)
+          if [ -n "$LEFT" ]; then
+            echo "::error::main 上不应存在预发布版本：$LEFT"
+            exit 1
+          fi
+
+      - name: Summarize
+        run: |
+          {
+            echo "### 本次稳定版"
+            echo
+            echo "| Package | 版本 |"
+            echo "| --- | --- |"
+            node scripts/list-package-versions.mjs --table
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build and test
+        run: |
+          pnpm -r --if-present build
+          pnpm -r --if-present test
+
+      - name: Stop here on dry run
+        if: inputs.dry_run
+        run: echo "dry_run=true，到此为止。"
+
+      # ── 场景 B 独有：提交版本号变更并推发版分支 ────────────────────
+      - name: Commit, tag and push release branch
+        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
+        run: |
+          NAME="${{ steps.branch.outputs.name }}"
+          git add -A
+          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
+          git tag "$NAME"
+          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
+          git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
+
+      # ── 两种场景共用：发布 ────────────────────────────────────────
+      - name: Publish to npm
+        if: '!inputs.dry_run'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ steps.disttag.outputs.value }}
+        run: |
+          if [ -n "$DIST_TAG" ]; then
+            pnpm changeset publish --tag "$DIST_TAG"
+          else
+            pnpm changeset publish
+          fi
+
+      - name: Push package tags
+        if: '!inputs.dry_run'
+        run: git push origin --tags
+
+      # ── 场景 B 独有：把版本号变更合回 main ────────────────────────
+      - name: Merge back into the release branch
+        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
+        id: merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr create \
+            --title "chore: release ${{ steps.branch.outputs.batch }}" \
+            --body "稳定版 \`${{ steps.branch.outputs.batch }}\`，已发布到 npm（dist-tag \`latest\`）。各 package 版本见 workflow summary。" \
+            --base "${{ inputs.branch }}" \
+            --head "${{ steps.branch.outputs.name }}")
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+          set +e
+          gh pr merge "$PR_URL" --merge --delete-branch
+          RC=$?
+          set -e
+          if [ $RC -ne 0 ]; then
+            echo "::warning::PR 合回 ${{ inputs.branch }} 失败，需要人工解决冲突：$PR_URL"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # main 上的补丁必须同步到 develop，否则下一次转正会把它覆盖掉。
+      # 直接 merge + push，不走 PR —— 冲突的解法是确定的，没有需要人
+      # review 的内容。
+      #
+      # 旧版本分支的 hotfix 不适用：那条线与主线已经分叉，是否同步由人
+      # 判断（通常是 cherry-pick 代码后在 develop 上单独写 changeset）。
+      - name: Sync into develop
+        if: "!inputs.dry_run && inputs.branch == 'main' && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'true'"
+        id: sync
+        run: |
+          git fetch origin main develop
+          git checkout -B develop origin/develop
+
+          set +e
+          git merge --no-ff origin/main -m "chore: sync ${{ steps.branch.outputs.batch }} into develop"
+          MERGE_RC=$?
+          set -e
+
+          if [ $MERGE_RC -ne 0 ]; then
+            set +e
+            node scripts/resolve-sync-conflicts.mjs
+            RESOLVE_RC=$?
+            set -e
+            if [ $RESOLVE_RC -ne 0 ]; then
+              # abort 之后远端 develop 完全没动，人工可以干净地重做一遍。
+              # npm 已经发布成功，这里失败的只是把版本提交同步回 develop。
+              git merge --abort
+              {
+                echo "::warning::存在无法自动解决的冲突，需要人工同步"
+                echo ""
+                echo "npm 已发布成功，main 也已更新，只是没能同步回 develop。"
+                echo "远端 develop 未被修改，在本地执行："
+                echo ""
+                echo "  git checkout develop && git pull"
+                echo "  git merge origin/main"
+                echo "  node scripts/resolve-sync-conflicts.mjs   # 版本号等确定性冲突自动解"
+                echo "  # 手工解决剩下的源码冲突后："
+                echo "  git commit"
+                echo "  git push origin develop"
+                echo ""
+                echo "不同步的话，下一次转正会覆盖掉这个补丁。"
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "synced=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            git commit -m "chore: sync ${{ steps.branch.outputs.batch }} into develop"
+          fi
+
+          # 合并不该带走 develop 的 pre 状态。带走了说明合进来的内容有问题，
+          # 推上去会让下一轮 beta 发成稳定版号。
+          if [ ! -f .changeset/pre.json ]; then
+            echo "::warning::合并后 develop 丢失了 pre.json，中止推送"
+            echo "synced=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git push origin develop
+          echo "synced=true" >> "$GITHUB_OUTPUT"
+
+      - name: Notify merge failure
+        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'false'"
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
+          TITLE: NocoBase 3 稳定版发布成功，但 PR 合回失败
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 需要人工介入
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            版本 **${{ steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `latest`）。
+
+            但版本提交合回 `main` 时发生冲突，需要人工解决：
+            ${{ steps.merge.outputs.url }}
+
+            发版分支 `${{ steps.branch.outputs.name }}` 已保留。
+            **在此之前不要再次发版**，否则版本号会从旧基线重新计算。
+        run: ./scripts/feishu-notify.sh
+
+      - name: Notify sync failure
+        if: "!inputs.dry_run && inputs.branch == 'main' && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'true' && steps.sync.outputs.synced == 'false'"
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
+          TITLE: NocoBase 3 稳定版已发布，但同步到 develop 需要人工处理
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 需要人工介入
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm 并合进 `main`。
+
+            但同步到 `develop` 时有无法自动解决的冲突（源码冲突）。
+            远端 `develop` 未被修改，在本地执行：
+            ```
+            git checkout develop && git pull
+            git merge origin/main
+            node scripts/resolve-sync-conflicts.mjs
+            # 手工解决剩下的源码冲突后 git commit && git push
+            ```
+            **不同步的话，下一次转正会覆盖掉这个补丁。**
+        run: ./scripts/feishu-notify.sh
+
+      - name: Fail the run when merge failed
+        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'false'"
+        run: exit 1
+
+      - name: Notify success
+        if: "!inputs.dry_run && (steps.mode.outputs.needs_version == 'false' || steps.merge.outputs.merged == 'true')"
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
+          TITLE: NocoBase 3 稳定版发布
+          STATUS: success
+          STATUS_TEXT_SUCCESS: 发布成功
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            已发布到 npm（dist-tag `latest`）。
+
+            本次发布的 package：
+            ```
+            ${{ steps.changed.outputs.released || '版本号由 merge-beta-to-stable 写好，清单见 workflow summary' }}
+            ```
+
+            ${{ steps.sync.outputs.synced == 'true' && '补丁已同步到 develop。' || '' }}
+        run: ./scripts/feishu-notify.sh

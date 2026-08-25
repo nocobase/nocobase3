@@ -14,13 +14,23 @@ describe('application authentication UI', () => {
       </AuthLayout>,
     );
 
+    const brand = screen.getByRole('img', { name: 'NocoBase' });
+    expect(brand).toBeVisible();
     expect(
-      screen.getByRole('img', { name: 'NocoBase Default App' }),
-    ).toBeVisible();
+      brand.querySelector('img[src="/assets/logo.png"]'),
+    ).toBeInTheDocument();
+    expect(
+      brand.querySelector('img[src="/assets/logo-dark.png"]'),
+    ).toBeInTheDocument();
+    expect(brand.querySelector('svg')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Welcome' })).toBeVisible();
     expect(
       screen.getByRole('complementary', { name: 'About this application' }),
     ).toHaveClass('hidden', 'md:grid');
+    expect(screen.getByText('AI-native application platform')).toBeVisible();
+    expect(screen.getByText('AI-native frontend')).toBeVisible();
+    expect(screen.getByText('NocoBase foundation')).toBeVisible();
+    expect(screen.getByText('Freedom above. Confidence below.')).toBeVisible();
     expect(screen.getByText('Application form')).toBeVisible();
   });
 
@@ -41,6 +51,18 @@ describe('application authentication UI', () => {
     fireEvent.change(screen.getByLabelText('Password'), {
       target: { value: 'password' },
     });
+
+    const passwordInput = screen.getByLabelText('Password');
+    expect(passwordInput).toHaveAttribute('type', 'password');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(passwordInput).toHaveAttribute('type', 'text');
+    expect(login).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(passwordInput).toHaveAttribute('type', 'password');
+    expect(login).not.toHaveBeenCalled();
+
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
     await waitFor(() => {

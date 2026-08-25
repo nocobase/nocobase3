@@ -3,7 +3,7 @@ import {
   type CollectionDefinitionBuilder,
   type MigrationContext,
   type MigrationDefinition,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 function timestamps(collection: CollectionDefinitionBuilder): void {
   collection.datetime('createdAt').notNull();

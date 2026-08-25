@@ -1,4 +1,4 @@
-import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 import {
   Activity,
   Building2,

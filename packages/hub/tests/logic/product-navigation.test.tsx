@@ -1,4 +1,4 @@
-import { buildRouteResources } from '@nocobase/portal-sdk/routing';
+import { buildRouteResources } from '@nocobase/app-portal-sdk/routing';
 import { describe, expect, it } from 'vitest';
 
 import { appRoutes } from '../../client/routes';

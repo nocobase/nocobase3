@@ -22,7 +22,7 @@ import { EditButton } from '@/components/resources/buttons/edit';
 import { ShowButton } from '@/components/resources/buttons/show';
 import { ListView } from '@/components/resources/views/list-view';
 import { useAIPageElementHandle } from './optional-ai';
-import type { Role } from '@nocobase/portal-sdk/acl';
+import type { Role } from '@nocobase/app-portal-sdk/acl';
 import { RoleBadges } from './role-badges';
 import { resolveRoleLabel } from './role-utils';
 import { getRolePath } from './routes';

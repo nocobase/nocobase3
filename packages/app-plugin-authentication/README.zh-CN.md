@@ -31,6 +31,19 @@ Refine `AuthProvider` 适配器。
 | `@nocobase/app-plugin-authentication/client/actions`   | 无页面依赖的认证动作 hooks                        |
 | `@nocobase/app-plugin-authentication/client/ui`        | 认证路由链接 `AuthLink`                           |
 
+插件还在 `registry/auth-ui` 发布官方认证 UI 配方。Template 可以将它物化到
+`client/extensions/nocobase-auth-ui`；安装后的副本属于应用，可以直接修改，不是插件
+运行时源码。
+
+Registry 元数据位于 `registry.config.json`，使用仓库级工具构建 shadcn 安装产物：
+
+```bash
+pnpm registry:build
+```
+
+生成的安装入口为 `public/r/auth-ui.json`。Registry 源码变更后需要重新构建；消费方只需
+对已发布的 JSON 执行 `shadcn add`。
+
 根入口是服务端入口，浏览器代码必须从 `@nocobase/app-plugin-authentication/client` 导入。
 
 ## 常用命令

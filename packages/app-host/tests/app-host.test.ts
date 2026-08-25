@@ -136,7 +136,7 @@ it('includes App-reported runtime resources in the protected control snapshot', 
           kind: "database",
           name: "Customer 主数据库",
           status: "active",
-          provider: "@nocobase/database",
+          provider: "@nocobase/app-database",
           updatedAt: "2026-08-23T12:00:00.000Z",
           details: {
             connectionName: "sqlite",

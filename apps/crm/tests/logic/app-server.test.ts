@@ -425,7 +425,7 @@ describe('native CRM app server', () => {
         kind: 'database',
         name: 'CRM 主数据库',
         status: 'active',
-        provider: '@nocobase/database',
+        provider: '@nocobase/app-database',
         details: {
           connectionName: 'sqlite',
           dialect: 'sqlite',

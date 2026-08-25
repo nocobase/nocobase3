@@ -1,6 +1,6 @@
 import type { Context, Hono, Next } from 'hono';
 
-import { proxyRequest } from '@nocobase/app-server/proxy';
+import { proxyRequest } from '@nocobase/app-server-kit/proxy';
 
 export interface AppRuntimeGatewayOptions {
   targetUrl: string | URL;

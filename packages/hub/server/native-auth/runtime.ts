@@ -3,14 +3,14 @@ import path from 'node:path';
 import {
   prepareAppDatabaseStorage,
   type AppDatabaseConfig,
-} from '@nocobase/app-server/database';
-import { createAppRuntime } from '@nocobase/app-server/runtime';
+} from '@nocobase/app-server-kit/database';
+import { createAppRuntime } from '@nocobase/app-server-kit/runtime';
 import {
   createAuthentication,
   type Auth,
   type AuthSession,
 } from '@nocobase/app-plugin-authentication';
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 
 export interface NativeAuthRuntimeOptions {
   appName: string;

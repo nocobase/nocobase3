@@ -7,13 +7,13 @@ import {
   getEnvBoolean,
   getEnvString,
   readEnvFiles,
-} from '@nocobase/app-server/config';
-import { createOriginProxyHandler } from '@nocobase/app-server/proxy';
+} from '@nocobase/app-server-kit/config';
+import { createOriginProxyHandler } from '@nocobase/app-server-kit/proxy';
 import {
   joinBasePath,
   normalizeBasePath,
   resolveApiProxyPath,
-} from '@nocobase/app-server/support';
+} from '@nocobase/app-server-kit/support';
 
 import { createApp, type CreateAppOptions } from './app.js';
 import { createReleaseManagement } from '@nocobase/hub-release-management/server';

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 
 import { LoadingState } from '@/components/app-shell/loading-state';
-import { clearAcl } from '@nocobase/portal-sdk/acl';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
-import { resolvePortalUrl } from '@nocobase/portal-sdk/runtime';
+import { clearAcl } from '@nocobase/app-portal-sdk/acl';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 
 import { isDingtalkBrowser } from './use-dingtalk-sign-in';
 

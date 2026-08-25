@@ -1,4 +1,4 @@
-import { defineSeed, type SeedDefinition } from '@nocobase/database';
+import { defineSeed, type SeedDefinition } from '@nocobase/app-database';
 import { hashPassword } from 'better-auth/crypto';
 
 import { createSeedState } from '../store.js';

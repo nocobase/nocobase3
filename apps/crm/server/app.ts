@@ -4,13 +4,13 @@ import path from 'node:path';
 import {
   createPortalSpaRuntimeGlobals,
   registerSpaRoutes,
-} from '@nocobase/app-server/spa';
+} from '@nocobase/app-server-kit/spa';
 import {
   joinBasePath,
   normalizeBasePath,
   resolveApiProxyPath,
   resolveAppName,
-} from '@nocobase/app-server/support';
+} from '@nocobase/app-server-kit/support';
 
 import { createCrmApiRoutes } from './routes.js';
 import type { CrmRuntime } from './runtime.js';

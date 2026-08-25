@@ -1,4 +1,4 @@
-import type { BuilderResult, CollectionBuilder } from '@nocobase/database';
+import type { BuilderResult, CollectionBuilder } from '@nocobase/app-database';
 
 /** Stores work responsibilities composed from multiple Permission Sets. */
 export function createPermissionSetGroupCollection(

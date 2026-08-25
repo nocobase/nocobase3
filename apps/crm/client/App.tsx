@@ -8,9 +8,9 @@ import {
   accessControlProvider,
   AclStoreProvider,
   aclStore,
-} from '@nocobase/portal-sdk/acl';
-import { i18nProvider } from '@nocobase/portal-sdk/i18n';
-import { getPortalBase } from '@nocobase/portal-sdk/runtime';
+} from '@nocobase/app-portal-sdk/acl';
+import { i18nProvider } from '@nocobase/app-portal-sdk/i18n';
+import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 import { type ResourceProps } from '@refinedev/core';
 import { UnsavedChangesNotifier } from '@refinedev/react-router';
 import { lazy, Suspense, type PropsWithChildren } from 'react';

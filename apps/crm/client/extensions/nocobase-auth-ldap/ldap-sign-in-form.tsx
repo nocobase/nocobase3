@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { InputPassword } from '@/components/auth/input-password';
-import type { AuthenticatorComponentProps } from '@nocobase/portal-sdk/auth';
+import type { AuthenticatorComponentProps } from '@nocobase/app-portal-sdk/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
