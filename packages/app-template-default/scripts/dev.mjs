@@ -198,18 +198,6 @@ const nextEnv = {
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
 };
 
-if (nextEnv.SMTP_MOCK_ENABLED === 'true') {
-  const smtpMockHost = nextEnv.SMTP_HOST || '127.0.0.1';
-  const smtpMockPort = numberFromEnv(nextEnv.SMTP_PORT, 1025);
-  if (await canListen(smtpMockHost, smtpMockPort)) {
-    spawnDevProcess('smtp-mock', 'node', ['scripts/smtp-mock.mjs'], nextEnv);
-  } else {
-    console.log(
-      `[smtp-mock] reusing listener at smtp://${smtpMockHost}:${smtpMockPort}`,
-    );
-  }
-}
-
 const appServerHost = nextEnv.APP_SERVER_HOST || '127.0.0.1';
 const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13000);
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;

@@ -113,11 +113,6 @@ describe('NotificationManager registration', () => {
         },
       });
 
-    const middleware = vi.fn();
-    manager.router.use('*', async (_context, next): Promise<void> => {
-      middleware();
-      await next();
-    });
     await manager.start();
     const result = await manager.send({
       source: { type: 'test' },
@@ -142,12 +137,6 @@ describe('NotificationManager registration', () => {
       'messageSnapshot',
     );
     expect(details?.deliveries[0]?.delivery).not.toHaveProperty('recipientKey');
-    const logResponse = await manager.router.request(
-      `/logs/${result.notificationId}`,
-    );
-    expect(logResponse.status).toBe(200);
-    expect(await logResponse.json()).toEqual({ data: details });
-    expect(middleware).toHaveBeenCalledOnce();
     await manager.close();
 
     const records = output.records();

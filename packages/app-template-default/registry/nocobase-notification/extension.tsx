@@ -1,49 +1,12 @@
 import type { AppExtension } from '@nocobase/portal-sdk/extensions';
 import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
-import { Bell, Mail } from 'lucide-react';
+import { Bell, FileClock, Mail } from 'lucide-react';
 
 import { NotificationInAppProvider } from './in-app/runtime.js';
 
 const notificationExtension: AppExtension = {
   id: 'nocobase-notification',
   Provider: NotificationInAppProvider,
-  dev: {
-    resources: [
-      {
-        name: 'notifications',
-        meta: {
-          label: 'Notifications',
-          icon: <Bell />,
-          description: 'Notification delivery and message center patterns.',
-        },
-      },
-      {
-        name: 'notification-in-app',
-        list: 'notifications',
-        meta: {
-          parent: 'notifications',
-          label: 'My notifications',
-          icon: <Mail />,
-        },
-      },
-    ],
-    routes: defineAppRoutes([
-      {
-        name: 'development.notifications',
-        path: 'notifications',
-        children: [
-          {
-            name: 'development.notifications.in-app',
-            index: true,
-            lazy: () =>
-              import('./in-app/page.js').then((module) => ({
-                default: module.NotificationInAppPage,
-              })),
-          },
-        ],
-      },
-    ]),
-  },
   resources: [
     {
       name: 'notifications',
@@ -55,8 +18,18 @@ const notificationExtension: AppExtension = {
       },
     },
     {
-      name: 'notification-in-app',
+      name: 'notification-logs',
       list: 'notifications',
+      meta: {
+        parent: 'notifications',
+        label: 'Delivery logs',
+        icon: <FileClock />,
+        acl: { type: 'authenticated' },
+      },
+    },
+    {
+      name: 'notification-in-app',
+      list: 'notifications/in-app',
       meta: {
         parent: 'notifications',
         label: 'My notifications',
@@ -72,8 +45,16 @@ const notificationExtension: AppExtension = {
       meta: { acl: { type: 'authenticated' } },
       children: [
         {
-          name: 'notifications.in-app',
+          name: 'notifications.logs',
           index: true,
+          lazy: () =>
+            import('./logs/page.js').then((module) => ({
+              default: module.NotificationLogsPage,
+            })),
+        },
+        {
+          name: 'notifications.in-app',
+          path: 'in-app',
           lazy: () =>
             import('./in-app/page.js').then((module) => ({
               default: module.NotificationInAppPage,

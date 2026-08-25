@@ -209,7 +209,6 @@ export class NotificationManager<
       const interval = this.options.reconcileIntervalMs ?? 30_000;
       await this.reconcile();
       if (!this.routesMounted) {
-        this.mountLogRoutes();
         this.router.route('/', channelRouter);
         this.routesMounted = true;
       }
@@ -406,18 +405,6 @@ export class NotificationManager<
         'Notification deliveries reconciled.',
       );
     }
-  }
-
-  private mountLogRoutes(): void {
-    this.router.get('/logs', async (context) =>
-      context.json({ data: await this.logs.listDetails() }),
-    );
-    this.router.get('/logs/:id', async (context) => {
-      const details = await this.logs.get(context.req.param('id'));
-      return details
-        ? context.json({ data: details })
-        : context.json({ error: 'Notification log not found.' }, 404);
-    });
   }
 }
 
