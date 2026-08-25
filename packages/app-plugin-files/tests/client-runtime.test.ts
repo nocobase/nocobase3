@@ -76,6 +76,12 @@ class FakeXMLHttpRequest extends EventTarget {
     this.dispatchEvent(new Event('abort'));
   }
 
+  respond(status: number, responseText = ''): void {
+    this.status = status;
+    this.responseText = responseText;
+    this.dispatchEvent(new Event('load'));
+  }
+
   static reset(): void {
     this.plans.length = 0;
     this.requests.length = 0;
@@ -190,6 +196,27 @@ describe('executeFileUploadPlan', () => {
     });
   });
 
+  it('uses the returned cancel plan when already aborted before PUT', async () => {
+    FakeXMLHttpRequest.enqueue({ status: 204 });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      executeFileUploadPlan(localPlan('pre-aborted'), testFile(), {
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({
+      code: 'UPLOAD_ABORTED',
+      operation: 'upload',
+    });
+
+    expect(FakeXMLHttpRequest.requests).toHaveLength(1);
+    expect(FakeXMLHttpRequest.requests[0]).toMatchObject({
+      method: 'DELETE',
+      url: '/mounted/api/files/pre-aborted/upload?access=opaque-cancel',
+    });
+  });
+
   it('cancels after an upload failure', async () => {
     FakeXMLHttpRequest.enqueue({ status: 503 });
     FakeXMLHttpRequest.enqueue({ status: 204 });
@@ -210,7 +237,7 @@ describe('executeFileUploadPlan', () => {
     });
   });
 
-  it('cancels after a complete failure', async () => {
+  it('does not cancel after a complete failure', async () => {
     FakeXMLHttpRequest.enqueue({ status: 200 });
     FakeXMLHttpRequest.enqueue({
       status: 409,
@@ -219,7 +246,6 @@ describe('executeFileUploadPlan', () => {
         code: 'FILE_BINDING_CONFLICT',
       }),
     });
-    FakeXMLHttpRequest.enqueue({ status: 204 });
 
     await expect(
       executeFileUploadPlan(localPlan('complete-failure'), testFile()),
@@ -231,7 +257,7 @@ describe('executeFileUploadPlan', () => {
 
     expect(
       FakeXMLHttpRequest.requests.map((request) => request.method),
-    ).toEqual(['PUT', 'POST', 'DELETE']);
+    ).toEqual(['PUT', 'POST']);
   });
 
   it('retries a failed complete once with the same plan', async () => {
@@ -265,10 +291,10 @@ describe('executeFileUploadPlan', () => {
     ]);
   });
 
-  it('does not retry an aborted complete', async () => {
+  it('adopts a successful complete even when abort fires after it starts', async () => {
+    const ready = storedFile('complete-abort');
     FakeXMLHttpRequest.enqueue({ status: 200 });
     FakeXMLHttpRequest.enqueue({ autoRespond: false });
-    FakeXMLHttpRequest.enqueue({ status: 204 });
     const controller = new AbortController();
     const pending = executeFileUploadPlan(
       localPlan('complete-abort'),
@@ -278,15 +304,16 @@ describe('executeFileUploadPlan', () => {
     await waitForRequestCount(2);
 
     controller.abort();
+    FakeXMLHttpRequest.requests[1]?.respond(
+      200,
+      JSON.stringify({ file: ready }),
+    );
 
-    await expect(pending).rejects.toMatchObject({
-      code: 'UPLOAD_ABORTED',
-      operation: 'complete',
-    });
-    expect(FakeXMLHttpRequest.requests[1]?.aborted).toBe(true);
+    await expect(pending).resolves.toEqual(ready);
+    expect(FakeXMLHttpRequest.requests[1]?.aborted).toBe(false);
     expect(
       FakeXMLHttpRequest.requests.map((request) => request.method),
-    ).toEqual(['PUT', 'POST', 'DELETE']);
+    ).toEqual(['PUT', 'POST']);
   });
 
   it('surfaces the retry failure when complete fails twice', async () => {
@@ -299,7 +326,6 @@ describe('executeFileUploadPlan', () => {
         code: 'FILE_BINDING_CONFLICT',
       }),
     });
-    FakeXMLHttpRequest.enqueue({ status: 204 });
 
     await expect(
       executeFileUploadPlan(localPlan('complete-double-failure'), testFile()),
@@ -311,7 +337,7 @@ describe('executeFileUploadPlan', () => {
 
     expect(
       FakeXMLHttpRequest.requests.map((request) => request.method),
-    ).toEqual(['PUT', 'POST', 'POST', 'DELETE']);
+    ).toEqual(['PUT', 'POST', 'POST']);
   });
 
   it('preserves the original failure when cancel also fails', async () => {

@@ -279,15 +279,6 @@ export class RelationBindingRepository {
     await this.#database.transaction(cancel, this.#connectionName);
   }
 
-  async hasForOtherRecord(recordId: string, fileId: string): Promise<boolean> {
-    return this.#query()
-      .selectFrom(this.#table)
-      .select(this.#idColumn)
-      .where(this.#recordColumn, '!=', recordId)
-      .where(this.#fileColumn, '=', fileId)
-      .exists();
-  }
-
   #query(connection?: DatabaseConnection): QueryAdapter {
     return connection?.query ?? this.#database.query(this.#connectionName);
   }

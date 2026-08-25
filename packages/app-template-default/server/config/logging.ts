@@ -28,6 +28,8 @@ const defaultRedactPaths = [
   'req.query.access',
 ];
 
+const requiredFilesRedactPaths = ['req.headers.referer', 'req.query.access'];
+
 const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(
   ({ env }): LoggingConfig => {
     const isProduction = env.string('NODE_ENV') === 'production';
@@ -52,7 +54,12 @@ const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(
       base: {
         service: env.string('LOG_SERVICE', 'app-template-default'),
       },
-      redact: env.list('LOG_REDACT', defaultRedactPaths),
+      redact: [
+        ...new Set([
+          ...env.list('LOG_REDACT', defaultRedactPaths),
+          ...requiredFilesRedactPaths,
+        ]),
+      ],
       transport,
     };
   },

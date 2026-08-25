@@ -1,4 +1,11 @@
-import { act, render, renderHook, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { executeFileUploadPlan } from '@nocobase/app-plugin-files/client';
@@ -82,16 +89,25 @@ describe('V3 file upload Registry', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>().mockResolvedValue(
-        new Response(JSON.stringify({ message: 'bad request' }), {
-          status: 409,
-          headers: { 'content-type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify({
+            error: 'file route rejected the request',
+            code: 'FILE_ROUTE_INVALID',
+          }),
+          {
+            status: 409,
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
       ),
     );
     await expect(appFileClient.request('files')).rejects.toMatchObject({
-      message: 'bad request',
+      message: 'file route rejected the request',
       status: 409,
-      payload: { message: 'bad request' },
+      payload: {
+        error: 'file route rejected the request',
+        code: 'FILE_ROUTE_INVALID',
+      },
     });
   });
 
@@ -211,6 +227,54 @@ describe('V3 file upload Registry', () => {
     expect(result.current.items).toEqual([]);
   });
 
+  it('does not abort plan creation and passes an aborted signal to plan execution', async () => {
+    let resolvePlan: ((response: Response) => void) | undefined;
+    const request = vi.fn<typeof fetch>().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolvePlan = resolve;
+        }),
+    );
+    vi.stubGlobal('fetch', request);
+    vi.mocked(executeFileUploadPlan).mockImplementation(
+      async (_plan, _file, options) => {
+        expect(options?.signal?.aborted).toBe(true);
+        throw new Error('Upload was cancelled.');
+      },
+    );
+    const { result } = renderHook(() =>
+      useFileUpload({
+        basePath: 'orders/order-1/files',
+        value: [],
+        onChange: vi.fn(),
+        messages,
+      }),
+    );
+
+    const upload = result.current.addFiles([
+      testFile('cancel.txt', 'text/plain'),
+    ]);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(request).toHaveBeenCalledWith(
+      '/api/orders/order-1/files',
+      expect.not.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    const key = result.current.items[0]?.key;
+    if (!key) throw new Error('Expected a queued upload item.');
+    act(() => result.current.cancelItem(key));
+    resolvePlan?.(jsonResponse(uploadResponse('cancelled-upload')));
+    await act(async () => upload);
+
+    expect(executeFileUploadPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 'cancelled-upload' }),
+      expect.any(File),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it('keeps a failed upload retryable and commits a successful retry', async () => {
     const ready = readyFile('retry-upload', 'retry.txt', 'text/plain');
     vi.stubGlobal(
@@ -290,6 +354,46 @@ describe('V3 file upload Registry', () => {
       />,
     );
     expect(screen.getByText('No files')).toBeTruthy();
+  });
+
+  it('does not render Cancel while an upload is completing', async () => {
+    const ready = readyFile('completing-upload', 'report.txt', 'text/plain');
+    let resolveUpload: ((value: StoredFile) => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(jsonResponse(uploadResponse('completing-upload'))),
+    );
+    vi.mocked(executeFileUploadPlan).mockImplementation(
+      (_plan, file, options) =>
+        new Promise<StoredFile>((resolve) => {
+          options?.onProgress?.({
+            loaded: file.size,
+            total: file.size,
+            percentage: 100,
+          });
+          resolveUpload = resolve;
+        }),
+    );
+    const onChange = vi.fn();
+    render(
+      <FileUploadField
+        basePath='orders/order-1/files'
+        value={[]}
+        onChange={onChange}
+        messages={messages}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: { files: [testFile('report.txt', 'text/plain')] },
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Completing')).toBeTruthy();
+    });
+    expect(screen.queryByLabelText('Cancel')).toBeNull();
+    resolveUpload?.(ready);
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith([ready]));
   });
 
   it('builds preview GET and download HEAD paths through the current App client', async () => {

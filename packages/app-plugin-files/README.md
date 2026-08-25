@@ -30,40 +30,42 @@ export default defineMigration({
   },
 });
 
-const runtime = createFilesRuntime({
+const filesRuntime = createFilesRuntime({
   database,
   config,
   audience,
   secret,
   basePath: '/api/files',
 });
-const fileService = requireFileService(services.fileService);
-const route = fileService.createFileRoute({
-  binding: {
-    type: 'relation',
-    collection: 'purchaseOrderAttachments',
-    recordParam: 'orderId',
-    recordField: 'purchaseOrderId',
-    maxFiles: 10,
-  },
-  authorize: ({ action, recordId, fileId }) =>
-    authorizeOrderFile({ action, orderId: recordId, fileId }),
+const fileService = createFileService({
+  runtime: filesRuntime,
+  publicBasePath: appPublicBasePath,
 });
-protectedRoutes.route('/api/files', createCoreFilesRoute(runtime));
-protectedRoutes.route('/api/orders/:orderId/files', route);
 
-function requireFileService(service: FileService | undefined): FileService {
-  if (!service)
-    throw new Error('The Files plugin is required by order routes.');
-  return service;
-}
+publicRoutes.route('/files', createCoreFilesRoute(filesRuntime));
+protectedRoutes.route(
+  '/orders/:orderId/files',
+  fileService.createFileRoute({
+    binding: {
+      type: 'relation',
+      collection: 'purchaseOrderAttachments',
+      recordParam: 'orderId',
+      recordField: 'purchaseOrderId',
+      maxFiles: 10,
+    },
+    authorize: ({ action, recordId, fileId }) =>
+      authorizeOrderFile({ action, orderId: recordId, fileId }),
+  }),
+);
 ```
 
-Create the optional service with `createFileService({ runtime,
-publicBasePath: appPublicBasePath })`; `appPublicBasePath` prefixes the mounted
-`/api/...` routes while the runtime `basePath` points at the resulting core
-Files URL. `authorize` must enforce business record existence and read/write/
-share permission. Foreign keys enforce referential integrity.
+Both subroutes are mounted inside the App API composition root, so their local
+mount paths do not include `/api`. Mount the Core route at `/files` on the
+public/capability boundary; its signed capabilities are the authorization
+mechanism. Mount business-scoped routes on the session-protected boundary.
+Create both routes and the `FileService` from the same `filesRuntime`.
+`authorize` must enforce business record existence and read/write/share
+permission. Foreign keys enforce referential integrity.
 
 ## File upload Registry
 

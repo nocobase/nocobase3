@@ -44,37 +44,39 @@ export async function executeFileUploadPlan(
           : (progress: FileUploadProgress): void =>
               options.onProgress?.(progress),
     });
-    return await completeUpload(plan, options.signal);
   } catch (error) {
     await cancelBestEffort(plan);
     throw error;
   }
+  if (options.signal?.aborted) {
+    await cancelBestEffort(plan);
+    throw createAbortError('upload');
+  }
+  options.onProgress?.({
+    loaded: file.size,
+    total: file.size,
+    percentage: 100,
+  });
+  return completeUpload(plan);
 }
 
-async function completeUpload(
-  plan: FileUploadPlan,
-  signal?: AbortSignal,
-): Promise<StoredFile> {
+async function completeUpload(plan: FileUploadPlan): Promise<StoredFile> {
   try {
-    return await completeUploadOnce(plan, signal);
+    return await completeUploadOnce(plan);
   } catch (error) {
     if (!shouldRetryComplete(error)) {
       throw error;
     }
-    return completeUploadOnce(plan, signal);
+    return completeUploadOnce(plan);
   }
 }
 
-async function completeUploadOnce(
-  plan: FileUploadPlan,
-  signal?: AbortSignal,
-): Promise<StoredFile> {
+async function completeUploadOnce(plan: FileUploadPlan): Promise<StoredFile> {
   return readReadyFile(
     await sendXhrRequest({
       method: 'POST',
       url: plan.complete.url,
       headers: plan.complete.headers,
-      signal,
       withCredentials: shouldSendCredentials(plan.complete.url),
       stableErrors: shouldSendCredentials(plan.complete.url),
       operation: 'complete',
@@ -88,7 +90,6 @@ function shouldRetryComplete(error: unknown): boolean {
   return (
     error instanceof FileClientError &&
     error.operation === 'complete' &&
-    error.code !== 'UPLOAD_ABORTED' &&
     error.code !== 'FILE_BINDING_CONFLICT' &&
     (error.status === 0 || error.status >= 500)
   );
@@ -149,6 +150,9 @@ function sendXhrRequest(options: XhrRequestOptions): Promise<XhrResponse> {
               ? event.total
               : (options.body?.size ?? 0);
           const loaded = event.loaded;
+          if (total > 0 && loaded >= total) {
+            return;
+          }
           options.onProgress?.({
             loaded,
             total,

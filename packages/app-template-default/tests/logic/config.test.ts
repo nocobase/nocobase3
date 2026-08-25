@@ -413,7 +413,13 @@ describe('logging config', () => {
       base: {
         service: 'portal-service',
       },
-      redact: ['password', 'headers.authorization', 'credentials.secret'],
+      redact: [
+        'password',
+        'headers.authorization',
+        'credentials.secret',
+        'req.headers.referer',
+        'req.query.access',
+      ],
       transport: {
         target: 'pino-pretty',
         options: {

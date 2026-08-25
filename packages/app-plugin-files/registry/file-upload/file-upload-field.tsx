@@ -246,21 +246,21 @@ export function FileUploadField({
                         onClick={() => void retryItem(item.key)}
                       />
                     ) : null}
-                    {isActiveItem(item) ? (
+                    {isCancellableItem(item) ? (
                       <IconButton
                         icon={X}
                         label={messages.cancel}
                         disabled={disabled}
                         onClick={() => cancelItem(item.key)}
                       />
-                    ) : (
+                    ) : !isActiveItem(item) ? (
                       <IconButton
                         icon={Trash2}
                         label={messages.remove}
                         disabled={disabled}
                         onClick={() => void removeItem(item.key)}
                       />
-                    )}
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -370,6 +370,10 @@ function isActiveItem(item: FileUploadItem): boolean {
     item.status === 'uploading' ||
     item.status === 'completing'
   );
+}
+
+function isCancellableItem(item: FileUploadItem): boolean {
+  return item.status === 'queued' || item.status === 'uploading';
 }
 
 function getStatusLabel(

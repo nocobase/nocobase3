@@ -447,6 +447,26 @@ describe('relation binding scoped file routes', () => {
       await getFilesRuntimeKernel(fixture.runtime).getFile(upload.file.id),
     ).toMatchObject({ status: 'ready' });
   });
+
+  it('idempotently detaches a ready file that is not referenced by this record', async () => {
+    const fixture = await createFixture();
+    const upload = await uploadAndComplete(
+      fixture,
+      ORDER_TWO,
+      'other-record.txt',
+      'data',
+    );
+
+    expect(
+      (
+        await fixture.app.request(
+          `/orders/${ORDER_ONE}/files/${upload.file.id}`,
+          { method: 'DELETE' },
+        )
+      ).status,
+    ).toBe(200);
+    expect(await relationRows(fixture, ORDER_TWO)).toHaveLength(1);
+  });
 });
 
 interface CreateFixtureOptions {

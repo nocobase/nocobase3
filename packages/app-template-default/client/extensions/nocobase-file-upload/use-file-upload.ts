@@ -127,7 +127,6 @@ export function useFileUpload({
                 ? { replaceFileId: item.replaceFileId }
                 : {}),
             }),
-            signal: controller.signal,
           },
         );
         assertCreatedUpload(created);
@@ -142,7 +141,6 @@ export function useFileUpload({
             onUploadProgress?.(progress, source);
           },
         });
-        if (controller.signal.aborted) return;
 
         const nextRecords = replaceRecord(
           recordsRef.current,

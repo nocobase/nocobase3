@@ -60,104 +60,88 @@ class RuntimeFileService implements FileService {
   }
 
   async createUpload(input: CreateUploadInput): Promise<FileUploadPlan> {
-    return runDirectService(() =>
-      this.#state().dataPlane.createUploadPlan(input),
-    );
+    return this.#state().dataPlane.createUploadPlan(input);
   }
 
   async createFile(input: CreateFileInput): Promise<StoredFile> {
-    return runDirectService(() => this.#state().dataPlane.createFile(input));
+    return this.#state().dataPlane.createFile(input);
   }
 
   async getFile(fileId: string): Promise<StoredFile | null> {
-    return runDirectService(async () => {
-      return (await this.#state().kernel.getFile(fileId)) ?? null;
-    });
+    return (await this.#state().kernel.getFile(fileId)) ?? null;
   }
 
   async getFiles(
     fileIds: readonly string[],
   ): Promise<Array<StoredFile | null>> {
-    return runDirectService(async () => {
-      return await this.#state().kernel.getFiles(fileIds);
-    });
+    return this.#state().kernel.getFiles(fileIds);
   }
 
   async openFile(fileId: string): Promise<OpenedFile> {
-    return runDirectService(() => this.#state().dataPlane.openFile(fileId));
+    return this.#state().dataPlane.openFile(fileId);
   }
 
   async createTemporaryAccessUrl(
     fileId: string,
     options: FileAccessOptions = {},
   ): Promise<string> {
-    return runDirectService(async () => {
-      const dataPlane = this.#state().dataPlane;
-      const access =
-        options.expiresInSeconds === undefined
-          ? await dataPlane.createReadAccess(
-              fileId,
-              options.disposition ?? 'attachment',
-            )
-          : await dataPlane.createReadAccess(
-              fileId,
-              options.disposition ?? 'attachment',
-              options.expiresInSeconds,
-            );
-      return access.url;
-    });
+    const dataPlane = this.#state().dataPlane;
+    const access =
+      options.expiresInSeconds === undefined
+        ? await dataPlane.createReadAccess(
+            fileId,
+            options.disposition ?? 'attachment',
+          )
+        : await dataPlane.createReadAccess(
+            fileId,
+            options.disposition ?? 'attachment',
+            options.expiresInSeconds,
+          );
+    return access.url;
   }
 
   async cancelUpload(fileId: string): Promise<void> {
-    await runDirectService(async () => {
-      const kernel = this.#state().kernel;
-      const current = await kernel.getFile(fileId);
-      if (!current) {
-        throw fileNotFound();
-      }
-      if (current.status !== 'pending') {
-        throw fileNotReady();
-      }
-      const result = await kernel.cancelUpload(fileId);
-      if (result.outcome === 'missing') {
-        throw fileNotFound();
-      }
-      if (result.outcome === 'ready') {
-        throw fileNotReady();
-      }
-    });
+    const kernel = this.#state().kernel;
+    const current = await kernel.getFile(fileId);
+    if (!current) {
+      throw fileNotFound();
+    }
+    if (current.status !== 'pending') {
+      throw fileNotReady();
+    }
+    const result = await kernel.cancelUpload(fileId);
+    if (result.outcome === 'missing') {
+      throw fileNotFound();
+    }
+    if (result.outcome === 'ready') {
+      throw fileNotReady();
+    }
   }
 
   async enablePublicAccess(
     fileId: string,
     options: PublicAccessOptions = {},
   ): Promise<string> {
-    return runDirectService(async () => {
-      const access = await this.#state().dataPlane.enablePublicAccess(
-        fileId,
-        options.disposition ?? 'attachment',
-      );
-      return access.url;
-    });
+    const access = await this.#state().dataPlane.enablePublicAccess(
+      fileId,
+      options.disposition ?? 'attachment',
+    );
+    return access.url;
   }
 
   async resetPublicAccess(
     fileId: string,
     options: PublicAccessOptions = {},
   ): Promise<string> {
-    return runDirectService(async () => {
-      const access = await this.#state().dataPlane.resetPublicAccess(
-        fileId,
-        options.disposition ?? 'attachment',
-      );
-      return access.url;
-    });
+    const access = await this.#state().dataPlane.resetPublicAccess(
+      fileId,
+      options.disposition ?? 'attachment',
+    );
+    return access.url;
   }
 
   async disablePublicAccess(fileId: string): Promise<void> {
-    await runDirectService(async () => {
-      await this.#state().dataPlane.disablePublicAccess(fileId);
-    });
+    await this.#state().dataPlane.disablePublicAccess(fileId);
   }
 
   #state(): ReturnType<typeof getFilesRuntimeServiceState> {
@@ -169,8 +153,4 @@ export function createFileService(
   options: CreateFileServiceOptions,
 ): FileService {
   return new RuntimeFileService(options);
-}
-
-async function runDirectService<T>(operation: () => Promise<T>): Promise<T> {
-  return operation();
 }

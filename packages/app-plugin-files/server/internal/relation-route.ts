@@ -393,9 +393,6 @@ async function handleDelete(
     throw fileBindingConflict();
   }
   if (file?.status === 'ready') {
-    if (await state.repository.hasForOtherRecord(recordId, fileId)) {
-      throw fileReferenceNotFound();
-    }
     return context.json<FileOperationResponse>({ success: true });
   }
   throw fileReferenceNotFound();
