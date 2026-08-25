@@ -1,0 +1,291 @@
+{
+  "version": "crm-demo-v1",
+  "ownerUsername": "nocobase",
+  "accounts": [
+    {
+      "name": "星河科技",
+      "industry": "软件与信息服务",
+      "tier": "strategic",
+      "status": "active",
+      "region": "华东",
+      "website": "https://xinghe.example.com",
+      "phone": "021-6888-1200",
+      "notes": "年度数字化升级重点客户，关注销售流程统一与经营分析。"
+    },
+    {
+      "name": "远航智能制造",
+      "industry": "高端制造",
+      "tier": "key",
+      "status": "prospect",
+      "region": "华南",
+      "website": "https://yuanhang.example.com",
+      "phone": "0755-8899-3200",
+      "notes": "正在评估智能工厂协同平台，计划先从销售与项目协同切入。"
+    },
+    {
+      "name": "云启零售",
+      "industry": "新零售",
+      "tier": "key",
+      "status": "active",
+      "region": "华北",
+      "website": "https://yunqi.example.com",
+      "phone": "010-6688-5100",
+      "notes": "已有多渠道会员体系，希望统一客户运营和商机跟踪。"
+    },
+    {
+      "name": "北辰新能源",
+      "industry": "新能源",
+      "tier": "strategic",
+      "status": "active",
+      "region": "华东",
+      "website": "https://beichen.example.com",
+      "phone": "025-8666-7800",
+      "notes": "集团级项目交付客户，后续机会集中在供应链与渠道协同。"
+    }
+  ],
+  "contacts": [
+    {
+      "name": "林晨",
+      "jobTitle": "首席技术官",
+      "decisionRole": "decision_maker",
+      "email": "lin.chen@xinghe.example.com",
+      "phone": "138-1000-1001",
+      "notes": "关注系统架构、数据安全与可扩展能力。",
+      "accountName": "星河科技"
+    },
+    {
+      "name": "周悦",
+      "jobTitle": "数字化平台主管",
+      "decisionRole": "champion",
+      "email": "zhou.yue@xinghe.example.com",
+      "phone": "138-1000-1002",
+      "notes": "内部项目推动者，偏好快速原型和可量化的上线节奏。",
+      "accountName": "星河科技"
+    },
+    {
+      "name": "陈昊",
+      "jobTitle": "制造业务副总裁",
+      "decisionRole": "decision_maker",
+      "email": "chen.hao@yuanhang.example.com",
+      "phone": "139-2000-2001",
+      "notes": "重点关注项目周期、现场执行与管理层看板。",
+      "accountName": "远航智能制造"
+    },
+    {
+      "name": "赵敏",
+      "jobTitle": "电商运营总监",
+      "decisionRole": "champion",
+      "email": "zhao.min@yunqi.example.com",
+      "phone": "137-3000-3001",
+      "notes": "希望打通线索、会员活动和复购分析。",
+      "accountName": "云启零售"
+    },
+    {
+      "name": "王璐",
+      "jobTitle": "采购平台主管",
+      "decisionRole": "influencer",
+      "email": "wang.lu@beichen.example.com",
+      "phone": "136-4000-4001",
+      "notes": "参与供应链协同项目需求评估与供应商筛选。",
+      "accountName": "北辰新能源"
+    }
+  ],
+  "leads": [
+    {
+      "name": "李睿",
+      "company": "启明医疗",
+      "status": "new",
+      "source": "inbound",
+      "score": 88,
+      "email": "li.rui@qiming.example.com",
+      "phone": "135-5100-1001",
+      "notes": "希望在三个月内上线渠道客户管理和销售预测。"
+    },
+    {
+      "name": "孙哲",
+      "company": "海岳物流",
+      "status": "contacted",
+      "source": "event",
+      "score": 72,
+      "email": "sun.zhe@haiyue.example.com",
+      "phone": "135-5100-1002",
+      "notes": "在行业峰会沟通，关注多区域销售团队协同。"
+    },
+    {
+      "name": "徐琳",
+      "company": "青禾教育",
+      "status": "qualified",
+      "source": "referral",
+      "score": 91,
+      "email": "xu.lin@qinghe.example.com",
+      "phone": "135-5100-1003",
+      "notes": "预算和负责人已明确，准备安排方案演示。"
+    },
+    {
+      "name": "高远",
+      "company": "卓越咨询",
+      "status": "nurturing",
+      "source": "outbound",
+      "score": 56,
+      "email": "gao.yuan@zhuoyue.example.com",
+      "phone": "135-5100-1004",
+      "notes": "今年暂无完整预算，持续分享行业案例。"
+    },
+    {
+      "name": "唐静",
+      "company": "极光生物",
+      "status": "contacted",
+      "source": "partner",
+      "score": 79,
+      "email": "tang.jing@jiguang.example.com",
+      "phone": "135-5100-1005",
+      "notes": "合作伙伴转介，重点关注合规审计和权限治理。"
+    },
+    {
+      "name": "何川",
+      "company": "长风传媒",
+      "status": "disqualified",
+      "source": "inbound",
+      "score": 32,
+      "email": "he.chuan@changfeng.example.com",
+      "phone": "135-5100-1006",
+      "notes": "当前需求与预算不匹配，保留后续重新评估机会。"
+    }
+  ],
+  "opportunities": [
+    {
+      "name": "星河 CRM 升级",
+      "stage": "discovery",
+      "amount": 680000,
+      "probability": 35,
+      "expectedCloseDate": "2026-10-30",
+      "nextStep": "完成销售流程工作坊",
+      "notes": "从线索到回款的端到端流程升级。",
+      "accountName": "星河科技"
+    },
+    {
+      "name": "远航智能工厂协同平台",
+      "stage": "proposal",
+      "amount": 1200000,
+      "probability": 55,
+      "expectedCloseDate": "2026-11-20",
+      "nextStep": "提交分阶段实施方案",
+      "notes": "先覆盖销售项目和交付协同，再扩展现场管理。",
+      "accountName": "远航智能制造"
+    },
+    {
+      "name": "云启客户运营中台",
+      "stage": "negotiation",
+      "amount": 920000,
+      "probability": 75,
+      "expectedCloseDate": "2026-09-25",
+      "nextStep": "确认合同范围与服务等级",
+      "notes": "统一会员触点、活动和复购分析。",
+      "accountName": "云启零售"
+    },
+    {
+      "name": "北辰项目交付管理",
+      "stage": "won",
+      "amount": 1500000,
+      "probability": 100,
+      "expectedCloseDate": "2026-08-08",
+      "nextStep": "安排项目启动会",
+      "notes": "已签约，进入项目启动与资源排期。",
+      "accountName": "北辰新能源"
+    },
+    {
+      "name": "星河研发项目门户",
+      "stage": "lost",
+      "amount": 360000,
+      "probability": 0,
+      "expectedCloseDate": "2026-07-18",
+      "nextStep": "复盘丢单原因",
+      "notes": "本期预算转向基础设施，保留明年机会。",
+      "accountName": "星河科技"
+    },
+    {
+      "name": "北辰供应链协同",
+      "stage": "discovery",
+      "amount": 780000,
+      "probability": 25,
+      "expectedCloseDate": "2026-12-15",
+      "nextStep": "梳理采购与供应商协同流程",
+      "notes": "从供应商准入和采购协同场景开始。",
+      "accountName": "北辰新能源"
+    }
+  ],
+  "activities": [
+    {
+      "subject": "星河销售流程工作坊",
+      "type": "meeting",
+      "status": "planned",
+      "dueAt": "2026-08-21T02:00:00.000Z",
+      "notes": "确认线索分级、商机阶段和预测口径。",
+      "opportunityName": "星河 CRM 升级",
+      "contactEmail": "zhou.yue@xinghe.example.com"
+    },
+    {
+      "subject": "星河架构与安全评审",
+      "type": "meeting",
+      "status": "planned",
+      "dueAt": "2026-08-25T06:00:00.000Z",
+      "notes": "准备部署架构、权限边界和审计能力说明。",
+      "opportunityName": "星河 CRM 升级",
+      "contactEmail": "lin.chen@xinghe.example.com"
+    },
+    {
+      "subject": "远航方案报价发送",
+      "type": "email",
+      "status": "completed",
+      "dueAt": "2026-08-17T08:00:00.000Z",
+      "notes": "已发送分阶段方案和商务报价。",
+      "opportunityName": "远航智能工厂协同平台",
+      "contactEmail": "chen.hao@yuanhang.example.com"
+    },
+    {
+      "subject": "远航管理层方案汇报",
+      "type": "meeting",
+      "status": "planned",
+      "dueAt": "2026-08-28T01:30:00.000Z",
+      "notes": "重点展示管理驾驶舱和项目风险预警。",
+      "opportunityName": "远航智能工厂协同平台",
+      "contactEmail": "chen.hao@yuanhang.example.com"
+    },
+    {
+      "subject": "云启合同条款确认",
+      "type": "call",
+      "status": "planned",
+      "dueAt": "2026-08-20T07:00:00.000Z",
+      "notes": "确认交付范围、验收指标和服务等级。",
+      "opportunityName": "云启客户运营中台",
+      "contactEmail": "zhao.min@yunqi.example.com"
+    },
+    {
+      "subject": "北辰项目启动资料准备",
+      "type": "task",
+      "status": "completed",
+      "dueAt": "2026-08-16T09:00:00.000Z",
+      "notes": "项目章程、团队名单和里程碑已准备完成。",
+      "opportunityName": "北辰项目交付管理",
+      "contactEmail": "wang.lu@beichen.example.com"
+    },
+    {
+      "subject": "北辰供应链需求访谈",
+      "type": "meeting",
+      "status": "planned",
+      "dueAt": "2026-09-03T02:30:00.000Z",
+      "notes": "访谈采购、质量和供应商管理团队。",
+      "opportunityName": "北辰供应链协同",
+      "contactEmail": "wang.lu@beichen.example.com"
+    },
+    {
+      "subject": "星河研发门户丢单复盘",
+      "type": "call",
+      "status": "completed",
+      "dueAt": "2026-07-21T03:00:00.000Z",
+      "notes": "记录预算优先级变化和下一年度重启条件。",
+      "opportunityName": "星河研发项目门户",
+      "contactEmail": "lin.chen@xinghe.example.com"
+    }
+  ]
+}

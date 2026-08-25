@@ -1,0 +1,111 @@
+{
+  "name": "@nocobase/app-plugin-settings",
+  "displayName": "App Settings",
+  "description": "Shared settings center and settings module registry for NocoBase applications.",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/bootstrap": {
+      "types": "./client/bootstrap.ts",
+      "import": "./client/bootstrap.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./client/pages/settings-center": {
+      "types": "./client/pages/settings-center-page.tsx",
+      "import": "./client/pages/settings-center-page.tsx"
+    },
+    "./client/pages/settings-module": {
+      "types": "./client/pages/settings-module-page.tsx",
+      "import": "./client/pages/settings-module-page.tsx"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/bootstrap": {
+        "types": "./dist/client/bootstrap.d.ts",
+        "import": "./dist/client/bootstrap.js"
+      },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./client/pages/settings-center": {
+        "types": "./dist/client/pages/settings-center-page.d.ts",
+        "import": "./dist/client/pages/settings-center-page.js"
+      },
+      "./client/pages/settings-module": {
+        "types": "./dist/client/pages/settings-module-page.d.ts",
+        "import": "./dist/client/pages/settings-module-page.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "nocobase": {
+    "plugin": {
+      "client": {
+        "bootstrap": "./client/bootstrap",
+        "routes": "./client/routes"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "^0.1.0",
+    "@nocobase/app-sdk": "^0.1.0",
+    "react": "^19.0.0",
+    "react-router": "^7.0.0"
+  },
+  "dependencies": {
+    "lucide-react": "^0.487.0"
+  },
+  "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-sdk": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/react": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

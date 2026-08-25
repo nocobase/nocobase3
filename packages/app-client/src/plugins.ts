@@ -13,6 +13,8 @@ const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
 
 export type AppClientRouteAuth = 'required' | 'guest' | 'optional';
 
+export type AppClientRouteSurface = 'application' | 'standalone';
+
 export type AppClientContributionSource = 'application' | 'plugin';
 
 export type AppClientProviderLayer = 'root' | 'application' | 'extension';
@@ -28,6 +30,7 @@ export interface AppClientRouteDefinition {
   readonly name: string;
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
+  readonly surface?: AppClientRouteSurface;
   readonly componentLoader: AppClientRouteComponentLoader;
 }
 
@@ -36,6 +39,7 @@ export interface AppClientRegisteredRoute extends AppClientRouteDefinition {
   readonly id: string;
   readonly packageName: string;
   readonly source: AppClientContributionSource;
+  readonly surface: AppClientRouteSurface;
 }
 
 export interface AppClientRouteComponentOverrideDefinition {
@@ -350,6 +354,7 @@ function createRegisteredRoute(
   const name = normalizeContributionName(route.name, packageName, 'route');
   const path = normalizeRoutePath(route.path, packageName, name);
   const auth = normalizeRouteAuth(route.auth, packageName, name);
+  const surface = normalizeRouteSurface(route.surface, packageName, name);
   if (path === '/' && source !== 'application') {
     throw new Error(
       `Client route "${name}" from plugin "${packageName}" cannot use reserved application root path "/".`,
@@ -378,7 +383,22 @@ function createRegisteredRoute(
     packageName,
     path,
     source,
+    surface,
   });
+}
+
+function normalizeRouteSurface(
+  surface: AppClientRouteSurface | undefined,
+  packageName: string,
+  routeName: string,
+): AppClientRouteSurface {
+  const normalized = surface ?? 'application';
+  if (normalized !== 'application' && normalized !== 'standalone') {
+    throw new Error(
+      `Client route "${routeName}" from plugin "${packageName}" must use surface "application" or "standalone".`,
+    );
+  }
+  return normalized;
 }
 
 function normalizeRouteAuth(

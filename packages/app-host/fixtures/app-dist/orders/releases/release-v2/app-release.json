@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "appId": "orders",
+  "releaseId": "release-v2",
+  "version": "2.0.0",
+  "artifactSha256": "11921891561d4ecce851d58a2940ce55cd129c11ce38aadbb6a97c03dfdb359f",
+  "createdAt": "2026-08-18T02:00:00.000Z",
+  "runtime": {
+    "healthPath": "/healthz"
+  }
+}

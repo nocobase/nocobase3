@@ -8,7 +8,10 @@ import {
   registerNocoBaseApiProxyRoutes,
   resolveNocoBaseApiUrl,
 } from '@nocobase/app-server/proxy';
-import { registerSpaRoutes } from '@nocobase/app-server/spa';
+import {
+  createPortalSpaRuntimeGlobals,
+  registerSpaRoutes,
+} from '@nocobase/app-server/spa';
 import {
   normalizeBasePath,
   resolveAppName,
@@ -22,7 +25,6 @@ import {
   createWebSocketHandler,
   registerWebSocketRoutes,
 } from './routes/websocket.js';
-import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
 
 export type {
   AppDisposer,

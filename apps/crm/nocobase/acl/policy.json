@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "dataSourceKey": "main",
+  "roles": [
+    {
+      "name": "r_agent_crm_manager",
+      "title": "Agent CRM Manager",
+      "description": "CRM manager role: manage all CRM accounts, contacts, leads, opportunities, and activities.",
+      "allowConfigure": false,
+      "allowNewMenu": false,
+      "snippets": ["!app", "!pm", "!pm.*", "!ui.*"],
+      "globalActions": [],
+      "resources": [
+        {
+          "name": "agent_crm_accounts",
+          "actions": [
+            { "name": "create", "scope": "none", "fieldPolicy": "all" },
+            { "name": "view", "scope": "all", "fieldPolicy": "all" },
+            { "name": "update", "scope": "all", "fieldPolicy": "all" }
+          ]
+        },
+        {
+          "name": "agent_crm_contacts",
+          "actions": [
+            { "name": "create", "scope": "none", "fieldPolicy": "all" },
+            { "name": "view", "scope": "all", "fieldPolicy": "all" },
+            { "name": "update", "scope": "all", "fieldPolicy": "all" }
+          ]
+        },
+        {
+          "name": "agent_crm_leads",
+          "actions": [
+            { "name": "create", "scope": "none", "fieldPolicy": "all" },
+            { "name": "view", "scope": "all", "fieldPolicy": "all" },
+            { "name": "update", "scope": "all", "fieldPolicy": "all" }
+          ]
+        },
+        {
+          "name": "agent_crm_opportunities",
+          "actions": [
+            { "name": "create", "scope": "none", "fieldPolicy": "all" },
+            { "name": "view", "scope": "all", "fieldPolicy": "all" },
+            { "name": "update", "scope": "all", "fieldPolicy": "all" }
+          ]
+        },
+        {
+          "name": "agent_crm_activities",
+          "actions": [
+            { "name": "create", "scope": "none", "fieldPolicy": "all" },
+            { "name": "view", "scope": "all", "fieldPolicy": "all" },
+            { "name": "update", "scope": "all", "fieldPolicy": "all" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "r_agent_crm_sales",
+      "title": "Agent CRM Sales",
+      "description": "CRM sales role: read shared accounts and contacts, and manage own leads, opportunities, and activities.",
+      "allowConfigure": false,
+      "allowNewMenu": false,
+      "snippets": ["!app", "!pm", "!pm.*", "!ui.*"],
+      "globalActions": [],
+      "resources": [
+        {
+          "name": "agent_crm_accounts",
+          "actions": [{ "name": "view", "scope": "all", "fieldPolicy": "all" }]
+        },
+        {
+          "name": "agent_crm_contacts",
+          "actions": [{ "name": "view", "scope": "all", "fieldPolicy": "all" }]
+        },
+        {
+          "name": "agent_crm_leads",
+          "actions": [
+            { "name": "create", "scope": "none", "fieldPolicy": "all" },
+            { "name": "view", "scope": "own", "fieldPolicy": "all" },
+            { "name": "update", "scope": "own", "fieldPolicy": "all" }
+          ]
+        },
+        {
+          "name": "agent_crm_opportunities",
+          "actions": [
+            { "name": "create", "scope": "none", "fieldPolicy": "all" },
+            { "name": "view", "scope": "own", "fieldPolicy": "all" },
+            { "name": "update", "scope": "own", "fieldPolicy": "all" }
+          ]
+        },
+        {
+          "name": "agent_crm_activities",
+          "actions": [
+            { "name": "create", "scope": "none", "fieldPolicy": "all" },
+            { "name": "view", "scope": "own", "fieldPolicy": "all" },
+            { "name": "update", "scope": "own", "fieldPolicy": "all" }
+          ]
+        }
+      ]
+    }
+  ]
+}

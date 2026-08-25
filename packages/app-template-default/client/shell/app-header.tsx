@@ -1,5 +1,6 @@
-import { Menu } from 'lucide-react';
+import { Menu, Settings2 } from 'lucide-react';
 import type { ReactElement } from 'react';
+import { Link } from 'react-router';
 
 import { Button } from '@nocobase/app-client/ui';
 
@@ -32,6 +33,15 @@ export function AppHeader({ onOpenSidebar }: AppHeaderProps): ReactElement {
         </p>
       </div>
       <div className='flex shrink-0 items-center gap-2'>
+        <Button
+          aria-label='App settings'
+          render={<Link to='/settings' />}
+          size='sm'
+          variant='outline'
+        >
+          <Settings2 />
+          <span className='hidden sm:inline'>App settings</span>
+        </Button>
         <ThemeSettings />
         <UserMenu />
       </div>

@@ -12,6 +12,13 @@ APP_DIST_DIR="$PWD/packages/app-host/fixtures/app-dist" pnpm --filter @nocobase/
 By default the host listens on `127.0.0.1:3000` and discovers apps from
 `./app-dist` in the current working directory.
 
+Set `APP_HOST_PUBLIC_URL` when the browser-facing root differs from the local
+listener, for example `APP_HOST_PUBLIC_URL=https://apps.example.com/runtime/`.
+It must be an absolute `http://` or `https://` URL without embedded credentials;
+invalid values prevent App Host from starting.
+The control API returns each App's resolved `accessUrl`; Hub and other clients
+must consume that value instead of constructing public URLs themselves.
+
 The package fixture shows the supported single-level `app-dist` layout:
 
 ```text
@@ -83,8 +90,45 @@ The returned app object should expose `fetch(request)` and may expose
 
 The `lifecycle` fixture is a complete lifecycle example. It registers a
 `scope.onBeforeDestroy(...)` hook, registers a `scope.registerDisposer(...)`
-cleanup function, and implements the actual `dispose()` logic.
+cleanup function, implements the actual `dispose()` logic, and returns that
+same function as `app.close`.
 
 The `ws-demo` fixture exposes a WebSocket clock stream. Its client derives the
 public URL from the current page origin, so `ws://<host>/ws-demo/ws` maps to
 `/ws` inside the embedded app.
+
+## Managed releases
+
+Immutable releases live below the app directory:
+
+```text
+app-dist/orders/releases/release-v1/
+  app-release.json
+  package.json
+  dist/server/embedded.js
+  dist/client/...
+```
+
+Deploy a release through the control API:
+
+```bash
+curl -X POST http://127.0.0.1:3000/__apps/orders/deploy \
+  -H 'content-type: application/json' \
+  -d '{"releaseId":"release-v1"}'
+```
+
+The host verifies the artifact checksum and readiness before promotion. It then
+atomically records the active release in
+`APP_DIST_DIR/.app-host/active-releases.json` before switching traffic. A
+failed readiness check or state write leaves the previous runtime active. On
+restart, the host verifies the persisted checksum again and restores every
+recorded release before opening its listening socket. Invalid state or replaced
+release content therefore fails closed.
+
+Rollback uses the same promotion path:
+
+```bash
+curl -X POST http://127.0.0.1:3000/__apps/orders/rollback \
+  -H 'content-type: application/json' \
+  -d '{"releaseId":"release-v1"}'
+```

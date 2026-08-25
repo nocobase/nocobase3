@@ -39,3 +39,53 @@ export function joinBasePath(basePath: string, pathInsideBase: string): string {
   const normalizedPath = normalizeBasePath(pathInsideBase);
   return `${normalizedBasePath}${normalizedPath}` || '/';
 }
+
+export function resolvePublicAppUrl(
+  publicUrl: string | undefined,
+  appBasePath: string,
+): string | undefined {
+  if (!publicUrl?.trim()) return undefined;
+
+  const url = new URL(publicUrl);
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.username ||
+    url.password
+  ) {
+    throw new Error(
+      'Public App URL must use HTTP(S) without embedded credentials.',
+    );
+  }
+
+  url.pathname = joinBasePath(url.pathname, appBasePath);
+  url.search = '';
+  url.hash = '';
+  return url.toString().replace(/\/$/, '');
+}
+
+/**
+ * Resolve the browser origin used by an App's internal authentication handler.
+ * App Host strips the public App path before dispatching the request, so the
+ * authentication library must receive the public origin without a path.
+ */
+export function resolvePublicAuthBaseUrl(
+  publicUrl: string | undefined,
+): string | undefined {
+  if (!publicUrl?.trim()) return undefined;
+
+  const url = new URL(publicUrl);
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.username ||
+    url.password
+  ) {
+    throw new Error(
+      'Public App URL must use HTTP(S) without embedded credentials.',
+    );
+  }
+
+  url.pathname = '';
+  url.search = '';
+  url.hash = '';
+  return url.toString().replace(/\/$/, '');
+}

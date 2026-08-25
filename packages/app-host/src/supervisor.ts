@@ -36,6 +36,7 @@ export interface AppHostSupervisorOptions {
   startTimeoutMs?: number;
   shutdownTimeoutMs?: number;
   healthPath?: string;
+  controlToken?: string;
 }
 
 export interface AppHostSupervisorInfo {
@@ -88,6 +89,7 @@ export class AppHostSupervisor {
   private readonly startTimeoutMs: number;
   private readonly shutdownTimeoutMs: number;
   private readonly healthPath: string;
+  private readonly controlToken?: string;
   private status: AppHostSupervisorStatus;
   private managedChild: ManagedChild | null = null;
   private startPromise: Promise<URL> | null = null;
@@ -116,6 +118,8 @@ export class AppHostSupervisor {
       options.healthPath ??
       process.env.APP_HOST_HEALTH_PATH ??
       DEFAULT_HEALTH_PATH;
+    this.controlToken =
+      options.controlToken ?? process.env.APP_HOST_CONTROL_TOKEN;
     this.status =
       !this.enabled || this.driver === 'disabled'
         ? 'disabled'
@@ -307,7 +311,7 @@ export class AppHostSupervisor {
     const exitPromise = waitForChildExit(managed.child, this.shutdownTimeoutMs);
     managed.child.kill('SIGTERM');
 
-    await exitPromise.catch((error: unknown) => {
+    await exitPromise.catch((error) => {
       console.warn(error instanceof Error ? error.message : String(error));
       managed.child.kill('SIGKILL');
     });
@@ -348,6 +352,9 @@ export class AppHostSupervisor {
       APP_HOST_BIND: this.host,
       APP_DIST_DIR: this.appDistDir,
     };
+    if (this.controlToken) {
+      env.APP_HOST_CONTROL_TOKEN = this.controlToken;
+    }
     const nodeOptions = sanitizeAppHostChildNodeOptions(env.NODE_OPTIONS);
 
     if (nodeOptions) {
@@ -419,11 +426,19 @@ export class AppHostSupervisor {
   }
 
   private pipeChildLogs(child: ChildProcess): void {
-    child.stdout?.on('data', (chunk: unknown) => {
-      writePrefixedChunk('app-host', chunk, process.stdout);
+    child.stdout?.on('data', (chunk: string | Buffer) => {
+      writePrefixedChunk(
+        'app-host',
+        typeof chunk === 'string' ? Buffer.from(chunk) : chunk,
+        process.stdout,
+      );
     });
-    child.stderr?.on('data', (chunk: unknown) => {
-      writePrefixedChunk('app-host', chunk, process.stderr);
+    child.stderr?.on('data', (chunk: string | Buffer) => {
+      writePrefixedChunk(
+        'app-host',
+        typeof chunk === 'string' ? Buffer.from(chunk) : chunk,
+        process.stderr,
+      );
     });
   }
 
@@ -437,7 +452,10 @@ export class AppHostSupervisor {
       }
 
       try {
-        await requestHealth(new URL(this.healthPath, targetUrl));
+        await requestHealth(
+          new URL(this.healthPath, targetUrl),
+          this.controlToken,
+        );
         return;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -502,8 +520,7 @@ function normalizeUrl(value?: string): URL | undefined {
 }
 
 export function sanitizeAppHostChildNodeOptions(value: unknown): string {
-  const source = typeof value === 'string' ? value : '';
-  return source
+  return (typeof value === 'string' ? value : '')
     .trim()
     .split(/\s+/)
     .filter(Boolean)
@@ -550,21 +567,31 @@ function isPortAvailable(port: number, host: string): Promise<boolean> {
   });
 }
 
-function requestHealth(url: URL): Promise<void> {
+function requestHealth(url: URL, controlToken?: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const req = http.get(url, (res) => {
-      res.resume();
-      if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-        resolve();
-        return;
-      }
+    const req = http.get(
+      url,
+      {
+        headers: controlToken
+          ? {
+              authorization: `Bearer ${controlToken}`,
+            }
+          : undefined,
+      },
+      (res) => {
+        res.resume();
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          resolve();
+          return;
+        }
 
-      reject(
-        new Error(
-          `health check returned ${res.statusCode ?? 'unknown status'}`,
-        ),
-      );
-    });
+        reject(
+          new Error(
+            `health check returned ${res.statusCode ?? 'unknown status'}`,
+          ),
+        );
+      },
+    );
 
     req.setTimeout(1000, () => {
       req.destroy(new Error('health check timed out'));
@@ -605,13 +632,9 @@ function sleep(ms: number): Promise<void> {
 
 function writePrefixedChunk(
   prefix: string,
-  chunk: unknown,
+  chunk: Buffer,
   writer: NodeJS.WriteStream,
 ): void {
-  if (!Buffer.isBuffer(chunk)) {
-    return;
-  }
-
   const text = chunk.toString();
   const lines = text.split(/\r?\n/);
   const hasTrailingNewline = text.endsWith('\n') || text.endsWith('\r');

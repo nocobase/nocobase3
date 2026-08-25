@@ -86,6 +86,7 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
+    "@nocobase/app-plugin-settings": "workspace:^",
     "sonner": "^2.0.3"
   },
   "devDependencies": {

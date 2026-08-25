@@ -1,0 +1,3 @@
+# Applied migrations are immutable because their compiled files are checksum-verified.
+server/migrations/202608220001_create_crm_tables.ts
+server/migrations/202608240001_create_access_control.ts

@@ -1,0 +1,10 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/server-library.json",
+  "compilerOptions": {
+    "rootDir": "src/server",
+    "outDir": "dist/server",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo"
+  },
+  "include": ["src/server/**/*.ts"],
+  "exclude": ["src/server/migrations/**/*.ts", "src/server/seed/**/*.ts"]
+}

@@ -10,3 +10,7 @@ export {
   startServer,
   type StandaloneServerOptions,
 } from './standalone.js';
+export * from '@nocobase/hub-release-management/server';
+export * from './settings/index.js';
+export * from './native-auth/index.js';
+export * from './app-runtime-gateway.js';

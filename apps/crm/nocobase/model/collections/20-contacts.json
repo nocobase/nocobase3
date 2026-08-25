@@ -1,0 +1,42 @@
+{
+  "name": "agent_crm_contacts",
+  "title": "CRM Contacts",
+  "description": "People associated with CRM customer accounts.",
+  "template": "general",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Contact name",
+      "interface": "input",
+      "validators": ["required", { "name": "max", "args": { "limit": 120 } }]
+    },
+    { "name": "jobTitle", "title": "Job title", "interface": "input" },
+    {
+      "name": "decisionRole",
+      "title": "Decision role",
+      "interface": "select",
+      "enum": [
+        {
+          "value": "decision_maker",
+          "label": "Decision maker",
+          "color": "purple"
+        },
+        { "value": "champion", "label": "Champion", "color": "green" },
+        { "value": "influencer", "label": "Influencer", "color": "blue" },
+        { "value": "user", "label": "Business user", "color": "default" }
+      ]
+    },
+    {
+      "name": "email",
+      "title": "Email",
+      "interface": "email",
+      "validators": ["email"]
+    },
+    { "name": "phone", "title": "Phone", "interface": "phone" },
+    {
+      "name": "notes",
+      "title": "Communication preferences",
+      "interface": "textarea"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "appId": "crm",
+  "dataRuntime": "native",
+  "dataSourceKey": "main",
+  "aclPolicy": "nocobase/acl/policy.json",
+  "healthPath": "/healthz",
+  "runtime": {
+    "backend": "in-process",
+    "isolation": "in-process",
+    "tier": "warm",
+    "resourcePolicy": {
+      "startupTimeoutMs": 10000,
+      "requestTimeoutMs": 30000,
+      "drainTimeoutMs": 10000,
+      "idleTtlMs": 900000,
+      "maxConcurrentRequests": 100
+    }
+  },
+  "requiredCollections": [
+    "agent_crm_accounts",
+    "agent_crm_contacts",
+    "agent_crm_leads",
+    "agent_crm_opportunities",
+    "agent_crm_activities"
+  ]
+}

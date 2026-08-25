@@ -78,6 +78,7 @@ describe('client plugin definitions', () => {
       id: '@nocobase/app-plugin-feature:index',
       path: '/feature',
       source: 'plugin',
+      surface: 'application',
     });
     expect(resolved.providers.map((provider) => provider.id)).toEqual([
       '@nocobase/app-plugin-foundation:first',
@@ -142,6 +143,28 @@ describe('client plugin definitions', () => {
       id: '@nocobase/app-template-default:home',
       path: '/',
       source: 'application',
+    });
+  });
+
+  it('keeps standalone plugin routes outside the application surface', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-settings',
+        routes: defineClientRoutes([
+          {
+            name: 'settings',
+            path: '/settings',
+            surface: 'standalone',
+            componentLoader: async () => ({ default: () => null }),
+          },
+        ]),
+      },
+    ]);
+
+    expect(resolved.routes[0]).toMatchObject({
+      auth: 'required',
+      path: '/settings',
+      surface: 'standalone',
     });
   });
 

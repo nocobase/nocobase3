@@ -63,10 +63,15 @@
   },
   "peerDependencies": {
     "@nocobase/app-client": "^0.1.0",
-    "@refinedev/core": "^5.0.0"
+    "@nocobase/app-sdk": "^0.1.0",
+    "@refinedev/core": "^5.0.0",
+    "react": "^19.0.0",
+    "react-router": "^7.0.0"
   },
   "dependencies": {
-    "@nocobase/portal-sdk": "workspace:^"
+    "@nocobase/app-plugin-settings": "workspace:^",
+    "@nocobase/portal-sdk": "workspace:^",
+    "lucide-react": "^0.487.0"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
@@ -76,6 +81,10 @@
     "@refinedev/core": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "@types/react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

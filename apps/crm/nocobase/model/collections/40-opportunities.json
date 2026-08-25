@@ -1,0 +1,51 @@
+{
+  "name": "agent_crm_opportunities",
+  "title": "CRM Opportunities",
+  "description": "Qualified sales opportunities progressing through the pipeline.",
+  "template": "general",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Opportunity name",
+      "interface": "input",
+      "validators": ["required", { "name": "max", "args": { "limit": 180 } }]
+    },
+    {
+      "name": "stage",
+      "title": "Sales stage",
+      "interface": "select",
+      "validators": ["required"],
+      "enum": [
+        { "value": "discovery", "label": "Discovery", "color": "blue" },
+        { "value": "proposal", "label": "Proposal", "color": "purple" },
+        { "value": "negotiation", "label": "Negotiation", "color": "gold" },
+        { "value": "won", "label": "Won", "color": "green" },
+        { "value": "lost", "label": "Lost", "color": "red" }
+      ],
+      "defaultValue": "discovery"
+    },
+    {
+      "name": "amount",
+      "title": "Expected amount",
+      "interface": "number",
+      "validators": ["required", { "name": "min", "args": { "limit": 0 } }]
+    },
+    {
+      "name": "probability",
+      "title": "Win probability",
+      "interface": "percent",
+      "validators": [
+        { "name": "min", "args": { "limit": 0 } },
+        { "name": "max", "args": { "limit": 100 } }
+      ],
+      "defaultValue": 20
+    },
+    {
+      "name": "expectedCloseDate",
+      "title": "Expected close date",
+      "interface": "dateOnly"
+    },
+    { "name": "nextStep", "title": "Next step", "interface": "input" },
+    { "name": "notes", "title": "Opportunity notes", "interface": "textarea" }
+  ]
+}

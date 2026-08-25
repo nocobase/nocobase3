@@ -1,0 +1,18 @@
+{
+  "collectionName": "agent_crm_accounts",
+  "name": "contacts",
+  "title": "Contacts",
+  "interface": "o2m",
+  "target": "agent_crm_contacts",
+  "foreignKey": "accountId",
+  "targetKey": "id",
+  "targetTitleField": "name",
+  "reverseField": {
+    "name": "account",
+    "title": "Account",
+    "interface": "m2o",
+    "target": "agent_crm_accounts",
+    "targetTitleField": "name",
+    "validators": ["required"]
+  }
+}

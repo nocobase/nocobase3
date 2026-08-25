@@ -67,6 +67,24 @@ describe('application shell', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Theme' })).toBeVisible();
   });
+
+  it('keeps authenticated standalone pages outside the application shell', async () => {
+    renderApplication('/settings', createAuthProvider(true), [
+      createRoute(
+        'settings',
+        '/settings',
+        'required',
+        StandaloneSettingsPage,
+        'plugin',
+        'standalone',
+      ),
+    ]);
+
+    expect(await screen.findByText('Standalone settings page')).toBeVisible();
+    expect(
+      screen.queryByRole('navigation', { name: 'Application navigation' }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 function renderApplication(
@@ -128,6 +146,7 @@ function createRoute(
   auth: AppClientRegisteredRoute['auth'],
   Component: ComponentType,
   source: AppClientRegisteredRoute['source'] = 'plugin',
+  surface: AppClientRegisteredRoute['surface'] = 'application',
 ): AppClientRegisteredRoute {
   const packageName =
     source === 'application'
@@ -141,6 +160,7 @@ function createRoute(
     packageName,
     path,
     source,
+    surface,
   };
 }
 
@@ -150,4 +170,8 @@ function HomePage(): ReactElement {
 
 function GuestPage(): ReactElement {
   return <div>Guest login page</div>;
+}
+
+function StandaloneSettingsPage(): ReactElement {
+  return <div>Standalone settings page</div>;
 }

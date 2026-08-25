@@ -30,6 +30,23 @@ export type {
 
 export type AppDisposer = () => void | Promise<void>;
 
+export type AppRuntimeResourceStatus =
+  'applying' | 'active' | 'restart-required' | 'error';
+
+export interface AppRuntimeResource {
+  id: string;
+  kind: string;
+  name: string;
+  status: AppRuntimeResourceStatus;
+  provider: string;
+  updatedAt: string;
+  details?: Record<string, string | number | boolean | null>;
+  error?: {
+    code: string;
+    message: string;
+  } | null;
+}
+
 export interface FetchApp {
   fetch(
     request: Request,
@@ -42,7 +59,9 @@ export interface FetchApp {
 export interface AppScope {
   readonly id: string;
   readonly appName?: string;
+  readonly displayName?: string;
   readonly version: number;
+  readonly releaseId: string | null;
   readonly basePath: string;
   readonly assetsBasePath: string;
   readonly clientDir?: string;
@@ -55,6 +74,7 @@ export interface AppScope {
   readonly dataDir?: string;
   readonly config?: unknown;
   readonly signal: AbortSignal;
+  reportRuntimeResource(resource: AppRuntimeResource): void;
   registerDisposer(name: string, dispose: AppDisposer): void;
   onBeforeDestroy(handler: () => void | Promise<void>): () => void;
 }
@@ -93,6 +113,7 @@ export interface AppServerReference {
 export type AppApiReference = AppServerReference;
 
 export interface AppReleaseReference extends AppCodeReference {
+  id: string;
   releaseDir: string;
   manifestPath?: string;
 }
@@ -118,6 +139,7 @@ export interface AppRuntimeEndpoint {
 export interface AppDefinition<TConfig = unknown> {
   id: string;
   appName?: string;
+  displayName?: string;
   basePath: string;
   enabled: boolean;
   backend: AppBackendKind;
@@ -142,6 +164,7 @@ export interface AppDefinition<TConfig = unknown> {
 
 export interface CreateAppDefinitionOptions<TConfig = unknown> {
   appName?: string;
+  displayName?: string;
   basePath?: string;
   enabled?: boolean;
   backend?: AppBackendKind;
@@ -176,12 +199,15 @@ export interface AppDestroyOptions {
 export interface AppSnapshot {
   id: string;
   appName?: string;
+  displayName?: string;
   version: number;
   basePath: string;
+  accessUrl?: string;
   backend: AppBackendKind;
   configVersion: string;
   desiredVersion: string;
   codeVersion: string;
+  releaseId: string | null;
   isolation: AppIsolation;
   tier: AppTier;
   state: AppState;
@@ -192,6 +218,7 @@ export interface AppSnapshot {
   lastAccessedAt: string | null;
   lastError: string | null;
   disposerCount: number;
+  resources: AppRuntimeResource[];
 }
 
 export interface ActiveAppHandle {
@@ -232,14 +259,17 @@ export interface DeployAppOptions {
   strategy?: 'restart' | 'blue-green';
   destroyTimeoutMs?: number;
   waitForReady?: boolean;
+  onBeforePromote?: () => void | Promise<void>;
 }
 
 export interface AppDeploymentResult {
   id: string;
   strategy: 'restart' | 'blue-green';
   previousVersion: string | null;
+  previousReleaseId: string | null;
   desiredVersion: string;
   activeVersion: string;
+  activeReleaseId: string | null;
   changed: boolean;
   app: AppSnapshot;
 }

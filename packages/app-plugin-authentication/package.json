@@ -99,6 +99,7 @@
     "react": "^19.0.0"
   },
   "dependencies": {
+    "@nocobase/app-plugin-settings": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/database": "workspace:^",

@@ -1,0 +1,10 @@
+{
+  "collectionName": "agent_crm_opportunities",
+  "name": "owner",
+  "title": "Owner",
+  "interface": "m2o",
+  "target": "user",
+  "foreignKey": "ownerId",
+  "targetKey": "id",
+  "targetTitleField": "name"
+}

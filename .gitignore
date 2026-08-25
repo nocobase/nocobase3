@@ -1,5 +1,7 @@
 node_modules/
+.pnpm-store/
 dist/
+/app-dist/
 coverage/
 test-results/
 playwright-report/
@@ -7,6 +9,8 @@ playwright-report/
 .env.local
 .env.*.local
 .agent-annotations/
+knowledge-base/
+**/data/auth-secret
 
 !packages/app-host/fixtures/app-dist/**/dist/
 !packages/app-host/fixtures/app-dist/**/dist/**
@@ -16,3 +20,7 @@ playwright-report/
 packages/app-host/fixtures/app-dist/main/
 packages/app-host/fixtures/app-dist/hub/dist/
 packages/app-host/fixtures/app-dist/hub/dist/**
+packages/app-host/fixtures/app-dist/.app-host/
+packages/app-host/fixtures/app-dist/crm/
+packages/app-host/fixtures/app-dist/orders/
+packages/app-host/fixtures/app-dist/service-desk/

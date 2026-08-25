@@ -1,21 +1,13 @@
-import type { RenderAuthenticator } from '@nocobase/portal-sdk/auth';
-
 import { AuthLayout } from '@/components/auth/auth-layout';
-import { DynamicSignIn } from '@/components/auth/dynamic-sign-in';
+import { BasicSignInForm } from '@/components/auth/basic-sign-in-form';
 
-type DefaultSignInPageProps = {
-  renderAuthenticator?: RenderAuthenticator;
-};
-
-export function DefaultSignInPage({
-  renderAuthenticator,
-}: DefaultSignInPageProps) {
+export function DefaultSignInPage() {
   return (
     <AuthLayout
       title='Welcome back'
-      description='Choose a sign-in method configured in NocoBase.'
+      description='Sign in to the independent NocoBase 3 Hub.'
     >
-      <DynamicSignIn renderAuthenticator={renderAuthenticator} />
+      <BasicSignInForm />
     </AuthLayout>
   );
 }

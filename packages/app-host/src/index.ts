@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { timingSafeEqual } from 'node:crypto';
 import {
   createServer,
   type IncomingMessage,
@@ -14,7 +15,12 @@ import {
   type ServerResponse,
 } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { AppRegistryError } from './errors.ts';
+import {
+  AppLifecycleTransitionError,
+  AppRegistryError,
+  AppReleaseIntegrityError,
+  AppStoppedError,
+} from './errors.ts';
 import {
   applyFetchResponse,
   isClientResponseClose,
@@ -22,7 +28,14 @@ import {
   toFetchRequest,
 } from './http-adapter.ts';
 import { DirectoryAppCatalog } from './app-catalog.ts';
+import {
+  AppReleaseStateStore,
+  type ActiveReleaseRecord,
+} from './app-release-state.ts';
 import { AppRuntimeRegistry } from './app-registry.ts';
+import { AppLifecycleManager } from './app-lifecycle.ts';
+import { AppLifecycleStateStore } from './app-lifecycle-state.ts';
+import type { AppDefinition, AppDeploymentResult } from './app-types.ts';
 import { writeAppSystemLog } from './app-system-log.ts';
 import {
   getPathInsideApp,
@@ -42,6 +55,10 @@ export * from './in-process-backend.ts';
 export * from './app-catalog.ts';
 export * from './app-registry.ts';
 export * from './app-runtime.ts';
+export * from './app-release.ts';
+export * from './app-release-state.ts';
+export * from './app-lifecycle.ts';
+export * from './app-lifecycle-state.ts';
 export * from './app-system-log.ts';
 export * from './static-client.ts';
 export * from './websocket.ts';
@@ -54,10 +71,15 @@ export interface AppHostOptions {
   maxActiveApps?: number;
   idleTtlMs?: number;
   evictionIntervalMs?: number;
+  controlToken?: string;
+  publicUrl?: string;
 }
 
 export interface AppHost {
   readonly appCatalog: DirectoryAppCatalog;
+  readonly releaseStateStore: AppReleaseStateStore;
+  readonly lifecycleStateStore: AppLifecycleStateStore;
+  readonly lifecycle: AppLifecycleManager;
   readonly registry: AppRuntimeRegistry;
   readonly server: Server;
   start(): Promise<void>;
@@ -65,14 +87,33 @@ export interface AppHost {
 }
 
 export function createAppHost(options: AppHostOptions = {}): AppHost {
+  const configuredPublicUrl = options.publicUrl
+    ? parsePublicHttpUrl(options.publicUrl, {
+        status: 500,
+        code: 'APP_HOST_PUBLIC_URL_INVALID',
+        label: 'APP_HOST_PUBLIC_URL',
+      })
+    : undefined;
   const appCatalog = new DirectoryAppCatalog({
     appsDir: options.appDistDir,
+  });
+  const releaseStateStore = new AppReleaseStateStore({
+    appsDir: appCatalog.appsDir,
+  });
+  const lifecycleStateStore = new AppLifecycleStateStore({
+    stateDir: releaseStateStore.stateDir,
   });
   const registry = new AppRuntimeRegistry({
     resolveFactory: (definition) => appCatalog.resolveFactory(definition),
     maxActiveApps: options.maxActiveApps,
     idleTtlMs: options.idleTtlMs,
     evictionIntervalMs: options.evictionIntervalMs,
+  });
+  const lifecycle = new AppLifecycleManager({
+    registry,
+    appCatalog,
+    releaseStateStore,
+    lifecycleStateStore,
   });
 
   const handleRequest = async (
@@ -86,6 +127,10 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         path,
         registry,
         appCatalog,
+        releaseStateStore,
+        lifecycle,
+        options.controlToken,
+        configuredPublicUrl,
       );
       if (managementResponse) {
         await applyFetchResponse(res, managementResponse);
@@ -100,6 +145,8 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
           await applyFetchResponse(res, notFoundResponse());
           return;
         }
+
+        assertAppRequestAvailable(lifecycle, appId);
 
         const pathInside = getPathInsideApp(definition, path);
 
@@ -143,35 +190,54 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
       }
     }
   };
-
   const server = createServer((req, res) => {
-    const requestPromise = handleRequest(req, res);
-    requestPromise.catch((error: unknown) => {
-      console.error(error);
-      if (!res.destroyed) {
-        res.destroy(error instanceof Error ? error : new Error(String(error)));
-      }
-    });
+    void handleRequest(req, res);
   });
 
   server.on('upgrade', (req, socket, head) => {
-    const upgradePromise = dispatchAppWebSocket(req, socket, head, registry);
-    upgradePromise.catch((error: unknown) => {
-      console.error(error);
-      rejectWebSocketUpgrade(
-        socket,
-        error instanceof AppRegistryError ? error.status : 500,
-      );
-    });
+    void dispatchAppWebSocket(req, socket, head, registry, lifecycle).catch(
+      (error) => {
+        console.error(error);
+        rejectWebSocketUpgrade(
+          socket,
+          error instanceof AppRegistryError ? error.status : 500,
+        );
+      },
+    );
   });
 
   return {
     appCatalog,
+    releaseStateStore,
+    lifecycleStateStore,
+    lifecycle,
     registry,
     server,
-    async start() {
-      const discoveredApps = await appCatalog.registerDiscovered(registry);
+    async start(): Promise<void> {
       attachAppEventLogs(registry);
+      let discoveredApps: AppDefinition[];
+
+      try {
+        discoveredApps = await appCatalog.registerDiscovered(registry);
+        await lifecycle.initialize();
+        await restoreActiveReleases(
+          registry,
+          appCatalog,
+          releaseStateStore,
+          lifecycle,
+        );
+      } catch (error) {
+        try {
+          await registry.destroyAll('startup restore failed');
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [error, cleanupError],
+            'App host startup and cleanup failed',
+            { cause: cleanupError },
+          );
+        }
+        throw error;
+      }
 
       await new Promise<void>((resolve) => {
         server.listen(
@@ -194,7 +260,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         }`,
       );
     },
-    async close(reason = 'host shutdown') {
+    async close(reason: string = 'host shutdown'): Promise<void> {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error) {
@@ -237,6 +303,7 @@ async function dispatchAppWebSocket(
   socket: Duplex,
   head: Buffer,
   registry: AppRuntimeRegistry,
+  lifecycle: AppLifecycleManager,
 ): Promise<void> {
   if (!isWebSocketUpgrade(req)) {
     rejectWebSocketUpgrade(socket, 400);
@@ -255,6 +322,8 @@ async function dispatchAppWebSocket(
     rejectWebSocketUpgrade(socket, 404);
     return;
   }
+
+  assertAppRequestAvailable(lifecycle, appId);
 
   const pathInside = getPathInsideApp(definition, path);
   if (isAppAssetPath(pathInside)) {
@@ -298,6 +367,8 @@ export async function startAppHostFromEnv(): Promise<AppHost> {
     maxActiveApps: numberFromEnv('MAX_ACTIVE_APPS'),
     idleTtlMs: numberFromEnv('APP_IDLE_TTL_MS'),
     evictionIntervalMs: numberFromEnv('APP_EVICTION_INTERVAL_MS'),
+    controlToken: process.env.APP_HOST_CONTROL_TOKEN,
+    publicUrl: process.env.APP_HOST_PUBLIC_URL,
   });
 
   await host.start();
@@ -353,8 +424,31 @@ async function managementApi(
   path: string,
   registry: AppRuntimeRegistry,
   appCatalog: DirectoryAppCatalog,
+  releaseStateStore: AppReleaseStateStore,
+  lifecycle: AppLifecycleManager,
+  controlToken?: string,
+  publicUrl?: URL,
 ): Promise<Response | null> {
   const method = req.method ?? 'GET';
+
+  if (
+    isProtectedControlPath(path) &&
+    controlToken &&
+    !hasControlAccess(req, controlToken)
+  ) {
+    return jsonResponse(
+      {
+        error: 'Unauthorized',
+        code: 'APP_HOST_UNAUTHORIZED',
+      },
+      {
+        status: 401,
+        headers: {
+          'www-authenticate': 'Bearer realm="app-host-control"',
+        },
+      },
+    );
+  }
 
   if (method === 'GET' && path === '/') {
     return jsonResponse({
@@ -369,6 +463,8 @@ async function managementApi(
         'curl -X POST http://localhost:3000/__apps/rescan',
         'curl -X POST http://localhost:3000/__apps/acme/activate',
         'curl -X POST http://localhost:3000/__apps/acme/deploy',
+        'curl http://localhost:3000/__apps/acme/releases',
+        'curl -X POST http://localhost:3000/__apps/acme/rollback',
         'curl -X POST http://localhost:3000/__apps/evict-idle',
         'curl http://localhost:3000/__apps/acme',
         'curl -X POST http://localhost:3000/__apps/acme/reload',
@@ -383,10 +479,35 @@ async function managementApi(
   }
 
   if (method === 'GET' && path === '/__apps') {
+    const [releases, activeReleaseState] = await Promise.all([
+      appCatalog.listReleases(),
+      releaseStateStore.read(),
+    ]);
+    const requestOrigin = resolveRequestOrigin(req);
+    const appPublicUrl = publicUrl ?? requestOrigin;
+    const definitions = registry.listDefinitions();
+    const lifecycleAppIds = [
+      ...definitions.map((definition) => definition.id),
+      ...releases.map((release) => release.appId),
+    ];
     return jsonResponse({
-      active: registry.list(),
-      definitions: registry.listDefinitions(),
+      active: registry.list().map((app) => ({
+        ...app,
+        accessUrl: joinPublicUrl(appPublicUrl, app.basePath),
+      })),
+      definitions: definitions.map((definition) => ({
+        ...definition,
+        accessUrl: joinPublicUrl(appPublicUrl, definition.basePath),
+      })),
+      releases: releases.map(toReleaseSummary),
+      activeReleases: activeReleaseState.releases,
+      lifecycle: lifecycle.list(lifecycleAppIds),
     });
+  }
+
+  if (method === 'GET' && path === '/__releases') {
+    const releases = await appCatalog.listReleases();
+    return jsonResponse({ releases: releases.map(toReleaseSummary) });
   }
 
   if (path === '/__apps/rescan') {
@@ -411,8 +532,19 @@ async function managementApi(
     return jsonResponse({ evicted });
   }
 
+  const releasesMatch = path.match(/^\/__apps\/([^/]+)\/releases$/);
+  if (releasesMatch) {
+    if (method !== 'GET') {
+      return methodNotAllowed('GET');
+    }
+
+    const id = decodeURIComponent(releasesMatch[1]);
+    const releases = await appCatalog.listReleases(id);
+    return jsonResponse({ releases: releases.map(toReleaseSummary) });
+  }
+
   const actionMatch = path.match(
-    /^\/__apps\/([^/]+)\/(activate|deploy|evict|reload)$/,
+    /^\/__apps\/([^/]+)\/(activate|deploy|evict|reload|rollback|start|stop|restart)$/,
   );
   if (actionMatch) {
     if (method !== 'POST') {
@@ -423,28 +555,85 @@ async function managementApi(
     const action = actionMatch[2];
 
     if (action === 'activate') {
+      const result = await lifecycle.start(id);
       return jsonResponse({
-        app: await registry.ensureActive(id),
+        app: result.app,
       });
     }
 
-    if (action === 'deploy') {
+    if (action === 'start') {
+      return jsonResponse({ lifecycle: await lifecycle.start(id) });
+    }
+
+    if (action === 'stop') {
+      return jsonResponse({ lifecycle: await lifecycle.stop(id) });
+    }
+
+    if (action === 'restart') {
+      return jsonResponse({ lifecycle: await lifecycle.restart(id) });
+    }
+
+    if (action === 'deploy' || action === 'rollback') {
       const input = await readJsonBody(req);
+      const activeReleaseState = await releaseStateStore.read();
+      const persistedPreviousReleaseId =
+        activeReleaseState.releases.find((release) => release.appId === id)
+          ?.releaseId ?? null;
+      const releaseId =
+        typeof input.releaseId === 'string' ? input.releaseId : undefined;
+      if (action === 'rollback' && !releaseId) {
+        return jsonResponse(
+          {
+            error: 'releaseId is required for rollback',
+            code: 'RELEASE_ID_REQUIRED',
+          },
+          { status: 400 },
+        );
+      }
+
+      const deployOptions = {
+        version: typeof input.version === 'string' ? input.version : undefined,
+        strategy:
+          input.strategy === 'restart' || input.strategy === 'blue-green'
+            ? input.strategy
+            : undefined,
+        destroyTimeoutMs: numberFromValue(input.destroyTimeoutMs),
+        reason:
+          action === 'rollback'
+            ? `rollback to release ${releaseId}`
+            : 'deploy API',
+      } as const;
+      let deployment: AppDeploymentResult;
+      if (releaseId) {
+        const definition = await appCatalog.resolveRelease(id, releaseId);
+        const artifactSha256 = requireReleaseChecksum(definition);
+        deployment = await registry.deployDefinition(definition, {
+          ...deployOptions,
+          onBeforePromote: async (): Promise<void> => {
+            await releaseStateStore.setActiveRelease({
+              appId: id,
+              releaseId,
+              artifactSha256,
+            });
+          },
+        });
+      } else {
+        deployment = await registry.deploy(id, {
+          ...deployOptions,
+          onBeforePromote: async (): Promise<void> => {
+            await releaseStateStore.clearActiveRelease(id);
+          },
+        });
+      }
+      if (!deployment.previousReleaseId && persistedPreviousReleaseId) {
+        deployment = {
+          ...deployment,
+          previousReleaseId: persistedPreviousReleaseId,
+          changed: persistedPreviousReleaseId !== deployment.activeReleaseId,
+        };
+      }
       return jsonResponse({
-        deployment: await registry.deploy(id, {
-          version:
-            typeof input.version === 'string' ? input.version : undefined,
-          strategy:
-            input.strategy === 'restart' || input.strategy === 'blue-green'
-              ? input.strategy
-              : undefined,
-          destroyTimeoutMs: numberFromValue(input.destroyTimeoutMs),
-          waitForReady:
-            typeof input.waitForReady === 'boolean'
-              ? input.waitForReady
-              : undefined,
-          reason: 'deploy API',
-        }),
+        deployment,
       });
     }
 
@@ -454,9 +643,8 @@ async function managementApi(
       });
     }
 
-    return jsonResponse({
-      app: await registry.reload(id, { reason: 'reload API' }),
-    });
+    const result = await lifecycle.restart(id);
+    return jsonResponse({ app: result.app });
   }
 
   const match = path.match(/^\/__apps\/([^/]+)$/);
@@ -467,7 +655,10 @@ async function managementApi(
   const id = decodeURIComponent(match[1]);
 
   if (method === 'GET') {
-    return jsonResponse(registry.status(id));
+    return jsonResponse({
+      ...registry.status(id),
+      lifecycle: lifecycle.status(id),
+    });
   }
 
   if (method === 'POST') {
@@ -535,7 +726,12 @@ function notFoundResponse(): Response {
         'POST /__apps/evict-idle',
         'GET /__apps/:id',
         'POST /__apps/:id/activate',
+        'POST /__apps/:id/start',
+        'POST /__apps/:id/stop',
+        'POST /__apps/:id/restart',
         'POST /__apps/:id/deploy',
+        'GET /__apps/:id/releases',
+        'POST /__apps/:id/rollback',
         'POST /__apps/:id/evict',
         'POST /__apps/:id/reload',
         'DELETE /__apps/:id',
@@ -575,17 +771,10 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 async function readJsonBody(
   req: IncomingMessage,
 ): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
+  const chunks: Uint8Array[] = [];
 
-  for await (const streamedChunk of req) {
-    const chunk: unknown = streamedChunk;
-    if (Buffer.isBuffer(chunk)) {
-      chunks.push(chunk);
-    } else if (typeof chunk === 'string') {
-      chunks.push(Buffer.from(chunk));
-    } else {
-      throw new TypeError('Request body contained an unsupported chunk type');
-    }
+  for await (const chunk of req as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
   }
 
   if (chunks.length === 0) {
@@ -643,4 +832,184 @@ function numberFromEnv(name: string): number | undefined {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function resolveRequestOrigin(req: IncomingMessage): URL {
+  const protocol = (
+    firstForwardedValue(req.headers['x-forwarded-proto']) ?? 'http'
+  ).toLowerCase();
+  const host =
+    firstForwardedValue(req.headers['x-forwarded-host']) ?? req.headers.host;
+  if (!host) {
+    throw new AppRegistryError('App Host request did not include a host', {
+      status: 400,
+      code: 'APP_HOST_REQUEST_HOST_REQUIRED',
+    });
+  }
+  if (
+    (protocol !== 'http' && protocol !== 'https') ||
+    /[\s/@\\?#]/.test(host)
+  ) {
+    throw new AppRegistryError(
+      'App Host request origin must use a valid HTTP(S) authority',
+      {
+        status: 400,
+        code: 'APP_HOST_REQUEST_ORIGIN_INVALID',
+      },
+    );
+  }
+  return parsePublicHttpUrl(`${protocol}://${host}`, {
+    status: 400,
+    code: 'APP_HOST_REQUEST_ORIGIN_INVALID',
+    label: 'App Host request origin',
+  });
+}
+
+function joinPublicUrl(publicUrl: URL, basePath: string): string {
+  const relative = basePath.replace(/^\/+/, '').replace(/\/+$/, '');
+  return new URL(`${relative}/`, publicUrl).toString();
+}
+
+function parsePublicHttpUrl(
+  value: string,
+  error: { status: number; code: string; label: string },
+): URL {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch (cause) {
+    throw new AppRegistryError(`${error.label} must be a valid HTTP(S) URL`, {
+      status: error.status,
+      code: error.code,
+      cause,
+    });
+  }
+
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.username ||
+    url.password
+  ) {
+    throw new AppRegistryError(
+      `${error.label} must use HTTP(S) without embedded credentials`,
+      {
+        status: error.status,
+        code: error.code,
+      },
+    );
+  }
+
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}/`;
+  url.search = '';
+  url.hash = '';
+  return url;
+}
+
+function firstForwardedValue(
+  value: string | string[] | undefined,
+): string | undefined {
+  const first = Array.isArray(value) ? value[0] : value?.split(',', 1)[0];
+  return first?.trim() || undefined;
+}
+
+function isProtectedControlPath(path: string): boolean {
+  return (
+    path === '/__health' ||
+    path === '/__apps' ||
+    path.startsWith('/__apps/') ||
+    path === '/__releases'
+  );
+}
+
+function hasControlAccess(
+  req: IncomingMessage,
+  expectedToken: string,
+): boolean {
+  const authorization = req.headers.authorization;
+  const providedToken = authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : '';
+  const expected = Buffer.from(expectedToken);
+  const provided = Buffer.from(providedToken);
+  return (
+    expected.length === provided.length &&
+    expected.length > 0 &&
+    timingSafeEqual(expected, provided)
+  );
+}
+
+async function restoreActiveReleases(
+  registry: AppRuntimeRegistry,
+  appCatalog: DirectoryAppCatalog,
+  releaseStateStore: AppReleaseStateStore,
+  lifecycle: AppLifecycleManager,
+): Promise<void> {
+  const state = await releaseStateStore.read();
+
+  for (const record of state.releases) {
+    const definition = await appCatalog.resolveRelease(
+      record.appId,
+      record.releaseId,
+    );
+    assertPersistedReleaseChecksum(record, definition);
+    if (lifecycle.isStopped(record.appId)) {
+      await registry.setDefinition(definition);
+    } else {
+      await registry.deployDefinition(definition, {
+        reason: `restore active release ${record.releaseId}`,
+      });
+    }
+  }
+}
+
+function assertAppRequestAvailable(
+  lifecycle: AppLifecycleManager,
+  appId: string,
+): void {
+  const reason = lifecycle.requestBlockedReason(appId);
+  if (reason === 'in-progress') {
+    throw new AppLifecycleTransitionError(appId);
+  }
+  if (reason === 'stopped') {
+    throw new AppStoppedError(appId);
+  }
+}
+
+function assertPersistedReleaseChecksum(
+  record: ActiveReleaseRecord,
+  definition: AppDefinition,
+): void {
+  const actualChecksum = requireReleaseChecksum(definition);
+  if (actualChecksum !== record.artifactSha256) {
+    throw new AppReleaseIntegrityError(
+      record.appId,
+      record.releaseId,
+      `persisted checksum ${record.artifactSha256} does not match release checksum ${actualChecksum}`,
+    );
+  }
+}
+
+function requireReleaseChecksum(definition: AppDefinition): string {
+  const releaseId = definition.release?.id ?? 'unknown';
+  const checksum = definition.release?.checksum;
+  if (!checksum) {
+    throw new AppReleaseIntegrityError(
+      definition.id,
+      releaseId,
+      'release checksum is missing',
+    );
+  }
+  return checksum;
+}
+
+function toReleaseSummary(
+  release: Awaited<ReturnType<DirectoryAppCatalog['listReleases']>>[number],
+) {
+  return {
+    appId: release.appId,
+    id: release.id,
+    version: release.version,
+    createdAt: release.createdAt,
+    runtime: release.manifest.runtime ?? {},
+  };
 }

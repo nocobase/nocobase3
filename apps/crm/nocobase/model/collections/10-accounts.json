@@ -1,0 +1,43 @@
+{
+  "name": "agent_crm_accounts",
+  "title": "CRM Accounts",
+  "description": "Customer organizations managed by the CRM application.",
+  "template": "general",
+  "fields": [
+    {
+      "name": "name",
+      "title": "Account name",
+      "interface": "input",
+      "validators": ["required", { "name": "max", "args": { "limit": 160 } }]
+    },
+    { "name": "industry", "title": "Industry", "interface": "input" },
+    {
+      "name": "tier",
+      "title": "Account tier",
+      "interface": "select",
+      "enum": [
+        { "value": "strategic", "label": "Strategic", "color": "purple" },
+        { "value": "key", "label": "Key", "color": "blue" },
+        { "value": "standard", "label": "Standard", "color": "default" }
+      ],
+      "defaultValue": "standard"
+    },
+    {
+      "name": "status",
+      "title": "Account status",
+      "interface": "select",
+      "validators": ["required"],
+      "enum": [
+        { "value": "prospect", "label": "Prospect", "color": "blue" },
+        { "value": "active", "label": "Active", "color": "green" },
+        { "value": "paused", "label": "Paused", "color": "gold" },
+        { "value": "inactive", "label": "Inactive", "color": "default" }
+      ],
+      "defaultValue": "prospect"
+    },
+    { "name": "region", "title": "Region", "interface": "input" },
+    { "name": "website", "title": "Website", "interface": "url" },
+    { "name": "phone", "title": "Phone", "interface": "phone" },
+    { "name": "notes", "title": "Notes", "interface": "textarea" }
+  ]
+}

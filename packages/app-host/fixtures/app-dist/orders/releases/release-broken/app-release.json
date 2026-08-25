@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "appId": "orders",
+  "releaseId": "release-broken",
+  "version": "3.0.0",
+  "artifactSha256": "8abe66812b5cc02d444aa69484218f4f7c11747b9059564178f8d87f84ee6e55",
+  "createdAt": "2026-08-18T03:00:00.000Z",
+  "runtime": {
+    "healthPath": "/healthz"
+  }
+}

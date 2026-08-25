@@ -1,0 +1,5 @@
+dist/
+fixtures/app-dist/.app-host/
+fixtures/app-dist/crm/
+fixtures/app-dist/orders/
+fixtures/app-dist/service-desk/

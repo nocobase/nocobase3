@@ -79,7 +79,7 @@ describe('app server', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/hub/";');
-    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/v2/api";');
+    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/api";');
   });
 
   it('reads embedded runtime config from dist/.env without using process.env', async () => {
@@ -380,7 +380,7 @@ describe('app server', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/hub/";');
-    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/v2/api";');
+    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/api";');
     expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
       html.indexOf('<script type="module"'),
     );

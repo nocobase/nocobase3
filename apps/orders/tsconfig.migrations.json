@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.server.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "isolatedDeclarations": false
+  },
+  "include": ["src/server/migrations/**/*.ts", "src/server/seed/**/*.ts"],
+  "exclude": []
+}

@@ -1,0 +1,17 @@
+{
+  "collectionName": "agent_crm_opportunities",
+  "name": "activities",
+  "title": "Activities",
+  "interface": "o2m",
+  "target": "agent_crm_activities",
+  "foreignKey": "opportunityId",
+  "targetKey": "id",
+  "targetTitleField": "subject",
+  "reverseField": {
+    "name": "opportunity",
+    "title": "Opportunity",
+    "interface": "m2o",
+    "target": "agent_crm_opportunities",
+    "targetTitleField": "name"
+  }
+}

@@ -2,7 +2,6 @@ import { Authenticated } from '@refinedev/core';
 import { CatchAllNavigate } from '@refinedev/react-router';
 import { Outlet, Route, Routes } from 'react-router';
 
-import { AclBootstrap } from '@/components/access-control/acl-bootstrap';
 import { NavigateToAccessibleResource } from '@/components/access-control/navigate-to-accessible-resource';
 import { ErrorComponent } from '@/components/app-shell/error-component';
 import { Layout } from '@/components/app-shell/layout';
@@ -24,11 +23,9 @@ export function AppRoutes() {
             key='authenticated-inner'
             fallback={<CatchAllNavigate to='/login' />}
           >
-            <AclBootstrap>
-              <AppExtensionProviders>
-                <Outlet />
-              </AppExtensionProviders>
-            </AclBootstrap>
+            <AppExtensionProviders>
+              <Outlet />
+            </AppExtensionProviders>
           </Authenticated>
         }
       >
@@ -49,9 +46,7 @@ export function AppRoutes() {
       <Route
         element={
           <Authenticated key='authenticated-outer' fallback={<Outlet />}>
-            <AclBootstrap>
-              <NavigateToAccessibleResource />
-            </AclBootstrap>
+            <NavigateToAccessibleResource />
           </Authenticated>
         }
       >

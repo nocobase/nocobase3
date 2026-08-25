@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { filterMenuItemsByAcl, useAclState } from '@nocobase/portal-sdk/acl';
+import { useLocation } from 'react-router';
 import {
   useMenu,
   useLink,
@@ -13,7 +13,6 @@ import {
   SidebarRail as ShadcnSidebarRail,
   Sidebar as ShadcnSidebar,
   SidebarContent as ShadcnSidebarContent,
-  SidebarFooter as ShadcnSidebarFooter,
   SidebarHeader as ShadcnSidebarHeader,
   useSidebar as useShadcnSidebar,
 } from '@/components/ui/sidebar';
@@ -29,33 +28,41 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, ListIcon, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronRight,
+  Gauge,
+  ListIcon,
+  Rocket,
+  ServerCog,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Brand } from '@/components/app-shell/brand';
 import { getResourceLabel } from '@/components/resources/resource-label';
+import { displayAppName } from '@/features/apps/presentation';
 
 export function Sidebar() {
   const { menuItems, selectedKey } = useMenu();
-  const acl = useAclState();
-  const allowedMenuItems = React.useMemo(
-    () =>
-      acl.status === 'ready'
-        ? filterMenuItemsByAcl(menuItems, acl.permissions)
-        : [],
-    [acl, menuItems],
-  );
+  const location = useLocation();
+  const appId = getAppIdFromPath(location.pathname);
 
   return (
-    <SidebarNavigation menuItems={allowedMenuItems} selectedKey={selectedKey} />
+    <SidebarNavigation
+      menuItems={menuItems}
+      selectedKey={selectedKey}
+      appScope={appId ? { appId, pathname: location.pathname } : undefined}
+    />
   );
 }
 
 export function SidebarNavigation({
   menuItems,
   selectedKey,
+  appScope,
 }: {
   menuItems: TreeMenuItem[];
   selectedKey?: string;
+  appScope?: { appId: string; pathname: string };
 }) {
   const { open } = useShadcnSidebar();
 
@@ -80,17 +87,98 @@ export function SidebarNavigation({
           },
         )}
       >
-        {menuItems.map((item: TreeMenuItem) => (
-          <SidebarItem
-            key={item.key || item.name}
-            item={item}
-            selectedKey={selectedKey}
-          />
-        ))}
+        {appScope ? (
+          <AppScopeMenu {...appScope} />
+        ) : (
+          menuItems.map((item: TreeMenuItem) => (
+            <SidebarItem
+              key={item.key || item.name}
+              item={item}
+              selectedKey={selectedKey}
+            />
+          ))
+        )}
       </ShadcnSidebarContent>
-      <SidebarFooter />
     </ShadcnSidebar>
   );
+}
+
+function AppScopeMenu({
+  appId,
+  pathname,
+}: {
+  appId: string;
+  pathname: string;
+}) {
+  const Link = useLink();
+  const { open } = useShadcnSidebar();
+  const encodedAppId = encodeURIComponent(appId);
+  const root = `/apps/${encodedAppId}`;
+  const items = [
+    { label: '概览', to: root, icon: Gauge, exact: true },
+    { label: '版本与发布', to: `${root}/deployments`, icon: Rocket },
+    { label: '运行资源', to: `${root}/resources`, icon: ServerCog },
+  ];
+
+  return (
+    <div className='flex flex-col gap-2'>
+      <Button
+        render={<Link to='/apps' />}
+        nativeButton={false}
+        variant='ghost'
+        className='h-9 justify-start gap-2 px-3 text-muted-foreground'
+      >
+        <ArrowLeft />
+        {open ? <span>返回应用</span> : null}
+      </Button>
+      {open ? (
+        <div className='mx-1 mb-2 rounded-xl border bg-sidebar-accent/45 p-3'>
+          <div className='text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground'>
+            应用
+          </div>
+          <div className='mt-1 truncate text-sm font-semibold'>
+            {displayAppName(appId)}
+          </div>
+          <div className='mt-0.5 truncate font-mono text-[10px] text-muted-foreground'>
+            {appId}
+          </div>
+        </div>
+      ) : null}
+      {items.map((item) => {
+        const active = item.exact
+          ? pathname === item.to
+          : pathname === item.to || pathname.startsWith(`${item.to}/`);
+        const Icon = item.icon;
+        return (
+          <Button
+            key={item.to}
+            render={<Link to={item.to} />}
+            nativeButton={false}
+            variant='ghost'
+            className={cn(
+              'h-10 justify-start gap-3 rounded-lg px-3',
+              active
+                ? 'bg-primary/10 text-primary hover:!bg-primary/15'
+                : 'hover:bg-sidebar-accent/80',
+            )}
+          >
+            <Icon className='size-4 shrink-0' />
+            {open ? <span>{item.label}</span> : null}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
+function getAppIdFromPath(pathname: string): string | undefined {
+  const match = pathname.match(/^\/apps\/([^/]+)/);
+  if (!match) return undefined;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 }
 
 type MenuItemProps = {
@@ -287,49 +375,6 @@ function SidebarHeader() {
   );
 }
 
-function SidebarFooter() {
-  const { open } = useShadcnSidebar();
-  const translate = useTranslate();
-
-  return (
-    <ShadcnSidebarFooter className='border-t border-sidebar-border/70 p-0'>
-      <div
-        title={`${__PORTAL_TEMPLATE_NAME__} v${__PORTAL_TEMPLATE_VERSION__}`}
-        className={cn(
-          'flex min-h-16 items-center',
-          open ? 'gap-3 px-5 py-3' : 'justify-center px-2',
-        )}
-      >
-        <ShieldCheck className='size-4 shrink-0 text-muted-foreground' />
-        {open && (
-          <div className='min-w-0 text-xs leading-4'>
-            <div className='font-semibold text-sidebar-foreground'>
-              {translate('shell.footer.freedom', 'AI builds freely.')}
-            </div>
-            <div className='text-muted-foreground'>
-              <a
-                href='https://nocobase.com'
-                target='_blank'
-                rel='noopener noreferrer'
-                className='font-medium text-sidebar-foreground hover:underline'
-              >
-                NocoBase
-              </a>{' '}
-              {translate(
-                'shell.footer.reliabilitySuffix',
-                'keeps it reliable.',
-              )}
-            </div>
-            <div className='mt-1 font-mono text-[10px] text-muted-foreground/70'>
-              {__PORTAL_TEMPLATE_NAME__} v{__PORTAL_TEMPLATE_VERSION__}
-            </div>
-          </div>
-        )}
-      </div>
-    </ShadcnSidebarFooter>
-  );
-}
-
 function useMenuItemLabel(item: TreeMenuItem) {
   const translate = useTranslate();
   const getUserFriendlyName = useUserFriendlyName();
@@ -416,6 +461,7 @@ function SidebarButton({
           />
         ) : undefined
       }
+      nativeButton={!asLink || !item.route}
       variant='ghost'
       size='default'
       className={cn(

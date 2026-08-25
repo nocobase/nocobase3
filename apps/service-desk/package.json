@@ -1,0 +1,83 @@
+{
+  "name": "@nocobase/app-service-desk",
+  "displayName": "客户服务中心",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "app": {
+    "displayName": "客户服务中心"
+  },
+  "nocobase": {
+    "defaultTemplateVersion": "3.1.1",
+    "plugins": {
+      "@nocobase/app-plugin-authentication": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-data-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-notification-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-settings": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-access-control": {
+        "enabled": true
+      }
+    }
+  },
+  "devDependencies": {
+    "@hono/node-server": "catalog:",
+    "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-plugin-access-control": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-data-provider": "workspace:^",
+    "@nocobase/app-plugin-notification-provider": "workspace:^",
+    "@nocobase/app-plugin-settings": "workspace:^",
+    "@nocobase/app-sdk": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/database": "workspace:^",
+    "@nocobase/dev-config": "workspace:*",
+    "@nocobase/portal-sdk": "workspace:^",
+    "@refinedev/core": "catalog:",
+    "@refinedev/react-router": "^2.0.0",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "better-auth": "catalog:",
+    "eslint": "catalog:",
+    "hono": "catalog:",
+    "knex": "catalog:",
+    "lucide-react": "^0.487.0",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "shadcn": "^4.13.1",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "^1.2.5",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "fix": "pnpm lint:fix && pnpm format",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
+    "test": "vitest run",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "release:pack": "node ./scripts/package-release.mjs",
+    "start": "node ./dist/server/standalone.js"
+  }
+}

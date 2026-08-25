@@ -1,0 +1,60 @@
+import { AuthPageShell } from '@nocobase/app-plugin-authentication/client/ui';
+import { useLogin } from '@refinedev/core';
+import { useState, type FormEvent, type ReactElement } from 'react';
+
+export default function OrdersLoginPage(): ReactElement {
+  const [identifier, setIdentifier] = useState('nocobase');
+  const [password, setPassword] = useState('admin123');
+  const { data, error, isPending, mutate } = useLogin<{
+    identifier: string;
+    password: string;
+  }>();
+  const submit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    mutate({ identifier, password });
+  };
+  return (
+    <AuthPageShell
+      description='登录后进入订单履约工作区，应用设置在独立设置中心管理。'
+      title='登录订单运营中心'
+    >
+      <form className='space-y-5' onSubmit={submit}>
+        <label className='block space-y-2 text-sm font-medium'>
+          账号
+          <input
+            autoComplete='username'
+            autoFocus
+            className='h-10 w-full rounded-lg border border-input bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring/30'
+            onChange={(event) => setIdentifier(event.target.value)}
+            value={identifier}
+          />
+        </label>
+        <label className='block space-y-2 text-sm font-medium'>
+          密码
+          <input
+            autoComplete='current-password'
+            className='h-10 w-full rounded-lg border border-input bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring/30'
+            onChange={(event) => setPassword(event.target.value)}
+            type='password'
+            value={password}
+          />
+        </label>
+        {(data?.error?.message ?? error?.message) ? (
+          <p className='rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive'>
+            {data?.error?.message ?? error?.message}
+          </p>
+        ) : null}
+        <button
+          className='h-10 w-full rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60'
+          disabled={isPending}
+          type='submit'
+        >
+          {isPending ? '正在登录…' : '登录'}
+        </button>
+        <p className='text-center text-xs text-muted-foreground'>
+          本地预览账号：nocobase / admin123
+        </p>
+      </form>
+    </AuthPageShell>
+  );
+}

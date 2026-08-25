@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useForgotPassword, useLink } from '@refinedev/core';
-import { useSearchParams } from 'react-router';
 
 import { AuthLayout } from '@/components/auth/auth-layout';
 import { Button } from '@/components/ui/button';
@@ -13,15 +12,11 @@ import { Label } from '@/components/ui/label';
 export const ForgotPasswordForm = () => {
   const [email, setEmail] = useState('');
   const Link = useLink();
-  const [searchParams] = useSearchParams();
   const { mutate: forgotPassword, isPending } = useForgotPassword();
 
   const handleForgotPassword = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    forgotPassword({
-      email,
-      authenticator: searchParams.get('name') ?? undefined,
-    });
+    forgotPassword({ email });
   };
 
   return (

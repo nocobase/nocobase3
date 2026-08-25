@@ -1,4 +1,5 @@
 import type { RefineProps } from '@refinedev/core';
+import type { AppClient } from '@nocobase/app-sdk';
 import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
 
 export type AppClientProvider = ComponentType<PropsWithChildren>;
@@ -7,6 +8,7 @@ export type AppClientRefineConfig = RefineProps;
 
 export interface AppClientConfig {
   basename?: string;
+  client?: AppClient;
   providers?: readonly AppClientProvider[];
   refine?: AppClientRefineConfig;
   routes: ReactNode;
