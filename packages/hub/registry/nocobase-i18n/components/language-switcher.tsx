@@ -1,5 +1,5 @@
 import { useGetLocale, useSetLocale, useTranslate } from '@refinedev/core';
-import { useEnabledLocales } from '@nocobase/portal-sdk/i18n';
+import { useEnabledLocales } from '@nocobase/app-portal-sdk/i18n';
 import { Languages, Loader2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 

@@ -1,7 +1,7 @@
 # Default App Development Guidelines
 
 This package is the reference application for the new `@nocobase/app-client`
-and `@nocobase/app-server` architecture. Follow the repository root
+and `@nocobase/app-server-kit` architecture. Follow the repository root
 `AGENTS.md` first, then these package-specific rules.
 
 ## Use the current client architecture

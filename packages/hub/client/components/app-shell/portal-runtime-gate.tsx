@@ -1,14 +1,14 @@
-import { authProvider } from '@nocobase/portal-sdk/auth';
+import { authProvider } from '@nocobase/app-portal-sdk/auth';
 import {
   isNocoBaseServiceError,
   nocobaseClient,
   nocobaseWebSocket,
   normalizeNocoBaseRuntimeError,
-} from '@nocobase/portal-sdk/client';
+} from '@nocobase/app-portal-sdk/client';
 import {
   portalRuntimeStore,
   resolvePortalUrl,
-} from '@nocobase/portal-sdk/runtime';
+} from '@nocobase/app-portal-sdk/runtime';
 import {
   useEffect,
   useRef,

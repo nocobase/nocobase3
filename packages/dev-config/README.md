@@ -19,7 +19,7 @@ pnpm add -D @nocobase/dev-config typescript eslint prettier
 Install optional peers only for the presets that need them. For example, a
 React Portal using the shared Vitest and Vite factories also needs Vitest,
 Vite, React Testing Library, JSDOM, and the React and Tailwind Vite plugins.
-Portal projects inject the compatibility plugin from `@nocobase/portal-sdk`.
+Portal projects inject the compatibility plugin from `@nocobase/app-portal-sdk`.
 
 Node.js 24 or newer is required to run the development tooling.
 

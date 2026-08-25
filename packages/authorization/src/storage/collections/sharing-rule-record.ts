@@ -1,4 +1,4 @@
-import type { BuilderResult, CollectionBuilder } from '@nocobase/database';
+import type { BuilderResult, CollectionBuilder } from '@nocobase/app-database';
 
 /** Stores one explicit shared record per row, avoiding unbounded JSON arrays. */
 export function createSharingRuleRecordCollection(

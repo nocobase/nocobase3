@@ -24,7 +24,7 @@ Application-owned React translations belong in `client/locales`, outside the
 installed Registry directory:
 
 ```ts
-import { registerTranslationResources } from '@nocobase/portal-sdk/i18n';
+import { registerTranslationResources } from '@nocobase/app-portal-sdk/i18n';
 
 registerTranslationResources('my-feature', {
   'en-US': { title: 'Orders' },

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import {
   resolveAuthSessionStorageKey,
   type AuthSessionField,
-} from '@nocobase/portal-sdk/client';
+} from '@nocobase/app-portal-sdk/client';
 
 import type { PortalE2ESession } from './api';
 import type { PortalE2EEnvironment } from './environment';

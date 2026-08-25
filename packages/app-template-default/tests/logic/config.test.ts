@@ -1,18 +1,19 @@
 // @vitest-environment node
 
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { validateMigrations, validateSeeds } from '@nocobase/database';
+import { validateMigrations, validateSeeds } from '@nocobase/app-database';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createConfigEnv,
   createConfigPaths,
   loadConfig,
-} from '@nocobase/app-server/config';
+} from '@nocobase/app-server-kit/config';
 
 import app from '../../server/config/app.ts';
 import caching from '../../server/config/caching.ts';
@@ -33,6 +34,19 @@ import {
 } from '../../server/runtime/config.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
+
+const requirePackage = createRequire(import.meta.url);
+
+/**
+ * Reads a plugin's declared version rather than repeating it as a literal.
+ *
+ * The assertions below check that plugin resolution reports the version the package actually declares. Hard-coding it
+ * restates the same value in two places, so every version bump breaks the test for a reason that has nothing to do
+ * with the resolution logic it covers.
+ */
+const declaredVersion = (packageName: string): string =>
+  (requirePackage(`${packageName}/package.json`) as { version: string })
+    .version;
 
 const tempDirs: string[] = [];
 
@@ -705,7 +719,7 @@ describe('app plugins', () => {
 
     expect(authenticationPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-authentication',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-authentication'),
       enabled: true,
     });
     expect(authenticationPlugin?.migrationsDirectory).toMatch(
@@ -723,7 +737,7 @@ describe('app plugins', () => {
     );
     expect(dataProviderPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-data-provider',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-data-provider'),
       enabled: true,
     });
     expect(dataProviderPlugin?.manifest.client).toEqual({
@@ -736,7 +750,7 @@ describe('app plugins', () => {
     expect(dataProviderPlugin?.seedsDirectory).toBeUndefined();
     expect(notificationProviderPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-notification-provider',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-notification-provider'),
       enabled: true,
     });
     expect(notificationProviderPlugin?.manifest.client).toEqual({
@@ -757,7 +771,7 @@ describe('app plugins', () => {
     expect(notificationProviderPlugin?.seedsDirectory).toBeUndefined();
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-database-example'),
       enabled: true,
     });
     expect(databaseExamplePlugin?.migrationsDirectory).toMatch(
@@ -769,7 +783,7 @@ describe('app plugins', () => {
     expect(databaseExamplePlugin?.routesEntry).toBeUndefined();
     expect(routesExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-routes-example',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-routes-example'),
       enabled: true,
     });
     expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
@@ -783,7 +797,7 @@ describe('app plugins', () => {
     );
     expect(queueExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-queue-example',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-queue-example'),
       enabled: true,
     });
     expect(queueExamplePlugin?.jobsDirectory).toMatch(
@@ -794,7 +808,7 @@ describe('app plugins', () => {
     );
     expect(realtimeExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-realtime-example',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-realtime-example'),
       enabled: true,
     });
     expect(realtimeExamplePlugin?.routesEntry).toMatch(
