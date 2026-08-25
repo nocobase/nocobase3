@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -169,6 +169,14 @@ describe('relation binding scoped file routes', () => {
       .where('fileId', '=', ready.file.id)
       .execute();
     const expired = await createUpload(fixture, ORDER_ONE, 'expired.txt', 7);
+    await putLocal(fixture, expired, 'expired');
+    const expiredCandidate = path.join(
+      fixture.storageRoot,
+      'pending',
+      expired.file.id,
+      'candidate',
+    );
+    await expect(access(expiredCandidate)).resolves.toBeUndefined();
     now = new Date('2026-08-24T00:10:00.000Z');
     const active = await createUpload(fixture, ORDER_ONE, 'active.txt', 6);
     now = new Date('2026-08-24T00:16:00.000Z');
@@ -181,7 +189,8 @@ describe('relation binding scoped file routes', () => {
     );
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getFile(expired.file.id),
-    ).toMatchObject({ status: 'pending' });
+    ).toMatchObject({ status: 'failed' });
+    await expect(access(expiredCandidate)).rejects.toThrow();
     expect(
       await getFilesRuntimeKernel(fixture.runtime).getFile(ready.file.id),
     ).toMatchObject({ status: 'ready' });
@@ -195,6 +204,66 @@ describe('relation binding scoped file routes', () => {
         (row) => row.fileId === reused.file.id,
       )?.slot,
     ).toBe(2);
+  });
+
+  it('expires an abandoned Local replacement while keeping the old relation replaceable', async () => {
+    let now = new Date('2026-08-24T00:00:00.000Z');
+    const fixture = await createFixture({ maxFiles: 1, clock: () => now });
+    const original = await uploadAndComplete(
+      fixture,
+      ORDER_ONE,
+      'old.txt',
+      'old',
+    );
+    const abandoned = await createUpload(
+      fixture,
+      ORDER_ONE,
+      'abandoned.txt',
+      9,
+      original.file.id,
+    );
+    await putLocal(fixture, abandoned, 'abandoned');
+    const candidate = path.join(
+      fixture.storageRoot,
+      'pending',
+      abandoned.file.id,
+      'candidate',
+    );
+    const orphanedReady = path.join(
+      fixture.storageRoot,
+      'ready',
+      abandoned.file.id,
+      'object',
+    );
+    await mkdir(path.dirname(orphanedReady), { recursive: true });
+    await writeFile(orphanedReady, 'abandoned');
+    await writeFile(
+      `${orphanedReady}.files-metadata.json`,
+      '{"contentType":"text/plain"}',
+    );
+    await expect(access(candidate)).resolves.toBeUndefined();
+    await expect(access(orphanedReady)).resolves.toBeUndefined();
+
+    now = new Date('2026-08-24T00:16:00.000Z');
+    const listed = await fixture.app.request(`/orders/${ORDER_ONE}/files`);
+
+    expect(await json<StoredFile[]>(listed)).toEqual([
+      expect.objectContaining({ id: original.file.id, status: 'ready' }),
+    ]);
+    const replacement = await createUpload(
+      fixture,
+      ORDER_ONE,
+      'replacement.txt',
+      4,
+      original.file.id,
+    );
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(abandoned.file.id),
+    ).toMatchObject({ status: 'failed' });
+    await expect(access(candidate)).rejects.toThrow();
+    await expect(access(orphanedReady)).rejects.toThrow();
+    await putLocal(fixture, replacement, 'next');
+    expect((await completeUpload(fixture, replacement)).status).toBe(200);
   });
 
   it('replaces at full capacity while preserving the internal row and slot', async () => {
@@ -246,7 +315,7 @@ describe('relation binding scoped file routes', () => {
     let transactionCount = 0;
     fixture.database.transaction = async (operation, connection) => {
       transactionCount += 1;
-      if (transactionCount >= 2 && transactionCount <= 4) {
+      if (transactionCount <= 3) {
         throw Object.assign(new Error('database is busy'), {
           code: 'SQLITE_BUSY',
         });
@@ -335,6 +404,72 @@ describe('relation binding scoped file routes', () => {
       await getFilesRuntimeKernel(fixture.runtime).getFile(upload.file.id),
     ).toMatchObject({ status: 'failed' });
     expect(provider.keys()).toEqual([]);
+  });
+
+  it('expires an abandoned S3 replacement while keeping the old relation replaceable', async () => {
+    let now = new Date('2026-08-24T00:00:00.000Z');
+    const provider = new FakeS3Provider();
+    const fixture = await createFixture({
+      provider,
+      maxFiles: 1,
+      clock: () => now,
+    });
+    const original = await uploadAndCompleteS3(
+      fixture,
+      ORDER_ONE,
+      'old.txt',
+      'old',
+    );
+    const replacement = await createUpload(
+      fixture,
+      ORDER_ONE,
+      'new.txt',
+      4,
+      original.file.id,
+    );
+    provider.putUpload(replacement.plan, {
+      contentLength: 4,
+      contentType: 'text/plain',
+    });
+    provider.put(`ready/${replacement.file.id}/object`, {
+      contentLength: 4,
+      contentType: 'text/plain',
+    });
+    now = new Date('2026-08-24T00:16:00.000Z');
+
+    const listed = await fixture.app.request(`/orders/${ORDER_ONE}/files`);
+    expect(await json<StoredFile[]>(listed)).toEqual([
+      expect.objectContaining({ id: original.file.id, status: 'ready' }),
+    ]);
+    const next = await createUpload(
+      fixture,
+      ORDER_ONE,
+      'next.txt',
+      4,
+      original.file.id,
+    );
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(replacement.file.id),
+    ).toMatchObject({ status: 'failed' });
+    expect(provider.keys()).toEqual([`ready/${original.file.id}/object`]);
+
+    provider.putUpload(next.plan, {
+      contentLength: 4,
+      contentType: 'text/plain',
+    });
+    expect((await completeUpload(fixture, next)).status).toBe(200);
+    now = new Date('2026-08-24T00:32:00.000Z');
+    expect(
+      await json<StoredFile[]>(
+        await fixture.app.request(`/orders/${ORDER_ONE}/files`),
+      ),
+    ).toEqual([expect.objectContaining({ id: next.file.id, status: 'ready' })]);
+    expect(provider.keys()).toEqual(
+      [
+        `ready/${next.file.id}/object`,
+        `ready/${original.file.id}/object`,
+      ].sort(),
+    );
   });
 
   it('rejects cross-record capabilities and removed business actions', async () => {
@@ -609,6 +744,26 @@ async function uploadAndComplete(
   return upload;
 }
 
+async function uploadAndCompleteS3(
+  fixture: RelationFixture,
+  orderId: string,
+  name: string,
+  contents: string,
+): Promise<CreateBusinessFileResponse> {
+  const upload = await createUpload(
+    fixture,
+    orderId,
+    name,
+    Buffer.byteLength(contents),
+  );
+  required(fixture.provider).putUpload(upload.plan, {
+    contentLength: Buffer.byteLength(contents),
+    contentType: 'text/plain',
+  });
+  expect((await completeUpload(fixture, upload)).status).toBe(200);
+  return upload;
+}
+
 function putLocal(
   fixture: RelationFixture,
   upload: CreateBusinessFileResponse,
@@ -714,6 +869,10 @@ class FakeS3Provider implements S3Provider {
 
   putUpload(plan: FileUploadPlan, metadata: StorageObjectMetadata): void {
     const key = decodeURIComponent(new URL(plan.upload.url).pathname.slice(1));
+    this.#objects.set(key, { ...metadata });
+  }
+
+  put(key: string, metadata: StorageObjectMetadata): void {
     this.#objects.set(key, { ...metadata });
   }
 

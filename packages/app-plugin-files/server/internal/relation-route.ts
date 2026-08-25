@@ -204,7 +204,7 @@ async function handleCreateUpload(
 ): Promise<Response> {
   const recordId = readRecordId(state, context);
   await state.options.authorize({ context, action: 'write', recordId });
-  await cleanupExpired(state, recordId);
+  await cleanupExpiredReservations(state, recordId);
   const body = await readJson<CreateBusinessFileRequest>(context);
   const replaceFileId = readOptionalFileId(body.replaceFileId);
   if (!(await state.repository.parentExists(recordId))) {
@@ -481,7 +481,22 @@ async function cleanupExpired(
   state: RelationRouteState,
   recordId: string,
 ): Promise<void> {
-  await state.repository.cleanupExpired(recordId, now(state));
+  await cleanupExpiredReservations(state, recordId);
+}
+
+async function cleanupExpiredReservations(
+  state: RelationRouteState,
+  recordId: string,
+): Promise<void> {
+  const expiredFileIds = await state.repository.listExpiredFileIds(
+    recordId,
+    now(state),
+  );
+  for (const fileId of expiredFileIds) {
+    await state.kernel.cancelUpload(fileId, async ({ connection }) => {
+      await state.repository.cancelPending(recordId, fileId, null, connection);
+    });
+  }
 }
 
 async function getReadyRow(

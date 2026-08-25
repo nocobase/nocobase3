@@ -21,6 +21,7 @@ export interface SignedUploadOptions {
 export interface SignedReadOptions {
   expiresInSeconds: number;
   contentDisposition?: string;
+  cacheControl?: string;
 }
 
 export interface SignedStorageRequest {

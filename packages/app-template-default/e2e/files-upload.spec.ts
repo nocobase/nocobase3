@@ -1,312 +1,178 @@
-import { createServer, type Server } from 'node:http';
+import { mkdtemp, rm } from 'node:fs/promises';
+import type { Server } from 'node:http';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { serve } from '@hono/node-server';
+import { expect, test } from '@playwright/test';
+import { Hono } from 'hono';
 
-const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64',
-);
+import {
+  createDatabaseManager,
+  createMigrationContext,
+  type DatabaseManager,
+} from '@nocobase/database';
+import {
+  createFileService,
+  createFilesRuntime,
+  resolveFilesConfig,
+  type FilesRuntime,
+} from '@nocobase/app-plugin-files/server';
 
-test('uploads, replaces, previews, downloads, and detaches through basePath', async ({
-  page,
-}) => {
-  const uploadServer = await startUploadServer();
-  let releaseComplete: () => void = () => undefined;
-  const completeGate = new Promise<void>((resolve) => {
-    releaseComplete = resolve;
-  });
-  const contentMethods: string[] = [];
-  await installFilesRoutes(page, {
-    ids: ['replacement-file'],
-    completeGate,
-    contentMethods,
-    uploadBaseUrl: uploadServer.baseUrl,
-  });
-  try {
-    await page.goto('e2e/files.html?seed=1');
+import filesMigration from '../../app-plugin-files/database/migrations/202608221000_files_create_files.ts';
+import { loadPortalE2EEnvironment, resolvePortalTestURL } from './support';
 
-    await expect(page.getByTestId('file-ids')).toHaveText('seed-file');
-    await page.getByLabel('Choose file').setInputFiles({
-      name: 'replacement.png',
-      mimeType: 'image/png',
-      buffer: Buffer.alloc(512 * 1024, 1),
-    });
-    await expect(
-      page.locator('[data-slot="file-upload-field"]'),
-    ).toHaveAttribute('aria-busy', 'true');
-    await expect(page.getByTestId('upload-progress')).toHaveText('100');
-    await expect(page.getByText('seed.png', { exact: true })).toBeVisible();
-    releaseComplete();
-
-    await expect(page.getByTestId('file-ids')).toHaveText('replacement-file');
-    await expect(
-      page.getByText('replacement.png', { exact: true }),
-    ).toBeVisible();
-    await page
-      .getByRole('button', { name: 'Preview: replacement.png' })
-      .click();
-    await expect(page.locator('[data-file-preview-dialog]')).toBeVisible();
-    await page.getByRole('button', { name: 'Download' }).click();
-    await expect.poll(() => contentMethods).toContain('HEAD');
-    await page.getByRole('button', { name: 'Close' }).click();
-
-    await page
-      .locator('[data-slot="file-upload-field"]')
-      .getByText('replacement.png', { exact: true })
-      .hover();
-    await page.getByRole('button', { name: 'Remove' }).click();
-    await expect(page.getByTestId('file-ids')).toHaveText('');
-  } finally {
-    await uploadServer.close();
-  }
-});
-
-test('aborts an active upload and retries failure with a fresh file ID', async ({
-  page,
-}) => {
-  const cancelIds: string[] = [];
-  await installFilesRoutes(page, {
-    ids: ['abort-file', 'failed-file', 'retry-file'],
-    delayedUploadId: 'abort-file',
-    failedUploadId: 'failed-file',
-    cancelIds,
-  });
-  await page.goto('e2e/files.html');
-
-  await page.getByLabel('Choose file').setInputFiles({
-    name: 'abort.txt',
-    mimeType: 'text/plain',
-    buffer: Buffer.from('abort'),
-  });
-  await expect(page.locator('[data-slot="file-upload-field"]')).toHaveAttribute(
-    'aria-busy',
-    'true',
-  );
-  await page
-    .locator('[data-slot="file-upload-field"]')
-    .getByText('abort.txt', { exact: true })
-    .first()
-    .hover();
-  await page.getByRole('button', { name: 'Cancel' }).click({ force: true });
-  await expect(page.getByLabel('Cancelled')).toBeVisible();
-  await expect.poll(() => cancelIds).toContain('abort-file');
-  await page
-    .locator('[data-slot="file-upload-field"]')
-    .getByText('abort.txt', { exact: true })
-    .first()
-    .hover();
-  await page.getByRole('button', { name: 'Remove' }).click();
-
-  await page.getByLabel('Choose file').setInputFiles({
-    name: 'retry.txt',
-    mimeType: 'text/plain',
-    buffer: Buffer.from('retry'),
-  });
-  await expect(page.getByLabel('Failed')).toBeVisible();
-  await page.getByRole('button', { name: 'Retry' }).click({ force: true });
-  await expect(page.getByTestId('file-ids')).toHaveText('retry-file');
-  await expect.poll(() => cancelIds).toContain('failed-file');
-});
-
-test('keeps readOnly files previewable without mutation controls', async ({
-  page,
-}) => {
-  await installFilesRoutes(page, { ids: [], contentMethods: [] });
-  await page.goto('e2e/files.html?seed=1&readOnly=1');
-
-  await expect(page.getByTestId('file-ids')).toHaveText('seed-file');
-  await expect(page.getByLabel('Choose file')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Replace' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Preview: seed.png' }).click();
-  await expect(page.locator('[data-file-preview-dialog]')).toBeVisible();
-});
-
-interface FilesRouteOptions {
-  ids: string[];
-  completeGate?: Promise<void>;
-  delayedUploadId?: string;
-  failedUploadId?: string;
-  cancelIds?: string[];
-  contentMethods?: string[];
-  uploadBaseUrl?: string;
+interface FilesServerFixture {
+  database: DatabaseManager;
+  runtime: FilesRuntime;
+  server: Server;
+  storageRoot: string;
 }
 
-async function installFilesRoutes(
-  page: Page,
-  options: FilesRouteOptions,
-): Promise<void> {
-  let createIndex = 0;
-  const files = new Map<string, ReturnType<typeof readyFile>>([
-    ['seed-file', readyFile('seed-file', 'seed.png', 'image/png', 68)],
+const environment = loadPortalE2EEnvironment();
+const filesServerPort = Number(process.env.NOCOBASE_E2E_FILES_PORT ?? 4174);
+let fixture: FilesServerFixture;
+
+test.beforeAll(async () => {
+  fixture = await createFilesServerFixture();
+});
+
+test.afterAll(async () => {
+  await closeServer(fixture.server);
+  await fixture.runtime.dispose();
+  await fixture.database.destroy();
+  await rm(fixture.storageRoot, { recursive: true, force: true });
+});
+
+test('uploads, previews, downloads, and detaches through the real Files route', async ({
+  page,
+}) => {
+  const requests: Array<{ method: string; path: string }> = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/e2e/')) {
+      requests.push({ method: request.method(), path: url.pathname });
+    }
+  });
+
+  await page.goto(resolvePortalTestURL(environment, 'e2e/files-upload.html'));
+  await page.getByLabel('Choose file').setInputFiles({
+    name: 'contract.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('server-backed files'),
+  });
+
+  const previewButton = page.getByRole('button', {
+    name: 'Preview: contract.txt',
+    exact: true,
+  });
+  await expect(previewButton).toBeVisible();
+  await expect(page.getByText('contract.txt', { exact: true })).toBeVisible();
+  expect(requests.map(({ method }) => method).slice(0, 3)).toEqual([
+    'POST',
+    'PUT',
+    'POST',
   ]);
 
-  await page.route('**/business/record/files**', async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const segments = url.pathname.split('/').filter(Boolean);
-    const filesIndex = segments.lastIndexOf('files');
-    const fileId =
-      filesIndex >= 0 && filesIndex + 1 < segments.length
-        ? decodeURIComponent(segments[filesIndex + 1] ?? '')
-        : undefined;
-    if (request.method() === 'POST' && !fileId) {
-      const id = options.ids[createIndex++];
-      if (!id) {
-        await route.fulfill({ status: 500, body: 'Unexpected upload create' });
-        return;
-      }
-      const body = request.postDataJSON() as {
-        name: string;
-        size: number;
-        contentType?: string;
-      };
-      await route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          file: {
-            ...readyFile(id, body.name, body.contentType ?? null, body.size),
-            status: 'pending',
-            size: null,
-          },
-          plan: {
-            fileId: id,
-            expiresAt: '2026-08-24T00:15:00.000Z',
-            upload: {
-              method: 'PUT',
-              url: options.uploadBaseUrl
-                ? `${options.uploadBaseUrl}/${id}`
-                : `e2e-upload/${id}`,
-            },
-            complete: { method: 'POST', url: `e2e-complete/${id}` },
-            cancel: { method: 'DELETE', url: `e2e-cancel/${id}` },
-          },
-        }),
-      });
-      return;
-    }
-    if (request.method() === 'DELETE' && fileId) {
-      files.delete(fileId);
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true }),
-      });
-      return;
-    }
-    if (fileId && segments.at(-1) === 'content') {
-      options.contentMethods?.push(request.method());
-      await fulfillContent(route, request.method());
-      return;
-    }
-    await route.fulfill({ status: 404 });
-  });
+  await previewButton.click();
+  await expect(
+    page.getByText('server-backed files', { exact: true }),
+  ).toBeVisible();
 
-  await page.route('**/e2e-upload/*', async (route) => {
-    const id = route.request().url().split('/').at(-1) ?? '';
-    if (id === options.delayedUploadId) {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-    }
-    if (id === options.failedUploadId) {
-      await route.fulfill({ status: 500, body: 'Upload failed' });
-      return;
-    }
-    await route.fulfill({ status: 204 });
-  });
+  const downloadStarted = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  const download = await downloadStarted;
+  expect(download.suggestedFilename()).toBe('contract.txt');
 
-  await page.route('**/e2e-complete/*', async (route) => {
-    const id = route.request().url().split('/').at(-1) ?? '';
-    if (options.completeGate) await options.completeGate;
-    const name = id === 'replacement-file' ? 'replacement.png' : 'retry.txt';
-    const file = readyFile(
-      id,
-      name,
-      name.endsWith('.png') ? 'image/png' : 'text/plain',
-      name.endsWith('.png') ? 68 : 5,
-    );
-    files.set(id, file);
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ file }),
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.locator('[data-slot="file-upload-field"] .group').first().hover();
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(page.getByText('contract.txt', { exact: true })).toHaveCount(0);
+
+  expect(requests).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ method: 'GET' }),
+      expect.objectContaining({ method: 'HEAD' }),
+      expect.objectContaining({ method: 'DELETE' }),
+    ]),
+  );
+  await expect(
+    fixture.database
+      .query()
+      .selectFrom('documents')
+      .select('fileId')
+      .where('id', '=', 'document-1')
+      .executeTakeFirst<Record<string, unknown>>(),
+  ).resolves.toMatchObject({ fileId: null });
+});
+
+async function createFilesServerFixture(): Promise<FilesServerFixture> {
+  const database = createDatabaseManager({
+    default: 'sqlite',
+    connections: {
+      sqlite: {
+        dialect: 'sqlite',
+        driver: 'better-sqlite3',
+        filename: ':memory:',
+        pool: { min: 1, max: 1 },
+      },
+    },
+  });
+  await filesMigration.up(createMigrationContext(database.connection()));
+  await database.builder().createCollection('documents', (collection) => {
+    collection.string('id', { length: 64 }).notNull().primary();
+    collection.string('fileId', { length: 64 }).nullable();
+    collection.foreignKey('fileId', {
+      references: { collection: 'files', fields: ['id'] },
+      onDelete: 'restrict',
     });
   });
-
-  await page.route('**/e2e-cancel/*', async (route) => {
-    const id = route.request().url().split('/').at(-1) ?? '';
-    options.cancelIds?.push(id);
-    await route.fulfill({ status: 200 });
+  await database
+    .query()
+    .insertInto('documents')
+    .values({ id: 'document-1', fileId: null })
+    .execute();
+  const storageRoot = await mkdtemp(path.join(tmpdir(), 'files-e2e-'));
+  const runtime = createFilesRuntime({
+    database,
+    config: resolveFilesConfig({
+      appStorageRoot: storageRoot,
+      config: { storage: { driver: 'local', root: storageRoot } },
+    }),
+    audience: 'files-e2e',
+    secret: 'files-e2e-secret-at-least-32-characters',
   });
+  const route = createFileService({ runtime }).createFileRoute({
+    binding: {
+      type: 'field',
+      collection: 'documents',
+      recordParam: 'documentId',
+      fileField: 'fileId',
+    },
+    constraints: {
+      allowedExtensions: ['.txt'],
+      allowedContentTypes: ['text/plain'],
+    },
+    authorize() {},
+  });
+  const app = new Hono();
+  app.route('/api/e2e/documents/:documentId/file', route);
+  const server = await startServer(app, filesServerPort);
+  return { database, runtime, server, storageRoot };
 }
 
-async function startUploadServer(): Promise<{
-  baseUrl: string;
-  close(): Promise<void>;
-}> {
-  const server = createServer((request, response) => {
-    const corsHeaders = {
-      'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'PUT, OPTIONS',
-      'access-control-allow-headers':
-        request.headers['access-control-request-headers'] ?? 'content-type',
-    };
-    if (request.method === 'OPTIONS') {
-      response.writeHead(204, corsHeaders).end();
-      return;
-    }
-    request.on('data', () => undefined);
-    request.on('end', () => response.writeHead(204, corsHeaders).end());
-  });
-  await new Promise<void>((resolve, reject) => {
+function startServer(app: Hono, port: number): Promise<Server> {
+  return new Promise((resolve, reject) => {
+    const server = serve(
+      { fetch: app.fetch, hostname: '127.0.0.1', port },
+      () => resolve(server as Server),
+    ) as Server;
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
   });
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    await closeServer(server);
-    throw new Error('Files upload E2E server did not bind a TCP port.');
-  }
-  return {
-    baseUrl: `http://127.0.0.1:${address.port}/upload`,
-    close: () => closeServer(server),
-  };
 }
 
 function closeServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
-}
-
-async function fulfillContent(route: Route, method: string): Promise<void> {
-  if (method === 'HEAD') {
-    await route.fulfill({
-      status: 200,
-      headers: { 'content-type': 'image/png', 'content-length': '68' },
-    });
-    return;
-  }
-  await route.fulfill({
-    status: 200,
-    contentType: 'image/png',
-    body: TINY_PNG,
-  });
-}
-
-function readyFile(
-  id: string,
-  name: string,
-  contentType: string | null,
-  size: number,
-) {
-  return {
-    id,
-    status: 'ready' as const,
-    name,
-    size,
-    contentType,
-    createdAt: '2026-08-24T00:00:00.000Z',
-    updatedAt: '2026-08-24T00:00:00.000Z',
-  };
 }

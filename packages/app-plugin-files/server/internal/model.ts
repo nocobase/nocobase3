@@ -1,4 +1,4 @@
-import type { StoredFile } from '../../client/types.js';
+import type { StoredFile } from '../../protocol.js';
 
 export type FileStatus = 'pending' | 'ready' | 'failed';
 export type PublicDisposition = 'inline' | 'attachment';

@@ -86,40 +86,17 @@ export class RelationBindingRepository {
       .exists();
   }
 
-  async cleanupExpired(recordId: string, now: Date): Promise<void> {
-    await this.#database.transaction(async (connection) => {
-      const query = connection.query;
-      const candidates = await query
-        .selectFrom(this.#table)
-        .select([this.#fileColumn, this.#reservationColumn])
-        .where(this.#recordColumn, '=', recordId)
-        .where(this.#reservationColumn, 'is not', null)
-        .where(this.#reservationColumn, '<=', now)
-        .execute<Record<string, unknown>>();
-      if (candidates.length === 0) {
-        return;
-      }
-      for (const candidate of candidates) {
-        const fileId = readFileId(candidate[this.#fileColumn]);
-        await query
-          .deleteFrom(this.#table)
-          .where(this.#recordColumn, '=', recordId)
-          .where(this.#fileColumn, '=', fileId)
-          .where(this.#reservationColumn, '<=', now)
-          .where((expression) =>
-            expression.not(
-              expression.exists(
-                expression
-                  .selectFrom('files')
-                  .select('id')
-                  .where('id', '=', fileId)
-                  .where('status', '=', 'ready'),
-              ),
-            ),
-          )
-          .execute();
-      }
-    }, this.#connectionName);
+  async listExpiredFileIds(recordId: string, now: Date): Promise<string[]> {
+    const candidates = await this.#query()
+      .selectFrom(this.#table)
+      .select(this.#fileColumn)
+      .where(this.#recordColumn, '=', recordId)
+      .where(this.#reservationColumn, 'is not', null)
+      .where(this.#reservationColumn, '<=', now)
+      .execute<Record<string, unknown>>();
+    return candidates.map((candidate) =>
+      readFileId(candidate[this.#fileColumn]),
+    );
   }
 
   async list(recordId: string): Promise<RelationBindingRow[]> {

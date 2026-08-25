@@ -63,12 +63,8 @@ describe('file metadata kernel', () => {
     expect(second.file.id).toMatch(/^[a-f0-9]{64}$/);
     expect(first.file.id).not.toBe(second.file.id);
     expect(first.candidateKey).not.toBe(second.candidateKey);
-    expect(first.readyKey).not.toBe(second.readyKey);
     expect(first.candidateKey).toMatch(
       new RegExp(`^pending/${first.file.id}/candidate$`),
-    );
-    expect(first.readyKey).toMatch(
-      new RegExp(`^ready/${first.file.id}/[a-f0-9]{48}$`),
     );
     expect(first).toMatchObject({
       file: {
@@ -114,75 +110,50 @@ describe('file metadata kernel', () => {
       },
     });
     const stored = await repository.getRequired(upload.file.id);
-    expect(stored.storageKey).toBe(upload.readyKey);
+    expect(stored.storageKey).toBe(readyKey(upload.file.id));
 
-    const retryCandidate = `pending/${upload.file.id}/retry`;
-    const retryReady = `ready/${upload.file.id}/retry`;
-    storage.put(retryCandidate, {
+    storage.put(upload.candidateKey, {
       contentLength: 999,
       contentType: 'application/octet-stream',
     });
-    await expect(
-      kernel.completeUpload({
-        fileId: upload.file.id,
-        candidateKey: retryCandidate,
-        readyKey: retryReady,
-      }),
-    ).resolves.toMatchObject({
+    await expect(kernel.completeUpload(upload)).resolves.toMatchObject({
       outcome: 'ready',
-      cleanupStorageKeys: [retryCandidate, retryReady],
+      cleanupStorageKeys: [upload.candidateKey],
       file: { size: 13, contentType: 'text/plain' },
     });
     expect((await repository.getRequired(upload.file.id)).storageKey).toBe(
-      upload.readyKey,
+      readyKey(upload.file.id),
     );
-    expect(storage.has(retryReady)).toBe(false);
   });
 
-  it('allows only one concurrent completion CAS winner and identifies loser cleanup', async () => {
+  it('allows only one concurrent completion CAS winner for the same plan', async () => {
     const upload = await kernel.createPending({ name: 'race.bin' });
-    const secondCandidate = `pending/${upload.file.id}/second-candidate`;
-    const secondReady = `ready/${upload.file.id}/second-ready`;
     storage.put(upload.candidateKey, {
       contentLength: 10,
       contentType: 'application/first',
-    });
-    storage.put(secondCandidate, {
-      contentLength: 20,
-      contentType: 'application/second',
     });
     storage.pauseFinalizations(2);
 
     const results = await Promise.all([
       kernel.completeUpload(upload),
-      kernel.completeUpload({
-        fileId: upload.file.id,
-        candidateKey: secondCandidate,
-        readyKey: secondReady,
-      }),
+      kernel.completeUpload(upload),
     ]);
 
     expect(
       results.filter((result) => result.outcome === 'completed'),
     ).toHaveLength(1);
-    const loser = results.find(
-      (result) =>
-        result.outcome === 'ready' && result.cleanupStorageKeys.length > 0,
+    expect(results.filter((result) => result.outcome === 'ready')).toHaveLength(
+      1,
     );
-    if (!loser || !('file' in loser)) {
-      throw new Error('Expected a completion loser.');
-    }
     const winner = await repository.getRequired(upload.file.id);
     expect(winner.status).toBe('ready');
-    expect([upload.readyKey, secondReady]).toContain(winner.storageKey);
-    expect(loser.cleanupStorageKeys).not.toContain(winner.storageKey);
+    expect(winner.storageKey).toBe(readyKey(upload.file.id));
     expect(storage.has(winner.storageKey ?? '')).toBe(true);
-    for (const storageKey of loser.cleanupStorageKeys) {
+    for (const storageKey of results.flatMap(
+      (result) => result.cleanupStorageKeys,
+    )) {
       await storage.delete(storageKey);
     }
-    const loserReadyKey =
-      winner.storageKey === upload.readyKey ? secondReady : upload.readyKey;
-    expect(storage.has(loserReadyKey)).toBe(false);
     expect(storage.has(winner.storageKey ?? '')).toBe(true);
   });
 
@@ -203,7 +174,7 @@ describe('file metadata kernel', () => {
       cleanupStorageKeys: [],
       error: new Error('simulated CAS failure'),
     });
-    expect(storage.has(upload.readyKey)).toBe(true);
+    expect(storage.has(readyKey(upload.file.id))).toBe(true);
     expect(storage.has(upload.candidateKey)).toBe(true);
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'pending',
@@ -259,7 +230,7 @@ describe('file metadata kernel', () => {
 
     const winner = concurrentKernel.completeUpload(upload);
     await pausedRepository.firstTransactionStarted;
-    expect(storage.has(upload.readyKey)).toBe(true);
+    expect(storage.has(readyKey(upload.file.id))).toBe(true);
 
     const failed = await concurrentKernel.completeUpload({
       ...upload,
@@ -280,9 +251,9 @@ describe('file metadata kernel', () => {
     const record = await repository.getRequired(upload.file.id);
     expect(record).toMatchObject({
       status: 'ready',
-      storageKey: upload.readyKey,
+      storageKey: readyKey(upload.file.id),
     });
-    expect(storage.has(upload.readyKey)).toBe(true);
+    expect(storage.has(readyKey(upload.file.id))).toBe(true);
   });
 
   it('resolves complete and cancel competition to one terminal state', async () => {
@@ -292,11 +263,7 @@ describe('file metadata kernel', () => {
     const completion = kernel.completeUpload(upload);
     await pause.started;
 
-    const cancellation = await kernel.cancelUpload(
-      upload.file.id,
-      upload.candidateKey,
-      upload.readyKey,
-    );
+    const cancellation = await kernel.cancelUpload(upload.file.id);
     pause.release();
     const completionResult = await completion;
 
@@ -306,7 +273,7 @@ describe('file metadata kernel', () => {
     expect(storage.has(upload.candidateKey)).toBe(false);
     expect(completionResult).toMatchObject({
       outcome: 'failed',
-      cleanupStorageKeys: [upload.readyKey],
+      cleanupStorageKeys: [readyKey(upload.file.id)],
     });
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'failed',
@@ -325,17 +292,17 @@ describe('file metadata kernel', () => {
   it('keeps the ready object when cancellation loses to completion', async () => {
     const upload = await createReadyFile(kernel, storage, 'ready-cancel.bin');
     expect(storage.has(upload.candidateKey)).toBe(true);
-    expect(storage.has(upload.readyKey)).toBe(true);
+    expect(storage.has(readyKey(upload.file.id))).toBe(true);
 
-    await expect(
-      kernel.cancelUpload(upload.file.id, upload.candidateKey, upload.readyKey),
-    ).resolves.toMatchObject({ outcome: 'ready' });
+    await expect(kernel.cancelUpload(upload.file.id)).resolves.toMatchObject({
+      outcome: 'ready',
+    });
 
     expect(storage.has(upload.candidateKey)).toBe(false);
-    expect(storage.has(upload.readyKey)).toBe(true);
+    expect(storage.has(readyKey(upload.file.id))).toBe(true);
   });
 
-  it('rejects candidate and ready keys that belong to another file', async () => {
+  it('rejects candidate keys that belong to another file', async () => {
     const first = await kernel.createPending({ name: 'first.bin' });
     const second = await kernel.createPending({ name: 'second.bin' });
     storage.put(second.candidateKey, { contentLength: 1 });
@@ -344,11 +311,7 @@ describe('file metadata kernel', () => {
       kernel.completeUpload({
         fileId: first.file.id,
         candidateKey: second.candidateKey,
-        readyKey: second.readyKey,
       }),
-    ).rejects.toThrow('storage key does not belong to fileId');
-    await expect(
-      kernel.cancelUpload(first.file.id, second.candidateKey, second.readyKey),
     ).rejects.toThrow('storage key does not belong to fileId');
     expect((await repository.getRequired(first.file.id)).status).toBe(
       'pending',
@@ -399,7 +362,7 @@ describe('file metadata kernel', () => {
     );
     const row = await knex('files').where({ id: upload.file.id }).first();
     expect(row).toMatchObject({
-      storage_key: upload.readyKey,
+      storage_key: readyKey(upload.file.id),
       public_token_hash: 'sha256:secret-token-hash',
       public_disposition: 'inline',
     });
@@ -426,6 +389,10 @@ async function createReadyFile(
     throw new Error('Expected test file completion to succeed.');
   }
   return upload;
+}
+
+function readyKey(fileId: string): string {
+  return `ready/${fileId}/object`;
 }
 
 class FakeFilesStorage {

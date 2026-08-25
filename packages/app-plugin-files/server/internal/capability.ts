@@ -22,7 +22,6 @@ export interface FileTransferDescriptor {
   fileId: string;
   expiresAt: number;
   candidateKey: string;
-  readyKey: string;
   maxBytes: number;
   expectedSize: number;
   contentType: string | null;
@@ -165,7 +164,6 @@ function readCapability(value: unknown): FileCapability {
     ...base,
     action: base.action,
     candidateKey: readString(record.candidateKey),
-    readyKey: readString(record.readyKey),
     maxBytes: readPositiveSafeInteger(record.maxBytes),
     expectedSize: readNonNegativeSafeInteger(record.expectedSize),
     contentType: readNullableString(record.contentType),

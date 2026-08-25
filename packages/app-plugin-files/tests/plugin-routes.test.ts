@@ -12,7 +12,6 @@ import {
 
 import { resolveFilesConfig } from '../server/config.js';
 import { createFilesRuntime, type FilesRuntime } from '../server/runtime.js';
-import { createFileService } from '../server/service.js';
 import registerFilesRoutes from '../server/routes/index.js';
 
 let database: DatabaseManager | undefined;
@@ -63,7 +62,7 @@ describe('Files plugin routes', () => {
       api,
       protectedRoutes,
       deps: { filesRuntime: runtime },
-      services: { fileService: createFileService({ runtime }) },
+      services: {},
     });
     app.route('/api', api);
 
@@ -83,7 +82,7 @@ describe('Files plugin routes', () => {
     expect(rootResponse.status).toBe(404);
   });
 
-  it('rejects registration without the app-owned runtime and service', () => {
+  it('rejects registration without the app-owned runtime', () => {
     expect(() =>
       registerFilesRoutes({
         app: new Hono(),

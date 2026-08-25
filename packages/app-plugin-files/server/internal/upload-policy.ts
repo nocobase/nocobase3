@@ -121,7 +121,7 @@ export function validateContentType(
   contentType: string | null,
   policy: Pick<UploadPolicy, 'contentType' | 'allowedContentTypes'>,
 ): void {
-  if (contentType !== policy.contentType) {
+  if (policy.contentType !== null && contentType !== policy.contentType) {
     throw uploadTypeNotAllowed();
   }
   if (
@@ -268,8 +268,8 @@ function assertUploadType(
   }
   if (
     policy.allowedContentTypes.length > 0 &&
-    (policy.contentType === null ||
-      !policy.allowedContentTypes.includes(policy.contentType))
+    policy.contentType !== null &&
+    !policy.allowedContentTypes.includes(policy.contentType)
   ) {
     throw uploadTypeNotAllowed();
   }

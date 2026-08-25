@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { Hono, type Context } from 'hono';
 import type { DatabaseConnection } from '@nocobase/database';
 
-import type { FileUploadPlan, StoredFile } from '../../client/types.js';
+import type { FileUploadPlan, StoredFile } from '../../protocol.js';
 import type { FilesConfig } from '../config.js';
 import type { CreateFileInput, FileConstraints, OpenedFile } from '../types.js';
 import {
@@ -176,6 +176,10 @@ export class FilesDataPlane {
     return (await this.createUploadAttempt(input)).plan;
   }
 
+  async cleanupExpiredPending(): Promise<void> {
+    await this.#kernel.cleanupExpiredPending();
+  }
+
   async createFile(input: CreateFileInput): Promise<StoredFile> {
     const name = normalizeFileName(input.name);
     const policy = normalizeStreamUploadPolicy(
@@ -186,6 +190,7 @@ export class FilesDataPlane {
     const source = toNodeReadable(input.content);
     let pending;
     try {
+      await this.cleanupExpiredPending();
       pending = await this.#kernel.createPending({ name });
     } catch (error) {
       source.destroy();
@@ -214,7 +219,6 @@ export class FilesDataPlane {
       const result = await this.#kernel.completeUpload({
         fileId: pending.fileId,
         candidateKey: pending.candidateKey,
-        readyKey: pending.readyKey,
         validateMetadata: (metadata) =>
           validateStreamStorageMetadata(metadata, policy),
       });
@@ -235,11 +239,7 @@ export class FilesDataPlane {
       throw uploadFailed('The streamed file could not be committed.');
     } catch (error) {
       try {
-        await this.#kernel.cancelUpload(
-          pending.fileId,
-          pending.candidateKey,
-          pending.readyKey,
-        );
+        await this.#kernel.cancelUpload(pending.fileId);
       } catch {
         // Preserve the stable upload error after best-effort cancellation.
       }
@@ -275,13 +275,13 @@ export class FilesDataPlane {
     const name = normalizeFileName(input.name);
     const policy = normalizeUploadPolicy(input, this.#config.upload.maxBytes);
     assertUploadPolicy(name, policy);
+    await this.cleanupExpiredPending();
     const pending = await this.#kernel.createPending({ name });
     const expiresAt = new Date(pending.expiresAt).getTime();
     const transfer: FileTransferDescriptor = {
       fileId: pending.fileId,
       expiresAt,
       candidateKey: pending.candidateKey,
-      readyKey: pending.readyKey,
       ...policy,
     };
 
@@ -329,11 +329,7 @@ export class FilesDataPlane {
         transfer,
       };
     } catch (error) {
-      await this.#kernel.cancelUpload(
-        pending.fileId,
-        pending.candidateKey,
-        pending.readyKey,
-      );
+      await this.#kernel.cancelUpload(pending.fileId);
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
@@ -495,7 +491,6 @@ export class FilesDataPlane {
       result = await this.#kernel.completeUpload({
         fileId: transfer.fileId,
         candidateKey: transfer.candidateKey,
-        readyKey: transfer.readyKey,
         validateMetadata: (metadata) =>
           validateStorageMetadata(metadata, transfer),
         ...(binding === undefined
@@ -547,8 +542,6 @@ export class FilesDataPlane {
   ): Promise<CancelledFileUpload<TBinding>> {
     const result = await this.#kernel.cancelUpload(
       transfer.fileId,
-      transfer.candidateKey,
-      transfer.readyKey,
       binding === undefined
         ? undefined
         : (input: CancelFileBindingInput): Promise<TBinding> =>
@@ -657,6 +650,7 @@ export class FilesDataPlane {
         const location = await this.#storage.createReadUrl(record.storageKey, {
           expiresInSeconds: this.#config.access.providerUrlExpiresInSeconds,
           contentDisposition,
+          cacheControl: 'private, no-store',
         });
         headers.delete('content-length');
         headers.set('location', location);

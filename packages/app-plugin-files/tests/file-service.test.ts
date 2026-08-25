@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -24,6 +24,7 @@ import filesMigration from '../database/migrations/202608221000_files_create_fil
 import {
   createOpaqueFilesRuntime,
   getFilesRuntimeDataPlane,
+  getFilesRuntimeKernel,
 } from '../server/internal/runtime.js';
 import type {
   LocalCandidateWriteOptions,
@@ -117,7 +118,7 @@ describe('public FileService', () => {
     ).toBe('abcdef');
   });
 
-  it('creates an S3 file without MIME when AWS reports its octet-stream default', async () => {
+  it('accepts and stores the Provider MIME when the caller omits it', async () => {
     const send = vi
       .spyOn(S3Client.prototype, 'send')
       .mockImplementationOnce(async (command) => {
@@ -133,10 +134,8 @@ describe('public FileService', () => {
       .mockResolvedValueOnce({
         ContentLength: 6,
         ContentType: 'application/octet-stream',
-        Metadata: { 'nocobase-content-type': 'omitted' },
       } as never)
-      .mockResolvedValueOnce({} as never)
-      .mockResolvedValueOnce({} as never);
+      .mockResolvedValue({} as never);
     const provider = new AwsS3Provider({
       driver: 's3',
       bucket: 'private-files',
@@ -165,14 +164,12 @@ describe('public FileService', () => {
       }),
     ).resolves.toMatchObject({
       status: 'ready',
-      size: 6,
-      contentType: null,
+      contentType: 'application/octet-stream',
     });
     const put = send.mock.calls[0]?.[0];
     expect(put).toBeInstanceOf(PutObjectCommand);
-    expect((put as PutObjectCommand).input.Metadata).toEqual({
-      'nocobase-content-type': 'omitted',
-    });
+    expect((put as PutObjectCommand).input).not.toHaveProperty('ContentType');
+    expect((put as PutObjectCommand).input).not.toHaveProperty('Metadata');
   });
 
   it('rejects size and type violations with stable service errors', async () => {
@@ -244,6 +241,104 @@ describe('public FileService', () => {
       code: 'FILE_NOT_READY',
     });
     await expect(fixture.service.getFile(ready.id)).resolves.toEqual(ready);
+  });
+
+  it('cleans expired S3 objects before direct upload and file creation', async () => {
+    let now = new Date('2026-08-24T00:00:00.000Z');
+    const provider = new StreamingS3Provider();
+    const fixture = await createFixture(
+      { storage: { driver: 's3', bucket: 'managed-files' } },
+      provider,
+      () => now,
+    );
+    const abandoned = await fixture.service.createUpload({
+      name: 'abandoned.txt',
+      size: 9,
+      contentType: 'text/plain',
+    });
+    const candidateKey = decodeURIComponent(
+      new URL(abandoned.upload.url).pathname.slice(1),
+    );
+    provider.put(candidateKey, 'abandoned', 'text/plain');
+    provider.put(`ready/${abandoned.fileId}/object`, 'abandoned', 'text/plain');
+    now = new Date('2026-08-24T00:16:00.000Z');
+
+    const next = await fixture.service.createUpload({
+      name: 'next.txt',
+      size: 4,
+      contentType: 'text/plain',
+    });
+
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(abandoned.fileId),
+    ).toMatchObject({ status: 'failed' });
+    expect(provider.keys()).toEqual([]);
+    const nextCandidateKey = decodeURIComponent(
+      new URL(next.upload.url).pathname.slice(1),
+    );
+    provider.put(nextCandidateKey, 'next', 'text/plain');
+    provider.put(`ready/${next.fileId}/object`, 'next', 'text/plain');
+    now = new Date('2026-08-24T00:32:00.000Z');
+
+    const created = await createTextFile(
+      fixture.service,
+      'created.txt',
+      'created',
+    );
+
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(next.fileId),
+    ).toMatchObject({ status: 'failed' });
+    expect(provider.keys()).toEqual([`ready/${created.id}/object`]);
+  });
+
+  it('cancels a pending file after finalization outlives persistence', async () => {
+    const fixture = await createFixture();
+    const plan = await fixture.service.createUpload({
+      name: 'persistence-failure.txt',
+      size: 4,
+      contentType: 'text/plain',
+    });
+    expect(
+      (
+        await fixture.app.request(plan.upload.url, {
+          method: 'PUT',
+          headers: plan.upload.headers,
+          body: 'data',
+        })
+      ).status,
+    ).toBe(200);
+    const transaction = fixture.database.transaction.bind(fixture.database);
+    let failNextTransaction = true;
+    fixture.database.transaction = async (operation, connection) => {
+      if (failNextTransaction) {
+        failNextTransaction = false;
+        throw new Error('simulated persistence failure');
+      }
+      return transaction(operation, connection);
+    };
+
+    expect(
+      (await fixture.app.request(plan.complete.url, { method: 'POST' })).status,
+    ).toBe(409);
+    const filesRoot = path.join(fixture.storageRoot, 'app/private/files');
+    const candidatePath = path.join(
+      filesRoot,
+      'pending',
+      plan.fileId,
+      'candidate',
+    );
+    const finalPath = path.join(filesRoot, 'ready', plan.fileId, 'object');
+    await expect(access(candidatePath)).resolves.toBeUndefined();
+    await expect(access(finalPath)).resolves.toBeUndefined();
+
+    await fixture.service.cancelUpload(plan.fileId);
+
+    await expect(fixture.service.getFile(plan.fileId)).resolves.toMatchObject({
+      status: 'failed',
+    });
+    await expect(access(candidatePath)).rejects.toThrow();
+    await expect(access(finalPath)).rejects.toThrow();
   });
 
   it('uses the public FileServiceError family for Routes and direct calls', async () => {
@@ -475,6 +570,17 @@ class StreamingS3Provider implements S3Provider {
   }
 
   dispose(): void {}
+
+  put(key: string, contents: string, contentType?: string): void {
+    this.#objects.set(key, Buffer.from(contents));
+    if (contentType !== undefined) {
+      this.#contentTypes.set(key, contentType);
+    }
+  }
+
+  keys(): string[] {
+    return [...this.#objects.keys()].sort();
+  }
 
   #require(key: string): Buffer {
     const value = this.#objects.get(key);

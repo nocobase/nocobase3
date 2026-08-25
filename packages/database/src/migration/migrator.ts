@@ -60,6 +60,8 @@ class DefaultMigrator implements Migrator {
           participatingPackageNames(this.options),
         );
 
+        await restoreAppliedMigrationMetadata(connection, migrations, history);
+
         const appliedNames = new Set(history.map((record) => record.name));
         const pending = migrations.filter(
           (migration) => !appliedNames.has(migration.name),
@@ -91,16 +93,16 @@ class DefaultMigrator implements Migrator {
     const migrationConnection = createMigrationContext(connection).connection;
     const tableName = this.options.tableName ?? DEFAULT_MIGRATION_TABLE;
 
-    if (!(await hasMigrationTable(migrationConnection, tableName))) {
-      return { restored: [] };
-    }
-
     return withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
       },
       async () => {
+        if (!(await hasMigrationTable(migrationConnection, tableName))) {
+          return { restored: [] };
+        }
+
         await ensureMigrationTable(migrationConnection, tableName);
         const history = await readMigrationHistory(
           migrationConnection,
@@ -158,13 +160,7 @@ class DefaultMigrator implements Migrator {
         const migrationsByName = new Map(
           migrations.map((migration) => [migration.name, migration]),
         );
-        for (const migration of migrations) {
-          if (history.some((record) => record.name === migration.name)) {
-            await migration.migration.restoreMetadata?.({
-              builder: connection.builder,
-            });
-          }
-        }
+        await restoreAppliedMigrationMetadata(connection, migrations, history);
         const records = history
           .filter((record) => record.batch === batch)
           .sort((a, b) => b.id - a.id);

@@ -394,11 +394,7 @@ describe('Files Local data plane', () => {
     if (capability.action !== 'upload') {
       throw new Error('Expected upload capability.');
     }
-    await fixture.kernel.cancelUpload(
-      cancelledPlan.fileId,
-      capability.candidateKey,
-      capability.readyKey,
-    );
+    await fixture.kernel.cancelUpload(cancelledPlan.fileId);
     const notReady = await fixture.app.request(cancelledPlan.upload.url, {
       method: 'PUT',
       body: 'x',
@@ -439,7 +435,6 @@ describe('Files S3-compatible data plane', () => {
     const plan = await fixture.dataPlane.createUploadPlan({
       name: 'report.pdf',
       size: 4,
-      contentType: 'application/pdf',
       constraints: {
         allowedExtensions: ['.pdf'],
         allowedContentTypes: ['application/pdf'],
@@ -451,7 +446,6 @@ describe('Files S3-compatible data plane', () => {
       url: expect.stringMatching(/^https:\/\/upload\.invalid\//),
       headers: {
         'if-none-match': '*',
-        'content-type': 'application/pdf',
       },
     });
     expect(plan.complete).toMatchObject({
@@ -468,7 +462,12 @@ describe('Files S3-compatible data plane', () => {
     });
     expect(complete.status).toBe(200);
     await expect(complete.json()).resolves.toMatchObject({
-      file: { id: plan.fileId, status: 'ready', size: 4 },
+      file: {
+        id: plan.fileId,
+        status: 'ready',
+        size: 4,
+        contentType: 'application/pdf',
+      },
     });
 
     const access = await fixture.dataPlane.createReadAccess(plan.fileId);
@@ -488,7 +487,10 @@ describe('Files S3-compatible data plane', () => {
     expect(get.headers.get('x-content-type-options')).toBe('nosniff');
     expect(get.body).toBeNull();
     expect(provider.readOptions).toEqual([
-      expect.objectContaining({ expiresInSeconds: 7 }),
+      expect.objectContaining({
+        expiresInSeconds: 7,
+        cacheControl: 'private, no-store',
+      }),
     ]);
   });
 
@@ -503,7 +505,7 @@ describe('Files S3-compatible data plane', () => {
       size: 4,
     });
     const plan = attempt.plan;
-    const candidateKey = provider.putUpload(plan, { contentLength: 4 });
+    provider.putUpload(plan, { contentLength: 4 });
     const pause = provider.pauseNextCopy();
     const completion = fixture.app.request(requiredCompleteUrl(plan), {
       method: 'POST',
@@ -511,11 +513,7 @@ describe('Files S3-compatible data plane', () => {
     await pause.started;
 
     await expect(
-      fixture.kernel.cancelUpload(
-        plan.fileId,
-        candidateKey,
-        attempt.transfer.readyKey,
-      ),
+      fixture.kernel.cancelUpload(plan.fileId),
     ).resolves.toMatchObject({ outcome: 'failed' });
     pause.release();
     const response = await completion;
@@ -538,7 +536,6 @@ describe('Files S3-compatible data plane', () => {
     const rejected = await fixture.dataPlane.createUploadPlan({
       name: 'rejected.txt',
       size: 4,
-      contentType: 'text/plain',
       constraints: { allowedContentTypes: ['text/plain'] },
     });
     const rejectedKey = provider.putUpload(rejected, {
@@ -587,6 +584,36 @@ describe('Files S3-compatible data plane', () => {
       contentType: 'text/plain',
     });
     expect(provider.has(oldCandidateKey)).toBe(false);
+  });
+
+  it('stores the normalized MIME after strict S3 metadata validation', async () => {
+    const provider = new FakeS3Provider();
+    const fixture = await createTestRuntime(
+      { storage: { driver: 's3', bucket: 'managed-files' } },
+      { s3Provider: provider },
+    );
+    const plan = await fixture.dataPlane.createUploadPlan({
+      name: 'normalized.txt',
+      size: 4,
+      contentType: 'text/plain',
+      constraints: { allowedContentTypes: ['text/plain'] },
+    });
+    provider.putUpload(plan, {
+      contentLength: 4,
+      contentType: 'text/plain; charset=utf-8',
+    });
+
+    const response = await fixture.app.request(requiredCompleteUrl(plan), {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      file: { contentType: 'text/plain' },
+    });
+    await expect(fixture.kernel.getRecord(plan.fileId)).resolves.toMatchObject({
+      contentType: 'text/plain',
+    });
   });
 
   it('maps provider read failures without leaking the signed URL', async () => {
@@ -665,10 +692,11 @@ describe.each(['local', 's3'] as const)(
       await expect(
         fixture.kernel.getFile(attempt.file.id),
       ).resolves.toMatchObject({ status: 'pending' });
+      const finalKey = readyKey(attempt.file.id);
       if (provider) {
         expect(provider.keys()).toEqual([
           attempt.transfer.candidateKey,
-          attempt.transfer.readyKey,
+          finalKey,
         ]);
       } else {
         expect(
@@ -676,8 +704,8 @@ describe.each(['local', 's3'] as const)(
         ).toEqual([
           attempt.transfer.candidateKey,
           `${attempt.transfer.candidateKey}.files-metadata.json`,
-          attempt.transfer.readyKey,
-          `${attempt.transfer.readyKey}.files-metadata.json`,
+          finalKey,
+          `${finalKey}.files-metadata.json`,
         ]);
       }
 
@@ -692,14 +720,11 @@ describe.each(['local', 's3'] as const)(
         fixture.kernel.getFile(attempt.file.id),
       ).resolves.toMatchObject({ status: 'ready' });
       if (provider) {
-        expect(provider.keys()).toEqual([attempt.transfer.readyKey]);
+        expect(provider.keys()).toEqual([finalKey]);
       } else {
         expect(
           await listFiles(path.join(fixture.storageRoot, 'app/private/files')),
-        ).toEqual([
-          attempt.transfer.readyKey,
-          `${attempt.transfer.readyKey}.files-metadata.json`,
-        ]);
+        ).toEqual([finalKey, `${finalKey}.files-metadata.json`]);
       }
     });
 
@@ -1007,6 +1032,10 @@ async function waitForPartFile(root: string): Promise<void> {
 
 function requiredCompleteUrl(plan: FileUploadPlan): string {
   return plan.complete.url;
+}
+
+function readyKey(fileId: string): string {
+  return `ready/${fileId}/object`;
 }
 
 class FakeS3Provider implements S3Provider {

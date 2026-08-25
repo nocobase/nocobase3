@@ -117,6 +117,16 @@ export class FilesRepository {
     return ids.map((id) => recordsById.get(id));
   }
 
+  async listExpiredPendingIds(now: Date): Promise<string[]> {
+    const rows = await this.#query()
+      .selectFrom(FILES_TABLE)
+      .select('id')
+      .where('status', '=', 'pending')
+      .where('uploadExpiresAt', '<=', now)
+      .execute<Record<string, unknown>>();
+    return rows.map((row) => readFileRecordId(row.id));
+  }
+
   async completePending(
     input: CompletePendingRecordInput,
     connection?: DatabaseConnection,
@@ -216,4 +226,11 @@ export function createFilesRepository(
   connectionName?: string,
 ): FilesRepository {
   return new FilesRepository(database, connectionName);
+}
+
+function readFileRecordId(value: unknown): string {
+  if (typeof value !== 'string' || !value) {
+    throw new Error('Files record id is invalid.');
+  }
+  return value;
 }

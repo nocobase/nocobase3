@@ -1,7 +1,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { createMigrator, loadMigrations } from '../../../src/index.js';
+import {
+  createDatabaseManager,
+  createMigrator,
+  loadMigrations,
+} from '../../../src/index.js';
+import { createMigrationContext } from '../../../src/migration/context.js';
+import { withMigrationLock } from '../../../src/migration/lock.js';
 import { describeIntegrationDatabases } from '../helpers.js';
 
 const tempRoot = join(process.cwd(), 'tests/.tmp');
@@ -75,8 +81,9 @@ describeIntegrationDatabases('migration runner', (context) => {
       executed: [],
       skipped: ['202608180001_create_migration_users'],
     });
-    expect(context.builder.inspectCollection('migrationUsers')).toBeUndefined();
+    expect(context.builder.inspectCollection('migrationUsers')).toBeDefined();
 
+    await context.metadataStore.removeCollection('migrationUsers');
     await expect(migrator.restoreMetadata()).resolves.toEqual({
       restored: ['202608180001_create_migration_users'],
     });
@@ -126,10 +133,66 @@ describeIntegrationDatabases('migration runner', (context) => {
 
     await expect(migrator.restoreMetadata()).resolves.toEqual({ restored: [] });
     await expect(context.db.schema.hasTable(tableName)).resolves.toBe(false);
-    await expect(context.db.schema.hasTable(lockTableName)).resolves.toBe(
-      false,
-    );
+    await expect(context.db.schema.hasTable(lockTableName)).resolves.toBe(true);
     expect(context.builder.inspectCollection('mustNotRestore')).toBeUndefined();
+  });
+
+  it('does not skip missing metadata history while the migration lock is held', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('lockedMissingMetadataHistory');
+    const lockTableName = context.table('lockedMissingMetadataLock');
+    await writeMigration(
+      directory,
+      '202608180001_locked_metadata',
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '202608180001_locked_metadata',
+        async up() {},
+        async restoreMetadata() {},
+        async down() {},
+      });
+    `,
+    );
+    let markLockAcquired!: () => void;
+    let releaseLock!: () => void;
+    const lockAcquired = new Promise<void>((resolve) => {
+      markLockAcquired = resolve;
+    });
+    const lockReleased = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const holderConnection = createMigrationContext(
+      context.database.connection(context.spec.name),
+    ).connection;
+    const lockHolder = withMigrationLock(
+      { ...holderConnection, name: `${holderConnection.name}-holder` },
+      { tableName: lockTableName },
+      async () => {
+        markLockAcquired();
+        await lockReleased;
+      },
+    );
+    await lockAcquired;
+
+    const migrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    });
+
+    try {
+      await expect(migrator.restoreMetadata()).rejects.toThrow(
+        `Migration lock "${lockTableName}" is already held`,
+      );
+      await expect(context.db.schema.hasTable(tableName)).resolves.toBe(false);
+    } finally {
+      releaseLock();
+      await lockHolder;
+    }
   });
 
   it('upgrades legacy history tables and preserves applied migrations', async () => {
@@ -645,6 +708,148 @@ describeIntegrationDatabases('migration runner', (context) => {
     });
     expect(context.builder.inspectCollection('dropSource')).toBeUndefined();
   });
+
+  if (context.spec.dialect === 'sqlite') {
+    it('replays applied metadata before pending migrations on a fresh manager', async () => {
+      const root = await createTempDirectory();
+      const directory = await createTempDirectory();
+      const filename = join(root, 'metadata-replay.sqlite');
+      const physicalTable = 'stored_documents';
+      const tableName = 'metadata_replay_history';
+      const lockTableName = 'metadata_replay_lock';
+      const firstMigration = '202608180001_create_mapped_documents';
+      const secondMigration = '202608180002_alter_and_rename_documents';
+      await writeMigration(
+        directory,
+        firstMigration,
+        `
+        import { defineMigration } from '../../../src/index.js';
+
+        const defineDocuments = (collection) => {
+          collection.tableName('${physicalTable}');
+          collection.increments('id').columnName('document_id');
+          collection.string('title').columnName('document_title');
+        };
+
+        export default defineMigration({
+          name: '${firstMigration}',
+          irreversible: true,
+          async up({ builder }) {
+            await builder.createCollection('documents', defineDocuments);
+          },
+          async restoreMetadata({ builder }) {
+            await builder.registerCollectionMetadata('documents', defineDocuments);
+          },
+        });
+        `,
+      );
+
+      const waitingManager = createSqliteManager(filename);
+      const waitingMigrator = createMigrator({
+        database: waitingManager,
+        directory,
+        tableName,
+        lockTableName,
+      });
+      await expect(waitingMigrator.restoreMetadata()).resolves.toEqual({
+        restored: [],
+      });
+
+      const firstManager = createSqliteManager(filename);
+      try {
+        await createMigrator({
+          database: firstManager,
+          directory,
+          tableName,
+          lockTableName,
+        }).latest();
+      } finally {
+        await firstManager.destroy();
+      }
+
+      try {
+        await expect(waitingMigrator.latest()).resolves.toEqual({
+          batch: 1,
+          executed: [],
+          skipped: [firstMigration],
+        });
+        expect(
+          waitingManager.builder().inspectCollection('documents'),
+        ).toMatchObject({ tableName: physicalTable });
+      } finally {
+        await waitingManager.destroy();
+      }
+
+      await writeMigration(
+        directory,
+        secondMigration,
+        `
+        import { defineMigration } from '../../../src/index.js';
+
+        const defineDocuments = (collection) => {
+          collection.tableName('${physicalTable}');
+          collection.increments('id').columnName('document_id');
+        };
+
+        export default defineMigration({
+          name: '${secondMigration}',
+          irreversible: true,
+          async up({ builder }) {
+            await builder.alterCollection('documents', (collection) => {
+              collection.dropField('title');
+            });
+            await builder.renameCollection('documents', 'archivedDocuments');
+          },
+          async restoreMetadata({ builder }) {
+            await builder.registerCollectionMetadata('documents', defineDocuments);
+            await builder.renameCollectionMetadata('documents', 'archivedDocuments');
+          },
+        });
+      `,
+      );
+
+      const secondManager = createSqliteManager(filename);
+      try {
+        expect(
+          secondManager.builder().inspectCollection('documents'),
+        ).toBeUndefined();
+        await expect(
+          createMigrator({
+            database: secondManager,
+            directory,
+            tableName,
+            lockTableName,
+          }).latest(),
+        ).resolves.toEqual({
+          batch: 2,
+          executed: [secondMigration],
+          skipped: [firstMigration],
+        });
+
+        const db = await secondManager
+          .connection()
+          .client<import('knex').Knex>();
+        await expect(db.schema.hasTable(physicalTable)).resolves.toBe(true);
+        await expect(db.schema.hasTable('documents')).resolves.toBe(false);
+        await expect(
+          db.schema.hasColumn(physicalTable, 'document_title'),
+        ).resolves.toBe(false);
+        await expect(
+          db.schema.hasColumn(physicalTable, 'document_id'),
+        ).resolves.toBe(true);
+        expect(
+          secondManager.builder().inspectCollection('archivedDocuments'),
+        ).toMatchObject({
+          tableName: physicalTable,
+          fields: expect.arrayContaining([
+            expect.objectContaining({ columnName: 'document_id' }),
+          ]),
+        });
+      } finally {
+        await secondManager.destroy();
+      }
+    });
+  }
 });
 
 async function createTempDirectory(): Promise<string> {
@@ -664,6 +869,20 @@ async function writeMigration(
 
 function trimSource(source: string): string {
   return `${source.trim().replace(/^ {6}/gm, '')}\n`;
+}
+
+function createSqliteManager(filename: string) {
+  return createDatabaseManager({
+    default: 'sqlite',
+    connections: {
+      sqlite: {
+        dialect: 'sqlite',
+        driver: 'better-sqlite3',
+        filename,
+        pool: { min: 1, max: 1 },
+      },
+    },
+  });
 }
 
 async function writeEventMigration(

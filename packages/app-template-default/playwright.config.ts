@@ -9,6 +9,7 @@ Object.entries(fileEnvironment).forEach(([key, value]) => {
 });
 
 const environment = loadPortalE2EEnvironment();
+const filesServerPort = process.env.NOCOBASE_E2E_FILES_PORT ?? '4174';
 
 export default defineConfig({
   testDir: './e2e',
@@ -33,6 +34,10 @@ export default defineConfig({
     env: {
       APP_BASE_PATH: environment.portalBase,
       NOCOBASE_E2E_API_URL: environment.apiURL,
+      NOCOBASE_E2E_FILES_PORT: filesServerPort,
+      NOCOBASE_E2E_FILES_SERVER_URL:
+        process.env.NOCOBASE_E2E_FILES_SERVER_URL ??
+        `http://127.0.0.1:${filesServerPort}`,
     },
   },
   projects: [

@@ -123,7 +123,7 @@ class RuntimeFileService implements FileService {
       if (current.status !== 'pending') {
         throw fileNotReady();
       }
-      const result = await kernel.cancelPendingUpload(fileId);
+      const result = await kernel.cancelUpload(fileId);
       if (result.outcome === 'missing') {
         throw fileNotFound();
       }

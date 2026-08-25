@@ -79,6 +79,19 @@ export default createPortalViteConfig(
         agentAnnotations({ root: __dirname }),
         appClientPluginsPlugin({ root: __dirname }),
       ],
+      ...(mode === 'e2e'
+        ? {
+            server: {
+              proxy: {
+                '/api/e2e': {
+                  target:
+                    env.NOCOBASE_E2E_FILES_SERVER_URL?.trim() ||
+                    'http://127.0.0.1:4174',
+                },
+              },
+            },
+          }
+        : {}),
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],
         alias: [

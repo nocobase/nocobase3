@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -250,6 +250,52 @@ describe('field binding scoped file routes', () => {
     }
   });
 
+  it('cleans an expired Local upload before creating the next field upload', async () => {
+    let now = new Date('2026-08-24T00:00:00.000Z');
+    const fixture = await createFixture({ clock: () => now });
+    const abandoned = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'abandoned.txt',
+      size: 9,
+      contentType: 'text/plain',
+    });
+    expect((await putBytes(fixture, abandoned, 'abandoned')).status).toBe(200);
+    const filesRoot = path.join(fixture.storageRoot, 'app/private/files');
+    const candidate = path.join(
+      filesRoot,
+      'pending',
+      abandoned.file.id,
+      'candidate',
+    );
+    const orphanedReady = path.join(
+      filesRoot,
+      'ready',
+      abandoned.file.id,
+      'object',
+    );
+    await mkdir(path.dirname(orphanedReady), { recursive: true });
+    await writeFile(orphanedReady, 'abandoned');
+    await writeFile(
+      `${orphanedReady}.files-metadata.json`,
+      '{"contentType":"text/plain"}',
+    );
+    await expect(access(candidate)).resolves.toBeUndefined();
+    await expect(access(orphanedReady)).resolves.toBeUndefined();
+    now = new Date('2026-08-24T00:16:00.000Z');
+
+    const next = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'next.txt',
+      size: 4,
+      contentType: 'text/plain',
+    });
+
+    expect(next.file.status).toBe('pending');
+    expect(
+      await getFilesRuntimeKernel(fixture.runtime).getFile(abandoned.file.id),
+    ).toMatchObject({ status: 'failed' });
+    await expect(access(candidate)).rejects.toThrow();
+    await expect(access(orphanedReady)).rejects.toThrow();
+  });
+
   it('isolates plans from routes with a different binding identity', async () => {
     const fixture = await createFixture();
     const upload = await createUpload(fixture, EMPLOYEE_ONE, {
@@ -491,6 +537,7 @@ describe('field binding scoped file routes', () => {
 interface CreateFixtureOptions {
   publicAccess?: boolean;
   routePublicAccess?: boolean;
+  clock?: () => Date;
 }
 
 async function createFixture(
@@ -526,15 +573,18 @@ async function createFixture(
     .execute();
 
   const storageRoot = await mkdtemp(path.join(tmpdir(), 'files-field-route-'));
-  const runtime = createOpaqueFilesRuntime({
-    database,
-    config: resolveFilesConfig({
-      appStorageRoot: storageRoot,
-      config: { publicAccess: { enabled: options.publicAccess ?? false } },
-    }),
-    audience: 'field-route-test',
-    secret: 'field-route-test-secret-at-least-32-characters',
-  });
+  const runtime = createOpaqueFilesRuntime(
+    {
+      database,
+      config: resolveFilesConfig({
+        appStorageRoot: storageRoot,
+        config: { publicAccess: { enabled: options.publicAccess ?? false } },
+      }),
+      audience: 'field-route-test',
+      secret: 'field-route-test-secret-at-least-32-characters',
+    },
+    options.clock === undefined ? {} : { clock: options.clock },
+  );
   const service = createFileService({ runtime });
   const deniedActions = new Set<'read' | 'write' | 'share'>();
   const authorizeCalls: TestFixture['authorizeCalls'] = [];

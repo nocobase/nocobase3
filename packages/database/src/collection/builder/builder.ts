@@ -124,6 +124,7 @@ export class CollectionBuilder {
     await this.metadataStore.removeCollection(name);
   }
 
+  /** Renames the logical collection while preserving its physical table name. */
   async renameCollectionMetadata(from: string, to: string): Promise<void> {
     const current = await this.metadataStore.getCollection(from);
     if (!current) {

@@ -1,6 +1,10 @@
 import { Readable } from 'node:stream';
 
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveFilesConfig } from '@nocobase/app-plugin-files/server';
@@ -16,9 +20,15 @@ import {
 import { AwsS3Provider } from '../server/internal/storage/aws-s3-provider.js';
 
 const appStorageRoot = '/tmp/nocobase/files-storage';
+const getSignedUrlMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: getSignedUrlMock,
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();
+  getSignedUrlMock.mockReset();
 });
 
 describe('S3-compatible Files storage', () => {
@@ -57,15 +67,15 @@ describe('S3-compatible Files storage', () => {
     });
   });
 
-  it('preserves an omitted MIME through AWS PutObject and HeadObject defaults', async () => {
+  it('omits MIME fields when none are provided and returns the Provider MIME', async () => {
     const send = vi
       .spyOn(S3Client.prototype, 'send')
       .mockResolvedValueOnce({} as never)
       .mockResolvedValueOnce({
         ContentLength: 6,
         ContentType: 'application/octet-stream',
-        Metadata: { 'nocobase-content-type': 'omitted' },
       } as never);
+    getSignedUrlMock.mockResolvedValue('https://upload.invalid/signed');
     const provider = new AwsS3Provider({
       driver: 's3',
       bucket: 'managed-files',
@@ -75,26 +85,42 @@ describe('S3-compatible Files storage', () => {
         secretAccessKey: 'secret-key',
       },
     });
+
+    await expect(
+      provider.createUploadUrl('pending/file-1', {
+        contentLength: 6,
+        expiresInSeconds: 60,
+      }),
+    ).resolves.toBe('https://upload.invalid/signed');
+    const signedPut = getSignedUrlMock.mock.calls[0]?.[1];
+    expect(signedPut).toBeInstanceOf(PutObjectCommand);
+    expect((signedPut as PutObjectCommand).input).not.toHaveProperty(
+      'ContentType',
+    );
+    expect((signedPut as PutObjectCommand).input).not.toHaveProperty(
+      'Metadata',
+    );
 
     await provider.putObject('pending/file-1', Readable.from(['abcdef']), {
       contentLength: 6,
     });
     const put = send.mock.calls[0]?.[0];
     expect(put).toBeInstanceOf(PutObjectCommand);
-    expect((put as PutObjectCommand).input).toMatchObject({
-      Metadata: { 'nocobase-content-type': 'omitted' },
-    });
+    expect((put as PutObjectCommand).input).not.toHaveProperty('ContentType');
+    expect((put as PutObjectCommand).input).not.toHaveProperty('Metadata');
     await expect(provider.headObject('pending/file-1')).resolves.toEqual({
       contentLength: 6,
+      contentType: 'application/octet-stream',
     });
     provider.dispose();
   });
 
-  it('keeps an explicit application/octet-stream MIME strict', async () => {
+  it('includes an explicit MIME in signing and returns it from HEAD', async () => {
     const send = vi.spyOn(S3Client.prototype, 'send').mockResolvedValueOnce({
       ContentLength: 6,
-      ContentType: 'application/octet-stream',
+      ContentType: 'text/plain',
     } as never);
+    getSignedUrlMock.mockResolvedValue('https://upload.invalid/signed');
     const provider = new AwsS3Provider({
       driver: 's3',
       bucket: 'managed-files',
@@ -105,11 +131,43 @@ describe('S3-compatible Files storage', () => {
       },
     });
 
+    await provider.createUploadUrl('pending/file-1', {
+      contentLength: 6,
+      contentType: 'text/plain',
+      expiresInSeconds: 60,
+    });
+    const signedPut = getSignedUrlMock.mock.calls[0]?.[1];
+    expect(signedPut).toBeInstanceOf(PutObjectCommand);
+    expect((signedPut as PutObjectCommand).input.ContentType).toBe(
+      'text/plain',
+    );
     await expect(provider.headObject('pending/file-1')).resolves.toEqual({
       contentLength: 6,
-      contentType: 'application/octet-stream',
+      contentType: 'text/plain',
     });
     expect(send).toHaveBeenCalledOnce();
+    provider.dispose();
+  });
+
+  it('signs the final GET with private no-store cache control', async () => {
+    getSignedUrlMock.mockResolvedValue('https://read.invalid/signed');
+    const provider = new AwsS3Provider({
+      driver: 's3',
+      bucket: 'managed-files',
+      region: 'us-east-1',
+    });
+
+    await expect(
+      provider.createReadUrl('ready/file-1/object', {
+        expiresInSeconds: 30,
+        cacheControl: 'private, no-store',
+      }),
+    ).resolves.toBe('https://read.invalid/signed');
+    const signedGet = getSignedUrlMock.mock.calls[0]?.[1];
+    expect(signedGet).toBeInstanceOf(GetObjectCommand);
+    expect((signedGet as GetObjectCommand).input.ResponseCacheControl).toBe(
+      'private, no-store',
+    );
     provider.dispose();
   });
 
@@ -157,6 +215,7 @@ describe('S3-compatible Files storage', () => {
       storage.createReadUrl('ready/file-1', {
         expiresInSeconds: 30,
         contentDisposition: 'attachment; filename="report.txt"',
+        cacheControl: 'private, no-store',
       }),
     ).resolves.toBe('https://read.invalid/apps%2Fprimary%2Fready%2Ffile-1');
     await storage.delete('ready/file-1');
@@ -183,6 +242,7 @@ describe('S3-compatible Files storage', () => {
         options: {
           expiresInSeconds: 30,
           contentDisposition: 'attachment; filename="report.txt"',
+          cacheControl: 'private, no-store',
         },
       },
       { operation: 'delete', key: 'apps/primary/ready/file-1' },

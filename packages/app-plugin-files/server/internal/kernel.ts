@@ -2,9 +2,10 @@ import { randomBytes } from 'node:crypto';
 
 import type { DatabaseConnection } from '@nocobase/database';
 
-import type { StoredFile } from '../../client/types.js';
+import type { StoredFile } from '../../protocol.js';
 import { normalizeStorageKey } from './storage/key.js';
 import type { StorageObjectMetadata } from './storage/types.js';
+import { normalizeOptionalContentType } from './upload-policy.js';
 import {
   toStoredFile,
   type FileRecord,
@@ -34,13 +35,11 @@ export interface PendingFileUpload {
   file: StoredFile;
   expiresAt: string;
   candidateKey: string;
-  readyKey: string;
 }
 
 export interface CompleteFileInput<TBinding = undefined> {
   fileId: string;
   candidateKey: string;
-  readyKey: string;
   validateMetadata?: (metadata: StorageObjectMetadata) => void;
   commitBinding?(
     connection: DatabaseConnection,
@@ -133,14 +132,12 @@ export class FileKernel {
       now,
     });
     const candidateKey = pendingStorageKey(fileId);
-    const readyKey = `ready/${fileId}/${randomHex(24)}`;
 
     return {
       fileId,
       file: toStoredFile(record),
       expiresAt: uploadExpiresAt.toISOString(),
       candidateKey,
-      readyKey,
     };
   }
 
@@ -171,14 +168,20 @@ export class FileKernel {
     return record ? cloneFileRecord(record) : undefined;
   }
 
+  async cleanupExpiredPending(): Promise<void> {
+    const fileIds = await this.#repository.listExpiredPendingIds(this.#now());
+    for (const fileId of fileIds) {
+      await this.cancelUpload(fileId);
+    }
+  }
+
   async completeUpload<TBinding = undefined>(
     input: CompleteFileInput<TBinding>,
   ): Promise<CompleteFileResult<TBinding>> {
     const fileId = readFileId(input.fileId);
     const candidateKey = normalizeStorageKey(input.candidateKey);
-    const readyKey = normalizeStorageKey(input.readyKey);
+    const readyKey = readyStorageKey(fileId);
     assertStorageKeyOwnership(fileId, candidateKey, 'pending');
-    assertStorageKeyOwnership(fileId, readyKey, 'ready');
     const commitBinding = input.commitBinding?.bind(input);
     const current = await this.#repository.get(fileId);
 
@@ -313,22 +316,11 @@ export class FileKernel {
 
   async cancelUpload<TBinding = undefined>(
     fileId: string,
-    candidateKey: string,
-    readyKey?: string,
     cancelBinding?: (input: CancelFileBindingInput) => Promise<TBinding>,
   ): Promise<CancelFileResult<TBinding>> {
     const normalizedFileId = readFileId(fileId);
-    const normalizedCandidateKey = normalizeStorageKey(candidateKey);
-    const normalizedReadyKey =
-      readyKey === undefined ? undefined : normalizeStorageKey(readyKey);
-    assertStorageKeyOwnership(
-      normalizedFileId,
-      normalizedCandidateKey,
-      'pending',
-    );
-    if (normalizedReadyKey !== undefined) {
-      assertStorageKeyOwnership(normalizedFileId, normalizedReadyKey, 'ready');
-    }
+    const candidateKey = pendingStorageKey(normalizedFileId);
+    const readyKey = readyStorageKey(normalizedFileId);
     const result = await this.#repository.transaction(
       async (connection): Promise<CancelFileResult<TBinding>> => {
         const failed = await this.#repository.failPending(
@@ -369,11 +361,7 @@ export class FileKernel {
       },
     );
     const cleanupKeys =
-      result.outcome === 'ready'
-        ? [normalizedCandidateKey]
-        : [normalizedCandidateKey, normalizedReadyKey].filter(
-            (key): key is string => key !== undefined,
-          );
+      result.outcome === 'ready' ? [candidateKey] : [candidateKey, readyKey];
     await Promise.all(
       cleanupKeys.map(async (key) => {
         try {
@@ -384,14 +372,6 @@ export class FileKernel {
       }),
     );
     return result;
-  }
-
-  async cancelPendingUpload(fileId: string): Promise<CancelFileResult> {
-    const normalizedFileId = readFileId(fileId);
-    return this.cancelUpload(
-      normalizedFileId,
-      pendingStorageKey(normalizedFileId),
-    );
   }
 
   async enablePublicAccess(
@@ -521,18 +501,10 @@ function normalizeStorageMetadata(
   ) {
     throw new Error('Files storage returned an invalid content length.');
   }
-  if (
-    metadata.contentType !== undefined &&
-    (!metadata.contentType.trim() || metadata.contentType.length > 255)
-  ) {
-    throw new Error('Files storage returned an invalid content type.');
-  }
-  return {
-    ...metadata,
-    ...(metadata.contentType === undefined
-      ? {}
-      : { contentType: metadata.contentType.trim() }),
-  };
+  const contentType = normalizeOptionalContentType(metadata.contentType);
+  const normalized = { ...metadata };
+  delete normalized.contentType;
+  return contentType === null ? normalized : { ...normalized, contentType };
 }
 
 function readFileName(value: string): string {
@@ -582,6 +554,10 @@ function randomHex(byteLength: number): string {
 
 function pendingStorageKey(fileId: string): string {
   return `pending/${fileId}/candidate`;
+}
+
+function readyStorageKey(fileId: string): string {
+  return `ready/${fileId}/object`;
 }
 
 function toError(value: unknown, message: string): Error {

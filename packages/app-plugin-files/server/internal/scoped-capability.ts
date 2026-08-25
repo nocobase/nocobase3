@@ -135,7 +135,6 @@ function readCapability(value: unknown): ScopedFileCapability {
     action: readAction(record.action),
     expiresAt: readPositiveSafeInteger(record.expiresAt),
     candidateKey: readRequiredString(record.candidateKey),
-    readyKey: readRequiredString(record.readyKey),
     maxBytes: readPositiveSafeInteger(record.maxBytes),
     expectedSize: readNonNegativeSafeInteger(record.expectedSize),
     contentType: readNullableString(record.contentType),
