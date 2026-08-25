@@ -683,6 +683,13 @@ describe('app plugins', () => {
     const authenticationPlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-authentication',
     );
+    const dataProviderPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-data-provider',
+    );
+    const notificationProviderPlugin = runtime.config.plugins.find(
+      (item) =>
+        item.packageName === '@nocobase/app-plugin-notification-provider',
+    );
     const databaseExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-database-example',
     );
@@ -707,6 +714,47 @@ describe('app plugins', () => {
     expect(authenticationPlugin?.seedsDirectory).toMatch(
       /app-plugin-authentication\/database\/seeds$/,
     );
+    expect(authenticationPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+      routes: './client/routes',
+    });
+    expect(authenticationPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-authentication\/client\/routes\.ts$/,
+    );
+    expect(dataProviderPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-data-provider',
+      version: '0.0.1',
+      enabled: true,
+    });
+    expect(dataProviderPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+    });
+    expect(dataProviderPlugin?.clientBootstrapEntry).toMatch(
+      /app-plugin-data-provider\/client\/bootstrap\.ts$/,
+    );
+    expect(dataProviderPlugin?.migrationsDirectory).toBeUndefined();
+    expect(dataProviderPlugin?.seedsDirectory).toBeUndefined();
+    expect(notificationProviderPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-notification-provider',
+      version: '0.0.1',
+      enabled: true,
+    });
+    expect(notificationProviderPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+      providers: './client/providers',
+      routes: './client/routes',
+    });
+    expect(notificationProviderPlugin?.clientBootstrapEntry).toMatch(
+      /app-plugin-notification-provider\/client\/bootstrap\.ts$/,
+    );
+    expect(notificationProviderPlugin?.clientProvidersEntry).toMatch(
+      /app-plugin-notification-provider\/client\/providers\.ts$/,
+    );
+    expect(notificationProviderPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-notification-provider\/client\/routes\.ts$/,
+    );
+    expect(notificationProviderPlugin?.migrationsDirectory).toBeUndefined();
+    expect(notificationProviderPlugin?.seedsDirectory).toBeUndefined();
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
       version: '0.0.1',
@@ -726,6 +774,10 @@ describe('app plugins', () => {
     });
     expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
     expect(routesExamplePlugin?.seedsDirectory).toBeUndefined();
+    expect(routesExamplePlugin?.manifest.client).toEqual({
+      routes: './client/routes',
+      providers: './client/providers',
+    });
     expect(routesExamplePlugin?.routesEntry).toMatch(
       /app-plugin-routes-example\/server\/routes\/index\.ts$/,
     );
@@ -864,6 +916,14 @@ describe('standalone runtime database config', () => {
       expect.arrayContaining([
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-authentication',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-data-provider',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-notification-provider',
           enabled: true,
         }),
         expect.objectContaining({

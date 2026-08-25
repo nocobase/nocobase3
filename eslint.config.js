@@ -27,7 +27,11 @@ const nodeLibraryRoots = [
   'packages/session',
 ];
 const devConfigRoots = ['packages/dev-config'];
-const clientLibraryRoots = ['packages/app-sdk', 'packages/app-portal-sdk'];
+const clientLibraryRoots = [
+  'packages/app-client',
+  'packages/app-sdk',
+  'packages/app-portal-sdk',
+];
 const portalRoots = ['packages/app-template-default', 'packages/hub'];
 const prefixPatterns = (roots, patterns) =>
   roots.flatMap((root) => patterns.map((pattern) => `${root}/${pattern}`));

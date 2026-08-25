@@ -1,6 +1,6 @@
 import type { DatabaseManager } from '@nocobase/app-database';
 import type { Logger } from '@nocobase/logging';
-import type { Job, JobClass, JobFactory } from '@nocobase/queue';
+import type { JobClass, JobFactory } from '@nocobase/queue';
 
 export interface AppJobDependencies {
   logger: Logger;
@@ -10,5 +10,5 @@ export interface AppJobDependencies {
 export function createAppJobFactory(
   dependencies: AppJobDependencies,
 ): JobFactory {
-  return (JobClass: JobClass) => new JobClass(dependencies) as Job;
+  return (JobClass: JobClass) => new JobClass(dependencies);
 }

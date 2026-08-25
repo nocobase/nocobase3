@@ -1,4 +1,5 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
+import agentAnnotations from '@gchust/agent-annotations/vite';
 import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import fs from 'node:fs';
 import path from 'path';
@@ -29,6 +30,7 @@ export default createPortalViteConfig(
 
     return {
       base: viteBase,
+      plugins: [agentAnnotations({ root: __dirname })],
       define: {
         __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
           command === 'serve' ? path.resolve(__dirname) : '',

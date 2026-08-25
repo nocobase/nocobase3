@@ -63,12 +63,15 @@ await authClient.signOut();
 
 await authClient.requestPasswordReset(
   'alice@example.com',
-  `${window.location.origin}/reset-password`,
+  resolveAppUrl('/reset-password'),
 );
+
+await authClient.resetPassword(newPassword, token);
 ```
 
-应用必须配置服务端密码重置邮件发送能力，并实现 redirect target 页面；仅调用
-客户端方法不会自动提供邮件服务或页面。
+插件自带的 `/reset-password` 页面会读取 Better Auth 附加在 URL 上的 `token`。
+`resolveAppUrl()` 会保留 `/main/` 之类的应用 basename。应用仍必须配置服务端密码
+重置邮件发送能力；仅调用客户端方法不会自动提供邮件服务。
 
 ## Refine AuthProvider
 
@@ -89,6 +92,7 @@ const authProvider = createAuthProvider(authClient);
 | `login`          | 使用 identifier、email 或 username 登录，成功后默认跳转 `/` |
 | `register`       | 创建密码账号，成功后默认跳转 `/login`                       |
 | `forgotPassword` | 请求发送重置链接                                            |
+| `updatePassword` | 使用 URL 或调用参数中的 token 更新密码，成功后跳转 `/login` |
 | `logout`         | 退出并跳转 `/login`                                         |
 | `check`          | 有 session 时返回 authenticated，否则跳转 `/login`          |
 | `getIdentity`    | 将 session user 映射为 Refine identity                      |
@@ -97,17 +101,29 @@ const authProvider = createAuthProvider(authClient);
 provider 会合并并缓存并发的 session 查询。login、register、logout 和 HTTP 401
 会清除当前 identity 缓存，下一次读取重新请求服务端。
 
-## UI registry
+## 插件页面与路由
 
-包内 [`ui/password`](../../../ui/password) 提供可复制的登录和注册表单。registry
-声明位于 [`ui/registry.json`](../../../ui/registry.json)。
+客户端插件清单声明独立的 `bootstrap` 和 `routes` 入口：
 
-这些文件是应用源码模板，不属于 npm runtime export。模板依赖：
+```json
+{
+  "client": {
+    "bootstrap": "./client/bootstrap",
+    "routes": "./client/routes"
+  }
+}
+```
 
-- Refine hooks；
-- 应用的 `@/components/ui/button`；
-- 应用的 `@/components/ui/input`；
-- 应用的 `@/components/ui/label`。
+`bootstrap` 注册 Refine `authProvider`；`routes` 使用 `defineClientRoutes()` 声明
+四个 `auth: 'guest'` 的认证路由。每个页面通过 `componentLoader` 独立按需加载，
+不会进入初始客户端 bundle。插件 fallback 表单只依赖 `@nocobase/ui`、Refine 和
+语义化主题 class，因此即使未安装 Registry 也能独立工作。它们不属于插件公共 UI API。
 
-应用可以复制后修改布局和文案，不应从 `@nocobase/app-plugin-authentication/ui/*` 直接做
-运行时导入。
+插件默认页面只提供最小 fallback 布局，不包含应用品牌或营销区域。应用安装
+`auth-ui` Registry 后，最终页面和四个密码表单都来自应用拥有的源码。完全自定义表单可从
+`client/actions` 使用稳定的 `usePasswordLogin()`、`usePasswordRegistration()`、
+`usePasswordResetRequest()` 和 `usePasswordReset()`，并自行组合 shadcn 组件。
+
+品牌、布局和最终页面组合由应用安装的 shadcn Registry 源码负责。Registry 只按稳定
+route ID 替换 `componentLoader`，不重新声明插件路由；复制到应用后的源码允许用户修改，
+升级时按三方合并处理。

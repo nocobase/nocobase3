@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { createCaching, type Caching } from '@nocobase/caching';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAuthStorage } from '../../auth-storage.js';

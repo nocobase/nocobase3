@@ -36,6 +36,14 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 - After changing dependencies, run `CI=true pnpm install --no-frozen-lockfile` and commit the synchronized lockfile. CI uses a frozen lockfile.
 - Node runtime, server, and tooling packages declare Node `>=24.0.0`. A browser-only runtime must not declare a Node runtime requirement merely because its development tooling uses Node.
 
+### Package Publishing
+
+Every package in `packages/` is published to npm, so none of them set `private: true`. A new package that declares it is excluded from the release and from `pack:check`, which means nothing catches a broken publish setup until someone tries to release it.
+
+A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
+
+Package names must not collide with what the v2 line already publishes. `@nocobase/database`, `@nocobase/app-server`, and `@nocobase/portal-sdk` are taken, which is why the v3 packages are `@nocobase/app-database`, `@nocobase/app-server-kit`, and `@nocobase/app-portal-sdk`. Check npm before settling on a name.
+
 ### Test Layout
 
 Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/app-database`, or `tests/logic` and `tests/components` in the Portal packages.

@@ -1,8 +1,11 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
+import agentAnnotations from '@gchust/agent-annotations/vite';
 import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import fs from 'node:fs';
 import path from 'path';
 import { loadEnv } from 'vite';
+
+import { appClientPluginsPlugin } from './scripts/client-plugins.js';
 
 const portalTemplate = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
@@ -46,20 +49,6 @@ export default createPortalViteConfig(
           ? env.NOCOBASE_E2E_API_URL.trim().replace(/\/$/, '')
           : joinBase(appBase, '/v2/api')
         : undefined;
-    const registrySourceRoot = path.resolve(__dirname, './registry');
-    const clientExtensionsRoot = path.resolve(__dirname, './client/extensions');
-    const extensionsRoot = fs.existsSync(registrySourceRoot)
-      ? registrySourceRoot
-      : clientExtensionsRoot;
-    const localExtensionAliases = fs.existsSync(clientExtensionsRoot)
-      ? fs
-          .readdirSync(clientExtensionsRoot, { withFileTypes: true })
-          .filter((entry) => entry.isDirectory())
-          .map((entry) => ({
-            find: `@/extensions/${entry.name}`,
-            replacement: path.join(clientExtensionsRoot, entry.name),
-          }))
-      : [];
     const defineEnv: Record<string, string> = {
       __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
         command === 'serve' ? path.resolve(__dirname) : '',
@@ -86,10 +75,20 @@ export default createPortalViteConfig(
       base: viteBase,
       define: defineEnv,
       envPrefix: ['VITE_'],
+      plugins: [
+        agentAnnotations({ root: __dirname }),
+        appClientPluginsPlugin({ root: __dirname }),
+      ],
       resolve: {
+        dedupe: ['react', 'react-dom', 'react-router'],
         alias: [
-          ...localExtensionAliases,
-          { find: '@/extensions', replacement: extensionsRoot },
+          {
+            find: /^@nocobase\/ui$/,
+            replacement: path.resolve(
+              __dirname,
+              './client/nocobase-ui/index.ts',
+            ),
+          },
           { find: '@', replacement: path.resolve(__dirname, './client') },
         ],
       },
