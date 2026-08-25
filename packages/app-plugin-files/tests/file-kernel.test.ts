@@ -110,7 +110,8 @@ describe('file metadata kernel', () => {
       },
     });
     const stored = await repository.getRequired(upload.file.id);
-    expect(stored.storageKey).toBe(readyKey(upload.file.id));
+    expect(stored.storageKey).toMatch(readyKeyPattern(upload.file.id));
+    const immutableReadyKey = requireStorageKey(stored.storageKey);
 
     storage.put(upload.candidateKey, {
       contentLength: 999,
@@ -122,7 +123,7 @@ describe('file metadata kernel', () => {
       file: { size: 13, contentType: 'text/plain' },
     });
     expect((await repository.getRequired(upload.file.id)).storageKey).toBe(
-      readyKey(upload.file.id),
+      immutableReadyKey,
     );
   });
 
@@ -147,14 +148,83 @@ describe('file metadata kernel', () => {
     );
     const winner = await repository.getRequired(upload.file.id);
     expect(winner.status).toBe('ready');
-    expect(winner.storageKey).toBe(readyKey(upload.file.id));
-    expect(storage.has(winner.storageKey ?? '')).toBe(true);
+    expect(winner.storageKey).toMatch(readyKeyPattern(upload.file.id));
+    const winnerKey = requireStorageKey(winner.storageKey);
+    const finalizedKeys = storage.readyKeys(upload.file.id);
+    expect(finalizedKeys).toHaveLength(2);
+    expect(new Set(finalizedKeys).size).toBe(2);
+    expect(storage.has(winnerKey)).toBe(true);
+    const losingKey = finalizedKeys.find((key) => key !== winnerKey);
+    expect(losingKey).toBeDefined();
+    expect(results.flatMap((result) => result.cleanupStorageKeys)).toContain(
+      losingKey,
+    );
+    expect(
+      results.flatMap((result) => result.cleanupStorageKeys),
+    ).not.toContain(winnerKey);
     for (const storageKey of results.flatMap(
       (result) => result.cleanupStorageKeys,
     )) {
       await storage.delete(storageKey);
     }
-    expect(storage.has(winner.storageKey ?? '')).toBe(true);
+    expect(storage.has(winnerKey)).toBe(true);
+  });
+
+  it('commits metadata from the copied ready candidate when the source changes after HEAD', async () => {
+    const upload = await kernel.createPending({ name: 'changing.bin' });
+    storage.put(
+      upload.candidateKey,
+      { contentLength: 5, contentType: 'text/plain' },
+      'first',
+    );
+    storage.mutateCandidateOnNextFinalization(
+      { contentLength: 11, contentType: 'application/octet-stream' },
+      'replacement',
+    );
+
+    const result = await kernel.completeUpload(upload);
+    expect(result).toMatchObject({
+      outcome: 'completed',
+      file: {
+        size: 11,
+        contentType: 'application/octet-stream',
+      },
+    });
+    const record = await repository.getRequired(upload.file.id);
+    const storageKey = requireStorageKey(record.storageKey);
+    expect(await storage.head(storageKey)).toMatchObject({
+      contentLength: record.size,
+      contentType: record.contentType ?? undefined,
+    });
+    expect(storage.read(storageKey)).toBe('replacement');
+  });
+
+  it('treats a delayed concurrent complete as ready after the winner removes pending bytes', async () => {
+    const upload = await kernel.createPending({ name: 'delayed.bin' });
+    storage.put(upload.candidateKey, { contentLength: 7 }, 'payload');
+    const pause = storage.pauseNextFinalization();
+    const delayed = kernel.completeUpload(upload);
+    await pause.started;
+
+    const winner = await kernel.completeUpload(upload);
+    expect(winner.outcome).toBe('completed');
+    for (const storageKey of winner.cleanupStorageKeys) {
+      await storage.delete(storageKey);
+    }
+    expect(storage.has(upload.candidateKey)).toBe(false);
+
+    pause.release();
+    const resolved = await delayed;
+    expect(resolved).toMatchObject({
+      outcome: 'ready',
+      file: { id: upload.file.id, status: 'ready', size: 7 },
+    });
+    expect(resolved.cleanupStorageKeys).toHaveLength(1);
+    expect(resolved.cleanupStorageKeys[0]).toMatch(
+      readyKeyPattern(upload.file.id),
+    );
+    const record = await repository.getRequired(upload.file.id);
+    expect(storage.has(requireStorageKey(record.storageKey))).toBe(true);
   });
 
   it('returns the finalized object key when the database CAS throws', async () => {
@@ -171,10 +241,13 @@ describe('file metadata kernel', () => {
     const result = await failingKernel.completeUpload(upload);
     expect(result).toMatchObject({
       outcome: 'persistence-failed',
-      cleanupStorageKeys: [],
       error: new Error('simulated CAS failure'),
     });
-    expect(storage.has(readyKey(upload.file.id))).toBe(true);
+    expect(result.cleanupStorageKeys).toHaveLength(1);
+    expect(result.cleanupStorageKeys[0]).toMatch(
+      readyKeyPattern(upload.file.id),
+    );
+    expect(storage.has(result.cleanupStorageKeys[0] ?? '')).toBe(true);
     expect(storage.has(upload.candidateKey)).toBe(true);
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'pending',
@@ -206,8 +279,11 @@ describe('file metadata kernel', () => {
 
     expect(result).toMatchObject({
       outcome: 'persistence-failed',
-      cleanupStorageKeys: [],
     });
+    expect(result.cleanupStorageKeys).toHaveLength(1);
+    expect(result.cleanupStorageKeys[0]).toMatch(
+      readyKeyPattern(upload.file.id),
+    );
     expect(storage.has(upload.candidateKey)).toBe(true);
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'pending',
@@ -217,8 +293,10 @@ describe('file metadata kernel', () => {
     ).toEqual([]);
   });
 
-  it('keeps a shared ready object while another completion can still commit it', async () => {
-    const upload = await kernel.createPending({ name: 'shared-ready.bin' });
+  it('cleans only a failed request candidate while a concurrent completion succeeds', async () => {
+    const upload = await kernel.createPending({
+      name: 'independent-ready.bin',
+    });
     storage.put(upload.candidateKey, { contentLength: 8 });
     const pausedRepository = new PausingFirstTransactionRepository(database);
     const concurrentKernel = createFileKernel({
@@ -230,7 +308,8 @@ describe('file metadata kernel', () => {
 
     const winner = concurrentKernel.completeUpload(upload);
     await pausedRepository.firstTransactionStarted;
-    expect(storage.has(readyKey(upload.file.id))).toBe(true);
+    const firstReadyKey = storage.readyKeys(upload.file.id)[0];
+    expect(firstReadyKey).toBeDefined();
 
     const failed = await concurrentKernel.completeUpload({
       ...upload,
@@ -240,8 +319,9 @@ describe('file metadata kernel', () => {
     });
     expect(failed).toMatchObject({
       outcome: 'persistence-failed',
-      cleanupStorageKeys: [],
     });
+    expect(failed.cleanupStorageKeys).toHaveLength(1);
+    expect(failed.cleanupStorageKeys[0]).not.toBe(firstReadyKey);
     for (const storageKey of failed.cleanupStorageKeys) {
       await storage.delete(storageKey);
     }
@@ -251,9 +331,9 @@ describe('file metadata kernel', () => {
     const record = await repository.getRequired(upload.file.id);
     expect(record).toMatchObject({
       status: 'ready',
-      storageKey: readyKey(upload.file.id),
+      storageKey: firstReadyKey,
     });
-    expect(storage.has(readyKey(upload.file.id))).toBe(true);
+    expect(storage.has(requireStorageKey(firstReadyKey))).toBe(true);
   });
 
   it('resolves complete and cancel competition to one terminal state', async () => {
@@ -273,8 +353,11 @@ describe('file metadata kernel', () => {
     expect(storage.has(upload.candidateKey)).toBe(false);
     expect(completionResult).toMatchObject({
       outcome: 'failed',
-      cleanupStorageKeys: [readyKey(upload.file.id)],
     });
+    expect(completionResult.cleanupStorageKeys).toHaveLength(1);
+    expect(completionResult.cleanupStorageKeys[0]).toMatch(
+      readyKeyPattern(upload.file.id),
+    );
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'failed',
     );
@@ -292,14 +375,16 @@ describe('file metadata kernel', () => {
   it('keeps the ready object when cancellation loses to completion', async () => {
     const upload = await createReadyFile(kernel, storage, 'ready-cancel.bin');
     expect(storage.has(upload.candidateKey)).toBe(true);
-    expect(storage.has(readyKey(upload.file.id))).toBe(true);
+    const stored = await repository.getRequired(upload.file.id);
+    const readyKey = requireStorageKey(stored.storageKey);
+    expect(storage.has(readyKey)).toBe(true);
 
     await expect(kernel.cancelUpload(upload.file.id)).resolves.toMatchObject({
       outcome: 'ready',
     });
 
     expect(storage.has(upload.candidateKey)).toBe(false);
-    expect(storage.has(readyKey(upload.file.id))).toBe(true);
+    expect(storage.has(readyKey)).toBe(true);
   });
 
   it('rejects candidate keys that belong to another file', async () => {
@@ -362,10 +447,10 @@ describe('file metadata kernel', () => {
     );
     const row = await knex('files').where({ id: upload.file.id }).first();
     expect(row).toMatchObject({
-      storage_key: readyKey(upload.file.id),
       public_token_hash: 'sha256:secret-token-hash',
       public_disposition: 'inline',
     });
+    expect(row.storage_key).toMatch(readyKeyPattern(upload.file.id));
 
     const storedFile = await kernel.getFile(upload.file.id);
     expect(storedFile).not.toHaveProperty('storageKey');
@@ -391,18 +476,35 @@ async function createReadyFile(
   return upload;
 }
 
-function readyKey(fileId: string): string {
-  return `ready/${fileId}/object`;
+function readyKeyPattern(fileId: string): RegExp {
+  return new RegExp(`^ready/${fileId}/[a-f0-9]{64}$`);
+}
+
+function requireStorageKey(value: string | null | undefined): string {
+  if (!value) {
+    throw new Error('Expected a storage key.');
+  }
+  return value;
+}
+
+interface FakeStorageObject {
+  metadata: StorageObjectMetadata;
+  contents: string;
 }
 
 class FakeFilesStorage {
-  readonly #objects = new Map<string, StorageObjectMetadata>();
+  readonly #objects = new Map<string, FakeStorageObject>();
   #barrier: FinalizationBarrier | undefined;
   #nextPause: DeferredFinalization | undefined;
+  #nextCandidateMutation: FakeStorageObject | undefined;
   #failNextDelete = false;
 
-  put(key: string, metadata: StorageObjectMetadata): void {
-    this.#objects.set(key, metadata);
+  put(
+    key: string,
+    metadata: StorageObjectMetadata,
+    contents: string = '',
+  ): void {
+    this.#objects.set(key, { metadata: { ...metadata }, contents });
   }
 
   has(key: string): boolean {
@@ -410,18 +512,42 @@ class FakeFilesStorage {
   }
 
   async head(key: string): Promise<StorageObjectMetadata> {
-    const metadata = this.#objects.get(key);
-    if (!metadata) {
+    const object = this.#objects.get(key);
+    if (!object) {
       throw new Error(`Missing fake storage object: ${key}`);
     }
-    return { ...metadata };
+    return { ...object.metadata };
+  }
+
+  read(key: string): string {
+    const object = this.#objects.get(key);
+    if (!object) {
+      throw new Error(`Missing fake storage object: ${key}`);
+    }
+    return object.contents;
+  }
+
+  readyKeys(fileId: string): string[] {
+    return [...this.#objects.keys()]
+      .filter((key) => key.startsWith(`ready/${fileId}/`))
+      .sort();
+  }
+
+  mutateCandidateOnNextFinalization(
+    metadata: StorageObjectMetadata,
+    contents: string,
+  ): void {
+    this.#nextCandidateMutation = { metadata: { ...metadata }, contents };
   }
 
   async finalizeCandidate(
     candidateKey: string,
     readyKey: string,
   ): Promise<void> {
-    const metadata = await this.head(candidateKey);
+    if (this.#nextCandidateMutation) {
+      this.#objects.set(candidateKey, this.#nextCandidateMutation);
+      this.#nextCandidateMutation = undefined;
+    }
     if (this.#barrier) {
       const barrier = this.#barrier;
       await barrier.arrive();
@@ -435,7 +561,14 @@ class FakeFilesStorage {
       pause.markStarted();
       await pause.waitForRelease();
     }
-    this.#objects.set(readyKey, metadata);
+    const source = this.#objects.get(candidateKey);
+    if (!source) {
+      throw new Error(`Missing fake storage object: ${candidateKey}`);
+    }
+    this.#objects.set(readyKey, {
+      metadata: { ...source.metadata },
+      contents: source.contents,
+    });
   }
 
   async delete(key: string): Promise<void> {

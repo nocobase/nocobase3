@@ -78,6 +78,21 @@ describe('V3 file upload Registry', () => {
       '/embedded/app/api/files',
       expect.objectContaining({ credentials: 'include' }),
     );
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'bad request' }), {
+          status: 409,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+    await expect(appFileClient.request('files')).rejects.toMatchObject({
+      message: 'bad request',
+      status: 409,
+      payload: { message: 'bad request' },
+    });
   });
 
   it('loads ready StoredFile arrays without relation serialization', () => {
@@ -146,6 +161,14 @@ describe('V3 file upload Registry', () => {
     expect(
       matchesFileRules(testFile('ok.pdf', 'application/pdf'), ['.pdf']),
     ).toBe(true);
+    expect(
+      matchesFileRules(testFile('archive.tar.gz', 'application/gzip'), [
+        '.tar.gz',
+      ]),
+    ).toBe(true);
+    expect(
+      matchesFileRules(testFile('archive.gz', 'application/gzip'), ['.tar.gz']),
+    ).toBe(false);
     expect(
       validateFile(testFile('bad.txt', 'text/plain'), {
         accept: '.pdf',

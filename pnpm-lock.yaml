@@ -484,6 +484,9 @@ importers:
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
+      '@nocobase/app-sdk':
+        specifier: workspace:^
+        version: link:../app-sdk
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit

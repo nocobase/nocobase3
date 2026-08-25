@@ -399,6 +399,7 @@ describe('field binding scoped file routes', () => {
     expect(enabled.status).toBe(200);
     const first = await json<PublicFileAccessResponse>(enabled);
     expect(first.file.id).toBe(upload.file.id);
+    expect(first.access).not.toHaveProperty('token');
     expect((await fixture.app.request(first.access.url)).status).toBe(200);
 
     const reset = await fixture.app.request(
@@ -406,7 +407,8 @@ describe('field binding scoped file routes', () => {
       jsonRequest('POST', { disposition: 'attachment' }),
     );
     const second = await json<PublicFileAccessResponse>(reset);
-    expect(second.access.token).not.toBe(first.access.token);
+    expect(second.access).not.toHaveProperty('token');
+    expect(second.access.url).not.toBe(first.access.url);
     expect((await fixture.app.request(first.access.url)).status).toBe(403);
     expect((await fixture.app.request(second.access.url)).status).toBe(200);
 

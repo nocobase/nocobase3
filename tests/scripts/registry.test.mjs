@@ -142,6 +142,37 @@ test('keeps the preinstalled Files Registry snapshot aligned with its plugin rec
   }
 });
 
+test('does not publish the legacy Hub file-upload protocol', () => {
+  const hubRoot = path.join(repoRoot, 'packages/hub');
+  const hubConfig = JSON.parse(
+    fs.readFileSync(path.join(hubRoot, 'registry.config.json'), 'utf8'),
+  );
+  assert.equal(
+    hubConfig.items.some(({ name }) => name === 'file-upload'),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(path.join(hubRoot, 'registry/nocobase-file-upload')),
+    false,
+  );
+
+  const legacyContracts = [
+    'FileFieldDescriptor',
+    'NocoBaseFileRecord',
+    'storages:check',
+    'upload-direct',
+    'upload-multipart',
+    'dataSourceKey',
+  ];
+  const hubRegistrySource = fs.readFileSync(
+    path.join(hubRoot, 'registry.config.json'),
+    'utf8',
+  );
+  for (const contract of legacyContracts) {
+    assert.doesNotMatch(hubRegistrySource, new RegExp(contract, 'u'));
+  }
+});
+
 function walkFiles(directory, root = directory) {
   return fs
     .readdirSync(directory, { withFileTypes: true })

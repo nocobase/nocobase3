@@ -115,7 +115,6 @@ export interface FileReadAccess {
 
 export interface PublicFileAccess {
   file: StoredFile;
-  token: string;
   url: string;
   disposition: PublicDisposition;
 }
@@ -764,7 +763,6 @@ export class FilesDataPlane {
   ): PublicFileAccess {
     return {
       file,
-      token,
       url: this.#accessUrl(file.id, 'content', token),
       disposition,
     };

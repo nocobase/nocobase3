@@ -173,7 +173,6 @@ export class FileKernel {
   ): Promise<CompleteFileResult<TBinding>> {
     const fileId = readFileId(input.fileId);
     const candidateKey = normalizeStorageKey(input.candidateKey);
-    const readyKey = readyStorageKey(fileId);
     assertStorageKeyOwnership(fileId, candidateKey, 'pending');
     const commitBinding = input.commitBinding?.bind(input);
     const current = await this.#repository.get(fileId);
@@ -201,10 +200,7 @@ export class FileKernel {
         outcome: 'ready',
         file,
         ...(binding === undefined ? {} : { binding }),
-        cleanupStorageKeys:
-          current.storageKey === readyKey
-            ? [candidateKey]
-            : [candidateKey, readyKey],
+        cleanupStorageKeys: [candidateKey],
       };
     }
     if (current.status === 'failed') {
@@ -215,20 +211,31 @@ export class FileKernel {
       };
     }
 
+    const readyKey = readyStorageKey(fileId);
     let metadata: StorageObjectMetadata;
     try {
-      metadata = normalizeStorageMetadata(
+      const candidateMetadata = normalizeStorageMetadata(
         await this.#storage.head(candidateKey),
       );
-      input.validateMetadata?.(metadata);
+      input.validateMetadata?.(candidateMetadata);
       await this.#storage.finalizeCandidate(candidateKey, readyKey);
+      metadata = normalizeStorageMetadata(await this.#storage.head(readyKey));
+      input.validateMetadata?.(metadata);
     } catch (error) {
       try {
-        metadata = normalizeStorageMetadata(await this.#storage.head(readyKey));
-        input.validateMetadata?.(metadata);
+        await this.#storage.delete(readyKey);
       } catch {
-        throw error;
+        // Preserve the upload validation or storage failure.
       }
+      const concurrent = await this.#resolveConcurrentTerminalState(
+        fileId,
+        readyKey,
+        commitBinding,
+      );
+      if (concurrent) {
+        return concurrent;
+      }
+      throw error;
     }
     try {
       return await this.#repository.transaction(
@@ -291,9 +298,7 @@ export class FileKernel {
             file,
             ...(binding === undefined ? {} : { binding }),
             cleanupStorageKeys:
-              readyRecord.storageKey === readyKey
-                ? [candidateKey]
-                : [candidateKey, readyKey],
+              outcome === 'completed' ? [candidateKey] : [readyKey],
           };
         },
       );
@@ -303,6 +308,7 @@ export class FileKernel {
         candidateKey,
         readyKey,
         toError(error, 'Files completion persistence failed.'),
+        commitBinding,
       );
     }
   }
@@ -313,7 +319,6 @@ export class FileKernel {
   ): Promise<CancelFileResult<TBinding>> {
     const normalizedFileId = readFileId(fileId);
     const candidateKey = pendingStorageKey(normalizedFileId);
-    const readyKey = readyStorageKey(normalizedFileId);
     const result = await this.#repository.transaction(
       async (connection): Promise<CancelFileResult<TBinding>> => {
         const failed = await this.#repository.failPending(
@@ -353,10 +358,8 @@ export class FileKernel {
         );
       },
     );
-    const cleanupKeys =
-      result.outcome === 'ready' ? [candidateKey] : [candidateKey, readyKey];
     await Promise.all(
-      cleanupKeys.map(async (key) => {
+      [candidateKey].map(async (key) => {
         try {
           await this.#storage.delete(key);
         } catch {
@@ -435,15 +438,34 @@ export class FileKernel {
     };
   }
 
-  async #resolvePersistenceFailure(
+  async #resolvePersistenceFailure<TBinding>(
     fileId: string,
     candidateKey: string,
     readyKey: string,
     error: Error,
-  ): Promise<CompleteFileResult> {
+    commitBinding:
+      | ((
+          connection: DatabaseConnection,
+          file: StoredFile,
+        ) => Promise<TBinding>)
+      | undefined,
+  ): Promise<CompleteFileResult<TBinding>> {
     try {
       const current = await this.#repository.get(fileId);
-      if (current?.status === 'ready' && current.storageKey === readyKey) {
+      if (current?.status === 'ready') {
+        if (current.storageKey !== readyKey) {
+          return (
+            (await this.#resolveConcurrentTerminalState(
+              fileId,
+              readyKey,
+              commitBinding,
+            )) ?? {
+              outcome: 'persistence-failed',
+              cleanupStorageKeys: [readyKey],
+              error,
+            }
+          );
+        }
         return {
           outcome: 'ready',
           file: toStoredFile(current),
@@ -451,23 +473,68 @@ export class FileKernel {
         };
       }
       if (current?.status === 'pending') {
-        // Another same-plan completion may have published this key and still commit it.
         return {
           outcome: 'persistence-failed',
-          cleanupStorageKeys: [],
+          cleanupStorageKeys: [readyKey],
           error,
         };
       }
       return {
         outcome: 'persistence-failed',
-        cleanupStorageKeys: [readyKey],
+        cleanupStorageKeys: [candidateKey, readyKey],
         error,
       };
     } catch {
       return {
         outcome: 'persistence-failed',
-        cleanupStorageKeys: [],
+        cleanupStorageKeys: [readyKey],
         error,
+      };
+    }
+  }
+
+  async #resolveConcurrentTerminalState<TBinding>(
+    fileId: string,
+    readyKey: string,
+    commitBinding:
+      | ((
+          connection: DatabaseConnection,
+          file: StoredFile,
+        ) => Promise<TBinding>)
+      | undefined,
+  ): Promise<CompleteFileResult<TBinding> | undefined> {
+    const current = await this.#repository.get(fileId);
+    if (!current) {
+      return { outcome: 'missing', cleanupStorageKeys: [readyKey] };
+    }
+    if (current.status === 'failed') {
+      return {
+        outcome: 'failed',
+        file: toStoredFile(current),
+        cleanupStorageKeys: [readyKey],
+      };
+    }
+    if (current.status !== 'ready') {
+      return undefined;
+    }
+    const file = toStoredFile(current);
+    try {
+      const binding = commitBinding
+        ? await this.#repository.transaction((connection) =>
+            commitBinding(connection, file),
+          )
+        : undefined;
+      return {
+        outcome: 'ready',
+        file,
+        ...(binding === undefined ? {} : { binding }),
+        cleanupStorageKeys: [readyKey],
+      };
+    } catch (error) {
+      return {
+        outcome: 'persistence-failed',
+        cleanupStorageKeys: [readyKey],
+        error: toError(error, 'Files binding persistence failed.'),
       };
     }
   }
@@ -550,7 +617,7 @@ function pendingStorageKey(fileId: string): string {
 }
 
 function readyStorageKey(fileId: string): string {
-  return `ready/${fileId}/object`;
+  return `ready/${fileId}/${randomHex(32)}`;
 }
 
 function toError(value: unknown, message: string): Error {

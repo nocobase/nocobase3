@@ -41,7 +41,6 @@ export class FakeS3Disk implements FilesStorageDisk {
       this.seed(key, contents);
       return;
     }
-    this.#assertAbsentWhenRequired(key, options);
     const value = Buffer.from(contents);
     this.#objects.set(key, {
       contents: value,
@@ -57,7 +56,6 @@ export class FakeS3Disk implements FilesStorageDisk {
     contents: Readable,
     options: WriteOptions = {},
   ): Promise<void> {
-    this.#assertAbsentWhenRequired(key, options);
     const chunks: Buffer[] = [];
     for await (const chunk of contents) {
       this.writeChunkCount += 1;
@@ -126,7 +124,6 @@ export class FakeS3Disk implements FilesStorageDisk {
       pause.markStarted();
       await pause.waitForRelease();
     }
-    this.#assertAbsentWhenRequired(destination, options);
     const sourceObject = this.#require(source);
     this.#objects.set(destination, {
       contents: Buffer.from(sourceObject.contents),
@@ -188,14 +185,6 @@ export class FakeS3Disk implements FilesStorageDisk {
       throw error;
     }
     return value;
-  }
-
-  #assertAbsentWhenRequired(key: string, options: WriteOptions): void {
-    if (options.IfNoneMatch === '*' && this.#objects.has(key)) {
-      const error = new Error('object exists') as NodeJS.ErrnoException;
-      error.code = 'PreconditionFailed';
-      throw error;
-    }
   }
 }
 

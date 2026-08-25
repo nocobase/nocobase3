@@ -85,7 +85,6 @@ describe('S3-compatible Files storage', () => {
       url: 'https://upload.invalid/apps%2Fprimary%2Fpending%2Ffile-1',
       headers: {
         'content-type': 'text/plain',
-        'if-none-match': '*',
       },
     });
     expect(disk.uploadRequests).toEqual([
@@ -94,7 +93,6 @@ describe('S3-compatible Files storage', () => {
         options: {
           expiresIn: 120,
           ContentLength: 13,
-          IfNoneMatch: '*',
           contentType: 'text/plain',
         },
       },
@@ -116,7 +114,7 @@ describe('S3-compatible Files storage', () => {
       {
         source: 'apps/primary/pending/file-1',
         destination: 'apps/primary/ready/file-1',
-        options: { IfNoneMatch: '*', visibility: 'private' },
+        options: { visibility: 'private' },
       },
     ]);
     await expect(
@@ -140,7 +138,7 @@ describe('S3-compatible Files storage', () => {
     expect(disk.keys()).toEqual(['apps/primary/pending/file-1']);
   });
 
-  it('does not overwrite existing candidate or ready content', async () => {
+  it('allows pending retries while independent ready candidates stay isolated', async () => {
     const disk = new FakeS3Disk();
     const storage = createInternalFilesStorage(
       resolveFilesConfig({
@@ -156,24 +154,23 @@ describe('S3-compatible Files storage', () => {
     }
 
     await storage.putCandidate('pending/file-1', Readable.from(['original']));
-    await expect(
-      storage.putCandidate('pending/file-1', Readable.from(['replacement'])),
-    ).rejects.toBeDefined();
-    await expect(
-      readText(await storage.openRead('pending/file-1')),
-    ).resolves.toBe('original');
-
-    disk.seed(
-      'ready/file-1',
-      { contentLength: 9, contentType: 'text/plain' },
-      'published',
+    await storage.putCandidate(
+      'pending/file-1',
+      Readable.from(['replacement']),
     );
     await expect(
-      storage.finalizeCandidate('pending/file-1', 'ready/file-1'),
-    ).rejects.toBeDefined();
+      readText(await storage.openRead('pending/file-1')),
+    ).resolves.toBe('replacement');
+
+    await storage.finalizeCandidate('pending/file-1', 'ready/file-1/first');
+    await storage.putCandidate('pending/file-1', Readable.from(['next']));
+    await storage.finalizeCandidate('pending/file-1', 'ready/file-1/second');
     await expect(
-      readText(await storage.openRead('ready/file-1')),
-    ).resolves.toBe('published');
+      readText(await storage.openRead('ready/file-1/first')),
+    ).resolves.toBe('replacement');
+    await expect(
+      readText(await storage.openRead('ready/file-1/second')),
+    ).resolves.toBe('next');
   });
 
   it('blocks operations after idempotent disposal', async () => {

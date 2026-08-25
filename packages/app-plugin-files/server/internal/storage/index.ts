@@ -1,8 +1,4 @@
-import { randomBytes } from 'node:crypto';
-import { link, mkdir, open, rm } from 'node:fs/promises';
-import path from 'node:path';
 import type { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 
 import { Disk, KeyNormalizer } from 'flydrive';
 import { FSDriver } from 'flydrive/drivers/fs';
@@ -85,7 +81,6 @@ class FlydriveFilesStorage<TDriver extends 'local' | 's3'> {
     await callFlydrive(() =>
       this.#disk.putStream(resolvedKey, contents, {
         visibility: 'private',
-        IfNoneMatch: '*',
         ...(options.contentType === undefined
           ? {}
           : { contentType: options.contentType }),
@@ -143,19 +138,19 @@ class FlydriveFilesStorage<TDriver extends 'local' | 's3'> {
     const destinationKey = this.#resolveKey(readyKey);
     if (this.driver === 'local') {
       await callFlydrive(() =>
-        this.#disk.copy(metadataKey(sourceKey), metadataKey(destinationKey)),
+        this.#disk.copy(sourceKey, destinationKey, {
+          visibility: 'private',
+        }),
       );
       try {
         await callFlydrive(() =>
-          this.#disk.copy(sourceKey, destinationKey, {
-            visibility: 'private',
-          }),
+          this.#disk.copy(metadataKey(sourceKey), metadataKey(destinationKey)),
         );
       } catch (error) {
         try {
-          await this.#disk.delete(metadataKey(destinationKey));
+          await this.#disk.delete(destinationKey);
         } catch {
-          // Preserve the object copy failure.
+          // Preserve the metadata copy failure.
         }
         throw error;
       }
@@ -165,7 +160,6 @@ class FlydriveFilesStorage<TDriver extends 'local' | 's3'> {
     await callFlydrive(() =>
       this.#disk.copy(sourceKey, destinationKey, {
         visibility: 'private',
-        IfNoneMatch: '*',
       }),
     );
   }
@@ -184,7 +178,6 @@ class FlydriveFilesStorage<TDriver extends 'local' | 's3'> {
       this.#disk.getSignedUploadUrl(this.#resolveKey(key), {
         expiresIn: options.expiresInSeconds,
         ContentLength: options.contentLength,
-        IfNoneMatch: '*',
         ...(options.contentType === undefined
           ? {}
           : { contentType: options.contentType }),
@@ -194,7 +187,6 @@ class FlydriveFilesStorage<TDriver extends 'local' | 's3'> {
       method: 'PUT',
       url,
       headers: {
-        'if-none-match': '*',
         ...(options.contentType === undefined
           ? {}
           : { 'content-type': options.contentType }),
@@ -261,36 +253,7 @@ export function normalizeStorageKey(key: string): string {
 }
 
 function createFsDriver(config: FilesLocalStorageConfig): FSDriver {
-  return new ExclusiveFSDriver(config);
-}
-
-class ExclusiveFSDriver extends FSDriver {
-  readonly #root: string;
-
-  constructor(config: FilesLocalStorageConfig) {
-    super({ location: config.root, visibility: 'private' });
-    this.#root = config.root;
-  }
-
-  override async putStream(key: string, contents: Readable): Promise<void> {
-    const destinationPath = path.join(this.#root, key);
-    const stagingPath = `${destinationPath}.${randomBytes(12).toString('hex')}.part`;
-    await mkdir(path.dirname(destinationPath), { recursive: true });
-
-    try {
-      const handle = await open(stagingPath, 'wx');
-      await pipeline(contents, handle.createWriteStream());
-      await link(stagingPath, destinationPath);
-    } finally {
-      await rm(stagingPath, { force: true });
-    }
-  }
-
-  override async copy(source: string, destination: string): Promise<void> {
-    const destinationPath = path.join(this.#root, destination);
-    await mkdir(path.dirname(destinationPath), { recursive: true });
-    await link(path.join(this.#root, source), destinationPath);
-  }
+  return new FSDriver({ location: config.root, visibility: 'private' });
 }
 
 function createS3Driver(config: FilesS3StorageConfig): S3Driver {

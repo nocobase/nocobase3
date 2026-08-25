@@ -673,11 +673,11 @@ describe('Files Public Access kernel', () => {
     const plan = await uploadLocalReady(fixture, 'public.txt', 'public text');
 
     const enabled = await fixture.dataPlane.enablePublicAccess(plan.fileId);
-    expect(enabled.token).toMatch(/^fp1_/);
+    expect(enabled).not.toHaveProperty('token');
     const state = await fixture.kernel.getPublicAccessState(plan.fileId);
     expect(state).toMatchObject({ disposition: 'attachment' });
     expect(state.tokenHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(state.tokenHash).not.toContain(enabled.token);
+    expect(enabled.url).not.toContain(state.tokenHash ?? '');
     expect((await fixture.app.request(enabled.url)).status).toBe(200);
 
     await expect(
@@ -687,7 +687,9 @@ describe('Files Public Access kernel', () => {
       fixture.dataPlane.resetPublicAccess(plan.fileId),
       fixture.dataPlane.resetPublicAccess(plan.fileId),
     ]);
-    expect(resets[0]?.token).not.toBe(resets[1]?.token);
+    expect(resets[0]?.url).not.toBe(resets[1]?.url);
+    expect(resets[0]).not.toHaveProperty('token');
+    expect(resets[1]).not.toHaveProperty('token');
     const oldToken = await fixture.app.request(enabled.url);
     expect(oldToken.status).toBe(403);
     await expect(oldToken.json()).resolves.toMatchObject({

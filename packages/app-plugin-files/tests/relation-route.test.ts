@@ -13,6 +13,7 @@ import {
 import type {
   CreateBusinessFileResponse,
   FileErrorResponse,
+  PublicFileAccessResponse,
   StoredFile,
 } from '@nocobase/app-plugin-files/protocol';
 import {
@@ -24,6 +25,7 @@ import {
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
 import {
   createOpaqueFilesRuntime,
+  getFilesRuntimeDataPlane,
   getFilesRuntimeKernel,
 } from '../server/internal/runtime.js';
 import { FakeS3Disk } from './support/fake-s3-disk.js';
@@ -160,6 +162,7 @@ describe('relation binding scoped file routes', () => {
       'old.txt',
       'old',
     );
+    const originalRow = (await relationRows(fixture, ORDER_ONE))[0];
     const blocked = await fixture.app.request(
       `/orders/${ORDER_ONE}/files`,
       jsonRequest('POST', {
@@ -181,6 +184,13 @@ describe('relation binding scoped file routes', () => {
     );
     await putLocal(fixture, replacement, 'next');
     expect((await completeUpload(fixture, replacement)).status).toBe(200);
+    const replacementRow = (await relationRows(fixture, ORDER_ONE))[0];
+    expect(replacementRow).toMatchObject({
+      id: originalRow?.id,
+      slot: originalRow?.slot,
+      fileId: replacement.file.id,
+      reservationExpiresAt: null,
+    });
     await expect(
       json<StoredFile[]>(
         await fixture.app.request(`/orders/${ORDER_ONE}/files`),
@@ -325,7 +335,6 @@ describe('relation binding scoped file routes', () => {
         binding: {
           type: 'relation',
           collection: 'purchaseOrderAttachments',
-          parentCollection: 'purchaseOrders',
           recordParam: 'orderId',
           recordField: 'purchaseOrderId',
           maxFiles: 2,
@@ -372,7 +381,6 @@ describe('relation binding scoped file routes', () => {
       binding: {
         type: 'relation',
         collection: 'purchaseOrderAttachments',
-        parentCollection: 'purchaseOrders',
         recordParam: 'orderId',
         recordField: 'purchaseOrderId',
         maxFiles: 3,
@@ -389,6 +397,33 @@ describe('relation binding scoped file routes', () => {
         })
       ).status,
     ).toBe(403);
+  });
+
+  it('returns Public Access URLs without exposing the raw token', async () => {
+    const fixture = await createFixture({ publicAccess: true });
+    const upload = await uploadAndComplete(
+      fixture,
+      ORDER_ONE,
+      'public.txt',
+      'public',
+    );
+    const base = `/orders/${ORDER_ONE}/files/${upload.file.id}/public-access`;
+    const enabled = await json<PublicFileAccessResponse>(
+      await fixture.app.request(
+        base,
+        jsonRequest('POST', { disposition: 'attachment' }),
+      ),
+    );
+    expect(enabled.access).not.toHaveProperty('token');
+    expect((await fixture.app.request(enabled.access.url)).status).toBe(200);
+
+    const reset = await json<PublicFileAccessResponse>(
+      await fixture.app.request(`${base}/reset`, { method: 'POST' }),
+    );
+    expect(reset.access).not.toHaveProperty('token');
+    expect(reset.access.url).not.toBe(enabled.access.url);
+    expect((await fixture.app.request(enabled.access.url)).status).toBe(403);
+    expect((await fixture.app.request(reset.access.url)).status).toBe(200);
   });
 
   it('detaches a ready relation without purging the file', async () => {
@@ -493,7 +528,6 @@ async function createFixture(
     binding: {
       type: 'relation',
       collection: 'purchaseOrderAttachments',
-      parentCollection: 'purchaseOrders',
       recordParam: 'orderId',
       recordField: 'purchaseOrderId',
       maxFiles: options.maxFiles ?? 2,
@@ -507,6 +541,7 @@ async function createFixture(
     authorize() {},
   });
   const app = new Hono();
+  app.route('/api/files', getFilesRuntimeDataPlane(runtime).createRoute());
   app.route('/orders/:orderId/files', route);
   const fixture = {
     app,

@@ -48,7 +48,6 @@ export interface PublicFileAccessRequest {
 
 export interface PublicFileAccess {
   url: string;
-  token: string;
   disposition: FileDisposition;
 }
 

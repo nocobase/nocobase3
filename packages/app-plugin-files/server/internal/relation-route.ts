@@ -31,7 +31,6 @@ import {
 } from './file-route-support.js';
 import type { FileKernel } from './kernel.js';
 import {
-  businessRecordNotFound,
   fileBindingConflict,
   fileLimitExceeded,
   fileReferenceNotFound,
@@ -59,8 +58,6 @@ export interface CreateRelationFileRouteInput {
 
 interface NormalizedRelationBinding {
   collection: string;
-  parentCollection: string;
-  parentField: string;
   recordField: string;
   recordParam: string;
   maxFiles: number;
@@ -86,8 +83,6 @@ export function createRelationFileRoute(
   const state: RelationRouteState = {
     scope: createScopedRouteIdentity(input.state.audience, 'relation', {
       collection: binding.collection,
-      parentCollection: binding.parentCollection,
-      parentField: binding.parentField,
       recordField: binding.recordField,
       recordParam: binding.recordParam,
       maxFiles: binding.maxFiles,
@@ -99,8 +94,6 @@ export function createRelationFileRoute(
         ? {}
         : { connection: input.state.connection }),
       collection: binding.collection,
-      parentCollection: binding.parentCollection,
-      parentField: binding.parentField,
       recordField: binding.recordField,
     }),
     options: input.options,
@@ -175,9 +168,6 @@ async function handleList(
   const recordId = readRecordId(state, context);
   await state.options.authorize({ context, action: 'read', recordId });
   await cleanupExpired(state, recordId);
-  if (!(await state.repository.parentExists(recordId))) {
-    throw businessRecordNotFound();
-  }
   const rows = await state.repository.list(recordId);
   const files = await state.kernel.getFiles(rows.map((row) => row.fileId));
   const filesById = new Map(
@@ -200,9 +190,6 @@ async function handleCreateUpload(
   await cleanupExpiredReservations(state, recordId);
   const body = await readJson<CreateBusinessFileRequest>(context);
   const replaceFileId = readOptionalFileId(body.replaceFileId);
-  if (!(await state.repository.parentExists(recordId))) {
-    throw businessRecordNotFound();
-  }
   if (
     replaceFileId !== null &&
     !(await getReadyRow(state, recordId, replaceFileId))
@@ -249,9 +236,6 @@ async function handleCreateUpload(
         },
         state.binding.maxFiles,
       );
-      if (reservation.outcome === 'record-missing') {
-        throw businessRecordNotFound();
-      }
       if (reservation.outcome === 'full') {
         throw fileLimitExceeded();
       }
@@ -357,9 +341,6 @@ async function handleComplete(
         connection,
       ),
   });
-  if (completed.binding?.outcome === 'record-missing') {
-    throw businessRecordNotFound();
-  }
   if (completed.binding?.outcome !== 'committed') {
     throw fileBindingConflict();
   }
@@ -399,9 +380,6 @@ async function handleDelete(
     recordId,
     fileId,
   });
-  if (!(await state.repository.parentExists(recordId))) {
-    throw businessRecordNotFound();
-  }
   const row = await state.repository.get(recordId, fileId);
   const file = await state.kernel.getFile(fileId);
   if (
@@ -447,7 +425,6 @@ async function handlePublicAccess(
     file: result.file,
     access: {
       url: result.url,
-      token: result.token,
       disposition: result.disposition,
     },
   });
@@ -535,14 +512,6 @@ function validateRelationBinding(
   binding: FileRelationBinding,
 ): NormalizedRelationBinding {
   const collection = readConfigName(binding.collection, 'collection');
-  const parentCollection = readConfigName(
-    binding.parentCollection,
-    'parentCollection',
-  );
-  const parentField = readConfigName(
-    binding.parentField ?? 'id',
-    'parentField',
-  );
   const recordParam = readConfigName(binding.recordParam, 'recordParam');
   const recordField = readConfigName(binding.recordField, 'recordField');
   if (!Number.isSafeInteger(binding.maxFiles) || binding.maxFiles <= 0) {
@@ -550,8 +519,6 @@ function validateRelationBinding(
   }
   return {
     collection,
-    parentCollection,
-    parentField,
     recordField,
     recordParam,
     maxFiles: binding.maxFiles,

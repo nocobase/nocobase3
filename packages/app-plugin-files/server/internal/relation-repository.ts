@@ -8,8 +8,6 @@ export interface CreateRelationBindingRepositoryOptions {
   database: DatabaseManager;
   connection?: string;
   collection: string;
-  parentCollection: string;
-  parentField: string;
   recordField: string;
 }
 
@@ -30,22 +28,16 @@ export interface CreateRelationReservationInput {
 }
 
 export type ReserveRelationSlotResult =
-  | { outcome: 'reserved'; row: RelationBindingRow }
-  | { outcome: 'full' }
-  | { outcome: 'record-missing' };
+  { outcome: 'reserved'; row: RelationBindingRow } | { outcome: 'full' };
 
 export type CommitRelationBindingResult =
-  | { outcome: 'committed'; row: RelationBindingRow }
-  | { outcome: 'conflict' }
-  | { outcome: 'record-missing' };
+  { outcome: 'committed'; row: RelationBindingRow } | { outcome: 'conflict' };
 
 export class RelationBindingRepository {
   readonly #database: DatabaseManager;
   readonly #connectionName: string | undefined;
   readonly #table: string;
-  readonly #parentTable: string;
   readonly #idColumn: string;
-  readonly #parentColumn: string;
   readonly #recordColumn: string;
   readonly #fileColumn: string;
   readonly #slotColumn: string;
@@ -57,26 +49,13 @@ export class RelationBindingRepository {
     this.#database = options.database;
     this.#connectionName = options.connection;
     this.#table = options.collection;
-    this.#parentTable = options.parentCollection;
     this.#idColumn = 'id';
-    this.#parentColumn = options.parentField;
     this.#recordColumn = options.recordField;
     this.#fileColumn = 'fileId';
     this.#slotColumn = 'slot';
     this.#reservationColumn = 'reservationExpiresAt';
     this.#createdAtColumn = 'createdAt';
     this.#updatedAtColumn = 'updatedAt';
-  }
-
-  async parentExists(
-    recordId: string,
-    connection?: DatabaseConnection,
-  ): Promise<boolean> {
-    return this.#query(connection)
-      .selectFrom(this.#parentTable)
-      .select(this.#parentColumn)
-      .where(this.#parentColumn, '=', recordId)
-      .exists();
   }
 
   async listExpiredFileIds(recordId: string, now: Date): Promise<string[]> {
@@ -131,9 +110,6 @@ export class RelationBindingRepository {
       try {
         const result = await this.#database.transaction(
           async (connection): Promise<ReserveRelationSlotResult> => {
-            if (!(await this.#parentExists(connection.query, input.recordId))) {
-              return { outcome: 'record-missing' };
-            }
             const occupied = await connection.query
               .selectFrom(this.#table)
               .select(this.#slotColumn)
@@ -192,9 +168,6 @@ export class RelationBindingRepository {
     const commit = async (
       activeConnection: DatabaseConnection,
     ): Promise<CommitRelationBindingResult> => {
-      if (!(await this.#parentExists(activeConnection.query, recordId))) {
-        return { outcome: 'record-missing' };
-      }
       const current = await this.#selectRow(
         activeConnection.query,
         recordId,
@@ -317,14 +290,6 @@ export class RelationBindingRepository {
 
   #query(connection?: DatabaseConnection): QueryAdapter {
     return connection?.query ?? this.#database.query(this.#connectionName);
-  }
-
-  #parentExists(query: QueryAdapter, recordId: string): Promise<boolean> {
-    return query
-      .selectFrom(this.#parentTable)
-      .select(this.#parentColumn)
-      .where(this.#parentColumn, '=', recordId)
-      .exists();
   }
 
   #selectRow(

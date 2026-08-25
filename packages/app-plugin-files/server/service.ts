@@ -2,7 +2,6 @@ import { normalizeBasePath } from '@nocobase/app-server-kit/support';
 import type { Hono } from 'hono';
 
 import type { FileUploadPlan, StoredFile } from '../protocol.js';
-import { FileServiceError } from './error.js';
 import type { FilesRuntime } from './runtime.js';
 import type {
   CreateFileInput,
@@ -13,11 +12,7 @@ import type {
   OpenedFile,
   PublicAccessOptions,
 } from './types.js';
-import {
-  fileNotFound,
-  fileNotReady,
-  storageUnavailable,
-} from './internal/errors.js';
+import { fileNotFound, fileNotReady } from './internal/errors.js';
 import { createFieldFileRoute } from './internal/field-route.js';
 import { createRelationFileRoute } from './internal/relation-route.js';
 import { invalidFileRoute } from './internal/route-errors.js';
@@ -177,13 +172,5 @@ export function createFileService(
 }
 
 async function runDirectService<T>(operation: () => Promise<T>): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    throw mapDirectServiceError(error);
-  }
-}
-
-function mapDirectServiceError(error: unknown): FileServiceError {
-  return error instanceof FileServiceError ? error : storageUnavailable();
+  return operation();
 }

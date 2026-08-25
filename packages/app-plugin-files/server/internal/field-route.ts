@@ -472,7 +472,6 @@ async function handlePublicAccess(
     file: result.file,
     access: {
       url: result.url,
-      token: result.token,
       disposition: result.disposition,
     },
   });

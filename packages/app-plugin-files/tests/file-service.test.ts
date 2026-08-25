@@ -50,6 +50,28 @@ afterEach(async () => {
 });
 
 describe('public FileService', () => {
+  it('uses the same multi-part extension rule as the Registry', async () => {
+    const fixture = await createFixture();
+    await expect(
+      fixture.service.createFile({
+        name: 'archive.tar.gz',
+        contentType: 'application/gzip',
+        size: 3,
+        content: asyncChunks(['123']),
+        constraints: { allowedExtensions: ['.tar.gz'] },
+      }),
+    ).resolves.toMatchObject({ status: 'ready', name: 'archive.tar.gz' });
+    await expect(
+      fixture.service.createFile({
+        name: 'archive.gz',
+        contentType: 'application/gzip',
+        size: 3,
+        content: asyncChunks(['123']),
+        constraints: { allowedExtensions: ['.tar.gz'] },
+      }),
+    ).rejects.toMatchObject({ code: 'UPLOAD_TYPE_NOT_ALLOWED' });
+  });
+
   it('streams a Local file into ready state and opens it as a stream', async () => {
     const fixture = await createFixture();
     const chunksRead: string[] = [];
@@ -268,6 +290,23 @@ describe('public FileService', () => {
     await expect(fixture.service.openFile('missing')).rejects.toBeInstanceOf(
       FileServiceError,
     );
+  });
+
+  it('preserves disposed runtime and schema errors for direct callers', async () => {
+    const disposed = await createFixture();
+    await disposed.runtime.dispose();
+    await expect(disposed.service.getFile('missing')).rejects.toThrow(
+      'Files runtime is invalid or disposed.',
+    );
+
+    const schema = await createFixture();
+    await schema.database.builder().dropCollection('files');
+    const error = await schema.service
+      .getFile('missing')
+      .catch((value) => value);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(FileServiceError);
+    expect(error).not.toMatchObject({ code: 'STORAGE_UNAVAILABLE' });
   });
 
   it('issues redacted short-lived Core URLs with bounded expiry', async () => {

@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { Readable, Transform, type TransformCallback } from 'node:stream';
 
 import type { StorageObjectMetadata } from './storage/types.js';
@@ -261,8 +260,12 @@ function assertUploadType(
   >,
 ): void {
   if (policy.allowedExtensions.length > 0) {
-    const extension = path.extname(name).toLowerCase();
-    if (!policy.allowedExtensions.includes(extension)) {
+    const fileName = name.toLowerCase();
+    if (
+      !policy.allowedExtensions.some((extension) =>
+        fileName.endsWith(extension),
+      )
+    ) {
       throw uploadTypeNotAllowed();
     }
   }
