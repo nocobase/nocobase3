@@ -1,5 +1,5 @@
 import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
-import { Activity, Boxes } from 'lucide-react';
+import { Activity, Boxes, ScrollText, Settings, Users } from 'lucide-react';
 import type { ComponentType } from 'react';
 
 import { HubCapabilityRouteGate } from '@/features/hub/provider';
@@ -17,7 +17,9 @@ export const appRoutes = defineAppRoutes([
     name: 'apps',
     path: '/apps',
     lazy: () =>
-      import('@/pages/applications/list').then(withCapability('hub.app')),
+      import('@/pages/applications/list').then(
+        withCapability('hub.app', { allowAnyApplication: true }),
+      ),
     resource: {
       meta: {
         label: 'Applications',
@@ -68,6 +70,65 @@ export const appRoutes = defineAppRoutes([
       import('@/pages/deployments/detail').then(
         withCapability('hub.deployment', { allowAnyApplication: true }),
       ),
+  },
+  {
+    name: 'audit',
+    path: '/audit',
+    lazy: () =>
+      import('@/pages/audit/list').then(
+        withCapability('hub.auditLog', { allowAnyApplication: true }),
+      ),
+    resource: {
+      meta: {
+        label: 'Audit log',
+        singularLabel: 'Audit event',
+        description: 'Hub management activity and final results.',
+        descriptionI18nKey: 'hub.resources.audit.description',
+        i18nKey: 'hub.resources.audit.label',
+        i18nSingularKey: 'hub.resources.audit.singular',
+        icon: <ScrollText />,
+        priority: 30,
+        hubResource: 'hub.auditLog',
+      },
+    },
+  },
+  {
+    name: 'members',
+    path: '/members',
+    lazy: () =>
+      import('@/pages/members/list').then(withCapability('hub.member')),
+    resource: {
+      meta: {
+        label: 'Members and roles',
+        singularLabel: 'Member',
+        description: 'Hub membership and built-in role capabilities.',
+        descriptionI18nKey: 'hub.resources.members.description',
+        i18nKey: 'hub.resources.members.label',
+        i18nSingularKey: 'hub.resources.members.singular',
+        icon: <Users />,
+        priority: 40,
+        hubResource: 'hub.member',
+      },
+    },
+  },
+  {
+    name: 'settings',
+    path: '/settings',
+    lazy: () =>
+      import('@/pages/settings/index').then(withCapability('hub.setting')),
+    resource: {
+      meta: {
+        label: 'Hub settings',
+        singularLabel: 'Hub setting',
+        description: 'Storage, retention, and management policies.',
+        descriptionI18nKey: 'hub.resources.settings.description',
+        i18nKey: 'hub.resources.settings.label',
+        i18nSingularKey: 'hub.resources.settings.singular',
+        icon: <Settings />,
+        priority: 50,
+        hubResource: 'hub.setting',
+      },
+    },
   },
 ]);
 

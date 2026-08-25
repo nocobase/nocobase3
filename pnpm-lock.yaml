@@ -1160,15 +1160,15 @@ importers:
       '@nocobase/app-host':
         specifier: workspace:^
         version: link:../app-host
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:^
+        version: link:../app-plugin-authentication
       '@nocobase/app-sdk':
         specifier: workspace:^
         version: link:../app-sdk
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../app-server
-      '@nocobase/authentication':
-        specifier: workspace:^
-        version: link:../authentication
       '@nocobase/authorization':
         specifier: workspace:^
         version: link:../authorization

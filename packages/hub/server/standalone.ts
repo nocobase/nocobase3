@@ -63,6 +63,16 @@ function createStandaloneServerWithRegistry(
     authBaseUrl: getEnvString(env, 'AUTH_BASE_URL'),
     databasePath: getEnvString(env, 'HUB_DATABASE_PATH'),
     releaseRoot: getEnvString(env, 'HUB_RELEASE_ROOT'),
+    sourceRoot: getEnvString(env, 'HUB_SOURCE_ROOT'),
+    appPublicOrigin: getEnvString(env, 'APP_PUBLIC_ORIGIN'),
+    runtimeSecretEncryptionKey: getEnvString(env, 'HUB_SECRET_ENCRYPTION_KEY'),
+    runtimeSecretEncryptionKeyFile: getEnvString(
+      env,
+      'HUB_SECRET_ENCRYPTION_KEY_FILE',
+    ),
+    maxUploadBytes: numberFromEnv(env, 'HUB_MAX_UPLOAD_BYTES'),
+    maxArtifactBytes: numberFromEnv(env, 'HUB_MAX_ARTIFACT_BYTES'),
+    uploadTtlSeconds: numberFromEnv(env, 'HUB_UPLOAD_TTL_SECONDS'),
     appHostRegistry,
     apiClientStoragePrefix: getEnvString(env, 'API_CLIENT_STORAGE_PREFIX'),
     apiClientStorageType: getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
@@ -86,9 +96,7 @@ async function startServerAsync(): Promise<void> {
       getEnvString(env, 'APP_HOST_BIND') ??
       getEnvString(env, 'HOST') ??
       '127.0.0.1',
-    appDistDir:
-      getEnvString(env, 'APP_DIST_DIR') ??
-      getEnvString(env, 'HUB_RELEASE_ROOT'),
+    appDistDir: resolveStandaloneCatalogDirectory(env),
   });
   const app = createStandaloneServerWithRegistry({}, env, appHost.registry);
   const host = getEnvString(env, 'APP_SERVER_HOST') ?? '127.0.0.1';
@@ -121,6 +129,14 @@ async function startServerAsync(): Promise<void> {
     shutdown.dispose();
     await closeStandalone(server, app, appHost);
   }
+}
+
+function resolveStandaloneCatalogDirectory(env: EnvMap): string | undefined {
+  const releaseRoot = getEnvString(env, 'HUB_RELEASE_ROOT');
+  if (releaseRoot) {
+    return path.join(path.resolve(releaseRoot), '.catalog');
+  }
+  return getEnvString(env, 'APP_DIST_DIR');
 }
 
 function startAppHost(appHost: AppHost): Promise<void> {

@@ -57,9 +57,7 @@ describe('standalone Hub lifecycle', () => {
     const hostPayload = (await hostResponse.json()) as {
       definitions: Array<{ id: string }>;
     };
-    expect(
-      hostPayload.definitions.map((definition) => definition.id),
-    ).toContain('demo');
+    expect(hostPayload.definitions).toEqual([]);
 
     const hubResponse = await fetch(
       `http://127.0.0.1:${hubPort}/hub/api/healthz`,

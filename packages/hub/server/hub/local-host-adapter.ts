@@ -2,6 +2,7 @@ import type {
   AppDefinition,
   AppDeploymentResult,
   AppRuntimeRegistry,
+  AppSnapshot,
   DeployAppOptions,
 } from '@nocobase/app-host';
 import { stat } from 'node:fs/promises';
@@ -18,6 +19,7 @@ export interface LocalHostDeploymentRequest {
   application: HubApplication;
   release: HubRelease;
   deployment: HubDeployment;
+  runtimeSecret?: string;
 }
 
 export interface LocalHostAdapterOptions {
@@ -75,9 +77,8 @@ export class LocalHostAdapter {
       target,
       operationId: request.deployment.id,
       expectedCurrentReleaseId: previousReleaseId,
-      runtimeConfig: this.appAuthSecret
-        ? { authSecret: this.appAuthSecret }
-        : undefined,
+      readiness: STRICT_JSON_READINESS,
+      runtimeConfig: this.runtimeConfig(request.runtimeSecret),
       reason: `Hub deployment ${request.deployment.id}`,
     };
     return registry.deploy(target.id, options);
@@ -86,6 +87,7 @@ export class LocalHostAdapter {
   async restore(
     application: HubApplication,
     release: HubRelease,
+    runtimeSecret?: string,
   ): Promise<AppDeploymentResult> {
     const registry = this.registry;
     if (!registry) {
@@ -111,10 +113,78 @@ export class LocalHostAdapter {
       target,
       operationId: `recovery-${release.id}`,
       expectedCurrentReleaseId: current?.releaseId ?? null,
-      runtimeConfig: this.appAuthSecret
-        ? { authSecret: this.appAuthSecret }
-        : undefined,
+      readiness: STRICT_JSON_READINESS,
+      runtimeConfig: this.runtimeConfig(runtimeSecret),
       reason: `Restore Hub active release ${release.id}`,
+    });
+  }
+
+  getRuntime(application: HubApplication): AppSnapshot | undefined {
+    return this.registry?.snapshot(application.slug);
+  }
+
+  async prepare(
+    application: HubApplication,
+    release: HubRelease,
+    runtimeSecret: string,
+    enabled: boolean,
+  ): Promise<AppDefinition> {
+    const registry = this.requireRegistry();
+    const target = {
+      ...(await this.createTarget(application, release)),
+      enabled,
+    };
+    return registry.configureInactive(target.id, {
+      target,
+      runtimeConfig: { authSecret: runtimeSecret },
+    });
+  }
+
+  async start(
+    application: HubApplication,
+    release: HubRelease,
+    runtimeSecret: string,
+    operationId: string,
+  ): Promise<AppDeploymentResult> {
+    const registry = this.requireRegistry();
+    const target = await this.createTarget(application, release);
+    return registry.deploy(target.id, {
+      target,
+      operationId,
+      expectedCurrentReleaseId: registry.snapshot(target.id)?.releaseId ?? null,
+      runtimeConfig: { authSecret: runtimeSecret },
+      readiness: STRICT_JSON_READINESS,
+      reason: `Start Hub application ${application.id}`,
+    });
+  }
+
+  async restart(
+    application: HubApplication,
+    release: HubRelease,
+    runtimeSecret: string,
+    operationId: string,
+  ): Promise<AppDeploymentResult> {
+    const registry = this.requireRegistry();
+    const target = await this.createTarget(application, release);
+    return registry.deploy(target.id, {
+      target,
+      operationId,
+      expectedCurrentReleaseId: registry.snapshot(target.id)?.releaseId ?? null,
+      runtimeConfig: { authSecret: runtimeSecret },
+      readiness: STRICT_JSON_READINESS,
+      reason: `Restart Hub application ${application.id}`,
+    });
+  }
+
+  async evict(application: HubApplication): Promise<boolean> {
+    return this.requireRegistry().evict(application.slug, {
+      reason: `Hub stopped application ${application.id}`,
+    });
+  }
+
+  async unregister(application: HubApplication): Promise<boolean> {
+    return this.requireRegistry().unregister(application.slug, {
+      reason: `Hub archived application ${application.id}`,
     });
   }
 
@@ -199,7 +269,34 @@ export class LocalHostAdapter {
       storageKey: release.storageKey,
     });
   }
+
+  private requireRegistry(): AppRuntimeRegistry {
+    if (!this.registry) {
+      throw new HubDomainError(
+        'HOST_UNAVAILABLE',
+        'The local App Host is unavailable.',
+        { status: 503, retryable: true },
+      );
+    }
+    return this.registry;
+  }
+
+  private runtimeConfig(
+    runtimeSecret: string | undefined,
+  ): Readonly<Record<string, unknown>> | undefined {
+    const authSecret = runtimeSecret ?? this.appAuthSecret;
+    return authSecret ? { authSecret } : undefined;
+  }
 }
+
+const STRICT_JSON_READINESS: NonNullable<DeployAppOptions['readiness']> = {
+  timeoutMs: 2_000,
+  intervalMs: 100,
+  expect: {
+    contentType: 'application/json',
+    json: { ok: true },
+  },
+};
 
 function manifestString(
   manifest: Record<string, unknown>,

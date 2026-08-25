@@ -36,8 +36,11 @@ import {
   type HubDeploymentEvent,
   type HubFetcher,
   type HubMe,
+  type HubApplication,
+  type HubMember,
+  type HubRelease,
   hasHubCapability,
-  hubPost,
+  hubRequest,
   useHubQuery,
 } from '@/features/hub/api';
 import {
@@ -90,13 +93,68 @@ export function DeploymentDetailPage({
     fetcher,
     enabled: Boolean(encodedId && !runtime),
   });
+  const capabilities = runtime?.me.capabilities ?? me.data?.capabilities;
   const canRedeploy = hasHubCapability(
-    runtime?.me.capabilities ?? me.data?.capabilities,
+    capabilities,
     'hub.deployment',
-    'create',
+    'redeploy',
     deployment.data?.applicationId,
   );
-  const capabilities = runtime?.me.capabilities ?? me.data?.capabilities;
+  const canReadApplication = hasHubCapability(
+    capabilities,
+    'hub.app',
+    'read',
+    deployment.data?.applicationId,
+  );
+  const canReadReleases = hasHubCapability(
+    capabilities,
+    'hub.release',
+    'read',
+    deployment.data?.applicationId,
+  );
+  const canReadMember = hasHubCapability(capabilities, 'hub.member', 'read');
+  const application = useHubQuery<HubApplication>({
+    path:
+      (canReadApplication || canRedeploy) && deployment.data?.applicationId
+        ? `/apps/${encodeURIComponent(deployment.data.applicationId)}`
+        : null,
+    fetcher,
+    enabled: Boolean(
+      (canReadApplication || canRedeploy) && deployment.data?.applicationId,
+    ),
+  });
+  const targetRelease = useHubQuery<HubRelease>({
+    path:
+      canReadReleases &&
+      deployment.data?.applicationId &&
+      deployment.data.targetReleaseId
+        ? `/apps/${encodeURIComponent(deployment.data.applicationId)}/releases/${encodeURIComponent(deployment.data.targetReleaseId)}`
+        : null,
+    fetcher,
+    enabled: canReadReleases,
+  });
+  const previousRelease = useHubQuery<HubRelease>({
+    path:
+      canReadReleases &&
+      deployment.data?.applicationId &&
+      deployment.data.previousReleaseId
+        ? `/apps/${encodeURIComponent(deployment.data.applicationId)}/releases/${encodeURIComponent(deployment.data.previousReleaseId)}`
+        : null,
+    fetcher,
+    enabled: canReadReleases,
+  });
+  const requestedByMember = useHubQuery<HubMember>({
+    path:
+      canReadMember && deployment.data?.requestedBy
+        ? `/members/${encodeURIComponent(deployment.data.requestedBy)}`
+        : null,
+    fetcher,
+    enabled: canReadMember,
+  });
+  const redeployTargetIsCurrent = Boolean(
+    deployment.data?.targetReleaseId &&
+    application.data?.activeRelease?.id === deployment.data.targetReleaseId,
+  );
   const deploymentStatus = deployment.data?.status;
   const reloadDeployment = deployment.reload;
   const reloadEvents = events.reload;
@@ -141,12 +199,6 @@ export function DeploymentDetailPage({
     'hub.deployment',
     'read',
   );
-  const canReadApplication = hasHubCapability(
-    capabilities,
-    'hub.app',
-    'read',
-    deploymentData.applicationId,
-  );
   const backTarget = canReadGlobalDeployments
     ? {
         label: translate('hub.common.deployments', 'Deployments'),
@@ -160,16 +212,7 @@ export function DeploymentDetailPage({
       : { label: translate('hub.common.home', 'Home'), to: '/' };
 
   const progress = getDeploymentProgress(deploymentData.status, translate);
-  const failure =
-    deploymentData.failure ??
-    (deploymentData.failureCode || deploymentData.failureMessage
-      ? {
-          code: deploymentData.failureCode ?? 'DEPLOYMENT_FAILED',
-          message:
-            deploymentData.failureMessage ??
-            translate('hub.deployment.failure.default', 'Deployment failed.'),
-        }
-      : null);
+  const failure = deploymentData.failure ?? null;
 
   return (
     <div className='space-y-6'>
@@ -208,7 +251,9 @@ export function DeploymentDetailPage({
               )}
             </p>
           </div>
-          {canRedeploy && TERMINAL_STATUSES.has(deploymentData.status) ? (
+          {canRedeploy &&
+          redeployTargetIsCurrent &&
+          TERMINAL_STATUSES.has(deploymentData.status) ? (
             <Button
               type='button'
               variant='outline'
@@ -320,11 +365,25 @@ export function DeploymentDetailPage({
                 value={deploymentData.applicationId}
               />
               <Detail
+                label={translate('hub.common.type', 'Type')}
+                value={getDeploymentTypeLabel(deploymentData.type, translate)}
+              />
+              <Detail
                 label={translate(
                   'hub.deployment.details.targetRelease',
                   'Target release',
                 )}
-                value={deploymentData.targetReleaseId}
+                value={
+                  targetRelease.data?.version ?? deploymentData.targetReleaseId
+                }
+                mono
+              />
+              <Detail
+                label={translate(
+                  'hub.deployment.details.activeRelease',
+                  'Current active release',
+                )}
+                value={application.data?.activeRelease?.version ?? '—'}
                 mono
               />
               <Detail
@@ -333,6 +392,7 @@ export function DeploymentDetailPage({
                   'Previous release',
                 )}
                 value={
+                  previousRelease.data?.version ??
                   deploymentData.previousReleaseId ??
                   translate('hub.common.none', 'None')
                 }
@@ -347,7 +407,12 @@ export function DeploymentDetailPage({
                   'hub.deployment.details.requestedBy',
                   'Requested by',
                 )}
-                value={deploymentData.requestedBy}
+                value={
+                  requestedByMember.data?.name ??
+                  (me.data?.user?.id === deploymentData.requestedBy
+                    ? me.data.user.name
+                    : deploymentData.requestedBy)
+                }
               />
               <Detail
                 label={translate('hub.common.started', 'Started')}
@@ -359,11 +424,13 @@ export function DeploymentDetailPage({
               />
               <Detail
                 label={translate(
-                  'hub.deployment.details.hostOperation',
-                  'Host operation',
+                  'hub.deployments.columns.duration',
+                  'Duration',
                 )}
-                value={deploymentData.hostOperationId ?? '—'}
-                mono
+                value={formatDeploymentDuration(
+                  deploymentData.startedAt,
+                  deploymentData.finishedAt,
+                )}
               />
             </dl>
           </CardContent>
@@ -419,13 +486,17 @@ export function DeploymentDetailPage({
                 event.preventDefault();
                 setRedeploying(true);
                 setRedeployError(null);
-                void hubPost<HubDeployment>(
+                void hubRequest<HubDeployment>(
                   `/apps/${encodeURIComponent(
                     deploymentData.applicationId,
                   )}/deployments`,
                   {
-                    targetReleaseId: deploymentData.targetReleaseId,
-                    type: 'redeploy',
+                    method: 'POST',
+                    headers: { 'idempotency-key': crypto.randomUUID() },
+                    body: JSON.stringify({
+                      targetReleaseId: deploymentData.targetReleaseId,
+                      type: 'redeploy',
+                    }),
                   },
                   fetcher,
                 )
@@ -545,6 +616,30 @@ function Detail({
         {value}
       </dd>
     </div>
+  );
+}
+
+function formatDeploymentDuration(
+  startedAt: string | null,
+  finishedAt: string | null,
+): string {
+  if (!startedAt) return '—';
+  if (!finishedAt) return 'In progress';
+  const milliseconds =
+    new Date(finishedAt).valueOf() - new Date(startedAt).valueOf();
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '—';
+  const seconds = Math.round(milliseconds / 1000);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return (
+    [
+      hours ? `${hours}h` : '',
+      minutes ? `${minutes}m` : '',
+      remainder ? `${remainder}s` : '',
+    ]
+      .filter(Boolean)
+      .join(' ') || '0s'
   );
 }
 

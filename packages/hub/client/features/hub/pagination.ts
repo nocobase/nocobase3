@@ -5,6 +5,7 @@ import {
   type HubApiError,
   type HubFetcher,
   type HubPageMeta,
+  useHubQuery,
 } from './api';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -26,6 +27,80 @@ export interface UseHubPaginatedQueryOptions {
   fetcher?: HubFetcher;
   enabled?: boolean;
   pageSize?: number;
+}
+
+export interface HubPageQueryState<T> {
+  data: T[];
+  meta: HubPageMeta | undefined;
+  loading: boolean;
+  error: HubApiError | Error | null;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  total: number;
+  setPage: (page: number) => void;
+  setPageSize: (pageSize: number) => void;
+  reload: () => void;
+}
+
+export type UseHubPageQueryOptions = UseHubPaginatedQueryOptions;
+
+/** Controlled server-side pagination for management tables. */
+export function useHubPageQuery<T>({
+  path,
+  fetcher,
+  enabled = true,
+  pageSize: initialPageSize = DEFAULT_PAGE_SIZE,
+}: UseHubPageQueryOptions): HubPageQueryState<T> {
+  const [page, setPageState] = useState(1);
+  const [pageSize, setPageSizeState] = useState(initialPageSize);
+  const requestPath =
+    path && enabled
+      ? page === 1 && pageSize === DEFAULT_PAGE_SIZE
+        ? path
+        : withPagination(path, pageSize, (page - 1) * pageSize)
+      : null;
+  const query = useHubQuery<T[]>({
+    path: requestPath,
+    fetcher,
+    enabled,
+    initialData: [],
+  });
+  const total =
+    nonNegativeInteger(query.meta?.total) ?? query.data?.length ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const setPage = useCallback(
+    (nextPage: number) => {
+      setPageState(Math.min(Math.max(1, nextPage), pageCount));
+    },
+    [pageCount],
+  );
+  const setPageSize = useCallback((nextPageSize: number) => {
+    setPageSizeState(Math.max(1, nextPageSize));
+    setPageState(1);
+  }, []);
+
+  useEffect(() => setPageState(1), [path]);
+  useEffect(() => {
+    if (page > pageCount) setPageState(pageCount);
+  }, [page, pageCount]);
+
+  return useMemo(
+    () => ({
+      data: query.data ?? [],
+      meta: query.meta,
+      loading: query.loading,
+      error: query.error,
+      page,
+      pageSize,
+      pageCount,
+      total,
+      setPage,
+      setPageSize,
+      reload: query.reload,
+    }),
+    [page, pageCount, pageSize, query, setPage, setPageSize, total],
+  );
 }
 
 /** Internal list state for Hub endpoints that expose limit/offset metadata. */

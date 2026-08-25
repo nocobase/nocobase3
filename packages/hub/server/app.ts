@@ -4,11 +4,12 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 
-import { Auth } from '@nocobase/authentication';
+import { Auth } from '@nocobase/app-plugin-authentication';
 import type { AppRuntimeRegistry } from '@nocobase/app-host';
 
 import { createHubApi } from './hub/api.js';
 import { createHubDatabase, type HubDatabaseRuntime } from './hub/database.js';
+import { resolveRuntimeSecretEncryptionKey } from './hub/runtime-secret-service.js';
 
 export interface CreateAppOptions {
   appName?: string;
@@ -28,6 +29,15 @@ export interface CreateAppOptions {
   authSecret?: string;
   authBaseUrl?: string;
   releaseRoot?: string;
+  appPublicOrigin?: string;
+  sourceRoot?: string;
+  repositorySeedPath?: string;
+  runtimeSecretEncryptionKey?: string;
+  runtimeSecretEncryptionKeyFile?: string;
+  maxUploadBytes?: number;
+  maxArtifactBytes?: number;
+  uploadTtlSeconds?: number;
+  agentTokenHashSecret?: string;
   appHostRegistry?: AppRuntimeRegistry;
 }
 
@@ -83,6 +93,7 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
   let hubRuntime: HubDatabaseRuntime | undefined;
   let hubReady: Promise<void> | undefined;
   let closeHubApi: (() => Promise<void>) | undefined;
+  let handleHubGit: ((request: Request) => Promise<Response>) | undefined;
 
   if (hubEnabled) {
     if (!authSecret || authSecret.trim().length < 32) {
@@ -146,11 +157,38 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
       authoritativeOrigin: configuredAuthBaseUrl ? authUrl.origin : undefined,
       registry: options.appHostRegistry,
       releaseRoot: options.releaseRoot,
-      appAuthSecret: authSecret,
+      appPublicOrigin: options.appPublicOrigin,
+      sourceRoot: options.sourceRoot,
+      repositorySeedPath: options.repositorySeedPath,
+      runtimeSecretEncryptionKey:
+        options.runtimeSecretEncryptionKey ||
+        options.runtimeSecretEncryptionKeyFile ||
+        (options.sourceRoot && options.repositorySeedPath)
+          ? resolveRuntimeSecretEncryptionKey({
+              authoritativeOrigin: configuredAuthBaseUrl
+                ? authUrl.origin
+                : undefined,
+              databasePath:
+                options.databasePath ??
+                process.env.HUB_DATABASE_PATH ??
+                path.resolve(process.cwd(), '.nocobase/hub.sqlite'),
+              configuredKey: options.runtimeSecretEncryptionKey,
+              keyFile: options.runtimeSecretEncryptionKeyFile,
+              authSecret,
+            })
+          : undefined,
+      maxUploadBytes: options.maxUploadBytes,
+      maxArtifactBytes: options.maxArtifactBytes,
+      uploadTtlSeconds: options.uploadTtlSeconds,
+      agentTokenHashSecret:
+        options.agentTokenHashSecret ??
+        process.env.HUB_AGENT_TOKEN_HASH_SECRET ??
+        `nocobase-hub-agent-token-v1\0${authSecret}`,
     });
     api.route('/', hubApi);
     hubReady = hubApi.ready;
     closeHubApi = () => hubApi.close();
+    handleHubGit = (request) => hubApi.handleGit(request);
   } else {
     api.get('/healthz', (context) => {
       return context.json({
@@ -172,6 +210,9 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
   }
 
   app.route(`${basePath}/api`, api);
+  if (handleHubGit) {
+    app.all(`${basePath}/git/*`, (context) => handleHubGit!(context.req.raw));
+  }
   if (clientHandler) {
     app.all(basePath || '/', (context) =>
       dispatchClientRoute(context.req.raw, basePath, clientHandler),

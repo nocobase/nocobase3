@@ -133,13 +133,16 @@ describe('Hub client API', () => {
 });
 
 describe('Hub route configuration', () => {
-  it('exposes only the four approved business routes without Registry routes', () => {
+  it('exposes the approved business routes without Registry routes', () => {
     expect(registryRoutesEnabled).toBe(false);
     expect(appRoutes.map((route) => route.path)).toEqual([
       '/apps',
       '/apps/:appId',
       '/deployments',
       '/deployments/:deploymentId',
+      '/audit',
+      '/members',
+      '/settings',
     ]);
     expect(
       appRoutes.flatMap((route) =>
@@ -155,6 +158,9 @@ describe('Hub route configuration', () => {
     ).toEqual([
       { name: 'apps', capability: 'hub.app' },
       { name: 'deployments', capability: 'hub.deployment' },
+      { name: 'audit', capability: 'hub.auditLog' },
+      { name: 'members', capability: 'hub.member' },
+      { name: 'settings', capability: 'hub.setting' },
     ]);
   });
 });

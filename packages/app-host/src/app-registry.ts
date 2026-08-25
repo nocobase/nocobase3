@@ -28,8 +28,10 @@ import type {
   AppDeploymentResult,
   AppDestroyOptions,
   AppReadinessPolicy,
+  AppReadinessResponseExpectation,
   AppRequestMetadata,
   AppSnapshot,
+  ConfigureInactiveAppOptions,
 } from './app-types.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 30_000;
@@ -88,6 +90,13 @@ export interface RegistryMetrics {
   activationFailures: number;
   lastActivationDurationMs: number | null;
   lastEvictionDurationMs: number | null;
+}
+
+interface ResolvedAppReadinessPolicy {
+  timeoutMs: number;
+  intervalMs: number;
+  successThreshold: number;
+  expect?: AppReadinessResponseExpectation;
 }
 
 export class AppRuntimeRegistry {
@@ -187,6 +196,45 @@ export class AppRuntimeRegistry {
 
       const definition = this.createDefinition(id, options);
       this.definitions.set(id, definition);
+      return definition;
+    });
+  }
+
+  async configureInactive(
+    id: string,
+    options: ConfigureInactiveAppOptions,
+  ): Promise<AppDefinition> {
+    return this.withAppLock(id, async () => {
+      if (options.target.id !== id) {
+        throw new AppRegistryError(
+          `Definition target "${options.target.id}" does not match app "${id}"`,
+          {
+            status: 400,
+            code: 'APP_DEFINITION_TARGET_INVALID',
+          },
+        );
+      }
+      if (this.runtimes.has(id)) {
+        throw new AppRegistryError(
+          `App "${id}" has an active runtime; deploy a release instead of replacing its definition`,
+          {
+            status: 409,
+            code: 'APP_DEFINITION_ACTIVE',
+          },
+        );
+      }
+
+      const definition = this.createDefinition(id, options.target);
+      const runtimeConfig =
+        options.runtimeConfig === null ? null : { ...options.runtimeConfig };
+
+      this.definitions.set(id, definition);
+      if (runtimeConfig === null) {
+        this.runtimeConfigs.delete(id);
+      } else {
+        this.runtimeConfigs.set(id, runtimeConfig);
+      }
+
       return definition;
     });
   }
@@ -686,8 +734,22 @@ export class AppRuntimeRegistry {
           }),
           remainingMs,
         );
-        const ready = response.ok;
-        await response.body?.cancel();
+        let ready = response.ok;
+        let responseFailure: unknown = ready
+          ? undefined
+          : new Error(`Readiness returned HTTP ${response.status}`);
+        try {
+          if (ready && policy.expect) {
+            await this.assertReadinessResponse(response, policy.expect);
+          }
+        } catch (error) {
+          ready = false;
+          responseFailure = error;
+        } finally {
+          if (!response.bodyUsed) {
+            await response.body?.cancel();
+          }
+        }
 
         if (ready) {
           successes += 1;
@@ -696,7 +758,7 @@ export class AppRuntimeRegistry {
           }
         } else {
           successes = 0;
-          lastFailure = new Error(`Readiness returned HTTP ${response.status}`);
+          lastFailure = responseFailure;
         }
       } catch (error) {
         successes = 0;
@@ -729,8 +791,8 @@ export class AppRuntimeRegistry {
   private resolveReadinessPolicy(
     definition: AppDefinition,
     options: AppReadinessPolicy | undefined,
-  ): Required<AppReadinessPolicy> {
-    const policy = {
+  ): ResolvedAppReadinessPolicy {
+    const policy: ResolvedAppReadinessPolicy = {
       timeoutMs:
         options?.timeoutMs ??
         definition.resourcePolicy?.startupTimeoutMs ??
@@ -738,6 +800,7 @@ export class AppRuntimeRegistry {
       intervalMs: options?.intervalMs ?? DEFAULT_READINESS_INTERVAL_MS,
       successThreshold:
         options?.successThreshold ?? DEFAULT_READINESS_SUCCESS_THRESHOLD,
+      expect: options?.expect,
     };
 
     if (
@@ -746,7 +809,8 @@ export class AppRuntimeRegistry {
       !Number.isFinite(policy.intervalMs) ||
       policy.intervalMs <= 0 ||
       !Number.isInteger(policy.successThreshold) ||
-      policy.successThreshold <= 0
+      policy.successThreshold <= 0 ||
+      !isValidReadinessExpectation(policy.expect)
     ) {
       throw new AppRegistryError('Invalid deployment readiness policy', {
         status: 400,
@@ -755,6 +819,39 @@ export class AppRuntimeRegistry {
     }
 
     return policy;
+  }
+
+  private async assertReadinessResponse(
+    response: Response,
+    expectation: AppReadinessResponseExpectation,
+  ): Promise<void> {
+    if (expectation.contentType !== undefined) {
+      const actualContentType = response.headers.get('content-type');
+      if (
+        actualContentType === null ||
+        normalizeMediaType(actualContentType) !==
+          normalizeMediaType(expectation.contentType)
+      ) {
+        throw new Error(
+          `Readiness returned Content-Type ${JSON.stringify(actualContentType)}; expected ${JSON.stringify(expectation.contentType)}`,
+        );
+      }
+    }
+
+    if (expectation.json !== undefined) {
+      const value: unknown = await response.json();
+      if (!isJsonObject(value)) {
+        throw new Error('Readiness did not return a JSON object');
+      }
+
+      for (const [key, expected] of Object.entries(expectation.json)) {
+        if (!Object.hasOwn(value, key) || value[key] !== expected) {
+          throw new Error(
+            `Readiness JSON field ${JSON.stringify(key)} did not match the expected value`,
+          );
+        }
+      }
+    }
   }
 
   private async evictForCapacity(): Promise<void> {
@@ -906,6 +1003,51 @@ export class AppRuntimeRegistry {
       throw new InvalidAppIdError(id);
     }
   }
+}
+
+function isValidReadinessExpectation(
+  expectation: AppReadinessResponseExpectation | undefined,
+): boolean {
+  if (expectation === undefined) {
+    return true;
+  }
+
+  if (typeof expectation !== 'object' || expectation === null) {
+    return false;
+  }
+
+  if (
+    expectation.contentType !== undefined &&
+    (typeof expectation.contentType !== 'string' ||
+      normalizeMediaType(expectation.contentType) === '')
+  ) {
+    return false;
+  }
+
+  return (
+    expectation.json === undefined || isExpectedJsonObject(expectation.json)
+  );
+}
+
+function isExpectedJsonObject(value: unknown): boolean {
+  if (!isJsonObject(value)) {
+    return false;
+  }
+
+  return Object.values(value).every(
+    (entry) =>
+      typeof entry === 'string' ||
+      (typeof entry === 'number' && Number.isFinite(entry)) ||
+      typeof entry === 'boolean',
+  );
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeMediaType(contentType: string): string {
+  return contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
 }
 
 function sortByLastAccessed(a: AppSnapshot, b: AppSnapshot): number {

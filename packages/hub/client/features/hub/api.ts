@@ -34,10 +34,72 @@ export interface HubApplication {
   description: string | null;
   status: HubApplicationStatus;
   defaultEnvironmentId: string;
-  activeReleaseId: string | null;
+  isDefault?: boolean;
+  revision?: number;
+  repository?: HubRepositorySummary;
+  latestRelease?: HubReleaseSummary | null;
+  activeRelease?: HubReleaseSummary | HubRelease | null;
+  runtime?: HubRuntimeSummary;
+  runtimeSecret?: HubRuntimeSecretSummary;
+  links?: HubApplicationLinks;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface HubApplicationLinks {
+  self: string;
+  open: string | null;
+}
+
+export interface HubRepositorySummary {
+  provider: string;
+  defaultBranch: string;
+  headCommit: string | null;
+  status: string;
+  updatedAt: string | null;
+}
+
+export interface HubRepository extends HubRepositorySummary {
+  cloneUrl: string;
+}
+
+export interface HubReleaseSummary {
+  id: string;
+  version: string;
+  sourceCommit: string | null;
+  createdAt: string;
+}
+
+export interface HubRuntimeSummary {
+  state: string;
+  health: string;
+  releaseId: string | null;
+  lastCheckedAt: string | null;
+}
+
+export interface HubRuntime {
+  applicationId: string;
+  environmentId: string;
+  runtimeId: string | null;
+  state: string;
+  health: string;
+  releaseId: string | null;
+  releaseVersion?: string | null;
+  url?: string | null;
+  startedAt: string | null;
+  lastSeenAt: string | null;
+  lastCheckedAt?: string | null;
+  activeRequests?: number | null;
+  failure?: HubDeploymentFailure | null;
+}
+
+export interface HubRuntimeSecretSummary {
+  configured: boolean;
+  version: number;
+  createdAt?: string | null;
+  rotatedAt: string | null;
+  lastInjectedAt?: string | null;
 }
 
 export type HubReleaseVerificationStatus =
@@ -52,8 +114,237 @@ export interface HubRelease {
   sizeBytes: number | null;
   sourceCommit: string | null;
   verificationStatus: HubReleaseVerificationStatus;
+  retention?: {
+    pinned: boolean;
+    pinnedBy: string | null;
+    pinnedAt: string | null;
+  };
   createdBy: string;
   createdAt: string;
+}
+
+export interface HubRole {
+  id?: string;
+  key?: string;
+  name?: string;
+  scope: 'global' | 'application' | string;
+  scopes?: string[];
+  descriptionKey?: string;
+  capabilities: HubCapability[];
+}
+
+export interface HubMemberApplicationAccess {
+  applicationId: string;
+  roles: string[];
+}
+
+export interface HubMemberAccess {
+  revision: number;
+  globalRoles: string[];
+  applications: HubMemberApplicationAccess[];
+}
+
+export interface HubApplicationAccess {
+  memberId?: string;
+  id?: string;
+  name: string;
+  email: string;
+  username?: string | null;
+  status: string;
+  roles: Array<string | { key?: string; name?: string }>;
+  revision?: number;
+}
+
+export interface HubMember {
+  id: string;
+  name: string;
+  email: string;
+  username?: string | null;
+  status: string;
+  roles?: Array<string | { key?: string; name?: string }>;
+  globalRoles?: string[];
+  visibleApplicationCount?: number;
+  lastActiveAt?: string | null;
+  createdAt: string;
+  revision: number;
+}
+
+export interface HubInvitation {
+  id: string;
+  email: string;
+  access?: {
+    globalRoles: string[];
+    applications: HubMemberApplicationAccess[];
+  };
+  status: string;
+  invitedBy?: string;
+  expiresAt: string;
+  acceptedBy?: string | null;
+  acceptedAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  inviteUrl?: string;
+}
+
+export interface HubResolvedInvitationRole {
+  id: string;
+  name: string;
+}
+
+export interface HubResolvedInvitationApplication {
+  name: string;
+  roles: HubResolvedInvitationRole[];
+}
+
+export interface HubResolvedInvitation {
+  email: string;
+  hubDisplayName: string;
+  access: {
+    globalRoles: HubResolvedInvitationRole[];
+    applications: HubResolvedInvitationApplication[];
+  };
+  expiresAt: string;
+}
+
+export interface HubAcceptedInvitationMember {
+  id: string;
+  name: string;
+  email: string;
+  username: string | null;
+  status: 'active';
+  roles?: string[];
+  applicationIds?: string[];
+  createdAt?: string;
+  revision?: number;
+}
+
+export interface HubAgentApplicationScope {
+  mode: 'selected' | 'all-authorized';
+  applicationIds?: string[];
+}
+
+export interface HubAgentCredential {
+  id: string;
+  clientId: string;
+  clientName: string;
+  scopes: string[];
+  applicationScope: HubAgentApplicationScope;
+  status: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  accessTokenExpiresAt: string;
+  refreshTokenExpiresAt: string;
+  revokedAt: string | null;
+}
+
+export interface HubAgentAuthorization {
+  id: string;
+  clientId: string;
+  clientName: string;
+  requestedScopes: string[];
+  requestedApplicationScope: HubAgentApplicationScope;
+  status: string;
+  expiresAt: string;
+}
+
+export interface HubAgentAuthorizationDecision {
+  status: string;
+}
+
+export interface HubAuditLog {
+  id: string;
+  actor: {
+    type: string;
+    id: string | null;
+    name: string;
+    email?: string | null;
+  };
+  application?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  action: string;
+  resource: string;
+  resourceId: string | null;
+  result: string;
+  source: string;
+  client?: { name?: string | null; ip?: string | null } | null;
+  details?: Record<string, unknown>;
+  requestId?: string | null;
+  createdAt: string;
+}
+
+export interface HubSettings {
+  releaseRetention: {
+    automaticCleanupEnabled: boolean;
+    keepPerApplication: number;
+    minimumAgeDays: number;
+  };
+  audit: {
+    recordDeniedMutations: boolean;
+    retentionDays: number;
+  };
+  confirmation: {
+    rollback: boolean;
+    archiveApplication: boolean;
+    rotateRuntimeSecret: boolean;
+  };
+  readOnly: {
+    sourceStorage: string;
+    releaseStorage: string;
+    hostMode: string;
+    environmentCount: number;
+  };
+  revision: number;
+  updatedAt: string;
+}
+
+export interface HubSystemInfo {
+  hubVersion?: string;
+  nodeVersion?: string;
+  databaseType?: string;
+  hostMode?: string;
+  hostAvailable?: boolean;
+  publicBasePath?: string;
+  startedAt?: string;
+  warnings?: string[];
+}
+
+export interface HubStorageCategory {
+  key: string;
+  labelKey: string;
+  descriptionKey: string;
+  bytes: number;
+  reclaimableBytes: number | null;
+  scope: string;
+  accuracy: string;
+}
+
+export interface HubStorage {
+  filesystem: {
+    capacityBytes: number;
+    usedBytes: number;
+    availableBytes: number;
+    usedPercent: number;
+  };
+  knownUsageBytes: number;
+  categories: HubStorageCategory[];
+  measuredAt: string;
+}
+
+export interface HubCleanupPlan {
+  totalReclaimableBytes: number;
+  candidates: Array<{
+    kind: string;
+    applicationId?: string | null;
+    resourceId: string;
+    bytes: number;
+    reason: string;
+  }>;
+  protectedCounts: Record<string, number>;
+  measuredAt: string;
 }
 
 export type HubDeploymentStatus =
@@ -84,13 +375,9 @@ export interface HubDeployment {
   type: HubDeploymentType;
   status: HubDeploymentStatus;
   requestedBy: string;
-  hostOperationId?: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   failure?: HubDeploymentFailure | null;
-  /** Older server projections expose the two failure fields separately. */
-  failureCode?: string | null;
-  failureMessage?: string | null;
   createdAt: string;
 }
 
@@ -314,6 +601,39 @@ export function hubPost<T>(
     { method: 'POST', body: JSON.stringify(body) },
     fetcher,
   );
+}
+
+export function hubPatch<T>(
+  path: string,
+  body: unknown,
+  fetcher?: HubFetcher,
+  headers?: HeadersInit,
+): Promise<HubEnvelope<T>> {
+  return hubRequest<T>(
+    path,
+    { method: 'PATCH', headers, body: JSON.stringify(body) },
+    fetcher,
+  );
+}
+
+export function hubPut<T>(
+  path: string,
+  body: unknown,
+  fetcher?: HubFetcher,
+  headers?: HeadersInit,
+): Promise<HubEnvelope<T>> {
+  return hubRequest<T>(
+    path,
+    { method: 'PUT', headers, body: JSON.stringify(body) },
+    fetcher,
+  );
+}
+
+export function hubDelete<T>(
+  path: string,
+  fetcher?: HubFetcher,
+): Promise<HubEnvelope<T>> {
+  return hubRequest<T>(path, { method: 'DELETE' }, fetcher);
 }
 
 function normalizeCapabilityPart(value: string): string {

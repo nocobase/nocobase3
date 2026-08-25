@@ -14,6 +14,18 @@ export default createPortalConfig({
   ignores: ['public/r/**'],
   overrides: [
     {
+      name: 'hub/server-project',
+      files: ['server/**/*.ts'],
+      ignores: ['server/hub/migrations/*.ts'],
+      languageOptions: {
+        parserOptions: {
+          project: './tsconfig.server.json',
+          projectService: false,
+          tsconfigRootDir: import.meta.dirname,
+        },
+      },
+    },
+    {
       name: 'hub/migration-project',
       files: ['server/hub/migrations/*.ts'],
       languageOptions: {

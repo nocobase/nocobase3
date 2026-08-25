@@ -18,6 +18,7 @@ import { HubLoginPage, HubSetupPage } from '@/features/hub/auth-pages';
 import { HubAuthGate } from '@/features/hub/gate';
 import { HubRuntimeProvider } from '@/features/hub/provider';
 import { createHubAuthRuntime } from '@/features/hub/runtime';
+import { appRoutes } from '@/routes';
 
 const application: HubApplication = {
   id: 'app-1',
@@ -26,7 +27,12 @@ const application: HubApplication = {
   description: 'Stock control',
   status: 'active',
   defaultEnvironmentId: 'default',
-  activeReleaseId: 'release-2',
+  activeRelease: {
+    id: 'release-2',
+    version: '1.2.0',
+    sourceCommit: 'abc123',
+    createdAt: '2026-08-21T09:00:00.000Z',
+  },
   createdBy: 'owner',
   createdAt: '2026-08-20T10:00:00.000Z',
   updatedAt: '2026-08-21T10:00:00.000Z',
@@ -43,6 +49,14 @@ const release: HubRelease = {
   verificationStatus: 'verified',
   createdBy: 'owner',
   createdAt: '2026-08-21T09:00:00.000Z',
+};
+
+const previousRelease: HubRelease = {
+  ...release,
+  id: 'release-1',
+  version: '1.1.0',
+  sourceCommit: 'def456',
+  createdAt: '2026-08-20T09:00:00.000Z',
 };
 
 const deployment: HubDeployment = {
@@ -91,6 +105,344 @@ function response<T>(data: T, meta = { total: 1, limit: 20, offset: 0 }) {
 }
 
 describe('Hub application pages', () => {
+  it('offers card and list views with a direct application link', async () => {
+    const summaryApplication = {
+      ...application,
+      isDefault: true,
+      revision: 2,
+      latestRelease: {
+        id: 'release-2',
+        version: '1.2.0',
+        sourceCommit: 'abc123',
+        createdAt: release.createdAt,
+      },
+      runtime: {
+        state: 'running',
+        health: 'healthy',
+        releaseId: 'release-2',
+        lastCheckedAt: '2026-08-21T09:02:00.000Z',
+      },
+      repository: {
+        provider: 'hub',
+        defaultBranch: 'main',
+        headCommit: 'abc123',
+        status: 'ready',
+        updatedAt: application.updatedAt,
+      },
+      links: {
+        self: '/hub/api/apps/app-1',
+        open: 'https://apps.example.com/inventory/',
+      },
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps')) return response([summaryApplication]);
+      if (path.endsWith('/me')) {
+        return response({
+          user: null,
+          roles: ['Viewer'],
+          capabilities: {
+            ...readOnly,
+            global: [
+              ...readOnly.global,
+              { resource: 'hub.repository', actions: ['read'] },
+            ],
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationsPage fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Open Inventory' }),
+    ).toHaveAttribute('href', 'https://apps.example.com/inventory/');
+    expect(screen.getByText('1.2.0')).toBeInTheDocument();
+    expect(screen.getByText('Healthy')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /develop inventory/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /list view/i }));
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /card view/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('offers capability-safe runtime and redeploy actions in card and list views', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.repository', actions: ['read', 'update'] },
+        { resource: 'hub.release', actions: ['read', 'create'] },
+        {
+          resource: 'hub.deployment',
+          actions: ['read', 'redeploy'],
+        },
+        { resource: 'hub.runtime', actions: ['read', 'control'] },
+      ],
+      application: [],
+    };
+    const runningApplication: HubApplication = {
+      ...application,
+      repository: {
+        provider: 'hub',
+        defaultBranch: 'main',
+        headCommit: 'abc123',
+        status: 'ready',
+        updatedAt: application.updatedAt,
+      },
+      runtime: {
+        state: 'running',
+        health: 'healthy',
+        releaseId: 'release-2',
+        lastCheckedAt: application.updatedAt,
+      },
+      links: {
+        self: '/hub/api/apps/app-1',
+        open: 'https://apps.example.com/inventory/',
+      },
+    };
+    const stoppedApplication: HubApplication = {
+      ...runningApplication,
+      id: 'app-2',
+      slug: 'orders',
+      name: 'Orders',
+      runtime: {
+        state: 'stopped',
+        health: 'unknown',
+        releaseId: 'release-2',
+        lastCheckedAt: application.updatedAt,
+      },
+      links: {
+        self: '/hub/api/apps/app-2',
+        open: 'https://apps.example.com/orders/',
+      },
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Deployer'], capabilities });
+      }
+      if (path.endsWith('/apps')) {
+        return response([runningApplication, stoppedApplication], {
+          total: 2,
+          limit: 20,
+          offset: 0,
+        });
+      }
+      if (path.endsWith('/apps/app-1/runtime/restart')) {
+        expect(init?.method).toBe('POST');
+        return response({
+          applicationId: 'app-1',
+          environmentId: 'default',
+          runtimeId: 'inventory:2',
+          state: 'running',
+          health: 'healthy',
+          releaseId: 'release-2',
+          startedAt: application.updatedAt,
+          lastSeenAt: application.updatedAt,
+        });
+      }
+      if (path.endsWith('/apps/app-2/runtime/start')) {
+        expect(init?.method).toBe('POST');
+        return response({
+          applicationId: 'app-2',
+          environmentId: 'default',
+          runtimeId: 'orders:1',
+          state: 'running',
+          health: 'healthy',
+          releaseId: 'release-2',
+          startedAt: application.updatedAt,
+          lastSeenAt: application.updatedAt,
+        });
+      }
+      if (path.endsWith('/apps/app-1/deployments') && init?.method === 'POST') {
+        expect(JSON.parse(String(init.body))).toEqual({
+          targetReleaseId: 'release-2',
+          type: 'redeploy',
+        });
+        expect(new Headers(init.headers).get('idempotency-key')).toMatch(
+          /^[0-9a-f-]{36}$/i,
+        );
+        return response({ ...deployment, id: 'redeployment-quick' });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <HubRuntimeProvider fetcher={fetchMock}>
+          <ApplicationsPage fetcher={fetchMock} />
+        </HubRuntimeProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Manage Inventory' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Develop Inventory' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Restart Inventory' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Stop Inventory' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Start Inventory' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Start Orders' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Restart Orders' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restart Inventory' }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/hub/api/apps/app-1/runtime/restart',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Orders' }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/hub/api/apps/app-2/runtime/start',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    const redeploy = await screen.findByRole('button', {
+      name: 'Redeploy Inventory',
+    });
+    fireEvent.click(redeploy);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/hub/api/apps/app-1/deployments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            targetReleaseId: 'release-2',
+            type: 'redeploy',
+          }),
+        }),
+      ),
+    );
+  });
+
+  it('only offers application statuses supported by the list API', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps')) return response([application]);
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: [], capabilities: readOnly });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationsPage fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    const statusFilter = await screen.findByRole('combobox', {
+      name: 'Filter by status',
+    });
+    expect(statusFilter).not.toContainElement(
+      screen.queryByRole('option', { name: 'Disabled' }),
+    );
+    expect(
+      screen.getByRole('option', { name: 'Archived' }),
+    ).toBeInTheDocument();
+  });
+
+  it('guides an authorized user to create the first application without CLI publish instructions', async () => {
+    const capabilities: HubCapabilities = {
+      global: [{ resource: 'hub.app', actions: ['create', 'read'] }],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps')) {
+        return response<HubApplication[]>([], {
+          total: 0,
+          limit: 20,
+          offset: 0,
+        });
+      }
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Owner'], capabilities });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationsPage fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText(/create an application.*coding agent/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('nb app publish')).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: /create application/i }),
+    ).toHaveLength(2);
+  });
+
+  it('does not present the latest undeployed release as the current release', async () => {
+    const summaryApplication = {
+      ...application,
+      latestRelease: {
+        id: 'release-3',
+        version: '1.3.0',
+        sourceCommit: 'def456',
+        createdAt: '2026-08-22T09:00:00.000Z',
+      },
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps')) return response([summaryApplication]);
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: [], capabilities: readOnly });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationsPage fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('1.2.0')).toBeInTheDocument();
+    expect(screen.queryByText('1.3.0')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /list view/i }));
+    expect(screen.getByText('1.2.0')).toBeInTheDocument();
+    expect(screen.queryByText('1.3.0')).not.toBeInTheDocument();
+  });
+
+  it('declares the governance routes shown by the application platform', () => {
+    expect(appRoutes.map((route) => route.name)).toEqual(
+      expect.arrayContaining(['audit', 'members', 'settings']),
+    );
+  });
+
   it('creates an application through the Hub API and refreshes the list', async () => {
     const capabilities: HubCapabilities = {
       global: [{ resource: 'hub.app', actions: ['create', 'read'] }],
@@ -115,7 +467,7 @@ describe('Hub application pages', () => {
             slug: body.slug,
             name: body.name,
             description: body.description ?? null,
-            activeReleaseId: null,
+            activeRelease: null,
           },
         ];
         return new Response(
@@ -140,7 +492,11 @@ describe('Hub application pages', () => {
     );
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /create application/i }),
+      (
+        await screen.findAllByRole('button', {
+          name: /create application/i,
+        })
+      )[0],
     );
     const slugInput = screen.getByLabelText('Slug');
     const slugPattern = slugInput.getAttribute('pattern');
@@ -157,7 +513,7 @@ describe('Hub application pages', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
 
-    expect(await screen.findAllByText('Orders')).toHaveLength(2);
+    expect(await screen.findByText('Orders')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       '/hub/api/apps',
       expect.objectContaining({
@@ -169,6 +525,13 @@ describe('Hub application pages', () => {
         }),
       }),
     );
+    const createRequest = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith('/apps') && init?.method === 'POST',
+    );
+    expect(
+      new Headers(createRequest?.[1]?.headers).get('idempotency-key'),
+    ).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
   it('loads the next page when the application result has more records', async () => {
@@ -201,7 +564,7 @@ describe('Hub application pages', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: /load more/i }));
-    expect(await screen.findAllByText('Application 21')).toHaveLength(2);
+    expect(await screen.findByText('Application 21')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       '/hub/api/apps?limit=20&offset=20',
       expect.objectContaining({ method: 'GET' }),
@@ -270,6 +633,339 @@ describe('Hub application pages', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('guides release publishing through a Coding Agent instead of the CLI', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps/app-1')) return response(application);
+      if (path.endsWith('/apps/app-1/releases')) return response([]);
+      if (path.endsWith('/apps/app-1/deployments')) return response([]);
+      if (path.endsWith('/me')) {
+        return response({
+          user: null,
+          roles: ['Viewer'],
+          capabilities: readOnly,
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationDetailPage applicationId='app-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Releases' }));
+    expect(
+      await screen.findByText(/coding agent.*publish/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/CLI/i)).not.toBeInTheDocument();
+  });
+
+  it('shows release details and pins the release through the approved API', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.release', actions: ['read', 'update'] },
+      ],
+      application: [],
+    };
+    let pinned = false;
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/apps/app-1')) return response(application);
+      if (path.endsWith('/apps/app-1/releases/release-2/pin')) {
+        expect(init?.method).toBe('POST');
+        expect(init?.body).toBe('{}');
+        pinned = true;
+        return response({
+          ...release,
+          retention: {
+            pinned: true,
+            pinnedBy: 'owner',
+            pinnedAt: '2026-08-25T10:00:00.000Z',
+          },
+        });
+      }
+      if (path.endsWith('/apps/app-1/releases/release-2')) {
+        return response({
+          ...release,
+          retention: {
+            pinned,
+            pinnedBy: pinned ? 'owner' : null,
+            pinnedAt: pinned ? '2026-08-25T10:00:00.000Z' : null,
+          },
+        });
+      }
+      if (path.endsWith('/apps/app-1/releases')) return response([release]);
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Admin'], capabilities });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationDetailPage applicationId='app-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Releases' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'View release 1.2.0' }),
+    );
+    expect(await screen.findByText('sha256:abc')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pin release' }));
+
+    expect(
+      await screen.findByRole('button', { name: 'Unpin release' }),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/hub/api/apps/app-1/releases/release-2/pin',
+      expect.objectContaining({ method: 'POST', body: '{}' }),
+    );
+  });
+
+  it('restores an archived application with revision protection', async () => {
+    const archivedApplication = {
+      ...application,
+      status: 'archived',
+      revision: 4,
+    };
+    const capabilities: HubCapabilities = {
+      global: [{ resource: 'hub.app', actions: ['read', 'restore'] }],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/apps/app-1/restore')) {
+        expect(init?.method).toBe('POST');
+        expect(new Headers(init?.headers).get('if-match')).toBe('"rev-4"');
+        expect(init?.body).toBe('{}');
+        return response({
+          ...archivedApplication,
+          status: 'active',
+          revision: 5,
+        });
+      }
+      if (path.endsWith('/apps/app-1')) return response(archivedApplication);
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Admin'], capabilities });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationDetailPage applicationId='app-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Restore application' }),
+    );
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/hub/api/apps/app-1/restore',
+        expect.objectContaining({ method: 'POST', body: '{}' }),
+      ),
+    );
+  });
+
+  it('redeploys the current release from the release table', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.release', actions: ['read'] },
+        { resource: 'hub.deployment', actions: ['read', 'redeploy'] },
+      ],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/apps/app-1')) return response(application);
+      if (path.endsWith('/apps/app-1/releases')) return response([release]);
+      if (path.endsWith('/apps/app-1/deployments') && init?.method === 'POST') {
+        expect(JSON.parse(String(init.body))).toEqual({
+          targetReleaseId: 'release-2',
+          type: 'redeploy',
+        });
+        return response({ ...deployment, id: 'redeployment-1' });
+      }
+      if (path.endsWith('/apps/app-1/deployments')) return response([]);
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Deployer'], capabilities });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationDetailPage applicationId='app-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Releases' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Redeploy 1.2.0' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm redeployment' }),
+    );
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/hub/api/apps/app-1/deployments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            targetReleaseId: 'release-2',
+            type: 'redeploy',
+          }),
+        }),
+      ),
+    );
+  });
+
+  it('shows development, permissions, and settings sections when authorized', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read', 'update', 'archive'] },
+        { resource: 'hub.repository', actions: ['read', 'update'] },
+        { resource: 'hub.release', actions: ['read', 'create'] },
+        { resource: 'hub.deployment', actions: ['read'] },
+        { resource: 'hub.runtime', actions: ['read', 'control'] },
+        { resource: 'hub.runtimeSecret', actions: ['read', 'rotate'] },
+        { resource: 'hub.permission', actions: ['read', 'assign'] },
+      ],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/apps/app-1')) {
+        return response({
+          ...application,
+          revision: 4,
+          links: { self: '/hub/api/apps/app-1', open: '/inventory/' },
+        });
+      }
+      if (path.endsWith('/apps/app-1/releases')) return response([release]);
+      if (path.endsWith('/apps/app-1/deployments'))
+        return response([deployment]);
+      if (path.endsWith('/apps/app-1/repository')) {
+        return response({
+          provider: 'hub',
+          cloneUrl: '/hub/git/inventory.git',
+          defaultBranch: 'main',
+          headCommit: 'abc123',
+          status: 'ready',
+          updatedAt: application.updatedAt,
+        });
+      }
+      if (path.endsWith('/apps/app-1/runtime')) {
+        return response({
+          applicationId: 'app-1',
+          environmentId: 'default',
+          runtimeId: 'inventory:1',
+          state: 'running',
+          health: 'healthy',
+          releaseId: 'release-2',
+          releaseVersion: '1.2.0',
+          url: '/inventory/',
+          startedAt: application.updatedAt,
+          lastSeenAt: application.updatedAt,
+          lastCheckedAt: application.updatedAt,
+          activeRequests: 0,
+          failure: null,
+        });
+      }
+      if (path.endsWith('/apps/app-1/runtime-secret')) {
+        return response({ configured: true, version: 1, rotatedAt: null });
+      }
+      if (path.endsWith('/apps/app-1/access')) {
+        return response([
+          {
+            memberId: 'member-1',
+            name: 'Alice',
+            email: 'alice@example.com',
+            username: 'alice',
+            status: 'active',
+            roles: ['viewer'],
+          },
+        ]);
+      }
+      if (path.endsWith('/apps/app-1/access?limit=1&offset=0')) {
+        const result = response([]);
+        result.headers.set('etag', '"rev-3"');
+        return result;
+      }
+      if (path.endsWith('/apps/app-1/access/member-1')) {
+        expect(init?.method).toBe('PUT');
+        expect(new Headers(init?.headers).get('if-match')).toBe('"rev-3"');
+        expect(JSON.parse(String(init?.body))).toEqual({
+          roles: ['developer', 'viewer'],
+        });
+        return response({ revision: 4, roles: ['developer', 'viewer'] });
+      }
+      if (path.endsWith('/roles')) {
+        return response([
+          {
+            id: 'developer',
+            key: 'developer',
+            scope: 'global',
+            scopes: ['global', 'application'],
+            capabilities: [],
+          },
+          {
+            id: 'viewer',
+            key: 'viewer',
+            scope: 'global',
+            scopes: ['global', 'application'],
+            capabilities: [],
+          },
+        ]);
+      }
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Admin'], capabilities });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationDetailPage applicationId='app-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Inventory' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('tab', { name: 'Development' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('tab', { name: 'Permissions' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Permissions' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit roles' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'developer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save roles' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/hub/api/apps/app-1/access/member-1',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ roles: ['developer', 'viewer'] }),
+        }),
+      ),
+    );
+  });
+
   it('does not request or misreport resources outside an app-only scope', async () => {
     const appOnly: HubCapabilities = {
       global: [],
@@ -317,6 +1013,50 @@ describe('Hub application pages', () => {
         String(input).endsWith('/apps/app-1/deployments'),
       ),
     ).toBe(false);
+  });
+
+  it('does not offer development instructions to a repository reader', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        ...readOnly.global,
+        { resource: 'hub.repository', actions: ['read'] },
+      ],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Viewer'], capabilities });
+      }
+      if (path.endsWith('/apps/app-1')) return response(application);
+      if (path.endsWith('/apps/app-1/releases')) return response([release]);
+      if (path.endsWith('/apps/app-1/deployments')) {
+        return response([deployment]);
+      }
+      if (path.endsWith('/apps/app-1/repository')) {
+        return response({
+          provider: 'hub',
+          cloneUrl: '/hub/git/inventory.git',
+          defaultBranch: 'main',
+          headCommit: 'abc123',
+          status: 'ready',
+          updatedAt: application.updatedAt,
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationDetailPage applicationId='app-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Inventory' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Development' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Develop' })).toBeNull();
   });
 
   it('loads additional releases from application pagination metadata', async () => {
@@ -414,7 +1154,7 @@ describe('Hub application pages', () => {
       global: [
         { resource: 'hub.app', actions: ['read'] },
         { resource: 'hub.release', actions: ['read'] },
-        { resource: 'hub.deployment', actions: ['create', 'read'] },
+        { resource: 'hub.deployment', actions: ['deploy', 'read'] },
       ],
       application: [],
     };
@@ -557,7 +1297,72 @@ describe('Hub setup page', () => {
 });
 
 describe('Hub deployment list', () => {
-  it('loads additional deployments from pagination metadata', async () => {
+  it('resolves release versions and operator names for the prototype columns', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.release', actions: ['read'] },
+        { resource: 'hub.deployment', actions: ['read'] },
+        { resource: 'hub.member', actions: ['read'] },
+      ],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/me')) {
+        return response({
+          user: { id: 'owner', name: 'Owner', email: 'owner@example.com' },
+          roles: ['Admin'],
+          capabilities,
+        });
+      }
+      if (path.endsWith('/deployments')) return response([deployment]);
+      if (path.endsWith('/apps')) return response([application]);
+      if (path.endsWith('/apps/app-1/releases/release-1')) {
+        return response(previousRelease);
+      }
+      if (path.endsWith('/apps/app-1/releases/release-2')) {
+        return response(release);
+      }
+      if (path.endsWith('/members/owner')) {
+        return response({
+          id: 'owner',
+          name: 'Alice Owner',
+          email: 'owner@example.com',
+          username: 'owner',
+          status: 'active',
+          createdAt: application.createdAt,
+          revision: 1,
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <HubRuntimeProvider fetcher={fetchMock}>
+          <DeploymentsPage fetcher={fetchMock} />
+        </HubRuntimeProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findAllByText('1.1.0')).not.toHaveLength(0);
+    expect(await screen.findAllByText('1.2.0')).not.toHaveLength(0);
+    expect(await screen.findAllByText('Alice Owner')).not.toHaveLength(0);
+    expect(screen.getAllByText('Deploy')).not.toHaveLength(0);
+    expect(screen.getAllByText('1m')).not.toHaveLength(0);
+    expect(
+      screen.getByRole('columnheader', { name: 'From release' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: 'To release' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: 'Duration' }),
+    ).toBeInTheDocument();
+  });
+
+  it('moves between deployment pages from pagination metadata', async () => {
     const firstPage = Array.from({ length: 20 }, (_, index) => ({
       ...deployment,
       id: `deployment-${index + 1}`,
@@ -585,7 +1390,7 @@ describe('Hub deployment list', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Next page' }));
 
     expect(await screen.findAllByText('deployment-21')).toHaveLength(2);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -643,9 +1448,68 @@ describe('Hub deployment list', () => {
 });
 
 describe('Deployment detail page', () => {
+  it('shows type, release transition, operator, and duration using existing lookups', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.release', actions: ['read'] },
+        { resource: 'hub.deployment', actions: ['read'] },
+        { resource: 'hub.member', actions: ['read'] },
+      ],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/deployments/deployment-1')) {
+        return response(deployment);
+      }
+      if (path.endsWith('/deployments/deployment-1/events')) {
+        return response([event]);
+      }
+      if (path.endsWith('/apps/app-1')) return response(application);
+      if (path.endsWith('/apps/app-1/releases/release-1')) {
+        return response(previousRelease);
+      }
+      if (path.endsWith('/apps/app-1/releases/release-2')) {
+        return response(release);
+      }
+      if (path.endsWith('/members/owner')) {
+        return response({
+          id: 'owner',
+          name: 'Alice Owner',
+          email: 'owner@example.com',
+          username: 'owner',
+          status: 'active',
+          createdAt: application.createdAt,
+          revision: 1,
+        });
+      }
+      if (path.endsWith('/me')) {
+        return response({
+          user: { id: 'owner', name: 'Owner', email: 'owner@example.com' },
+          roles: ['Admin'],
+          capabilities,
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <DeploymentDetailPage deploymentId='deployment-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Alice Owner')).toBeInTheDocument();
+    expect(screen.getByText('1.1.0')).toBeInTheDocument();
+    expect(screen.getAllByText('1.2.0')).toHaveLength(2);
+    expect(screen.getByText('Deploy')).toBeInTheDocument();
+    expect(screen.getByText('1m')).toBeInTheDocument();
+  });
+
   it('redeploys the same target release through the Hub API', async () => {
     const writable: HubCapabilities = {
-      global: [{ resource: 'hub.deployment', actions: ['create', 'read'] }],
+      global: [{ resource: 'hub.deployment', actions: ['redeploy', 'read'] }],
       application: [],
     };
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
@@ -654,6 +1518,7 @@ describe('Deployment detail page', () => {
         return response(deployment);
       if (path.endsWith('/deployments/deployment-1/events'))
         return response([event]);
+      if (path.endsWith('/apps/app-1')) return response(application);
       if (path.endsWith('/apps/app-1/deployments') && init?.method === 'POST') {
         return new Response(
           JSON.stringify({
@@ -698,6 +1563,53 @@ describe('Deployment detail page', () => {
         }),
       ),
     );
+  });
+
+  it('hides redeploy after the application active release has changed', async () => {
+    const writable: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.deployment', actions: ['redeploy', 'read'] },
+      ],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/deployments/deployment-1'))
+        return response(deployment);
+      if (path.endsWith('/deployments/deployment-1/events'))
+        return response([event]);
+      if (path.endsWith('/apps/app-1')) {
+        return response({
+          ...application,
+          activeRelease: {
+            id: 'release-3',
+            version: '1.3.0',
+            sourceCommit: 'next',
+            createdAt: '2026-08-22T09:00:00.000Z',
+          },
+        });
+      }
+      if (path.endsWith('/me')) {
+        return response({
+          user: null,
+          roles: ['Deployer'],
+          capabilities: writable,
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <DeploymentDetailPage deploymentId='deployment-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('1.3.0')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Redeploy' }),
+    ).not.toBeInTheDocument();
   });
 
   it('returns a deployment-only scoped viewer to the accessible home', async () => {

@@ -29,6 +29,157 @@ afterEach(async () => {
 });
 
 describe('AppRuntimeRegistry release deployment', () => {
+  it('configures an inactive definition and private runtime config without activating it', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
+    v1.definition.config = { publicSetting: 'release-value' };
+    const { host, origin } = await startEmptyHost(fixture.appsDir);
+    const runtimeConfig = {
+      authSecret: 'inactive-runtime-auth-secret-at-least-32-characters',
+    };
+
+    await expect(
+      host.registry.configureInactive('customer', {
+        target: v1.definition,
+        runtimeConfig,
+      }),
+    ).resolves.toMatchObject({
+      id: 'customer',
+      release: { releaseId: 'release-v1' },
+      config: { publicSetting: 'release-value' },
+    });
+
+    expect(host.registry.snapshot('customer')).toBeUndefined();
+    await expect(access(v1.startedPath)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    const managementResponse = await fetch(`${origin}/__apps/customer`);
+    expect(await managementResponse.text()).not.toContain(
+      runtimeConfig.authSecret,
+    );
+
+    await host.registry.ensureActive('customer');
+    await expect(fetchScopeConfig(origin)).resolves.toEqual({
+      publicSetting: 'release-value',
+      ...runtimeConfig,
+    });
+  });
+
+  it('removes inactive private runtime config only when runtimeConfig is null', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
+    v1.definition.config = { publicSetting: 'release-value' };
+    const { host, origin } = await startEmptyHost(fixture.appsDir);
+
+    await host.registry.configureInactive('customer', {
+      target: v1.definition,
+      runtimeConfig: {
+        authSecret: 'runtime-auth-secret-that-must-be-removed',
+      },
+    });
+    await host.registry.configureInactive('customer', {
+      target: v1.definition,
+      runtimeConfig: null,
+    });
+    await host.registry.ensureActive('customer');
+
+    await expect(fetchScopeConfig(origin)).resolves.toEqual({
+      publicSetting: 'release-value',
+    });
+  });
+
+  it('rejects inactive configuration while a runtime is active without changing its definition or private config', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
+    const v2 = await fixture.createRelease('release-v2', '2.0.0', 'ready');
+    const { host, origin } = await startEmptyHost(fixture.appsDir);
+    const currentRuntimeConfig = {
+      authSecret: 'current-runtime-auth-secret-at-least-32-characters',
+    };
+
+    await host.registry.configureInactive('customer', {
+      target: v1.definition,
+      runtimeConfig: currentRuntimeConfig,
+    });
+    await host.registry.ensureActive('customer');
+
+    await expect(
+      host.registry.configureInactive('customer', {
+        target: v2.definition,
+        runtimeConfig: {
+          authSecret: 'replacement-runtime-auth-secret-at-least-32-characters',
+        },
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'APP_DEFINITION_ACTIVE',
+    });
+
+    expect(host.registry.definition('customer')?.release?.releaseId).toBe(
+      'release-v1',
+    );
+    await expect(fetchScopeConfig(origin)).resolves.toEqual(
+      currentRuntimeConfig,
+    );
+  });
+
+  it('rejects an inactive configuration target for another app', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
+    const { host } = await startEmptyHost(fixture.appsDir);
+
+    await expect(
+      host.registry.configureInactive('other', {
+        target: v1.definition,
+        runtimeConfig: null,
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      code: 'APP_DEFINITION_TARGET_INVALID',
+    });
+    expect(host.registry.has('other')).toBe(false);
+    expect(host.registry.has('customer')).toBe(false);
+  });
+
+  it('serializes inactive configuration behind an in-flight deployment', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'gate');
+    const { host } = await startEmptyHost(fixture.appsDir);
+
+    const deployment = host.registry.deploy('customer', {
+      target: v1.definition,
+      operationId: 'deployment-holds-app-lock',
+      expectedCurrentReleaseId: null,
+      readiness: {
+        timeoutMs: 1_000,
+        intervalMs: 5,
+        successThreshold: 1,
+      },
+    });
+    await waitForFile(v1.startedPath);
+
+    let configurationSettled = false;
+    const configuration = host.registry
+      .configureInactive('customer', {
+        target: v1.definition,
+        runtimeConfig: null,
+      })
+      .finally(() => {
+        configurationSettled = true;
+      });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(configurationSettled).toBe(false);
+
+    await writeFile(v1.readyPath, 'ready');
+    await expect(deployment).resolves.toMatchObject({
+      activeReleaseId: 'release-v1',
+    });
+    await expect(configuration).rejects.toMatchObject({
+      status: 409,
+      code: 'APP_DEFINITION_ACTIVE',
+    });
+  });
+
   it('keeps deployment runtime config private and reuses it after cold activation', async () => {
     const fixture = await createDeploymentFixture();
     const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
@@ -117,6 +268,78 @@ describe('AppRuntimeRegistry release deployment', () => {
     await expect(
       fetch(`${origin}/customer/api/version`),
     ).resolves.toMatchObject({ status: 404 });
+  });
+
+  it('accepts a matching readiness expectation with content-type parameters and extra JSON fields', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease(
+      'release-v1',
+      '1.0.0',
+      'json-content-type',
+    );
+    const { host } = await startEmptyHost(fixture.appsDir);
+
+    await expect(
+      host.registry.deploy('customer', {
+        target: v1.definition,
+        operationId: 'matching-response-expectation',
+        expectedCurrentReleaseId: null,
+        readiness: {
+          timeoutMs: 100,
+          intervalMs: 5,
+          successThreshold: 1,
+          expect: {
+            contentType: 'application/json',
+            json: { ok: true },
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ activeReleaseId: 'release-v1' });
+  });
+
+  it('rejects an HTML 200 readiness response when JSON is expected', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'html-ready');
+    const { host } = await startEmptyHost(fixture.appsDir);
+
+    await expect(
+      host.registry.deploy('customer', {
+        target: v1.definition,
+        operationId: 'html-is-not-json-readiness',
+        expectedCurrentReleaseId: null,
+        readiness: {
+          timeoutMs: 60,
+          intervalMs: 5,
+          successThreshold: 1,
+          expect: {
+            contentType: 'application/json',
+            json: { ok: true },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'APP_READINESS_FAILED' });
+
+    expect(host.registry.has('customer')).toBe(false);
+    expect(host.registry.snapshot('customer')).toBeUndefined();
+  });
+
+  it('keeps response.ok readiness compatibility when no response expectation is provided', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'html-ready');
+    const { host } = await startEmptyHost(fixture.appsDir);
+
+    await expect(
+      host.registry.deploy('customer', {
+        target: v1.definition,
+        operationId: 'legacy-response-ok',
+        expectedCurrentReleaseId: null,
+        readiness: {
+          timeoutMs: 60,
+          intervalMs: 5,
+          successThreshold: 1,
+        },
+      }),
+    ).resolves.toMatchObject({ activeReleaseId: 'release-v1' });
   });
 
   it('loads the target from its real release directory and switches server and static assets together', async () => {
@@ -280,6 +503,43 @@ describe('AppRuntimeRegistry release deployment', () => {
     await expect(fetchAsset(origin)).resolves.toContain('1.0.0');
   });
 
+  it('restores the old binding when the post-switch JSON expectation fails', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
+    const v2 = await fixture.createRelease(
+      'release-v2',
+      '2.0.0',
+      'expectation-fail-after-ready',
+    );
+    const { host, origin } = await startHost(fixture.appsDir, v1.definition);
+
+    await expect(fetchVersion(origin)).resolves.toBe('1.0.0');
+    await expect(
+      host.registry.deploy('customer', {
+        target: v2.definition,
+        operationId: 'post-switch-expectation-failure',
+        expectedCurrentReleaseId: 'release-v1',
+        readiness: {
+          timeoutMs: 60,
+          intervalMs: 5,
+          successThreshold: 1,
+          expect: {
+            contentType: 'application/json',
+            json: { ok: true },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'APP_READINESS_FAILED' });
+
+    await waitForFile(v2.destroyedPath);
+    await expect(readFile(v2.destroyedPath, 'utf8')).resolves.toBe('2');
+    expect(host.registry.definition('customer')?.release?.releaseId).toBe(
+      'release-v1',
+    );
+    expect(host.registry.snapshot('customer')?.releaseId).toBe('release-v1');
+    await expect(fetchVersion(origin)).resolves.toBe('1.0.0');
+  });
+
   it('switches the binding before draining the old runtime and lets its in-flight request finish', async () => {
     const fixture = await createDeploymentFixture();
     const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
@@ -359,7 +619,14 @@ describe('AppRuntimeRegistry release deployment', () => {
   });
 });
 
-type ReadinessBehavior = 'ready' | 'gate' | 'fail' | 'fail-after-ready';
+type ReadinessBehavior =
+  | 'ready'
+  | 'gate'
+  | 'fail'
+  | 'fail-after-ready'
+  | 'html-ready'
+  | 'json-content-type'
+  | 'expectation-fail-after-ready';
 
 interface ReleaseFixture {
   definition: AppDefinition;
@@ -478,11 +745,26 @@ function releaseModuleSource(
           const pathname = new URL(request.url).pathname;
           if (pathname === "/healthz") {
             healthChecks += 1;
+            if (readiness === "html-ready") {
+              return new Response("<!doctype html><title>SPA fallback</title>", {
+                status: 200,
+                headers: { "content-type": "text/html; charset=utf-8" },
+              });
+            }
+            if (readiness === "json-content-type") {
+              return new Response(JSON.stringify({ ok: true, version, extra: "allowed" }), {
+                status: 200,
+                headers: { "content-type": "application/json; charset=utf-8" },
+              });
+            }
             if (readiness === "fail") {
               return Response.json({ ok: false, version }, { status: 503 });
             }
             if (readiness === "fail-after-ready" && healthChecks > 1) {
               return Response.json({ ok: false, version }, { status: 503 });
+            }
+            if (readiness === "expectation-fail-after-ready" && healthChecks > 1) {
+              return Response.json({ ok: false, version });
             }
             if (readiness === "gate") {
               try {

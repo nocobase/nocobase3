@@ -23,6 +23,15 @@ const labels: Record<string, string> = {
   succeeded: 'Succeeded',
   failed: 'Failed',
   cancelled: 'Cancelled',
+  running: 'Running',
+  starting: 'Starting',
+  stopping: 'Stopping',
+  stopped: 'Stopped',
+  healthy: 'Healthy',
+  unhealthy: 'Unhealthy',
+  success: 'Success',
+  failure: 'Failure',
+  denied: 'Denied',
 };
 
 type Translate = (key: string, defaultMessage?: string) => string;
@@ -54,16 +63,23 @@ export function getStatusVariant(
 ): HubStatusVariant {
   switch (value) {
     case 'failed':
+    case 'failure':
+    case 'unhealthy':
+    case 'denied':
     case 'rejected':
     case 'disabled':
       return 'destructive';
     case 'succeeded':
+    case 'success':
+    case 'healthy':
+    case 'running':
     case 'verified':
     case 'active':
       return 'default';
     case 'queued':
     case 'pending':
     case 'preparing':
+    case 'starting':
     case 'checking':
       return 'secondary';
     default:

@@ -59,7 +59,12 @@ describe('Hub production build artifacts', () => {
         'APP_SERVER_PORT=14000',
         'HUB_ENABLED=true',
         'HUB_DATABASE_PATH=./storage/hub.sqlite',
+        'HUB_SOURCE_ROOT=./sources',
         'HUB_RELEASE_ROOT=./releases',
+        'APP_PUBLIC_ORIGIN=http://127.0.0.1:3000',
+        'HUB_MAX_UPLOAD_BYTES=536870912',
+        'HUB_MAX_ARTIFACT_BYTES=2147483648',
+        'HUB_UPLOAD_TTL_SECONDS=86400',
         'API_CLIENT_STORAGE_PREFIX=HUB_',
         'API_CLIENT_STORAGE_TYPE=localStorage',
         'API_CLIENT_SHARE_TOKEN=true',
@@ -76,6 +81,7 @@ describe('Hub production build artifacts', () => {
         'DB_PASSWORD=do-not-package-this-password',
         'DEPLOY_TOKEN=do-not-package-this-token',
         'SERVICE_CREDENTIALS=do-not-package-these-credentials',
+        'HUB_SECRET_ENCRYPTION_KEY=do-not-package-this-key',
         'APP_SERVER_START_LOG=${AUTH_SECRET}',
         'AUTH_BASE_URL=http://deploy:credential@127.0.0.1:14000/hub/api/auth',
         'NOCOBASE_WS_URL=ws://127.0.0.1:13000/ws',
@@ -114,7 +120,12 @@ describe('Hub production build artifacts', () => {
         'APP_SERVER_PORT=14001',
         'HUB_ENABLED=true',
         'HUB_DATABASE_PATH=./storage/hub.sqlite',
+        'HUB_SOURCE_ROOT=./sources',
         'HUB_RELEASE_ROOT=./releases',
+        'APP_PUBLIC_ORIGIN=http://127.0.0.1:3000',
+        'HUB_MAX_UPLOAD_BYTES=536870912',
+        'HUB_MAX_ARTIFACT_BYTES=2147483648',
+        'HUB_UPLOAD_TTL_SECONDS=86400',
         'API_CLIENT_STORAGE_PREFIX=HUB_',
         'API_CLIENT_STORAGE_TYPE=localStorage',
         'API_CLIENT_SHARE_TOKEN=true',
@@ -131,7 +142,7 @@ describe('Hub production build artifacts', () => {
     expect(commands).toContain('pnpm --filter @nocobase/app-host');
     expect(commands).toContain('--filter @nocobase/app-server');
     expect(commands).toContain('--filter @nocobase/app-sdk');
-    expect(commands).toContain('--filter @nocobase/authentication');
+    expect(commands).toContain('--filter @nocobase/app-plugin-authentication');
     expect(commands).toContain('--filter @nocobase/caching');
     expect(commands).toContain('--filter @nocobase/database');
   });

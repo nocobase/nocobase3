@@ -464,6 +464,76 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
+  it('wires approved Hub management storage and encryption environment', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-env-'));
+    tempDirs.push(root);
+    const sourceRoot = path.join(root, 'sources');
+    setEnv('APP_NAME', 'hub');
+    setEnv('APP_BASE_PATH', '/hub');
+    setEnv('HUB_ENABLED', 'true');
+    setEnv('HUB_DATABASE_PATH', path.join(root, 'hub.sqlite'));
+    setEnv('HUB_SOURCE_ROOT', sourceRoot);
+    setEnv('HUB_RELEASE_ROOT', path.join(root, 'releases'));
+    setEnv('APP_PUBLIC_ORIGIN', 'http://127.0.0.1:3000');
+    setEnv(
+      'AUTH_SECRET',
+      'standalone-management-auth-secret-at-least-32-characters',
+    );
+    setEnv(
+      'HUB_SECRET_ENCRYPTION_KEY',
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    );
+    setEnv('NOCOBASE_API_PROXY_TARGET', '');
+    setEnv('NOCOBASE_API_PROXY_PATH', '');
+    const origin = 'http://127.0.0.1:13000';
+    const app = createStandaloneServer({ viteDevUrl: false });
+
+    const owner = await app.request(`${origin}/hub/api/setup/owner`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin,
+      },
+      body: JSON.stringify({
+        email: 'standalone-owner@example.com',
+        password: 'correct horse battery staple',
+        name: 'Standalone Owner',
+      }),
+    });
+    expect(owner.status).toBe(201);
+    const signIn = await app.request(`${origin}/hub/api/auth/sign-in/email`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin,
+      },
+      body: JSON.stringify({
+        email: 'standalone-owner@example.com',
+        password: 'correct horse battery staple',
+      }),
+    });
+    const cookie = signIn.headers.get('set-cookie') ?? '';
+
+    const settings = await app.request(`${origin}/hub/api/settings`, {
+      headers: { cookie },
+    });
+    await expect(settings.json()).resolves.toMatchObject({
+      data: {
+        readOnly: {
+          sourceStorage: 'local',
+          releaseStorage: 'local',
+        },
+      },
+    });
+    const systemInfo = await app.request(`${origin}/hub/api/system-info`, {
+      headers: { cookie },
+    });
+    await expect(systemInfo.json()).resolves.toMatchObject({
+      data: { warnings: [] },
+    });
+    await app.close?.();
+  });
+
   it('proxies hub client routes to Vite dev server', async () => {
     setEnv('APP_NAME', 'hub');
     setEnv('APP_BASE_PATH', '/hub');

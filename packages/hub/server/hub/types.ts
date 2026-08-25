@@ -20,7 +20,13 @@ export type DeploymentStatus = (typeof DEPLOYMENT_STATUSES)[number];
 export const DEPLOYMENT_TYPES = ['deploy', 'rollback', 'redeploy'] as const;
 export type DeploymentType = (typeof DEPLOYMENT_TYPES)[number];
 
-export const HUB_ROLES = ['owner', 'admin', 'deployer', 'viewer'] as const;
+export const HUB_ROLES = [
+  'owner',
+  'admin',
+  'developer',
+  'deployer',
+  'viewer',
+] as const;
 export type HubRole = (typeof HUB_ROLES)[number];
 
 export interface HubApplication {

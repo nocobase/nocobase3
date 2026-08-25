@@ -19,6 +19,24 @@ const TERMINAL_DEPLOYMENT_STATUSES = [
 export interface HubListOptions {
   limit?: number;
   offset?: number;
+  applicationIds?: readonly string[];
+}
+
+export interface DeploymentListOptions extends HubListOptions {
+  applicationId?: string;
+  statuses?: readonly HubDeployment['status'][];
+  types?: readonly HubDeployment['type'][];
+  requestedBy?: string;
+  from?: Date;
+  to?: Date;
+  query?: string;
+  sort?:
+    | 'createdAt'
+    | '-createdAt'
+    | 'startedAt'
+    | '-startedAt'
+    | 'finishedAt'
+    | '-finishedAt';
 }
 
 export interface HubListResult<T> {
@@ -32,6 +50,11 @@ export interface CreateApplicationInput {
   slug: string;
   name: string;
   description?: string | null;
+}
+
+export interface CreateApplicationOptions {
+  id?: string;
+  isDefault?: boolean;
 }
 
 export interface CreateReleaseInput {
@@ -337,15 +360,26 @@ export class HubStore {
     options: HubListOptions = {},
   ): Promise<HubListResult<HubApplication>> {
     const pagination = normalizePagination(options);
+    if (options.applicationIds?.length === 0) {
+      return { items: [], total: 0, ...pagination };
+    }
+    const applicationIds = options.applicationIds;
     const [rows, total] = await Promise.all([
-      this.connection.query
-        .selectFrom('hubApplications')
-        .selectAll()
+      (applicationIds
+        ? this.connection.query
+            .selectFrom('hubApplications')
+            .selectAll()
+            .where('id', 'in', applicationIds)
+        : this.connection.query.selectFrom('hubApplications').selectAll()
+      )
         .orderBy('createdAt', 'desc')
         .limit(pagination.limit)
         .offset(pagination.offset)
         .execute(),
-      this.count('hubApplications'),
+      this.count(
+        'hubApplications',
+        applicationIds ? { id: applicationIds } : undefined,
+      ),
     ]);
     return { items: rows.map(toApplication), total, ...pagination };
   }
@@ -373,16 +407,19 @@ export class HubStore {
   async createApplication(
     input: CreateApplicationInput,
     actorId: string,
+    options: CreateApplicationOptions = {},
   ): Promise<HubApplication> {
     const slug = normalizeSlug(input.slug);
     const name = requireText(input.name, 'name', 255);
     const now = new Date();
     const row = {
-      id: crypto.randomUUID(),
+      id: options.id ?? crypto.randomUUID(),
       slug,
       name,
       description: normalizeOptionalText(input.description, 10_000),
       status: 'active',
+      isDefault: options.isDefault ?? false,
+      revision: 1,
       defaultEnvironmentId: DEFAULT_ENVIRONMENT_ID,
       activeReleaseId: null,
       createdBy: actorId,
@@ -508,27 +545,91 @@ export class HubStore {
   }
 
   async listDeployments(
-    options: HubListOptions & { applicationId?: string } = {},
+    options: DeploymentListOptions = {},
   ): Promise<HubListResult<HubDeployment>> {
     const pagination = normalizePagination(options);
+    if (options.applicationIds?.length === 0) {
+      return { items: [], total: 0, ...pagination };
+    }
     let query = this.connection.query.selectFrom('hubDeployments').selectAll();
     if (options.applicationId) {
       query = query.where('applicationId', '=', options.applicationId);
     }
+    if (options.applicationIds) {
+      query = query.where('applicationId', 'in', options.applicationIds);
+    }
+    if (options.statuses?.length) {
+      query = query.where('status', 'in', options.statuses);
+    }
+    if (options.types?.length) {
+      query = query.where('type', 'in', options.types);
+    }
+    if (options.requestedBy) {
+      query = query.where('requestedBy', '=', options.requestedBy);
+    }
+    if (options.from) query = query.where('createdAt', '>=', options.from);
+    if (options.to) query = query.where('createdAt', '<=', options.to);
+    if (options.query) {
+      const pattern = `%${escapeLike(options.query)}%`;
+      const [applications, releases] = await Promise.all([
+        this.connection.query
+          .selectFrom('hubApplications')
+          .select('id')
+          .where((eb) =>
+            eb.or([eb('name', 'like', pattern), eb('slug', 'like', pattern)]),
+          )
+          .execute<{ id: string }>(),
+        this.connection.query
+          .selectFrom('hubReleases')
+          .select('id')
+          .where('version', 'like', pattern)
+          .execute<{ id: string }>(),
+      ]);
+      query = query.where((eb) =>
+        eb.or([
+          eb('id', 'like', pattern),
+          ...(applications.length
+            ? [
+                eb(
+                  'applicationId',
+                  'in',
+                  applications.map((row) => row.id),
+                ),
+              ]
+            : []),
+          ...(releases.length
+            ? [
+                eb(
+                  'targetReleaseId',
+                  'in',
+                  releases.map((row) => row.id),
+                ),
+              ]
+            : []),
+        ]),
+      );
+    }
+    const sort = deploymentOrder(options.sort);
+    const countQuery = query
+      .clearSelect()
+      .clearOrderBy()
+      .clearLimit()
+      .clearOffset()
+      .select((eb) => [eb.fn.countAll().as('total')]);
     const [rows, total] = await Promise.all([
       query
-        .orderBy('createdAt', 'desc')
+        .orderBy(sort[0], sort[1])
+        .orderBy('id', sort[1])
         .limit(pagination.limit)
         .offset(pagination.offset)
         .execute(),
-      this.count(
-        'hubDeployments',
-        options.applicationId
-          ? { applicationId: options.applicationId }
-          : undefined,
-      ),
+      countQuery.executeTakeFirst<{ total: number | string }>(),
     ]);
-    return { items: rows.map(toDeployment), total, ...pagination };
+    return {
+      items: rows.map(toDeployment),
+      total: Number(total?.total ?? 0),
+      ...pagination,
+    };
   }
 
   async getDeployment(id: string): Promise<HubDeployment | undefined> {
@@ -563,10 +664,13 @@ export class HubStore {
         idempotencyKey,
       );
       if (existing) {
-        if (existing.targetReleaseId !== input.targetReleaseId) {
+        if (
+          existing.targetReleaseId !== input.targetReleaseId ||
+          existing.type !== (input.type ?? 'deploy')
+        ) {
           throw conflict(
             'IDEMPOTENCY_KEY_CONFLICT',
-            'The idempotency key was already used with a different deployment target.',
+            'The idempotency key was already used with a different deployment request.',
           );
         }
         return { deployment: existing, created: false };
@@ -574,12 +678,55 @@ export class HubStore {
     }
 
     const application = await this.requireApplication(applicationId);
+    if (application.status === 'archived') {
+      throw conflict(
+        'APPLICATION_ARCHIVED',
+        'Archived applications cannot be deployed.',
+      );
+    }
     const release = await this.getRelease(input.targetReleaseId);
     if (!release || release.applicationId !== applicationId) {
       throw notFound(
         'RELEASE_NOT_FOUND',
         `Release "${input.targetReleaseId}" was not found for this application.`,
       );
+    }
+    if (release.verificationStatus !== 'verified') {
+      throw conflict(
+        'RELEASE_NOT_VERIFIED',
+        'Only verified releases can be deployed.',
+      );
+    }
+    const type = input.type ?? 'deploy';
+    if (type === 'redeploy') {
+      if (!application.activeReleaseId) {
+        throw conflict(
+          'ACTIVE_RELEASE_REQUIRED',
+          'Redeploy requires an active release.',
+        );
+      }
+      if (release.id !== application.activeReleaseId) {
+        throw conflict(
+          'ACTIVE_RELEASE_CHANGED',
+          'Redeploy must target the current active release.',
+        );
+      }
+    }
+    if (type === 'rollback') {
+      const succeeded = await this.connection.query
+        .selectFrom('hubDeployments')
+        .select('id')
+        .where('applicationId', '=', applicationId)
+        .where('targetReleaseId', '=', release.id)
+        .where('status', '=', 'succeeded')
+        .limit(1)
+        .executeTakeFirst();
+      if (!succeeded) {
+        throw validation(
+          'VALIDATION_ERROR',
+          'Rollback must target a previously successful release.',
+        );
+      }
     }
 
     try {
@@ -606,8 +753,7 @@ export class HubStore {
           environmentId: DEFAULT_ENVIRONMENT_ID,
           targetReleaseId: release.id,
           previousReleaseId: application.activeReleaseId,
-          type:
-            input.type ?? (application.activeReleaseId ? 'deploy' : 'deploy'),
+          type,
           status: 'queued',
           requestedBy: actorId,
           idempotencyKey,
@@ -656,7 +802,11 @@ export class HubStore {
           applicationId,
           idempotencyKey,
         );
-        if (existing && existing.targetReleaseId === input.targetReleaseId) {
+        if (
+          existing &&
+          existing.targetReleaseId === input.targetReleaseId &&
+          existing.type === (input.type ?? 'deploy')
+        ) {
           return { deployment: existing, created: false };
         }
         if (existing) {
@@ -1004,7 +1154,9 @@ export class HubStore {
       .selectFrom(table)
       .select((eb) => [eb.fn.countAll().as('total')]);
     for (const [key, value] of Object.entries(where ?? {})) {
-      query = query.where(key, '=', value);
+      query = Array.isArray(value)
+        ? query.where(key, 'in', value)
+        : query.where(key, '=', value);
     }
     const row = await query.executeTakeFirst();
     return Number(row?.total ?? 0);
@@ -1018,6 +1170,20 @@ function normalizePagination(options: HubListOptions): {
   const limit = Math.min(100, Math.max(1, Math.trunc(options.limit ?? 20)));
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
   return { limit, offset };
+}
+
+function deploymentOrder(
+  sort: DeploymentListOptions['sort'],
+): [string, 'asc' | 'desc'] {
+  const value = sort ?? '-createdAt';
+  return value.startsWith('-') ? [value.slice(1), 'desc'] : [value, 'asc'];
+}
+
+function escapeLike(value: string): string {
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll('%', '\\%')
+    .replaceAll('_', '\\_');
 }
 
 function deploymentReservationKey(applicationId: string): string {

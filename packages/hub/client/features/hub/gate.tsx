@@ -31,7 +31,7 @@ export function HubAuthGate({
   children,
   runtime = hubAuthRuntime,
   fetcher,
-  publicPaths = ['/login', '/signin', '/setup'],
+  publicPaths = ['/login', '/signin', '/setup', '/invitation-acceptance'],
 }: HubAuthGateProps) {
   const translate = useTranslate();
   const location = useLocation();

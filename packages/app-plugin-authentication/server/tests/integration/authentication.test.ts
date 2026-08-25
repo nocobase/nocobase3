@@ -9,8 +9,12 @@ import {
 } from '@nocobase/database';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Auth, type AuthEnv } from '../../../index.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  Auth,
+  type AuthEnv,
+  PasswordUserCreationError,
+} from '../../../index.js';
 import { databaseAdapter } from '../../better-auth/database-adapter.js';
 
 async function migrateAuthentication(
@@ -298,6 +302,561 @@ describe('Authentication naming strategy', () => {
           ],
         }),
       ).resolves.toMatchObject({ email: 'camel@example.com' });
+    } finally {
+      await database.destroy();
+    }
+  });
+});
+
+describe('Authentication transactional password user creation', () => {
+  it('creates a login-capable user in the caller transaction without a session', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+      });
+
+      const user = await database.connection().transaction((connection) =>
+        auth.createPasswordUser(
+          {
+            email: 'INVITED@EXAMPLE.COM',
+            password: 'correct horse battery staple',
+            name: 'Invited Member',
+            username: 'Invited.Member',
+          },
+          { connection },
+        ),
+      );
+
+      expect(user).toMatchObject({
+        id: expect.any(String),
+        email: 'invited@example.com',
+        name: 'Invited Member',
+        username: 'invited.member',
+      });
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('user')
+          .select(['id', 'email', 'username'])
+          .where('id', '=', user.id)
+          .executeTakeFirst(),
+      ).resolves.toMatchObject({
+        id: user.id,
+        email: 'invited@example.com',
+        username: 'invited.member',
+      });
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('account')
+          .select(['issuer', 'accountId', 'providerId', 'userId', 'password'])
+          .where('userId', '=', user.id)
+          .executeTakeFirst(),
+      ).resolves.toMatchObject({
+        issuer: 'local:credential',
+        accountId: user.id,
+        providerId: 'credential',
+        userId: user.id,
+        password: expect.any(String),
+      });
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('session')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
+
+      const app = new Hono();
+      app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+        auth.handler(context.req.raw),
+      );
+      const response = await app.request('/api/auth/sign-in/username', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          username: 'INVITED.MEMBER',
+          password: 'correct horse battery staple',
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        user: { id: user.id, email: 'invited@example.com' },
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('rolls back both the user and credential account with the caller transaction', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+      });
+
+      await expect(
+        database.connection().transaction(async (connection) => {
+          await auth.createPasswordUser(
+            {
+              email: 'rollback@example.com',
+              password: 'correct horse battery staple',
+              name: 'Rollback Member',
+              username: 'rollback.member',
+            },
+            { connection },
+          );
+          throw new Error('abort transaction');
+        }),
+      ).rejects.toThrow('abort transaction');
+
+      await expect(
+        database.connection().query.selectFrom('user').select('id').execute(),
+      ).resolves.toEqual([]);
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('account')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('rejects a duplicate email before invoking sign-up side effects', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+    const sendVerificationEmail = vi.fn(async () => undefined);
+    const onExistingUserSignUp = vi.fn(async () => undefined);
+
+    try {
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+        emailAndPassword: {
+          enabled: true,
+          requireEmailVerification: true,
+          onExistingUserSignUp,
+        },
+        emailVerification: {
+          sendOnSignUp: true,
+          sendVerificationEmail,
+        },
+      });
+
+      await database.connection().transaction((connection) =>
+        auth.createPasswordUser(
+          {
+            email: 'member@example.com',
+            password: 'correct horse battery staple',
+            name: 'First Member',
+            username: 'first.member',
+          },
+          { connection },
+        ),
+      );
+      const duplicate = await database
+        .connection()
+        .transaction((connection) =>
+          auth.createPasswordUser(
+            {
+              email: 'MEMBER@EXAMPLE.COM',
+              password: 'a different valid password',
+              name: 'Duplicate Member',
+              username: 'duplicate.member',
+            },
+            { connection },
+          ),
+        )
+        .catch((error: unknown) => error);
+
+      expect(duplicate).toBeInstanceOf(PasswordUserCreationError);
+      expect(duplicate).toMatchObject({
+        name: 'PasswordUserCreationError',
+        code: 'EMAIL_ALREADY_EXISTS',
+      });
+      expect(sendVerificationEmail).not.toHaveBeenCalled();
+      expect(onExistingUserSignUp).not.toHaveBeenCalled();
+      await expect(
+        database.connection().query.selectFrom('user').select('id').execute(),
+      ).resolves.toHaveLength(1);
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('verification')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('session')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('returns stable errors for duplicate and invalid usernames', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+      });
+      await database.connection().transaction((connection) =>
+        auth.createPasswordUser(
+          {
+            email: 'first@example.com',
+            password: 'correct horse battery staple',
+            name: 'First Member',
+            username: 'Shared.Name',
+          },
+          { connection },
+        ),
+      );
+
+      const duplicate = await database
+        .connection()
+        .transaction((connection) =>
+          auth.createPasswordUser(
+            {
+              email: 'second@example.com',
+              password: 'correct horse battery staple',
+              name: 'Second Member',
+              username: 'SHARED.NAME',
+            },
+            { connection },
+          ),
+        )
+        .catch((error: unknown) => error);
+      expect(duplicate).toBeInstanceOf(PasswordUserCreationError);
+      expect(duplicate).toMatchObject({ code: 'USERNAME_ALREADY_EXISTS' });
+
+      const invalid = await database
+        .connection()
+        .transaction((connection) =>
+          auth.createPasswordUser(
+            {
+              email: 'invalid@example.com',
+              password: 'correct horse battery staple',
+              name: 'Invalid Member',
+              username: 'invalid username!',
+            },
+            { connection },
+          ),
+        )
+        .catch((error: unknown) => error);
+      expect(invalid).toBeInstanceOf(PasswordUserCreationError);
+      expect(invalid).toMatchObject({ code: 'INVALID_USERNAME' });
+
+      await expect(
+        database.connection().query.selectFrom('user').select('id').execute(),
+      ).resolves.toHaveLength(1);
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('account')
+          .select('id')
+          .execute(),
+      ).resolves.toHaveLength(1);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('uses the configured password hashing and verification functions', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+    const hash = vi.fn(
+      async (password: string): Promise<string> => `custom:${password}`,
+    );
+    const verify = vi.fn(
+      async (input: { hash: string; password: string }): Promise<boolean> =>
+        input.hash === `custom:${input.password}`,
+    );
+
+    try {
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+        emailAndPassword: { enabled: true, password: { hash, verify } },
+      });
+      const password = 'correct horse battery staple';
+      const user = await database.connection().transaction((connection) =>
+        auth.createPasswordUser(
+          {
+            email: 'custom-hash@example.com',
+            password,
+            name: 'Custom Hash',
+            username: 'custom.hash',
+          },
+          { connection },
+        ),
+      );
+
+      expect(hash).toHaveBeenCalledExactlyOnceWith(password);
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('account')
+          .select('password')
+          .where('userId', '=', user.id)
+          .executeTakeFirst(),
+      ).resolves.toEqual({ password: `custom:${password}` });
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('session')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
+
+      const response = await auth.handler(
+        new Request('http://localhost/api/auth/sign-in/email', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            email: 'custom-hash@example.com',
+            password,
+          }),
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(verify).toHaveBeenCalledWith({
+        hash: `custom:${password}`,
+        password,
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('rejects and rolls back a missing credential account', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+        databaseHooks: {
+          account: { create: { before: async () => false } },
+        },
+      });
+
+      const error = await database
+        .connection()
+        .transaction((connection) =>
+          auth.createPasswordUser(
+            {
+              email: 'missing-account@example.com',
+              password: 'correct horse battery staple',
+              name: 'Missing Account',
+              username: 'missing.account',
+            },
+            { connection },
+          ),
+        )
+        .catch((reason: unknown) => reason);
+
+      expect(error).toBeInstanceOf(PasswordUserCreationError);
+      expect(error).toMatchObject({
+        name: 'PasswordUserCreationError',
+        code: 'CREDENTIAL_ACCOUNT_NOT_PERSISTED',
+      });
+      await expect(
+        database.connection().query.selectFrom('user').select('id').execute(),
+      ).resolves.toEqual([]);
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('account')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('rolls back a missing credential account when given a regular connection', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+        databaseHooks: {
+          account: { create: { before: async () => false } },
+        },
+      });
+
+      const error = await auth
+        .createPasswordUser(
+          {
+            email: 'regular-connection@example.com',
+            password: 'correct horse battery staple',
+            name: 'Regular Connection',
+            username: 'regular.connection',
+          },
+          { connection: database.connection() },
+        )
+        .catch((reason: unknown) => reason);
+
+      expect(error).toBeInstanceOf(PasswordUserCreationError);
+      expect(error).toMatchObject({
+        name: 'PasswordUserCreationError',
+        code: 'CREDENTIAL_ACCOUNT_NOT_PERSISTED',
+      });
+      await expect(
+        database.connection().query.selectFrom('user').select('id').execute(),
+      ).resolves.toEqual([]);
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('account')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('creates an invited password user that can sign in when verification is required', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+    const sendVerificationEmail = vi.fn(async () => undefined);
+
+    try {
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+        emailAndPassword: {
+          enabled: true,
+          requireEmailVerification: true,
+        },
+        emailVerification: {
+          sendOnSignUp: true,
+          sendVerificationEmail,
+        },
+      });
+
+      const user = await database.connection().transaction((connection) =>
+        auth.createPasswordUser(
+          {
+            email: 'verified-invitation@example.com',
+            password: 'correct horse battery staple',
+            name: 'Verified Invitation',
+            username: 'verified.invitation',
+          },
+          { connection },
+        ),
+      );
+
+      expect(Boolean(user.emailVerified)).toBe(true);
+      expect(sendVerificationEmail).not.toHaveBeenCalled();
+      const response = await auth.handler(
+        new Request('http://localhost/api/auth/sign-in/email', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            email: 'verified-invitation@example.com',
+            password: 'correct horse battery staple',
+          }),
+        }),
+      );
+      expect(response.status).toBe(200);
+      const signedIn = await response.json();
+      expect(signedIn.user.id).toBe(user.id);
+      expect(Boolean(signedIn.user.emailVerified)).toBe(true);
     } finally {
       await database.destroy();
     }

@@ -207,5 +207,9 @@ export function formatHubBytes(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value < 1024 * 1024 * 1024)
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value < 1024 * 1024 * 1024 * 1024)
+    return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  return `${(value / (1024 * 1024 * 1024 * 1024)).toFixed(1)} TB`;
 }

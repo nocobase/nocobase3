@@ -8,16 +8,30 @@ import {
 
 export type HubResource =
   | 'hub.app'
+  | 'hub.repository'
   | 'hub.release'
   | 'hub.deployment'
   | 'hub.runtime'
+  | 'hub.runtimeSecret'
   | 'hub.auditLog'
   | 'hub.member'
   | 'hub.permission'
   | 'hub.setting';
 
 export type HubAction =
-  'create' | 'read' | 'update' | 'delete' | 'control' | 'assign';
+  | 'create'
+  | 'read'
+  | 'update'
+  | 'delete'
+  | 'archive'
+  | 'restore'
+  | 'deploy'
+  | 'rollback'
+  | 'redeploy'
+  | 'control'
+  | 'rotate'
+  | 'export'
+  | 'assign';
 
 export interface HubAuthorizationRequest {
   resource: HubResource;
@@ -35,37 +49,83 @@ export interface HubCapabilities {
   application: HubApplicationCapabilities[];
 }
 
+export interface HubRoleDefinition {
+  readonly id: HubRole;
+  readonly scopes: readonly ('global' | 'application')[];
+  readonly preservesOwnership: boolean;
+  readonly descriptionKey: string;
+  readonly capabilities: readonly string[];
+}
+
 export interface AuthorizedHubActor {
   user: HubUserSummary;
   roles: HubRole[];
   capabilities: HubCapabilities;
 }
 
-const ROLE_CAPABILITIES: Readonly<Record<HubRole, readonly HubCapability[]>> = {
+export const ROLE_CAPABILITIES: Readonly<
+  Record<HubRole, readonly HubCapability[]>
+> = {
   owner: [{ resource: '*', actions: ['*'] }],
   admin: [
-    { resource: 'hub.app', actions: ['create', 'read', 'update', 'delete'] },
-    { resource: 'hub.release', actions: ['create', 'read'] },
-    { resource: 'hub.deployment', actions: ['create', 'read'] },
+    {
+      resource: 'hub.app',
+      actions: ['create', 'read', 'update', 'archive', 'restore'],
+    },
+    { resource: 'hub.repository', actions: ['read', 'update'] },
+    { resource: 'hub.release', actions: ['create', 'read', 'update'] },
+    {
+      resource: 'hub.deployment',
+      actions: ['read', 'deploy', 'rollback', 'redeploy'],
+    },
     { resource: 'hub.runtime', actions: ['read', 'control'] },
-    { resource: 'hub.auditLog', actions: ['read'] },
+    { resource: 'hub.runtimeSecret', actions: ['read', 'rotate'] },
+    { resource: 'hub.auditLog', actions: ['read', 'export'] },
     { resource: 'hub.member', actions: ['create', 'read', 'update', 'delete'] },
     { resource: 'hub.permission', actions: ['read', 'assign'] },
     { resource: 'hub.setting', actions: ['read', 'update'] },
   ],
+  developer: [
+    { resource: 'hub.app', actions: ['read'] },
+    { resource: 'hub.repository', actions: ['read', 'update'] },
+    { resource: 'hub.release', actions: ['read', 'create'] },
+    { resource: 'hub.deployment', actions: ['read'] },
+    { resource: 'hub.runtime', actions: ['read'] },
+    { resource: 'hub.auditLog', actions: ['read'] },
+  ],
   deployer: [
     { resource: 'hub.app', actions: ['read'] },
     { resource: 'hub.release', actions: ['read'] },
-    { resource: 'hub.deployment', actions: ['create', 'read'] },
-    { resource: 'hub.runtime', actions: ['read'] },
+    {
+      resource: 'hub.deployment',
+      actions: ['read', 'deploy', 'rollback', 'redeploy'],
+    },
+    { resource: 'hub.runtime', actions: ['read', 'control'] },
+    { resource: 'hub.auditLog', actions: ['read'] },
   ],
   viewer: [
     { resource: 'hub.app', actions: ['read'] },
     { resource: 'hub.release', actions: ['read'] },
     { resource: 'hub.deployment', actions: ['read'] },
     { resource: 'hub.runtime', actions: ['read'] },
+    { resource: 'hub.repository', actions: ['read'] },
+    { resource: 'hub.auditLog', actions: ['read'] },
   ],
 };
+
+export const HUB_ROLE_DEFINITIONS: readonly HubRoleDefinition[] = Object.freeze(
+  (Object.keys(ROLE_CAPABILITIES) as HubRole[]).map((role) => ({
+    id: role,
+    scopes: (role === 'owner' || role === 'admin'
+      ? ['global']
+      : ['global', 'application']) as ('global' | 'application')[],
+    preservesOwnership: role === 'owner',
+    descriptionKey: `hub.roles.${role}.description`,
+    capabilities: ROLE_CAPABILITIES[role].flatMap((capability) =>
+      capability.actions.map((action) => `${capability.resource}:${action}`),
+    ),
+  })),
+);
 
 export class HubAuthorization {
   constructor(private readonly store: HubStore) {}

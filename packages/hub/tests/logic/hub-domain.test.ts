@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { Auth } from '@nocobase/authentication';
+import { Auth } from '@nocobase/app-plugin-authentication';
 import { AppRuntimeRegistry } from '@nocobase/app-host';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,7 @@ import {
 } from '../../server/hub/database.ts';
 import { HubDomainError, HubStore } from '../../server/hub/store.ts';
 import { LocalHostAdapter } from '../../server/hub/local-host-adapter.ts';
+import { RuntimeSecretService } from '../../server/hub/runtime-secret-service.ts';
 
 const databases: HubDatabaseRuntime[] = [];
 const registries: AppRuntimeRegistry[] = [];
@@ -159,6 +160,85 @@ describe('HubStore', () => {
         'user-1',
       ),
     ).rejects.toMatchObject({ code: 'DEPLOYMENT_IN_PROGRESS', status: 409 });
+  });
+
+  it('validates rollback and redeploy targets against deployment history', async () => {
+    const { database, store } = await createStore();
+    const application = await createApplication(store);
+    const first = await store.createRelease(
+      application.id,
+      { version: '1.0.0', checksum: 'sha256:first', manifest: {} },
+      'user-1',
+    );
+    const second = await store.createRelease(
+      application.id,
+      { version: '2.0.0', checksum: 'sha256:second', manifest: {} },
+      'user-1',
+    );
+
+    await expect(
+      store.createDeployment(
+        application.id,
+        {
+          targetReleaseId: first.release.id,
+          type: 'rollback',
+          idempotencyKey: 'rollback-never-active',
+        },
+        'user-1',
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 422 });
+
+    await database.connection.query
+      .updateTable('hubApplications')
+      .set({ activeReleaseId: first.release.id })
+      .where('id', '=', application.id)
+      .execute();
+
+    await expect(
+      store.createDeployment(
+        application.id,
+        {
+          targetReleaseId: second.release.id,
+          type: 'redeploy',
+          idempotencyKey: 'redeploy-not-active',
+        },
+        'user-1',
+      ),
+    ).rejects.toMatchObject({ code: 'ACTIVE_RELEASE_CHANGED', status: 409 });
+
+    const redeploy = await store.createDeployment(
+      application.id,
+      {
+        targetReleaseId: first.release.id,
+        type: 'redeploy',
+        idempotencyKey: 'redeploy-active',
+      },
+      'user-1',
+    );
+    expect(redeploy.deployment.type).toBe('redeploy');
+  });
+
+  it('rejects deployment creation for an archived application', async () => {
+    const { database, store } = await createStore();
+    const application = await createApplication(store);
+    const { release } = await store.createRelease(
+      application.id,
+      { version: '1.0.0', checksum: 'sha256:archived', manifest: {} },
+      'user-1',
+    );
+    await database.connection.query
+      .updateTable('hubApplications')
+      .set({ status: 'archived' })
+      .where('id', '=', application.id)
+      .execute();
+
+    await expect(
+      store.createDeployment(
+        application.id,
+        { targetReleaseId: release.id, type: 'deploy' },
+        'user-1',
+      ),
+    ).rejects.toMatchObject({ code: 'APPLICATION_ARCHIVED', status: 409 });
   });
 
   it('rolls back the active release, terminal state, and reservation when the success event cannot be persisted', async () => {
@@ -364,6 +444,18 @@ describe('HubStore', () => {
       'user-1',
     );
     await store.setActiveRelease(application.id, release.id);
+    const encryptionKey = {
+      key: Buffer.alloc(32, 4),
+      keyId: 'runtime-recovery-key',
+    };
+    const runtimeSecrets = new RuntimeSecretService(
+      database.connection,
+      encryptionKey,
+    );
+    await runtimeSecrets.ensureInitial(application.id);
+    const expectedRuntimeSecret = await runtimeSecrets.getActive(
+      application.id,
+    );
 
     await expect(store.listActiveApplicationReleases()).resolves.toEqual([
       {
@@ -379,11 +471,15 @@ describe('HubStore', () => {
       total: 0,
     });
 
+    let activatedConfig: unknown;
     const registry = new AppRuntimeRegistry({
       startEvictionLoop: false,
-      resolveFactory: () => () => ({
-        fetch: () => Response.json({ ok: true }),
-      }),
+      resolveFactory: () => (scope) => {
+        activatedConfig = scope.config;
+        return {
+          fetch: () => Response.json({ ok: true }),
+        };
+      },
     });
     registries.push(registry);
     const auth = new Auth({
@@ -397,12 +493,16 @@ describe('HubStore', () => {
       bootstrapAuth: auth,
       registry,
       releaseRoot,
+      runtimeSecretEncryptionKey: encryptionKey,
       appName: 'hub',
       publicBasePath: '/hub',
     });
 
     await api.ready;
     expect(registry.snapshot(application.slug)?.releaseId).toBe(release.id);
+    expect(activatedConfig).toEqual({
+      authSecret: expectedRuntimeSecret.secret,
+    });
     await expect(store.listDeployments()).resolves.toMatchObject({
       items: [],
       total: 0,
@@ -445,6 +545,53 @@ describe('HubStore', () => {
 });
 
 describe('LocalHostAdapter', () => {
+  it('rejects an HTML fallback even when the readiness endpoint returns 200', async () => {
+    const { store } = await createStore();
+    const application = await createApplication(store);
+    const releaseRoot = await mkdtemp(
+      path.join(tmpdir(), 'nocobase-hub-readiness-contract-'),
+    );
+    temporaryDirectories.push(releaseRoot);
+    const storageKey = `${application.slug}/1.0.0`;
+    const serverDirectory = path.join(releaseRoot, storageKey, 'dist/server');
+    await mkdir(serverDirectory, { recursive: true });
+    await writeFile(path.join(serverDirectory, 'embedded.js'), 'export {};');
+    const { release } = await store.createRelease(
+      application.id,
+      {
+        version: '1.0.0',
+        checksum: await computeReleaseArtifactChecksum(
+          path.join(releaseRoot, storageKey),
+        ),
+        manifest: {},
+        storageKey,
+      },
+      'user-1',
+    );
+    const { deployment } = await store.createDeployment(
+      application.id,
+      { targetReleaseId: release.id },
+      'user-1',
+    );
+    const registry = new AppRuntimeRegistry({
+      startEvictionLoop: false,
+      resolveFactory: () => () => ({
+        fetch: () =>
+          new Response('<!doctype html><title>SPA fallback</title>', {
+            status: 200,
+            headers: { 'content-type': 'text/html; charset=utf-8' },
+          }),
+      }),
+    });
+    registries.push(registry);
+    const adapter = new LocalHostAdapter({ registry, releaseRoot });
+
+    await expect(
+      adapter.deploy({ application, release, deployment }),
+    ).rejects.toMatchObject({ code: 'APP_READINESS_FAILED' });
+    expect(registry.snapshot(application.slug)).toBeUndefined();
+  });
+
   it('commits a release only after a real local Host deployment succeeds', async () => {
     const { database, store } = await createStore();
     const application = await createApplication(store);
@@ -756,6 +903,68 @@ describe('LocalHostAdapter', () => {
 });
 
 describe('HubAuthorization', () => {
+  it('separates source publishing, deployment, runtime control, and governance capabilities', async () => {
+    const { store } = await createStore();
+    const authorization = new HubAuthorization(store);
+
+    await store.assignRole('developer-1', 'developer');
+    await store.assignRole('deployer-1', 'deployer');
+    await store.assignRole('admin-1', 'admin');
+
+    await expect(
+      authorization.require('developer-1', {
+        resource: 'hub.repository',
+        action: 'update',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      authorization.require('developer-1', {
+        resource: 'hub.release',
+        action: 'create',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      authorization.require('developer-1', {
+        resource: 'hub.deployment',
+        action: 'deploy',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    for (const action of ['deploy', 'rollback', 'redeploy'] as const) {
+      await expect(
+        authorization.require('deployer-1', {
+          resource: 'hub.deployment',
+          action,
+        }),
+      ).resolves.toBeUndefined();
+    }
+    await expect(
+      authorization.require('deployer-1', {
+        resource: 'hub.runtime',
+        action: 'control',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      authorization.require('deployer-1', {
+        resource: 'hub.release',
+        action: 'create',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    await expect(
+      authorization.require('admin-1', {
+        resource: 'hub.runtimeSecret',
+        action: 'rotate',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      authorization.require('admin-1', {
+        resource: 'hub.auditLog',
+        action: 'export',
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('keeps role capabilities server-side and application scopes private', async () => {
     const { store } = await createStore();
     const authorization = new HubAuthorization(store);
@@ -781,6 +990,137 @@ describe('HubAuthorization', () => {
         action: 'read',
       }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('Hub deployment API authorization', () => {
+  it('authorizes an application deployer using the requested deployment type', async () => {
+    const { database, store } = await createStore();
+    const application = await createApplication(store);
+    const { release } = await store.createRelease(
+      application.id,
+      { version: '1.0.0', checksum: 'sha256:api-deployer', manifest: {} },
+      'owner-1',
+    );
+    await store.assignRole('deployer-1', 'deployer', application.id);
+    const auth = new Auth({
+      connection: database.connection,
+      baseURL: 'http://localhost/hub/api/auth',
+      secret: 'hub-deployer-api-secret-at-least-32-characters',
+    });
+    vi.spyOn(auth, 'getSession').mockResolvedValue({
+      user: {
+        id: 'deployer-1',
+        name: 'APP Deployer',
+        email: 'deployer@example.com',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      session: {
+        id: 'session-1',
+        userId: 'deployer-1',
+        token: 'session-token',
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+    const api = createHubApi({
+      database,
+      auth,
+      bootstrapAuth: auth,
+      appName: 'hub',
+      publicBasePath: '/hub',
+    });
+
+    const response = await api.request(
+      `http://localhost/apps/${application.id}/deployments`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': 'app-deployer-deploy',
+          origin: 'http://localhost',
+        },
+        body: JSON.stringify({
+          targetReleaseId: release.id,
+          type: 'deploy',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      data: { type: 'deploy', requestedBy: 'deployer-1' },
+    });
+    await api.close();
+  });
+
+  it('requires Idempotency-Key in the header and rejects the legacy body field', async () => {
+    const { database, store } = await createStore();
+    const application = await createApplication(store);
+    const { release } = await store.createRelease(
+      application.id,
+      { version: '1.0.0', checksum: 'sha256:header-only', manifest: {} },
+      'owner-1',
+    );
+    await store.assignRole('owner-1', 'owner');
+    const auth = new Auth({
+      connection: database.connection,
+      baseURL: 'http://localhost/hub/api/auth',
+      secret: 'hub-header-api-secret-at-least-32-characters',
+    });
+    vi.spyOn(auth, 'getSession').mockResolvedValue({
+      user: {
+        id: 'owner-1',
+        name: 'Owner',
+        email: 'owner@example.com',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      session: {
+        id: 'session-owner',
+        userId: 'owner-1',
+        token: 'owner-session-token',
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+    const api = createHubApi({
+      database,
+      auth,
+      bootstrapAuth: auth,
+      appName: 'hub',
+      publicBasePath: '/hub',
+    });
+
+    const response = await api.request(
+      `http://localhost/apps/${application.id}/deployments`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://localhost',
+        },
+        body: JSON.stringify({
+          targetReleaseId: release.id,
+          type: 'deploy',
+          idempotencyKey: 'legacy-body-key',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        issues: [{ path: 'idempotencyKey', code: 'unknown_field' }],
+      },
+    });
+    await api.close();
   });
 });
 
@@ -1111,7 +1451,7 @@ describe('createHubApi', () => {
     expect(response.status).toBe(201);
   });
 
-  it('does not register a verified release before its local artifact passes checksum verification', async () => {
+  it('does not expose legacy local artifact release registration', async () => {
     const { database, store } = await createStore();
     const releaseRoot = await mkdtemp(
       path.join(tmpdir(), 'nocobase-hub-release-verification-'),
@@ -1187,44 +1527,21 @@ describe('createHubApi', () => {
     const application = ((await appResponse.json()) as { data: { id: string } })
       .data;
     const releaseUrl = `http://localhost/hub/api/apps/${application.id}/releases`;
-    const requestRelease = (version: string, storageKey: string) =>
-      mounted.request(releaseUrl, {
-        method: 'POST',
-        headers: {
-          cookie,
-          'content-type': 'application/json',
-          origin: 'http://localhost',
-        },
-        body: JSON.stringify({
-          version,
-          checksum: `sha256:${'0'.repeat(64)}`,
-          manifest: {},
-          storageKey,
-        }),
-      });
-
-    const missing = await requestRelease(
-      '1.0.0',
-      'verified-release-app/missing',
-    );
-    expect(missing.status).toBe(422);
-    await expect(missing.json()).resolves.toMatchObject({
-      error: { code: 'RELEASE_ARTIFACT_UNAVAILABLE' },
+    const legacy = await mounted.request(releaseUrl, {
+      method: 'POST',
+      headers: {
+        cookie,
+        'content-type': 'application/json',
+        origin: 'http://localhost',
+      },
+      body: JSON.stringify({
+        version: '1.0.0',
+        checksum: `sha256:${'0'.repeat(64)}`,
+        manifest: {},
+        storageKey: 'verified-release-app/missing',
+      }),
     });
-
-    const mismatchedStorageKey = 'verified-release-app/1.0.1';
-    await mkdir(path.join(releaseRoot, mismatchedStorageKey), {
-      recursive: true,
-    });
-    await writeFile(
-      path.join(releaseRoot, mismatchedStorageKey, 'artifact.txt'),
-      'real artifact content',
-    );
-    const mismatched = await requestRelease('1.0.1', mismatchedStorageKey);
-    expect(mismatched.status).toBe(422);
-    await expect(mismatched.json()).resolves.toMatchObject({
-      error: { code: 'RELEASE_CHECKSUM_MISMATCH' },
-    });
+    expect(legacy.status).toBe(404);
 
     await expect(store.listReleases(application.id)).resolves.toMatchObject({
       items: [],
@@ -1547,7 +1864,7 @@ describe('createHubApi', () => {
   });
 
   it('serves protected application, release, and asynchronous deployment routes', async () => {
-    const { database } = await createStore();
+    const { database, store } = await createStore();
     const releaseRoot = await mkdtemp(
       path.join(tmpdir(), 'nocobase-hub-routes-release-'),
     );
@@ -1615,32 +1932,25 @@ describe('createHubApi', () => {
       body: JSON.stringify({ slug: 'routes-app', name: 'Routes App' }),
     });
     expect(appResponse.status).toBe(201);
-    const application = ((await appResponse.json()) as { data: { id: string } })
-      .data;
+    const application = (
+      (await appResponse.json()) as {
+        data: { id: string; createdBy: string };
+      }
+    ).data;
     const storageKey = 'routes-app/1.0.0';
     const releaseDirectory = path.join(releaseRoot, storageKey);
     await mkdir(releaseDirectory, { recursive: true });
     await writeFile(path.join(releaseDirectory, 'artifact.txt'), 'artifact');
-    const releaseResponse = await mounted.request(
-      `http://localhost/hub/api/apps/${application.id}/releases`,
+    const { release } = await store.createRelease(
+      application.id,
       {
-        method: 'POST',
-        headers: {
-          cookie,
-          'content-type': 'application/json',
-          origin: 'http://localhost',
-        },
-        body: JSON.stringify({
-          version: '1.0.0',
-          checksum: await computeReleaseArtifactChecksum(releaseDirectory),
-          manifest: {},
-          storageKey,
-        }),
+        version: '1.0.0',
+        checksum: await computeReleaseArtifactChecksum(releaseDirectory),
+        manifest: {},
+        storageKey,
       },
+      application.createdBy,
     );
-    expect(releaseResponse.status).toBe(201);
-    const release = ((await releaseResponse.json()) as { data: { id: string } })
-      .data;
     const deploymentResponse = await mounted.request(
       `http://localhost/hub/api/apps/${application.id}/deployments`,
       {
@@ -1675,7 +1985,7 @@ describe('createHubApi', () => {
       { headers: { cookie } },
     );
     await expect(applicationAfterFailure.json()).resolves.toMatchObject({
-      data: { activeReleaseId: null },
+      data: { activeRelease: null },
     });
     await api.close();
   });

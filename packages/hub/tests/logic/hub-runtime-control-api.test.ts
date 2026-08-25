@@ -1,0 +1,452 @@
+// @vitest-environment node
+
+import { Auth } from '@nocobase/app-plugin-authentication';
+import { AppRuntimeRegistry } from '@nocobase/app-host';
+import { Hono } from 'hono';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { createHubApi, type HubApi } from '../../server/hub/api.ts';
+import { computeReleaseArtifactChecksum } from '../../server/hub/artifact-integrity.ts';
+import {
+  createHubDatabase,
+  type HubDatabaseRuntime,
+} from '../../server/hub/database.ts';
+import { RuntimeSecretService } from '../../server/hub/runtime-secret-service.ts';
+import { HubStore } from '../../server/hub/store.ts';
+
+const origin = 'http://127.0.0.1:13224';
+const authSecret = 'hub-runtime-control-test-secret-at-least-32-characters';
+const encryptionKey = { key: Buffer.alloc(32, 6), keyId: 'runtime-test-key' };
+
+interface RuntimeFixture {
+  readonly root: string;
+  readonly database: HubDatabaseRuntime;
+  readonly store: HubStore;
+  readonly registry: AppRuntimeRegistry;
+  readonly auth: Auth;
+  readonly api: HubApi;
+  readonly mounted: Hono;
+  readonly cookie: string;
+  readonly ownerId: string;
+  readonly applicationId: string;
+  readonly releaseId: string;
+  setReadinessFailure(value: boolean): void;
+}
+
+const fixtures: RuntimeFixture[] = [];
+
+afterEach(async () => {
+  for (const fixture of fixtures.splice(0)) {
+    await fixture.api.close();
+    await fixture.registry.destroyAll({ reason: 'test cleanup' });
+    await fixture.database.close();
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+describe('Hub Runtime control API', () => {
+  it('validates empty bodies and makes start and stop naturally idempotent', async () => {
+    const fixture = await createRuntimeFixture();
+
+    const invalid = await request(fixture, '/runtime/start', {
+      method: 'POST',
+      body: JSON.stringify({ unexpected: true }),
+    });
+    expect(invalid.status).toBe(422);
+    await expect(invalid.json()).resolves.toMatchObject({
+      error: { code: 'VALIDATION_ERROR' },
+    });
+
+    const started = await request(fixture, '/runtime/start', {
+      method: 'POST',
+      body: '{}',
+    });
+    expect(started.status).toBe(200);
+    await expect(started.json()).resolves.toMatchObject({
+      data: { state: 'running', releaseId: fixture.releaseId },
+      meta: { idempotent: false },
+    });
+
+    const repeatedStart = await request(fixture, '/runtime/start', {
+      method: 'POST',
+      body: '{}',
+    });
+    await expect(repeatedStart.json()).resolves.toMatchObject({
+      data: { state: 'running', releaseId: fixture.releaseId },
+      meta: { idempotent: true },
+    });
+
+    const stopped = await request(fixture, '/runtime/stop', {
+      method: 'POST',
+      body: '{}',
+    });
+    await expect(stopped.json()).resolves.toMatchObject({
+      data: { state: 'stopped' },
+      meta: { idempotent: false },
+    });
+
+    const repeatedStop = await request(fixture, '/runtime/stop', {
+      method: 'POST',
+      body: '{}',
+    });
+    await expect(repeatedStop.json()).resolves.toMatchObject({
+      data: { state: 'stopped' },
+      meta: { idempotent: true },
+    });
+  });
+
+  it('rejects archived applications and unfinished deployments', async () => {
+    const archived = await createRuntimeFixture();
+    await archived.store.connection.query
+      .updateTable('hubApplications')
+      .set({ status: 'archived' })
+      .where('id', '=', archived.applicationId)
+      .execute();
+
+    for (const action of ['start', 'stop', 'restart'] as const) {
+      const response = await request(archived, `/runtime/${action}`, {
+        method: 'POST',
+        headers:
+          action === 'restart'
+            ? { 'idempotency-key': 'archived-restart' }
+            : undefined,
+        body: '{}',
+      });
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'APPLICATION_ARCHIVED' },
+      });
+    }
+
+    const deploying = await createRuntimeFixture();
+    await deploying.store.createDeployment(
+      deploying.applicationId,
+      { targetReleaseId: deploying.releaseId },
+      deploying.ownerId,
+    );
+    const conflict = await request(deploying, '/runtime/start', {
+      method: 'POST',
+      body: '{}',
+    });
+    expect(conflict.status).toBe(409);
+    await expect(conflict.json()).resolves.toMatchObject({
+      error: { code: 'RUNTIME_CONTROL_CONFLICT', retryable: true },
+    });
+  });
+
+  it('requires an idempotency key for restart and replays the same result', async () => {
+    const fixture = await createRuntimeFixture();
+    const missing = await request(fixture, '/runtime/restart', {
+      method: 'POST',
+      body: '{}',
+    });
+    expect(missing.status).toBe(400);
+    await expect(missing.json()).resolves.toMatchObject({
+      error: { code: 'INVALID_IDEMPOTENCY_KEY' },
+    });
+
+    const first = await request(fixture, '/runtime/restart', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'restart-once' },
+      body: '{}',
+    });
+    const firstPayload = (await first.json()) as {
+      data: { runtimeId: string };
+      meta: { idempotent: boolean; previousState: string };
+    };
+    expect(firstPayload).toMatchObject({
+      data: { state: 'running', releaseId: fixture.releaseId },
+      meta: { idempotent: false, previousState: 'stopped' },
+    });
+    const runtimeId = firstPayload.data.runtimeId;
+
+    const replay = await request(fixture, '/runtime/restart', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'restart-once' },
+      body: '{}',
+    });
+    await expect(replay.json()).resolves.toMatchObject({
+      data: { runtimeId },
+      meta: { idempotent: true, previousState: 'stopped' },
+    });
+  });
+
+  it('rotates a secret idempotently and records a failed rotation', async () => {
+    const fixture = await createRuntimeFixture();
+
+    const invalid = await request(fixture, '/runtime-secret/rotate', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'rotate-invalid' },
+      body: JSON.stringify({ unexpected: true }),
+    });
+    expect(invalid.status).toBe(422);
+
+    const first = await request(fixture, '/runtime-secret/rotate', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'rotate-once' },
+      body: '{}',
+    });
+    await expect(first.json()).resolves.toMatchObject({
+      data: { version: 2 },
+      meta: { idempotent: false },
+    });
+    const replay = await request(fixture, '/runtime-secret/rotate', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'rotate-once' },
+      body: '{}',
+    });
+    await expect(replay.json()).resolves.toMatchObject({
+      data: { version: 2 },
+      meta: { idempotent: true },
+    });
+
+    await request(fixture, '/runtime/start', { method: 'POST', body: '{}' });
+    fixture.setReadinessFailure(true);
+    const failed = await request(fixture, '/runtime-secret/rotate', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'rotate-fails' },
+      body: '{}',
+    });
+    expect(failed.status).toBeGreaterThanOrEqual(400);
+
+    const audits = await requestAbsolute(
+      fixture,
+      `/audit-logs?applicationId=${encodeURIComponent(fixture.applicationId)}&action=runtimeSecret.rotationFailed`,
+    );
+    await expect(audits.json()).resolves.toMatchObject({
+      data: [
+        expect.objectContaining({
+          action: 'runtimeSecret.rotationFailed',
+          result: 'failure',
+          failureCode: expect.any(String),
+        }),
+      ],
+      meta: { total: 1 },
+    });
+  });
+
+  it('recovers stale idempotency work and pending rotations before other recovery', async () => {
+    const fixture = await createRuntimeFixture();
+    const service = new RuntimeSecretService(
+      fixture.database.connection,
+      encryptionKey,
+    );
+    const operationId = rotationOperationId(
+      fixture.ownerId,
+      fixture.applicationId,
+      'recover-rotation',
+    );
+    await service.beginRotation(fixture.applicationId, operationId);
+    const now = new Date();
+    await fixture.database.connection.query
+      .insertInto('hubIdempotencyRecords')
+      .values({
+        id: crypto.randomUUID(),
+        identityKey: `actor:${fixture.ownerId}`,
+        actorId: fixture.ownerId,
+        credentialId: null,
+        endpoint: 'POST /apps/:id/runtime-secret/rotate',
+        scopeKey: fixture.applicationId,
+        idempotencyKey: 'recover-rotation',
+        requestHash: createHash('sha256').update('{}').digest('hex'),
+        responseResource: null,
+        status: 'running',
+        expiresAt: new Date(now.getTime() + 86_400_000),
+        createdAt: now,
+        updatedAt: now,
+      })
+      .execute();
+
+    const recovered = createHubApi({
+      database: fixture.database,
+      auth: fixture.auth,
+      bootstrapAuth: fixture.auth,
+      registry: fixture.registry,
+      releaseRoot: path.join(fixture.root, 'releases'),
+      runtimeSecretEncryptionKey: encryptionKey,
+      appName: 'hub',
+      publicBasePath: '/hub',
+      authoritativeOrigin: origin,
+      appPublicOrigin: 'http://127.0.0.1:3000',
+    });
+    await recovered.ready;
+    await expect(service.summary(fixture.applicationId)).resolves.toMatchObject(
+      {
+        version: 2,
+      },
+    );
+    await expect(
+      fixture.database.connection.query
+        .selectFrom('hubRuntimeSecrets')
+        .select('id')
+        .where('applicationId', '=', fixture.applicationId)
+        .where('state', '=', 'pending')
+        .execute(),
+    ).resolves.toEqual([]);
+    await expect(
+      fixture.database.connection.query
+        .selectFrom('hubIdempotencyRecords')
+        .select('id')
+        .where('status', '=', 'running')
+        .execute(),
+    ).resolves.toEqual([]);
+    await recovered.close();
+  });
+});
+
+async function createRuntimeFixture(): Promise<RuntimeFixture> {
+  const root = await mkdtemp(path.join(tmpdir(), 'hub-runtime-control-api-'));
+  const database = createHubDatabase({
+    filename: path.join(root, 'hub.sqlite'),
+  });
+  await database.ready;
+  let failReadiness = false;
+  const registry = new AppRuntimeRegistry({
+    startEvictionLoop: false,
+    resolveFactory: () => {
+      const unhealthy = failReadiness;
+      return () => ({
+        fetch: () => Response.json({ ok: !unhealthy }),
+      });
+    },
+  });
+  const auth = new Auth({
+    connection: database.connection,
+    baseURL: origin,
+    basePath: '/hub/api/auth',
+    secret: authSecret,
+    emailAndPassword: { enabled: true, autoSignIn: false },
+  });
+  const api = createHubApi({
+    database,
+    auth,
+    bootstrapAuth: auth,
+    registry,
+    releaseRoot: path.join(root, 'releases'),
+    runtimeSecretEncryptionKey: encryptionKey,
+    appName: 'hub',
+    publicBasePath: '/hub',
+    authoritativeOrigin: origin,
+    appPublicOrigin: 'http://127.0.0.1:3000',
+  });
+  const mounted = new Hono();
+  mounted.route('/hub/api', api);
+  await api.ready;
+  const owner = await mounted.request(`${origin}/hub/api/setup/owner`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin },
+    body: JSON.stringify({
+      email: 'runtime-owner@example.com',
+      password: 'correct horse battery staple',
+      name: 'Runtime Owner',
+      username: 'runtimeowner',
+    }),
+  });
+  const ownerPayload = (await owner.json()) as {
+    data: { user: { id: string } };
+  };
+  const ownerId = ownerPayload.data.user.id;
+  const signIn = await mounted.request(`${origin}/hub/api/auth/sign-in/email`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin },
+    body: JSON.stringify({
+      email: 'runtime-owner@example.com',
+      password: 'correct horse battery staple',
+    }),
+  });
+  const cookie = signIn.headers.get('set-cookie') ?? '';
+  const store = new HubStore(database.connection);
+  const application = await store.createApplication(
+    { slug: `runtime-${crypto.randomUUID().slice(0, 8)}`, name: 'Runtime APP' },
+    ownerId,
+  );
+  const storageKey = `${application.slug}/release-1`;
+  const releaseDirectory = path.join(root, 'releases', storageKey);
+  await mkdir(path.join(releaseDirectory, 'dist/server'), { recursive: true });
+  await writeFile(
+    path.join(releaseDirectory, 'dist/server/embedded.js'),
+    'export default {};\n',
+  );
+  const { release } = await store.createRelease(
+    application.id,
+    {
+      version: '1.0.0',
+      checksum: await computeReleaseArtifactChecksum(releaseDirectory),
+      manifest: {
+        server: {
+          entrypoint: 'dist/server/embedded.js',
+          healthPath: '/healthz',
+        },
+      },
+      storageKey,
+    },
+    ownerId,
+  );
+  await store.setActiveRelease(application.id, release.id);
+  await new RuntimeSecretService(
+    database.connection,
+    encryptionKey,
+  ).ensureInitial(application.id);
+  const fixture: RuntimeFixture = {
+    root,
+    database,
+    store,
+    registry,
+    auth,
+    api,
+    mounted,
+    cookie,
+    ownerId,
+    applicationId: application.id,
+    releaseId: release.id,
+    setReadinessFailure(value: boolean): void {
+      failReadiness = value;
+    },
+  };
+  fixtures.push(fixture);
+  return fixture;
+}
+
+function request(
+  fixture: RuntimeFixture,
+  suffix: string,
+  init: RequestInit,
+): Promise<Response> {
+  return requestAbsolute(
+    fixture,
+    `/apps/${fixture.applicationId}${suffix}`,
+    init,
+  );
+}
+
+function requestAbsolute(
+  fixture: RuntimeFixture,
+  pathname: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set('cookie', fixture.cookie);
+  if (init.method && init.method !== 'GET' && init.method !== 'HEAD') {
+    headers.set('origin', origin);
+    if (!headers.has('content-type'))
+      headers.set('content-type', 'application/json');
+  }
+  return fixture.mounted.request(`${origin}/hub/api${pathname}`, {
+    ...init,
+    headers,
+  });
+}
+
+function rotationOperationId(
+  actorId: string,
+  applicationId: string,
+  idempotencyKey: string,
+): string {
+  return `runtime-secret-${createHash('sha256')
+    .update(`actor:${actorId}\0${applicationId}\0${idempotencyKey}`)
+    .digest('hex')}`;
+}

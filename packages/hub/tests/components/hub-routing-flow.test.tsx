@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe('Hub landing route', () => {
-  it('sends an application-scoped viewer to its first readable application', async () => {
+  it('sends an application-scoped viewer to the filtered application list', async () => {
     vi.stubGlobal('__PORTAL_TEMPLATE_NAME__', 'NocoBase Hub');
     vi.stubGlobal('__PORTAL_TEMPLATE_VERSION__', 'test');
     vi.stubGlobal(
@@ -67,6 +67,7 @@ describe('Hub landing route', () => {
                     { resource: 'hub.app', actions: ['read'] },
                     { resource: 'hub.release', actions: ['read'] },
                     { resource: 'hub.deployment', actions: ['read'] },
+                    { resource: 'hub.auditLog', actions: ['read'] },
                   ],
                 },
               ],
@@ -75,31 +76,24 @@ describe('Hub landing route', () => {
           requestId: 'me',
         });
       }
-      if (path.endsWith('/apps/app-1')) {
+      if (path.endsWith('/apps')) {
         return Response.json({
-          data: {
-            id: 'app-1',
-            slug: 'inventory',
-            name: 'Inventory',
-            description: null,
-            status: 'active',
-            defaultEnvironmentId: 'default',
-            activeReleaseId: null,
-            createdBy: 'owner',
-            createdAt: '2026-08-20T10:00:00.000Z',
-            updatedAt: '2026-08-21T10:00:00.000Z',
-          },
-          requestId: 'application',
-        });
-      }
-      if (
-        path.endsWith('/apps/app-1/releases') ||
-        path.endsWith('/apps/app-1/deployments')
-      ) {
-        return Response.json({
-          data: [],
-          meta: { total: 0, limit: 20, offset: 0 },
-          requestId: 'empty-list',
+          data: [
+            {
+              id: 'app-1',
+              slug: 'inventory',
+              name: 'Inventory',
+              description: null,
+              status: 'active',
+              defaultEnvironmentId: 'default',
+              activeRelease: null,
+              createdBy: 'owner',
+              createdAt: '2026-08-20T10:00:00.000Z',
+              updatedAt: '2026-08-21T10:00:00.000Z',
+            },
+          ],
+          meta: { total: 1, limit: 20, offset: 0 },
+          requestId: 'applications',
         });
       }
       throw new Error(`Unexpected request: ${path}`);
@@ -124,12 +118,18 @@ describe('Hub landing route', () => {
 
     render(<RouterProvider router={router} />);
 
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe('/apps/app-1'),
+    await waitFor(() => expect(router.state.location.pathname).toBe('/apps'));
+    expect(await screen.findByText('Inventory')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Applications' }),
+    ).toHaveAttribute('href', '/apps');
+    expect(screen.getByRole('button', { name: 'Audit log' })).toHaveAttribute(
+      'href',
+      '/audit',
     );
     expect(
       fetchMock.mock.calls.some(([input]) => String(input) === '/hub/api/apps'),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('renders an accessible landing for deployment-only application scope', async () => {

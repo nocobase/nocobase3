@@ -35,7 +35,11 @@ import { getResourceLabel } from '@/components/resources/resource-label';
 import { hasHubCapability } from '@/features/hub/api';
 import { useHubRuntime } from '@/features/hub/provider';
 
-const applicationScopedMenuResources = new Set(['hub.deployment']);
+const applicationScopedMenuResources = new Set([
+  'hub.app',
+  'hub.auditLog',
+  'hub.deployment',
+]);
 
 export function Sidebar() {
   const { menuItems, selectedKey } = useMenu();

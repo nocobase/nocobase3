@@ -233,6 +233,17 @@ export interface AppReadinessPolicy {
   timeoutMs?: number;
   intervalMs?: number;
   successThreshold?: number;
+  expect?: AppReadinessResponseExpectation;
+}
+
+export interface AppReadinessResponseExpectation {
+  contentType?: string;
+  json?: Readonly<Record<string, string | number | boolean>>;
+}
+
+export interface ConfigureInactiveAppOptions {
+  target: AppDefinition;
+  runtimeConfig: Readonly<Record<string, unknown>> | null;
 }
 
 export interface DeployAppOptions {
