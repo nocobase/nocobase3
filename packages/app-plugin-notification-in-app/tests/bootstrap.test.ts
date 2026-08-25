@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 
-import { notificationPluginServiceToken } from '@nocobase/app-plugin-notification';
 import bootstrap from '../server/bootstrap.js';
+import { MemoryInAppStore } from '../server/store.js';
 
 describe('in-app notification plugin bootstrap', () => {
   it('registers its Channel and database Provider', () => {
@@ -14,24 +14,15 @@ describe('in-app notification plugin bootstrap', () => {
         return registry;
       }),
     };
-    const manager = { registry, router: new Hono(), send: vi.fn() };
-
-    const pluginServices = {
-      get: vi.fn(() => ({ manager })),
-      onAvailable: vi.fn((_, consume) => consume({ manager })),
-    };
+    const notification = { registry, router: new Hono(), send: vi.fn() };
     bootstrap({
       deps: {
         resolveRequestUserId: vi.fn(),
       },
-      pluginServices,
-      runtime: {
-        config: {
-          database: {},
-          notification: { enabled: true, channels: [] },
-        },
+      services: {
+        notification,
+        notificationInAppStore: new MemoryInAppStore(),
       },
-      services: {},
       lifecycle: { registerDisposer: vi.fn() },
     });
 
@@ -42,12 +33,9 @@ describe('in-app notification plugin bootstrap', () => {
       'in-app',
       expect.objectContaining({ type: 'database' }),
     );
-    expect(pluginServices.onAvailable).toHaveBeenCalledWith(
-      notificationPluginServiceToken,
-      expect.any(Function),
-    );
-    expect(manager.router.routes).toEqual(
+    expect(notification.router.routes).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ method: 'GET', path: '/in-app' }),
         expect.objectContaining({ method: 'POST', path: '/test/in-app' }),
       ]),
     );
@@ -58,13 +46,6 @@ describe('in-app notification plugin bootstrap', () => {
       bootstrap({
         deps: {
           resolveRequestUserId: vi.fn(),
-        },
-        pluginServices: { get: vi.fn(() => undefined), onAvailable: vi.fn() },
-        runtime: {
-          config: {
-            database: {},
-            notification: { enabled: false, channels: [] },
-          },
         },
         services: {},
         lifecycle: { registerDisposer: vi.fn() },

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 
-import { notificationPluginServiceToken } from '@nocobase/app-plugin-notification';
 import bootstrap from '../server/bootstrap.js';
 
 describe('notification Providers plugin bootstrap', () => {
@@ -14,26 +13,12 @@ describe('notification Providers plugin bootstrap', () => {
         return registry;
       }),
     };
-    const manager = { registry, router: new Hono(), send: vi.fn() };
-
-    const pluginServices = {
-      get: vi.fn(() => ({ manager })),
-      onAvailable: vi.fn((_, consume) => consume({ manager })),
-    };
+    const notification = { registry, router: new Hono(), send: vi.fn() };
     bootstrap({
       deps: undefined,
-      pluginServices,
-      runtime: {
-        config: { database: {}, notification: { enabled: true, channels: [] } },
-      },
-      services: {},
+      services: { notification },
       lifecycle: { registerDisposer: vi.fn() },
     });
-
-    expect(pluginServices.onAvailable).toHaveBeenCalledWith(
-      notificationPluginServiceToken,
-      expect.any(Function),
-    );
 
     expect(registry.registerChannel).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'email' }),
@@ -42,7 +27,7 @@ describe('notification Providers plugin bootstrap', () => {
       'email',
       expect.objectContaining({ type: 'smtp' }),
     );
-    expect(manager.router.routes).toEqual(
+    expect(notification.router.routes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ method: 'POST', path: '/test/email' }),
       ]),
@@ -53,13 +38,6 @@ describe('notification Providers plugin bootstrap', () => {
     expect(() =>
       bootstrap({
         deps: undefined,
-        pluginServices: { get: vi.fn(() => undefined), onAvailable: vi.fn() },
-        runtime: {
-          config: {
-            database: {},
-            notification: { enabled: false, channels: [] },
-          },
-        },
         services: {},
         lifecycle: { registerDisposer: vi.fn() },
       }),

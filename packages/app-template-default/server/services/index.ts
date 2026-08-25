@@ -1,5 +1,20 @@
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { AppDriveConfig } from '@nocobase/drive';
+import {
+  createInAppStore,
+  type InAppMessage,
+  type InAppRecipient,
+  type InAppStore,
+} from '@nocobase/app-plugin-notification-in-app';
+import type {
+  EmailMessage,
+  EmailRecipient,
+} from '@nocobase/app-plugin-notification-providers';
+import {
+  createNotificationManager,
+  type NotificationManager,
+} from '@nocobase/app-plugin-notification';
+import { createSessionMiddleware } from '@nocobase/session';
 
 import type { AppConfig } from '../config/index.js';
 import type { RealtimeService } from '../realtime/service.js';
@@ -15,10 +30,25 @@ import {
   type FileUploads,
 } from './public-file-storage.js';
 
+export interface AppNotificationChannels {
+  readonly 'in-app': {
+    readonly recipient: InAppRecipient;
+    readonly message: InAppMessage;
+  };
+  readonly email: {
+    readonly recipient: EmailRecipient;
+    readonly message: EmailMessage;
+  };
+}
+
 export interface AppServices {
   appSettingsStore: AppSettings;
   publicFileStorage: FileUploads;
+  notification?: NotificationManager<AppNotificationChannels>;
+  notificationInAppStore?: InAppStore;
   realtime: RealtimeService;
+  start(): Promise<void>;
+  dispose(): Promise<void>;
 }
 
 export interface CreateAppServicesOptions {
@@ -30,6 +60,24 @@ export function createAppServices(
   deps: AppDeps,
   options: CreateAppServicesOptions,
 ): AppServices {
+  const config = runtime.config.notification;
+  const database = runtime.database;
+  let notification: NotificationManager<AppNotificationChannels> | undefined;
+  let notificationInAppStore: InAppStore | undefined;
+  if (config.enabled) {
+    if (!database) {
+      throw new Error('Notifications require a configured database.');
+    }
+    notification = createNotificationManager<AppNotificationChannels>({
+      database,
+      queue: deps.queueManager,
+      logger: deps.logging.getLogger('notification'),
+      config,
+    });
+    notificationInAppStore = createInAppStore(database);
+  }
+  notification?.router.use('*', createSessionMiddleware(deps.sessionManager));
+
   return {
     appSettingsStore: runtime.database
       ? new AppSettingsService(runtime.database)
@@ -40,7 +88,11 @@ export function createAppServices(
         : new UnavailableFileUploadsService(
             resolveFileUploadsUnavailableMessage(runtime.config.drive),
           ),
+    notification,
+    notificationInAppStore,
     realtime: options.realtime,
+    start: (): Promise<void> => notification?.start() ?? Promise.resolve(),
+    dispose: (): Promise<void> => notification?.close() ?? Promise.resolve(),
   };
 }
 

@@ -1,24 +1,28 @@
 import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
 import { Hono, type MiddlewareHandler } from 'hono';
 
-import { notificationPluginServiceToken } from '../service.js';
-
 interface NotificationRoutesDeps {
   readonly auth: { required(): MiddlewareHandler };
 }
 
-type NotificationRoutesContext = AppPluginRoutesContext<NotificationRoutesDeps>;
+interface NotificationRoutesServices {
+  readonly notification?: { readonly router: Hono };
+}
+
+type NotificationRoutesContext = AppPluginRoutesContext<
+  NotificationRoutesDeps,
+  NotificationRoutesServices
+>;
 
 export default function registerRoutes({
   app,
   deps,
-  pluginServices,
+  services,
 }: NotificationRoutesContext): void {
-  const service = pluginServices.get(notificationPluginServiceToken);
-  if (!service) return;
+  if (!services.notification) return;
 
   const routes = new Hono();
   routes.use('*', deps.auth.required());
-  routes.route('/', service.manager.router);
+  routes.route('/', services.notification.router);
   app.route('/api/notifications', routes);
 }

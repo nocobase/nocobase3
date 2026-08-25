@@ -1,57 +1,59 @@
 import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
-import {
-  notificationPluginServiceToken,
-  type NotificationConfig,
+import type {
+  NotificationChannelDefinition,
+  NotificationProviderDefinition,
 } from '@nocobase/app-plugin-notification';
+import type { Hono } from 'hono';
 
 import {
   createDatabaseProviderDefinition,
   createInAppChannelDefinition,
 } from './definition.js';
 import { createInAppRouter, type InAppUserIdResolver } from './router.js';
-import { createInAppStore } from './store.js';
-import { createInAppTestRouter } from './test-router.js';
+import type { InAppStore } from './store.js';
+import { createInAppTestRouter, type InAppTestSender } from './test-router.js';
 
 interface NotificationPluginDependencies {
   readonly resolveRequestUserId: InAppUserIdResolver;
 }
 
-interface InAppPluginConfig {
-  readonly database: import('@nocobase/app-server-kit/database').AppDatabaseConfig;
-  readonly notification: NotificationConfig & { readonly enabled: boolean };
+interface NotificationRegistrar {
+  registerChannel(
+    definition: NotificationChannelDefinition,
+  ): NotificationRegistrar;
+  registerProvider(
+    channelType: string,
+    definition: NotificationProviderDefinition,
+  ): NotificationRegistrar;
+}
+
+interface NotificationPluginServices {
+  readonly notification?: InAppTestSender & {
+    readonly registry: NotificationRegistrar;
+    readonly router: Hono;
+  };
+  readonly notificationInAppStore?: InAppStore;
 }
 
 type NotificationPluginContext = AppPluginServerContext<
   NotificationPluginDependencies,
-  unknown,
-  AppRuntime<InAppPluginConfig>
+  NotificationPluginServices
 >;
 
 export default function bootstrap({
   deps,
-  pluginServices,
-  runtime,
+  services,
 }: NotificationPluginContext): void {
-  if (!runtime.config.notification.enabled) return;
-  pluginServices.onAvailable(
-    notificationPluginServiceToken,
-    (notification): void => {
-      const store = createInAppStore(runtime.database);
-      notification.manager.registry
-        .registerChannel(createInAppChannelDefinition())
-        .registerProvider(
-          'in-app',
-          createDatabaseProviderDefinition({ store }),
-        );
-      notification.manager.router.route(
-        '/in-app',
-        createInAppRouter(store, { resolveUserId: deps.resolveRequestUserId }),
-      );
-      notification.manager.router.route(
-        '/test',
-        createInAppTestRouter(notification.manager),
-      );
-    },
+  const notification = services.notification;
+  const store = services.notificationInAppStore;
+  if (!notification || !store) return;
+
+  notification.registry
+    .registerChannel(createInAppChannelDefinition())
+    .registerProvider('in-app', createDatabaseProviderDefinition({ store }));
+  notification.router.route(
+    '/in-app',
+    createInAppRouter(store, { resolveUserId: deps.resolveRequestUserId }),
   );
+  notification.router.route('/test', createInAppTestRouter(notification));
 }

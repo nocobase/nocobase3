@@ -825,9 +825,7 @@ describe('app plugins', () => {
     expect(notificationPlugin?.migrationsDirectory).toMatch(
       /app-plugin-notification\/database\/migrations$/,
     );
-    expect(notificationPlugin?.bootstrapEntry).toMatch(
-      /app-plugin-notification\/server\/bootstrap\.ts$/,
-    );
+    expect(notificationPlugin?.bootstrapEntry).toBeUndefined();
     expect(notificationPlugin?.routesEntry).toMatch(
       /app-plugin-notification\/server\/routes\/index\.ts$/,
     );
