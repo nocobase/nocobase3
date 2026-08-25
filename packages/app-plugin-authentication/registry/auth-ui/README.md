@@ -1,14 +1,16 @@
 # NocoBase Authentication UI
 
-Application-owned authentication presentation for the default Template. The
-authentication plugin owns protocol, session state, route identity, headless
-actions and internal fallback forms. This Registry item owns the final forms,
-branding, layout and page composition, and overrides only the plugin route
-component loaders.
+Application-owned authentication presentation backed by the authentication
+plugin. The authentication plugin owns protocol, session state, route identity,
+headless actions and internal fallback forms. This Registry item owns the final
+forms, branding, layout and page composition, and overrides only the plugin
+route component loaders.
 
-Files installed under `client/extensions/nocobase-auth-ui` are source code and
-may be edited by the application. Upgrades should be reviewed as a three-way
-merge; plugin internals must not be copied into this extension.
+The canonical recipe is published by `@nocobase/app-plugin-authentication`.
+Once materialized, files under `client/extensions/nocobase-auth-ui` are
+application-owned source code and may be edited freely. Upgrades should be
+reviewed as a three-way merge; plugin internals must not be copied into the
+installed extension.
 
 ## Edit map
 

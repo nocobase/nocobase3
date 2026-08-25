@@ -9,7 +9,7 @@ export function AuthMarketingPanel(): ReactElement {
       <div className='pointer-events-none absolute inset-0 opacity-[0.08] [background-image:linear-gradient(currentColor_1px,transparent_1px),linear-gradient(90deg,currentColor_1px,transparent_1px)] [background-size:48px_48px]' />
       <div className='relative w-full max-w-xl'>
         <p className='text-xs font-semibold tracking-[0.14em] text-white/55 uppercase'>
-          NocoBase Default App
+          NocoBase
         </p>
         <h2 className='mt-3 max-w-lg text-5xl leading-[1.08] font-semibold tracking-[-0.04em]'>
           Build the application your team actually needs.
@@ -23,8 +23,8 @@ export function AuthMarketingPanel(): ReactElement {
             Application-owned UI
           </p>
           <p className='mt-2 text-sm leading-6 text-white/65'>
-            These pages reuse the authentication plugin&apos;s forms and
-            behavior without duplicating its routes or session protocol.
+            These pages reuse the authentication plugin&apos;s headless actions
+            and route contracts without duplicating its session protocol.
           </p>
         </div>
       </div>

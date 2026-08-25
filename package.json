@@ -26,6 +26,7 @@
     "plugin:register": "node ./scripts/register-plugin.mjs",
     "plugin:unregister": "node ./scripts/unregister-plugin.mjs",
     "plugin:remove": "node ./scripts/remove-plugin.mjs",
+    "registry": "node ./scripts/registry.mjs",
     "app:client:inspect": "tsx ./scripts/inspect-app-client.mjs",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm pack:check",
     "fix": "pnpm lint:fix && pnpm format",
