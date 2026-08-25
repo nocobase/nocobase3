@@ -43,7 +43,6 @@ export function createNotificationRoutes({
         400,
       );
     const result = await notification.send({
-      idempotencyKey: context.req.header('idempotency-key'),
       source: { type: 'notification-test' },
       recipients: input.addresses.map((address) => ({
         channels: [{ channel: 'email', recipient: { address } }],
@@ -60,7 +59,6 @@ export function createNotificationRoutes({
     if (!input)
       return context.json({ error: 'User IDs and body are required.' }, 400);
     const result = await notification.send({
-      idempotencyKey: context.req.header('idempotency-key'),
       source: { type: 'notification-test' },
       recipients: input.userIds.map((userId) => ({
         userId,

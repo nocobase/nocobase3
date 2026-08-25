@@ -66,9 +66,7 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
   };
 }
 
-function smtpDisposition(
-  error: unknown,
-): 'never' | 'same_provider' | 'next_provider' {
+function smtpDisposition(error: unknown): 'never' | 'same_provider' {
   const code =
     error && typeof error === 'object' && 'code' in error
       ? String(error.code)

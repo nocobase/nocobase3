@@ -25,7 +25,8 @@ describe('notification logs', () => {
                   delivery: {
                     id: 'delivery-1',
                     channel: 'email',
-                    providerChain: ['primary'],
+                    providerName: 'primary',
+                    providerType: 'fake',
                     attemptCount: 1,
                     status: 'failed',
                     createdAt: '2026-08-25T00:00:00.000Z',

@@ -28,7 +28,8 @@ export interface NotificationDeliveryDetails {
   readonly delivery: {
     readonly id: string;
     readonly channel: string;
-    readonly providerChain: readonly string[];
+    readonly providerName: string;
+    readonly providerType: string;
     readonly attemptCount: number;
     readonly status: NotificationStatus;
     readonly nextRunAt?: string;

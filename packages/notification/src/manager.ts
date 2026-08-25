@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import { Hono } from 'hono';
 
@@ -176,6 +176,10 @@ export class NotificationManager<
             throw new Error(
               `Provider Runtime name "${provider.name}" must match configured name "${providerConfig.name}" in Channel "${config.type}".`,
             );
+          if (provider.type !== providerConfig.type)
+            throw new Error(
+              `Provider Runtime type "${provider.type}" must match configured type "${providerConfig.type}" for Provider "${providerConfig.name}" in Channel "${config.type}".`,
+            );
           providers.push(provider);
         }
         if (providers.length === 0)
@@ -258,26 +262,10 @@ export class NotificationManager<
       throw new Error(
         'NotificationManager.start() must complete before send().',
       );
-    if (
-      input.idempotencyKey !== undefined &&
-      (input.idempotencyKey.length === 0 || input.idempotencyKey.length > 255)
-    )
-      throw new Error(
-        'Notification idempotencyKey must contain between 1 and 255 characters.',
-      );
     if (input.recipients.length === 0)
       throw new Error('At least one notification recipient is required.');
     const now = await this.store.now();
-    const notificationId = input.idempotencyKey
-      ? stableUuid(
-          `${input.source?.type ?? 'application'}:${input.idempotencyKey}`,
-        )
-      : randomUUID();
-    const requestHash = stableHash({
-      source: input.source,
-      recipients: input.recipients,
-      message: input.message,
-    });
+    const notificationId = randomUUID();
     const deliveries: NotificationDeliveryRecord[] = [];
     for (const recipient of input.recipients) {
       for (const target of recipient.channels) {
@@ -290,24 +278,36 @@ export class NotificationManager<
           throw new Error(
             `Notification Channel "${target.channel}" is not enabled.`,
           );
-        const deliveryId = randomUUID();
-        deliveries.push({
-          id: deliveryId,
-          notificationId,
-          channel: target.channel,
-          recipientKey:
-            recipient.userId ?? stableRecipientKey(target.recipient),
-          recipientSnapshot: target.recipient,
-          messageSnapshot: message,
-          providerChain: this.channelManager.providerNames(target.channel),
-          providerCursor: 0,
-          attemptCount: 0,
-          status: 'pending',
-          idempotencyKey: `${notificationId}:${deliveryId}`,
-          createdAt: now,
-          updatedAt: now,
-          version: 1,
-        });
+        if (target.providerMode === 'broadcast' && target.providerName)
+          throw new Error(
+            'providerName cannot be combined with broadcast providerMode.',
+          );
+        const providers = this.channelManager.providerIdentities(
+          target.channel,
+          {
+            providerName: target.providerName,
+            providerMode: target.providerMode,
+          },
+        );
+        if (providers.length === 0)
+          throw new Error(
+            `Notification Channel "${target.channel}" has no matching enabled Provider.`,
+          );
+        for (const provider of providers) {
+          deliveries.push({
+            id: randomUUID(),
+            notificationId,
+            channel: target.channel,
+            recipientSnapshot: target.recipient,
+            messageSnapshot: message,
+            providerName: provider.name,
+            providerType: provider.type,
+            attemptCount: 0,
+            status: 'pending',
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
       }
     }
     if (deliveries.length === 0)
@@ -316,18 +316,15 @@ export class NotificationManager<
       id: notificationId,
       sourceType: input.source?.type ?? 'application',
       sourceReferenceId: input.source?.referenceId,
-      idempotencyKey: input.idempotencyKey,
-      requestHash,
       messageSnapshot: input.message as Readonly<Record<string, object>>,
       status: 'pending',
       createdAt: now,
       updatedAt: now,
     };
-    const created = await this.store.create({ log, deliveries });
-    const storedDeliveries = created.bundle.deliveries;
+    await this.store.create({ log, deliveries });
     await Promise.all(
-      storedDeliveries
-        .filter((delivery) => created.created && delivery.status === 'pending')
+      deliveries
+        .filter((delivery) => delivery.status === 'pending')
         .map(async (delivery): Promise<void> => this.dispatch(delivery.id)),
     );
     this.options.logger.debug(
@@ -335,17 +332,15 @@ export class NotificationManager<
         event: 'notification.queued',
         notificationId,
         sourceType: log.sourceType,
-        deliveryCount: storedDeliveries.length,
-        channels: [
-          ...new Set(storedDeliveries.map((delivery) => delivery.channel)),
-        ],
+        deliveryCount: deliveries.length,
+        channels: [...new Set(deliveries.map((delivery) => delivery.channel))],
       },
       'Notification queued for delivery.',
     );
     return {
-      notificationId: created.bundle.log.id,
-      status: created.bundle.log.status,
-      deliveries: storedDeliveries.map((delivery) => ({
+      notificationId: log.id,
+      status: log.status,
+      deliveries: deliveries.map((delivery) => ({
         id: delivery.id,
         channel: delivery.channel,
         status: delivery.status,
@@ -418,34 +413,4 @@ export function createNotificationManager<
   options: NotificationManagerOptions<TChannels>,
 ): NotificationManager<TChannels> {
   return new NotificationManager(options);
-}
-
-function stableRecipientKey(recipient: object): string {
-  const entries = Object.entries(recipient).sort(([left], [right]) =>
-    left.localeCompare(right),
-  );
-  return JSON.stringify(Object.fromEntries(entries));
-}
-
-function stableHash(value: unknown): string {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex');
-}
-
-function stableUuid(value: string): string {
-  const hex = stableHash(value).slice(0, 32).split('');
-  hex[12] = '5';
-  hex[16] = ((Number.parseInt(hex[16] ?? '0', 16) & 0x3) | 0x8).toString(16);
-  return `${hex.slice(0, 8).join('')}-${hex.slice(8, 12).join('')}-${hex.slice(12, 16).join('')}-${hex.slice(16, 20).join('')}-${hex.slice(20).join('')}`;
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .filter(([, item]) => item !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
 }

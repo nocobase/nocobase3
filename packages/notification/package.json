@@ -18,10 +18,6 @@
     "./migrations/202608190001_create_notification_tables": {
       "types": "./src/migrations/202608190001_create_notification_tables.ts",
       "import": "./src/migrations/202608190001_create_notification_tables.ts"
-    },
-    "./migrations/202608250001_add_notification_reliability_fields": {
-      "types": "./src/migrations/202608250001_add_notification_reliability_fields.ts",
-      "import": "./src/migrations/202608250001_add_notification_reliability_fields.ts"
     }
   },
   "publishConfig": {
@@ -33,10 +29,6 @@
       "./migrations/202608190001_create_notification_tables": {
         "types": "./dist/migrations/202608190001_create_notification_tables.d.ts",
         "import": "./dist/migrations/202608190001_create_notification_tables.js"
-      },
-      "./migrations/202608250001_add_notification_reliability_fields": {
-        "types": "./dist/migrations/202608250001_add_notification_reliability_fields.d.ts",
-        "import": "./dist/migrations/202608250001_add_notification_reliability_fields.js"
       }
     }
   },

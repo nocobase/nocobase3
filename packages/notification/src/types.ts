@@ -12,13 +12,23 @@ export interface NotificationChannelSchema {
 
 export type NotificationChannelMap = Record<string, NotificationChannelSchema>;
 
+export type NotificationProviderSelection =
+  | {
+      readonly providerMode?: 'single';
+      readonly providerName?: string;
+    }
+  | {
+      readonly providerMode: 'broadcast';
+      readonly providerName?: never;
+    };
+
 export type NotificationRecipientChannel<
   TChannels extends NotificationChannelMap,
 > = {
   readonly [TType in keyof TChannels & string]: {
     readonly channel: TType;
     readonly recipient: TChannels[TType]['recipient'];
-  };
+  } & NotificationProviderSelection;
 }[keyof TChannels & string];
 
 export type NotificationMessageInput<TChannels extends NotificationChannelMap> =
@@ -29,7 +39,6 @@ export type NotificationMessageInput<TChannels extends NotificationChannelMap> =
 export interface NotificationSendInput<
   TChannels extends NotificationChannelMap,
 > {
-  readonly idempotencyKey?: string;
   readonly source?: {
     readonly type: string;
     readonly referenceId?: string;
@@ -80,8 +89,7 @@ export interface NotificationProviderSendError {
   readonly category?: string;
 }
 
-export type NotificationRetryDisposition =
-  'never' | 'same_provider' | 'next_provider';
+export type NotificationRetryDisposition = 'never' | 'same_provider';
 
 export type ProviderSendResult =
   | {
@@ -104,7 +112,6 @@ export interface NotificationProviderSendInput<TMessage = object> {
   readonly notificationId: string;
   readonly deliveryId: string;
   readonly attemptId: string;
-  readonly idempotencyKey: string;
   readonly deadline: string;
   readonly signal: AbortSignal;
 }

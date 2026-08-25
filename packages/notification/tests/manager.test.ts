@@ -136,7 +136,6 @@ describe('NotificationManager registration', () => {
     expect(details?.deliveries[0]?.delivery).not.toHaveProperty(
       'messageSnapshot',
     );
-    expect(details?.deliveries[0]?.delivery).not.toHaveProperty('recipientKey');
     await manager.close();
 
     const records = output.records();
@@ -168,6 +167,80 @@ describe('NotificationManager registration', () => {
     expect(JSON.stringify(records)).not.toContain('private@example.com');
     expect(JSON.stringify(records)).not.toContain('private subject');
 
+    await queue.close();
+    await database.destroy();
+  });
+
+  it('creates one Delivery per Provider in broadcast mode', async () => {
+    const queue = createQueueManager(createSyncQueueConfig());
+    const database = await createNotificationTestDatabase();
+    const manager = createNotificationManager({
+      database,
+      queue,
+      logger: createLogger({ level: 'silent' }),
+      config: {
+        channels: [
+          {
+            type: 'email',
+            enabled: true,
+            providers: [
+              { type: 'fake', name: 'primary' },
+              { type: 'fake', name: 'secondary' },
+            ],
+          },
+        ],
+      },
+      store: new FakeNotificationStore(),
+    });
+    manager
+      .registerChannel({
+        type: 'email',
+        async createChannel() {
+          return {
+            type: 'email',
+            async prepare(input): Promise<object> {
+              return input.message;
+            },
+          };
+        },
+      })
+      .registerProvider('email', {
+        type: 'fake',
+        async createProvider(_context, config) {
+          return {
+            name: config.name,
+            type: config.type,
+            async send() {
+              return { status: 'accepted' } as const;
+            },
+          };
+        },
+      });
+    await manager.start();
+
+    const result = await manager.send({
+      recipients: [
+        {
+          channels: [
+            {
+              channel: 'email',
+              providerMode: 'broadcast',
+              recipient: { address: 'test@example.com' },
+            },
+          ],
+        },
+      ],
+      message: { email: { subject: 'Broadcast' } },
+    });
+    const details = await manager.logs.get(result.notificationId);
+
+    expect(result.deliveries).toHaveLength(2);
+    expect(
+      details?.deliveries.map((item) => item.delivery.providerName).sort(),
+    ).toEqual(['primary', 'secondary']);
+    expect(details?.log.status).toBe('completed');
+
+    await manager.close();
     await queue.close();
     await database.destroy();
   });
@@ -219,7 +292,9 @@ describe('NotificationManager registration', () => {
     await manager.start();
 
     expect(manager.channelManager.has('email')).toBe(true);
-    expect(manager.channelManager.providerNames('email')).toEqual(['primary']);
+    expect(manager.channelManager.providerIdentities('email')).toEqual([
+      { name: 'primary', type: 'fake' },
+    ]);
     expect(() =>
       manager.registerProvider('email', {
         type: 'late',
@@ -261,7 +336,7 @@ describe('NotificationManager registration', () => {
     await database.destroy();
   });
 
-  it('returns the existing notification for the same idempotency key', async () => {
+  it('rejects a Provider Runtime type that differs from its config', async () => {
     const queue = createQueueManager(createSyncQueueConfig());
     const database = await createNotificationTestDatabase();
     const manager = createNotificationManager({
@@ -273,60 +348,39 @@ describe('NotificationManager registration', () => {
           {
             type: 'email',
             enabled: true,
-            providers: [{ type: 'fake', name: 'primary' }],
+            providers: [{ type: 'configured', name: 'primary' }],
           },
         ],
       },
       store: new FakeNotificationStore(),
     });
-    manager
-      .registerChannel({
-        type: 'email',
-        async createChannel() {
-          return {
-            type: 'email',
-            async prepare(input): Promise<object> {
-              return input.message;
-            },
-          };
-        },
-      })
-      .registerProvider('email', {
-        type: 'fake',
-        async createProvider(_context, config) {
-          return {
-            name: config.name,
-            type: config.type,
-            async send() {
-              return { status: 'accepted' } as const;
-            },
-          };
-        },
-      });
-    await manager.start();
-    const input = {
-      idempotencyKey: 'approval-42',
-      recipients: [
-        {
-          channels: [
-            {
-              channel: 'email' as const,
-              recipient: { address: 'test@example.com' },
-            },
-          ],
-        },
-      ],
-      message: { email: { subject: 'Approved' } },
-    };
+    manager.registerChannel({
+      type: 'email',
+      async createChannel() {
+        return {
+          type: 'email',
+          async prepare(input): Promise<object> {
+            return input.message;
+          },
+        };
+      },
+    });
+    manager.registerProvider('email', {
+      type: 'configured',
+      async createProvider(_context, config) {
+        return {
+          name: config.name,
+          type: 'different',
+          async send() {
+            return { status: 'accepted' } as const;
+          },
+        };
+      },
+    });
 
-    const first = await manager.send(input);
-    const second = await manager.send(input);
-    expect(second.notificationId).toBe(first.notificationId);
-    expect(second.deliveries.map((item) => item.id)).toEqual(
-      first.deliveries.map((item) => item.id),
+    await expect(manager.start()).rejects.toThrow(
+      'must match configured type "configured"',
     );
-
-    await manager.close();
     await queue.close();
     await database.destroy();
   });

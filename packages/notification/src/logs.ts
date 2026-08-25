@@ -10,11 +10,7 @@ export interface NotificationLogDetails {
   readonly deliveries: readonly {
     readonly delivery: Omit<
       NotificationDeliveryRecord,
-      | 'recipientKey'
-      | 'recipientSnapshot'
-      | 'messageSnapshot'
-      | 'leaseToken'
-      | 'leaseExpiresAt'
+      'recipientSnapshot' | 'messageSnapshot' | 'leaseToken' | 'leaseExpiresAt'
     >;
     readonly attempts: readonly NotificationAttemptRecord[];
   }[];
@@ -70,7 +66,6 @@ function redactDelivery(
   record: NotificationDeliveryRecord,
 ): NotificationLogDetails['deliveries'][number]['delivery'] {
   const {
-    recipientKey: _recipientKey,
     recipientSnapshot: _recipientSnapshot,
     messageSnapshot: _messageSnapshot,
     leaseToken: _leaseToken,

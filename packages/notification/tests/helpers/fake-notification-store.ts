@@ -3,7 +3,6 @@ import type {
   NotificationDeliveryRecord,
   NotificationDeliveryStatus,
   NotificationErrorRecord,
-  NotificationCreateResult,
   NotificationLogBundle,
   NotificationLogRecord,
   NotificationLogStatus,
@@ -19,36 +18,25 @@ export class FakeNotificationStore implements NotificationStore {
     return new Date().toISOString();
   }
 
-  async create(
-    bundle: NotificationLogBundle,
-  ): Promise<NotificationCreateResult> {
-    const existing = this.logs.get(bundle.log.id);
-    if (existing) {
-      if (existing.requestHash !== bundle.log.requestHash)
-        throw new Error('Notification idempotency key request mismatch.');
-      return {
-        created: false,
-        bundle: {
-          log: existing,
-          deliveries: await this.listDeliveries(existing.id),
-        },
-      };
-    }
+  async create(bundle: NotificationLogBundle): Promise<void> {
     this.logs.set(bundle.log.id, bundle.log);
     for (const delivery of bundle.deliveries) {
       this.deliveries.set(delivery.id, delivery);
     }
-    return { created: true, bundle };
   }
 
   async getLog(id: string): Promise<NotificationLogRecord | undefined> {
-    return this.logs.get(id);
+    const log = this.logs.get(id);
+    return log ? this.withSummary(log) : undefined;
   }
 
   async listLogs(
     limit: number = 100,
   ): Promise<readonly NotificationLogRecord[]> {
-    return [...this.logs.values()]
+    const logs = await Promise.all(
+      [...this.logs.values()].map((log) => this.withSummary(log)),
+    );
+    return logs
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, limit);
   }
@@ -112,10 +100,8 @@ export class FakeNotificationStore implements NotificationStore {
       leaseToken,
       leaseExpiresAt,
       updatedAt: await this.now(),
-      version: delivery.version + 1,
     };
     this.deliveries.set(id, claimed);
-    await this.refreshLog(claimed.notificationId);
     return claimed;
   }
 
@@ -129,7 +115,7 @@ export class FakeNotificationStore implements NotificationStore {
       !current ||
       !['preparing', 'submitting'].includes(current.status) ||
       current.leaseToken !== delivery.leaseToken ||
-      current.version !== delivery.version
+      current.attemptCount !== delivery.attemptCount
     ) {
       return undefined;
     }
@@ -139,18 +125,18 @@ export class FakeNotificationStore implements NotificationStore {
     ]);
     const next: NotificationDeliveryRecord = {
       ...current,
-      providerCursor: delivery.providerCursor,
       attemptCount: attempt.sequence,
       status: 'submitting',
       leaseExpiresAt,
       updatedAt: await this.now(),
-      version: current.version + 1,
     };
     this.deliveries.set(next.id, next);
     return next;
   }
 
-  async finishAttempt(attempt: NotificationAttemptRecord): Promise<void> {
+  private async finishAttempt(
+    attempt: NotificationAttemptRecord,
+  ): Promise<void> {
     const attempts = this.attempts.get(attempt.deliveryId) ?? [];
     this.attempts.set(
       attempt.deliveryId,
@@ -158,30 +144,6 @@ export class FakeNotificationStore implements NotificationStore {
         current.id === attempt.id ? attempt : current,
       ),
     );
-  }
-
-  async finishAttemptAndContinue(
-    attempt: NotificationAttemptRecord,
-    delivery: NotificationDeliveryRecord,
-    providerCursor: number,
-  ): Promise<NotificationDeliveryRecord | undefined> {
-    const current = this.deliveries.get(delivery.id);
-    if (
-      !current ||
-      current.status !== 'submitting' ||
-      current.leaseToken !== delivery.leaseToken ||
-      current.version !== delivery.version
-    )
-      return undefined;
-    await this.finishAttempt(attempt);
-    const next: NotificationDeliveryRecord = {
-      ...current,
-      providerCursor,
-      updatedAt: await this.now(),
-      version: current.version + 1,
-    };
-    this.deliveries.set(next.id, next);
-    return next;
   }
 
   async finishAttemptAndDelivery(
@@ -198,13 +160,21 @@ export class FakeNotificationStore implements NotificationStore {
     if (
       !current ||
       current.status !== 'submitting' ||
-      current.leaseToken !== delivery.leaseToken ||
-      current.version !== delivery.version
+      current.leaseToken !== delivery.leaseToken
     )
       return undefined;
     await this.finishAttempt(attempt);
-    if (nextRunAt) return this.scheduleRetry(current, nextRunAt, error!);
-    return this.finishDelivery(current, status, error);
+    const finished: NotificationDeliveryRecord = {
+      ...current,
+      status,
+      lastError: error,
+      nextRunAt,
+      leaseToken: undefined,
+      leaseExpiresAt: undefined,
+      updatedAt: await this.now(),
+    };
+    this.deliveries.set(finished.id, finished);
+    return finished;
   }
 
   async renewLease(
@@ -235,8 +205,7 @@ export class FakeNotificationStore implements NotificationStore {
     if (
       !current ||
       !['preparing', 'submitting'].includes(current.status) ||
-      current.leaseToken !== delivery.leaseToken ||
-      current.version !== delivery.version
+      current.leaseToken !== delivery.leaseToken
     ) {
       return undefined;
     }
@@ -248,38 +217,9 @@ export class FakeNotificationStore implements NotificationStore {
       leaseToken: undefined,
       leaseExpiresAt: undefined,
       updatedAt: await this.now(),
-      version: current.version + 1,
     };
     this.deliveries.set(finished.id, finished);
-    await this.refreshLog(finished.notificationId);
     return finished;
-  }
-
-  async scheduleRetry(
-    delivery: NotificationDeliveryRecord,
-    nextRunAt: string,
-    error: NotificationErrorRecord,
-  ): Promise<NotificationDeliveryRecord | undefined> {
-    const current = this.deliveries.get(delivery.id);
-    if (
-      !current ||
-      current.status !== 'submitting' ||
-      current.leaseToken !== delivery.leaseToken ||
-      current.version !== delivery.version
-    )
-      return undefined;
-    const next: NotificationDeliveryRecord = {
-      ...current,
-      status: 'failed',
-      nextRunAt,
-      lastError: error,
-      leaseToken: undefined,
-      leaseExpiresAt: undefined,
-      version: current.version + 1,
-    };
-    this.deliveries.set(next.id, next);
-    await this.refreshLog(next.notificationId);
-    return next;
   }
 
   async recoverExpired(now: string): Promise<number> {
@@ -306,23 +246,26 @@ export class FakeNotificationStore implements NotificationStore {
                   'Provider result is unknown after worker interruption.',
               },
         updatedAt: now,
-        version: delivery.version + 1,
       };
       this.deliveries.set(next.id, next);
-      await this.refreshLog(next.notificationId);
       recovered += 1;
     }
     return recovered;
   }
 
-  private async refreshLog(notificationId: string): Promise<void> {
-    const log = this.logs.get(notificationId);
-    if (!log) return;
-    this.logs.set(notificationId, {
+  private async withSummary(
+    log: NotificationLogRecord,
+  ): Promise<NotificationLogRecord> {
+    const deliveries = await this.listDeliveries(log.id);
+    return {
       ...log,
-      status: summarize(await this.listDeliveries(notificationId)),
-      updatedAt: await this.now(),
-    });
+      status: summarize(deliveries),
+      updatedAt: deliveries.reduce(
+        (latest, delivery) =>
+          delivery.updatedAt > latest ? delivery.updatedAt : latest,
+        log.updatedAt,
+      ),
+    };
   }
 }
 

@@ -19,6 +19,11 @@ export interface ChannelRuntime {
   readonly providers: readonly NotificationProvider[];
 }
 
+export interface NotificationProviderIdentity {
+  readonly name: string;
+  readonly type: string;
+}
+
 export interface ChannelManagerOptions {
   readonly logger: Logger;
   readonly store: NotificationStore;
@@ -50,10 +55,24 @@ export class ChannelManager {
     return this.runtimes.has(type);
   }
 
-  providerNames(type: string): readonly string[] {
-    return (
-      this.runtimes.get(type)?.providers.map((provider) => provider.name) ?? []
-    );
+  providerIdentities(
+    type: string,
+    options: {
+      readonly providerName?: string;
+      readonly providerMode?: 'single' | 'broadcast';
+    } = {},
+  ): readonly NotificationProviderIdentity[] {
+    const providers = this.runtimes.get(type)?.providers ?? [];
+    if (options.providerMode === 'broadcast')
+      return providers.map(({ name, type: providerType }) => ({
+        name,
+        type: providerType,
+      }));
+    const provider = options.providerName
+      ? providers.find((candidate) => candidate.name === options.providerName)
+      : (providers.find((candidate) => candidate.name === 'primary') ??
+        providers[0]);
+    return provider ? [{ name: provider.name, type: provider.type }] : [];
   }
 
   async send(
@@ -158,124 +177,106 @@ export class ChannelManager {
     claimed: NotificationDeliveryRecord,
     prepared: object,
   ): Promise<NotificationDeliveryRecord | undefined> {
-    let current = claimed;
-    for (
-      let cursor = claimed.providerCursor;
-      cursor < claimed.providerChain.length;
-      cursor += 1
-    ) {
-      const providerName = claimed.providerChain[cursor];
-      const provider = runtime.providers.find(
-        (candidate) => candidate.name === providerName,
-      );
-      if (!provider)
-        return this.options.store.finishDelivery(current, 'failed', {
-          code: 'PROVIDER_UNAVAILABLE',
-          message: `Snapshotted notification Provider "${providerName}" is unavailable.`,
-          category: 'configuration',
-        });
+    const provider = runtime.providers.find(
+      (candidate) =>
+        candidate.name === claimed.providerName &&
+        candidate.type === claimed.providerType,
+    );
+    if (!provider)
+      return this.options.store.finishDelivery(claimed, 'failed', {
+        code: 'PROVIDER_UNAVAILABLE',
+        message: `Notification Provider "${claimed.providerName}" (${claimed.providerType}) is unavailable.`,
+        category: 'configuration',
+      });
 
-      const attempt: NotificationAttemptRecord = {
-        id: randomUUID(),
-        deliveryId: current.id,
-        sequence: current.attemptCount + 1,
-        providerName: provider.name,
-        providerType: provider.type,
-        status: 'submitting',
-        startedAt: await this.options.store.now(),
-      };
-      const started = await this.options.store.startAttempt(
-        { ...current, providerCursor: cursor },
-        attempt,
-        await this.leaseExpiry(),
-      );
-      if (!started) return undefined;
-      current = started;
+    const attempt: NotificationAttemptRecord = {
+      id: randomUUID(),
+      deliveryId: claimed.id,
+      sequence: claimed.attemptCount + 1,
+      providerName: provider.name,
+      providerType: provider.type,
+      status: 'submitting',
+      startedAt: await this.options.store.now(),
+    };
+    const started = await this.options.store.startAttempt(
+      claimed,
+      attempt,
+      await this.leaseExpiry(),
+    );
+    if (!started) return undefined;
+    const current = started;
 
-      const result = await this.invoke(provider, prepared, current, attempt.id);
-      const finishedAt = await this.options.store.now();
-      if (result.status === 'accepted') {
-        const finished = await this.options.store.finishAttemptAndDelivery(
-          {
-            ...attempt,
-            status: 'accepted',
-            finishedAt,
-            providerMessageId: result.providerMessageId,
-          },
-          current,
-          'accepted',
-        );
-        this.options.logger.debug(
-          {
-            event: 'notification.delivery.accepted',
-            notificationId: current.notificationId,
-            deliveryId: current.id,
-            channel: current.channel,
-            provider: provider.name,
-            providerType: provider.type,
-            providerMessageId: result.providerMessageId,
-          },
-          'Notification Delivery accepted by Provider.',
-        );
-        return finished;
-      }
-      if (result.status === 'submission_unknown') {
-        return this.options.store.finishAttemptAndDelivery(
-          {
-            ...attempt,
-            status: 'unknown',
-            finishedAt,
-            error: result.error,
-          },
-          current,
-          'unknown',
-          result.error,
-        );
-      }
-
-      const failedAttempt: NotificationAttemptRecord = {
-        ...attempt,
-        status: 'failed',
-        finishedAt,
-        error: result.error,
-      };
-      if (result.disposition === 'same_provider') {
-        const providerAttempts = (
-          await this.options.store.listAttempts(current.id)
-        ).filter((item) => item.providerName === provider.name).length;
-        if (providerAttempts < this.maxAttemptsPerProvider) {
-          const retryAt = new Date(
-            Date.parse(finishedAt) +
-              this.retryDelay(providerAttempts, result.retryAfterMs),
-          ).toISOString();
-          return this.options.store.finishAttemptAndDelivery(
-            failedAttempt,
-            current,
-            'failed',
-            result.error,
-            retryAt,
-          );
-        }
-      }
-      const hasNext = cursor + 1 < claimed.providerChain.length;
-      if (result.disposition === 'next_provider' && hasNext) {
-        const continued = await this.options.store.finishAttemptAndContinue(
-          failedAttempt,
-          current,
-          cursor + 1,
-        );
-        if (!continued) return undefined;
-        current = continued;
-        continue;
-      }
-      return this.options.store.finishAttemptAndDelivery(
-        failedAttempt,
+    const result = await this.invoke(provider, prepared, current, attempt.id);
+    const finishedAt = await this.options.store.now();
+    if (result.status === 'accepted') {
+      const finished = await this.options.store.finishAttemptAndDelivery(
+        {
+          ...attempt,
+          status: 'accepted',
+          finishedAt,
+          providerMessageId: result.providerMessageId,
+        },
         current,
-        'failed',
+        'accepted',
+      );
+      this.options.logger.debug(
+        {
+          event: 'notification.delivery.accepted',
+          notificationId: current.notificationId,
+          deliveryId: current.id,
+          channel: current.channel,
+          provider: provider.name,
+          providerType: provider.type,
+          providerMessageId: result.providerMessageId,
+        },
+        'Notification Delivery accepted by Provider.',
+      );
+      return finished;
+    }
+    if (result.status === 'submission_unknown') {
+      return this.options.store.finishAttemptAndDelivery(
+        {
+          ...attempt,
+          status: 'unknown',
+          finishedAt,
+          error: result.error,
+        },
+        current,
+        'unknown',
         result.error,
       );
     }
-    return current;
+
+    const failedAttempt: NotificationAttemptRecord = {
+      ...attempt,
+      status: 'failed',
+      finishedAt,
+      error: result.error,
+    };
+    if (result.disposition === 'same_provider') {
+      const providerAttempts = (
+        await this.options.store.listAttempts(current.id)
+      ).filter((item) => item.providerName === provider.name).length;
+      if (providerAttempts < this.maxAttemptsPerProvider) {
+        const retryAt = new Date(
+          Date.parse(finishedAt) +
+            this.retryDelay(providerAttempts, result.retryAfterMs),
+        ).toISOString();
+        return this.options.store.finishAttemptAndDelivery(
+          failedAttempt,
+          current,
+          'failed',
+          result.error,
+          retryAt,
+        );
+      }
+    }
+    return this.options.store.finishAttemptAndDelivery(
+      failedAttempt,
+      current,
+      'failed',
+      result.error,
+    );
   }
 
   private async invoke(
@@ -310,7 +311,6 @@ export class ChannelManager {
           notificationId: delivery.notificationId,
           deliveryId: delivery.id,
           attemptId,
-          idempotencyKey: delivery.idempotencyKey,
           deadline,
           signal: controller.signal,
         }),

@@ -31,7 +31,7 @@ describe('DatabaseNotificationStore', () => {
     ).resolves.toMatchObject([
       {
         id: 'delivery-1',
-        providerChain: ['primary', 'secondary'],
+        providerName: 'primary',
         status: 'pending',
       },
     ]);
@@ -44,7 +44,6 @@ describe('DatabaseNotificationStore', () => {
     expect(claimed).toMatchObject({
       status: 'preparing',
       leaseToken: 'lease-1',
-      version: 2,
     });
     await expect(
       store.claimDelivery('delivery-1', 'lease-2', '2026-08-24T00:02:00.000Z'),
@@ -56,7 +55,7 @@ describe('DatabaseNotificationStore', () => {
       attempt,
       '2026-08-24T00:01:00.000Z',
     );
-    expect(started).toMatchObject({ attemptCount: 1, version: 3 });
+    expect(started).toMatchObject({ attemptCount: 1 });
     await expect(
       store.startAttempt(
         claimed!,
@@ -80,7 +79,6 @@ describe('DatabaseNotificationStore', () => {
       status: 'accepted',
       leaseToken: undefined,
       leaseExpiresAt: undefined,
-      version: 4,
     });
     await expect(store.getLog('notification-1')).resolves.toMatchObject({
       status: 'completed',
@@ -104,6 +102,99 @@ describe('DatabaseNotificationStore', () => {
     });
     await expect(store.getLog('notification-1')).resolves.toMatchObject({
       status: 'pending',
+    });
+  });
+
+  it('does not claim a retry before nextRunAt', async () => {
+    await store.create(createBundle());
+    const claimed = await store.claimDelivery(
+      'delivery-1',
+      'lease-1',
+      '2026-08-25T00:01:00.000Z',
+    );
+    const attempt = createAttempt();
+    const started = await store.startAttempt(
+      claimed!,
+      attempt,
+      '2026-08-25T00:01:00.000Z',
+    );
+    await store.finishAttemptAndDelivery(
+      {
+        ...attempt,
+        status: 'failed',
+        finishedAt: '2026-08-25T00:00:01.000Z',
+        error: { message: 'retry later' },
+      },
+      started!,
+      'failed',
+      { message: 'retry later' },
+      '2099-01-01T00:00:00.000Z',
+    );
+
+    await expect(
+      store.claimDelivery('delivery-1', 'lease-2', '2026-08-25T00:02:00.000Z'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('derives notification status from current Delivery states', async () => {
+    const bundle = createBundle();
+    await store.create({
+      ...bundle,
+      deliveries: [
+        ...bundle.deliveries,
+        { ...bundle.deliveries[0]!, id: 'delivery-2' },
+      ],
+    });
+    const first = await store.claimDelivery(
+      'delivery-1',
+      'lease-1',
+      '2026-08-25T00:01:00.000Z',
+    );
+    const firstAttempt = createAttempt();
+    const firstStarted = await store.startAttempt(
+      first!,
+      firstAttempt,
+      '2026-08-25T00:01:00.000Z',
+    );
+    await store.finishAttemptAndDelivery(
+      {
+        ...firstAttempt,
+        status: 'accepted',
+        finishedAt: '2026-08-25T00:00:01.000Z',
+      },
+      firstStarted!,
+      'accepted',
+    );
+    await expect(store.getLog('notification-1')).resolves.toMatchObject({
+      status: 'processing',
+    });
+
+    const second = await store.claimDelivery(
+      'delivery-2',
+      'lease-2',
+      '2026-08-25T00:01:00.000Z',
+    );
+    const secondAttempt = {
+      ...createAttempt(),
+      id: 'attempt-2',
+      deliveryId: 'delivery-2',
+    };
+    const secondStarted = await store.startAttempt(
+      second!,
+      secondAttempt,
+      '2026-08-25T00:01:00.000Z',
+    );
+    await store.finishAttemptAndDelivery(
+      {
+        ...secondAttempt,
+        status: 'accepted',
+        finishedAt: '2026-08-25T00:00:02.000Z',
+      },
+      secondStarted!,
+      'accepted',
+    );
+    await expect(store.getLog('notification-1')).resolves.toMatchObject({
+      status: 'completed',
     });
   });
 
@@ -158,17 +249,14 @@ function createBundle(): NotificationLogBundle {
     id: 'delivery-1',
     notificationId: 'notification-1',
     channel: 'email',
-    recipientKey: 'user-1',
     recipientSnapshot: { address: 'test@example.com' },
     messageSnapshot: { subject: 'Hello' },
-    providerChain: ['primary', 'secondary'],
-    providerCursor: 0,
+    providerName: 'primary',
+    providerType: 'fake',
     attemptCount: 0,
     status: 'pending',
-    idempotencyKey: 'notification-1:delivery-1',
     createdAt,
     updatedAt: createdAt,
-    version: 1,
   };
   return {
     log: {
