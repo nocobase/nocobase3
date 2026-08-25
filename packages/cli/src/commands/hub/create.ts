@@ -12,7 +12,11 @@ import {
   removeDirectory,
   scaffoldFromTemplate,
 } from '../../lib/scaffold.ts';
-import { DEFAULT_HUB_TEMPLATE, downloadTemplate } from '../../lib/template.ts';
+import {
+  DEFAULT_HUB_TEMPLATE,
+  DEFAULT_REGISTRY,
+  downloadTemplate,
+} from '../../lib/template.ts';
 
 /** Runtime state a hub writes as it runs; none of it belongs in version control. */
 const GITIGNORE_ADDITIONS = [
@@ -53,6 +57,7 @@ export default class HubCreate extends Command {
     }),
     registry: Flags.string({
       description: 'npm registry to download the template from.',
+      default: DEFAULT_REGISTRY,
     }),
     port: Flags.integer({
       default: DEFAULT_HUB_PORT,

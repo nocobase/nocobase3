@@ -5,7 +5,7 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/components/ui/utils';
+import { cn } from '@/lib/utils';
 
 import type { FilePreviewerProps } from '../file-preview-types';
 import { fetchFileContent } from '../file-url';

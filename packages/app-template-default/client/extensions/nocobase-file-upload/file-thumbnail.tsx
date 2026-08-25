@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
-import { cn } from '@/components/ui/utils';
+import { cn } from '@/lib/utils';
 
 import { getThumbnailUrl } from './file-url';
 import {

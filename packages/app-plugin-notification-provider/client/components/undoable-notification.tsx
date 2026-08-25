@@ -1,5 +1,6 @@
-import { Button } from '@nocobase/app-client/ui';
 import type { ReactElement } from 'react';
+
+import { Button } from './ui/button.js';
 
 export interface UndoableNotificationProps {
   readonly cancelMutation?: () => void;

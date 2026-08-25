@@ -13,7 +13,7 @@ import {
 import { useMemo, useRef, useState, type ComponentProps } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/components/ui/utils';
+import { cn } from '@/lib/utils';
 
 import { FilePreviewDialog } from './file-preview-dialog';
 import { defaultFilePreviewMessages } from './file-preview-messages';

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-data-provider",
   "displayName": "Data Provider App Plugin",
   "description": "Registers the NocoBase Refine data provider with the application client runtime.",
-  "version": "0.0.1",
+  "version": "0.0.1-beta.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -62,7 +62,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
-    "@nocobase/app-client": "^0.1.0",
+    "@nocobase/app-client": "workspace:^",
     "@refinedev/core": "^5.0.0"
   },
   "dependencies": {
