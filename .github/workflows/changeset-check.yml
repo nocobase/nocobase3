@@ -5,6 +5,10 @@ name: Changeset Check
 #                 时阻止合并。这类问题机器能确定判断。
 #   advisory   —— 改了可发布代码却没写 changeset 时提醒，但始终以成功退出。
 #                 patch/minor/major 的取舍需要人判断，CI 猜不了。
+#
+# 这里不检查 .changeset/pre.json —— develop 常驻 pre 模式，它出现在指向
+# develop 的 PR 里是正常的。保护 main 不被污染是 guard-main.yml 的职责，
+# 那条只在目标分支为 main 的 PR 上运行。
 
 on:
   pull_request:
@@ -41,16 +45,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      # 长期分支不允许携带预发布状态，见 reusable-merge 里的同名检查
-      - name: Guard against prerelease state
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -f .changeset/pre.json || -d .changeset/pre ]]; then
-            echo "::error::PR 中出现 .changeset/pre.json 或 .changeset/pre/，预发布状态只能存在于 release line"
-            exit 1
-          fi
 
       - name: Validate changeset files
         shell: bash
