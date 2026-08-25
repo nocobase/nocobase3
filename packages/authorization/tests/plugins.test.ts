@@ -154,7 +154,7 @@ describe('official authorization plugins', () => {
     const { authorization } = setup();
     expect(authorization.describe()).toMatchObject({
       plugins: ['permission-sets', 'database'],
-      resourceTypes: ['authorization.permission-sets', 'database.collection'],
+      resourceTypes: ['authorization.settings', 'database.collection'],
       grantProvider: 'permission-sets',
     });
     expect(
@@ -446,6 +446,65 @@ describe('official authorization plugins', () => {
     });
   });
 
+  it('returns input field constraints for create actions', async () => {
+    const store = new MockPermissionSetStore({
+      permissionSets: [
+        {
+          key: 'order-creator',
+          grants: [
+            {
+              resource: { type: 'database.collection', id: 'main.orders' },
+              actions: [
+                {
+                  action: 'create',
+                  policy: {
+                    type: 'database',
+                    fields: {
+                      input: ['amount', 'ownerId'],
+                      output: ['id'],
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      assignments: [
+        {
+          id: 'order-creator-alice',
+          subject: { type: 'user', id: 'alice' },
+          permissionSet: 'order-creator',
+        },
+      ],
+    });
+    const authorization = createAuthorization({
+      plugins: [permissionSets({ store }), databaseAuthorization()],
+    });
+    authorization.database.collections.add(orders);
+
+    await expect(
+      authorization.authorize({
+        principal: { type: 'user', id: 'alice' },
+        resource: { type: 'database.collection', id: 'main.orders' },
+        action: 'create',
+        params: { fields: { input: ['amount'] } },
+      }),
+    ).resolves.toMatchObject({
+      effect: 'conditional',
+      conditions: {
+        type: 'database',
+        collection: 'main.orders',
+        action: 'create',
+        filter: { $and: [] },
+        fields: {
+          input: ['amount', 'ownerId'],
+          output: ['id'],
+        },
+      },
+    });
+  });
+
   it('rejects invalid Record Access Filter AST', async () => {
     const store = new MockPermissionSetStore({
       permissionSets: [
@@ -536,24 +595,32 @@ describe('official authorization plugins', () => {
       {
         key: 'shared-order',
         resource: { type: 'database.collection', id: 'main.orders' },
-        actions: ['read'],
+        actions: [
+          {
+            action: 'read',
+            selection: {
+              type: 'records',
+              ids: ['order-1', 'order-2'],
+            },
+          },
+        ],
         subjects: [{ type: 'user', id: 'alice' }],
-        selection: {
-          type: 'records',
-          recordIds: ['order-1', 'order-2'],
-        },
       },
     ]);
     const restrictions = new MockRestrictionRuleStore([
       {
         key: 'owned-only',
         resource: { type: 'database.collection', id: 'main.orders' },
-        actions: ['read'],
+        actions: [
+          {
+            action: 'read',
+            scope: {
+              type: 'database',
+              recordAccess: 'recordsIOwn',
+            },
+          },
+        ],
         subjects: [{ type: 'user', id: 'alice' }],
-        scope: {
-          type: 'database',
-          recordAccess: 'recordsIOwn',
-        },
       },
     ]);
     const authorization = createAuthorization({
@@ -588,6 +655,32 @@ describe('official authorization plugins', () => {
     });
   });
 
+  it('resolves independent scopes for each configured action', async () => {
+    const defaults = new MockDefaultAccessStore([
+      {
+        resource: { type: 'database.collection', id: 'main.orders' },
+        actions: [
+          { action: 'read', scope: { type: 'all' } },
+          { action: 'update', scope: { type: 'ids', ids: ['order-1'] } },
+        ],
+      },
+    ]);
+    const authorization = createAuthorization({
+      plugins: [defaultAccess({ store: defaults })],
+    });
+    const input = {
+      principal: { type: 'user', id: 'alice' },
+      resource: { type: 'database.collection', id: 'main.orders' },
+    } as const;
+
+    await expect(
+      authorization.constraints.resolve({ ...input, action: 'read' }),
+    ).resolves.toMatchObject([{ value: { type: 'all' } }]);
+    await expect(
+      authorization.constraints.resolve({ ...input, action: 'update' }),
+    ).resolves.toMatchObject([{ value: { type: 'ids', ids: ['order-1'] } }]);
+  });
+
   it('allows generic default access to expand a database grant scope', async () => {
     const store = new MockPermissionSetStore({
       permissionSets: [
@@ -620,8 +713,7 @@ describe('official authorization plugins', () => {
     const defaults = new MockDefaultAccessStore([
       {
         resource: { type: 'database.collection', id: 'main.orders' },
-        actions: ['read'],
-        scope: { type: 'all' },
+        actions: [{ action: 'read', scope: { type: 'all' } }],
       },
     ]);
     const authorization = createAuthorization({
@@ -646,6 +738,64 @@ describe('official authorization plugins', () => {
       conditions: {
         type: 'database',
         filter: { $and: [] },
+      },
+    });
+  });
+
+  it('resolves a custom filter Record Access policy from grant params', async () => {
+    const store = new MockPermissionSetStore({
+      permissionSets: [
+        {
+          key: 'regional-reader',
+          grants: [
+            {
+              resource: { type: 'database.collection', id: 'main.orders' },
+              actions: [
+                {
+                  action: 'read',
+                  policy: {
+                    type: 'database',
+                    fields: { output: ['id', 'regionId'] },
+                    recordAccess: [
+                      {
+                        key: 'customFilter',
+                        params: {
+                          filter: {
+                            $and: [{ regionId: { $eq: 'east' } }],
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      assignments: [
+        {
+          id: 'regional-reader',
+          subject: { type: 'user', id: 'alice' },
+          permissionSet: 'regional-reader',
+        },
+      ],
+    });
+    const authorization = createAuthorization({
+      plugins: [permissionSets({ store }), databaseAuthorization()],
+    });
+    authorization.database.collections.add(orders);
+    await expect(
+      authorization.authorize({
+        principal: { type: 'user', id: 'alice' },
+        resource: { type: 'database.collection', id: 'main.orders' },
+        action: 'read',
+        params: { fields: { output: ['id', 'regionId'] } },
+      }),
+    ).resolves.toMatchObject({
+      effect: 'conditional',
+      conditions: {
+        filter: { $and: [{ regionId: { $eq: 'east' } }] },
       },
     });
   });

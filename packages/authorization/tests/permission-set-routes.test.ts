@@ -12,7 +12,10 @@ describe('Permission Set handler', () => {
       key: 'permission-administrator',
       grants: [
         {
-          resource: { type: 'authorization.permission-sets', id: '*' },
+          resource: {
+            type: 'authorization.settings',
+            id: 'permission-sets',
+          },
           actions: [
             { action: 'read' },
             { action: 'create' },

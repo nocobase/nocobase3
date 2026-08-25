@@ -50,15 +50,20 @@ export class RestrictionRuleService
     const subjects = resolveAuthorizationSubjects(input);
     const rules = await this.getStore().list();
     return rules
-      .filter(
-        (rule) =>
-          restrictionMatches(rule, input) &&
-          appliesToSubject(rule.subjects, subjects),
-      )
-      .map((rule) => ({
+      .flatMap((rule) => {
+        const configured = rule.actions.find(
+          (action) => action.action === input.action,
+        );
+        return restrictionMatches(rule, input) &&
+          appliesToSubject(rule.subjects, subjects) &&
+          configured
+          ? [{ rule, configured }]
+          : [];
+      })
+      .map(({ rule, configured }) => ({
         source: { plugin: this.id, id: rule.key },
         effect: 'restrict' as const,
-        value: rule.scope,
+        value: configured.scope,
       }));
   }
 
@@ -76,7 +81,7 @@ function restrictionMatches(
   return (
     rule.resource.type === input.resource.type &&
     (rule.resource.id === '*' || rule.resource.id === input.resource.id) &&
-    rule.actions.includes(input.action)
+    rule.actions.some((action) => action.action === input.action)
   );
 }
 

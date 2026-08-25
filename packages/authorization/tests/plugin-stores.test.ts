@@ -104,34 +104,48 @@ describe('authorization plugin database stores', () => {
 
     await authorization.defaultAccess.set({
       resource,
-      actions: ['read'],
-      scope: { type: 'all' },
+      actions: [{ action: 'read', scope: { type: 'all' } }],
     });
     await authorization.sharingRules.create({
       key: 'shared-orders',
       resource,
-      actions: ['read'],
+      actions: [
+        {
+          action: 'read',
+          selection: { type: 'records', ids: ['order-1'] },
+        },
+      ],
       subjects: [{ type: 'user', id: 'alice' }],
-      selection: { type: 'records', recordIds: ['order-1'] },
     });
     await authorization.restrictionRules.create({
       key: 'owned-orders-only',
       resource,
-      actions: ['read'],
+      actions: [
+        {
+          action: 'read',
+          scope: {
+            type: 'database',
+            recordAccess: 'recordsIOwn',
+          },
+        },
+      ],
       subjects: [{ type: 'user', id: 'alice' }],
-      scope: {
-        type: 'database',
-        recordAccess: 'recordsIOwn',
-      },
     });
 
     await expect(
       authorization.defaultAccess.get(resource.type, resource.id),
-    ).resolves.toMatchObject({ scope: { type: 'all' } });
+    ).resolves.toMatchObject({
+      actions: [{ action: 'read', scope: { type: 'all' } }],
+    });
     await expect(authorization.sharingRules.list()).resolves.toMatchObject([
       {
         key: 'shared-orders',
-        selection: { type: 'records', recordIds: ['order-1'] },
+        actions: [
+          {
+            action: 'read',
+            selection: { type: 'records', ids: ['order-1'] },
+          },
+        ],
       },
     ]);
     await expect(authorization.restrictionRules.list()).resolves.toMatchObject([

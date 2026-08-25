@@ -69,6 +69,25 @@ export function recordsICreated(): RecordAccessPolicy {
   });
 }
 
+export interface CustomFilterParams {
+  filter: DatabaseFilter;
+}
+
+export function customFilter(): RecordAccessPolicy<CustomFilterParams> {
+  return defineRecordAccessPolicy({
+    key: 'customFilter',
+    title: 'Custom Filter',
+    description: 'Select records with a custom filter condition.',
+    paramsSchema: { type: 'database-filter' },
+    resolve: ({ params }) => {
+      if (!params || typeof params !== 'object' || !('filter' in params)) {
+        throw new Error('Custom Filter requires filter params');
+      }
+      return params.filter;
+    },
+  });
+}
+
 function requiredAttribute(
   collection: DatabaseCollectionDefinition,
   attribute: string,

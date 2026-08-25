@@ -88,20 +88,24 @@ class DefaultAccessService
   ): Promise<readonly AccessConstraint[]> {
     const rules = await this.getStore().list();
     return rules
-      .filter(
-        (rule) =>
-          rule.resource.type === input.resource.type &&
+      .flatMap((rule) => {
+        const configured = rule.actions.find(
+          (action) => action.action === input.action,
+        );
+        return rule.resource.type === input.resource.type &&
           (rule.resource.id === '*' ||
             rule.resource.id === input.resource.id) &&
-          rule.actions.includes(input.action),
-      )
-      .map((rule) => ({
+          configured
+          ? [{ rule, configured }]
+          : [];
+      })
+      .map(({ rule, configured }) => ({
         source: {
           plugin: this.id,
           id: `${rule.resource.type}:${rule.resource.id}`,
         },
         effect: 'expand' as const,
-        value: rule.scope,
+        value: configured.scope,
       }));
   }
 

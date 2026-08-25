@@ -10,10 +10,14 @@ const bootstrap: AppClientPluginBootstrap = ({ appClient, refine }) => {
   > = {
     async can({ resource, action }) {
       if (!resource) return { can: false };
-      if (resource === 'authorization.permission-sets') {
+      if (resource === 'authorization') return { can: true };
+      if (resource.startsWith('authorization.settings.')) {
         return {
           can: await authz.can(
-            { type: 'authorization.permission-sets', id: '*' },
+            {
+              type: 'authorization.settings',
+              id: resource.slice('authorization.settings.'.length),
+            },
             administrationAction(action),
           ),
         };
@@ -27,9 +31,28 @@ const bootstrap: AppClientPluginBootstrap = ({ appClient, refine }) => {
   refine.setAccessControlProvider(accessControlProvider);
   refine.addResources([
     {
-      name: 'authorization.permission-sets',
-      list: '/settings/authorization/permission-sets',
+      name: 'authorization',
       meta: { label: 'Authorization' },
+    },
+    {
+      name: 'authorization.settings.permission-sets',
+      list: '/settings/authorization/permission-sets',
+      meta: { label: 'Permission Sets', parent: 'authorization' },
+    },
+    {
+      name: 'authorization.settings.default-access',
+      list: '/settings/authorization/default-access',
+      meta: { label: 'Default Access', parent: 'authorization' },
+    },
+    {
+      name: 'authorization.settings.sharing-rules',
+      list: '/settings/authorization/sharing-rules',
+      meta: { label: 'Sharing Rules', parent: 'authorization' },
+    },
+    {
+      name: 'authorization.settings.restriction-rules',
+      list: '/settings/authorization/restriction-rules',
+      meta: { label: 'Restriction Rules', parent: 'authorization' },
     },
   ]);
 };

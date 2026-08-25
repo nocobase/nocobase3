@@ -3,6 +3,8 @@ import type { DatabaseFilter } from './filter.js';
 
 export interface DatabaseCollectionDefinition {
   name: string;
+  title?: string;
+  description?: string;
   actions: readonly string[];
   fields: readonly string[];
   attributes?: Readonly<Record<string, string>>;

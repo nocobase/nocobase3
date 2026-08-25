@@ -1,4 +1,4 @@
-import { useMenu, type TreeMenuItem } from '@refinedev/core';
+import { useCan, useMenu, type TreeMenuItem } from '@refinedev/core';
 import { ChevronRight, X } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
@@ -18,6 +18,7 @@ export function AppSidebar({
   onCloseMobile,
 }: AppSidebarProps): ReactElement {
   const { menuItems, selectedKey } = useMenu();
+  const { data: homeAccess } = useCan({ resource: 'home', action: 'access' });
 
   return (
     <>
@@ -49,14 +50,16 @@ export function AppSidebar({
           aria-label='Application navigation'
           className='flex-1 space-y-1 overflow-y-auto p-3'
         >
-          <NavigationLink
-            isSelected={
-              selectedKey === HOME_NAVIGATION_ITEM.key || selectedKey === '/'
-            }
-            label={HOME_NAVIGATION_ITEM.label}
-            onNavigate={onCloseMobile}
-            route={HOME_NAVIGATION_ITEM.route}
-          />
+          {homeAccess?.can === true ? (
+            <NavigationLink
+              isSelected={
+                selectedKey === HOME_NAVIGATION_ITEM.key || selectedKey === '/'
+              }
+              label={HOME_NAVIGATION_ITEM.label}
+              onNavigate={onCloseMobile}
+              route={HOME_NAVIGATION_ITEM.route}
+            />
+          ) : null}
           {menuItems.map((item) => (
             <NavigationTree
               item={item}

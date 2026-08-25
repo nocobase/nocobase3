@@ -20,6 +20,9 @@ const authz = createAuthorization({
 @nocobase/authorization/default-access/migrations/202608210002_create_default_access_rules
 ```
 
+显式选择的记录按 Action 保存在 `authorizationDefaultAccessRuleRecords`，规则表不保存
+大段 ID 数组。
+
 ## 设置默认范围
 
 允许所有已获得文章读取权限的主体读取全部文章：
@@ -30,8 +33,7 @@ await authz.defaultAccess.set({
     type: 'database.collection',
     id: 'main.articles',
   },
-  actions: ['read'],
-  scope: { type: 'all' },
+  actions: [{ action: 'read', scope: { type: 'all' } }],
 });
 ```
 
@@ -43,11 +45,12 @@ await authz.defaultAccess.set({
     type: 'document.library',
     id: 'help-center',
   },
-  actions: ['read'],
-  scope: {
-    type: 'ids',
-    ids: ['getting-started', 'faq'],
-  },
+  actions: [
+    {
+      action: 'read',
+      scope: { type: 'ids', ids: ['getting-started', 'faq'] },
+    },
+  ],
 });
 ```
 
@@ -60,8 +63,12 @@ await authz.defaultAccess.set({
     type: 'database.collection',
     id: 'main.articles',
   },
-  actions: ['read'],
-  scope: authz.database.scope('publishedArticles'),
+  actions: [
+    {
+      action: 'read',
+      scope: authz.database.scope('publishedArticles'),
+    },
+  ],
 });
 ```
 

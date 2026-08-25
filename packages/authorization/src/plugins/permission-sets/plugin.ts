@@ -100,7 +100,7 @@ export function permissionSets(
         service.initialize(new DatabasePermissionSetStore(authz.connection));
       }
       authz.resources.add({
-        resourceType: 'authorization.permission-sets',
+        resourceType: 'authorization.settings',
         async authorize(request, context) {
           const grants = await context.grants.resolve({
             principal: request.principal,
@@ -113,7 +113,7 @@ export function permissionSets(
                 effect: 'permit',
                 reasons: grants.map((grant) => ({
                   code: 'PERMISSION_SET_ADMINISTRATION_GRANTED',
-                  message: `${grant.source.plugin}:${grant.source.id} allows Permission Set administration`,
+                  message: `${grant.source.plugin}:${grant.source.id} allows Authorization settings administration`,
                   plugin: 'permission-sets',
                 })),
               }
@@ -122,7 +122,8 @@ export function permissionSets(
                 reasons: [
                   {
                     code: 'PERMISSION_SET_ADMINISTRATION_DENIED',
-                    message: 'Permission Set administration is not allowed',
+                    message:
+                      'Authorization settings administration is not allowed',
                     plugin: 'permission-sets',
                   },
                 ],

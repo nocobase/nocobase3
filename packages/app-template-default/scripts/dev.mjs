@@ -231,8 +231,6 @@ spawnDevProcess(
     '--include',
     'package.json',
     '--include',
-    '../app-plugin-*/package.json',
-    '--include',
     '../app-plugin-*/database/**/*',
     '--include',
     '../app-plugin-*/server/**/*',

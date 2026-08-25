@@ -27,24 +27,7 @@ const seed: SeedDefinition = defineSeed({
           id: crypto.randomUUID(),
           key: SYSTEM_ADMINISTRATOR,
           title: 'System administrator',
-          grants: JSON.stringify([
-            {
-              resource: {
-                type: 'authorization.permission-sets',
-                id: '*',
-              },
-              actions: [
-                { action: 'read' },
-                { action: 'create' },
-                { action: 'update' },
-                { action: 'delete' },
-              ],
-            },
-            {
-              resource: { type: 'page', id: '*' },
-              actions: [{ action: 'access' }],
-            },
-          ]),
+          grants: JSON.stringify(systemAdministratorGrants()),
           createdAt: now,
           updatedAt: now,
         })
@@ -73,5 +56,26 @@ const seed: SeedDefinition = defineSeed({
     }
   },
 });
+
+function systemAdministratorGrants(): readonly object[] {
+  const settings = administratorResources.map(({ id, actions }) => ({
+    resource: { type: 'authorization.settings', id },
+    actions: actions.map((action) => ({ action })),
+  }));
+  return [
+    ...settings,
+    {
+      resource: { type: 'page', id: '*' },
+      actions: [{ action: 'access' }],
+    },
+  ];
+}
+
+const administratorResources = [
+  { id: 'permission-sets', actions: ['read', 'create', 'update', 'delete'] },
+  { id: 'default-access', actions: ['read', 'create', 'update', 'delete'] },
+  { id: 'sharing-rules', actions: ['read', 'create', 'update', 'delete'] },
+  { id: 'restriction-rules', actions: ['read', 'create', 'update', 'delete'] },
+] as const;
 
 export default seed;

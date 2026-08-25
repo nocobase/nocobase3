@@ -8,8 +8,12 @@ export interface RestrictionRule {
   key: string;
   title?: string;
   resource: ResourceRef;
-  actions: readonly string[];
+  actions: readonly RestrictionRuleAction[];
   subjects: readonly AuthorizationSubject[];
-  scope: AccessConstraintValue;
   reason?: string;
+}
+
+export interface RestrictionRuleAction {
+  action: string;
+  scope: AccessConstraintValue;
 }

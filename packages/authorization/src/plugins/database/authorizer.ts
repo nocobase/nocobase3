@@ -24,6 +24,7 @@ import type {
 } from './model.js';
 import {
   andFilters,
+  allRecordsFilter,
   assertDatabaseFilter,
   isNoRecordsFilter,
   orFilters,
@@ -90,21 +91,22 @@ export class DatabaseResourceAuthorizer {
       message: `${grant.source.plugin}:${grant.source.id} allows ${resourceId}.${request.action}`,
       plugin: 'database',
     }));
-    if (request.action === 'create') return { effect: 'permit', reasons };
-
     try {
-      const filter = await this.resolveEffectiveFilter(
-        request.principal,
-        resource,
-        request.action,
-        configs,
-        await constraintsService.resolve({
-          principal: request.principal,
-          subjects: request.subjects,
-          resource: { type: 'database.collection', id: resourceId },
-          action: request.action,
-        }),
-      );
+      const filter =
+        request.action === 'create'
+          ? allRecordsFilter()
+          : await this.resolveEffectiveFilter(
+              request.principal,
+              resource,
+              request.action,
+              configs,
+              await constraintsService.resolve({
+                principal: request.principal,
+                subjects: request.subjects,
+                resource: { type: 'database.collection', id: resourceId },
+                action: request.action,
+              }),
+            );
       if (isNoRecordsFilter(filter)) {
         return this.deny(
           'NO_RECORD_ACCESS',

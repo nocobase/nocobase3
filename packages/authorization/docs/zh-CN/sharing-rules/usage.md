@@ -22,7 +22,8 @@ const authz = createAuthorization({
 
 Migration 创建两张表：
 
-- `authorizationSharingRules` 保存规则、接收主体和条件范围；
+- `authorizationSharingRules` 保存规则和条件范围；
+- `authorizationSharingRuleAssignments` 保存接收主体；
 - `authorizationSharingRuleRecords` 保存显式选择的记录 ID。
 
 ## 分享指定对象
@@ -37,16 +38,20 @@ await authz.sharingRules.create({
     type: 'database.collection',
     id: 'main.orders',
   },
-  actions: ['read'],
+  actions: [
+    {
+      action: 'read',
+      selection: {
+        type: 'records',
+        ids: ['order-1', 'order-2'],
+      },
+    },
+  ],
   subjects: [{ type: 'role', id: 'auditor' }],
-  selection: {
-    type: 'records',
-    recordIds: ['order-1', 'order-2'],
-  },
 });
 ```
 
-`recordIds` 会写入 `authorizationSharingRuleRecords`，不会作为 JSON 数组保存在规则表。
+`ids` 会按 Action 写入 `authorizationSharingRuleRecords`，不会作为 JSON 数组保存在规则表。
 
 ## 按条件分享
 
@@ -59,19 +64,24 @@ await authz.sharingRules.create({
     type: 'database.collection',
     id: 'main.orders',
   },
-  actions: ['read'],
+  actions: [
+    {
+      action: 'read',
+      selection: {
+        type: 'policy',
+        policy: authz.database.scope({
+          key: 'regionalRecords',
+          params: { region: 'north' },
+        }),
+      },
+    },
+  ],
   subjects: [{ type: 'department', id: 'north-sales' }],
-  selection: {
-    type: 'criteria',
-    scope: authz.database.scope({
-      key: 'regionalRecords',
-      params: { region: 'north' },
-    }),
-  },
 });
 ```
 
-`criteria` 使用资源插件能够解释的 Scope。其他资源类型也可以定义自己的
+`policy` 使用资源插件能够解释的 Scope。具体记录只通过 `records` 表达，Policy 中不再
+重复提供 Specific IDs。其他资源类型也可以定义自己的
 Policy。
 
 ## 接收主体

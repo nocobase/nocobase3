@@ -16,17 +16,6 @@ export interface SharingRulesApi {
   list(): Promise<readonly SharingRule[]>;
 }
 
-function sharingRuleMatches(
-  rule: SharingRule,
-  input: ResolveAccessConstraintsInput,
-): boolean {
-  return (
-    rule.resource.type === input.resource.type &&
-    (rule.resource.id === '*' || rule.resource.id === input.resource.id) &&
-    rule.actions.includes(input.action)
-  );
-}
-
 function sharesWithSubject(
   configured: readonly AuthorizationSubject[],
   actual: readonly AuthorizationSubject[],
@@ -79,18 +68,25 @@ export class SharingRuleService
     const subjects = resolveAuthorizationSubjects(input);
     const rules = await this.getStore().list();
     return rules
-      .filter(
-        (rule) =>
-          sharingRuleMatches(rule, input) &&
-          sharesWithSubject(rule.subjects, subjects),
-      )
-      .map((rule) => ({
+      .flatMap((rule) => {
+        const configured = rule.actions.find(
+          (action) => action.action === input.action,
+        );
+        return rule.resource.type === input.resource.type &&
+          (rule.resource.id === '*' ||
+            rule.resource.id === input.resource.id) &&
+          sharesWithSubject(rule.subjects, subjects) &&
+          configured
+          ? [{ rule, configured }]
+          : [];
+      })
+      .map(({ rule, configured }) => ({
         source: { plugin: this.id, id: rule.key },
         effect: 'expand' as const,
         value:
-          rule.selection.type === 'records'
-            ? { type: 'ids' as const, ids: rule.selection.recordIds }
-            : rule.selection.scope,
+          configured.selection.type === 'records'
+            ? { type: 'ids' as const, ids: configured.selection.ids }
+            : configured.selection.policy,
       }));
   }
 

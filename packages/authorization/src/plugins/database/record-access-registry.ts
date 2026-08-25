@@ -1,5 +1,6 @@
 import {
   allRecords,
+  customFilter,
   recordsICreated,
   recordsIOwn,
   type RecordAccessPolicy,
@@ -12,6 +13,7 @@ export class RecordAccessPolicyRegistry {
     this.add(allRecords());
     this.add(recordsIOwn());
     this.add(recordsICreated());
+    this.add(customFilter());
   }
 
   add<P = unknown>(policy: RecordAccessPolicy<P>): void {

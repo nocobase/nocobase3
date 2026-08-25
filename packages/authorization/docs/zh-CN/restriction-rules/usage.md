@@ -20,6 +20,9 @@ const authz = createAuthorization({
 @nocobase/authorization/restriction-rules/migrations/202608210004_create_restriction_rules
 ```
 
+显式记录保存在 `authorizationRestrictionRuleRecords`，适用主体保存在
+`authorizationRestrictionRuleAssignments`。
+
 ## 创建限制规则
 
 限制外部协作者只能读取和修改自己拥有的订单：
@@ -32,9 +35,11 @@ await authz.restrictionRules.create({
     type: 'database.collection',
     id: 'main.orders',
   },
-  actions: ['read', 'update'],
+  actions: [
+    { action: 'read', scope: authz.database.scope('recordsIOwn') },
+    { action: 'update', scope: authz.database.scope('recordsIOwn') },
+  ],
   subjects: [{ type: 'role', id: 'contractor' }],
-  scope: authz.database.scope('recordsIOwn'),
 });
 ```
 
@@ -47,12 +52,13 @@ await authz.restrictionRules.create({
     type: 'database.collection',
     id: 'main.orders',
   },
-  actions: ['read'],
+  actions: [
+    {
+      action: 'read',
+      scope: { type: 'ids', ids: ['order-1', 'order-2'] },
+    },
+  ],
   subjects: [{ type: 'user', id: 'temporary-reviewer' }],
-  scope: {
-    type: 'ids',
-    ids: ['order-1', 'order-2'],
-  },
 });
 ```
 

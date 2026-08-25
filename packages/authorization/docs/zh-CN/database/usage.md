@@ -334,12 +334,13 @@ AND Restriction Rules
 await authz.sharingRules.create({
   key: 'share-orders-with-auditors',
   resource: { type: 'database.collection', id: 'main.orders' },
-  actions: ['read'],
+  actions: [
+    {
+      action: 'read',
+      selection: { type: 'records', ids: ['order-1', 'order-2'] },
+    },
+  ],
   subjects: [{ type: 'role', id: 'auditor' }],
-  selection: {
-    type: 'records',
-    recordIds: ['order-1', 'order-2'],
-  },
 });
 ```
 
@@ -349,9 +350,11 @@ await authz.sharingRules.create({
 await authz.restrictionRules.create({
   key: 'contractor-owned-orders',
   resource: { type: 'database.collection', id: 'main.orders' },
-  actions: ['read', 'update'],
+  actions: [
+    { action: 'read', scope: authz.database.scope('recordsIOwn') },
+    { action: 'update', scope: authz.database.scope('recordsIOwn') },
+  ],
   subjects: [{ type: 'role', id: 'contractor' }],
-  scope: authz.database.scope('recordsIOwn'),
 });
 ```
 

@@ -5,15 +5,19 @@ import type {
 } from '../../core/index.js';
 
 export type SharingSelection =
-  | { type: 'records'; recordIds: readonly string[] }
-  | { type: 'criteria'; scope: AccessConstraintValue };
+  | { type: 'records'; ids: readonly string[] }
+  | { type: 'policy'; policy: AccessConstraintValue };
+
+export interface SharingRuleAction {
+  action: string;
+  selection: SharingSelection;
+}
 
 export interface SharingRule {
   key: string;
   title?: string;
   resource: ResourceRef;
-  actions: readonly string[];
+  actions: readonly SharingRuleAction[];
   subjects: readonly AuthorizationSubject[];
-  selection: SharingSelection;
   reason?: string;
 }
