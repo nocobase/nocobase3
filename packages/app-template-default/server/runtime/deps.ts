@@ -16,7 +16,7 @@ import {
   createSessionManager,
   type NocoBaseSessionManager,
 } from '@nocobase/session';
-import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import {
   createAppAuthorization,

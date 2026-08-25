@@ -49,6 +49,11 @@ export interface AppClientRouteComponentOverrideDefinition {
   readonly componentEntry?: string;
 }
 
+export interface AppClientSourceExtension {
+  readonly name: string;
+  readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
+}
+
 export interface AppClientProviderDefinition {
   readonly name: string;
   readonly component: AppClientProvider;
@@ -180,6 +185,22 @@ export function defineClientRouteComponentOverrides(
       }),
     ),
   );
+}
+
+export function defineClientSourceExtension(
+  extension: AppClientSourceExtension,
+): AppClientSourceExtension {
+  const name = extension.name.trim();
+  if (!name) {
+    throw new Error('A client source extension must define a non-empty name.');
+  }
+  return Object.freeze({
+    ...extension,
+    name,
+    routeComponentOverrides: extension.routeComponentOverrides
+      ? defineClientRouteComponentOverrides(extension.routeComponentOverrides)
+      : undefined,
+  });
 }
 
 function normalizeRouteOverrideId(routeId: string): string {

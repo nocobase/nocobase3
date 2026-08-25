@@ -1,4 +1,4 @@
-import { createDatabaseManager } from '@nocobase/database';
+import { createDatabaseManager } from '@nocobase/app-database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import permissionSetMigration from '../src/plugins/permission-sets/migrations/202608210001_create_permission_set_tables.js';
 import defaultAccessMigration from '../src/plugins/default-access/migrations/202608210002_create_default_access_rules.js';

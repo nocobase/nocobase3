@@ -11,6 +11,10 @@ The plugin has three independent client contributions:
 
 Undoable mutation notifications are rendered by the plugin itself and do not
 depend on the application's archived `client-old` tree or on Refine context.
+The plugin owns the shadcn primitives it needs under `client/components/ui`.
+Add more with `pnpm exec shadcn add <name>`, then retain explicit exported
+types and relative `.js` imports required by this declaration-emitting ESM
+package.
 
 Register the plugin in an application package:
 

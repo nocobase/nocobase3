@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/database';
+import type { DatabaseConnection } from '@nocobase/app-database';
 import { ResourceHandlerRegistry } from './registry.js';
 import { AccessConstraintRegistry } from './constraints.js';
 import type { AccessConstraintService } from './constraints.js';

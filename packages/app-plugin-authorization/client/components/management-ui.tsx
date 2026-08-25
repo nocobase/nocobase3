@@ -1,5 +1,6 @@
-import { Button, Input } from '@nocobase/app-client/ui';
 import type { ReactElement, ReactNode } from 'react';
+
+import { Button, Input } from './ui.js';
 
 export function ManagementToolbar({
   search,

@@ -1,4 +1,4 @@
-import { configurePortalI18n } from '@nocobase/portal-sdk/i18n';
+import { configurePortalI18n } from '@nocobase/app-portal-sdk/i18n';
 
 export const portalI18nReady = configurePortalI18n({
   defaultLocale: 'en-US',

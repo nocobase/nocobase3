@@ -3,9 +3,7 @@ import {
   type AppClientRouteComponentOverrideDefinition,
 } from '@nocobase/app-client/plugins';
 
-import authenticationPageOverrides from './auth/page-overrides';
-
 export const routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[] =
-  defineClientRouteComponentOverrides([...authenticationPageOverrides]);
+  defineClientRouteComponentOverrides([]);
 
 export default routeComponentOverrides;

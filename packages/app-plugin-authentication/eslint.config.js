@@ -2,9 +2,9 @@ import { createClientLibraryConfig } from '@nocobase/dev-config/eslint';
 
 export default createClientLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
-  // UI sources are published registry fragments and are typechecked by their
-  // consuming Portal rather than this package's declaration build.
-  ignores: ['ui/**'],
+  // Registry sources are typechecked and linted through the Default Template's
+  // preinstalled snapshot rather than this package's declaration build.
+  ignores: ['registry/**', 'ui/**'],
   overrides: [
     {
       name: 'app-plugin-authentication/database-task-project',

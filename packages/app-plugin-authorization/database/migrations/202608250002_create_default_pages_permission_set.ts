@@ -1,4 +1,7 @@
-import { defineMigration, type MigrationDefinition } from '@nocobase/database';
+import {
+  defineMigration,
+  type MigrationDefinition,
+} from '@nocobase/app-database';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608250002_create_default_pages_permission_set',

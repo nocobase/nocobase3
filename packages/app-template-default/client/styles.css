@@ -2,6 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @source "../../app-client/src";
+@source "./components/ui";
 @source "../node_modules/@nocobase/app-plugin-*/client";
 @source "../node_modules/@nocobase/app-plugin-*/dist/client";
 

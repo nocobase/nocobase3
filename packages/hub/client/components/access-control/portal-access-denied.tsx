@@ -1,7 +1,7 @@
 import { useGetIdentity, useTranslate } from '@refinedev/core';
 import { ShieldX } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
-import { useAclState, type AclIdentity } from '@nocobase/portal-sdk/acl';
+import { useAclState, type AclIdentity } from '@nocobase/app-portal-sdk/acl';
 
 import {
   getRoleOptions,

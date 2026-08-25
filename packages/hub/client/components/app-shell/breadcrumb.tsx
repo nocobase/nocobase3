@@ -20,7 +20,7 @@ import {
   BreadcrumbPage as ShadcnBreadcrumbPage,
   Breadcrumb as ShadcnBreadcrumb,
 } from '@/components/ui/breadcrumb';
-import { resolveTranslatableText } from '@nocobase/portal-sdk/i18n';
+import { resolveTranslatableText } from '@nocobase/app-portal-sdk/i18n';
 import { getResourceLabel } from '@/components/resources/resource-label';
 
 export function Breadcrumb() {

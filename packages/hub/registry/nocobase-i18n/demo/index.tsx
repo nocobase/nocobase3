@@ -1,5 +1,5 @@
 import { useGetLocale, useTranslate } from '@refinedev/core';
-import { useEnabledLocales } from '@nocobase/portal-sdk/i18n';
+import { useEnabledLocales } from '@nocobase/app-portal-sdk/i18n';
 import { Database, Languages, PanelsTopLeft } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 import { LanguageSwitcher } from '..';
 import { I18nPromptGenerator } from './prompt-generator';
 

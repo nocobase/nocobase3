@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/database';
+import type { DatabaseConnection } from '@nocobase/app-database';
 import type { DefaultAccessRule } from './model.js';
 import type { DefaultAccessStore } from './store.js';
 

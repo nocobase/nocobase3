@@ -5,7 +5,7 @@ import {
   AclStoreProvider,
   type AclState,
   type AclStore,
-} from '@nocobase/portal-sdk/acl';
+} from '@nocobase/app-portal-sdk/acl';
 
 import { AclGate } from '@/components/access-control/acl-gate';
 import { PortalAccessDeniedView } from '@/components/access-control/portal-access-denied';

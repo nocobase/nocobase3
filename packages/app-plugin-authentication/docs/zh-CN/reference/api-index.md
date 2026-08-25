@@ -196,6 +196,15 @@ logout、check、getIdentity 和 onError。
 - `@nocobase/app-plugin-authentication/client/bootstrap` 默认导出客户端插件
   bootstrap，用于注册 Refine `authProvider`；
 - `@nocobase/app-plugin-authentication/client/routes` 默认导出登录、注册、忘记密码和
-  重置密码的 guest 路由定义。
+  重置密码的 guest 路由定义；
+- `@nocobase/app-plugin-authentication/client/route-contracts` 导出稳定的
+  `AUTHENTICATION_ROUTE_IDS`，应用或 Registry 用它声明 component override；
+- `@nocobase/app-plugin-authentication/client/actions` 导出密码登录、注册、请求重置和
+  完成重置的 headless hooks；
+- `@nocobase/app-plugin-authentication/client/ui` 仅导出用于应用内 SPA 导航的
+  `AuthLink`。密码表单由 `auth-ui` Registry 拥有；需要自行实现表单时使用
+  `@nocobase/app-plugin-authentication/client/actions` 的 headless hooks。
 
-具体页面通过路由的 `componentLoader` 按需加载，不从 `client` 聚合入口导出。
+具体 fallback 页面通过路由的 `componentLoader` 按需加载，不从公开入口导出。默认
+表单直接持有按需生成的 shadcn 基础组件源码；品牌、营销区域和最终页面组合由宿主
+Registry 源码负责。

@@ -1,4 +1,4 @@
-import type { AppExtension } from '@nocobase/portal-sdk/extensions';
+import type { AppExtension } from '@nocobase/app-portal-sdk/extensions';
 import { usersExampleRoutes } from './app-routes';
 import './locales';
 

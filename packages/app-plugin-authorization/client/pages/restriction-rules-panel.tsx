@@ -1,4 +1,4 @@
-import { Button, Input } from '@nocobase/app-client/ui';
+import { Button, Input } from '../components/ui.js';
 import {
   useCallback,
   useEffect,

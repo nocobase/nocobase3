@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/database';
+import type { DatabaseConnection } from '@nocobase/app-database';
 import type { SharingRule, SharingRuleAction } from './model.js';
 import type { SharingRuleStore } from './store.js';
 

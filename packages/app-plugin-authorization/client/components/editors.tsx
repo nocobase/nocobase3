@@ -1,5 +1,6 @@
-import { Input, Label } from '@nocobase/app-client/ui';
 import { useState, type ReactElement, type ReactNode } from 'react';
+
+import { Input, Label } from './ui.js';
 import type {
   AccessScope,
   AuthorizationOptions,

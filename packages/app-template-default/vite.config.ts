@@ -1,5 +1,6 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
-import { portalSdkCompatibilityPlugin } from '@nocobase/portal-sdk/vite';
+import agentAnnotations from '@gchust/agent-annotations/vite';
+import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import fs from 'node:fs';
 import path from 'path';
 import { loadEnv } from 'vite';
@@ -74,7 +75,10 @@ export default createPortalViteConfig(
       base: viteBase,
       define: defineEnv,
       envPrefix: ['VITE_'],
-      plugins: [appClientPluginsPlugin({ root: __dirname })],
+      plugins: [
+        agentAnnotations({ root: __dirname }),
+        appClientPluginsPlugin({ root: __dirname }),
+      ],
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],
         alias: [

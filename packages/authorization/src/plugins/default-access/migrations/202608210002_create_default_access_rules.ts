@@ -1,4 +1,7 @@
-import { defineMigration, type MigrationDefinition } from '@nocobase/database';
+import {
+  defineMigration,
+  type MigrationDefinition,
+} from '@nocobase/app-database';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608210002_create_default_access_rules',

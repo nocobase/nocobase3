@@ -1,5 +1,5 @@
 import { useContext, type CSSProperties } from 'react';
-import { RouteOverlayViewportContext } from '@nocobase/portal-sdk/routing';
+import { RouteOverlayViewportContext } from '@nocobase/app-portal-sdk/routing';
 
 export function useRouteOverlayViewportStyle() {
   const viewport = useContext(RouteOverlayViewportContext);

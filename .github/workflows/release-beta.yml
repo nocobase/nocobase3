@@ -1,0 +1,278 @@
+name: Release Beta
+
+# develop 上发预览版：consume changesets -> X.Y.0-beta.N -> npm dist-tag beta
+#
+# dist-tag 由 .changeset/pre.json 的 tag 字段决定，publish 不需要也不允许
+# 显式指定 --tag（pre 模式下会被拒绝）。
+#
+# 在临时发版分支上完成 version + publish，再通过 PR 合回 develop。
+# 这样发版期间别人往 develop 合 PR 不会导致推送失败——发版分支是独占的。
+#
+# 首次需要有人在本地跑一次 `changeset pre enter beta` 并提交；
+# 之后每一轮发版都由这个 workflow 完成，转正后 CI 会自动重新进入 pre 模式。
+#
+# 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
+# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
+# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run: compute versions and run checks without publishing or pushing'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Publish beta
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://npm.nocobase.ai
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 不在 pre 模式就发版，会直接发出稳定版号并占掉 latest 该用的号段。
+      - name: Verify develop is in pre mode
+        run: |
+          if [ ! -f .changeset/pre.json ]; then
+            echo "::error::develop is not in pre mode. Run changeset pre enter beta locally and commit it first."
+            exit 1
+          fi
+          MODE=$(node -p "require('./.changeset/pre.json').mode")
+          if [ "$MODE" != "pre" ]; then
+            echo "::error::pre.json has mode '$MODE', expected 'pre'"
+            exit 1
+          fi
+
+      # 必须排除 README.md —— changeset init 会生成它，用 `ls .changeset/*.md`
+      # 判断会永远为真。这只是粗筛，真正的判断在 version 之后比对版本号。
+      - name: Verify there is something to release
+        run: |
+          COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
+          if [ "$COUNT" = "0" ]; then
+            echo "::error::No pending changesets — nothing to release"
+            exit 1
+          fi
+          echo "Pending changesets: $COUNT"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Snapshot versions before versioning
+        run: |
+          node scripts/list-package-versions.mjs > /tmp/versions-before.json
+
+      # 切到临时发版分支再动版本号。develop 在整个发版过程中保持不变，
+      # 别人可以正常往里合 PR。
+      #
+      # 版本标识用 `YYYY-MM-DD.{num}`：各 package 独立版本，没有统一版本号
+      # 可以命名，日期是版本的自然标识。
+      #
+      # 序号从 tag 推导而不是从分支——分支合并后会被删除，只看分支会让序号
+      # 回退并与已发布的版本重复。tag 是长期记录。
+      - name: Create release branch
+        id: branch
+        run: |
+          git fetch --tags --force
+          DAY=$(date -u +%Y-%m-%d)
+          MAX=0
+          for t in $(git tag -l "release-beta/${DAY}.*"); do
+            N="${t##*.}"
+            case "$N" in ''|*[!0-9]*) continue ;; esac
+            [ "$N" -gt "$MAX" ] && MAX="$N"
+          done
+          SEQ=$((MAX + 1))
+          BATCH="${DAY}.${SEQ}"
+          NAME="release-beta/${BATCH}"
+          git checkout -b "$NAME"
+          {
+            echo "name=$NAME"
+            echo "batch=$BATCH"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version: $BATCH"
+
+      - name: Version
+        run: pnpm changeset version
+
+      # version 跑完却没有任何版本号变化，说明本次 changeset 全是 empty，
+      # 或者声明的 package 都被 ignore 掉了。继续跑会 publish 零个包。
+      - name: Verify versions actually changed
+        id: changed
+        run: |
+          CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
+          if [ -z "$CHANGED" ]; then
+            echo "::error::changeset version changed no versions (they may all be empty changesets)"
+            exit 1
+          fi
+          echo "$CHANGED"
+
+          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
+          {
+            echo "released<<RELEASED_EOF"
+            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
+            echo "RELEASED_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summarize
+        run: |
+          {
+            echo "### Prerelease"
+            echo
+            echo "| Package | Version |"
+            echo "| --- | --- |"
+            node scripts/list-package-versions.mjs --table
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build and test
+        run: |
+          pnpm -r --if-present build
+          pnpm -r --if-present test
+
+      - name: Stop here on dry run
+        if: inputs.dry_run
+        run: echo "dry_run=true — stopping here. The release branch was not pushed."
+
+      # ── 以下只在实发时执行 ────────────────────────────────────────
+      # 不打产品级 tag。各 package 独立版本，不存在一个能代表整个仓库的
+      # 版本号——拿某个包的版本当仓库版本会产生误导性的 tag。
+      # 追溯某批发布用发版分支的 merge commit：
+      #   git log --merges --grep="chore: release" develop
+      #   git tag -l "release-beta/*"
+      # 版本 tag 与发版分支同名。分支合并后会被删除，tag 独占该名字，
+      # 所以歧义只存在于发版进行中的这几分钟。
+      #
+      # 但在此期间必须用完整 refspec —— `git push origin <name>` 在同名时
+      # 会直接报错：src refspec ... matches more than one
+      - name: Commit, tag and push release branch
+        if: '!inputs.dry_run'
+        run: |
+          NAME="${{ steps.branch.outputs.name }}"
+          git add -A
+          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
+          git tag "$NAME"
+          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
+          git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
+
+      # publish 会为**实际发布成功**的每个 package 打 name@version tag。
+      # 这份 tag 基于真实发布结果，不是工作区状态，语义准确。
+      # 注意不要用 `changeset git-tag` 代替：那条命令读的是工作区所有包的
+      # package.json，会给这批没发布的包也打上 tag。
+      # 不能带 --tag —— pre 模式下 changeset 会直接拒绝：
+      #   Releasing under custom tag is not allowed in pre mode!
+      # dist-tag 由 pre.json 里的 tag 决定（`pre enter beta` 时定的 beta），
+      # publish 自动用它。
+      - name: Publish to npm
+        if: '!inputs.dry_run'
+        run: pnpm changeset publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Push package tags
+        if: '!inputs.dry_run'
+        run: git push origin --tags
+
+      # 用 --merge 而不是 --squash：保留 tag 与 develop 历史的血缘，
+      # git describe 才能用。不加 --admin：冲突时要让 PR 停下等人处理，
+      # 强合会把 develop 上刚改的东西冲掉。
+      - name: Merge back into develop
+        if: '!inputs.dry_run'
+        id: merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr create \
+            --title "chore: release ${{ steps.branch.outputs.batch }}" \
+            --body "Prerelease \`${{ steps.branch.outputs.batch }}\` published to npm under the \`beta\` dist-tag. Per-package versions are in the workflow summary." \
+            --base develop \
+            --head "${{ steps.branch.outputs.name }}")
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+          set +e
+          gh pr merge "$PR_URL" --merge --delete-branch
+          RC=$?
+          set -e
+          if [ $RC -ne 0 ]; then
+            echo "::warning::Failed to merge the PR back into develop; conflicts need manual work: $PR_URL"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # npm 已经发布成功，只是仓库没同步。这个状态是安全的——版本号已经
+      # 落在 npm，PR 只负责把它写回仓库，人工解冲突即可。
+      - name: Notify merge failure
+        if: "!inputs.dry_run && steps.merge.outputs.merged == 'false'"
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
+          TITLE: NocoBase 3 预览版发布成功，但 PR 合回失败
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 需要人工介入
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            版本 **${{ steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `beta`）。
+
+            但版本提交合回 `develop` 时发生冲突，需要人工解决：
+            ${{ steps.merge.outputs.url }}
+
+            发版分支 `${{ steps.branch.outputs.name }}` 已保留，解决冲突后合并即可。
+            **在此之前不要再次发版**，否则版本号会从旧基线重新计算。
+        run: ./scripts/feishu-notify.sh
+
+      - name: Fail the run when merge back failed
+        if: "!inputs.dry_run && steps.merge.outputs.merged == 'false'"
+        run: exit 1
+
+      - name: Notify success
+        if: "!inputs.dry_run && steps.merge.outputs.merged == 'true'"
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
+          TITLE: NocoBase 3 预览版发布
+          STATUS: success
+          STATUS_TEXT_SUCCESS: 发布成功
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm（dist-tag `beta`）。
+
+            本次发布的 package：
+            ```
+            ${{ steps.changed.outputs.released }}
+            ```
+        run: ./scripts/feishu-notify.sh

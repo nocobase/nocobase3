@@ -1,4 +1,4 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';
+import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { Hono } from 'hono';
 
