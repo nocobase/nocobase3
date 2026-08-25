@@ -86,7 +86,7 @@ jobs:
         run: |
           node scripts/list-package-versions.mjs > /tmp/versions-before.json
 
-      # 批次标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支会被删除）。
+      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支会被删除）。
       - name: Create release branch
         id: branch
         run: |
@@ -106,7 +106,7 @@ jobs:
             echo "name=$NAME"
             echo "batch=$BATCH"
           } >> "$GITHUB_OUTPUT"
-          echo "本批：$BATCH"
+          echo "本次版本：$BATCH"
 
       # pre exit 只改状态，version 才真正脱后缀并删除 pre.json。
       - name: Exit pre mode and version
@@ -160,7 +160,7 @@ jobs:
         if: inputs.dry_run
         run: echo "dry_run=true，到此为止。发版分支未推送。"
 
-      # 批次 tag 与发版分支同名。同名期间必须用完整 refspec ——
+      # 版本 tag 与发版分支同名。同名期间必须用完整 refspec ——
       # `git push origin <name>` 会报 src refspec matches more than one。
       - name: Commit, tag and push release branch
         if: '!inputs.dry_run'
@@ -251,7 +251,7 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            批次 **${{ steps.branch.outputs.batch }}** 的转正提交合进 `main` 时发生冲突：
+            版本 **${{ steps.branch.outputs.batch }}** 的转正提交合进 `main` 时发生冲突：
             ${{ steps.merge_main.outputs.url }}
 
             npm 尚未发布，没有产生不一致状态。
@@ -272,7 +272,7 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            批次 **${{ steps.branch.outputs.batch }}** 已合进 `main`，可以发布了。
+            版本 **${{ steps.branch.outputs.batch }}** 已合进 `main`，可以发布了。
 
             但同步回 `develop` 失败，需要人工处理：
             ${{ steps.merge_develop.outputs.url || '（合并阶段就失败了，没有创建 PR）' }}
@@ -296,7 +296,7 @@ jobs:
           STATUS_TEXT_SUCCESS: 待发布
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            批次 **${{ steps.branch.outputs.batch }}** 已转正并合进 `main`，`develop` 已重新进入 pre 模式。
+            版本 **${{ steps.branch.outputs.batch }}** 已转正并合进 `main`，`develop` 已重新进入 pre 模式。
 
             **尚未发布到 npm。** 点 `release-stable.yml` 完成发布（输入保持默认）。
 

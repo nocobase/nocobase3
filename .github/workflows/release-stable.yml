@@ -149,7 +149,7 @@ jobs:
         run: |
           node scripts/list-package-versions.mjs > /tmp/versions-before.json
 
-      # 批次标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支合并后会被删除）。
+      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支合并后会被删除）。
       - name: Create release branch
         if: steps.mode.outputs.needs_version == 'true'
         id: branch
@@ -170,7 +170,7 @@ jobs:
             echo "name=$NAME"
             echo "batch=$BATCH"
           } >> "$GITHUB_OUTPUT"
-          echo "本批：$BATCH"
+          echo "本次版本：$BATCH"
 
       - name: Version
         if: steps.mode.outputs.needs_version == 'true'
@@ -198,7 +198,7 @@ jobs:
       - name: Summarize
         run: |
           {
-            echo "### 本批稳定版"
+            echo "### 本次稳定版"
             echo
             echo "| Package | 版本 |"
             echo "| --- | --- |"
@@ -251,7 +251,7 @@ jobs:
         run: |
           PR_URL=$(gh pr create \
             --title "chore: release ${{ steps.branch.outputs.batch }}" \
-            --body "稳定版批次 \`${{ steps.branch.outputs.batch }}\`，已发布到 npm（dist-tag \`latest\`）。各 package 版本见 workflow summary。" \
+            --body "稳定版 \`${{ steps.branch.outputs.batch }}\`，已发布到 npm（dist-tag \`latest\`）。各 package 版本见 workflow summary。" \
             --base "${{ inputs.branch }}" \
             --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -337,7 +337,7 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            批次 **${{ steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `latest`）。
+            版本 **${{ steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `latest`）。
 
             但版本提交合回 `main` 时发生冲突，需要人工解决：
             ${{ steps.merge.outputs.url }}
@@ -357,7 +357,7 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            批次 **${{ steps.branch.outputs.batch }}** 已发布到 npm 并合进 `main`。
+            版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm 并合进 `main`。
 
             但同步到 `develop` 时有无法自动解决的冲突（源码冲突）。
             远端 `develop` 未被修改，在本地执行：

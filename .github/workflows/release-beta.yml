@@ -97,11 +97,11 @@ jobs:
       # 切到临时发版分支再动版本号。develop 在整个发版过程中保持不变，
       # 别人可以正常往里合 PR。
       #
-      # 批次标识用 `YYYY-MM-DD.{num}`：各 package 独立版本，没有统一版本号
-      # 可以命名，日期是批次的自然标识。
+      # 版本标识用 `YYYY-MM-DD.{num}`：各 package 独立版本，没有统一版本号
+      # 可以命名，日期是版本的自然标识。
       #
       # 序号从 tag 推导而不是从分支——分支合并后会被删除，只看分支会让序号
-      # 回退并与已发布的批次重复。tag 是长期记录。
+      # 回退并与已发布的版本重复。tag 是长期记录。
       - name: Create release branch
         id: branch
         run: |
@@ -121,12 +121,12 @@ jobs:
             echo "name=$NAME"
             echo "batch=$BATCH"
           } >> "$GITHUB_OUTPUT"
-          echo "本批：$BATCH"
+          echo "本次版本：$BATCH"
 
       - name: Version
         run: pnpm changeset version
 
-      # version 跑完却没有任何版本号变化，说明本批 changeset 全是 empty，
+      # version 跑完却没有任何版本号变化，说明本次 changeset 全是 empty，
       # 或者声明的 package 都被 ignore 掉了。继续跑会 publish 零个包。
       - name: Verify versions actually changed
         run: |
@@ -140,7 +140,7 @@ jobs:
       - name: Summarize
         run: |
           {
-            echo "### 本批预览版"
+            echo "### 本次预览版"
             echo
             echo "| Package | 版本 |"
             echo "| --- | --- |"
@@ -162,7 +162,7 @@ jobs:
       # 追溯某批发布用发版分支的 merge commit：
       #   git log --merges --grep="chore: release" develop
       #   git tag -l "release-beta/*"
-      # 批次 tag 与发版分支同名。分支合并后会被删除，tag 独占该名字，
+      # 版本 tag 与发版分支同名。分支合并后会被删除，tag 独占该名字，
       # 所以歧义只存在于发版进行中的这几分钟。
       #
       # 但在此期间必须用完整 refspec —— `git push origin <name>` 在同名时
@@ -206,7 +206,7 @@ jobs:
         run: |
           PR_URL=$(gh pr create \
             --title "chore: release ${{ steps.branch.outputs.batch }}" \
-            --body "预览版批次 \`${{ steps.branch.outputs.batch }}\`，已发布到 npm（dist-tag \`beta\`）。各 package 版本见 workflow summary。" \
+            --body "预览版 \`${{ steps.branch.outputs.batch }}\`，已发布到 npm（dist-tag \`beta\`）。各 package 版本见 workflow summary。" \
             --base develop \
             --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -235,7 +235,7 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            批次 **${{ steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `beta`）。
+            版本 **${{ steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `beta`）。
 
             但版本提交合回 `develop` 时发生冲突，需要人工解决：
             ${{ steps.merge.outputs.url }}
@@ -259,7 +259,7 @@ jobs:
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            批次 **${{ steps.branch.outputs.batch }}** 已发布到 npm（dist-tag `beta`）。
+            版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm（dist-tag `beta`）。
 
             安装：`pnpm add @nocobase/core@beta`
         run: ./scripts/feishu-notify.sh

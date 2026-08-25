@@ -219,7 +219,7 @@ gh pr create --base develop              # 另开一个 PR 同步到 develop
 如果要修的是**已经不是最新**的版本（例如 `main` 已到 2.0，但用户还在用 1.3.x）：
 
 ```bash
-git checkout -b 1.3 release/2026-08-20.1   # 从当时的批次 tag 切
+git checkout -b 1.3 release/2026-08-20.1   # 从当时的版本 tag 切
 # 修 bug + pnpm changeset（选 patch）
 git push origin 1.3
 ```
@@ -285,7 +285,7 @@ NocoBase 2 的实现同时耦合了以下操作：
 
 ### 代价一：预发布模式的连带发布
 
-Changesets 的 prerelease mode（`changeset pre enter`）在计算 release plan 时，会把所有通过 `dependencies`、`optionalDependencies`、`peerDependencies` 依赖本批 package 的下游**无条件拉进来**，与 bump 大小无关，且沿依赖链传递到底。
+Changesets 的 prerelease mode（`changeset pre enter`）在计算 release plan 时，会把所有通过 `dependencies`、`optionalDependencies`、`peerDependencies` 依赖本次发布 package 的下游**无条件拉进来**，与 bump 大小无关，且沿依赖链传递到底。
 
 在对齐本仓库依赖形状的沙盒中实测（`test-branch-version/experiments/single-branch-model.sh`），依赖图为 `core <- store <- server <- host`、`core <- ui`、`core <- auth`，只给 `core` 一个 patch changeset：
 
@@ -398,7 +398,7 @@ snapshot 的级联规则与 stable 完全一致（共用同一套范围判断）
 
 ### package 默认独立版本
 
-每个 package 的版本号只表达自身的兼容性，不表达产品发布批次。不使用 `fixed` 或 `linked` 强制统一版本。
+每个 package 的版本号只表达自身的兼容性，不表达产品发布。不使用 `fixed` 或 `linked` 强制统一版本。
 
 产品层面的版本（例如 `v3.1.0`）由主仓库 Git tag 和 GitHub Release 表达，与单个 package 的 npm 版本解耦。
 
@@ -578,7 +578,7 @@ main:    version=1.3.2
 场景：`main` 已经走到 `2.0.0`，但线上还有用户在用 `1.3.x`，需要给 `1.3.x` 出补丁。已验证（`test-branch-version/experiments/patch-old-version.sh`）。
 
 ```bash
-# ① 从当时的批次 tag 切分支 —— 不是从 main 切
+# ① 从当时的版本 tag 切分支 —— 不是从 main 切
 git checkout -b 1.3 release/2026-08-20.1
 
 # ② 修 bug + changeset（选 patch）
@@ -621,7 +621,7 @@ registry 上 @nocobase/core 的版本：1.2.0, 1.2.4, 1.3.0, 1.3.1, 2.0.0
 
 维护分支的特点：
 
-- 从**批次 tag** 切出，不是从 `main` 切
+- 从**版本 tag** 切出，不是从 `main` 切
 - **不进 pre 模式**，直接发该号段的稳定版号
 - 发版时**必须勾 `keep_latest`**
 - 与 `main` 各走各的号段，不需要同步
@@ -670,11 +670,11 @@ pnpm changeset
 Add a new Portal extension API and update the built-in Hub integration.
 ```
 
-changeset 描述的是本次代码变更的发布影响，不是一次实际发布操作。多个功能 PR 的 changeset 会被同一个发布批次一起消费。
+changeset 描述的是本次代码变更的发布影响，不是一次实际发布操作。多个功能 PR 的 changeset 会被同一次发布一起消费。
 
 推荐粒度是「每个需要发布的 PR 一份」，不是每个 commit 一份。
 
-**开发者不修改 package.json 的 `version` 字段。** 添加 changeset 不等于立即发版；它可以在仓库中等待数天，与其他 PR 的 changeset 一起被后续发布批次汇总。
+**开发者不修改 package.json 的 `version` 字段。** 添加 changeset 不等于立即发版；它可以在仓库中等待数天，与其他 PR 的 changeset 一起被后续的发布汇总。
 
 ### 版本号是怎么算出来的
 
@@ -768,7 +768,7 @@ CI 不应根据 diff 自动猜测 bump 级别。它可以发现「缺少 changes
 Prepare app-template-default 3.0 and its supporting runtime APIs.
 ```
 
-Changesets 会合并同一批次中的所有声明，按每个 package 的最高 bump 计算版本。
+Changesets 会合并同一次发布中的所有声明，按每个 package 的最高 bump 计算版本。
 
 ### 依赖方是否自动发布
 
@@ -865,7 +865,7 @@ node scripts/resolve-sync-conflicts.mjs  # 自动解冲突
 git push origin develop
 ```
 
-批次序号与转正共用 `release/` 前缀和序号空间——两者都发 `latest`，是同一条稳定线上的连续批次。
+版本序号与转正共用 `release/` 前缀和序号空间——两者都发 `latest`，是同一条稳定线上的连续版本。
 
 守卫：
 
@@ -1124,16 +1124,16 @@ if (gitTagReleases.length > 0) await createGitTags({ releases: gitTagReleases })
 
 ```text
 @nocobase/portal-sdk@2.2.0          package 级，changeset publish 自动打
-release/2026-08-24.1                批次级，标记一次发布行为
+release/2026-08-24.1                版本级，标记一次发布
 ```
 
 > 如果产品侧需要一个对外版本号（例如官网、Docker 镜像标签），可以选定某个核心 package 的版本作为代表，但那属于产品发布物料，不要塞进自动发版流程——否则每次发版都要编一个仓库版本号。
 
-### 用日期标识发布批次
+### 用日期标识版本
 
-没有统一版本号可以命名批次，日期是批次的自然标识。已验证（`test-branch-version/experiments/batch-naming.sh`）。
+各 package 独立版本，没有一个能代表整个仓库的版本号，日期就是版本的自然标识。已验证（`test-branch-version/experiments/batch-naming.sh`）。
 
-|        | 发版分支                    | 批次 tag                    | merge log                     |
+|        | 发版分支                    | 版本 tag                    | merge log                     |
 | ------ | --------------------------- | --------------------------- | ----------------------------- |
 | 预览版 | `release-beta/2026-08-24.1` | `release-beta/2026-08-24.1` | `chore: release 2026-08-24.1` |
 | 稳定版 | `release/2026-08-24.1`      | `release/2026-08-24.1`      | `chore: release 2026-08-24.1` |
@@ -1142,7 +1142,7 @@ tag 在合并前打在发版分支上，与分支同名。
 
 三个实现细节：
 
-**序号从 tag 推导，不是从分支。** 分支合并时被 `--delete-branch` 删掉，只看分支会让序号回退并与已发布批次重复：
+**序号从 tag 推导，不是从分支。** 分支合并时被 `--delete-branch` 删掉，只看分支会让序号回退并与已发布版本重复：
 
 ```text
 连发三批            -> .1 .2 .3
@@ -1167,13 +1167,13 @@ $ git push origin refs/tags/<name>:refs/tags/<name>      # ok
 追溯：
 
 ```bash
-git tag -l 'release-beta/*'                # 所有预览版批次
-git tag -l 'release/*'                     # 所有稳定版批次
+git tag -l 'release-beta/*'                # 所有预览版
+git tag -l 'release/*'                     # 所有稳定版
 git show release/2026-08-24.1              # 某批发了什么
 git log --merges --grep="chore: release"   # 发布时间线
 ```
 
-因为合回用的是 `--merge` 而非 `--squash`，发版 commit 保留在历史里，配合批次 tag 和 PR 记录能完整还原一次发布。
+因为合回用的是 `--merge` 而非 `--squash`，发版 commit 保留在历史里，配合版本 tag 和 PR 记录能完整还原一次发布。
 
 ### 预发布也打 package 级 tag
 
