@@ -715,6 +715,10 @@ describe('database migrations', () => {
         name: '202608190001_create_notification_tables',
         fileName: '202608190001_create_notification_tables.ts',
       }),
+      expect.objectContaining({
+        name: '202608250001_add_notification_reliability_fields',
+        fileName: '202608250001_add_notification_reliability_fields.ts',
+      }),
     ]);
   });
 });

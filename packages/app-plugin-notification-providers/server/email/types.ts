@@ -26,3 +26,8 @@ export interface EmailChannelConfig {
   readonly enabled: boolean;
   readonly providers: readonly SmtpProviderConfig[];
 }
+
+export interface PreparedEmailMessage {
+  readonly to: string;
+  readonly content: EmailMessage;
+}

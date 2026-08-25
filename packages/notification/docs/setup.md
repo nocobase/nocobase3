@@ -89,6 +89,12 @@ app.route('/api/notifications', notification.router);
 export { default } from '@nocobase/notification/migrations/202608190001_create_notification_tables';
 ```
 
+可靠性字段使用独立的前向迁移，避免修改已经执行过的建表迁移：
+
+```ts title="database/migrations/202608250001_add_notification_reliability_fields.ts"
+export { default } from '@nocobase/notification/migrations/202608250001_add_notification_reliability_fields';
+```
+
 使用站内信时，`@nocobase/app-plugin-notification-in-app` 的 manifest 会自动提供站内信 migration。
 
 至此，业务服务可以从应用服务中取得 `NotificationManager<AppNotificationChannels>` 并发送通知。

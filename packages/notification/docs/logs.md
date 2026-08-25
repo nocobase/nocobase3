@@ -58,9 +58,11 @@ interface NotificationLogDetails {
 | `failed`     | 所有 Delivery 均失败                   |
 | `unknown`    | 至少一个 Delivery 的提交结果无法确认   |
 
-Delivery 状态包括 `pending`、`sending`、`sent`、`failed` 和 `unknown`。
+Delivery 状态包括 `pending`、`preparing`、`submitting`、`accepted`、`failed` 和 `unknown`。
 
-`sent` 表示 Provider 已接受本次提交，不等于终端用户已经阅读，也不一定等于供应商最终送达。`unknown` 表示外部服务可能已经接受消息，不过本地没有取得确定结果。遇到 `unknown` 时，先查询供应商记录，再决定是否重新发送。
+`accepted` 表示 Provider 已接受本次提交，不等于终端用户已经阅读，也不一定等于供应商最终送达。带 `nextRunAt` 的 `failed` 表示已安排持久化重试；`unknown` 表示外部服务可能已经接受消息，不过本地没有取得确定结果。遇到 `unknown` 时，先查询供应商记录，再决定是否重新发送。
+
+Manager 保留 `/api/notifications/logs` 和 `/api/notifications/logs/:id` 调试路由，返回内容会移除消息正文、收件人快照和租约 token。
 
 ## 查询站内信
 

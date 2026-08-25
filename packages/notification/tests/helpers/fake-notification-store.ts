@@ -3,6 +3,7 @@ import type {
   NotificationDeliveryRecord,
   NotificationDeliveryStatus,
   NotificationErrorRecord,
+  NotificationCreateResult,
   NotificationLogBundle,
   NotificationLogRecord,
   NotificationLogStatus,
@@ -18,11 +19,26 @@ export class FakeNotificationStore implements NotificationStore {
     return new Date().toISOString();
   }
 
-  async create(bundle: NotificationLogBundle): Promise<void> {
+  async create(
+    bundle: NotificationLogBundle,
+  ): Promise<NotificationCreateResult> {
+    const existing = this.logs.get(bundle.log.id);
+    if (existing) {
+      if (existing.requestHash !== bundle.log.requestHash)
+        throw new Error('Notification idempotency key request mismatch.');
+      return {
+        created: false,
+        bundle: {
+          log: existing,
+          deliveries: await this.listDeliveries(existing.id),
+        },
+      };
+    }
     this.logs.set(bundle.log.id, bundle.log);
     for (const delivery of bundle.deliveries) {
       this.deliveries.set(delivery.id, delivery);
     }
+    return { created: true, bundle };
   }
 
   async getLog(id: string): Promise<NotificationLogRecord | undefined> {
@@ -51,11 +67,18 @@ export class FakeNotificationStore implements NotificationStore {
     );
   }
 
-  async listPending(
+  async listReady(
+    now: string,
     limit: number = 100,
   ): Promise<readonly NotificationDeliveryRecord[]> {
     return [...this.deliveries.values()]
-      .filter((delivery) => delivery.status === 'pending')
+      .filter(
+        (delivery) =>
+          delivery.status === 'pending' ||
+          (delivery.status === 'failed' &&
+            delivery.nextRunAt !== undefined &&
+            delivery.nextRunAt <= now),
+      )
       .slice(0, limit);
   }
 
@@ -71,10 +94,21 @@ export class FakeNotificationStore implements NotificationStore {
     leaseExpiresAt: string,
   ): Promise<NotificationDeliveryRecord | undefined> {
     const delivery = this.deliveries.get(id);
-    if (!delivery || delivery.status !== 'pending') return undefined;
+    const now = await this.now();
+    if (
+      !delivery ||
+      (delivery.status !== 'pending' &&
+        !(
+          delivery.status === 'failed' &&
+          delivery.nextRunAt !== undefined &&
+          delivery.nextRunAt <= now
+        ))
+    )
+      return undefined;
     const claimed: NotificationDeliveryRecord = {
       ...delivery,
-      status: 'sending',
+      status: 'preparing',
+      nextRunAt: undefined,
       leaseToken,
       leaseExpiresAt,
       updatedAt: await this.now(),
@@ -88,11 +122,13 @@ export class FakeNotificationStore implements NotificationStore {
   async startAttempt(
     delivery: NotificationDeliveryRecord,
     attempt: NotificationAttemptRecord,
+    leaseExpiresAt: string,
   ): Promise<NotificationDeliveryRecord | undefined> {
     const current = this.deliveries.get(delivery.id);
     if (
       !current ||
-      current.status !== 'sending' ||
+      !['preparing', 'submitting'].includes(current.status) ||
+      current.leaseToken !== delivery.leaseToken ||
       current.version !== delivery.version
     ) {
       return undefined;
@@ -105,6 +141,8 @@ export class FakeNotificationStore implements NotificationStore {
       ...current,
       providerCursor: delivery.providerCursor,
       attemptCount: attempt.sequence,
+      status: 'submitting',
+      leaseExpiresAt,
       updatedAt: await this.now(),
       version: current.version + 1,
     };
@@ -122,15 +160,82 @@ export class FakeNotificationStore implements NotificationStore {
     );
   }
 
+  async finishAttemptAndContinue(
+    attempt: NotificationAttemptRecord,
+    delivery: NotificationDeliveryRecord,
+    providerCursor: number,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const current = this.deliveries.get(delivery.id);
+    if (
+      !current ||
+      current.status !== 'submitting' ||
+      current.leaseToken !== delivery.leaseToken ||
+      current.version !== delivery.version
+    )
+      return undefined;
+    await this.finishAttempt(attempt);
+    const next: NotificationDeliveryRecord = {
+      ...current,
+      providerCursor,
+      updatedAt: await this.now(),
+      version: current.version + 1,
+    };
+    this.deliveries.set(next.id, next);
+    return next;
+  }
+
+  async finishAttemptAndDelivery(
+    attempt: NotificationAttemptRecord,
+    delivery: NotificationDeliveryRecord,
+    status: Extract<
+      NotificationDeliveryStatus,
+      'accepted' | 'failed' | 'unknown'
+    >,
+    error?: NotificationErrorRecord,
+    nextRunAt?: string,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const current = this.deliveries.get(delivery.id);
+    if (
+      !current ||
+      current.status !== 'submitting' ||
+      current.leaseToken !== delivery.leaseToken ||
+      current.version !== delivery.version
+    )
+      return undefined;
+    await this.finishAttempt(attempt);
+    if (nextRunAt) return this.scheduleRetry(current, nextRunAt, error!);
+    return this.finishDelivery(current, status, error);
+  }
+
+  async renewLease(
+    id: string,
+    leaseToken: string,
+    leaseExpiresAt: string,
+  ): Promise<boolean> {
+    const current = this.deliveries.get(id);
+    if (
+      !current ||
+      !['preparing', 'submitting'].includes(current.status) ||
+      current.leaseToken !== leaseToken
+    )
+      return false;
+    this.deliveries.set(id, { ...current, leaseExpiresAt });
+    return true;
+  }
+
   async finishDelivery(
     delivery: NotificationDeliveryRecord,
-    status: Exclude<NotificationDeliveryStatus, 'pending' | 'sending'>,
+    status: Extract<
+      NotificationDeliveryStatus,
+      'accepted' | 'failed' | 'unknown'
+    >,
     error?: NotificationErrorRecord,
   ): Promise<NotificationDeliveryRecord | undefined> {
     const current = this.deliveries.get(delivery.id);
     if (
       !current ||
-      current.status !== 'sending' ||
+      !['preparing', 'submitting'].includes(current.status) ||
+      current.leaseToken !== delivery.leaseToken ||
       current.version !== delivery.version
     ) {
       return undefined;
@@ -139,6 +244,7 @@ export class FakeNotificationStore implements NotificationStore {
       ...current,
       status,
       lastError: error,
+      nextRunAt: undefined,
       leaseToken: undefined,
       leaseExpiresAt: undefined,
       updatedAt: await this.now(),
@@ -149,11 +255,38 @@ export class FakeNotificationStore implements NotificationStore {
     return finished;
   }
 
+  async scheduleRetry(
+    delivery: NotificationDeliveryRecord,
+    nextRunAt: string,
+    error: NotificationErrorRecord,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const current = this.deliveries.get(delivery.id);
+    if (
+      !current ||
+      current.status !== 'submitting' ||
+      current.leaseToken !== delivery.leaseToken ||
+      current.version !== delivery.version
+    )
+      return undefined;
+    const next: NotificationDeliveryRecord = {
+      ...current,
+      status: 'failed',
+      nextRunAt,
+      lastError: error,
+      leaseToken: undefined,
+      leaseExpiresAt: undefined,
+      version: current.version + 1,
+    };
+    this.deliveries.set(next.id, next);
+    await this.refreshLog(next.notificationId);
+    return next;
+  }
+
   async recoverExpired(now: string): Promise<number> {
     let recovered = 0;
     for (const delivery of this.deliveries.values()) {
       if (
-        delivery.status !== 'sending' ||
+        !['preparing', 'submitting'].includes(delivery.status) ||
         !delivery.leaseExpiresAt ||
         delivery.leaseExpiresAt > now
       ) {
@@ -161,13 +294,17 @@ export class FakeNotificationStore implements NotificationStore {
       }
       const next: NotificationDeliveryRecord = {
         ...delivery,
-        status: 'unknown',
+        status: delivery.status === 'preparing' ? 'pending' : 'unknown',
         leaseToken: undefined,
         leaseExpiresAt: undefined,
-        lastError: {
-          code: 'LEASE_EXPIRED',
-          message: 'Provider result is unknown after worker interruption.',
-        },
+        lastError:
+          delivery.status === 'preparing'
+            ? undefined
+            : {
+                code: 'LEASE_EXPIRED',
+                message:
+                  'Provider result is unknown after worker interruption.',
+              },
         updatedAt: now,
         version: delivery.version + 1,
       };
@@ -199,12 +336,15 @@ function summarize(
   if (
     deliveries.some(
       (delivery) =>
-        delivery.status === 'pending' || delivery.status === 'sending',
+        delivery.status === 'pending' ||
+        delivery.status === 'preparing' ||
+        delivery.status === 'submitting' ||
+        (delivery.status === 'failed' && delivery.nextRunAt !== undefined),
     )
   ) {
     return 'processing';
   }
-  if (deliveries.every((delivery) => delivery.status === 'sent'))
+  if (deliveries.every((delivery) => delivery.status === 'accepted'))
     return 'completed';
   if (deliveries.every((delivery) => delivery.status === 'failed'))
     return 'failed';

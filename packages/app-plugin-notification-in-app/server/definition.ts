@@ -21,6 +21,13 @@ export interface InAppChannelConfig {
   readonly providers: readonly InAppProviderConfig[];
 }
 
+export interface PreparedInAppMessage {
+  readonly deliveryId: string;
+  readonly notificationId: string;
+  readonly recipient: InAppRecipient;
+  readonly content: InAppMessage;
+}
+
 export interface CreateInAppChannelDefinitionOptions {
   readonly resolveUserId?: InAppUserIdResolver;
 }
@@ -33,7 +40,12 @@ export function defineInAppChannelConfig(
 
 export function createInAppChannelDefinition(
   options: CreateInAppChannelDefinitionOptions = {},
-): NotificationChannelDefinition<InAppChannelConfig> {
+): NotificationChannelDefinition<
+  InAppChannelConfig,
+  InAppRecipient,
+  InAppMessage,
+  PreparedInAppMessage
+> {
   let store: InAppStore | undefined;
   return {
     type: 'in-app',
@@ -46,7 +58,8 @@ export function createInAppChannelDefinition(
           readonly notificationId: string;
           readonly recipient: InAppRecipient;
           readonly message: InAppMessage;
-        }): Promise<object> {
+          readonly signal: AbortSignal;
+        }): Promise<PreparedInAppMessage> {
           if (!input.recipient.userId)
             throw new Error('In-app recipient userId is required.');
           return {
@@ -64,7 +77,10 @@ export function createInAppChannelDefinition(
   };
 }
 
-export function createDatabaseProviderDefinition(): NotificationProviderDefinition<InAppProviderConfig> {
+export function createDatabaseProviderDefinition(): NotificationProviderDefinition<
+  InAppProviderConfig,
+  PreparedInAppMessage
+> {
   return {
     type: 'database',
     async createProvider(context, config) {
@@ -72,21 +88,26 @@ export function createDatabaseProviderDefinition(): NotificationProviderDefiniti
       return {
         name: config.name,
         type: 'database',
-        async send(message: object) {
-          const value = message as {
-            readonly deliveryId: string;
-            readonly notificationId: string;
-            readonly recipient: InAppRecipient;
-            readonly content: InAppMessage;
-          };
-          await store.deliver({
-            deliveryId: value.deliveryId,
-            notificationId: value.notificationId,
-            userId: value.recipient.userId,
-            message: value.content,
-            createdAt: await context.store.now(),
-          });
-          return { status: 'accepted' };
+        async send({ message }) {
+          try {
+            await store.deliver({
+              deliveryId: message.deliveryId,
+              notificationId: message.notificationId,
+              userId: message.recipient.userId,
+              message: message.content,
+              createdAt: await context.store.now(),
+            });
+            return { status: 'accepted' };
+          } catch (error) {
+            return {
+              status: 'failed',
+              disposition: 'same_provider',
+              error: {
+                category: 'storage',
+                message: error instanceof Error ? error.message : String(error),
+              },
+            };
+          }
         },
       };
     },

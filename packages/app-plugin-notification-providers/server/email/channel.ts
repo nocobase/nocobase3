@@ -4,6 +4,7 @@ import type {
   EmailChannelConfig,
   EmailMessage,
   EmailRecipient,
+  PreparedEmailMessage,
 } from './types.js';
 
 export interface EmailChannelDefinitionOptions {
@@ -18,7 +19,12 @@ export function defineEmailChannelConfig(
 
 export function createEmailChannelDefinition(
   options: EmailChannelDefinitionOptions = {},
-): NotificationChannelDefinition<EmailChannelConfig> {
+): NotificationChannelDefinition<
+  EmailChannelConfig,
+  EmailRecipient,
+  EmailMessage,
+  PreparedEmailMessage
+> {
   return {
     type: 'email',
     async createChannel() {
@@ -27,21 +33,20 @@ export function createEmailChannelDefinition(
         async prepare(input: {
           readonly deliveryId: string;
           readonly notificationId: string;
-          readonly recipient: object;
-          readonly message: object;
-        }): Promise<object> {
-          const recipient = input.recipient as EmailRecipient;
-          const message = input.message as EmailMessage;
+          readonly recipient: EmailRecipient;
+          readonly message: EmailMessage;
+          readonly signal: AbortSignal;
+        }): Promise<PreparedEmailMessage> {
           const address =
-            recipient.address ??
-            (recipient.userId
-              ? await options.resolveUserEmail?.(recipient.userId)
+            input.recipient.address ??
+            (input.recipient.userId
+              ? await options.resolveUserEmail?.(input.recipient.userId)
               : undefined);
           if (!address)
             throw new Error('Email recipient address cannot be resolved.');
-          if (!message.subject || !message.text)
+          if (!input.message.subject || !input.message.text)
             throw new Error('Email subject and text are required.');
-          return { to: address, content: message };
+          return { to: address, content: input.message };
         },
       };
     },

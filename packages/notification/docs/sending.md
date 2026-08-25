@@ -7,27 +7,27 @@
 ```ts
 const result = await notification.send({
   source: {
-    type: "workflow",
-    referenceId: "workflow-42",
+    type: 'workflow',
+    referenceId: 'workflow-42',
   },
   recipients: [
     {
-      userId: "user-1",
+      userId: 'user-1',
       channels: [
         {
-          channel: "in-app",
+          channel: 'in-app',
           recipient: {
-            userId: "user-1",
+            userId: 'user-1',
           },
         },
       ],
     },
   ],
   message: {
-    "in-app": {
-      title: "审批待处理",
-      body: "你有一条新的审批任务。",
-      actionUrl: "/approvals/approval-2026-001",
+    'in-app': {
+      title: '审批待处理',
+      body: '你有一条新的审批任务。',
+      actionUrl: '/approvals/approval-2026-001',
     },
   },
 });
@@ -41,14 +41,15 @@ const result = await notification.send({
 
 ```ts
 await notification.send({
+  idempotencyKey: 'approval:42:completed',
   recipients: [
     {
-      userId: "user-1",
+      userId: 'user-1',
       channels: [
         {
-          channel: "email",
+          channel: 'email',
           recipient: {
-            address: "alice@example.com",
+            address: 'alice@example.com',
           },
         },
       ],
@@ -56,13 +57,15 @@ await notification.send({
   ],
   message: {
     email: {
-      subject: "审批待处理",
-      text: "你有一条新的审批任务。",
-      html: "<p>你有一条新的审批任务。</p>",
+      subject: '审批待处理',
+      text: '你有一条新的审批任务。',
+      html: '<p>你有一条新的审批任务。</p>',
     },
   },
 });
 ```
+
+可选的 `idempotencyKey` 在同一个 source type 内唯一。使用相同 key 和相同请求会返回原 Notification 与 Delivery；相同 key 携带不同请求会被拒绝。核心还会为每个 Delivery 生成稳定的 Provider idempotency key，同一 Provider 重试时保持不变。
 
 如果注册 Email Channel 时配置了 `resolveUserEmail`，那么也可以只传 `userId`：
 
@@ -82,42 +85,42 @@ await notification.send({
 ```ts
 const result = await notification.send({
   source: {
-    type: "approval",
-    referenceId: "approval-2026-001",
+    type: 'approval',
+    referenceId: 'approval-2026-001',
   },
   recipients: [
     {
-      userId: "user-1",
+      userId: 'user-1',
       channels: [
         {
-          channel: "in-app",
-          recipient: { userId: "user-1" },
+          channel: 'in-app',
+          recipient: { userId: 'user-1' },
         },
         {
-          channel: "email",
-          recipient: { address: "alice@example.com" },
+          channel: 'email',
+          recipient: { address: 'alice@example.com' },
         },
       ],
     },
     {
-      userId: "user-2",
+      userId: 'user-2',
       channels: [
         {
-          channel: "in-app",
-          recipient: { userId: "user-2" },
+          channel: 'in-app',
+          recipient: { userId: 'user-2' },
         },
       ],
     },
   ],
   message: {
-    "in-app": {
-      title: "审批待处理",
-      body: "你有一条新的审批任务。",
-      actionUrl: "/approvals/approval-2026-001",
+    'in-app': {
+      title: '审批待处理',
+      body: '你有一条新的审批任务。',
+      actionUrl: '/approvals/approval-2026-001',
     },
     email: {
-      subject: "审批待处理",
-      text: "你有一条新的审批任务。",
+      subject: '审批待处理',
+      text: '你有一条新的审批任务。',
     },
   },
 });
@@ -136,11 +139,18 @@ const result = await notification.send({
 ```ts
 interface NotificationSendResult {
   readonly notificationId: string;
-  readonly status: "pending";
+  readonly status:
+    'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';
   readonly deliveries: readonly {
     readonly id: string;
     readonly channel: string;
-    readonly status: "pending";
+    readonly status:
+      | 'pending'
+      | 'preparing'
+      | 'submitting'
+      | 'accepted'
+      | 'failed'
+      | 'unknown';
   }[];
 }
 ```

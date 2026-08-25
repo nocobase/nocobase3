@@ -4,7 +4,7 @@ import type {
 } from '@nocobase/notification';
 import nodemailer from 'nodemailer';
 
-import type { EmailMessage, SmtpProviderConfig } from '../types.js';
+import type { PreparedEmailMessage, SmtpProviderConfig } from '../types.js';
 
 export function defineSmtpProviderConfig(
   input: Omit<SmtpProviderConfig, 'type'>,
@@ -12,7 +12,10 @@ export function defineSmtpProviderConfig(
   return { type: 'smtp', ...input };
 }
 
-export function createSmtpProviderDefinition(): NotificationProviderDefinition<SmtpProviderConfig> {
+export function createSmtpProviderDefinition(): NotificationProviderDefinition<
+  SmtpProviderConfig,
+  PreparedEmailMessage
+> {
   return {
     type: 'smtp',
     async createProvider(_context, config) {
@@ -25,18 +28,14 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<S
       return {
         name: config.name,
         type: 'smtp',
-        async send(message: object): Promise<ProviderSendResult> {
-          const value = message as {
-            readonly to: string;
-            readonly content: EmailMessage;
-          };
+        async send({ message }): Promise<ProviderSendResult> {
           try {
             await transporter.sendMail({
-              from: value.content.from ?? config.from,
-              to: value.to,
-              subject: value.content.subject,
-              text: value.content.text,
-              html: value.content.html,
+              from: message.content.from ?? config.from,
+              to: message.to,
+              subject: message.content.subject,
+              text: message.content.text,
+              html: message.content.html,
             });
             return { status: 'accepted' };
           } catch (error) {
@@ -55,7 +54,7 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<S
                 category: 'provider',
                 message: error instanceof Error ? error.message : String(error),
               },
-              allowNextProvider: true,
+              disposition: smtpDisposition(error),
             };
           }
         },
@@ -65,6 +64,25 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<S
       };
     },
   };
+}
+
+function smtpDisposition(
+  error: unknown,
+): 'never' | 'same_provider' | 'next_provider' {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String(error.code)
+      : undefined;
+  if (code === 'EAUTH' || code === 'EENVELOPE' || code === 'EMESSAGE')
+    return 'never';
+  if (
+    code === 'ECONNREFUSED' ||
+    code === 'ENOTFOUND' ||
+    code === 'EAI_AGAIN' ||
+    code === 'ESOCKET'
+  )
+    return 'same_provider';
+  return 'never';
 }
 
 function isUnknownSubmission(error: unknown): error is Error {

@@ -93,7 +93,7 @@ Notification Manager 在每次启动时都会根据配置重新创建 Provider R
 
 轮换密码、API key 或证书时，如果仍然是同一个逻辑 Provider 实例，保持 `name` 不变。如果改为另一个供应商账号或投递目标，建议使用新的 `name`。
 
-当还有 `pending` 或 `sending` Delivery 时，不要重命名 Provider 或调整 Provider 顺序。先等待已排队的投递完成，再修改配置。
+当还有 `pending`、`preparing` 或 `submitting` Delivery 时，不要重命名 Provider。已创建的 Delivery 会按快照中的 `name` 查找 Provider Runtime；如需下线旧实例，应先等待这些投递完成。
 
 :::
 
@@ -121,7 +121,7 @@ defineEmailChannelConfig({
 });
 ```
 
-Provider 的 `name` 在同一个 Channel 中必须唯一，并且需要在重启和配置发布之间保持稳定。当前 Provider 明确返回可继续的失败结果时，Manager 才会尝试下一个 Provider；不会重复调用同一个 Provider。
+Provider 的 `name` 在同一个 Channel 中必须唯一，并且需要在重启和配置发布之间保持稳定。当前 Provider 返回 `next_provider` 时，Manager 才会尝试快照中的下一个 Provider；返回 `same_provider` 时由核心持久化调度重试，且复用同一个 Delivery 幂等键；返回 `submission_unknown` 时不会重试或 fallback。
 
 ## 完整配置
 

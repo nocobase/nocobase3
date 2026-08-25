@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { Hono } from 'hono';
 
@@ -41,6 +41,9 @@ export class NotificationManager<
   >();
   private readonly queueJob: DeliveryJobClass;
   private started = false;
+  private startPromise?: Promise<void>;
+  private queueJobRegistered = false;
+  private routesMounted = false;
   private reconcileTimer?: ReturnType<typeof setInterval>;
 
   constructor(private readonly options: NotificationManagerOptions<TChannels>) {
@@ -51,12 +54,15 @@ export class NotificationManager<
     this.channelManager = new ChannelManager({
       logger: options.logger,
       store: this.store,
+      leaseMs: options.leaseMs,
+      providerTimeoutMs: options.providerTimeoutMs,
+      retry: options.retry,
     });
     this.queueJob = createDeliveryJob(this.channelManager);
   }
 
   registerChannel(definition: NotificationChannelDefinition): this {
-    if (this.started)
+    if (this.started || this.startPromise)
       throw new Error(
         'Notification Channel definitions must be registered before start().',
       );
@@ -79,7 +85,7 @@ export class NotificationManager<
     channelType: string,
     definition: NotificationProviderDefinition,
   ): this {
-    if (this.started)
+    if (this.started || this.startPromise)
       throw new Error(
         'Notification Provider definitions must be registered before start().',
       );
@@ -105,6 +111,17 @@ export class NotificationManager<
 
   async start(): Promise<void> {
     if (this.started) return;
+    if (this.startPromise) return this.startPromise;
+    const operation = this.startInternal();
+    this.startPromise = operation;
+    try {
+      await operation;
+    } finally {
+      if (this.startPromise === operation) this.startPromise = undefined;
+    }
+  }
+
+  private async startInternal(): Promise<void> {
     const pendingProviders: import('./types.js').NotificationProvider[] = [];
     const enabledConfigs = this.options.config.channels.filter(
       (config) => config.enabled,
@@ -118,6 +135,7 @@ export class NotificationManager<
     );
     try {
       let providerCount = 0;
+      const channels: import('./types.js').NotificationChannel[] = [];
       for (const config of this.options.config.channels) {
         if (!config.enabled) continue;
         const definition = this.definitions.get(config.type);
@@ -153,8 +171,12 @@ export class NotificationManager<
             context,
             providerConfig,
           );
-          providers.push(provider);
           pendingProviders.push(provider);
+          if (provider.name !== providerConfig.name)
+            throw new Error(
+              `Provider Runtime name "${provider.name}" must match configured name "${providerConfig.name}" in Channel "${config.type}".`,
+            );
+          providers.push(provider);
         }
         if (providers.length === 0)
           throw new Error(
@@ -162,7 +184,7 @@ export class NotificationManager<
           );
         this.channelManager.register(config.type, { channel, providers });
         pendingProviders.length = 0;
-        channel.mount?.(this.router);
+        channels.push(channel);
         providerCount += providers.length;
         this.options.logger.debug(
           {
@@ -176,14 +198,31 @@ export class NotificationManager<
           'Notification Channel started.',
         );
       }
-      this.options.queue.registerJob(this.queueJob);
-      this.started = true;
+      const channelRouter = new Hono();
+      if (!this.routesMounted) {
+        for (const channel of channels) channel.mount?.(channelRouter);
+      }
+      if (!this.queueJobRegistered) {
+        this.options.queue.registerJob(this.queueJob);
+        this.queueJobRegistered = true;
+      }
       const interval = this.options.reconcileIntervalMs ?? 30_000;
+      await this.reconcile();
+      if (!this.routesMounted) {
+        this.mountLogRoutes();
+        this.router.route('/', channelRouter);
+        this.routesMounted = true;
+      }
+      this.started = true;
       this.reconcileTimer = setInterval((): void => {
-        void this.reconcile();
+        void this.reconcile().catch((error: unknown) => {
+          this.options.logger.error(
+            { event: 'notification.reconcile_failed', err: error },
+            'Notification reconciliation failed.',
+          );
+        });
       }, interval);
       this.reconcileTimer.unref?.();
-      await this.reconcile();
       this.options.logger.info(
         {
           event: 'notification.manager.started',
@@ -194,6 +233,9 @@ export class NotificationManager<
         'Notification Manager started.',
       );
     } catch (error) {
+      if (this.reconcileTimer) clearInterval(this.reconcileTimer);
+      this.reconcileTimer = undefined;
+      this.started = false;
       for (const provider of pendingProviders.reverse()) {
         try {
           await provider.close?.();
@@ -217,10 +259,26 @@ export class NotificationManager<
       throw new Error(
         'NotificationManager.start() must complete before send().',
       );
+    if (
+      input.idempotencyKey !== undefined &&
+      (input.idempotencyKey.length === 0 || input.idempotencyKey.length > 255)
+    )
+      throw new Error(
+        'Notification idempotencyKey must contain between 1 and 255 characters.',
+      );
     if (input.recipients.length === 0)
       throw new Error('At least one notification recipient is required.');
     const now = await this.store.now();
-    const notificationId = randomUUID();
+    const notificationId = input.idempotencyKey
+      ? stableUuid(
+          `${input.source?.type ?? 'application'}:${input.idempotencyKey}`,
+        )
+      : randomUUID();
+    const requestHash = stableHash({
+      source: input.source,
+      recipients: input.recipients,
+      message: input.message,
+    });
     const deliveries: NotificationDeliveryRecord[] = [];
     for (const recipient of input.recipients) {
       for (const target of recipient.channels) {
@@ -233,8 +291,9 @@ export class NotificationManager<
           throw new Error(
             `Notification Channel "${target.channel}" is not enabled.`,
           );
+        const deliveryId = randomUUID();
         deliveries.push({
-          id: randomUUID(),
+          id: deliveryId,
           notificationId,
           channel: target.channel,
           recipientKey:
@@ -245,6 +304,7 @@ export class NotificationManager<
           providerCursor: 0,
           attemptCount: 0,
           status: 'pending',
+          idempotencyKey: `${notificationId}:${deliveryId}`,
           createdAt: now,
           updatedAt: now,
           version: 1,
@@ -257,39 +317,45 @@ export class NotificationManager<
       id: notificationId,
       sourceType: input.source?.type ?? 'application',
       sourceReferenceId: input.source?.referenceId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash,
       messageSnapshot: input.message as Readonly<Record<string, object>>,
       status: 'pending',
       createdAt: now,
       updatedAt: now,
     };
-    await this.store.create({ log, deliveries });
+    const created = await this.store.create({ log, deliveries });
+    const storedDeliveries = created.bundle.deliveries;
     await Promise.all(
-      deliveries.map(async (delivery): Promise<void> =>
-        this.dispatch(delivery.id),
-      ),
+      storedDeliveries
+        .filter((delivery) => created.created && delivery.status === 'pending')
+        .map(async (delivery): Promise<void> => this.dispatch(delivery.id)),
     );
     this.options.logger.debug(
       {
         event: 'notification.queued',
         notificationId,
         sourceType: log.sourceType,
-        deliveryCount: deliveries.length,
-        channels: [...new Set(deliveries.map((delivery) => delivery.channel))],
+        deliveryCount: storedDeliveries.length,
+        channels: [
+          ...new Set(storedDeliveries.map((delivery) => delivery.channel)),
+        ],
       },
       'Notification queued for delivery.',
     );
     return {
-      notificationId,
-      status: 'pending',
-      deliveries: deliveries.map((delivery) => ({
+      notificationId: created.bundle.log.id,
+      status: created.bundle.log.status,
+      deliveries: storedDeliveries.map((delivery) => ({
         id: delivery.id,
         channel: delivery.channel,
-        status: 'pending',
+        status: delivery.status,
       })),
     };
   }
 
   async close(): Promise<void> {
+    await this.startPromise?.catch(() => undefined);
     const wasStarted = this.started;
     if (this.reconcileTimer) clearInterval(this.reconcileTimer);
     this.reconcileTimer = undefined;
@@ -321,7 +387,8 @@ export class NotificationManager<
   private async reconcile(): Promise<void> {
     const now = await this.store.now();
     const recoveredCount = await this.store.recoverExpired(now);
-    const deliveries = await this.store.listPending(
+    const deliveries = await this.store.listReady(
+      now,
       this.options.reconcileBatchSize ?? 100,
     );
     await Promise.all(
@@ -339,6 +406,18 @@ export class NotificationManager<
         'Notification deliveries reconciled.',
       );
     }
+  }
+
+  private mountLogRoutes(): void {
+    this.router.get('/logs', async (context) =>
+      context.json({ data: await this.logs.listDetails() }),
+    );
+    this.router.get('/logs/:id', async (context) => {
+      const details = await this.logs.get(context.req.param('id'));
+      return details
+        ? context.json({ data: details })
+        : context.json({ error: 'Notification log not found.' }, 404);
+    });
   }
 }
 
@@ -359,4 +438,27 @@ function stableRecipientKey(recipient: object): string {
     left.localeCompare(right),
   );
   return JSON.stringify(Object.fromEntries(entries));
+}
+
+function stableHash(value: unknown): string {
+  return createHash('sha256').update(canonicalJson(value)).digest('hex');
+}
+
+function stableUuid(value: string): string {
+  const hex = stableHash(value).slice(0, 32).split('');
+  hex[12] = '5';
+  hex[16] = ((Number.parseInt(hex[16] ?? '0', 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8).join('')}-${hex.slice(8, 12).join('')}-${hex.slice(12, 16).join('')}-${hex.slice(16, 20).join('')}-${hex.slice(20).join('')}`;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }

@@ -80,6 +80,11 @@ export interface SmsRecipient {
 export interface SmsMessage {
   readonly text: string;
 }
+
+export interface PreparedSmsMessage {
+  readonly to: string;
+  readonly text: string;
+}
 ```
 
 随后把 `sms` 加入应用的 Channel map：
@@ -102,7 +107,12 @@ import type {
   ProviderSendResult,
 } from '@nocobase/notification';
 
-export function createSmsChannelDefinition(): NotificationChannelDefinition<SmsChannelConfig> {
+export function createSmsChannelDefinition(): NotificationChannelDefinition<
+  SmsChannelConfig,
+  SmsRecipient,
+  SmsMessage,
+  PreparedSmsMessage
+> {
   return {
     type: 'sms',
     async createChannel() {
@@ -113,7 +123,8 @@ export function createSmsChannelDefinition(): NotificationChannelDefinition<SmsC
           readonly notificationId: string;
           readonly recipient: SmsRecipient;
           readonly message: SmsMessage;
-        }): Promise<object> {
+          readonly signal: AbortSignal;
+        }): Promise<PreparedSmsMessage> {
           if (!input.recipient.phoneNumber) {
             throw new Error('SMS phone number is required.');
           }
@@ -131,7 +142,10 @@ export function createSmsChannelDefinition(): NotificationChannelDefinition<SmsC
   };
 }
 
-export function createExampleSmsProviderDefinition(): NotificationProviderDefinition<SmsProviderConfig> {
+export function createExampleSmsProviderDefinition(): NotificationProviderDefinition<
+  SmsProviderConfig,
+  PreparedSmsMessage
+> {
   return {
     type: 'example-sms',
     async createProvider(_context, config) {
@@ -139,13 +153,12 @@ export function createExampleSmsProviderDefinition(): NotificationProviderDefini
       return {
         name: config.name,
         type: 'example-sms',
-        async send(message: object): Promise<ProviderSendResult> {
-          const value = message as {
-            readonly to: string;
-            readonly text: string;
-          };
+        async send(input): Promise<ProviderSendResult> {
           try {
-            const response = await client.send(value);
+            const response = await client.send(input.message, {
+              signal: input.signal,
+              idempotencyKey: input.idempotencyKey,
+            });
             return { status: 'accepted', providerMessageId: response.id };
           } catch (error) {
             return {
@@ -154,7 +167,7 @@ export function createExampleSmsProviderDefinition(): NotificationProviderDefini
                 category: 'provider',
                 message: error instanceof Error ? error.message : String(error),
               },
-              allowNextProvider: true,
+              disposition: 'next_provider',
             };
           }
         },
@@ -184,7 +197,7 @@ export function createExampleSmsProviderDefinition(): NotificationProviderDefini
 | `failed`             | 供应商明确拒绝或请求确定失败 |
 | `submission_unknown` | 无法判断供应商是否已接受请求 |
 
-确定失败时，可以通过 `allowNextProvider` 决定是否继续尝试配置中的下一个 Provider。
+确定失败时，通过 `disposition` 告诉核心如何调度：`never` 直接结束，`same_provider` 持久化退避后重试当前 Provider，`next_provider` 尝试快照中的下一个 Provider。
 
 ```ts
 return {
@@ -194,7 +207,7 @@ return {
     category: 'provider',
     message: 'The phone number is invalid.',
   },
-  allowNextProvider: false,
+  disposition: 'never',
 };
 ```
 
@@ -213,7 +226,7 @@ return {
 
 :::warning 注意
 
-如果 `Provider.send()` 直接抛出异常，Manager 会按不允许继续的失败处理。需要继续尝试下一个 Provider 时，请捕获异常并返回 `failed` 和 `allowNextProvider: true`。
+如果 `Provider.send()` 直接抛出异常，Manager 会按 `never` 处理。Provider 每次只执行一次提交；重试、退避和 fallback 由核心管理。
 
 `submission_unknown` 不会继续调用下一个 Provider，以免同一条消息被重复发送。
 

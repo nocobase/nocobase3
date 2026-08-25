@@ -35,6 +35,10 @@ export class MemoryInAppStore implements InAppStore {
     readonly message: InAppMessage;
     readonly createdAt: string;
   }): Promise<InAppItem> {
+    const existing = [...this.items.values()].find(
+      (item) => item.deliveryId === input.deliveryId,
+    );
+    if (existing) return existing;
     const item: InAppItem = {
       id: randomUUID(),
       deliveryId: input.deliveryId,
@@ -151,11 +155,22 @@ export class DatabaseInAppStore implements InAppStore {
       updatedAt: input.createdAt,
       version: 1,
     };
-    await this.database
-      .query()
-      .insertInto<ItemRow>('notificationInAppItems')
-      .values(toRow(item))
-      .execute();
+    try {
+      await this.database
+        .query()
+        .insertInto<ItemRow>('notificationInAppItems')
+        .values(toRow(item))
+        .execute();
+    } catch (error) {
+      const existing = await this.database
+        .query()
+        .selectFrom<ItemRow>('notificationInAppItems')
+        .selectAll()
+        .where('deliveryId', '=', input.deliveryId)
+        .executeTakeFirst<ItemRow>();
+      if (existing) return fromRow(existing);
+      throw error;
+    }
     return item;
   }
   async list(input: {

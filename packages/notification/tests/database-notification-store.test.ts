@@ -26,7 +26,9 @@ describe('DatabaseNotificationStore', () => {
     const bundle = createBundle();
     await store.create(bundle);
 
-    await expect(store.listPending()).resolves.toMatchObject([
+    await expect(
+      store.listReady('2026-08-24T00:00:00.000Z'),
+    ).resolves.toMatchObject([
       {
         id: 'delivery-1',
         providerChain: ['primary', 'secondary'],
@@ -40,7 +42,7 @@ describe('DatabaseNotificationStore', () => {
       '2026-08-24T00:01:00.000Z',
     );
     expect(claimed).toMatchObject({
-      status: 'sending',
+      status: 'preparing',
       leaseToken: 'lease-1',
       version: 2,
     });
@@ -49,26 +51,33 @@ describe('DatabaseNotificationStore', () => {
     ).resolves.toBeUndefined();
 
     const attempt = createAttempt();
-    const started = await store.startAttempt(claimed!, attempt);
+    const started = await store.startAttempt(
+      claimed!,
+      attempt,
+      '2026-08-24T00:01:00.000Z',
+    );
     expect(started).toMatchObject({ attemptCount: 1, version: 3 });
     await expect(
-      store.startAttempt(claimed!, { ...attempt, id: 'attempt-stale' }),
+      store.startAttempt(
+        claimed!,
+        { ...attempt, id: 'attempt-stale' },
+        '2026-08-24T00:01:00.000Z',
+      ),
     ).resolves.toBeUndefined();
 
     const finishedAttempt: NotificationAttemptRecord = {
       ...attempt,
-      status: 'sent',
+      status: 'accepted',
       finishedAt: '2026-08-24T00:00:02.000Z',
       providerMessageId: 'provider-message-1',
     };
-    await store.finishAttempt(finishedAttempt);
-    await expect(store.listAttempts('delivery-1')).resolves.toEqual([
+    const finished = await store.finishAttemptAndDelivery(
       finishedAttempt,
-    ]);
-
-    const finished = await store.finishDelivery(started!, 'sent');
+      started!,
+      'accepted',
+    );
     expect(finished).toMatchObject({
-      status: 'sent',
+      status: 'accepted',
       leaseToken: undefined,
       leaseExpiresAt: undefined,
       version: 4,
@@ -79,7 +88,7 @@ describe('DatabaseNotificationStore', () => {
     });
   });
 
-  it('marks an expired lease as unknown', async () => {
+  it('returns an expired preparation lease to pending', async () => {
     await store.create(createBundle());
     await store.claimDelivery(
       'delivery-1',
@@ -91,14 +100,55 @@ describe('DatabaseNotificationStore', () => {
       store.recoverExpired('2026-08-24T00:02:00.000Z'),
     ).resolves.toBe(1);
     await expect(store.getDelivery('delivery-1')).resolves.toMatchObject({
-      status: 'unknown',
-      lastError: {
-        code: 'LEASE_EXPIRED',
-      },
+      status: 'pending',
     });
     await expect(store.getLog('notification-1')).resolves.toMatchObject({
-      status: 'unknown',
+      status: 'pending',
     });
+  });
+
+  it('marks an expired Provider submission lease as unknown', async () => {
+    await store.create(createBundle());
+    const claimed = await store.claimDelivery(
+      'delivery-1',
+      'expired-submission',
+      '2026-08-24T00:01:00.000Z',
+    );
+    await store.startAttempt(
+      claimed!,
+      createAttempt(),
+      '2026-08-24T00:01:00.000Z',
+    );
+
+    await expect(
+      store.recoverExpired('2026-08-24T00:02:00.000Z'),
+    ).resolves.toBe(1);
+    await expect(store.getDelivery('delivery-1')).resolves.toMatchObject({
+      status: 'unknown',
+      lastError: { code: 'LEASE_EXPIRED' },
+    });
+    await expect(store.listAttempts('delivery-1')).resolves.toMatchObject([
+      {
+        id: 'attempt-1',
+        status: 'unknown',
+        finishedAt: '2026-08-24T00:02:00.000Z',
+        error: { code: 'LEASE_EXPIRED' },
+      },
+    ]);
+    await expect(
+      store.finishAttemptAndDelivery(
+        {
+          ...createAttempt(),
+          status: 'accepted',
+          finishedAt: '2026-08-24T00:03:00.000Z',
+        },
+        (await store.getDelivery('delivery-1'))!,
+        'accepted',
+      ),
+    ).resolves.toBeUndefined();
+    await expect(store.listAttempts('delivery-1')).resolves.toMatchObject([
+      { status: 'unknown' },
+    ]);
   });
 });
 
@@ -115,6 +165,7 @@ function createBundle(): NotificationLogBundle {
     providerCursor: 0,
     attemptCount: 0,
     status: 'pending',
+    idempotencyKey: 'notification-1:delivery-1',
     createdAt,
     updatedAt: createdAt,
     version: 1,
@@ -139,7 +190,7 @@ function createAttempt(): NotificationAttemptRecord {
     sequence: 1,
     providerName: 'primary',
     providerType: 'fake',
-    status: 'sending',
+    status: 'submitting',
     startedAt: '2026-08-24T00:00:01.000Z',
   };
 }

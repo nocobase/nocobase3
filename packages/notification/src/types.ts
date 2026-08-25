@@ -29,6 +29,7 @@ export type NotificationMessageInput<TChannels extends NotificationChannelMap> =
 export interface NotificationSendInput<
   TChannels extends NotificationChannelMap,
 > {
+  readonly idempotencyKey?: string;
   readonly source?: {
     readonly type: string;
     readonly referenceId?: string;
@@ -42,11 +43,18 @@ export interface NotificationSendInput<
 
 export interface NotificationSendResult {
   readonly notificationId: string;
-  readonly status: 'pending';
+  readonly status:
+    'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';
   readonly deliveries: readonly {
     readonly id: string;
     readonly channel: string;
-    readonly status: 'pending';
+    readonly status:
+      | 'pending'
+      | 'preparing'
+      | 'submitting'
+      | 'accepted'
+      | 'failed'
+      | 'unknown';
   }[];
 }
 
@@ -72,6 +80,9 @@ export interface NotificationProviderSendError {
   readonly category?: string;
 }
 
+export type NotificationRetryDisposition =
+  'never' | 'same_provider' | 'next_provider';
+
 export type ProviderSendResult =
   | {
       readonly status: 'accepted';
@@ -80,17 +91,30 @@ export type ProviderSendResult =
   | {
       readonly status: 'failed';
       readonly error: NotificationProviderSendError;
-      readonly allowNextProvider: boolean;
+      readonly disposition: NotificationRetryDisposition;
+      readonly retryAfterMs?: number;
     }
   | {
       readonly status: 'submission_unknown';
       readonly error: NotificationProviderSendError;
     };
 
+export interface NotificationProviderSendInput<TMessage = object> {
+  readonly message: TMessage;
+  readonly notificationId: string;
+  readonly deliveryId: string;
+  readonly attemptId: string;
+  readonly idempotencyKey: string;
+  readonly deadline: string;
+  readonly signal: AbortSignal;
+}
+
 export interface NotificationProvider<TMessage = object> {
   readonly name: string;
   readonly type: string;
-  send(message: TMessage): Promise<ProviderSendResult>;
+  send(
+    input: NotificationProviderSendInput<TMessage>,
+  ): Promise<ProviderSendResult>;
   close?(): Promise<void>;
 }
 
@@ -105,6 +129,7 @@ export interface NotificationChannel<
     readonly notificationId: string;
     readonly recipient: TRecipient;
     readonly message: TMessage;
+    readonly signal: AbortSignal;
   }): Promise<TPrepared>;
   mount?(router: Hono): void;
 }
@@ -124,12 +149,13 @@ export interface NotificationProviderDefinition<
     readonly name: string;
     readonly enabled?: boolean;
   } = NotificationProviderConfig,
+  TPrepared = object,
 > {
   readonly type: TConfig['type'];
   createProvider(
     context: NotificationProviderContext,
     config: TConfig,
-  ): Promise<NotificationProvider>;
+  ): Promise<NotificationProvider<TPrepared>>;
 }
 
 export interface NotificationChannelDefinition<
@@ -142,12 +168,15 @@ export interface NotificationChannelDefinition<
       readonly enabled?: boolean;
     }[];
   } = NotificationChannelConfig,
+  TRecipient = object,
+  TMessage = object,
+  TPrepared = object,
 > {
   readonly type: TConfig['type'];
   createChannel(
     context: NotificationChannelContext,
     config: TConfig,
-  ): Promise<NotificationChannel>;
+  ): Promise<NotificationChannel<TRecipient, TMessage, TPrepared>>;
 }
 
 export interface NotificationManagerOptions<
@@ -162,4 +191,12 @@ export interface NotificationManagerOptions<
   readonly store?: NotificationStore;
   readonly reconcileIntervalMs?: number;
   readonly reconcileBatchSize?: number;
+  readonly providerTimeoutMs?: number;
+  readonly leaseMs?: number;
+  readonly retry?: {
+    readonly maxAttemptsPerProvider?: number;
+    readonly initialDelayMs?: number;
+    readonly maxDelayMs?: number;
+    readonly jitterRatio?: number;
+  };
 }
