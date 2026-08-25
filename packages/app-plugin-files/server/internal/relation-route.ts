@@ -12,7 +12,6 @@ import type {
 } from '../../protocol.js';
 import type { CreateFileRouteOptions, FileRelationBinding } from '../types.js';
 import type { FilesDataPlane } from './data-plane.js';
-import { storageUnavailable } from './errors.js';
 import {
   readCapabilityScope,
   readConfigName,
@@ -34,7 +33,6 @@ import {
   fileBindingConflict,
   fileLimitExceeded,
   fileReferenceNotFound,
-  FileRouteError,
   invalidFileRoute,
 } from './route-errors.js';
 import {
@@ -242,7 +240,7 @@ async function handleCreateUpload(
     }
   } catch (error) {
     await bestEffortCancel(state, attempt.transfer);
-    throw error instanceof FileRouteError ? error : storageUnavailable();
+    throw error;
   }
 
   return context.json<CreateBusinessFileResponse>(
@@ -341,7 +339,10 @@ async function handleComplete(
         connection,
       ),
   });
-  if (completed.binding?.outcome !== 'committed') {
+  if (completed.binding === undefined) {
+    throw new Error('Files relation completion returned no binding result.');
+  }
+  if (completed.binding.outcome !== 'committed') {
     throw fileBindingConflict();
   }
   return context.json({ file: completed.file });

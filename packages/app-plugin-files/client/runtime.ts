@@ -60,6 +60,13 @@ export async function executeFileUploadPlan(
   return completeUpload(plan);
 }
 
+export async function completeFileUploadPlan(
+  plan: FileUploadPlan,
+): Promise<StoredFile> {
+  assertUploadPlan(plan);
+  return completeUpload(plan);
+}
+
 async function completeUpload(plan: FileUploadPlan): Promise<StoredFile> {
   try {
     try {
@@ -97,7 +104,6 @@ function shouldRetryComplete(error: unknown): boolean {
   return (
     error instanceof FileClientError &&
     error.operation === 'complete' &&
-    error.code !== 'FILE_BINDING_CONFLICT' &&
     (error.status === 0 || error.status >= 500)
   );
 }
@@ -107,8 +113,7 @@ function shouldCancelComplete(error: unknown): boolean {
     error instanceof FileClientError &&
     error.operation === 'complete' &&
     error.status >= 400 &&
-    error.status < 500 &&
-    error.code !== 'FILE_BINDING_CONFLICT'
+    error.status < 500
   );
 }
 

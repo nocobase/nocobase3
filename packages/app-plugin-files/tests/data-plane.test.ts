@@ -545,6 +545,39 @@ describe('Files S3-compatible data plane', () => {
     });
     expect(responseBody).not.toContain('signature=secret');
   });
+
+  it('leaves unknown completion database errors to the App handler', async () => {
+    const fixture = await createTestRuntime();
+    const plan = await fixture.dataPlane.createUploadPlan({
+      name: 'database-error.txt',
+      size: 4,
+      contentType: 'text/plain',
+    });
+    expect(
+      (
+        await fixture.app.request(plan.upload.url, {
+          method: 'PUT',
+          headers: plan.upload.headers,
+          body: 'data',
+        })
+      ).status,
+    ).toBe(200);
+    fixture.app.onError((_error, context) =>
+      context.json({ error: 'Internal Server Error' }, 500),
+    );
+    await fixture.database.builder().dropCollection('files');
+
+    const response = await fixture.app.request(plan.complete.url, {
+      method: 'POST',
+    });
+    const responseBody = await response.text();
+    expect(response.status).toBe(500);
+    expect(JSON.parse(responseBody)).toEqual({
+      error: 'Internal Server Error',
+    });
+    expect(responseBody).not.toContain('no such table');
+    expect(responseBody).not.toContain('STORAGE_UNAVAILABLE');
+  });
 });
 
 describe.each(['local', 's3'] as const)(
@@ -594,7 +627,7 @@ describe.each(['local', 's3'] as const)(
 
       await expect(
         fixture.dataPlane.completeUpload(attempt.transfer, binding),
-      ).rejects.toMatchObject({ code: 'UPLOAD_FAILED' });
+      ).rejects.toMatchObject({ code: 'UPLOAD_FAILED', status: 503 });
       await expect(
         fixture.kernel.getFile(attempt.file.id),
       ).resolves.toMatchObject({ status: 'pending' });
@@ -652,7 +685,7 @@ describe.each(['local', 's3'] as const)(
             throw new Error('simulated binding failure');
           },
         }),
-      ).rejects.toMatchObject({ code: 'UPLOAD_FAILED' });
+      ).rejects.toMatchObject({ code: 'UPLOAD_FAILED', status: 503 });
       await fixture.dataPlane.cancelUpload(attempt.transfer);
 
       await expect(

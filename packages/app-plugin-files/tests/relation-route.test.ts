@@ -203,8 +203,49 @@ describe('relation binding scoped file routes', () => {
     ).toMatchObject({ status: 'ready' });
   });
 
-  it('maps exhausted retryable reservation errors to storage unavailable', async () => {
+  it('retries relation completion after a persistence result is uncertain', async () => {
+    const fixture = await createFixture();
+    const upload = await createUpload(fixture, ORDER_ONE, 'retry.txt', 5);
+    await putLocal(fixture, upload, 'retry');
+    const transaction = fixture.database.transaction.bind(fixture.database);
+    let failNextTransaction = true;
+    fixture.database.transaction = async (operation, connection) => {
+      if (failNextTransaction) {
+        failNextTransaction = false;
+        throw new Error('private database cause');
+      }
+      return transaction(operation, connection);
+    };
+
+    const failed = await completeUpload(fixture, upload);
+    const failedBody = await failed.text();
+    expect(failed.status).toBe(503);
+    expect(JSON.parse(failedBody)).toEqual({
+      error: 'The uploaded file could not be committed.',
+      code: 'UPLOAD_FAILED',
+    });
+    expect(failedBody).not.toContain('private database cause');
+    await expect(
+      getFilesRuntimeKernel(fixture.runtime).getFile(upload.file.id),
+    ).resolves.toMatchObject({ status: 'pending' });
+
+    const retry = await completeUpload(fixture, upload);
+    expect(retry.status).toBe(200);
+    expect(await relationRows(fixture, ORDER_ONE)).toEqual([
+      expect.objectContaining({
+        fileId: upload.file.id,
+        reservationExpiresAt: null,
+      }),
+    ]);
+    expect((await completeUpload(fixture, upload)).status).toBe(200);
+    expect(await relationRows(fixture, ORDER_ONE)).toHaveLength(1);
+  });
+
+  it('leaves reservation database failures to the App error handler', async () => {
     const fixture = await createFixture({ maxFiles: 1 });
+    fixture.app.onError((_error, context) =>
+      context.json({ error: 'Internal Server Error' }, 500),
+    );
     fixture.database.transaction = async () => {
       throw Object.assign(new Error('database is busy'), {
         code: 'SQLITE_BUSY',
@@ -220,10 +261,13 @@ describe('relation binding scoped file routes', () => {
       }),
     );
 
-    expect(response.status).toBe(503);
-    await expect(json<FileErrorResponse>(response)).resolves.toMatchObject({
-      code: 'STORAGE_UNAVAILABLE',
+    expect(response.status).toBe(500);
+    const responseBody = await response.text();
+    expect(JSON.parse(responseBody)).toEqual({
+      error: 'Internal Server Error',
     });
+    expect(responseBody).not.toContain('database is busy');
+    expect(responseBody).not.toContain('STORAGE_UNAVAILABLE');
   });
 
   it('runs Provider PUT simulation then scoped S3 complete and binds', async () => {

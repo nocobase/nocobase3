@@ -8,7 +8,11 @@ import {
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { executeFileUploadPlan } from '@nocobase/app-plugin-files/client';
+import {
+  completeFileUploadPlan,
+  executeFileUploadPlan,
+  FileClientError,
+} from '@nocobase/app-plugin-files/client';
 
 import { normalizeFileBasePath } from '../../client/extensions/nocobase-file-upload/base-path';
 import { appFileClient } from '../../client/extensions/nocobase-file-upload/app-client';
@@ -36,6 +40,7 @@ vi.mock('@nocobase/app-plugin-files/client', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@nocobase/app-plugin-files/client')
   >()),
+  completeFileUploadPlan: vi.fn(),
   executeFileUploadPlan: vi.fn(),
 }));
 
@@ -66,6 +71,7 @@ afterEach(() => {
     .NOCOBASE_PORTAL_BASE;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.mocked(completeFileUploadPlan).mockReset();
   vi.mocked(executeFileUploadPlan).mockReset();
 });
 
@@ -275,18 +281,22 @@ describe('V3 file upload Registry', () => {
     );
   });
 
-  it('keeps a failed upload retryable and commits a successful retry', async () => {
+  it('starts a new upload after a stable complete failure was cancelled', async () => {
     const ready = readyFile('retry-upload', 'retry.txt', 'text/plain');
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn<typeof fetch>()
-        .mockImplementation(async () =>
-          jsonResponse(uploadResponse('retry-upload')),
-        ),
-    );
+    const request = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () =>
+        jsonResponse(uploadResponse('retry-upload')),
+      );
+    vi.stubGlobal('fetch', request);
     vi.mocked(executeFileUploadPlan)
-      .mockRejectedValueOnce(new Error('Upload failed'))
+      .mockRejectedValueOnce(
+        new FileClientError('The upload type is not allowed.', {
+          code: 'UPLOAD_TYPE_NOT_ALLOWED',
+          status: 400,
+          operation: 'complete',
+        }),
+      )
       .mockResolvedValueOnce(ready);
     const onChange = vi.fn();
     const onUploadError = vi.fn();
@@ -307,7 +317,7 @@ describe('V3 file upload Registry', () => {
       expect.objectContaining({ status: 'error' }),
     ]);
     expect(onUploadError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Upload failed' }),
+      expect.objectContaining({ message: 'The upload type is not allowed.' }),
       expect.any(File),
     );
 
@@ -315,9 +325,103 @@ describe('V3 file upload Registry', () => {
     if (!key) throw new Error('Expected a retryable upload item.');
     await act(async () => result.current.retryItem(key));
 
+    expect(request).toHaveBeenCalledTimes(2);
     expect(executeFileUploadPlan).toHaveBeenCalledTimes(2);
+    expect(completeFileUploadPlan).not.toHaveBeenCalled();
     expect(onChange).toHaveBeenCalledWith([ready]);
     expect(result.current.items).toEqual([]);
+  });
+
+  it('retries field replacement completion with the original plan', async () => {
+    const original = readyFile('old-avatar', 'old.txt', 'text/plain');
+    const ready = readyFile('new-avatar', 'new.txt', 'text/plain');
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse(uploadResponse('new-avatar')));
+    vi.stubGlobal('fetch', request);
+    vi.mocked(executeFileUploadPlan).mockRejectedValueOnce(
+      new FileClientError('File complete failed with status 503.', {
+        code: 'STORAGE_UNAVAILABLE',
+        status: 503,
+        operation: 'complete',
+      }),
+    );
+    vi.mocked(completeFileUploadPlan).mockResolvedValueOnce(ready);
+    const onChange = vi.fn();
+    const file = testFile('new.txt', 'text/plain');
+    const { result } = renderHook(() =>
+      useFileUpload({
+        basePath: 'employees/employee-1/avatar',
+        value: [original],
+        onChange,
+        messages,
+      }),
+    );
+
+    await act(async () => result.current.replaceFile(original.id, file));
+    expect(result.current.items).toEqual([
+      expect.objectContaining({ key: original.id, status: 'done' }),
+      expect.objectContaining({
+        status: 'error',
+        replaceFileId: original.id,
+      }),
+    ]);
+
+    const retryKey = result.current.items.find(
+      (item) => item.status === 'error',
+    )?.key;
+    if (!retryKey) throw new Error('Expected a retryable replacement.');
+    await act(async () => result.current.retryItem(retryKey));
+
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(executeFileUploadPlan).toHaveBeenCalledTimes(1);
+    expect(completeFileUploadPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 'new-avatar' }),
+    );
+    expect(onChange).toHaveBeenCalledWith([ready]);
+  });
+
+  it('retries relation addition completion with the original plan', async () => {
+    const existing = readyFile('existing-file', 'existing.txt', 'text/plain');
+    const ready = readyFile('added-file', 'added.txt', 'text/plain');
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse(uploadResponse('added-file')));
+    vi.stubGlobal('fetch', request);
+    vi.mocked(executeFileUploadPlan).mockRejectedValueOnce(
+      new FileClientError('File complete transport failed.', {
+        code: 'UPLOAD_FAILED',
+        status: 0,
+        operation: 'complete',
+      }),
+    );
+    vi.mocked(completeFileUploadPlan).mockResolvedValueOnce(ready);
+    const onChange = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({
+        basePath: 'orders/order-1/files',
+        value: [existing],
+        onChange,
+        multiple: true,
+        messages,
+      }),
+    );
+
+    await act(async () =>
+      result.current.addFiles([testFile('added.txt', 'text/plain')]),
+    );
+    const retryKey = result.current.items.find(
+      (item) => item.status === 'error',
+    )?.key;
+    if (!retryKey) throw new Error('Expected a retryable relation upload.');
+    await act(async () => result.current.retryItem(retryKey));
+
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(executeFileUploadPlan).toHaveBeenCalledTimes(1);
+    expect(completeFileUploadPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 'added-file' }),
+    );
+    expect(onChange).toHaveBeenCalledWith([existing, ready]);
   });
 
   it('renders maxFiles, disabled, and readOnly UX states', () => {

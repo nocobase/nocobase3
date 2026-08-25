@@ -247,6 +247,11 @@ class FlydriveFilesStorage<TDriver extends 'local' | 's3'> {
 }
 
 const keyNormalizer = new KeyNormalizer();
+const flydriveErrors = new WeakSet<object>();
+
+export function isFlydriveStorageError(error: unknown): boolean {
+  return isObject(error) && flydriveErrors.has(error);
+}
 
 export function normalizeStorageKey(key: string): string {
   return keyNormalizer.normalize(key);
@@ -309,8 +314,20 @@ async function callFlydrive<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    throw flydriveCause(error);
+    throw markFlydriveError(flydriveCause(error));
   }
+}
+
+function markFlydriveError(error: unknown): unknown {
+  if (isObject(error)) {
+    flydriveErrors.add(error);
+    return error;
+  }
+  const wrapped = new Error('Flydrive storage operation failed.', {
+    cause: error,
+  });
+  flydriveErrors.add(wrapped);
+  return wrapped;
 }
 
 function flydriveCause(error: unknown): unknown {
@@ -323,4 +340,10 @@ function flydriveCause(error: unknown): unknown {
     return flydriveCause(error.cause);
   }
   return error;
+}
+
+function isObject(value: unknown): value is object {
+  return (
+    (typeof value === 'object' && value !== null) || typeof value === 'function'
+  );
 }

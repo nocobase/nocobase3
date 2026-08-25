@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  completeFileUploadPlan,
   executeFileUploadPlan,
   FileClientError,
   type FileClientOperation,
@@ -33,7 +34,11 @@ describe('@nocobase/app-plugin-files contracts', () => {
     expect(Object.keys(serverEntry)).toContain('createFileService');
     expect(Object.keys(serverEntry)).toContain('createCoreFilesRoute');
     expect(Object.keys(clientEntry)).toEqual(
-      expect.arrayContaining(['FileClientError', 'executeFileUploadPlan']),
+      expect.arrayContaining([
+        'completeFileUploadPlan',
+        'FileClientError',
+        'executeFileUploadPlan',
+      ]),
     );
     expect(Object.keys(serverEntry)).not.toEqual(
       expect.arrayContaining([
@@ -90,7 +95,10 @@ describe('@nocobase/app-plugin-files contracts', () => {
     expect(plan.upload.method).toBe('PUT');
   });
 
-  it('publishes only the stable client helper, error, and protocol types', () => {
+  it('publishes only stable client helpers, error, and protocol types', () => {
+    expectTypeOf(completeFileUploadPlan).returns.toEqualTypeOf<
+      Promise<import('@nocobase/app-plugin-files/protocol').StoredFile>
+    >();
     expectTypeOf(executeFileUploadPlan).returns.toEqualTypeOf<
       Promise<import('@nocobase/app-plugin-files/protocol').StoredFile>
     >();

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  completeFileUploadPlan,
   executeFileUploadPlan,
   FileClientError,
   type FileUploadProgress,
@@ -237,7 +238,7 @@ describe('executeFileUploadPlan', () => {
     });
   });
 
-  it('does not cancel after a complete binding conflict', async () => {
+  it('cancels after a complete binding conflict', async () => {
     FakeXMLHttpRequest.enqueue({ status: 200 });
     FakeXMLHttpRequest.enqueue({
       status: 409,
@@ -246,6 +247,7 @@ describe('executeFileUploadPlan', () => {
         code: 'FILE_BINDING_CONFLICT',
       }),
     });
+    FakeXMLHttpRequest.enqueue({ status: 409 });
 
     await expect(
       executeFileUploadPlan(localPlan('complete-failure'), testFile()),
@@ -257,7 +259,7 @@ describe('executeFileUploadPlan', () => {
 
     expect(
       FakeXMLHttpRequest.requests.map((request) => request.method),
-    ).toEqual(['PUT', 'POST']);
+    ).toEqual(['PUT', 'POST', 'DELETE']);
   });
 
   it.each(['UPLOAD_TYPE_NOT_ALLOWED', 'UPLOAD_SIZE_EXCEEDED'])(
@@ -343,6 +345,23 @@ describe('executeFileUploadPlan', () => {
     ]);
   });
 
+  it('retries completion without uploading the file again', async () => {
+    const ready = storedFile('complete-only-retry');
+    FakeXMLHttpRequest.enqueue({ status: 503 });
+    FakeXMLHttpRequest.enqueue({
+      status: 200,
+      responseText: JSON.stringify({ file: ready }),
+    });
+
+    await expect(
+      completeFileUploadPlan(localPlan('complete-only-retry')),
+    ).resolves.toEqual(ready);
+
+    expect(
+      FakeXMLHttpRequest.requests.map((request) => request.method),
+    ).toEqual(['POST', 'POST']);
+  });
+
   it('adopts a successful complete even when abort fires after it starts', async () => {
     const ready = storedFile('complete-abort');
     FakeXMLHttpRequest.enqueue({ status: 200 });
@@ -389,7 +408,7 @@ describe('executeFileUploadPlan', () => {
 
     expect(
       FakeXMLHttpRequest.requests.map((request) => request.method),
-    ).toEqual(['PUT', 'POST', 'POST']);
+    ).toEqual(['PUT', 'POST', 'POST', 'DELETE']);
   });
 
   it.each([0, 503])(

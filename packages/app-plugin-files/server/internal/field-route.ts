@@ -322,6 +322,9 @@ async function handleComplete(
   if (completed.binding?.outcome === 'record-missing') {
     throw businessRecordNotFound();
   }
+  if (completed.binding === undefined) {
+    throw new Error('Files field completion returned no binding result.');
+  }
   if (completed.binding?.outcome !== 'committed') {
     throw fileBindingConflict();
   }

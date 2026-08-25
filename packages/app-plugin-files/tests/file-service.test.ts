@@ -227,7 +227,7 @@ describe('public FileService', () => {
     await expect(fixture.service.getFile(ready.id)).resolves.toEqual(ready);
   });
 
-  it('cancels a pending file after finalization outlives persistence', async () => {
+  it('retries the same completion after a persistence result is uncertain', async () => {
     const fixture = await createFixture();
     const plan = await fixture.service.createUpload({
       name: 'persistence-failure.txt',
@@ -253,9 +253,14 @@ describe('public FileService', () => {
       return transaction(operation, connection);
     };
 
-    expect(
-      (await fixture.app.request(plan.complete.url, { method: 'POST' })).status,
-    ).toBe(409);
+    const failed = await fixture.app.request(plan.complete.url, {
+      method: 'POST',
+    });
+    expect(failed.status).toBe(503);
+    await expect(failed.json()).resolves.toEqual({
+      error: 'The uploaded file could not be committed.',
+      code: 'UPLOAD_FAILED',
+    });
     await expect(fixture.service.getFile(plan.fileId)).resolves.toMatchObject({
       status: 'pending',
     });
@@ -263,14 +268,15 @@ describe('public FileService', () => {
       code: 'FILE_NOT_READY',
     });
 
-    await fixture.service.cancelUpload(plan.fileId);
-
+    expect(
+      (await fixture.app.request(plan.complete.url, { method: 'POST' })).status,
+    ).toBe(200);
     await expect(fixture.service.getFile(plan.fileId)).resolves.toMatchObject({
-      status: 'failed',
+      status: 'ready',
     });
-    await expect(fixture.service.openFile(plan.fileId)).rejects.toMatchObject({
-      code: 'FILE_NOT_READY',
-    });
+    await expect(
+      readWebStream((await fixture.service.openFile(plan.fileId)).stream),
+    ).resolves.toBe('data');
   });
 
   it('uses the public FileServiceError family for Routes and direct calls', async () => {

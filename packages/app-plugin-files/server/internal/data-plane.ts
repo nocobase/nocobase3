@@ -46,6 +46,7 @@ import {
   matchesPublicToken,
 } from './public-access.js';
 import type { InternalFilesStorage } from './storage/types.js';
+import { isFlydriveStorageError } from './storage/index.js';
 import {
   assertStreamUploadPolicy,
   assertUploadPolicy,
@@ -230,7 +231,7 @@ export class FilesDataPlane {
       if (result.outcome === 'failed') {
         throw fileNotReady();
       }
-      throw uploadFailed('The streamed file could not be committed.');
+      throw uploadPersistenceFailed();
     } catch (error) {
       try {
         await this.#kernel.cancelUpload(pending.fileId);
@@ -240,7 +241,7 @@ export class FilesDataPlane {
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
-      throw storageUnavailable();
+      throwMappedStorageError(error);
     } finally {
       source.destroy();
     }
@@ -257,8 +258,8 @@ export class FilesDataPlane {
         file: toStoredFile(record),
         stream: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
       };
-    } catch {
-      throw storageUnavailable();
+    } catch (error) {
+      throwMappedStorageError(error);
     }
   }
 
@@ -326,7 +327,7 @@ export class FilesDataPlane {
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
-      throw storageUnavailable();
+      throwMappedStorageError(error);
     }
   }
 
@@ -455,7 +456,7 @@ export class FilesDataPlane {
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
-      throw uploadFailed('The file upload could not be received.');
+      throwMappedStorageError(error);
     } finally {
       source.destroy();
     }
@@ -503,7 +504,7 @@ export class FilesDataPlane {
       if (isMissingStorageObject(error)) {
         throw uploadFailed('The uploaded object could not be found.');
       }
-      throw storageUnavailable();
+      throwMappedStorageError(error);
     }
 
     await Promise.all(
@@ -525,7 +526,7 @@ export class FilesDataPlane {
       case 'failed':
         throw uploadFailed('The pending upload was cancelled.');
       case 'persistence-failed':
-        throw uploadFailed('The uploaded file could not be committed.');
+        throw uploadPersistenceFailed();
     }
   }
 
@@ -653,8 +654,8 @@ export class FilesDataPlane {
       const stream = await this.#storage.openRead(record.storageKey);
       const body = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
       return new Response(body, { status: 200, headers });
-    } catch {
-      throw storageUnavailable();
+    } catch (error) {
+      throwMappedStorageError(error);
     }
   }
 
@@ -694,8 +695,14 @@ export class FilesDataPlane {
         throw invalidAccess();
       }
       return capability.disposition;
-    } catch {
-      throw invalidAccess();
+    } catch (error) {
+      if (
+        error instanceof ExpiredFileCapabilityError ||
+        error instanceof InvalidFileCapabilityError
+      ) {
+        throw invalidAccess();
+      }
+      throw error;
     }
   }
 
@@ -781,11 +788,12 @@ export class FilesDataPlane {
   }
 
   #errorResponse(error: Error, context: Context): Response {
-    const mapped =
-      error instanceof FilesDataPlaneError ? error : storageUnavailable();
+    if (!(error instanceof FilesDataPlaneError)) {
+      throw error;
+    }
     return context.json<FilesErrorResponseBody>(
-      { error: mapped.message, code: mapped.code },
-      mapped.status,
+      { error: error.message, code: error.code },
+      error.status,
     );
   }
 
@@ -853,14 +861,29 @@ function uploadFailed(message: string): FilesDataPlaneError {
   return new FilesDataPlaneError('UPLOAD_FAILED', 409, message);
 }
 
+function uploadPersistenceFailed(): FilesDataPlaneError {
+  return new FilesDataPlaneError(
+    'UPLOAD_FAILED',
+    503,
+    'The uploaded file could not be committed.',
+  );
+}
+
 function mapPublicAccessKernelError(error: unknown): FilesDataPlaneError {
   if (!(error instanceof PublicAccessKernelError)) {
-    return storageUnavailable();
+    throw error;
   }
   if (error.reason === 'file-not-ready') {
     return fileNotReady();
   }
   return new FilesDataPlaneError('INVALID_ACCESS', 409, error.message);
+}
+
+function throwMappedStorageError(error: unknown): never {
+  if (isFlydriveStorageError(error)) {
+    throw storageUnavailable();
+  }
+  throw error;
 }
 
 function isMissingStorageObject(error: unknown): boolean {

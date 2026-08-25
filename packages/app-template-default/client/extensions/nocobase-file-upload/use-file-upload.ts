@@ -1,4 +1,8 @@
-import { executeFileUploadPlan } from '@nocobase/app-plugin-files/client';
+import {
+  completeFileUploadPlan,
+  executeFileUploadPlan,
+  FileClientError,
+} from '@nocobase/app-plugin-files/client';
 import {
   useCallback,
   useEffect,
@@ -16,6 +20,7 @@ import type {
   CreateScopedFileResponse,
   FileUploadItem,
   FileUploadMessages,
+  FileUploadPlan,
   FileUploadProgress,
   StoredFile,
 } from './types';
@@ -63,6 +68,7 @@ export function useFileUpload({
   const recordsRef = useRef(controlledValue);
   const controllersRef = useRef(new Map<string, AbortController>());
   const attemptKeysRef = useRef(new Set<string>());
+  const completePlansRef = useRef(new Map<string, FileUploadPlan>());
   const [operationError, setOperationError] = useState<Error | null>(null);
   const [attempts, setAttempts] = useState<FileUploadItem[]>([]);
   const items = useMemo(
@@ -88,6 +94,7 @@ export function useFileUpload({
       controllersRef.current.forEach((controller) => controller.abort());
       controllersRef.current.clear();
       attemptKeysRef.current.clear();
+      completePlansRef.current.clear();
     },
     [],
   );
@@ -99,6 +106,7 @@ export function useFileUpload({
       const controller = new AbortController();
       controllersRef.current.set(item.key, controller);
       setOperationError(null);
+      let completePlan = completePlansRef.current.get(item.key);
 
       try {
         const validation = validateFile(source, {
@@ -108,39 +116,55 @@ export function useFileUpload({
         });
         if (!validation.valid) throw new Error(validation.message);
 
-        onUploadStart?.(source);
-        updateAttempt(setAttempts, item.key, (current) => ({
-          ...current,
-          status: 'uploading',
-          error: undefined,
-          progress: { loaded: 0, total: source.size, percentage: 0 },
-        }));
-        const created = await appFileClient.request<CreateScopedFileResponse>(
-          path,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              name: source.name,
-              size: source.size,
-              ...(source.type ? { contentType: source.type } : {}),
-              ...(item.replaceFileId
-                ? { replaceFileId: item.replaceFileId }
-                : {}),
-            }),
-          },
-        );
-        assertCreatedUpload(created);
-        const ready = await executeFileUploadPlan(created.plan, source, {
-          signal: controller.signal,
-          onProgress: (progress) => {
-            updateAttempt(setAttempts, item.key, (current) => ({
-              ...current,
-              status: progress.percentage >= 100 ? 'completing' : 'uploading',
-              progress,
-            }));
-            onUploadProgress?.(progress, source);
-          },
-        });
+        let ready: StoredFile;
+        if (completePlan) {
+          updateAttempt(setAttempts, item.key, (current) => ({
+            ...current,
+            status: 'completing',
+            error: undefined,
+            progress: {
+              loaded: source.size,
+              total: source.size,
+              percentage: 100,
+            },
+          }));
+          ready = await completeFileUploadPlan(completePlan);
+        } else {
+          onUploadStart?.(source);
+          updateAttempt(setAttempts, item.key, (current) => ({
+            ...current,
+            status: 'uploading',
+            error: undefined,
+            progress: { loaded: 0, total: source.size, percentage: 0 },
+          }));
+          const created = await appFileClient.request<CreateScopedFileResponse>(
+            path,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                name: source.name,
+                size: source.size,
+                ...(source.type ? { contentType: source.type } : {}),
+                ...(item.replaceFileId
+                  ? { replaceFileId: item.replaceFileId }
+                  : {}),
+              }),
+            },
+          );
+          assertCreatedUpload(created);
+          completePlan = created.plan;
+          ready = await executeFileUploadPlan(created.plan, source, {
+            signal: controller.signal,
+            onProgress: (progress) => {
+              updateAttempt(setAttempts, item.key, (current) => ({
+                ...current,
+                status: progress.percentage >= 100 ? 'completing' : 'uploading',
+                progress,
+              }));
+              onUploadProgress?.(progress, source);
+            },
+          });
+        }
 
         const nextRecords = replaceRecord(
           recordsRef.current,
@@ -151,6 +175,7 @@ export function useFileUpload({
         recordsRef.current = nextRecords;
         attemptKeysRef.current.delete(item.key);
         controllersRef.current.delete(item.key);
+        completePlansRef.current.delete(item.key);
         setAttempts((current) =>
           current.filter((currentItem) => currentItem.key !== item.key),
         );
@@ -165,6 +190,14 @@ export function useFileUpload({
         attemptKeysRef.current.delete(item.key);
         const cancelled = controller.signal.aborted;
         const resolvedError = toError(error);
+        const retainedPlan = isUncertainCompleteError(error)
+          ? completePlan
+          : undefined;
+        if (retainedPlan) {
+          completePlansRef.current.set(item.key, retainedPlan);
+        } else {
+          completePlansRef.current.delete(item.key);
+        }
         updateAttempt(setAttempts, item.key, (current) => ({
           ...current,
           status: cancelled ? 'cancelled' : 'error',
@@ -215,12 +248,19 @@ export function useFileUpload({
       if (!additions.length) return;
 
       additions.forEach((item) => attemptKeysRef.current.add(item.key));
-      setAttempts((current) => [
-        ...current.filter(
-          (item) => item.status !== 'error' && item.status !== 'cancelled',
-        ),
-        ...additions,
-      ]);
+      setAttempts((current) => {
+        current
+          .filter(
+            (item) => item.status === 'error' || item.status === 'cancelled',
+          )
+          .forEach((item) => completePlansRef.current.delete(item.key));
+        return [
+          ...current.filter(
+            (item) => item.status !== 'error' && item.status !== 'cancelled',
+          ),
+          ...additions,
+        ];
+      });
       for (const item of additions) await runUpload(item);
     },
     [additionCount, canUpload, maxFiles, multiple, runUpload],
@@ -243,6 +283,7 @@ export function useFileUpload({
       return;
     }
     attemptKeysRef.current.delete(key);
+    completePlansRef.current.delete(key);
     updateAttempt(setAttempts, key, (item) => ({
       ...item,
       status: 'cancelled',
@@ -268,6 +309,7 @@ export function useFileUpload({
         controllersRef.current.get(key)?.abort();
         controllersRef.current.delete(key);
         attemptKeysRef.current.delete(key);
+        completePlansRef.current.delete(key);
         setAttempts((current) => current.filter((entry) => entry.key !== key));
         return;
       }
@@ -362,6 +404,16 @@ function assertCreatedUpload(value: CreateScopedFileResponse): void {
 
 function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
+}
+
+function isUncertainCompleteError(value: unknown): boolean {
+  return (
+    value instanceof FileClientError &&
+    value.operation === 'complete' &&
+    (value.status === 0 ||
+      value.status >= 500 ||
+      (value.status >= 200 && value.status < 300))
+  );
 }
 
 function updateAttempt(
