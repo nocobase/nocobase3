@@ -2,10 +2,10 @@ import { Command, Flags } from '@oclif/core';
 import { resolveAppScript } from '../../lib/app-script.ts';
 import { runAttached } from '../../lib/run-command.ts';
 
-export default class AppDev extends Command {
-  static override summary = 'Start the app in local development mode.';
+export default class AppStart extends Command {
+  static override summary = 'Start the app in production mode.';
   static override description =
-    "Runs the app's dev script with the package manager the project already uses. A hub is not required for local development.";
+    "Runs the app's start script, which serves what `nb3 app build` produced. Build first: unlike `nb3 app dev`, this does not compile sources, and starting without a build fails.";
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
@@ -26,11 +26,11 @@ export default class AppDev extends Command {
   };
 
   public async run(): Promise<void> {
-    const { flags } = await this.parse(AppDev);
+    const { flags } = await this.parse(AppStart);
     const { args, env, packageManager, project } = await resolveAppScript({
       address: { host: flags.host, port: flags.port },
       dir: flags.dir,
-      script: 'dev',
+      script: 'start',
     });
 
     this.log(`Starting ${project.config.name} with ${packageManager}...\n`);

@@ -9,6 +9,8 @@ App 是用户实际开发的应用，比如 CRM、客服工作台、数据看板
 ```text
 nb3 app create    创建本地 App 源码
 nb3 app dev       本地开发 App
+nb3 app build     构建生产产物
+nb3 app start     以生产模式运行已构建的产物
 nb3 app info      查看 App 信息
 nb3 app config    查看或修改 App 配置
 nb3 app destroy   删除本地 App
@@ -83,6 +85,32 @@ nb3 app dev --host 0.0.0.0
 在 App 的任意子目录下执行都可以，命令会向上查找 `.nb3/` 定位项目根目录。
 
 如果只是本地开发，到这里就够了，不需要安装 Hub。
+
+## 构建和运行生产产物
+
+```bash
+nb3 app build
+nb3 app start
+```
+
+`build` 运行 App 的 `build` 脚本，产物写到 `dist/`；`start` 运行 `start` 脚本，直接伺服这份产物。和 `dev` 不同，`start` 不会编译源码，没有先 build 就 start 会报错。
+
+`start` 同样支持指定端口和地址：
+
+```bash
+nb3 app start --port 3100
+nb3 app start --host 0.0.0.0
+```
+
+`--port` 和 `--host` 通过环境变量传给脚本，而不是拼在命令行上——`pnpm run start -- --port 3100` 会把 `--` 原样交给脚本，npm 和 yarn 却会吞掉它，靠命令行转发在三个包管理器之间行为并不一致。CLI 会同时设置 `APP_SERVER_HOST`/`APP_SERVER_PORT` 和 `HOST`/`PORT`：默认模板读前者，Vite 系模板读后者。
+
+三条命令都接受 `--dir` 指定 App 目录：
+
+```bash
+nb3 app build --dir ./crm
+```
+
+App 脚本的退出码会原样返回，构建失败时 `nb3 app build` 就是失败，可以直接用在 CI 里。
 
 ## 查看 App 信息
 

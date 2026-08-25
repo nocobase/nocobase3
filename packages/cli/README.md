@@ -12,6 +12,8 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 | ----------------- | ------------------------------------------------------ |
 | `nb3 app create`  | 从 npm 下载模板包并生成本地 App 项目                   |
 | `nb3 app dev`     | 用项目自身的包管理器运行其 `dev` 脚本                  |
+| `nb3 app build`   | 运行其 `build` 脚本，构建生产产物                      |
+| `nb3 app start`   | 运行其 `start` 脚本，以生产模式伺服构建产物            |
 | `nb3 app info`    | 显示 App 名称、目录、模板来源、依赖是否已安装          |
 | `nb3 app config`  | 读写 `.nb3/config.json`                                |
 | `nb3 app destroy` | 删除本地 App 目录，带确认和路径防护                    |
@@ -27,6 +29,8 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 `nb3 app deploy`、`nb3 app pull`、`nb3 app list` 需要 Hub 提供 App 管理 API，而 v3 的 Hub 目前只有健康检查和一个 API 代理，因此这三条命令以退出码 3 明确报错，不打印占位输出——脚本里 deploy 返回成功却什么都没做，比直接失败危险得多。
 
 `nb3 hub` 的 8 条命令全部可用。
+
+`app dev`、`app build`、`app start` 只是把 App 自己的 npm 脚本跑起来，CLI 不替它决定怎么编译或怎么监听。`--port` 和 `--host` 走环境变量而不是命令行：`pnpm run start -- --port 3100` 会把 `--` 原样交给脚本，npm 和 yarn 却会吞掉它，命令行转发在三个包管理器之间并不一致。`APP_SERVER_HOST`/`APP_SERVER_PORT` 和 `HOST`/`PORT` 会同时设置，前者是默认模板读的，后者是 Vite 系模板读的。子进程的退出码原样返回，构建失败时命令就是失败。
 
 停止 Hub 时终止的是整个进程组而不是单个进程：start 脚本通常是包管理器的包装进程，真正监听端口的服务是它的孙进程，只杀记录的 pid 会留下占着端口的孤儿。
 

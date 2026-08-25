@@ -2,38 +2,30 @@ import { Command, Flags } from '@oclif/core';
 import { resolveAppScript } from '../../lib/app-script.ts';
 import { runAttached } from '../../lib/run-command.ts';
 
-export default class AppDev extends Command {
-  static override summary = 'Start the app in local development mode.';
+export default class AppBuild extends Command {
+  static override summary = 'Build the app for production.';
   static override description =
-    "Runs the app's dev script with the package manager the project already uses. A hub is not required for local development.";
+    "Runs the app's build script with the package manager the project already uses. Run this before `nb3 app start`, which serves the build output rather than compiling on the fly.";
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --dir ./crm',
-    '<%= config.bin %> <%= command.id %> --port 3100',
   ];
 
   static override flags = {
     dir: Flags.string({
       description: 'App directory. Defaults to the current directory.',
     }),
-    port: Flags.integer({
-      description: 'Port to listen on.',
-    }),
-    host: Flags.string({
-      description: 'Host to bind to.',
-    }),
   };
 
   public async run(): Promise<void> {
-    const { flags } = await this.parse(AppDev);
+    const { flags } = await this.parse(AppBuild);
     const { args, env, packageManager, project } = await resolveAppScript({
-      address: { host: flags.host, port: flags.port },
       dir: flags.dir,
-      script: 'dev',
+      script: 'build',
     });
 
-    this.log(`Starting ${project.config.name} with ${packageManager}...\n`);
+    this.log(`Building ${project.config.name} with ${packageManager}...\n`);
 
     const exitCode = await runAttached(packageManager, args, {
       cwd: project.directory,

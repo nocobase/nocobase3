@@ -10,6 +10,7 @@ import { loadTestConfig, runCommand } from './helpers.ts';
  * tests assert that the CLI exposes exactly it — no missing commands and no extras that never made it into the docs.
  */
 const APP_COMMANDS = [
+  'build',
   'config',
   'create',
   'deploy',
@@ -18,6 +19,7 @@ const APP_COMMANDS = [
   'info',
   'list',
   'pull',
+  'start',
 ];
 const HUB_COMMANDS = [
   'create',
@@ -92,11 +94,13 @@ describe('command tree', () => {
 
 describe('documented argument contract', () => {
   it.each([
+    ['app:build', [], ['dir']],
     ['app:create', ['name'], ['dir', 'template', 'registry']],
+    ['app:dev', [], ['dir', 'port', 'host']],
+    ['app:start', [], ['dir', 'port', 'host']],
     ['app:pull', ['name', 'dir'], ['hub']],
     ['app:deploy', [], ['dir', 'hub']],
     ['app:config', ['key', 'value'], ['dir', 'json']],
-    ['app:destroy', ['dir'], ['hub', 'yes']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
     ['hub:create', ['name'], ['dir', 'template', 'registry', 'port', 'host']],
     ['hub:dev', [], ['hub-dir', 'port', 'host', 'portals-dir']],
