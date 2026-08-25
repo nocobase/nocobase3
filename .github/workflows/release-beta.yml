@@ -20,9 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: '只算版本号，不发布不推送'
+        description: 'Dry run: compute versions and run checks without publishing or pushing'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: release-write

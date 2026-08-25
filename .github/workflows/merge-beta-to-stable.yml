@@ -23,9 +23,9 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: '只算版本号，不推送任何分支'
+        description: 'Dry run: compute versions and run checks without pushing any branch'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: release-write

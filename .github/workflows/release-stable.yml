@@ -24,17 +24,17 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: '从哪个分支发'
+        description: 'Branch to release from'
         type: string
         default: main
       keep_latest:
-        description: '不要动 latest 指针（给旧版本发 hotfix 时勾上，会发到 dist-tag legacy）'
+        description: 'Keep the latest dist-tag untouched (check this for hotfixes on older versions; publishes to legacy)'
         type: boolean
         default: false
       dry_run:
-        description: '只算版本号，不发布不推送'
+        description: 'Dry run: compute versions and run checks without publishing or pushing'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: release-write
