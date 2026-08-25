@@ -4,7 +4,7 @@ interface AppFileClient {
 
 export const appFileClient: AppFileClient = {
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await fetch(buildAppFileUrl(path), {
+    const response = await globalThis.fetch(buildAppFileUrl(path), {
       ...init,
       credentials: 'include',
       headers: {
@@ -14,9 +14,12 @@ export const appFileClient: AppFileClient = {
       },
     });
     const text = await response.text();
-    const payload: unknown = text ? parsePayload(text) : undefined;
+    const payload = text ? parsePayload(text) : undefined;
     if (!response.ok) {
-      throw new Error(readErrorMessage(payload, response.status));
+      throw new Error(
+        readErrorMessage(payload) ??
+          `Unable to complete file request (${response.status}).`,
+      );
     }
     return payload as T;
   },
@@ -26,21 +29,21 @@ export function buildAppFileUrl(
   path: string,
   query?: Readonly<Record<string, string>>,
 ): string {
-  const base = resolveCurrentAppUrl(`/api/${path.replace(/^\/+/, '')}`);
-  if (!query) {
-    return base;
-  }
-  const search = new URLSearchParams(query).toString();
+  const base = resolveAppUrl(`/api/${path.replace(/^\/+/, '')}`);
+  const search = query ? new URLSearchParams(query).toString() : '';
   return search ? `${base}${base.includes('?') ? '&' : '?'}${search}` : base;
 }
 
-function resolveCurrentAppUrl(path: string): string {
+function resolveAppUrl(path: string): string {
   if (typeof window === 'undefined') {
     return path;
   }
   const runtime = window as Window & { NOCOBASE_PORTAL_BASE?: unknown };
-  const viteEnv = (import.meta as ImportMeta & { env?: { BASE_URL?: string } })
-    .env;
+  const viteEnv = (
+    import.meta as ImportMeta & {
+      env?: { BASE_URL?: string };
+    }
+  ).env;
   const configuredBase =
     typeof runtime.NOCOBASE_PORTAL_BASE === 'string'
       ? runtime.NOCOBASE_PORTAL_BASE
@@ -49,8 +52,11 @@ function resolveCurrentAppUrl(path: string): string {
     configuredBase === '/'
       ? '/'
       : `/${configuredBase.replace(/^\/+|\/+$/g, '')}/`;
-  return new URL(path.replace(/^\/+/, ''), `${window.location.origin}${base}`)
-    .pathname;
+  const url = new URL(
+    path.replace(/^\/+/, ''),
+    `${window.location.origin}${base}`,
+  );
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function parsePayload(value: string): unknown {
@@ -61,12 +67,15 @@ function parsePayload(value: string): unknown {
   }
 }
 
-function readErrorMessage(payload: unknown, status: number): string {
-  if (payload && typeof payload === 'object' && 'message' in payload) {
+function readErrorMessage(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+  if ('message' in payload) {
     return String(payload.message);
   }
-  if (payload && typeof payload === 'object' && 'error' in payload) {
+  if ('error' in payload) {
     return String(payload.error);
   }
-  return `Unable to complete file request (${status}).`;
+  return undefined;
 }

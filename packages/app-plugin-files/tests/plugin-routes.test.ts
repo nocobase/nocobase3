@@ -52,6 +52,7 @@ describe('Files plugin routes', () => {
     });
     const app = new Hono();
     const api = new Hono();
+    const protectedRoutes = new Hono();
     api.use('*', async (context, next) => {
       await next();
       context.header('x-api-middleware', 'applied');
@@ -60,6 +61,7 @@ describe('Files plugin routes', () => {
     registerFilesRoutes({
       app,
       api,
+      protectedRoutes,
       deps: { filesRuntime: runtime },
       services: { fileService: createFileService({ runtime }) },
     });
@@ -86,6 +88,7 @@ describe('Files plugin routes', () => {
       registerFilesRoutes({
         app: new Hono(),
         api: new Hono(),
+        protectedRoutes: new Hono(),
         deps: {},
         services: {},
       }),

@@ -24,9 +24,13 @@ describe('queue example plugin routes', () => {
     });
     managers.push(queueManager);
     const app = new Hono();
+    const api = new Hono();
+    const protectedRoutes = new Hono();
 
     registerRoutes({
       app,
+      api,
+      protectedRoutes,
       deps: { queueManager },
       services: undefined,
     });

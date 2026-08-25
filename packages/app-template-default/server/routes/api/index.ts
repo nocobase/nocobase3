@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requestLogger } from '@nocobase/logging';
+import type { AppPluginProtectedRoutes } from '@nocobase/app-server/plugins';
 
 import type { AppServices } from '@/services/index.js';
 import type { AppDeps } from '../../runtime/deps.js';
@@ -21,6 +22,7 @@ export interface ApiRouteOptions {
 export interface ApiRoutes {
   app: Hono;
   plugins: Hono;
+  protectedRoutes: AppPluginProtectedRoutes;
   finalize(): Hono;
 }
 
@@ -53,8 +55,11 @@ export function createApiRoutes({
     createAppSettingsRoutes({ appSettingsStore: services.appSettingsStore }),
   );
   const pluginRoutes = new Hono();
-  const protectedRoutes = new Hono();
-  protectedRoutes.get('/apps', deps.auth.required(), createAppsHandler());
+  const protectedApp = new Hono();
+  const protectedRoutes = createProtectedRoutes(protectedApp, deps);
+  const apps = new Hono();
+  apps.get('/', createAppsHandler());
+  protectedRoutes.route('/apps', apps);
 
   api.onError(
     createApiErrorHandler({
@@ -64,11 +69,27 @@ export function createApiRoutes({
   return {
     app: api,
     plugins: pluginRoutes,
+    protectedRoutes,
     finalize(): Hono {
       api.route('/', publicRoutes);
       api.route('/', pluginRoutes);
-      api.route('/', protectedRoutes);
+      api.route('/', protectedApp);
+      api.all('*', (context) => context.notFound());
       return api;
+    },
+  };
+}
+
+function createProtectedRoutes(
+  routes: Hono,
+  deps: AppDeps,
+): AppPluginProtectedRoutes {
+  return {
+    route(path, app): void {
+      const protectedRoute = new Hono();
+      protectedRoute.use('*', deps.auth.required());
+      protectedRoute.route('/', app);
+      routes.route(path, protectedRoute);
     },
   };
 }

@@ -240,6 +240,36 @@ describe('relation binding scoped file routes', () => {
     ).toMatchObject({ status: 'ready' });
   });
 
+  it('maps exhausted retryable reservation errors to storage unavailable', async () => {
+    const fixture = await createFixture({ maxFiles: 1 });
+    const transaction = fixture.database.transaction.bind(fixture.database);
+    let transactionCount = 0;
+    fixture.database.transaction = async (operation, connection) => {
+      transactionCount += 1;
+      if (transactionCount >= 2 && transactionCount <= 4) {
+        throw Object.assign(new Error('database is busy'), {
+          code: 'SQLITE_BUSY',
+        });
+      }
+      return transaction(operation, connection);
+    };
+
+    const response = await fixture.app.request(
+      `/orders/${ORDER_ONE}/files`,
+      jsonRequest('POST', {
+        name: 'busy.txt',
+        size: 1,
+        contentType: 'text/plain',
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    await expect(json<FileErrorResponse>(response)).resolves.toMatchObject({
+      code: 'STORAGE_UNAVAILABLE',
+    });
+    expect(transactionCount).toBeGreaterThanOrEqual(4);
+  });
+
   it('runs Provider PUT simulation then scoped S3 complete and binds', async () => {
     const provider = new FakeS3Provider();
     const fixture = await createFixture({ provider });

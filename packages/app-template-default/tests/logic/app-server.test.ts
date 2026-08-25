@@ -8,10 +8,13 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { Hono } from 'hono';
+import { basePath, routePath } from 'hono/route';
 import {
   createDefaultCachingConfig,
   type CachingConfig,
 } from '@nocobase/caching';
+import type { AuthEnv, AuthSession } from '@nocobase/app-plugin-authentication';
 import type { AppRuntime } from '@nocobase/app-server/runtime';
 import type {
   AppWebSocket,
@@ -32,6 +35,7 @@ import {
 
 import {
   createApp,
+  type CreateAppOptions,
   type AppDisposer,
   type AppScope,
   createServer as createEmbeddedServer,
@@ -43,6 +47,7 @@ import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalo
 import type { AppConfig } from '../../server/config/index.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
+import type { AppDeps } from '../../server/runtime/deps.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
@@ -712,6 +717,95 @@ describe('app server', () => {
     });
   });
 
+  it('exposes public and authenticated API surfaces to plugin routes', async () => {
+    let deps: AppDeps | undefined;
+    let businessMiddlewareCalls = 0;
+    const app = createTestApp({
+      nocoBaseApiUrl: false,
+      pluginBootstraps: [
+        {
+          packageName: '@nocobase/app-plugin-test-auth',
+          bootstrap(context) {
+            deps = context.deps as AppDeps;
+          },
+        },
+      ],
+      pluginRoutes: [
+        {
+          packageName: '@nocobase/app-plugin-test-routes',
+          registerRoutes({ api, protectedRoutes }) {
+            const businessFiles = new Hono<AuthEnv>();
+            businessFiles.use('*', async (_context, next) => {
+              businessMiddlewareCalls += 1;
+              await next();
+            });
+            businessFiles.get('/:fileId', (context) =>
+              context.json({
+                protected: true,
+                userId: context.get('auth')?.user.id,
+                orderId: context.req.param('orderId'),
+                fileId: context.req.param('fileId'),
+                routePath: routePath(context),
+                basePath: basePath(context),
+              }),
+            );
+            api.get('/plugin-public', (context) =>
+              context.json({ public: true }),
+            );
+            protectedRoutes.route(
+              '/purchase-orders/:orderId/attachments',
+              businessFiles,
+            );
+          },
+        },
+      ],
+    });
+    expect(deps).toBeDefined();
+    if (!deps) {
+      throw new Error('Expected application dependencies to be initialized.');
+    }
+    const getSession = vi
+      .spyOn(deps.auth, 'getSession')
+      .mockImplementation((headers) =>
+        Promise.resolve(
+          headers.get('cookie') === 'test-auth=valid'
+            ? testAuthSession()
+            : null,
+        ),
+      );
+
+    const publicResponse = await app.request(
+      'http://localhost/api/plugin-public',
+    );
+    const unknownResponse = await app.request(
+      'http://localhost/api/not-mounted',
+    );
+    const anonymousApps = await app.request('http://localhost/api/apps');
+    const anonymousFiles = await app.request(
+      'http://localhost/api/purchase-orders/po-1/attachments/file-1',
+    );
+    const authenticatedFiles = await app.request(
+      'http://localhost/api/purchase-orders/po-1/attachments/file-1',
+      { headers: { cookie: 'test-auth=valid' } },
+    );
+
+    expect(publicResponse.status).toBe(200);
+    expect(unknownResponse.status).toBe(404);
+    expect(anonymousApps.status).toBe(401);
+    expect(anonymousFiles.status).toBe(401);
+    expect(authenticatedFiles.status).toBe(200);
+    expect(getSession).toHaveBeenCalledTimes(3);
+    expect(businessMiddlewareCalls).toBe(1);
+    await expect(authenticatedFiles.json()).resolves.toEqual({
+      protected: true,
+      userId: 'test-user',
+      orderId: 'po-1',
+      fileId: 'file-1',
+      routePath: '/api/purchase-orders/:orderId/attachments/:fileId',
+      basePath: '/api/purchase-orders/po-1/attachments',
+    });
+  });
+
   it('dispatches jobs from enabled app plugins', async () => {
     vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
     const runtime = createStandaloneRuntime();
@@ -1158,6 +1252,8 @@ interface CreateTestAppOptions {
   caching?: CachingConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
+  pluginBootstraps?: CreateAppOptions['pluginBootstraps'];
+  pluginRoutes?: CreateAppOptions['pluginRoutes'];
   spa?: {
     indexPath?: string;
     runtime?: AppConfig['spa']['runtime'];
@@ -1241,9 +1337,16 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     dispose: () => Promise.resolve(),
   };
   const lifecycle = createAppDisposerRegistry();
-  const app = Object.assign(createApp(runtime, { lifecycle }), {
-    close: () => lifecycle.disposeAll(),
-  });
+  const app = Object.assign(
+    createApp(runtime, {
+      lifecycle,
+      pluginBootstraps: options.pluginBootstraps,
+      pluginRoutes: options.pluginRoutes,
+    }),
+    {
+      close: () => lifecycle.disposeAll(),
+    },
+  );
 
   return trackCloseable(app);
 }
@@ -1278,6 +1381,29 @@ function firstCookie(response: Response): string {
   const setCookie = response.headers.get('set-cookie');
   expect(setCookie).toBeTruthy();
   return setCookie?.split(';')[0] ?? '';
+}
+
+function testAuthSession(): NonNullable<AuthSession> {
+  const createdAt = new Date('2026-08-25T00:00:00.000Z');
+  const updatedAt = new Date('2026-08-25T00:01:00.000Z');
+  return {
+    user: {
+      id: 'test-user',
+      name: 'Test User',
+      email: 'test@example.com',
+      emailVerified: true,
+      createdAt,
+      updatedAt,
+    },
+    session: {
+      id: 'test-session',
+      userId: 'test-user',
+      token: 'test-token',
+      expiresAt: new Date('2026-08-26T00:00:00.000Z'),
+      createdAt,
+      updatedAt,
+    },
+  };
 }
 
 function createMockDatabase(

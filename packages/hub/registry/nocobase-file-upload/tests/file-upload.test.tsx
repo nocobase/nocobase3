@@ -20,6 +20,7 @@ import { appFileClient } from '../app-client';
 import { FilePreviewField } from '../file-preview-field';
 import { FileUploadField } from '../file-upload-field';
 import {
+  fetchFileContent,
   getDownloadUrl,
   getPreviewFileUrl,
   triggerFileDownload,
@@ -69,10 +70,30 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete (window as Window & { NOCOBASE_PORTAL_BASE?: unknown })
+    .NOCOBASE_PORTAL_BASE;
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe('V3 file upload Registry', () => {
+  it('uses the current App base path without a host client package', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('{"ok":true}'));
+    vi.stubGlobal('fetch', request);
+    Object.defineProperty(window, 'NOCOBASE_PORTAL_BASE', {
+      configurable: true,
+      value: '/embedded/app/',
+    });
+
+    await expect(appFileClient.request('files')).resolves.toEqual({ ok: true });
+    expect(request).toHaveBeenCalledWith(
+      '/embedded/app/api/files',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
   it('loads ready StoredFile arrays without relation serialization', () => {
     const existing = readyFile('ready-1', 'report.pdf', 'application/pdf');
     const { result } = renderHook(() =>
@@ -459,13 +480,19 @@ describe('V3 file upload Registry', () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(null, { status: 200 }));
+    await fetchFileContent('orders/order-1/files', file);
+    expect(fetchSpy).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/orders/order-1/files/file%2F1/content'),
+      expect.objectContaining({ method: 'GET', credentials: 'same-origin' }),
+    );
+    fetchSpy.mockClear();
     const click = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => undefined);
     await triggerFileDownload('orders/order-1/files', file);
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining('/api/orders/order-1/files/file%2F1/content'),
-      expect.objectContaining({ method: 'HEAD', credentials: 'include' }),
+      expect.objectContaining({ method: 'HEAD', credentials: 'same-origin' }),
     );
     expect(click).toHaveBeenCalledOnce();
   });

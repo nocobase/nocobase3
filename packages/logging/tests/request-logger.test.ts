@@ -56,6 +56,34 @@ describe('requestLogger', () => {
     ]);
   });
 
+  it('redacts referer by default unless redaction is explicitly disabled', async () => {
+    const referer = 'https://example.com/form?access=secret';
+    const defaultOutput = createMemoryDestination();
+    const unredactedOutput = createMemoryDestination();
+    const app = new Hono();
+    app.use(
+      '/default',
+      requestLogger({ logger: createLogger({}, defaultOutput) }),
+    );
+    app.use(
+      '/unredacted',
+      requestLogger({
+        logger: createLogger({ redact: false }, unredactedOutput),
+      }),
+    );
+    app.get('*', (context) => context.json({ ok: true }));
+
+    await app.request('/default', { headers: { referer } });
+    await app.request('/unredacted', { headers: { referer } });
+
+    expect(defaultOutput.records()[0]).toMatchObject({
+      req: { headers: { referer: '[REDACTED]' } },
+    });
+    expect(unredactedOutput.records()[0]).toMatchObject({
+      req: { headers: { referer } },
+    });
+  });
+
   it('uses warning and error levels for unsuccessful responses', async () => {
     const output = createMemoryDestination();
     const app = new Hono();

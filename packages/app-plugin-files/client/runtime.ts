@@ -5,10 +5,6 @@ import type {
   FileUploadProgress,
 } from './types.js';
 
-interface FileResponseBody {
-  file: StoredFile;
-}
-
 interface XhrRequestOptions {
   method: 'PUT' | 'POST' | 'DELETE';
   url: string;
@@ -48,23 +44,64 @@ export async function executeFileUploadPlan(
           : (progress: FileUploadProgress): void =>
               options.onProgress?.(progress),
     });
-    return readReadyFile(
-      await sendXhrRequest({
-        method: 'POST',
-        url: plan.complete.url,
-        headers: plan.complete.headers,
-        signal: options.signal,
-        withCredentials: shouldSendCredentials(plan.complete.url),
-        stableErrors: shouldSendCredentials(plan.complete.url),
-        operation: 'complete',
-      }),
-      plan.fileId,
-      'complete',
-    );
+    return await completeUpload(plan, options.signal);
   } catch (error) {
     await cancelBestEffort(plan);
     throw error;
   }
+}
+
+async function completeUpload(
+  plan: FileUploadPlan,
+  signal?: AbortSignal,
+): Promise<StoredFile> {
+  try {
+    return await completeUploadOnce(plan, signal);
+  } catch (error) {
+    if (!shouldRetryComplete(error)) {
+      throw error;
+    }
+    try {
+      return await completeUploadOnce(plan, signal);
+    } catch (retryError) {
+      if (
+        retryError instanceof FileClientError &&
+        retryError.code === 'UPLOAD_ABORTED'
+      ) {
+        throw retryError;
+      }
+      throw error;
+    }
+  }
+}
+
+async function completeUploadOnce(
+  plan: FileUploadPlan,
+  signal?: AbortSignal,
+): Promise<StoredFile> {
+  return readReadyFile(
+    await sendXhrRequest({
+      method: 'POST',
+      url: plan.complete.url,
+      headers: plan.complete.headers,
+      signal,
+      withCredentials: shouldSendCredentials(plan.complete.url),
+      stableErrors: shouldSendCredentials(plan.complete.url),
+      operation: 'complete',
+    }),
+    plan.fileId,
+    'complete',
+  );
+}
+
+function shouldRetryComplete(error: unknown): boolean {
+  return (
+    error instanceof FileClientError &&
+    error.operation === 'complete' &&
+    error.code !== 'UPLOAD_ABORTED' &&
+    error.code !== 'FILE_BINDING_CONFLICT' &&
+    (error.status === 0 || error.status >= 500)
+  );
 }
 
 async function cancelBestEffort(plan: FileUploadPlan): Promise<void> {
@@ -194,8 +231,7 @@ function readReadyFile(
   ) {
     throw invalidReadyResponse(operation, response.status);
   }
-  const responseBody: FileResponseBody = { file: parsed.file };
-  return responseBody.file;
+  return parsed.file;
 }
 
 function invalidReadyResponse(

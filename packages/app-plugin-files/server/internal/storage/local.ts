@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import {
   link,
@@ -6,7 +7,6 @@ import {
   readFile,
   rm,
   stat,
-  unlink,
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
@@ -42,30 +42,34 @@ export class NodeLocalFilesStorage implements LocalFilesStorage {
     this.#assertActive();
     const objectPath = this.#resolveKey(key);
     const metadataPath = toMetadataPath(objectPath);
+    const stagingPath = `${objectPath}.${randomBytes(12).toString('hex')}.part`;
+    const stagingMetadataPath = toMetadataPath(stagingPath);
     await mkdir(path.dirname(objectPath), { recursive: true });
-    let objectCreated = false;
-    let metadataCreated = false;
 
     try {
-      const objectHandle = await open(objectPath, 'wx');
-      objectCreated = true;
+      const objectHandle = await open(stagingPath, 'wx');
       await pipeline(contents, objectHandle.createWriteStream());
       const metadata: LocalMetadataFile = {
         ...(options.contentType === undefined
           ? {}
           : { contentType: options.contentType }),
       };
-      await writeFile(metadataPath, JSON.stringify(metadata), {
+      await writeFile(stagingMetadataPath, JSON.stringify(metadata), {
         encoding: 'utf8',
         flag: 'wx',
       });
-      metadataCreated = true;
-    } catch (error) {
+      await link(stagingMetadataPath, metadataPath);
+      try {
+        await link(stagingPath, objectPath);
+      } catch (error) {
+        await rm(metadataPath, { force: true });
+        throw error;
+      }
+    } finally {
       await Promise.all([
-        objectCreated ? rm(objectPath, { force: true }) : Promise.resolve(),
-        metadataCreated ? rm(metadataPath, { force: true }) : Promise.resolve(),
+        rm(stagingPath, { force: true }),
+        rm(stagingMetadataPath, { force: true }),
       ]);
-      throw error;
     }
   }
 
@@ -94,22 +98,12 @@ export class NodeLocalFilesStorage implements LocalFilesStorage {
     const candidateMetadataPath = toMetadataPath(candidatePath);
     const readyMetadataPath = toMetadataPath(readyPath);
     await mkdir(path.dirname(readyPath), { recursive: true });
-    await link(candidatePath, readyPath);
+    await link(candidateMetadataPath, readyMetadataPath);
 
     try {
-      await link(candidateMetadataPath, readyMetadataPath);
+      await link(candidatePath, readyPath);
     } catch (error) {
-      await rm(readyPath, { force: true });
-      throw error;
-    }
-
-    try {
-      await Promise.all([unlink(candidatePath), unlink(candidateMetadataPath)]);
-    } catch (error) {
-      await Promise.all([
-        rm(readyPath, { force: true }),
-        rm(readyMetadataPath, { force: true }),
-      ]);
+      await rm(readyMetadataPath, { force: true });
       throw error;
     }
   }

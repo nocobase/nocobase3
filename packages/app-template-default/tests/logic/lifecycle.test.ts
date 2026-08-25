@@ -15,12 +15,16 @@ const runConfiguredAppMigrationsMock = vi.hoisted(() =>
     calls.push('migrate');
   }),
 );
+const restoreMetadataMock = vi.hoisted(() =>
+  vi.fn(async () => {
+    calls.push('restore-metadata');
+  }),
+);
 const runConfiguredAppSeedsMock = vi.hoisted(() =>
   vi.fn(async () => {
     calls.push('seed');
   }),
 );
-
 vi.mock('@nocobase/app-server/database', () => ({
   prepareAppDatabaseStorage: prepareAppDatabaseStorageMock,
 }));
@@ -37,13 +41,19 @@ beforeEach(() => {
   prepareAppDatabaseStorageMock.mockClear();
   runConfiguredAppMigrationsMock.mockClear();
   runConfiguredAppSeedsMock.mockClear();
+  restoreMetadataMock.mockClear();
 });
 
 describe('app runtime preparation', () => {
   it('runs migrations before seeds', async () => {
     await prepareAppRuntime(createRuntime());
 
-    expect(calls).toEqual(['prepare-database', 'migrate', 'seed']);
+    expect(calls).toEqual([
+      'prepare-database',
+      'restore-metadata',
+      'migrate',
+      'seed',
+    ]);
   });
 
   it('does not run seeds when migrations fail', async () => {
@@ -59,6 +69,14 @@ function createRuntime(): AppRuntime<AppConfig> {
   return {
     config: {
       database: {},
+      plugins: [
+        {
+          packageName: '@nocobase/app-plugin-files',
+          enabled: true,
+        },
+      ],
     },
+    database: {},
+    restoreMetadata: restoreMetadataMock,
   } as AppRuntime<AppConfig>;
 }

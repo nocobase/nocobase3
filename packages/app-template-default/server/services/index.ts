@@ -33,7 +33,10 @@ export function createAppServices(
       ? new AppSettingsService(runtime.database)
       : new UnavailableAppSettingsService(),
     fileService: deps.filesRuntime
-      ? createFileService({ runtime: deps.filesRuntime })
+      ? createFileService({
+          runtime: deps.filesRuntime,
+          publicBasePath: runtime.config.app.publicBasePath,
+        })
       : undefined,
     realtime: options.realtime,
   };

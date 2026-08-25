@@ -37,7 +37,7 @@ export function fetchFileContent(
     ),
     {
       method,
-      credentials: 'include',
+      credentials: 'same-origin',
       signal: options.signal,
     },
   ).then((response) => {

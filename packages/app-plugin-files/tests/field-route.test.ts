@@ -380,6 +380,33 @@ describe('field binding scoped file routes', () => {
     ).toBe(404);
   });
 
+  it('serves PDF content inline by default while allowing attachment override', async () => {
+    const fixture = await createFixture();
+    const upload = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
+      name: 'preview.pdf',
+      size: 4,
+      contentType: 'application/pdf',
+    });
+    const path = `/employees/${EMPLOYEE_ONE}/avatar/${upload.file.id}/content`;
+
+    const inline = await fixture.app.request(path);
+    expect(inline.status).toBe(200);
+    expect(inline.headers.get('content-type')).toBe('application/pdf');
+    expect(inline.headers.get('content-disposition')).toBe(
+      `inline; filename="preview.pdf"; filename*=UTF-8''preview.pdf`,
+    );
+    await expect(inline.text()).resolves.toBe('xxxx');
+
+    const attachment = await fixture.app.request(
+      `${path}?disposition=attachment`,
+      { method: 'HEAD' },
+    );
+    expect(attachment.status).toBe(200);
+    expect(attachment.headers.get('content-disposition')).toBe(
+      `attachment; filename="preview.pdf"; filename*=UTF-8''preview.pdf`,
+    );
+  });
+
   it('returns 404 for removed commit/access/uploads routes', async () => {
     const fixture = await createFixture();
     const fileId = 'a'.repeat(64);
@@ -520,8 +547,8 @@ async function createFixture(
     },
     constraints: {
       maxBytes: 1024,
-      allowedExtensions: ['.txt'],
-      allowedContentTypes: ['text/plain'],
+      allowedExtensions: ['.txt', '.pdf'],
+      allowedContentTypes: ['text/plain', 'application/pdf'],
     },
     publicAccess: options.routePublicAccess ?? options.publicAccess,
     authorize({ action, recordId, fileId }) {

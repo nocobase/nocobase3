@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { Readable } from 'node:stream';
+
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveFilesConfig } from '@nocobase/app-plugin-files/server';
 
@@ -10,8 +13,13 @@ import {
   type SignedUploadOptions,
   type StorageObjectMetadata,
 } from '../server/internal/storage/index.js';
+import { AwsS3Provider } from '../server/internal/storage/aws-s3-provider.js';
 
 const appStorageRoot = '/tmp/nocobase/files-storage';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('S3-compatible Files storage', () => {
   it('maps AWS/R2/MinIO client options including temporary credentials', () => {
@@ -49,7 +57,63 @@ describe('S3-compatible Files storage', () => {
     });
   });
 
-  it('signs private upload/read operations and finalizes with copy then delete', async () => {
+  it('preserves an omitted MIME through AWS PutObject and HeadObject defaults', async () => {
+    const send = vi
+      .spyOn(S3Client.prototype, 'send')
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({
+        ContentLength: 6,
+        ContentType: 'application/octet-stream',
+        Metadata: { 'nocobase-content-type': 'omitted' },
+      } as never);
+    const provider = new AwsS3Provider({
+      driver: 's3',
+      bucket: 'managed-files',
+      region: 'us-east-1',
+      credentials: {
+        accessKeyId: 'access-key',
+        secretAccessKey: 'secret-key',
+      },
+    });
+
+    await provider.putObject('pending/file-1', Readable.from(['abcdef']), {
+      contentLength: 6,
+    });
+    const put = send.mock.calls[0]?.[0];
+    expect(put).toBeInstanceOf(PutObjectCommand);
+    expect((put as PutObjectCommand).input).toMatchObject({
+      Metadata: { 'nocobase-content-type': 'omitted' },
+    });
+    await expect(provider.headObject('pending/file-1')).resolves.toEqual({
+      contentLength: 6,
+    });
+    provider.dispose();
+  });
+
+  it('keeps an explicit application/octet-stream MIME strict', async () => {
+    const send = vi.spyOn(S3Client.prototype, 'send').mockResolvedValueOnce({
+      ContentLength: 6,
+      ContentType: 'application/octet-stream',
+    } as never);
+    const provider = new AwsS3Provider({
+      driver: 's3',
+      bucket: 'managed-files',
+      region: 'us-east-1',
+      credentials: {
+        accessKeyId: 'access-key',
+        secretAccessKey: 'secret-key',
+      },
+    });
+
+    await expect(provider.headObject('pending/file-1')).resolves.toEqual({
+      contentLength: 6,
+      contentType: 'application/octet-stream',
+    });
+    expect(send).toHaveBeenCalledOnce();
+    provider.dispose();
+  });
+
+  it('signs private operations and publishes ready content without deleting pending', async () => {
     const provider = new FakeS3Provider();
     const storage = createInternalFilesStorage(
       resolveFilesConfig({
@@ -113,7 +177,6 @@ describe('S3-compatible Files storage', () => {
         sourceKey: 'apps/primary/pending/file-1',
         destinationKey: 'apps/primary/ready/file-1',
       },
-      { operation: 'delete', key: 'apps/primary/pending/file-1' },
       {
         operation: 'signRead',
         key: 'apps/primary/ready/file-1',
@@ -145,33 +208,6 @@ describe('S3-compatible Files storage', () => {
       'Files storage has been disposed.',
     );
   });
-
-  it('removes a copied destination when source cleanup fails', async () => {
-    const provider = new FakeS3Provider();
-    const storage = createInternalFilesStorage(
-      resolveFilesConfig({
-        appStorageRoot,
-        config: {
-          storage: { driver: 's3', bucket: 'managed-files' },
-        },
-      }),
-      { s3Provider: provider },
-    );
-    provider.failNextDelete();
-
-    await expect(
-      storage.finalizeCandidate('pending/file-1', 'ready/file-1'),
-    ).rejects.toThrow('simulated delete failure');
-    expect(provider.calls.slice(-3)).toEqual([
-      {
-        operation: 'copy',
-        sourceKey: 'pending/file-1',
-        destinationKey: 'ready/file-1',
-      },
-      { operation: 'delete', key: 'pending/file-1' },
-      { operation: 'delete', key: 'ready/file-1' },
-    ]);
-  });
 });
 
 type FakeS3Call =
@@ -184,7 +220,6 @@ type FakeS3Call =
 class FakeS3Provider implements S3Provider {
   readonly calls: FakeS3Call[] = [];
   disposeCount = 0;
-  #deleteFailures = 0;
 
   async createUploadUrl(
     key: string,
@@ -217,17 +252,9 @@ class FakeS3Provider implements S3Provider {
 
   async deleteObject(key: string): Promise<void> {
     this.calls.push({ operation: 'delete', key });
-    if (this.#deleteFailures > 0) {
-      this.#deleteFailures -= 1;
-      throw new Error('simulated delete failure');
-    }
   }
 
   dispose(): void {
     this.disposeCount += 1;
-  }
-
-  failNextDelete(): void {
-    this.#deleteFailures += 1;
   }
 }

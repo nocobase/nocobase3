@@ -8,9 +8,10 @@ import {
 import type { AppConfig } from '../config/index.js';
 
 export async function prepareAppRuntime(
-  runtime: AppRuntime<AppConfig>,
+  runtime: AppRuntime<Pick<AppConfig, 'database' | 'plugins'>>,
 ): Promise<void> {
   await prepareAppDatabaseStorage(runtime.config.database);
+  await runtime.restoreMetadata();
   await runConfiguredAppMigrations(runtime);
   await runConfiguredAppSeeds(runtime);
 }

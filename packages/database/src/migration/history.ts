@@ -3,6 +3,14 @@ import type { MigrationConnection, MigrationHistoryRecord } from './types.js';
 
 export const DEFAULT_MIGRATION_TABLE = '__nocobase_migrations';
 
+export async function hasMigrationTable(
+  connection: MigrationConnection,
+  tableName: string = DEFAULT_MIGRATION_TABLE,
+): Promise<boolean> {
+  const knex = await connection.client<Knex>();
+  return knex.schema.hasTable(tableName);
+}
+
 interface MigrationHistoryRow {
   id: number;
   package_name: string;

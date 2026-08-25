@@ -69,11 +69,3 @@ export function fileReferenceNotFound(): FileRouteError {
     'The file reference was not found.',
   );
 }
-
-export function businessFileNotReady(): FileRouteError {
-  return new FileRouteError(
-    'FILE_NOT_READY',
-    409,
-    'The file is not ready to be bound.',
-  );
-}

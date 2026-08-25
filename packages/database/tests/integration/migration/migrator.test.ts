@@ -36,6 +36,13 @@ describeIntegrationDatabases('migration runner', (context) => {
           });
         },
 
+        async restoreMetadata({ builder }) {
+          await builder.registerCollectionMetadata('migrationUsers', (collection) => {
+            collection.increments('id');
+            collection.string('name');
+          });
+        },
+
         async down({ builder }) {
           await builder.dropCollection('migrationUsers');
         },
@@ -60,12 +67,20 @@ describeIntegrationDatabases('migration runner', (context) => {
     expect(
       await context.db.schema.hasTable(context.table('migrationUsers')),
     ).toBe(true);
+    await context.metadataStore.removeCollection('migrationUsers');
+    expect(context.builder.inspectCollection('migrationUsers')).toBeUndefined();
 
     await expect(migrator.latest()).resolves.toMatchObject({
       batch: 1,
       executed: [],
       skipped: ['202608180001_create_migration_users'],
     });
+    expect(context.builder.inspectCollection('migrationUsers')).toBeUndefined();
+
+    await expect(migrator.restoreMetadata()).resolves.toEqual({
+      restored: ['202608180001_create_migration_users'],
+    });
+    expect(context.builder.inspectCollection('migrationUsers')).toBeDefined();
 
     const history = await context
       .db(tableName)
@@ -77,6 +92,44 @@ describeIntegrationDatabases('migration runner', (context) => {
         batch: 1,
       },
     ]);
+  });
+
+  it('does nothing when metadata history has not been created', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('missingMetadataHistory');
+    const lockTableName = context.table('missingMetadataLock');
+    await writeMigration(
+      directory,
+      '202608180001_unapplied_metadata',
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '202608180001_unapplied_metadata',
+        async up() {},
+        async restoreMetadata({ builder }) {
+          await builder.registerCollectionMetadata('mustNotRestore', {
+            fields: [],
+          });
+        },
+        async down() {},
+      });
+    `,
+    );
+    const migrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    });
+
+    await expect(migrator.restoreMetadata()).resolves.toEqual({ restored: [] });
+    await expect(context.db.schema.hasTable(tableName)).resolves.toBe(false);
+    await expect(context.db.schema.hasTable(lockTableName)).resolves.toBe(
+      false,
+    );
+    expect(context.builder.inspectCollection('mustNotRestore')).toBeUndefined();
   });
 
   it('upgrades legacy history tables and preserves applied migrations', async () => {
@@ -271,6 +324,15 @@ describeIntegrationDatabases('migration runner', (context) => {
 
         async up({ builder }) {
           await builder.createCollection('rollbackUsers', (collection) => {
+            collection.tableName('${context.table('rollbackUsers')}');
+            collection.increments('id');
+            collection.string('name');
+          });
+        },
+
+        async restoreMetadata({ builder }) {
+          await builder.registerCollectionMetadata('rollbackUsers', (collection) => {
+            collection.tableName('${context.table('rollbackUsers')}');
             collection.increments('id');
             collection.string('name');
           });
@@ -295,6 +357,7 @@ describeIntegrationDatabases('migration runner', (context) => {
     expect(
       await context.db.schema.hasTable(context.table('rollbackUsers')),
     ).toBe(true);
+    await context.metadataStore.removeCollection('rollbackUsers');
 
     await expect(migrator.rollback()).resolves.toEqual({
       batch: 1,
@@ -411,6 +474,176 @@ describeIntegrationDatabases('migration runner', (context) => {
     await expect(migrator.latest()).rejects.toThrow(
       'Executed migration "202608180001_checksum_guard" checksum changed.',
     );
+  });
+
+  it('restores metadata-only collection renames in migration order', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('renameMetadataHistory');
+    const lockTableName = context.table('renameMetadataLock');
+    await writeMigration(
+      directory,
+      '202608180001_create_rename_source',
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '202608180001_create_rename_source',
+        async up({ builder }) {
+          await builder.createCollection('renameSource', (collection) => {
+            collection.increments('id');
+          });
+        },
+        async restoreMetadata({ builder }) {
+          await builder.registerCollectionMetadata('renameSource', (collection) => {
+            collection.increments('id');
+          });
+        },
+        async down({ builder }) {
+          await builder.dropCollection('renameSource');
+        },
+      });
+    `,
+    );
+    const migrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    });
+    await migrator.latest();
+    await writeMigration(
+      directory,
+      '202608180002_rename_collection',
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '202608180002_rename_collection',
+        async up({ builder }) {
+          await builder.renameCollection('renameSource', 'renamedCollection');
+        },
+        async restoreMetadata({ builder }) {
+          await builder.renameCollectionMetadata('renameSource', 'renamedCollection');
+        },
+        async down({ builder }) {
+          await builder.renameCollection('renamedCollection', 'renameSource');
+        },
+      });
+    `,
+    );
+
+    await migrator.latest();
+    await context.metadataStore.removeCollection('renameSource');
+    await expect(migrator.restoreMetadata()).resolves.toEqual({
+      restored: [
+        '202608180001_create_rename_source',
+        '202608180002_rename_collection',
+      ],
+    });
+    expect(context.builder.inspectCollection('renameSource')).toBeUndefined();
+    expect(
+      context.builder.inspectCollection('renamedCollection'),
+    ).toBeDefined();
+
+    await context.metadataStore.removeCollection('renamedCollection');
+    await expect(migrator.rollback()).resolves.toMatchObject({
+      rolledBack: ['202608180002_rename_collection'],
+    });
+    expect(context.builder.inspectCollection('renameSource')).toBeDefined();
+    expect(
+      context.builder.inspectCollection('renamedCollection'),
+    ).toBeUndefined();
+
+    await expect(migrator.rollback()).resolves.toMatchObject({
+      rolledBack: ['202608180001_create_rename_source'],
+    });
+    expect(context.builder.inspectCollection('renameSource')).toBeUndefined();
+  });
+
+  it('restores metadata-only collection drops without leaving stale metadata', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('dropMetadataHistory');
+    const lockTableName = context.table('dropMetadataLock');
+    await writeMigration(
+      directory,
+      '202608180001_create_drop_source',
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      const defineCollection = (collection) => {
+        collection.increments('id');
+      };
+
+      export default defineMigration({
+        name: '202608180001_create_drop_source',
+        async up({ builder }) {
+          await builder.createCollection('dropSource', defineCollection);
+        },
+        async restoreMetadata({ builder }) {
+          await builder.registerCollectionMetadata('dropSource', defineCollection);
+        },
+        async down({ builder }) {
+          await builder.dropCollection('dropSource');
+        },
+      });
+    `,
+    );
+    const migrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    });
+    await migrator.latest();
+    await writeMigration(
+      directory,
+      '202608180002_drop_collection',
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      const defineCollection = (collection) => {
+        collection.increments('id');
+      };
+
+      export default defineMigration({
+        name: '202608180002_drop_collection',
+        async up({ builder }) {
+          await builder.dropCollection('dropSource');
+        },
+        async restoreMetadata({ builder }) {
+          await builder.removeCollectionMetadata('dropSource');
+        },
+        async down({ builder }) {
+          await builder.createCollection('dropSource', defineCollection);
+        },
+      });
+    `,
+    );
+
+    await migrator.latest();
+    await context.metadataStore.saveCollection('dropSource', {
+      name: 'dropSource',
+      fields: [],
+    });
+    await expect(migrator.restoreMetadata()).resolves.toEqual({
+      restored: [
+        '202608180001_create_drop_source',
+        '202608180002_drop_collection',
+      ],
+    });
+    expect(context.builder.inspectCollection('dropSource')).toBeUndefined();
+
+    await expect(migrator.rollback()).resolves.toMatchObject({
+      rolledBack: ['202608180002_drop_collection'],
+    });
+    expect(context.builder.inspectCollection('dropSource')).toBeDefined();
+
+    await expect(migrator.rollback()).resolves.toMatchObject({
+      rolledBack: ['202608180001_create_drop_source'],
+    });
+    expect(context.builder.inspectCollection('dropSource')).toBeUndefined();
   });
 });
 

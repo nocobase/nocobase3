@@ -5,5 +5,11 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["index.ts", "protocol.ts", "server/**/*.ts", "client/**/*.ts"]
+  "include": [
+    "index.ts",
+    "protocol.ts",
+    "database/files-collection.ts",
+    "server/**/*.ts",
+    "client/**/*.ts"
+  ]
 }

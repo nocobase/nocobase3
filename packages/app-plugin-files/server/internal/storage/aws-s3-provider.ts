@@ -19,6 +19,9 @@ import type {
   StorageObjectMetadata,
 } from './types.js';
 
+const OMITTED_CONTENT_TYPE_METADATA = 'nocobase-content-type';
+const OMITTED_CONTENT_TYPE_VALUE = 'omitted';
+
 export function createAwsS3ClientConfig(
   config: FilesS3StorageConfig,
 ): S3ClientConfig {
@@ -62,7 +65,11 @@ export class AwsS3Provider implements S3Provider {
       ContentLength: options.contentLength,
       IfNoneMatch: '*',
       ...(options.contentType === undefined
-        ? {}
+        ? {
+            Metadata: {
+              [OMITTED_CONTENT_TYPE_METADATA]: OMITTED_CONTENT_TYPE_VALUE,
+            },
+          }
         : { ContentType: options.contentType }),
     });
     return getSignedUrl(this.#client, command, {
@@ -85,7 +92,11 @@ export class AwsS3Provider implements S3Provider {
           ? {}
           : { ContentLength: options.contentLength }),
         ...(options.contentType === undefined
-          ? {}
+          ? {
+              Metadata: {
+                [OMITTED_CONTENT_TYPE_METADATA]: OMITTED_CONTENT_TYPE_VALUE,
+              },
+            }
           : { ContentType: options.contentType }),
       }),
     );
@@ -99,9 +110,10 @@ export class AwsS3Provider implements S3Provider {
       throw new Error('S3 object metadata is missing ContentLength.');
     }
 
+    const contentTypeOmitted = hasOmittedContentTypeMetadata(result.Metadata);
     return {
       contentLength: result.ContentLength,
-      ...(result.ContentType === undefined
+      ...(result.ContentType === undefined || contentTypeOmitted
         ? {}
         : { contentType: result.ContentType }),
       ...(result.ETag === undefined ? {} : { etag: result.ETag }),
@@ -157,6 +169,16 @@ export class AwsS3Provider implements S3Provider {
   dispose(): void {
     this.#client.destroy();
   }
+}
+
+function hasOmittedContentTypeMetadata(
+  metadata: Record<string, string> | undefined,
+): boolean {
+  return Object.entries(metadata ?? {}).some(
+    ([name, value]) =>
+      name.toLowerCase() === OMITTED_CONTENT_TYPE_METADATA &&
+      value === OMITTED_CONTENT_TYPE_VALUE,
+  );
 }
 
 function encodeCopySource(bucket: string, key: string): string {

@@ -3,6 +3,7 @@ import {
   DEFAULT_MIGRATION_TABLE,
   deleteMigrationHistoryRecord,
   ensureMigrationTable,
+  hasMigrationTable,
   readMigrationHistory,
   recordMigrationCompleted,
 } from './history.js';
@@ -13,12 +14,14 @@ import type {
   LoadedMigration,
   MigrationDefinition,
   MigrationHistoryRecord,
+  MigrationMetadataRestoreResult,
   MigrationRollbackResult,
   MigrationRunResult,
 } from './types.js';
 
 export interface Migrator {
   latest(): Promise<MigrationRunResult>;
+  restoreMetadata(): Promise<MigrationMetadataRestoreResult>;
   rollback(): Promise<MigrationRollbackResult>;
 }
 
@@ -68,12 +71,53 @@ class DefaultMigrator implements Migrator {
           pending.length > 0 ? nextBatch(history) : currentBatch(history);
         const executed: string[] = [];
 
-        for (const migration of pending) {
-          await this.runUpMigration(connection, migration, batch);
-          executed.push(migration.name);
+        for (const migration of migrations) {
+          if (!appliedNames.has(migration.name)) {
+            await this.runUpMigration(connection, migration, batch);
+            executed.push(migration.name);
+          }
         }
 
         return { batch, executed, skipped };
+      },
+    );
+  }
+
+  async restoreMetadata(): Promise<MigrationMetadataRestoreResult> {
+    const connection = this.options.database.connection(
+      this.options.connection,
+    );
+    const migrations = await loadMigrations(this.options);
+    const migrationConnection = createMigrationContext(connection).connection;
+    const tableName = this.options.tableName ?? DEFAULT_MIGRATION_TABLE;
+
+    if (!(await hasMigrationTable(migrationConnection, tableName))) {
+      return { restored: [] };
+    }
+
+    return withMigrationLock(
+      migrationConnection,
+      {
+        tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+      },
+      async () => {
+        await ensureMigrationTable(migrationConnection, tableName);
+        const history = await readMigrationHistory(
+          migrationConnection,
+          tableName,
+        );
+        validateAppliedMigrationHistory(
+          migrations,
+          history,
+          participatingPackageNames(this.options),
+        );
+
+        const restored = await restoreAppliedMigrationMetadata(
+          connection,
+          migrations,
+          history,
+        );
+        return { restored };
       },
     );
   }
@@ -114,6 +158,13 @@ class DefaultMigrator implements Migrator {
         const migrationsByName = new Map(
           migrations.map((migration) => [migration.name, migration]),
         );
+        for (const migration of migrations) {
+          if (history.some((record) => record.name === migration.name)) {
+            await migration.migration.restoreMetadata?.({
+              builder: connection.builder,
+            });
+          }
+        }
         const records = history
           .filter((record) => record.batch === batch)
           .sort((a, b) => b.id - a.id);
@@ -251,6 +302,28 @@ function validateRollbackMigration(migration: MigrationDefinition): void {
       `Migration "${migration.name}" does not define down(context).`,
     );
   }
+}
+
+async function restoreAppliedMigrationMetadata(
+  connection: ReturnType<CreateMigratorOptions['database']['connection']>,
+  migrations: LoadedMigration[],
+  history: MigrationHistoryRecord[],
+): Promise<string[]> {
+  const appliedNames = new Set(history.map((record) => record.name));
+  const restored: string[] = [];
+  for (const migration of migrations) {
+    if (
+      !appliedNames.has(migration.name) ||
+      !migration.migration.restoreMetadata
+    ) {
+      continue;
+    }
+    await migration.migration.restoreMetadata({
+      builder: connection.builder,
+    });
+    restored.push(migration.name);
+  }
+  return restored;
 }
 
 function nextBatch(history: MigrationHistoryRecord[]): number {

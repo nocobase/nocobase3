@@ -5,6 +5,7 @@ import {
   type CreateMigratorOptions,
   type DatabaseManager,
   type MigrationSource,
+  type MigrationMetadataRestoreResult,
   type MigrationRollbackResult,
   type MigrationRunResult,
 } from '@nocobase/database';
@@ -13,10 +14,17 @@ import type { AppDatabaseMigrationConfig } from './types.js';
 
 export interface AppMigrator {
   latest(): Promise<AppMigrationRunResult>;
+  restoreMetadata(): Promise<AppMigrationMetadataRestoreResult>;
   rollback(): Promise<AppMigrationRollbackResult>;
 }
 
 export type AppMigrationSkippedReason = 'missing-directory';
+
+export interface AppMigrationMetadataRestoreResult {
+  status: 'completed' | 'skipped';
+  reason?: AppMigrationSkippedReason;
+  restored?: string[];
+}
 
 export interface AppMigrationRunResult {
   status: 'completed' | 'skipped';
@@ -50,6 +58,16 @@ export function createAppMigrator(
       }
 
       return completedRunResult(await createDatabaseMigrator(options).latest());
+    },
+
+    async restoreMetadata(): Promise<AppMigrationMetadataRestoreResult> {
+      if (!hasMigrationDirectory(options)) {
+        return skippedMetadataRestoreResult();
+      }
+
+      return completedMetadataRestoreResult(
+        await createDatabaseMigrator(options).restoreMetadata(),
+      );
     },
 
     async rollback(): Promise<AppMigrationRollbackResult> {
@@ -115,6 +133,22 @@ function completedRunResult(result: MigrationRunResult): AppMigrationRunResult {
     batch: result.batch,
     executed: result.executed,
     skipped: result.skipped,
+  };
+}
+
+function skippedMetadataRestoreResult(): AppMigrationMetadataRestoreResult {
+  return {
+    status: 'skipped',
+    reason: 'missing-directory',
+  };
+}
+
+function completedMetadataRestoreResult(
+  result: MigrationMetadataRestoreResult,
+): AppMigrationMetadataRestoreResult {
+  return {
+    status: 'completed',
+    restored: result.restored,
   };
 }
 

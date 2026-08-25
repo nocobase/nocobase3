@@ -156,6 +156,7 @@ export class RelationBindingRepository {
     maxFiles: number,
   ): Promise<ReserveRelationSlotResult> {
     const maxAttempts = maxFiles * 2 + 1;
+    let lastRetryableError: unknown;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
         const result = await this.#database.transaction(
@@ -205,9 +206,10 @@ export class RelationBindingRepository {
         if (!isRetryableSlotConflict(error)) {
           throw error;
         }
+        lastRetryableError = error;
       }
     }
-    return { outcome: 'full' };
+    throw lastRetryableError;
   }
 
   async commit(

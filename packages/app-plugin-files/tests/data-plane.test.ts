@@ -1,4 +1,4 @@
-import { readdir, readFile, rm } from 'node:fs/promises';
+import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { mkdtemp } from 'node:fs/promises';
@@ -141,6 +141,7 @@ describe('Files Local data plane', () => {
     expect(head.status).toBe(200);
     expect(head.body).toBeNull();
     expect(head.headers.get('content-length')).toBe('13');
+    expect(head.headers.get('referrer-policy')).toBe('no-referrer');
     expect(head.headers.get('x-content-type-options')).toBe('nosniff');
     expect(head.headers.get('content-disposition')).toContain(
       'attachment; filename="quarterly_report.txt"',
@@ -151,6 +152,65 @@ describe('Files Local data plane', () => {
     expect(content.status).toBe(200);
     expect(content.headers.get('content-type')).toBe('text/plain');
     await expect(content.text()).resolves.toBe('managed files');
+  });
+
+  it('does not expose a canonical candidate while a Local PUT is still streaming', async () => {
+    const fixture = await createTestRuntime();
+    const attempt = await fixture.dataPlane.createUploadAttempt({
+      name: 'streaming.txt',
+      size: 15,
+      contentType: 'text/plain',
+    });
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(value) {
+        controller = value;
+        controller.enqueue(new TextEncoder().encode('partial'));
+      },
+    });
+    const uploading = streamRequest(
+      fixture.app,
+      attempt.plan.upload.url,
+      body,
+      attempt.plan.upload.headers,
+    );
+    const localRoot = path.join(fixture.storageRoot, 'app/private/files');
+    await waitForPartFile(localRoot);
+
+    const candidatePath = path.join(localRoot, attempt.transfer.candidateKey);
+    await expect(stat(candidatePath)).rejects.toMatchObject({ code: 'ENOENT' });
+    const earlyComplete = await fixture.app.request(attempt.plan.complete.url, {
+      method: 'POST',
+    });
+    expect(earlyComplete.status).toBe(409);
+    await expect(earlyComplete.json()).resolves.toMatchObject({
+      code: 'UPLOAD_FAILED',
+    });
+
+    controller.enqueue(new TextEncoder().encode(' content'));
+    controller.close();
+    expect((await uploading).status).toBe(200);
+    await expect(stat(candidatePath)).resolves.toMatchObject({ size: 15 });
+    expect(
+      (
+        await fixture.app.request(attempt.plan.complete.url, {
+          method: 'POST',
+        })
+      ).status,
+    ).toBe(200);
+
+    const record = await fixture.kernel.getRecord(attempt.file.id);
+    expect(record).toMatchObject({
+      status: 'ready',
+      size: 15,
+      contentType: 'text/plain',
+    });
+    if (!record?.storageKey) {
+      throw new Error('Expected a ready storage key.');
+    }
+    await expect(
+      readFile(path.join(localRoot, record.storageKey), 'utf8'),
+    ).resolves.toBe('partial content');
   });
 
   it('cancels pending Local uploads through the Core route idempotently', async () => {
@@ -337,6 +397,7 @@ describe('Files Local data plane', () => {
     await fixture.kernel.cancelUpload(
       cancelledPlan.fileId,
       capability.candidateKey,
+      capability.readyKey,
     );
     const notReady = await fixture.app.request(cancelledPlan.upload.url, {
       method: 'PUT',
@@ -423,6 +484,7 @@ describe('Files S3-compatible data plane', () => {
     expect(get.status).toBe(302);
     expect(get.headers.get('location')).toMatch(/^https:\/\/read\.invalid\//);
     expect(get.headers.get('content-length')).toBeNull();
+    expect(get.headers.get('referrer-policy')).toBe('no-referrer');
     expect(get.headers.get('x-content-type-options')).toBe('nosniff');
     expect(get.body).toBeNull();
     expect(provider.readOptions).toEqual([
@@ -436,10 +498,11 @@ describe('Files S3-compatible data plane', () => {
       { storage: { driver: 's3', bucket: 'managed-files' } },
       { s3Provider: provider },
     );
-    const plan = await fixture.dataPlane.createUploadPlan({
+    const attempt = await fixture.dataPlane.createUploadAttempt({
       name: 'race.bin',
       size: 4,
     });
+    const plan = attempt.plan;
     const candidateKey = provider.putUpload(plan, { contentLength: 4 });
     const pause = provider.pauseNextCopy();
     const completion = fixture.app.request(requiredCompleteUrl(plan), {
@@ -448,7 +511,11 @@ describe('Files S3-compatible data plane', () => {
     await pause.started;
 
     await expect(
-      fixture.kernel.cancelUpload(plan.fileId, candidateKey),
+      fixture.kernel.cancelUpload(
+        plan.fileId,
+        candidateKey,
+        attempt.transfer.readyKey,
+      ),
     ).resolves.toMatchObject({ outcome: 'failed' });
     pause.release();
     const response = await completion;
@@ -550,6 +617,144 @@ describe('Files S3-compatible data plane', () => {
     expect(responseBody).not.toContain('signature=secret');
   });
 });
+
+describe.each(['local', 's3'] as const)(
+  'Files %s completion retry contract',
+  (driver) => {
+    it('keeps the pending candidate when binding fails and retries the same plan', async () => {
+      const provider = driver === 's3' ? new FakeS3Provider() : undefined;
+      const fixture = await createTestRuntime(
+        driver === 's3'
+          ? { storage: { driver: 's3', bucket: 'managed-files' } }
+          : {},
+        provider === undefined ? {} : { s3Provider: provider },
+      );
+      const attempt = await fixture.dataPlane.createUploadAttempt({
+        name: 'retry.txt',
+        size: 5,
+        contentType: 'text/plain',
+      });
+      if (provider) {
+        provider.putUpload(attempt.plan, {
+          contentLength: 5,
+          contentType: 'text/plain',
+        });
+      } else {
+        const response = await fixture.app.request(attempt.plan.upload.url, {
+          method: 'PUT',
+          headers: attempt.plan.upload.headers,
+          body: 'retry',
+        });
+        expect(response.status).toBe(200);
+      }
+
+      let bindingAttempts = 0;
+      const binding = {
+        async commit(): Promise<string> {
+          bindingAttempts += 1;
+          if (bindingAttempts === 1) {
+            throw new Error('simulated binding failure');
+          }
+          return 'bound';
+        },
+      };
+
+      await expect(
+        fixture.dataPlane.completeUpload(attempt.transfer, binding),
+      ).rejects.toMatchObject({ code: 'UPLOAD_FAILED' });
+      await expect(
+        fixture.kernel.getFile(attempt.file.id),
+      ).resolves.toMatchObject({ status: 'pending' });
+      if (provider) {
+        expect(provider.keys()).toEqual([
+          attempt.transfer.candidateKey,
+          attempt.transfer.readyKey,
+        ]);
+      } else {
+        expect(
+          await listFiles(path.join(fixture.storageRoot, 'app/private/files')),
+        ).toEqual([
+          attempt.transfer.candidateKey,
+          `${attempt.transfer.candidateKey}.files-metadata.json`,
+          attempt.transfer.readyKey,
+          `${attempt.transfer.readyKey}.files-metadata.json`,
+        ]);
+      }
+
+      await expect(
+        fixture.dataPlane.completeUpload(attempt.transfer, binding),
+      ).resolves.toMatchObject({
+        file: { id: attempt.file.id, status: 'ready', size: 5 },
+        binding: 'bound',
+      });
+      expect(bindingAttempts).toBe(2);
+      await expect(
+        fixture.kernel.getFile(attempt.file.id),
+      ).resolves.toMatchObject({ status: 'ready' });
+      if (provider) {
+        expect(provider.keys()).toEqual([attempt.transfer.readyKey]);
+      } else {
+        expect(
+          await listFiles(path.join(fixture.storageRoot, 'app/private/files')),
+        ).toEqual([
+          attempt.transfer.readyKey,
+          `${attempt.transfer.readyKey}.files-metadata.json`,
+        ]);
+      }
+    });
+
+    it('removes retained candidates when a failed binding is explicitly cancelled', async () => {
+      const provider = driver === 's3' ? new FakeS3Provider() : undefined;
+      const fixture = await createTestRuntime(
+        driver === 's3'
+          ? { storage: { driver: 's3', bucket: 'managed-files' } }
+          : {},
+        provider === undefined ? {} : { s3Provider: provider },
+      );
+      const attempt = await fixture.dataPlane.createUploadAttempt({
+        name: 'cancel-after-failure.txt',
+        size: 4,
+        contentType: 'text/plain',
+      });
+      if (provider) {
+        provider.putUpload(attempt.plan, {
+          contentLength: 4,
+          contentType: 'text/plain',
+        });
+      } else {
+        expect(
+          (
+            await fixture.app.request(attempt.plan.upload.url, {
+              method: 'PUT',
+              headers: attempt.plan.upload.headers,
+              body: 'data',
+            })
+          ).status,
+        ).toBe(200);
+      }
+
+      await expect(
+        fixture.dataPlane.completeUpload(attempt.transfer, {
+          async commit(): Promise<void> {
+            throw new Error('simulated binding failure');
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'UPLOAD_FAILED' });
+      await fixture.dataPlane.cancelUpload(attempt.transfer);
+
+      await expect(
+        fixture.kernel.getFile(attempt.file.id),
+      ).resolves.toMatchObject({ status: 'failed' });
+      if (provider) {
+        expect(provider.keys()).toEqual([]);
+      } else {
+        expect(
+          await listFiles(path.join(fixture.storageRoot, 'app/private/files')),
+        ).toEqual([]);
+      }
+    });
+  },
+);
 
 describe('Files Public Access kernel', () => {
   it('stores only hashes and invalidates tokens on reset and disable', async () => {
@@ -776,6 +981,28 @@ async function listFiles(root: string): Promise<string[]> {
   }
   await visit(root);
   return result.sort();
+}
+
+async function waitForPartFile(root: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    let files: string[] = [];
+    try {
+      files = await listFiles(root);
+    } catch (error) {
+      if (!(
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      )) {
+        throw error;
+      }
+    }
+    if (files.some((file) => file.endsWith('.part'))) {
+      return;
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error('Timed out waiting for Local staging file.');
 }
 
 function requiredCompleteUrl(plan: FileUploadPlan): string {

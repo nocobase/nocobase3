@@ -1,4 +1,13 @@
-import { cp, readdir, readFile, rm } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import {
+  cp,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +20,8 @@ const target = path.join(root, 'packages/hub/registry/nocobase-file-upload');
 const check = process.argv.includes('--check');
 
 if (check) {
+  await checkRegistryImports();
+  await checkStandaloneAppClient();
   const differences = await compareDirectories(source, target);
   if (differences.length > 0) {
     console.error(
@@ -21,6 +32,123 @@ if (check) {
 } else {
   await rm(target, { recursive: true, force: true });
   await cp(source, target, { recursive: true });
+}
+
+async function checkRegistryImports() {
+  const config = JSON.parse(
+    await readFile(
+      path.join(root, 'packages/app-template-default/registry.config.json'),
+      'utf8',
+    ),
+  );
+  const item = config.items.find(
+    (candidate) => candidate.name === 'file-upload',
+  );
+  if (!item) {
+    throw new Error('The file-upload Registry item is missing.');
+  }
+  const declared = new Set(
+    (item.dependencies ?? []).map((dependency) => dependencyName(dependency)),
+  );
+  const imports = await readExternalImports(source, item.source.include);
+  const undeclared = [...imports].filter(
+    (dependency) => dependency !== 'react' && !declared.has(dependency),
+  );
+  if (undeclared.length > 0) {
+    throw new Error(
+      `file-upload Registry imports undeclared dependencies: ${undeclared.join(', ')}`,
+    );
+  }
+}
+
+async function checkStandaloneAppClient() {
+  const directory = await mkdtemp(path.join(tmpdir(), 'nocobase-file-upload-'));
+  try {
+    await Promise.all([
+      cp(
+        path.join(source, 'app-client.ts'),
+        path.join(directory, 'app-client.ts'),
+      ),
+      writeFile(
+        path.join(directory, 'package.json'),
+        '{"name":"file-upload-registry-check","private":true,"type":"module"}\n',
+      ),
+    ]);
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', './app-client.ts'],
+      { cwd: directory, encoding: 'utf8' },
+    );
+    if (result.status !== 0) {
+      throw new Error(
+        `file-upload Registry app client is not standalone:\n${result.stderr || result.stdout}`,
+      );
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function readExternalImports(directory, include) {
+  const files = (await walkFiles(directory)).filter((file) =>
+    isIncluded(file, include),
+  );
+  const dependencies = new Set();
+  const pattern = /(?:from\s+|import\s*(?:\(\s*)?)(['"])([^'"]+)\1/g;
+  for (const file of files.filter((candidate) =>
+    /\.[cm]?[jt]sx?$/.test(candidate),
+  )) {
+    const content = await readFile(path.join(directory, file), 'utf8');
+    for (const match of content.matchAll(pattern)) {
+      const specifier = match[2];
+      if (
+        !specifier ||
+        specifier.startsWith('.') ||
+        specifier.startsWith('@/') ||
+        specifier === 'react' ||
+        specifier.startsWith('react/')
+      ) {
+        continue;
+      }
+      dependencies.add(packageName(specifier));
+    }
+  }
+  return dependencies;
+}
+
+function isIncluded(file, include) {
+  return include.some((entry) => {
+    const normalized = entry.replace(/^\.\//, '').replace(/\/$/, '');
+    return file === normalized || file.startsWith(`${normalized}/`);
+  });
+}
+
+async function walkFiles(directory, relative = '') {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const item = path.join(relative, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await walkFiles(path.join(directory, entry.name), item)));
+    } else {
+      files.push(item);
+    }
+  }
+  return files;
+}
+
+function dependencyName(value) {
+  const match = value.match(/^(@[^/]+\/[^@]+|[^@]+)@/);
+  if (!match) {
+    throw new Error(`Registry dependency must include a version: ${value}`);
+  }
+  return match[1];
+}
+
+function packageName(specifier) {
+  return specifier.startsWith('@')
+    ? specifier.split('/').slice(0, 2).join('/')
+    : specifier.split('/')[0];
 }
 
 async function compareDirectories(left, right, relative = '') {

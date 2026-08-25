@@ -234,6 +234,107 @@ describe('executeFileUploadPlan', () => {
     ).toEqual(['PUT', 'POST', 'DELETE']);
   });
 
+  it('retries a failed complete once with the same plan', async () => {
+    const ready = storedFile('complete-retry');
+    FakeXMLHttpRequest.enqueue({ status: 200 });
+    FakeXMLHttpRequest.enqueue({ status: 503 });
+    FakeXMLHttpRequest.enqueue({
+      status: 200,
+      responseText: JSON.stringify({ file: ready }),
+    });
+
+    await expect(
+      executeFileUploadPlan(localPlan('complete-retry'), testFile()),
+    ).resolves.toEqual(ready);
+
+    expect(
+      FakeXMLHttpRequest.requests.map(({ method, url }) => ({ method, url })),
+    ).toEqual([
+      {
+        method: 'PUT',
+        url: '/mounted/api/files/complete-retry/upload?access=opaque-local',
+      },
+      {
+        method: 'POST',
+        url: '/mounted/api/files/complete-retry/complete?access=opaque-complete',
+      },
+      {
+        method: 'POST',
+        url: '/mounted/api/files/complete-retry/complete?access=opaque-complete',
+      },
+    ]);
+  });
+
+  it('does not retry an aborted complete', async () => {
+    FakeXMLHttpRequest.enqueue({ status: 200 });
+    FakeXMLHttpRequest.enqueue({ autoRespond: false });
+    FakeXMLHttpRequest.enqueue({ status: 204 });
+    const controller = new AbortController();
+    const pending = executeFileUploadPlan(
+      localPlan('complete-abort'),
+      testFile(),
+      { signal: controller.signal },
+    );
+    await waitForRequestCount(2);
+
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'UPLOAD_ABORTED',
+      operation: 'complete',
+    });
+    expect(FakeXMLHttpRequest.requests[1]?.aborted).toBe(true);
+    expect(
+      FakeXMLHttpRequest.requests.map((request) => request.method),
+    ).toEqual(['PUT', 'POST', 'DELETE']);
+  });
+
+  it('preserves the first complete failure when the retry also fails', async () => {
+    FakeXMLHttpRequest.enqueue({ status: 200 });
+    FakeXMLHttpRequest.enqueue({ status: 503 });
+    FakeXMLHttpRequest.enqueue({ status: 502 });
+    FakeXMLHttpRequest.enqueue({ status: 204 });
+
+    await expect(
+      executeFileUploadPlan(localPlan('complete-double-failure'), testFile()),
+    ).rejects.toMatchObject({
+      code: 'UPLOAD_FAILED',
+      status: 503,
+      operation: 'complete',
+    });
+
+    expect(
+      FakeXMLHttpRequest.requests.map((request) => request.method),
+    ).toEqual(['PUT', 'POST', 'POST', 'DELETE']);
+  });
+
+  it('surfaces an abort while waiting for the retried complete', async () => {
+    const plan = localPlan('complete-retry-abort');
+    FakeXMLHttpRequest.enqueue({ status: 200 });
+    FakeXMLHttpRequest.enqueue({ status: 503 });
+    FakeXMLHttpRequest.enqueue({ autoRespond: false });
+    FakeXMLHttpRequest.enqueue({ status: 204 });
+    const controller = new AbortController();
+    const pending = executeFileUploadPlan(plan, testFile(), {
+      signal: controller.signal,
+    });
+    await waitForRequestCount(3);
+
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'UPLOAD_ABORTED',
+      status: 0,
+      operation: 'complete',
+    });
+    expect(FakeXMLHttpRequest.requests[2]?.aborted).toBe(true);
+    expect(
+      FakeXMLHttpRequest.requests.map((request) => request.method),
+    ).toEqual(['PUT', 'POST', 'POST', 'DELETE']);
+    expect(FakeXMLHttpRequest.requests[2]?.url).toBe(plan.complete.url);
+    expect(FakeXMLHttpRequest.requests[3]?.url).toBe(plan.cancel.url);
+  });
+
   it('preserves the original failure when cancel also fails', async () => {
     FakeXMLHttpRequest.enqueue({
       status: 410,
@@ -333,6 +434,12 @@ describe('executeFileUploadPlan', () => {
 
 function testFile(): File {
   return new File(['0123456789'], 'report.txt', { type: 'text/plain' });
+}
+
+async function waitForRequestCount(count: number): Promise<void> {
+  while (FakeXMLHttpRequest.requests.length < count) {
+    await Promise.resolve();
+  }
 }
 
 function storedFile(id: string): StoredFile {

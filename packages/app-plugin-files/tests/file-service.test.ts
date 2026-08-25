@@ -3,7 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 
 import {
@@ -31,6 +32,7 @@ import type {
   SignedUploadOptions,
   StorageObjectMetadata,
 } from '../server/internal/storage/types.js';
+import { AwsS3Provider } from '../server/internal/storage/aws-s3-provider.js';
 
 const secret = 'test-secret-with-at-least-thirty-two-bytes';
 
@@ -45,6 +47,7 @@ interface ServiceFixture {
 const activeFixtures: ServiceFixture[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     activeFixtures.splice(0).map(async (fixture) => {
       await fixture.runtime.dispose();
@@ -112,6 +115,64 @@ describe('public FileService', () => {
     expect(
       await readWebStream((await fixture.service.openFile(file.id)).stream),
     ).toBe('abcdef');
+  });
+
+  it('creates an S3 file without MIME when AWS reports its octet-stream default', async () => {
+    const send = vi
+      .spyOn(S3Client.prototype, 'send')
+      .mockImplementationOnce(async (command) => {
+        const body = (command as PutObjectCommand).input.Body;
+        if (!(body instanceof Readable)) {
+          throw new Error('Expected AWS PutObject to receive the file stream.');
+        }
+        for await (const _chunk of body) {
+          // Consume the stream as the real AWS request handler does.
+        }
+        return {} as never;
+      })
+      .mockResolvedValueOnce({
+        ContentLength: 6,
+        ContentType: 'application/octet-stream',
+        Metadata: { 'nocobase-content-type': 'omitted' },
+      } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never);
+    const provider = new AwsS3Provider({
+      driver: 's3',
+      bucket: 'private-files',
+      region: 'us-east-1',
+      credentials: {
+        accessKeyId: 'access-key',
+        secretAccessKey: 'secret-key',
+      },
+    });
+    const fixture = await createFixture(
+      {
+        storage: {
+          driver: 's3',
+          bucket: 'private-files',
+          region: 'us-east-1',
+        },
+      },
+      provider,
+    );
+
+    await expect(
+      fixture.service.createFile({
+        name: 'generated.bin',
+        size: 6,
+        content: Readable.from(['abcdef']),
+      }),
+    ).resolves.toMatchObject({
+      status: 'ready',
+      size: 6,
+      contentType: null,
+    });
+    const put = send.mock.calls[0]?.[0];
+    expect(put).toBeInstanceOf(PutObjectCommand);
+    expect((put as PutObjectCommand).input.Metadata).toEqual({
+      'nocobase-content-type': 'omitted',
+    });
   });
 
   it('rejects size and type violations with stable service errors', async () => {

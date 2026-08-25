@@ -1,3 +1,4 @@
+import { normalizeBasePath } from '@nocobase/app-server/support';
 import type { Hono } from 'hono';
 
 import type { FileUploadPlan, StoredFile } from '../protocol.js';
@@ -24,13 +25,16 @@ import { getFilesRuntimeServiceState } from './internal/runtime.js';
 
 export interface CreateFileServiceOptions {
   runtime: FilesRuntime;
+  publicBasePath?: string;
 }
 
 class RuntimeFileService implements FileService {
   readonly #runtime: FilesRuntime;
+  readonly #publicBasePath: string;
 
   constructor(options: CreateFileServiceOptions) {
     this.#runtime = options.runtime;
+    this.#publicBasePath = normalizeBasePath(options.publicBasePath ?? '');
   }
 
   createFileRoute(options: CreateFileRouteOptions): Hono {
@@ -46,6 +50,7 @@ class RuntimeFileService implements FileService {
         options,
         binding: options.binding,
         state,
+        publicBasePath: this.#publicBasePath,
       });
     }
     if (options.binding.type === 'relation') {
@@ -53,6 +58,7 @@ class RuntimeFileService implements FileService {
         options,
         binding: options.binding,
         state,
+        publicBasePath: this.#publicBasePath,
       });
     }
     throw invalidFileRoute('File route binding type is invalid.');

@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto';
 
 import type { Context } from 'hono';
+import { joinBasePath } from '@nocobase/app-server/support';
+
+export function resolvePublicFileRoutePath(
+  publicBasePath: string,
+  mountedRoutePath: string,
+): string {
+  return joinBasePath(publicBasePath, mountedRoutePath);
+}
 
 export function createScopedRouteIdentity(
   audience: string,

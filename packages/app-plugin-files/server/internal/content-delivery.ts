@@ -5,6 +5,7 @@ const DEFAULT_CONTENT_TYPE = 'application/octet-stream';
 const INLINE_CONTENT_TYPES = new Set([
   'audio/mpeg',
   'audio/ogg',
+  'application/pdf',
   'image/gif',
   'image/jpeg',
   'image/png',
@@ -79,6 +80,7 @@ export function createContentHeaders(
     'content-disposition': contentDisposition,
     'content-length': String(record.size ?? 0),
     'content-type': record.contentType ?? DEFAULT_CONTENT_TYPE,
+    'referrer-policy': 'no-referrer',
     'x-content-type-options': 'nosniff',
   });
 }

@@ -85,7 +85,13 @@ export function createApp(
   });
 
   for (const plugin of options.pluginRoutes ?? []) {
-    const pluginContext = { app, api: apiRoutes.plugins, deps, services };
+    const pluginContext = {
+      app,
+      api: apiRoutes.plugins,
+      protectedRoutes: apiRoutes.protectedRoutes,
+      deps,
+      services,
+    };
     plugin.registerRoutes(pluginContext);
   }
 

@@ -130,7 +130,7 @@ describe('file metadata kernel', () => {
       }),
     ).resolves.toMatchObject({
       outcome: 'ready',
-      cleanupStorageKeys: [retryCandidate],
+      cleanupStorageKeys: [retryCandidate, retryReady],
       file: { size: 13, contentType: 'text/plain' },
     });
     expect((await repository.getRequired(upload.file.id)).storageKey).toBe(
@@ -175,10 +175,15 @@ describe('file metadata kernel', () => {
     const winner = await repository.getRequired(upload.file.id);
     expect(winner.status).toBe('ready');
     expect([upload.readyKey, secondReady]).toContain(winner.storageKey);
-    expect(loser.cleanupStorageKeys[0]).not.toBe(winner.storageKey);
+    expect(loser.cleanupStorageKeys).not.toContain(winner.storageKey);
     expect(storage.has(winner.storageKey ?? '')).toBe(true);
-
-    expect(storage.has(loser.cleanupStorageKeys[0] ?? 'missing')).toBe(true);
+    for (const storageKey of loser.cleanupStorageKeys) {
+      await storage.delete(storageKey);
+    }
+    const loserReadyKey =
+      winner.storageKey === upload.readyKey ? secondReady : upload.readyKey;
+    expect(storage.has(loserReadyKey)).toBe(false);
+    expect(storage.has(winner.storageKey ?? '')).toBe(true);
   });
 
   it('returns the finalized object key when the database CAS throws', async () => {
@@ -195,24 +200,18 @@ describe('file metadata kernel', () => {
     const result = await failingKernel.completeUpload(upload);
     expect(result).toMatchObject({
       outcome: 'persistence-failed',
-      candidateStorageKey: upload.readyKey,
-      cleanupStorageKeys: [upload.readyKey],
-      cleanupSafe: true,
+      cleanupStorageKeys: [],
       error: new Error('simulated CAS failure'),
     });
     expect(storage.has(upload.readyKey)).toBe(true);
+    expect(storage.has(upload.candidateKey)).toBe(true);
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'pending',
     );
 
-    if (
-      result.outcome !== 'persistence-failed' ||
-      !result.cleanupSafe ||
-      result.cleanupStorageKeys[0] === undefined
-    ) {
+    if (result.outcome !== 'persistence-failed') {
       throw new Error('Expected persistence failure compensation result.');
     }
-    expect(storage.has(result.cleanupStorageKeys[0])).toBe(true);
   });
 
   it('rolls back file readiness and business writes in one transaction', async () => {
@@ -236,15 +235,54 @@ describe('file metadata kernel', () => {
 
     expect(result).toMatchObject({
       outcome: 'persistence-failed',
-      cleanupStorageKeys: [upload.readyKey],
-      cleanupSafe: true,
+      cleanupStorageKeys: [],
     });
+    expect(storage.has(upload.candidateKey)).toBe(true);
     expect((await repository.getRequired(upload.file.id)).status).toBe(
       'pending',
     );
     expect(
       await database.query().selectFrom('fileBindings').selectAll().execute(),
     ).toEqual([]);
+  });
+
+  it('keeps a shared ready object while another completion can still commit it', async () => {
+    const upload = await kernel.createPending({ name: 'shared-ready.bin' });
+    storage.put(upload.candidateKey, { contentLength: 8 });
+    const pausedRepository = new PausingFirstTransactionRepository(database);
+    const concurrentKernel = createFileKernel({
+      repository: pausedRepository,
+      storage,
+      uploadExpiresInSeconds: 900,
+      clock: () => now,
+    });
+
+    const winner = concurrentKernel.completeUpload(upload);
+    await pausedRepository.firstTransactionStarted;
+    expect(storage.has(upload.readyKey)).toBe(true);
+
+    const failed = await concurrentKernel.completeUpload({
+      ...upload,
+      commitBinding: async () => {
+        throw new Error('simulated binding failure');
+      },
+    });
+    expect(failed).toMatchObject({
+      outcome: 'persistence-failed',
+      cleanupStorageKeys: [],
+    });
+    for (const storageKey of failed.cleanupStorageKeys) {
+      await storage.delete(storageKey);
+    }
+
+    pausedRepository.releaseFirstTransaction();
+    await expect(winner).resolves.toMatchObject({ outcome: 'completed' });
+    const record = await repository.getRequired(upload.file.id);
+    expect(record).toMatchObject({
+      status: 'ready',
+      storageKey: upload.readyKey,
+    });
+    expect(storage.has(upload.readyKey)).toBe(true);
   });
 
   it('resolves complete and cancel competition to one terminal state', async () => {
@@ -257,6 +295,7 @@ describe('file metadata kernel', () => {
     const cancellation = await kernel.cancelUpload(
       upload.file.id,
       upload.candidateKey,
+      upload.readyKey,
     );
     pause.release();
     const completionResult = await completion;
@@ -283,6 +322,19 @@ describe('file metadata kernel', () => {
     );
   });
 
+  it('keeps the ready object when cancellation loses to completion', async () => {
+    const upload = await createReadyFile(kernel, storage, 'ready-cancel.bin');
+    expect(storage.has(upload.candidateKey)).toBe(true);
+    expect(storage.has(upload.readyKey)).toBe(true);
+
+    await expect(
+      kernel.cancelUpload(upload.file.id, upload.candidateKey, upload.readyKey),
+    ).resolves.toMatchObject({ outcome: 'ready' });
+
+    expect(storage.has(upload.candidateKey)).toBe(false);
+    expect(storage.has(upload.readyKey)).toBe(true);
+  });
+
   it('rejects candidate and ready keys that belong to another file', async () => {
     const first = await kernel.createPending({ name: 'first.bin' });
     const second = await kernel.createPending({ name: 'second.bin' });
@@ -296,7 +348,7 @@ describe('file metadata kernel', () => {
       }),
     ).rejects.toThrow('storage key does not belong to fileId');
     await expect(
-      kernel.cancelUpload(first.file.id, second.candidateKey),
+      kernel.cancelUpload(first.file.id, second.candidateKey, second.readyKey),
     ).rejects.toThrow('storage key does not belong to fileId');
     expect((await repository.getRequired(first.file.id)).status).toBe(
       'pending',
@@ -417,7 +469,6 @@ class FakeFilesStorage {
       await pause.waitForRelease();
     }
     this.#objects.set(readyKey, metadata);
-    this.#objects.delete(candidateKey);
   }
 
   async delete(key: string): Promise<void> {
@@ -454,6 +505,39 @@ class FailingCompleteRepository extends FilesRepository {
     ..._args: Parameters<FilesRepository['completePending']>
   ): Promise<boolean> {
     throw new Error('simulated CAS failure');
+  }
+}
+
+class PausingFirstTransactionRepository extends FilesRepository {
+  readonly firstTransactionStarted: Promise<void>;
+  #markFirstTransactionStarted!: () => void;
+  #releaseFirstTransaction!: () => void;
+  readonly #firstTransactionReleased: Promise<void>;
+  #transactionCount = 0;
+
+  constructor(database: DatabaseManager) {
+    super(database);
+    this.firstTransactionStarted = new Promise<void>((resolve) => {
+      this.#markFirstTransactionStarted = resolve;
+    });
+    this.#firstTransactionReleased = new Promise<void>((resolve) => {
+      this.#releaseFirstTransaction = resolve;
+    });
+  }
+
+  override async transaction<T>(
+    callback: Parameters<FilesRepository['transaction']>[0],
+  ): Promise<T> {
+    this.#transactionCount += 1;
+    if (this.#transactionCount === 1) {
+      this.#markFirstTransactionStarted();
+      await this.#firstTransactionReleased;
+    }
+    return super.transaction(callback) as Promise<T>;
+  }
+
+  releaseFirstTransaction(): void {
+    this.#releaseFirstTransaction();
   }
 }
 

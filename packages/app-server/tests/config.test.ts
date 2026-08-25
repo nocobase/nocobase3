@@ -195,6 +195,7 @@ describe('app runtime context', () => {
     });
 
     expect(runtime.seeder).toBeUndefined();
+    await expect(runtime.restoreMetadata()).resolves.toBeUndefined();
     await expect(runtime.runSeeds()).resolves.toBeUndefined();
   });
 
@@ -295,8 +296,13 @@ describe('app migrator', () => {
       executed: ['001_create_users'],
       skipped: ['000_create_accounts'],
     });
+    const restoreMetadata = vi.fn();
     const rollback = vi.fn();
-    createDatabaseMigratorMock.mockReturnValue({ latest, rollback });
+    createDatabaseMigratorMock.mockReturnValue({
+      latest,
+      restoreMetadata,
+      rollback,
+    });
     const database = createMockDatabaseManager();
     const migrator = createAppMigrator({
       database,
@@ -325,6 +331,33 @@ describe('app migrator', () => {
       extensions: ['.js', '.mjs'],
     });
     expect(latest).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores metadata from applied migration history', async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-migrations-'),
+    );
+    const restoreMetadata = vi.fn().mockResolvedValue({
+      restored: ['001_create_users'],
+    });
+    createDatabaseMigratorMock.mockReturnValue({
+      latest: vi.fn(),
+      restoreMetadata,
+      rollback: vi.fn(),
+    });
+    const migrator = createAppMigrator({
+      database: createMockDatabaseManager(),
+      config: {
+        directory,
+        autoRun: false,
+      },
+    });
+
+    await expect(migrator.restoreMetadata()).resolves.toEqual({
+      status: 'completed',
+      restored: ['001_create_users'],
+    });
+    expect(restoreMetadata).toHaveBeenCalledTimes(1);
   });
 
   it('rolls back migrations from the configured directory', async () => {

@@ -63,9 +63,7 @@ export type CompleteFileResult<TBinding = undefined> =
   | { outcome: 'missing'; cleanupStorageKeys: readonly string[] }
   | {
       outcome: 'persistence-failed';
-      candidateStorageKey: string;
       cleanupStorageKeys: readonly string[];
-      cleanupSafe: boolean;
       error: Error;
     };
 
@@ -199,9 +197,7 @@ export class FileKernel {
       } catch (error) {
         return {
           outcome: 'persistence-failed',
-          candidateStorageKey: candidateKey,
           cleanupStorageKeys: [candidateKey],
-          cleanupSafe: true,
           error: toError(error, 'Files binding persistence failed.'),
         };
       }
@@ -209,7 +205,10 @@ export class FileKernel {
         outcome: 'ready',
         file,
         ...(binding === undefined ? {} : { binding }),
-        cleanupStorageKeys: [candidateKey],
+        cleanupStorageKeys:
+          current.storageKey === readyKey
+            ? [candidateKey]
+            : [candidateKey, readyKey],
       };
     }
     if (current.status === 'failed') {
@@ -296,13 +295,16 @@ export class FileKernel {
             file,
             ...(binding === undefined ? {} : { binding }),
             cleanupStorageKeys:
-              readyRecord.storageKey === readyKey ? [] : [readyKey],
+              readyRecord.storageKey === readyKey
+                ? [candidateKey]
+                : [candidateKey, readyKey],
           };
         },
       );
     } catch (error) {
       return this.#resolvePersistenceFailure(
         fileId,
+        candidateKey,
         readyKey,
         toError(error, 'Files completion persistence failed.'),
       );
@@ -312,15 +314,21 @@ export class FileKernel {
   async cancelUpload<TBinding = undefined>(
     fileId: string,
     candidateKey: string,
+    readyKey?: string,
     cancelBinding?: (input: CancelFileBindingInput) => Promise<TBinding>,
   ): Promise<CancelFileResult<TBinding>> {
     const normalizedFileId = readFileId(fileId);
     const normalizedCandidateKey = normalizeStorageKey(candidateKey);
+    const normalizedReadyKey =
+      readyKey === undefined ? undefined : normalizeStorageKey(readyKey);
     assertStorageKeyOwnership(
       normalizedFileId,
       normalizedCandidateKey,
       'pending',
     );
+    if (normalizedReadyKey !== undefined) {
+      assertStorageKeyOwnership(normalizedFileId, normalizedReadyKey, 'ready');
+    }
     const result = await this.#repository.transaction(
       async (connection): Promise<CancelFileResult<TBinding>> => {
         const failed = await this.#repository.failPending(
@@ -360,13 +368,21 @@ export class FileKernel {
         );
       },
     );
-    if (result.outcome !== 'ready') {
-      try {
-        await this.#storage.delete(normalizedCandidateKey);
-      } catch {
-        // Cleanup is best-effort; failed state and reservation release are durable.
-      }
-    }
+    const cleanupKeys =
+      result.outcome === 'ready'
+        ? [normalizedCandidateKey]
+        : [normalizedCandidateKey, normalizedReadyKey].filter(
+            (key): key is string => key !== undefined,
+          );
+    await Promise.all(
+      cleanupKeys.map(async (key) => {
+        try {
+          await this.#storage.delete(key);
+        } catch {
+          // Cleanup is best-effort; failed state and reservation release are durable.
+        }
+      }),
+    );
     return result;
   }
 
@@ -448,6 +464,7 @@ export class FileKernel {
 
   async #resolvePersistenceFailure(
     fileId: string,
+    candidateKey: string,
     readyKey: string,
     error: Error,
   ): Promise<CompleteFileResult> {
@@ -457,22 +474,26 @@ export class FileKernel {
         return {
           outcome: 'ready',
           file: toStoredFile(current),
+          cleanupStorageKeys: [candidateKey],
+        };
+      }
+      if (current?.status === 'pending') {
+        // Another same-plan completion may have published this key and still commit it.
+        return {
+          outcome: 'persistence-failed',
           cleanupStorageKeys: [],
+          error,
         };
       }
       return {
         outcome: 'persistence-failed',
-        candidateStorageKey: readyKey,
         cleanupStorageKeys: [readyKey],
-        cleanupSafe: true,
         error,
       };
     } catch {
       return {
         outcome: 'persistence-failed',
-        candidateStorageKey: readyKey,
         cleanupStorageKeys: [],
-        cleanupSafe: false,
         error,
       };
     }

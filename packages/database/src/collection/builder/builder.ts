@@ -109,6 +109,34 @@ export class CollectionBuilder {
     );
   }
 
+  async registerCollectionMetadata(
+    name: string,
+    input: CollectionDefinitionInput,
+  ): Promise<void> {
+    const definition = normalizeCollectionInput(input);
+    await this.metadataStore.saveCollection(name, {
+      ...definition,
+      name,
+    });
+  }
+
+  async removeCollectionMetadata(name: string): Promise<void> {
+    await this.metadataStore.removeCollection(name);
+  }
+
+  async renameCollectionMetadata(from: string, to: string): Promise<void> {
+    const current = await this.metadataStore.getCollection(from);
+    if (!current) {
+      return;
+    }
+    await this.metadataStore.removeCollection(from);
+    await this.metadataStore.saveCollection(to, {
+      ...current,
+      name: to,
+      tableName: this.compiler.effectiveTableName(from, current),
+    });
+  }
+
   async alterCollection(
     name: string,
     input: CollectionAlterInput,

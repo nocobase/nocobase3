@@ -70,16 +70,6 @@ export class ProviderS3FilesStorage implements S3FilesStorage {
     const sourceKey = this.#resolveKey(candidateKey);
     const destinationKey = this.#resolveKey(readyKey);
     await this.#provider.copyObject(sourceKey, destinationKey);
-    try {
-      await this.#provider.deleteObject(sourceKey);
-    } catch (error) {
-      try {
-        await this.#provider.deleteObject(destinationKey);
-      } catch {
-        // Preserve the source deletion failure after best-effort rollback.
-      }
-      throw error;
-    }
   }
 
   async openRead(key: string): Promise<Readable> {

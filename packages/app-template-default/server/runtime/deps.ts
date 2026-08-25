@@ -26,6 +26,7 @@ import type { Auth } from '@nocobase/app-plugin-authentication';
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
 import { createCookiePrefix } from './utils.js';
+import { isFilesPluginEnabled } from './plugins.js';
 
 export interface AppDeps {
   auth: Auth;
@@ -106,13 +107,6 @@ export async function disposeAppDeps(deps: AppDeps): Promise<void> {
     deps.logging.flush(),
     deps.sessionManager.dispose(),
   ]);
-}
-
-function isFilesPluginEnabled(config: AppConfig): boolean {
-  return (config.plugins ?? []).some(
-    (plugin) =>
-      plugin.packageName === '@nocobase/app-plugin-files' && plugin.enabled,
-  );
 }
 
 function requireDatabase(runtime: AppRuntime<AppConfig>) {

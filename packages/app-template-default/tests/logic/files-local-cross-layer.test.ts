@@ -25,6 +25,7 @@ import {
 
 import filesMigration from '../../../app-plugin-files/database/migrations/202608221000_files_create_files.ts';
 import { appFileClient } from '../../registry/nocobase-file-upload/app-client.ts';
+import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 
 interface Fixture {
   app: Hono;
@@ -37,6 +38,7 @@ const fixtures: Fixture[] = [];
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   await Promise.all(
     fixtures.splice(0).map(async (fixture) => {
       await fixture.runtime.dispose();
@@ -49,6 +51,10 @@ afterEach(async () => {
 describe('Files Local cross-layer workflow', () => {
   it('runs Registry through the App-local route, SQLite, Local storage, and detach', async () => {
     const fixture = await createFixture();
+    vi.stubGlobal('window', {
+      location: { origin: 'http://app.local' },
+      NOCOBASE_PORTAL_BASE: '/main',
+    });
     const requestedPaths: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const request = new Request(
@@ -82,9 +88,18 @@ describe('Files Local cross-layer workflow', () => {
         }),
       },
     );
-    expect(requestedPaths[0]).toBe('/api/documents/document-1/file');
+    expect(requestedPaths[0]).toBe('/main/api/documents/document-1/file');
     expect(requestedPaths.some((value) => value.startsWith('/v2/api'))).toBe(
       false,
+    );
+    expect(created.plan.upload.url).toMatch(
+      /^\/main\/api\/documents\/document-1\/file\/.+\/upload\?access=/,
+    );
+    expect(created.plan.complete.url).toMatch(
+      /^\/main\/api\/documents\/document-1\/file\/.+\/complete\?access=/,
+    );
+    expect(created.plan.cancel.url).toMatch(
+      /^\/main\/api\/documents\/document-1\/file\/.+\/upload\?access=/,
     );
 
     const upload = await fetch(created.plan.upload.url, {
@@ -103,6 +118,24 @@ describe('Files Local cross-layer workflow', () => {
     });
     expect(complete.status).toBe(200);
 
+    const cancelled = await appFileClient.request<CreateBusinessFileResponse>(
+      basePath,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'cancelled.txt',
+          size: 1,
+          contentType: 'text/plain',
+          replaceFileId: created.file.id,
+        }),
+      },
+    );
+    const cancel = await fetch(cancelled.plan.cancel.url, {
+      method: cancelled.plan.cancel.method,
+      credentials: 'include',
+    });
+    expect(cancel.status).toBe(200);
+
     const listed = await appFileClient.request<StoredFile[]>(basePath);
     expect(listed).toEqual([
       expect.objectContaining({
@@ -113,7 +146,7 @@ describe('Files Local cross-layer workflow', () => {
     ]);
 
     const content = await fetch(
-      `/api/${basePath}/${encodeURIComponent(created.file.id)}/content`,
+      `/main/api/${basePath}/${encodeURIComponent(created.file.id)}/content`,
       { credentials: 'include' },
     );
     expect(content.status).toBe(200);
@@ -170,7 +203,10 @@ async function createFixture(): Promise<Fixture> {
     audience: 'files-cross-layer',
     secret: 'files-cross-layer-secret-at-least-32-characters',
   });
-  const route = createFileService({ runtime }).createFileRoute({
+  const route = createFileService({
+    runtime,
+    publicBasePath: '/main',
+  }).createFileRoute({
     binding: {
       type: 'field',
       collection: 'documents',
@@ -183,14 +219,15 @@ async function createFixture(): Promise<Fixture> {
     },
     authorize() {},
   });
-  const app = new Hono();
-  app.use('/api/documents/*', async (context, next) => {
+  const internalApp = new Hono();
+  internalApp.use('/api/documents/*', async (context, next) => {
     if (context.req.header('cookie') !== 'files-session=authenticated') {
       return context.json({ error: 'Unauthenticated' }, 401);
     }
     await next();
   });
-  app.route('/api/documents/:documentId/file', route);
+  internalApp.route('/api/documents/:documentId/file', route);
+  const app = createPublicBasePathAdapter(internalApp, '/main');
   const fixture = { app, database, runtime, storageRoot };
   fixtures.push(fixture);
   return fixture;

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -41,8 +41,9 @@ describe('local Files storage', () => {
     });
 
     await storage.finalizeCandidate('pending/file-1', 'ready/file-1');
-    await expect(storage.head('pending/file-1')).rejects.toMatchObject({
-      code: 'ENOENT',
+    await expect(storage.head('pending/file-1')).resolves.toMatchObject({
+      contentLength: 13,
+      contentType: 'text/plain',
     });
     expect(await readText(await storage.openRead('ready/file-1'))).toBe(
       'managed files',
@@ -53,6 +54,41 @@ describe('local Files storage', () => {
     await expect(storage.head('ready/file-1')).rejects.toMatchObject({
       code: 'ENOENT',
     });
+  });
+
+  it('keeps a streaming PUT hidden until bytes and metadata are complete', async () => {
+    const appStorageRoot = await createTempDirectory();
+    const storage = createInternalFilesStorage(
+      resolveFilesConfig({ appStorageRoot }),
+    );
+    if (storage.driver !== 'local') {
+      throw new Error('Expected local Files storage.');
+    }
+
+    const source = new PassThrough();
+    source.write('partial');
+    const writing = storage.putCandidate('pending/file-1', source, {
+      contentType: 'text/plain',
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    await expect(storage.head('pending/file-1')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(
+      storage.finalizeCandidate('pending/file-1', 'ready/file-1'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+
+    source.end(' content');
+    await writing;
+    await expect(storage.head('pending/file-1')).resolves.toMatchObject({
+      contentLength: 15,
+      contentType: 'text/plain',
+    });
+    await storage.finalizeCandidate('pending/file-1', 'ready/file-1');
+    await expect(
+      readText(await storage.openRead('ready/file-1')),
+    ).resolves.toBe('partial content');
   });
 
   it('rejects unsafe object keys and operations after disposal', async () => {

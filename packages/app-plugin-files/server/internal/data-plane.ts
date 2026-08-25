@@ -235,7 +235,11 @@ export class FilesDataPlane {
       throw uploadFailed('The streamed file could not be committed.');
     } catch (error) {
       try {
-        await this.#kernel.cancelPendingUpload(pending.fileId);
+        await this.#kernel.cancelUpload(
+          pending.fileId,
+          pending.candidateKey,
+          pending.readyKey,
+        );
       } catch {
         // Preserve the stable upload error after best-effort cancellation.
       }
@@ -325,7 +329,11 @@ export class FilesDataPlane {
         transfer,
       };
     } catch (error) {
-      await this.#kernel.cancelUpload(pending.fileId, pending.candidateKey);
+      await this.#kernel.cancelUpload(
+        pending.fileId,
+        pending.candidateKey,
+        pending.readyKey,
+      );
       if (error instanceof FilesDataPlaneError) {
         throw error;
       }
@@ -540,6 +548,7 @@ export class FilesDataPlane {
     const result = await this.#kernel.cancelUpload(
       transfer.fileId,
       transfer.candidateKey,
+      transfer.readyKey,
       binding === undefined
         ? undefined
         : (input: CancelFileBindingInput): Promise<TBinding> =>
