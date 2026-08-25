@@ -1,4 +1,10 @@
-export { Job, Locator, QueueManager, Schedule, Worker } from '@boringnode/queue';
+export {
+  Job,
+  Locator,
+  QueueManager,
+  Schedule,
+  Worker,
+} from '@boringnode/queue';
 export type {
   DispatchManyResult,
   DispatchResult,

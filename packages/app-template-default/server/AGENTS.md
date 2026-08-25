@@ -19,7 +19,7 @@ verify them at the route, service, and configuration boundary that changed.
 - `config/*` owns environment parsing and defaults. Prefer adding config there
   instead of reading `process.env` in routes or services.
 - `routes/*` owns HTTP shape. Keep business logic in `services/*`.
-- `migrations/*` owns database shape. Add or update a focused migration when a
+- `../database/migrations/*` owns database shape. Add or update a focused migration when a
   service needs durable storage.
 
 ## Runtime Contract
@@ -28,10 +28,10 @@ Standalone and embedded may differ only in their adapter layer. After adapter
 normalization, app routes, SPA runtime globals, API proxy behavior, database
 setup, migrations, and services must use the shared runtime path.
 
-| Mode | Public base path | App-local incoming path | Internal base path | Public API URL | Internal proxy route |
-| --- | --- | --- | --- | --- | --- |
-| standalone | `APP_BASE_PATH` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<APP_BASE_PATH>/v2/api` | `/v2/api` |
-| embedded | `scope.basePath` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<scope.basePath>/v2/api` | `/v2/api` |
+| Mode       | Public base path | App-local incoming path            | Internal base path    | Public API URL            | Internal proxy route |
+| ---------- | ---------------- | ---------------------------------- | --------------------- | ------------------------- | -------------------- |
+| standalone | `APP_BASE_PATH`  | `/settings` from `/<app>/settings` | app-local root (`''`) | `<APP_BASE_PATH>/v2/api`  | `/v2/api`            |
+| embedded   | `scope.basePath` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<scope.basePath>/v2/api` | `/v2/api`            |
 
 `APP_BASE_PATH` and `scope.basePath` are public mount paths. Do not use them as
 app-local route prefixes. App-local routes should be written as `/api/*`,
@@ -76,7 +76,7 @@ debugging path, proxy, database, or SPA index issues.
 
 ## Adding Storage
 
-1. Create a migration under `server/migrations` with a timestamped name.
+1. Create a migration under `database/migrations` with a timestamped name.
 2. Keep `up` and `down` focused on one schema change.
 3. Add a service that uses the configured `DatabaseManager`; do not open an
    extra database connection inside the service.
@@ -86,11 +86,11 @@ debugging path, proxy, database, or SPA index issues.
 ## Proxy And SPA Runtime Rules
 
 - Keep NocoBase upstream proxy behavior and generic fetch proxy behavior in
-  `@nocobase/app-server/proxy`.
+  `@nocobase/app-server-kit/proxy`.
 - Preserve forwarded headers, referer/origin rewriting, and hop-by-hop header
   removal when changing proxy code.
 - SPA runtime globals are created in `server/spa/runtime-globals.ts` and
-  injected by `@nocobase/app-server/spa`.
+  injected by `@nocobase/app-server-kit/spa`.
   They are part of the browser SDK contract, not ordinary HTML decoration.
 - Static SPA assets must be served before the SPA fallback and missing assets
   must return JSON `404`, not the SPA index.

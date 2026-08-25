@@ -1,9 +1,9 @@
-import type { AIToolRendererMap } from "./tool-renderer-provider";
-import { BusinessReportRenderer } from "./business-report-renderer";
-import { ChartRenderer } from "./chart-renderer";
-import { SubAgentRenderer } from "./sub-agent-renderer";
-import { SuggestionsRenderer } from "./suggestions-renderer";
-import { WorkflowRenderer } from "./workflow-renderer";
+import type { AIToolRendererMap } from './tool-renderer-provider';
+import { BusinessReportRenderer } from './business-report-renderer';
+import { ChartRenderer } from './chart-renderer';
+import { SubAgentRenderer } from './sub-agent-renderer';
+import { SuggestionsRenderer } from './suggestions-renderer';
+import { WorkflowRenderer } from './workflow-renderer';
 
 export const builtInToolRenderers: AIToolRendererMap = {
   suggestions: {
@@ -19,7 +19,7 @@ export const builtInToolRenderers: AIToolRendererMap = {
     component: ChartRenderer,
     standalone: true,
   },
-  "dispatch-sub-agent-task": {
+  'dispatch-sub-agent-task': {
     component: SubAgentRenderer,
     standalone: true,
   },

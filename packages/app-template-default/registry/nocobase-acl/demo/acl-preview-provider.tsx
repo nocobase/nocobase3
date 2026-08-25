@@ -1,11 +1,11 @@
-import { useMemo, type PropsWithChildren } from "react";
+import { useMemo, type PropsWithChildren } from 'react';
 
 import {
   AclStoreProvider,
   type AclActionParams,
   type AclState,
   type AclStore,
-} from "@nocobase/portal-sdk/acl";
+} from '@nocobase/app-portal-sdk/acl';
 
 type PreviewRecordPermission = {
   dataSourceKey?: string;
@@ -31,35 +31,35 @@ export function AclPreviewProvider({
     const resources = Array.from(
       new Set(
         Object.keys(permissions).map((permission) =>
-          permission.slice(0, permission.lastIndexOf(":"))
-        )
-      )
+          permission.slice(0, permission.lastIndexOf(':')),
+        ),
+      ),
     );
     const state: AclState = {
-      status: "ready",
+      status: 'ready',
       permissions: {
-        currentRole: roles.length > 1 ? "__union__" : roles[0],
+        currentRole: roles.length > 1 ? '__union__' : roles[0],
         roles,
-        roleMode: roles.length > 1 ? "allow-use-union" : "default",
+        roleMode: roles.length > 1 ? 'allow-use-union' : 'default',
         resources,
         actions: permissions,
         actionAlias: {
-          list: "list",
-          get: "get",
-          create: "create",
-          update: "update",
-          destroy: "destroy",
+          list: 'list',
+          get: 'get',
+          create: 'create',
+          update: 'update',
+          destroy: 'destroy',
         },
         snippets: [],
       },
     };
     const recordState = new Map(
       recordPermissions.map((permission) => [
-        `${permission.dataSourceKey ?? "main"}:${permission.resource}:${
+        `${permission.dataSourceKey ?? 'main'}:${permission.resource}:${
           permission.action
         }:${permission.id}`,
         permission.allowed,
-      ])
+      ]),
     );
 
     return {
@@ -71,7 +71,7 @@ export function AclPreviewProvider({
       recordPermissions: {
         getState: () => recordState,
         subscribe: () => () => undefined,
-        getPermission: ({ dataSourceKey = "main", resource, action, id }) =>
+        getPermission: ({ dataSourceKey = 'main', resource, action, id }) =>
           recordState.get(`${dataSourceKey}:${resource}:${action}:${id}`),
       },
     };

@@ -15,7 +15,11 @@ export type AuthorizationOperation =
   | { type: 'removePermissionSetGroup'; key: string }
   | { type: 'upsertAssignment'; id: string; value: Assignment }
   | { type: 'removeAssignment'; id: string }
-  | { type: 'setOrganizationWideDefault'; resource: string; value: OrganizationWideDefault }
+  | {
+      type: 'setOrganizationWideDefault';
+      resource: string;
+      value: OrganizationWideDefault;
+    }
   | { type: 'removeOrganizationWideDefault'; resource: string }
   | { type: 'upsertSharingRule'; key: string; value: SharingRule }
   | { type: 'removeSharingRule'; key: string }
@@ -33,7 +37,11 @@ function equal(left: unknown, right: unknown): boolean {
     return false;
   }
   if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+    if (
+      !Array.isArray(left) ||
+      !Array.isArray(right) ||
+      left.length !== right.length
+    ) {
       return false;
     }
     return left.every((item, index) => equal(item, right[index]));
@@ -43,13 +51,21 @@ function equal(left: unknown, right: unknown): boolean {
     const rightRecord = right as Record<string, unknown>;
     const leftKeys = Object.keys(leftRecord).sort();
     const rightKeys = Object.keys(rightRecord).sort();
-    return leftKeys.length === rightKeys.length
-      && leftKeys.every((key, index) => key === rightKeys[index] && equal(leftRecord[key], rightRecord[key]));
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key, index) =>
+          key === rightKeys[index] && equal(leftRecord[key], rightRecord[key]),
+      )
+    );
   }
   return false;
 }
 
-function keyed<T>(items: readonly T[], key: (item: T) => string): Map<string, T> {
+function keyed<T>(
+  items: readonly T[],
+  key: (item: T) => string,
+): Map<string, T> {
   return new Map(items.map((item) => [key(item), item]));
 }
 
@@ -84,20 +100,41 @@ export function diffAuthorization(
   const current = currentInput;
   const desired = desiredInput;
   const operations: AuthorizationOperation[] = [];
-  operations.push(...diffKeyed(current.permissionSets, desired.permissionSets, (item) => item.key,
-    (key, value) => ({ type: 'upsertPermissionSet', key, value }),
-    (key) => ({ type: 'removePermissionSet', key })));
-  operations.push(...diffKeyed(current.permissionSetGroups, desired.permissionSetGroups, (item) => item.key,
-    (key, value) => ({ type: 'upsertPermissionSetGroup', key, value }),
-    (key) => ({ type: 'removePermissionSetGroup', key })));
-  operations.push(...diffKeyed(current.assignments, desired.assignments, (item) => item.id,
-    (id, value) => ({ type: 'upsertAssignment', id, value }),
-    (id) => ({ type: 'removeAssignment', id })));
+  operations.push(
+    ...diffKeyed(
+      current.permissionSets,
+      desired.permissionSets,
+      (item) => item.key,
+      (key, value) => ({ type: 'upsertPermissionSet', key, value }),
+      (key) => ({ type: 'removePermissionSet', key }),
+    ),
+  );
+  operations.push(
+    ...diffKeyed(
+      current.permissionSetGroups,
+      desired.permissionSetGroups,
+      (item) => item.key,
+      (key, value) => ({ type: 'upsertPermissionSetGroup', key, value }),
+      (key) => ({ type: 'removePermissionSetGroup', key }),
+    ),
+  );
+  operations.push(
+    ...diffKeyed(
+      current.assignments,
+      desired.assignments,
+      (item) => item.id,
+      (id, value) => ({ type: 'upsertAssignment', id, value }),
+      (id) => ({ type: 'removeAssignment', id }),
+    ),
+  );
 
   const currentDefaults = current.organizationWideDefaults;
   const desiredDefaults = desired.organizationWideDefaults;
   for (const [resource, value] of Object.entries(desiredDefaults)) {
-    if (!(resource in currentDefaults) || !equal(currentDefaults[resource], value)) {
+    if (
+      !(resource in currentDefaults) ||
+      !equal(currentDefaults[resource], value)
+    ) {
       operations.push({ type: 'setOrganizationWideDefault', resource, value });
     }
   }
@@ -106,11 +143,23 @@ export function diffAuthorization(
       operations.push({ type: 'removeOrganizationWideDefault', resource });
     }
   }
-  operations.push(...diffKeyed(current.sharingRules, desired.sharingRules, (item) => item.key,
-    (key, value) => ({ type: 'upsertSharingRule', key, value }),
-    (key) => ({ type: 'removeSharingRule', key })));
-  operations.push(...diffKeyed(current.restrictionRules, desired.restrictionRules, (item) => item.key,
-    (key, value) => ({ type: 'upsertRestrictionRule', key, value }),
-    (key) => ({ type: 'removeRestrictionRule', key })));
+  operations.push(
+    ...diffKeyed(
+      current.sharingRules,
+      desired.sharingRules,
+      (item) => item.key,
+      (key, value) => ({ type: 'upsertSharingRule', key, value }),
+      (key) => ({ type: 'removeSharingRule', key }),
+    ),
+  );
+  operations.push(
+    ...diffKeyed(
+      current.restrictionRules,
+      desired.restrictionRules,
+      (item) => item.key,
+      (key, value) => ({ type: 'upsertRestrictionRule', key, value }),
+      (key) => ({ type: 'removeRestrictionRule', key }),
+    ),
+  );
   return operations;
 }

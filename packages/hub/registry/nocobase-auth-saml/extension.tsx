@@ -1,35 +1,35 @@
-import { lazy } from "react";
-import { BadgeCheck } from "lucide-react";
+import { lazy } from 'react';
+import { BadgeCheck } from 'lucide-react';
 
-import type { AppExtension } from "@nocobase/portal-sdk/extensions";
-import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
+import type { AppExtension } from '@nocobase/app-portal-sdk/extensions';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 
-const SamlSignInButton = lazy(() => import("./saml-sign-in-button"));
-const SamlAutoRedirectProvider = lazy(() => import("./auto-redirect-provider"));
+const SamlSignInButton = lazy(() => import('./saml-sign-in-button'));
+const SamlAutoRedirectProvider = lazy(() => import('./auto-redirect-provider'));
 
 const samlAuthExtension: AppExtension = {
-  id: "nocobase-auth-saml",
+  id: 'nocobase-auth-saml',
   AuthRuntimeProvider: SamlAutoRedirectProvider,
   authRuntimePriority: 20,
   dev: {
     resources: [
       {
-        name: "auth-saml-demo",
-        list: "auth/saml",
+        name: 'auth-saml-demo',
+        list: 'auth/saml',
         meta: {
-          parent: "auth-components",
-          label: "SAML",
+          parent: 'auth-components',
+          label: 'SAML',
           icon: <BadgeCheck />,
-          acl: { type: "authenticated" },
+          acl: { type: 'authenticated' },
         },
       },
     ],
     routes: defineAppRoutes([
       {
-        name: "development.auth.saml",
-        path: "auth/saml",
+        name: 'development.auth.saml',
+        path: 'auth/saml',
         lazy: () =>
-          import("./demo").then((module) => ({
+          import('./demo').then((module) => ({
             default: module.SamlAuthDemoPage,
           })),
       },
@@ -37,8 +37,8 @@ const samlAuthExtension: AppExtension = {
   },
   authAdapters: [
     {
-      authType: "SAML",
-      placement: "button",
+      authType: 'SAML',
+      placement: 'button',
       Component: SamlSignInButton,
     },
   ],

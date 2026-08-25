@@ -3,9 +3,10 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
     "paths": {
-      "@/extensions/*": ["./client/extensions/*", "./registry/*"],
+      "@nocobase/ui": ["./client/nocobase-ui/index.ts"],
       "@/*": ["./client/*"]
     }
   },
-  "include": ["client", "registry"]
+  "include": ["client"],
+  "exclude": ["client-old", "registry"]
 }

@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren } from 'react';
 
-import { useResourceParams, useTranslate } from "@refinedev/core";
-import { Breadcrumb } from "@/components/app-shell/breadcrumb";
-import { CreateButton } from "@/components/resources/buttons/create";
-import { useResourceLabel } from "@/components/resources/resource-label";
+import { useResourceParams, useTranslate } from '@refinedev/core';
+import { Breadcrumb } from '@/components/app-shell/breadcrumb';
+import { CreateButton } from '@/components/resources/buttons/create';
+import { useResourceLabel } from '@/components/resources/resource-label';
 import {
   resolveTranslatableText,
   type TranslationOptions,
-} from "@nocobase/portal-sdk/i18n";
-import { cn } from "@/lib/utils";
+} from '@nocobase/app-portal-sdk/i18n';
+import { cn } from '@/lib/utils';
 
 type ListViewProps = PropsWithChildren<{
   className?: string;
@@ -19,7 +19,7 @@ type ListViewProps = PropsWithChildren<{
 
 export function ListView({ children, className, resource }: ListViewProps) {
   return (
-    <div className={cn("flex flex-col", "gap-6", className)}>
+    <div className={cn('flex flex-col', 'gap-6', className)}>
       <ListViewHeader resource={resource} />
       {children}
     </div>
@@ -49,7 +49,7 @@ export const ListViewHeader = ({
 
   const isCreateButtonVisible = canCreate ?? !!resource?.create;
 
-  const resourceTitle = useResourceLabel(resource, "plural", identifier);
+  const resourceTitle = useResourceLabel(resource, 'plural', identifier);
   const title = titleFromProps ?? resourceTitle;
   const meta = resource?.meta as
     | {
@@ -62,33 +62,33 @@ export const ListViewHeader = ({
     ? translate(
         meta.descriptionI18nKey,
         meta.i18nOptions,
-        meta.description ?? meta.descriptionI18nKey
+        meta.description ?? meta.descriptionI18nKey,
       )
     : resolveTranslatableText(meta?.description);
 
   return (
-    <div className={cn("flex flex-col", "gap-3", wrapperClassName)}>
-      <div className="flex items-center text-muted-foreground">
+    <div className={cn('flex flex-col', 'gap-3', wrapperClassName)}>
+      <div className='flex items-center text-muted-foreground'>
         <Breadcrumb />
       </div>
       <div
         className={cn(
-          "flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between",
-          headerClassName
+          'flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between',
+          headerClassName,
         )}
       >
         <div>
-          <h2 className="text-3xl font-semibold tracking-[-0.035em]">
+          <h2 className='text-3xl font-semibold tracking-[-0.035em]'>
             {title}
           </h2>
           {description && (
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            <p className='mt-2 max-w-2xl text-sm leading-6 text-muted-foreground'>
               {description}
             </p>
           )}
         </div>
         {isCreateButtonVisible && (
-          <div className="flex items-center gap-2">
+          <div className='flex items-center gap-2'>
             <CreateButton resource={resourceName} />
           </div>
         )}
@@ -97,4 +97,4 @@ export const ListViewHeader = ({
   );
 };
 
-ListView.displayName = "ListView";
+ListView.displayName = 'ListView';

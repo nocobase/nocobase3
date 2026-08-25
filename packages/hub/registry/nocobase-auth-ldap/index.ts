@@ -1,1 +1,1 @@
-export { useLdapSignIn } from "./use-ldap-sign-in";
+export { useLdapSignIn } from './use-ldap-sign-in';

@@ -1,4 +1,4 @@
-import type { AclState, RoleMode } from "@nocobase/portal-sdk/acl";
+import type { AclState, RoleMode } from '@nocobase/app-portal-sdk/acl';
 
 export type RoleSwitcherContext = {
   currentRole?: string;
@@ -8,9 +8,9 @@ export type RoleSwitcherContext = {
 
 export function resolveRoleSwitcherContext(
   state: AclState,
-  storedRole?: string
+  storedRole?: string,
 ): RoleSwitcherContext {
-  if (state.status === "ready") {
+  if (state.status === 'ready') {
     return {
       currentRole: state.permissions.currentRole ?? storedRole,
       roleMode: state.permissions.roleMode,
@@ -18,7 +18,7 @@ export function resolveRoleSwitcherContext(
     };
   }
 
-  if (state.status === "error" && state.portalAccessDenied) {
+  if (state.status === 'error' && state.portalAccessDenied) {
     return {
       currentRole: state.portalAccessDenied.role?.trim() || storedRole,
       roleMode: state.portalAccessDenied.roleMode,

@@ -1,18 +1,18 @@
-import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { mailApi } from "./mail-api";
-import type { MailLabel } from "./types";
-import { LABEL_COLOR_OPTIONS, LABEL_SWATCH_CLASSES } from "./types";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { mailApi } from './mail-api';
+import type { MailLabel } from './types';
+import { LABEL_COLOR_OPTIONS, LABEL_SWATCH_CLASSES } from './types';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,11 +22,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
-type LabelValues = Pick<MailLabel, "label" | "color" | "description">;
-const EMPTY: LabelValues = { label: "", color: "default", description: "" };
+type LabelValues = Pick<MailLabel, 'label' | 'color' | 'description'>;
+const EMPTY: LabelValues = { label: '', color: 'default', description: '' };
 
 export interface MailLabelManagerProps {
   open: boolean;
@@ -57,9 +57,9 @@ export function MailLabelManager({
         ? {
             label: first.label,
             color: first.color,
-            description: first.description ?? "",
+            description: first.description ?? '',
           }
-        : EMPTY
+        : EMPTY,
     );
     // Initialize once per opening; keep the current edit stable after a mutation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,7 +70,7 @@ export function MailLabelManager({
     setForm({
       label: label.label,
       color: label.color,
-      description: label.description ?? "",
+      description: label.description ?? '',
     });
   };
 
@@ -90,14 +90,14 @@ export function MailLabelManager({
         });
         onChange(
           labels.map((item) =>
-            item.id === selectedId ? { ...item, ...updated } : item
-          )
+            item.id === selectedId ? { ...item, ...updated } : item,
+          ),
         );
       }
-      toast.success("Label saved");
+      toast.success('Label saved');
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to save label"
+        error instanceof Error ? error.message : 'Failed to save label',
       );
     } finally {
       setBusy(false);
@@ -115,10 +115,10 @@ export function MailLabelManager({
         setForm(EMPTY);
       }
       setConfirmDeleteId(null);
-      toast.success("Label deleted");
+      toast.success('Label deleted');
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to delete label"
+        error instanceof Error ? error.message : 'Failed to delete label',
       );
     } finally {
       setBusy(false);
@@ -126,39 +126,39 @@ export function MailLabelManager({
   };
 
   const editor = (
-    <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
-      <div className="flex flex-col gap-2">
-        <div className="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
+    <div className='grid gap-4 sm:grid-cols-[180px_1fr]'>
+      <div className='flex flex-col gap-2'>
+        <div className='flex max-h-80 flex-col gap-0.5 overflow-y-auto'>
           {labels.map((label) => (
             <div
               key={label.id}
               className={cn(
-                "group flex items-center rounded-md text-sm hover:bg-muted/60",
-                selectedId === label.id && "bg-muted font-medium"
+                'group flex items-center rounded-md text-sm hover:bg-muted/60',
+                selectedId === label.id && 'bg-muted font-medium',
               )}
             >
               <button
-                type="button"
+                type='button'
                 onClick={() => select(label)}
-                className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left"
+                className='flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left'
               >
                 <span
                   className={cn(
-                    "size-2.5 shrink-0 rounded-full",
+                    'size-2.5 shrink-0 rounded-full',
                     LABEL_SWATCH_CLASSES[label.color] ??
-                      LABEL_SWATCH_CLASSES.default
+                      LABEL_SWATCH_CLASSES.default,
                   )}
                 />
-                <span className="truncate">{label.label}</span>
+                <span className='truncate'>{label.label}</span>
               </button>
               <Button
-                variant="ghost"
-                size="icon-sm"
+                variant='ghost'
+                size='icon-sm'
                 title={`Delete ${label.label}`}
                 aria-label={`Delete ${label.label}`}
                 disabled={busy}
                 onClick={() => setConfirmDeleteId(label.id)}
-                className="mr-1 shrink-0 text-muted-foreground opacity-60 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                className='mr-1 shrink-0 text-muted-foreground opacity-60 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100'
               >
                 <Trash2 />
               </Button>
@@ -166,8 +166,8 @@ export function MailLabelManager({
           ))}
         </div>
         <Button
-          variant="outline"
-          size="sm"
+          variant='outline'
+          size='sm'
           onClick={() => {
             setSelectedId(null);
             setForm(EMPTY);
@@ -176,8 +176,8 @@ export function MailLabelManager({
           <Plus /> New
         </Button>
       </div>
-      <div className="flex flex-col gap-3">
-        <div className="space-y-1.5">
+      <div className='flex flex-col gap-3'>
+        <div className='space-y-1.5'>
           <Label>Name</Label>
           <Input
             value={form.label}
@@ -186,41 +186,41 @@ export function MailLabelManager({
             }
           />
         </div>
-        <div className="space-y-1.5">
+        <div className='space-y-1.5'>
           <Label>Description</Label>
           <Input
-            value={form.description ?? ""}
+            value={form.description ?? ''}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, description: event.target.value }))
             }
           />
         </div>
-        <div className="space-y-2">
+        <div className='space-y-2'>
           <Label>Color</Label>
-          <div className="flex items-center gap-2">
+          <div className='flex items-center gap-2'>
             {LABEL_COLOR_OPTIONS.map((color) => (
               <button
                 key={color}
-                type="button"
+                type='button'
                 title={color}
                 onClick={() => setForm((prev) => ({ ...prev, color }))}
                 className={cn(
-                  "size-5 rounded-full",
+                  'size-5 rounded-full',
                   LABEL_SWATCH_CLASSES[color],
                   form.color === color &&
-                    "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                    'ring-2 ring-foreground ring-offset-2 ring-offset-background',
                 )}
               />
             ))}
           </div>
         </div>
-        <div className="mt-2 flex items-center justify-end">
+        <div className='mt-2 flex items-center justify-end'>
           <Button
-            size="sm"
+            size='sm'
             disabled={!form.label.trim() || busy}
             onClick={() => void save()}
           >
-            {busy && <Loader2 className="animate-spin" />} Save
+            {busy && <Loader2 className='animate-spin' />} Save
           </Button>
         </div>
       </div>
@@ -233,7 +233,7 @@ export function MailLabelManager({
         editor
       ) : (
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent className="sm:max-w-2xl">
+          <DialogContent className='sm:max-w-2xl'>
             <DialogHeader>
               <DialogTitle>Manage labels</DialogTitle>
             </DialogHeader>
@@ -257,7 +257,7 @@ export function MailLabelManager({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              variant="destructive"
+              variant='destructive'
               disabled={busy}
               onClick={() => void remove()}
             >

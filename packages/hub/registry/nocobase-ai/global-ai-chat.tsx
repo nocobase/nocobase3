@@ -6,17 +6,17 @@ import {
   type Dispatch,
   type PropsWithChildren,
   type SetStateAction,
-} from "react";
-import { RouteOverlayViewportContext } from "@nocobase/portal-sdk/routing";
+} from 'react';
+import { RouteOverlayViewportContext } from '@nocobase/app-portal-sdk/routing';
 import {
   AIChatFloatingTrigger,
   NocoBaseAIRootProvider,
   useAIPageElementPicker,
   type AIChatComposerAction,
-} from "./components";
-import { AIChatWindow } from "./components/chat/chat-window";
-import { ChatSurface } from "./components/surfaces/chat-surface";
-import { ChatSurfaceActions } from "./components/surfaces/chat-surface-actions";
+} from './components';
+import { AIChatWindow } from './components/chat/chat-window';
+import { ChatSurface } from './components/surfaces/chat-surface';
+import { ChatSurfaceActions } from './components/surfaces/chat-surface-actions';
 import {
   AIChatProvider,
   type AIToolInvokerMap,
@@ -24,10 +24,10 @@ import {
   useAIChatBase,
   useAIChatControllerState,
   useGlobalAIChatController,
-} from "./providers";
-import { nocobaseAIService } from "./services";
-import { Globe2, MousePointer2 } from "lucide-react";
-import { useAITranslate } from "./locales/use-ai-translate";
+} from './providers';
+import { nocobaseAIService } from './services';
+import { Globe2, MousePointer2 } from 'lucide-react';
+import { useAITranslate } from './locales/use-ai-translate';
 
 const DEFAULT_SIDE_PANEL_WIDTH = 450;
 export function NocoBaseAIExtensionProvider({
@@ -50,36 +50,32 @@ function NocoBaseAIGlobalEntry({ children }: PropsWithChildren) {
   const { open } = useAIChatControllerState(controller);
   const [webSearch, setWebSearch] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const ready =
-    ai.configurationStatus === "ready" &&
-    ai.employees.length > 0;
+  const ready = ai.configurationStatus === 'ready' && ai.employees.length > 0;
   const routeOverlayViewport = useMemo(
     () =>
       ready && open && !expanded
         ? { inlineEnd: DEFAULT_SIDE_PANEL_WIDTH }
         : null,
-    [expanded, open, ready]
+    [expanded, open, ready],
   );
 
   return (
     <div
       data-open={ready && open && !expanded}
-      data-chat-side="right"
-      className="chat-side-panel-layout @container min-h-svh min-w-0"
+      data-chat-side='right'
+      className='chat-side-panel-layout @container min-h-svh min-w-0'
       style={
         {
-          "--chat-side-panel-width": `${DEFAULT_SIDE_PANEL_WIDTH}px`,
+          '--chat-side-panel-width': `${DEFAULT_SIDE_PANEL_WIDTH}px`,
         } as CSSProperties
       }
     >
-      <RouteOverlayViewportContext.Provider
-        value={routeOverlayViewport}
-      >
-        <div className="min-w-0">{children}</div>
+      <RouteOverlayViewportContext.Provider value={routeOverlayViewport}>
+        <div className='min-w-0'>{children}</div>
       </RouteOverlayViewportContext.Provider>
       {ready ? (
         <AIChatProvider
-          id="starter-global-ai"
+          id='starter-global-ai'
           controller={controller}
           webSearch={webSearch}
         >
@@ -123,7 +119,7 @@ function StarterGlobalAIChat({
   const { registeredCount, startPicking } = useAIPageElementPicker();
   const supportsWebSearch = currentModel.supportWebSearch === true;
   const unreadCount = conversations.filter(
-    (conversation) => conversation.unread
+    (conversation) => conversation.unread,
   ).length;
 
   useEffect(() => {
@@ -133,8 +129,8 @@ function StarterGlobalAIChat({
   const composerActions = useMemo<AIChatComposerAction[]>(
     () => [
       {
-        key: "pick-page-element",
-        label: t("actions.pickPageElement", "Pick page element"),
+        key: 'pick-page-element',
+        label: t('actions.pickPageElement', 'Pick page element'),
         icon: <MousePointer2 />,
         disabled: registeredCount === 0,
         onClick: () => {
@@ -149,14 +145,14 @@ function StarterGlobalAIChat({
         },
       },
       {
-        key: "web-search",
+        key: 'web-search',
         label: supportsWebSearch
           ? webSearch
-            ? t("actions.disableWebSearch", "Disable web search")
-            : t("actions.enableWebSearch", "Enable web search")
+            ? t('actions.disableWebSearch', 'Disable web search')
+            : t('actions.enableWebSearch', 'Enable web search')
           : t(
-              "actions.webSearchUnsupported",
-              "Web search is not supported by this model"
+              'actions.webSearchUnsupported',
+              'Web search is not supported by this model',
             ),
         icon: <Globe2 />,
         active: webSearch,
@@ -176,7 +172,7 @@ function StarterGlobalAIChat({
       supportsWebSearch,
       webSearch,
       t,
-    ]
+    ],
   );
   const closeChat = () => {
     setExpanded(false);
@@ -191,7 +187,7 @@ function StarterGlobalAIChat({
     <>
       <ChatSurface
         open={open}
-        variant={expanded ? "dialog" : "side-panel"}
+        variant={expanded ? 'dialog' : 'side-panel'}
         onOpenChange={handleSurfaceOpenChange}
         width={DEFAULT_SIDE_PANEL_WIDTH}
         showCloseHandle={false}

@@ -6,7 +6,9 @@ export interface AppSettingsRoutesOptions {
   appSettingsStore: AppSettings;
 }
 
-export function createAppSettingsRoutes(options: AppSettingsRoutesOptions): Hono {
+export function createAppSettingsRoutes(
+  options: AppSettingsRoutesOptions,
+): Hono {
   const routes = new Hono();
 
   routes.get('/', async (c) => {

@@ -1,4 +1,7 @@
-import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
+import {
+  defineConfig,
+  type ConfigFactory,
+} from '@nocobase/app-server-kit/config';
 import type { AppDriveConfig, DriveVisibility } from '@nocobase/drive';
 
 const driveConfig: ConfigFactory<AppDriveConfig> = defineConfig(
@@ -44,7 +47,10 @@ const driveConfig: ConfigFactory<AppDriveConfig> = defineConfig(
 
 export default driveConfig;
 
-function resolveVisibility(value: string | undefined, fallback: DriveVisibility): DriveVisibility {
+function resolveVisibility(
+  value: string | undefined,
+  fallback: DriveVisibility,
+): DriveVisibility {
   if (value === 'public' || value === 'private') {
     return value;
   }

@@ -1,11 +1,11 @@
-import { nocobaseClient } from "@nocobase/portal-sdk/client";
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 
-import { getDataSourceHeaders } from "./storage";
+import { getDataSourceHeaders } from './storage';
 import type {
   FileUploadMessages,
   FileUploadOptions,
   NocoBaseFileRecord,
-} from "./types";
+} from './types';
 
 export type PresignedFileInfo = {
   key: string;
@@ -23,22 +23,22 @@ export type PresignedUploadResult = {
 
 export async function uploadDirect(
   { file, descriptor, storage, signal }: FileUploadOptions,
-  messages: Pick<FileUploadMessages, "directUploadFailed">
+  messages: Pick<FileUploadMessages, 'directUploadFailed'>,
 ) {
-  const dataSourceKey = descriptor.dataSourceKey ?? "main";
+  const dataSourceKey = descriptor.dataSourceKey ?? 'main';
   const headers = getDataSourceHeaders(dataSourceKey);
-  const mimetype = file.type || "application/octet-stream";
+  const mimetype = file.type || 'application/octet-stream';
 
   const initialized = await nocobaseClient.action<PresignedUploadResult>(
-    "storages",
-    "createPresignedUrl",
+    'storages',
+    'createPresignedUrl',
     {
-      method: "POST",
+      method: 'POST',
       headers,
       signal,
       query: {
         uploadDataSourceKey:
-          dataSourceKey === "main" ? undefined : dataSourceKey,
+          dataSourceKey === 'main' ? undefined : dataSourceKey,
       },
       body: {
         name: file.name,
@@ -47,13 +47,13 @@ export async function uploadDirect(
         storageId: storage.id,
         storageType: storage.type,
       },
-    }
+    },
   );
 
   const uploaded = await fetch(initialized.putUrl, {
-    method: "PUT",
+    method: 'PUT',
     headers: {
-      "Content-Type": mimetype,
+      'Content-Type': mimetype,
     },
     body: file,
     signal,
@@ -67,26 +67,26 @@ export async function uploadDirect(
 
   return nocobaseClient.action<NocoBaseFileRecord>(
     descriptor.fileCollection,
-    "create",
+    'create',
     {
-      method: "POST",
+      method: 'POST',
       headers,
       signal,
       query: {
         uploadDataSourceKey:
-          dataSourceKey === "main" ? undefined : dataSourceKey,
+          dataSourceKey === 'main' ? undefined : dataSourceKey,
       },
       body: {
         title: fileInfo.title,
         filename: fileInfo.key,
         extname: fileInfo.extname,
-        path: "",
+        path: '',
         size: fileInfo.size ?? file.size,
-        url: fileInfo.url ?? "",
+        url: fileInfo.url ?? '',
         mimetype: fileInfo.mimetype ?? mimetype,
         meta: {},
         storageId: storage.id,
       },
-    }
+    },
   );
 }

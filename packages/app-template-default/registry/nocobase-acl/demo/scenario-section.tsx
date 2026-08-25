@@ -1,10 +1,10 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from '@/components/ui/badge';
 import {
   AclScenarioPromptGenerator,
   type AclPromptGeneratorConfig,
-} from "./prompt-generator";
+} from './prompt-generator';
 
 export function AclScenarioSection({
   eyebrow,
@@ -20,13 +20,13 @@ export function AclScenarioSection({
   prompt: AclPromptGeneratorConfig;
 }) {
   return (
-    <section className="space-y-5 border-t pt-8">
+    <section className='space-y-5 border-t pt-8'>
       <div>
-        <Badge variant="outline">{eyebrow}</Badge>
-        <h2 className="mt-3 text-2xl font-semibold tracking-[-0.025em]">
+        <Badge variant='outline'>{eyebrow}</Badge>
+        <h2 className='mt-3 text-2xl font-semibold tracking-[-0.025em]'>
           {title}
         </h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+        <p className='mt-2 max-w-3xl text-sm leading-6 text-muted-foreground'>
           {description}
         </p>
       </div>

@@ -1,12 +1,12 @@
-export const SIGNATURE_ATTR = "data-mail-signature";
+export const SIGNATURE_ATTR = 'data-mail-signature';
 
 export function createSignatureId() {
   return `sig-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function stripSignature(html: string): string {
-  if (!html) return "";
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.body.querySelectorAll(`[${SIGNATURE_ATTR}]`).forEach((el) => el.remove());
   return doc.body.innerHTML;
 }
@@ -17,7 +17,7 @@ function wrapSignature(content: string): string {
 
 export function applySignature(
   html: string,
-  signatureContent: string | null | undefined
+  signatureContent: string | null | undefined,
 ): string {
   const base = stripSignature(html);
   if (!signatureContent) return base;

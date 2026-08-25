@@ -24,20 +24,20 @@ Application-owned React translations belong in `client/locales`, outside the
 installed Registry directory:
 
 ```ts
-import { registerTranslationResources } from "@nocobase/portal-sdk/i18n";
+import { registerTranslationResources } from '@nocobase/app-portal-sdk/i18n';
 
-registerTranslationResources("my-feature", {
-  "en-US": { title: "Orders" },
-  "zh-CN": { title: "订单" },
+registerTranslationResources('my-feature', {
+  'en-US': { title: 'Orders' },
+  'zh-CN': { title: '订单' },
 });
 ```
 
 Other installed components can opt into another server-generated namespace:
 
 ```ts
-import { registerServerResourceNamespace } from "@/extensions/nocobase-i18n";
+import { registerServerResourceNamespace } from '@/extensions/nocobase-i18n';
 
-registerServerResourceNamespace("my-dynamic-namespace");
+registerServerResourceNamespace('my-dynamic-namespace');
 ```
 
 Namespaces registered after startup are loaded incrementally. Existing exact

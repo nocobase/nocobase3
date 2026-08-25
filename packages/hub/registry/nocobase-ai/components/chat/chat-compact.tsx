@@ -1,16 +1,16 @@
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { History, LoaderCircle } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { History, LoaderCircle } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import {
   useAIChatBase,
   useAIChatStatus,
   type AIToolCallDecision,
-} from "../../providers";
-import { ChatComposer, type AIChatComposerAction } from "./chat-composer";
-import { AIChatHistoryDialog } from "./chat-history-dialog";
-import { ChatHeader } from "./chat-header";
-import { useAITranslate } from "../../locales/use-ai-translate";
+} from '../../providers';
+import { ChatComposer, type AIChatComposerAction } from './chat-composer';
+import { AIChatHistoryDialog } from './chat-history-dialog';
+import { ChatHeader } from './chat-header';
+import { useAITranslate } from '../../locales/use-ai-translate';
 
 export type AIChatCompactProps = {
   className?: string;
@@ -41,13 +41,13 @@ export function AIChatCompact({
   const { currentEmployee } = useAIChatBase();
   const { status } = useAIChatStatus();
   const [historyOpen, setHistoryOpen] = useState(false);
-  const busy = status === "submitted" || status === "streaming";
+  const busy = status === 'submitted' || status === 'streaming';
 
   return (
     <section
       className={cn(
-        "flex min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-card",
-        className
+        'flex min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-card',
+        className,
       )}
     >
       <ChatHeader
@@ -56,9 +56,9 @@ export function AIChatCompact({
         actions={
           <>
             <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("chat.openHistory", "Open message history")}
+              variant='ghost'
+              size='icon-sm'
+              aria-label={t('chat.openHistory', 'Open message history')}
               onClick={() => setHistoryOpen(true)}
             >
               <History />
@@ -68,9 +68,9 @@ export function AIChatCompact({
         }
       />
       {busy ? (
-        <div className="flex items-center gap-2 border-b bg-muted/25 px-4 py-2 text-xs text-muted-foreground">
-          <LoaderCircle className="size-3.5 animate-spin" />
-          {t("chat.employeeWorking", "{{name}} is working…", {
+        <div className='flex items-center gap-2 border-b bg-muted/25 px-4 py-2 text-xs text-muted-foreground'>
+          <LoaderCircle className='size-3.5 animate-spin' />
+          {t('chat.employeeWorking', '{{name}} is working…', {
             name: currentEmployee.nickname,
           })}
         </div>

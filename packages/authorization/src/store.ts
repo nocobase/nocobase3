@@ -12,14 +12,35 @@ import type {
 } from './types.js';
 
 export interface AuthorizationStore {
-  findAssignments(subjects: readonly AssignmentSubject[], now: Date): Promise<Assignment[]>;
+  findAssignments(
+    subjects: readonly AssignmentSubject[],
+    now: Date,
+  ): Promise<Assignment[]>;
   getPermissionSet(key: string): Promise<PermissionSet | undefined>;
   getPermissionSetGroup(key: string): Promise<PermissionSetGroup | undefined>;
-  getOrganizationWideDefault(resource: string): Promise<OrganizationWideDefault | undefined>;
-  findSharingRules(subjects: readonly AssignmentSubject[], resource: string, action: string, now: Date): Promise<SharingRule[]>;
-  createExplicitSharingFilter(rule: SharingRule, collection: string, identifier: string): Promise<FilterAst | undefined>;
-  matchesFilterMembership(node: FilterMembershipNode, value: unknown): Promise<boolean>;
-  findRestrictionRules(subjects: readonly AssignmentSubject[], resource: string, action: string): Promise<RestrictionRule[]>;
+  getOrganizationWideDefault(
+    resource: string,
+  ): Promise<OrganizationWideDefault | undefined>;
+  findSharingRules(
+    subjects: readonly AssignmentSubject[],
+    resource: string,
+    action: string,
+    now: Date,
+  ): Promise<SharingRule[]>;
+  createExplicitSharingFilter(
+    rule: SharingRule,
+    collection: string,
+    identifier: string,
+  ): Promise<FilterAst | undefined>;
+  matchesFilterMembership(
+    node: FilterMembershipNode,
+    value: unknown,
+  ): Promise<boolean>;
+  findRestrictionRules(
+    subjects: readonly AssignmentSubject[],
+    resource: string,
+    action: string,
+  ): Promise<RestrictionRule[]>;
 }
 
 export interface MemoryAuthorizationStoreOptions {
@@ -52,8 +73,13 @@ export class MemoryAuthorizationStore implements AuthorizationStore {
     this.restrictionRules = [...(options.restrictionRules ?? [])];
   }
 
-  async findAssignments(subjects: readonly AssignmentSubject[], now: Date): Promise<Assignment[]> {
-    const keys = new Set(subjects.map((subject) => `${subject.type}:${subject.id}`));
+  async findAssignments(
+    subjects: readonly AssignmentSubject[],
+    now: Date,
+  ): Promise<Assignment[]> {
+    const keys = new Set(
+      subjects.map((subject) => `${subject.type}:${subject.id}`),
+    );
     return this.assignments.filter((assignment) => {
       if (!keys.has(`${assignment.subject.type}:${assignment.subject.id}`)) {
         return false;
@@ -72,11 +98,15 @@ export class MemoryAuthorizationStore implements AuthorizationStore {
     return this.permissionSets.get(key);
   }
 
-  async getPermissionSetGroup(key: string): Promise<PermissionSetGroup | undefined> {
+  async getPermissionSetGroup(
+    key: string,
+  ): Promise<PermissionSetGroup | undefined> {
     return this.permissionSetGroups.get(key);
   }
 
-  async getOrganizationWideDefault(resource: string): Promise<OrganizationWideDefault | undefined> {
+  async getOrganizationWideDefault(
+    resource: string,
+  ): Promise<OrganizationWideDefault | undefined> {
     return this.defaults[resource];
   }
 
@@ -86,12 +116,19 @@ export class MemoryAuthorizationStore implements AuthorizationStore {
     action: string,
     now: Date,
   ): Promise<SharingRule[]> {
-    const keys = new Set(subjects.map((subject) => `${subject.type}:${subject.id}`));
-    return this.sharingRules.filter((rule) => rule.resource === resource
-      && rule.actions.includes(action)
-      && rule.subjects.some((subject) => keys.has(`${subject.type}:${subject.id}`))
-      && (!rule.startsAt || rule.startsAt <= now)
-      && (!rule.expiresAt || rule.expiresAt > now));
+    const keys = new Set(
+      subjects.map((subject) => `${subject.type}:${subject.id}`),
+    );
+    return this.sharingRules.filter(
+      (rule) =>
+        rule.resource === resource &&
+        rule.actions.includes(action) &&
+        rule.subjects.some((subject) =>
+          keys.has(`${subject.type}:${subject.id}`),
+        ) &&
+        (!rule.startsAt || rule.startsAt <= now) &&
+        (!rule.expiresAt || rule.expiresAt > now),
+    );
   }
 
   async createExplicitSharingFilter(
@@ -105,8 +142,13 @@ export class MemoryAuthorizationStore implements AuthorizationStore {
     return filter(collection, condition(identifier, '$in', rule.records.ids));
   }
 
-  async matchesFilterMembership(_node: FilterMembershipNode, _value: unknown): Promise<boolean> {
-    throw new Error('MemoryAuthorizationStore does not produce membership filters');
+  async matchesFilterMembership(
+    _node: FilterMembershipNode,
+    _value: unknown,
+  ): Promise<boolean> {
+    throw new Error(
+      'MemoryAuthorizationStore does not produce membership filters',
+    );
   }
 
   async findRestrictionRules(
@@ -114,10 +156,16 @@ export class MemoryAuthorizationStore implements AuthorizationStore {
     resource: string,
     action: string,
   ): Promise<RestrictionRule[]> {
-    const keys = new Set(subjects.map((subject) => `${subject.type}:${subject.id}`));
-    return this.restrictionRules.filter((rule) => rule.resource === resource
-      && rule.actions.includes(action)
-      && rule.subjects.some((subject) => keys.has(`${subject.type}:${subject.id}`)));
+    const keys = new Set(
+      subjects.map((subject) => `${subject.type}:${subject.id}`),
+    );
+    return this.restrictionRules.filter(
+      (rule) =>
+        rule.resource === resource &&
+        rule.actions.includes(action) &&
+        rule.subjects.some((subject) =>
+          keys.has(`${subject.type}:${subject.id}`),
+        ),
+    );
   }
-
 }

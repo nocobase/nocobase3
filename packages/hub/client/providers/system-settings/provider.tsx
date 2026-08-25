@@ -4,16 +4,16 @@ import {
   useMemo,
   useState,
   type PropsWithChildren,
-} from "react";
-import { applySystemLocale } from "@nocobase/portal-sdk/i18n";
+} from 'react';
+import { applySystemLocale } from '@nocobase/app-portal-sdk/i18n';
 import {
   loadSystemSettings,
   SystemSettingsContext,
   type SystemSettings,
   type SystemSettingsContextValue,
-} from "@nocobase/portal-sdk/system-settings";
+} from '@nocobase/app-portal-sdk/system-settings';
 
-import { LoadingState } from "@/components/app-shell/loading-state";
+import { LoadingState } from '@/components/app-shell/loading-state';
 
 export function SystemSettingsProvider({ children }: PropsWithChildren) {
   const [settings, setSettings] = useState<SystemSettings>();
@@ -33,8 +33,8 @@ export function SystemSettingsProvider({ children }: PropsWithChildren) {
       const nextError =
         reason instanceof Error
           ? reason
-          : new Error("Unable to load system settings");
-      console.warn("Unable to load NocoBase system settings", reason);
+          : new Error('Unable to load system settings');
+      console.warn('Unable to load NocoBase system settings', reason);
       setError(nextError);
       await applySystemLocale();
       return undefined;
@@ -55,7 +55,7 @@ export function SystemSettingsProvider({ children }: PropsWithChildren) {
       loading,
       refresh: () => load(true),
     }),
-    [error, load, loading, settings]
+    [error, load, loading, settings],
   );
 
   if (!ready) return <LoadingState fullscreen />;

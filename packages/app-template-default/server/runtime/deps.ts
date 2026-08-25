@@ -1,11 +1,11 @@
 import { createCaching, type Caching } from '@nocobase/caching';
-import { createAuthStorage, createAuthentication } from '@nocobase/authentication';
+import {
+  createAuthStorage,
+  createAuthentication,
+} from '@nocobase/app-plugin-authentication';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import { SnowflakeIdGenerator } from '@nocobase/id-generator';
-import {
-  createLogging,
-  type Logging,
-} from '@nocobase/logging';
+import { createLogging, type Logging } from '@nocobase/logging';
 import {
   createQueueManager,
   createSyncQueueConfig,
@@ -16,8 +16,8 @@ import {
   createSessionManager,
   type NocoBaseSessionManager,
 } from '@nocobase/session';
-import type { AppRuntime } from '@nocobase/app-server/runtime';
-import type { Auth } from '@nocobase/authentication';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import type { Auth } from '@nocobase/app-plugin-authentication';
 
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
@@ -47,8 +47,9 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       ...config.auth.advanced,
       database: {
         ...config.auth.advanced?.database,
-        generateId: config.auth.advanced?.database?.generateId
-          ?? (() => idGenerator.generateString()),
+        generateId:
+          config.auth.advanced?.database?.generateId ??
+          (() => idGenerator.generateString()),
       },
       defaultCookieAttributes: {
         path: config.app.publicBasePath || '/',
@@ -56,18 +57,25 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       },
     },
   });
-  const driveManager = config.drive ? createDriveManager(config.drive) : undefined;
+  const driveManager = config.drive
+    ? createDriveManager(config.drive)
+    : undefined;
   const logging = createLogging(config.logging);
-  const sessionManager = createSessionManager(config.session ?? createNullSessionConfig());
+  const sessionManager = createSessionManager(
+    config.session ?? createNullSessionConfig(),
+  );
   const queueLogger = logging.getLogger().child({ module: 'queue' });
-  const queueManager = createQueueManager(config.queue ?? createSyncQueueConfig(), {
-    database: runtime.database,
-    logger: queueLogger,
-    jobFactory: createAppJobFactory({
+  const queueManager = createQueueManager(
+    config.queue ?? createSyncQueueConfig(),
+    {
       database: runtime.database,
       logger: queueLogger,
-    }),
-  });
+      jobFactory: createAppJobFactory({
+        database: runtime.database,
+        logger: queueLogger,
+      }),
+    },
+  );
 
   return {
     caching,

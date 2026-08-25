@@ -1,14 +1,19 @@
 // @vitest-environment node
 
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { validateMigrations } from '@nocobase/database';
+import { validateMigrations, validateSeeds } from '@nocobase/app-database';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createConfigEnv, createConfigPaths, loadConfig } from '@nocobase/app-server/config';
+import {
+  createConfigEnv,
+  createConfigPaths,
+  loadConfig,
+} from '@nocobase/app-server-kit/config';
 
 import app from '../../server/config/app.ts';
 import caching from '../../server/config/caching.ts';
@@ -19,10 +24,29 @@ import logging from '../../server/config/logging.ts';
 import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
 import spa from '../../server/config/spa.ts';
-import { createStandaloneRuntime } from '../../server/index.ts';
-import { loadEmbeddedAppConfig } from '../../server/runtime/config.ts';
+import {
+  createStandaloneDatabaseTaskRuntime,
+  createStandaloneRuntime,
+} from '../../server/index.ts';
+import {
+  loadDatabaseTaskConfig,
+  loadEmbeddedAppConfig,
+} from '../../server/runtime/config.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
+
+const requirePackage = createRequire(import.meta.url);
+
+/**
+ * Reads a plugin's declared version rather than repeating it as a literal.
+ *
+ * The assertions below check that plugin resolution reports the version the package actually declares. Hard-coding it
+ * restates the same value in two places, so every version bump breaks the test for a reason that has nothing to do
+ * with the resolution logic it covers.
+ */
+const declaredVersion = (packageName: string): string =>
+  (requirePackage(`${packageName}/package.json`) as { version: string })
+    .version;
 
 const tempDirs: string[] = [];
 
@@ -35,7 +59,9 @@ afterEach(() => {
 describe('config registry', () => {
   it('loads every registered config section', () => {
     const config = loadConfig(configFactories, {
-      env: createConfigEnv({ AUTH_SECRET: 'test-auth-secret-at-least-32-characters' }),
+      env: createConfigEnv({
+        AUTH_SECRET: 'test-auth-secret-at-least-32-characters',
+      }),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
       }),
@@ -55,7 +81,9 @@ describe('config registry', () => {
     expect(config.logging.default).toBe('system');
     expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
-    expect(config.spa.indexPath).toBe('/tmp/app-template-default/dist/client/index.html');
+    expect(config.spa.indexPath).toBe(
+      '/tmp/app-template-default/dist/client/index.html',
+    );
   });
 });
 
@@ -99,7 +127,9 @@ describe('app config', () => {
   });
 
   it('resolves embedded routing from the app-host scope', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-embedded-config-'));
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-embedded-config-'),
+    );
     const dataDir = path.join(root, 'data');
     const clientDir = path.join(root, 'dist/client');
     tempDirs.push(root);
@@ -111,8 +141,8 @@ describe('app config', () => {
         basePath: '/main',
         rootDir: root,
         clientDir,
-      dataDir,
-      config: { authSecret: 'test-auth-secret-at-least-32-characters' },
+        dataDir,
+        config: { authSecret: 'test-auth-secret-at-least-32-characters' },
       },
       new URL('../../server/embedded.ts', import.meta.url).href,
     );
@@ -131,6 +161,12 @@ describe('app config', () => {
     expect(config.database.connections.sqlite).toMatchObject({
       filename: path.join(dataDir, 'database.sqlite'),
     });
+    expect(config.database.migrations.directory).toBe(
+      path.join(root, 'dist', 'database', 'migrations'),
+    );
+    expect(config.database.seeds?.directory).toBe(
+      path.join(root, 'dist', 'database', 'seeds'),
+    );
     expect(config.drive.disks.local).toMatchObject({
       location: path.join(dataDir, 'app/private'),
     });
@@ -407,10 +443,15 @@ describe('spa config', () => {
   });
 
   it('uses the copied client index when config root is a deployment dist root', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-template-default-dist-root-'));
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-dist-root-'),
+    );
     tempDirs.push(root);
     mkdirSync(path.join(root, 'client'), { recursive: true });
-    writeFileSync(path.join(root, 'client', 'index.html'), '<div id="root"></div>');
+    writeFileSync(
+      path.join(root, 'client', 'index.html'),
+      '<div id="root"></div>',
+    );
 
     const config = spa({
       env: createConfigEnv({}),
@@ -461,7 +502,15 @@ describe('database config', () => {
       debug: false,
     });
     expect(config.migrations).toEqual({
-      directory: '/tmp/app-template-default/server/migrations',
+      directory: '/tmp/app-template-default/database/migrations',
+      packageName: '@nocobase/app-template-default',
+      autoRun: false,
+      tableName: undefined,
+      lockTableName: undefined,
+    });
+    expect(config.seeds).toEqual({
+      directory: '/tmp/app-template-default/database/seeds',
+      packageName: '@nocobase/app-template-default',
       autoRun: false,
       tableName: undefined,
       lockTableName: undefined,
@@ -480,6 +529,9 @@ describe('database config', () => {
         DB_SCHEMA: 'public,tenant',
         DB_DEBUG: 'true',
         DB_MIGRATIONS_AUTO_RUN: 'true',
+        DB_SEEDS_AUTO_RUN: 'true',
+        DB_SEEDS_TABLE: 'app_seeds',
+        DB_SEEDS_LOCK_TABLE: 'app_seed_lock',
       }),
       paths: createConfigPaths({
         rootDir: '/tmp/app-template-default',
@@ -499,6 +551,11 @@ describe('database config', () => {
       debug: true,
     });
     expect(config.migrations.autoRun).toBe(true);
+    expect(config.seeds).toMatchObject({
+      autoRun: true,
+      tableName: 'app_seeds',
+      lockTableName: 'app_seed_lock',
+    });
   });
 
   it('does not consume database URL env values as connection config', () => {
@@ -562,7 +619,8 @@ describe('drive config', () => {
       visibility: 'private',
     });
     expect(config.links).toEqual({
-      '/tmp/app-template-default/public/storage': '/tmp/app-template-default/storage/app/public',
+      '/tmp/app-template-default/public/storage':
+        '/tmp/app-template-default/storage/app/public',
     });
   });
 
@@ -620,25 +678,300 @@ describe('drive config', () => {
 
 describe('database migrations', () => {
   it('loads template migration files with the current definition format', async () => {
-    const directory = fileURLToPath(new URL('../../server/migrations', import.meta.url));
+    const directory = fileURLToPath(
+      new URL('../../database/migrations', import.meta.url),
+    );
 
     await expect(validateMigrations(directory)).resolves.toEqual([
       expect.objectContaining({
         name: '202608180001_create_app_settings_table',
         fileName: '202608180001_create_app_settings_table.ts',
       }),
-      expect.objectContaining({
-        name: '202608200001_create_authentication_tables',
-        fileName: '202608200001_create_authentication_tables.ts',
-      }),
     ]);
   });
 });
 
+describe('app plugins', () => {
+  it('resolves enabled plugins and their database sources', async () => {
+    const runtime = createStandaloneRuntime();
+    const authenticationPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-authentication',
+    );
+    const dataProviderPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-data-provider',
+    );
+    const notificationProviderPlugin = runtime.config.plugins.find(
+      (item) =>
+        item.packageName === '@nocobase/app-plugin-notification-provider',
+    );
+    const databaseExamplePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-database-example',
+    );
+    const routesExamplePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-routes-example',
+    );
+    const queueExamplePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-queue-example',
+    );
+    const realtimeExamplePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-realtime-example',
+    );
+
+    expect(authenticationPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-authentication',
+      version: declaredVersion('@nocobase/app-plugin-authentication'),
+      enabled: true,
+    });
+    expect(authenticationPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-authentication\/database\/migrations$/,
+    );
+    expect(authenticationPlugin?.seedsDirectory).toMatch(
+      /app-plugin-authentication\/database\/seeds$/,
+    );
+    expect(authenticationPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+      routes: './client/routes',
+    });
+    expect(authenticationPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-authentication\/client\/routes\.ts$/,
+    );
+    expect(dataProviderPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-data-provider',
+      version: declaredVersion('@nocobase/app-plugin-data-provider'),
+      enabled: true,
+    });
+    expect(dataProviderPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+    });
+    expect(dataProviderPlugin?.clientBootstrapEntry).toMatch(
+      /app-plugin-data-provider\/client\/bootstrap\.ts$/,
+    );
+    expect(dataProviderPlugin?.migrationsDirectory).toBeUndefined();
+    expect(dataProviderPlugin?.seedsDirectory).toBeUndefined();
+    expect(notificationProviderPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-notification-provider',
+      version: declaredVersion('@nocobase/app-plugin-notification-provider'),
+      enabled: true,
+    });
+    expect(notificationProviderPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+      providers: './client/providers',
+      routes: './client/routes',
+    });
+    expect(notificationProviderPlugin?.clientBootstrapEntry).toMatch(
+      /app-plugin-notification-provider\/client\/bootstrap\.ts$/,
+    );
+    expect(notificationProviderPlugin?.clientProvidersEntry).toMatch(
+      /app-plugin-notification-provider\/client\/providers\.ts$/,
+    );
+    expect(notificationProviderPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-notification-provider\/client\/routes\.ts$/,
+    );
+    expect(notificationProviderPlugin?.migrationsDirectory).toBeUndefined();
+    expect(notificationProviderPlugin?.seedsDirectory).toBeUndefined();
+    expect(databaseExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-database-example',
+      version: declaredVersion('@nocobase/app-plugin-database-example'),
+      enabled: true,
+    });
+    expect(databaseExamplePlugin?.migrationsDirectory).toMatch(
+      /app-plugin-database-example\/database\/migrations$/,
+    );
+    expect(databaseExamplePlugin?.seedsDirectory).toMatch(
+      /app-plugin-database-example\/database\/seeds$/,
+    );
+    expect(databaseExamplePlugin?.routesEntry).toBeUndefined();
+    expect(routesExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-routes-example',
+      version: declaredVersion('@nocobase/app-plugin-routes-example'),
+      enabled: true,
+    });
+    expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
+    expect(routesExamplePlugin?.seedsDirectory).toBeUndefined();
+    expect(routesExamplePlugin?.manifest.client).toEqual({
+      routes: './client/routes',
+      providers: './client/providers',
+    });
+    expect(routesExamplePlugin?.routesEntry).toMatch(
+      /app-plugin-routes-example\/server\/routes\/index\.ts$/,
+    );
+    expect(queueExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-queue-example',
+      version: declaredVersion('@nocobase/app-plugin-queue-example'),
+      enabled: true,
+    });
+    expect(queueExamplePlugin?.jobsDirectory).toMatch(
+      /app-plugin-queue-example\/server\/jobs$/,
+    );
+    expect(queueExamplePlugin?.routesEntry).toMatch(
+      /app-plugin-queue-example\/server\/routes\/index\.ts$/,
+    );
+    expect(realtimeExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-realtime-example',
+      version: declaredVersion('@nocobase/app-plugin-realtime-example'),
+      enabled: true,
+    });
+    expect(realtimeExamplePlugin?.routesEntry).toMatch(
+      /app-plugin-realtime-example\/server\/routes\/index\.ts$/,
+    );
+    expect(realtimeExamplePlugin?.bootstrapEntry).toMatch(
+      /app-plugin-realtime-example\/server\/bootstrap\.ts$/,
+    );
+    expect(runtime.config.queue.jobs?.locations).toEqual([
+      expect.stringMatching(/app-template-default\/server\/jobs/),
+      expect.stringMatching(
+        /app-plugin-queue-example\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+      ),
+    ]);
+    expect(runtime.config.database.migrations.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-template-default',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+        }),
+      ]),
+    );
+    expect(runtime.config.database.seeds?.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-template-default',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+        }),
+      ]),
+    );
+
+    await expect(
+      validateMigrations({
+        sources: runtime.config.database.migrations.sources ?? [],
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+          name: '202608200001_create_authentication_tables',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+          name: '202608220001_database_example_create_messages',
+        }),
+      ]),
+    );
+    await expect(
+      validateSeeds({
+        sources: runtime.config.database.seeds?.sources ?? [],
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+          name: '202608220002_database_example_create_welcome_message',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+          name: '202608220003_authentication_create_default_admin_user',
+        }),
+      ]),
+    );
+  });
+});
+
 describe('standalone runtime database config', () => {
-  it('uses the active server directory for migrations', () => {
+  it('loads database tasks without application-only configuration', () => {
+    const rootDir = fileURLToPath(new URL('../..', import.meta.url));
+    const config = loadDatabaseTaskConfig({
+      mode: 'standalone',
+      env: {},
+      paths: {
+        rootDir,
+        serverDir: path.join(rootDir, 'server'),
+        databaseDir: path.join(rootDir, 'database'),
+      },
+      routing: {
+        name: 'app-template-default',
+        publicBasePath: '/app-template-default',
+        internalBasePath: '',
+        internalApiProxyPath: '/v2/api',
+        publicApiUrl: '/app-template-default/v2/api',
+      },
+    });
+
+    expect(config.database.default).toBe('sqlite');
+    expect(config).not.toHaveProperty('auth');
+    expect(config.database.migrations.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-template-default',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+        }),
+      ]),
+    );
+  });
+
+  it('creates a database task runtime with plugin sources', async () => {
+    const runtime = createStandaloneDatabaseTaskRuntime();
+
+    expect(runtime.config).not.toHaveProperty('auth');
+    expect(runtime.config.plugins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-authentication',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-data-provider',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-notification-provider',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-database-example',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-routes-example',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-queue-example',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-realtime-example',
+          enabled: true,
+        }),
+      ]),
+    );
+    expect(runtime.migrator).toBeDefined();
+    expect(runtime.seeder).toBeDefined();
+
+    await runtime.dispose();
+  });
+
+  it('uses the active database directory for migrations and seeds', () => {
     const runtime = createStandaloneRuntime();
 
-    expect(runtime.config.database.migrations.directory).toMatch(/server\/migrations$/);
+    expect(runtime.config.database.migrations.directory).toMatch(
+      /database\/migrations$/,
+    );
+    expect(runtime.config.database.seeds?.directory).toMatch(
+      /database\/seeds$/,
+    );
   });
 });

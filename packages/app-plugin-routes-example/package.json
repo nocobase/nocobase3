@@ -1,0 +1,83 @@
+{
+  "name": "@nocobase/app-plugin-routes-example",
+  "displayName": "Routes Example App Plugin",
+  "description": "Full-stack example with server and lazy client routes.",
+  "version": "0.0.1",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./client/providers": {
+      "types": "./client/providers.ts",
+      "import": "./client/providers.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      "./package.json": "./package.json",
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./client/providers": {
+        "types": "./dist/client/providers.d.ts",
+        "import": "./dist/client/providers.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "nocobase": {
+    "plugin": {
+      "client": {
+        "routes": "./client/routes",
+        "providers": "./client/providers"
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "dependencies": {
+    "@nocobase/app-server-kit": "workspace:^",
+    "hono": "catalog:"
+  },
+  "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-sdk": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "@types/react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "^0.1.0",
+    "@nocobase/app-sdk": "^0.1.0",
+    "react": "^19.0.0"
+  }
+}

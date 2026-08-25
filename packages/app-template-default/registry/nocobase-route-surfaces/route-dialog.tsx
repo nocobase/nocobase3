@@ -1,16 +1,16 @@
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { X } from "lucide-react";
-import { type ReactNode, useCallback, useContext } from "react";
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
+import { X } from 'lucide-react';
+import { type ReactNode, useCallback, useContext } from 'react';
 import {
   RouteOverlayDepthContext,
   RouteSurfaceContext,
   type RouteSurfaceBeforeClose,
   useRouteSurfaceState,
-} from "@nocobase/portal-sdk/routing";
+} from '@nocobase/app-portal-sdk/routing';
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useRouteOverlayViewportStyle } from "./route-overlay-viewport";
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useRouteOverlayViewportStyle } from './route-overlay-viewport';
 
 export function RouteDialog({
   title,
@@ -42,7 +42,10 @@ export function RouteDialog({
     animated: true,
   });
   const handleOpenChange = useCallback(
-    (nextOpen: boolean, eventDetails: DialogPrimitive.Root.ChangeEventDetails) => {
+    (
+      nextOpen: boolean,
+      eventDetails: DialogPrimitive.Root.ChangeEventDetails,
+    ) => {
       if (nextOpen) {
         setOpen(true);
         return;
@@ -51,7 +54,7 @@ export function RouteDialog({
       eventDetails.cancel();
       void close();
     },
-    [close, setOpen]
+    [close, setOpen],
   );
 
   return (
@@ -65,14 +68,14 @@ export function RouteDialog({
           }}
         >
           <DialogPrimitive.Portal
-            className="pointer-events-none fixed inset-y-0 right-0 left-0 z-50 transition-[right] duration-200 ease-in-out md:right-(--route-overlay-inline-end)"
+            className='pointer-events-none fixed inset-y-0 right-0 left-0 z-50 transition-[right] duration-200 ease-in-out md:right-(--route-overlay-inline-end)'
             style={overlayViewportStyle}
           >
             {isNestedOverlay ? (
               <RouteDialogBackdrop open={open} onClose={close} />
             ) : (
               <DialogPrimitive.Backdrop
-                className="pointer-events-auto absolute inset-0 bg-black/10 duration-150 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+                className='pointer-events-auto absolute inset-0 bg-black/10 duration-150 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0'
                 onClick={(event) => {
                   event.stopPropagation();
                   void close();
@@ -81,37 +84,37 @@ export function RouteDialog({
             )}
             <DialogPrimitive.Popup
               className={cn(
-                "pointer-events-auto absolute top-1/2 left-1/2 flex max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-150 outline-none sm:max-w-2xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-                className
+                'pointer-events-auto absolute top-1/2 left-1/2 flex max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-150 outline-none sm:max-w-2xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+                className,
               )}
             >
-              <header className="relative shrink-0 border-b px-5 py-4 pr-14 text-left">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 space-y-1">
-                    <DialogPrimitive.Title className="font-heading truncate text-lg font-medium">
+              <header className='relative shrink-0 border-b px-5 py-4 pr-14 text-left'>
+                <div className='flex items-start justify-between gap-4'>
+                  <div className='min-w-0 space-y-1'>
+                    <DialogPrimitive.Title className='font-heading truncate text-lg font-medium'>
                       {title}
                     </DialogPrimitive.Title>
                     {description ? (
-                      <DialogPrimitive.Description className="text-sm text-muted-foreground">
+                      <DialogPrimitive.Description className='text-sm text-muted-foreground'>
                         {description}
                       </DialogPrimitive.Description>
                     ) : null}
                   </div>
                   {actions ? (
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className='flex shrink-0 items-center gap-2'>
                       {actions}
                     </div>
                   ) : null}
                 </div>
                 <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="absolute top-3 right-3"
+                  type='button'
+                  variant='ghost'
+                  size='icon-sm'
+                  className='absolute top-3 right-3'
                   onClick={() => void close()}
                 >
                   <X />
-                  <span className="sr-only">{closeLabel}</span>
+                  <span className='sr-only'>{closeLabel}</span>
                 </Button>
               </header>
               {children}
@@ -133,11 +136,11 @@ function RouteDialogBackdrop({
 }) {
   return (
     <div
-      role="presentation"
-      aria-hidden="true"
+      role='presentation'
+      aria-hidden='true'
       className={cn(
-        "pointer-events-auto absolute inset-0 bg-black/10 transition-opacity duration-150 supports-backdrop-filter:backdrop-blur-xs",
-        open ? "opacity-100" : "pointer-events-none opacity-0"
+        'pointer-events-auto absolute inset-0 bg-black/10 transition-opacity duration-150 supports-backdrop-filter:backdrop-blur-xs',
+        open ? 'opacity-100' : 'pointer-events-none opacity-0',
       )}
       onClick={(event) => {
         event.stopPropagation();

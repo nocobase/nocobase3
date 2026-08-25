@@ -1,7 +1,7 @@
-import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogClose,
@@ -9,16 +9,16 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 
-import { getFileName, triggerFileDownload } from "./file-url";
-import { defaultFilePreviewMessages } from "./file-preview-messages";
-import { getPreviewType } from "./file-preview-types";
+import { getFileName, triggerFileDownload } from './file-url';
+import { defaultFilePreviewMessages } from './file-preview-messages';
+import { getPreviewType } from './file-preview-types';
 import type {
   FileFieldDescriptor,
   FilePreviewMessages,
   NocoBaseFileRecord,
-} from "./types";
+} from './types';
 
 export type FilePreviewDialogProps = {
   open: boolean;
@@ -40,7 +40,7 @@ export function FilePreviewDialog({
   const [index, setIndex] = useState(initialIndex);
   const messages = useMemo(
     () => ({ ...defaultFilePreviewMessages, ...messageOverrides }),
-    [messageOverrides]
+    [messageOverrides],
   );
 
   useEffect(() => {
@@ -52,7 +52,10 @@ export function FilePreviewDialog({
   }, [files.length]);
 
   const file = files[index] ?? files[0];
-  const previewType = useMemo(() => (file ? getPreviewType(file) : null), [file]);
+  const previewType = useMemo(
+    () => (file ? getPreviewType(file) : null),
+    [file],
+  );
 
   if (!file || !previewType) return null;
 
@@ -64,26 +67,28 @@ export function FilePreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        data-file-preview-dialog=""
-        className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-5xl"
+        data-file-preview-dialog=''
+        className='max-h-[calc(100vh-2rem)] gap-0 overflow-hidden p-0 sm:max-w-5xl'
       >
-        <DialogHeader className="border-b px-4 py-3">
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <div className="min-w-0">
-              <DialogTitle className="truncate">{getFileName(file)}</DialogTitle>
+        <DialogHeader className='border-b px-4 py-3'>
+          <div className='flex min-w-0 items-center justify-between gap-3'>
+            <div className='min-w-0'>
+              <DialogTitle className='truncate'>
+                {getFileName(file)}
+              </DialogTitle>
               <DialogDescription>
                 {files.length > 1
                   ? `${index + 1} / ${files.length}`
                   : messages.preview}
               </DialogDescription>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className='flex shrink-0 items-center gap-1'>
               {files.length > 1 ? (
                 <>
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
+                    type='button'
+                    variant='ghost'
+                    size='icon-sm'
                     aria-label={messages.previous}
                     title={messages.previous}
                     disabled={!canGoPrevious}
@@ -94,15 +99,15 @@ export function FilePreviewDialog({
                     <ChevronLeft />
                   </Button>
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
+                    type='button'
+                    variant='ghost'
+                    size='icon-sm'
                     aria-label={messages.next}
                     title={messages.next}
                     disabled={!canGoNext}
                     onClick={() =>
                       setIndex((current) =>
-                        Math.min(files.length - 1, current + 1)
+                        Math.min(files.length - 1, current + 1),
                       )
                     }
                   >
@@ -111,9 +116,9 @@ export function FilePreviewDialog({
                 </>
               ) : null}
               <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
+                type='button'
+                variant='ghost'
+                size='icon-sm'
                 aria-label={messages.download}
                 title={messages.download}
                 onClick={() => triggerFileDownload(file)}
@@ -123,9 +128,9 @@ export function FilePreviewDialog({
               <DialogClose
                 render={
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
+                    type='button'
+                    variant='ghost'
+                    size='icon-sm'
                     aria-label={messages.close}
                     title={messages.close}
                   />
@@ -136,7 +141,7 @@ export function FilePreviewDialog({
             </div>
           </div>
         </DialogHeader>
-        <div className="h-[min(70vh,720px)] overflow-hidden">
+        <div className='h-[min(70vh,720px)] overflow-hidden'>
           <Previewer
             file={file}
             index={index}

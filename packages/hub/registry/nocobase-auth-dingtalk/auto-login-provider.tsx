@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router";
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 
-import { LoadingState } from "@/components/app-shell/loading-state";
-import { clearAcl } from "@nocobase/portal-sdk/acl";
-import { nocobaseClient } from "@nocobase/portal-sdk/client";
-import { resolvePortalUrl } from "@nocobase/portal-sdk/runtime";
+import { LoadingState } from '@/components/app-shell/loading-state';
+import { clearAcl } from '@nocobase/app-portal-sdk/acl';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 
-import { isDingtalkBrowser } from "./use-dingtalk-sign-in";
+import { isDingtalkBrowser } from './use-dingtalk-sign-in';
 
 type CheckLoginResponse = {
   success?: boolean;
-  autoLoginType?: "oauth" | "internal";
+  autoLoginType?: 'oauth' | 'internal';
   authUrl?: string;
   authenticator?: string;
   corpId?: string;
@@ -37,21 +37,21 @@ type DingtalkApi = {
   runtime?: {
     permission?: {
       requestAuthCode?: (
-        options: DingtalkAuthCodeOptions
+        options: DingtalkAuthCodeOptions,
       ) => Promise<DingtalkAuthCodeResult> | void;
     };
   };
 };
 
 const publicAuthPaths = new Set([
-  "/login",
-  "/signin",
-  "/register",
-  "/forgot-password",
+  '/login',
+  '/signin',
+  '/register',
+  '/forgot-password',
 ]);
 
 async function requestDingtalkAuthCode(corpId: string) {
-  const module = await import("dingtalk-jsapi");
+  const module = await import('dingtalk-jsapi');
   const dd = ((module as { default?: unknown }).default ??
     module) as DingtalkApi;
 
@@ -61,7 +61,7 @@ async function requestDingtalkAuthCode(corpId: string) {
       if (code) {
         resolve(String(code));
       } else {
-        reject(new Error("DingTalk did not return an authorization code."));
+        reject(new Error('DingTalk did not return an authorization code.'));
       }
     };
     const fail = (error: { errorMessage?: string; message?: string }) =>
@@ -69,25 +69,25 @@ async function requestDingtalkAuthCode(corpId: string) {
         new Error(
           error?.errorMessage ||
             error?.message ||
-            "Unable to request a DingTalk authorization code."
-        )
+            'Unable to request a DingTalk authorization code.',
+        ),
       );
     const run = () => {
       const requestAuthCode = dd?.runtime?.permission?.requestAuthCode;
-      if (typeof requestAuthCode === "function") {
+      if (typeof requestAuthCode === 'function') {
         const result = requestAuthCode({ corpId, success, fail });
         if (result?.then) result.then(success).catch(fail);
         return;
       }
-      if (typeof dd?.getAuthCode === "function") {
+      if (typeof dd?.getAuthCode === 'function') {
         dd.getAuthCode({ corpId, success, fail });
         return;
       }
-      fail({ message: "DingTalk auth-code API is unavailable." });
+      fail({ message: 'DingTalk auth-code API is unavailable.' });
     };
 
     try {
-      if (typeof dd.ready === "function") {
+      if (typeof dd.ready === 'function') {
         dd.ready(run);
       } else {
         run();
@@ -123,25 +123,25 @@ export default function DingtalkAutoLoginProvider({
     void (async () => {
       try {
         const result = await nocobaseClient.action<CheckLoginResponse>(
-          "dingtalk",
-          "checkLogin",
+          'dingtalk',
+          'checkLogin',
           {
-            method: "GET",
+            method: 'GET',
             query: { isDingTalkBrowser: true, redirect },
             signal: controller.signal,
             authenticator: null,
             includeRole: false,
             withAclMeta: false,
-          }
+          },
         );
 
         if (result?.success !== false) return;
-        if (result.autoLoginType === "oauth" && result.authUrl) {
+        if (result.autoLoginType === 'oauth' && result.authUrl) {
           window.location.replace(nocobaseClient.resolveUrl(result.authUrl));
           return;
         }
         if (
-          result.autoLoginType !== "internal" ||
+          result.autoLoginType !== 'internal' ||
           !result.authenticator ||
           !result.corpId
         ) {
@@ -150,16 +150,16 @@ export default function DingtalkAutoLoginProvider({
 
         const authCode = await requestDingtalkAuthCode(result.corpId);
         const signedIn = await nocobaseClient.action<SignInResponse>(
-          "auth",
-          "signIn",
+          'auth',
+          'signIn',
           {
-            method: "POST",
+            method: 'POST',
             authenticator: result.authenticator,
-            body: { authCode, loginType: "internal" },
-          }
+            body: { authCode, loginType: 'internal' },
+          },
         );
         if (!signedIn.token) {
-          throw new Error("NocoBase did not return an access token.");
+          throw new Error('NocoBase did not return an access token.');
         }
         nocobaseClient.setAuthenticator(result.authenticator);
         nocobaseClient.setToken(signedIn.token);
@@ -167,8 +167,8 @@ export default function DingtalkAutoLoginProvider({
         clearAcl();
         window.location.replace(redirect);
       } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          console.warn("Unable to complete DingTalk automatic login", error);
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.warn('Unable to complete DingTalk automatic login', error);
         }
       } finally {
         setIsChecking(false);

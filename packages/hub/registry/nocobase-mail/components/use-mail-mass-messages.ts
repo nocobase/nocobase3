@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import { mailApi } from "./mail-api";
-import { MailMassMessageStatus, type MailMassMessage } from "./types";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { mailApi } from './mail-api';
+import { MailMassMessageStatus, type MailMassMessage } from './types';
 
 const ACTIVE_STATUSES = new Set<MailMassMessageStatus>([
   MailMassMessageStatus.PENDING,
@@ -10,7 +10,7 @@ const ACTIVE_STATUSES = new Set<MailMassMessageStatus>([
 
 export function useMailMassMessages(
   parentId: number | null,
-  { enabled = true, pollIntervalMs = 3_000 } = {}
+  { enabled = true, pollIntervalMs = 3_000 } = {},
 ) {
   const [messages, setMessages] = useState<MailMassMessage[]>([]);
   const [loading, setLoading] = useState(enabled);
@@ -26,7 +26,9 @@ export function useMailMassMessages(
     } catch (error) {
       if (sequence !== requestSequence.current) return;
       toast.error(
-        error instanceof Error ? error.message : "Failed to load bulk send tasks"
+        error instanceof Error
+          ? error.message
+          : 'Failed to load bulk send tasks',
       );
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
@@ -43,7 +45,10 @@ export function useMailMassMessages(
   }, [enabled, refresh]);
 
   useEffect(() => {
-    if (!enabled || !messages.some((message) => ACTIVE_STATUSES.has(message.status))) {
+    if (
+      !enabled ||
+      !messages.some((message) => ACTIVE_STATUSES.has(message.status))
+    ) {
       return;
     }
     const timer = window.setInterval(() => void refresh(), pollIntervalMs);

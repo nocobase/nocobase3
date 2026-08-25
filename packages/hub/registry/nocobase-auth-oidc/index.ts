@@ -1,1 +1,1 @@
-export { useOidcSignIn } from "./use-oidc-sign-in";
+export { useOidcSignIn } from './use-oidc-sign-in';

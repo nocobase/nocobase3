@@ -1,5 +1,5 @@
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export type BusinessReportChart = {
   title?: string;
@@ -16,20 +16,20 @@ export type BusinessReportData = {
 };
 
 export type BusinessReportMarkdownPart =
-  | { type: "markdown"; content: string }
-  | { type: "chart"; options: Record<string, unknown> };
+  | { type: 'markdown'; content: string }
+  | { type: 'chart'; options: Record<string, unknown> };
 
 const chartTagPattern = /<echarts>([\s\S]*?)<\/echarts>/gi;
 const chartPlaceholderPattern = /\{\{\s*chart\s*:\s*(\d+)\s*\}\}/gi;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 export function normalizeBusinessReportCharts(
-  value: unknown
+  value: unknown,
 ): BusinessReportChart[] {
   let charts = value;
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     try {
       charts = JSON.parse(value) as unknown;
     } catch {
@@ -41,27 +41,24 @@ export function normalizeBusinessReportCharts(
     if (!isRecord(item) || !isRecord(item.options)) return [];
     return [
       {
-        title: typeof item.title === "string" ? item.title : undefined,
-        summary: typeof item.summary === "string" ? item.summary : undefined,
+        title: typeof item.title === 'string' ? item.title : undefined,
+        summary: typeof item.summary === 'string' ? item.summary : undefined,
         options: item.options,
       },
     ];
   });
 }
 
-const buildChartMarkdownBlock = (
-  chart: BusinessReportChart,
-  index: number
-) => {
+const buildChartMarkdownBlock = (chart: BusinessReportChart, index: number) => {
   const parts = [`## ${chart.title || `Chart ${index + 1}`}`];
   if (chart.summary) parts.push(chart.summary);
   parts.push(`<echarts>${JSON.stringify(chart.options, null, 2)}</echarts>`);
-  return parts.join("\n\n");
+  return parts.join('\n\n');
 };
 
 export function buildBusinessReportMarkdown(report: BusinessReportData) {
   const usedIndexes = new Set<number>();
-  const body = (report.markdown ?? "").replace(
+  const body = (report.markdown ?? '').replace(
     chartPlaceholderPattern,
     (placeholder, rawIndex: string) => {
       const index = Number(rawIndex) - 1;
@@ -69,7 +66,7 @@ export function buildBusinessReportMarkdown(report: BusinessReportData) {
       if (!chart) return placeholder;
       usedIndexes.add(index);
       return buildChartMarkdownBlock(chart, index);
-    }
+    },
   );
   const sections = [`# ${report.title}`];
   if (report.summary) sections.push(`> ${report.summary}`);
@@ -79,45 +76,45 @@ export function buildBusinessReportMarkdown(report: BusinessReportData) {
       sections.push(buildChartMarkdownBlock(chart, index));
     }
   });
-  return sections.join("\n\n");
+  return sections.join('\n\n');
 }
 
 export function splitBusinessReportMarkdown(
-  markdown: string
+  markdown: string,
 ): BusinessReportMarkdownPart[] {
   const result: BusinessReportMarkdownPart[] = [];
   let offset = 0;
   for (const match of markdown.matchAll(chartTagPattern)) {
     const index = match.index ?? 0;
     const before = markdown.slice(offset, index);
-    if (before.trim()) result.push({ type: "markdown", content: before });
+    if (before.trim()) result.push({ type: 'markdown', content: before });
     try {
       const options = JSON.parse(match[1]) as unknown;
-      if (isRecord(options)) result.push({ type: "chart", options });
+      if (isRecord(options)) result.push({ type: 'chart', options });
     } catch {
-      result.push({ type: "markdown", content: match[0] });
+      result.push({ type: 'markdown', content: match[0] });
     }
     offset = index + match[0].length;
   }
   const remainder = markdown.slice(offset);
-  if (remainder.trim()) result.push({ type: "markdown", content: remainder });
+  if (remainder.trim()) result.push({ type: 'markdown', content: remainder });
   return result;
 }
 
 export function getBusinessReportFileName(report: BusinessReportData) {
-  return (report.fileName || report.title || "business-analysis-report")
-    .replace(/[\\/:*?"<>|]+/g, "-")
+  return (report.fileName || report.title || 'business-analysis-report')
+    .replace(/[\\/:*?"<>|]+/g, '-')
     .trim();
 }
 
 export function downloadBusinessReportFile(
   filename: string,
   content: string,
-  mimeType: string
+  mimeType: string,
 ) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const link = document.createElement('a');
   link.href = url;
   link.download = filename;
   link.click();
@@ -128,9 +125,9 @@ export async function renderBusinessReportMarkdownToHtml(markdown: string) {
   // Static rendering is intentionally loaded only for HTML export/preview.
   // Rendering through a temporary client root can lose a section when the
   // root is unmounted immediately after a synchronous render.
-  const { prerender } = await import("react-dom/static.browser");
+  const { prerender } = await import('react-dom/static.browser');
   const { prelude } = await prerender(
-    <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+    <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>,
   );
   return new Response(prelude as unknown as BodyInit).text();
 }
@@ -139,35 +136,35 @@ const nextFrame = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 async function renderChartImage(options: Record<string, unknown>) {
-  const { prepareEChartsRuntime } = await import("./echarts-runtime");
+  const { prepareEChartsRuntime } = await import('./echarts-runtime');
   const echarts = await prepareEChartsRuntime(options);
-  const host = document.createElement("div");
-  host.style.position = "fixed";
-  host.style.left = "-100000px";
-  host.style.top = "0";
-  host.style.width = "900px";
-  host.style.height = "360px";
-  host.style.pointerEvents = "none";
+  const host = document.createElement('div');
+  host.style.position = 'fixed';
+  host.style.left = '-100000px';
+  host.style.top = '0';
+  host.style.width = '900px';
+  host.style.height = '360px';
+  host.style.pointerEvents = 'none';
   document.body.appendChild(host);
   let chart: ReturnType<typeof echarts.init> | undefined;
   try {
-    chart = echarts.init(host, "default", { renderer: "canvas" });
+    chart = echarts.init(host, 'default', { renderer: 'canvas' });
     chart.setOption(
       {
         ...options,
         animation: false,
-        backgroundColor: "#ffffff",
+        backgroundColor: '#ffffff',
         toolbox: { show: false },
       },
-      true
+      true,
     );
     await nextFrame();
     await nextFrame();
     const source = chart.getDataURL({
-      type: "png",
+      type: 'png',
       pixelRatio: 2,
-      backgroundColor: "#ffffff",
-      excludeComponents: ["toolbox"],
+      backgroundColor: '#ffffff',
+      excludeComponents: ['toolbox'],
     });
     return source;
   } finally {
@@ -178,21 +175,21 @@ async function renderChartImage(options: Record<string, unknown>) {
 
 const escapeHtml = (value: string) =>
   value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 export async function buildBusinessReportHtml(
   report: BusinessReportData,
-  options: { autoPrint?: boolean; printMode?: boolean } = {}
+  options: { autoPrint?: boolean; printMode?: boolean } = {},
 ) {
   const markdown = buildBusinessReportMarkdown(report);
   const parts = splitBusinessReportMarkdown(markdown);
   const body: string[] = [];
   for (const part of parts) {
-    if (part.type === "markdown") {
+    if (part.type === 'markdown') {
       body.push(await renderBusinessReportMarkdownToHtml(part.content));
       continue;
     }
@@ -202,8 +199,8 @@ export async function buildBusinessReportHtml(
     } catch (error) {
       body.push(
         `<pre class="chart-error">${escapeHtml(
-          error instanceof Error ? error.message : "Unable to render chart"
-        )}</pre>`
+          error instanceof Error ? error.message : 'Unable to render chart',
+        )}</pre>`,
       );
     }
   }
@@ -218,15 +215,15 @@ export async function buildBusinessReportHtml(
       * { box-sizing: border-box; }
       html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { margin: 0; color: #1f2937; background: ${
-        printMode ? "#fff" : "#f5f5f5"
+        printMode ? '#fff' : '#f5f5f5'
       }; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       .report-shell { max-width: ${
-        printMode ? "190mm" : "960px"
-      }; margin: 0 auto; padding: ${printMode ? "0" : "32px 24px 64px"}; }
+        printMode ? '190mm' : '960px'
+      }; margin: 0 auto; padding: ${printMode ? '0' : '32px 24px 64px'}; }
       .report-paper { background: #fff; border: ${
-        printMode ? "0" : "1px solid #d4d4d4"
-      }; border-radius: ${printMode ? "0" : "16px"}; padding: ${
-        printMode ? "0" : "40px 48px"
+        printMode ? '0' : '1px solid #d4d4d4'
+      }; border-radius: ${printMode ? '0' : '16px'}; padding: ${
+        printMode ? '0' : '40px 48px'
       }; }
       h1, h2, h3 { color: #171717; break-after: avoid-page; }
       h1 { margin-top: 0; font-size: 32px; }
@@ -243,7 +240,7 @@ export async function buildBusinessReportHtml(
   </head>
   <body>
     <main class="report-shell"><article class="report-paper">${body.join(
-      ""
+      '',
     )}</article></main>
     ${
       options.autoPrint
@@ -259,7 +256,7 @@ export async function buildBusinessReportHtml(
         });
       });
     </script>`
-        : ""
+        : ''
     }
   </body>
 </html>`;
@@ -270,9 +267,9 @@ export async function printBusinessReport(report: BusinessReportData) {
     autoPrint: true,
     printMode: true,
   });
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  const opened = window.open(url, '_blank', 'noopener,noreferrer');
   if (!opened) {
     URL.revokeObjectURL(url);
     return false;

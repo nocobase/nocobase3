@@ -1,22 +1,22 @@
-import { serve } from "@hono/node-server";
-import type { IncomingMessage } from "node:http";
-import path from "node:path";
-import type { Duplex } from "node:stream";
-import { fileURLToPath } from "node:url";
+import { serve } from '@hono/node-server';
+import type { IncomingMessage } from 'node:http';
+import path from 'node:path';
+import type { Duplex } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 
 import {
   createAppRuntime,
   type AppRuntime,
-} from "@nocobase/app-server/runtime";
+} from '@nocobase/app-server-kit/runtime';
 import {
   acceptWebSocketUpgrade,
   createWebSocketUpgradeRequest,
   isWebSocketUpgrade,
   rejectWebSocketUpgrade,
-} from "@nocobase/app-server/websocket";
+} from '@nocobase/app-server-kit/websocket';
 
-import type { AppServer } from "./app.js";
-import type { AppConfig } from "./config/index.js";
+import type { AppServer } from './app.js';
+import type { AppConfig } from './config/index.js';
 import {
   createAppDisposerRegistry,
   createAppFromRuntime,
@@ -25,7 +25,7 @@ import {
   onceAsync,
   prepareAppRuntime,
   type AppDisposerRegistry,
-} from "./runtime/index.js";
+} from './runtime/index.js';
 
 const HTTP_DRAIN_TIMEOUT_MS = 30_000;
 const FORCE_EXIT_TIMEOUT_MS = 35_000;
@@ -61,19 +61,19 @@ export async function createStandaloneServer(
     const websocketAbortController = new AbortController();
 
     lifecycle.registerDisposer(
-      "runtime",
+      'runtime',
       onceAsync(() => runtime.dispose()),
     );
     await prepareAppRuntime(runtime);
 
-    const app = createStandaloneAppFromRuntime(
+    const app = await createStandaloneAppFromRuntime(
       runtime,
       lifecycle,
       websocketAbortController.signal,
       options,
     );
-    lifecycle.registerDisposer("websocket-connections", () => {
-      websocketAbortController.abort(new Error("app server closed"));
+    lifecycle.registerDisposer('websocket-connections', () => {
+      websocketAbortController.abort(new Error('app server closed'));
     });
 
     return app;
@@ -120,13 +120,13 @@ export function createStandaloneRuntime(): AppRuntime<AppConfig> {
   return createAppRuntime(loadStandaloneAppConfig(import.meta.url));
 }
 
-function createStandaloneAppFromRuntime(
+async function createStandaloneAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
   lifecycle: AppDisposerRegistry,
   signal: AbortSignal,
   options: StandaloneServerOptions = {},
-): StandaloneServer {
-  const app = createAppFromRuntime(runtime, {
+): Promise<StandaloneServer> {
+  const app = await createAppFromRuntime(runtime, {
     ...options,
     lifecycle,
   });
@@ -150,7 +150,7 @@ export function registerStandaloneWebSocketUpgradeHandler(
   app: StandaloneServer,
   server: ReturnType<typeof serve>,
 ): void {
-  server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const dispatchPromise = dispatchStandaloneWebSocket(req, socket, head, app);
     dispatchPromise.catch((error) => {
       console.error(error);
@@ -225,8 +225,8 @@ function registerShutdownHandlers(
     });
   };
 
-  process.on("SIGINT", () => handleShutdown("SIGINT"));
-  process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 }
 
 async function shutdownAppServer(
@@ -282,7 +282,7 @@ async function closeServerWithGracePeriod(
     if (timedOut) {
       closePromise.catch((error) => {
         console.error(
-          "HTTP server close failed after the drain timeout.",
+          'HTTP server close failed after the drain timeout.',
           error,
         );
       });
@@ -330,7 +330,7 @@ async function disposeAfterStartupFailure(
   } catch (disposeError) {
     throw new AggregateError(
       [startupError, disposeError],
-      "Failed to start server and dispose resources",
+      'Failed to start server and dispose resources',
       { cause: disposeError },
     );
   }

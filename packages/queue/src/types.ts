@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { Job } from '@boringnode/queue';
 import type {
   DispatchManyResult,
@@ -73,17 +73,20 @@ export interface CreateQueueManagerOptions {
   jobFactory?: NocoBaseQueueJobFactory;
 }
 
-export type NocoBaseQueueJobClass<T extends Job = Job> = (new (...args: any[]) => T) & {
+export type NocoBaseQueueJobClass<T extends Job = Job> = (new (
+  ...args: any[]
+) => T) & {
   options?: JobOptions;
   name: string;
 };
 export type NocoBaseQueueJobFactory = (
   JobClass: NocoBaseQueueJobClass,
 ) => Job | Promise<Job>;
-export type NocoBaseQueueDispatchableJobClass<T extends Job = Job> = NocoBaseQueueJobClass<T> & {
-  dispatch(payload: T extends Job<infer P> ? P : never): unknown;
-  dispatchMany(payloads: Array<T extends Job<infer P> ? P : never>): unknown;
-};
+export type NocoBaseQueueDispatchableJobClass<T extends Job = Job> =
+  NocoBaseQueueJobClass<T> & {
+    dispatch(payload: T extends Job<infer P> ? P : never): unknown;
+    dispatchMany(payloads: Array<T extends Job<infer P> ? P : never>): unknown;
+  };
 
 export interface QueueDispatchOptions {
   queue?: string;

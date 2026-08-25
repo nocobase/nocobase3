@@ -13,8 +13,8 @@ import {
   SingleAxisComponent,
   TimelineComponent,
   VisualMapComponent,
-} from "echarts/components";
-import { use as registerEChartsModules } from "echarts/core";
+} from 'echarts/components';
+import { use as registerEChartsModules } from 'echarts/core';
 
 registerEChartsModules([
   BrushComponent,

@@ -10,13 +10,13 @@ V3 的基本思路：
 ## 1. 安装 CLI
 
 ```bash
-npm install -g @nocobase/cli
+npm install -g @nocobase/nb3-cli
 ```
 
 ## 2. 创建本地 App
 
 ```bash
-nb app create crm
+nb3 app create crm
 cd crm
 ```
 
@@ -24,7 +24,7 @@ cd crm
 
 ```bash
 crm/
-  .nb/
+  .nb3/
   client/
   server/
   package.json
@@ -33,7 +33,7 @@ crm/
 ## 3. 本地开发
 
 ```bash
-nb app dev
+nb3 app dev
 ```
 
 如果只是本地开发，到这里就够了，不需要安装 Hub。
@@ -47,10 +47,10 @@ Hub 是用于部署和管理 App 的应用中心。
 如果需要本地 Hub：
 
 ```bash
-nb hub create my-hub
+nb3 hub create my-hub
 cd my-hub
-nb hub start
-nb hub open
+nb3 hub start
+nb3 hub open
 ```
 
 ## 5. 部署 App
@@ -64,19 +64,19 @@ cd ../crm
 部署到本地 Hub：
 
 ```bash
-nb app deploy --hub http://localhost:3000
+nb3 app deploy --hub http://localhost:3000
 ```
 
 部署到远端 Hub：
 
 ```bash
-nb app deploy --hub https://apps.example.com
+nb3 app deploy --hub https://apps.example.com
 ```
 
 后续如果 App 已经记录了 Hub 地址，可以直接执行：
 
 ```bash
-nb app deploy
+nb3 app deploy
 ```
 
 ## 常见问题
@@ -89,12 +89,16 @@ nb app deploy
 
 不需要。Hub 可以在本机、测试环境或线上。
 
-### `nb app create` 和 `nb hub create` 有什么区别？
+### `nb3 app create` 和 `nb3 hub create` 有什么区别？
 
-`nb app create` 创建业务 App 源码。
+`nb3 app create` 创建业务 App 源码。
 
-`nb hub create` 创建应用中心运行环境。
+`nb3 hub create` 创建应用中心运行环境。
 
 ## 架构介绍
 
 - [应用服务分层架构](./architecture.md)
+
+## 插件开发
+
+- [插件开发快速开始](./plugin-development-quickstart.md)

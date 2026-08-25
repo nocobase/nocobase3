@@ -28,7 +28,7 @@ After installation, import the components from `@/extensions/nocobase-mail`.
 - Message detail resolves authenticated `cid:` inline images and keeps those images out of the
   regular attachment list.
 
-The mail API client (`mailApi`) uses `nocobaseClient` from `@nocobase/portal-sdk/client`. A compatible NocoBase backend with the mail plugin enabled is required.
+The mail API client (`mailApi`) uses `nocobaseClient` from `@nocobase/app-portal-sdk/client`. A compatible NocoBase backend with the mail plugin enabled is required.
 
 ## Send modes
 
@@ -41,11 +41,7 @@ delivery jobs are visible together. Reusable compose forms can still opt into bu
   To recipient, and defaults to a 2-second interval between messages.
 
 ```tsx
-<MailComposeForm
-  allowScheduleSend
-  allowBulkSend
-  defaultBulkIntervalMs={2000}
-/>
+<MailComposeForm allowScheduleSend allowBulkSend defaultBulkIntervalMs={2000} />
 ```
 
 Bulk and scheduled sending are separate modes, matching the NocoBase email

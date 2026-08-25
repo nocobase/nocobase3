@@ -1,1 +1,1 @@
-export { default } from "./prettier/index.ts";
+export { default } from './prettier/index.ts';

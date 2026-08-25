@@ -2,7 +2,10 @@ import { fake } from '@boringnode/queue/drivers/fake_adapter';
 import { KnexAdapter } from '@boringnode/queue/drivers/knex_adapter';
 import { redis } from '@boringnode/queue/drivers/redis_adapter';
 import { sync } from '@boringnode/queue/drivers/sync_adapter';
-import type { AdapterFactory, QueueManagerConfig } from '@boringnode/queue/types';
+import type {
+  AdapterFactory,
+  QueueManagerConfig,
+} from '@boringnode/queue/types';
 import type { Knex } from 'knex';
 
 import type {
@@ -20,7 +23,10 @@ export async function createBoringQueueConfig(
 ): Promise<QueueManagerConfig> {
   return {
     default: config.default,
-    adapters: await createAdapterFactories(selectActiveConnections(config), options),
+    adapters: await createAdapterFactories(
+      selectActiveConnections(config),
+      options,
+    ),
     retry: config.retry,
     defaultJobOptions: config.defaultJobOptions,
     queues: mapQueues(config.queues),
@@ -33,12 +39,16 @@ export async function createBoringQueueConfig(
   };
 }
 
-function selectActiveConnections(config: AppQueueConfig): Record<string, AppQueueConnectionConfig> {
-  const activeConnectionNames = new Set<string>([
-    config.default,
-    config.worker?.connection,
-    ...Object.values(config.queues ?? {}).map((queue) => queue.connection),
-  ].filter((name): name is string => Boolean(name)));
+function selectActiveConnections(
+  config: AppQueueConfig,
+): Record<string, AppQueueConnectionConfig> {
+  const activeConnectionNames = new Set<string>(
+    [
+      config.default,
+      config.worker?.connection,
+      ...Object.values(config.queues ?? {}).map((queue) => queue.connection),
+    ].filter((name): name is string => Boolean(name)),
+  );
   const connections: Record<string, AppQueueConnectionConfig> = {};
 
   for (const [name, connection] of Object.entries(config.connections)) {
@@ -94,10 +104,14 @@ async function createDatabaseAdapterFactory(
   options: CreateQueueManagerOptions,
 ): Promise<AdapterFactory> {
   if (!options.database) {
-    throw new Error('Queue database connection requires a configured DatabaseManager.');
+    throw new Error(
+      'Queue database connection requires a configured DatabaseManager.',
+    );
   }
 
-  const databaseConnection = await options.database.connect(connection.connection);
+  const databaseConnection = await options.database.connect(
+    connection.connection,
+  );
   const client = await databaseConnection.client<Knex>();
 
   return () =>
@@ -128,7 +142,9 @@ function mapQueues(
   );
 }
 
-function mapWorker(worker: AppQueueConfig['worker']): QueueManagerConfig['worker'] {
+function mapWorker(
+  worker: AppQueueConfig['worker'],
+): QueueManagerConfig['worker'] {
   if (!worker) {
     return undefined;
   }
@@ -141,14 +157,22 @@ function mapWorker(worker: AppQueueConfig['worker']): QueueManagerConfig['worker
   };
 }
 
-function createBoringLogger(logger: NocoBaseQueueLogger): NonNullable<QueueManagerConfig['logger']> {
+function createBoringLogger(
+  logger: NocoBaseQueueLogger,
+): NonNullable<QueueManagerConfig['logger']> {
   return {
-    trace: (messageOrObject: string | object, message?: string) => log(logger, 'trace', messageOrObject, message),
-    debug: (messageOrObject: string | object, message?: string) => log(logger, 'debug', messageOrObject, message),
-    info: (messageOrObject: string | object, message?: string) => log(logger, 'info', messageOrObject, message),
-    warn: (messageOrObject: string | object, message?: string) => log(logger, 'warn', messageOrObject, message),
-    error: (messageOrObject: string | object, message?: string) => log(logger, 'error', messageOrObject, message),
-    child: (bindings: object) => createBoringLogger(createChildLogger(logger, bindings)),
+    trace: (messageOrObject: string | object, message?: string) =>
+      log(logger, 'trace', messageOrObject, message),
+    debug: (messageOrObject: string | object, message?: string) =>
+      log(logger, 'debug', messageOrObject, message),
+    info: (messageOrObject: string | object, message?: string) =>
+      log(logger, 'info', messageOrObject, message),
+    warn: (messageOrObject: string | object, message?: string) =>
+      log(logger, 'warn', messageOrObject, message),
+    error: (messageOrObject: string | object, message?: string) =>
+      log(logger, 'error', messageOrObject, message),
+    child: (bindings: object) =>
+      createBoringLogger(createChildLogger(logger, bindings)),
   };
 }
 
@@ -166,7 +190,10 @@ function log(
   logger[level]?.(messageOrObject, message);
 }
 
-function createChildLogger(logger: NocoBaseQueueLogger, bindings: object): NocoBaseQueueLogger {
+function createChildLogger(
+  logger: NocoBaseQueueLogger,
+  bindings: object,
+): NocoBaseQueueLogger {
   const maybeChildLogger = logger as NocoBaseQueueLogger & {
     child?: (bindings: object) => NocoBaseQueueLogger;
   };

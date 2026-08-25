@@ -1,36 +1,36 @@
-import type { Page } from "@playwright/test";
+import type { Page } from '@playwright/test';
 import {
   resolveAuthSessionStorageKey,
   type AuthSessionField,
-} from "@nocobase/portal-sdk/client";
+} from '@nocobase/app-portal-sdk/client';
 
-import type { PortalE2ESession } from "./api";
-import type { PortalE2EEnvironment } from "./environment";
+import type { PortalE2ESession } from './api';
+import type { PortalE2EEnvironment } from './environment';
 
 export function getPortalStorageKey(
   environment: Pick<
     PortalE2EEnvironment,
-    "appName" | "shareToken" | "storagePrefix"
+    'appName' | 'shareToken' | 'storagePrefix'
   >,
-  field: AuthSessionField
+  field: AuthSessionField,
 ) {
   return resolveAuthSessionStorageKey(environment, field);
 }
 
 const getSessionValues = (
   environment: PortalE2EEnvironment,
-  session: PortalE2ESession
+  session: PortalE2ESession,
 ) => ({
-  [getPortalStorageKey(environment, "token")]: session.token,
-  [getPortalStorageKey(environment, "auth")]: session.authenticator,
-  [getPortalStorageKey(environment, "role")]: session.role,
-  [getPortalStorageKey(environment, "locale")]: session.locale,
+  [getPortalStorageKey(environment, 'token')]: session.token,
+  [getPortalStorageKey(environment, 'auth')]: session.authenticator,
+  [getPortalStorageKey(environment, 'role')]: session.role,
+  [getPortalStorageKey(environment, 'locale')]: session.locale,
 });
 
 export async function installPortalSession(
   page: Page,
   environment: PortalE2EEnvironment,
-  session: PortalE2ESession
+  session: PortalE2ESession,
 ) {
   const payload = {
     storageType: environment.storageType,
@@ -40,7 +40,7 @@ export async function installPortalSession(
     storageType,
     values,
   }: {
-    storageType: "localStorage" | "sessionStorage";
+    storageType: 'localStorage' | 'sessionStorage';
     values: Record<string, string | undefined>;
   }) => {
     const storage = window[storageType];
@@ -62,26 +62,25 @@ export async function installPortalSession(
 
 export async function readPortalSession(
   page: Page,
-  environment: PortalE2EEnvironment
+  environment: PortalE2EEnvironment,
 ): Promise<PortalE2ESession | undefined> {
   const keys = {
-    token: getPortalStorageKey(environment, "token"),
-    authenticator: getPortalStorageKey(environment, "auth"),
-    role: getPortalStorageKey(environment, "role"),
-    locale: getPortalStorageKey(environment, "locale"),
+    token: getPortalStorageKey(environment, 'token'),
+    authenticator: getPortalStorageKey(environment, 'auth'),
+    role: getPortalStorageKey(environment, 'role'),
+    locale: getPortalStorageKey(environment, 'locale'),
   };
   const values = await page.evaluate(
     ({ storageType, sessionKeys }) => {
       const storage = window[storageType];
       return {
         token: storage.getItem(sessionKeys.token) ?? undefined,
-        authenticator:
-          storage.getItem(sessionKeys.authenticator) ?? undefined,
+        authenticator: storage.getItem(sessionKeys.authenticator) ?? undefined,
         role: storage.getItem(sessionKeys.role) ?? undefined,
         locale: storage.getItem(sessionKeys.locale) ?? undefined,
       };
     },
-    { storageType: environment.storageType, sessionKeys: keys }
+    { storageType: environment.storageType, sessionKeys: keys },
   );
 
   if (!values.token) return undefined;
@@ -97,11 +96,11 @@ export async function savePortalStorageState(
   page: Page,
   environment: PortalE2EEnvironment,
   session: PortalE2ESession,
-  path: string
+  path: string,
 ) {
-  if (environment.storageType === "sessionStorage") {
+  if (environment.storageType === 'sessionStorage') {
     throw new Error(
-      "Playwright storageState cannot persist sessionStorage. Use installPortalSession for this Portal."
+      'Playwright storageState cannot persist sessionStorage. Use installPortalSession for this Portal.',
     );
   }
   await installPortalSession(page, environment, session);

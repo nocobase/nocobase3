@@ -6,10 +6,10 @@ import {
   useState,
   type ForwardedRef,
   type ReactElement,
-} from "react";
-import { ChevronsUpDown, Loader2 } from "lucide-react";
+} from 'react';
+import { ChevronsUpDown, Loader2 } from 'lucide-react';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -17,29 +17,29 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from '@/components/ui/command';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import type { RemoteSelectMessages, RemoteSelectProps } from "./types";
-import { useRemoteOptions } from "./use-remote-options";
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import type { RemoteSelectMessages, RemoteSelectProps } from './types';
+import { useRemoteOptions } from './use-remote-options';
 
 const DEFAULT_MESSAGES: RemoteSelectMessages = {
-  searchPlaceholder: "Search...",
-  empty: "No results found.",
-  loading: "Loading...",
-  loadMore: "Load more",
-  loadingMore: "Loading more...",
-  error: "Options could not be loaded.",
-  retry: "Retry",
+  searchPlaceholder: 'Search...',
+  empty: 'No results found.',
+  loading: 'Loading...',
+  loadMore: 'Load more',
+  loadingMore: 'Loading more...',
+  error: 'Options could not be loaded.',
+  retry: 'Retry',
 };
 
 function RemoteSelectInner<TOption>(
   props: RemoteSelectProps<TOption>,
-  forwardedRef: ForwardedRef<HTMLButtonElement>
+  forwardedRef: ForwardedRef<HTMLButtonElement>,
 ) {
   const {
     className,
@@ -53,8 +53,8 @@ function RemoteSelectInner<TOption>(
     onClick,
     onOpenChange,
     pageSize = 20,
-    placeholder = "Select...",
-    popupSide = "bottom",
+    placeholder = 'Select...',
+    popupSide = 'bottom',
     requestKey = [],
     renderOption,
     renderValue,
@@ -64,19 +64,15 @@ function RemoteSelectInner<TOption>(
     ...triggerProps
   } = props;
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const listboxId = useId();
   const messages = useMemo(
     () => ({ ...DEFAULT_MESSAGES, ...messageOverrides }),
-    [messageOverrides]
+    [messageOverrides],
   );
-  const selectedOptions = multiple
-    ? value
-    : value
-      ? [value]
-      : [];
+  const selectedOptions = multiple ? value : value ? [value] : [];
   const selectedKeys = new Set(
-    selectedOptions.map((option) => getOptionKey(option))
+    selectedOptions.map((option) => getOptionKey(option)),
   );
   const remote = useRemoteOptions({
     debounceMs,
@@ -91,21 +87,21 @@ function RemoteSelectInner<TOption>(
 
   const setTriggerRef = useCallback(
     (node: HTMLButtonElement | null) => {
-      if (typeof forwardedRef === "function") forwardedRef(node);
+      if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef) forwardedRef.current = node;
     },
-    [forwardedRef]
+    [forwardedRef],
   );
   const changeOpen = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen);
       if (!nextOpen) {
-        setSearch("");
+        setSearch('');
         remote.resetSearch();
       }
       onOpenChange?.(nextOpen);
     },
-    [onOpenChange, remote.resetSearch]
+    [onOpenChange, remote.resetSearch],
   );
 
   const selectOption = (option: TOption) => {
@@ -114,7 +110,7 @@ function RemoteSelectInner<TOption>(
       onValueChange(
         selectedKeys.has(key)
           ? value.filter((item) => getOptionKey(item) !== key)
-          : [...value, option]
+          : [...value, option],
       );
       return;
     }
@@ -123,8 +119,9 @@ function RemoteSelectInner<TOption>(
     changeOpen(false);
   };
 
-  const selectedContent = renderValue?.(selectedOptions) ??
-    selectedOptions.map(getOptionLabel).join(", ");
+  const selectedContent =
+    renderValue?.(selectedOptions) ??
+    selectedOptions.map(getOptionLabel).join(', ');
 
   return (
     <Popover open={open} onOpenChange={changeOpen}>
@@ -134,16 +131,16 @@ function RemoteSelectInner<TOption>(
             <Button
               {...triggerProps}
               ref={setTriggerRef}
-              type="button"
-              variant="outline"
-              role="combobox"
+              type='button'
+              variant='outline'
+              role='combobox'
               aria-controls={listboxId}
               aria-expanded={open}
               aria-busy={remote.loading || remote.loadingMore}
               disabled={disabled}
               className={cn(
-                "h-10 w-full min-w-0 justify-between font-normal",
-                className
+                'h-10 w-full min-w-0 justify-between font-normal',
+                className,
               )}
               onClick={onClick}
             />
@@ -151,22 +148,22 @@ function RemoteSelectInner<TOption>(
         >
           <span
             className={cn(
-              "min-w-0 flex-1 truncate text-left",
-              !selectedOptions.length && "text-muted-foreground"
+              'min-w-0 flex-1 truncate text-left',
+              !selectedOptions.length && 'text-muted-foreground',
             )}
           >
             {selectedOptions.length ? selectedContent : placeholder}
           </span>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className='size-4 shrink-0 opacity-50' />
         </PopoverTrigger>
       </div>
 
       <PopoverContent
-        align="start"
+        align='start'
         side={popupSide}
         sideOffset={8}
-        positionerClassName="pointer-events-auto z-[70]"
-        className="w-(--anchor-width) gap-0 overflow-hidden p-0"
+        positionerClassName='pointer-events-auto z-[70]'
+        className='w-(--anchor-width) gap-0 overflow-hidden p-0'
       >
         <Command shouldFilter={false}>
           <CommandInput
@@ -175,17 +172,17 @@ function RemoteSelectInner<TOption>(
             placeholder={messages.searchPlaceholder}
           />
           {remote.loading ? (
-            <div className="flex min-h-24 items-center justify-center gap-2 px-3 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
+            <div className='flex min-h-24 items-center justify-center gap-2 px-3 text-sm text-muted-foreground'>
+              <Loader2 className='size-4 animate-spin' />
               {messages.loading}
             </div>
           ) : remote.error && remote.options.length === 0 ? (
-            <div className="flex min-h-24 flex-col items-center justify-center gap-2 px-3 py-4 text-center text-sm text-muted-foreground">
+            <div className='flex min-h-24 flex-col items-center justify-center gap-2 px-3 py-4 text-center text-sm text-muted-foreground'>
               <span>{messages.error}</span>
               <Button
-                type="button"
-                variant="ghost"
-                size="sm"
+                type='button'
+                variant='ghost'
+                size='sm'
                 onClick={remote.retry}
               >
                 {messages.retry}
@@ -212,22 +209,22 @@ function RemoteSelectInner<TOption>(
                 </CommandGroup>
               </CommandList>
               {remote.hasMore || remote.error ? (
-                <div className="border-t p-1">
+                <div className='border-t p-1'>
                   {remote.error ? (
-                    <p className="px-2 py-1 text-xs text-destructive">
+                    <p className='px-2 py-1 text-xs text-destructive'>
                       {messages.error}
                     </p>
                   ) : null}
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
+                    type='button'
+                    variant='ghost'
+                    size='sm'
+                    className='w-full'
                     disabled={remote.loadingMore}
                     onClick={remote.error ? remote.retry : remote.loadMore}
                   >
                     {remote.loadingMore ? (
-                      <Loader2 className="size-4 animate-spin" />
+                      <Loader2 className='size-4 animate-spin' />
                     ) : null}
                     {remote.error
                       ? messages.retry
@@ -248,5 +245,5 @@ function RemoteSelectInner<TOption>(
 export const RemoteSelect = forwardRef(RemoteSelectInner) as <TOption>(
   props: RemoteSelectProps<TOption> & {
     ref?: ForwardedRef<HTMLButtonElement>;
-  }
+  },
 ) => ReactElement;

@@ -59,7 +59,9 @@ describe('app server', () => {
   });
 
   it('serves embedded production client routes from the stripped app-host path', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-embedded-client-'));
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-hub-embedded-client-'),
+    );
     tempDirs.push(root);
     writeFileSync(
       path.join(root, 'index.html'),
@@ -90,7 +92,9 @@ describe('app server', () => {
         }),
       );
     });
-    const appRoot = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-embedded-root-'));
+    const appRoot = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-hub-embedded-root-'),
+    );
     tempDirs.push(appRoot);
     const clientDir = path.join(appRoot, 'dist', 'client');
     mkdirSync(clientDir, { recursive: true });
@@ -103,7 +107,10 @@ describe('app server', () => {
         'API_CLIENT_SHARE_TOKEN=true',
       ].join('\n'),
     );
-    writeFileSync(path.join(clientDir, 'index.html'), '<script type="module" src="/hub/assets/index.js"></script>');
+    writeFileSync(
+      path.join(clientDir, 'index.html'),
+      '<script type="module" src="/hub/assets/index.js"></script>',
+    );
 
     const app = await createEmbeddedServer({
       id: 'hub',
@@ -112,7 +119,9 @@ describe('app server', () => {
       clientDir,
     });
 
-    const api = await app.request('http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fhub%2F');
+    const api = await app.request(
+      'http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fhub%2F',
+    );
     await expect(api.json()).resolves.toEqual({
       url: '/nocobase/api/oidc:checkRedirect?redirect=%2Fhub%2F',
       forwardedPrefix: '/v2/api',
@@ -120,9 +129,15 @@ describe('app server', () => {
 
     const page = await app.request('http://localhost/');
     const html = await page.text();
-    expect(html).toContain('window.__nocobase_api_client_storage_prefix__ = "EMBEDDED_";');
-    expect(html).toContain('window.__nocobase_api_client_storage_type__ = "sessionStorage";');
-    expect(html).toContain('window.__nocobase_api_client_share_token__ = true;');
+    expect(html).toContain(
+      'window.__nocobase_api_client_storage_prefix__ = "EMBEDDED_";',
+    );
+    expect(html).toContain(
+      'window.__nocobase_api_client_storage_type__ = "sessionStorage";',
+    );
+    expect(html).toContain(
+      'window.__nocobase_api_client_share_token__ = true;',
+    );
   });
 
   it('proxies /<app>/v2/api requests to the configured NocoBase API URL', async () => {
@@ -146,13 +161,16 @@ describe('app server', () => {
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request('http://localhost/hub/v2/api/systemSettings:get?locale=zh-CN', {
-      headers: {
-        host: '127.0.0.1:13000',
-        origin: 'http://127.0.0.1:13000',
-        referer: 'http://127.0.0.1:13000/hub/login',
+    const response = await app.request(
+      'http://localhost/hub/v2/api/systemSettings:get?locale=zh-CN',
+      {
+        headers: {
+          host: '127.0.0.1:13000',
+          origin: 'http://127.0.0.1:13000',
+          referer: 'http://127.0.0.1:13000/hub/login',
+        },
       },
-    });
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -201,16 +219,19 @@ describe('app server', () => {
 
     // A TLS-terminating proxy in front of this process: the site is https, but this hop is cleartext
     // and its x-forwarded-* headers carry the browser's real context.
-    const response = await app.request('http://localhost/hub/v2/api/auth:signIn', {
-      method: 'POST',
-      headers: {
-        host: 'apps.example.com',
-        origin: 'https://apps.example.com',
-        referer: 'https://apps.example.com/hub/login',
-        'x-forwarded-host': 'apps.example.com',
-        'x-forwarded-proto': 'https',
+    const response = await app.request(
+      'http://localhost/hub/v2/api/auth:signIn',
+      {
+        method: 'POST',
+        headers: {
+          host: 'apps.example.com',
+          origin: 'https://apps.example.com',
+          referer: 'https://apps.example.com/hub/login',
+          'x-forwarded-host': 'apps.example.com',
+          'x-forwarded-proto': 'https',
+        },
       },
-    });
+    );
 
     expect(response.status).toBe(200);
     const forwarded = (await response.json()) as Record<string, string>;
@@ -237,7 +258,9 @@ describe('app server', () => {
       clientIndexPath: path.join(root, 'index.html'),
     });
 
-    const response = await app.request('http://localhost/hub/v2/api/oidc:checkRedirect?redirect=%2Fhub%2F');
+    const response = await app.request(
+      'http://localhost/hub/v2/api/oidc:checkRedirect?redirect=%2Fhub%2F',
+    );
 
     expect(response.status).toBe(503);
     expect(response.headers.get('content-type')).toContain('application/json');
@@ -253,7 +276,10 @@ describe('app server', () => {
       response.statusCode = 200;
       response.setHeader('content-type', 'application/json; charset=utf-8');
       response.setHeader('content-encoding', 'gzip');
-      response.setHeader('content-length', String(compressedPayload.byteLength));
+      response.setHeader(
+        'content-length',
+        String(compressedPayload.byteLength),
+      );
       response.end(compressedPayload);
     });
     const app = createApp({
@@ -261,7 +287,9 @@ describe('app server', () => {
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request('http://localhost/hub/v2/api/systemSettings:get');
+    const response = await app.request(
+      'http://localhost/hub/v2/api/systemSettings:get',
+    );
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-encoding')).toBeNull();
@@ -291,15 +319,36 @@ describe('app server', () => {
 
   it('proxies hub client routes to Vite dev server', async () => {
     const viteDevUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'text/plain; charset=utf-8');
-      response.end(`vite:${_request.method}:${_request.url}`);
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({
+          method: _request.method,
+          url: _request.url,
+          origin: _request.headers.origin,
+          referer: _request.headers.referer,
+        }),
+      );
     });
     const app = createStandaloneServer({ viteDevUrl });
 
-    const response = await app.request('http://localhost/hub/settings?tab=apps');
+    const response = await app.request(
+      'http://localhost/hub/settings?tab=apps',
+      {
+        headers: {
+          origin: 'http://localhost',
+          referer: 'http://localhost/hub/',
+        },
+      },
+    );
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('vite:GET:/hub/settings?tab=apps');
+    const viteOrigin = new URL(viteDevUrl).origin;
+    await expect(response.json()).resolves.toEqual({
+      method: 'GET',
+      url: '/hub/settings?tab=apps',
+      origin: viteOrigin,
+      referer: `${viteOrigin}/hub/`,
+    });
   });
 
   it('injects browser runtime config when serving the production client index', async () => {
@@ -332,15 +381,23 @@ describe('app server', () => {
     expect(response.status).toBe(200);
     expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/hub/";');
     expect(html).toContain('window.NOCOBASE_API_URL = "/hub/v2/api";');
-    expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(html.indexOf('<script type="module"'));
+    expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
+      html.indexOf('<script type="module"'),
+    );
   });
 
   it('serves production client assets before the SPA fallback', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-client-'));
     tempDirs.push(root);
     mkdirSync(path.join(root, 'assets'));
-    writeFileSync(path.join(root, 'index.html'), '<script type="module" src="/hub/assets/index.js"></script>');
-    writeFileSync(path.join(root, 'assets/index.js'), 'console.log("hub asset");');
+    writeFileSync(
+      path.join(root, 'index.html'),
+      '<script type="module" src="/hub/assets/index.js"></script>',
+    );
+    writeFileSync(
+      path.join(root, 'assets/index.js'),
+      'console.log("hub asset");',
+    );
 
     const app = createApp({
       basePath: '/hub',
@@ -351,8 +408,12 @@ describe('app server', () => {
     const response = await app.request('http://localhost/hub/assets/index.js');
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
-    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(response.headers.get('content-type')).toBe(
+      'text/javascript; charset=utf-8',
+    );
+    expect(response.headers.get('cache-control')).toBe(
+      'public, max-age=31536000, immutable',
+    );
     await expect(response.text()).resolves.toBe('console.log("hub asset");');
   });
 
@@ -368,7 +429,9 @@ describe('app server', () => {
       nocoBaseApiUrl: false,
     });
 
-    const response = await app.request('http://localhost/hub/assets/missing.js');
+    const response = await app.request(
+      'http://localhost/hub/assets/missing.js',
+    );
 
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
@@ -435,9 +498,9 @@ describe('forwarded headers for a cross-site upstream', () => {
     expect(headers.get('x-forwarded-proto')).toBe('https');
     // The point of the three assertions above: the requestOrigin the upstream derives has to equal,
     // verbatim, the origin it receives.
-    expect(`${headers.get('x-forwarded-proto')}://${headers.get('x-forwarded-host')}`).toBe(
-      headers.get('origin'),
-    );
+    expect(
+      `${headers.get('x-forwarded-proto')}://${headers.get('x-forwarded-host')}`,
+    ).toBe(headers.get('origin'));
   });
 
   it('aligns referer too, since the upstream falls back to it without an origin', () => {
@@ -461,7 +524,9 @@ describe('forwarded headers for a cross-site upstream', () => {
   });
 
   it('still reports the proxy mount point', () => {
-    expect(forwardedFromLocalhost({}).get('x-forwarded-prefix')).toBe('/hub/v2/api');
+    expect(forwardedFromLocalhost({}).get('x-forwarded-prefix')).toBe(
+      '/hub/v2/api',
+    );
   });
 
   it('leaves a loopback upstream on the faithful-relay path', () => {

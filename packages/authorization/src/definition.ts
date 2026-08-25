@@ -33,7 +33,9 @@ export interface AuthorizationDefinition {
 export type AuthorizationDefinitionInput = Partial<AuthorizationDefinition>;
 
 /** Normalizes a partial input into the canonical snapshot shape. */
-export function defineAuthorization(input: AuthorizationDefinitionInput = {}): AuthorizationDefinition {
+export function defineAuthorization(
+  input: AuthorizationDefinitionInput = {},
+): AuthorizationDefinition {
   return {
     permissionSets: [...(input.permissionSets ?? [])],
     permissionSetGroups: [...(input.permissionSetGroups ?? [])],

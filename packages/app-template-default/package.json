@@ -1,34 +1,66 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "3.1.1",
+  "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
   "nocobase": {
-    "defaultTemplateVersion": "3.1.1"
+    "defaultTemplateVersion": "0.0.1",
+    "plugins": {
+      "@nocobase/app-plugin-authentication": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-data-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-notification-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-database-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-routes-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-queue-example": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-realtime-example": {
+        "enabled": true
+      }
+    }
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
     "@base-ui/react": "^1.6.0",
     "@dicebear/core": "^9.4.3",
     "@fontsource-variable/geist": "^5.3.0",
+    "@gchust/agent-annotations": "0.1.x",
     "@hono/node-server": "catalog:",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
-    "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-data-provider": "workspace:^",
+    "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-notification-provider": "workspace:^",
+    "@nocobase/app-plugin-queue-example": "workspace:^",
+    "@nocobase/app-plugin-realtime-example": "workspace:^",
+    "@nocobase/app-plugin-routes-example": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
-    "@nocobase/authentication": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/id-generator": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "@nocobase/portal-sdk": "workspace:^",
+    "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
+    "@nocobase/ui": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
@@ -85,7 +117,6 @@
     "react-day-picker": "10.0.1",
     "react-dom": "catalog:",
     "react-error-boundary": "^6.0.0",
-    "react-grab": "0.1.50",
     "react-hook-form": "^7.57.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.12.2",
@@ -93,7 +124,6 @@
     "recharts": "^3.8.0",
     "remark-gfm": "^4.0.1",
     "shadcn": "^4.13.1",
-    "sonner": "^2.0.3",
     "tailwind-merge": "^3.2.0",
     "tailwindcss": "catalog:",
     "tsc-alias": "^1.9.2",
@@ -104,6 +134,30 @@
     "vitest": "catalog:",
     "zod": "^3.25.76"
   },
+  "files": [
+    "client",
+    "server",
+    "database",
+    "public",
+    "scripts",
+    "registry",
+    "index.html",
+    "components.json",
+    "registry.config.json",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "eslint.config.js",
+    "tsconfig.json",
+    "tsconfig.node.json",
+    "tsconfig.server.json",
+    "tsconfig.migrations.json",
+    "Dockerfile",
+    "ecosystem.config.js",
+    ".env.example",
+    "README.MD",
+    "MIGRATION.md",
+    "AGENTS.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -122,17 +176,18 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
+    "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:sdk": "pnpm --filter @nocobase/portal-sdk test",
+    "test:sdk": "pnpm --filter @nocobase/app-portal-sdk test",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:install": "playwright install chromium",
     "test:all": "pnpm typecheck && pnpm test && pnpm test:sdk && pnpm build && pnpm test:e2e",
-    "start": "node ./dist/server/standalone.js",
+    "start": "node ./scripts/start.mjs",
     "refine": "refine",
     "sdk:check": "pnpm exec portal-sdk check",
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-template-default.tgz\" && pnpm exec publint ."

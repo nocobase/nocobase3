@@ -1,61 +1,61 @@
-import type { AppExtension } from "@nocobase/portal-sdk/extensions";
-import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
-import { Blocks, PanelsTopLeft, ShieldCheck } from "lucide-react";
-import { RoleSwitcherUserMenuItems } from "./components/role-switcher";
+import type { AppExtension } from '@nocobase/app-portal-sdk/extensions';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
+import { Blocks, PanelsTopLeft, ShieldCheck } from 'lucide-react';
+import { RoleSwitcherUserMenuItems } from './components/role-switcher';
 
 const nocobaseAclExtension: AppExtension = {
-  id: "nocobase-acl",
+  id: 'nocobase-acl',
   UserMenuItems: RoleSwitcherUserMenuItems,
   dev: {
     resources: [
       {
-        name: "acl-integration",
+        name: 'acl-integration',
         meta: {
-          label: "Access control",
+          label: 'Access control',
           icon: <ShieldCheck />,
-          description: "NocoBase ACL integration for admin applications.",
-          acl: { type: "authenticated" },
+          description: 'NocoBase ACL integration for admin applications.',
+          acl: { type: 'authenticated' },
         },
       },
       {
-        name: "acl-components",
-        list: "acl",
+        name: 'acl-components',
+        list: 'acl',
         meta: {
-          parent: "acl-integration",
-          label: "Role switcher",
+          parent: 'acl-integration',
+          label: 'Role switcher',
           icon: <Blocks />,
-          acl: { type: "authenticated" },
+          acl: { type: 'authenticated' },
         },
       },
       {
-        name: "acl-patterns",
-        list: "acl/patterns",
+        name: 'acl-patterns',
+        list: 'acl/patterns',
         meta: {
-          parent: "acl-integration",
-          label: "Permission patterns",
+          parent: 'acl-integration',
+          label: 'Permission patterns',
           icon: <PanelsTopLeft />,
-          acl: { type: "authenticated" },
+          acl: { type: 'authenticated' },
         },
       },
     ],
     routes: defineAppRoutes([
       {
-        name: "development.acl",
-        path: "acl",
+        name: 'development.acl',
+        path: 'acl',
         children: [
           {
-            name: "development.acl.components",
+            name: 'development.acl.components',
             index: true,
             lazy: () =>
-              import("./demo/components").then((module) => ({
+              import('./demo/components').then((module) => ({
                 default: module.AclComponentsPage,
               })),
           },
           {
-            name: "development.acl.patterns",
-            path: "patterns",
+            name: 'development.acl.patterns',
+            path: 'patterns',
             lazy: () =>
-              import("./demo").then((module) => ({
+              import('./demo').then((module) => ({
                 default: module.AclPatternsPage,
               })),
           },

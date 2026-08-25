@@ -1,0 +1,85 @@
+{
+  "name": "@nocobase/app-client",
+  "version": "0.0.1",
+  "description": "React and Refine runtime for NocoBase applications.",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./plugins": {
+      "types": "./src/plugins.ts",
+      "import": "./src/plugins.ts"
+    },
+    "./ui": {
+      "types": "./src/ui/index.ts",
+      "import": "./src/ui/index.ts"
+    }
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./plugins": {
+        "types": "./dist/plugins.d.ts",
+        "import": "./dist/plugins.js"
+      },
+      "./ui": {
+        "types": "./dist/ui/index.d.ts",
+        "import": "./dist/ui/index.js"
+      }
+    },
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.6.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.2.0"
+  },
+  "peerDependencies": {
+    "@nocobase/app-sdk": "^0.1.0",
+    "@refinedev/core": "^5.0.0",
+    "@refinedev/react-router": "^2.0.0",
+    "react": "^19.0.0",
+    "react-router": "^7.0.0"
+  },
+  "devDependencies": {
+    "@nocobase/app-sdk": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@refinedev/core": "catalog:",
+    "@refinedev/react-router": "^2.0.0",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "eslint": "catalog:",
+    "jsdom": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,6 +1,6 @@
-import type { InferUIMessageChunk } from "ai";
-import { parseNocoBaseSSE, type NocoBaseStreamEvent } from "./stream-parser";
-import { StreamCoalescer } from "./stream-coalescer";
+import type { InferUIMessageChunk } from 'ai';
+import { parseNocoBaseSSE, type NocoBaseStreamEvent } from './stream-parser';
+import { StreamCoalescer } from './stream-coalescer';
 import {
   getToolCallState,
   getToolProviderMetadata,
@@ -8,9 +8,9 @@ import {
   parseToolInput,
   toolCallsFromEvent,
   type NocoBaseToolCall,
-} from "./stream-event-utils";
-import { SubAgentStreamAccumulator } from "./sub-agent-stream";
-import type { AIChatMessage } from "./types";
+} from './stream-event-utils';
+import { SubAgentStreamAccumulator } from './sub-agent-stream';
+import type { AIChatMessage } from './types';
 
 const VISUAL_DELTA_FLUSH_INTERVAL = 50;
 const VISUAL_DELTA_FLUSH_SIZE = 768;
@@ -20,7 +20,7 @@ const TOOL_INPUT_FLUSH_SIZE = 2048;
 type AIChatChunk = InferUIMessageChunk<AIChatMessage>;
 
 type BufferedVisualDelta = {
-  type: "text-delta" | "reasoning-delta";
+  type: 'text-delta' | 'reasoning-delta';
   id: string;
   delta: string;
 };
@@ -37,16 +37,16 @@ type BufferedSubAgentToolEvent = {
 };
 
 const reasoningContent = (event: NocoBaseStreamEvent) => {
-  if (typeof event.body === "object" && event.body) {
+  if (typeof event.body === 'object' && event.body) {
     const content = (event.body as { content?: unknown }).content;
-    return typeof content === "string" ? content : "";
+    return typeof content === 'string' ? content : '';
   }
-  return "";
+  return '';
 };
 
 const mergeToolCallChunks = (
   current: BufferedSubAgentToolEvent,
-  incoming: BufferedSubAgentToolEvent
+  incoming: BufferedSubAgentToolEvent,
 ) => {
   const chunks = current.chunks.map((chunk) => ({ ...chunk }));
   for (const chunk of incoming.chunks) {
@@ -56,9 +56,9 @@ const mergeToolCallChunks = (
       !chunk.name &&
       (chunk.id === undefined || chunk.id === last.id) &&
       (chunk.index === undefined || chunk.index === last.index) &&
-      typeof chunk.args === "string"
+      typeof chunk.args === 'string'
     ) {
-      last.args = `${typeof last.args === "string" ? last.args : ""}${
+      last.args = `${typeof last.args === 'string' ? last.args : ''}${
         chunk.args
       }`;
     } else {
@@ -75,7 +75,7 @@ const mergeToolCallChunks = (
 export function createNocoBaseUIMessageStream(
   stream: ReadableStream<Uint8Array>,
   messageId: string | null = `assistant-${crypto.randomUUID()}`,
-  options: { waitForNewMessage?: boolean; seedMessage?: AIChatMessage } = {}
+  options: { waitForNewMessage?: boolean; seedMessage?: AIChatMessage } = {},
 ): ReadableStream<AIChatChunk> {
   return new ReadableStream<AIChatChunk>({
     async start(controller) {
@@ -90,7 +90,7 @@ export function createNocoBaseUIMessageStream(
       const toolCallInputs = new Map<string, unknown>();
       const subAgents = new SubAgentStreamAccumulator(options.seedMessage);
       controller.enqueue(
-        messageId === null ? { type: "start" } : { type: "start", messageId }
+        messageId === null ? { type: 'start' } : { type: 'start', messageId },
       );
 
       const visualDeltas = new StreamCoalescer<string, BufferedVisualDelta>({
@@ -111,7 +111,7 @@ export function createNocoBaseUIMessageStream(
         merge: (current, incoming) => `${current}${incoming}`,
         onFlush: (toolCallId, inputTextDelta) => {
           controller.enqueue({
-            type: "tool-input-delta",
+            type: 'tool-input-delta',
             toolCallId,
             inputTextDelta,
           });
@@ -145,8 +145,8 @@ export function createNocoBaseUIMessageStream(
           chunks,
           size: chunks.reduce(
             (size, chunk) =>
-              size + (typeof chunk.args === "string" ? chunk.args.length : 0),
-            0
+              size + (typeof chunk.args === 'string' ? chunk.args.length : 0),
+            0,
           ),
         });
       };
@@ -168,7 +168,7 @@ export function createNocoBaseUIMessageStream(
         }),
         onFlush: (_, pending) => {
           const body =
-            pending.event.type === "reasoning" && isRecord(pending.event.body)
+            pending.event.type === 'reasoning' && isRecord(pending.event.body)
               ? { ...pending.event.body, content: pending.content }
               : pending.content;
           for (const chunk of subAgents.process({ ...pending.event, body })) {
@@ -186,10 +186,10 @@ export function createNocoBaseUIMessageStream(
           return;
         }
         subAgentNarrativeEvents.flush(
-          subAgentNarrativeKey(sessionId, "reasoning")
+          subAgentNarrativeKey(sessionId, 'reasoning'),
         );
         subAgentNarrativeEvents.flush(
-          subAgentNarrativeKey(sessionId, "content")
+          subAgentNarrativeKey(sessionId, 'content'),
         );
       };
 
@@ -197,28 +197,28 @@ export function createNocoBaseUIMessageStream(
         const sessionId = event.sessionId;
         if (!sessionId) return;
         const content =
-          event.type === "content" && typeof event.body === "string"
+          event.type === 'content' && typeof event.body === 'string'
             ? event.body
-            : event.type === "reasoning" && isRecord(event.body)
-            ? typeof event.body.content === "string"
-              ? event.body.content
-              : ""
-            : "";
+            : event.type === 'reasoning' && isRecord(event.body)
+              ? typeof event.body.content === 'string'
+                ? event.body.content
+                : ''
+              : '';
         if (!content) return;
-        const otherType = event.type === "content" ? "reasoning" : "content";
+        const otherType = event.type === 'content' ? 'reasoning' : 'content';
         subAgentNarrativeEvents.flush(
-          subAgentNarrativeKey(sessionId, otherType)
+          subAgentNarrativeKey(sessionId, otherType),
         );
         subAgentNarrativeEvents.push(
           subAgentNarrativeKey(sessionId, event.type),
-          { event, content }
+          { event, content },
         );
       };
 
       const finishActiveText = () => {
         if (!textStarted) return;
         visualDeltas.flush(`text-delta:${textId}`);
-        controller.enqueue({ type: "text-end", id: textId });
+        controller.enqueue({ type: 'text-end', id: textId });
         textStarted = false;
         textId = `text-${crypto.randomUUID()}`;
       };
@@ -226,7 +226,7 @@ export function createNocoBaseUIMessageStream(
       const finishActiveReasoning = () => {
         if (!reasoningStarted) return;
         visualDeltas.flush(`reasoning-delta:${reasoningId}`);
-        controller.enqueue({ type: "reasoning-end", id: reasoningId });
+        controller.enqueue({ type: 'reasoning-end', id: reasoningId });
         reasoningStarted = false;
         reasoningId = `reasoning-${crypto.randomUUID()}`;
       };
@@ -238,18 +238,18 @@ export function createNocoBaseUIMessageStream(
 
       try {
         for await (const event of parseNocoBaseSSE(stream)) {
-          if (event.type !== "tool_call_chunks") {
+          if (event.type !== 'tool_call_chunks') {
             toolInputDeltas.flushAll();
           }
-          if (event.from === "sub-agent") {
+          if (event.from === 'sub-agent') {
             finishActiveNarrative();
-            if (event.type === "content" || event.type === "reasoning") {
+            if (event.type === 'content' || event.type === 'reasoning') {
               if (event.sessionId) subAgentToolEvents.flush(event.sessionId);
               enqueueSubAgentNarrativeEvent(event);
               continue;
             }
             flushSubAgentNarrativeEvents(event.sessionId);
-            if (event.type === "tool_call_chunks") {
+            if (event.type === 'tool_call_chunks') {
               enqueueSubAgentToolEvent(event);
               continue;
             }
@@ -263,48 +263,48 @@ export function createNocoBaseUIMessageStream(
           flushSubAgentNarrativeEvents();
           subAgentToolEvents.flushAll();
 
-          if (event.type === "new_message") {
+          if (event.type === 'new_message') {
             responseStarted = true;
             continue;
           }
 
-          if (!responseStarted && event.type !== "error") {
+          if (!responseStarted && event.type !== 'error') {
             continue;
           }
 
-          if (event.type === "content" && typeof event.body === "string") {
+          if (event.type === 'content' && typeof event.body === 'string') {
             finishActiveReasoning();
             if (!textStarted) {
-              controller.enqueue({ type: "text-start", id: textId });
+              controller.enqueue({ type: 'text-start', id: textId });
               textStarted = true;
             }
             enqueueVisualDelta({
-              type: "text-delta",
+              type: 'text-delta',
               id: textId,
               delta: event.body,
             });
           }
 
-          if (event.type === "reasoning") {
+          if (event.type === 'reasoning') {
             finishActiveText();
             const delta = reasoningContent(event);
             if (delta && !reasoningStarted) {
               controller.enqueue({
-                type: "reasoning-start",
+                type: 'reasoning-start',
                 id: reasoningId,
               });
               reasoningStarted = true;
             }
             if (delta) {
               enqueueVisualDelta({
-                type: "reasoning-delta",
+                type: 'reasoning-delta',
                 id: reasoningId,
                 delta,
               });
             }
           }
 
-          if (event.type === "tool_call_chunks") {
+          if (event.type === 'tool_call_chunks') {
             finishActiveNarrative();
             for (const chunk of toolCallsFromEvent(event)) {
               const toolCallId = chunk.id ?? currentToolCallId;
@@ -313,40 +313,40 @@ export function createNocoBaseUIMessageStream(
               if (chunk.name && !announcedToolCalls.has(toolCallId)) {
                 toolCallNames.set(toolCallId, chunk.name);
                 controller.enqueue({
-                  type: "tool-input-start",
+                  type: 'tool-input-start',
                   toolCallId,
                   toolName: chunk.name,
                   dynamic: true,
                 });
                 announcedToolCalls.add(toolCallId);
               }
-              if (typeof chunk.args === "string" && chunk.args) {
+              if (typeof chunk.args === 'string' && chunk.args) {
                 const previousInput = toolCallInputs.get(toolCallId);
                 toolCallInputs.set(
                   toolCallId,
-                  `${typeof previousInput === "string" ? previousInput : ""}${
+                  `${typeof previousInput === 'string' ? previousInput : ''}${
                     chunk.args
-                  }`
+                  }`,
                 );
                 toolInputDeltas.push(toolCallId, chunk.args);
               }
             }
           }
 
-          if (event.type === "tool_calls") {
+          if (event.type === 'tool_calls') {
             finishActiveNarrative();
             for (const toolCall of toolCallsFromEvent(event)) {
               const toolCallId = toolCall.id ?? `tool-${crypto.randomUUID()}`;
-              const toolName = toolCall.name ?? "tool";
+              const toolName = toolCall.name ?? 'tool';
               const toolState = getToolCallState(toolCall);
               const { invokeStatus, resultStatus } = toolState;
               const toolInput = parseToolInput(
-                toolCall.args ?? toolCall.input ?? {}
+                toolCall.args ?? toolCall.input ?? {},
               );
               toolCallNames.set(toolCallId, toolName);
               toolCallInputs.set(toolCallId, toolInput);
               controller.enqueue({
-                type: "tool-input-available",
+                type: 'tool-input-available',
                 toolCallId,
                 toolName,
                 input: toolInput,
@@ -357,16 +357,16 @@ export function createNocoBaseUIMessageStream(
 
               if (toolState.failed) {
                 controller.enqueue({
-                  type: "tool-output-error",
+                  type: 'tool-output-error',
                   toolCallId,
                   errorText: String(
-                    toolCall.content ?? toolCall.output ?? "Tool call failed"
+                    toolCall.content ?? toolCall.output ?? 'Tool call failed',
                   ),
                   dynamic: true,
                 });
               } else if (toolState.completed) {
                 controller.enqueue({
-                  type: "tool-output-available",
+                  type: 'tool-output-available',
                   toolCallId,
                   output: toolCall.output ??
                     toolCall.content ?? {
@@ -378,7 +378,7 @@ export function createNocoBaseUIMessageStream(
             }
           }
 
-          if (event.type === "tool_call_status" && isRecord(event.body)) {
+          if (event.type === 'tool_call_status' && isRecord(event.body)) {
             finishActiveNarrative();
             const toolCall = isRecord(event.body.toolCall)
               ? (event.body.toolCall as NocoBaseToolCall)
@@ -388,11 +388,11 @@ export function createNocoBaseUIMessageStream(
               const mergedToolCall = {
                 ...toolCall,
                 invokeStatus:
-                  typeof event.body.invokeStatus === "string"
+                  typeof event.body.invokeStatus === 'string'
                     ? event.body.invokeStatus
                     : toolCall.invokeStatus,
                 status:
-                  typeof event.body.status === "string"
+                  typeof event.body.status === 'string'
                     ? event.body.status
                     : toolCall.status,
                 content: event.body.content ?? toolCall.content,
@@ -400,7 +400,7 @@ export function createNocoBaseUIMessageStream(
               const toolState = getToolCallState(mergedToolCall);
               const { invokeStatus, resultStatus } = toolState;
               const toolName =
-                toolCall.name ?? toolCallNames.get(toolCallId) ?? "tool";
+                toolCall.name ?? toolCallNames.get(toolCallId) ?? 'tool';
               const toolInput =
                 toolCall.args !== undefined || toolCall.input !== undefined
                   ? parseToolInput(toolCall.args ?? toolCall.input)
@@ -408,7 +408,7 @@ export function createNocoBaseUIMessageStream(
               toolCallNames.set(toolCallId, toolName);
               toolCallInputs.set(toolCallId, toolInput);
               controller.enqueue({
-                type: "tool-input-available",
+                type: 'tool-input-available',
                 toolCallId,
                 toolName,
                 input: toolInput,
@@ -418,14 +418,14 @@ export function createNocoBaseUIMessageStream(
               announcedToolCalls.add(toolCallId);
               if (toolState.failed) {
                 controller.enqueue({
-                  type: "tool-output-error",
+                  type: 'tool-output-error',
                   toolCallId,
-                  errorText: String(event.body.content ?? "Tool call failed"),
+                  errorText: String(event.body.content ?? 'Tool call failed'),
                   dynamic: true,
                 });
               } else if (toolState.completed) {
                 controller.enqueue({
-                  type: "tool-output-available",
+                  type: 'tool-output-available',
                   toolCallId,
                   output: event.body.content ?? {
                     status: invokeStatus || resultStatus,
@@ -436,10 +436,10 @@ export function createNocoBaseUIMessageStream(
             }
           }
 
-          if (event.type === "error") {
+          if (event.type === 'error') {
             controller.enqueue({
-              type: "error",
-              errorText: String(event.body ?? "AI response failed"),
+              type: 'error',
+              errorText: String(event.body ?? 'AI response failed'),
             });
           }
         }
@@ -449,7 +449,7 @@ export function createNocoBaseUIMessageStream(
         flushSubAgentNarrativeEvents();
         subAgentToolEvents.flushAll();
         finishActiveNarrative();
-        controller.enqueue({ type: "finish" });
+        controller.enqueue({ type: 'finish' });
         controller.close();
       } catch (error) {
         toolInputDeltas.clear();

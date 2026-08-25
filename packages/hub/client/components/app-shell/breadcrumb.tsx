@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Fragment, useMemo } from "react";
-import { Home } from "lucide-react";
+import { Fragment, useMemo } from 'react';
+import { Home } from 'lucide-react';
 import {
   type IResourceItem,
   matchResourceFromRoute,
@@ -12,16 +12,16 @@ import {
   useResourceParams,
   useTranslate,
   useUserFriendlyName,
-} from "@refinedev/core";
+} from '@refinedev/core';
 import {
   BreadcrumbSeparator as ShadcnBreadcrumbSeparator,
   BreadcrumbItem as ShadcnBreadcrumbItem,
   BreadcrumbList as ShadcnBreadcrumbList,
   BreadcrumbPage as ShadcnBreadcrumbPage,
   Breadcrumb as ShadcnBreadcrumb,
-} from "@/components/ui/breadcrumb";
-import { resolveTranslatableText } from "@nocobase/portal-sdk/i18n";
-import { getResourceLabel } from "@/components/resources/resource-label";
+} from '@/components/ui/breadcrumb';
+import { resolveTranslatableText } from '@nocobase/app-portal-sdk/i18n';
+import { getResourceLabel } from '@/components/resources/resource-label';
 
 export function Breadcrumb() {
   const Link = useLink();
@@ -31,7 +31,7 @@ export function Breadcrumb() {
   const getToPath = useGetToPath();
   const translate = useTranslate();
   const getUserFriendlyName = useUserFriendlyName();
-  const rootRouteResource = matchResourceFromRoute("/", resources);
+  const rootRouteResource = matchResourceFromRoute('/', resources);
   const resolvedBreadcrumbs = useMemo(() => {
     if (breadcrumbs.length > 0) return breadcrumbs;
 
@@ -40,23 +40,20 @@ export function Breadcrumb() {
 
     const items: Array<{ label: string; href?: string }> = [
       {
-        label:
-          closestMatch.resource.meta?.label ?? closestMatch.resource.name,
-        href: getToPath({ resource: closestMatch.resource, action: "list" }),
+        label: closestMatch.resource.meta?.label ?? closestMatch.resource.name,
+        href: getToPath({ resource: closestMatch.resource, action: 'list' }),
       },
     ];
-    const nestedAction = getNestedRouteAction(
-      pathname,
-      closestMatch.matchedSegmentCount
-    ) ??
-      (closestMatch.action && closestMatch.action !== "list"
+    const nestedAction =
+      getNestedRouteAction(pathname, closestMatch.matchedSegmentCount) ??
+      (closestMatch.action && closestMatch.action !== 'list'
         ? closestMatch.action
         : undefined);
     if (nestedAction) {
       items.push({
         label: translate(
           `buttons.${nestedAction}`,
-          nestedAction.charAt(0).toUpperCase() + nestedAction.slice(1)
+          nestedAction.charAt(0).toUpperCase() + nestedAction.slice(1),
         ),
       });
     }
@@ -72,12 +69,12 @@ export function Breadcrumb() {
     }[] = [];
 
     list.push({
-      key: "breadcrumb-item-home",
-      href: rootRouteResource.matchedRoute ?? "/",
+      key: 'breadcrumb-item-home',
+      href: rootRouteResource.matchedRoute ?? '/',
       Component: (
-        <Link to={rootRouteResource.matchedRoute ?? "/"}>
+        <Link to={rootRouteResource.matchedRoute ?? '/'}>
           {rootRouteResource?.resource?.meta?.icon ?? (
-            <Home className="h-4 w-4" />
+            <Home className='h-4 w-4' />
           )}
         </Link>
       ),
@@ -91,21 +88,21 @@ export function Breadcrumb() {
           label === resource.name ||
           (href &&
             [resource.list, resource.create, resource.edit, resource.show].some(
-              (route) => typeof route === "string" && route === href
+              (route) => typeof route === 'string' && route === href,
             ))
         );
       });
       const displayLabel = matchingResource
         ? getResourceLabel(
             matchingResource,
-            "plural",
+            'plural',
             translate,
-            getUserFriendlyName
+            getUserFriendlyName,
           )
         : resolveTranslatableText(label);
       list.push({
         key: `breadcrumb-item-${displayLabel}`,
-        href: href ?? "",
+        href: href ?? '',
         Component: href ? (
           <Link to={href}>{displayLabel}</Link>
         ) : (
@@ -152,12 +149,12 @@ export function Breadcrumb() {
 
 function findClosestRouteMatch(
   pathname: string | undefined,
-  resources: IResourceItem[]
+  resources: IResourceItem[],
 ) {
-  const segments = pathname?.split("/").filter(Boolean) ?? [];
+  const segments = pathname?.split('/').filter(Boolean) ?? [];
 
   for (let length = segments.length; length >= 0; length -= 1) {
-    const route = `/${segments.slice(0, length).join("/")}`;
+    const route = `/${segments.slice(0, length).join('/')}`;
     const match = matchResourceFromRoute(route, resources);
     if (match.resource) {
       return { ...match, matchedSegmentCount: length };
@@ -169,14 +166,14 @@ function findClosestRouteMatch(
 
 function getNestedRouteAction(
   pathname: string | undefined,
-  matchedSegmentCount: number
+  matchedSegmentCount: number,
 ) {
-  const segments = pathname?.split("/").filter(Boolean) ?? [];
+  const segments = pathname?.split('/').filter(Boolean) ?? [];
   const action = segments[matchedSegmentCount];
 
-  return action && ["create", "edit", "show", "clone"].includes(action)
+  return action && ['create', 'edit', 'show', 'clone'].includes(action)
     ? action
     : undefined;
 }
 
-Breadcrumb.displayName = "Breadcrumb";
+Breadcrumb.displayName = 'Breadcrumb';

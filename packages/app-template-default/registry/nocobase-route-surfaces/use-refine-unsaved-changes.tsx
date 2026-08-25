@@ -1,6 +1,6 @@
-import { useTranslate, useWarnAboutChange } from "@refinedev/core";
-import { TriangleAlert } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslate, useWarnAboutChange } from '@refinedev/core';
+import { TriangleAlert } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   AlertDialog,
@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogMedia,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 
 type PendingConfirmation = {
   promise: Promise<boolean>;
@@ -35,7 +35,7 @@ export function useRefineUnsavedChangesGuard() {
       setOpen(false);
       pending.resolve(allowed);
     },
-    [setWarnWhen]
+    [setWarnWhen],
   );
 
   useEffect(
@@ -43,7 +43,7 @@ export function useRefineUnsavedChangesGuard() {
       pendingRef.current?.resolve(false);
       pendingRef.current = null;
     },
-    []
+    [],
   );
 
   const beforeClose = useCallback(() => {
@@ -73,33 +73,30 @@ export function useRefineUnsavedChangesGuard() {
               <TriangleAlert />
             </AlertDialogMedia>
             <AlertDialogTitle>
-              {translate(
-                "unsavedChanges.title",
-                "Discard unsaved changes?"
-              )}
+              {translate('unsavedChanges.title', 'Discard unsaved changes?')}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {translate(
-                "unsavedChanges.description",
-                "Your changes have not been saved. Leaving now will discard them."
+                'unsavedChanges.description',
+                'Your changes have not been saved. Leaving now will discard them.',
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => settle(false)}>
-              {translate("unsavedChanges.stay", "Keep editing")}
+              {translate('unsavedChanges.stay', 'Keep editing')}
             </AlertDialogCancel>
             <AlertDialogAction
-              variant="destructive"
+              variant='destructive'
               onClick={() => settle(true)}
             >
-              {translate("unsavedChanges.leave", "Discard changes")}
+              {translate('unsavedChanges.leave', 'Discard changes')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     ),
-    [open, settle, translate]
+    [open, settle, translate],
   );
 
   return { beforeClose, confirmation };

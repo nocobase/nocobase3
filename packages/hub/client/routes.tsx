@@ -1,4 +1,4 @@
-import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 
 // Set this to false when the application no longer needs the example routes
 // contributed by installed Registry extensions. Providers, adapters, and the

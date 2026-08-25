@@ -1,16 +1,25 @@
-import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
+import {
+  defineConfig,
+  type ConfigFactory,
+} from '@nocobase/app-server-kit/config';
 import type { AppSessionConfig, SessionSameSite } from '@nocobase/session';
 
 const sessionConfig: ConfigFactory<AppSessionConfig> = defineConfig(
   ({ env, paths }): AppSessionConfig => ({
     enabled: env.boolean('SESSION_ENABLED', true),
-    default: env.string('SESSION_STORE', env.string('SESSION_DRIVER', 'memory')),
+    default: env.string(
+      'SESSION_STORE',
+      env.string('SESSION_DRIVER', 'memory'),
+    ),
 
     cookie: {
       name: env.string('SESSION_COOKIE', 'nocobase_session'),
       path: env.string('SESSION_PATH', '/'),
       domain: env.string('SESSION_DOMAIN'),
-      secure: env.boolean('SESSION_SECURE_COOKIE', env.string('NODE_ENV') === 'production'),
+      secure: env.boolean(
+        'SESSION_SECURE_COOKIE',
+        env.string('NODE_ENV') === 'production',
+      ),
       httpOnly: env.boolean('SESSION_HTTP_ONLY', true),
       sameSite: resolveSameSite(env.string('SESSION_SAME_SITE'), 'lax'),
       partitioned: env.boolean('SESSION_PARTITIONED_COOKIE', false),
@@ -23,7 +32,10 @@ const sessionConfig: ConfigFactory<AppSessionConfig> = defineConfig(
       rolling: env.boolean('SESSION_ROLLING', true),
     },
 
-    secret: env.string('SESSION_SECRET', env.string('AUTH_SECRET', 'nocobase-local-session-secret')),
+    secret: env.string(
+      'SESSION_SECRET',
+      env.string('AUTH_SECRET', 'nocobase-local-session-secret'),
+    ),
     previousSecrets: env.list('SESSION_PREVIOUS_SECRETS', []),
     gcLottery: [
       env.number('SESSION_GC_LOTTERY_HITS', 2),
@@ -64,9 +76,16 @@ const sessionConfig: ConfigFactory<AppSessionConfig> = defineConfig(
 
 export default sessionConfig;
 
-function resolveSameSite(value: string | undefined, fallback: SessionSameSite): SessionSameSite {
+function resolveSameSite(
+  value: string | undefined,
+  fallback: SessionSameSite,
+): SessionSameSite {
   const normalized = value?.toLowerCase();
-  if (normalized === 'lax' || normalized === 'strict' || normalized === 'none') {
+  if (
+    normalized === 'lax' ||
+    normalized === 'strict' ||
+    normalized === 'none'
+  ) {
     return normalized;
   }
 

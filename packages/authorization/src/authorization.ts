@@ -4,23 +4,23 @@ import {
   assertFilterCollection,
   matchesFilterAsync,
   orFilters,
-} from "./filter.js";
-import { AuthorizationDefinitionBuilder } from "./definition-builder.js";
-import { defineAuthorization } from "./definition.js";
-import { validateAuthorization } from "./diagnostics.js";
-import { diffAuthorization } from "./operations.js";
-import { PolicyRegistry, ResourceRegistry } from "./registry.js";
-import { standardPolicies } from "./standard-policies.js";
-import type { AuthorizationStore } from "./store.js";
-import type { AuthorizationDefinitionCallback } from "./definition-builder.js";
+} from './filter.js';
+import { AuthorizationDefinitionBuilder } from './definition-builder.js';
+import { defineAuthorization } from './definition.js';
+import { validateAuthorization } from './diagnostics.js';
+import { diffAuthorization } from './operations.js';
+import { PolicyRegistry, ResourceRegistry } from './registry.js';
+import { standardPolicies } from './standard-policies.js';
+import type { AuthorizationStore } from './store.js';
+import type { AuthorizationDefinitionCallback } from './definition-builder.js';
 import type {
   AuthorizationCatalog,
   AuthorizationDefinition,
   AuthorizationDefinitionInput,
   PolicyDescriptor,
-} from "./definition.js";
-import type { AuthorizationValidationResult } from "./diagnostics.js";
-import type { AuthorizationOperation } from "./operations.js";
+} from './definition.js';
+import type { AuthorizationValidationResult } from './diagnostics.js';
+import type { AuthorizationOperation } from './operations.js';
 import type {
   ActionPermission,
   AssignmentSubject,
@@ -36,11 +36,11 @@ import type {
   RelationAuthorizationPlan,
   RelationAuthorizationRequest,
   ResourceDefinition,
-} from "./types.js";
+} from './types.js';
 
 export interface AuthorizationOptions {
   store: AuthorizationStore;
-  defaultAccess?: "deny";
+  defaultAccess?: 'deny';
   policies?: readonly PolicyDefinition[];
 }
 
@@ -56,21 +56,21 @@ export type AuthorizationActionPlans = Readonly<
 >;
 
 function unionFields(
-  values: readonly ("*" | readonly string[] | undefined)[],
-): "*" | string[] {
-  if (values.includes("*")) {
-    return "*";
+  values: readonly ('*' | readonly string[] | undefined)[],
+): '*' | string[] {
+  if (values.includes('*')) {
+    return '*';
   }
   return [...new Set(values.flatMap((value) => value ?? []))];
 }
 
 function fieldsAllowed(
   requested: readonly string[] | undefined,
-  allowed: "*" | readonly string[],
+  allowed: '*' | readonly string[],
 ): boolean {
   return (
     !requested ||
-    allowed === "*" ||
+    allowed === '*' ||
     requested.every((field) => allowed.includes(field))
   );
 }
@@ -95,7 +95,7 @@ export class Authorization {
   define(
     input: AuthorizationDefinitionInput | AuthorizationDefinitionCallback = {},
   ): AuthorizationDefinition {
-    if (typeof input === "function") {
+    if (typeof input === 'function') {
       const builder = new AuthorizationDefinitionBuilder();
       input(builder);
       return builder.build();
@@ -182,7 +182,7 @@ export class Authorization {
     if (!resource || !resource.actions.includes(request.action)) {
       return this.denied(
         reasons,
-        "UNKNOWN_RESOURCE_OR_ACTION",
+        'UNKNOWN_RESOURCE_OR_ACTION',
         `Unknown resource or action: ${request.resource}.${request.action}`,
       );
     }
@@ -204,7 +204,7 @@ export class Authorization {
       if (!grants.length) {
         return this.denied(
           reasons,
-          "NO_OBJECT_PERMISSION",
+          'NO_OBJECT_PERMISSION',
           `No Object Permission allows ${resource.name}.${request.action}`,
         );
       }
@@ -215,7 +215,7 @@ export class Authorization {
       );
       for (const { set } of grants) {
         reasons.push({
-          type: "permissionSet",
+          type: 'permissionSet',
           key: set.key,
           message: `${set.key} allows ${resource.name}.${request.action}`,
         });
@@ -228,17 +228,17 @@ export class Authorization {
       if (!this.requestedFieldsAllowed(request.fields, input, output)) {
         return this.denied(
           reasons,
-          "FIELD_NOT_ALLOWED",
-          "One or more input, output, filter, sort, or group fields are not allowed",
+          'FIELD_NOT_ALLOWED',
+          'One or more input, output, filter, sort, or group fields are not allowed',
         );
       }
       reasons.push({
-        type: "fieldSecurity",
+        type: 'fieldSecurity',
         key: request.action,
         message: `Field permissions resolved for ${request.action}`,
       });
 
-      if (request.action === "create") {
+      if (request.action === 'create') {
         return { allowed: true, fields: { input, output }, reasons };
       }
 
@@ -247,7 +247,7 @@ export class Authorization {
         resource,
         request.action,
         grants.flatMap(({ action }) => action.recordScope ?? []),
-        "recordScope",
+        'recordScope',
         reasons,
       );
       await this.addBaselineFilters(
@@ -270,7 +270,7 @@ export class Authorization {
       if (!recordFilters.length) {
         return this.denied(
           reasons,
-          "NO_RECORD_ACCESS",
+          'NO_RECORD_ACCESS',
           `No Record Access allows ${resource.name}.${request.action}`,
         );
       }
@@ -297,10 +297,10 @@ export class Authorization {
         : true;
       if (!allowed) {
         reasons.push({
-          type: "recordAccess",
-          key: "recordMismatch",
+          type: 'recordAccess',
+          key: 'recordMismatch',
           message:
-            "The record does not match the effective Record Access filter",
+            'The record does not match the effective Record Access filter',
         });
       }
       return {
@@ -312,7 +312,7 @@ export class Authorization {
     } catch (error) {
       return this.denied(
         reasons,
-        "AUTHORIZATION_RESOLUTION_FAILED",
+        'AUTHORIZATION_RESOLUTION_FAILED',
         this.errorMessage(error),
       );
     }
@@ -328,15 +328,15 @@ export class Authorization {
       if (!source) {
         return this.deniedRelation(
           reasons,
-          "UNKNOWN_RESOURCE",
+          'UNKNOWN_RESOURCE',
           `Unknown resource: ${request.resource}`,
         );
       }
       const field = source.fields[request.field];
-      if (!field || field.type !== "relation") {
+      if (!field || field.type !== 'relation') {
         return this.deniedRelation(
           reasons,
-          "UNKNOWN_RELATION",
+          'UNKNOWN_RELATION',
           `Unknown relation: ${request.resource}.${request.field}`,
         );
       }
@@ -344,14 +344,14 @@ export class Authorization {
       if (!target) {
         return this.deniedRelation(
           reasons,
-          "UNKNOWN_TARGET_RESOURCE",
+          'UNKNOWN_TARGET_RESOURCE',
           `Unknown relation target: ${field.target}`,
         );
       }
 
-      const sourceAction = request.action === "traverse" ? "read" : "update";
+      const sourceAction = request.action === 'traverse' ? 'read' : 'update';
       const sourceFields: AuthorizationFieldRequest =
-        request.action === "traverse"
+        request.action === 'traverse'
           ? { output: [request.field] }
           : { input: [request.field] };
       const sourcePlan = await this.plan(principal, {
@@ -369,11 +369,11 @@ export class Authorization {
       // Relation operations derive their source permission from the ordinary
       // Action and relation field security: read for traversal, update for
       // connecting or disconnecting.
-      if (request.action === "disconnect") {
+      if (request.action === 'disconnect') {
         return { allowed: true, sourceFilter: sourcePlan.filter, reasons };
       }
 
-      const targetAction = "read";
+      const targetAction = 'read';
       const targetPlan = await this.plan(principal, {
         resource: target.name,
         action: targetAction,
@@ -404,10 +404,10 @@ export class Authorization {
         ))
       ) {
         reasons.push({
-          type: "recordAccess",
-          key: "relationTargetMismatch",
+          type: 'recordAccess',
+          key: 'relationTargetMismatch',
           message:
-            "The target record does not match the effective relation target filter",
+            'The target record does not match the effective relation target filter',
         });
         return {
           allowed: false,
@@ -425,7 +425,7 @@ export class Authorization {
     } catch (error) {
       return this.deniedRelation(
         reasons,
-        "RELATION_AUTHORIZATION_FAILED",
+        'RELATION_AUTHORIZATION_FAILED',
         this.errorMessage(error),
       );
     }
@@ -454,8 +454,8 @@ export class Authorization {
 
   private resolveSubjects(principal: Principal): AssignmentSubject[] {
     return [
-      { type: "user", id: principal.id },
-      { type: "allAuthenticatedUsers", id: "*" },
+      { type: 'user', id: principal.id },
+      { type: 'allAuthenticatedUsers', id: '*' },
     ];
   }
 
@@ -466,7 +466,7 @@ export class Authorization {
     const assignments = await this.store.findAssignments(subjects, now);
     const keys = new Set<string>();
     for (const assignment of assignments) {
-      if (assignment.target.type === "permissionSet") {
+      if (assignment.target.type === 'permissionSet') {
         keys.add(assignment.target.key);
       } else {
         const group = await this.store.getPermissionSetGroup(
@@ -498,7 +498,7 @@ export class Authorization {
     resource: ResourceDefinition,
     action: string,
     scopes: readonly RecordScope[],
-    usage: "recordScope" | "sharingRule" | "restrictionRule",
+    usage: 'recordScope' | 'sharingRule' | 'restrictionRule',
     reasons: AuthorizationReason[],
   ): Promise<FilterAst[]> {
     const filters: FilterAst[] = [];
@@ -516,7 +516,7 @@ export class Authorization {
       assertFilterCollection(compiled, resource.name);
       filters.push(compiled);
       reasons.push({
-        type: "recordAccess",
+        type: 'recordAccess',
         key: scope.policy,
         message: `${scope.policy} contributes a record scope`,
       });
@@ -540,13 +540,13 @@ export class Authorization {
       now,
     );
     for (const rule of rules) {
-      if (rule.records.type === "criteria") {
+      if (rule.records.type === 'criteria') {
         const compiled = await this.compileScopes(
           principal,
           resource,
           action,
           rule.records.scopes,
-          "sharingRule",
+          'sharingRule',
           reasons,
         );
         if (!compiled.length) {
@@ -554,8 +554,8 @@ export class Authorization {
         }
         filters.push(orFilters(resource.name, compiled));
       } else {
-        const identifier = resource.attributes?.identifier ?? "id";
-        if (resource.fields[identifier]?.type !== "scalar") {
+        const identifier = resource.attributes?.identifier ?? 'id';
+        if (resource.fields[identifier]?.type !== 'scalar') {
           throw new Error(
             `Resource "${resource.name}" does not declare a scalar identifier field`,
           );
@@ -570,7 +570,7 @@ export class Authorization {
         }
       }
       reasons.push({
-        type: "sharingRule",
+        type: 'sharingRule',
         key: rule.key,
         message: `${rule.key} shares a record range`,
       });
@@ -596,7 +596,7 @@ export class Authorization {
         resource,
         action,
         rule.scopes,
-        "restrictionRule",
+        'restrictionRule',
         reasons,
       );
       if (!compiled.length) {
@@ -604,7 +604,7 @@ export class Authorization {
       }
       filters.push(orFilters(resource.name, compiled));
       reasons.push({
-        type: "restrictionRule",
+        type: 'restrictionRule',
         key: rule.key,
         message: `${rule.key} restricts the final record range`,
       });
@@ -621,14 +621,14 @@ export class Authorization {
     reasons: AuthorizationReason[],
   ): Promise<void> {
     const baseline = await this.store.getOrganizationWideDefault(resource.name);
-    const access = baseline?.access ?? "private";
+    const access = baseline?.access ?? 'private';
     if (
-      (access === "publicReadWrite" && ["read", "update"].includes(action)) ||
-      (access === "publicReadOnly" && action === "read")
+      (access === 'publicReadWrite' && ['read', 'update'].includes(action)) ||
+      (access === 'publicReadOnly' && action === 'read')
     ) {
       filters.push(allRecords(resource.name));
       reasons.push({
-        type: "organizationWideDefault",
+        type: 'organizationWideDefault',
         key: access,
         message: `${resource.name} is ${access}`,
       });
@@ -636,16 +636,16 @@ export class Authorization {
     const ownerField = resource.attributes?.owner;
     const ownerAlreadyGranted = explicitScopes.some(
       (scope) =>
-        scope.policy === "recordsIOwn" || scope.policy === "allRecords",
+        scope.policy === 'recordsIOwn' || scope.policy === 'allRecords',
     );
     if (
       ownerField &&
       !ownerAlreadyGranted &&
-      ["read", "update", "delete"].includes(action)
+      ['read', 'update', 'delete'].includes(action)
     ) {
-      const policy = this.policies.get("recordsIOwn");
+      const policy = this.policies.get('recordsIOwn');
       if (!policy) {
-        throw new Error("recordsIOwn policy is not registered");
+        throw new Error('recordsIOwn policy is not registered');
       }
       filters.push(
         await policy.compile({
@@ -656,17 +656,17 @@ export class Authorization {
         }),
       );
       reasons.push({
-        type: "ownerAccess",
-        key: "recordOwner",
-        message: "Record ownership grants access",
+        type: 'ownerAccess',
+        key: 'recordOwner',
+        message: 'Record ownership grants access',
       });
     }
   }
 
   private requestedFieldsAllowed(
     requested: AuthorizationFieldRequest | undefined,
-    input: "*" | readonly string[],
-    output: "*" | readonly string[],
+    input: '*' | readonly string[],
+    output: '*' | readonly string[],
   ): boolean {
     if (!requested) {
       return true;
@@ -687,8 +687,8 @@ export class Authorization {
     const fields = new Set(Object.keys(resource.fields));
     for (const action of actions) {
       for (const field of [
-        ...(action.inputFields === "*" ? [] : (action.inputFields ?? [])),
-        ...(action.outputFields === "*" ? [] : (action.outputFields ?? [])),
+        ...(action.inputFields === '*' ? [] : (action.inputFields ?? [])),
+        ...(action.outputFields === '*' ? [] : (action.outputFields ?? [])),
       ]) {
         if (!fields.has(field)) {
           throw new Error(
@@ -706,7 +706,7 @@ export class Authorization {
   ): AuthorizationPlan {
     return {
       allowed: false,
-      reasons: [...reasons, { type: "error", key, message }],
+      reasons: [...reasons, { type: 'error', key, message }],
     };
   }
 
@@ -717,13 +717,13 @@ export class Authorization {
   ): RelationAuthorizationPlan {
     return {
       allowed: false,
-      reasons: [...reasons, { type: "error", key, message }],
+      reasons: [...reasons, { type: 'error', key, message }],
     };
   }
 
   private errorMessage(error: unknown): string {
     return error instanceof Error
       ? error.message
-      : "Authorization resolution failed";
+      : 'Authorization resolution failed';
   }
 }

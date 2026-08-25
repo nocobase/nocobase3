@@ -62,11 +62,11 @@ function ensureUploadFile(input: unknown): UploadFile {
 function isUploadFile(input: unknown): input is UploadFile {
   return Boolean(
     input &&
-      typeof input === 'object' &&
-      typeof (input as UploadFile).name === 'string' &&
-      typeof (input as UploadFile).size === 'number' &&
-      typeof (input as UploadFile).type === 'string' &&
-      typeof (input as UploadFile).arrayBuffer === 'function',
+    typeof input === 'object' &&
+    typeof (input as UploadFile).name === 'string' &&
+    typeof (input as UploadFile).size === 'number' &&
+    typeof (input as UploadFile).type === 'string' &&
+    typeof (input as UploadFile).arrayBuffer === 'function',
   );
 }
 
@@ -85,13 +85,20 @@ function normalizeUploadFileName(name: string): string {
   return normalized || 'upload.bin';
 }
 
-async function putFile(disk: NocoBaseDriveDisk, key: string, file: UploadFile): Promise<void> {
+async function putFile(
+  disk: NocoBaseDriveDisk,
+  key: string,
+  file: UploadFile,
+): Promise<void> {
   await disk.put(key, new Uint8Array(await file.arrayBuffer()), {
     contentType: file.type || undefined,
   });
 }
 
-async function getUrlOrNull(disk: NocoBaseDriveDisk, key: string): Promise<string | null> {
+async function getUrlOrNull(
+  disk: NocoBaseDriveDisk,
+  key: string,
+): Promise<string | null> {
   try {
     return await disk.getUrl(key);
   } catch {

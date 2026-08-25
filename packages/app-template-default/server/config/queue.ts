@@ -1,6 +1,9 @@
 import path from 'node:path';
 
-import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
+import {
+  defineConfig,
+  type ConfigFactory,
+} from '@nocobase/app-server-kit/config';
 import type { AppQueueConfig } from '@nocobase/queue';
 
 const queueConfig: ConfigFactory<AppQueueConfig> = defineConfig(
@@ -42,7 +45,10 @@ const queueConfig: ConfigFactory<AppQueueConfig> = defineConfig(
     jobs: {
       locations: [path.join(paths.server(), 'jobs/**/*.{ts,js}')],
       autoLoad: env.boolean('QUEUE_JOBS_AUTO_LOAD', true),
-      hotReload: env.boolean('QUEUE_JOBS_HOT_RELOAD', process.env.NODE_ENV === 'development'),
+      hotReload: env.boolean(
+        'QUEUE_JOBS_HOT_RELOAD',
+        process.env.NODE_ENV === 'development',
+      ),
     },
   }),
 );

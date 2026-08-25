@@ -10,7 +10,7 @@
 import type {
   AppWebSocketAcceptResult,
   AppWebSocketHandler,
-} from '@nocobase/app-server/websocket';
+} from '@nocobase/app-server-kit/websocket';
 
 import type { AppState } from './events.ts';
 
@@ -26,12 +26,16 @@ export type {
   AppWebSocketOpenEvent,
   AppWebSocketReadyState,
   AppWebSocketSendOptions,
-} from '@nocobase/app-server/websocket';
+} from '@nocobase/app-server-kit/websocket';
 
 export type AppDisposer = () => void | Promise<void>;
 
 export interface FetchApp {
-  fetch(request: Request, env?: unknown, executionCtx?: unknown): Response | Promise<Response>;
+  fetch(
+    request: Request,
+    env?: unknown,
+    executionCtx?: unknown,
+  ): Response | Promise<Response>;
   websocket?: AppWebSocketHandler;
 }
 
@@ -57,7 +61,8 @@ export interface AppScope {
 
 export type AppFactory = (scope: AppScope) => FetchApp | Promise<FetchApp>;
 
-export type AppBackendKind = 'in-process' | 'worker' | 'process' | 'external-service';
+export type AppBackendKind =
+  'in-process' | 'worker' | 'process' | 'external-service';
 
 export type AppIsolation = AppBackendKind;
 
@@ -197,7 +202,10 @@ export interface ActiveAppHandle {
   readonly signal: AbortSignal;
   readonly state: AppState;
   dispatch(request: Request, metadata?: AppRequestMetadata): Promise<Response>;
-  acceptWebSocket(request: Request, metadata?: AppRequestMetadata): Promise<AppWebSocketAcceptResult>;
+  acceptWebSocket(
+    request: Request,
+    metadata?: AppRequestMetadata,
+  ): Promise<AppWebSocketAcceptResult>;
   destroy(options?: string | AppDestroyOptions): Promise<void>;
   snapshot(): AppSnapshot;
 }

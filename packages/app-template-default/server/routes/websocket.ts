@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 
-import type { AppWebSocketHandler } from '@nocobase/app-server/websocket';
+import type { AppWebSocketHandler } from '@nocobase/app-server-kit/websocket';
 
 import type {
   RealtimeConnection,
@@ -29,7 +29,9 @@ export function registerWebSocketRoutes(app: Hono): void {
   );
 }
 
-export function createWebSocketHandler(options: WebSocketHandlerOptions): AppWebSocketHandler {
+export function createWebSocketHandler(
+  options: WebSocketHandlerOptions,
+): AppWebSocketHandler {
   return (request) => {
     const url = new URL(request.url);
     if (url.pathname !== APP_LOCAL_WEBSOCKET_PATH) {

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router";
-import { nocobaseClient } from "@nocobase/portal-sdk/client";
-import { resolvePortalUrl } from "@nocobase/portal-sdk/runtime";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 
-import { LoadingState } from "@/components/app-shell/loading-state";
+import { LoadingState } from '@/components/app-shell/loading-state';
 
 type AutoRedirectResponse = {
   success?: boolean;
@@ -18,10 +18,10 @@ type AuthAutoRedirectProviderProps = React.PropsWithChildren<{
 }>;
 
 const publicAuthPaths = new Set([
-  "/login",
-  "/signin",
-  "/register",
-  "/forgot-password",
+  '/login',
+  '/signin',
+  '/register',
+  '/forgot-password',
 ]);
 
 export function AuthAutoRedirectProvider({
@@ -35,9 +35,7 @@ export function AuthAutoRedirectProvider({
   const attemptedRef = useRef(false);
   const redirect = resolvePortalUrl(`${pathname}${search}`);
   const shouldCheck =
-    enabled &&
-    !nocobaseClient.getToken() &&
-    !publicAuthPaths.has(pathname);
+    enabled && !nocobaseClient.getToken() && !publicAuthPaths.has(pathname);
   const [isChecking, setIsChecking] = useState(shouldCheck);
   const stableQuery = useMemo(() => query, [JSON.stringify(query)]);
 
@@ -53,7 +51,7 @@ export function AuthAutoRedirectProvider({
 
     void nocobaseClient
       .action<AutoRedirectResponse>(resource, action, {
-        method: "GET",
+        method: 'GET',
         query: { redirect, ...stableQuery },
         signal: controller.signal,
         authenticator: null,
@@ -68,7 +66,7 @@ export function AuthAutoRedirectProvider({
         setIsChecking(false);
       })
       .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (error instanceof DOMException && error.name === 'AbortError') {
           return;
         }
         setIsChecking(false);

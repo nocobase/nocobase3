@@ -1,11 +1,18 @@
-import { prepareAppDatabaseStorage } from '@nocobase/app-server/database';
-import { runConfiguredAppMigrations, type AppRuntime } from '@nocobase/app-server/runtime';
+import { prepareAppDatabaseStorage } from '@nocobase/app-server-kit/database';
+import {
+  runConfiguredAppMigrations,
+  runConfiguredAppSeeds,
+  type AppRuntime,
+} from '@nocobase/app-server-kit/runtime';
 import { prepareDriveStorage } from '@nocobase/drive';
 
 import type { AppConfig } from '../config/index.js';
 
-export async function prepareAppRuntime(runtime: AppRuntime<AppConfig>): Promise<void> {
+export async function prepareAppRuntime(
+  runtime: AppRuntime<AppConfig>,
+): Promise<void> {
   await prepareAppDatabaseStorage(runtime.config.database);
   await prepareDriveStorage(runtime.config.drive);
   await runConfiguredAppMigrations(runtime);
+  await runConfiguredAppSeeds(runtime);
 }

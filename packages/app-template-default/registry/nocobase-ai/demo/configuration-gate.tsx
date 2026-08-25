@@ -1,35 +1,30 @@
-import type { ReactNode } from "react";
-import { CircleAlert } from "lucide-react";
+import type { ReactNode } from 'react';
+import { CircleAlert } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  AIProvider,
-  useAI,
-  type AIEmployee,
-  type AIModel,
-} from "../providers";
-import type { AIService } from "../services";
-import { useAITranslate } from "../locales/use-ai-translate";
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AIProvider, useAI, type AIEmployee, type AIModel } from '../providers';
+import type { AIService } from '../services';
+import { useAITranslate } from '../locales/use-ai-translate';
 
 const previewEmployees: AIEmployee[] = [
   {
-    username: "atlas",
-    nickname: "Atlas",
-    position: "General assistant",
-    greeting: "How can I help with this page?",
+    username: 'atlas',
+    nickname: 'Atlas',
+    position: 'General assistant',
+    greeting: 'How can I help with this page?',
   },
   {
-    username: "viz",
-    nickname: "Viz",
-    position: "Insights analyst",
-    greeting: "What would you like to explore?",
+    username: 'viz',
+    nickname: 'Viz',
+    position: 'Insights analyst',
+    greeting: 'What would you like to explore?',
   },
 ];
 
 const previewModels: AIModel[] = [
   {
-    value: "__preview__",
-    label: "Preview only",
+    value: '__preview__',
+    label: 'Preview only',
     configured: false,
   },
 ];
@@ -47,7 +42,7 @@ const previewService: AIService = {
   updateEmployeeUserPrompt: async () => undefined,
   listConversations: async () => [],
   getConversationMessages: async () => [],
-  getConversationActiveState: async () => "idle",
+  getConversationActiveState: async () => 'idle',
   updateConversationTitle: async () => undefined,
   destroyConversation: async () => undefined,
   uploadFile: async (file) => ({
@@ -68,9 +63,7 @@ export function AIConfigurationGate({ children }: { children: ReactNode }) {
   const t = useAITranslate();
   const { configurationStatus, hasEnabledModels, employees } = useAI();
   const configured =
-    configurationStatus === "ready" &&
-    hasEnabledModels &&
-    employees.length > 0;
+    configurationStatus === 'ready' && hasEnabledModels && employees.length > 0;
 
   if (configured) return children;
 
@@ -87,16 +80,16 @@ export function AIConfigurationGate({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className='space-y-6'>
       <Alert>
         <CircleAlert />
         <AlertTitle>
-          {t("demo.configuration.previewTitle", "Preview mode")}
+          {t('demo.configuration.previewTitle', 'Preview mode')}
         </AlertTitle>
         <AlertDescription>
           {t(
-            "demo.configuration.previewDescription",
-            "Component examples remain available. Sending messages requires an enabled AI model in the connected NocoBase application."
+            'demo.configuration.previewDescription',
+            'Component examples remain available. Sending messages requires an enabled AI model in the connected NocoBase application.',
           )}
         </AlertDescription>
       </Alert>
