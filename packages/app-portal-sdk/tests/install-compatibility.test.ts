@@ -1,3 +1,6 @@
+/* eslint-disable vitest/no-disabled-tests -- These cover the template compatibility check, which is disabled while v3 templates are unpublished.
+   Re-enable together with COMPATIBILITY_CHECK_DISABLED in scripts/check-template-compatibility.mjs
+   and src/vite/index.ts. */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -83,7 +86,12 @@ const runWorkspaceRootChecker = (packageJson) => {
   return result;
 };
 
-it('accepts a derived template with a compatible base version', () => {
+/**
+ * Skipped while the template compatibility check is disabled for unreleased v3 templates. These assert the behaviour of
+ * that check, so they exercise nothing until it is switched back on. Re-enable them together with
+ * COMPATIBILITY_CHECK_DISABLED in scripts/check-template-compatibility.mjs and src/vite/index.ts.
+ */
+it.skip('accepts a derived template with a compatible base version', () => {
   const result = runChecker({
     name: '@example/custom-portal',
     version: '8.4.0',
@@ -95,7 +103,7 @@ it('accepts a derived template with a compatible base version', () => {
   );
 });
 
-it('rejects an incompatible base template version with an actionable error', () => {
+it.skip('rejects an incompatible base template version with an actionable error', () => {
   const result = runChecker({
     name: '@example/custom-portal',
     version: '8.4.0',
@@ -109,7 +117,7 @@ it('rejects an incompatible base template version with an actionable error', () 
   expect(result.stderr).toMatch(/Supported Default Template range/);
 });
 
-it('rejects projects that do not preserve their base template version', () => {
+it.skip('rejects projects that do not preserve their base template version', () => {
   const result = runChecker({
     name: '@example/custom-portal',
     version: '8.4.0',
@@ -119,7 +127,7 @@ it('rejects projects that do not preserve their base template version', () => {
   expect(result.stderr).toMatch(/nocobase\.defaultTemplateVersion/);
 });
 
-it('skips private workspace roots during package preinstall', () => {
+it.skip('skips private workspace roots during package preinstall', () => {
   const result = runWorkspaceRootChecker({
     name: 'example-workspace',
     private: true,

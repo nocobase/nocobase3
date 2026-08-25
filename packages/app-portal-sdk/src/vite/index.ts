@@ -24,6 +24,8 @@ const sdkPackagePath = path.resolve(
   '../../package.json',
 );
 
+const COMPATIBILITY_CHECK_DISABLED = true;
+
 export const portalSdkCompatibilityPlugin = ({
   root = process.cwd(),
 }: {
@@ -31,6 +33,14 @@ export const portalSdkCompatibilityPlugin = ({
 } = {}): Plugin => ({
   name: 'nocobase-portal-sdk-compatibility',
   configResolved() {
+    // Disabled while v3 is unreleased. The gate compares the project's template version against the range this SDK
+    // supports, which only means something once templates are published and their versions carry release history.
+    // Every v3 package currently sits at 0.0.1, so the gate would reject every project it exists to protect.
+    // Re-enable together with the same check in scripts/check-template-compatibility.mjs once templates ship.
+    if (COMPATIBILITY_CHECK_DISABLED) {
+      return;
+    }
+
     const projectPackage = readPackage(path.resolve(root, 'package.json'));
     const sdkPackage = readPackage(sdkPackagePath);
     const defaultTemplateVersion =

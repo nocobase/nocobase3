@@ -1,3 +1,6 @@
+/* eslint-disable vitest/no-disabled-tests -- The Vite compatibility gate is disabled while v3 templates are unpublished.
+   Re-enable together with COMPATIBILITY_CHECK_DISABLED in scripts/check-template-compatibility.mjs
+   and src/vite/index.ts. */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,7 +18,9 @@ it('the SDK 2 range includes Template 3 and excludes adjacent generations', () =
   expect(semver.satisfies('4.0.0', range)).toBe(false);
 });
 
-it('the Vite plugin reports an invalid base template version', () => {
+// Skipped while the Vite compatibility gate is disabled for unreleased v3 templates; see
+// COMPATIBILITY_CHECK_DISABLED in src/vite/index.ts.
+it.skip('the Vite plugin reports an invalid base template version', () => {
   const projectRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), 'portal-sdk-vite-compat-'),
   );

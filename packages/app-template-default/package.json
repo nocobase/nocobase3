@@ -1,14 +1,14 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "3.0.0",
+  "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
   "nocobase": {
-    "defaultTemplateVersion": "3.0.0",
+    "defaultTemplateVersion": "0.0.1",
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true
@@ -125,6 +125,30 @@
     "vitest": "catalog:",
     "zod": "^3.25.76"
   },
+  "files": [
+    "client",
+    "server",
+    "database",
+    "public",
+    "scripts",
+    "registry",
+    "index.html",
+    "components.json",
+    "registry.config.json",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "eslint.config.js",
+    "tsconfig.json",
+    "tsconfig.node.json",
+    "tsconfig.server.json",
+    "tsconfig.migrations.json",
+    "Dockerfile",
+    "ecosystem.config.js",
+    ".env.example",
+    "README.MD",
+    "MIGRATION.md",
+    "AGENTS.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -154,7 +178,7 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:install": "playwright install chromium",
     "test:all": "pnpm typecheck && pnpm test && pnpm test:sdk && pnpm build && pnpm test:e2e",
-    "start": "node ./dist/server/standalone.js",
+    "start": "node ./scripts/start.mjs",
     "refine": "refine",
     "sdk:check": "pnpm exec portal-sdk check",
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-template-default.tgz\" && pnpm exec publint ."

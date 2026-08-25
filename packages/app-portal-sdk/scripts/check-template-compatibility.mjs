@@ -61,7 +61,31 @@ const isWorkspaceInstallRoot = (packageInfo) =>
   packageInfo?.value?.private === true &&
   fs.existsSync(path.join(packageInfo.directory, 'pnpm-workspace.yaml'));
 
+/**
+ * Disabled while v3 is unreleased.
+ *
+ * The check compares a project's `nocobase.defaultTemplateVersion` against the range this SDK supports, which only
+ * means something once the template is published and its versions carry release history. Every v3 package currently
+ * sits at 0.0.1, so the check would reject every project it was meant to protect. Re-enable it, and restore
+ * `supportedDefaultTemplateRange` to a real range, once the template ships.
+ */
+const CHECK_DISABLED = true;
+
 export const checkTemplateCompatibility = ({ silent = false } = {}) => {
+  if (CHECK_DISABLED) {
+    if (!silent) {
+      process.stdout.write(
+        'Portal SDK template compatibility check is disabled until v3 templates are published.\n',
+      );
+    }
+
+    return {
+      compatible: true,
+      defaultTemplateVersion: undefined,
+      supportedDefaultTemplateRange: undefined,
+    };
+  }
+
   const sdkPackage = readPackage(sdkRoot)?.value;
   const projectPackage = findProjectPackage();
   const supportedRange = sdkPackage?.nocobase?.supportedDefaultTemplateRange;
