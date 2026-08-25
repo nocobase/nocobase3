@@ -6,6 +6,8 @@
 //   node scripts/list-package-versions.mjs --prerelease 只列出带预发布后缀的
 //   node scripts/list-package-versions.mjs --changed <前值JSON文件>  列出版本号变了的
 //   node scripts/list-package-versions.mjs --candidates 列出可发布包的 name@version
+//   node scripts/list-package-versions.mjs --released <前值JSON文件>  列出本次发布的包，
+//                                          飞书通知用，每行 `name  version`
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -57,6 +59,21 @@ if (mode === '--table') {
     .filter((p) => before[p.name] !== p.version)
     .map((p) => `${p.name}: ${before[p.name]} -> ${p.version}`);
   console.log(changed.join('\n'));
+} else if (mode === '--released') {
+  // 只列版本号真的变了的包 —— 那才是本次实际发布的内容。
+  const beforeFile = process.argv[3];
+  if (!beforeFile) {
+    console.error('--released 需要指定前值 JSON 文件');
+    process.exit(2);
+  }
+  const before = JSON.parse(fs.readFileSync(beforeFile, 'utf8'));
+  const released = packages.filter(
+    (p) => !p.private && before[p.name] !== p.version,
+  );
+  const width = Math.max(0, ...released.map((p) => p.name.length));
+  console.log(
+    released.map((p) => `${p.name.padEnd(width)}  ${p.version}`).join('\n'),
+  );
 } else if (mode === '--candidates') {
   for (const p of packages) {
     if (p.private) continue;

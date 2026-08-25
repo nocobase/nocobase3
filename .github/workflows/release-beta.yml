@@ -129,6 +129,7 @@ jobs:
       # version 跑完却没有任何版本号变化，说明本次 changeset 全是 empty，
       # 或者声明的 package 都被 ignore 掉了。继续跑会 publish 零个包。
       - name: Verify versions actually changed
+        id: changed
         run: |
           CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
           if [ -z "$CHANGED" ]; then
@@ -136,6 +137,13 @@ jobs:
             exit 1
           fi
           echo "$CHANGED"
+
+          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
+          {
+            echo "released<<RELEASED_EOF"
+            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
+            echo "RELEASED_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Summarize
         run: |
@@ -261,5 +269,8 @@ jobs:
           CONTENT: |
             版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm（dist-tag `beta`）。
 
-            安装：`pnpm add @nocobase/core@beta`
+            本次发布的 package：
+            ```
+            ${{ steps.changed.outputs.released }}
+            ```
         run: ./scripts/feishu-notify.sh

@@ -178,6 +178,7 @@ jobs:
 
       - name: Verify versions actually changed
         if: steps.mode.outputs.needs_version == 'true'
+        id: changed
         run: |
           CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
           if [ -z "$CHANGED" ]; then
@@ -185,6 +186,13 @@ jobs:
             exit 1
           fi
           echo "$CHANGED"
+
+          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
+          {
+            echo "released<<RELEASED_EOF"
+            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
+            echo "RELEASED_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       # main 上不应产生预发布版本号。出现了说明 changeset 写错了。
       - name: Verify no prerelease versions
@@ -385,7 +393,12 @@ jobs:
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            已发布到 npm（dist-tag `latest`）。各 package 版本见 workflow summary。
+            已发布到 npm（dist-tag `latest`）。
+
+            本次发布的 package：
+            ```
+            ${{ steps.changed.outputs.released || '版本号由 merge-beta-to-stable 写好，清单见 workflow summary' }}
+            ```
 
             ${{ steps.sync.outputs.synced == 'true' && '补丁已同步到 develop。' || '' }}
         run: ./scripts/feishu-notify.sh
