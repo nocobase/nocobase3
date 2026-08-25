@@ -6,7 +6,7 @@ keywords: 'NocoBase,NotificationManager,发送通知,站内信,邮件'
 
 # 发送通知
 
-服务端业务代码通过 `NotificationManager.send()` 发送通知。一个调用可以包含多个接收人，每个接收人也可以选择多个 Channel。
+服务端业务代码通过 `NotificationManager.send()` 发送通知。一个调用可以包含多个接收人，并将同一份通知内容发送到多个 Channel。
 
 ## 发送站内信
 
@@ -18,22 +18,12 @@ const result = await notification.send({
     type: 'workflow',
     referenceId: 'workflow-42',
   },
-  recipients: [
-    {
-      channels: [
-        {
-          channel: 'in-app',
-          recipient: { userId: 'user-1' },
-        },
-      ],
-    },
-  ],
-  message: {
-    'in-app': {
-      title: '审批待处理',
-      body: '你有一条新的审批任务。',
-      actionUrl: '/approvals/approval-2026-001',
-    },
+  to: { type: 'user', id: 'user-1' },
+  channels: ['in-app'],
+  content: {
+    title: '审批待处理',
+    body: '你有一条新的审批任务。',
+    actionUrl: '/approvals/approval-2026-001',
   },
 });
 ```
@@ -46,62 +36,57 @@ const result = await notification.send({
 
 ```ts
 await notification.send({
-  recipients: [
-    {
-      channels: [
-        {
-          channel: 'email',
-          recipient: { address: 'alice@example.com' },
-        },
-      ],
-    },
-  ],
-  message: {
-    email: {
-      subject: '审批待处理',
-      text: '你有一条新的审批任务。',
-      html: '<p>你有一条新的审批任务。</p>',
-    },
+  to: { type: 'email', address: 'alice@example.com' },
+  channels: ['email'],
+  content: {
+    title: '审批待处理',
+    body: '你有一条新的审批任务。',
   },
 });
 ```
 
-邮件的 `subject` 和 `text` 必填，`html` 和 `from` 可选。默认应用没有配置用户 ID 到邮箱地址的解析器，因此只传 `userId` 无法发送邮件。
+默认 renderer 将 `content.title` 映射为邮件主题，将 `content.body` 映射为纯文本正文。默认应用没有配置用户 ID 到邮箱地址的 resolver，因此只传用户 ID 无法发送邮件。
 
-## 同时发送多个 Channel
+## 多个接收人与 Channel
 
-同一个接收人可以同时收到站内信和邮件：
+多个接收人可以共享同一份内容和 Channel：
 
 ```ts
 await notification.send({
-  recipients: [
-    {
-      channels: [
-        {
-          channel: 'in-app',
-          recipient: { userId: 'user-1' },
-        },
-        {
-          channel: 'email',
-          recipient: { address: 'alice@example.com' },
-        },
-      ],
-    },
+  to: [
+    { type: 'user', id: 'user-1' },
+    { type: 'user', id: 'user-2' },
   ],
-  message: {
-    'in-app': {
-      title: '审批完成',
-      body: '请查看审批结果。',
-    },
+  channels: ['in-app', 'email'],
+  content: {
+    title: '审批完成',
+    body: '请查看审批结果。',
+  },
+});
+```
+
+上面的调用会创建四条 Delivery（2 个接收人 × 2 个 Channel）。每个 Channel 的 recipient resolver 负责把统一接收人转换成对应地址。
+
+如果某个 Channel 需要不同字段，使用 `channelOverrides`：
+
+```ts
+await notification.send({
+  to: { type: 'user', id: 'user-1' },
+  channels: ['in-app', 'email'],
+  content: {
+    title: '审批完成',
+    body: '请查看审批结果。',
+  },
+  channelOverrides: {
     email: {
-      subject: '审批完成',
-      text: '请查看审批结果。',
+      subject: '审批完成｜NocoBase',
+      html: '<p>请查看审批结果。</p>',
     },
   },
 });
 ```
 
-这次调用会创建两条 Delivery。`message` 必须包含接收人所选择的每个 Channel，否则 `send()` 会直接抛出错误。
+Provider 由 Channel 配置统一选择；普通业务代码不需要维护 Provider 名称或底层 Delivery 字段。
 
 ## 读取返回结果
 
@@ -126,13 +111,13 @@ const details = await notification.logs.get(result.notificationId);
 以下情况会直接抛出错误：
 
 - Notification Manager 尚未完成启动
-- `recipients` 为空
-- 没有任何 Channel 目标
-- `message` 缺少接收人选择的 Channel
+- `to` 为空
+- 没有任何 Channel
 - 使用了未启用的 Channel
+- Channel 不支持通用内容
 - Channel 没有可用的 Provider
 
-地址解析、消息校验和 Provider 调用在队列任务中执行。遇到这类错误时，`send()` 可能已经返回，需要到 Delivery 日志中查看结果。
+Channel 不支持某种接收人时，对应组合会创建一条失败的 Delivery，其他接收人与 Channel 仍可继续投递。地址解析、消息校验和 Provider 调用在队列任务中执行；这些阶段失败时，`send()` 可能已经返回，需要到 Delivery 日志中查看结果。
 
 ## 相关链接
 

@@ -9,8 +9,10 @@ import type {
 } from './store.js';
 import type {
   NotificationChannel,
+  NotificationContent,
   NotificationProvider,
   NotificationProviderSendError,
+  NotificationRecipient,
   ProviderSendResult,
 } from './types.js';
 
@@ -53,6 +55,31 @@ export class ChannelManager {
 
   has(type: string): boolean {
     return this.runtimes.has(type);
+  }
+
+  resolveRecipient(
+    type: string,
+    recipient: NotificationRecipient,
+  ): object | undefined {
+    const channel = this.runtimes.get(type)?.channel;
+    if (!channel)
+      throw new Error(`Notification Channel "${type}" is not enabled.`);
+    return channel.resolveRecipient?.(recipient);
+  }
+
+  render(
+    type: string,
+    content: NotificationContent,
+    override?: object,
+  ): object {
+    const channel = this.runtimes.get(type)?.channel;
+    if (!channel)
+      throw new Error(`Notification Channel "${type}" is not enabled.`);
+    if (!channel.render)
+      throw new Error(
+        `Notification Channel "${type}" does not support common content.`,
+      );
+    return channel.render({ content, override });
   }
 
   providerIdentities(

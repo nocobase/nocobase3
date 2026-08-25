@@ -8,13 +8,16 @@ import { NotificationLogs } from './logs.js';
 import {
   createDatabaseNotificationStore,
   type NotificationDeliveryRecord,
+  type NotificationErrorRecord,
   type NotificationLogRecord,
+  type NotificationLogStatus,
   type NotificationStore,
 } from './store.js';
 import type {
   NotificationChannelDefinition,
   NotificationManagerOptions,
   NotificationProviderDefinition,
+  NotificationRecipient,
   NotificationSendInput,
   NotificationSendResult,
 } from './types.js';
@@ -29,7 +32,7 @@ export class NotificationManager<
   readonly router: Hono;
   readonly logs: NotificationLogs;
   readonly store: NotificationStore;
-  readonly channelManager: ChannelManager;
+  private readonly channelManager: ChannelManager;
 
   private readonly definitions = new Map<
     string,
@@ -262,6 +265,67 @@ export class NotificationManager<
       throw new Error(
         'NotificationManager.start() must complete before send().',
       );
+    const recipients: readonly NotificationRecipient[] =
+      'type' in input.to ? [input.to] : input.to;
+    if (recipients.length === 0)
+      throw new Error('At least one notification recipient is required.');
+    const channels = [...new Set(input.channels)];
+    if (channels.length === 0)
+      throw new Error('At least one notification Channel is required.');
+
+    const message: Record<string, object> = {};
+    for (const channel of channels) {
+      const override = input.channelOverrides?.[channel];
+      message[channel] = this.channelManager.render(
+        channel,
+        input.content,
+        override,
+      );
+    }
+
+    return this.sendExpanded({
+      source: input.source,
+      recipients: recipients.map((recipient) => ({
+        channels: channels.map((channel) => {
+          const resolved = this.channelManager.resolveRecipient(
+            channel,
+            recipient,
+          );
+          return resolved
+            ? { channel, recipient: resolved }
+            : {
+                channel,
+                recipient,
+                error: {
+                  code: 'RECIPIENT_UNSUPPORTED',
+                  category: 'recipient',
+                  message: `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
+                },
+              };
+        }),
+      })),
+      message,
+    });
+  }
+
+  private async sendExpanded(input: {
+    readonly source?: {
+      readonly type: string;
+      readonly referenceId?: string;
+    };
+    readonly recipients: readonly {
+      readonly channels: readonly {
+        readonly channel: string;
+        readonly recipient: object;
+        readonly error?: NotificationErrorRecord;
+      }[];
+    }[];
+    readonly message: Readonly<Record<string, object | undefined>>;
+  }): Promise<NotificationSendResult> {
+    if (!this.started)
+      throw new Error(
+        'NotificationManager.start() must complete before send().',
+      );
     if (input.recipients.length === 0)
       throw new Error('At least one notification recipient is required.');
     const now = await this.store.now();
@@ -278,16 +342,8 @@ export class NotificationManager<
           throw new Error(
             `Notification Channel "${target.channel}" is not enabled.`,
           );
-        if (target.providerMode === 'broadcast' && target.providerName)
-          throw new Error(
-            'providerName cannot be combined with broadcast providerMode.',
-          );
         const providers = this.channelManager.providerIdentities(
           target.channel,
-          {
-            providerName: target.providerName,
-            providerMode: target.providerMode,
-          },
         );
         if (providers.length === 0)
           throw new Error(
@@ -303,7 +359,8 @@ export class NotificationManager<
             providerName: provider.name,
             providerType: provider.type,
             attemptCount: 0,
-            status: 'pending',
+            status: target.error ? 'failed' : 'pending',
+            lastError: target.error,
             createdAt: now,
             updatedAt: now,
           });
@@ -317,7 +374,7 @@ export class NotificationManager<
       sourceType: input.source?.type ?? 'application',
       sourceReferenceId: input.source?.referenceId,
       messageSnapshot: input.message as Readonly<Record<string, object>>,
-      status: 'pending',
+      status: initialNotificationStatus(deliveries),
       createdAt: now,
       updatedAt: now,
     };
@@ -401,6 +458,16 @@ export class NotificationManager<
       );
     }
   }
+}
+
+function initialNotificationStatus(
+  deliveries: readonly NotificationDeliveryRecord[],
+): NotificationLogStatus {
+  if (deliveries.every((delivery) => delivery.status === 'failed'))
+    return 'failed';
+  if (deliveries.some((delivery) => delivery.status === 'failed'))
+    return 'processing';
+  return 'pending';
 }
 
 export function createNotificationManager<

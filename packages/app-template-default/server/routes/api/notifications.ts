@@ -44,10 +44,12 @@ export function createNotificationRoutes({
       );
     const result = await notification.send({
       source: { type: 'notification-test' },
-      recipients: input.addresses.map((address) => ({
-        channels: [{ channel: 'email', recipient: { address } }],
+      to: input.addresses.map((address) => ({
+        type: 'email' as const,
+        address,
       })),
-      message: { email: { subject: input.subject, text: input.text } },
+      channels: ['email'],
+      content: { title: input.subject, body: input.text },
     });
     return context.json({ data: result }, 202);
   });
@@ -60,16 +62,12 @@ export function createNotificationRoutes({
       return context.json({ error: 'User IDs and body are required.' }, 400);
     const result = await notification.send({
       source: { type: 'notification-test' },
-      recipients: input.userIds.map((userId) => ({
-        userId,
-        channels: [{ channel: 'in-app', recipient: { userId } }],
-      })),
-      message: {
-        'in-app': {
-          title: input.title,
-          body: input.body,
-          actionUrl: input.actionUrl,
-        },
+      to: input.userIds.map((id) => ({ type: 'user' as const, id })),
+      channels: ['in-app'],
+      content: {
+        title: input.title,
+        body: input.body,
+        actionUrl: input.actionUrl,
       },
     });
     return context.json({ data: result }, 202);

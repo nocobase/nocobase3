@@ -50,16 +50,9 @@ describe('notification routes', () => {
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
         source: { type: 'notification-test' },
-        recipients: [
-          {
-            channels: [
-              {
-                channel: 'email',
-                recipient: { address: 'alice@example.com' },
-              },
-            ],
-          },
-        ],
+        to: [{ type: 'email', address: 'alice@example.com' }],
+        channels: ['email'],
+        content: { title: 'Test', body: 'Hello' },
       }),
     );
   });

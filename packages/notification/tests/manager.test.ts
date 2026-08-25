@@ -94,6 +94,12 @@ describe('NotificationManager registration', () => {
         async createChannel() {
           return {
             type: 'email',
+            resolveRecipient(recipient): object {
+              return recipient;
+            },
+            render({ content }): object {
+              return { subject: content.title, text: content.body };
+            },
             async prepare(input): Promise<object> {
               return input.message;
             },
@@ -116,17 +122,9 @@ describe('NotificationManager registration', () => {
     await manager.start();
     const result = await manager.send({
       source: { type: 'test' },
-      recipients: [
-        {
-          channels: [
-            {
-              channel: 'email',
-              recipient: { address: 'private@example.com' },
-            },
-          ],
-        },
-      ],
-      message: { email: { subject: 'private subject' } },
+      to: { type: 'email', address: 'private@example.com' },
+      channels: ['email'],
+      content: { title: 'private subject', body: 'private body' },
     });
     const details = await manager.logs.get(result.notificationId);
     expect(details?.log).not.toHaveProperty('messageSnapshot');
@@ -171,9 +169,10 @@ describe('NotificationManager registration', () => {
     await database.destroy();
   });
 
-  it('creates one Delivery per Provider in broadcast mode', async () => {
+  it('expands shared content across recipients and Channels', async () => {
     const queue = createQueueManager(createSyncQueueConfig());
     const database = await createNotificationTestDatabase();
+    const store = new FakeNotificationStore();
     const manager = createNotificationManager({
       database,
       queue,
@@ -181,64 +180,142 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            type: 'in-app',
+            enabled: true,
+            providers: [{ type: 'fake', name: 'primary' }],
+          },
+          {
             type: 'email',
             enabled: true,
-            providers: [
-              { type: 'fake', name: 'primary' },
-              { type: 'fake', name: 'secondary' },
-            ],
+            providers: [{ type: 'fake', name: 'primary' }],
           },
         ],
       },
-      store: new FakeNotificationStore(),
+      store,
     });
-    manager
-      .registerChannel({
-        type: 'email',
-        async createChannel() {
-          return {
-            type: 'email',
-            async prepare(input): Promise<object> {
-              return input.message;
-            },
-          };
-        },
-      })
-      .registerProvider('email', {
-        type: 'fake',
-        async createProvider(_context, config) {
-          return {
-            name: config.name,
-            type: config.type,
-            async send() {
-              return { status: 'accepted' } as const;
-            },
-          };
-        },
-      });
+
+    for (const channelType of ['in-app', 'email']) {
+      manager
+        .registerChannel({
+          type: channelType,
+          async createChannel() {
+            return {
+              type: channelType,
+              resolveRecipient(recipient): object | undefined {
+                if (recipient.type === 'user') return { userId: recipient.id };
+                if (channelType === 'email' && recipient.type === 'email')
+                  return { address: recipient.address };
+                return undefined;
+              },
+              render({ content, override }): object {
+                return {
+                  title: content.title,
+                  body: content.body,
+                  ...override,
+                };
+              },
+              async prepare(input): Promise<object> {
+                return input.message;
+              },
+            };
+          },
+        })
+        .registerProvider(channelType, {
+          type: 'fake',
+          async createProvider(_context, config) {
+            return {
+              name: config.name,
+              type: config.type,
+              async send() {
+                return { status: 'accepted' } as const;
+              },
+            };
+          },
+        });
+    }
     await manager.start();
 
     const result = await manager.send({
-      recipients: [
-        {
-          channels: [
-            {
-              channel: 'email',
-              providerMode: 'broadcast',
-              recipient: { address: 'test@example.com' },
-            },
-          ],
-        },
+      to: [
+        { type: 'user', id: 'user-1' },
+        { type: 'user', id: 'user-2' },
       ],
-      message: { email: { subject: 'Broadcast' } },
+      channels: ['in-app', 'email'],
+      content: { title: 'Approval complete', body: 'Review the result.' },
+      channelOverrides: { email: { title: 'Email subject' } },
     });
-    const details = await manager.logs.get(result.notificationId);
+    const deliveries = await store.listDeliveries(result.notificationId);
 
-    expect(result.deliveries).toHaveLength(2);
+    expect(deliveries).toHaveLength(4);
     expect(
-      details?.deliveries.map((item) => item.delivery.providerName).sort(),
-    ).toEqual(['primary', 'secondary']);
-    expect(details?.log.status).toBe('completed');
+      deliveries.map((delivery) => [
+        delivery.channel,
+        delivery.recipientSnapshot,
+        delivery.messageSnapshot,
+      ]),
+    ).toEqual([
+      [
+        'in-app',
+        { userId: 'user-1' },
+        { title: 'Approval complete', body: 'Review the result.' },
+      ],
+      [
+        'email',
+        { userId: 'user-1' },
+        { title: 'Email subject', body: 'Review the result.' },
+      ],
+      [
+        'in-app',
+        { userId: 'user-2' },
+        { title: 'Approval complete', body: 'Review the result.' },
+      ],
+      [
+        'email',
+        { userId: 'user-2' },
+        { title: 'Email subject', body: 'Review the result.' },
+      ],
+    ]);
+
+    const partialResult = await manager.send({
+      to: { type: 'email', address: 'alice@example.com' },
+      channels: ['in-app', 'email'],
+      content: { body: 'Mixed recipient support.' },
+    });
+    const partialDeliveries = await store.listDeliveries(
+      partialResult.notificationId,
+    );
+    expect(partialResult.status).toBe('processing');
+    expect(partialDeliveries).toEqual([
+      expect.objectContaining({
+        channel: 'in-app',
+        status: 'failed',
+        lastError: {
+          code: 'RECIPIENT_UNSUPPORTED',
+          category: 'recipient',
+          message:
+            'Notification Channel "in-app" does not support recipient type "email".',
+        },
+      }),
+      expect.objectContaining({
+        channel: 'email',
+        status: 'accepted',
+        recipientSnapshot: { address: 'alice@example.com' },
+      }),
+    ]);
+    expect(
+      (await manager.logs.get(partialResult.notificationId))?.log.status,
+    ).toBe('partial');
+
+    const failedResult = await manager.send({
+      to: { type: 'phone', number: '123' },
+      channels: ['in-app', 'email'],
+      content: { body: 'Unsupported everywhere.' },
+    });
+    expect(failedResult.status).toBe('failed');
+    expect(failedResult.deliveries).toEqual([
+      expect.objectContaining({ channel: 'in-app', status: 'failed' }),
+      expect.objectContaining({ channel: 'email', status: 'failed' }),
+    ]);
 
     await manager.close();
     await queue.close();
@@ -291,10 +368,6 @@ describe('NotificationManager registration', () => {
 
     await manager.start();
 
-    expect(manager.channelManager.has('email')).toBe(true);
-    expect(manager.channelManager.providerIdentities('email')).toEqual([
-      { name: 'primary', type: 'fake' },
-    ]);
     expect(() =>
       manager.registerProvider('email', {
         type: 'late',
@@ -433,12 +506,11 @@ describe('NotificationManager registration', () => {
 
     await expect(manager.start()).rejects.toThrow('reconcile failed');
     expect(close).toHaveBeenCalledOnce();
-    await expect(manager.send({ recipients: [], message: {} })).rejects.toThrow(
-      'must complete before send',
-    );
+    await expect(
+      manager.send({ to: [], channels: [], content: { body: '' } }),
+    ).rejects.toThrow('must complete before send');
 
     await manager.start();
-    expect(manager.channelManager.has('email')).toBe(true);
     await manager.close();
     expect(close).toHaveBeenCalledTimes(2);
 

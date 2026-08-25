@@ -1,7 +1,9 @@
 import type {
+  NotificationContent,
   NotificationProviderContext,
   NotificationChannelDefinition,
   NotificationProviderDefinition,
+  NotificationRecipient,
 } from '@nocobase/notification';
 import { createInAppStore, type InAppStore } from './store.js';
 import { createInAppRouter } from './router.js';
@@ -53,6 +55,24 @@ export function createInAppChannelDefinition(
       store ??= resolveInAppStore(context);
       return {
         type: 'in-app',
+        resolveRecipient(
+          recipient: NotificationRecipient,
+        ): InAppRecipient | undefined {
+          return recipient.type === 'user'
+            ? { userId: recipient.id }
+            : undefined;
+        },
+        render(input: {
+          readonly content: NotificationContent;
+          readonly override?: Partial<InAppMessage>;
+        }): InAppMessage {
+          return {
+            title: input.content.title,
+            body: input.content.body,
+            actionUrl: input.content.actionUrl,
+            ...input.override,
+          };
+        },
         async prepare(input: {
           readonly deliveryId: string;
           readonly notificationId: string;

@@ -51,6 +51,9 @@ describe('ChannelManager', () => {
       { name: 'secondary', type: 'fake' },
       { name: 'primary', type: 'fake' },
     ]);
+    expect(
+      manager.resolveRecipient('email', { type: 'phone', number: '123' }),
+    ).toBeUndefined();
   });
 
   it('does not invoke another Provider when submission result is unknown', async () => {

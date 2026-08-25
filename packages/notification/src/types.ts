@@ -12,29 +12,16 @@ export interface NotificationChannelSchema {
 
 export type NotificationChannelMap = Record<string, NotificationChannelSchema>;
 
-export type NotificationProviderSelection =
-  | {
-      readonly providerMode?: 'single';
-      readonly providerName?: string;
-    }
-  | {
-      readonly providerMode: 'broadcast';
-      readonly providerName?: never;
-    };
+export interface NotificationContent {
+  readonly title?: string;
+  readonly body: string;
+  readonly actionUrl?: string;
+}
 
-export type NotificationRecipientChannel<
-  TChannels extends NotificationChannelMap,
-> = {
-  readonly [TType in keyof TChannels & string]: {
-    readonly channel: TType;
-    readonly recipient: TChannels[TType]['recipient'];
-  } & NotificationProviderSelection;
-}[keyof TChannels & string];
-
-export type NotificationMessageInput<TChannels extends NotificationChannelMap> =
-  Partial<{
-    readonly [TType in keyof TChannels & string]: TChannels[TType]['message'];
-  }>;
+export type NotificationRecipient =
+  | { readonly type: 'user'; readonly id: string }
+  | { readonly type: 'email'; readonly address: string }
+  | { readonly type: 'phone'; readonly number: string };
 
 export interface NotificationSendInput<
   TChannels extends NotificationChannelMap,
@@ -43,11 +30,14 @@ export interface NotificationSendInput<
     readonly type: string;
     readonly referenceId?: string;
   };
-  readonly recipients: readonly {
-    readonly userId?: string;
-    readonly channels: readonly NotificationRecipientChannel<TChannels>[];
-  }[];
-  readonly message: NotificationMessageInput<TChannels>;
+  readonly to: NotificationRecipient | readonly NotificationRecipient[];
+  readonly channels: readonly (keyof TChannels & string)[];
+  readonly content: NotificationContent;
+  readonly channelOverrides?: Partial<{
+    readonly [TType in keyof TChannels & string]: Partial<
+      TChannels[TType]['message']
+    >;
+  }>;
 }
 
 export interface NotificationSendResult {
@@ -131,6 +121,11 @@ export interface NotificationChannel<
   TPrepared = object,
 > {
   readonly type: string;
+  resolveRecipient?(recipient: NotificationRecipient): TRecipient | undefined;
+  render?(input: {
+    readonly content: NotificationContent;
+    readonly override?: Partial<TMessage>;
+  }): TMessage;
   prepare(input: {
     readonly deliveryId: string;
     readonly notificationId: string;
