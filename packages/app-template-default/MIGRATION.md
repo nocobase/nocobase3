@@ -46,7 +46,7 @@ The loaded module must default-export its page component. Keep route placement,
 authentication boundaries, loading, and error presentation in `client/routing/`;
 do not add product routes there. Plugin-owned routes continue to be declared by
 the plugin and may be customized by the application through
-`client/route-overrides.ts`.
+`client/extensions/*/extension.ts` or `client/route-overrides.ts`.
 
 ### Keep loading feedback inside its surface
 

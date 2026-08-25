@@ -1,6 +1,4 @@
 import { Refine, type ResourceProps } from '@refinedev/core';
-import { lazy, Suspense } from 'react';
-
 import { BrowserRouter } from 'react-router';
 import routerProvider, {
   UnsavedChangesNotifier,
@@ -25,10 +23,6 @@ const appResources = [...configuredResources].sort(
 );
 
 const basename = getHubBrowserBase();
-
-const ReactGrabPicker = import.meta.env.DEV
-  ? lazy(() => import('./components/development/react-grab-picker'))
-  : null;
 
 function App() {
   return (
@@ -57,11 +51,6 @@ function App() {
             <UnsavedChangesNotifier />
             <DocumentTitleHandler appName='NocoBase Hub' />
           </Refine>
-          {ReactGrabPicker ? (
-            <Suspense fallback={null}>
-              <ReactGrabPicker />
-            </Suspense>
-          ) : null}
         </TooltipProvider>
       </ThemeProvider>
     </BrowserRouter>

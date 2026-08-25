@@ -1,35 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  AUTHENTICATION_PAGE_ROUTE_IDS,
-  defineAuthenticationPageOverrides,
-} from '../ui/index.js';
+import { AUTHENTICATION_ROUTE_IDS } from '../route-contracts.js';
+import * as authenticationUi from '../ui/index.js';
 
 describe('authentication client UI', () => {
-  it('maps partial page overrides to stable route IDs', () => {
-    const login = async () => ({ default: () => null });
-    const resetPassword = async () => ({ default: () => null });
-    const overrides = defineAuthenticationPageOverrides({
-      login: {
-        componentEntry: './client/auth/pages/login-page',
-        componentLoader: login,
-      },
-      resetPassword,
+  it('exports stable route IDs without owning application overrides', () => {
+    expect(AUTHENTICATION_ROUTE_IDS).toEqual({
+      forgotPassword: '@nocobase/app-plugin-authentication:forgot-password',
+      login: '@nocobase/app-plugin-authentication:login',
+      register: '@nocobase/app-plugin-authentication:register',
+      resetPassword: '@nocobase/app-plugin-authentication:reset-password',
     });
+    expect(Object.isFrozen(AUTHENTICATION_ROUTE_IDS)).toBe(true);
+  });
 
-    expect(overrides).toEqual([
-      {
-        routeId: AUTHENTICATION_PAGE_ROUTE_IDS.login,
-        componentEntry: './client/auth/pages/login-page',
-        componentLoader: login,
-      },
-      {
-        routeId: AUTHENTICATION_PAGE_ROUTE_IDS.resetPassword,
-        componentEntry: undefined,
-        componentLoader: resetPassword,
-      },
-    ]);
-    expect(Object.isFrozen(overrides)).toBe(true);
-    expect(Object.isFrozen(overrides[0])).toBe(true);
+  it('keeps application-owned forms out of the public UI entry', () => {
+    expect(Object.keys(authenticationUi)).toEqual(['AuthLink']);
   });
 });

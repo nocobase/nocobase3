@@ -8,6 +8,12 @@ export default createReactVitestConfig({
   resolve: {
     alias: [
       {
+        find: /^@nocobase\/ui$/,
+        replacement: fileURLToPath(
+          new URL('./client/nocobase-ui/index.ts', import.meta.url),
+        ),
+      },
+      {
         find: '@/jobs',
         replacement: fileURLToPath(new URL('./server/jobs', import.meta.url)),
       },
@@ -35,6 +41,7 @@ export default createReactVitestConfig({
       'tests/logic/client-shell.test.tsx',
       'tests/logic/client-theme.test.tsx',
       'tests/logic/config.test.ts',
+      'tests/logic/dev-plugin-watches.test.ts',
       'tests/logic/e2e-support.test.ts',
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugins.test.ts',

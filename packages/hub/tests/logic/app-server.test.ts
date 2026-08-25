@@ -477,6 +477,8 @@ describe('app server', () => {
           method: _request.method,
           url: _request.url,
           cookie: _request.headers.cookie ?? null,
+          origin: _request.headers.origin,
+          referer: _request.headers.referer,
         }),
       );
     });
@@ -485,15 +487,22 @@ describe('app server', () => {
     const response = await app.request(
       'http://localhost/hub/settings?tab=apps',
       {
-        headers: { cookie: 'hub.session_token=do-not-forward' },
+        headers: {
+          cookie: 'hub.session_token=do-not-forward',
+          origin: 'http://localhost',
+          referer: 'http://localhost/hub/',
+        },
       },
     );
 
     expect(response.status).toBe(200);
+    const viteOrigin = new URL(viteDevUrl).origin;
     await expect(response.json()).resolves.toEqual({
       method: 'GET',
       url: '/hub/settings?tab=apps',
       cookie: null,
+      origin: viteOrigin,
+      referer: `${viteOrigin}/hub/`,
     });
   });
 
