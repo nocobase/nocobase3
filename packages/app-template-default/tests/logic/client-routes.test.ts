@@ -2,32 +2,39 @@ import { describe, expect, it } from 'vitest';
 
 import applicationRoutes from '../../client/routes.ts';
 import routeComponentOverrides from '../../client/route-overrides.ts';
+import sourceExtensions from '../../client/source-extensions.ts';
 
 describe('app client routes', () => {
-  it('declares application-owned authentication page overrides', () => {
+  it('discovers application-owned authentication page overrides', () => {
     expect(
-      routeComponentOverrides.map(({ componentEntry, routeId }) => ({
-        componentEntry,
-        routeId,
-      })),
+      sourceExtensions
+        .flatMap((extension) => extension.routeComponentOverrides ?? [])
+        .map(({ componentEntry, routeId }) => ({
+          componentEntry,
+          routeId,
+        })),
     ).toEqual([
       {
-        componentEntry: './client/auth/pages/login-page',
+        componentEntry: './client/extensions/nocobase-auth-ui/pages/login-page',
         routeId: '@nocobase/app-plugin-authentication:login',
       },
       {
-        componentEntry: './client/auth/pages/register-page',
+        componentEntry:
+          './client/extensions/nocobase-auth-ui/pages/register-page',
         routeId: '@nocobase/app-plugin-authentication:register',
       },
       {
-        componentEntry: './client/auth/pages/forgot-password-page',
+        componentEntry:
+          './client/extensions/nocobase-auth-ui/pages/forgot-password-page',
         routeId: '@nocobase/app-plugin-authentication:forgot-password',
       },
       {
-        componentEntry: './client/auth/pages/reset-password-page',
+        componentEntry:
+          './client/extensions/nocobase-auth-ui/pages/reset-password-page',
         routeId: '@nocobase/app-plugin-authentication:reset-password',
       },
     ]);
+    expect(routeComponentOverrides).toEqual([]);
   });
 
   it('declares the application home route as a lazy required route', async () => {

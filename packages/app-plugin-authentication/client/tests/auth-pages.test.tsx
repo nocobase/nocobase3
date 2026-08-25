@@ -2,35 +2,25 @@ import { Refine, type AuthProvider } from '@refinedev/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ForgotPasswordForm } from '../forms/forgot-password-form.js';
-import { LoginForm } from '../forms/login-form.js';
-import { RegisterForm } from '../forms/register-form.js';
-import { ResetPasswordForm } from '../forms/reset-password-form.js';
-import LoginPage from '../pages/login-page.js';
+import LoginPage from '../default-pages/login-page.js';
+import { PasswordLoginForm } from '../fallback-ui/password-login-form.js';
+import { PasswordRegistrationForm } from '../fallback-ui/password-registration-form.js';
+import { PasswordResetRequestForm } from '../fallback-ui/password-reset-request-form.js';
+import { PasswordResetForm } from '../fallback-ui/password-reset-form.js';
 
 describe('authentication forms', () => {
-  it('renders the responsive authentication layout and product panel', () => {
+  it('renders the minimal fallback authentication layout', () => {
     render(
       <Refine authProvider={createAuthProvider({})}>
         <LoginPage />
       </Refine>,
     );
 
-    expect(screen.getByRole('img', { name: 'NocoBase' })).toBeVisible();
+    expect(screen.getByText('NocoBase')).toBeVisible();
     expect(
       screen.getByRole('heading', { name: 'Welcome back', level: 1 }),
     ).toBeVisible();
-    expect(
-      screen.getByRole('complementary', { name: 'About NocoBase' }),
-    ).toHaveClass('hidden', 'md:grid');
-    expect(
-      screen.getByRole('heading', {
-        name: 'Let AI build freely. NocoBase keeps it reliable.',
-        level: 2,
-      }),
-    ).toBeVisible();
-    expect(screen.getByText('AI-native frontend')).toBeVisible();
-    expect(screen.getByText('NocoBase foundation')).toBeVisible();
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
   });
 
   it('submits a username or email and password when signing in', async () => {
@@ -40,7 +30,7 @@ describe('authentication forms', () => {
 
     render(
       <Refine authProvider={createAuthProvider({ login })}>
-        <LoginForm />
+        <PasswordLoginForm />
       </Refine>,
     );
 
@@ -65,7 +55,7 @@ describe('authentication forms', () => {
 
     render(
       <Refine authProvider={createAuthProvider({ register })}>
-        <RegisterForm />
+        <PasswordRegistrationForm />
       </Refine>,
     );
 
@@ -96,11 +86,9 @@ describe('authentication forms', () => {
     const updatePassword = vi
       .fn<NonNullable<AuthProvider['updatePassword']>>()
       .mockResolvedValue({ success: true });
-    window.history.replaceState({}, '', '/reset-password?token=reset-token');
-
     render(
       <Refine authProvider={createAuthProvider({ updatePassword })}>
-        <ResetPasswordForm />
+        <PasswordResetForm token='reset-token' />
       </Refine>,
     );
 
@@ -127,7 +115,7 @@ describe('authentication forms', () => {
 
     render(
       <Refine authProvider={createAuthProvider({ forgotPassword })}>
-        <ForgotPasswordForm />
+        <PasswordResetRequestForm />
       </Refine>,
     );
 

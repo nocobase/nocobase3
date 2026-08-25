@@ -13,13 +13,15 @@ This directory is the active Default App browser client.
 - Keep route rendering, auth grouping, loading, and error handling under
   `routing/`; do not declare product routes there.
 - Put application-only page composition and branding here.
-- Customize a plugin route through `route-overrides.ts`; do not register a
-  duplicate path such as `/login`.
+- Customize a plugin route through a discovered
+  `extensions/*/extension.ts` source extension or `route-overrides.ts`; do not
+  register a duplicate path such as `/login`.
 - A route override may replace only `componentLoader`. Keep it lazy, include an
   inspectable `componentEntry`, and default-export the page component.
-- Authentication UI belongs in `auth/` and should reuse
-  `@nocobase/app-plugin-authentication/client/ui` rather than plugin-internal
-  paths.
+- Authentication UI belongs in `extensions/nocobase-auth-ui/`. Use `AuthLink`
+  from `@nocobase/app-plugin-authentication/client/ui`, keep final password
+  forms local under the Registry `forms/` directory, and use
+  `@nocobase/app-plugin-authentication/client/actions` for custom variants.
 - Use Refine hooks and providers for authentication state. Do not call Better
   Auth endpoints directly from pages or create another session store.
 - Keep app-wide theme and loading behavior applicable to plugin pages.

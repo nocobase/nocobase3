@@ -60,6 +60,7 @@
     "@nocobase/portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
+    "@nocobase/ui": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
