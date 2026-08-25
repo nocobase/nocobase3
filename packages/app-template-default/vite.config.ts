@@ -76,7 +76,12 @@ export default createPortalViteConfig(
       define: defineEnv,
       envPrefix: ['VITE_'],
       plugins: [
-        agentAnnotations({ root: __dirname }),
+        agentAnnotations({
+          root: __dirname,
+          clientExtensions: [
+            path.resolve(__dirname, 'client/agent-annotations-host.ts'),
+          ],
+        }),
         appClientPluginsPlugin({ root: __dirname }),
       ],
       resolve: {
