@@ -1,5 +1,5 @@
-import { getPortalBase } from '@nocobase/portal-sdk/runtime';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 
 export type InboxMutationAction = 'read' | 'unread' | 'delete';
 

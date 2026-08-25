@@ -1,7 +1,6 @@
 {
   "name": "@nocobase/authorization",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -29,7 +28,8 @@
         "types": "./dist/storage/collections/*.d.ts",
         "import": "./dist/storage/collections/*.js"
       }
-    }
+    },
+    "access": "public"
   },
   "files": [
     "dist"
@@ -46,7 +46,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/database": "workspace:^"
+    "@nocobase/app-database": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

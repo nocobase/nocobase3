@@ -1,4 +1,4 @@
-import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { AppDriveConfig } from '@nocobase/drive';
 import type {
   InAppMessage,

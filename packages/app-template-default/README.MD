@@ -1,164 +1,172 @@
-# NocoBase Portal Template
+# NocoBase Default App Template
 
-A React and shadcn/ui template for building standalone frontends backed by
-NocoBase.
-
-![NocoBase Portal Template](https://static-docs.nocobase.com/2026-07-22-08-48-12.png)
+The reference full-stack application for the new NocoBase App architecture. It
+uses `@nocobase/app-server` on the backend and a React + Refine + shadcn client
+from `@nocobase/app-client`.
 
 ## Quick start
 
+From the repository root:
+
 ```bash
 pnpm install
-cp .env.example .env.local
-pnpm dev
+cp packages/app-template-default/.env.example \
+  packages/app-template-default/.env.local
+pnpm app:dev
 ```
 
-The development entry starts at `http://127.0.0.1:13000/app-template-default/` by default.
-Vite runs behind the Hub server at `http://127.0.0.1:5173`.
+The example environment mounts the application at `/main`. Use the URL printed
+by the development command as the source of truth for host and port.
 
-## Configuration
-
-The minimum local configuration is:
+The key settings are:
 
 ```env
-APP_BASE_PATH=/app-template-default
-NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api
+APP_BASE_PATH=/main
+NOCOBASE_API_PROXY_TARGET=
 ```
 
-- `APP_BASE_PATH` is the public mount path for the app server. The default template uses `/app-template-default`.
-- `NOCOBASE_API_PROXY_TARGET` is the upstream NocoBase REST API root and must
-  include `/api`. This value is read by the app server and is not exposed through
-  Vite.
+`APP_BASE_PATH` is the public application mount path.
+`NOCOBASE_API_PROXY_TARGET`, when configured, is the upstream NocoBase API
+origin used by the server-side proxy; it is not exposed as a Vite client
+variable.
 
-The browser-facing API route is derived from `APP_BASE_PATH`. For example,
-`APP_BASE_PATH=/app-template-default` exposes the proxy at
-`/app-template-default/v2/api`.
+## App plugins
 
-The Portal uses the same authentication storage convention as NocoBase. If the
-server customizes it, keep `API_CLIENT_STORAGE_PREFIX`,
-`API_CLIENT_STORAGE_TYPE`, and `API_CLIENT_SHARE_TOKEN` aligned with the server.
-These values are copied to `dist/.env` and injected by the app server at request
-time; they are not Vite client build-time variables.
+The App loads enabled packages listed in `package.json` under
+`nocobase.plugins`. A plugin also appears in `devDependencies` so its server and
+client entries can be resolved during development and build.
 
-## Development
+Create and register a plugin from the repository root:
 
 ```bash
-# Start the Vite development server
-pnpm dev
-
-# Build the production assets
-pnpm build
-
-# Serve a production build
-pnpm start
+pnpm plugin:create audit-log
+pnpm plugin:register audit-log --app app-template-default
 ```
 
-Application pages and resources live under `client`. The included Users page is a
-working example based on the standard NocoBase `users` collection.
-
-Application translations live in `client/locales`. Default locale, available
-locale labels, i18next options, and post-switch behavior remain customizable in
-`client/providers/i18n/runtime.ts`. Shared UI components live in
-`client/components/ui` and follow the shadcn Base UI conventions.
-
-Stable NocoBase runtime behavior is provided by `@nocobase/portal-sdk`.
-The template records its inherited base version in
-`nocobase.defaultTemplateVersion`; SDK installation, development, and builds
-stop with an actionable error when that version is outside the SDK's supported
-range. Application composition and visual source remain owned by this project.
-
-## Extensions
-
-Installed extensions live in `client/extensions` and are ordinary
-application-owned source files. Their providers, resources, routes, login
-adapters, and user-menu items are discovered automatically.
-
-Routes declared with `defineAppRoutes` can use `lazy: () => import(...)` to
-keep page modules out of the initial bundle while preserving synchronous menu,
-resource, and access metadata.
-
-Set `registryRoutesEnabled` to `false` in `client/routes.tsx` when replacing the
-bundled example navigation with application-owned routes. Installed extension
-providers, login adapters, and the `/dev` component showcases remain available.
-
-Optional NocoBase integrations, including authentication methods and i18n, can
-be installed from the `@nocobase` Registry configured in `components.json`.
-After installation, the generated source can be customized and committed with
-the application.
-
-Registry implementations import runtime APIs from documented
-`@nocobase/portal-sdk` subpaths and continue to use `@/components` for
-application-owned visual composition. Each Registry item declares the minimum
-compatible SDK version in `registry.config.json`.
-
-In this Registry source repository, canonical extension source lives in
-`registry` and is loaded directly by `pnpm dev` and `pnpm build`. The published
-npm template contains the default extensions under `client/extensions` instead.
-
-## Authentication
-
-Basic username or email and password login is built in. The default login page
-also renders enabled NocoBase authentication methods when their frontend
-Registry adapters are installed.
-
-Customize `client/pages/login/index.tsx` to replace the whole login page, or use
-`DefaultSignInPage` to keep dynamic authentication while overriding individual
-authenticator UI.
-
-## Testing
-
-Frontend logic and component tests live under `tests/` and run with Vitest and
-Testing Library. Registry-owned tests live beside each item under
-`registry/<name>/tests`, while Portal SDK tests live under `sdk/tests` and run
-through the SDK package. These tests exercise local behavior without mocking
-NocoBase APIs, authentication, ACL, or data providers. Put behavior that needs
-real server data under `e2e/` instead.
+Remove the application registration before deleting the package:
 
 ```bash
-pnpm test
-pnpm test:watch
-pnpm test:coverage
-pnpm test:sdk
+pnpm plugin:unregister audit-log --app app-template-default
+pnpm plugin:remove audit-log
 ```
 
-Playwright E2E tests connect to a real NocoBase environment. The included smoke
-test signs in through the actual Portal login page, verifies the server session,
-and confirms that authentication survives a reload. It does not depend on any
-Registry example page.
+See [Plugin development quick start](../../docs/plugin-development-quickstart.md)
+for the server, database, client bootstrap, routes, and providers protocols.
 
-Copy `.env.e2e.example` to `.env.e2e` and provide a dedicated test account.
-Playwright always starts an isolated Portal dev server at
-`http://127.0.0.1:4173` (configurable with `NOCOBASE_E2E_PORT`) and stops it when
-the run finishes. Set `NOCOBASE_E2E_API_URL` to the real NocoBase backend and
-`APP_BASE_PATH` to the Portal path under test. The default command never
-reuses a manually started frontend.
+## Current client architecture
+
+The active browser source is `client/`:
+
+```text
+client/
+├── application.ts          application contribution loader
+├── bootstrap.ts            application Refine defaults
+├── routes.ts               application-owned route declarations
+├── providers.ts            application Provider declarations
+├── route-overrides.ts      application component replacements
+├── routing/                route placement, lazy loading, and error UI
+├── auth/                    application authentication presentation
+├── pages/                   application-owned pages
+├── shell/                   authenticated application shell
+├── theme/                   app-wide theme and selector
+├── app.ts                   final AppClient composition
+├── index.tsx                async startup entry
+├── refine-runtime.ts        plugin Refine contribution collector
+└── runtime.ts               plugin loading and runtime validation
+```
+
+`client-old/` is a temporary, untracked migration archive. It is not current
+application source and must never be imported, staged, or used as a routing or
+provider architecture reference.
+
+Enabled client plugins contribute independently:
+
+- `client/bootstrap`: Refine capabilities such as auth, data, notifications,
+  access control, i18n, and live providers;
+- `client/routes`: inspectable route path/auth metadata and lazy page loaders;
+- `client/providers`: synchronous React providers with explicit ordering.
+
+The Default App contributes through the same three protocols, wired by
+`client/application.ts`. Its bootstrap runs before plugin bootstraps. Its `/`
+home route is declared in `client/routes.ts`, while `client/routing/` only
+renders the resolved routes.
+
+Providers are composed outer-to-inner in fixed layer order:
+`root -> application -> extension`. The app Theme Provider uses `root`;
+application providers otherwise default to `application`, and plugin providers
+use `extension`. `before` and `after` can refine order only within the same
+layer.
+
+Inspect the final client composition with:
 
 ```bash
-pnpm test:e2e:install
-pnpm test:e2e
-pnpm test:e2e:ui
+pnpm app:client:inspect --app app-template-default
+pnpm app:client:inspect --app app-template-default --json
+pnpm app:client:inspect --app app-template-default --type bootstrap
 ```
 
-Reusable E2E helpers currently live in `e2e/support`. They provide environment
-and basename resolution, NocoBase resource/action requests, API sign-in and
-session checks, and browser session installation. Keep business-specific test
-data and assertions in the application. These helpers can move into the Portal
-SDK after their application-facing contract has stabilized.
+The output shows bootstrap order, route ownership and final component source,
+and Provider source/layer/order.
 
-The root `pnpm test` command includes both template and Registry tests. The
-published template contains materialized extensions instead of `registry/`,
-but their tests remain source-repository checks and are not copied into user
-projects.
-Default Template source upgrades are documented in the
-[template migration guide](https://github.com/nocobase/app-template-default/blob/main/MIGRATION.md).
-SDK API and compatibility changes are documented separately in the
-[Portal SDK migration guide](../portal-sdk/MIGRATION.md).
+## Authentication UI
 
-## Learn more
+`@nocobase/app-plugin-authentication` owns the AuthProvider, session behavior,
+redirects, and the guest routes `/login`, `/register`, `/forgot-password`, and
+`/reset-password`. It also provides default fallback pages.
 
-- [NocoBase documentation](https://docs.nocobase.com/)
-- [Refine documentation](https://refine.dev/docs/)
-- [shadcn/ui documentation](https://ui.shadcn.com/)
+The Default App customizes only those routes' lazy page components in the
+installed `client/extensions/nocobase-auth-ui/` Registry source. `AuthLink` is
+imported from the stable `@nocobase/app-plugin-authentication/client/ui`
+subpath; the final password forms are application-owned Registry source and
+call the plugin's stable `client/actions` hooks. It does not duplicate guest
+routes or call Better Auth endpoints directly from page components.
+
+See
+[client/extensions/nocobase-auth-ui/README.md](client/extensions/nocobase-auth-ui/README.md)
+for the task-oriented edit map. Password reset still requires deployment-side
+configuration of Better Auth's `emailAndPassword.sendResetPassword` callback
+and a real mail transport.
+
+The upstream recipe and its Registry configuration are published by the
+authentication package at `registry/auth-ui` and `registry.config.json`. The
+Default Template commits only the materialized, application-owned snapshot.
+Build the authentication Registry payload from the repository root with:
+
+```bash
+pnpm registry build --package @nocobase/app-plugin-authentication
+```
+
+To initialize extensions in a new output tree, materialize them there:
+
+```bash
+pnpm registry materialize \
+  --package @nocobase/app-plugin-authentication \
+  --item auth-ui \
+  --output-root /path/to/new-template
+```
+
+Materialization refuses an existing target so it cannot silently overwrite
+application edits. Updating an installed Registry item must use an explicit
+three-way merge.
+
+## Theme
+
+`client/theme` wraps application and plugin pages. The top-right selector
+supports System, Light, and Dark modes. Plugin pages should use semantic
+Tailwind classes such as `bg-background`, `text-foreground`, and
+`border-border` so they follow the selected theme.
+
+## Development and validation
+
+```bash
+pnpm --filter @nocobase/app-template-default lint
+pnpm --filter @nocobase/app-template-default typecheck
+pnpm --filter @nocobase/app-template-default test
+pnpm --filter @nocobase/app-template-default build
+```
+
+Unit and integration tests live under `tests/logic`. Browser flows that require
+real authentication, APIs, ACL, files, or server data belong under `e2e`.
 
 ## License
 

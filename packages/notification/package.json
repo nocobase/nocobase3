@@ -44,7 +44,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "hono": "catalog:"

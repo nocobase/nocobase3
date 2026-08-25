@@ -1,4 +1,4 @@
-import type { Role } from '@nocobase/portal-sdk/acl';
+import type { Role } from '@nocobase/app-portal-sdk/acl';
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight } from 'lucide-react';
 import { resolveRoleLabel } from './role-utils';

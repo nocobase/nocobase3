@@ -60,7 +60,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/notification": "workspace:^",
     "nodemailer": "^9.0.5"
   },

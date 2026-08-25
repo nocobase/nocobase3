@@ -1,4 +1,4 @@
-import type { BuilderResult, CollectionBuilder } from '@nocobase/database';
+import type { BuilderResult, CollectionBuilder } from '@nocobase/app-database';
 
 /** Stores mandatory record boundaries that intersect all positive record grants. */
 export function createRestrictionRuleCollection(

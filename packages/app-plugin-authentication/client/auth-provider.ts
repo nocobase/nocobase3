@@ -1,3 +1,4 @@
+import { resolveAppUrl } from '@nocobase/app-sdk';
 import type { AuthProvider } from '@refinedev/core';
 import type { AuthClient } from './auth-client.js';
 
@@ -66,13 +67,32 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
       try {
         await client.requestPasswordReset(
           String(params?.email ?? ''),
-          `${window.location.origin}/reset-password`,
+          resolveAppUrl('/reset-password'),
         );
         return { success: true };
       } catch (error) {
         return {
           success: false,
           error: authError(error, 'Unable to send the reset link.'),
+        };
+      }
+    },
+    updatePassword: async (params) => {
+      try {
+        await client.resetPassword(
+          String(params?.newPassword ?? params?.password ?? ''),
+          String(
+            params?.token ??
+              new URLSearchParams(window.location.search).get('token') ??
+              '',
+          ),
+        );
+        clear();
+        return { success: true, redirectTo: '/login' };
+      } catch (error) {
+        return {
+          success: false,
+          error: authError(error, 'Unable to reset the password.'),
         };
       }
     },

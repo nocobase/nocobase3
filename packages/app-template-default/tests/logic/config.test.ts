@@ -1,18 +1,19 @@
 // @vitest-environment node
 
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { validateMigrations, validateSeeds } from '@nocobase/database';
+import { validateMigrations, validateSeeds } from '@nocobase/app-database';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createConfigEnv,
   createConfigPaths,
   loadConfig,
-} from '@nocobase/app-server/config';
+} from '@nocobase/app-server-kit/config';
 
 import app from '../../server/config/app.ts';
 import caching from '../../server/config/caching.ts';
@@ -34,6 +35,19 @@ import {
 } from '../../server/runtime/config.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
+
+const requirePackage = createRequire(import.meta.url);
+
+/**
+ * Reads a plugin's declared version rather than repeating it as a literal.
+ *
+ * The assertions below check that plugin resolution reports the version the package actually declares. Hard-coding it
+ * restates the same value in two places, so every version bump breaks the test for a reason that has nothing to do
+ * with the resolution logic it covers.
+ */
+const declaredVersion = (packageName: string): string =>
+  (requirePackage(`${packageName}/package.json`) as { version: string })
+    .version;
 
 const tempDirs: string[] = [];
 
@@ -725,6 +739,13 @@ describe('app plugins', () => {
     const authenticationPlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-authentication',
     );
+    const dataProviderPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-data-provider',
+    );
+    const notificationProviderPlugin = runtime.config.plugins.find(
+      (item) =>
+        item.packageName === '@nocobase/app-plugin-notification-provider',
+    );
     const databaseExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-database-example',
     );
@@ -747,7 +768,7 @@ describe('app plugins', () => {
 
     expect(authenticationPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-authentication',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-authentication'),
       enabled: true,
     });
     expect(authenticationPlugin?.migrationsDirectory).toMatch(
@@ -756,9 +777,50 @@ describe('app plugins', () => {
     expect(authenticationPlugin?.seedsDirectory).toMatch(
       /app-plugin-authentication\/database\/seeds$/,
     );
+    expect(authenticationPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+      routes: './client/routes',
+    });
+    expect(authenticationPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-authentication\/client\/routes\.ts$/,
+    );
+    expect(dataProviderPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-data-provider',
+      version: declaredVersion('@nocobase/app-plugin-data-provider'),
+      enabled: true,
+    });
+    expect(dataProviderPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+    });
+    expect(dataProviderPlugin?.clientBootstrapEntry).toMatch(
+      /app-plugin-data-provider\/client\/bootstrap\.ts$/,
+    );
+    expect(dataProviderPlugin?.migrationsDirectory).toBeUndefined();
+    expect(dataProviderPlugin?.seedsDirectory).toBeUndefined();
+    expect(notificationProviderPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-notification-provider',
+      version: declaredVersion('@nocobase/app-plugin-notification-provider'),
+      enabled: true,
+    });
+    expect(notificationProviderPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+      providers: './client/providers',
+      routes: './client/routes',
+    });
+    expect(notificationProviderPlugin?.clientBootstrapEntry).toMatch(
+      /app-plugin-notification-provider\/client\/bootstrap\.ts$/,
+    );
+    expect(notificationProviderPlugin?.clientProvidersEntry).toMatch(
+      /app-plugin-notification-provider\/client\/providers\.ts$/,
+    );
+    expect(notificationProviderPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-notification-provider\/client\/routes\.ts$/,
+    );
+    expect(notificationProviderPlugin?.migrationsDirectory).toBeUndefined();
+    expect(notificationProviderPlugin?.seedsDirectory).toBeUndefined();
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-database-example'),
       enabled: true,
     });
     expect(databaseExamplePlugin?.migrationsDirectory).toMatch(
@@ -790,17 +852,21 @@ describe('app plugins', () => {
     );
     expect(routesExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-routes-example',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-routes-example'),
       enabled: true,
     });
     expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
     expect(routesExamplePlugin?.seedsDirectory).toBeUndefined();
+    expect(routesExamplePlugin?.manifest.client).toEqual({
+      routes: './client/routes',
+      providers: './client/providers',
+    });
     expect(routesExamplePlugin?.routesEntry).toMatch(
       /app-plugin-routes-example\/server\/routes\/index\.ts$/,
     );
     expect(queueExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-queue-example',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-queue-example'),
       enabled: true,
     });
     expect(queueExamplePlugin?.jobsDirectory).toMatch(
@@ -811,7 +877,7 @@ describe('app plugins', () => {
     );
     expect(realtimeExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-realtime-example',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-realtime-example'),
       enabled: true,
     });
     expect(realtimeExamplePlugin?.routesEntry).toMatch(
@@ -940,6 +1006,14 @@ describe('standalone runtime database config', () => {
       expect.arrayContaining([
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-authentication',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-data-provider',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-notification-provider',
           enabled: true,
         }),
         expect.objectContaining({

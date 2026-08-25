@@ -1,12 +1,12 @@
+import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { getPortalBase } from '@nocobase/portal-sdk/runtime';
 
-export function cn(...inputs: ClassValue[]) {
+export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
-export function assetUrl(path: string) {
+export function assetUrl(path: string): string {
   if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(path)) return path;
 
   const base = getPortalBase().replace(/\/+$/, '');

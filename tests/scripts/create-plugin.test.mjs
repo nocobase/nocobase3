@@ -50,22 +50,61 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   assert.equal(packageJson.name, '@nocobase/app-plugin-audit-log');
   assert.equal(packageJson.prettier, '@nocobase/dev-config/prettier');
   assert.deepEqual(packageJson.exports, {
+    './client/bootstrap': {
+      types: './client/bootstrap.ts',
+      import: './client/bootstrap.ts',
+    },
+    './client/routes': {
+      types: './client/routes.ts',
+      import: './client/routes.ts',
+    },
+    './client/providers': {
+      types: './client/providers.ts',
+      import: './client/providers.ts',
+    },
     './package.json': './package.json',
+  });
+  assert.deepEqual(packageJson.nocobase.plugin.client, {
+    bootstrap: './client/bootstrap',
+    routes: './client/routes',
+    providers: './client/providers',
   });
   assert.deepEqual(packageJson.nocobase.plugin.database, {
     migrations: './database/migrations',
     seeds: './database/seeds',
   });
-  assert.equal(packageJson.dependencies['@nocobase/database'], 'workspace:^');
+  assert.equal(
+    packageJson.dependencies['@nocobase/app-database'],
+    'workspace:^',
+  );
   assert.equal(packageJson.dependencies.hono, 'catalog:');
+  assert.equal(packageJson.peerDependencies['@nocobase/app-client'], '^0.1.0');
+  assert.equal(packageJson.peerDependencies.react, '^19.0.0');
+  assert.equal(
+    packageJson.devDependencies['@nocobase/app-client'],
+    'workspace:*',
+  );
+  assert.equal(packageJson.devDependencies['@types/react'], 'catalog:');
+  assert.equal(packageJson.devDependencies.react, 'catalog:');
   assert.equal(
     tsconfig.extends,
     '@nocobase/dev-config/tsconfig/server-library.json',
   );
-  assert.deepEqual(tsconfig.include, ['server/**/*.ts', 'database/**/*.ts']);
+  assert.deepEqual(tsconfig.compilerOptions.lib, [
+    'ES2022',
+    'DOM',
+    'DOM.Iterable',
+  ]);
+  assert.equal(tsconfig.compilerOptions.jsx, 'react-jsx');
+  assert.deepEqual(tsconfig.include, [
+    'database/**/*.ts',
+    'server/**/*.ts',
+    'client/**/*.ts',
+    'client/**/*.tsx',
+  ]);
   assert.equal(
     tsconfigContents,
-    `{\n  "extends": "@nocobase/dev-config/tsconfig/server-library.json",\n  "compilerOptions": {\n    "rootDir": ".",\n    "outDir": "dist"\n  },\n  "include": ["server/**/*.ts", "database/**/*.ts"]\n}\n`,
+    `{\n  "extends": "@nocobase/dev-config/tsconfig/server-library.json",\n  "compilerOptions": {\n    "jsx": "react-jsx",\n    "lib": ["ES2022", "DOM", "DOM.Iterable"],\n    "rootDir": ".",\n    "outDir": "dist"\n  },\n  "include": [\n    "database/**/*.ts",\n    "server/**/*.ts",\n    "client/**/*.ts",\n    "client/**/*.tsx"\n  ]\n}\n`,
   );
   await assert.rejects(
     readFile(path.join(result.targetDirectory, 'src/index.ts'), 'utf8'),
@@ -75,6 +114,21 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     path.join(result.targetDirectory, 'server/bootstrap.ts'),
     'utf8',
   );
+  const clientBootstrap = await readFile(
+    path.join(result.targetDirectory, 'client/bootstrap.ts'),
+    'utf8',
+  );
+  const clientRoutes = await readFile(
+    path.join(result.targetDirectory, 'client/routes.ts'),
+    'utf8',
+  );
+  const clientProviders = await readFile(
+    path.join(result.targetDirectory, 'client/providers.ts'),
+    'utf8',
+  );
+  assert.match(clientBootstrap, /AppClientPluginBootstrap/u);
+  assert.match(clientRoutes, /defineClientRoutes\(\[\]\)/u);
+  assert.match(clientProviders, /defineClientProviders\(\s*\[\],\s*\)/u);
   await readFile(
     path.join(result.targetDirectory, 'tests/bootstrap.test.ts'),
     'utf8',
@@ -113,6 +167,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   );
   await readFile(
     path.join(result.targetDirectory, 'tests/database.test.ts'),
+    'utf8',
+  );
+  await readFile(
+    path.join(result.targetDirectory, 'tests/client.test.ts'),
     'utf8',
   );
   await readFile(

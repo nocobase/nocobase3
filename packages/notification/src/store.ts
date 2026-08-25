@@ -1,4 +1,4 @@
-import type { DatabaseManager, Row } from '@nocobase/database';
+import type { DatabaseManager, Row } from '@nocobase/app-database';
 
 export type NotificationLogStatus =
   'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';

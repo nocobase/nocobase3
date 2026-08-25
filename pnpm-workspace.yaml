@@ -66,10 +66,11 @@ catalog:
   vitest: ^4.1.10
 
 allowBuilds:
-  '@nocobase/portal-sdk': true
+  '@nocobase/app-portal-sdk': true
   better-sqlite3: true
   esbuild: true
 
 minimumReleaseAgeExclude:
   - '@publint/pack@0.1.7'
   - publint@0.3.24
+  - '@gchust/agent-annotations@0.1.3'

@@ -1,5 +1,5 @@
-import type { AppExtension } from '@nocobase/portal-sdk/extensions';
-import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
+import type { AppExtension } from '@nocobase/app-portal-sdk/extensions';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 import { Bell, FileClock, Mail } from 'lucide-react';
 
 import { NotificationInAppProvider } from './in-app/runtime.js';

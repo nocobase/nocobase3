@@ -13,7 +13,7 @@ describe('routes example plugin', () => {
       services: undefined,
     });
 
-    const response = await app.request('/routes-example');
+    const response = await app.request('/api/routes-example');
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({

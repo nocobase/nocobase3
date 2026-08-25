@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {

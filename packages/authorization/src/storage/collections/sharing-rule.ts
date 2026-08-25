@@ -1,4 +1,4 @@
-import type { BuilderResult, CollectionBuilder } from '@nocobase/database';
+import type { BuilderResult, CollectionBuilder } from '@nocobase/app-database';
 
 /** Stores rule metadata; explicit record IDs live in authzSharingRuleRecords. */
 export function createSharingRuleCollection(

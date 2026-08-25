@@ -30,7 +30,7 @@ effective role names. Its result follows the familiar Refine query shape with
 ACL role set, not every role assigned to the signed-in user.
 
 ```tsx
-import { useGetRoles } from '@nocobase/portal-sdk/acl';
+import { useGetRoles } from '@nocobase/app-portal-sdk/acl';
 
 function CurrentAccessContext() {
   const { data: roles, isLoading } = useGetRoles();
@@ -41,7 +41,7 @@ function CurrentAccessContext() {
 ```
 
 ```tsx
-import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 
 export const appRoutes = defineAppRoutes([
   {

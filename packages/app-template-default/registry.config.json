@@ -8,7 +8,7 @@
       "title": "NocoBase Error Boundary",
       "description": "Reusable render boundaries and NocoBase runtime status views with copyable redacted diagnostics and recovery actions.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "lucide-react@^0.487.0",
         "react-error-boundary@^6.0.0",
         "react-router@^7.0.2"
@@ -27,7 +27,7 @@
       "title": "NocoBase Route Surfaces",
       "description": "URL-backed drawer, dialog, and page containers with nested drawer stacking and a shared close lifecycle.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.1.0",
+        "@nocobase/app-portal-sdk@^2.1.0",
         "@base-ui/react@^1.6.0",
         "@refinedev/core@^5.0.8",
         "lucide-react@^0.487.0",
@@ -56,7 +56,7 @@
       "title": "NocoBase Client Components",
       "description": "Small reusable Portal client components with transport-agnostic APIs and shadcn UI composition.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@tanstack/react-query@^5.81.5",
         "lucide-react@^0.487.0"
       ],
@@ -82,7 +82,7 @@
       "title": "NocoBase Users Example",
       "description": "Complete Users resource example with ACL-aware list, filters, route-backed drawers, nested role details, and optional AI page context.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@refinedev/core@^5.0.8",
         "@refinedev/react-hook-form@^5.0.0",
         "@refinedev/react-table@^6.0.0",
@@ -115,7 +115,7 @@
       "title": "NocoBase i18n",
       "description": "Optional NocoBase server-language resources, user preference persistence, reusable language controls, and an integrated showcase for the Portal SDK i18n runtime.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@refinedev/core@^5.0.8",
         "lucide-react@^0.487.0",
         "react-router@^7.0.2"
@@ -143,7 +143,7 @@
       "title": "NocoBase AI Runtime",
       "description": "NocoBase AI services, providers, transports, controllers, and avatars.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@ai-sdk/react@2.0.0",
         "ai@5.0.0",
         "@dicebear/core@^9.4.3",
@@ -162,7 +162,7 @@
       "title": "NocoBase AI Chat Components",
       "description": "Reusable NocoBase AI chat window, containers, floating trigger, and employee shortcut.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@refinedev/core@^5.0.8",
         "echarts@^5.5.0",
         "echarts-for-react@3.0.2",
@@ -214,7 +214,7 @@
       "title": "NocoBase AI Components and Demo",
       "description": "Complete NocoBase AI component runtime with application resources, routes, and component showcase pages.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.1.0",
+        "@nocobase/app-portal-sdk@^2.1.0",
         "@refinedev/core@^5.0.8",
         "react-router@^7.0.2"
       ],
@@ -244,7 +244,7 @@
       "title": "NocoBase File Upload",
       "description": "Controlled shadcn/ui file upload field for NocoBase file collections.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@tanstack/react-query@^5.81.5",
         "lucide-react@^0.487.0",
         "react-markdown@^10.1.0",
@@ -289,7 +289,7 @@
       "title": "NocoBase Mail",
       "description": "Mail inbox, compose, detail, and label components backed by the NocoBase mail API.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@refinedev/core@^5.0.8",
         "@tiptap/extension-link@^3.29.0",
         "@tiptap/extension-placeholder@^3.29.0",
@@ -334,7 +334,7 @@
       "title": "NocoBase ACL UI",
       "description": "Page, region, field, and role-switching components backed by the Starter's NocoBase accessControlProvider.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@refinedev/core@^5.0.8",
         "lucide-react@^0.487.0"
       ],
@@ -352,7 +352,7 @@
       "title": "NocoBase ACL Components and Demo",
       "description": "Complete ACL composition demo with live role switching, action matrix, multi-collection regions, and field permissions.",
       "dependencies": [
-        "@nocobase/portal-sdk@^2.0.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@refinedev/core@^5.0.8",
         "react-router@^7.0.2"
       ],

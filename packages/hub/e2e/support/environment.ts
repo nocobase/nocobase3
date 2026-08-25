@@ -2,7 +2,7 @@ import {
   normalizePortalBase,
   resolveNocoBaseAppName,
   resolveNocoBasePortalName,
-} from '@nocobase/portal-sdk/runtime';
+} from '@nocobase/app-portal-sdk/runtime';
 
 export type PortalE2EStorageType = 'localStorage' | 'sessionStorage';
 

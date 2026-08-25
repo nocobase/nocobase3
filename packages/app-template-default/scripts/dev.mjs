@@ -4,6 +4,8 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
+
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -208,6 +210,7 @@ const appUrl = appBasePath
   ? `${appServerUrl}/${appBasePath}/`
   : `${appServerUrl}/`;
 const proxyApiPath = `/${[appBasePath, 'v2/api'].filter(Boolean).join('/')}`;
+const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);
 
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);
@@ -231,12 +234,7 @@ spawnDevProcess(
     '--clear-screen=false',
     '--include',
     'package.json',
-    '--include',
-    '../app-plugin-*/package.json',
-    '--include',
-    '../app-plugin-*/database/**/*',
-    '--include',
-    '../app-plugin-*/server/**/*',
+    ...pluginWatchIncludes.flatMap((include) => ['--include', include]),
     'server/standalone.ts',
   ],
   {

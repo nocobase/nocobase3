@@ -276,7 +276,7 @@ export default {
 - aliases
 - package 特有插件与环境变量
 
-compatibility plugin 由 Portal 配置从 `@nocobase/portal-sdk/vite` 注入，避免 `dev-config -> portal-sdk -> dev-config` 的 package 循环。
+compatibility plugin 由 Portal 配置从 `@nocobase/app-portal-sdk/vite` 注入，避免 `dev-config -> portal-sdk -> dev-config` 的 package 循环。
 
 ### 8.3 Playwright
 

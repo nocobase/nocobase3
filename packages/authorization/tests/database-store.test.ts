@@ -1,7 +1,7 @@
 import {
   createDatabaseManager,
   type DatabaseConnection,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import type { Knex } from 'knex';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Authorization, DatabaseAuthorizationStore } from '../src/index.js';

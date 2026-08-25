@@ -18,12 +18,12 @@ import {
   createDefaultCachingConfig,
   type CachingConfig,
 } from '@nocobase/caching';
-import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
-} from '@nocobase/app-server/websocket';
-import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
+} from '@nocobase/app-server-kit/websocket';
+import type { DatabaseManager, QueryAdapter } from '@nocobase/app-database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
@@ -35,7 +35,7 @@ import {
   joinBasePath,
   normalizeBasePath,
   resolveAppNameFromBasePath,
-} from '@nocobase/app-server/support';
+} from '@nocobase/app-server-kit/support';
 
 import {
   createApp,
@@ -755,19 +755,18 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('loads routes from enabled app plugins', async () => {
+  it('protects API routes loaded from enabled app plugins', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
     const response = await app.request(
-      `http://localhost${runtime.config.app.publicBasePath}/routes-example`,
+      `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      plugin: '@nocobase/app-plugin-routes-example',
-      message: 'Hello from the routes example plugin',
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      message: expect.any(String),
     });
   });
 
@@ -905,18 +904,36 @@ describe('app server', () => {
 
   it('proxies standalone SPA routes to Vite dev server with the public base path restored', async () => {
     const viteDevUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'text/plain; charset=utf-8');
-      response.end(`vite:${_request.method}:${_request.url}`);
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({
+          method: _request.method,
+          url: _request.url,
+          origin: _request.headers.origin,
+          referer: _request.headers.referer,
+        }),
+      );
     });
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
     const publicBasePath = runtime.config.app.publicBasePath;
     const requestPath = `${publicBasePath}/settings?tab=apps`;
 
-    const response = await app.request(`http://localhost${requestPath}`);
+    const response = await app.request(`http://localhost${requestPath}`, {
+      headers: {
+        origin: 'http://localhost',
+        referer: `http://localhost${publicBasePath}/`,
+      },
+    });
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe(`vite:GET:${requestPath}`);
+    const viteOrigin = new URL(viteDevUrl).origin;
+    await expect(response.json()).resolves.toEqual({
+      method: 'GET',
+      url: requestPath,
+      origin: viteOrigin,
+      referer: `${viteOrigin}${publicBasePath}/`,
+    });
     await app.close();
   });
 
