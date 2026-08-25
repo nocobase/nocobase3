@@ -5,7 +5,11 @@ import {
   removeDirectory,
   scaffoldApp,
 } from '../../lib/scaffold.ts';
-import { DEFAULT_TEMPLATE, downloadTemplate } from '../../lib/template.ts';
+import {
+  DEFAULT_REGISTRY,
+  DEFAULT_TEMPLATE,
+  downloadTemplate,
+} from '../../lib/template.ts';
 
 export default class AppCreate extends Command {
   static override summary = 'Create a local app source directory.';
@@ -36,6 +40,7 @@ export default class AppCreate extends Command {
     }),
     registry: Flags.string({
       description: 'npm registry to download the template from.',
+      default: DEFAULT_REGISTRY,
     }),
   };
 

@@ -30,11 +30,22 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 
 停止 Hub 时终止的是整个进程组而不是单个进程：start 脚本通常是包管理器的包装进程，真正监听端口的服务是它的孙进程，只杀记录的 pid 会留下占着端口的孤儿。
 
-由于 v3 的 Hub 包尚未发布，`nb3 hub create` 的默认模板源也暂时指向 `@nocobase/portal-template-default@3.1.1`，和 `nb3 app create` 一样。
+`nb3 hub create` 的默认模板源是 `@nocobase/hub@beta`。
 
 退出码约定：`0` 成功或 stub，`1` 运行错误，`2` 参数错误，`3` 尚未实现。
 
-由于 v3 的模板包尚未发布，默认模板源暂时指向已发布的 v2 包 `@nocobase/portal-template-default@3.1.1`，用于跑通完整流程。等 v3 包发布后，只需改 `src/lib/template.ts` 里的 `DEFAULT_TEMPLATE` 一个常量。开发 v3 模板本身时可以直接指向本地目录：
+默认模板源是 `@nocobase/app-template-default@beta`，从自建 registry `https://npm.nocobase.ai` 下载。
+
+`@beta` 是因为目前只有预览版发布到了这条渠道；第一个稳定版发出后，把 `src/lib/template.ts` 里的 `DEFAULT_TEMPLATE` 和 `DEFAULT_HUB_TEMPLATE` 改成稳定范围即可。
+
+两个默认值都能覆盖：
+
+```bash
+nb3 app create crm --template @nocobase/app-template-default@0.0.1
+nb3 app create crm --registry https://registry.npmjs.org
+```
+
+开发模板本身时直接指向本地目录：
 
 ```bash
 nb3 app create crm --template ./packages/app-template-default

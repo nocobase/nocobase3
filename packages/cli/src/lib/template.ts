@@ -4,13 +4,15 @@ import path from 'node:path';
 import { CommandFailedError, runCommand } from './run-command.ts';
 
 /**
- * Neither v3 package is on npm yet, so both defaults point at the published v2 portal template for now. It is enough to
- * exercise the whole download-install-run path; only these constants change once the v3 packages ship.
+ * v3 packages are published to the self-hosted registry, not the public npm. Both defaults pin `@beta` because that is
+ * the only channel with v3 releases so far; switch them to a stable range once the first stable version ships.
  */
-export const DEFAULT_TEMPLATE = '@nocobase/portal-template-default@3.1.1';
+export const DEFAULT_REGISTRY = 'https://npm.nocobase.ai';
+
+export const DEFAULT_TEMPLATE = '@nocobase/app-template-default@beta';
 
 /** The hub is scaffolded the same way an app is: download a package, extract it, install, run. */
-export const DEFAULT_HUB_TEMPLATE = '@nocobase/portal-template-default@3.1.1';
+export const DEFAULT_HUB_TEMPLATE = '@nocobase/hub@beta';
 
 const PACK_TIMEOUT_MS = 5 * 60 * 1000;
 
