@@ -65,12 +65,12 @@ jobs:
       - name: Verify develop is in pre mode
         run: |
           if [ ! -f .changeset/pre.json ]; then
-            echo "::error::develop 不在 pre 模式。先在本地执行 changeset pre enter beta 并提交。"
+            echo "::error::develop is not in pre mode. Run changeset pre enter beta locally and commit it first."
             exit 1
           fi
           MODE=$(node -p "require('./.changeset/pre.json').mode")
           if [ "$MODE" != "pre" ]; then
-            echo "::error::pre.json 的 mode 是 '$MODE'，期望 'pre'"
+            echo "::error::pre.json has mode '$MODE', expected 'pre'"
             exit 1
           fi
 
@@ -80,10 +80,10 @@ jobs:
         run: |
           COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
           if [ "$COUNT" = "0" ]; then
-            echo "::error::没有待消费的 changeset，无需发版"
+            echo "::error::No pending changesets — nothing to release"
             exit 1
           fi
-          echo "待消费 changeset：$COUNT 个"
+          echo "Pending changesets: $COUNT"
 
       - name: Configure git
         run: |
@@ -121,7 +121,7 @@ jobs:
             echo "name=$NAME"
             echo "batch=$BATCH"
           } >> "$GITHUB_OUTPUT"
-          echo "本次版本：$BATCH"
+          echo "Version: $BATCH"
 
       - name: Version
         run: pnpm changeset version
@@ -133,7 +133,7 @@ jobs:
         run: |
           CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
           if [ -z "$CHANGED" ]; then
-            echo "::error::changeset version 没有改动任何版本号（可能都是 empty changeset）"
+            echo "::error::changeset version changed no versions (they may all be empty changesets)"
             exit 1
           fi
           echo "$CHANGED"
@@ -148,9 +148,9 @@ jobs:
       - name: Summarize
         run: |
           {
-            echo "### 本次预览版"
+            echo "### Prerelease"
             echo
-            echo "| Package | 版本 |"
+            echo "| Package | Version |"
             echo "| --- | --- |"
             node scripts/list-package-versions.mjs --table
           } >> "$GITHUB_STEP_SUMMARY"
@@ -162,7 +162,7 @@ jobs:
 
       - name: Stop here on dry run
         if: inputs.dry_run
-        run: echo "dry_run=true，到此为止。发版分支未推送。"
+        run: echo "dry_run=true — stopping here. The release branch was not pushed."
 
       # ── 以下只在实发时执行 ────────────────────────────────────────
       # 不打产品级 tag。各 package 独立版本，不存在一个能代表整个仓库的
@@ -214,7 +214,7 @@ jobs:
         run: |
           PR_URL=$(gh pr create \
             --title "chore: release ${{ steps.branch.outputs.batch }}" \
-            --body "预览版 \`${{ steps.branch.outputs.batch }}\`，已发布到 npm（dist-tag \`beta\`）。各 package 版本见 workflow summary。" \
+            --body "Prerelease \`${{ steps.branch.outputs.batch }}\` published to npm under the \`beta\` dist-tag. Per-package versions are in the workflow summary." \
             --base develop \
             --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -224,7 +224,7 @@ jobs:
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
-            echo "::warning::PR 合回 develop 失败，需要人工解决冲突：$PR_URL"
+            echo "::warning::Failed to merge the PR back into develop; conflicts need manual work: $PR_URL"
             echo "merged=false" >> "$GITHUB_OUTPUT"
           else
             echo "merged=true" >> "$GITHUB_OUTPUT"
