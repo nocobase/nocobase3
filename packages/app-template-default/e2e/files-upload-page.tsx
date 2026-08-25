@@ -1,7 +1,7 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import '../client/App.css';
+import '../client/styles.css';
 import {
   FileUploadField,
   type StoredFile,

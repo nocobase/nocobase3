@@ -8,7 +8,10 @@ import {
   type ScopedFileCapabilityCodec,
 } from './scoped-capability.js';
 import { createInternalFilesStorage } from './storage/index.js';
-import type { InternalFilesStorage, S3Provider } from './storage/types.js';
+import type {
+  FilesStorageDisk,
+  InternalFilesStorage,
+} from './storage/types.js';
 
 interface FilesRuntimeState {
   audience: string;
@@ -24,7 +27,7 @@ interface FilesRuntimeState {
 export interface CreateOpaqueFilesRuntimeInternalOptions {
   basePath?: string;
   clock?: () => Date;
-  s3Provider?: S3Provider;
+  disk?: FilesStorageDisk;
 }
 
 const runtimeStates = new WeakMap<FilesRuntime, FilesRuntimeState>();
@@ -52,9 +55,9 @@ export function createOpaqueFilesRuntime(
 ): FilesRuntime {
   const clock = internalOptions.clock ?? (() => new Date());
   const storage = createInternalFilesStorage(options.config, {
-    ...(internalOptions.s3Provider === undefined
+    ...(internalOptions.disk === undefined
       ? {}
-      : { s3Provider: internalOptions.s3Provider }),
+      : { disk: internalOptions.disk }),
   });
   const repository = createFilesRepository(
     options.database,

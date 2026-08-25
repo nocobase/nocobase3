@@ -91,6 +91,7 @@
     "@aws-sdk/s3-request-presigner": "^3.577.0",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-database": "workspace:^",
+    "flydrive": "^2.1.0",
     "hono": "catalog:"
   },
   "devDependencies": {

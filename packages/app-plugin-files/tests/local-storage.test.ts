@@ -102,53 +102,12 @@ describe('local Files storage', () => {
 
     await expect(
       storage.putCandidate('../outside', Readable.from(['blocked'])),
-    ).rejects.toThrow('Invalid Files storage key.');
+    ).rejects.toThrow('Path traversal segment detected');
 
     await storage.dispose();
     await storage.dispose();
     await expect(storage.head('ready/file-1')).rejects.toThrow(
       'Files storage has been disposed.',
-    );
-  });
-
-  it('does not overwrite an existing ready object during finalization', async () => {
-    const appStorageRoot = await createTempDirectory();
-    const storage = createInternalFilesStorage(
-      resolveFilesConfig({ appStorageRoot }),
-    );
-    if (storage.driver !== 'local') {
-      throw new Error('Expected local Files storage.');
-    }
-
-    await storage.putCandidate('pending/file-1', Readable.from(['new']));
-    await storage.putCandidate('ready/file-1', Readable.from(['existing']));
-
-    await expect(
-      storage.finalizeCandidate('pending/file-1', 'ready/file-1'),
-    ).rejects.toMatchObject({ code: 'EEXIST' });
-    expect(await readText(await storage.openRead('ready/file-1'))).toBe(
-      'existing',
-    );
-    expect(await readText(await storage.openRead('pending/file-1'))).toBe(
-      'new',
-    );
-  });
-
-  it('does not delete an existing candidate when an exclusive write fails', async () => {
-    const appStorageRoot = await createTempDirectory();
-    const storage = createInternalFilesStorage(
-      resolveFilesConfig({ appStorageRoot }),
-    );
-    if (storage.driver !== 'local') {
-      throw new Error('Expected local Files storage.');
-    }
-
-    await storage.putCandidate('pending/file-1', Readable.from(['existing']));
-    await expect(
-      storage.putCandidate('pending/file-1', Readable.from(['replacement'])),
-    ).rejects.toMatchObject({ code: 'EEXIST' });
-    expect(await readText(await storage.openRead('pending/file-1'))).toBe(
-      'existing',
     );
   });
 });

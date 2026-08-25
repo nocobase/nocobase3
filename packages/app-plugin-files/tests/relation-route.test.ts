@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -13,7 +13,6 @@ import {
 import type {
   CreateBusinessFileResponse,
   FileErrorResponse,
-  FileUploadPlan,
   StoredFile,
 } from '@nocobase/app-plugin-files/protocol';
 import {
@@ -27,12 +26,7 @@ import {
   createOpaqueFilesRuntime,
   getFilesRuntimeKernel,
 } from '../server/internal/runtime.js';
-import type {
-  S3Provider,
-  SignedReadOptions,
-  SignedUploadOptions,
-  StorageObjectMetadata,
-} from '../server/internal/storage/types.js';
+import { FakeS3Disk } from './support/fake-s3-disk.js';
 
 const ORDER_ONE = 'order-1';
 const ORDER_TWO = 'order-2';
@@ -42,7 +36,7 @@ interface RelationFixture {
   database: DatabaseManager;
   runtime: FilesRuntime;
   storageRoot: string;
-  provider?: FakeS3Provider;
+  provider?: FakeS3Disk;
 }
 
 interface RelationRow {
@@ -207,66 +201,6 @@ describe('relation binding scoped file routes', () => {
     ).toBe(2);
   });
 
-  it('expires an abandoned Local replacement while keeping the old relation replaceable', async () => {
-    let now = new Date('2026-08-24T00:00:00.000Z');
-    const fixture = await createFixture({ maxFiles: 1, clock: () => now });
-    const original = await uploadAndComplete(
-      fixture,
-      ORDER_ONE,
-      'old.txt',
-      'old',
-    );
-    const abandoned = await createUpload(
-      fixture,
-      ORDER_ONE,
-      'abandoned.txt',
-      9,
-      original.file.id,
-    );
-    await putLocal(fixture, abandoned, 'abandoned');
-    const candidate = path.join(
-      fixture.storageRoot,
-      'pending',
-      abandoned.file.id,
-      'candidate',
-    );
-    const orphanedReady = path.join(
-      fixture.storageRoot,
-      'ready',
-      abandoned.file.id,
-      'object',
-    );
-    await mkdir(path.dirname(orphanedReady), { recursive: true });
-    await writeFile(orphanedReady, 'abandoned');
-    await writeFile(
-      `${orphanedReady}.files-metadata.json`,
-      '{"contentType":"text/plain"}',
-    );
-    await expect(access(candidate)).resolves.toBeUndefined();
-    await expect(access(orphanedReady)).resolves.toBeUndefined();
-
-    now = new Date('2026-08-24T00:16:00.000Z');
-    const listed = await fixture.app.request(`/orders/${ORDER_ONE}/files`);
-
-    expect(await json<StoredFile[]>(listed)).toEqual([
-      expect.objectContaining({ id: original.file.id, status: 'ready' }),
-    ]);
-    const replacement = await createUpload(
-      fixture,
-      ORDER_ONE,
-      'replacement.txt',
-      4,
-      original.file.id,
-    );
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getFile(abandoned.file.id),
-    ).toMatchObject({ status: 'failed' });
-    await expect(access(candidate)).rejects.toThrow();
-    await expect(access(orphanedReady)).rejects.toThrow();
-    await putLocal(fixture, replacement, 'next');
-    expect((await completeUpload(fixture, replacement)).status).toBe(200);
-  });
-
   it('replaces at full capacity while preserving the internal row and slot', async () => {
     const fixture = await createFixture({ maxFiles: 1 });
     const original = await uploadAndComplete(
@@ -341,7 +275,7 @@ describe('relation binding scoped file routes', () => {
   });
 
   it('runs Provider PUT simulation then scoped S3 complete and binds', async () => {
-    const provider = new FakeS3Provider();
+    const provider = new FakeS3Disk();
     const fixture = await createFixture({ provider });
     const upload = await createUpload(fixture, ORDER_ONE, 's3.txt', 4);
 
@@ -379,7 +313,7 @@ describe('relation binding scoped file routes', () => {
   });
 
   it('resolves scoped complete/cancel races to failed plus released reservation', async () => {
-    const provider = new FakeS3Provider();
+    const provider = new FakeS3Disk();
     const fixture = await createFixture({ provider, maxFiles: 1 });
     const upload = await createUpload(fixture, ORDER_ONE, 'race.txt', 4);
     provider.putUpload(upload.plan, {
@@ -405,72 +339,6 @@ describe('relation binding scoped file routes', () => {
       await getFilesRuntimeKernel(fixture.runtime).getFile(upload.file.id),
     ).toMatchObject({ status: 'failed' });
     expect(provider.keys()).toEqual([]);
-  });
-
-  it('expires an abandoned S3 replacement while keeping the old relation replaceable', async () => {
-    let now = new Date('2026-08-24T00:00:00.000Z');
-    const provider = new FakeS3Provider();
-    const fixture = await createFixture({
-      provider,
-      maxFiles: 1,
-      clock: () => now,
-    });
-    const original = await uploadAndCompleteS3(
-      fixture,
-      ORDER_ONE,
-      'old.txt',
-      'old',
-    );
-    const replacement = await createUpload(
-      fixture,
-      ORDER_ONE,
-      'new.txt',
-      4,
-      original.file.id,
-    );
-    provider.putUpload(replacement.plan, {
-      contentLength: 4,
-      contentType: 'text/plain',
-    });
-    provider.put(`ready/${replacement.file.id}/object`, {
-      contentLength: 4,
-      contentType: 'text/plain',
-    });
-    now = new Date('2026-08-24T00:16:00.000Z');
-
-    const listed = await fixture.app.request(`/orders/${ORDER_ONE}/files`);
-    expect(await json<StoredFile[]>(listed)).toEqual([
-      expect.objectContaining({ id: original.file.id, status: 'ready' }),
-    ]);
-    const next = await createUpload(
-      fixture,
-      ORDER_ONE,
-      'next.txt',
-      4,
-      original.file.id,
-    );
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getFile(replacement.file.id),
-    ).toMatchObject({ status: 'failed' });
-    expect(provider.keys()).toEqual([`ready/${original.file.id}/object`]);
-
-    provider.putUpload(next.plan, {
-      contentLength: 4,
-      contentType: 'text/plain',
-    });
-    expect((await completeUpload(fixture, next)).status).toBe(200);
-    now = new Date('2026-08-24T00:32:00.000Z');
-    expect(
-      await json<StoredFile[]>(
-        await fixture.app.request(`/orders/${ORDER_ONE}/files`),
-      ),
-    ).toEqual([expect.objectContaining({ id: next.file.id, status: 'ready' })]);
-    expect(provider.keys()).toEqual(
-      [
-        `ready/${next.file.id}/object`,
-        `ready/${original.file.id}/object`,
-      ].sort(),
-    );
   });
 
   it('rejects cross-record capabilities and removed business actions', async () => {
@@ -607,7 +475,7 @@ describe('relation binding scoped file routes', () => {
 interface CreateFixtureOptions {
   maxFiles?: number;
   publicAccess?: boolean;
-  provider?: FakeS3Provider;
+  provider?: FakeS3Disk;
   clock?: () => Date;
 }
 
@@ -675,9 +543,7 @@ async function createFixture(
       secret: 'relation-route-test-secret-at-least-32-characters',
     },
     {
-      ...(options.provider === undefined
-        ? {}
-        : { s3Provider: options.provider }),
+      ...(options.provider === undefined ? {} : { disk: options.provider }),
       ...(options.clock === undefined ? {} : { clock: options.clock }),
     },
   );
@@ -748,26 +614,6 @@ async function uploadAndComplete(
   return upload;
 }
 
-async function uploadAndCompleteS3(
-  fixture: RelationFixture,
-  orderId: string,
-  name: string,
-  contents: string,
-): Promise<CreateBusinessFileResponse> {
-  const upload = await createUpload(
-    fixture,
-    orderId,
-    name,
-    Buffer.byteLength(contents),
-  );
-  required(fixture.provider).putUpload(upload.plan, {
-    contentLength: Buffer.byteLength(contents),
-    contentType: 'text/plain',
-  });
-  expect((await completeUpload(fixture, upload)).status).toBe(200);
-  return upload;
-}
-
 function putLocal(
   fixture: RelationFixture,
   upload: CreateBusinessFileResponse,
@@ -824,100 +670,4 @@ function required<T>(value: T | undefined): T {
     throw new Error('Expected a value.');
   }
   return value;
-}
-
-class FakeS3Provider implements S3Provider {
-  readonly #objects = new Map<string, StorageObjectMetadata>();
-  #copyPause: DeferredCopy | undefined;
-
-  async createUploadUrl(
-    key: string,
-    _options: SignedUploadOptions,
-  ): Promise<string> {
-    return `https://upload.invalid/${encodeURIComponent(key)}`;
-  }
-
-  async headObject(key: string): Promise<StorageObjectMetadata> {
-    const metadata = this.#objects.get(key);
-    if (!metadata) {
-      const error = new Error('missing object') as NodeJS.ErrnoException;
-      error.code = 'NoSuchKey';
-      throw error;
-    }
-    return { ...metadata };
-  }
-
-  async copyObject(sourceKey: string, destinationKey: string): Promise<void> {
-    if (this.#copyPause) {
-      const pause = this.#copyPause;
-      this.#copyPause = undefined;
-      pause.markStarted();
-      await pause.waitForRelease();
-    }
-    this.#objects.set(destinationKey, await this.headObject(sourceKey));
-  }
-
-  async createReadUrl(
-    key: string,
-    _options: SignedReadOptions,
-  ): Promise<string> {
-    await this.headObject(key);
-    return `https://read.invalid/${encodeURIComponent(key)}?signature=secret`;
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    this.#objects.delete(key);
-  }
-
-  dispose(): void {}
-
-  putUpload(plan: FileUploadPlan, metadata: StorageObjectMetadata): void {
-    const key = decodeURIComponent(new URL(plan.upload.url).pathname.slice(1));
-    this.#objects.set(key, { ...metadata });
-  }
-
-  put(key: string, metadata: StorageObjectMetadata): void {
-    this.#objects.set(key, { ...metadata });
-  }
-
-  keys(): string[] {
-    return [...this.#objects.keys()].sort();
-  }
-
-  pauseNextCopy(): { started: Promise<void>; release(): void } {
-    const pause = new DeferredCopy();
-    this.#copyPause = pause;
-    return {
-      started: pause.started,
-      release: () => pause.release(),
-    };
-  }
-}
-
-class DeferredCopy {
-  readonly started: Promise<void>;
-  readonly #released: Promise<void>;
-  #markStarted!: () => void;
-  #release!: () => void;
-
-  constructor() {
-    this.started = new Promise<void>((resolve) => {
-      this.#markStarted = resolve;
-    });
-    this.#released = new Promise<void>((resolve) => {
-      this.#release = resolve;
-    });
-  }
-
-  markStarted(): void {
-    this.#markStarted();
-  }
-
-  release(): void {
-    this.#release();
-  }
-
-  async waitForRelease(): Promise<void> {
-    await this.#released;
-  }
 }

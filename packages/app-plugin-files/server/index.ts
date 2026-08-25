@@ -1,3 +1,5 @@
+import type { Hono } from 'hono';
+
 export { resolveFilesConfig } from './config.js';
 export type { FilesConfig, ResolveFilesConfigOptions } from './config.js';
 export { createFilesRuntime } from './runtime.js';
@@ -20,3 +22,9 @@ export type {
   OpenedFile,
   PublicAccessOptions,
 } from './types.js';
+import { getFilesRuntimeDataPlane } from './internal/runtime.js';
+import type { FilesRuntime } from './runtime.js';
+
+export function createCoreFilesRoute(runtime: FilesRuntime): Hono {
+  return getFilesRuntimeDataPlane(runtime).createRoute();
+}

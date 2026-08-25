@@ -94,9 +94,9 @@ Every package that emits `.d.ts` files (`declaration: true`) enables both `isola
 | `packages/authorization/tsconfig.json`               | Authorization library      |
 | `packages/app-database/tsconfig.json`                | Database package           |
 | `packages/app-host/tsconfig.json`                    | Application host           |
+| `packages/app-plugin-files/tsconfig.json`            | Files plugin library       |
 | `packages/app-server-kit/tsconfig.json`              | Application server library |
 | `packages/caching/tsconfig.json`                     | Caching library            |
-| `packages/drive/tsconfig.json`                       | File storage library       |
 | `packages/id-generator/tsconfig.json`                | ID generator library       |
 | `packages/logging/tsconfig.json`                     | Logging library            |
 | `packages/queue/tsconfig.json`                       | Queue library              |

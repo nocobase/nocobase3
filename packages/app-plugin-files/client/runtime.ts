@@ -61,17 +61,7 @@ async function completeUpload(
     if (!shouldRetryComplete(error)) {
       throw error;
     }
-    try {
-      return await completeUploadOnce(plan, signal);
-    } catch (retryError) {
-      if (
-        retryError instanceof FileClientError &&
-        retryError.code === 'UPLOAD_ABORTED'
-      ) {
-        throw retryError;
-      }
-      throw error;
-    }
+    return completeUploadOnce(plan, signal);
   }
 }
 

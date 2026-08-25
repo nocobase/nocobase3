@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -248,52 +248,6 @@ describe('field binding scoped file routes', () => {
     } finally {
       await rebuiltRuntime.dispose();
     }
-  });
-
-  it('cleans an expired Local upload before creating the next field upload', async () => {
-    let now = new Date('2026-08-24T00:00:00.000Z');
-    const fixture = await createFixture({ clock: () => now });
-    const abandoned = await createUpload(fixture, EMPLOYEE_ONE, {
-      name: 'abandoned.txt',
-      size: 9,
-      contentType: 'text/plain',
-    });
-    expect((await putBytes(fixture, abandoned, 'abandoned')).status).toBe(200);
-    const filesRoot = path.join(fixture.storageRoot, 'app/private/files');
-    const candidate = path.join(
-      filesRoot,
-      'pending',
-      abandoned.file.id,
-      'candidate',
-    );
-    const orphanedReady = path.join(
-      filesRoot,
-      'ready',
-      abandoned.file.id,
-      'object',
-    );
-    await mkdir(path.dirname(orphanedReady), { recursive: true });
-    await writeFile(orphanedReady, 'abandoned');
-    await writeFile(
-      `${orphanedReady}.files-metadata.json`,
-      '{"contentType":"text/plain"}',
-    );
-    await expect(access(candidate)).resolves.toBeUndefined();
-    await expect(access(orphanedReady)).resolves.toBeUndefined();
-    now = new Date('2026-08-24T00:16:00.000Z');
-
-    const next = await createUpload(fixture, EMPLOYEE_ONE, {
-      name: 'next.txt',
-      size: 4,
-      contentType: 'text/plain',
-    });
-
-    expect(next.file.status).toBe('pending');
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getFile(abandoned.file.id),
-    ).toMatchObject({ status: 'failed' });
-    await expect(access(candidate)).rejects.toThrow();
-    await expect(access(orphanedReady)).rejects.toThrow();
   });
 
   it('isolates plans from routes with a different binding identity', async () => {

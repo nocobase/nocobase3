@@ -176,10 +176,6 @@ export class FilesDataPlane {
     return (await this.createUploadAttempt(input)).plan;
   }
 
-  async cleanupExpiredPending(): Promise<void> {
-    await this.#kernel.cleanupExpiredPending();
-  }
-
   async createFile(input: CreateFileInput): Promise<StoredFile> {
     const name = normalizeFileName(input.name);
     const policy = normalizeStreamUploadPolicy(
@@ -190,7 +186,6 @@ export class FilesDataPlane {
     const source = toNodeReadable(input.content);
     let pending;
     try {
-      await this.cleanupExpiredPending();
       pending = await this.#kernel.createPending({ name });
     } catch (error) {
       source.destroy();
@@ -275,7 +270,6 @@ export class FilesDataPlane {
     const name = normalizeFileName(input.name);
     const policy = normalizeUploadPolicy(input, this.#config.upload.maxBytes);
     assertUploadPolicy(name, policy);
-    await this.cleanupExpiredPending();
     const pending = await this.#kernel.createPending({ name });
     const expiresAt = new Date(pending.expiresAt).getTime();
     const transfer: FileTransferDescriptor = {

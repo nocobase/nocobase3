@@ -850,9 +850,7 @@ describe('app plugins', () => {
     expect(filesPlugin?.migrationsDirectory).toMatch(
       /app-plugin-files\/database\/migrations$/,
     );
-    expect(filesPlugin?.routesEntry).toMatch(
-      /app-plugin-files\/server\/routes\/index\.ts$/,
-    );
+    expect(filesPlugin?.routesEntry).toBeUndefined();
     expect(dataProviderPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-data-provider',
       version: declaredVersion('@nocobase/app-plugin-data-provider'),

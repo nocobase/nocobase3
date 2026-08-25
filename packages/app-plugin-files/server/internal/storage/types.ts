@@ -1,5 +1,7 @@
 import type { Readable } from 'node:stream';
 
+import type { SignedURLOptions, WriteOptions } from 'flydrive/types';
+
 export interface StorageObjectMetadata {
   contentLength: number;
   contentType?: string;
@@ -30,6 +32,30 @@ export interface SignedStorageRequest {
   headers: Record<string, string>;
 }
 
+export interface FilesStorageDisk {
+  put(
+    key: string,
+    contents: string | Uint8Array,
+    options?: WriteOptions,
+  ): Promise<void>;
+  putStream(
+    key: string,
+    contents: Readable,
+    options?: WriteOptions,
+  ): Promise<void>;
+  get(key: string): Promise<string>;
+  getStream(key: string): Promise<Readable>;
+  getMetaData(key: string): Promise<StorageObjectMetadata>;
+  getSignedUrl(key: string, options?: SignedURLOptions): Promise<string>;
+  getSignedUploadUrl(key: string, options?: SignedURLOptions): Promise<string>;
+  copy(
+    source: string,
+    destination: string,
+    options?: WriteOptions,
+  ): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
 interface CommonFilesStorage {
   putCandidate(
     key: string,
@@ -57,18 +83,3 @@ export interface S3FilesStorage extends CommonFilesStorage {
 }
 
 export type InternalFilesStorage = LocalFilesStorage | S3FilesStorage;
-
-export interface S3Provider {
-  createUploadUrl(key: string, options: SignedUploadOptions): Promise<string>;
-  putObject?(
-    key: string,
-    contents: Readable,
-    options: LocalCandidateWriteOptions,
-  ): Promise<void>;
-  headObject(key: string): Promise<StorageObjectMetadata>;
-  copyObject(sourceKey: string, destinationKey: string): Promise<void>;
-  openRead?(key: string): Promise<Readable>;
-  createReadUrl(key: string, options: SignedReadOptions): Promise<string>;
-  deleteObject(key: string): Promise<void>;
-  dispose(): void;
-}

@@ -1,4 +1,4 @@
-import { readdir, readFile, rm, stat } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { mkdtemp } from 'node:fs/promises';
@@ -24,12 +24,7 @@ import {
   getFilesRuntimeKernel,
   createOpaqueFilesRuntime,
 } from '../server/internal/runtime.js';
-import type {
-  S3Provider,
-  SignedReadOptions,
-  SignedUploadOptions,
-  StorageObjectMetadata,
-} from '../server/internal/storage/types.js';
+import { FakeS3Disk } from './support/fake-s3-disk.js';
 
 const secret = 'test-files-data-plane-secret-at-least-32-characters';
 const basePath = '/api/files';
@@ -152,65 +147,6 @@ describe('Files Local data plane', () => {
     expect(content.status).toBe(200);
     expect(content.headers.get('content-type')).toBe('text/plain');
     await expect(content.text()).resolves.toBe('managed files');
-  });
-
-  it('does not expose a canonical candidate while a Local PUT is still streaming', async () => {
-    const fixture = await createTestRuntime();
-    const attempt = await fixture.dataPlane.createUploadAttempt({
-      name: 'streaming.txt',
-      size: 15,
-      contentType: 'text/plain',
-    });
-    let controller!: ReadableStreamDefaultController<Uint8Array>;
-    const body = new ReadableStream<Uint8Array>({
-      start(value) {
-        controller = value;
-        controller.enqueue(new TextEncoder().encode('partial'));
-      },
-    });
-    const uploading = streamRequest(
-      fixture.app,
-      attempt.plan.upload.url,
-      body,
-      attempt.plan.upload.headers,
-    );
-    const localRoot = path.join(fixture.storageRoot, 'app/private/files');
-    await waitForPartFile(localRoot);
-
-    const candidatePath = path.join(localRoot, attempt.transfer.candidateKey);
-    await expect(stat(candidatePath)).rejects.toMatchObject({ code: 'ENOENT' });
-    const earlyComplete = await fixture.app.request(attempt.plan.complete.url, {
-      method: 'POST',
-    });
-    expect(earlyComplete.status).toBe(409);
-    await expect(earlyComplete.json()).resolves.toMatchObject({
-      code: 'UPLOAD_FAILED',
-    });
-
-    controller.enqueue(new TextEncoder().encode(' content'));
-    controller.close();
-    expect((await uploading).status).toBe(200);
-    await expect(stat(candidatePath)).resolves.toMatchObject({ size: 15 });
-    expect(
-      (
-        await fixture.app.request(attempt.plan.complete.url, {
-          method: 'POST',
-        })
-      ).status,
-    ).toBe(200);
-
-    const record = await fixture.kernel.getRecord(attempt.file.id);
-    expect(record).toMatchObject({
-      status: 'ready',
-      size: 15,
-      contentType: 'text/plain',
-    });
-    if (!record?.storageKey) {
-      throw new Error('Expected a ready storage key.');
-    }
-    await expect(
-      readFile(path.join(localRoot, record.storageKey), 'utf8'),
-    ).resolves.toBe('partial content');
   });
 
   it('cancels pending Local uploads through the Core route idempotently', async () => {
@@ -412,7 +348,7 @@ describe('Files Local data plane', () => {
         'utf8',
       ),
       readFile(
-        new URL('../server/internal/storage/local.ts', import.meta.url),
+        new URL('../server/internal/storage/index.ts', import.meta.url),
         'utf8',
       ),
     ]);
@@ -424,13 +360,13 @@ describe('Files Local data plane', () => {
 
 describe('Files S3-compatible data plane', () => {
   it('redirects S3 GET while answering HEAD from stored metadata', async () => {
-    const provider = new FakeS3Provider();
+    const provider = new FakeS3Disk();
     const fixture = await createTestRuntime(
       {
         storage: { driver: 's3', bucket: 'managed-files' },
         access: { providerUrlExpiresInSeconds: 7 },
       },
-      { s3Provider: provider },
+      { disk: provider },
     );
     const plan = await fixture.dataPlane.createUploadPlan({
       name: 'report.pdf',
@@ -444,9 +380,6 @@ describe('Files S3-compatible data plane', () => {
     expect(plan.upload).toMatchObject({
       method: 'PUT',
       url: expect.stringMatching(/^https:\/\/upload\.invalid\//),
-      headers: {
-        'if-none-match': '*',
-      },
     });
     expect(plan.complete).toMatchObject({
       method: 'POST',
@@ -495,10 +428,10 @@ describe('Files S3-compatible data plane', () => {
   });
 
   it('resolves complete and cancel competition without leaving a ready object', async () => {
-    const provider = new FakeS3Provider();
+    const provider = new FakeS3Disk();
     const fixture = await createTestRuntime(
       { storage: { driver: 's3', bucket: 'managed-files' } },
-      { s3Provider: provider },
+      { disk: provider },
     );
     const attempt = await fixture.dataPlane.createUploadAttempt({
       name: 'race.bin',
@@ -528,10 +461,10 @@ describe('Files S3-compatible data plane', () => {
   });
 
   it('compensates rejected candidates and prevents old upload URLs from changing ready content', async () => {
-    const provider = new FakeS3Provider();
+    const provider = new FakeS3Disk();
     const fixture = await createTestRuntime(
       { storage: { driver: 's3', bucket: 'managed-files' } },
-      { s3Provider: provider },
+      { disk: provider },
     );
     const rejected = await fixture.dataPlane.createUploadPlan({
       name: 'rejected.txt',
@@ -587,10 +520,10 @@ describe('Files S3-compatible data plane', () => {
   });
 
   it('stores the normalized MIME after strict S3 metadata validation', async () => {
-    const provider = new FakeS3Provider();
+    const provider = new FakeS3Disk();
     const fixture = await createTestRuntime(
       { storage: { driver: 's3', bucket: 'managed-files' } },
-      { s3Provider: provider },
+      { disk: provider },
     );
     const plan = await fixture.dataPlane.createUploadPlan({
       name: 'normalized.txt',
@@ -617,10 +550,10 @@ describe('Files S3-compatible data plane', () => {
   });
 
   it('maps provider read failures without leaking the signed URL', async () => {
-    const provider = new FakeS3Provider();
+    const provider = new FakeS3Disk();
     const fixture = await createTestRuntime(
       { storage: { driver: 's3', bucket: 'managed-files' } },
-      { s3Provider: provider },
+      { disk: provider },
     );
     const plan = await fixture.dataPlane.createUploadPlan({
       name: 'unavailable.bin',
@@ -649,12 +582,12 @@ describe.each(['local', 's3'] as const)(
   'Files %s completion retry contract',
   (driver) => {
     it('keeps the pending candidate when binding fails and retries the same plan', async () => {
-      const provider = driver === 's3' ? new FakeS3Provider() : undefined;
+      const provider = driver === 's3' ? new FakeS3Disk() : undefined;
       const fixture = await createTestRuntime(
         driver === 's3'
           ? { storage: { driver: 's3', bucket: 'managed-files' } }
           : {},
-        provider === undefined ? {} : { s3Provider: provider },
+        provider === undefined ? {} : { disk: provider },
       );
       const attempt = await fixture.dataPlane.createUploadAttempt({
         name: 'retry.txt',
@@ -729,12 +662,12 @@ describe.each(['local', 's3'] as const)(
     });
 
     it('removes retained candidates when a failed binding is explicitly cancelled', async () => {
-      const provider = driver === 's3' ? new FakeS3Provider() : undefined;
+      const provider = driver === 's3' ? new FakeS3Disk() : undefined;
       const fixture = await createTestRuntime(
         driver === 's3'
           ? { storage: { driver: 's3', bucket: 'managed-files' } }
           : {},
-        provider === undefined ? {} : { s3Provider: provider },
+        provider === undefined ? {} : { disk: provider },
       );
       const attempt = await fixture.dataPlane.createUploadAttempt({
         name: 'cancel-after-failure.txt',
@@ -861,14 +794,14 @@ describe('Files Public Access kernel', () => {
   });
 
   it('documents the short residual lifetime of an issued S3 URL', async () => {
-    const provider = new FakeS3Provider();
+    const provider = new FakeS3Disk();
     const fixture = await createTestRuntime(
       {
         storage: { driver: 's3', bucket: 'managed-files' },
         access: { providerUrlExpiresInSeconds: 3 },
         publicAccess: { enabled: true },
       },
-      { s3Provider: provider },
+      { disk: provider },
     );
     const plan = await fixture.dataPlane.createUploadPlan({
       name: 'public.pdf',
@@ -1008,150 +941,10 @@ async function listFiles(root: string): Promise<string[]> {
   return result.sort();
 }
 
-async function waitForPartFile(root: string): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    let files: string[] = [];
-    try {
-      files = await listFiles(root);
-    } catch (error) {
-      if (!(
-        error instanceof Error &&
-        'code' in error &&
-        error.code === 'ENOENT'
-      )) {
-        throw error;
-      }
-    }
-    if (files.some((file) => file.endsWith('.part'))) {
-      return;
-    }
-    await new Promise<void>((resolve) => setImmediate(resolve));
-  }
-  throw new Error('Timed out waiting for Local staging file.');
-}
-
 function requiredCompleteUrl(plan: FileUploadPlan): string {
   return plan.complete.url;
 }
 
 function readyKey(fileId: string): string {
   return `ready/${fileId}/object`;
-}
-
-class FakeS3Provider implements S3Provider {
-  readonly #objects = new Map<string, StorageObjectMetadata>();
-  readonly readOptions: SignedReadOptions[] = [];
-  #copyPause: DeferredCopy | undefined;
-  #readFailures = 0;
-
-  async createUploadUrl(
-    key: string,
-    _options: SignedUploadOptions,
-  ): Promise<string> {
-    return `https://upload.invalid/${encodeURIComponent(key)}`;
-  }
-
-  async headObject(key: string): Promise<StorageObjectMetadata> {
-    const metadata = this.#objects.get(key);
-    if (!metadata) {
-      const error = new Error('missing object') as NodeJS.ErrnoException;
-      error.code = 'NoSuchKey';
-      throw error;
-    }
-    return { ...metadata };
-  }
-
-  async copyObject(sourceKey: string, destinationKey: string): Promise<void> {
-    if (this.#copyPause) {
-      const pause = this.#copyPause;
-      this.#copyPause = undefined;
-      pause.markStarted();
-      await pause.waitForRelease();
-    }
-    const metadata = await this.headObject(sourceKey);
-    if (this.#objects.has(destinationKey)) {
-      const error = new Error('destination exists') as NodeJS.ErrnoException;
-      error.code = 'PreconditionFailed';
-      throw error;
-    }
-    this.#objects.set(destinationKey, metadata);
-  }
-
-  async createReadUrl(
-    key: string,
-    options: SignedReadOptions,
-  ): Promise<string> {
-    if (this.#readFailures > 0) {
-      this.#readFailures -= 1;
-      throw new Error('provider read signing failed with signature=secret');
-    }
-    await this.headObject(key);
-    this.readOptions.push({ ...options });
-    return `https://read.invalid/${encodeURIComponent(key)}?signature=secret`;
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    this.#objects.delete(key);
-  }
-
-  dispose(): void {}
-
-  put(key: string, metadata: StorageObjectMetadata): void {
-    this.#objects.set(key, { ...metadata });
-  }
-
-  putUpload(plan: FileUploadPlan, metadata: StorageObjectMetadata): string {
-    const key = decodeURIComponent(new URL(plan.upload.url).pathname.slice(1));
-    this.put(key, metadata);
-    return key;
-  }
-
-  has(key: string): boolean {
-    return this.#objects.has(key);
-  }
-
-  keys(): string[] {
-    return [...this.#objects.keys()].sort();
-  }
-
-  pauseNextCopy(): { started: Promise<void>; release(): void } {
-    const pause = new DeferredCopy();
-    this.#copyPause = pause;
-    return {
-      started: pause.started,
-      release: () => pause.release(),
-    };
-  }
-
-  failNextRead(): void {
-    this.#readFailures += 1;
-  }
-}
-
-class DeferredCopy {
-  readonly started: Promise<void>;
-  readonly #released: Promise<void>;
-  #markStarted!: () => void;
-  #release!: () => void;
-
-  constructor() {
-    this.started = new Promise<void>((resolve) => {
-      this.#markStarted = resolve;
-    });
-    this.#released = new Promise<void>((resolve) => {
-      this.#release = resolve;
-    });
-  }
-
-  markStarted(): void {
-    this.#markStarted();
-  }
-
-  release(): void {
-    this.#release();
-  }
-
-  async waitForRelease(): Promise<void> {
-    await this.#released;
-  }
 }

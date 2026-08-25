@@ -289,17 +289,23 @@ describe('executeFileUploadPlan', () => {
     ).toEqual(['PUT', 'POST', 'DELETE']);
   });
 
-  it('preserves the first complete failure when the retry also fails', async () => {
+  it('surfaces the retry failure when complete fails twice', async () => {
     FakeXMLHttpRequest.enqueue({ status: 200 });
     FakeXMLHttpRequest.enqueue({ status: 503 });
-    FakeXMLHttpRequest.enqueue({ status: 502 });
+    FakeXMLHttpRequest.enqueue({
+      status: 409,
+      responseText: JSON.stringify({
+        error: 'The file binding changed.',
+        code: 'FILE_BINDING_CONFLICT',
+      }),
+    });
     FakeXMLHttpRequest.enqueue({ status: 204 });
 
     await expect(
       executeFileUploadPlan(localPlan('complete-double-failure'), testFile()),
     ).rejects.toMatchObject({
-      code: 'UPLOAD_FAILED',
-      status: 503,
+      code: 'FILE_BINDING_CONFLICT',
+      status: 409,
       operation: 'complete',
     });
 

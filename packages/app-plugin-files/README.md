@@ -1,8 +1,9 @@
 # @nocobase/app-plugin-files
 
-`createFileRoute()` accepts logical Collection and field names. The existing
-Database QueryAdapter applies the configured naming strategy, so route setup
-does not depend on in-memory Collection metadata:
+`createFileRoute()` accepts logical collection and field names. Files V1 relies
+only on the QueryAdapter's default naming normalization. It does not read
+Collection metadata mappings and does not support or promise custom
+`tableName`, `columnName`, or `tablePrefix` mappings:
 
 ```ts
 const route = fileService.createFileRoute({
@@ -19,7 +20,7 @@ const route = fileService.createFileRoute({
 ```
 
 Business migrations and database constraints remain responsible for the
-binding schema. A relation binding names its parent Collection explicitly;
+binding schema. A relation binding names its parent collection explicitly;
 `parentField` defaults to `id`.
 
 ## File upload Registry

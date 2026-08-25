@@ -31,6 +31,7 @@ describe('@nocobase/app-plugin-files contracts', () => {
     expect(clientEntry).toBeDefined();
     expect(Object.keys(serverEntry)).toContain('createFilesRuntime');
     expect(Object.keys(serverEntry)).toContain('createFileService');
+    expect(Object.keys(serverEntry)).toContain('createCoreFilesRoute');
     expect(Object.keys(clientEntry).sort()).toEqual([
       'FileClientError',
       'executeFileUploadPlan',

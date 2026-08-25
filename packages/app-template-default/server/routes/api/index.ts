@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requestLogger } from '@nocobase/logging';
+import { createCoreFilesRoute } from '@nocobase/app-plugin-files/server';
 
 import type { AppServices } from '@/services/index.js';
 import type { AppDeps } from '../../runtime/deps.js';
@@ -46,8 +47,11 @@ export function createApiRoutes({
     '/app-settings',
     createAppSettingsRoutes({ appSettingsStore: services.appSettingsStore }),
   );
+  if (deps.filesRuntime) {
+    publicRoutes.route('/files', createCoreFilesRoute(deps.filesRuntime));
+  }
   const protectedRoutes = new Hono();
-  protectedRoutes.use('/apps', deps.auth.required());
+  protectedRoutes.use('*', deps.auth.required());
   protectedRoutes.get('/apps', createAppsHandler());
 
   api.onError(

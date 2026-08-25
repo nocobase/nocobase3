@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import type { DatabaseConnection } from '@nocobase/app-database';
 
 import type { StoredFile } from '../../protocol.js';
-import { normalizeStorageKey } from './storage/key.js';
+import { normalizeStorageKey } from './storage/index.js';
 import type { StorageObjectMetadata } from './storage/types.js';
 import { normalizeOptionalContentType } from './upload-policy.js';
 import {
@@ -166,13 +166,6 @@ export class FileKernel {
   ): Promise<FileRecord | undefined> {
     const record = await this.#repository.get(readFileId(fileId), connection);
     return record ? cloneFileRecord(record) : undefined;
-  }
-
-  async cleanupExpiredPending(): Promise<void> {
-    const fileIds = await this.#repository.listExpiredPendingIds(this.#now());
-    for (const fileId of fileIds) {
-      await this.cancelUpload(fileId);
-    }
   }
 
   async completeUpload<TBinding = undefined>(

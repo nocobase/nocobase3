@@ -632,7 +632,7 @@ describe('app server', () => {
     });
   });
 
-  it('does not expose the removed upload endpoint', async () => {
+  it('requires authentication for unmatched protected API routes', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
@@ -642,7 +642,7 @@ describe('app server', () => {
       method: 'POST',
     });
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(401);
   });
 
   it('strips compressed upstream response headers before returning proxied API responses', async () => {
@@ -697,14 +697,14 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('mounts plugin routes without changing API fallback behavior', async () => {
+  it('mounts plugin routes while keeping the API fallback protected', async () => {
     const app = createTestApp({
       nocoBaseApiUrl: false,
       pluginRoutes: [
         {
           packageName: '@nocobase/app-plugin-test-routes',
           registerRoutes({ app }) {
-            app.get('/api/plugin-public', (context) =>
+            app.get('/plugin-public', (context) =>
               context.json({ public: true }),
             );
           },
@@ -712,16 +712,14 @@ describe('app server', () => {
       ],
     });
 
-    const publicResponse = await app.request(
-      'http://localhost/api/plugin-public',
-    );
+    const publicResponse = await app.request('http://localhost/plugin-public');
     const unknownResponse = await app.request(
       'http://localhost/api/not-mounted',
     );
     const protectedResponse = await app.request('http://localhost/api/apps');
 
     expect(publicResponse.status).toBe(200);
-    expect(unknownResponse.status).toBe(404);
+    expect(unknownResponse.status).toBe(401);
     expect(protectedResponse.status).toBe(401);
     await expect(publicResponse.json()).resolves.toEqual({ public: true });
   });
@@ -779,7 +777,7 @@ describe('app server', () => {
       error: 'The file access credential is invalid.',
       code: 'INVALID_ACCESS',
     });
-    expect(oldUpload.status).toBe(404);
+    expect(oldUpload.status).toBe(401);
     expect(rootHealth.status).toBe(404);
     expect(bareLocalApi.status).toBe(404);
     await app.close();
