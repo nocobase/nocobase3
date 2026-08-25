@@ -62,12 +62,19 @@ export async function executeFileUploadPlan(
 
 async function completeUpload(plan: FileUploadPlan): Promise<StoredFile> {
   try {
+    try {
+      return await completeUploadOnce(plan);
+    } catch (error) {
+      if (!shouldRetryComplete(error)) {
+        throw error;
+      }
+    }
     return await completeUploadOnce(plan);
   } catch (error) {
-    if (!shouldRetryComplete(error)) {
-      throw error;
+    if (shouldCancelComplete(error)) {
+      await cancelBestEffort(plan);
     }
-    return completeUploadOnce(plan);
+    throw error;
   }
 }
 
@@ -92,6 +99,16 @@ function shouldRetryComplete(error: unknown): boolean {
     error.operation === 'complete' &&
     error.code !== 'FILE_BINDING_CONFLICT' &&
     (error.status === 0 || error.status >= 500)
+  );
+}
+
+function shouldCancelComplete(error: unknown): boolean {
+  return (
+    error instanceof FileClientError &&
+    error.operation === 'complete' &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.code !== 'FILE_BINDING_CONFLICT'
   );
 }
 

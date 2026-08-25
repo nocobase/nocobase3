@@ -237,7 +237,7 @@ describe('executeFileUploadPlan', () => {
     });
   });
 
-  it('does not cancel after a complete failure', async () => {
+  it('does not cancel after a complete binding conflict', async () => {
     FakeXMLHttpRequest.enqueue({ status: 200 });
     FakeXMLHttpRequest.enqueue({
       status: 409,
@@ -258,6 +258,58 @@ describe('executeFileUploadPlan', () => {
     expect(
       FakeXMLHttpRequest.requests.map((request) => request.method),
     ).toEqual(['PUT', 'POST']);
+  });
+
+  it.each(['UPLOAD_TYPE_NOT_ALLOWED', 'UPLOAD_SIZE_EXCEEDED'])(
+    'cancels after a stable complete 4xx failure: %s',
+    async (code) => {
+      FakeXMLHttpRequest.enqueue({ status: 200 });
+      FakeXMLHttpRequest.enqueue({
+        status: 400,
+        responseText: JSON.stringify({
+          error: 'The file does not satisfy the upload policy.',
+          code,
+        }),
+      });
+      FakeXMLHttpRequest.enqueue({ status: 204 });
+
+      await expect(
+        executeFileUploadPlan(localPlan(`complete-${code}`), testFile()),
+      ).rejects.toMatchObject({
+        code,
+        status: 400,
+        operation: 'complete',
+      });
+
+      expect(
+        FakeXMLHttpRequest.requests.map((request) => request.method),
+      ).toEqual(['PUT', 'POST', 'DELETE']);
+    },
+  );
+
+  it('preserves a stable complete 4xx failure when cancel also fails', async () => {
+    FakeXMLHttpRequest.enqueue({ status: 200 });
+    FakeXMLHttpRequest.enqueue({
+      status: 400,
+      responseText: JSON.stringify({
+        error: 'The file type is not allowed.',
+        code: 'UPLOAD_TYPE_NOT_ALLOWED',
+      }),
+    });
+    FakeXMLHttpRequest.enqueue({ status: 500 });
+
+    await expect(
+      executeFileUploadPlan(localPlan('complete-cancel-failure'), testFile()),
+    ).rejects.toMatchObject({
+      message: 'The file type is not allowed.',
+      code: 'UPLOAD_TYPE_NOT_ALLOWED',
+      status: 400,
+      operation: 'complete',
+    });
+
+    expect(
+      FakeXMLHttpRequest.requests.map((request) => request.method),
+    ).toEqual(['PUT', 'POST', 'DELETE']);
   });
 
   it('retries a failed complete once with the same plan', async () => {
@@ -339,6 +391,30 @@ describe('executeFileUploadPlan', () => {
       FakeXMLHttpRequest.requests.map((request) => request.method),
     ).toEqual(['PUT', 'POST', 'POST']);
   });
+
+  it.each([0, 503])(
+    'does not cancel after consecutive uncertain complete failures: %s',
+    async (status) => {
+      FakeXMLHttpRequest.enqueue({ status: 200 });
+      FakeXMLHttpRequest.enqueue({ status });
+      FakeXMLHttpRequest.enqueue({ status });
+
+      await expect(
+        executeFileUploadPlan(
+          localPlan(`complete-uncertain-${status}`),
+          testFile(),
+        ),
+      ).rejects.toMatchObject({
+        code: 'UPLOAD_FAILED',
+        status,
+        operation: 'complete',
+      });
+
+      expect(
+        FakeXMLHttpRequest.requests.map((request) => request.method),
+      ).toEqual(['PUT', 'POST', 'POST']);
+    },
+  );
 
   it('preserves the original failure when cancel also fails', async () => {
     FakeXMLHttpRequest.enqueue({
