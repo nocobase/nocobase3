@@ -116,9 +116,6 @@ The run endpoint's idempotency header is not a runtime options object. Do not al
 6. Once persisted, verify its workflow id/key, version, hash, context, event key, status, and timestamps.
 7. Verify side-effecting run scripts by their business idempotency evidence, not merely a resolved workflow status.
 
-## Implementation references
+## Installed implementation discovery
 
-- [Workflow service](../../../server/services/workflow.ts)
-- [Authenticated HTTP routes](../../../server/routes/api/workflows.ts)
-- [Invocation contract](../../../engine/server/invocation-contract.ts)
-- [Plugin bootstrap registration](../../../server/bootstrap.ts)
+Resolve `@nocobase/app-plugin-workflow/server` through the project's package manager and inspect its installed declarations when verifying the current `WorkflowService`, server bootstrap, or route exports. Keep application calls on public package exports rather than importing plugin-internal file paths.

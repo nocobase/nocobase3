@@ -4,8 +4,8 @@ description: 'Use when agents need to define, validate, invoke, inspect, or diag
 argument-hint: '[action: explain|define|validate|invoke|inspect|diagnose] [workflow-key-or-path]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: workflow
-version: 1.0.0
-last-reviewed: 2026-08-23
+version: 1.0.1
+last-reviewed: 2026-08-25
 risk-level: medium
 ---
 
@@ -137,6 +137,3 @@ Final response must include:
 - [DSL Authoring](references/dsl-authoring.md): use as the detailed, implementation-aligned DSL contract.
 - [Invocation and Service API](references/invocation-and-service-api.md): use for invocation and management calls.
 - [Execution Diagnostics](references/execution-diagnostics.md): use for runtime inspection and fault isolation.
-- [Current workflow source types](../../engine/workflow-source/types.ts): normative TypeScript DSL shapes.
-- [Current source validator](../../engine/server/source-validator.ts): normative schema and semantic checks.
-- [Current workflow service](../../server/services/workflow.ts): normative internal service contract.

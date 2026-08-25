@@ -54,10 +54,3 @@ Write down:
 8. Operational evidence needed when a step fails.
 
 If the proposed process cannot be expressed with the application's registered node contracts, do not invent DSL. Implement/register an instruction or move the behavior into a `run` script, depending on whether it introduces process semantics or merely performs business work.
-
-## Implementation references
-
-- [Current concept design](../../../../../worklog/2026-08-13-v3-workflow/workflow-concept-boundary.md)
-- [Current invocation design](../../../../../worklog/2026-08-13-v3-workflow/workflow-invocation-design.md)
-- [Workflow source types](../../../engine/workflow-source/types.ts)
-- [Runtime invocation contract](../../../engine/server/invocation-contract.ts)

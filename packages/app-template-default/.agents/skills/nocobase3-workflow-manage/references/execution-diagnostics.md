@@ -131,10 +131,6 @@ Report at least:
 - Root-cause category: source/compile, activation/config, invocation contract, queue/worker, artifact/module, business script, timeout/cancellation, or authorization/observability.
 - Safest recovery: source revision, configuration correction, idempotent retry, new invocation, or explicit compensation.
 
-## Implementation references
+## Installed implementation discovery
 
-- [Status constants](../../../engine/server/constants.ts)
-- [Workflow service inspection methods](../../../server/services/workflow.ts)
-- [HTTP inspection routes and permissions](../../../server/routes/api/workflows.ts)
-- [Run-node structured inspection](../../../engine/server/run-inspector.ts)
-- [Timeout reaper](../../../engine/server/timeout-reaper.ts)
+Resolve `@nocobase/app-plugin-workflow/server` and `@nocobase/app-plugin-workflow` through the project's package manager when current implementation details are needed. Inspect the installed declarations for status constants, service methods, route permissions, run-node logging, and timeout behavior; do not assume a monorepo sibling source path exists in an initialized project.

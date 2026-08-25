@@ -19,24 +19,18 @@
 
 Each direct child directory of the configured workflow source root is one workflow package. The directory name is its stable workflow key. It must contain `workflow.ts` (or a compiled `workflow.js` for loading); package scanning additionally recognizes `workflow.package.yaml` for include/exclude/entry controls and requires one of those workflow entry files.
 
-In the default app, import the aggregated DSL:
+In the default initialized app, workflow packages are direct children of `server/workflows`, next to `server/workflows/dsl.ts`. Import that application-owned aggregation from a package's `workflow.ts`:
 
 ```ts
-import {
-  defineWorkflow,
-  node,
-} from '@nocobase/app-template-default/server/workflow-source';
+import { defineWorkflow, node } from '../dsl.js';
 ```
 
-The application aggregation is important: it is the discoverable list of node factories available in that application. It currently contains `node.condition` and `node.run`. Do not bypass it to guess plugin-private nodes.
+If the application uses another source root or publishes a stable application package subpath, resolve its aggregation entry before authoring. The aggregation is the discoverable list of node factories available in that application. The default template currently contains `node.condition` and `node.run`. Do not bypass it to guess plugin-private nodes.
 
 ## Complete current example
 
 ```ts
-import {
-  defineWorkflow,
-  node,
-} from '@nocobase/app-template-default/server/workflow-source';
+import { defineWorkflow, node } from '../dsl.js';
 
 export default defineWorkflow({
   title: 'Quotation decision',
@@ -248,15 +242,11 @@ Visibility is lexical and tree-based. A node may reference declared results from
 
 ## Validation and compilation
 
-Run the plugin's actual checker before load/build. In this source workspace, use the default application's `tsx` dependency to execute the plugin CLI:
+Run the installed plugin's actual checker before load/build:
 
 ```bash
-pnpm --filter @nocobase/app-template-default exec tsx \
-  ../../packages/app-plugin-workflow/engine/cli.ts \
-  check <package-or-workflow.ts>
+pnpm exec workflow check <package-or-workflow.ts>
 ```
-
-In an installed or already-built distribution, the equivalent contract is `workflow check <workflow-package>`. Do not use a stale workspace `workflow` bin link as evidence; the implementation entry is `packages/app-plugin-workflow/engine/cli.ts`.
 
 The checker performs, in order:
 
@@ -284,16 +274,3 @@ The default app build path scans each direct workflow package, builds immutable 
 - Every run script is static, bundled, named-exported, abort-aware, and idempotent.
 - Every referenced run result has an accurate, lexically visible schema.
 - The real six-phase checker passes before build/load.
-
-## Implementation references
-
-- [DSL source types](../../../engine/workflow-source/types.ts)
-- [DSL implementation](../../../engine/workflow-source/core.ts)
-- [Source parser](../../../engine/server/source-parser.ts)
-- [Source validator](../../../engine/server/source-validator.ts)
-- [Source compiler](../../../engine/server/source-compiler.ts)
-- [Input validation](../../../engine/server/workflow-inputs.ts)
-- [Context validation](../../../engine/server/invocation-contract.ts)
-- [Condition validation](../../../engine/server/expressions/validator.ts)
-- [Run instruction](../../../engine/server/instructions/run.ts)
-- [Node result validation](../../../engine/server/node-results.ts)
