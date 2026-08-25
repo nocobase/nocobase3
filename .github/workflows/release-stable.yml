@@ -80,7 +80,7 @@ jobs:
           BRANCH: ${{ inputs.branch }}
         run: |
           if [ -f .changeset/pre.json ]; then
-            echo "::error::$BRANCH 上存在 .changeset/pre.json，稳定线被污染，中止发布"
+            echo "::error::$BRANCH carries .changeset/pre.json — the stable line is contaminated, aborting"
             exit 1
           fi
 
@@ -90,7 +90,7 @@ jobs:
           BRANCH: ${{ inputs.branch }}
         run: |
           if [ "$BRANCH" = "develop" ]; then
-            echo "::error::develop 发版请用 release-beta.yml"
+            echo "::error::Use release-beta.yml to release from develop"
             exit 1
           fi
 
@@ -104,11 +104,11 @@ jobs:
         run: |
           if [ "$KEEP" = "true" ]; then
             echo "value=legacy" >> "$GITHUB_OUTPUT"
-            echo "dist-tag: legacy（latest 指针保持不变）"
+            echo "dist-tag: legacy (the latest pointer stays where it is)"
           else
             if [ "$BRANCH" != "main" ]; then
-              echo "::error::从 $BRANCH 发版但没有勾选 keep_latest。"
-              echo "如果这是给旧版本发的 hotfix，勾上 keep_latest 再跑。"
+              echo "::error::Releasing from $BRANCH without keep_latest checked."
+              echo "If this is a hotfix for an older version, check keep_latest and run again."
               exit 1
             fi
             echo "value=" >> "$GITHUB_OUTPUT"
@@ -121,10 +121,10 @@ jobs:
         run: |
           COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
           if [ "$COUNT" = "0" ]; then
-            echo "changeset 0 个 —— 版本号已由 merge-beta-to-stable 写好，直接发布"
+            echo "0 changesets — versions were already written by merge-beta-to-stable, publishing directly"
             echo "needs_version=false" >> "$GITHUB_OUTPUT"
           else
-            echo "changeset $COUNT 个 —— 需要先计算版本号"
+            echo "$COUNT changesets — versions need to be computed first"
             echo "needs_version=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -134,9 +134,9 @@ jobs:
       - name: Verify there is something to publish
         if: steps.mode.outputs.needs_version == 'false'
         run: |
-          echo "待发布候选："
+          echo "Publish candidates:"
           node scripts/list-package-versions.mjs --candidates
-          echo "publish 会逐个查 registry，已存在的自动跳过"
+          echo "publish queries the registry per package and skips the ones already there"
 
       - name: Configure git
         run: |
@@ -170,7 +170,7 @@ jobs:
             echo "name=$NAME"
             echo "batch=$BATCH"
           } >> "$GITHUB_OUTPUT"
-          echo "本次版本：$BATCH"
+          echo "Version: $BATCH"
 
       - name: Version
         if: steps.mode.outputs.needs_version == 'true'
@@ -182,7 +182,7 @@ jobs:
         run: |
           CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
           if [ -z "$CHANGED" ]; then
-            echo "::error::changeset version 没有改动任何版本号（可能都是 empty changeset）"
+            echo "::error::changeset version changed no versions (they may all be empty changesets)"
             exit 1
           fi
           echo "$CHANGED"
@@ -199,16 +199,16 @@ jobs:
         run: |
           LEFT=$(node scripts/list-package-versions.mjs --prerelease)
           if [ -n "$LEFT" ]; then
-            echo "::error::main 上不应存在预发布版本：$LEFT"
+            echo "::error::Prerelease versions should not exist on main: $LEFT"
             exit 1
           fi
 
       - name: Summarize
         run: |
           {
-            echo "### 本次稳定版"
+            echo "### Stable release"
             echo
-            echo "| Package | 版本 |"
+            echo "| Package | Version |"
             echo "| --- | --- |"
             node scripts/list-package-versions.mjs --table
           } >> "$GITHUB_STEP_SUMMARY"
@@ -220,7 +220,7 @@ jobs:
 
       - name: Stop here on dry run
         if: inputs.dry_run
-        run: echo "dry_run=true，到此为止。"
+        run: echo "dry_run=true — stopping here."
 
       # ── 场景 B 独有：提交版本号变更并推发版分支 ────────────────────
       - name: Commit, tag and push release branch
@@ -259,7 +259,7 @@ jobs:
         run: |
           PR_URL=$(gh pr create \
             --title "chore: release ${{ steps.branch.outputs.batch }}" \
-            --body "稳定版 \`${{ steps.branch.outputs.batch }}\`，已发布到 npm（dist-tag \`latest\`）。各 package 版本见 workflow summary。" \
+            --body "Stable release \`${{ steps.branch.outputs.batch }}\` published to npm under the \`latest\` dist-tag. Per-package versions are in the workflow summary." \
             --base "${{ inputs.branch }}" \
             --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -269,7 +269,7 @@ jobs:
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
-            echo "::warning::PR 合回 ${{ inputs.branch }} 失败，需要人工解决冲突：$PR_URL"
+            echo "::warning::Failed to merge the PR back into ${{ inputs.branch }}; conflicts need manual work: $PR_URL"
             echo "merged=false" >> "$GITHUB_OUTPUT"
           else
             echo "merged=true" >> "$GITHUB_OUTPUT"
@@ -303,19 +303,19 @@ jobs:
               # npm 已经发布成功，这里失败的只是把版本提交同步回 develop。
               git merge --abort
               {
-                echo "::warning::存在无法自动解决的冲突，需要人工同步"
+                echo "::warning::Conflicts that cannot be resolved automatically — sync by hand"
                 echo ""
-                echo "npm 已发布成功，main 也已更新，只是没能同步回 develop。"
-                echo "远端 develop 未被修改，在本地执行："
+                echo "npm publish succeeded and main is updated; only the sync back to develop failed."
+                echo "Remote develop is untouched. Run this locally:"
                 echo ""
                 echo "  git checkout develop && git pull"
                 echo "  git merge origin/main"
-                echo "  node scripts/resolve-sync-conflicts.mjs   # 版本号等确定性冲突自动解"
-                echo "  # 手工解决剩下的源码冲突后："
+                echo "  node scripts/resolve-sync-conflicts.mjs   # resolves version conflicts automatically"
+                echo "  # then resolve the remaining source conflicts by hand:"
                 echo "  git commit"
                 echo "  git push origin develop"
                 echo ""
-                echo "不同步的话，下一次转正会覆盖掉这个补丁。"
+                echo "Without this sync the next promotion will overwrite the patch."
               } >> "$GITHUB_STEP_SUMMARY"
               echo "synced=false" >> "$GITHUB_OUTPUT"
               exit 0
@@ -326,7 +326,7 @@ jobs:
           # 合并不该带走 develop 的 pre 状态。带走了说明合进来的内容有问题，
           # 推上去会让下一轮 beta 发成稳定版号。
           if [ ! -f .changeset/pre.json ]; then
-            echo "::warning::合并后 develop 丢失了 pre.json，中止推送"
+            echo "::warning::develop lost pre.json after the merge — aborting the push"
             echo "synced=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
