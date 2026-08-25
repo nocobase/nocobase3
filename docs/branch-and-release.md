@@ -1303,9 +1303,19 @@ N 个   分支上有新 changeset                -> 先 version，再 PR 合回
 ### 需要配置的 secrets
 
 ```text
-NPM_TOKEN         npm 发布令牌
+NPM_TOKEN         registry 发布令牌
 FEISHU_WEBHOOK    飞书通知（可选）
 ```
+
+包发布到自建的 Verdaccio：`https://npm.nocobase.ai`。workflow 里由 `setup-node` 的 `registry-url` 指定，它会生成 `.npmrc`：
+
+```text
+//npm.nocobase.ai/:_authToken=${NODE_AUTH_TOKEN}
+registry=https://npm.nocobase.ai/
+always-auth=true
+```
+
+`NODE_AUTH_TOKEN` 是 `setup-node` 约定的环境变量名，workflow 里从 `secrets.NPM_TOKEN` 取值。因为 `registry=` 设的是全局默认，`@nocobase` scope 会跟着走，不需要额外的 scope 配置，也不需要给 30 个 package 挨个加 `publishConfig.registry`。
 
 Git 推送用 `GITHUB_TOKEN`，它由 Actions 自动注入，不需要配置。
 
@@ -1330,21 +1340,24 @@ Git 推送用 `GITHUB_TOKEN`，它由 Actions 自动注入，不需要配置。
 }
 ```
 
-### 闭源但需要安装的 package
+### 发布到别的 registry
 
-`private: true` 表示禁止 publish，不表示发布到私有 registry。闭源但需要交付的 package 应使用：
+当前所有 package 都发到 `https://npm.nocobase.ai`，由 workflow 的 `registry-url` 统一指定，package.json 里不需要写 `registry`。
+
+个别 package 需要发到别处时，在它自己的 `publishConfig` 里覆盖：
 
 ```json
 {
-  "private": false,
   "publishConfig": {
-    "registry": "https://pkg.nocobase.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   }
 }
 ```
 
-公共 npm 和私有 registry 使用不同的 GitHub Environment 和凭据。Changesets 统一计算版本，publish workflow 按 registry 分 job 执行。
+`publishConfig.registry` 优先级高于 `.npmrc` 里的默认值。但要注意**认证是按 registry host 配的**——`setup-node` 只为 `registry-url` 那一个 host 写了 `_authToken`，发到别的 host 需要额外准备凭据。
+
+顺带澄清一个容易混的点：`private: true` 表示禁止 publish，不表示「发布到私有 registry」。要发布就必须是 `private: false`，发到哪里由 `registry` 决定。
 
 ### 不发布的内部 package
 
@@ -1454,7 +1467,7 @@ npm 不允许覆盖已发布版本。处理方式：
 
 **待办**——只能人工做，做完才能真正发版：
 
-- 配置 secrets：`NPM_TOKEN`；`FEISHU_WEBHOOK` 可选，不配则通知步骤失败但不影响发版。
+- 配置 secrets：`NPM_TOKEN`（Verdaccio 的发布令牌）；`FEISHU_WEBHOOK` 可选，不配则通知步骤失败但不影响发版。
 
 **已完成**：
 
