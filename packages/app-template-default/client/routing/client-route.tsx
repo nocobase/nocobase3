@@ -1,4 +1,4 @@
-import { Button, Loading } from '@nocobase/app-client/ui';
+import { Button, Loading } from '@nocobase/ui';
 import type {
   AppClientRegisteredRoute,
   AppClientRouteComponentModule,

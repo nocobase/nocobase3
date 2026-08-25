@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -106,8 +106,18 @@ export async function inspectAppClient({
     ...pluginContributions,
   ];
   const resolved = resolveAppClientContributions(contributions);
-  const routeComponentOverrides =
-    await loadApplicationRouteComponentOverrides(appRoot);
+  const [declaredRouteComponentOverrides, sourceExtensions] = await Promise.all(
+    [
+      loadApplicationRouteComponentOverrides(appRoot),
+      loadApplicationSourceExtensions(appRoot),
+    ],
+  );
+  const routeComponentOverrides = [
+    ...declaredRouteComponentOverrides,
+    ...sourceExtensions.flatMap(
+      (extension) => extension.routeComponentOverrides ?? [],
+    ),
+  ];
   const finalRoutes = applyClientRouteComponentOverrides(
     resolved.routes,
     routeComponentOverrides,
@@ -225,6 +235,40 @@ async function loadApplicationRouteComponentOverrides(appRoot) {
       { cause: error },
     );
   }
+}
+
+async function loadApplicationSourceExtensions(appRoot) {
+  const extensionsRoot = path.join(appRoot, 'client/extensions');
+  if (!existsSync(extensionsRoot) || !statSync(extensionsRoot).isDirectory()) {
+    return [];
+  }
+  const entries = readdirSync(extensionsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .flatMap((entry) =>
+      ['ts', 'js']
+        .map((extension) =>
+          path.join(extensionsRoot, entry.name, `extension.${extension}`),
+        )
+        .filter((candidate) => existsSync(candidate)),
+    );
+  const extensions = [];
+  for (const entry of entries) {
+    try {
+      const module = await import(pathToFileURL(entry).href);
+      if (!module.default || typeof module.default !== 'object') {
+        throw new Error('the default export must be a source extension');
+      }
+      extensions.push(module.default);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Failed to inspect application source extension ${path.relative(appRoot, entry)}: ${reason}`,
+        { cause: error },
+      );
+    }
+  }
+  return extensions;
 }
 
 async function findApplicationEntry(appRoot, contribution) {

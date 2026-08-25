@@ -116,12 +116,14 @@ provider 会合并并缓存并发的 session 查询。login、register、logout 
 
 `bootstrap` 注册 Refine `authProvider`；`routes` 使用 `defineClientRoutes()` 声明
 四个 `auth: 'guest'` 的认证路由。每个页面通过 `componentLoader` 独立按需加载，
-不会进入初始客户端 bundle。页面只依赖 `@nocobase/app-client/ui`、Refine 和语义化
-主题 class，因此能跟随宿主应用主题。
+不会进入初始客户端 bundle。插件 fallback 表单只依赖 `@nocobase/ui`、Refine 和
+语义化主题 class，因此即使未安装 Registry 也能独立工作。它们不属于插件公共 UI API。
 
-默认页面使用响应式双栏布局：左侧放置品牌、标题和认证表单，桌面端右侧展示平台
-说明，窄屏时隐藏说明区域并让表单占满页面。品牌标记、说明面板和图标都由插件自身
-提供，不引用宿主应用的组件 alias、公开资源或 `client-old` 目录。
+插件默认页面只提供最小 fallback 布局，不包含应用品牌或营销区域。应用安装
+`auth-ui` Registry 后，最终页面和四个密码表单都来自应用拥有的源码。完全自定义表单可从
+`client/actions` 使用稳定的 `usePasswordLogin()`、`usePasswordRegistration()`、
+`usePasswordResetRequest()` 和 `usePasswordReset()`，并自行组合 shadcn 组件。
 
-需要品牌化时，应由应用或扩展插件提供明确的替换机制，不再维护一份与运行时页面
-重复的可复制 UI registry。
+品牌、布局和最终页面组合由应用安装的 shadcn Registry 源码负责。Registry 只按稳定
+route ID 替换 `componentLoader`，不重新声明插件路由；复制到应用后的源码允许用户修改，
+升级时按三方合并处理。

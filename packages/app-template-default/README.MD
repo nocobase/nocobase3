@@ -114,14 +114,18 @@ and Provider source/layer/order.
 redirects, and the guest routes `/login`, `/register`, `/forgot-password`, and
 `/reset-password`. It also provides default fallback pages.
 
-The Default App customizes only those routes' lazy page components in
-`client/auth/`. It imports forms and links from the stable
-`@nocobase/app-plugin-authentication/client/ui` subpath. It does not duplicate
-guest routes or call Better Auth endpoints directly from page components.
+The Default App customizes only those routes' lazy page components in the
+installed `client/extensions/nocobase-auth-ui/` Registry source. `AuthLink` is
+imported from the stable `@nocobase/app-plugin-authentication/client/ui`
+subpath; the final password forms are application-owned Registry source and
+call the plugin's stable `client/actions` hooks. It does not duplicate guest
+routes or call Better Auth endpoints directly from page components.
 
-See [client/auth/README.md](client/auth/README.md) for the task-oriented edit
-map. Password reset still requires deployment-side configuration of Better
-Auth's `emailAndPassword.sendResetPassword` callback and a real mail transport.
+See
+[client/extensions/nocobase-auth-ui/README.md](client/extensions/nocobase-auth-ui/README.md)
+for the task-oriented edit map. Password reset still requires deployment-side
+configuration of Better Auth's `emailAndPassword.sendResetPassword` callback
+and a real mail transport.
 
 ## Theme
 

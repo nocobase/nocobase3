@@ -236,6 +236,37 @@ describe('app client runtime', () => {
     });
   });
 
+  it('applies route overrides contributed by source extensions', async () => {
+    const PluginLoginPage: ComponentType = () => null;
+    const RegistryLoginPage: ComponentType = () => null;
+    const runtime = await createAppRuntime({
+      plugins: [
+        createAuthPlugin(
+          '@nocobase/app-plugin-authentication',
+          PluginLoginPage,
+        ),
+      ],
+      sourceExtensions: [
+        {
+          name: 'authentication-ui',
+          routeComponentOverrides: [
+            {
+              routeId: '@nocobase/app-plugin-authentication:login',
+              componentLoader: async () => ({ default: RegistryLoginPage }),
+            },
+          ],
+        },
+      ],
+    });
+
+    const loginRoute = runtime.routes.find(
+      (route) => route.id === '@nocobase/app-plugin-authentication:login',
+    );
+    await expect(loginRoute?.componentLoader()).resolves.toEqual({
+      default: RegistryLoginPage,
+    });
+  });
+
   it('rejects invalid routes module exports', async () => {
     const plugin: AppClientPluginLoader = {
       packageName: '@nocobase/app-plugin-routes',

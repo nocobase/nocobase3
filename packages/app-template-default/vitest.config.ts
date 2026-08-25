@@ -8,6 +8,12 @@ export default createReactVitestConfig({
   resolve: {
     alias: [
       {
+        find: /^@nocobase\/ui$/,
+        replacement: fileURLToPath(
+          new URL('./client/nocobase-ui/index.ts', import.meta.url),
+        ),
+      },
+      {
         find: '@/jobs',
         replacement: fileURLToPath(new URL('./server/jobs', import.meta.url)),
       },

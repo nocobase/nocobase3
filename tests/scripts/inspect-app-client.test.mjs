@@ -130,7 +130,10 @@ test('inspects configured client routes and providers', async () => {
   assert.match(output, /auth: guest/u);
   assert.match(output, /route source: plugin/u);
   assert.match(output, /component source: application/u);
-  assert.match(output, /client\/auth\/pages\/login-page/u);
+  assert.match(
+    output,
+    /client\/extensions\/nocobase-auth-ui\/pages\/login-page/u,
+  );
   assert.match(output, /Providers \(outer -> inner\)/u);
   assert.match(output, /layer: root/u);
 
@@ -182,10 +185,10 @@ test('inspects configured client routes and providers', async () => {
         routeSource,
       })),
     [
-      './client/auth/pages/login-page',
-      './client/auth/pages/register-page',
-      './client/auth/pages/forgot-password-page',
-      './client/auth/pages/reset-password-page',
+      './client/extensions/nocobase-auth-ui/pages/login-page',
+      './client/extensions/nocobase-auth-ui/pages/register-page',
+      './client/extensions/nocobase-auth-ui/pages/forgot-password-page',
+      './client/extensions/nocobase-auth-ui/pages/reset-password-page',
     ].map((componentEntry) => ({
       componentEntry,
       componentSource: 'application',

@@ -10,6 +10,7 @@ import {
   type AppClientRegisteredRoute,
   type AppClientRouteDefinition,
   type AppClientRouteComponentOverrideDefinition,
+  type AppClientSourceExtension,
 } from '@nocobase/app-client/plugins';
 import type { AppClientRefineConfig } from '@nocobase/app-client';
 import { createAppClient, type AppClient } from '@nocobase/app-sdk';
@@ -34,6 +35,7 @@ export interface CreateAppRuntimeOptions {
   readonly application: AppClientApplicationLoader;
   readonly plugins: readonly AppClientPluginLoader[];
   readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
+  readonly sourceExtensions?: readonly AppClientSourceExtension[];
 }
 
 interface LoadedClientContribution {
@@ -88,10 +90,13 @@ export async function createAppRuntime(
   }
 
   const contributions = resolveAppClientContributions(loadedContributions);
-  const routes = applyClientRouteComponentOverrides(
-    contributions.routes,
-    options.routeComponentOverrides ?? [],
+  const extensionOverrides = collectSourceExtensionRouteOverrides(
+    options.sourceExtensions ?? [],
   );
+  const routes = applyClientRouteComponentOverrides(contributions.routes, [
+    ...(options.routeComponentOverrides ?? []),
+    ...extensionOverrides,
+  ]);
   if (
     !routes.some(
       (route) =>
@@ -112,6 +117,27 @@ export async function createAppRuntime(
     }),
     providers: contributions.providers,
     routes,
+  });
+}
+
+function collectSourceExtensionRouteOverrides(
+  extensions: readonly AppClientSourceExtension[],
+): readonly AppClientRouteComponentOverrideDefinition[] {
+  const names = new Set<string>();
+  return extensions.flatMap((extension) => {
+    const name = extension.name.trim();
+    if (!name) {
+      throw new Error(
+        'A client source extension must define a non-empty name.',
+      );
+    }
+    if (names.has(name)) {
+      throw new Error(
+        `Client source extension "${name}" is registered more than once.`,
+      );
+    }
+    names.add(name);
+    return extension.routeComponentOverrides ?? [];
   });
 }
 
