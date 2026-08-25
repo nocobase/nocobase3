@@ -12,6 +12,7 @@
     "dev-config:build": "pnpm --filter @nocobase/dev-config build",
     "prelint": "pnpm dev-config:build",
     "build": "pnpm -r --if-present build",
+    "changeset": "changeset",
     "lint": "pnpm -r --if-present lint",
     "prelint:fix": "pnpm dev-config:build",
     "lint:fix": "pnpm -r --if-present lint:fix",
@@ -47,6 +48,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",
+    "@changesets/cli": "^3.0.1",
     "@nocobase/dev-config": "workspace:*",
     "eslint": "catalog:",
     "husky": "catalog:",

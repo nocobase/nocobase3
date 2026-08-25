@@ -1,0 +1,48 @@
+name: Guard Main
+
+# main 上永远不允许出现 .changeset/pre.json 或 .changeset/pre/。
+#
+# 它们一旦进入 main，之后所有从 main 发出的版本都会变成预发布版本，
+# 而且不容易被发现——这是整套流程唯一的致命失误点，必须阻塞。
+#
+# 唯一合法的例外是 merge-beta-to-stable.yml 产生的转正合并：那次合并里
+# pre.json 已经被 changeset version 删掉了，所以这条检查依然成立。
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Reject prerelease state
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for prerelease state files
+        run: |
+          FOUND=""
+          [ -f .changeset/pre.json ] && FOUND="$FOUND .changeset/pre.json"
+          if [ -d .changeset/pre ] && [ -n "$(ls -A .changeset/pre 2>/dev/null)" ]; then
+            FOUND="$FOUND .changeset/pre/"
+          fi
+          if [ -n "$FOUND" ]; then
+            echo "::error::main 上不允许存在预发布状态文件：$FOUND"
+            echo "如果这是一次转正合并，说明 changeset version 没有跑，或者跑之前就合了。"
+            exit 1
+          fi
+          echo "未发现预发布状态文件"
+
+      - name: Check for prerelease versions
+        run: |
+          LEFT=$(node scripts/list-package-versions.mjs --prerelease)
+          if [ -n "$LEFT" ]; then
+            echo "::error::main 上不允许预发布版本号：$LEFT"
+            exit 1
+          fi
+          echo "未发现预发布版本号"

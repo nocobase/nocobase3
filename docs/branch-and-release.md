@@ -62,6 +62,7 @@ git add .changeset && git commit -m "chore: add changeset"
 
 生成的文件长这样：
 
+<!-- prettier-ignore -->
 ```md
 ---
 "@nocobase/core": minor
@@ -659,6 +660,7 @@ pnpm changeset
 
 交互式选择受影响 package、SemVer 级别和变更说明，生成 `.changeset/<random-name>.md`：
 
+<!-- prettier-ignore -->
 ```md
 ---
 "@nocobase/portal-sdk": minor
@@ -755,6 +757,7 @@ CI 不应根据 diff 自动猜测 bump 级别。它可以发现「缺少 changes
 
 同一份 changeset 可以给不同 package 指定不同 bump：
 
+<!-- prettier-ignore -->
 ```md
 ---
 "@nocobase/app-template-default": major

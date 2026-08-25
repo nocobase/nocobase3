@@ -1,0 +1,65 @@
+name: Changeset Check
+
+# 两层检查，严格程度不同：
+#   validation —— 已提交的 changeset 本身有错（非法 YAML、未知包名、非法 bump）
+#                 时阻止合并。这类问题机器能确定判断。
+#   advisory   —— 改了可发布代码却没写 changeset 时提醒，但始终以成功退出。
+#                 patch/minor/major 的取舍需要人判断，CI 猜不了。
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    name: Validate and advise
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 长期分支不允许携带预发布状态，见 reusable-merge 里的同名检查
+      - name: Guard against prerelease state
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f .changeset/pre.json || -d .changeset/pre ]]; then
+            echo "::error::PR 中出现 .changeset/pre.json 或 .changeset/pre/，预发布状态只能存在于 release line"
+            exit 1
+          fi
+
+      - name: Validate changeset files
+        shell: bash
+        run: node scripts/validate-changesets.mjs
+
+      - name: Advise on missing changesets
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SKIP_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'release:skip') }}
+        run: node scripts/advise-changesets.mjs
