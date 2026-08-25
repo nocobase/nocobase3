@@ -10,6 +10,11 @@ name: Release Beta
 #
 # 首次需要有人在本地跑一次 `changeset pre enter beta` 并提交；
 # 之后每一轮发版都由这个 workflow 完成，转正后 CI 会自动重新进入 pre 模式。
+#
+# 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
+# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
+# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
 
 on:
   workflow_dispatch:
@@ -32,14 +37,13 @@ jobs:
     name: Publish beta
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: ${{ inputs.dry_run && 'dry-run' || 'npm-publish' }}
     steps:
       - name: Check out develop
         uses: actions/checkout@v4
         with:
           ref: develop
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -198,7 +202,7 @@ jobs:
         if: '!inputs.dry_run'
         id: merge
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
             --title "chore: release ${{ steps.branch.outputs.batch }}" \

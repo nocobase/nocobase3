@@ -1303,13 +1303,13 @@ N 个   分支上有新 changeset                -> 先 version，再 PR 合回
 ### 需要配置的 secrets
 
 ```text
-RELEASE_TOKEN     能推 main 和 develop 的 PAT
-                  GITHUB_TOKEN 推受保护分支会被拒
 NPM_TOKEN         npm 发布令牌
 FEISHU_WEBHOOK    飞书通知（可选）
 ```
 
-发布凭据放在受保护的 GitHub Environment 中，建议开人工 approve。
+Git 推送用 `GITHUB_TOKEN`，它由 Actions 自动注入，不需要配置。
+
+**这依赖于仓库当前没有分支保护。** 加上分支保护后 `GITHUB_TOKEN` 会被拒，需要换成能绕过保护的 PAT。另一个已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的设计）——对本流程无影响，同步过去的内容已经在发版时 build + test 过。
 
 首次使用需要有人在本地跑一次 `changeset pre enter beta` 并提交，之后由 workflow 接管。
 
@@ -1450,14 +1450,19 @@ npm 不允许覆盖已发布版本。处理方式：
 
 > 早期版本的文档记录过一条前置阻塞：`private: false` 的 package 通过 `dependencies` 依赖 `private: true` 的 package 时，Changesets 会直接报错退出。当前仓库 30 个 package 全部是可发布的，这条阻塞已不存在。新增 private package 时需要重新检查，见「private 与可发布 package 不能混在同一条运行时依赖链上」。
 
-### 阶段二：仓库配置（待办）
+### 阶段二：仓库配置
 
-这些只能人工做，做完才能真正发版：
+**待办**——只能人工做，做完才能真正发版：
 
-1. 为 `main` 和 `develop` 配置分支保护。
-2. 配置 secrets：`RELEASE_TOKEN`（能推受保护分支的 PAT）、`NPM_TOKEN`、`FEISHU_WEBHOOK`。
-3. 建立 `npm-publish` 和 `dry-run` 两个 GitHub Environment，前者开人工 approve。
-4. 在 `develop` 上执行一次 `pnpm changeset pre enter beta` 并提交——这是唯一需要人工执行的 changeset 命令，之后由 CI 维持。
+- 配置 secrets：`NPM_TOKEN`；`FEISHU_WEBHOOK` 可选，不配则通知步骤失败但不影响发版。
+
+**已完成**：
+
+- `develop` 已进入 pre 模式（`.changeset/pre.json`）。这是唯一需要人工执行的 changeset 命令，之后每轮转正由 `merge-beta-to-stable.yml` 自动重新进入。
+
+**暂缓**：
+
+- 分支保护。当前用自动注入的 `GITHUB_TOKEN` 推送，加上保护后会被拒，届时需要换成 PAT。
 
 ### 阶段三：启用 develop 预览版
 

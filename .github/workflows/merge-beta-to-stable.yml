@@ -13,6 +13,11 @@ name: Merge Beta to Stable
 # 延后发布是安全的：changeset publish 读的是 package.json 的版本号，
 # 逐个查 registry 有没有 name@version，与 changeset 是否还在无关
 # （源码 getUnpublishedPackages）。所以合并完成后随时可以发。
+#
+# 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
+# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
+# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
 
 on:
   workflow_dispatch:
@@ -41,7 +46,7 @@ jobs:
         with:
           ref: develop
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -171,7 +176,7 @@ jobs:
         if: '!inputs.dry_run'
         id: merge_main
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
             --title "chore: release ${{ steps.branch.outputs.batch }}" \
@@ -197,7 +202,7 @@ jobs:
         if: "!inputs.dry_run && steps.merge_main.outputs.merged == 'true'"
         id: merge_develop
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git fetch origin develop
           SYNC="chore/sync-${{ steps.branch.outputs.batch }}"

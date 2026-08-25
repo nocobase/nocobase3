@@ -14,6 +14,11 @@ name: Release Stable
 # 关于 dist-tag：它只影响 `npm install <pkg>` 不写版本号的人。写了
 # `^1.3.0` 这类 range 的用户按 semver 从版本列表解析，不看 dist-tag。
 # 所以给旧版本发补丁时，唯一要做的就是别让 latest 指针倒退。
+#
+# 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
+# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
+# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
 
 on:
   workflow_dispatch:
@@ -44,14 +49,13 @@ jobs:
     name: Publish from main
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: ${{ inputs.dry_run && 'dry-run' || 'npm-publish' }}
     steps:
       - name: Check out the release branch
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -243,7 +247,7 @@ jobs:
         if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
         id: merge
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
             --title "chore: release ${{ steps.branch.outputs.batch }}" \
