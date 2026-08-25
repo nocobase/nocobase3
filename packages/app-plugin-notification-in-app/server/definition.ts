@@ -6,8 +6,6 @@ import type {
   NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
 import { createInAppStore, type InAppStore } from './store.js';
-import { createInAppRouter } from './router.js';
-import type { InAppUserIdResolver } from './router.js';
 import type { InAppMessage, InAppRecipient } from './types.js';
 
 const stores = new WeakMap<object, InAppStore>();
@@ -30,29 +28,21 @@ export interface PreparedInAppMessage {
   readonly content: InAppMessage;
 }
 
-export interface CreateInAppChannelDefinitionOptions {
-  readonly resolveUserId?: InAppUserIdResolver;
-}
-
 export function defineInAppChannelConfig(
   input: Omit<InAppChannelConfig, 'type'>,
 ): InAppChannelConfig {
   return { type: 'in-app', ...input };
 }
 
-export function createInAppChannelDefinition(
-  options: CreateInAppChannelDefinitionOptions = {},
-): NotificationChannelDefinition<
+export function createInAppChannelDefinition(): NotificationChannelDefinition<
   InAppChannelConfig,
   InAppRecipient,
   InAppMessage,
   PreparedInAppMessage
 > {
-  let store: InAppStore | undefined;
   return {
     type: 'in-app',
-    async createChannel(context) {
-      store ??= resolveInAppStore(context);
+    async createChannel() {
       return {
         type: 'in-app',
         resolveRecipient(
@@ -89,22 +79,18 @@ export function createInAppChannelDefinition(
             content: input.message,
           };
         },
-        mount(router): void {
-          router.route('/in-app', createInAppRouter(store!, options));
-        },
       };
     },
   };
 }
 
-export function createDatabaseProviderDefinition(): NotificationProviderDefinition<
-  InAppProviderConfig,
-  PreparedInAppMessage
-> {
+export function createDatabaseProviderDefinition(
+  options: { readonly store?: InAppStore } = {},
+): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
     async createProvider(context, config) {
-      const store = resolveInAppStore(context);
+      const store = options.store ?? resolveInAppStore(context);
       return {
         name: config.name,
         type: 'database',

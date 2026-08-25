@@ -234,7 +234,6 @@ describe('app server', () => {
       'runtime',
       'app-deps',
       'realtime-service',
-      'app-services',
       'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
     ]);
 

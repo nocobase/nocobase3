@@ -233,8 +233,6 @@ describe('NotificationManager registration', () => {
           },
         });
     }
-    await manager.start();
-
     const result = await manager.send({
       to: [
         { type: 'user', id: 'user-1' },
@@ -508,7 +506,7 @@ describe('NotificationManager registration', () => {
     expect(close).toHaveBeenCalledOnce();
     await expect(
       manager.send({ to: [], channels: [], content: { body: '' } }),
-    ).rejects.toThrow('must complete before send');
+    ).rejects.toThrow('At least one notification recipient is required.');
 
     await manager.start();
     await manager.close();

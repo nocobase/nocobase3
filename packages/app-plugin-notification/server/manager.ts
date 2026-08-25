@@ -39,10 +39,10 @@ export class NotificationManager<
   private readonly channelManager: ChannelManager;
 
   private readonly queueJob: DeliveryJobClass;
+  private readonly runtimePromises = new Map<string, Promise<void>>();
+  private activated = false;
   private started = false;
   private startPromise?: Promise<void>;
-  private queueJobRegistered = false;
-  private routesMounted = false;
   private reconcileTimer?: ReturnType<typeof setInterval>;
 
   constructor(private readonly options: NotificationManagerOptions<TChannels>) {
@@ -57,8 +57,17 @@ export class NotificationManager<
       leaseMs: options.leaseMs,
       providerTimeoutMs: options.providerTimeoutMs,
       retry: options.retry,
+      resolveRuntime: async (type): Promise<void> => this.ensureRuntime(type),
     });
     this.queueJob = createDeliveryJob(this.channelManager);
+  }
+
+  activate(): void {
+    if (!this.activated) {
+      this.options.queue.registerJob(this.queueJob);
+      this.activated = true;
+      this.startReconciler();
+    }
   }
 
   async start(): Promise<void> {
@@ -74,7 +83,6 @@ export class NotificationManager<
   }
 
   private async startInternal(): Promise<void> {
-    const pendingProviders: import('./types.js').NotificationProvider[] = [];
     const enabledConfigs = this.options.config.channels.filter(
       (config) => config.enabled,
     );
@@ -86,104 +94,26 @@ export class NotificationManager<
       'Starting Notification Manager.',
     );
     try {
-      let providerCount = 0;
-      const channels: import('./types.js').NotificationChannel[] = [];
-      for (const config of this.options.config.channels) {
-        if (!config.enabled) continue;
-        const definition = this.registry.channel(config.type);
-        if (!definition)
-          throw new Error(
-            `Notification Channel definition "${config.type}" is not registered.`,
-          );
-        const context = {
-          database: this.options.database,
-          logger: this.options.logger,
-          queue: this.options.queue,
-          store: this.store,
-        };
-        const channel = await definition.createChannel(context, config);
-        const providerTypes = new Set<string>();
-        const providers = [];
-        for (const providerConfig of config.providers) {
-          if (providerConfig.enabled === false) continue;
-          if (providerTypes.has(providerConfig.name))
-            throw new Error(
-              `Provider name "${providerConfig.name}" is duplicated in Channel "${config.type}".`,
-            );
-          providerTypes.add(providerConfig.name);
-          const providerDefinition = this.registry.provider(
-            config.type,
-            providerConfig.type,
-          );
-          if (!providerDefinition)
-            throw new Error(
-              `Provider definition "${providerConfig.type}" is not registered for Channel "${config.type}".`,
-            );
-          const provider = await providerDefinition.createProvider(
-            context,
-            providerConfig,
-          );
-          pendingProviders.push(provider);
-          if (provider.name !== providerConfig.name)
-            throw new Error(
-              `Provider Runtime name "${provider.name}" must match configured name "${providerConfig.name}" in Channel "${config.type}".`,
-            );
-          if (provider.type !== providerConfig.type)
-            throw new Error(
-              `Provider Runtime type "${provider.type}" must match configured type "${providerConfig.type}" for Provider "${providerConfig.name}" in Channel "${config.type}".`,
-            );
-          providers.push(provider);
-        }
-        if (providers.length === 0)
-          throw new Error(
-            `Enabled Channel "${config.type}" requires at least one enabled Provider.`,
-          );
-        this.channelManager.register(config.type, { channel, providers });
-        pendingProviders.length = 0;
-        channels.push(channel);
-        providerCount += providers.length;
-        this.options.logger.debug(
-          {
-            event: 'notification.channel.started',
-            channel: config.type,
-            providers: providers.map((provider) => ({
-              name: provider.name,
-              type: provider.type,
-            })),
-          },
-          'Notification Channel started.',
-        );
-      }
-      const channelRouter = new Hono();
-      if (!this.routesMounted) {
-        for (const channel of channels) channel.mount?.(channelRouter);
-      }
-      if (!this.queueJobRegistered) {
-        this.options.queue.registerJob(this.queueJob);
-        this.queueJobRegistered = true;
-      }
-      const interval = this.options.reconcileIntervalMs ?? 30_000;
+      this.activate();
+      await Promise.all(
+        enabledConfigs.map(async (config): Promise<void> =>
+          this.ensureRuntime(config.type),
+        ),
+      );
       await this.reconcile();
-      if (!this.routesMounted) {
-        this.router.route('/', channelRouter);
-        this.routesMounted = true;
-      }
       this.started = true;
-      this.reconcileTimer = setInterval((): void => {
-        void this.reconcile().catch((error: unknown) => {
-          this.options.logger.error(
-            { event: 'notification.reconcile_failed', err: error },
-            'Notification reconciliation failed.',
-          );
-        });
-      }, interval);
-      this.reconcileTimer.unref?.();
       this.options.logger.info(
         {
           event: 'notification.manager.started',
           channelCount: enabledConfigs.length,
-          providerCount,
-          reconcileIntervalMs: interval,
+          providerCount: enabledConfigs.reduce(
+            (count, config) =>
+              count +
+              config.providers.filter((provider) => provider.enabled !== false)
+                .length,
+            0,
+          ),
+          reconcileIntervalMs: this.options.reconcileIntervalMs ?? 30_000,
         },
         'Notification Manager started.',
       );
@@ -191,14 +121,9 @@ export class NotificationManager<
       if (this.reconcileTimer) clearInterval(this.reconcileTimer);
       this.reconcileTimer = undefined;
       this.started = false;
-      for (const provider of pendingProviders.reverse()) {
-        try {
-          await provider.close?.();
-        } catch {
-          // Preserve the startup error; registered Providers are logged by close().
-        }
-      }
       await this.channelManager.close();
+      this.runtimePromises.clear();
+      this.activated = false;
       this.options.logger.error(
         { event: 'notification.manager.start_failed', err: error },
         'Failed to start Notification Manager.',
@@ -210,10 +135,7 @@ export class NotificationManager<
   async send(
     input: NotificationSendInput<TChannels>,
   ): Promise<NotificationSendResult> {
-    if (!this.started)
-      throw new Error(
-        'NotificationManager.start() must complete before send().',
-      );
+    this.activate();
     const recipients: readonly NotificationRecipient[] =
       'type' in input.to ? [input.to] : input.to;
     if (recipients.length === 0)
@@ -221,6 +143,11 @@ export class NotificationManager<
     const channels = [...new Set(input.channels)];
     if (channels.length === 0)
       throw new Error('At least one notification Channel is required.');
+    await Promise.all(
+      channels.map(async (channel): Promise<void> =>
+        this.ensureRuntime(channel),
+      ),
+    );
 
     const message: Record<string, object> = {};
     for (const channel of channels) {
@@ -271,10 +198,6 @@ export class NotificationManager<
     }[];
     readonly message: Readonly<Record<string, object | undefined>>;
   }): Promise<NotificationSendResult> {
-    if (!this.started)
-      throw new Error(
-        'NotificationManager.start() must complete before send().',
-      );
     if (input.recipients.length === 0)
       throw new Error('At least one notification recipient is required.');
     const now = await this.store.now();
@@ -356,12 +279,14 @@ export class NotificationManager<
 
   async close(): Promise<void> {
     await this.startPromise?.catch(() => undefined);
-    const wasStarted = this.started;
+    const wasActive = this.activated;
     if (this.reconcileTimer) clearInterval(this.reconcileTimer);
     this.reconcileTimer = undefined;
     await this.channelManager.close();
+    this.runtimePromises.clear();
+    this.activated = false;
     this.started = false;
-    if (wasStarted) {
+    if (wasActive) {
       this.options.logger.info(
         { event: 'notification.manager.closed' },
         'Notification Manager closed.',
@@ -405,6 +330,111 @@ export class NotificationManager<
         },
         'Notification deliveries reconciled.',
       );
+    }
+  }
+
+  private startReconciler(): void {
+    const interval = this.options.reconcileIntervalMs ?? 30_000;
+    this.reconcileTimer = setInterval((): void => {
+      void this.reconcile().catch((error: unknown) => {
+        this.options.logger.error(
+          { event: 'notification.reconcile_failed', err: error },
+          'Notification reconciliation failed.',
+        );
+      });
+    }, interval);
+    this.reconcileTimer.unref?.();
+  }
+
+  private ensureRuntime(type: string): Promise<void> {
+    if (this.channelManager.has(type)) return Promise.resolve();
+    const existing = this.runtimePromises.get(type);
+    if (existing) return existing;
+    const operation = this.createRuntime(type);
+    this.runtimePromises.set(type, operation);
+    void operation.catch(() => {
+      if (this.runtimePromises.get(type) === operation) {
+        this.runtimePromises.delete(type);
+      }
+    });
+    return operation;
+  }
+
+  private async createRuntime(type: string): Promise<void> {
+    const config = this.options.config.channels.find(
+      (candidate) => candidate.type === type,
+    );
+    if (!config?.enabled)
+      throw new Error(`Notification Channel "${type}" is not enabled.`);
+    const definition = this.registry.channel(type);
+    if (!definition)
+      throw new Error(
+        `Notification Channel definition "${type}" is not registered.`,
+      );
+    const context = {
+      database: this.options.database,
+      logger: this.options.logger,
+      queue: this.options.queue,
+      store: this.store,
+    };
+    const channel = await definition.createChannel(context, config);
+    const providers: import('./types.js').NotificationProvider[] = [];
+    try {
+      const providerNames = new Set<string>();
+      for (const providerConfig of config.providers) {
+        if (providerConfig.enabled === false) continue;
+        if (providerNames.has(providerConfig.name))
+          throw new Error(
+            `Provider name "${providerConfig.name}" is duplicated in Channel "${type}".`,
+          );
+        providerNames.add(providerConfig.name);
+        const providerDefinition = this.registry.provider(
+          type,
+          providerConfig.type,
+        );
+        if (!providerDefinition)
+          throw new Error(
+            `Provider definition "${providerConfig.type}" is not registered for Channel "${type}".`,
+          );
+        const provider = await providerDefinition.createProvider(
+          context,
+          providerConfig,
+        );
+        providers.push(provider);
+        if (provider.name !== providerConfig.name)
+          throw new Error(
+            `Provider Runtime name "${provider.name}" must match configured name "${providerConfig.name}" in Channel "${type}".`,
+          );
+        if (provider.type !== providerConfig.type)
+          throw new Error(
+            `Provider Runtime type "${provider.type}" must match configured type "${providerConfig.type}" for Provider "${providerConfig.name}" in Channel "${type}".`,
+          );
+      }
+      if (providers.length === 0)
+        throw new Error(
+          `Enabled Channel "${type}" requires at least one enabled Provider.`,
+        );
+      this.channelManager.register(type, { channel, providers });
+      this.options.logger.debug(
+        {
+          event: 'notification.channel.started',
+          channel: type,
+          providers: providers.map((provider) => ({
+            name: provider.name,
+            type: provider.type,
+          })),
+        },
+        'Notification Channel started.',
+      );
+    } catch (error) {
+      for (const provider of providers.reverse()) {
+        try {
+          await provider.close?.();
+        } catch {
+          // Preserve the Runtime creation error.
+        }
+      }
+      throw error;
     }
   }
 }

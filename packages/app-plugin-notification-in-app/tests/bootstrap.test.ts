@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 
+import { notificationPluginServiceToken } from '@nocobase/app-plugin-notification';
 import bootstrap from '../server/bootstrap.js';
 
 describe('in-app notification plugin bootstrap', () => {
   it('registers its Channel and database Provider', () => {
     const registry = {
-      router: new Hono(),
-      send: vi.fn(),
       registerChannel: vi.fn(function () {
         return registry;
       }),
@@ -15,15 +14,24 @@ describe('in-app notification plugin bootstrap', () => {
         return registry;
       }),
     };
+    const manager = { registry, router: new Hono(), send: vi.fn() };
 
+    const pluginServices = {
+      get: vi.fn(() => ({ manager })),
+      onAvailable: vi.fn((_, consume) => consume({ manager })),
+    };
     bootstrap({
       deps: {
         resolveRequestUserId: vi.fn(),
       },
-      services: {
-        notification: registry,
-        notificationRegistry: registry,
+      pluginServices,
+      runtime: {
+        config: {
+          database: {},
+          notification: { enabled: true, channels: [] },
+        },
       },
+      services: {},
       lifecycle: { registerDisposer: vi.fn() },
     });
 
@@ -34,7 +42,11 @@ describe('in-app notification plugin bootstrap', () => {
       'in-app',
       expect.objectContaining({ type: 'database' }),
     );
-    expect(registry.router.routes).toEqual(
+    expect(pluginServices.onAvailable).toHaveBeenCalledWith(
+      notificationPluginServiceToken,
+      expect.any(Function),
+    );
+    expect(manager.router.routes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ method: 'POST', path: '/test/in-app' }),
       ]),
@@ -46,6 +58,13 @@ describe('in-app notification plugin bootstrap', () => {
       bootstrap({
         deps: {
           resolveRequestUserId: vi.fn(),
+        },
+        pluginServices: { get: vi.fn(() => undefined), onAvailable: vi.fn() },
+        runtime: {
+          config: {
+            database: {},
+            notification: { enabled: false, channels: [] },
+          },
         },
         services: {},
         lifecycle: { registerDisposer: vi.fn() },

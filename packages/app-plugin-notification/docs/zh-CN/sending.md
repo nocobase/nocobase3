@@ -110,7 +110,7 @@ const details = await notification.logs.get(result.notificationId);
 
 以下情况会直接抛出错误：
 
-- Notification Manager 尚未完成启动
+- 配置的 Channel 或 Provider Definition 尚未由插件注册
 - `to` 为空
 - 没有任何 Channel
 - 使用了未启用的 Channel

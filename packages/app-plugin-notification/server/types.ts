@@ -1,8 +1,6 @@
 import type { DatabaseManager } from '@nocobase/app-database';
 import type { Logger } from '@nocobase/logging';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
-import type { Hono } from 'hono';
-
 import type { NotificationStore } from './store.js';
 import type { NotificationRegistry } from './registry.js';
 
@@ -134,7 +132,6 @@ export interface NotificationChannel<
     readonly message: TMessage;
     readonly signal: AbortSignal;
   }): Promise<TPrepared>;
-  mount?(router: Hono): void;
 }
 
 export interface NotificationProviderContext {

@@ -9,6 +9,7 @@ import {
   resolveNocoBaseApiUrl,
 } from '@nocobase/app-server-kit/proxy';
 import { registerSpaRoutes } from '@nocobase/app-server-kit/spa';
+import { createAppPluginServiceRegistry } from '@nocobase/app-server-kit/plugins';
 import {
   normalizeBasePath,
   resolveAppName,
@@ -64,15 +65,14 @@ export function createApp(
     onceAsync(() => realtime.close()),
   );
   const services = createAppServices(runtime, deps, { realtime });
-  options.lifecycle.registerDisposer(
-    'app-services',
-    onceAsync(() => services.dispose()),
-  );
+  const pluginServices = createAppPluginServiceRegistry();
   const app = new Hono();
 
   for (const plugin of options.pluginBootstraps ?? []) {
     plugin.bootstrap({
       deps,
+      pluginServices,
+      runtime,
       services,
       lifecycle: {
         registerDisposer(name, dispose): void {
@@ -93,7 +93,7 @@ export function createApp(
   });
 
   for (const plugin of options.pluginRoutes ?? []) {
-    plugin.registerRoutes({ app, deps, services });
+    plugin.registerRoutes({ app, deps, pluginServices, runtime, services });
   }
 
   registerNocoBaseApiProxyRoutes(app, {
@@ -118,6 +118,6 @@ export function createApp(
 
   return Object.assign(app, {
     websocket: createWebSocketHandler({ realtime }),
-    start: onceAsync(() => services.start()),
+    start: onceAsync(() => Promise.resolve()),
   });
 }

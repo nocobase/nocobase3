@@ -825,6 +825,12 @@ describe('app plugins', () => {
     expect(notificationPlugin?.migrationsDirectory).toMatch(
       /app-plugin-notification\/database\/migrations$/,
     );
+    expect(notificationPlugin?.bootstrapEntry).toMatch(
+      /app-plugin-notification\/server\/bootstrap\.ts$/,
+    );
+    expect(notificationPlugin?.routesEntry).toMatch(
+      /app-plugin-notification\/server\/routes\/index\.ts$/,
+    );
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
       version: declaredVersion('@nocobase/app-plugin-database-example'),

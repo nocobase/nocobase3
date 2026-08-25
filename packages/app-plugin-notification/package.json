@@ -60,6 +60,7 @@
   },
   "dependencies": {
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "hono": "catalog:"

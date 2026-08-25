@@ -478,6 +478,9 @@ importers:
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging

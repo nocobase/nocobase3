@@ -29,6 +29,7 @@ export interface NotificationProviderIdentity {
 export interface ChannelManagerOptions {
   readonly logger: Logger;
   readonly store: NotificationStore;
+  readonly resolveRuntime?: (type: string) => Promise<void>;
   readonly leaseMs?: number;
   readonly providerTimeoutMs?: number;
   readonly retry?: {
@@ -108,6 +109,7 @@ export class ChannelManager {
     const stored = await this.options.store.getDelivery(deliveryId);
     if (!stored || !isRunnable(stored, await this.options.store.now()))
       return stored;
+    await this.options.resolveRuntime?.(stored.channel);
     const runtime = this.runtimes.get(stored.channel);
     if (!runtime || runtime.providers.length === 0) return undefined;
 
