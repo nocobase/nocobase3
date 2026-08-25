@@ -13,15 +13,15 @@ export type FilesPluginRoutesContext = AppPluginRoutesContext<
 >;
 
 export default function registerFilesRoutes({
-  api,
+  app,
   deps,
 }: FilesPluginRoutesContext): void {
   if (!deps.filesRuntime) {
     throw new Error('The Files plugin runtime is not initialized.');
   }
 
-  api.route(
-    '/files',
+  app.route(
+    '/api/files',
     getFilesRuntimeDataPlane(deps.filesRuntime).createRoute(),
   );
 }

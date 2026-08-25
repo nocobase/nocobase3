@@ -80,7 +80,7 @@ export function createApp(
     });
   }
 
-  const apiRoutes = registerAppRoutes(app, {
+  registerAppRoutes(app, {
     appName,
     publicBasePath,
     deps,
@@ -88,17 +88,9 @@ export function createApp(
   });
 
   for (const plugin of options.pluginRoutes ?? []) {
-    const pluginContext = {
-      app,
-      api: apiRoutes.plugins,
-      protectedRoutes: apiRoutes.protectedRoutes,
-      deps,
-      services,
-    };
-    plugin.registerRoutes(pluginContext);
+    plugin.registerRoutes({ app, deps, services });
   }
-
-  app.route('/api', apiRoutes.finalize());
+  app.all('/api/*', (context) => context.notFound());
 
   registerNocoBaseApiProxyRoutes(app, {
     apiProxyPath: internalApiProxyPath,

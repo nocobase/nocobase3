@@ -3,28 +3,6 @@ import { CollectionBuilder } from '../../../src/index.js';
 import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
 
 describe('CollectionBuilder metadata APIs', () => {
-  it('synchronously inspects logical metadata with resolved physical names', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
-    const builder = new CollectionBuilder({
-      metadataStore,
-      naming: { underscored: true, tablePrefix: 'app_' },
-    });
-    await builder.createCollection('employeeProfiles', (collection) => {
-      collection.tableName('business_people');
-      collection.string('employeeId').columnName('employee_key');
-      collection.string('avatarId');
-    });
-
-    expect(builder.inspectCollection('employeeProfiles')).toMatchObject({
-      tableName: 'business_people',
-      fields: [
-        { definition: { name: 'employeeId' }, columnName: 'employee_key' },
-        { definition: { name: 'avatarId' }, columnName: 'avatar_id' },
-      ],
-    });
-    expect(builder.inspectCollection('missing')).toBeUndefined();
-  });
-
   it('updates collection metadata without schema operations', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({ metadataStore });

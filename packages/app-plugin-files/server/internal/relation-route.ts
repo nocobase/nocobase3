@@ -1,9 +1,5 @@
 import { randomBytes } from 'node:crypto';
 
-import type {
-  ConstraintDefinition,
-  InspectedCollection,
-} from '@nocobase/app-database';
 import { Hono, type Context } from 'hono';
 
 import type {
@@ -62,8 +58,8 @@ export interface CreateRelationFileRouteInput {
 }
 
 interface NormalizedRelationBinding {
-  collection: InspectedCollection;
-  parentCollection: InspectedCollection;
+  collection: string;
+  parentCollection: string;
   parentField: string;
   recordField: string;
   recordParam: string;
@@ -85,15 +81,12 @@ interface RelationRouteState {
 export function createRelationFileRoute(
   input: CreateRelationFileRouteInput,
 ): Hono {
-  const binding = validateRelationBinding(input.binding, input.state);
+  const binding = validateRelationBinding(input.binding);
   validateOptions(input.options);
   const state: RelationRouteState = {
     scope: createScopedRouteIdentity(input.state.audience, 'relation', {
-      collection:
-        binding.collection.definition.name ?? binding.collection.tableName,
-      parentCollection:
-        binding.parentCollection.definition.name ??
-        binding.parentCollection.tableName,
+      collection: binding.collection,
+      parentCollection: binding.parentCollection,
       parentField: binding.parentField,
       recordField: binding.recordField,
       recordParam: binding.recordParam,
@@ -540,211 +533,36 @@ async function bestEffortCancel(
 
 function validateRelationBinding(
   binding: FileRelationBinding,
-  state: FilesRuntimeServiceState,
 ): NormalizedRelationBinding {
-  const collectionName = readConfigName(binding.collection, 'collection');
+  const collection = readConfigName(binding.collection, 'collection');
+  const parentCollection = readConfigName(
+    binding.parentCollection,
+    'parentCollection',
+  );
+  const parentField = readConfigName(
+    binding.parentField ?? 'id',
+    'parentField',
+  );
   const recordParam = readConfigName(binding.recordParam, 'recordParam');
   const recordField = readConfigName(binding.recordField, 'recordField');
   if (!Number.isSafeInteger(binding.maxFiles) || binding.maxFiles <= 0) {
     throw invalidFileRoute('File route maxFiles must be a positive integer.');
   }
-  const builder = state.database.builder(state.connection);
-  const collection = builder.inspectCollection(collectionName);
-  const files = builder.inspectCollection('files');
-  if (!collection) {
-    throw invalidFileRoute(`Collection "${collectionName}" does not exist.`);
-  }
-  if (!files) {
-    throw invalidFileRoute('Collection "files" does not exist.');
-  }
-  requireField(collection, 'id', 'string', false, 64);
-  requireField(collection, 'fileId', 'string', false, 64);
-  requireField(collection, 'slot', 'integer', false);
-  requireField(collection, 'reservationExpiresAt', 'datetime', true);
-  requireField(collection, 'createdAt', 'datetime', false);
-  requireField(collection, 'updatedAt', 'datetime', false);
-  if (!hasSinglePrimaryKey(collection, 'id')) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" field "id" must be the sole primary key.`,
-    );
-  }
-  const filesId = findField(files, 'id');
-  if (
-    !filesId ||
-    isRelationField(filesId.definition) ||
-    filesId.definition.type !== 'string' ||
-    filesId.definition.length !== 64
-  ) {
-    throw invalidFileRoute('Collection "files" field "id" must be string(64).');
-  }
-  const record = findField(collection, recordField);
-  if (!record || isRelationField(record.definition)) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" field "${recordField}" does not exist or is not scalar.`,
-    );
-  }
-  if (record.definition.nullable !== false) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" field "${recordField}" must be non-nullable.`,
-    );
-  }
-  if (!hasRestrictFilesForeignKey(collection)) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" field "fileId" must reference files.id with ON DELETE RESTRICT.`,
-    );
-  }
-  if (!hasUniquePair(collection, recordField, 'slot')) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" must have a unique constraint on (${recordField}, slot).`,
-    );
-  }
-  if (!hasUniquePair(collection, recordField, 'fileId')) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" must have a unique constraint on (${recordField}, fileId).`,
-    );
-  }
-  const parentReference = findRecordForeignKey(collection, recordField);
-  if (!parentReference) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" field "${recordField}" must reference a parent record.`,
-    );
-  }
-  const parentCollection = state.database
-    .builder(state.connection)
-    .inspectCollection(parentReference.collection);
-  if (!parentCollection) {
-    throw invalidFileRoute(
-      `Relation parent collection "${parentReference.collection}" does not exist.`,
-    );
-  }
-  const parentField = findField(parentCollection, parentReference.field);
-  if (
-    !parentField ||
-    isRelationField(parentField.definition) ||
-    !hasSinglePrimaryKey(parentCollection, parentReference.field) ||
-    parentField.definition.type !== record.definition.type ||
-    parentField.definition.length !== record.definition.length
-  ) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" field "${recordField}" must match its parent record ID type.`,
-    );
-  }
   return {
     collection,
     parentCollection,
-    parentField: parentReference.field,
+    parentField,
     recordField,
     recordParam,
     maxFiles: binding.maxFiles,
   };
 }
 
-function requireField(
-  collection: InspectedCollection,
-  name: string,
-  type: string,
-  nullable: boolean,
-  length?: number,
-): void {
-  const field = findField(collection, name);
-  if (
-    !field ||
-    isRelationField(field.definition) ||
-    field.definition.type !== type ||
-    field.definition.nullable !== nullable ||
-    (length !== undefined && field.definition.length !== length)
-  ) {
-    throw invalidFileRoute(
-      `Collection "${collection.definition.name ?? collection.tableName}" field "${name}" has an invalid relation binding type.`,
-    );
-  }
-}
-
-function findField(collection: InspectedCollection, name: string) {
-  return collection.fields.find((field) => field.definition.name === name);
-}
-
-function isRelationField(
-  definition: InspectedCollection['fields'][number]['definition'],
-): boolean {
-  return ['belongsTo', 'hasOne', 'hasMany', 'belongsToMany'].includes(
-    definition.type,
-  );
-}
-
-function hasRestrictFilesForeignKey(collection: InspectedCollection): boolean {
-  return (collection.definition.constraints ?? []).some(
-    (constraint) =>
-      constraint.type === 'foreignKey' &&
-      constraint.fields.length === 1 &&
-      constraint.fields[0] === 'fileId' &&
-      constraint.references.collection === 'files' &&
-      (constraint.references.fields ?? ['id']).length === 1 &&
-      (constraint.references.fields ?? ['id'])[0] === 'id' &&
-      constraint.onDelete === 'restrict',
-  );
-}
-
-function hasSinglePrimaryKey(
-  collection: InspectedCollection,
-  fieldName: string,
-): boolean {
-  const direct = collection.fields.filter(
-    (field) => field.definition.primaryKey === true,
-  );
-  const constraints = (collection.definition.constraints ?? []).filter(
-    (
-      constraint,
-    ): constraint is Extract<ConstraintDefinition, { type: 'primary' }> =>
-      constraint.type === 'primary',
-  );
-  const names = new Set([
-    ...direct.map((field) => field.definition.name),
-    ...constraints.flatMap((constraint) => constraint.fields),
-  ]);
-  return names.size === 1 && names.has(fieldName);
-}
-
-function hasUniquePair(
-  collection: InspectedCollection,
-  first: string,
-  second: string,
-): boolean {
-  return (collection.definition.constraints ?? []).some(
-    (constraint) =>
-      constraint.type === 'unique' &&
-      constraint.fields.length === 2 &&
-      constraint.fields[0] === first &&
-      constraint.fields[1] === second,
-  );
-}
-
-function findRecordForeignKey(
-  collection: InspectedCollection,
-  recordField: string,
-): { collection: string; field: string } | undefined {
-  const constraint = (collection.definition.constraints ?? []).find(
-    (
-      candidate,
-    ): candidate is Extract<ConstraintDefinition, { type: 'foreignKey' }> =>
-      candidate.type === 'foreignKey' &&
-      candidate.fields.length === 1 &&
-      candidate.fields[0] === recordField &&
-      (candidate.references.fields ?? ['id']).length === 1,
-  );
-  return constraint
-    ? {
-        collection: constraint.references.collection,
-        field: (constraint.references.fields ?? ['id'])[0] ?? 'id',
-      }
-    : undefined;
-}
-
 function readRecordId(state: RelationRouteState, context: Context): string {
   const value = context.req.param(state.binding.recordParam);
   if (!value) {
     throw invalidFileRoute(
-      `Mounted file route is missing record parameter ":${state.binding.recordParam}" for collection "${state.binding.collection.definition.name}".`,
+      `Mounted file route is missing record parameter ":${state.binding.recordParam}" for collection "${state.binding.collection}".`,
     );
   }
   return value;

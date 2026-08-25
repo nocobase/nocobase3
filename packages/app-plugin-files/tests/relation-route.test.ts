@@ -74,6 +74,7 @@ describe('relation binding scoped file routes', () => {
       binding: {
         type: 'relation',
         collection: 'purchaseOrderAttachments',
+        parentCollection: 'purchaseOrders',
         recordParam: 'orderId',
         recordField: 'purchaseOrderId',
         maxFiles: 2,
@@ -514,6 +515,7 @@ describe('relation binding scoped file routes', () => {
         binding: {
           type: 'relation',
           collection: 'purchaseOrderAttachments',
+          parentCollection: 'purchaseOrders',
           recordParam: 'orderId',
           recordField: 'purchaseOrderId',
           maxFiles: 2,
@@ -560,6 +562,7 @@ describe('relation binding scoped file routes', () => {
       binding: {
         type: 'relation',
         collection: 'purchaseOrderAttachments',
+        parentCollection: 'purchaseOrders',
         recordParam: 'orderId',
         recordField: 'purchaseOrderId',
         maxFiles: 3,
@@ -682,6 +685,7 @@ async function createFixture(
     binding: {
       type: 'relation',
       collection: 'purchaseOrderAttachments',
+      parentCollection: 'purchaseOrders',
       recordParam: 'orderId',
       recordField: 'purchaseOrderId',
       maxFiles: options.maxFiles ?? 2,

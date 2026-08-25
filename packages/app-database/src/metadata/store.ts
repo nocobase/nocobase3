@@ -5,7 +5,6 @@ import type {
 } from '../collection/types.js';
 
 export interface CollectionMetadataStore {
-  getCollectionSync(name: string): CollectionDefinition | undefined;
   getCollection(name: string): Promise<CollectionDefinition | undefined>;
   saveCollection(name: string, definition: CollectionDefinition): Promise<void>;
   removeCollection(name: string): Promise<void>;

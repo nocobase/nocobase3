@@ -347,7 +347,7 @@ describe('public FileService', () => {
       fixture.service.createFileRoute({
         binding: {
           type: 'field',
-          collection: 'missingBusinessRecords',
+          collection: '',
           recordParam: 'recordId',
           fileField: 'fileId',
         },

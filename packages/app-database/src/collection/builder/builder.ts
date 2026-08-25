@@ -47,17 +47,6 @@ export interface CollectionBuilderOptions {
   namingStrategy?: NamingStrategy;
 }
 
-export interface InspectedCollectionField {
-  definition: AnyFieldDefinition;
-  columnName: string;
-}
-
-export interface InspectedCollection {
-  definition: CollectionDefinition;
-  tableName: string;
-  fields: InspectedCollectionField[];
-}
-
 export class CollectionBuilder {
   private readonly schemaAdapter: SchemaAdapter;
   private readonly metadataStore: CollectionMetadataStore;
@@ -73,25 +62,6 @@ export class CollectionBuilder {
     });
   }
 
-  inspectCollection(name: string): InspectedCollection | undefined {
-    const definition = this.metadataStore.getCollectionSync(name);
-    if (!definition) {
-      return undefined;
-    }
-    return {
-      definition,
-      tableName: this.compiler.effectiveTableName(name, definition),
-      fields: (definition.fields ?? []).map((field) => ({
-        definition: field,
-        columnName: this.compiler.effectiveColumnName(
-          field.name,
-          field,
-          definition,
-        ),
-      })),
-    };
-  }
-
   async createCollection(
     name: string,
     input: CollectionDefinitionInput,
@@ -102,17 +72,6 @@ export class CollectionBuilder {
       [{ type: 'createCollection', name, definition }],
       options,
     );
-  }
-
-  async registerCollectionMetadata(
-    name: string,
-    input: CollectionDefinitionInput,
-  ): Promise<void> {
-    const definition = normalizeCollectionInput(input);
-    await this.metadataStore.saveCollection(name, {
-      ...definition,
-      name,
-    });
   }
 
   async alterCollection(

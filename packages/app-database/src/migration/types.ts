@@ -21,21 +21,11 @@ export interface MigrationContext {
   readonly connection: MigrationConnection;
 }
 
-export type MigrationMetadataBuilder = Pick<
-  CollectionBuilder,
-  'registerCollectionMetadata'
->;
-
-export interface MigrationMetadataContext {
-  readonly builder: MigrationMetadataBuilder;
-}
-
 export interface MigrationDefinition {
   readonly name: string;
   readonly transaction?: MigrationTransactionMode;
   readonly irreversible?: boolean;
   up(context: MigrationContext): Promise<void>;
-  restoreMetadata?(context: MigrationMetadataContext): Promise<void>;
   down?(context: MigrationContext): Promise<void>;
 }
 
@@ -74,10 +64,6 @@ export interface MigrationRunResult {
   readonly batch: number;
   readonly executed: string[];
   readonly skipped: string[];
-}
-
-export interface MigrationMetadataRestoreResult {
-  readonly restored: string[];
 }
 
 export interface MigrationRollbackResult {

@@ -7,13 +7,9 @@ import registerRoutes from '../server/routes/index.js';
 describe('realtime example plugin routes', () => {
   it('registers the realtime page', async () => {
     const app = new Hono();
-    const api = new Hono();
-    const protectedRoutes = new Hono();
 
     registerRoutes({
       app,
-      api,
-      protectedRoutes,
       deps: undefined,
       services: undefined,
     });

@@ -1,7 +1,6 @@
 export { createAppDatabaseManager } from './manager.js';
 export {
   createAppMigrator,
-  type AppMigrationMetadataRestoreResult,
   type AppMigrationRollbackResult,
   type AppMigrationRunResult,
   type AppMigrationSkippedReason,

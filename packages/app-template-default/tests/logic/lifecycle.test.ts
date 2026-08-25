@@ -10,17 +10,12 @@ const prepareAppDatabaseStorageMock = vi.hoisted(() =>
     calls.push('prepare-database');
   }),
 );
-const runMigrationsMock = vi.hoisted(() =>
+const runConfiguredAppMigrationsMock = vi.hoisted(() =>
   vi.fn(async () => {
     calls.push('migrate');
   }),
 );
-const restoreMetadataMock = vi.hoisted(() =>
-  vi.fn(async () => {
-    calls.push('restore-metadata');
-  }),
-);
-const runSeedsMock = vi.hoisted(() =>
+const runConfiguredAppSeedsMock = vi.hoisted(() =>
   vi.fn(async () => {
     calls.push('seed');
   }),
@@ -28,72 +23,44 @@ const runSeedsMock = vi.hoisted(() =>
 vi.mock('@nocobase/app-server-kit/database', () => ({
   prepareAppDatabaseStorage: prepareAppDatabaseStorageMock,
 }));
+vi.mock('@nocobase/app-server-kit/runtime', () => ({
+  runConfiguredAppMigrations: runConfiguredAppMigrationsMock,
+  runConfiguredAppSeeds: runConfiguredAppSeedsMock,
+}));
 import { prepareAppRuntime } from '../../server/runtime/lifecycle.ts';
 
 beforeEach(() => {
   calls.length = 0;
   prepareAppDatabaseStorageMock.mockClear();
-  runMigrationsMock.mockReset().mockImplementation(async () => {
+  runConfiguredAppMigrationsMock.mockReset().mockImplementation(async () => {
     calls.push('migrate');
   });
-  runSeedsMock.mockReset().mockImplementation(async () => {
+  runConfiguredAppSeedsMock.mockReset().mockImplementation(async () => {
     calls.push('seed');
   });
-  restoreMetadataMock.mockClear();
 });
 
 describe('app runtime preparation', () => {
-  it('runs self-contained migrations before seeds when auto-run is enabled', async () => {
-    await prepareAppRuntime(createRuntime(true, true));
+  it('runs configured migrations before seeds', async () => {
+    await prepareAppRuntime(createRuntime());
 
     expect(calls).toEqual(['prepare-database', 'migrate', 'seed']);
     expect(prepareAppDatabaseStorageMock).toHaveBeenCalledOnce();
-    expect(restoreMetadataMock).not.toHaveBeenCalled();
-  });
-
-  it('only restores metadata when migration auto-run is disabled', async () => {
-    await prepareAppRuntime(createRuntime(false, false));
-
-    expect(calls).toEqual(['prepare-database', 'restore-metadata']);
-    expect(runMigrationsMock).not.toHaveBeenCalled();
-    expect(runSeedsMock).not.toHaveBeenCalled();
   });
 
   it('does not run seeds when migrations fail', async () => {
     const error = new Error('migration failed');
-    runMigrationsMock.mockRejectedValueOnce(error);
+    runConfiguredAppMigrationsMock.mockRejectedValueOnce(error);
 
-    await expect(prepareAppRuntime(createRuntime(true, true))).rejects.toBe(
-      error,
-    );
-    expect(runSeedsMock).not.toHaveBeenCalled();
+    await expect(prepareAppRuntime(createRuntime())).rejects.toBe(error);
+    expect(runConfiguredAppSeedsMock).not.toHaveBeenCalled();
   });
 });
 
-function createRuntime(
-  migrationsAutoRun: boolean,
-  seedsAutoRun: boolean,
-): AppRuntime<AppConfig> {
+function createRuntime(): AppRuntime<AppConfig> {
   return {
     config: {
-      database: {
-        migrations: {
-          autoRun: migrationsAutoRun,
-        },
-        seeds: {
-          autoRun: seedsAutoRun,
-        },
-      },
-      plugins: [
-        {
-          packageName: '@nocobase/app-plugin-files',
-          enabled: true,
-        },
-      ],
+      database: {},
     },
-    database: {},
-    migrator: { restoreMetadata: restoreMetadataMock },
-    runMigrations: runMigrationsMock,
-    runSeeds: runSeedsMock,
   } as AppRuntime<AppConfig>;
 }

@@ -1,35 +1,26 @@
 # @nocobase/app-plugin-files
 
-`createFileRoute()` validates Collection fields, foreign keys, and physical
-names from the current process's Collection metadata. Define metadata recovery
-inside the same business migration so the migration runner restores it after a
-restart without rerunning schema or data changes:
+`createFileRoute()` accepts logical Collection and field names. The existing
+Database QueryAdapter applies the configured naming strategy, so route setup
+does not depend on in-memory Collection metadata:
 
 ```ts
-export default defineMigration({
-  async up({ builder }) {
-    await builder.createCollection(
-      'purchaseOrders',
-      definePurchaseOrdersCollection,
-    );
+const route = fileService.createFileRoute({
+  binding: {
+    type: 'relation',
+    collection: 'purchaseOrderAttachments',
+    parentCollection: 'purchaseOrders',
+    recordParam: 'purchaseOrderId',
+    recordField: 'purchaseOrderId',
+    maxFiles: 10,
   },
-  async restoreMetadata({ builder }) {
-    await builder.registerCollectionMetadata(
-      'purchaseOrders',
-      definePurchaseOrdersCollection,
-    );
-  },
-  // ...
+  authorize,
 });
-
-const route = fileService.createFileRoute(/* ... */);
 ```
 
-Run migrations explicitly during deployment, then start the application
-normally. Startup restores `restoreMetadata()` for applied migrations even
-when migration auto-run is disabled. Metadata recovery does not execute DDL or
-make a missing database table valid, so route creation continues to fail fast
-on invalid definitions.
+Business migrations and database constraints remain responsible for the
+binding schema. A relation binding names its parent Collection explicitly;
+`parentField` defaults to `id`.
 
 ## File upload Registry
 

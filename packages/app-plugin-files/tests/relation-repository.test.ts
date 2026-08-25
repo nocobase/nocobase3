@@ -4,7 +4,6 @@ import type {
   CollectionBuilder,
   DatabaseConnection,
   DatabaseManager,
-  InspectedCollection,
   QueryAdapter,
 } from '@nocobase/app-database';
 
@@ -18,16 +17,8 @@ describe('RelationBindingRepository', () => {
     const database = new FailingDatabaseManager(error);
     const repository = new RelationBindingRepository({
       database,
-      collection: inspectedCollection('attachments', [
-        'id',
-        'recordId',
-        'fileId',
-        'slot',
-        'reservationExpiresAt',
-        'createdAt',
-        'updatedAt',
-      ]),
-      parentCollection: inspectedCollection('records', ['id']),
+      collection: 'attachments',
+      parentCollection: 'records',
       parentField: 'id',
       recordField: 'recordId',
     });
@@ -84,18 +75,4 @@ class FailingDatabaseManager implements DatabaseManager {
   }
 
   async destroy(): Promise<void> {}
-}
-
-function inspectedCollection(
-  name: string,
-  fieldNames: readonly string[],
-): InspectedCollection {
-  return {
-    definition: { name },
-    tableName: name,
-    fields: fieldNames.map((fieldName) => ({
-      definition: { name: fieldName, type: 'string' },
-      columnName: fieldName,
-    })),
-  };
 }

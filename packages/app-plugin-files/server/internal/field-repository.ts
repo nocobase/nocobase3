@@ -1,14 +1,13 @@
 import type {
   DatabaseConnection,
   DatabaseManager,
-  InspectedCollection,
   QueryAdapter,
 } from '@nocobase/app-database';
 
 export interface CreateFieldBindingRepositoryOptions {
   database: DatabaseManager;
   connection?: string;
-  collection: InspectedCollection;
+  collection: string;
   recordField: string;
   fileField: string;
 }
@@ -27,9 +26,9 @@ export class FieldBindingRepository {
   constructor(options: CreateFieldBindingRepositoryOptions) {
     this.#database = options.database;
     this.#connection = options.connection;
-    this.#table = options.collection.tableName;
-    this.#recordColumn = findColumn(options.collection, options.recordField);
-    this.#fileColumn = findColumn(options.collection, options.fileField);
+    this.#table = options.collection;
+    this.#recordColumn = options.recordField;
+    this.#fileColumn = options.fileField;
   }
 
   async get(
@@ -77,21 +76,6 @@ export function createFieldBindingRepository(
   options: CreateFieldBindingRepositoryOptions,
 ): FieldBindingRepository {
   return new FieldBindingRepository(options);
-}
-
-function findColumn(
-  collection: InspectedCollection,
-  fieldName: string,
-): string {
-  const field = collection.fields.find(
-    (candidate) => candidate.definition.name === fieldName,
-  );
-  if (!field) {
-    throw new Error(
-      `Collection "${collection.definition.name ?? collection.tableName}" field "${fieldName}" is unavailable.`,
-    );
-  }
-  return field.columnName;
 }
 
 function readNullableFileId(value: unknown): string | null {

@@ -1,18 +1,16 @@
 import { prepareAppDatabaseStorage } from '@nocobase/app-server-kit/database';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import {
+  runConfiguredAppMigrations,
+  runConfiguredAppSeeds,
+  type AppRuntime,
+} from '@nocobase/app-server-kit/runtime';
 
 import type { AppConfig } from '../config/index.js';
 
 export async function prepareAppRuntime(
-  runtime: AppRuntime<Pick<AppConfig, 'database' | 'plugins'>>,
+  runtime: AppRuntime<AppConfig>,
 ): Promise<void> {
   await prepareAppDatabaseStorage(runtime.config.database);
-  if (runtime.config.database.migrations.autoRun) {
-    await runtime.runMigrations();
-  } else {
-    await runtime.migrator?.restoreMetadata();
-  }
-  if (runtime.config.database.seeds?.autoRun) {
-    await runtime.runSeeds();
-  }
+  await runConfiguredAppMigrations(runtime);
+  await runConfiguredAppSeeds(runtime);
 }

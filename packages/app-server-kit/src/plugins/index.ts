@@ -1,16 +1,7 @@
-import type { Env, Hono, Schema } from 'hono';
-
-export interface AppPluginProtectedRoutes {
-  route<E extends Env, S extends Schema, B extends string>(
-    path: string,
-    app: Hono<E, S, B>,
-  ): void;
-}
+import type { Hono } from 'hono';
 
 export interface AppPluginRoutesContext<TDeps = unknown, TServices = unknown> {
   readonly app: Hono;
-  readonly api: Hono;
-  readonly protectedRoutes: AppPluginProtectedRoutes;
   readonly deps: TDeps;
   readonly services: TServices;
 }

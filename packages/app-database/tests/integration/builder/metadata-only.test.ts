@@ -1,34 +1,7 @@
 import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../helpers.js';
 
-describeIntegrationDatabases('metadata-only operations', (context) => {
-  it('registers a complete collection definition without creating its table', async () => {
-    await context.builder.registerCollectionMetadata(
-      'purchaseOrders',
-      (collection) => {
-        collection.string('id', { length: 64 }).notNull().primary();
-        collection.string('attachmentId', { length: 64 }).nullable();
-      },
-    );
-
-    expect(
-      await context.db.schema.hasTable(context.table('purchaseOrders')),
-    ).toBe(false);
-    expect(context.builder.inspectCollection('purchaseOrders')).toMatchObject({
-      definition: {
-        name: 'purchaseOrders',
-        fields: [
-          expect.objectContaining({ name: 'id', type: 'string', length: 64 }),
-          expect.objectContaining({
-            name: 'attachmentId',
-            type: 'string',
-            length: 64,
-          }),
-        ],
-      },
-    });
-  });
-
+describeIntegrationDatabases('metadata-only updates', (context) => {
   it('updates metadata without changing database schema', async () => {
     await context.builder.createCollection('orders', (collection) => {
       collection.increments('id');

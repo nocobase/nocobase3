@@ -1,15 +1,14 @@
 import type {
   DatabaseConnection,
   DatabaseManager,
-  InspectedCollection,
   QueryAdapter,
 } from '@nocobase/app-database';
 
 export interface CreateRelationBindingRepositoryOptions {
   database: DatabaseManager;
   connection?: string;
-  collection: InspectedCollection;
-  parentCollection: InspectedCollection;
+  collection: string;
+  parentCollection: string;
   parentField: string;
   recordField: string;
 }
@@ -57,22 +56,16 @@ export class RelationBindingRepository {
   constructor(options: CreateRelationBindingRepositoryOptions) {
     this.#database = options.database;
     this.#connectionName = options.connection;
-    this.#table = options.collection.tableName;
-    this.#parentTable = options.parentCollection.tableName;
-    this.#idColumn = findColumn(options.collection, 'id');
-    this.#parentColumn = findColumn(
-      options.parentCollection,
-      options.parentField,
-    );
-    this.#recordColumn = findColumn(options.collection, options.recordField);
-    this.#fileColumn = findColumn(options.collection, 'fileId');
-    this.#slotColumn = findColumn(options.collection, 'slot');
-    this.#reservationColumn = findColumn(
-      options.collection,
-      'reservationExpiresAt',
-    );
-    this.#createdAtColumn = findColumn(options.collection, 'createdAt');
-    this.#updatedAtColumn = findColumn(options.collection, 'updatedAt');
+    this.#table = options.collection;
+    this.#parentTable = options.parentCollection;
+    this.#idColumn = 'id';
+    this.#parentColumn = options.parentField;
+    this.#recordColumn = options.recordField;
+    this.#fileColumn = 'fileId';
+    this.#slotColumn = 'slot';
+    this.#reservationColumn = 'reservationExpiresAt';
+    this.#createdAtColumn = 'createdAt';
+    this.#updatedAtColumn = 'updatedAt';
   }
 
   async parentExists(
@@ -366,21 +359,6 @@ export function createRelationBindingRepository(
   options: CreateRelationBindingRepositoryOptions,
 ): RelationBindingRepository {
   return new RelationBindingRepository(options);
-}
-
-function findColumn(
-  collection: InspectedCollection,
-  fieldName: string,
-): string {
-  const field = collection.fields.find(
-    (candidate) => candidate.definition.name === fieldName,
-  );
-  if (!field) {
-    throw new Error(
-      `Collection "${collection.definition.name ?? collection.tableName}" field "${fieldName}" is unavailable.`,
-    );
-  }
-  return field.columnName;
 }
 
 function findAvailableSlot(

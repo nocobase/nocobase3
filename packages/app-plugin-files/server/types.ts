@@ -86,6 +86,8 @@ export interface FileFieldBinding {
 export interface FileRelationBinding {
   type: 'relation';
   collection: string;
+  parentCollection: string;
+  parentField?: string;
   recordParam: string;
   recordField: string;
   maxFiles: number;

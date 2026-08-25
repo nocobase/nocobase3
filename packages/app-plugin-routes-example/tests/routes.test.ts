@@ -6,13 +6,9 @@ import registerRoutes from '../server/routes/index.js';
 describe('routes example plugin', () => {
   it('registers a route without application dependencies or services', async () => {
     const app = new Hono();
-    const api = new Hono();
-    const protectedRoutes = new Hono();
 
     registerRoutes({
       app,
-      api,
-      protectedRoutes,
       deps: undefined,
       services: undefined,
     });

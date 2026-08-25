@@ -9,10 +9,6 @@ export default defineMigration({
     await builder.createCollection('files', defineFilesCollection);
   },
 
-  async restoreMetadata({ builder }) {
-    await builder.registerCollectionMetadata('files', defineFilesCollection);
-  },
-
   async down({ builder }) {
     await builder.dropCollection('files');
   },

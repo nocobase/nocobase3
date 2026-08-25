@@ -185,15 +185,6 @@ function validateMigrationDefinition(
     );
   }
 
-  if (
-    value.restoreMetadata !== undefined &&
-    typeof value.restoreMetadata !== 'function'
-  ) {
-    throw new Error(
-      `Migration "${value.name}" restoreMetadata must be a function when provided.`,
-    );
-  }
-
   if (value.down !== undefined && typeof value.down !== 'function') {
     throw new Error(
       `Migration "${value.name}" down must be a function when provided.`,

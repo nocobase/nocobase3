@@ -30,7 +30,7 @@ afterEach(async () => {
 });
 
 describe('Files plugin routes', () => {
-  it('mounts the data plane only on the API plugin surface', async () => {
+  it('mounts the data plane at /api/files after existing API routes', async () => {
     database = createDatabaseManager({
       default: 'sqlite',
       connections: {
@@ -51,20 +51,17 @@ describe('Files plugin routes', () => {
     });
     const app = new Hono();
     const api = new Hono();
-    const protectedRoutes = new Hono();
     api.use('*', async (context, next) => {
       await next();
       context.header('x-api-middleware', 'applied');
     });
+    app.route('/api', api);
 
     registerFilesRoutes({
       app,
-      api,
-      protectedRoutes,
       deps: { filesRuntime: runtime },
       services: {},
     });
-    app.route('/api', api);
 
     const apiResponse = await app.request(
       '/api/files/missing/content?access=secret',
@@ -86,8 +83,6 @@ describe('Files plugin routes', () => {
     expect(() =>
       registerFilesRoutes({
         app: new Hono(),
-        api: new Hono(),
-        protectedRoutes: new Hono(),
         deps: {},
         services: {},
       }),
