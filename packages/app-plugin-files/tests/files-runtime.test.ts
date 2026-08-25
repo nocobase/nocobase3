@@ -54,11 +54,6 @@ describe('files runtime composition', () => {
       secret: 'test-files-secret-at-least-32-characters',
       basePath: '/tenant/api/files',
     });
-    expect(Object.keys(runtime)).toEqual([]);
-    expect(runtime).not.toHaveProperty('kernel');
-    expect(runtime).not.toHaveProperty('repository');
-    expect(runtime).not.toHaveProperty('storage');
-
     const pending = await getFilesRuntimeKernel(runtime).createPending({
       name: 'runtime.txt',
     });

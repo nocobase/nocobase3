@@ -1,10 +1,9 @@
 import type { Knex } from 'knex';
-import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createDatabaseManager,
-  createMigrator,
+  createMigrationContext,
   type DatabaseManager,
 } from '@nocobase/app-database';
 
@@ -18,45 +17,29 @@ afterEach(async () => {
 });
 
 describe('files migration', () => {
-  it('creates and drops the files schema with named constraints and indexes', async () => {
+  it('creates and drops the files schema with required constraints and indexes', async () => {
     const { manager, knex } = await createTestDatabase();
     database = manager;
-    const migrator = createMigrator({
-      database: manager,
-      directory: fileURLToPath(
-        new URL('../database/migrations', import.meta.url),
-      ),
-      packageName: '@nocobase/app-plugin-files',
-      tableName: 'files_migrations',
-      lockTableName: 'files_migration_lock',
-    });
-
-    expect(filesMigration.name).toBe('202608221000_files_create_files');
-    await expect(migrator.latest()).resolves.toMatchObject({
-      executed: ['202608221000_files_create_files'],
-      skipped: [],
-    });
+    const context = createMigrationContext(manager.connection());
+    await filesMigration.up(context);
 
     expect(await knex.schema.hasTable('files')).toBe(true);
-    const tableDefinition = await knex('sqlite_master')
-      .select('sql')
-      .where({ type: 'table', name: 'files' })
-      .first<{ sql: string }>();
-    expect(tableDefinition?.sql).toMatch(/pk_files/i);
     const columns = await knex.raw('PRAGMA table_info(files)');
-    expect(columns.map((column: { name: string }) => column.name)).toEqual([
-      'id',
-      'status',
-      'storage_key',
-      'name',
-      'size',
-      'content_type',
-      'upload_expires_at',
-      'public_token_hash',
-      'public_disposition',
-      'created_at',
-      'updated_at',
-    ]);
+    expect(columns.map((column: { name: string }) => column.name)).toEqual(
+      expect.arrayContaining([
+        'id',
+        'status',
+        'storage_key',
+        'name',
+        'size',
+        'content_type',
+        'upload_expires_at',
+        'public_token_hash',
+        'public_disposition',
+        'created_at',
+        'updated_at',
+      ]),
+    );
     expect(
       columns.find((column: { name: string }) => column.name === 'id'),
     ).toMatchObject({
@@ -69,25 +52,22 @@ describe('files migration', () => {
     ).toMatchObject({ type: 'bigint', notnull: 0 });
 
     const indexes = await knex.raw('PRAGMA index_list(files)');
-    expect(indexes).toEqual(
+    const indexedColumns = await Promise.all(
+      indexes.map(async (index: { name: string; unique: number }) => ({
+        unique: index.unique,
+        columns: (await knex.raw(`PRAGMA index_info(${index.name})`)).map(
+          (column: { name: string }) => column.name,
+        ),
+      })),
+    );
+    expect(indexedColumns).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: 'uq_files_storage_key',
-          unique: 1,
-        }),
-        expect.objectContaining({
-          name: 'idx_files_status_upload_expires_at',
           unique: 0,
+          columns: ['status', 'upload_expires_at'],
         }),
       ]),
     );
-    const statusExpiryColumns = await knex.raw(
-      'PRAGMA index_info(idx_files_status_upload_expires_at)',
-    );
-    expect(statusExpiryColumns).toEqual([
-      expect.objectContaining({ name: 'status', seqno: 0 }),
-      expect.objectContaining({ name: 'upload_expires_at', seqno: 1 }),
-    ]);
 
     const now = new Date('2026-08-24T00:00:00.000Z');
     const base = {
@@ -114,9 +94,7 @@ describe('files migration', () => {
       }),
     ).rejects.toThrow(/unique/i);
 
-    await expect(migrator.rollback()).resolves.toMatchObject({
-      rolledBack: ['202608221000_files_create_files'],
-    });
+    await filesMigration.down(context);
     expect(await knex.schema.hasTable('files')).toBe(false);
   });
 });

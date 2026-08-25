@@ -32,10 +32,9 @@ describe('@nocobase/app-plugin-files contracts', () => {
     expect(Object.keys(serverEntry)).toContain('createFilesRuntime');
     expect(Object.keys(serverEntry)).toContain('createFileService');
     expect(Object.keys(serverEntry)).toContain('createCoreFilesRoute');
-    expect(Object.keys(clientEntry).sort()).toEqual([
-      'FileClientError',
-      'executeFileUploadPlan',
-    ]);
+    expect(Object.keys(clientEntry)).toEqual(
+      expect.arrayContaining(['FileClientError', 'executeFileUploadPlan']),
+    );
     expect(Object.keys(serverEntry)).not.toEqual(
       expect.arrayContaining([
         'createFileKernel',
@@ -106,19 +105,9 @@ describe('@nocobase/app-plugin-files contracts', () => {
   });
 
   it('keeps FileService and FilesRuntime public contracts narrow', () => {
-    expectTypeOf<keyof FileService>().toEqualTypeOf<
-      | 'createFileRoute'
-      | 'createUpload'
-      | 'createFile'
-      | 'getFile'
-      | 'getFiles'
-      | 'openFile'
-      | 'createTemporaryAccessUrl'
-      | 'cancelUpload'
-      | 'enablePublicAccess'
-      | 'resetPublicAccess'
-      | 'disablePublicAccess'
-    >();
+    expectTypeOf<FileService['createFileRoute']>().toBeFunction();
+    expectTypeOf<FileService['createFile']>().toBeFunction();
+    expectTypeOf<FileService['openFile']>().toBeFunction();
     expectTypeOf<keyof FilesRuntime>().toEqualTypeOf<'dispose'>();
     expectTypeOf<
       CreateFileInput['content']

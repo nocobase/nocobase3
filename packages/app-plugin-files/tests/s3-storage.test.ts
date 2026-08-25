@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 import { S3Driver } from 'flydrive/drivers/s3';
 import { describe, expect, it } from 'vitest';
 
@@ -83,6 +85,7 @@ describe('S3-compatible Files storage', () => {
       url: 'https://upload.invalid/apps%2Fprimary%2Fpending%2Ffile-1',
       headers: {
         'content-type': 'text/plain',
+        'if-none-match': '*',
       },
     });
     expect(disk.uploadRequests).toEqual([
@@ -91,6 +94,7 @@ describe('S3-compatible Files storage', () => {
         options: {
           expiresIn: 120,
           ContentLength: 13,
+          IfNoneMatch: '*',
           contentType: 'text/plain',
         },
       },
@@ -112,7 +116,7 @@ describe('S3-compatible Files storage', () => {
       {
         source: 'apps/primary/pending/file-1',
         destination: 'apps/primary/ready/file-1',
-        options: { visibility: 'private' },
+        options: { IfNoneMatch: '*', visibility: 'private' },
       },
     ]);
     await expect(
@@ -136,6 +140,42 @@ describe('S3-compatible Files storage', () => {
     expect(disk.keys()).toEqual(['apps/primary/pending/file-1']);
   });
 
+  it('does not overwrite existing candidate or ready content', async () => {
+    const disk = new FakeS3Disk();
+    const storage = createInternalFilesStorage(
+      resolveFilesConfig({
+        appStorageRoot,
+        config: {
+          storage: { driver: 's3', bucket: 'managed-files' },
+        },
+      }),
+      { disk },
+    );
+    if (storage.driver !== 's3') {
+      throw new Error('Expected S3 Files storage.');
+    }
+
+    await storage.putCandidate('pending/file-1', Readable.from(['original']));
+    await expect(
+      storage.putCandidate('pending/file-1', Readable.from(['replacement'])),
+    ).rejects.toBeDefined();
+    await expect(
+      readText(await storage.openRead('pending/file-1')),
+    ).resolves.toBe('original');
+
+    disk.seed(
+      'ready/file-1',
+      { contentLength: 9, contentType: 'text/plain' },
+      'published',
+    );
+    await expect(
+      storage.finalizeCandidate('pending/file-1', 'ready/file-1'),
+    ).rejects.toBeDefined();
+    await expect(
+      readText(await storage.openRead('ready/file-1')),
+    ).resolves.toBe('published');
+  });
+
   it('blocks operations after idempotent disposal', async () => {
     const storage = createInternalFilesStorage(
       resolveFilesConfig({
@@ -154,3 +194,11 @@ describe('S3-compatible Files storage', () => {
     );
   });
 });
+
+async function readText(stream: Readable): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}

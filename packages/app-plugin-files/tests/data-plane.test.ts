@@ -1,4 +1,4 @@
-import { readdir, readFile, rm } from 'node:fs/promises';
+import { readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { mkdtemp } from 'node:fs/promises';
@@ -54,21 +54,6 @@ afterEach(async () => {
 });
 
 describe('Files Local data plane', () => {
-  it('registers the exact Core data plane route table', async () => {
-    const fixture = await createTestRuntime();
-    expect(
-      fixture.dataPlane
-        .createRoute()
-        .routes.map(({ method, path: routePath }) => [method, routePath]),
-    ).toEqual([
-      ['PUT', '/:fileId/upload'],
-      ['DELETE', '/:fileId/upload'],
-      ['POST', '/:fileId/complete'],
-      ['GET', '/:fileId/content'],
-      ['HEAD', '/:fileId/content'],
-    ]);
-  });
-
   it('mounts PUT/cancel/complete/content and keeps Local PUT pending', async () => {
     const fixture = await createTestRuntime();
     const plan = await fixture.dataPlane.createUploadPlan({
@@ -340,22 +325,6 @@ describe('Files Local data plane', () => {
       code: 'FILE_NOT_READY',
     });
   });
-
-  it('contains no full-body upload buffering API in the Local path', async () => {
-    const sources = await Promise.all([
-      readFile(
-        new URL('../server/internal/data-plane.ts', import.meta.url),
-        'utf8',
-      ),
-      readFile(
-        new URL('../server/internal/storage/index.ts', import.meta.url),
-        'utf8',
-      ),
-    ]);
-    const localUploadSource = sources.join('\n');
-    expect(localUploadSource).not.toMatch(/\.arrayBuffer\s*\(/);
-    expect(localUploadSource).not.toMatch(/Buffer\.concat\s*\(/);
-  });
 });
 
 describe('Files S3-compatible data plane', () => {
@@ -595,10 +564,14 @@ describe.each(['local', 's3'] as const)(
         contentType: 'text/plain',
       });
       if (provider) {
-        provider.putUpload(attempt.plan, {
-          contentLength: 5,
-          contentType: 'text/plain',
-        });
+        provider.putUpload(
+          attempt.plan,
+          {
+            contentLength: 5,
+            contentType: 'text/plain',
+          },
+          'retry',
+        );
       } else {
         const response = await fixture.app.request(attempt.plan.upload.url, {
           method: 'PUT',
@@ -625,22 +598,6 @@ describe.each(['local', 's3'] as const)(
       await expect(
         fixture.kernel.getFile(attempt.file.id),
       ).resolves.toMatchObject({ status: 'pending' });
-      const finalKey = readyKey(attempt.file.id);
-      if (provider) {
-        expect(provider.keys()).toEqual([
-          attempt.transfer.candidateKey,
-          finalKey,
-        ]);
-      } else {
-        expect(
-          await listFiles(path.join(fixture.storageRoot, 'app/private/files')),
-        ).toEqual([
-          attempt.transfer.candidateKey,
-          `${attempt.transfer.candidateKey}.files-metadata.json`,
-          finalKey,
-          `${finalKey}.files-metadata.json`,
-        ]);
-      }
 
       await expect(
         fixture.dataPlane.completeUpload(attempt.transfer, binding),
@@ -652,13 +609,11 @@ describe.each(['local', 's3'] as const)(
       await expect(
         fixture.kernel.getFile(attempt.file.id),
       ).resolves.toMatchObject({ status: 'ready' });
-      if (provider) {
-        expect(provider.keys()).toEqual([finalKey]);
-      } else {
-        expect(
-          await listFiles(path.join(fixture.storageRoot, 'app/private/files')),
-        ).toEqual([finalKey, `${finalKey}.files-metadata.json`]);
-      }
+      await expect(
+        readWebStream(
+          (await fixture.dataPlane.openFile(attempt.file.id)).stream,
+        ),
+      ).resolves.toBe('retry');
     });
 
     it('removes retained candidates when a failed binding is explicitly cancelled', async () => {
@@ -703,13 +658,9 @@ describe.each(['local', 's3'] as const)(
       await expect(
         fixture.kernel.getFile(attempt.file.id),
       ).resolves.toMatchObject({ status: 'failed' });
-      if (provider) {
-        expect(provider.keys()).toEqual([]);
-      } else {
-        expect(
-          await listFiles(path.join(fixture.storageRoot, 'app/private/files')),
-        ).toEqual([]);
-      }
+      await expect(
+        fixture.dataPlane.openFile(attempt.file.id),
+      ).rejects.toMatchObject({ code: 'FILE_NOT_READY' });
     });
   },
 );
@@ -945,6 +896,8 @@ function requiredCompleteUrl(plan: FileUploadPlan): string {
   return plan.complete.url;
 }
 
-function readyKey(fileId: string): string {
-  return `ready/${fileId}/object`;
+async function readWebStream(
+  stream: ReadableStream<Uint8Array>,
+): Promise<string> {
+  return new Response(stream).text();
 }

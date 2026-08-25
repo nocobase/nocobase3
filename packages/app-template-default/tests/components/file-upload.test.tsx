@@ -1,6 +1,8 @@
 import { act, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { executeFileUploadPlan } from '@nocobase/app-plugin-files/client';
+
 import { normalizeFileBasePath } from '../../client/extensions/nocobase-file-upload/base-path';
 import { appFileClient } from '../../client/extensions/nocobase-file-upload/app-client';
 import { FilePreviewField } from '../../client/extensions/nocobase-file-upload/file-preview-field';
@@ -17,9 +19,18 @@ import {
   validateFile,
 } from '../../client/extensions/nocobase-file-upload/validation';
 import type {
+  CreateScopedFileResponse,
+  FileUploadPlan,
   FileUploadMessages,
   StoredFile,
 } from '../../client/extensions/nocobase-file-upload/types';
+
+vi.mock('@nocobase/app-plugin-files/client', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@nocobase/app-plugin-files/client')
+  >()),
+  executeFileUploadPlan: vi.fn(),
+}));
 
 const messages: FileUploadMessages = {
   chooseFiles: 'Choose files',
@@ -48,6 +59,7 @@ afterEach(() => {
     .NOCOBASE_PORTAL_BASE;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.mocked(executeFileUploadPlan).mockReset();
 });
 
 describe('V3 file upload Registry', () => {
@@ -140,6 +152,85 @@ describe('V3 file upload Registry', () => {
         messages,
       }),
     ).toMatchObject({ valid: false, code: 'type' });
+  });
+
+  it('commits a successful upload to the controlled value', async () => {
+    const ready = readyFile('ready-upload', 'report.txt', 'text/plain');
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(jsonResponse(uploadResponse('ready-upload'))),
+    );
+    vi.mocked(executeFileUploadPlan).mockResolvedValue(ready);
+    const onChange = vi.fn();
+    const onUploadComplete = vi.fn();
+    const file = testFile('report.txt', 'text/plain');
+    const { result } = renderHook(() =>
+      useFileUpload({
+        basePath: 'orders/order-1/files',
+        value: [],
+        onChange,
+        messages,
+        onUploadComplete,
+      }),
+    );
+
+    await act(async () => result.current.addFiles([file]));
+
+    expect(executeFileUploadPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 'ready-upload' }),
+      file,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(onChange).toHaveBeenCalledWith([ready]);
+    expect(onUploadComplete).toHaveBeenCalledWith(ready);
+    expect(result.current.items).toEqual([]);
+  });
+
+  it('keeps a failed upload retryable and commits a successful retry', async () => {
+    const ready = readyFile('retry-upload', 'retry.txt', 'text/plain');
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockImplementation(async () =>
+          jsonResponse(uploadResponse('retry-upload')),
+        ),
+    );
+    vi.mocked(executeFileUploadPlan)
+      .mockRejectedValueOnce(new Error('Upload failed'))
+      .mockResolvedValueOnce(ready);
+    const onChange = vi.fn();
+    const onUploadError = vi.fn();
+    const { result } = renderHook(() =>
+      useFileUpload({
+        basePath: 'orders/order-1/files',
+        value: [],
+        onChange,
+        messages,
+        onUploadError,
+      }),
+    );
+
+    await act(async () =>
+      result.current.addFiles([testFile('retry.txt', 'text/plain')]),
+    );
+    expect(result.current.items).toEqual([
+      expect.objectContaining({ status: 'error' }),
+    ]);
+    expect(onUploadError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Upload failed' }),
+      expect.any(File),
+    );
+
+    const key = result.current.items[0]?.key;
+    if (!key) throw new Error('Expected a retryable upload item.');
+    await act(async () => result.current.retryItem(key));
+
+    expect(executeFileUploadPlan).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenCalledWith([ready]);
+    expect(result.current.items).toEqual([]);
   });
 
   it('renders maxFiles, disabled, and readOnly UX states', () => {
@@ -269,4 +360,33 @@ function readyFile(
 
 function testFile(name: string, contentType: string, size = 8): File {
   return new File([new Uint8Array(size)], name, { type: contentType });
+}
+
+function uploadResponse(fileId: string): CreateScopedFileResponse {
+  const plan: FileUploadPlan = {
+    fileId,
+    expiresAt: '2026-08-25T01:00:00.000Z',
+    upload: { method: 'PUT', url: `/api/files/${fileId}/upload` },
+    complete: { method: 'POST', url: `/api/files/${fileId}/complete` },
+    cancel: { method: 'DELETE', url: `/api/files/${fileId}/upload` },
+  };
+  return {
+    file: {
+      id: fileId,
+      status: 'pending',
+      name: `${fileId}.txt`,
+      size: null,
+      contentType: null,
+      createdAt: '2026-08-25T00:00:00.000Z',
+      updatedAt: '2026-08-25T00:00:00.000Z',
+    },
+    plan,
+  };
+}
+
+function jsonResponse(value: unknown): Response {
+  return new Response(JSON.stringify(value), {
+    status: 201,
+    headers: { 'content-type': 'application/json' },
+  });
 }

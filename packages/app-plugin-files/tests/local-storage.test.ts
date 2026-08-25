@@ -91,6 +91,32 @@ describe('local Files storage', () => {
     ).resolves.toBe('partial content');
   });
 
+  it('does not overwrite existing candidate or ready content', async () => {
+    const appStorageRoot = await createTempDirectory();
+    const storage = createInternalFilesStorage(
+      resolveFilesConfig({ appStorageRoot }),
+    );
+    if (storage.driver !== 'local') {
+      throw new Error('Expected local Files storage.');
+    }
+
+    await storage.putCandidate('pending/file-1', Readable.from(['original']));
+    await expect(
+      storage.putCandidate('pending/file-1', Readable.from(['replacement'])),
+    ).rejects.toBeDefined();
+    await expect(
+      readText(await storage.openRead('pending/file-1')),
+    ).resolves.toBe('original');
+
+    await storage.putCandidate('ready/file-1', Readable.from(['published']));
+    await expect(
+      storage.finalizeCandidate('pending/file-1', 'ready/file-1'),
+    ).rejects.toBeDefined();
+    await expect(
+      readText(await storage.openRead('ready/file-1')),
+    ).resolves.toBe('published');
+  });
+
   it('rejects unsafe object keys and operations after disposal', async () => {
     const appStorageRoot = await createTempDirectory();
     const storage = createInternalFilesStorage(

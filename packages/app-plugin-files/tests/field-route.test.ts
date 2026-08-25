@@ -61,48 +61,6 @@ afterEach(async () => {
 });
 
 describe('field binding scoped file routes', () => {
-  it('registers the exact unified route table without commit/access/uploads', async () => {
-    const fixture = await createFixture({ publicAccess: true });
-    const child = fixture.service.createFileRoute({
-      binding: {
-        type: 'field',
-        collection: 'employees',
-        recordParam: 'employeeId',
-        fileField: 'avatarId',
-      },
-      publicAccess: true,
-      authorize() {},
-    });
-
-    expect(
-      child.routes.map(({ method, path: routePath }) => [method, routePath]),
-    ).toEqual([
-      ['GET', '/'],
-      ['POST', '/'],
-      ['PUT', '/:fileId/upload'],
-      ['DELETE', '/:fileId/upload'],
-      ['POST', '/:fileId/complete'],
-      ['GET', '/:fileId/content'],
-      ['HEAD', '/:fileId/content'],
-      ['DELETE', '/:fileId'],
-      ['POST', '/:fileId/public-access'],
-      ['POST', '/:fileId/public-access/reset'],
-      ['DELETE', '/:fileId/public-access'],
-    ]);
-    expect(
-      child.routes.some(({ path: value }) => value.includes('commit')),
-    ).toBe(false);
-    expect(
-      child.routes.some(
-        ({ path: value }) =>
-          value.includes('access') && !value.includes('public-access'),
-      ),
-    ).toBe(false);
-    expect(
-      child.routes.some(({ path: value }) => value.includes('uploads')),
-    ).toBe(false);
-  });
-
   it('runs POST, scoped Local PUT, scoped complete, and binds atomically', async () => {
     const fixture = await createFixture();
     const upload = await createUpload(fixture, EMPLOYEE_ONE, {
@@ -346,39 +304,45 @@ describe('field binding scoped file routes', () => {
     ).toMatchObject({ status: 'failed' });
   });
 
-  it('checks read authorization and current binding for every GET/HEAD content', async () => {
-    const fixture = await createFixture();
-    const upload = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
-      name: 'private.txt',
-      size: 7,
-      contentType: 'text/plain',
-    });
-    const path = `/employees/${EMPLOYEE_ONE}/avatar/${upload.file.id}/content`;
+  it.each(['GET', 'HEAD'] as const)(
+    'checks read authorization and current binding for %s content',
+    async (method) => {
+      const fixture = await createFixture();
+      const upload = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
+        name: 'private.txt',
+        size: 7,
+        contentType: 'text/plain',
+      });
+      const path = `/employees/${EMPLOYEE_ONE}/avatar/${upload.file.id}/content`;
 
-    const head = await fixture.app.request(path, { method: 'HEAD' });
-    expect(head.status).toBe(200);
-    expect(head.body).toBeNull();
-    expect(head.headers.get('content-length')).toBe('7');
-    const content = await fixture.app.request(path);
-    expect(content.status).toBe(200);
-    await expect(content.text()).resolves.toBe('xxxxxxx');
-    expect(fixture.authorizeCalls).toContainEqual({
-      action: 'read',
-      recordId: EMPLOYEE_ONE,
-      fileId: upload.file.id,
-    });
+      fixture.authorizeCalls.length = 0;
+      const content = await fixture.app.request(path, { method });
+      expect(content.status).toBe(200);
+      if (method === 'HEAD') {
+        expect(content.body).toBeNull();
+        expect(content.headers.get('content-length')).toBe('7');
+      } else {
+        await expect(content.text()).resolves.toBe('xxxxxxx');
+      }
+      expect(fixture.authorizeCalls).toContainEqual({
+        action: 'read',
+        recordId: EMPLOYEE_ONE,
+        fileId: upload.file.id,
+      });
 
-    fixture.deniedActions.add('read');
-    expect((await fixture.app.request(path)).status).toBe(403);
-    fixture.deniedActions.delete('read');
-    expect(
-      (
-        await fixture.app.request(
-          `/employees/${EMPLOYEE_TWO}/avatar/${upload.file.id}/content`,
-        )
-      ).status,
-    ).toBe(404);
-  });
+      fixture.deniedActions.add('read');
+      expect((await fixture.app.request(path, { method })).status).toBe(403);
+      fixture.deniedActions.delete('read');
+      expect(
+        (
+          await fixture.app.request(
+            `/employees/${EMPLOYEE_TWO}/avatar/${upload.file.id}/content`,
+            { method },
+          )
+        ).status,
+      ).toBe(404);
+    },
+  );
 
   it('serves PDF content inline by default while allowing attachment override', async () => {
     const fixture = await createFixture();

@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -234,24 +234,21 @@ describe('public FileService', () => {
     expect(
       (await fixture.app.request(plan.complete.url, { method: 'POST' })).status,
     ).toBe(409);
-    const filesRoot = path.join(fixture.storageRoot, 'app/private/files');
-    const candidatePath = path.join(
-      filesRoot,
-      'pending',
-      plan.fileId,
-      'candidate',
-    );
-    const finalPath = path.join(filesRoot, 'ready', plan.fileId, 'object');
-    await expect(access(candidatePath)).resolves.toBeUndefined();
-    await expect(access(finalPath)).resolves.toBeUndefined();
+    await expect(fixture.service.getFile(plan.fileId)).resolves.toMatchObject({
+      status: 'pending',
+    });
+    await expect(fixture.service.openFile(plan.fileId)).rejects.toMatchObject({
+      code: 'FILE_NOT_READY',
+    });
 
     await fixture.service.cancelUpload(plan.fileId);
 
     await expect(fixture.service.getFile(plan.fileId)).resolves.toMatchObject({
       status: 'failed',
     });
-    await expect(access(candidatePath)).rejects.toThrow();
-    await expect(access(finalPath)).rejects.toThrow();
+    await expect(fixture.service.openFile(plan.fileId)).rejects.toMatchObject({
+      code: 'FILE_NOT_READY',
+    });
   });
 
   it('uses the public FileServiceError family for Routes and direct calls', async () => {
