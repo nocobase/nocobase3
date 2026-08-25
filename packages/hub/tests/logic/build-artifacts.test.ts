@@ -123,7 +123,11 @@ describe('Hub production build artifacts', () => {
     for (const command of ['node', 'npm', 'pnpm']) {
       writeExecutable(
         path.join(fakeBinDir, command),
-        '#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "$BUILD_COMMAND_LOG"\n',
+        [
+          '#!/bin/sh',
+          'printf "APP_BASE_PATH=%s APP_BROWSER_BASE_PATH=%s %s\\n" "$APP_BASE_PATH" "$APP_BROWSER_BASE_PATH" "$0 $*" >> "$BUILD_COMMAND_LOG"',
+          '',
+        ].join('\n'),
       );
     }
 
@@ -136,6 +140,7 @@ describe('Hub production build artifacts', () => {
         env: {
           ...process.env,
           APP_BASE_PATH: '/runtime-hub',
+          APP_BROWSER_BASE_PATH: '/runtime-console',
           BUILD_COMMAND_LOG: commandLog,
           PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ''}`,
         },
@@ -147,7 +152,7 @@ describe('Hub production build artifacts', () => {
       [
         'APP_NAME=hub',
         'APP_BASE_PATH=/runtime-hub',
-        'APP_BROWSER_BASE_PATH=/console',
+        'APP_BROWSER_BASE_PATH=/runtime-console',
         'APP_SERVER_HOST=0.0.0.0',
         'APP_SERVER_PORT=14001',
         'HUB_ENABLED=true',
@@ -178,7 +183,14 @@ describe('Hub production build artifacts', () => {
     expect(commands).toContain('--filter @nocobase/app-plugin-authentication');
     expect(commands).toContain('--filter @nocobase/caching');
     expect(commands).toContain('--filter @nocobase/app-database');
-    expect(commands).toContain('--filter @nocobase/app-template-default build');
+    const defaultAppBuild = commands
+      .split(/\r?\n/)
+      .find((command) =>
+        command.includes('--filter @nocobase/app-template-default build'),
+      );
+    expect(defaultAppBuild).toContain(
+      'APP_BASE_PATH=/default APP_BROWSER_BASE_PATH=/default',
+    );
     expect(commands).toContain('./scripts/build-default-app-resources.mjs');
     expect(commands).toContain('--template-dir');
     expect(commands).toContain('--build-dir');

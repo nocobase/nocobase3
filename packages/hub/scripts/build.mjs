@@ -209,11 +209,12 @@ const writeDistEnv = ({
   );
 };
 
-const run = (label, command, args) => {
+const run = (label, command, args, options = {}) => {
   console.log(`\n> ${label}`);
 
   const result = spawn.sync(command, args, {
     cwd: rootDir,
+    env: options.env ? { ...process.env, ...options.env } : process.env,
     stdio: 'inherit',
   });
 
@@ -259,11 +260,17 @@ const build = ({
   run('Typecheck client', 'pnpm', ['exec', 'tsc']);
   run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
   run('Build client', 'pnpm', ['exec', 'refine', 'build']);
-  run('Build default application template', 'pnpm', [
-    '--filter',
-    '@nocobase/app-template-default',
-    'build',
-  ]);
+  run(
+    'Build default application template',
+    'pnpm',
+    ['--filter', '@nocobase/app-template-default', 'build'],
+    {
+      env: {
+        APP_BASE_PATH: '/default',
+        APP_BROWSER_BASE_PATH: '/default',
+      },
+    },
+  );
   run('Generate default application resources', 'node', [
     './scripts/build-default-app-resources.mjs',
     '--template-dir',
