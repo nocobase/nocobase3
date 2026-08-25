@@ -701,21 +701,6 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('protects API routes loaded from enabled app plugins', async () => {
-    const runtime = createStandaloneRuntime();
-    const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
-    );
-    const response = await app.request(
-      `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
-    );
-
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({
-      message: expect.any(String),
-    });
-  });
-
   it('exposes public and authenticated API surfaces to plugin routes', async () => {
     let deps: AppDeps | undefined;
     let businessMiddlewareCalls = 0;

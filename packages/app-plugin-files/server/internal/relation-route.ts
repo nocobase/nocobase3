@@ -548,18 +548,9 @@ function validateRelationBinding(
   if (!Number.isSafeInteger(binding.maxFiles) || binding.maxFiles <= 0) {
     throw invalidFileRoute('File route maxFiles must be a positive integer.');
   }
-  let collection: InspectedCollection | undefined;
-  let files: InspectedCollection | undefined;
-  try {
-    collection = state.database
-      .builder(state.connection)
-      .inspectCollection(collectionName);
-    files = state.database.builder(state.connection).inspectCollection('files');
-  } catch {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" cannot be inspected for a file route.`,
-    );
-  }
+  const builder = state.database.builder(state.connection);
+  const collection = builder.inspectCollection(collectionName);
+  const files = builder.inspectCollection('files');
   if (!collection) {
     throw invalidFileRoute(`Collection "${collectionName}" does not exist.`);
   }

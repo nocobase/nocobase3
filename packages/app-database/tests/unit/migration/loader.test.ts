@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -88,37 +87,6 @@ describe('migration loader', () => {
         name: '202608180002_from_alpha',
       },
     ]);
-  });
-
-  it('preserves checksums across the app-database package rename', async () => {
-    const directory = await createTempDirectory();
-    const name = '202608180001_package_rename';
-    const source = `import {
-  defineMigration,
-  type MigrationDefinition,
-} from '@nocobase/app-database';
-
-const migration: MigrationDefinition = defineMigration({
-  name: '${name}',
-  async up() {},
-  async down() {},
-});
-
-export default migration;
-`;
-    await writeFile(join(directory, `${name}.ts`), source, 'utf8');
-
-    const [migration] = await loadMigrations({ directory });
-    const legacySource = source
-      .replaceAll('@nocobase/app-database', '@nocobase/database')
-      .replace(
-        /import\s*\{\s*defineMigration,\s*type MigrationDefinition,\s*\}\s*from '@nocobase\/database';/,
-        "import { defineMigration, type MigrationDefinition } from '@nocobase/database';",
-      );
-
-    expect(migration.checksum).toBe(
-      createHash('sha256').update(legacySource).digest('hex'),
-    );
   });
 
   it('supports an explicit package name for the legacy directory API', async () => {

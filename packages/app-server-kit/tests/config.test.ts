@@ -196,7 +196,6 @@ describe('app runtime context', () => {
     });
 
     expect(runtime.seeder).toBeUndefined();
-    await expect(runtime.restoreMetadata()).resolves.toBeUndefined();
     await expect(runtime.runSeeds()).resolves.toBeUndefined();
   });
 

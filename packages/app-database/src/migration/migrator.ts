@@ -73,11 +73,9 @@ class DefaultMigrator implements Migrator {
           pending.length > 0 ? nextBatch(history) : currentBatch(history);
         const executed: string[] = [];
 
-        for (const migration of migrations) {
-          if (!appliedNames.has(migration.name)) {
-            await this.runUpMigration(connection, migration, batch);
-            executed.push(migration.name);
-          }
+        for (const migration of pending) {
+          await this.runUpMigration(connection, migration, batch);
+          executed.push(migration.name);
         }
 
         return { batch, executed, skipped };

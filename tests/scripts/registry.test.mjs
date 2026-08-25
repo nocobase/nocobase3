@@ -14,6 +14,7 @@ import {
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 const ownerRoot = path.join(repoRoot, 'packages/app-plugin-authentication');
+const filesOwnerRoot = path.join(repoRoot, 'packages/app-plugin-files');
 
 test('parses package-scoped Registry commands', () => {
   assert.deepEqual(
@@ -122,6 +123,23 @@ test('materializes the authentication recipe without overwriting it', async (t) 
       }),
     /Registry target already exists/u,
   );
+});
+
+test('keeps the preinstalled Files Registry snapshot aligned with its plugin recipe', () => {
+  const recipeRoot = path.join(filesOwnerRoot, 'registry/file-upload');
+  const preinstalledRoot = path.join(
+    repoRoot,
+    'packages/app-template-default/client/extensions/nocobase-file-upload',
+  );
+  const recipeFiles = walkFiles(recipeRoot);
+
+  assert.deepEqual(walkFiles(preinstalledRoot), recipeFiles);
+  for (const file of recipeFiles) {
+    assert.equal(
+      fs.readFileSync(path.join(preinstalledRoot, file), 'utf8'),
+      fs.readFileSync(path.join(recipeRoot, file), 'utf8'),
+    );
+  }
 });
 
 function walkFiles(directory, root = directory) {

@@ -43,8 +43,12 @@ export default createReactVitestConfig({
       'tests/logic/config.test.ts',
       'tests/logic/dev-plugin-watches.test.ts',
       'tests/logic/e2e-support.test.ts',
+      'tests/logic/files-composition.test.ts',
+      'tests/logic/files-local-cross-layer.test.ts',
+      'tests/logic/files-metadata-restart.test.ts',
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugins.test.ts',
+      'tests/components/file-upload.test.tsx',
     ],
     coverage: {
       provider: 'v8',

@@ -1,61 +1,118 @@
-import type { FileUploadMessages } from './types';
+import type {
+  FileFieldDescriptor,
+  FileStorageInfo,
+  FileUploadMessages,
+} from './types';
 
 export type FileValidationResult =
-  { valid: true } | { valid: false; code: 'size' | 'type'; message: string };
+  | { valid: true }
+  | { valid: false; code: 'size' | 'mimetype'; message: string };
 
-export function validateFile(
-  file: File,
-  options: {
-    maxBytes?: number;
-    accept?: string | readonly string[];
-    messages: Pick<FileUploadMessages, 'fileSizeExceeded' | 'fileTypeRejected'>;
-  },
-): FileValidationResult {
-  if (options.maxBytes !== undefined && file.size > options.maxBytes) {
-    return {
-      valid: false,
-      code: 'size',
-      message: options.messages.fileSizeExceeded(options.maxBytes),
-    };
+export function resolveMaxFileSize(
+  descriptor: FileFieldDescriptor,
+  storage: FileStorageInfo,
+) {
+  const storageSize = storage.rules?.size;
+  const fieldSize = descriptor.maxSize;
+
+  if (storageSize !== undefined && fieldSize !== undefined) {
+    return Math.min(storageSize, fieldSize);
   }
-  if (!matchesFileRules(file, options.accept)) {
-    return {
-      valid: false,
-      code: 'type',
-      message: options.messages.fileTypeRejected,
-    };
-  }
-  return { valid: true };
+
+  return storageSize ?? fieldSize;
 }
 
-export function matchesFileRules(
-  file: File,
-  accept?: string | readonly string[],
-): boolean {
-  const rules = normalizeRules(accept);
-  if (!rules.length) return true;
+function normalizeRules(rules?: string | string[]) {
+  if (!rules) return [];
 
-  const contentType = file.type.toLowerCase();
+  return (Array.isArray(rules) ? rules : rules.split(','))
+    .map((rule) => rule.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function matchesFileRules(file: File, rules?: string | string[]) {
+  const normalized = normalizeRules(rules);
+  if (!normalized.length) return true;
+
+  const mimetype = file.type.toLowerCase();
   const filename = file.name.toLowerCase();
-  return rules.some((rule) => {
+
+  return normalized.some((rule) => {
     if (rule === '*' || rule === '*/*') return true;
     if (rule.startsWith('.')) return filename.endsWith(rule);
-    if (rule.endsWith('/*')) return contentType.startsWith(rule.slice(0, -1));
-    return contentType === rule;
+    if (rule.endsWith('/*')) {
+      return mimetype.startsWith(rule.slice(0, -1));
+    }
+    return mimetype === rule;
   });
 }
 
-export function getAcceptAttribute(
-  accept?: string | readonly string[],
-): string | undefined {
-  if (!accept) return undefined;
-  return typeof accept === 'string' ? accept : accept.join(',');
+export function validateFileBeforeUpload(
+  file: File,
+  descriptor: FileFieldDescriptor,
+  storage: FileStorageInfo,
+  messages: Pick<
+    FileUploadMessages,
+    'fileSizeExceeded' | 'storageMimeTypeRejected' | 'fieldMimeTypeRejected'
+  >,
+): FileValidationResult {
+  const maxSize = resolveMaxFileSize(descriptor, storage);
+
+  if (maxSize !== undefined && file.size > maxSize) {
+    return {
+      valid: false,
+      code: 'size',
+      message: messages.fileSizeExceeded(maxSize),
+    };
+  }
+
+  if (!matchesFileRules(file, storage.rules?.mimetype)) {
+    return {
+      valid: false,
+      code: 'mimetype',
+      message: messages.storageMimeTypeRejected,
+    };
+  }
+
+  if (!matchesFileRules(file, descriptor.accept)) {
+    return {
+      valid: false,
+      code: 'mimetype',
+      message: messages.fieldMimeTypeRejected,
+    };
+  }
+
+  return { valid: true };
 }
 
-function normalizeRules(
-  accept?: string | readonly string[],
-): readonly string[] {
-  if (!accept) return [];
-  const values = typeof accept === 'string' ? accept.split(',') : accept;
-  return values.map((rule) => rule.trim().toLowerCase()).filter(Boolean);
+export function validateFileForField(
+  file: File,
+  descriptor: FileFieldDescriptor,
+  messages: Pick<
+    FileUploadMessages,
+    'fileSizeExceeded' | 'fieldMimeTypeRejected'
+  >,
+): FileValidationResult {
+  if (descriptor.maxSize !== undefined && file.size > descriptor.maxSize) {
+    return {
+      valid: false,
+      code: 'size',
+      message: messages.fileSizeExceeded(descriptor.maxSize),
+    };
+  }
+
+  if (!matchesFileRules(file, descriptor.accept)) {
+    return {
+      valid: false,
+      code: 'mimetype',
+      message: messages.fieldMimeTypeRejected,
+    };
+  }
+
+  return { valid: true };
+}
+
+export function getAcceptAttribute(accept?: string | string[]) {
+  if (!accept) return undefined;
+  return Array.isArray(accept) ? accept.join(',') : accept;
 }

@@ -7,7 +7,6 @@ import type {
 import { createAppDatabaseManager } from '../database/manager.js';
 import {
   createAppMigrator,
-  type AppMigrationMetadataRestoreResult,
   type AppMigrationRunResult,
   type AppMigrator,
 } from '../database/migrator.js';
@@ -18,8 +17,6 @@ import {
 } from '../database/seeder.js';
 import { prepareAppDatabaseStorage } from '../database/storage.js';
 import type { AppDatabaseConfig } from '../database/types.js';
-
-export type { AppMigrationMetadataRestoreResult } from '../database/migrator.js';
 
 export interface AppRuntimeConfig {
   database: AppDatabaseConfig;
@@ -37,7 +34,6 @@ export interface AppRuntime<
   database?: DatabaseManager;
   migrator?: AppMigrator;
   seeder?: AppSeeder;
-  restoreMetadata(): Promise<AppMigrationMetadataRestoreResult | undefined>;
   runMigrations(): Promise<AppMigrationRunResult | undefined>;
   runSeeds(): Promise<AppSeedRunResult | undefined>;
   dispose(): Promise<void>;
@@ -69,8 +65,6 @@ export function createAppRuntime<TConfig extends AppRuntimeConfig>(
     database,
     migrator,
     seeder,
-    restoreMetadata: () =>
-      migrator?.restoreMetadata() ?? Promise.resolve(undefined),
     runMigrations: () => migrator?.latest() ?? Promise.resolve(undefined),
     runSeeds: () => seeder?.run() ?? Promise.resolve(undefined),
     dispose: () => database?.destroy() ?? Promise.resolve(),

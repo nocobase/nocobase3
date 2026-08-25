@@ -62,28 +62,4 @@ describeIntegrationDatabases('metadata-only operations', (context) => {
       description: 'Total order amount before refunds.',
     });
   });
-
-  it('renames and removes metadata without changing database schema', async () => {
-    await context.builder.createCollection('legacyOrders', (collection) => {
-      collection.increments('id');
-    });
-
-    await context.builder.renameCollectionMetadata('legacyOrders', 'orders');
-    expect(
-      await context.db.schema.hasTable(context.table('legacyOrders')),
-    ).toBe(true);
-    expect(await context.db.schema.hasTable(context.table('orders'))).toBe(
-      false,
-    );
-    expect(context.builder.inspectCollection('legacyOrders')).toBeUndefined();
-    expect(context.builder.inspectCollection('orders')).toMatchObject({
-      tableName: context.table('legacyOrders'),
-    });
-
-    await context.builder.removeCollectionMetadata('orders');
-    expect(
-      await context.db.schema.hasTable(context.table('legacyOrders')),
-    ).toBe(true);
-    expect(context.builder.inspectCollection('orders')).toBeUndefined();
-  });
 });

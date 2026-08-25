@@ -23,11 +23,7 @@ export interface MigrationContext {
 
 export type MigrationMetadataBuilder = Pick<
   CollectionBuilder,
-  | 'registerCollectionMetadata'
-  | 'removeCollectionMetadata'
-  | 'renameCollectionMetadata'
-  | 'updateCollectionMetadata'
-  | 'updateFieldMetadata'
+  'registerCollectionMetadata'
 >;
 
 export interface MigrationMetadataContext {

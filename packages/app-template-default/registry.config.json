@@ -239,41 +239,6 @@
       }
     },
     {
-      "name": "file-upload",
-      "type": "registry:block",
-      "title": "NocoBase File Upload",
-      "description": "V3 file upload and preview fields for Scoped Files Routes.",
-      "dependencies": [
-        "@nocobase/app-plugin-files@^0.1.0",
-        "lucide-react@^0.487.0",
-        "react-markdown@^10.1.0",
-        "remark-gfm@^4.0.1"
-      ],
-      "registryDependencies": ["alert", "button", "dialog", "tooltip"],
-      "docs": "Requires the NocoBase3 Files App Plugin. FileUploadField and FilePreviewField accept StoredFile[] plus a relative Scoped Files Route basePath and use the current App client internally.",
-      "source": {
-        "root": "registry/nocobase-file-upload",
-        "target": "client/extensions/nocobase-file-upload",
-        "include": [
-          "README.md",
-          "app-client.ts",
-          "base-path.ts",
-          "file-preview-dialog.tsx",
-          "file-preview-field.tsx",
-          "file-preview-messages.ts",
-          "file-preview-types.ts",
-          "file-thumbnail.tsx",
-          "file-upload-field.tsx",
-          "file-url.ts",
-          "index.ts",
-          "previewers",
-          "types.ts",
-          "use-file-upload.ts",
-          "validation.ts"
-        ]
-      }
-    },
-    {
       "name": "mail",
       "type": "registry:block",
       "title": "NocoBase Mail",

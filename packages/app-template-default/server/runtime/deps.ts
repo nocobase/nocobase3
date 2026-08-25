@@ -26,7 +26,6 @@ import type { Auth } from '@nocobase/app-plugin-authentication';
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
 import { createCookiePrefix } from './utils.js';
-import { isFilesPluginEnabled } from './plugins.js';
 
 export interface AppDeps {
   auth: Auth;
@@ -62,7 +61,10 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       },
     },
   });
-  const filesRuntime = isFilesPluginEnabled(config)
+  const filesRuntime = config.plugins.some(
+    (plugin) =>
+      plugin.packageName === '@nocobase/app-plugin-files' && plugin.enabled,
+  )
     ? createFilesRuntime({
         database: requireDatabase(runtime),
         config: config.files,

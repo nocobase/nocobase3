@@ -5,16 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { Knex } from 'knex';
 
-import {
-  createDatabaseManager,
-  createMigrationContext,
-  createMigrator,
-  ensureMigrationTable,
-  validateMigrations,
-  validateSeeds,
-} from '@nocobase/app-database';
+import { validateMigrations, validateSeeds } from '@nocobase/app-database';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -394,6 +386,8 @@ describe('logging config', () => {
       },
     });
     expect(config.redact).toContain('headers.authorization');
+    expect(config.redact).toContain('req.headers.referer');
+    expect(config.redact).toContain('req.query.access');
   });
 
   it('maps logger env values into the system logger', () => {
@@ -799,76 +793,6 @@ describe('database migrations', () => {
       }),
     ]);
   });
-
-  it('accepts existing history checksums for baseline migrations', async () => {
-    const root = mkdtempSync(
-      path.join(tmpdir(), 'baseline-migration-history-'),
-    );
-    tempDirs.push(root);
-    const runtime = createStandaloneRuntime();
-    const sources = runtime.config.database.migrations.sources ?? [];
-    const expectedChecksums = new Map([
-      [
-        '202608180001_create_app_settings_table',
-        '7a8f342fb41017789a463e58b25ffd9151e43b45fc072e09eda9b4bda63cd53a',
-      ],
-      [
-        '202608200001_create_authentication_tables',
-        'b5e33e9b71bf4c7345c766147e3ec1e0c4054ef208d2b01dbdf3284e53290edf',
-      ],
-      [
-        '202608220001_database_example_create_messages',
-        '1fced190e8ecf1a63d1f8f621f292bf8357cbf27c89e8d0f8c80e9089392c40a',
-      ],
-    ]);
-    const migrations = (await validateMigrations({ sources })).filter(
-      (migration) => expectedChecksums.has(migration.name),
-    );
-    expect(
-      new Map(
-        migrations.map((migration) => [migration.name, migration.checksum]),
-      ),
-    ).toEqual(expectedChecksums);
-
-    const databaseManager = createDatabaseManager({
-      default: 'sqlite',
-      connections: {
-        sqlite: {
-          dialect: 'sqlite',
-          driver: 'better-sqlite3',
-          filename: path.join(root, 'database.sqlite'),
-        },
-      },
-    });
-    const connection = databaseManager.connection('sqlite');
-    const migrationConnection = createMigrationContext(connection).connection;
-    const tableName = 'existing_migration_history';
-    await ensureMigrationTable(migrationConnection, tableName);
-    const knex = await connection.client<Knex>();
-    await knex(tableName).insert(
-      migrations.map((migration, index) => ({
-        package_name: migration.packageName,
-        name: migration.name,
-        batch: 1,
-        checksum: expectedChecksums.get(migration.name),
-        executed_at: new Date(),
-        duration_ms: index,
-      })),
-    );
-
-    try {
-      await expect(
-        createMigrator({
-          database: databaseManager,
-          connection: 'sqlite',
-          sources,
-          tableName,
-        }).restoreMetadata(),
-      ).resolves.toEqual({ restored: [] });
-    } finally {
-      await databaseManager.destroy();
-    }
-  });
 });
 
 describe('app plugins', () => {
@@ -920,7 +844,7 @@ describe('app plugins', () => {
     );
     expect(filesPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-files',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-files'),
       enabled: true,
     });
     expect(filesPlugin?.migrationsDirectory).toMatch(

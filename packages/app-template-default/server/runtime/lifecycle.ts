@@ -10,7 +10,7 @@ export async function prepareAppRuntime(
   if (runtime.config.database.migrations.autoRun) {
     await runtime.runMigrations();
   } else {
-    await runtime.restoreMetadata();
+    await runtime.migrator?.restoreMetadata();
   }
   if (runtime.config.database.seeds?.autoRun) {
     await runtime.runSeeds();

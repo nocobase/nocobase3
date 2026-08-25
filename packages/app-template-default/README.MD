@@ -1,7 +1,7 @@
 # NocoBase Default App Template
 
 The reference full-stack application for the new NocoBase App architecture. It
-uses `@nocobase/app-server-kit` on the backend and a React + Refine + shadcn client
+uses `@nocobase/app-server` on the backend and a React + Refine + shadcn client
 from `@nocobase/app-client`.
 
 ## Quick start

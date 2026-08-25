@@ -354,35 +354,27 @@
       "name": "file-upload",
       "type": "registry:block",
       "title": "NocoBase File Upload",
-      "description": "V3 file upload and preview fields for Scoped Files Routes.",
+      "description": "Controlled shadcn/ui file upload field for NocoBase file collections.",
       "dependencies": [
-        "@nocobase/app-plugin-files@^0.1.0",
+        "@nocobase/app-portal-sdk@^2.0.0",
+        "@tanstack/react-query@^5.81.5",
         "lucide-react@^0.487.0",
         "react-markdown@^10.1.0",
         "remark-gfm@^4.0.1"
       ],
-      "registryDependencies": ["alert", "button", "dialog", "tooltip"],
-      "docs": "Requires the NocoBase3 Files App Plugin. FileUploadField and FilePreviewField accept StoredFile[] plus a relative Scoped Files Route basePath and use the current App client internally.",
+      "registryDependencies": [
+        "alert",
+        "button",
+        "card",
+        "dialog",
+        "input",
+        "tooltip"
+      ],
+      "docs": "Requires a compatible Portal SDK client and a field targeting a file-template collection. The extension contributes a development-only file manager at /dev/files; its public-URL preview gallery does not require attachments:list.",
       "source": {
         "root": "registry/nocobase-file-upload",
         "target": "client/extensions/nocobase-file-upload",
-        "include": [
-          "README.md",
-          "app-client.ts",
-          "base-path.ts",
-          "file-preview-dialog.tsx",
-          "file-preview-field.tsx",
-          "file-preview-messages.ts",
-          "file-preview-types.ts",
-          "file-thumbnail.tsx",
-          "file-upload-field.tsx",
-          "file-url.ts",
-          "index.ts",
-          "previewers",
-          "types.ts",
-          "use-file-upload.ts",
-          "validation.ts"
-        ]
+        "include": ["."]
       }
     },
     {

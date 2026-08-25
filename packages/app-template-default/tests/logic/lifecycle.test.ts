@@ -92,7 +92,7 @@ function createRuntime(
       ],
     },
     database: {},
-    restoreMetadata: restoreMetadataMock,
+    migrator: { restoreMetadata: restoreMetadataMock },
     runMigrations: runMigrationsMock,
     runSeeds: runSeedsMock,
   } as AppRuntime<AppConfig>;

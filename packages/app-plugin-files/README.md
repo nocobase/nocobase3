@@ -30,3 +30,17 @@ normally. Startup restores `restoreMetadata()` for applied migrations even
 when migration auto-run is disabled. Metadata recovery does not execute DDL or
 make a missing database table valid, so route creation continues to fail fast
 on invalid definitions.
+
+## File upload Registry
+
+The plugin owns the `file-upload` Registry recipe under `registry/file-upload`.
+The Default Template keeps a materialized snapshot in
+`client/extensions/nocobase-file-upload` so applications can edit it directly.
+
+```bash
+pnpm registry build --package @nocobase/app-plugin-files
+pnpm registry materialize \
+  --package @nocobase/app-plugin-files \
+  --item file-upload \
+  --output-root /path/to/app
+```

@@ -244,18 +244,7 @@ function migrationNameFromFileName(fileName: string): string {
 }
 
 function createMigrationChecksum(source: string): string {
-  return createHash('sha256')
-    .update(normalizeMigrationSourceForChecksum(source))
-    .digest('hex');
-}
-
-function normalizeMigrationSourceForChecksum(source: string): string {
-  return source
-    .replaceAll('@nocobase/app-database', '@nocobase/database')
-    .replace(
-      /import\s*\{\s*defineMigration,\s*type MigrationDefinition,\s*\}\s*from '@nocobase\/database';/,
-      "import { defineMigration, type MigrationDefinition } from '@nocobase/database';",
-    );
+  return createHash('sha256').update(source).digest('hex');
 }
 
 function isNonEmptyString(value: unknown): value is string {

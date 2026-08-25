@@ -3,26 +3,6 @@ import { CollectionBuilder } from '../../../src/index.js';
 import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
 
 describe('CollectionBuilder metadata APIs', () => {
-  it('renames and removes metadata without schema operations', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
-    const builder = new CollectionBuilder({
-      metadataStore,
-      naming: { underscored: true, tablePrefix: 'app_' },
-    });
-    await builder.registerCollectionMetadata('legacyOrders', (collection) => {
-      collection.increments('id');
-    });
-
-    await builder.renameCollectionMetadata('legacyOrders', 'orders');
-    expect(builder.inspectCollection('legacyOrders')).toBeUndefined();
-    expect(builder.inspectCollection('orders')).toMatchObject({
-      tableName: 'app_legacy_orders',
-    });
-
-    await builder.removeCollectionMetadata('orders');
-    expect(builder.inspectCollection('orders')).toBeUndefined();
-  });
-
   it('synchronously inspects logical metadata with resolved physical names', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({

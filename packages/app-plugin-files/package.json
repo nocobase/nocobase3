@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-files",
   "displayName": "Files App Plugin",
   "description": "Managed file contracts and runtime for NocoBase applications.",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -48,14 +48,23 @@
         "import": "./dist/protocol.js"
       },
       "./package.json": "./package.json"
-    }
+    },
+    "access": "public"
   },
   "files": [
     "dist",
+    "registry",
+    "registry.config.json",
+    "public/r",
     "!dist/server/internal/**/*.d.ts",
     "!dist/server/internal/**/*.d.ts.map"
   ],
   "nocobase": {
+    "registry": {
+      "items": {
+        "file-upload": "./registry/file-upload"
+      }
+    },
     "plugin": {
       "database": {
         "migrations": "./database/migrations"
@@ -66,12 +75,15 @@
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.tests.json",
     "test": "vitest run",
+    "registry:build": "node ../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
+    "prepack": "pnpm registry:build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-plugin-files.tgz\" && pnpm exec publint .",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {

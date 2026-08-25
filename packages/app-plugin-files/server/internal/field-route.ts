@@ -490,18 +490,9 @@ function validateFieldBinding(
   const collectionName = readConfigName(binding.collection, 'collection');
   const recordParam = readConfigName(binding.recordParam, 'recordParam');
   const fileField = readConfigName(binding.fileField, 'fileField');
-  let collection: InspectedCollection | undefined;
-  let files: InspectedCollection | undefined;
-  try {
-    collection = state.database
-      .builder(state.connection)
-      .inspectCollection(collectionName);
-    files = state.database.builder(state.connection).inspectCollection('files');
-  } catch (_error) {
-    throw invalidFileRoute(
-      `Collection "${collectionName}" cannot be inspected for a file route.`,
-    );
-  }
+  const builder = state.database.builder(state.connection);
+  const collection = builder.inspectCollection(collectionName);
+  const files = builder.inspectCollection('files');
   if (!collection) {
     throw invalidFileRoute(`Collection "${collectionName}" does not exist.`);
   }

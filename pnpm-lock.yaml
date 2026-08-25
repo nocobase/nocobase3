@@ -1229,6 +1229,37 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/drive:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.577.0
+        version: 3.1111.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.577.0
+        version: 3.1111.0
+      flydrive:
+        specifier: ^2.1.0
+        version: 2.1.0(@aws-sdk/client-s3@3.1111.0)(@aws-sdk/s3-request-presigner@3.1111.0)
+    devDependencies:
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../dev-config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/hub:
     devDependencies:
       '@ai-sdk/react':
@@ -1255,9 +1286,6 @@ importers:
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
-      '@nocobase/app-plugin-files':
-        specifier: workspace:^
-        version: link:../app-plugin-files
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../app-portal-sdk
@@ -5129,6 +5157,21 @@ packages:
   flow-parser@0.328.0:
     resolution: {integrity: sha512-F+Ik2Of7ndl2FyPmZ77NrhbZp9lYjIsreDXeq4fo0sjxa3SIFv48QAszBqvPeMMzmw7JzqySJUxGR8CSD7EdXw==}
     engines: {node: '>=0.4.0'}
+
+  flydrive@2.1.0:
+    resolution: {integrity: sha512-464Y3vfAZKI3h+LodtjjFMnMxiItyHTKVGzfb2RBYzPfFl1gG7/RstlXH7bhUgB34h44lO9Cm4ZDW8UEk6Jd5g==}
+    engines: {node: '>=24.0.0'}
+    peerDependencies:
+      '@aws-sdk/client-s3': ^3.577.0
+      '@aws-sdk/s3-request-presigner': ^3.577.0
+      '@google-cloud/storage': ^7.10.2
+    peerDependenciesMeta:
+      '@aws-sdk/client-s3':
+        optional: true
+      '@aws-sdk/s3-request-presigner':
+        optional: true
+      '@google-cloud/storage':
+        optional: true
 
   follow-redirects@1.16.0:
     resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
@@ -11732,6 +11775,16 @@ snapshots:
   flow-parser@0.328.0:
     dependencies:
       flow-estree: 0.328.0
+
+  flydrive@2.1.0(@aws-sdk/client-s3@3.1111.0)(@aws-sdk/s3-request-presigner@3.1111.0):
+    dependencies:
+      '@humanwhocodes/retry': 0.4.3
+      '@poppinss/utils': 7.0.1
+      etag: 1.8.1
+      mime-types: 3.0.2
+    optionalDependencies:
+      '@aws-sdk/client-s3': 3.1111.0
+      '@aws-sdk/s3-request-presigner': 3.1111.0
 
   follow-redirects@1.16.0(debug@4.4.3):
     optionalDependencies:

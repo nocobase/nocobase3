@@ -24,6 +24,8 @@ const defaultRedactPaths = [
   'headers.Authorization',
   'headers.cookie',
   'headers.Cookie',
+  'req.headers.referer',
+  'req.query.access',
 ];
 
 const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(

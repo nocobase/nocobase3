@@ -20,7 +20,6 @@ export interface ApiRouteOptions {
 }
 
 export interface ApiRoutes {
-  app: Hono;
   plugins: Hono;
   protectedRoutes: AppPluginProtectedRoutes;
   finalize(): Hono;
@@ -67,7 +66,6 @@ export function createApiRoutes({
     }),
   );
   return {
-    app: api,
     plugins: pluginRoutes,
     protectedRoutes,
     finalize(): Hono {

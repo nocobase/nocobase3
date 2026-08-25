@@ -74,11 +74,6 @@ export class CollectionBuilder {
   }
 
   inspectCollection(name: string): InspectedCollection | undefined {
-    if (!this.metadataStore.getCollectionSync) {
-      throw new Error(
-        'The configured collection metadata store does not support synchronous inspection.',
-      );
-    }
     const definition = this.metadataStore.getCollectionSync(name);
     if (!definition) {
       return undefined;
@@ -117,24 +112,6 @@ export class CollectionBuilder {
     await this.metadataStore.saveCollection(name, {
       ...definition,
       name,
-    });
-  }
-
-  async removeCollectionMetadata(name: string): Promise<void> {
-    await this.metadataStore.removeCollection(name);
-  }
-
-  /** Renames the logical collection while preserving its physical table name. */
-  async renameCollectionMetadata(from: string, to: string): Promise<void> {
-    const current = await this.metadataStore.getCollection(from);
-    if (!current) {
-      return;
-    }
-    await this.metadataStore.removeCollection(from);
-    await this.metadataStore.saveCollection(to, {
-      ...current,
-      name: to,
-      tableName: this.compiler.effectiveTableName(from, current),
     });
   }
 

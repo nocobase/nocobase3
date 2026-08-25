@@ -1,64 +1,110 @@
-import { buildAppFileUrl } from './app-client';
-import { normalizeFileBasePath } from './base-path';
-import type { StoredFile } from './types';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 
-export function getFileName(file: StoredFile): string {
-  return file.name || `file-${file.id}`;
+import { getDataSourceHeaders } from './storage';
+import { isNocoBaseManagedFileUrl } from './file-url-policy';
+import type { FileFieldDescriptor, NocoBaseFileRecord } from './types';
+
+type TemporaryUrlResponse = {
+  url?: string;
+  data?: { url?: string; data?: { url?: string } };
+};
+
+function resolveFileUrl(value?: string | null) {
+  return value ? nocobaseClient.resolveUrl(value) : '';
 }
 
-export function getFileContentPath(basePath: string, file: StoredFile): string {
-  return `${normalizeFileBasePath(basePath)}/${encodeURIComponent(file.id)}/content`;
+function getFileUrlSource(file: NocoBaseFileRecord) {
+  return file.url || file.preview || file.path || '';
 }
 
-export function getPreviewFileUrl(basePath: string, file: StoredFile): string {
-  return buildAppFileUrl(getFileContentPath(basePath, file));
+export function isNocoBaseFileUrl(value: string) {
+  return isNocoBaseManagedFileUrl(
+    value,
+    nocobaseClient.getApiUrl(),
+    typeof window === 'undefined' ? undefined : window.location.href,
+  );
 }
 
-export function getDownloadUrl(basePath: string, file: StoredFile): string {
-  return buildAppFileUrl(getFileContentPath(basePath, file), {
-    disposition: 'attachment',
-  });
+function appendUrlFlag(value: string, flag: 'download' | 'preview') {
+  if (!value) return value;
+
+  try {
+    const url = new URL(
+      value,
+      typeof window === 'undefined' ? undefined : window.location.href,
+    );
+    url.searchParams.set(flag, '1');
+    return url.toString();
+  } catch {
+    const separator = value.includes('?') ? '&' : '?';
+    return `${value}${separator}${flag}=1`;
+  }
 }
 
-export function getThumbnailUrl(basePath: string, file: StoredFile): string {
-  return getPreviewFileUrl(basePath, file);
+export function getFileUrl(file: NocoBaseFileRecord) {
+  return resolveFileUrl(getFileUrlSource(file));
 }
 
-export function fetchFileContent(
-  basePath: string,
-  file: StoredFile,
-  options: { signal?: AbortSignal; method?: 'GET' | 'HEAD' } = {},
-): Promise<Response> {
-  const method = options.method ?? 'GET';
-  return fetch(
-    buildAppFileUrl(
-      getFileContentPath(basePath, file),
-      method === 'HEAD' ? { disposition: 'attachment' } : undefined,
-    ),
-    {
-      method,
-      credentials: 'same-origin',
-      signal: options.signal,
-    },
-  ).then((response) => {
-    if (!response.ok) {
-      throw new Error(`Unable to load file (${response.status})`);
-    }
-    return response;
-  });
+export function getPreviewFileUrl(file: NocoBaseFileRecord) {
+  const source = getFileUrlSource(file);
+  const url = getFileUrl(file);
+  return isNocoBaseFileUrl(source) ? appendUrlFlag(url, 'preview') : url;
 }
 
-export async function triggerFileDownload(
-  basePath: string,
-  file: StoredFile,
-): Promise<void> {
-  if (typeof document === 'undefined') return;
-  await fetchFileContent(basePath, file, { method: 'HEAD' });
+export function getThumbnailUrl(file: NocoBaseFileRecord) {
+  const source = file.preview || getFileUrlSource(file);
+  const url = resolveFileUrl(source);
+  return isNocoBaseFileUrl(source) ? appendUrlFlag(url, 'preview') : url;
+}
+
+export function getFileName(file: NocoBaseFileRecord) {
+  return file.title || file.filename || `file-${file.id}`;
+}
+
+export function getDownloadFileName(file: NocoBaseFileRecord) {
+  const filename = getFileName(file);
+  if (file.extname && !filename.toLowerCase().endsWith(file.extname)) {
+    return `${filename}${file.extname.startsWith('.') ? '' : '.'}${
+      file.extname
+    }`;
+  }
+  return filename;
+}
+
+export function getDownloadUrl(file: NocoBaseFileRecord) {
+  const source = getFileUrlSource(file);
+  const url = getFileUrl(file);
+  return isNocoBaseFileUrl(source) ? appendUrlFlag(url, 'download') : url;
+}
+
+export function triggerFileDownload(file: NocoBaseFileRecord) {
+  const url = getDownloadUrl(file);
+  if (!url || typeof document === 'undefined') return;
+
   const link = document.createElement('a');
-  link.href = getDownloadUrl(basePath, file);
-  link.download = getFileName(file);
+  link.href = url;
+  link.download = getDownloadFileName(file);
   link.rel = 'noopener noreferrer';
   document.body.appendChild(link);
   link.click();
   link.remove();
+}
+
+export async function createTemporaryFileUrl(
+  file: NocoBaseFileRecord,
+  descriptor: FileFieldDescriptor,
+) {
+  const response = await nocobaseClient.action<TemporaryUrlResponse>(
+    descriptor.fileCollection,
+    `createTemporaryURL/${file.id}`,
+    {
+      method: 'POST',
+      headers: getDataSourceHeaders(descriptor.dataSourceKey),
+      unwrap: 'none',
+    },
+  );
+
+  const url =
+    response.url ?? response.data?.url ?? response.data?.data?.url ?? '';
+  return resolveFileUrl(url);
 }

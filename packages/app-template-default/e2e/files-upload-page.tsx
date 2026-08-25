@@ -5,7 +5,7 @@ import '../client/App.css';
 import {
   FileUploadField,
   type StoredFile,
-} from '../registry/nocobase-file-upload';
+} from '../client/extensions/nocobase-file-upload';
 
 function FilesUploadPage() {
   const [files, setFiles] = useState<StoredFile[]>([]);

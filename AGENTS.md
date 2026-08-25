@@ -42,7 +42,7 @@ Every package in `packages/` is published to npm, so none of them set `private: 
 
 A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
 
-Package names must not collide with what the v2 line already publishes. `@nocobase/app-database`, `@nocobase/app-server-kit`, and `@nocobase/app-portal-sdk` are taken, which is why the v3 packages are `@nocobase/app-database`, `@nocobase/app-server-kit`, and `@nocobase/app-portal-sdk`. Check npm before settling on a name.
+Package names must not collide with what the v2 line already publishes. `@nocobase/database`, `@nocobase/app-server`, and `@nocobase/portal-sdk` are taken, which is why the v3 packages are `@nocobase/app-database`, `@nocobase/app-server-kit`, and `@nocobase/app-portal-sdk`. Check npm before settling on a name.
 
 ### Test Layout
 
@@ -75,6 +75,7 @@ Every package that emits `.d.ts` files (`declaration: true`) enables both `isola
 | `packages/app-host/tsconfig.json`                    | Application host           |
 | `packages/app-server-kit/tsconfig.json`              | Application server library |
 | `packages/caching/tsconfig.json`                     | Caching library            |
+| `packages/drive/tsconfig.json`                       | File storage library       |
 | `packages/id-generator/tsconfig.json`                | ID generator library       |
 | `packages/logging/tsconfig.json`                     | Logging library            |
 | `packages/queue/tsconfig.json`                       | Queue library              |
