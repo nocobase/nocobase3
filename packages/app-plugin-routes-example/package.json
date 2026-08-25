@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-routes-example",
   "displayName": "Routes Example App Plugin",
   "description": "Full-stack example with server and lazy client routes.",
-  "version": "0.0.1-beta.0",
+  "version": "0.0.1-beta.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
