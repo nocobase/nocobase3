@@ -8,6 +8,7 @@ export {
   type ResolvedAppPlugins,
 } from './resolve.js';
 export type {
+  AppPluginClientManifest,
   AppPluginDatabaseManifest,
   AppPluginManifest,
   AppPluginRegistration,

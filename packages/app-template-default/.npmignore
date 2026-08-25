@@ -12,6 +12,7 @@ logs/
 coverage/
 playwright-report/
 test-results/
+client-old/
 
 registry/
 registry.config.json

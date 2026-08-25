@@ -16,6 +16,12 @@
       "@nocobase/app-plugin-files": {
         "enabled": true
       },
+      "@nocobase/app-plugin-data-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-notification-provider": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-database-example": {
         "enabled": true
       },
@@ -35,12 +41,16 @@
     "@base-ui/react": "^1.6.0",
     "@dicebear/core": "^9.4.3",
     "@fontsource-variable/geist": "^5.3.0",
+    "@gchust/agent-annotations": "0.1.x",
     "@hono/node-server": "catalog:",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
+    "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-files": "workspace:^",
+    "@nocobase/app-plugin-data-provider": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
@@ -109,7 +119,6 @@
     "react-day-picker": "10.0.1",
     "react-dom": "catalog:",
     "react-error-boundary": "^6.0.0",
-    "react-grab": "0.1.50",
     "react-hook-form": "^7.57.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.12.2",
@@ -117,7 +126,6 @@
     "recharts": "^3.8.0",
     "remark-gfm": "^4.0.1",
     "shadcn": "^4.13.1",
-    "sonner": "^2.0.3",
     "tailwind-merge": "^3.2.0",
     "tailwindcss": "catalog:",
     "tsc-alias": "^1.9.2",
@@ -148,7 +156,7 @@
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
-    "test": "vitest run --exclude tests/logic/react-grab-picker.test.ts && vitest run --maxWorkers=1 tests/logic/react-grab-picker.test.ts",
+    "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:sdk": "pnpm --filter @nocobase/portal-sdk test",

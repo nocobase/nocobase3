@@ -319,19 +319,36 @@ describe('app server', () => {
 
   it('proxies hub client routes to Vite dev server', async () => {
     const viteDevUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'text/plain; charset=utf-8');
-      response.end(`vite:${_request.method}:${_request.url}`);
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({
+          method: _request.method,
+          url: _request.url,
+          origin: _request.headers.origin,
+          referer: _request.headers.referer,
+        }),
+      );
     });
     const app = createStandaloneServer({ viteDevUrl });
 
     const response = await app.request(
       'http://localhost/hub/settings?tab=apps',
+      {
+        headers: {
+          origin: 'http://localhost',
+          referer: 'http://localhost/hub/',
+        },
+      },
     );
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe(
-      'vite:GET:/hub/settings?tab=apps',
-    );
+    const viteOrigin = new URL(viteDevUrl).origin;
+    await expect(response.json()).resolves.toEqual({
+      method: 'GET',
+      url: '/hub/settings?tab=apps',
+      origin: viteOrigin,
+      referer: `${viteOrigin}/hub/`,
+    });
   });
 
   it('injects browser runtime config when serving the production client index', async () => {

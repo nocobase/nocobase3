@@ -1,0 +1,10 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/client-library.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": ["vite/client"]
+  },
+  "include": ["client/**/*.ts", "client/**/*.tsx"],
+  "exclude": ["tests"]
+}
