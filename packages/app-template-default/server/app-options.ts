@@ -1,4 +1,4 @@
-import type { SpaHandler } from '@nocobase/app-runtime/spa';
+import type { SpaHandler } from '@nocobase/app-server-kit/spa';
 import type {
   LoadedAppPluginBootstrap,
   LoadedAppPluginRoutes,

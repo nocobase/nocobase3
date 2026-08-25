@@ -7,7 +7,7 @@ import type { MigrationSource, SeedSource } from '@nocobase/app-database';
 import type {
   AppPluginBootstrap,
   AppPluginRoutesRegistrar,
-} from '@nocobase/app-runtime/plugins';
+} from '@nocobase/app-server-kit/plugins';
 
 import type {
   AppPluginManifest,

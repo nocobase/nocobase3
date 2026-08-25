@@ -1,9 +1,12 @@
-import { defineConfig, type ConfigFactory } from '@nocobase/app-runtime/config';
+import {
+  defineConfig,
+  type ConfigFactory,
+} from '@nocobase/app-server-kit/config';
 import {
   joinBasePath,
   normalizeBasePath,
   resolveAppNameFromBasePath,
-} from '@nocobase/app-runtime/support';
+} from '@nocobase/app-server-kit/support';
 import type { AppRoutingConfig } from './types.js';
 
 const appConfig: ConfigFactory<AppRoutingConfig> = defineConfig(

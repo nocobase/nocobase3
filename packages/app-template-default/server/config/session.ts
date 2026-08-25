@@ -1,4 +1,7 @@
-import { defineConfig, type ConfigFactory } from '@nocobase/app-runtime/config';
+import {
+  defineConfig,
+  type ConfigFactory,
+} from '@nocobase/app-server-kit/config';
 import type { AppSessionConfig, SessionSameSite } from '@nocobase/session';
 
 const sessionConfig: ConfigFactory<AppSessionConfig> = defineConfig(

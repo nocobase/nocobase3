@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 
-import type { AppWebSocketHandler } from '@nocobase/app-runtime/websocket';
+import type { AppWebSocketHandler } from '@nocobase/app-server-kit/websocket';
 
 import type {
   RealtimeConnection,

@@ -1,7 +1,6 @@
 {
-  "name": "@nocobase/app-runtime",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@nocobase/app-server-kit",
+  "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -48,6 +47,9 @@
       "import": "./src/websocket.ts"
     }
   },
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "exports": {
       ".": {
@@ -86,7 +88,8 @@
         "types": "./dist/websocket.d.ts",
         "import": "./dist/websocket.js"
       }
-    }
+    },
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

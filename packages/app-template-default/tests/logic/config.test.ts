@@ -12,7 +12,7 @@ import {
   createConfigEnv,
   createConfigPaths,
   loadConfig,
-} from '@nocobase/app-runtime/config';
+} from '@nocobase/app-server-kit/config';
 
 import app from '../../server/config/app.ts';
 import caching from '../../server/config/caching.ts';
@@ -698,7 +698,7 @@ describe('app plugins', () => {
 
     expect(authenticationPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-authentication',
-      version: '0.1.0',
+      version: '0.0.1',
       enabled: true,
     });
     expect(authenticationPlugin?.migrationsDirectory).toMatch(
@@ -709,7 +709,7 @@ describe('app plugins', () => {
     );
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
-      version: '0.1.0',
+      version: '0.0.1',
       enabled: true,
     });
     expect(databaseExamplePlugin?.migrationsDirectory).toMatch(
@@ -721,7 +721,7 @@ describe('app plugins', () => {
     expect(databaseExamplePlugin?.routesEntry).toBeUndefined();
     expect(routesExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-routes-example',
-      version: '0.1.0',
+      version: '0.0.1',
       enabled: true,
     });
     expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
@@ -731,7 +731,7 @@ describe('app plugins', () => {
     );
     expect(queueExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-queue-example',
-      version: '0.1.0',
+      version: '0.0.1',
       enabled: true,
     });
     expect(queueExamplePlugin?.jobsDirectory).toMatch(
@@ -742,7 +742,7 @@ describe('app plugins', () => {
     );
     expect(realtimeExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-realtime-example',
-      version: '0.1.0',
+      version: '0.0.1',
       enabled: true,
     });
     expect(realtimeExamplePlugin?.routesEntry).toMatch(

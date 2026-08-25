@@ -1,7 +1,6 @@
 {
   "name": "@nocobase/session",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -16,13 +15,17 @@
       "import": "./src/index.ts"
     }
   },
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
       }
-    }
+    },
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

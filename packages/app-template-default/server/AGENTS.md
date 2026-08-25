@@ -86,11 +86,11 @@ debugging path, proxy, database, or SPA index issues.
 ## Proxy And SPA Runtime Rules
 
 - Keep NocoBase upstream proxy behavior and generic fetch proxy behavior in
-  `@nocobase/app-runtime/proxy`.
+  `@nocobase/app-server-kit/proxy`.
 - Preserve forwarded headers, referer/origin rewriting, and hop-by-hop header
   removal when changing proxy code.
 - SPA runtime globals are created in `server/spa/runtime-globals.ts` and
-  injected by `@nocobase/app-runtime/spa`.
+  injected by `@nocobase/app-server-kit/spa`.
   They are part of the browser SDK contract, not ordinary HTML decoration.
 - Static SPA assets must be served before the SPA fallback and missing assets
   must return JSON `404`, not the SPA index.

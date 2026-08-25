@@ -18,11 +18,11 @@ import {
   createDefaultCachingConfig,
   type CachingConfig,
 } from '@nocobase/caching';
-import type { AppRuntime } from '@nocobase/app-runtime/runtime';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
-} from '@nocobase/app-runtime/websocket';
+} from '@nocobase/app-server-kit/websocket';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/app-database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggingConfig } from '@nocobase/logging';
@@ -35,7 +35,7 @@ import {
   joinBasePath,
   normalizeBasePath,
   resolveAppNameFromBasePath,
-} from '@nocobase/app-runtime/support';
+} from '@nocobase/app-server-kit/support';
 
 import {
   createApp,

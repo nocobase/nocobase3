@@ -1,8 +1,8 @@
 import {
   defineDatabaseConfig,
   type ConfigFactory,
-} from '@nocobase/app-runtime/config';
-import type { AppDatabaseConfig } from '@nocobase/app-runtime/database';
+} from '@nocobase/app-server-kit/config';
+import type { AppDatabaseConfig } from '@nocobase/app-server-kit/database';
 
 const databaseConfig: ConfigFactory<AppDatabaseConfig> = defineDatabaseConfig(
   ({ env, paths }): AppDatabaseConfig => ({

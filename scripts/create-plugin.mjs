@@ -281,7 +281,7 @@ function createScaffoldFiles({
       fix: 'pnpm lint:fix && pnpm format',
     },
     dependencies: {
-      '@nocobase/app-runtime': 'workspace:^',
+      '@nocobase/app-server-kit': 'workspace:^',
       '@nocobase/app-database': 'workspace:^',
       hono: 'catalog:',
     },
@@ -320,11 +320,11 @@ function createScaffoldFiles({
     ['package.json', `${JSON.stringify(packageJson, null, 2)}\n`],
     [
       'server/bootstrap.ts',
-      `import type { AppPluginServerContext } from '@nocobase/app-runtime/plugins';\n\nexport type ${symbolName}PluginServerContext = AppPluginServerContext;\n\nexport default function bootstrap${symbolName}Plugin(\n  _context: ${symbolName}PluginServerContext,\n): void {\n  // Register plugin resources and lifecycle disposers here.\n}\n`,
+      `import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';\n\nexport type ${symbolName}PluginServerContext = AppPluginServerContext;\n\nexport default function bootstrap${symbolName}Plugin(\n  _context: ${symbolName}PluginServerContext,\n): void {\n  // Register plugin resources and lifecycle disposers here.\n}\n`,
     ],
     [
       'server/routes/index.ts',
-      `import type { AppPluginRoutesContext } from '@nocobase/app-runtime/plugins';\nimport { Hono } from 'hono';\n\nexport default function register${symbolName}Routes({\n  app,\n}: AppPluginRoutesContext): void {\n  const routes = new Hono();\n\n  routes.get('/', (context) =>\n    context.json({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    }),\n  );\n\n  app.route('/${shortName}', routes);\n}\n`,
+      `import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';\nimport { Hono } from 'hono';\n\nexport default function register${symbolName}Routes({\n  app,\n}: AppPluginRoutesContext): void {\n  const routes = new Hono();\n\n  routes.get('/', (context) =>\n    context.json({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    }),\n  );\n\n  app.route('/${shortName}', routes);\n}\n`,
     ],
     [
       'tests/bootstrap.test.ts',

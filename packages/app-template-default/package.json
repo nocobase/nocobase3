@@ -1,14 +1,14 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "3.1.1",
+  "version": "3.0.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
   "nocobase": {
-    "defaultTemplateVersion": "3.1.1",
+    "defaultTemplateVersion": "3.0.0",
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true
@@ -40,7 +40,7 @@
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
-    "@nocobase/app-runtime": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/app-database": "workspace:^",

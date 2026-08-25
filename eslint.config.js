@@ -15,7 +15,7 @@ const rootNodeFiles = [
   'tools/**/*.{js,mjs,cjs}',
 ];
 const nodeLibraryRoots = [
-  'packages/app-runtime',
+  'packages/app-server-kit',
   'packages/authorization',
   'packages/caching',
   'packages/app-database',

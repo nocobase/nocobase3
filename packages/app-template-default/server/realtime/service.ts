@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   AppWebSocket,
   AppWebSocketMessageData,
-} from '@nocobase/app-runtime/websocket';
+} from '@nocobase/app-server-kit/websocket';
 
 import {
   encodeRealtimeServerMessage,

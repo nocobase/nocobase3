@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-routes-example",
   "displayName": "Routes Example App Plugin",
   "description": "Example app plugin with a convention-based HTTP route.",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -29,7 +29,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-runtime": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

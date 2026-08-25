@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
 
-import type { AppWebSocketHandler } from '@nocobase/app-runtime/websocket';
-import type { AppRuntime } from '@nocobase/app-runtime/runtime';
+import type { AppWebSocketHandler } from '@nocobase/app-server-kit/websocket';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { CreateAppOptions } from './app-options.js';
 import { onceAsync } from './runtime/disposers.js';
 import {
   registerNocoBaseApiProxyRoutes,
   resolveNocoBaseApiUrl,
-} from '@nocobase/app-runtime/proxy';
-import { registerSpaRoutes } from '@nocobase/app-runtime/spa';
+} from '@nocobase/app-server-kit/proxy';
+import { registerSpaRoutes } from '@nocobase/app-server-kit/spa';
 import {
   normalizeBasePath,
   resolveAppName,
-} from '@nocobase/app-runtime/support';
+} from '@nocobase/app-server-kit/support';
 import type { AppConfig } from './config/index.js';
 import { createRealtimeService } from './realtime/service.js';
 import { createAppDeps, disposeAppDeps } from './runtime/deps.js';
@@ -30,7 +30,10 @@ export type {
   CreateAppOptions,
   SpaHandler,
 } from './app-options.js';
-export { joinBasePath, normalizeBasePath } from '@nocobase/app-runtime/support';
+export {
+  joinBasePath,
+  normalizeBasePath,
+} from '@nocobase/app-server-kit/support';
 
 export type AppServer = Hono & {
   websocket?: AppWebSocketHandler;
