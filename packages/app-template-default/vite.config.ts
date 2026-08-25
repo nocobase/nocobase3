@@ -84,6 +84,9 @@ export default createPortalViteConfig(
         }),
         appClientPluginsPlugin({ root: __dirname }),
       ],
+      server: {
+        watch: { ignored: ['**/.agent-annotations/**'] },
+      },
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],
         alias: [
