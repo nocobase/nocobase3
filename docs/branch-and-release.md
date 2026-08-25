@@ -68,7 +68,7 @@ git add .changeset && git commit -m "chore: add changeset"
 "@nocobase/core": minor
 ---
 
-新增导出能力。
+Add data export support to the core runtime.
 ```
 
 **这一步版本号不变。** changeset 只是一张纸条，会一直攒着：

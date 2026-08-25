@@ -238,6 +238,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
           TITLE: NocoBase 3 预览版发布成功，但 PR 合回失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
@@ -262,6 +263,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
           TITLE: NocoBase 3 预览版发布
           STATUS: success
           STATUS_TEXT_SUCCESS: 发布成功
