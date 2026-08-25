@@ -1,5 +1,5 @@
 import type { CachingConfig } from '@nocobase/caching';
-import type { AppDatabaseConfig } from '@nocobase/app-server/database';
+import type { AppDatabaseConfig } from '@nocobase/app-server-kit/database';
 import type { FilesConfig } from '@nocobase/app-plugin-files/server';
 import type { LoggingConfig } from '@nocobase/logging';
 import type { AppQueueConfig } from '@nocobase/queue';

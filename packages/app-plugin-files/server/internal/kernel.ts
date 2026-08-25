@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import type { DatabaseConnection } from '@nocobase/database';
+import type { DatabaseConnection } from '@nocobase/app-database';
 
 import type { StoredFile } from '../../protocol.js';
 import { normalizeStorageKey } from './storage/key.js';

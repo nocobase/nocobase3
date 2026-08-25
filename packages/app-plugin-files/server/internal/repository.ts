@@ -2,7 +2,7 @@ import type {
   DatabaseConnection,
   DatabaseManager,
   QueryAdapter,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 import {
   readFileRecord,

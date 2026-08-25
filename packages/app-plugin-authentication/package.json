@@ -2,8 +2,7 @@
   "name": "@nocobase/app-plugin-authentication",
   "displayName": "Authentication App Plugin",
   "description": "Authentication plugin for NocoBase applications.",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -31,6 +30,14 @@
     "./client/routes": {
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
+    },
+    "./client/route-contracts": {
+      "types": "./client/route-contracts.ts",
+      "import": "./client/route-contracts.ts"
+    },
+    "./client/actions": {
+      "types": "./client/actions/index.ts",
+      "import": "./client/actions/index.ts"
     },
     "./client/ui": {
       "types": "./client/ui/index.ts",
@@ -60,17 +67,34 @@
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
       },
+      "./client/route-contracts": {
+        "types": "./dist/client/route-contracts.d.ts",
+        "import": "./dist/client/route-contracts.js"
+      },
+      "./client/actions": {
+        "types": "./dist/client/actions/index.d.ts",
+        "import": "./dist/client/actions/index.js"
+      },
       "./client/ui": {
         "types": "./dist/client/ui/index.d.ts",
         "import": "./dist/client/ui/index.js"
       },
       "./package.json": "./package.json"
-    }
+    },
+    "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "registry",
+    "registry.config.json",
+    "public/r"
   ],
   "nocobase": {
+    "registry": {
+      "items": {
+        "auth-ui": "./registry/auth-ui"
+      }
+    },
     "plugin": {
       "client": {
         "bootstrap": "./client/bootstrap",
@@ -86,22 +110,26 @@
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
+    "registry:build": "node ../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
+    "prepack": "pnpm registry:build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
     "@nocobase/app-client": "^0.1.0",
+    "@nocobase/ui": "^0.1.0",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0"
   },
   "dependencies": {
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "better-auth": "catalog:",
     "hono": "catalog:",
     "knex": "catalog:"
@@ -109,6 +137,7 @@
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/ui": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/react": "catalog:",

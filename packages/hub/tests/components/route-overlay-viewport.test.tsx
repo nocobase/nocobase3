@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { MemoryRouter } from 'react-router';
 
-import { RouteOverlayViewportContext } from '@nocobase/portal-sdk/routing';
+import { RouteOverlayViewportContext } from '@nocobase/app-portal-sdk/routing';
 import { RouteDialog } from '@/extensions/nocobase-route-surfaces';
 
 describe('Route overlay viewport', () => {

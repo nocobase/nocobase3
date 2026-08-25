@@ -1,7 +1,7 @@
 import {
   nocobaseClient,
   type NocoBaseClient,
-} from '@nocobase/portal-sdk/client';
+} from '@nocobase/app-portal-sdk/client';
 import type {
   AIChatMessage,
   AIConversation,

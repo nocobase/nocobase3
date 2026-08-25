@@ -1,7 +1,7 @@
 import type {
   ConstraintDefinition,
   InspectedCollection,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import { Hono, type Context } from 'hono';
 
 import type {

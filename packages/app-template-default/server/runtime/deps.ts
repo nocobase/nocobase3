@@ -19,8 +19,8 @@ import {
   createSessionManager,
   type NocoBaseSessionManager,
 } from '@nocobase/session';
-import type { AppRuntime } from '@nocobase/app-server/runtime';
-import { joinBasePath } from '@nocobase/app-server/support';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import { joinBasePath } from '@nocobase/app-server-kit/support';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 
 import { createAppJobFactory } from '../jobs/dependencies.js';

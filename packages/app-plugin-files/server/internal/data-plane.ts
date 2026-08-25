@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 
 import { Hono, type Context } from 'hono';
-import type { DatabaseConnection } from '@nocobase/database';
+import type { DatabaseConnection } from '@nocobase/app-database';
 
 import type { FileUploadPlan, StoredFile } from '../../protocol.js';
 import type { FilesConfig } from '../config.js';

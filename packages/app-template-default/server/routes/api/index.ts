@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requestLogger } from '@nocobase/logging';
-import type { AppPluginProtectedRoutes } from '@nocobase/app-server/plugins';
+import type { AppPluginProtectedRoutes } from '@nocobase/app-server-kit/plugins';
 
 import type { AppServices } from '@/services/index.js';
 import type { AppDeps } from '../../runtime/deps.js';

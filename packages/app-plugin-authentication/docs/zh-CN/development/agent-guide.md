@@ -27,28 +27,26 @@ server/routes/api/auth.ts
 database/migrations/
   应用自己的认证扩展表结构
 
-client/auth/
-  应用自己的认证页面组合、品牌和 provider UI
+client/extensions/nocobase-auth-ui/
+  Registry 安装的认证页面组合、品牌和 UI
 
 client/route-overrides.ts
   只替换插件路由的最终页面组件
 ```
 
 默认认证路由仍由 authentication 插件拥有。应用修改登录、注册、忘记密码和重置密码
-的视觉表现时，应在 `client/auth/` 中组合公开 UI，并通过
-`client/route-overrides.ts` 只替换 `componentLoader`，不要重复声明 `/login` 等路径。
+的视觉表现时，应修改安装后的 `client/extensions/nocobase-auth-ui/`，由其
+`extension.ts` 自动贡献 route component override，不要重复声明 `/login` 等路径。
 
-应用应只从稳定出口导入认证 UI：
+应用页面可以从稳定出口导入认证路由链接：
 
 ```ts
-import {
-  AuthLink,
-  LoginForm,
-} from '@nocobase/app-plugin-authentication/client/ui';
+import { AuthLink } from '@nocobase/app-plugin-authentication/client/ui';
 ```
 
-不要导入 authentication 包内部的 `client/forms`、`client/components` 或
-`client/pages` 路径。需要新增认证方式时，可以把该 provider 的客户端实现放在
+认证页面和密码表单应使用安装后的
+`client/extensions/nocobase-auth-ui/` Registry 源码；不要导入 authentication 包内部的
+`client/default-pages`、`client/fallback-ui` 或其他内部路径。需要新增认证方式时，可以把该 provider 的客户端实现放在
 `client/auth/<provider>`，再由应用页面组合入口引用。
 
 开始前，Agent 可以先阅读这些应用文件，再查看：
@@ -146,7 +144,7 @@ database/migrations/
 ```
 
 可以让 Agent 对照 plugin 文档中的 schema，逐项列出字段、类型、唯一约束和索引，
-再转换为 `@nocobase/database` Fluent DSL。
+再转换为 `@nocobase/app-database` Fluent DSL。
 
 ### 4. 增加客户端入口
 

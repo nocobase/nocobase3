@@ -9,7 +9,7 @@ import { useResourceLabel } from '@/components/resources/resource-label';
 import {
   resolveTranslatableText,
   type TranslationOptions,
-} from '@nocobase/portal-sdk/i18n';
+} from '@nocobase/app-portal-sdk/i18n';
 import { cn } from '@/lib/utils';
 
 type ListViewProps = PropsWithChildren<{

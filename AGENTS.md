@@ -26,7 +26,7 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 - Inherit Prettier through `"prettier": "@nocobase/dev-config/prettier"` in `package.json`.
 - Prefer `pnpm fix` after editing code. It always runs ESLint `--fix` before Prettier `--write`. `pnpm format:check` is a read-only incremental check.
 - Node tests use `createNodeVitestConfig`. React/jsdom tests use `createReactVitestConfig`. The React preset already installs jest-dom matchers and Testing Library cleanup.
-- Portal Vite configurations use `createPortalViteConfig` and inject the compatibility plugin from `@nocobase/portal-sdk/vite`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
+- Portal Vite configurations use `createPortalViteConfig` and inject the compatibility plugin from `@nocobase/app-portal-sdk/vite`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
 - Keep Playwright configuration package-local for now; there is no shared Playwright preset.
 
 ### Dependencies and Runtime
@@ -36,13 +36,21 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 - After changing dependencies, run `CI=true pnpm install --no-frozen-lockfile` and commit the synchronized lockfile. CI uses a frozen lockfile.
 - Node runtime, server, and tooling packages declare Node `>=24.0.0`. A browser-only runtime must not declare a Node runtime requirement merely because its development tooling uses Node.
 
+### Package Publishing
+
+Every package in `packages/` is published to npm, so none of them set `private: true`. A new package that declares it is excluded from the release and from `pack:check`, which means nothing catches a broken publish setup until someone tries to release it.
+
+A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
+
+Package names must not collide with what the v2 line already publishes. `@nocobase/app-database`, `@nocobase/app-server-kit`, and `@nocobase/app-portal-sdk` are taken, which is why the v3 packages are `@nocobase/app-database`, `@nocobase/app-server-kit`, and `@nocobase/app-portal-sdk`. Check npm before settling on a name.
+
 ### Test Layout
 
-Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/database`, or `tests/logic` and `tests/components` in the Portal packages.
+Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/app-database`, or `tests/logic` and `tests/components` in the Portal packages.
 
 Name test files `*.test.ts` or `*.test.tsx`. Vitest discovers them by filename rather than by directory, so a test placed outside `tests/` still runs and will not fail loudly; keeping the layout consistent is a convention the tooling does not enforce for you.
 
-Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/database` does.
+Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/app-database` does.
 
 ### Validation
 
@@ -59,13 +67,13 @@ Every package that emits `.d.ts` files (`declaration: true`) enables both `isola
 
 | Configuration                                        | Purpose                    |
 | ---------------------------------------------------- | -------------------------- |
-| `packages/portal-sdk/tsconfig.json`                  | Portal SDK                 |
+| `packages/app-portal-sdk/tsconfig.json`              | Portal SDK                 |
 | `packages/app-sdk/tsconfig.json`                     | Browser app SDK            |
 | `packages/app-plugin-authentication/tsconfig.json`   | Authentication library     |
 | `packages/authorization/tsconfig.json`               | Authorization library      |
-| `packages/database/tsconfig.json`                    | Database package           |
+| `packages/app-database/tsconfig.json`                | Database package           |
 | `packages/app-host/tsconfig.json`                    | Application host           |
-| `packages/app-server/tsconfig.json`                  | Application server library |
+| `packages/app-server-kit/tsconfig.json`              | Application server library |
 | `packages/caching/tsconfig.json`                     | Caching library            |
 | `packages/id-generator/tsconfig.json`                | ID generator library       |
 | `packages/logging/tsconfig.json`                     | Logging library            |

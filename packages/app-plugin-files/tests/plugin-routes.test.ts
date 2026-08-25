@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseManager,
   type DatabaseManager,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 import { resolveFilesConfig } from '../server/config.js';
 import { createFilesRuntime, type FilesRuntime } from '../server/runtime.js';

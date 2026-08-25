@@ -15,12 +15,12 @@ import {
   type CachingConfig,
 } from '@nocobase/caching';
 import type { AuthEnv, AuthSession } from '@nocobase/app-plugin-authentication';
-import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
-} from '@nocobase/app-server/websocket';
-import type { DatabaseManager, QueryAdapter } from '@nocobase/database';
+} from '@nocobase/app-server-kit/websocket';
+import type { DatabaseManager, QueryAdapter } from '@nocobase/app-database';
 import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import {
@@ -31,7 +31,7 @@ import {
   joinBasePath,
   normalizeBasePath,
   resolveAppNameFromBasePath,
-} from '@nocobase/app-server/support';
+} from '@nocobase/app-server-kit/support';
 
 import {
   createApp,

@@ -3,7 +3,7 @@ import {
   useLogout,
   useTranslate,
 } from '@refinedev/core';
-import { resolveNocoBaseSettingsUrl } from '@nocobase/portal-sdk/runtime';
+import { resolveNocoBaseSettingsUrl } from '@nocobase/app-portal-sdk/runtime';
 import {
   DropdownMenu,
   DropdownMenuItem,

@@ -9,7 +9,7 @@ import {
   createDatabaseManager,
   createMigrationContext,
   type DatabaseManager,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import type {
   CreateBusinessFileResponse,
   FileErrorResponse,

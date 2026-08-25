@@ -5,7 +5,7 @@ import {
   createDatabaseManager,
   createMigrationContext,
   type DatabaseManager,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
 import {

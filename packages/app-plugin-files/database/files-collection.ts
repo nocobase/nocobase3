@@ -1,4 +1,4 @@
-import type { CollectionDefinitionBuilder } from '@nocobase/database';
+import type { CollectionDefinitionBuilder } from '@nocobase/app-database';
 
 export function defineFilesCollection(
   collection: CollectionDefinitionBuilder,

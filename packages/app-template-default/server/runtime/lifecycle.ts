@@ -1,5 +1,5 @@
-import { prepareAppDatabaseStorage } from '@nocobase/app-server/database';
-import type { AppRuntime } from '@nocobase/app-server/runtime';
+import { prepareAppDatabaseStorage } from '@nocobase/app-server-kit/database';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 
 import type { AppConfig } from '../config/index.js';
 

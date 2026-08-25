@@ -1,0 +1,100 @@
+import type {
+  DatabaseManager,
+  MigrationSource,
+  SeedSource,
+} from '@nocobase/app-database';
+
+import { createAppDatabaseManager } from '../database/manager.js';
+import {
+  createAppMigrator,
+  type AppMigrationMetadataRestoreResult,
+  type AppMigrationRunResult,
+  type AppMigrator,
+} from '../database/migrator.js';
+import {
+  createAppSeeder,
+  type AppSeeder,
+  type AppSeedRunResult,
+} from '../database/seeder.js';
+import { prepareAppDatabaseStorage } from '../database/storage.js';
+import type { AppDatabaseConfig } from '../database/types.js';
+
+export type { AppMigrationMetadataRestoreResult } from '../database/migrator.js';
+
+export interface AppRuntimeConfig {
+  database: AppDatabaseConfig;
+}
+
+export interface CreateAppRuntimeOptions {
+  migrationSources?: readonly MigrationSource[];
+  seedSources?: readonly SeedSource[];
+}
+
+export interface AppRuntime<
+  TConfig extends AppRuntimeConfig = AppRuntimeConfig,
+> {
+  config: TConfig;
+  database?: DatabaseManager;
+  migrator?: AppMigrator;
+  seeder?: AppSeeder;
+  restoreMetadata(): Promise<AppMigrationMetadataRestoreResult | undefined>;
+  runMigrations(): Promise<AppMigrationRunResult | undefined>;
+  runSeeds(): Promise<AppSeedRunResult | undefined>;
+  dispose(): Promise<void>;
+}
+
+export function createAppRuntime<TConfig extends AppRuntimeConfig>(
+  config: TConfig,
+  options: CreateAppRuntimeOptions = {},
+): AppRuntime<TConfig> {
+  const database = createAppDatabaseManager(config.database);
+  const migrator = database
+    ? createAppMigrator({
+        database,
+        config: config.database.migrations,
+        sources: options.migrationSources ?? config.database.migrations.sources,
+      })
+    : undefined;
+  const seeder =
+    database && config.database.seeds
+      ? createAppSeeder({
+          database,
+          config: config.database.seeds,
+          sources: options.seedSources ?? config.database.seeds.sources,
+        })
+      : undefined;
+
+  return {
+    config,
+    database,
+    migrator,
+    seeder,
+    restoreMetadata: () =>
+      migrator?.restoreMetadata() ?? Promise.resolve(undefined),
+    runMigrations: () => migrator?.latest() ?? Promise.resolve(undefined),
+    runSeeds: () => seeder?.run() ?? Promise.resolve(undefined),
+    dispose: () => database?.destroy() ?? Promise.resolve(),
+  };
+}
+
+export async function runConfiguredAppSeeds(
+  runtime: AppRuntime,
+): Promise<AppSeedRunResult | undefined> {
+  if (!runtime.config.database.seeds?.autoRun) {
+    return undefined;
+  }
+
+  await prepareAppDatabaseStorage(runtime.config.database);
+  return runtime.runSeeds();
+}
+
+export async function runConfiguredAppMigrations(
+  runtime: AppRuntime,
+): Promise<AppMigrationRunResult | undefined> {
+  if (!runtime.config.database.migrations.autoRun) {
+    return undefined;
+  }
+
+  await prepareAppDatabaseStorage(runtime.config.database);
+  return runtime.runMigrations();
+}

@@ -6,7 +6,7 @@ import type {
   DatabaseManager,
   InspectedCollection,
   QueryAdapter,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 import { RelationBindingRepository } from '../server/internal/relation-repository.js';
 

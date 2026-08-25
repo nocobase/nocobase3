@@ -1,8 +1,7 @@
 {
   "name": "@nocobase/app-client",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "React and Refine runtime for NocoBase applications.",
-  "private": true,
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -36,7 +35,8 @@
         "types": "./dist/ui/index.d.ts",
         "import": "./dist/ui/index.js"
       }
-    }
+    },
+    "access": "public"
   },
   "files": [
     "dist"

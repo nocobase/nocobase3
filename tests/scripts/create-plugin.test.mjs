@@ -73,7 +73,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     migrations: './database/migrations',
     seeds: './database/seeds',
   });
-  assert.equal(packageJson.dependencies['@nocobase/database'], 'workspace:^');
+  assert.equal(
+    packageJson.dependencies['@nocobase/app-database'],
+    'workspace:^',
+  );
   assert.equal(packageJson.dependencies.hono, 'catalog:');
   assert.equal(packageJson.peerDependencies['@nocobase/app-client'], '^0.1.0');
   assert.equal(packageJson.peerDependencies.react, '^19.0.0');

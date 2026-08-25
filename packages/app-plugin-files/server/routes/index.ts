@@ -1,4 +1,4 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';
+import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
 
 import { getFilesRuntimeDataPlane } from '../internal/runtime.js';
 import type { FilesRuntime } from '../runtime.js';

@@ -77,8 +77,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.577.0",
     "@aws-sdk/s3-request-presigner": "^3.577.0",
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

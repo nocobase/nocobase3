@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 
 import type { AppConfig } from '../../server/config/index.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';

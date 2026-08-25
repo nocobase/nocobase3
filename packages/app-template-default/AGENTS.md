@@ -1,7 +1,7 @@
 # Default App Development Guidelines
 
 This package is the reference application for the new `@nocobase/app-client`
-and `@nocobase/app-server` architecture. Follow the repository root
+and `@nocobase/app-server-kit` architecture. Follow the repository root
 `AGENTS.md` first, then these package-specific rules.
 
 ## Use the current client architecture
@@ -30,17 +30,20 @@ pnpm plugin:unregister <name> --app app-template-default
 - The application owns its root route, theme, page composition, branding,
   loading states, and final provider tree.
 
-Do not redeclare a plugin route merely to customize its UI. Put application
-component replacements in `client/route-overrides.ts`. Overrides may replace
-only `componentLoader`; route identity, path, auth mode, and plugin ownership
-remain unchanged. Keep every route page lazy-loaded and default-export its
-component.
+Do not redeclare a plugin route merely to customize its UI. Application source
+extensions under `client/extensions/*/extension.ts` may contribute component
+replacements; `client/route-overrides.ts` remains available for direct
+application overrides. Overrides may replace only `componentLoader`; route
+identity, path, auth mode, and plugin ownership remain unchanged. Keep every
+route page lazy-loaded and default-export its component.
 
-Authentication-specific UI customization belongs in `client/auth/`. Reuse the
-stable `@nocobase/app-plugin-authentication/client/ui` exports for forms and
-links. Do not call Better Auth endpoints directly from page components or
-duplicate session state; use the Refine authentication hooks exposed by those
-components. See `client/auth/README.md` for the edit map.
+Authentication-specific UI customization belongs in the installed
+`client/extensions/nocobase-auth-ui/` Registry source. Reuse `AuthLink` from the
+stable `@nocobase/app-plugin-authentication/client/ui` export, keep the final
+password forms in the Registry `forms/` directory, and use `client/actions` for
+a fully custom form. Do not call Better Auth endpoints directly from page
+components or duplicate session state. See
+`client/extensions/nocobase-auth-ui/README.md` for the edit map.
 
 ## Keep the client inspectable
 

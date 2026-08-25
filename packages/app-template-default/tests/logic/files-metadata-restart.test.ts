@@ -20,8 +20,8 @@ import {
 import {
   createAppRuntime,
   type AppRuntime,
-} from '@nocobase/app-server/runtime';
-import type { AppDatabaseConfig } from '@nocobase/app-server/database';
+} from '@nocobase/app-server-kit/runtime';
+import type { AppDatabaseConfig } from '@nocobase/app-server-kit/database';
 
 import type { AppConfig } from '../../server/config/index.js';
 import { prepareAppRuntime } from '../../server/runtime/lifecycle.js';

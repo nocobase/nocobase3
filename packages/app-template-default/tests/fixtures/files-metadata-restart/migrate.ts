@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
-import type { AppDatabaseConfig } from '@nocobase/app-server/database';
-import { createAppRuntime } from '@nocobase/app-server/runtime';
+import type { AppDatabaseConfig } from '@nocobase/app-server-kit/database';
+import { createAppRuntime } from '@nocobase/app-server-kit/runtime';
 
 const filename = process.argv[2];
 if (!filename) {

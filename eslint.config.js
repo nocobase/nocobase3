@@ -15,10 +15,10 @@ const rootNodeFiles = [
   'tools/**/*.{js,mjs,cjs}',
 ];
 const nodeLibraryRoots = [
-  'packages/app-server',
+  'packages/app-server-kit',
   'packages/authorization',
   'packages/caching',
-  'packages/database',
+  'packages/app-database',
   'packages/app-host',
   'packages/id-generator',
   'packages/logging',
@@ -29,7 +29,7 @@ const devConfigRoots = ['packages/dev-config'];
 const clientLibraryRoots = [
   'packages/app-client',
   'packages/app-sdk',
-  'packages/portal-sdk',
+  'packages/app-portal-sdk',
 ];
 const portalRoots = ['packages/app-template-default', 'packages/hub'];
 const prefixPatterns = (roots, patterns) =>

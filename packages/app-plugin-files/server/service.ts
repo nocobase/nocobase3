@@ -1,4 +1,4 @@
-import { normalizeBasePath } from '@nocobase/app-server/support';
+import { normalizeBasePath } from '@nocobase/app-server-kit/support';
 import type { Hono } from 'hono';
 
 import type { FileUploadPlan, StoredFile } from '../protocol.js';

@@ -7,7 +7,7 @@ import {
   type PropsWithChildren,
   type SetStateAction,
 } from 'react';
-import { RouteOverlayViewportContext } from '@nocobase/portal-sdk/routing';
+import { RouteOverlayViewportContext } from '@nocobase/app-portal-sdk/routing';
 import {
   AIChatFloatingTrigger,
   NocoBaseAIRootProvider,

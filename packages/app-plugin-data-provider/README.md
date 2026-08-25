@@ -2,7 +2,7 @@
 
 Client-only App plugin that registers the NocoBase Refine `dataProvider`.
 
-The implementation currently reuses `@nocobase/portal-sdk/data`. This package
+The implementation currently reuses `@nocobase/app-portal-sdk/data`. This package
 owns only the App client bootstrap integration; it does not manage database
 connections, schemas, or server-side data sources.
 

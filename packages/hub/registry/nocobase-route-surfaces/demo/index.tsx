@@ -12,7 +12,7 @@ import {
   createRouteSurfaceNavigationState,
   resolveRouteSurfaceCloseTo,
   useRouteSurfaceClose,
-} from '@nocobase/portal-sdk/routing';
+} from '@nocobase/app-portal-sdk/routing';
 import {
   useLocation,
   useNavigate,

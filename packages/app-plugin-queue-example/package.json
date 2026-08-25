@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-queue-example",
   "displayName": "Queue Example App Plugin",
   "description": "Example app plugin with a convention-based queue job and route.",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -29,7 +29,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "hono": "catalog:"
   },

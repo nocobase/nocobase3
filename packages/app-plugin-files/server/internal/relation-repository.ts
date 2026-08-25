@@ -3,7 +3,7 @@ import type {
   DatabaseManager,
   InspectedCollection,
   QueryAdapter,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 export interface CreateRelationBindingRepositoryOptions {
   database: DatabaseManager;

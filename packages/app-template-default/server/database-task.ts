@@ -1,7 +1,7 @@
 import {
   createAppRuntime,
   type AppRuntime,
-} from '@nocobase/app-server/runtime';
+} from '@nocobase/app-server-kit/runtime';
 
 import {
   loadStandaloneDatabaseTaskConfig,

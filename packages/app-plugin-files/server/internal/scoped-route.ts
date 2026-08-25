@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import type { Context } from 'hono';
-import { joinBasePath } from '@nocobase/app-server/support';
+import { joinBasePath } from '@nocobase/app-server-kit/support';
 
 export function resolvePublicFileRoutePath(
   publicBasePath: string,
