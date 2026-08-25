@@ -1,4 +1,4 @@
-import type { AppPluginServerContext } from '@nocobase/app-server/plugins';
+import type { AppPluginServerContext } from '@nocobase/app-runtime/plugins';
 
 import {
   startClockPublisher,

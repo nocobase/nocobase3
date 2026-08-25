@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 import { mailApi } from '../components/mail-api';
 
 afterEach(() => vi.restoreAllMocks());

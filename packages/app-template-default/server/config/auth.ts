@@ -1,4 +1,4 @@
-import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
+import { defineConfig, type ConfigFactory } from '@nocobase/app-runtime/config';
 import type { AuthOptions } from '@nocobase/app-plugin-authentication';
 
 export type AppAuthConfig = Omit<AuthOptions, 'connection'>;

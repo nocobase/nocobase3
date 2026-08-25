@@ -52,7 +52,7 @@ const config = JSON.parse(
 );
 const itemNames = new Set();
 const filesByRoot = new Map();
-const portalSdkImport = '@nocobase/portal-sdk';
+const portalSdkImport = '@nocobase/app-portal-sdk';
 const sourceItems = config.items.map((item) => {
   if (!item.name || itemNames.has(item.name)) {
     throw new Error(`Registry item name must be unique: ${item.name}`);

@@ -69,7 +69,7 @@
   "dependencies": {
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "@refinedev/core": "catalog:",
     "better-auth": "catalog:",
     "hono": "catalog:",

@@ -5,14 +5,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { validateMigrations, validateSeeds } from '@nocobase/database';
+import { validateMigrations, validateSeeds } from '@nocobase/app-database';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createConfigEnv,
   createConfigPaths,
   loadConfig,
-} from '@nocobase/app-server/config';
+} from '@nocobase/app-runtime/config';
 
 import app from '../../server/config/app.ts';
 import caching from '../../server/config/caching.ts';

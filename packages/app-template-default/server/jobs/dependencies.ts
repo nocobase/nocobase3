@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { Logger } from '@nocobase/logging';
 import type { Job, JobClass, JobFactory } from '@nocobase/queue';
 

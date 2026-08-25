@@ -1,8 +1,8 @@
 import { lazy } from 'react';
 import { LogIn } from 'lucide-react';
 
-import type { AppExtension } from '@nocobase/portal-sdk/extensions';
-import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
+import type { AppExtension } from '@nocobase/app-portal-sdk/extensions';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 
 const OidcSignInButton = lazy(() => import('./oidc-sign-in-button'));
 const OidcAutoRedirectProvider = lazy(() => import('./auto-redirect-provider'));

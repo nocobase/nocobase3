@@ -7,13 +7,13 @@ import { fileURLToPath } from 'node:url';
 import {
   createAppRuntime,
   type AppRuntime,
-} from '@nocobase/app-server/runtime';
+} from '@nocobase/app-runtime/runtime';
 import {
   acceptWebSocketUpgrade,
   createWebSocketUpgradeRequest,
   isWebSocketUpgrade,
   rejectWebSocketUpgrade,
-} from '@nocobase/app-server/websocket';
+} from '@nocobase/app-runtime/websocket';
 
 import type { AppServer } from './app.js';
 import type { AppConfig } from './config/index.js';

@@ -3,7 +3,7 @@ import {
   RouteSurfaceContext,
   type RouteSurfaceBeforeClose,
   useRouteSurfaceState,
-} from '@nocobase/portal-sdk/routing';
+} from '@nocobase/app-portal-sdk/routing';
 
 export function RoutePage({
   children,

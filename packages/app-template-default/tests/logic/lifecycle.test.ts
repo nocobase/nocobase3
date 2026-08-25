@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AppRuntime } from '@nocobase/app-server/runtime';
+import type { AppRuntime } from '@nocobase/app-runtime/runtime';
 
 import type { AppConfig } from '../../server/config/index.ts';
 
@@ -26,11 +26,11 @@ const runConfiguredAppSeedsMock = vi.hoisted(() =>
   }),
 );
 
-vi.mock('@nocobase/app-server/database', () => ({
+vi.mock('@nocobase/app-runtime/database', () => ({
   prepareAppDatabaseStorage: prepareAppDatabaseStorageMock,
 }));
 
-vi.mock('@nocobase/app-server/runtime', () => ({
+vi.mock('@nocobase/app-runtime/runtime', () => ({
   runConfiguredAppMigrations: runConfiguredAppMigrationsMock,
   runConfiguredAppSeeds: runConfiguredAppSeedsMock,
 }));

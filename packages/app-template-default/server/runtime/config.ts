@@ -5,8 +5,8 @@ import {
   createConfigPaths,
   loadConfig,
   type ConfigContext,
-} from '@nocobase/app-server/config';
-import type { AppDatabaseConfig } from '@nocobase/app-server/database';
+} from '@nocobase/app-runtime/config';
+import type { AppDatabaseConfig } from '@nocobase/app-runtime/database';
 import type { AppQueueConfig } from '@nocobase/queue';
 
 import configFactories, { type AppConfig } from '../config/index.js';

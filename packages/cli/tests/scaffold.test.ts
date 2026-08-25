@@ -33,7 +33,7 @@ async function createTemplate(
   await writeFile(
     path.join(directory, 'package.json'),
     JSON.stringify({
-      dependencies: { '@nocobase/app-server': '^0.1.0' },
+      dependencies: { '@nocobase/app-runtime': '^0.1.0' },
       name: '@nocobase/app-template-default',
       publishConfig: { access: 'public' },
       repository: { type: 'git', url: 'git+https://example.com/repo.git' },
@@ -132,7 +132,7 @@ describe('scaffoldApp', () => {
       await readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
     );
 
-    expect(manifest.dependencies['@nocobase/app-server']).toBe('^0.1.0');
+    expect(manifest.dependencies['@nocobase/app-runtime']).toBe('^0.1.0');
   });
 
   it('records where the app came from', async () => {

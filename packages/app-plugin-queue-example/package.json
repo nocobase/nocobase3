@@ -29,7 +29,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-runtime": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "hono": "catalog:"
   },

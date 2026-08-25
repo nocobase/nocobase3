@@ -2,7 +2,7 @@ import {
   defineConfig,
   type ConfigEnv,
   type ConfigFactory,
-} from '@nocobase/app-server/config';
+} from '@nocobase/app-runtime/config';
 import type { AppServerConfig } from './types.js';
 
 const serverConfig: ConfigFactory<AppServerConfig> = defineConfig(

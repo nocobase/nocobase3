@@ -46,7 +46,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/database": "workspace:^"
+    "@nocobase/app-database": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

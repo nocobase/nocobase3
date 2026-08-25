@@ -4,8 +4,8 @@ import {
   nocobaseClient,
   nocobaseWebSocket,
   normalizeNocoBaseRuntimeError,
-} from '@nocobase/portal-sdk/client';
-import { portalRuntimeStore } from '@nocobase/portal-sdk/runtime';
+} from '@nocobase/app-portal-sdk/client';
+import { portalRuntimeStore } from '@nocobase/app-portal-sdk/runtime';
 import { resolveAppUrl } from '@nocobase/app-sdk';
 import {
   useEffect,

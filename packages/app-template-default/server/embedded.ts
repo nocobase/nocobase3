@@ -1,4 +1,4 @@
-import { createAppRuntime } from '@nocobase/app-server/runtime';
+import { createAppRuntime } from '@nocobase/app-runtime/runtime';
 
 import type { AppServer } from './app.js';
 import {

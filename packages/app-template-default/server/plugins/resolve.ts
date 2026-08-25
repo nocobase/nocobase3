@@ -3,11 +3,11 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
-import type { MigrationSource, SeedSource } from '@nocobase/database';
+import type { MigrationSource, SeedSource } from '@nocobase/app-database';
 import type {
   AppPluginBootstrap,
   AppPluginRoutesRegistrar,
-} from '@nocobase/app-server/plugins';
+} from '@nocobase/app-runtime/plugins';
 
 import type {
   AppPluginManifest,

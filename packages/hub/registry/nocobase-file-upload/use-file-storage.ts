@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 
 import { getDataSourceHeaders } from './storage';
 import type { FileFieldDescriptor, StorageCheckResult } from './types';

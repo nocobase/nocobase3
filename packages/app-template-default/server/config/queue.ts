@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
+import { defineConfig, type ConfigFactory } from '@nocobase/app-runtime/config';
 import type { AppQueueConfig } from '@nocobase/queue';
 
 const queueConfig: ConfigFactory<AppQueueConfig> = defineConfig(

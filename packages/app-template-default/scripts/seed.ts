@@ -1,4 +1,4 @@
-import { prepareAppDatabaseStorage } from '@nocobase/app-server/database';
+import { prepareAppDatabaseStorage } from '@nocobase/app-runtime/database';
 
 import { createStandaloneDatabaseTaskRuntime } from '../server/database-task.js';
 

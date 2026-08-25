@@ -1,13 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readEnvFiles, type EnvMap } from '@nocobase/app-server/config';
+import { readEnvFiles, type EnvMap } from '@nocobase/app-runtime/config';
 import {
   joinBasePath,
   normalizeBasePath,
   resolveAppName,
   resolveAppNameFromBasePath,
-} from '@nocobase/app-server/support';
+} from '@nocobase/app-runtime/support';
 
 import type { AppDisposer } from '../app-options.js';
 

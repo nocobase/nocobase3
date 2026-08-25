@@ -1,4 +1,4 @@
-import type { RenderAuthenticator } from '@nocobase/portal-sdk/auth';
+import type { RenderAuthenticator } from '@nocobase/app-portal-sdk/auth';
 
 import { AuthLayout } from '@/components/auth/auth-layout';
 import { DynamicSignIn } from '@/components/auth/dynamic-sign-in';

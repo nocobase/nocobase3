@@ -1,4 +1,4 @@
-import type { SpaRuntimeGlobals } from '@nocobase/app-server/spa';
+import type { SpaRuntimeGlobals } from '@nocobase/app-runtime/spa';
 
 export interface PortalSpaRuntimeConfig {
   appBasePath: string;

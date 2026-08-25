@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 
-import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
-import type { ConfigPaths } from '@nocobase/app-server/config';
+import { defineConfig, type ConfigFactory } from '@nocobase/app-runtime/config';
+import type { ConfigPaths } from '@nocobase/app-runtime/config';
 import type { AppSpaConfig } from './types.js';
 
 const spaConfig: ConfigFactory<AppSpaConfig> = defineConfig(

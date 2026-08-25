@@ -1,6 +1,9 @@
 import type { ResourceProps, TreeMenuItem } from '@refinedev/core';
-import type { AppExtension } from '@nocobase/portal-sdk/extensions';
-import { defineAppRoutes, renderAppRoutes } from '@nocobase/portal-sdk/routing';
+import type { AppExtension } from '@nocobase/app-portal-sdk/extensions';
+import {
+  defineAppRoutes,
+  renderAppRoutes,
+} from '@nocobase/app-portal-sdk/routing';
 import { KeyRound, PanelsTopLeft } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Navigate, Outlet, Route, useLocation } from 'react-router';

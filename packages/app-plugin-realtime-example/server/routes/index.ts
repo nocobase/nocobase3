@@ -1,4 +1,4 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';
+import type { AppPluginRoutesContext } from '@nocobase/app-runtime/plugins';
 import { Hono } from 'hono';
 
 import { CLOCK_TOPIC } from '../publishers/clock.js';

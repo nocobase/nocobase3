@@ -1,5 +1,5 @@
-import type { Role, RoleMode } from '@nocobase/portal-sdk/acl';
-import { resolveTranslatableText } from '@nocobase/portal-sdk/i18n';
+import type { Role, RoleMode } from '@nocobase/app-portal-sdk/acl';
+import { resolveTranslatableText } from '@nocobase/app-portal-sdk/i18n';
 
 export const UNION_ROLE = '__union__';
 export const ANONYMOUS_ROLE = 'anonymous';

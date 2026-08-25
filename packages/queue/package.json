@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@boringnode/queue": "^0.7.1",
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "ioredis": "catalog:",
     "knex": "catalog:"
   },

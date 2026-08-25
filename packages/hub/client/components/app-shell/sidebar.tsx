@@ -1,7 +1,10 @@
 'use client';
 
 import React from 'react';
-import { filterMenuItemsByAcl, useAclState } from '@nocobase/portal-sdk/acl';
+import {
+  filterMenuItemsByAcl,
+  useAclState,
+} from '@nocobase/app-portal-sdk/acl';
 import {
   useMenu,
   useLink,

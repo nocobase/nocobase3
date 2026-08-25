@@ -1,9 +1,9 @@
-import { prepareAppDatabaseStorage } from '@nocobase/app-server/database';
+import { prepareAppDatabaseStorage } from '@nocobase/app-runtime/database';
 import {
   runConfiguredAppMigrations,
   runConfiguredAppSeeds,
   type AppRuntime,
-} from '@nocobase/app-server/runtime';
+} from '@nocobase/app-runtime/runtime';
 import { prepareDriveStorage } from '@nocobase/drive';
 
 import type { AppConfig } from '../config/index.js';
