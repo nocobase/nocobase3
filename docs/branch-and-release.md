@@ -1053,11 +1053,12 @@ gh pr merge "$PR_URL" --merge --delete-branch
 第一种是绝大多数情况。第二种的冲突需要人判断——两边改的是同一个 JSON 对象的不同字段：
 
 ```text
-目标分支版本：
+<<<<<<< HEAD (develop)
   "version": "1.2.0",
   "dependencies": { "lodash": "^4.0.0" }
-发版分支版本：
+=======
   "version": "1.3.0-beta.0",
+>>>>>>> release-beta/2026-08-24.1
 ```
 
 正确结果是两个都要——版本号取发版分支的，依赖取目标分支的。这不能无脑 `--ours` 或 `--theirs`，所以交给人处理。
