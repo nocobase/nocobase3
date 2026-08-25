@@ -67,12 +67,12 @@ jobs:
       - name: Verify develop is in pre mode
         run: |
           if [ ! -f .changeset/pre.json ]; then
-            echo "::error::develop 不在 pre 模式，没有可转正的预览版"
+            echo "::error::develop is not in pre mode — there is no prerelease to promote"
             exit 1
           fi
           MODE=$(node -p "require('./.changeset/pre.json').mode")
           if [ "$MODE" != "pre" ]; then
-            echo "::error::pre.json 的 mode 是 '$MODE'，期望 'pre'"
+            echo "::error::pre.json has mode '$MODE', expected 'pre'"
             exit 1
           fi
           echo "pre tag: $(node -p "require('./.changeset/pre.json').tag")"
@@ -106,7 +106,7 @@ jobs:
             echo "name=$NAME"
             echo "batch=$BATCH"
           } >> "$GITHUB_OUTPUT"
-          echo "本次版本：$BATCH"
+          echo "Version: $BATCH"
 
       # pre exit 只改状态，version 才真正脱后缀并删除 pre.json。
       - name: Exit pre mode and version
@@ -121,7 +121,7 @@ jobs:
         run: |
           CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
           if [ -z "$CHANGED" ]; then
-            echo "::error::转正没有改动任何版本号——这一轮 pre 期间可能从未发过预览版"
+            echo "::error::Promotion changed no versions — this pre cycle may never have shipped a prerelease"
             exit 1
           fi
           echo "$CHANGED"
@@ -138,23 +138,23 @@ jobs:
       - name: Verify no prerelease residue
         run: |
           if [ -f .changeset/pre.json ]; then
-            echo "::error::pre.json 仍然存在，changeset version 未按预期清理"
+            echo "::error::pre.json still exists — changeset version did not clean it up as expected"
             exit 1
           fi
           LEFT=$(node scripts/list-package-versions.mjs --prerelease)
           if [ -n "$LEFT" ]; then
-            echo "::error::以下 package 仍是预发布版本：$LEFT"
+            echo "::error::These packages are still on prerelease versions: $LEFT"
             exit 1
           fi
 
       - name: Summarize
         run: |
           {
-            echo "### 待发布版本"
+            echo "### Pending release"
             echo
-            echo "合并完成后，点 \`release-stable.yml\` 发布："
+            echo "Run \`release-stable.yml\` after this is merged to publish:"
             echo
-            echo "| Package | 版本 |"
+            echo "| Package | Version |"
             echo "| --- | --- |"
             node scripts/list-package-versions.mjs --table
           } >> "$GITHUB_STEP_SUMMARY"
@@ -166,7 +166,7 @@ jobs:
 
       - name: Stop here on dry run
         if: inputs.dry_run
-        run: echo "dry_run=true，到此为止。发版分支未推送。"
+        run: echo "dry_run=true — stopping here. The release branch was not pushed."
 
       # 版本 tag 与发版分支同名。同名期间必须用完整 refspec ——
       # `git push origin <name>` 会报 src refspec matches more than one。
@@ -188,7 +188,7 @@ jobs:
         run: |
           PR_URL=$(gh pr create \
             --title "chore: release ${{ steps.branch.outputs.batch }}" \
-            --body "预览版转正，版本号已脱掉 \`-beta\` 后缀。**尚未发布到 npm**，合并后点 \`release-stable.yml\` 发布。各 package 版本见 workflow summary。" \
+            --body "Promoted the prerelease: version numbers no longer carry the \`-beta\` suffix. **Not published to npm yet** — run \`release-stable.yml\` after merging. Per-package versions are in the workflow summary." \
             --base main \
             --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -198,7 +198,7 @@ jobs:
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
-            echo "::warning::PR 合进 main 失败：$PR_URL"
+            echo "::warning::Failed to merge the PR into main: $PR_URL"
             echo "merged=false" >> "$GITHUB_OUTPUT"
           else
             echo "merged=true" >> "$GITHUB_OUTPUT"
@@ -221,7 +221,7 @@ jobs:
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
-            echo "::warning::合回 develop 有冲突，需要人工处理"
+            echo "::warning::Merging back into develop hit conflicts that need manual work"
             echo "merged=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -233,7 +233,7 @@ jobs:
 
           PR_URL=$(gh pr create \
             --title "chore: sync ${{ steps.branch.outputs.batch }} back to develop" \
-            --body "把转正结果同步回 develop，并重新进入 pre 模式。" \
+            --body "Sync the promoted versions back to develop and re-enter pre mode." \
             --base develop \
             --head "$SYNC")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"

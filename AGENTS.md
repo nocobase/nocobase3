@@ -61,6 +61,27 @@ exports resolve to compiled ESM JavaScript and declarations in `dist`. When
 changing `packages/dev-config`, run
 `pnpm --filter @nocobase/dev-config check`; do not hand-edit generated output.
 
+## Language
+
+Anything a person outside the team can read is written in English. Anything only the team reads may be written in Chinese.
+
+Write in English:
+
+- Commit messages and pull request titles
+- Code comments, including comments in workflow files
+- Identifiers, log output, and error messages
+- Changeset summaries — they are copied verbatim into the published CHANGELOG
+- Everything a GitHub Actions run produces that a contributor sees: `workflow_dispatch` input descriptions, job and step names, job summaries, `::error` and `::warning` annotations, and the body of any pull request the workflow opens
+
+Chinese is fine for:
+
+- Documents under `docs/`
+- Feishu notification titles and bodies, which only reach an internal group
+
+The distinction is the audience, not the file type. A comment inside a workflow is read by maintainers and stays English along with the rest of the code; the Feishu message that same workflow sends never leaves the team, so it stays Chinese.
+
+The workflow files under `.github/workflows/` still carry Chinese comments written before this rule existed. Translate the ones you touch; there is no need to convert the rest in a single pass.
+
 ## TypeScript Requirements for Library Development
 
 Every package that emits `.d.ts` files (`declaration: true`) enables both `isolatedDeclarations: true` and `isolatedModules: true`. This currently covers:
