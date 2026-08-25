@@ -6,7 +6,7 @@ import {
   type NotificationAttemptRecord,
   type NotificationDeliveryRecord,
   type NotificationLogBundle,
-} from '../src/store.js';
+} from '../server/store.js';
 import { createNotificationTestDatabase } from './helpers/database.js';
 
 describe('DatabaseNotificationStore', () => {

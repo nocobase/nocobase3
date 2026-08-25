@@ -10,8 +10,10 @@ import type {
 } from '@nocobase/app-plugin-notification-providers';
 import {
   createNotificationManager,
+  createNotificationRegistry,
   type NotificationManager,
-} from '@nocobase/notification';
+  type NotificationRegistry,
+} from '@nocobase/app-plugin-notification';
 import { createSessionMiddleware } from '@nocobase/session';
 
 import type { AppConfig } from '../config/index.js';
@@ -43,6 +45,7 @@ export interface AppServices {
   appSettingsStore: AppSettings;
   publicFileStorage: FileUploads;
   notification?: NotificationManager<AppNotificationChannels>;
+  notificationRegistry?: NotificationRegistry;
   realtime: RealtimeService;
   start(): Promise<void>;
   dispose(): Promise<void>;
@@ -60,15 +63,18 @@ export function createAppServices(
   const config = runtime.config.notification;
   const database = runtime.database;
   let notification: NotificationManager<AppNotificationChannels> | undefined;
+  let notificationRegistry: NotificationRegistry | undefined;
   if (config.enabled) {
     if (!database) {
       throw new Error('Notifications require a configured database.');
     }
+    notificationRegistry = createNotificationRegistry();
     notification = createNotificationManager<AppNotificationChannels>({
       database,
       queue: deps.queueManager,
       logger: deps.logging.getLogger('notification'),
       config,
+      registry: notificationRegistry,
     });
   }
   notification?.router.use('*', createSessionMiddleware(deps.sessionManager));
@@ -84,6 +90,7 @@ export function createAppServices(
             resolveFileUploadsUnavailableMessage(runtime.config.drive),
           ),
     notification,
+    notificationRegistry,
     realtime: options.realtime,
     start: (): Promise<void> => notification?.start() ?? Promise.resolve(),
     dispose: (): Promise<void> => notification?.close() ?? Promise.resolve(),

@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Hono } from 'hono';
 
 import bootstrap from '../server/bootstrap.js';
 
 describe('notification Providers plugin bootstrap', () => {
   it('registers the Email Channel and SMTP Provider', () => {
     const registry = {
+      router: new Hono(),
+      send: vi.fn(),
       registerChannel: vi.fn(function () {
         return registry;
       }),
@@ -15,7 +18,10 @@ describe('notification Providers plugin bootstrap', () => {
 
     bootstrap({
       deps: undefined,
-      services: { notification: registry },
+      services: {
+        notification: registry,
+        notificationRegistry: registry,
+      },
       lifecycle: { registerDisposer: vi.fn() },
     });
 
@@ -25,6 +31,11 @@ describe('notification Providers plugin bootstrap', () => {
     expect(registry.registerProvider).toHaveBeenCalledWith(
       'email',
       expect.objectContaining({ type: 'smtp' }),
+    );
+    expect(registry.router.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: 'POST', path: '/test/email' }),
+      ]),
     );
   });
 

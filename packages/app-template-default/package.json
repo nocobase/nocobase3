@@ -19,6 +19,9 @@
       "@nocobase/app-plugin-notification-provider": {
         "enabled": true
       },
+      "@nocobase/app-plugin-notification": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-database-example": {
         "enabled": true
       },
@@ -65,7 +68,7 @@
     "@nocobase/drive": "workspace:^",
     "@nocobase/id-generator": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "@nocobase/notification": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",

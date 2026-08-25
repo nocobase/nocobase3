@@ -3,7 +3,6 @@
   "displayName": "Notification Providers App Plugin",
   "description": "Registers built-in notification Channels and Providers.",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -32,6 +31,7 @@
     "./package.json": "./package.json"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/server/index.d.ts",
@@ -61,7 +61,8 @@
   },
   "dependencies": {
     "@nocobase/app-server-kit": "workspace:^",
-    "@nocobase/notification": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^",
+    "hono": "catalog:",
     "nodemailer": "^9.0.5"
   },
   "devDependencies": {

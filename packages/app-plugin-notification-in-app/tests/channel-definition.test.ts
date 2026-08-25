@@ -1,4 +1,4 @@
-import type { NotificationChannelContext } from '@nocobase/notification';
+import type { NotificationChannelContext } from '@nocobase/app-plugin-notification';
 import { describe, expect, it } from 'vitest';
 
 import { createInAppChannelDefinition } from '../server/definition.js';

@@ -10,7 +10,6 @@ import {
 } from '@nocobase/app-server-kit/proxy';
 import { registerSpaRoutes } from '@nocobase/app-server-kit/spa';
 import {
-  joinBasePath,
   normalizeBasePath,
   resolveAppName,
 } from '@nocobase/app-server-kit/support';
@@ -104,15 +103,6 @@ export function createApp(
   });
 
   registerWebSocketRoutes(app);
-
-  if (services.notification) {
-    // Channels add routes during service startup. mount() delegates at request
-    // time, so routes registered after createApp() remain reachable.
-    app.mount(
-      joinBasePath(internalBasePath, '/api/notifications'),
-      services.notification.router.fetch,
-    );
-  }
 
   registerSpaRoutes(app, {
     basePath: internalBasePath,

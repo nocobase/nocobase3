@@ -19,5 +19,4 @@ export interface InAppItem {
   readonly readAt?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly version: number;
 }

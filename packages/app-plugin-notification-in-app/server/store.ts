@@ -21,7 +21,6 @@ export interface InAppStore {
     readonly id: string;
     readonly userId: string;
     readonly action: 'read' | 'unread' | 'delete';
-    readonly expectedVersion: number;
   }): Promise<InAppItem | undefined>;
   markAllRead(userId: string): Promise<number>;
 }
@@ -49,7 +48,6 @@ export class MemoryInAppStore implements InAppStore {
       actionUrl: input.message.actionUrl,
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
-      version: 1,
     };
     this.items.set(item.id, item);
     return item;
@@ -80,15 +78,9 @@ export class MemoryInAppStore implements InAppStore {
     readonly id: string;
     readonly userId: string;
     readonly action: 'read' | 'unread' | 'delete';
-    readonly expectedVersion: number;
   }): Promise<InAppItem | undefined> {
     const item = this.items.get(input.id);
-    if (
-      !item ||
-      item.userId !== input.userId ||
-      item.version !== input.expectedVersion
-    )
-      return undefined;
+    if (!item || item.userId !== input.userId) return undefined;
     const next: InAppItem = {
       ...item,
       readAt:
@@ -98,7 +90,6 @@ export class MemoryInAppStore implements InAppStore {
             ? undefined
             : item.readAt,
       updatedAt: new Date().toISOString(),
-      version: item.version + 1,
     };
     if (input.action === 'delete') this.items.delete(item.id);
     else this.items.set(item.id, next);
@@ -112,7 +103,6 @@ export class MemoryInAppStore implements InAppStore {
           ...item,
           readAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          version: item.version + 1,
         });
         count++;
       }
@@ -131,7 +121,6 @@ interface ItemRow extends Row {
   readAt?: string | null;
   createdAt: string;
   updatedAt: string;
-  version: number;
 }
 
 export class DatabaseInAppStore implements InAppStore {
@@ -153,7 +142,6 @@ export class DatabaseInAppStore implements InAppStore {
       actionUrl: input.message.actionUrl,
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
-      version: 1,
     };
     try {
       await this.database
@@ -202,48 +190,39 @@ export class DatabaseInAppStore implements InAppStore {
     readonly id: string;
     readonly userId: string;
     readonly action: 'read' | 'unread' | 'delete';
-    readonly expectedVersion: number;
   }): Promise<InAppItem | undefined> {
-    const current = await this.database
-      .query()
-      .selectFrom<ItemRow>('notificationInAppItems')
-      .selectAll()
-      .where('id', '=', input.id)
-      .where('userId', '=', input.userId)
-      .executeTakeFirst<ItemRow>();
-    if (!current) return undefined;
     const now = new Date().toISOString();
+    if (input.action === 'delete') {
+      const current = await this.database
+        .query()
+        .selectFrom<ItemRow>('notificationInAppItems')
+        .selectAll()
+        .where('id', '=', input.id)
+        .where('userId', '=', input.userId)
+        .executeTakeFirst<ItemRow>();
+      if (!current) return undefined;
+      const result = await this.database
+        .query()
+        .deleteFrom('notificationInAppItems')
+        .where('id', '=', input.id)
+        .where('userId', '=', input.userId)
+        .execute();
+      return result.deletedCount === 1
+        ? { ...fromRow(current), updatedAt: now }
+        : undefined;
+    }
     const set =
       input.action === 'read'
-        ? { readAt: now, updatedAt: now, version: input.expectedVersion + 1 }
-        : input.action === 'unread'
-          ? {
-              readAt: null,
-              updatedAt: now,
-              version: input.expectedVersion + 1,
-            }
-          : { updatedAt: now, version: input.expectedVersion + 1 };
+        ? { readAt: now, updatedAt: now }
+        : { readAt: null, updatedAt: now };
     const result = await this.database
       .query()
       .updateTable<ItemRow>('notificationInAppItems')
       .set(set)
       .where('id', '=', input.id)
       .where('userId', '=', input.userId)
-      .where('version', '=', input.expectedVersion)
       .execute();
     if (result.updatedCount !== 1) return undefined;
-    if (input.action === 'delete') {
-      await this.database
-        .query()
-        .deleteFrom('notificationInAppItems')
-        .where('id', '=', input.id)
-        .execute();
-      return {
-        ...fromRow(current),
-        updatedAt: now,
-        version: input.expectedVersion + 1,
-      };
-    }
     const row = await this.database
       .query()
       .selectFrom<ItemRow>('notificationInAppItems')
@@ -282,7 +261,6 @@ function fromRow(row: ItemRow): InAppItem {
     readAt: row.readAt ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    version: row.version,
   };
 }
 function toRow(item: InAppItem): ItemRow {
@@ -297,6 +275,5 @@ function toRow(item: InAppItem): ItemRow {
     readAt: item.readAt,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
-    version: item.version,
   };
 }

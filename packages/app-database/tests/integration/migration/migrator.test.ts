@@ -129,7 +129,9 @@ describeIntegrationDatabases('migration runner', (context) => {
     });
     await expect(
       context.db(tableName).select(['package_name', 'name']),
-    ).resolves.toEqual([{ package_name: 'app', name: migrationName }]);
+    ).resolves.toEqual([
+      { package_name: '@nocobase/plugin-legacy', name: migrationName },
+    ]);
   });
 
   it('runs and rolls back a global batch across package sources', async () => {
@@ -411,6 +413,213 @@ describeIntegrationDatabases('migration runner', (context) => {
     await expect(migrator.latest()).rejects.toThrow(
       'Executed migration "202608180001_checksum_guard" checksum changed.',
     );
+  });
+
+  it('accepts an explicitly declared historical checksum', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('acceptedChecksumHistory');
+    const lockTableName = context.table('acceptedChecksumLock');
+    const migrationName = '202608180002_accepted_checksum';
+    await writeMigration(
+      directory,
+      migrationName,
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${migrationName}',
+        async up() {},
+        async down() {},
+      });
+    `,
+    );
+
+    const migrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    });
+    await migrator.latest();
+    const [history] = await context.db(tableName).select('checksum');
+    const canonicalChecksum = 'a'.repeat(64);
+
+    await writeMigration(
+      directory,
+      migrationName,
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${migrationName}',
+        checksum: '${canonicalChecksum}',
+        acceptedChecksums: ['${history.checksum}'],
+        async up() {
+          // The implementation moved without changing the applied schema.
+        },
+        async down() {},
+      });
+    `,
+    );
+
+    const movedMigrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      packageName: '@nocobase/new-source',
+      tableName,
+      lockTableName,
+    });
+    await expect(movedMigrator.latest()).resolves.toMatchObject({
+      executed: [],
+      skipped: [migrationName],
+    });
+    await expect(
+      context.db(tableName).select(['package_name', 'checksum']),
+    ).resolves.toEqual([
+      {
+        package_name: '@nocobase/new-source',
+        checksum: canonicalChecksum,
+      },
+    ]);
+  });
+
+  it('uses an explicit checksum across source and compiled artifacts', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('portableChecksumHistory');
+    const lockTableName = context.table('portableChecksumLock');
+    const migrationName = '202608180003_portable_checksum';
+    const checksum = 'b'.repeat(64);
+    await writeMigration(
+      directory,
+      migrationName,
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${migrationName}',
+        checksum: '${checksum}',
+        async up() {},
+        async down() {},
+      });
+    `,
+    );
+
+    const sourceMigrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      packageName: '@nocobase/source-package',
+      tableName,
+      lockTableName,
+    });
+    await sourceMigrator.latest();
+
+    await rm(join(directory, `${migrationName}.ts`));
+    await writeFile(
+      join(directory, `${migrationName}.js`),
+      trimSource(`
+      import { defineMigration } from '../../../src/index.js';
+      const migration = defineMigration({
+        name: '${migrationName}',
+        checksum: '${checksum}',
+        async up() {},
+        async down() {},
+      });
+      export default migration;
+    `),
+    );
+    const compiledMigrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      packageName: '@nocobase/compiled-package',
+      tableName,
+      lockTableName,
+    });
+
+    await expect(compiledMigrator.latest()).resolves.toMatchObject({
+      executed: [],
+      skipped: [migrationName],
+    });
+    await expect(
+      context.db(tableName).select(['package_name', 'checksum']),
+    ).resolves.toEqual([
+      { package_name: '@nocobase/compiled-package', checksum },
+    ]);
+  });
+
+  it.each([
+    [
+      'source wrapper',
+      'fcddce6190c241db557f05b677947be893ea691672311cde503797244935cc08',
+    ],
+    [
+      'compiled wrapper',
+      'cb5a396bb56195bd0d84479364d5200490bbbb38dbbd6deef073fbc293005a36',
+    ],
+  ])('upgrades a legacy %s migration record', async (_artifact, checksum) => {
+    const directory = await createTempDirectory();
+    const tableName = context.table(`legacyWrapperHistory${checksum[0]}`);
+    const lockTableName = context.table(`legacyWrapperLock${checksum[0]}`);
+    const migrationName = '202608190001_create_notification_tables';
+    const canonicalChecksum = 'c'.repeat(64);
+    const emptyMigrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    });
+    await emptyMigrator.latest();
+    await context.db(tableName).insert({
+      package_name: 'app',
+      name: migrationName,
+      batch: 1,
+      checksum,
+      executed_at: new Date(),
+      duration_ms: 0,
+    });
+    await writeMigration(
+      directory,
+      migrationName,
+      `
+      import { defineMigration } from '../../../src/index.js';
+
+      export default defineMigration({
+        name: '${migrationName}',
+        checksum: '${canonicalChecksum}',
+        acceptedChecksums: [
+          'fcddce6190c241db557f05b677947be893ea691672311cde503797244935cc08',
+          'cb5a396bb56195bd0d84479364d5200490bbbb38dbbd6deef073fbc293005a36',
+        ],
+        async up() {},
+        async down() {},
+      });
+    `,
+    );
+    const movedMigrator = createMigrator({
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      packageName: '@nocobase/app-plugin-notification',
+      tableName,
+      lockTableName,
+    });
+
+    await expect(movedMigrator.latest()).resolves.toMatchObject({
+      executed: [],
+      skipped: [migrationName],
+    });
+    await expect(
+      context.db(tableName).select(['package_name', 'checksum']),
+    ).resolves.toEqual([
+      {
+        package_name: '@nocobase/app-plugin-notification',
+        checksum: canonicalChecksum,
+      },
+    ]);
   });
 });
 

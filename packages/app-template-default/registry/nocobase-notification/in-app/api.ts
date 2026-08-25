@@ -12,7 +12,6 @@ export interface InboxItem {
   readonly actionUrl?: string;
   readonly readAt?: string;
   readonly createdAt: string;
-  readonly version: number;
 }
 
 export interface InboxFilters {
@@ -60,11 +59,10 @@ export async function fetchUnreadCount(signal?: AbortSignal): Promise<number> {
 export async function mutateInboxItem(
   id: string,
   action: InboxMutationAction,
-  expectedVersion: number,
 ): Promise<InboxItem> {
   const response = await mutation<{ readonly data: InboxItem }>(
     `${getInboxBaseUrl()}/${encodeURIComponent(id)}`,
-    { action, expectedVersion },
+    { action },
   );
   return response.data;
 }

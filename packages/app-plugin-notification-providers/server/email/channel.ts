@@ -2,7 +2,7 @@ import type {
   NotificationChannelDefinition,
   NotificationContent,
   NotificationRecipient,
-} from '@nocobase/notification';
+} from '@nocobase/app-plugin-notification';
 
 import type {
   EmailChannelConfig,

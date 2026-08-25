@@ -725,10 +725,6 @@ describe('database migrations', () => {
         name: '202608180001_create_app_settings_table',
         fileName: '202608180001_create_app_settings_table.ts',
       }),
-      expect.objectContaining({
-        name: '202608190001_create_notification_tables',
-        fileName: '202608190001_create_notification_tables.ts',
-      }),
     ]);
   });
 });
@@ -745,6 +741,9 @@ describe('app plugins', () => {
     const notificationProviderPlugin = runtime.config.plugins.find(
       (item) =>
         item.packageName === '@nocobase/app-plugin-notification-provider',
+    );
+    const notificationPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-notification',
     );
     const databaseExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-database-example',
@@ -818,6 +817,14 @@ describe('app plugins', () => {
     );
     expect(notificationProviderPlugin?.migrationsDirectory).toBeUndefined();
     expect(notificationProviderPlugin?.seedsDirectory).toBeUndefined();
+    expect(notificationPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-notification',
+      version: '0.0.1',
+      enabled: true,
+    });
+    expect(notificationPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-notification\/database\/migrations$/,
+    );
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
       version: declaredVersion('@nocobase/app-plugin-database-example'),
@@ -904,6 +911,9 @@ describe('app plugins', () => {
           packageName: '@nocobase/app-plugin-database-example',
         }),
         expect.objectContaining({
+          packageName: '@nocobase/app-plugin-notification',
+        }),
+        expect.objectContaining({
           packageName: '@nocobase/app-plugin-notification-in-app',
         }),
       ]),
@@ -935,6 +945,10 @@ describe('app plugins', () => {
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
           name: '202608220001_database_example_create_messages',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-notification',
+          name: '202608190001_create_notification_tables',
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-notification-in-app',

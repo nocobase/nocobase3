@@ -4,7 +4,7 @@ import type {
   NotificationChannelDefinition,
   NotificationProviderDefinition,
   NotificationRecipient,
-} from '@nocobase/notification';
+} from '@nocobase/app-plugin-notification';
 import { createInAppStore, type InAppStore } from './store.js';
 import { createInAppRouter } from './router.js';
 import type { InAppUserIdResolver } from './router.js';

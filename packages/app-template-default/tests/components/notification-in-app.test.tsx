@@ -49,7 +49,6 @@ describe('notification Inbox page', () => {
             data: {
               ...itemFixture(),
               readAt: '2026-08-20T00:01:00.000Z',
-              version: 2,
             },
           });
         }
@@ -72,7 +71,10 @@ describe('notification Inbox page', () => {
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         '/api/notifications/in-app/item-1',
-        expect.objectContaining({ method: 'POST' }),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ action: 'read' }),
+        }),
       ),
     );
   });
@@ -142,7 +144,6 @@ function itemFixture(): object {
     body: 'A purchase request is waiting for review.',
     actionUrl: '/requests/1',
     createdAt: '2026-08-20T00:00:00.000Z',
-    version: 1,
   };
 }
 

@@ -1,11 +1,11 @@
 import { createLogger } from '@nocobase/logging';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ChannelManager } from '../src/channel-manager.js';
+import { ChannelManager } from '../server/channel-manager.js';
 import {
   type NotificationDeliveryRecord,
   type NotificationLogRecord,
-} from '../src/store.js';
+} from '../server/store.js';
 import { FakeNotificationStore } from './helpers/fake-notification-store.js';
 
 describe('ChannelManager', () => {

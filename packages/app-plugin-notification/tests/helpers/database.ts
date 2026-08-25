@@ -3,7 +3,7 @@ import {
   type DatabaseManager,
 } from '@nocobase/app-database';
 
-import migration from '../../src/migrations/202608190001_create_notification_tables.js';
+import migration from '../../database/migrations/202608190001_create_notification_tables.js';
 
 export async function createNotificationTestDatabase(): Promise<DatabaseManager> {
   const database = createDatabaseManager({

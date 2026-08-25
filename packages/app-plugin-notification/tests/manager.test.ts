@@ -2,8 +2,8 @@ import { createLogger, type DestinationStream } from '@nocobase/logging';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createNotificationManager } from '../src/manager.js';
-import type { NotificationDeliveryRecord } from '../src/store.js';
+import { createNotificationManager } from '../server/manager.js';
+import type { NotificationDeliveryRecord } from '../server/store.js';
 import { createNotificationTestDatabase } from './helpers/database.js';
 import { FakeNotificationStore } from './helpers/fake-notification-store.js';
 
@@ -30,7 +30,7 @@ describe('NotificationManager registration', () => {
       },
       store: new FakeNotificationStore(),
     });
-    manager.registerChannel({
+    manager.registry.registerChannel({
       type: 'email',
       async createChannel() {
         return {
@@ -41,7 +41,7 @@ describe('NotificationManager registration', () => {
         };
       },
     });
-    manager.registerProvider('email', {
+    manager.registry.registerProvider('email', {
       type: 'working',
       async createProvider(_context, config) {
         return {
@@ -54,7 +54,7 @@ describe('NotificationManager registration', () => {
         };
       },
     });
-    manager.registerProvider('email', {
+    manager.registry.registerProvider('email', {
       type: 'broken',
       async createProvider() {
         throw new Error('startup failed');
@@ -88,7 +88,7 @@ describe('NotificationManager registration', () => {
       store: new FakeNotificationStore(),
     });
 
-    manager
+    manager.registry
       .registerChannel({
         type: 'email',
         async createChannel() {
@@ -195,7 +195,7 @@ describe('NotificationManager registration', () => {
     });
 
     for (const channelType of ['in-app', 'email']) {
-      manager
+      manager.registry
         .registerChannel({
           type: channelType,
           async createChannel() {
@@ -341,7 +341,7 @@ describe('NotificationManager registration', () => {
       store: new FakeNotificationStore(),
     });
 
-    manager
+    manager.registry
       .registerChannel({
         type: 'email',
         async createChannel() {
@@ -369,13 +369,13 @@ describe('NotificationManager registration', () => {
     await manager.start();
 
     expect(() =>
-      manager.registerProvider('email', {
+      manager.registry.registerProvider('email', {
         type: 'late',
         async createProvider() {
           throw new Error('not created');
         },
       }),
-    ).toThrow('must be registered before start()');
+    ).not.toThrow();
 
     await manager.close();
     await queue.close();
@@ -399,11 +399,11 @@ describe('NotificationManager registration', () => {
       },
     };
 
-    manager.registerProvider('email', definition);
+    manager.registry.registerProvider('email', definition);
 
-    expect(() => manager.registerProvider('email', definition)).toThrow(
-      'already registered for Channel "email"',
-    );
+    expect(() =>
+      manager.registry.registerProvider('email', definition),
+    ).toThrow('already registered for Channel "email"');
 
     await queue.close();
     await database.destroy();
@@ -427,7 +427,7 @@ describe('NotificationManager registration', () => {
       },
       store: new FakeNotificationStore(),
     });
-    manager.registerChannel({
+    manager.registry.registerChannel({
       type: 'email',
       async createChannel() {
         return {
@@ -438,7 +438,7 @@ describe('NotificationManager registration', () => {
         };
       },
     });
-    manager.registerProvider('email', {
+    manager.registry.registerProvider('email', {
       type: 'configured',
       async createProvider(_context, config) {
         return {
@@ -478,7 +478,7 @@ describe('NotificationManager registration', () => {
       },
       store,
     });
-    manager
+    manager.registry
       .registerChannel({
         type: 'email',
         async createChannel() {

@@ -109,6 +109,25 @@ export async function deleteMigrationHistoryRecord(
     .delete();
 }
 
+export async function updateMigrationHistoryIdentity(
+  connection: MigrationConnection,
+  options: {
+    tableName?: string;
+    name: string;
+    packageName: string;
+    checksum?: string;
+  },
+): Promise<void> {
+  await (
+    await connection.client<Knex>()
+  )(options.tableName ?? DEFAULT_MIGRATION_TABLE)
+    .where({ name: options.name })
+    .update({
+      package_name: options.packageName,
+      ...(options.checksum === undefined ? {} : { checksum: options.checksum }),
+    });
+}
+
 async function ensurePackageNameColumn(
   knex: Knex,
   tableName: string,

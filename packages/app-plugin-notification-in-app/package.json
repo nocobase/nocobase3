@@ -3,13 +3,15 @@
   "displayName": "In-app Notification App Plugin",
   "description": "Registers the in-app notification Channel and database Provider.",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
   "sideEffects": false,
+  "files": [
+    "dist"
+  ],
   "main": "./dist/server/index.js",
   "types": "./dist/server/index.d.ts",
   "exports": {
@@ -24,6 +26,7 @@
     "./package.json": "./package.json"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/server/index.d.ts",
@@ -57,7 +60,7 @@
   "dependencies": {
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
-    "@nocobase/notification": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/session": "workspace:^",
     "hono": "catalog:"
   },

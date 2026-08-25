@@ -2,12 +2,14 @@ import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';
 import type {
   NotificationChannelDefinition,
   NotificationProviderDefinition,
-} from '@nocobase/notification';
+} from '@nocobase/app-plugin-notification';
+import type { Hono } from 'hono';
 
 import {
   createDatabaseProviderDefinition,
   createInAppChannelDefinition,
 } from './index.js';
+import { createInAppTestRouter, type InAppTestSender } from './test-router.js';
 
 interface NotificationPluginDependencies {
   readonly auth: {
@@ -28,7 +30,8 @@ interface NotificationRegistrar {
 }
 
 interface NotificationPluginServices {
-  readonly notification?: NotificationRegistrar;
+  readonly notification?: InAppTestSender & { readonly router: Hono };
+  readonly notificationRegistry?: NotificationRegistrar;
 }
 
 interface NotificationPluginConfig {
@@ -47,7 +50,11 @@ export default function bootstrap({
   deps,
   services,
 }: NotificationPluginContext): void {
-  services.notification
+  const notification = services.notification;
+  if (notification) {
+    notification.router.route('/test', createInAppTestRouter(notification));
+  }
+  services.notificationRegistry
     ?.registerChannel(
       createInAppChannelDefinition({
         resolveUserId: createNotificationUserIdResolver(

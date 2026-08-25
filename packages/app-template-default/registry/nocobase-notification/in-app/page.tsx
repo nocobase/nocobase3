@@ -71,7 +71,7 @@ export function NotificationInAppPage(): React.ReactElement {
           ),
     );
     try {
-      await mutateInboxItem(item.id, action, item.version);
+      await mutateInboxItem(item.id, action);
       inboxRuntime.refresh();
     } catch (reason) {
       setError(

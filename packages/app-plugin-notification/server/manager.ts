@@ -6,6 +6,11 @@ import { ChannelManager } from './channel-manager.js';
 import { createDeliveryJob, type DeliveryJobClass } from './delivery-job.js';
 import { NotificationLogs } from './logs.js';
 import {
+  createNotificationRegistry,
+  type NotificationRegistry,
+} from './registry.js';
+import { createNotificationRouter } from './router.js';
+import {
   createDatabaseNotificationStore,
   type NotificationDeliveryRecord,
   type NotificationErrorRecord,
@@ -14,9 +19,7 @@ import {
   type NotificationStore,
 } from './store.js';
 import type {
-  NotificationChannelDefinition,
   NotificationManagerOptions,
-  NotificationProviderDefinition,
   NotificationRecipient,
   NotificationSendInput,
   NotificationSendResult,
@@ -32,16 +35,9 @@ export class NotificationManager<
   readonly router: Hono;
   readonly logs: NotificationLogs;
   readonly store: NotificationStore;
+  readonly registry: NotificationRegistry;
   private readonly channelManager: ChannelManager;
 
-  private readonly definitions = new Map<
-    string,
-    NotificationChannelDefinition
-  >();
-  private readonly providerDefinitions = new Map<
-    string,
-    Map<string, NotificationProviderDefinition>
-  >();
   private readonly queueJob: DeliveryJobClass;
   private started = false;
   private startPromise?: Promise<void>;
@@ -50,10 +46,11 @@ export class NotificationManager<
   private reconcileTimer?: ReturnType<typeof setInterval>;
 
   constructor(private readonly options: NotificationManagerOptions<TChannels>) {
+    this.registry = options.registry ?? createNotificationRegistry();
     this.store =
       options.store ?? createDatabaseNotificationStore(options.database);
     this.logs = new NotificationLogs(this.store);
-    this.router = new Hono();
+    this.router = createNotificationRouter({ logs: this.logs });
     this.channelManager = new ChannelManager({
       logger: options.logger,
       store: this.store,
@@ -62,54 +59,6 @@ export class NotificationManager<
       retry: options.retry,
     });
     this.queueJob = createDeliveryJob(this.channelManager);
-  }
-
-  registerChannel(definition: NotificationChannelDefinition): this {
-    if (this.started || this.startPromise)
-      throw new Error(
-        'Notification Channel definitions must be registered before start().',
-      );
-    if (this.definitions.has(definition.type))
-      throw new Error(
-        `Notification Channel definition "${definition.type}" is already registered.`,
-      );
-    this.definitions.set(definition.type, definition);
-    this.options.logger.debug(
-      {
-        event: 'notification.channel.registered',
-        channel: definition.type,
-      },
-      'Notification Channel definition registered.',
-    );
-    return this;
-  }
-
-  registerProvider(
-    channelType: string,
-    definition: NotificationProviderDefinition,
-  ): this {
-    if (this.started || this.startPromise)
-      throw new Error(
-        'Notification Provider definitions must be registered before start().',
-      );
-    const definitions =
-      this.providerDefinitions.get(channelType) ??
-      new Map<string, NotificationProviderDefinition>();
-    if (definitions.has(definition.type))
-      throw new Error(
-        `Notification Provider definition "${definition.type}" is already registered for Channel "${channelType}".`,
-      );
-    definitions.set(definition.type, definition);
-    this.providerDefinitions.set(channelType, definitions);
-    this.options.logger.debug(
-      {
-        event: 'notification.provider.registered',
-        channel: channelType,
-        providerType: definition.type,
-      },
-      'Notification Provider definition registered.',
-    );
-    return this;
   }
 
   async start(): Promise<void> {
@@ -141,7 +90,7 @@ export class NotificationManager<
       const channels: import('./types.js').NotificationChannel[] = [];
       for (const config of this.options.config.channels) {
         if (!config.enabled) continue;
-        const definition = this.definitions.get(config.type);
+        const definition = this.registry.channel(config.type);
         if (!definition)
           throw new Error(
             `Notification Channel definition "${config.type}" is not registered.`,
@@ -153,7 +102,6 @@ export class NotificationManager<
           store: this.store,
         };
         const channel = await definition.createChannel(context, config);
-        const providerDefinitions = this.providerDefinitions.get(config.type);
         const providerTypes = new Set<string>();
         const providers = [];
         for (const providerConfig of config.providers) {
@@ -163,7 +111,8 @@ export class NotificationManager<
               `Provider name "${providerConfig.name}" is duplicated in Channel "${config.type}".`,
             );
           providerTypes.add(providerConfig.name);
-          const providerDefinition = providerDefinitions?.get(
+          const providerDefinition = this.registry.provider(
+            config.type,
             providerConfig.type,
           );
           if (!providerDefinition)

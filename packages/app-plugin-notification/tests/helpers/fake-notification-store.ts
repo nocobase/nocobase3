@@ -7,7 +7,7 @@ import type {
   NotificationLogRecord,
   NotificationLogStatus,
   NotificationStore,
-} from '../../src/store.js';
+} from '../../server/store.js';
 
 export class FakeNotificationStore implements NotificationStore {
   private readonly logs = new Map<string, NotificationLogRecord>();

@@ -17,7 +17,6 @@ const migration: MigrationDefinition = defineMigration({
       table.datetime('readAt').nullable();
       table.datetime('createdAt').notNull();
       table.datetime('updatedAt').notNull();
-      table.integer('version').notNull().defaultTo(1);
       table.unique('deliveryId', {
         name: 'notification_in_app_delivery_unique',
       });

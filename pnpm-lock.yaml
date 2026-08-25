@@ -473,17 +473,51 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/app-plugin-notification:
+    dependencies:
+      '@nocobase/app-database':
+        specifier: workspace:^
+        version: link:../app-database
+      '@nocobase/logging':
+        specifier: workspace:^
+        version: link:../logging
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../queue
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+    devDependencies:
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../dev-config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/app-plugin-notification-in-app:
     dependencies:
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:^
+        version: link:../app-plugin-notification
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit
-      '@nocobase/notification':
-        specifier: workspace:^
-        version: link:../notification
       '@nocobase/session':
         specifier: workspace:^
         version: link:../session
@@ -585,12 +619,15 @@ importers:
 
   packages/app-plugin-notification-providers:
     dependencies:
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:^
+        version: link:../app-plugin-notification
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit
-      '@nocobase/notification':
-        specifier: workspace:^
-        version: link:../notification
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
       nodemailer:
         specifier: ^9.0.5
         version: 9.0.5
@@ -891,6 +928,9 @@ importers:
       '@nocobase/app-plugin-database-example':
         specifier: workspace:^
         version: link:../app-plugin-database-example
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:^
+        version: link:../app-plugin-notification
       '@nocobase/app-plugin-notification-in-app':
         specifier: workspace:^
         version: link:../app-plugin-notification-in-app
@@ -933,9 +973,6 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
-      '@nocobase/notification':
-        specifier: workspace:^
-        version: link:../notification
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../queue
@@ -1619,40 +1656,6 @@ importers:
       pino-pretty:
         specifier: 'catalog:'
         version: 13.1.3
-    devDependencies:
-      '@nocobase/dev-config':
-        specifier: workspace:*
-        version: link:../dev-config
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.13.3
-      eslint:
-        specifier: 'catalog:'
-        version: 10.8.1(jiti@2.7.0)
-      prettier:
-        specifier: 'catalog:'
-        version: 3.9.6
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
-
-  packages/notification:
-    dependencies:
-      '@nocobase/app-database':
-        specifier: workspace:^
-        version: link:../app-database
-      '@nocobase/logging':
-        specifier: workspace:^
-        version: link:../logging
-      '@nocobase/queue':
-        specifier: workspace:^
-        version: link:../queue
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*

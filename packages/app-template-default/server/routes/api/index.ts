@@ -11,7 +11,6 @@ import { createHealthzHandler } from './healthz.js';
 import { createSessionRoutes } from './session.js';
 import { createUploadRoutes } from './upload.js';
 import { createAuthRoutes } from './auth.js';
-import { createNotificationRoutes } from './notifications.js';
 
 export interface ApiRouteOptions {
   appName: string;
@@ -56,10 +55,13 @@ export function createApiRoutes({
   const protectedRoutes = new Hono();
   protectedRoutes.use('*', deps.auth.required());
   protectedRoutes.get('/apps', createAppsHandler());
-  protectedRoutes.route(
-    '/notifications',
-    createNotificationRoutes({ notification: services.notification }),
-  );
+  if (services.notification) {
+    protectedRoutes.mount('/notifications', services.notification.router.fetch);
+  } else {
+    protectedRoutes.all('/notifications/*', (context) =>
+      context.json({ error: 'Notifications are not configured.' }, 503),
+    );
+  }
 
   api.onError(
     createApiErrorHandler({

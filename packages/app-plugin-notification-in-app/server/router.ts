@@ -81,17 +81,15 @@ export function createInAppRouter(
       return context.json({ error: 'Invalid CSRF token.' }, 403);
     const body = await context.req.json<{
       action?: 'read' | 'unread' | 'delete';
-      expectedVersion?: number;
     }>();
     const updated = await store.update({
       id: context.req.param('id'),
       userId: context.var.notificationUserId,
       action: body.action ?? 'read',
-      expectedVersion: body.expectedVersion ?? 0,
     });
     return updated
       ? context.json({ data: updated })
-      : context.json({ error: 'Not found or version conflict.' }, 409);
+      : context.json({ error: 'Not found.' }, 404);
   });
   return router;
 }

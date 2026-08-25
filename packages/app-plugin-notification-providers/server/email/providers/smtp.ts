@@ -1,7 +1,7 @@
 import type {
   NotificationProviderDefinition,
   ProviderSendResult,
-} from '@nocobase/notification';
+} from '@nocobase/app-plugin-notification';
 import nodemailer from 'nodemailer';
 
 import type { PreparedEmailMessage, SmtpProviderConfig } from '../types.js';

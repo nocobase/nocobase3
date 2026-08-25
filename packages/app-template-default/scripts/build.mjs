@@ -214,7 +214,7 @@ run('Build server workspace dependencies', 'pnpm', [
   '--filter',
   '@nocobase/logging',
   '--filter',
-  '@nocobase/notification',
+  '@nocobase/app-plugin-notification',
   '--filter',
   '@nocobase/queue',
   '--filter',

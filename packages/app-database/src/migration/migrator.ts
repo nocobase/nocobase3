@@ -5,6 +5,7 @@ import {
   ensureMigrationTable,
   readMigrationHistory,
   recordMigrationCompleted,
+  updateMigrationHistoryIdentity,
 } from './history.js';
 import { DEFAULT_MIGRATION_LOCK_TABLE, withMigrationLock } from './lock.js';
 import { loadMigrations } from './loader.js';
@@ -56,6 +57,12 @@ class DefaultMigrator implements Migrator {
           history,
           participatingPackageNames(this.options),
         );
+        await reconcileAcceptedMigrationHistory(
+          migrationConnection,
+          migrations,
+          history,
+          this.options.tableName,
+        );
 
         const appliedNames = new Set(history.map((record) => record.name));
         const pending = migrations.filter(
@@ -104,6 +111,12 @@ class DefaultMigrator implements Migrator {
           migrations,
           history,
           participatingPackageNames(this.options),
+        );
+        await reconcileAcceptedMigrationHistory(
+          migrationConnection,
+          migrations,
+          history,
+          this.options.tableName,
         );
 
         const batch = currentBatch(history);
@@ -201,6 +214,35 @@ class DefaultMigrator implements Migrator {
   }
 }
 
+async function reconcileAcceptedMigrationHistory(
+  connection: Parameters<typeof updateMigrationHistoryIdentity>[0],
+  migrations: LoadedMigration[],
+  history: MigrationHistoryRecord[],
+  tableName?: string,
+): Promise<void> {
+  const migrationsByName = new Map(
+    migrations.map((migration) => [migration.name, migration]),
+  );
+  for (const record of history) {
+    const migration = migrationsByName.get(record.name);
+    if (!migration) {
+      continue;
+    }
+    const checksumMatches = record.checksum === migration.checksum;
+    const checksumAccepted =
+      migration.migration.acceptedChecksums?.includes(record.checksum) === true;
+    if (!checksumMatches && !checksumAccepted) continue;
+    if (record.packageName === migration.packageName && checksumMatches)
+      continue;
+    await updateMigrationHistoryIdentity(connection, {
+      tableName,
+      name: record.name,
+      packageName: migration.packageName,
+      checksum: checksumAccepted ? migration.checksum : undefined,
+    });
+  }
+}
+
 function validateAppliedMigrationHistory(
   migrations: LoadedMigration[],
   history: MigrationHistoryRecord[],
@@ -222,7 +264,10 @@ function validateAppliedMigrationHistory(
         `Executed migration "${record.name}" is missing from migration sources. Package: "${record.packageName}".`,
       );
     }
-    if (record.checksum !== migration.checksum) {
+    if (
+      record.checksum !== migration.checksum &&
+      !migration.migration.acceptedChecksums?.includes(record.checksum)
+    ) {
       throw new Error(
         `Executed migration "${record.name}" checksum changed. Package: "${record.packageName}".`,
       );

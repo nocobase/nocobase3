@@ -4,6 +4,7 @@ import type { NocoBaseQueueManager } from '@nocobase/queue';
 import type { Hono } from 'hono';
 
 import type { NotificationStore } from './store.js';
+import type { NotificationRegistry } from './registry.js';
 
 export interface NotificationChannelSchema {
   readonly recipient: object;
@@ -190,6 +191,7 @@ export interface NotificationManagerOptions<
   readonly queue: NocoBaseQueueManager;
   readonly logger: Logger;
   readonly config: NotificationConfig;
+  readonly registry?: NotificationRegistry;
   readonly store?: NotificationStore;
   readonly reconcileIntervalMs?: number;
   readonly reconcileBatchSize?: number;

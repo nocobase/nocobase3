@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Hono } from 'hono';
 
 import bootstrap from '../server/bootstrap.js';
 
 describe('in-app notification plugin bootstrap', () => {
   it('registers its Channel and database Provider', () => {
     const registry = {
+      router: new Hono(),
+      send: vi.fn(),
       registerChannel: vi.fn(function () {
         return registry;
       }),
@@ -25,7 +28,10 @@ describe('in-app notification plugin bootstrap', () => {
           },
         },
       },
-      services: { notification: registry },
+      services: {
+        notification: registry,
+        notificationRegistry: registry,
+      },
       lifecycle: { registerDisposer: vi.fn() },
     });
 
@@ -35,6 +41,11 @@ describe('in-app notification plugin bootstrap', () => {
     expect(registry.registerProvider).toHaveBeenCalledWith(
       'in-app',
       expect.objectContaining({ type: 'database' }),
+    );
+    expect(registry.router.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: 'POST', path: '/test/in-app' }),
+      ]),
     );
   });
 
