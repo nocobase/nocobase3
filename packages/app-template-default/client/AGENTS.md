@@ -22,6 +22,8 @@ This directory is the active Default App browser client.
   from `@nocobase/app-plugin-authentication/client/ui`, keep final password
   forms local under the Registry `forms/` directory, and use
   `@nocobase/app-plugin-authentication/client/actions` for custom variants.
+  This directory is the Default Template's preinstalled, application-owned
+  snapshot; its upstream recipe lives in the authentication plugin.
 - Use Refine hooks and providers for authentication state. Do not call Better
   Auth endpoints directly from pages or create another session store.
 - Keep app-wide theme and loading behavior applicable to plugin pages.

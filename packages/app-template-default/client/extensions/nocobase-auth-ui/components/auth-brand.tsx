@@ -1,29 +1,25 @@
+import { resolveAppUrl } from '@nocobase/app-sdk';
 import type { ReactElement } from 'react';
 
 export function AuthBrand(): ReactElement {
   return (
-    <div aria-label='NocoBase' className='flex items-center gap-3' role='img'>
-      <svg
+    <div
+      aria-label='NocoBase'
+      className='flex h-10 w-full items-center justify-center'
+      role='img'
+    >
+      <img
+        alt=''
         aria-hidden='true'
-        className='size-10 shrink-0 text-foreground'
-        fill='none'
-        viewBox='0 0 40 40'
-      >
-        <path
-          d='m20 3 14 8v16l-14 8-14-8V11l14-8Z'
-          fill='currentColor'
-          opacity='.12'
-        />
-        <path
-          d='m20 3 14 8-14 8L6 11l14-8Zm0 16v16m14-24v16l-14 8-14-8V11'
-          stroke='currentColor'
-          strokeLinejoin='round'
-          strokeWidth='2.5'
-        />
-      </svg>
-      <span className='text-2xl font-semibold tracking-[-0.04em]'>
-        NocoBase
-      </span>
+        className='h-10 w-auto object-contain dark:hidden'
+        src={resolveAppUrl('/assets/logo.png')}
+      />
+      <img
+        alt=''
+        aria-hidden='true'
+        className='hidden h-10 w-auto object-contain dark:block'
+        src={resolveAppUrl('/assets/logo-dark.png')}
+      />
     </div>
   );
 }
