@@ -12,6 +12,8 @@
 #   STATUS_TEXT_FAILURE - Custom failure text (defaults to "构建失败")
 #   CONTENT       - Card body content in lark_md format (defaults to auto-generated)
 #   BUILD_TIME    - Build timestamp (defaults to current time in Asia/Shanghai)
+#   ACTOR         - Who triggered the run; appended to the footer when set
+#   REPOSITORY    - owner/repo; appended to the footer when set
 
 set -euo pipefail
 
@@ -32,7 +34,17 @@ else
   STATUS_EMOJI="❌"
 fi
 
-CONTENT="${CONTENT:-"**时间：**${BUILD_TIME}\n**状态：**${STATUS_EMOJI} ${STATUS_TEXT}"}"
+# 状态、时间、触发者、仓库这几项每条通知都该有，但自定义 CONTENT 时
+# 容易漏掉，所以在脚本里统一追加，调用方只负责写正文。
+FOOTER="**状态：**${STATUS_EMOJI} ${STATUS_TEXT}\n**时间：**${BUILD_TIME}"
+[[ -n "${ACTOR:-}" ]] && FOOTER="${FOOTER}\n**触发者：**${ACTOR}"
+[[ -n "${REPOSITORY:-}" ]] && FOOTER="${FOOTER}\n**仓库：**${REPOSITORY}"
+
+if [[ -n "${CONTENT:-}" ]]; then
+  CONTENT="${CONTENT}\n\n${FOOTER}"
+else
+  CONTENT="${FOOTER}"
+fi
 
 PAYLOAD=$(jq -n \
   --arg title "$TITLE" \

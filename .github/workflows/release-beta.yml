@@ -228,7 +228,9 @@ jobs:
         if: "!inputs.dry_run && steps.merge.outputs.merged == 'false'"
         env:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
-          TITLE: 预览版发布成功，但 PR 合回失败
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          TITLE: NocoBase 3 预览版发布成功，但 PR 合回失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -250,7 +252,9 @@ jobs:
         if: "!inputs.dry_run && steps.merge.outputs.merged == 'true'"
         env:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
-          TITLE: 预览版发布
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          TITLE: NocoBase 3 预览版发布
           STATUS: success
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
