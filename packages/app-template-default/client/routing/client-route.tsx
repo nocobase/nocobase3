@@ -1,10 +1,12 @@
-import { Button, Loading } from '@nocobase/ui';
 import type {
   AppClientRegisteredRoute,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
 import { type ReactElement, useEffect, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
+
+import { Loading } from '@/components/loading';
+import { Button } from '@/components/ui/button';
 
 export interface ClientRouteProps {
   readonly route: AppClientRegisteredRoute;

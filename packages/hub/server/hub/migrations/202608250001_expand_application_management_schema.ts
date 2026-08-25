@@ -3,7 +3,7 @@ import {
   type CollectionBuilder,
   type MigrationContext,
   type MigrationDefinition,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import type { Knex } from 'knex';
 
 const migration: MigrationDefinition = defineMigration({

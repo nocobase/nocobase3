@@ -19,7 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTranslate } from '@refinedev/core';
-import { getCurrentLocale } from '@nocobase/portal-sdk/i18n';
+import { getCurrentLocale } from '@nocobase/app-portal-sdk/i18n';
 import type { HubApiError } from './api';
 import { getStatusLabel, getStatusVariant } from './status';
 

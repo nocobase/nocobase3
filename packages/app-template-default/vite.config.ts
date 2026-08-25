@@ -1,6 +1,6 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
-import { portalSdkCompatibilityPlugin } from '@nocobase/portal-sdk/vite';
+import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import fs from 'node:fs';
 import path from 'path';
 import { loadEnv } from 'vite';
@@ -82,13 +82,6 @@ export default createPortalViteConfig(
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],
         alias: [
-          {
-            find: /^@nocobase\/ui$/,
-            replacement: path.resolve(
-              __dirname,
-              './client/nocobase-ui/index.ts',
-            ),
-          },
           { find: '@', replacement: path.resolve(__dirname, './client') },
         ],
       },

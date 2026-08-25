@@ -1,7 +1,6 @@
 {
   "name": "@nocobase/logging",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -22,7 +21,8 @@
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
       }
-    }
+    },
+    "access": "public"
   },
   "files": [
     "dist"

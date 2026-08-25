@@ -98,7 +98,7 @@ locale labels, i18next options, and post-switch behavior remain customizable in
 `client/providers/i18n/runtime.ts`. Shared UI components live in
 `client/components/ui` and follow the shadcn Base UI conventions.
 
-Stable NocoBase runtime behavior is provided by `@nocobase/portal-sdk`.
+Stable NocoBase runtime behavior is provided by `@nocobase/app-portal-sdk`.
 The template records its inherited base version in
 `nocobase.defaultTemplateVersion`; SDK installation, development, and builds
 stop with an actionable error when that version is outside the SDK's supported
@@ -124,7 +124,7 @@ After installation, the generated source can be customized and committed with
 the application.
 
 Registry implementations import runtime APIs from documented
-`@nocobase/portal-sdk` subpaths and continue to use `@/components` for
+`@nocobase/app-portal-sdk` subpaths and continue to use `@/components` for
 application-owned visual composition. Each Registry item declares the minimum
 compatible SDK version in `registry.config.json`.
 

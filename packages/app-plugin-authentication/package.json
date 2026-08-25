@@ -2,8 +2,7 @@
   "name": "@nocobase/app-plugin-authentication",
   "displayName": "Authentication App Plugin",
   "description": "Authentication plugin for NocoBase applications.",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1-beta.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -81,12 +80,21 @@
         "import": "./dist/client/ui/index.js"
       },
       "./package.json": "./package.json"
-    }
+    },
+    "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "registry",
+    "registry.config.json",
+    "public/r"
   ],
   "nocobase": {
+    "registry": {
+      "items": {
+        "auth-ui": "./registry/auth-ui"
+      }
+    },
     "plugin": {
       "client": {
         "bootstrap": "./client/bootstrap",
@@ -99,34 +107,40 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
+    "registry:build": "node ../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
+    "prepack": "pnpm registry:build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
-    "@nocobase/app-client": "^0.1.0",
-    "@nocobase/ui": "^0.1.0",
+    "@nocobase/app-client": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "better-auth": "catalog:",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "hono": "catalog:",
-    "knex": "catalog:"
+    "knex": "catalog:",
+    "tailwind-merge": "^3.2.0"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
-    "@nocobase/ui": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/react": "catalog:",
@@ -134,10 +148,13 @@
     "@types/node": "catalog:",
     "better-sqlite3": "catalog:",
     "eslint": "catalog:",
+    "jsdom": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "jsdom": "catalog:",
+    "shadcn": "^4.13.1",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "^1.2.5",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

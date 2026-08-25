@@ -228,12 +228,12 @@ const run = (label, command, args) => {
 
 const buildServerWorkspaceFilters = [
   '@nocobase/app-host',
-  '@nocobase/app-server',
+  '@nocobase/app-server-kit',
   '@nocobase/app-sdk',
   '@nocobase/app-plugin-authentication',
   '@nocobase/authorization',
   '@nocobase/caching',
-  '@nocobase/database',
+  '@nocobase/app-database',
 ];
 
 const build = ({

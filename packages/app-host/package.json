@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-host",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.0",
   "description": "Standalone runtime host for NocoBase apps.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -41,7 +41,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@nocobase/app-server": "workspace:^"
+    "@nocobase/app-server-kit": "workspace:^"
   },
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
@@ -66,5 +66,8 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

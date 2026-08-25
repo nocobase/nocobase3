@@ -310,8 +310,8 @@ function createScaffoldFiles({
       fix: 'pnpm lint:fix && pnpm format',
     },
     dependencies: {
-      '@nocobase/app-server': 'workspace:^',
-      '@nocobase/database': 'workspace:^',
+      '@nocobase/app-server-kit': 'workspace:^',
+      '@nocobase/app-database': 'workspace:^',
       hono: 'catalog:',
     },
     peerDependencies: {
@@ -343,11 +343,11 @@ function createScaffoldFiles({
     ],
     [
       `database/migrations/${migrationName}.ts.example`,
-      `import { defineMigration, type MigrationDefinition } from '@nocobase/database';\n\nconst migration: MigrationDefinition = defineMigration({\n  name: '${migrationName}',\n\n  async up({ builder }) {\n    await builder.createCollection(\n      '${collectionName}',\n      (collection) => {\n        collection.increments('id');\n        collection.string('name', { length: 255, nullable: false });\n        collection.datetime('createdAt', { nullable: false });\n      },\n    );\n  },\n\n  async down({ builder }) {\n    await builder.dropCollection('${collectionName}');\n  },\n});\n\nexport default migration;\n`,
+      `import { defineMigration, type MigrationDefinition } from '@nocobase/app-database';\n\nconst migration: MigrationDefinition = defineMigration({\n  name: '${migrationName}',\n\n  async up({ builder }) {\n    await builder.createCollection(\n      '${collectionName}',\n      (collection) => {\n        collection.increments('id');\n        collection.string('name', { length: 255, nullable: false });\n        collection.datetime('createdAt', { nullable: false });\n      },\n    );\n  },\n\n  async down({ builder }) {\n    await builder.dropCollection('${collectionName}');\n  },\n});\n\nexport default migration;\n`,
     ],
     [
       `database/seeds/${seedName}.ts.example`,
-      `import { defineSeed, type SeedDefinition } from '@nocobase/database';\n\nconst seed: SeedDefinition = defineSeed({\n  name: '${seedName}',\n\n  async run({ query }) {\n    await query\n      .insertInto('${collectionName}')\n      .values({\n        name: 'Welcome from ${packageName}',\n        createdAt: new Date(),\n      })\n      .execute();\n  },\n});\n\nexport default seed;\n`,
+      `import { defineSeed, type SeedDefinition } from '@nocobase/app-database';\n\nconst seed: SeedDefinition = defineSeed({\n  name: '${seedName}',\n\n  async run({ query }) {\n    await query\n      .insertInto('${collectionName}')\n      .values({\n        name: 'Welcome from ${packageName}',\n        createdAt: new Date(),\n      })\n      .execute();\n  },\n});\n\nexport default seed;\n`,
     ],
     [
       'eslint.config.js',
@@ -368,11 +368,11 @@ function createScaffoldFiles({
     ],
     [
       'server/bootstrap.ts',
-      `import type { AppPluginServerContext } from '@nocobase/app-server/plugins';\n\nexport type ${symbolName}PluginServerContext = AppPluginServerContext;\n\nexport default function bootstrap${symbolName}Plugin(\n  _context: ${symbolName}PluginServerContext,\n): void {\n  // Register plugin resources and lifecycle disposers here.\n}\n`,
+      `import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';\n\nexport type ${symbolName}PluginServerContext = AppPluginServerContext;\n\nexport default function bootstrap${symbolName}Plugin(\n  _context: ${symbolName}PluginServerContext,\n): void {\n  // Register plugin resources and lifecycle disposers here.\n}\n`,
     ],
     [
       'server/routes/index.ts',
-      `import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';\nimport { Hono } from 'hono';\n\nexport default function register${symbolName}Routes({\n  app,\n}: AppPluginRoutesContext): void {\n  const routes = new Hono();\n\n  routes.get('/', (context) =>\n    context.json({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    }),\n  );\n\n  app.route('/${shortName}', routes);\n}\n`,
+      `import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';\nimport { Hono } from 'hono';\n\nexport default function register${symbolName}Routes({\n  app,\n}: AppPluginRoutesContext): void {\n  const routes = new Hono();\n\n  routes.get('/', (context) =>\n    context.json({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    }),\n  );\n\n  app.route('/${shortName}', routes);\n}\n`,
     ],
     [
       'tests/bootstrap.test.ts',
@@ -380,7 +380,7 @@ function createScaffoldFiles({
     ],
     [
       'tests/database.test.ts',
-      `import { fileURLToPath } from 'node:url';\n\nimport { validateMigrations, validateSeeds } from '@nocobase/database';\nimport { describe, expect, it } from 'vitest';\n\ndescribe('${packageName} database', () => {\n  it('keeps database examples disabled by default', async () => {\n    const migrationsDirectory = fileURLToPath(\n      new URL('../database/migrations', import.meta.url),\n    );\n    const seedsDirectory = fileURLToPath(\n      new URL('../database/seeds', import.meta.url),\n    );\n\n    await expect(validateMigrations(migrationsDirectory)).resolves.toEqual([]);\n    await expect(validateSeeds(seedsDirectory)).resolves.toEqual([]);\n  });\n});\n`,
+      `import { fileURLToPath } from 'node:url';\n\nimport { validateMigrations, validateSeeds } from '@nocobase/app-database';\nimport { describe, expect, it } from 'vitest';\n\ndescribe('${packageName} database', () => {\n  it('keeps database examples disabled by default', async () => {\n    const migrationsDirectory = fileURLToPath(\n      new URL('../database/migrations', import.meta.url),\n    );\n    const seedsDirectory = fileURLToPath(\n      new URL('../database/seeds', import.meta.url),\n    );\n\n    await expect(validateMigrations(migrationsDirectory)).resolves.toEqual([]);\n    await expect(validateSeeds(seedsDirectory)).resolves.toEqual([]);\n  });\n});\n`,
     ],
     [
       'tests/client.test.ts',

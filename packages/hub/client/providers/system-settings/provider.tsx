@@ -5,13 +5,13 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { applySystemLocale } from '@nocobase/portal-sdk/i18n';
+import { applySystemLocale } from '@nocobase/app-portal-sdk/i18n';
 import {
   loadSystemSettings,
   SystemSettingsContext,
   type SystemSettings,
   type SystemSettingsContextValue,
-} from '@nocobase/portal-sdk/system-settings';
+} from '@nocobase/app-portal-sdk/system-settings';
 
 import { LoadingState } from '@/components/app-shell/loading-state';
 

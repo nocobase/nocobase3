@@ -3,7 +3,7 @@ import { gunzipSync } from 'node:zlib';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { DatabaseConnection, Row } from '@nocobase/database';
+import type { DatabaseConnection, Row } from '@nocobase/app-database';
 
 import { computeReleaseArtifactChecksum } from './artifact-integrity.ts';
 import { HubDomainError } from './store.ts';

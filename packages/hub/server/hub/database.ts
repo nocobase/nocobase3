@@ -3,7 +3,7 @@ import {
   createMigrator,
   type DatabaseConnection,
   type DatabaseManager,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

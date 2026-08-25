@@ -1,14 +1,14 @@
 {
   "name": "@nocobase/hub",
   "displayName": "NocoBase Hub",
-  "version": "3.1.1",
+  "version": "0.0.1-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
   "nocobase": {
-    "defaultTemplateVersion": "3.1.1"
+    "defaultTemplateVersion": "0.0.1"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -18,14 +18,14 @@
     "@gchust/agent-annotations": "0.1.x",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
+    "@nocobase/app-database": "workspace:^",
     "@nocobase/app-host": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/app-sdk": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-portal-sdk": "workspace:^",
+    "@nocobase/app-sdk": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/authorization": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/database": "workspace:^",
-    "@nocobase/portal-sdk": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
@@ -121,7 +121,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:sdk": "pnpm --filter @nocobase/portal-sdk test",
+    "test:sdk": "pnpm --filter @nocobase/app-portal-sdk test",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",

@@ -1,4 +1,4 @@
-import type { DatabaseConnection, Row } from '@nocobase/database';
+import type { DatabaseConnection, Row } from '@nocobase/app-database';
 import {
   PasswordUserCreationError,
   type Auth,

@@ -127,6 +127,28 @@ for the task-oriented edit map. Password reset still requires deployment-side
 configuration of Better Auth's `emailAndPassword.sendResetPassword` callback
 and a real mail transport.
 
+The upstream recipe and its Registry configuration are published by the
+authentication package at `registry/auth-ui` and `registry.config.json`. The
+Default Template commits only the materialized, application-owned snapshot.
+Build the authentication Registry payload from the repository root with:
+
+```bash
+pnpm registry build --package @nocobase/app-plugin-authentication
+```
+
+To initialize extensions in a new output tree, materialize them there:
+
+```bash
+pnpm registry materialize \
+  --package @nocobase/app-plugin-authentication \
+  --item auth-ui \
+  --output-root /path/to/new-template
+```
+
+Materialization refuses an existing target so it cannot silently overwrite
+application edits. Updating an installed Registry item must use an explicit
+three-way merge.
+
 ## Theme
 
 `client/theme` wraps application and plugin pages. The top-right selector

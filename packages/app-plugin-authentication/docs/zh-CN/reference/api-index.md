@@ -206,4 +206,5 @@ logout、check、getIdentity 和 onError。
   `@nocobase/app-plugin-authentication/client/actions` 的 headless hooks。
 
 具体 fallback 页面通过路由的 `componentLoader` 按需加载，不从公开入口导出。默认
-表单只依赖 `@nocobase/ui`；品牌、营销区域和最终页面组合由宿主 Registry 源码负责。
+表单直接持有按需生成的 shadcn 基础组件源码；品牌、营销区域和最终页面组合由宿主
+Registry 源码负责。

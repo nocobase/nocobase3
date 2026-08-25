@@ -1,7 +1,7 @@
 import type {
   AppPluginBootstrap,
   AppPluginRoutesRegistrar,
-} from '@nocobase/app-server/plugins';
+} from '@nocobase/app-server-kit/plugins';
 
 export interface AppPluginRegistration {
   enabled: boolean;

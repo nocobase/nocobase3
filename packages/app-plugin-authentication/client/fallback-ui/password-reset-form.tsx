@@ -1,6 +1,8 @@
-import { Button, Input, Label } from '@nocobase/ui';
 import { useState, type FormEvent, type ReactElement } from 'react';
 
+import { Button } from '../components/ui/button.js';
+import { Input } from '../components/ui/input.js';
+import { Label } from '../components/ui/label.js';
 import { usePasswordReset } from '../actions/index.js';
 import { FormStatus } from './form-status.js';
 

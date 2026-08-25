@@ -1,4 +1,8 @@
-import type { DatabaseConnection, Row, SelectQuery } from '@nocobase/database';
+import type {
+  DatabaseConnection,
+  Row,
+  SelectQuery,
+} from '@nocobase/app-database';
 
 import { HubDomainError } from './store.ts';
 

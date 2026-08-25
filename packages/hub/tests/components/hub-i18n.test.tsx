@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router';
 import {
   i18n,
   i18nProvider as portalI18nProvider,
-} from '@nocobase/portal-sdk/i18n';
+} from '@nocobase/app-portal-sdk/i18n';
 
 import '@/locales';
 import { Header } from '@/components/app-shell/header';

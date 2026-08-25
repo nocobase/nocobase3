@@ -1,8 +1,8 @@
 import { lazy } from 'react';
 import { ContactRound } from 'lucide-react';
 
-import type { AppExtension } from '@nocobase/portal-sdk/extensions';
-import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
+import type { AppExtension } from '@nocobase/app-portal-sdk/extensions';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 
 const LdapSignInForm = lazy(() => import('./ldap-sign-in-form'));
 

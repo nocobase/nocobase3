@@ -287,7 +287,7 @@ migration。
 在 `database/migrations/` 中创建对应表：
 
 ```ts
-import { defineMigration } from '@nocobase/database';
+import { defineMigration } from '@nocobase/app-database';
 
 export default defineMigration({
   name: '202608210001_create_ticket_accounts',

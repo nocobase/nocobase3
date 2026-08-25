@@ -1,4 +1,4 @@
-import { defineAppRoutes } from '@nocobase/portal-sdk/routing';
+import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 import { Activity, Boxes, ScrollText, Settings, Users } from 'lucide-react';
 import type { ComponentType } from 'react';
 

@@ -13,7 +13,7 @@ configuration, so local values can extend or override the baseline:
 
 ```js
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
-import { portalSdkCompatibilityPlugin } from '@nocobase/portal-sdk/vite';
+import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import path from 'node:path';
 
 export default createPortalViteConfig(
@@ -34,7 +34,7 @@ export default createPortalViteConfig(
 ```
 
 The compatibility plugin is injected to keep this package independent from
-`@nocobase/portal-sdk`; this avoids a package cycle because the SDK itself uses
+`@nocobase/app-portal-sdk`; this avoids a package cycle because the SDK itself uses
 the shared development config. The effective Vite `root` defaults to
 `process.cwd()`. Set `root` in the local config when Vite runs from another
 directory; the factory passes the same absolute root to the compatibility

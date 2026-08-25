@@ -3,7 +3,7 @@ import { BrowserRouter } from 'react-router';
 import routerProvider, {
   UnsavedChangesNotifier,
 } from '@refinedev/react-router';
-import { i18nProvider } from '@nocobase/portal-sdk/i18n';
+import { i18nProvider } from '@nocobase/app-portal-sdk/i18n';
 import { DocumentTitleHandler } from './components/app-shell/document-title-handler';
 import { useNotificationProvider } from './components/notifications/use-notification-provider';
 import { Toaster } from './components/notifications/toaster';

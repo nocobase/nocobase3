@@ -140,11 +140,11 @@ describe('Hub production build artifacts', () => {
 
     const commands = readFileSync(commandLog, 'utf8');
     expect(commands).toContain('pnpm --filter @nocobase/app-host');
-    expect(commands).toContain('--filter @nocobase/app-server');
+    expect(commands).toContain('--filter @nocobase/app-server-kit');
     expect(commands).toContain('--filter @nocobase/app-sdk');
     expect(commands).toContain('--filter @nocobase/app-plugin-authentication');
     expect(commands).toContain('--filter @nocobase/caching');
-    expect(commands).toContain('--filter @nocobase/database');
+    expect(commands).toContain('--filter @nocobase/app-database');
   });
 
   it.each([
@@ -218,10 +218,10 @@ describe('Hub production build artifacts', () => {
       main: './src/index.ts',
       exports: { '.': './src/index.ts' },
       publishConfig: { exports: { '.': './dist/index.js' } },
-      dependencies: { '@nocobase/database': 'workspace:^' },
+      dependencies: { '@nocobase/app-database': 'workspace:^' },
     });
-    createWorkspacePackage(packagesRoot, 'database', {
-      name: '@nocobase/database',
+    createWorkspacePackage(packagesRoot, 'app-database', {
+      name: '@nocobase/app-database',
       version: '1.0.0',
       type: 'module',
       main: './dist/index.js',
@@ -241,7 +241,7 @@ describe('Hub production build artifacts', () => {
       path.join(fixtureHubRoot, 'dist/package.json'),
     );
     expect(distPackage.dependencies).toMatchObject({
-      '@nocobase/database': 'file:vendor/@nocobase/database',
+      '@nocobase/app-database': 'file:vendor/@nocobase/app-database',
       '@nocobase/feature': 'file:vendor/@nocobase/feature',
       'better-sqlite3': '12.11.1',
       knex: '3.1.0',
@@ -258,7 +258,7 @@ describe('Hub production build artifacts', () => {
       existsSync(
         path.join(
           fixtureHubRoot,
-          'dist/vendor/@nocobase/database/dist/index.js',
+          'dist/vendor/@nocobase/app-database/dist/index.js',
         ),
       ),
     ).toBe(true);
@@ -269,7 +269,7 @@ describe('Hub production build artifacts', () => {
     ).toMatchObject({
       name: '@nocobase/feature',
       exports: { '.': './dist/index.js' },
-      dependencies: { '@nocobase/database': 'file:../database' },
+      dependencies: { '@nocobase/app-database': 'file:../app-database' },
     });
   });
 });

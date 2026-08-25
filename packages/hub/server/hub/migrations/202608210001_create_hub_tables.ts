@@ -2,7 +2,7 @@ import {
   defineMigration,
   type CollectionBuilder,
   type MigrationDefinition,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202608210001_create_hub_tables',

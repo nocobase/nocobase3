@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/database';
+import type { DatabaseConnection } from '@nocobase/app-database';
 import {
   APIError,
   betterAuth,

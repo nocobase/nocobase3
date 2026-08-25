@@ -1,4 +1,7 @@
-import { defineConfig, type ConfigFactory } from '@nocobase/app-server/config';
+import {
+  defineConfig,
+  type ConfigFactory,
+} from '@nocobase/app-server-kit/config';
 import {
   isLoggerLevel,
   type LoggerConfig,

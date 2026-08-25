@@ -1,4 +1,4 @@
-import { translate } from '@nocobase/portal-sdk/i18n';
+import { translate } from '@nocobase/app-portal-sdk/i18n';
 
 import { NOCOBASE_ERROR_BOUNDARY_I18N_NAMESPACE } from './locales';
 

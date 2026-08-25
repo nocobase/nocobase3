@@ -1,5 +1,8 @@
 import { useSetLocale, useTranslate } from '@refinedev/core';
-import { getCurrentLocale, useEnabledLocales } from '@nocobase/portal-sdk/i18n';
+import {
+  getCurrentLocale,
+  useEnabledLocales,
+} from '@nocobase/app-portal-sdk/i18n';
 import { Languages } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';

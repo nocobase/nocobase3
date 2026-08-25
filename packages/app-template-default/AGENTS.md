@@ -1,7 +1,7 @@
 # Default App Development Guidelines
 
 This package is the reference application for the new `@nocobase/app-client`
-and `@nocobase/app-server` architecture. Follow the repository root
+and `@nocobase/app-server-kit` architecture. Follow the repository root
 `AGENTS.md` first, then these package-specific rules.
 
 ## Use the current client architecture
@@ -44,6 +44,9 @@ password forms in the Registry `forms/` directory, and use `client/actions` for
 a fully custom form. Do not call Better Auth endpoints directly from page
 components or duplicate session state. See
 `client/extensions/nocobase-auth-ui/README.md` for the edit map.
+The upstream recipe is published by
+`@nocobase/app-plugin-authentication/registry/auth-ui`; do not restore a second
+canonical copy under this package's `registry/` directory.
 
 ## Keep the client inspectable
 
