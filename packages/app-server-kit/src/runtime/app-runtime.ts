@@ -4,6 +4,8 @@ import type {
   SeedSource,
 } from '@nocobase/app-database';
 
+import { createConfigPaths } from '../config/paths.js';
+import type { ConfigPaths } from '../config/types.js';
 import { createAppDatabaseManager } from '../database/manager.js';
 import {
   createAppMigrator,
@@ -23,6 +25,7 @@ export interface AppRuntimeConfig {
 }
 
 export interface CreateAppRuntimeOptions {
+  paths?: ConfigPaths;
   migrationSources?: readonly MigrationSource[];
   seedSources?: readonly SeedSource[];
 }
@@ -31,6 +34,7 @@ export interface AppRuntime<
   TConfig extends AppRuntimeConfig = AppRuntimeConfig,
 > {
   config: TConfig;
+  paths: ConfigPaths;
   database?: DatabaseManager;
   migrator?: AppMigrator;
   seeder?: AppSeeder;
@@ -62,6 +66,7 @@ export function createAppRuntime<TConfig extends AppRuntimeConfig>(
 
   return {
     config,
+    paths: options.paths ?? createConfigPaths({ rootDir: process.cwd() }),
     database,
     migrator,
     seeder,

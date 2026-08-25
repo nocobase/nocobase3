@@ -113,7 +113,9 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
   const child = spawn(command, args, {
     cwd: rootDir,
     env,
-    stdio: options.filterViteStartup ? ['inherit', 'pipe', 'pipe'] : 'inherit',
+    stdio:
+      options.stdio ??
+      (options.filterViteStartup ? ['inherit', 'pipe', 'pipe'] : 'inherit'),
   });
 
   if (options.filterViteStartup) {
@@ -140,10 +142,18 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
 
 let shuttingDown = false;
 const children = [];
+let envRestartTimer;
+let envWatcher;
 
 const shutdown = (exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
+
+  if (envRestartTimer) {
+    clearTimeout(envRestartTimer);
+    envRestartTimer = undefined;
+  }
+  envWatcher?.close();
 
   for (const child of children) {
     if (!child.killed && child.exitCode === null) {
@@ -193,7 +203,7 @@ const nextEnv = {
   APP_SERVER_PORT: String(appServerPort),
 };
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;
-const appBasePath = String(nextEnv.APP_BASE_PATH || '/app-template-default')
+const appBasePath = String(nextEnv.APP_BASE_PATH || '/main')
   .trim()
   .replace(/^\/+|\/+$/g, '');
 const appUrl = appBasePath
@@ -219,7 +229,17 @@ spawnDevProcess(
   { filterViteStartup: true },
 );
 
-spawnDevProcess(
+const serverEnv = {
+  ...process.env,
+  APP_VITE_DEV_HOST: viteDevHost,
+  APP_VITE_DEV_PORT: String(vitePort),
+  APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
+  APP_SERVER_HOST: appServerHost,
+  APP_SERVER_PORT: String(appServerPort),
+  APP_SERVER_START_LOG: 'false',
+};
+
+const serverChild = spawnDevProcess(
   'server',
   'tsx',
   [
@@ -232,8 +252,22 @@ spawnDevProcess(
     ...pluginWatchIncludes.flatMap((include) => ['--include', include]),
     'server/standalone.ts',
   ],
-  {
-    ...nextEnv,
-    APP_SERVER_START_LOG: 'false',
-  },
+  serverEnv,
+  { stdio: ['pipe', 'inherit', 'inherit'] },
 );
+
+if (serverChild.stdin) {
+  process.stdin.pipe(serverChild.stdin);
+}
+
+envWatcher = fs.watch(rootDir, (_eventType, filename) => {
+  const changedFile = filename?.toString();
+  if (changedFile !== '.env' && changedFile !== '.env.local') return;
+
+  if (envRestartTimer) clearTimeout(envRestartTimer);
+  envRestartTimer = setTimeout(() => {
+    envRestartTimer = undefined;
+    console.log(`[dev] ${changedFile} changed; restarting server`);
+    serverChild.stdin?.write('\n');
+  }, 100);
+});

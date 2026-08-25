@@ -41,7 +41,7 @@ export default createPortalViteConfig(
   portalSdkCompatibilityPlugin,
   ({ command, mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
-    const appBase = normalizeBase(env.APP_BASE_PATH ?? '/app-template-default');
+    const appBase = normalizeBase(env.APP_BASE_PATH ?? '/main');
     const viteBase = appBase;
     const publicApiUrl =
       command === 'serve'
