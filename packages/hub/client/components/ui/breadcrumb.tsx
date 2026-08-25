@@ -4,11 +4,12 @@ import { useRender } from '@base-ui/react/use-render';
 
 import { cn } from '@/lib/utils';
 import { ChevronRightIcon, MoreHorizontalIcon } from 'lucide-react';
+import { translate } from '@nocobase/app-portal-sdk/i18n';
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<'nav'>) {
   return (
     <nav
-      aria-label='breadcrumb'
+      aria-label={translate('ui.breadcrumb.label', 'Breadcrumb')}
       data-slot='breadcrumb'
       className={cn(className)}
       {...props}
@@ -106,7 +107,7 @@ function BreadcrumbEllipsis({
       {...props}
     >
       <MoreHorizontalIcon />
-      <span className='sr-only'>More</span>
+      <span className='sr-only'>{translate('ui.breadcrumb.more', 'More')}</span>
     </span>
   );
 }

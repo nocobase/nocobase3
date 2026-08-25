@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react';
+import { translate } from '@nocobase/app-portal-sdk/i18n';
 
 import { cn } from '@/lib/utils';
 
@@ -19,7 +20,7 @@ export function LoadingState({
       )}
     >
       <Loader2 className='size-7 animate-spin text-primary' />
-      <span className='sr-only'>Loading</span>
+      <span className='sr-only'>{translate('ui.loading', 'Loading')}</span>
     </div>
   );
 }

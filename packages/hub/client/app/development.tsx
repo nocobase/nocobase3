@@ -20,8 +20,10 @@ const coreDevelopmentResources: ResourceProps[] = [
     name: 'auth-components',
     meta: {
       label: 'Authentication',
+      i18nKey: 'hub.development.auth.label',
       icon: <KeyRound />,
       description: 'NocoBase authentication UI and integration patterns.',
+      descriptionI18nKey: 'hub.development.auth.description',
     },
   },
   {
@@ -30,9 +32,11 @@ const coreDevelopmentResources: ResourceProps[] = [
     meta: {
       parent: 'auth-components',
       label: 'Login composition',
+      i18nKey: 'hub.development.authComposition.label',
       icon: <PanelsTopLeft />,
       description:
         'Dynamic login and application-owned customization patterns.',
+      descriptionI18nKey: 'hub.development.authComposition.description',
     },
   },
 ];

@@ -10,6 +10,45 @@ export const starter = {
   'auth.signingOut': 'Signing out...',
   'auth.showPassword': 'Show password',
   'auth.hidePassword': 'Hide password',
+  'auth.account': 'Username or email',
+  'auth.password': 'Password',
+  'auth.confirmPassword': 'Confirm password',
+  'auth.signIn': 'Sign in',
+  'auth.signingIn': 'Signing in…',
+  'auth.forgotPassword': 'Forgot password?',
+  'auth.noAccount': 'No account?',
+  'auth.signUp': 'Sign up',
+  'auth.createAccount': 'Create your account',
+  'auth.createAccountDescription': 'Create your NocoBase account.',
+  'auth.creatingAccount': 'Creating account…',
+  'auth.haveAccount': 'Have an account?',
+  'auth.signUp.missingField': 'Please enter {{field}}',
+  'auth.signUp.passwordMismatch': "Passwords don't match",
+  'auth.signUp.passwordMismatchDescription':
+    'Please make sure both password fields match.',
+  'auth.signUp.loadError': 'Unable to load the sign-up method',
+  'auth.signUp.noMethod': 'No sign-up method available',
+  'auth.signUp.invalidMethodDescription':
+    'This sign-up link is invalid or the authentication method does not support account registration.',
+  'auth.signUp.disabled': 'Account registration is disabled',
+  'auth.signUp.disabledDescription':
+    'Contact your administrator if you need an account.',
+  'auth.signIn.loadError': 'Unable to load sign-in methods',
+  'auth.signIn.loadErrorDescription':
+    'Please try again or contact your administrator.',
+  'auth.signIn.noMethod': 'No supported sign-in methods',
+  'auth.signIn.noMethodDescription':
+    'No sign-in method is currently available. Contact your administrator for access.',
+  'auth.signIn.orContinueWith': 'Or continue with',
+  'auth.welcomeBack': 'Welcome back',
+  'auth.welcomeBackDescription':
+    'Choose a sign-in method configured in NocoBase.',
+  'auth.forgot.title': 'Forgot password',
+  'auth.forgot.description': 'Enter your email to reset your password.',
+  'auth.forgot.email': 'Email',
+  'auth.forgot.back': 'Back to sign in',
+  'auth.forgot.send': 'Send reset link',
+  'auth.forgot.sending': 'Sending…',
   'auth.marketing.eyebrow': 'AI-native application platform',
   'auth.marketing.title': 'Let AI build freely. NocoBase keeps it reliable.',
   'auth.marketing.description':
@@ -135,6 +174,12 @@ export const starter = {
   'hub.error.forbidden': 'You do not have permission to view this resource.',
   'hub.error.notFound': 'This resource could not be found.',
   'hub.error.defaultMessage': 'Please try again.',
+  'hub.error.unauthorized': 'Your Hub session has expired. Sign in again.',
+  'hub.error.invalidRequest': 'Check the entered information and try again.',
+  'hub.error.conflict':
+    'This information changed elsewhere. Reload and try again.',
+  'hub.error.network': 'Unable to reach Hub. Check the connection and retry.',
+  'hub.error.server': 'Hub could not complete the request. Try again.',
   'hub.notFound.title': '{{kind}} not found',
   'hub.notFound.description':
     'The requested {{kind}} is unavailable or you do not have access to it.',
@@ -319,6 +364,23 @@ export const starter = {
   'hub.deployment.progress.description':
     '{{status}}. Event history refreshes while the deployment is running.',
   'hub.deployment.failure.default': 'Deployment failed.',
+  'hub.deployment.failure.unknown.title': 'Deployment failed',
+  'hub.deployment.failure.readinessFailed.title': 'Readiness failed',
+  'hub.deployment.failure.readinessFailed.message':
+    'Runtime readiness check failed.',
+  'hub.deployment.failure.hubRestarted.title': 'Deployment interrupted',
+  'hub.deployment.failure.hubRestarted.message':
+    'Hub restarted during deployment, so the outcome could not be verified safely.',
+  'hub.deployment.failure.serverEntrypointMissing.title':
+    'Server entry point missing',
+  'hub.deployment.failure.serverEntrypointMissing.message':
+    'The release does not contain a runnable server entry point.',
+  'hub.deployment.failure.appCreateFailed.title': 'Application start failed',
+  'hub.deployment.failure.appCreateFailed.message':
+    'APP Host could not start the application.',
+  'hub.deployment.failure.internalError.title': 'Internal error',
+  'hub.deployment.failure.internalError.message':
+    'An internal error interrupted the deployment.',
   'hub.deployment.timeline.title': 'Event timeline',
   'hub.deployment.timeline.description':
     'Persisted stages reported by the Hub deployment orchestrator.',
@@ -603,6 +665,446 @@ export const starter = {
   'hub.pagination.page': 'page',
   'hub.pagination.previous': 'Previous page',
   'hub.pagination.next': 'Next page',
+  'hub.common.actions': 'Actions',
+  'hub.common.close': 'Close',
+  'hub.common.done': 'Done',
+  'hub.common.saving': 'Saving…',
+  'hub.common.inProgress': 'In progress',
+  'hub.common.copied': 'Copied',
+  'hub.common.copyError':
+    'Clipboard access failed. Select the prompt and copy it manually.',
+  'hub.common.copyPrompt': 'Copy prompt',
+  'hub.development.auth.label': 'Authentication',
+  'hub.development.auth.description':
+    'NocoBase authentication UI and integration patterns.',
+  'hub.development.authComposition.label': 'Login composition',
+  'hub.development.authComposition.description':
+    'Dynamic login and application-owned customization patterns.',
+  'hub.development.authDemo.badge': 'Authentication',
+  'hub.development.authDemo.title': 'Login composition',
+  'hub.development.authDemo.description':
+    'Compare the backend-driven default with the two application-owned customization boundaries.',
+  'hub.development.authDemo.scenario.dynamic.title': 'Default dynamic login',
+  'hub.development.authDemo.scenario.dynamic.description':
+    'Enabled authenticators are discovered from NocoBase and arranged exactly as forms and buttons on the login page.',
+  'hub.development.authDemo.scenario.method.title': 'Replace one method',
+  'hub.development.authDemo.scenario.method.description':
+    'The dynamic page remains intact while one authenticator receives application-owned branding and interaction.',
+  'hub.development.authDemo.scenario.page.title': 'Replace the complete page',
+  'hub.development.authDemo.scenario.page.description':
+    'The application owns the whole visual composition while the Starter retains the authentication runtime.',
+  'hub.development.authDemo.tab.dynamic': 'Dynamic',
+  'hub.development.authDemo.tab.method': 'Replace method',
+  'hub.development.authDemo.tab.page': 'Replace page',
+  'hub.development.authDemo.continueWithSso': 'Continue with NocoBase SSO',
+  'hub.development.authDemo.customOidcOnly':
+    'Custom UI for the company-oidc authenticator only',
+  'hub.development.authDemo.applicationOwnedPage': 'Application-owned page',
+  'hub.development.authDemo.marketingTitle':
+    'Build freely. Keep the foundation reliable.',
+  'hub.development.authDemo.marketingDescription':
+    "This entire composition can change without replacing the Starter's authentication runtime.",
+  'hub.development.authDemo.continueToApplication':
+    'Continue to your NocoBase application.',
+  'hub.development.authDemo.or': 'or',
+  'hub.development.authDemo.accessPolicy':
+    "By continuing, you agree to your organization's access policy.",
+  'hub.development.authDemo.phone': 'Phone',
+  'hub.development.authDemo.phoneNumber': 'Phone number',
+  'hub.development.authDemo.verificationCode': 'Verification code',
+  'hub.development.authDemo.sendCode': 'Send code',
+  'hub.development.authMethod.defaultComponent': 'Default component',
+  'hub.development.authMethod.defaultComponentDescription':
+    'Installed Registries add this UI to the dynamic login page automatically.',
+  'hub.development.authPrompt.generator': 'Prompt generator',
+  'hub.development.authPrompt.generatorDescription':
+    'Generate an implementation prompt for an application-owned login UI.',
+  'hub.development.authPrompt.integrationPattern': 'Integration pattern',
+  'hub.development.authPrompt.pattern.dynamic': 'Use the default dynamic login',
+  'hub.development.authPrompt.pattern.method':
+    'Replace one authentication method',
+  'hub.development.authPrompt.pattern.page': 'Replace the complete login page',
+  'hub.development.authPrompt.generated': 'Generated implementation prompt',
+  'hub.development.authPrompt.generatedDescription':
+    'Updates when the customization boundary changes.',
+  'hub.development.authPrompt.dynamic':
+    "Keep the Starter's default dynamic login page unchanged.",
+  'hub.development.authPrompt.method':
+    "Customize the Starter login page by replacing only one configured authenticator. Keep the default dynamic authenticator discovery and default UI for every other method. Reuse that Registry's headless sign-in hook so token callbacks, the X-Authenticator header, logout, and redirect behavior remain unchanged.",
+  'hub.development.authPrompt.page':
+    'Create a fully custom login page for this Starter. Preserve the built-in authentication runtime, callback token capture, current authenticator storage, X-Authenticator request header, role reset, and SSO logout redirect. Keep installed authentication hooks available to the custom page.',
+  'hub.duration.hours': '{{count}}h',
+  'hub.duration.minutes': '{{count}}m',
+  'hub.duration.seconds': '{{count}}s',
+  'hub.application.redeploy.title': 'Redeploy current release',
+  'hub.application.redeploy.confirm': 'Confirm redeployment',
+  'hub.deployment.details.activeRelease': 'Current active release',
+  'hub.development.description':
+    'Copy one instruction to your local Coding Agent. The Agent prepares a local workspace and publishes the finished work back to Hub.',
+  'hub.development.prompt': `Develop the NocoBase Hub application “{{name}}” (slug: {{slug}}) in a local working copy.
+
+Hub URL: {{hubUrl}}
+Expected source repository: {{cloneUrl}}
+Default branch: {{branch}}
+Current Hub head: {{headCommit}}
+
+Use the nb3 CLI and follow these steps. Do not clone with git directly, do not request or expose a password or access token, and do not discard any existing local changes.
+
+1. Check the local prerequisites. Node.js 24 or later is required.
+
+node --version
+nb3 --version
+
+If nb3 is not installed, install it and check the version again:
+
+npm install -g @nocobase/nb3-cli
+nb3 --version
+
+2. Authorize this computer to read and publish this application. Run the following command and ask me to approve the browser authorization page if it opens:
+
+nb3 hub login --hub {{hubUrl}} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive
+
+3. Choose a suitable local parent directory. If ./{{slug}} does not exist, pull the Hub-managed source with:
+
+nb3 app pull {{slug}} ./{{slug}} --hub {{hubUrl}} --non-interactive
+
+If ./{{slug}} already exists, do not overwrite it and do not run the pull command against that non-empty directory. Inspect it first:
+
+nb3 app info --dir ./{{slug}} --json
+git -C ./{{slug}} status --short
+git -C ./{{slug}} rev-parse HEAD
+
+Reuse it only when it is the same Hub application. Treat local changes or commits as user work: understand and preserve them before continuing. If the clean local HEAD does not equal the current Hub head shown above, pull a fresh copy into a different empty directory instead of overwriting or manually synchronizing the existing directory. For example, after choosing an unused path:
+
+nb3 app pull {{slug}} ./{{slug}}-fresh --hub {{hubUrl}} --non-interactive
+
+If the existing directory is a different project or cannot be reused safely, choose another empty destination. Substitute the directory you actually use in all remaining commands.
+
+4. Enter the application directory, install dependencies, and start the development server:
+
+cd ./{{slug}}
+pnpm install
+nb3 app dev
+
+Keep the development server running while making the requested changes. Record the local URL printed by the command and verify the relevant user flows in a browser.
+
+5. Implement only the requested application changes. Run focused tests while developing. Before publishing, stop the development server if needed and run the complete project checks:
+
+pnpm check
+
+Fix any failure instead of skipping or weakening checks.
+
+6. Review and commit only the intended source changes. Use a concise English Conventional Commit message that describes the actual work:
+
+git status --short
+git diff --check
+git add <changed-files-replace-with-the-actual-paths>
+git commit -m "feat(app): <summary-replace-with-the-actual-change>"
+
+The worktree must be clean after the commit. Do not run git push manually; nb3 app publish pushes the committed source to the Hub repository before it builds the same commit.
+
+7. Validate the publish plan without changing Hub state:
+
+nb3 app publish --bump patch --hub {{hubUrl}} --dry-run --non-interactive --json
+
+If the dry run succeeds, publish the new Release:
+
+nb3 app publish --bump patch --hub {{hubUrl}} --non-interactive --json
+
+Do not add --deploy unless I explicitly request deployment. If a command reports missing or expired authorization, run the exact nb3 hub login command printed by the CLI and ask me to approve it. If publishing is interrupted, resume with the --operation-id command printed by the CLI instead of starting a duplicate operation.
+
+8. Read the successful publish command's JSON output and report the source commit, Release version, Release ID, and all verification results. Do not request deployment or Runtime permissions just to inspect status.`,
+  'hub.repository.description':
+    'Hub stores the authoritative source and commit history. Local workspaces are disposable working copies.',
+  'hub.repository.unavailable': 'Source repository is unavailable',
+  'hub.repository.unavailableDescription':
+    'Hub could not load the authoritative source repository. Retry after repository initialization completes.',
+  'hub.releases.redeploy': 'Redeploy',
+  'hub.releases.pin': 'Pin release',
+  'hub.releases.unpin': 'Unpin release',
+  'hub.releases.retentionError': 'Unable to update release retention',
+  'hub.releases.detail.description':
+    'Immutable build metadata, source revision, checksum, and retention state.',
+  'hub.releases.detail.loading': 'Loading release details',
+  'hub.releases.detail.sourceCommit': 'Source commit',
+  'hub.releases.detail.checksum': 'Checksum',
+  'hub.releases.detail.createdBy': 'Created by',
+  'hub.releases.detail.retention': 'Retention',
+  'hub.releases.detail.pinned': 'Pinned',
+  'hub.releases.detail.policyManaged': 'Policy managed',
+  'hub.releases.detail.pinnedAt': 'Pinned at',
+  'hub.releases.detail.manifest': 'Manifest',
+  'hub.permissions.loading': 'Loading permissions',
+  'hub.permissions.membersDescription':
+    'Roles below apply only to this application. Global assignments are evaluated by the server as well.',
+  'hub.permissions.emptyDescription':
+    'Members with global roles may still have access to this application.',
+  'hub.permissions.missingRevision':
+    'The current permission revision is unavailable. Reload and try again.',
+  'hub.permissions.savingRoles': 'Saving…',
+  'hub.permissions.rolesDescription':
+    'Roles are read-only capability sets. Deployer controls deployments; Developer publishes source and Releases.',
+  'hub.runtime.loading': 'Loading runtime',
+  'hub.runtime.lastChecked': 'Last checked',
+  'hub.runtime.startedAt': 'Started',
+  'hub.runtime.activeRequests': 'Active requests',
+  'hub.runtimeSecret.description':
+    'Each application has an independent signing secret. Hub never displays its value.',
+  'hub.runtimeSecret.version': 'Version',
+  'hub.runtimeSecret.rotatedAt': 'Last rotated',
+  'hub.runtimeSecret.confirm':
+    'Rotating the secret signs all existing application sessions out. Continue?',
+  'hub.applicationSettings.saving': 'Saving…',
+  'hub.applicationSettings.slugImmutable':
+    'The application slug is its stable URL and repository identity and cannot be changed.',
+  'hub.applicationSettings.lifecycle': 'Application lifecycle',
+  'hub.applicationSettings.archiveDescription':
+    'Archiving disables development and deployment while preserving source, Releases, data, and history.',
+  'hub.applicationSettings.restore': 'Restore application',
+  'hub.applicationSettings.restoring': 'Restoring…',
+  'hub.applicationSettings.archiveConfirm': 'Archive this application?',
+  'hub.audit.description':
+    'See who performed each Hub management action, when it happened, which application or resource it affected, and the final result.',
+  'hub.audit.filter.application': 'Filter by application',
+  'hub.audit.filter.allApplications': 'All applications',
+  'hub.audit.filter.action': 'Filter by action',
+  'hub.audit.filter.allActions': 'All actions',
+  'hub.audit.filter.result': 'Filter by result',
+  'hub.audit.filter.allResults': 'All results',
+  'hub.audit.filter.source': 'Filter by source',
+  'hub.audit.filter.allSources': 'All sources',
+  'hub.audit.filter.actorId': 'Actor ID',
+  'hub.audit.filter.resource': 'Resource type',
+  'hub.audit.filter.resourceId': 'Resource ID',
+  'hub.audit.filter.from': 'From',
+  'hub.audit.filter.to': 'To',
+  'hub.audit.columns.time': 'Time',
+  'hub.audit.columns.actor': 'Actor',
+  'hub.audit.columns.resource': 'Resource',
+  'hub.audit.columns.result': 'Result',
+  'hub.audit.systemActor': 'System',
+  'hub.audit.hubScope': 'Hub',
+  'hub.audit.details.view': 'View details',
+  'hub.audit.details.title': 'Audit event details',
+  'hub.audit.details.description':
+    'Identity, request context, affected resource, and the safe event payload recorded by Hub.',
+  'hub.audit.details.time': 'Time',
+  'hub.audit.details.requestId': 'Request ID',
+  'hub.audit.details.actor': 'Actor',
+  'hub.audit.details.client': 'Client',
+  'hub.audit.details.clientName': 'Name',
+  'hub.audit.details.credentialId': 'Credential ID',
+  'hub.audit.details.ipAddress': 'IP address',
+  'hub.audit.details.payload': 'Details (safe JSON)',
+  'hub.members.description':
+    'Control who can develop, publish, deploy, and administer each application through built-in roles and application scope.',
+  'hub.members.filter.status': 'Filter by member status',
+  'hub.members.filter.allStatuses': 'All statuses',
+  'hub.members.filter.role': 'Filter by role',
+  'hub.members.filter.allRoles': 'All roles',
+  'hub.members.empty.title': 'No members',
+  'hub.members.empty.description': 'No Hub members match the current filters.',
+  'hub.members.disableConfirm':
+    'Disable this member and revoke active sessions?',
+  'hub.invitation.description':
+    'The invitation URL is shown once. Hub does not send email automatically.',
+  'hub.invitation.error': 'Unable to create invitation',
+  'hub.invitation.copyNow': 'Copy this URL now; it will not be returned again.',
+  'hub.invitation.scope': 'Role scope',
+  'hub.invitation.applicationScope': 'One application',
+  'hub.invitation.globalScope': 'All applications',
+  'hub.invitation.selectApplication': 'Select an application',
+  'hub.invitation.expiry': 'Expires in days',
+  'hub.invitation.creating': 'Creating…',
+  'hub.roles.empty.title': 'No role catalog',
+  'hub.roles.empty.description': 'The built-in role catalog is unavailable.',
+  'hub.roles.description':
+    'These capability sets are read-only. Deployer controls Runtime and deployments; Developer controls source and Release creation.',
+  'hub.roles.owner': 'Owner',
+  'hub.roles.admin': 'Admin',
+  'hub.roles.developer': 'Developer',
+  'hub.roles.deployer': 'Deployer',
+  'hub.roles.viewer': 'Viewer',
+  'hub.roles.owner.description': 'Full control of Hub and all applications.',
+  'hub.roles.admin.description':
+    'Manage applications, members, settings, releases, and deployments.',
+  'hub.roles.developer.description':
+    'Develop application source and publish Releases.',
+  'hub.roles.deployer.description':
+    'Deploy, roll back, and control application Runtime.',
+  'hub.roles.viewer.description':
+    'View applications, Releases, deployments, Runtime, and audit history.',
+  'hub.roleScope.global': 'Global',
+  'hub.roleScope.application': 'Application',
+  'hub.capability.resource.all': 'All resources',
+  'hub.capability.resource.app': 'Applications',
+  'hub.capability.resource.repository': 'Source repositories',
+  'hub.capability.resource.release': 'Releases',
+  'hub.capability.resource.deployment': 'Deployments',
+  'hub.capability.resource.runtime': 'Runtime',
+  'hub.capability.resource.runtimeSecret': 'Runtime secrets',
+  'hub.capability.resource.auditLog': 'Audit log',
+  'hub.capability.resource.member': 'Members',
+  'hub.capability.resource.permission': 'Permissions',
+  'hub.capability.resource.setting': 'Settings',
+  'hub.capability.action.all': 'All actions',
+  'hub.capability.action.create': 'Create',
+  'hub.capability.action.read': 'View',
+  'hub.capability.action.update': 'Update',
+  'hub.capability.action.delete': 'Delete',
+  'hub.capability.action.assign': 'Assign',
+  'hub.capability.action.export': 'Export',
+  'hub.capability.action.deploy': 'Deploy',
+  'hub.capability.action.rollback': 'Roll back',
+  'hub.capability.action.redeploy': 'Redeploy',
+  'hub.capability.action.control': 'Control',
+  'hub.capability.action.rotate': 'Rotate',
+  'hub.audit.action.application.created': 'Application created',
+  'hub.audit.action.application.updated': 'Application updated',
+  'hub.audit.action.application.archived': 'Application archived',
+  'hub.audit.action.application.restored': 'Application restored',
+  'hub.audit.action.repository.pushed': 'Source pushed',
+  'hub.audit.action.release.published': 'Release published',
+  'hub.audit.action.release.pinned': 'Release pinned',
+  'hub.audit.action.release.unpinned': 'Release unpinned',
+  'hub.audit.action.deployment.requested': 'Deployment requested',
+  'hub.audit.action.deployment.succeeded': 'Deployment succeeded',
+  'hub.audit.action.deployment.failed': 'Deployment failed',
+  'hub.audit.action.runtime.started': 'Runtime started',
+  'hub.audit.action.runtime.evicted': 'Runtime evicted',
+  'hub.audit.action.runtime.restarted': 'Runtime restarted',
+  'hub.audit.action.runtimeSecret.rotated': 'Runtime secret rotated',
+  'hub.audit.action.runtimeSecret.rotationFailed':
+    'Runtime secret rotation failed',
+  'hub.audit.action.credential.authorized': 'Agent credential authorized',
+  'hub.audit.action.credential.revoked': 'Agent credential revoked',
+  'hub.audit.action.member.invited': 'Member invited',
+  'hub.audit.action.member.updated': 'Member updated',
+  'hub.audit.action.permission.updated': 'Permission updated',
+  'hub.audit.action.settings.updated': 'Settings updated',
+  'hub.audit.action.defaultApplication.bootstrapped':
+    'Default application initialized',
+  'hub.audit.action.defaultApplication.bootstrapFailed':
+    'Default application initialization failed',
+  'hub.audit.action.setup.owner.created': 'Hub Owner created',
+  'hub.audit.resource.hub': 'Hub',
+  'hub.audit.resource.application': 'Application',
+  'hub.audit.resource.repository': 'Source repository',
+  'hub.audit.resource.release': 'Release',
+  'hub.audit.resource.deployment': 'Deployment',
+  'hub.audit.resource.runtime': 'Runtime',
+  'hub.audit.resource.runtimeSecret': 'Runtime secret',
+  'hub.audit.resource.credential': 'Agent credential',
+  'hub.audit.resource.member': 'Member',
+  'hub.audit.source.web': 'Web',
+  'hub.audit.source.agent': 'Coding Agent',
+  'hub.audit.source.git': 'Git',
+  'hub.audit.source.system': 'System',
+  'hub.audit.actorType.user': 'User',
+  'hub.audit.actorType.agent': 'Coding Agent',
+  'hub.audit.actorType.system': 'System',
+  'hub.environment.default': 'Default',
+  'hub.deployment.event.queued': 'Deployment queued.',
+  'hub.deployment.event.preparing': 'Preparing release.',
+  'hub.deployment.event.activating': 'Activating release.',
+  'hub.deployment.event.checking': 'Checking runtime readiness.',
+  'hub.deployment.event.switching': 'Switching active release.',
+  'hub.deployment.event.draining': 'Draining previous runtime.',
+  'hub.deployment.event.succeeded': 'Deployment completed.',
+  'hub.deployment.event.failed': 'Deployment failed.',
+  'hub.deployment.event.readiness': 'Readiness checks passed.',
+  'hub.storage.cleanup.kind.release': 'Release',
+  'hub.storage.cleanup.reason.outsideRetentionWindow':
+    'Outside retention window',
+  'hub.systemInfo.hostMode.inProcess': 'In process',
+  'hub.systemInfo.hostMode.unavailable': 'Unavailable',
+  'hub.systemInfo.warning.runtimeSecretEncryption':
+    'Runtime secret encryption is not configured.',
+  'hub.settings.description':
+    'Review local storage usage and configure Release retention, audit retention, and confirmation policies.',
+  'hub.settings.saving': 'Saving…',
+  'hub.settings.saveError': 'Unable to save settings',
+  'hub.settings.loading': 'Loading settings',
+  'hub.storage.loading': 'Measuring storage',
+  'hub.storage.description':
+    'Monitor the Hub filesystem so source repositories, Release artifacts, runtime data, and logs do not exhaust the disk.',
+  'hub.storage.measuredAt': 'Measured {{date}}',
+  'hub.storage.usedOf': 'used of {{capacity}}',
+  'hub.storage.available': '{{available}} available',
+  'hub.storage.reclaimable': '{{value}} reclaimable',
+  'hub.storage.cleanupPreviewDescription':
+    '{{count}} candidates could reclaim {{size}}. This preview never deletes data.',
+  'storage.sourceRepositories': 'Source repositories',
+  'storage.sourceRepositories.description':
+    'Bare Git objects, branches, and commit history; local workspaces and node_modules are not included.',
+  'storage.releaseArtifacts': 'Release artifacts',
+  'storage.releaseArtifacts.description':
+    'Verified immutable build artifacts. Only unreferenced Releases selected by retention can be reclaimed.',
+  'storage.temporaryUploads': 'Temporary uploads',
+  'storage.temporaryUploads.description':
+    'Expired, cancelled, or failed upload sessions after their grace period.',
+  'storage.runtimeData': 'Application data',
+  'storage.runtimeData.description':
+    'Local application databases and attachments; external storage is not counted.',
+  'storage.logs': 'Logs',
+  'storage.logs.description':
+    'Hub, Deployment, and application log files on this filesystem.',
+  'storage.otherFilesystemUsage': 'Other filesystem usage',
+  'storage.otherFilesystemUsage.description':
+    'Filesystem usage not managed by Hub and therefore not reclaimable here.',
+  'hub.storage.protected.activeRelease': 'Active Release',
+  'hub.storage.protected.deploymentReference': 'Deployment reference',
+  'hub.storage.protected.pinned': 'Pinned',
+  'hub.systemInfo.loading': 'Loading system information',
+  'hub.systemInfo.hubVersion': 'Hub version',
+  'hub.systemInfo.nodeVersion': 'Node.js',
+  'hub.systemInfo.database': 'Database',
+  'hub.systemInfo.hostMode': 'APP Host mode',
+  'hub.systemInfo.basePath': 'Public base path',
+  'hub.systemInfo.startedAt': 'Started',
+  'hub.systemInfo.description':
+    'Read-only, security-filtered information for diagnosing this Hub deployment.',
+  'hub.systemInfo.warnings': 'Configuration warnings',
+  'hub.settings.retention.description':
+    'Active, previous successful, in-progress, pinned, and minimum-age Releases are always protected.',
+  'hub.settings.retention.keep': 'Historical Releases per application',
+  'hub.settings.retention.keepDescription':
+    'Oldest unreferenced Releases become cleanup candidates after this count.',
+  'hub.settings.retention.minimumAge': 'Minimum retention in days',
+  'hub.settings.retention.minimumAgeDescription':
+    'Releases newer than this value never become cleanup candidates.',
+  'hub.settings.retention.automatic': 'Automatic cleanup',
+  'hub.settings.retention.automaticDescription':
+    'Unavailable until deletion and recovery safeguards are enabled by the server.',
+  'hub.settings.safety.description':
+    'Control management audit retention and confirmations for high-impact actions.',
+  'hub.settings.audit.retention': 'Audit retention in days',
+  'hub.settings.audit.retentionDescription':
+    'How long Hub keeps management audit events.',
+  'hub.settings.audit.denied': 'Record denied mutations',
+  'hub.settings.audit.deniedDescription':
+    'Record safe metadata for denied management requests after rate limiting.',
+  'hub.settings.confirm.rollback': 'Confirm rollbacks',
+  'hub.settings.confirm.archive': 'Confirm application archive',
+  'hub.settings.confirm.rotate': 'Confirm Runtime Secret rotation',
+  'hub.auth.error.default': 'Authentication failed.',
+  'hub.auth.error.validation': 'Enter your username or email and password.',
+  'hub.auth.error.invalidCredentials': 'Invalid username or password.',
+  'ui.close': 'Close',
+  'ui.loading': 'Loading',
+  'ui.sidebar.title': 'Sidebar',
+  'ui.sidebar.description': 'Displays the mobile sidebar.',
+  'ui.sidebar.toggle': 'Toggle sidebar',
+  'ui.breadcrumb.more': 'More',
+  'ui.breadcrumb.label': 'Breadcrumb',
+  'ui.carousel.previous': 'Previous slide',
+  'ui.carousel.next': 'Next slide',
+  'ui.pagination.label': 'Pagination',
+  'ui.pagination.previous': 'Go to previous page',
+  'ui.pagination.next': 'Go to next page',
+  'ui.pagination.more': 'More pages',
+  'pages.error.info':
+    'The "{{action}}" component may be missing from the "{{resource}}" resource.',
   'users.users': 'User',
   Admin: 'Admin',
   Root: 'Root',

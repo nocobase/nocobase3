@@ -85,6 +85,8 @@ import {
 import {
   formatHubBytes,
   formatHubDate,
+  formatHubDuration,
+  getHubErrorMessage,
   HubEmptyState,
   HubErrorState,
   HubLoadMore,
@@ -98,7 +100,18 @@ import {
   useHubPaginatedQuery,
 } from '@/features/hub/pagination';
 import { useOptionalHubRuntime } from '@/features/hub/provider';
-import { getDeploymentTypeLabel } from '@/features/hub/status';
+import { getHubBrowserBase } from '@/features/hub/runtime';
+import { getDeploymentTypeLabel, getStatusLabel } from '@/features/hub/status';
+import {
+  getHubAuditActionLabel,
+  getHubAuditResourceLabel,
+  getHubAuditSourceLabel,
+  getHubCapabilityActionLabel,
+  getHubCapabilityResourceLabel,
+  getHubEnvironmentLabel,
+  getHubRoleLabel,
+  getHubRoleScopeLabel,
+} from '@/features/hub/labels';
 
 export interface ApplicationDetailPageProps {
   applicationId?: string;
@@ -721,7 +734,12 @@ export function ApplicationDetailPage({
                   translate,
                   'hub.application.deploy.environment',
                   'Environment: {{environment}}',
-                  { environment: applicationData.defaultEnvironmentId },
+                  {
+                    environment: getHubEnvironmentLabel(
+                      applicationData.defaultEnvironmentId,
+                      translate,
+                    ),
+                  },
                 )}
               </span>
               <span className='mt-2 block'>
@@ -740,7 +758,9 @@ export function ApplicationDetailPage({
                   'Unable to create deployment',
                 )}
               </AlertTitle>
-              <AlertDescription>{deploymentError.message}</AlertDescription>
+              <AlertDescription>
+                {getHubErrorMessage(deploymentError, translate)}
+              </AlertDescription>
             </Alert>
           ) : null}
           <AlertDialogFooter>
@@ -830,7 +850,10 @@ function ApplicationOverview({
       <OverviewCard
         icon={<Boxes aria-hidden='true' />}
         label={translate('hub.application.overview.environment', 'Environment')}
-        value={application.defaultEnvironmentId}
+        value={getHubEnvironmentLabel(
+          application.defaultEnvironmentId,
+          translate,
+        )}
         detail={translate(
           'hub.application.overview.mvpTarget',
           'MVP deployment target',
@@ -1188,7 +1211,9 @@ function ApplicationReleases({
                   'Unable to update release retention',
                 )}
               </AlertTitle>
-              <AlertDescription>{retentionError.message}</AlertDescription>
+              <AlertDescription>
+                {getHubErrorMessage(retentionError, translate)}
+              </AlertDescription>
             </Alert>
           ) : null}
           <DialogFooter>
@@ -1255,7 +1280,7 @@ function ReleaseDetails({
       <dl className='grid gap-4 text-sm sm:grid-cols-2'>
         <Detail
           label={translate('hub.common.status', 'Status')}
-          value={release.verificationStatus}
+          value={getStatusLabel(release.verificationStatus, translate)}
         />
         <Detail
           label={translate('hub.releases.detail.sourceCommit', 'Source commit')}
@@ -1430,9 +1455,13 @@ function ApplicationActivity({
                       </p>
                     ) : null}
                   </TableCell>
-                  <TableCell className='font-medium'>{log.action}</TableCell>
+                  <TableCell className='font-medium'>
+                    {getHubAuditActionLabel(log.action, translate)}
+                  </TableCell>
                   <TableCell>
-                    <span>{log.resource}</span>
+                    <span>
+                      {getHubAuditResourceLabel(log.resource, translate)}
+                    </span>
                     <p className='max-w-48 truncate font-mono text-xs text-muted-foreground'>
                       {log.resourceId ?? '—'}
                     </p>
@@ -1440,7 +1469,9 @@ function ApplicationActivity({
                   <TableCell>
                     <HubStatusBadge status={log.result} />
                   </TableCell>
-                  <TableCell className='capitalize'>{log.source}</TableCell>
+                  <TableCell>
+                    {getHubAuditSourceLabel(log.source, translate)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1587,9 +1618,10 @@ function ApplicationDeployments({
                     )}
                   </TableCell>
                   <TableCell>
-                    {formatDeploymentDuration(
+                    {formatHubDuration(
                       deployment.startedAt,
                       deployment.finishedAt,
+                      translate,
                     )}
                   </TableCell>
                 </TableRow>
@@ -1604,30 +1636,6 @@ function ApplicationDeployments({
         onLoadMore={onLoadMore}
       />
     </div>
-  );
-}
-
-function formatDeploymentDuration(
-  startedAt: string | null,
-  finishedAt: string | null,
-): string {
-  if (!startedAt) return '—';
-  if (!finishedAt) return 'In progress';
-  const milliseconds =
-    new Date(finishedAt).valueOf() - new Date(startedAt).valueOf();
-  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '—';
-  const seconds = Math.round(milliseconds / 1000);
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = seconds % 60;
-  return (
-    [
-      hours ? `${hours}h` : '',
-      minutes ? `${minutes}m` : '',
-      remainder ? `${remainder}s` : '',
-    ]
-      .filter(Boolean)
-      .join(' ') || '0s'
   );
 }
 
@@ -1667,11 +1675,87 @@ function ApplicationDevelopment({
       />
     );
   }
+  const hubUrl = resolveHubPublicUrl();
   const prompt = translateWithValues(
     translate,
     'hub.development.prompt',
-    'Start local development for the NocoBase Hub application “{{name}}” (slug: {{slug}}). Connect to this Hub, check my development permission, clone or update {{cloneUrl}}, install dependencies, and start development. Preserve local changes when the directory already exists. When the work is complete and verified, commit and push the source first, then build the same commit and publish a new Release to Hub.',
+    `Develop the NocoBase Hub application “{{name}}” (slug: {{slug}}) in a local working copy.
+
+Hub URL: {{hubUrl}}
+Expected source repository: {{cloneUrl}}
+Default branch: {{branch}}
+Current Hub head: {{headCommit}}
+
+Use the nb3 CLI and follow these steps. Do not clone with git directly, do not request or expose a password or access token, and do not discard any existing local changes.
+
+1. Check the local prerequisites. Node.js 24 or later is required.
+
+node --version
+nb3 --version
+
+If nb3 is not installed, install it and check the version again:
+
+npm install -g @nocobase/nb3-cli
+nb3 --version
+
+2. Authorize this computer to read and publish this application. Run the following command and ask me to approve the browser authorization page if it opens:
+
+nb3 hub login --hub {{hubUrl}} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive
+
+3. Choose a suitable local parent directory. If ./{{slug}} does not exist, pull the Hub-managed source with:
+
+nb3 app pull {{slug}} ./{{slug}} --hub {{hubUrl}} --non-interactive
+
+If ./{{slug}} already exists, do not overwrite it and do not run the pull command against that non-empty directory. Inspect it first:
+
+nb3 app info --dir ./{{slug}} --json
+git -C ./{{slug}} status --short
+git -C ./{{slug}} rev-parse HEAD
+
+Reuse it only when it is the same Hub application. Treat local changes or commits as user work: understand and preserve them before continuing. If the clean local HEAD does not equal the current Hub head shown above, pull a fresh copy into a different empty directory instead of overwriting or manually synchronizing the existing directory. For example, after choosing an unused path:
+
+nb3 app pull {{slug}} ./{{slug}}-fresh --hub {{hubUrl}} --non-interactive
+
+If the existing directory is a different project or cannot be reused safely, choose another empty destination. Substitute the directory you actually use in all remaining commands.
+
+4. Enter the application directory, install dependencies, and start the development server:
+
+cd ./{{slug}}
+pnpm install
+nb3 app dev
+
+Keep the development server running while making the requested changes. Record the local URL printed by the command and verify the relevant user flows in a browser.
+
+5. Implement only the requested application changes. Run focused tests while developing. Before publishing, stop the development server if needed and run the complete project checks:
+
+pnpm check
+
+Fix any failure instead of skipping or weakening checks.
+
+6. Review and commit only the intended source changes. Use a concise English Conventional Commit message that describes the actual work:
+
+git status --short
+git diff --check
+git add <changed-files-replace-with-the-actual-paths>
+git commit -m "feat(app): <summary-replace-with-the-actual-change>"
+
+The worktree must be clean after the commit. Do not run git push manually; nb3 app publish pushes the committed source to the Hub repository before it builds the same commit.
+
+7. Validate the publish plan without changing Hub state:
+
+nb3 app publish --bump patch --hub {{hubUrl}} --dry-run --non-interactive --json
+
+If the dry run succeeds, publish the new Release:
+
+nb3 app publish --bump patch --hub {{hubUrl}} --non-interactive --json
+
+Do not add --deploy unless I explicitly request deployment. If a command reports missing or expired authorization, run the exact nb3 hub login command printed by the CLI and ask me to approve it. If publishing is interrupted, resume with the --operation-id command printed by the CLI instead of starting a duplicate operation.
+
+8. Read the successful publish command's JSON output and report the source commit, Release version, Release ID, and all verification results. Do not request deployment or Runtime permissions just to inspect status.`,
     {
+      branch: repository.defaultBranch,
+      headCommit: repository.headCommit ?? 'none',
+      hubUrl,
       name: application.name,
       slug: application.slug,
       cloneUrl: repository.cloneUrl,
@@ -1752,7 +1836,7 @@ function ApplicationDevelopment({
             />
             <Detail
               label={translate('hub.common.status', 'Status')}
-              value={repository.status}
+              value={getStatusLabel(repository.status, translate)}
             />
             <Detail
               label={translate('hub.common.updated', 'Updated')}
@@ -1816,7 +1900,12 @@ function ApplicationPermissions({
     if (!roleKey || !supportsApplicationScope) {
       return [];
     }
-    return [{ key: roleKey, label: role.name ?? roleKey }];
+    return [
+      {
+        key: roleKey,
+        label: getHubRoleLabel(role.name ?? roleKey, translate),
+      },
+    ];
   });
 
   const startEditing = (member: HubApplicationAccess) => {
@@ -1972,7 +2061,9 @@ function ApplicationPermissions({
                   'Unable to update application roles',
                 )}
               </AlertTitle>
-              <AlertDescription>{updateError.message}</AlertDescription>
+              <AlertDescription>
+                {getHubErrorMessage(updateError, translate)}
+              </AlertDescription>
             </Alert>
           ) : null}
           {access.length === 0 ? (
@@ -2043,9 +2134,12 @@ function ApplicationPermissions({
                       ) : (
                         member.roles
                           .map((role) =>
-                            typeof role === 'string'
-                              ? role
-                              : (role.name ?? role.key),
+                            getHubRoleLabel(
+                              typeof role === 'string'
+                                ? role
+                                : (role.name ?? role.key ?? 'role'),
+                              translate,
+                            ),
                           )
                           .join(', ') || '—'
                       )}
@@ -2212,7 +2306,9 @@ function ApplicationPermissions({
                       'Unable to update application roles',
                     )}
                   </AlertTitle>
-                  <AlertDescription>{updateError.message}</AlertDescription>
+                  <AlertDescription>
+                    {getHubErrorMessage(updateError, translate)}
+                  </AlertDescription>
                 </Alert>
               ) : null}
             </div>
@@ -2265,9 +2361,11 @@ function ApplicationPermissions({
               <div key={roleKey} className='rounded-lg border p-4'>
                 <div className='flex items-center justify-between gap-2'>
                   <p className='font-medium capitalize'>
-                    {role.name ?? roleKey}
+                    {getHubRoleLabel(role.name ?? roleKey, translate)}
                   </p>
-                  <Badge variant='outline'>{role.scope}</Badge>
+                  <Badge variant='outline'>
+                    {getHubRoleScopeLabel(role.scope, translate)}
+                  </Badge>
                 </div>
                 <div className='mt-3 flex flex-wrap gap-1.5'>
                   {role.capabilities.flatMap((capability) =>
@@ -2276,7 +2374,11 @@ function ApplicationPermissions({
                         key={`${capability.resource}:${action}`}
                         variant='secondary'
                       >
-                        {capability.resource.replace(/^hub\./, '')}:{action}
+                        {getHubCapabilityResourceLabel(
+                          capability.resource,
+                          translate,
+                        )}
+                        : {getHubCapabilityActionLabel(action, translate)}
                       </Badge>
                     )),
                   )}
@@ -2645,6 +2747,11 @@ function ApplicationSettings({
       ) : null}
     </div>
   );
+}
+
+function resolveHubPublicUrl(): string {
+  if (typeof window === 'undefined') return getHubBrowserBase() || '/';
+  return new URL(getHubBrowserBase() || '/', window.location.origin).toString();
 }
 
 function Detail({

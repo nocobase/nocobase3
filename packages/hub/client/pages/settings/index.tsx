@@ -36,6 +36,7 @@ import {
 import {
   formatHubBytes,
   formatHubDate,
+  getHubErrorMessage,
   HubErrorState,
   HubLoadingState,
 } from '@/features/hub/components';
@@ -142,7 +143,9 @@ export function HubSettingsPage({ fetcher }: HubSettingsPageProps) {
           <AlertTitle>
             {translate('hub.settings.saveError', 'Unable to save settings')}
           </AlertTitle>
-          <AlertDescription>{saveError.message}</AlertDescription>
+          <AlertDescription>
+            {getHubErrorMessage(saveError, translate)}
+          </AlertDescription>
         </Alert>
       ) : null}
       <div className='grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]'>
@@ -338,7 +341,11 @@ function StorageCard({
                     {Object.entries(cleanupPlan.data.protectedCounts).map(
                       ([reason, count]) => (
                         <Badge key={reason} variant='outline'>
-                          {reason}: {count}
+                          {translate(
+                            `hub.storage.protected.${reason}`,
+                            storageProtectedLabel(reason),
+                          )}
+                          : {count}
                         </Badge>
                       ),
                     )}
@@ -377,14 +384,26 @@ function StorageCard({
               <TableBody>
                 {cleanupPlan.data.candidates.map((candidate) => (
                   <TableRow key={`${candidate.kind}:${candidate.resourceId}`}>
-                    <TableCell>{candidate.kind}</TableCell>
+                    <TableCell>
+                      {translate(
+                        `hub.storage.cleanup.kind.${candidate.kind}`,
+                        storageCleanupKindLabel(candidate.kind),
+                      )}
+                    </TableCell>
                     <TableCell className='font-mono text-xs'>
                       {candidate.applicationId ?? '—'}
                     </TableCell>
                     <TableCell className='font-mono text-xs'>
                       {candidate.resourceId}
                     </TableCell>
-                    <TableCell>{candidate.reason}</TableCell>
+                    <TableCell>
+                      {translate(
+                        `hub.storage.cleanup.reason.${cleanupReasonKey(
+                          candidate.reason,
+                        )}`,
+                        candidate.reason,
+                      )}
+                    </TableCell>
                     <TableCell className='text-right'>
                       {formatHubBytes(candidate.bytes)}
                     </TableCell>
@@ -438,7 +457,15 @@ function SystemInfoCard({
     [translate('hub.systemInfo.hubVersion', 'Hub version'), info.hubVersion],
     [translate('hub.systemInfo.nodeVersion', 'Node.js'), info.nodeVersion],
     [translate('hub.systemInfo.database', 'Database'), info.databaseType],
-    [translate('hub.systemInfo.hostMode', 'APP Host mode'), info.hostMode],
+    [
+      translate('hub.systemInfo.hostMode', 'APP Host mode'),
+      info.hostMode
+        ? translate(
+            `hub.systemInfo.hostMode.${camelCase(info.hostMode)}`,
+            info.hostMode,
+          )
+        : undefined,
+    ],
     [
       translate('hub.systemInfo.basePath', 'Public base path'),
       info.publicBasePath,
@@ -482,7 +509,12 @@ function SystemInfoCard({
             <AlertDescription>
               <ul className='list-disc space-y-1 pl-4'>
                 {info.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+                  <li key={warning}>
+                    {translate(
+                      `hub.systemInfo.warning.${systemWarningKey(warning)}`,
+                      warning,
+                    )}
+                  </li>
                 ))}
               </ul>
             </AlertDescription>
@@ -775,6 +807,42 @@ function storageDescription(key: string): string {
       } as Record<string, string>
     )[key] ?? 'Hub-reported storage category.'
   );
+}
+
+function storageProtectedLabel(key: string): string {
+  return (
+    (
+      {
+        activeRelease: 'Active Release',
+        deploymentReference: 'Deployment reference',
+        pinned: 'Pinned',
+      } as Record<string, string>
+    )[key] ?? key
+  );
+}
+
+function storageCleanupKindLabel(key: string): string {
+  return ({ release: 'Release' } as Record<string, string>)[key] ?? key;
+}
+
+function cleanupReasonKey(value: string): string {
+  if (value === 'outside retention window') return 'outsideRetentionWindow';
+  return camelCase(value);
+}
+
+function systemWarningKey(value: string): string {
+  if (value === 'Runtime secret encryption is not configured.') {
+    return 'runtimeSecretEncryption';
+  }
+  return camelCase(value);
+}
+
+function camelCase(value: string): string {
+  return value
+    .replace(/[^a-zA-Z0-9]+(.)/g, (_match, character: string) =>
+      character.toUpperCase(),
+    )
+    .replace(/^./, (character) => character.toLowerCase());
 }
 
 export default HubSettingsPage;

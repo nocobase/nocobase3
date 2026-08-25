@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslate } from '@refinedev/core';
 
 import { PromptOutput } from '@/components/demo/prompt-output';
 import {
@@ -19,11 +20,11 @@ import {
 
 export type AuthIntegrationPattern = 'dynamic' | 'method' | 'page';
 
-const patternLabels: Record<AuthIntegrationPattern, string> = {
-  dynamic: 'Use the default dynamic login',
-  method: 'Replace one authentication method',
-  page: 'Replace the complete login page',
-};
+const authDemoPatternValues: AuthIntegrationPattern[] = [
+  'dynamic',
+  'method',
+  'page',
+];
 
 export function AuthDemoPromptGenerator({
   value,
@@ -34,56 +35,92 @@ export function AuthDemoPromptGenerator({
   onValueChange?: (value: AuthIntegrationPattern) => void;
   patterns?: AuthIntegrationPattern[];
 }) {
+  const translate = useTranslate();
   const [localPattern, setLocalPattern] = useState<AuthIntegrationPattern>(
     value ?? patterns?.[0] ?? 'method',
   );
   const pattern = value ?? localPattern;
-  const availablePatterns =
-    patterns ?? (Object.keys(patternLabels) as AuthIntegrationPattern[]);
+  const availablePatterns = patterns ?? authDemoPatternValues;
   const setPattern = (next: AuthIntegrationPattern) => {
     setLocalPattern(next);
     onValueChange?.(next);
   };
   const prompt = useMemo(() => {
     if (pattern === 'method') {
-      return "Customize the Starter login page by replacing only one configured authenticator. Keep the default dynamic authenticator discovery and default UI for every other method. Reuse that Registry's headless sign-in hook so token callbacks, the X-Authenticator header, logout, and redirect behavior remain unchanged.";
+      return translate(
+        'hub.development.authPrompt.method',
+        "Customize the Starter login page by replacing only one configured authenticator. Keep the default dynamic authenticator discovery and default UI for every other method. Reuse that Registry's headless sign-in hook so token callbacks, the X-Authenticator header, logout, and redirect behavior remain unchanged.",
+      );
     }
     if (pattern === 'page') {
-      return 'Create a fully custom login page for this Starter. Preserve the built-in authentication runtime, callback token capture, current authenticator storage, X-Authenticator request header, role reset, and SSO logout redirect. Keep installed authentication hooks available to the custom page.';
+      return translate(
+        'hub.development.authPrompt.page',
+        'Create a fully custom login page for this Starter. Preserve the built-in authentication runtime, callback token capture, current authenticator storage, X-Authenticator request header, role reset, and SSO logout redirect. Keep installed authentication hooks available to the custom page.',
+      );
     }
-    return "Keep the Starter's default dynamic login page unchanged.";
-  }, [pattern]);
+    return translate(
+      'hub.development.authPrompt.dynamic',
+      "Keep the Starter's default dynamic login page unchanged.",
+    );
+  }, [pattern, translate]);
+  const getPatternLabel = (key: AuthIntegrationPattern) =>
+    translate(`hub.development.authPrompt.pattern.${key}`, patternLabels[key]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Prompt generator</CardTitle>
+        <CardTitle>
+          {translate(
+            'hub.development.authPrompt.generator',
+            'Prompt generator',
+          )}
+        </CardTitle>
         <CardDescription>
-          Generate an implementation prompt for an application-owned login UI.
+          {translate(
+            'hub.development.authPrompt.generatorDescription',
+            'Generate an implementation prompt for an application-owned login UI.',
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className='grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]'>
         <div className='space-y-2'>
-          <Label>Integration pattern</Label>
+          <Label>
+            {translate(
+              'hub.development.authPrompt.integrationPattern',
+              'Integration pattern',
+            )}
+          </Label>
           <Select
             value={pattern}
             onValueChange={(next) => setPattern(next as AuthIntegrationPattern)}
           >
             <SelectTrigger className='w-full'>
-              <SelectValue>{patternLabels[pattern]}</SelectValue>
+              <SelectValue>{getPatternLabel(pattern)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {availablePatterns.map((key) => (
                 <SelectItem key={key} value={key}>
-                  {patternLabels[key]}
+                  {getPatternLabel(key)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <PromptOutput
-          title='Generated implementation prompt'
-          description='Updates when the customization boundary changes.'
+          title={translate(
+            'hub.development.authPrompt.generated',
+            'Generated implementation prompt',
+          )}
+          description={translate(
+            'hub.development.authPrompt.generatedDescription',
+            'Updates when the customization boundary changes.',
+          )}
+          copiedLabel={translate('hub.common.copied', 'Copied')}
+          copyErrorLabel={translate(
+            'hub.common.copyError',
+            'Clipboard access failed. Select the prompt and copy it manually.',
+          )}
+          copyLabel={translate('hub.common.copyPrompt', 'Copy prompt')}
           prompt={prompt}
           promptClassName='min-h-36'
         />
@@ -91,3 +128,9 @@ export function AuthDemoPromptGenerator({
     </Card>
   );
 }
+
+const patternLabels: Record<AuthIntegrationPattern, string> = {
+  dynamic: 'Use the default dynamic login',
+  method: 'Replace one authentication method',
+  page: 'Replace the complete login page',
+};

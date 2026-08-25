@@ -9,6 +9,40 @@ export const starter = {
   'auth.signingOut': '正在退出...',
   'auth.showPassword': '显示密码',
   'auth.hidePassword': '隐藏密码',
+  'auth.account': '用户名或邮箱',
+  'auth.password': '密码',
+  'auth.confirmPassword': '确认密码',
+  'auth.signIn': '登录',
+  'auth.signingIn': '正在登录…',
+  'auth.forgotPassword': '忘记密码？',
+  'auth.noAccount': '还没有账号？',
+  'auth.signUp': '注册',
+  'auth.createAccount': '创建账号',
+  'auth.createAccountDescription': '创建你的 NocoBase 账号。',
+  'auth.creatingAccount': '正在创建账号…',
+  'auth.haveAccount': '已有账号？',
+  'auth.signUp.missingField': '请输入{{field}}',
+  'auth.signUp.passwordMismatch': '两次输入的密码不一致',
+  'auth.signUp.passwordMismatchDescription': '请确保两次输入的密码相同。',
+  'auth.signUp.loadError': '无法加载注册方式',
+  'auth.signUp.noMethod': '没有可用的注册方式',
+  'auth.signUp.invalidMethodDescription':
+    '此注册链接无效，或该认证方式不支持账号注册。',
+  'auth.signUp.disabled': '账号注册已关闭',
+  'auth.signUp.disabledDescription': '如需账号，请联系管理员。',
+  'auth.signIn.loadError': '无法加载登录方式',
+  'auth.signIn.loadErrorDescription': '请重试或联系管理员。',
+  'auth.signIn.noMethod': '没有可用的登录方式',
+  'auth.signIn.noMethodDescription': '当前没有可用的登录方式，请联系管理员。',
+  'auth.signIn.orContinueWith': '或使用以下方式继续',
+  'auth.welcomeBack': '欢迎回来',
+  'auth.welcomeBackDescription': '请选择 NocoBase 中已配置的登录方式。',
+  'auth.forgot.title': '忘记密码',
+  'auth.forgot.description': '输入邮箱以重置密码。',
+  'auth.forgot.email': '邮箱',
+  'auth.forgot.back': '返回登录',
+  'auth.forgot.send': '发送重置链接',
+  'auth.forgot.sending': '正在发送…',
   'auth.marketing.eyebrow': 'AI 原生应用平台',
   'auth.marketing.title': '让 AI 自由构建，由 NocoBase 保障可靠运行。',
   'auth.marketing.description':
@@ -127,6 +161,11 @@ export const starter = {
   'hub.error.forbidden': '你没有权限查看此资源。',
   'hub.error.notFound': '未找到此资源。',
   'hub.error.defaultMessage': '请重试。',
+  'hub.error.unauthorized': 'Hub 会话已过期，请重新登录。',
+  'hub.error.invalidRequest': '请检查输入内容后重试。',
+  'hub.error.conflict': '此信息已在其他位置发生变化，请刷新后重试。',
+  'hub.error.network': '无法连接到 Hub，请检查网络后重试。',
+  'hub.error.server': 'Hub 无法完成此请求，请重试。',
   'hub.notFound.title': '未找到{{kind}}',
   'hub.notFound.description': '请求的{{kind}}不可用，或你没有访问权限。',
   'hub.start.loading': '正在加载 Hub',
@@ -303,6 +342,19 @@ export const starter = {
   'hub.deployment.progress.description':
     '{{status}}。部署运行期间会自动刷新事件历史。',
   'hub.deployment.failure.default': '部署失败。',
+  'hub.deployment.failure.unknown.title': '部署失败',
+  'hub.deployment.failure.readinessFailed.title': '就绪检查失败',
+  'hub.deployment.failure.readinessFailed.message': '运行时就绪检查失败。',
+  'hub.deployment.failure.hubRestarted.title': '部署中断',
+  'hub.deployment.failure.hubRestarted.message':
+    '部署期间 Hub 发生重启，无法安全确认部署结果。',
+  'hub.deployment.failure.serverEntrypointMissing.title': '缺少服务端入口',
+  'hub.deployment.failure.serverEntrypointMissing.message':
+    '此版本不包含可运行的服务端入口文件。',
+  'hub.deployment.failure.appCreateFailed.title': '应用启动失败',
+  'hub.deployment.failure.appCreateFailed.message': 'APP Host 无法启动此应用。',
+  'hub.deployment.failure.internalError.title': '内部错误',
+  'hub.deployment.failure.internalError.message': '内部错误导致部署中断。',
   'hub.deployment.timeline.title': '事件时间线',
   'hub.deployment.timeline.description':
     'Hub 部署编排器上报并持久化的执行阶段。',
@@ -570,6 +622,424 @@ export const starter = {
   'hub.pagination.page': '页',
   'hub.pagination.previous': '上一页',
   'hub.pagination.next': '下一页',
+  'hub.common.actions': '操作',
+  'hub.common.close': '关闭',
+  'hub.common.done': '完成',
+  'hub.common.saving': '正在保存…',
+  'hub.common.inProgress': '进行中',
+  'hub.common.copied': '已复制',
+  'hub.common.copyError': '无法访问剪贴板，请选中提示词并手动复制。',
+  'hub.common.copyPrompt': '复制提示词',
+  'hub.development.auth.label': '认证',
+  'hub.development.auth.description': 'NocoBase 认证界面与集成模式。',
+  'hub.development.authComposition.label': '登录界面组合',
+  'hub.development.authComposition.description': '动态登录与应用自定义模式。',
+  'hub.development.authDemo.badge': '认证',
+  'hub.development.authDemo.title': '登录界面组合',
+  'hub.development.authDemo.description':
+    '对比后端驱动的默认登录方式与两种由应用自定义的边界。',
+  'hub.development.authDemo.scenario.dynamic.title': '默认动态登录',
+  'hub.development.authDemo.scenario.dynamic.description':
+    '从 NocoBase 获取已启用的认证器，并按登录页中的表单和按钮自动排列。',
+  'hub.development.authDemo.scenario.method.title': '替换单个认证方式',
+  'hub.development.authDemo.scenario.method.description':
+    '保留动态登录页，仅为一个认证器提供应用自定义的品牌与交互。',
+  'hub.development.authDemo.scenario.page.title': '替换完整登录页',
+  'hub.development.authDemo.scenario.page.description':
+    '应用负责整个页面的视觉组合，同时保留 Starter 的认证运行时。',
+  'hub.development.authDemo.tab.dynamic': '动态登录',
+  'hub.development.authDemo.tab.method': '替换认证方式',
+  'hub.development.authDemo.tab.page': '替换登录页',
+  'hub.development.authDemo.continueWithSso': '使用 NocoBase SSO 继续',
+  'hub.development.authDemo.customOidcOnly':
+    '仅为 company-oidc 认证器提供自定义界面',
+  'hub.development.authDemo.applicationOwnedPage': '应用自定义页面',
+  'hub.development.authDemo.marketingTitle': '自由构建，底层依旧可靠。',
+  'hub.development.authDemo.marketingDescription':
+    '无需替换 Starter 的认证运行时，即可更改整个页面组合。',
+  'hub.development.authDemo.continueToApplication':
+    '继续访问你的 NocoBase 应用。',
+  'hub.development.authDemo.or': '或者',
+  'hub.development.authDemo.accessPolicy':
+    '继续操作即表示你同意组织的访问策略。',
+  'hub.development.authDemo.phone': '手机号',
+  'hub.development.authDemo.phoneNumber': '请输入手机号',
+  'hub.development.authDemo.verificationCode': '验证码',
+  'hub.development.authDemo.sendCode': '发送验证码',
+  'hub.development.authMethod.defaultComponent': '默认组件',
+  'hub.development.authMethod.defaultComponentDescription':
+    '安装 Registry 后，此界面会自动添加到动态登录页。',
+  'hub.development.authPrompt.generator': '提示词生成器',
+  'hub.development.authPrompt.generatorDescription':
+    '为应用自定义的登录界面生成实现提示词。',
+  'hub.development.authPrompt.integrationPattern': '集成模式',
+  'hub.development.authPrompt.pattern.dynamic': '使用默认动态登录',
+  'hub.development.authPrompt.pattern.method': '替换一个认证方式',
+  'hub.development.authPrompt.pattern.page': '替换完整登录页',
+  'hub.development.authPrompt.generated': '生成的实现提示词',
+  'hub.development.authPrompt.generatedDescription':
+    '自定义边界发生变化时会自动更新。',
+  'hub.development.authPrompt.dynamic': '保持 Starter 的默认动态登录页不变。',
+  'hub.development.authPrompt.method':
+    '自定义 Starter 登录页，但只替换一个已配置的认证器。保留默认的动态认证器发现机制，以及其他认证方式的默认界面。复用该 Registry 的无头登录 Hook，确保令牌回调、X-Authenticator 请求头、退出登录和重定向行为保持不变。',
+  'hub.development.authPrompt.page':
+    '为此 Starter 创建完全自定义的登录页。保留内置认证运行时、回调令牌获取、当前认证器存储、X-Authenticator 请求头、角色重置和 SSO 退出重定向，并让已安装的认证 Hook 仍可供自定义页面使用。',
+  'hub.duration.hours': '{{count}} 小时',
+  'hub.duration.minutes': '{{count}} 分钟',
+  'hub.duration.seconds': '{{count}} 秒',
+  'hub.application.redeploy.title': '重新部署当前版本',
+  'hub.application.redeploy.confirm': '确认重新部署',
+  'hub.deployment.details.activeRelease': '当前运行版本',
+  'hub.development.description':
+    '复制一条指令给本地 Coding Agent，Agent 会准备本地工作区，并将完成的工作发布回 Hub。',
+  'hub.development.prompt': `请在本地工作副本中开发 NocoBase Hub 应用“{{name}}”（slug：{{slug}}）。
+
+Hub 地址：{{hubUrl}}
+预期源码仓库：{{cloneUrl}}
+默认分支：{{branch}}
+Hub 当前提交：{{headCommit}}
+
+请使用 nb3 CLI 按以下步骤执行。不要直接使用 git clone，不要索取或暴露密码、访问令牌，不要丢弃任何现有的本地修改。
+
+1. 检查本地环境。Node.js 需要 24 或更高版本。
+
+node --version
+nb3 --version
+
+如果尚未安装 nb3，请先安装，然后再次检查版本：
+
+npm install -g @nocobase/nb3-cli
+nb3 --version
+
+2. 为当前电脑授权，以便读取并发布此应用。执行下面的命令；如果打开浏览器授权页面，请让我批准：
+
+nb3 hub login --hub {{hubUrl}} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive
+
+3. 选择合适的本地父目录。如果 ./{{slug}} 不存在，请使用下面的命令拉取 Hub 管理的源码：
+
+nb3 app pull {{slug}} ./{{slug}} --hub {{hubUrl}} --non-interactive
+
+如果 ./{{slug}} 已经存在，不要覆盖它，也不要对非空目录执行 pull。先检查：
+
+nb3 app info --dir ./{{slug}} --json
+git -C ./{{slug}} status --short
+git -C ./{{slug}} rev-parse HEAD
+
+只有确认它就是此 Hub 应用时才复用该目录。本地修改和本地提交都属于用户工作，继续之前必须理解并保留。如果干净工作区的本地 HEAD 与上面显示的 Hub 当前提交不同，请把最新源码拉取到另一个空目录，不要覆盖或手动同步现有目录。例如，选择一个尚未使用的路径后执行：
+
+nb3 app pull {{slug}} ./{{slug}}-fresh --hub {{hubUrl}} --non-interactive
+
+如果现有目录是其他项目，或者无法安全复用，请选择另一个空目录。后续所有命令都要替换成实际使用的目录。
+
+4. 进入应用目录、安装依赖并启动开发服务：
+
+cd ./{{slug}}
+pnpm install
+nb3 app dev
+
+修改代码时保持开发服务运行，记录命令输出的本地访问地址，并在浏览器中验证相关用户流程。
+
+5. 只实现我提出的应用修改。开发过程中运行相关的专项测试。发布前，如有必要先停止开发服务，然后执行完整检查：
+
+pnpm check
+
+遇到失败必须修复，不要跳过或削弱检查。
+
+6. 只审查并提交本次实际修改的源码。使用能够描述实际工作的简短英文 Conventional Commit 提交信息：
+
+git status --short
+git diff --check
+git add <changed-files-replace-with-the-actual-paths>
+git commit -m "feat(app): <summary-replace-with-the-actual-change>"
+
+提交后工作区必须干净。不要手动执行 git push；nb3 app publish 会先把已提交的源码推送到 Hub 仓库，再基于同一个提交构建。
+
+7. 先验证发布计划，此步骤不会改变 Hub 状态：
+
+nb3 app publish --bump patch --hub {{hubUrl}} --dry-run --non-interactive --json
+
+dry-run 成功后，发布新的 Release：
+
+nb3 app publish --bump patch --hub {{hubUrl}} --non-interactive --json
+
+除非我明确要求部署，否则不要添加 --deploy。如果命令提示授权缺失或已过期，请执行 CLI 输出的完整 nb3 hub login 命令，并让我批准授权。如果发布中断，请使用 CLI 输出的 --operation-id 命令恢复同一个操作，不要重新开始造成重复操作。
+
+8. 从成功的发布命令 JSON 输出中读取并报告源码提交、Release 版本、Release ID 以及所有检查结果。不要仅为了查看状态而额外申请部署或 Runtime 权限。`,
+  'hub.repository.description':
+    'Hub 保存权威源码和提交历史，本地工作区只是可随时重新创建的工作副本。',
+  'hub.repository.unavailable': '源码仓库不可用',
+  'hub.repository.unavailableDescription':
+    'Hub 无法加载权威源码仓库，请在仓库初始化完成后重试。',
+  'hub.releases.redeploy': '重新部署',
+  'hub.releases.pin': '固定版本',
+  'hub.releases.unpin': '取消固定版本',
+  'hub.releases.retentionError': '无法更新版本保留状态',
+  'hub.releases.detail.description':
+    '查看不可变的构建元数据、源码修订、校验和与保留状态。',
+  'hub.releases.detail.loading': '正在加载版本详情',
+  'hub.releases.detail.sourceCommit': '源码提交',
+  'hub.releases.detail.checksum': '校验和',
+  'hub.releases.detail.createdBy': '创建人',
+  'hub.releases.detail.retention': '保留状态',
+  'hub.releases.detail.pinned': '已固定',
+  'hub.releases.detail.policyManaged': '按策略管理',
+  'hub.releases.detail.pinnedAt': '固定时间',
+  'hub.releases.detail.manifest': '清单',
+  'hub.permissions.loading': '正在加载权限',
+  'hub.permissions.membersDescription':
+    '以下角色只适用于此应用，服务端还会同时判断全局角色。',
+  'hub.permissions.emptyDescription':
+    '拥有全局角色的成员仍可能有权访问此应用。',
+  'hub.permissions.missingRevision': '当前权限修订不可用，请刷新后重试。',
+  'hub.permissions.savingRoles': '正在保存…',
+  'hub.permissions.rolesDescription':
+    '角色能力集为只读。部署者负责部署；开发者负责源码与版本发布。',
+  'hub.runtime.loading': '正在加载运行时',
+  'hub.runtime.lastChecked': '最近检查时间',
+  'hub.runtime.startedAt': '启动时间',
+  'hub.runtime.activeRequests': '活动请求数',
+  'hub.runtimeSecret.description':
+    '每个应用都有独立的签名密钥，Hub 不会显示密钥内容。',
+  'hub.runtimeSecret.version': '版本',
+  'hub.runtimeSecret.rotatedAt': '最近轮换时间',
+  'hub.runtimeSecret.confirm':
+    '轮换密钥会使此应用的现有会话全部退出，是否继续？',
+  'hub.applicationSettings.saving': '正在保存…',
+  'hub.applicationSettings.slugImmutable':
+    '应用标识是稳定的访问地址和仓库标识，创建后不可修改。',
+  'hub.applicationSettings.lifecycle': '应用生命周期',
+  'hub.applicationSettings.archiveDescription':
+    '归档后将无法继续开发和部署，但会保留源码、版本、数据和历史记录。',
+  'hub.applicationSettings.restore': '恢复应用',
+  'hub.applicationSettings.restoring': '正在恢复…',
+  'hub.applicationSettings.archiveConfirm': '确认归档此应用吗？',
+  'hub.audit.description':
+    '查看每项 Hub 管理操作的执行人、执行时间、影响的应用或资源以及最终结果。',
+  'hub.audit.filter.application': '按应用筛选',
+  'hub.audit.filter.allApplications': '全部应用',
+  'hub.audit.filter.action': '按操作筛选',
+  'hub.audit.filter.allActions': '全部操作',
+  'hub.audit.filter.result': '按结果筛选',
+  'hub.audit.filter.allResults': '全部结果',
+  'hub.audit.filter.source': '按来源筛选',
+  'hub.audit.filter.allSources': '全部来源',
+  'hub.audit.filter.actorId': '操作者 ID',
+  'hub.audit.filter.resource': '资源类型',
+  'hub.audit.filter.resourceId': '资源 ID',
+  'hub.audit.filter.from': '开始时间',
+  'hub.audit.filter.to': '结束时间',
+  'hub.audit.columns.time': '时间',
+  'hub.audit.columns.actor': '操作者',
+  'hub.audit.columns.resource': '资源',
+  'hub.audit.columns.result': '结果',
+  'hub.audit.systemActor': '系统',
+  'hub.audit.hubScope': 'Hub',
+  'hub.audit.details.view': '查看详情',
+  'hub.audit.details.title': '审计事件详情',
+  'hub.audit.details.description':
+    '查看 Hub 记录的身份、请求上下文、受影响资源及安全事件数据。',
+  'hub.audit.details.time': '时间',
+  'hub.audit.details.requestId': '请求 ID',
+  'hub.audit.details.actor': '操作者',
+  'hub.audit.details.client': '客户端',
+  'hub.audit.details.clientName': '名称',
+  'hub.audit.details.credentialId': '凭据 ID',
+  'hub.audit.details.ipAddress': 'IP 地址',
+  'hub.audit.details.payload': '详情（安全 JSON）',
+  'hub.members.description':
+    '通过内置角色和应用范围，控制谁可以开发、发布、部署和管理各个应用。',
+  'hub.members.filter.status': '按成员状态筛选',
+  'hub.members.filter.allStatuses': '全部状态',
+  'hub.members.filter.role': '按角色筛选',
+  'hub.members.filter.allRoles': '全部角色',
+  'hub.members.empty.title': '暂无成员',
+  'hub.members.empty.description': '当前筛选条件下没有匹配的 Hub 成员。',
+  'hub.members.disableConfirm': '确认停用此成员并撤销其活动会话吗？',
+  'hub.invitation.description':
+    '邀请链接只显示一次，Hub 不会自动发送邀请邮件。',
+  'hub.invitation.error': '无法创建邀请',
+  'hub.invitation.copyNow': '请立即复制此链接，之后将无法再次查看。',
+  'hub.invitation.scope': '角色范围',
+  'hub.invitation.applicationScope': '单个应用',
+  'hub.invitation.globalScope': '全部应用',
+  'hub.invitation.selectApplication': '选择应用',
+  'hub.invitation.expiry': '有效天数',
+  'hub.invitation.creating': '正在创建…',
+  'hub.roles.empty.title': '暂无角色目录',
+  'hub.roles.empty.description': '内置角色目录当前不可用。',
+  'hub.roles.description':
+    '这些能力集为只读。部署者负责运行时和部署；开发者负责源码和版本发布。',
+  'hub.roles.owner': '所有者',
+  'hub.roles.admin': '管理员',
+  'hub.roles.developer': '开发者',
+  'hub.roles.deployer': '部署者',
+  'hub.roles.viewer': '查看者',
+  'hub.roles.owner.description': '完全管理 Hub 和所有应用。',
+  'hub.roles.admin.description': '管理应用、成员、设置、版本和部署。',
+  'hub.roles.developer.description': '开发应用源码并发布版本。',
+  'hub.roles.deployer.description': '部署、回滚并控制应用运行时。',
+  'hub.roles.viewer.description': '查看应用、版本、部署、运行时和审计记录。',
+  'hub.roleScope.global': '全局',
+  'hub.roleScope.application': '应用',
+  'hub.capability.resource.all': '全部资源',
+  'hub.capability.resource.app': '应用',
+  'hub.capability.resource.repository': '源码仓库',
+  'hub.capability.resource.release': '版本',
+  'hub.capability.resource.deployment': '部署',
+  'hub.capability.resource.runtime': '运行时',
+  'hub.capability.resource.runtimeSecret': '运行密钥',
+  'hub.capability.resource.auditLog': '审计日志',
+  'hub.capability.resource.member': '成员',
+  'hub.capability.resource.permission': '权限',
+  'hub.capability.resource.setting': '设置',
+  'hub.capability.action.all': '全部操作',
+  'hub.capability.action.create': '创建',
+  'hub.capability.action.read': '查看',
+  'hub.capability.action.update': '更新',
+  'hub.capability.action.delete': '删除',
+  'hub.capability.action.assign': '分配',
+  'hub.capability.action.export': '导出',
+  'hub.capability.action.deploy': '部署',
+  'hub.capability.action.rollback': '回滚',
+  'hub.capability.action.redeploy': '重新部署',
+  'hub.capability.action.control': '控制',
+  'hub.capability.action.rotate': '轮换',
+  'hub.audit.action.application.created': '创建应用',
+  'hub.audit.action.application.updated': '更新应用',
+  'hub.audit.action.application.archived': '归档应用',
+  'hub.audit.action.application.restored': '恢复应用',
+  'hub.audit.action.repository.pushed': '推送源码',
+  'hub.audit.action.release.published': '发布版本',
+  'hub.audit.action.release.pinned': '固定版本',
+  'hub.audit.action.release.unpinned': '取消固定版本',
+  'hub.audit.action.deployment.requested': '发起部署',
+  'hub.audit.action.deployment.succeeded': '部署成功',
+  'hub.audit.action.deployment.failed': '部署失败',
+  'hub.audit.action.runtime.started': '启动运行时',
+  'hub.audit.action.runtime.evicted': '回收运行实例',
+  'hub.audit.action.runtime.restarted': '重启运行时',
+  'hub.audit.action.runtimeSecret.rotated': '轮换运行密钥',
+  'hub.audit.action.runtimeSecret.rotationFailed': '运行密钥轮换失败',
+  'hub.audit.action.credential.authorized': '授权 Agent 凭据',
+  'hub.audit.action.credential.revoked': '撤销 Agent 凭据',
+  'hub.audit.action.member.invited': '邀请成员',
+  'hub.audit.action.member.updated': '更新成员',
+  'hub.audit.action.permission.updated': '更新权限',
+  'hub.audit.action.settings.updated': '更新设置',
+  'hub.audit.action.defaultApplication.bootstrapped': '初始化默认应用',
+  'hub.audit.action.defaultApplication.bootstrapFailed': '默认应用初始化失败',
+  'hub.audit.action.setup.owner.created': '创建 Hub 所有者',
+  'hub.audit.resource.hub': 'Hub',
+  'hub.audit.resource.application': '应用',
+  'hub.audit.resource.repository': '源码仓库',
+  'hub.audit.resource.release': '版本',
+  'hub.audit.resource.deployment': '部署',
+  'hub.audit.resource.runtime': '运行时',
+  'hub.audit.resource.runtimeSecret': '运行密钥',
+  'hub.audit.resource.credential': 'Agent 凭据',
+  'hub.audit.resource.member': '成员',
+  'hub.audit.source.web': '网页',
+  'hub.audit.source.agent': 'Coding Agent',
+  'hub.audit.source.git': 'Git',
+  'hub.audit.source.system': '系统',
+  'hub.audit.actorType.user': '用户',
+  'hub.audit.actorType.agent': 'Coding Agent',
+  'hub.audit.actorType.system': '系统',
+  'hub.environment.default': '默认环境',
+  'hub.deployment.event.queued': '部署已进入队列。',
+  'hub.deployment.event.preparing': '正在准备版本。',
+  'hub.deployment.event.activating': '正在激活版本。',
+  'hub.deployment.event.checking': '正在检查运行时就绪状态。',
+  'hub.deployment.event.switching': '正在切换当前版本。',
+  'hub.deployment.event.draining': '正在停止上一个运行时。',
+  'hub.deployment.event.succeeded': '部署已完成。',
+  'hub.deployment.event.failed': '部署失败。',
+  'hub.deployment.event.readiness': '就绪检查已通过。',
+  'hub.storage.cleanup.kind.release': '版本',
+  'hub.storage.cleanup.reason.outsideRetentionWindow': '超出保留范围',
+  'hub.systemInfo.hostMode.inProcess': '进程内',
+  'hub.systemInfo.hostMode.unavailable': '不可用',
+  'hub.systemInfo.warning.runtimeSecretEncryption': '未配置运行密钥加密。',
+  'hub.settings.description':
+    '查看本机存储用量，并配置版本保留、审计保留和操作确认策略。',
+  'hub.settings.saving': '正在保存…',
+  'hub.settings.saveError': '无法保存设置',
+  'hub.settings.loading': '正在加载设置',
+  'hub.storage.loading': '正在统计存储用量',
+  'hub.storage.description':
+    '监控 Hub 所在文件系统，避免源码仓库、版本产物、运行数据和日志耗尽磁盘空间。',
+  'hub.storage.measuredAt': '统计于 {{date}}',
+  'hub.storage.usedOf': '已使用，总容量 {{capacity}}',
+  'hub.storage.available': '可用 {{available}}',
+  'hub.storage.reclaimable': '可释放 {{value}}',
+  'hub.storage.cleanupPreviewDescription':
+    '{{count}} 个候选项预计可释放 {{size}}，此预览不会删除数据。',
+  'storage.sourceRepositories': '源码仓库',
+  'storage.sourceRepositories.description':
+    '裸 Git 对象、分支和提交历史，不包含本地工作区及 node_modules。',
+  'storage.releaseArtifacts': '版本产物',
+  'storage.releaseArtifacts.description':
+    '已验证的不可变构建产物，只有保留策略选中的未引用版本可以释放。',
+  'storage.temporaryUploads': '临时上传',
+  'storage.temporaryUploads.description':
+    '超过宽限期的已过期、已取消或失败上传会话。',
+  'storage.runtimeData': '应用数据',
+  'storage.runtimeData.description': '本机应用数据库和附件，不统计外部存储。',
+  'storage.logs': '日志',
+  'storage.logs.description': '此文件系统中的 Hub、部署及应用日志文件。',
+  'storage.otherFilesystemUsage': '其他文件系统用量',
+  'storage.otherFilesystemUsage.description':
+    '不由 Hub 管理的文件系统用量，因此无法在此处释放。',
+  'hub.storage.protected.activeRelease': '当前版本',
+  'hub.storage.protected.deploymentReference': '部署引用',
+  'hub.storage.protected.pinned': '已固定',
+  'hub.systemInfo.loading': '正在加载系统信息',
+  'hub.systemInfo.hubVersion': 'Hub 版本',
+  'hub.systemInfo.nodeVersion': 'Node.js',
+  'hub.systemInfo.database': '数据库',
+  'hub.systemInfo.hostMode': 'APP Host 模式',
+  'hub.systemInfo.basePath': '公开基础路径',
+  'hub.systemInfo.startedAt': '启动时间',
+  'hub.systemInfo.description': '用于诊断此 Hub 部署的只读安全信息。',
+  'hub.systemInfo.warnings': '配置警告',
+  'hub.settings.retention.description':
+    '当前版本、上一个成功版本、进行中的版本、已固定版本和未达到最短保留期的版本始终受保护。',
+  'hub.settings.retention.keep': '每个应用保留的历史版本数',
+  'hub.settings.retention.keepDescription':
+    '超过此数量后，最早且未被引用的版本将成为清理候选。',
+  'hub.settings.retention.minimumAge': '最短保留天数',
+  'hub.settings.retention.minimumAgeDescription':
+    '比此天数更新的版本不会成为清理候选。',
+  'hub.settings.retention.automatic': '自动清理',
+  'hub.settings.retention.automaticDescription':
+    '服务端启用删除与恢复保护后才可使用。',
+  'hub.settings.safety.description':
+    '配置管理审计的保留时间，以及高影响操作的确认策略。',
+  'hub.settings.audit.retention': '审计记录保留天数',
+  'hub.settings.audit.retentionDescription': 'Hub 保留管理审计事件的时长。',
+  'hub.settings.audit.denied': '记录被拒绝的修改请求',
+  'hub.settings.audit.deniedDescription':
+    '在限流检查之后，记录被拒绝管理请求的安全元数据。',
+  'hub.settings.confirm.rollback': '回滚前确认',
+  'hub.settings.confirm.archive': '归档应用前确认',
+  'hub.settings.confirm.rotate': '轮换运行密钥前确认',
+  'hub.auth.error.default': '认证失败。',
+  'hub.auth.error.validation': '请输入用户名或邮箱及密码。',
+  'hub.auth.error.invalidCredentials': '用户名、邮箱或密码错误。',
+  'ui.close': '关闭',
+  'ui.loading': '加载中',
+  'ui.sidebar.title': '侧边栏',
+  'ui.sidebar.description': '显示移动端侧边栏。',
+  'ui.sidebar.toggle': '切换侧边栏',
+  'ui.breadcrumb.more': '更多',
+  'ui.breadcrumb.label': '面包屑导航',
+  'ui.carousel.previous': '上一张',
+  'ui.carousel.next': '下一张',
+  'ui.pagination.label': '分页',
+  'ui.pagination.previous': '前往上一页',
+  'ui.pagination.next': '前往下一页',
+  'ui.pagination.more': '更多页码',
+  'pages.error.info': '“{{resource}}”资源可能缺少“{{action}}”组件。',
   'users.users': '用户',
   Admin: '管理员',
   Root: '超级管理员',

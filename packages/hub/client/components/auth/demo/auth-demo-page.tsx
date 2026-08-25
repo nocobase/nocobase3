@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Building2, MessageSquare, ShieldCheck } from 'lucide-react';
+import { useTranslate } from '@refinedev/core';
 
 import { BrandLogo } from '@/components/app-shell/brand';
 import { Badge } from '@/components/ui/badge';
@@ -22,45 +23,64 @@ import {
 
 const scenarioCopy: Record<
   AuthIntegrationPattern,
-  { title: string; description: string }
+  {
+    titleKey: string;
+    title: string;
+    descriptionKey: string;
+    description: string;
+  }
 > = {
   dynamic: {
+    titleKey: 'hub.development.authDemo.scenario.dynamic.title',
     title: 'Default dynamic login',
+    descriptionKey: 'hub.development.authDemo.scenario.dynamic.description',
     description:
       'Enabled authenticators are discovered from NocoBase and arranged exactly as forms and buttons on the login page.',
   },
   method: {
+    titleKey: 'hub.development.authDemo.scenario.method.title',
     title: 'Replace one method',
+    descriptionKey: 'hub.development.authDemo.scenario.method.description',
     description:
       'The dynamic page remains intact while one authenticator receives application-owned branding and interaction.',
   },
   page: {
+    titleKey: 'hub.development.authDemo.scenario.page.title',
     title: 'Replace the complete page',
+    descriptionKey: 'hub.development.authDemo.scenario.page.description',
     description:
       'The application owns the whole visual composition while the Starter retains the authentication runtime.',
   },
 };
 
 export function AuthDemoPage() {
+  const translate = useTranslate();
   const [pattern, setPattern] = useState<AuthIntegrationPattern>('dynamic');
+  const scenario = scenarioCopy[pattern];
 
   return (
     <div className='space-y-8 pb-12'>
       <header className='space-y-2'>
-        <Badge variant='secondary'>Authentication</Badge>
+        <Badge variant='secondary'>
+          {translate('hub.development.authDemo.badge', 'Authentication')}
+        </Badge>
         <h1 className='font-heading text-3xl font-semibold tracking-tight'>
-          Login composition
+          {translate('hub.development.authDemo.title', 'Login composition')}
         </h1>
         <p className='max-w-3xl text-muted-foreground'>
-          Compare the backend-driven default with the two application-owned
-          customization boundaries.
+          {translate(
+            'hub.development.authDemo.description',
+            'Compare the backend-driven default with the two application-owned customization boundaries.',
+          )}
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>{scenarioCopy[pattern].title}</CardTitle>
-          <CardDescription>{scenarioCopy[pattern].description}</CardDescription>
+          <CardTitle>{translate(scenario.titleKey, scenario.title)}</CardTitle>
+          <CardDescription>
+            {translate(scenario.descriptionKey, scenario.description)}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs
@@ -68,9 +88,18 @@ export function AuthDemoPage() {
             onValueChange={(next) => setPattern(next as AuthIntegrationPattern)}
           >
             <TabsList className='w-full'>
-              <TabsTrigger value='dynamic'>Dynamic</TabsTrigger>
-              <TabsTrigger value='method'>Replace method</TabsTrigger>
-              <TabsTrigger value='page'>Replace page</TabsTrigger>
+              <TabsTrigger value='dynamic'>
+                {translate('hub.development.authDemo.tab.dynamic', 'Dynamic')}
+              </TabsTrigger>
+              <TabsTrigger value='method'>
+                {translate(
+                  'hub.development.authDemo.tab.method',
+                  'Replace method',
+                )}
+              </TabsTrigger>
+              <TabsTrigger value='page'>
+                {translate('hub.development.authDemo.tab.page', 'Replace page')}
+              </TabsTrigger>
             </TabsList>
             <TabsContent value='dynamic'>
               <DynamicLoginPreview />
@@ -101,18 +130,26 @@ function DynamicLoginPreview({
 }: {
   replaceOidc?: boolean;
 }) {
+  const translate = useTranslate();
   return (
     <div className='mx-auto max-w-sm space-y-5 pt-5'>
       <div className='space-y-1 text-center'>
-        <h2 className='font-heading text-xl font-semibold'>Welcome back</h2>
+        <h2 className='font-heading text-xl font-semibold'>
+          {translate('auth.welcomeBack', 'Welcome back')}
+        </h2>
         <p className='text-sm text-muted-foreground'>
-          Choose a sign-in method configured in NocoBase.
+          {translate(
+            'auth.welcomeBackDescription',
+            'Choose a sign-in method configured in NocoBase.',
+          )}
         </p>
       </div>
 
       <Tabs defaultValue='password'>
         <TabsList className='w-full'>
-          <TabsTrigger value='password'>Password</TabsTrigger>
+          <TabsTrigger value='password'>
+            {translate('auth.password', 'Password')}
+          </TabsTrigger>
           <TabsTrigger value='sms'>SMS</TabsTrigger>
         </TabsList>
         <TabsContent value='password'>
@@ -125,7 +162,9 @@ function DynamicLoginPreview({
 
       <div className='flex items-center gap-4 py-1'>
         <Separator className='flex-1' />
-        <span className='text-xs text-muted-foreground'>Or continue with</span>
+        <span className='text-xs text-muted-foreground'>
+          {translate('auth.signIn.orContinueWith', 'Or continue with')}
+        </span>
         <Separator className='flex-1' />
       </div>
 
@@ -134,10 +173,16 @@ function DynamicLoginPreview({
           <div className='space-y-2 rounded-xl border border-primary/25 bg-primary/5 p-3'>
             <Button className='w-full'>
               <ShieldCheck />
-              Continue with NocoBase SSO
+              {translate(
+                'hub.development.authDemo.continueWithSso',
+                'Continue with NocoBase SSO',
+              )}
             </Button>
             <p className='text-center text-xs text-muted-foreground'>
-              Custom UI for the company-oidc authenticator only
+              {translate(
+                'hub.development.authDemo.customOidcOnly',
+                'Custom UI for the company-oidc authenticator only',
+              )}
             </p>
           </div>
         ) : (
@@ -156,6 +201,7 @@ function DynamicLoginPreview({
 }
 
 function CustomLoginPagePreview() {
+  const translate = useTranslate();
   return (
     <div className='mx-auto mt-5 grid max-w-4xl overflow-hidden rounded-xl border md:grid-cols-[1.1fr_1fr]'>
       <div className='hidden min-h-[460px] flex-col justify-between bg-foreground p-8 text-background md:flex'>
@@ -166,28 +212,45 @@ function CustomLoginPagePreview() {
           <span className='font-heading text-lg font-semibold'>NocoBase</span>
         </div>
         <div className='space-y-3'>
-          <Badge variant='secondary'>Application-owned page</Badge>
+          <Badge variant='secondary'>
+            {translate(
+              'hub.development.authDemo.applicationOwnedPage',
+              'Application-owned page',
+            )}
+          </Badge>
           <p className='font-heading text-3xl font-semibold leading-tight'>
-            Build freely. Keep the foundation reliable.
+            {translate(
+              'hub.development.authDemo.marketingTitle',
+              'Build freely. Keep the foundation reliable.',
+            )}
           </p>
           <p className='text-sm text-background/65'>
-            This entire composition can change without replacing the Starter's
-            authentication runtime.
+            {translate(
+              'hub.development.authDemo.marketingDescription',
+              "This entire composition can change without replacing the Starter's authentication runtime.",
+            )}
           </p>
         </div>
       </div>
 
       <div className='space-y-6 bg-card p-6 sm:p-8'>
         <div className='space-y-1'>
-          <h2 className='font-heading text-2xl font-semibold'>Sign in</h2>
+          <h2 className='font-heading text-2xl font-semibold'>
+            {translate('auth.signIn', 'Sign in')}
+          </h2>
           <p className='text-sm text-muted-foreground'>
-            Continue to your NocoBase application.
+            {translate(
+              'hub.development.authDemo.continueToApplication',
+              'Continue to your NocoBase application.',
+            )}
           </p>
         </div>
         <PasswordFields />
         <div className='flex items-center gap-4'>
           <Separator className='flex-1' />
-          <span className='text-xs text-muted-foreground'>or</span>
+          <span className='text-xs text-muted-foreground'>
+            {translate('hub.development.authDemo.or', 'or')}
+          </span>
           <Separator className='flex-1' />
         </div>
         <Button variant='outline' className='w-full'>
@@ -195,7 +258,10 @@ function CustomLoginPagePreview() {
           NocoBase SSO
         </Button>
         <p className='text-center text-xs text-muted-foreground'>
-          By continuing, you agree to your organization's access policy.
+          {translate(
+            'hub.development.authDemo.accessPolicy',
+            "By continuing, you agree to your organization's access policy.",
+          )}
         </p>
       </div>
     </div>
@@ -203,33 +269,47 @@ function CustomLoginPagePreview() {
 }
 
 function PasswordFields() {
+  const translate = useTranslate();
   return (
     <div className='space-y-4 pt-3'>
       <div className='space-y-2'>
-        <Label>Username or email</Label>
+        <Label>{translate('auth.account', 'Username or email')}</Label>
         <Input placeholder='you@example.com' />
       </div>
       <div className='space-y-2'>
-        <Label>Password</Label>
+        <Label>{translate('auth.password', 'Password')}</Label>
         <Input type='password' value='password' readOnly />
       </div>
-      <Button className='w-full'>Sign in</Button>
+      <Button className='w-full'>{translate('auth.signIn', 'Sign in')}</Button>
     </div>
   );
 }
 
 function SmsFields() {
+  const translate = useTranslate();
   return (
     <div className='space-y-4 pt-3'>
       <div className='space-y-2'>
-        <Label>Phone</Label>
-        <Input placeholder='Phone number' />
+        <Label>{translate('hub.development.authDemo.phone', 'Phone')}</Label>
+        <Input
+          placeholder={translate(
+            'hub.development.authDemo.phoneNumber',
+            'Phone number',
+          )}
+        />
       </div>
       <div className='grid grid-cols-[1fr_auto] gap-2'>
-        <Input placeholder='Verification code' />
-        <Button variant='outline'>Send code</Button>
+        <Input
+          placeholder={translate(
+            'hub.development.authDemo.verificationCode',
+            'Verification code',
+          )}
+        />
+        <Button variant='outline'>
+          {translate('hub.development.authDemo.sendCode', 'Send code')}
+        </Button>
       </div>
-      <Button className='w-full'>Sign in</Button>
+      <Button className='w-full'>{translate('auth.signIn', 'Sign in')}</Button>
     </div>
   );
 }

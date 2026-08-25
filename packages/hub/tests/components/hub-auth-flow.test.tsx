@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { hubGet } from '@/features/hub/api';
+import { HubApiError } from '@/features/hub/api';
 import { HubLoginPage } from '@/features/hub/auth-pages';
 import { HubAuthGate } from '@/features/hub/gate';
 import {
@@ -11,8 +12,63 @@ import {
   HubRuntimeProvider,
 } from '@/features/hub/provider';
 import { createHubAuthRuntime } from '@/features/hub/runtime';
+import { i18n, i18nProvider } from '@nocobase/app-portal-sdk/i18n';
+import '@/locales';
+import { portalI18nReady } from '@/providers/i18n/runtime';
 
 describe('Hub login flow', () => {
+  it('shows invalid credentials in Simplified Chinese', async () => {
+    await portalI18nReady;
+    await i18n.changeLanguage('zh-CN');
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      if (String(input).endsWith('/setup/status')) {
+        return Response.json({
+          data: { setupRequired: false, ownerConfigured: true },
+          requestId: 'setup',
+        });
+      }
+      throw new Error(`Unexpected request: ${String(input)}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Refine
+          i18nProvider={i18nProvider}
+          authProvider={{
+            login: async () => ({
+              success: false,
+              error: new HubApiError('Invalid username or password', {
+                code: 'INVALID_USERNAME_OR_PASSWORD',
+                status: 401,
+              }),
+            }),
+            logout: async () => ({ success: true }),
+            check: async () => ({ authenticated: false }),
+            onError: async () => ({}),
+          }}
+        >
+          <Routes>
+            <Route path='/login' element={<HubLoginPage fetcher={fetcher} />} />
+          </Routes>
+        </Refine>
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(await screen.findByLabelText('用户名或邮箱'), {
+      target: { value: 'owner@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('密码'), {
+      target: { value: 'wrong password' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+
+    expect(
+      await screen.findByText('用户名、邮箱或密码错误。'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Invalid username or password')).toBeNull();
+    await i18n.changeLanguage('en-US');
+  });
+
   it('returns to the protected deep link after signing in', async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const path = String(input);

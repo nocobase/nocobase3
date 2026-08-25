@@ -97,7 +97,7 @@ describe('Hub audit details and filters', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'View details: deployment.succeeded',
+        name: 'View details: Deployment succeeded',
       }),
     );
 
@@ -132,7 +132,7 @@ describe('Hub audit details and filters', () => {
     const fetcher = createFetcher();
     render(<AuditLogPage fetcher={fetcher} />);
 
-    expect(await screen.findByText('deployment.succeeded')).toBeInTheDocument();
+    expect(await screen.findByText('Deployment succeeded')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Actor ID'), {
       target: { value: 'member-1' },
     });

@@ -58,6 +58,7 @@ import {
 } from '@/features/hub/api';
 import {
   formatHubDate,
+  getHubErrorMessage,
   HubEmptyState,
   HubErrorState,
   HubLoadMore,
@@ -66,6 +67,7 @@ import {
 } from '@/features/hub/components';
 import { useHubPaginatedQuery } from '@/features/hub/pagination';
 import { useOptionalHubRuntime } from '@/features/hub/provider';
+import { getHubEnvironmentLabel } from '@/features/hub/labels';
 
 export interface ApplicationsPageProps {
   fetcher?: HubFetcher;
@@ -382,7 +384,9 @@ function CreateApplicationDialog({
                   'Unable to create application',
                 )}
               </AlertTitle>
-              <AlertDescription>{error.message}</AlertDescription>
+              <AlertDescription>
+                {getHubErrorMessage(error, translate)}
+              </AlertDescription>
             </Alert>
           ) : null}
           <div className='space-y-2'>
@@ -533,7 +537,10 @@ function ApplicationResults({
                       {translate('hub.common.environment', 'Environment')}
                     </dt>
                     <dd className='mt-1 font-medium'>
-                      {application.defaultEnvironmentId}
+                      {getHubEnvironmentLabel(
+                        application.defaultEnvironmentId,
+                        translate,
+                      )}
                     </dd>
                   </div>
                   <div>
@@ -621,7 +628,12 @@ function ApplicationResults({
                     translate('hub.apps.notDeployed', 'Not deployed'),
                   )}
                 </TableCell>
-                <TableCell>{application.defaultEnvironmentId}</TableCell>
+                <TableCell>
+                  {getHubEnvironmentLabel(
+                    application.defaultEnvironmentId,
+                    translate,
+                  )}
+                </TableCell>
                 <TableCell>{formatHubDate(application.updatedAt)}</TableCell>
                 <TableCell>
                   <ApplicationQuickActions
@@ -866,7 +878,7 @@ function ApplicationQuickActions({
       ) : null}
       {error ? (
         <p className='basis-full text-xs text-destructive' role='alert'>
-          {error.message}
+          {getHubErrorMessage(error, translate)}
         </p>
       ) : null}
     </div>

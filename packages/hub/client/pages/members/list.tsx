@@ -52,6 +52,7 @@ import {
 } from '@/features/hub/api';
 import {
   formatHubDate,
+  getHubErrorMessage,
   HubEmptyState,
   HubErrorState,
   HubListSkeleton,
@@ -64,6 +65,12 @@ import {
   roleName,
 } from '@/features/hub/management-components';
 import { useHubPageQuery } from '@/features/hub/pagination';
+import {
+  getHubCapabilityActionLabel,
+  getHubCapabilityResourceLabel,
+  getHubRoleLabel,
+  getHubRoleScopeLabel,
+} from '@/features/hub/labels';
 
 export interface MembersPageProps {
   fetcher?: HubFetcher;
@@ -187,7 +194,7 @@ export function MembersPage({ fetcher }: MembersPageProps) {
                   const key = item.key ?? item.id ?? item.name ?? 'role';
                   return (
                     <NativeSelectOption key={key} value={key}>
-                      {item.name ?? key}
+                      {getHubRoleLabel(item.name ?? key, translate)}
                     </NativeSelectOption>
                   );
                 })}
@@ -325,7 +332,7 @@ function MemberRow({
                   variant='secondary'
                   className='capitalize'
                 >
-                  {roleName(item)}
+                  {getHubRoleLabel(roleName(item), translate)}
                 </Badge>
               ))
             : '—'}
@@ -477,7 +484,9 @@ function MemberAccessDialog({
                 'Unable to save member access',
               )}
             </AlertTitle>
-            <AlertDescription>{error.message}</AlertDescription>
+            <AlertDescription>
+              {getHubErrorMessage(error, translate)}
+            </AlertDescription>
           </Alert>
         ) : null}
         {access.error ? (
@@ -605,6 +614,7 @@ function RoleCheckboxGroup({
   selected: string[];
   onChange: (roles: string[]) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className='space-y-2'>
       <p className='text-sm font-medium'>{title}</p>
@@ -615,12 +625,17 @@ function RoleCheckboxGroup({
             <div key={key} className='flex items-center gap-2'>
               <Checkbox
                 checked={selected.includes(key)}
-                aria-label={`${ariaPrefix} ${role.name ?? key}`}
+                aria-label={`${ariaPrefix} ${getHubRoleLabel(
+                  role.name ?? key,
+                  translate,
+                )}`}
                 onCheckedChange={(checked) =>
                   onChange(toggleRole(selected, key, checked === true))
                 }
               />
-              <span className='text-sm'>{role.name ?? key}</span>
+              <span className='text-sm'>
+                {getHubRoleLabel(role.name ?? key, translate)}
+              </span>
             </div>
           );
         })}
@@ -685,7 +700,9 @@ function InvitationList({ fetcher }: { fetcher?: HubFetcher }) {
               'Unable to revoke invitation',
             )}
           </AlertTitle>
-          <AlertDescription>{error.message}</AlertDescription>
+          <AlertDescription>
+            {getHubErrorMessage(error, translate)}
+          </AlertDescription>
         </Alert>
       ) : null}
       {invitations.error ? (
@@ -855,7 +872,9 @@ function AgentCredentialList({ fetcher }: { fetcher?: HubFetcher }) {
               'Unable to revoke credential',
             )}
           </AlertTitle>
-          <AlertDescription>{error.message}</AlertDescription>
+          <AlertDescription>
+            {getHubErrorMessage(error, translate)}
+          </AlertDescription>
         </Alert>
       ) : null}
       {credentials.error ? (
@@ -1084,15 +1103,28 @@ function RoleCatalog({
           return (
             <div key={key} className='rounded-lg border p-4'>
               <div className='flex items-center justify-between gap-2'>
-                <p className='font-semibold capitalize'>{role.name ?? key}</p>
-                <Badge variant='outline'>{role.scope}</Badge>
+                <p className='font-semibold capitalize'>
+                  {getHubRoleLabel(role.name ?? key, translate)}
+                </p>
+                <Badge variant='outline'>
+                  {getHubRoleScopeLabel(role.scope, translate)}
+                </Badge>
               </div>
               <div className='mt-3 space-y-2'>
                 {role.capabilities.map((capability) => (
                   <div key={capability.resource}>
-                    <p className='text-xs font-medium'>{capability.resource}</p>
+                    <p className='text-xs font-medium'>
+                      {getHubCapabilityResourceLabel(
+                        capability.resource,
+                        translate,
+                      )}
+                    </p>
                     <p className='text-xs text-muted-foreground'>
-                      {capability.actions.join(', ')}
+                      {capability.actions
+                        .map((action) =>
+                          getHubCapabilityActionLabel(action, translate),
+                        )
+                        .join(', ')}
                     </p>
                   </div>
                 ))}
@@ -1158,7 +1190,9 @@ function InviteMemberDialog({
             <AlertTitle>
               {translate('hub.invitation.error', 'Unable to create invitation')}
             </AlertTitle>
-            <AlertDescription>{error.message}</AlertDescription>
+            <AlertDescription>
+              {getHubErrorMessage(error, translate)}
+            </AlertDescription>
           </Alert>
         ) : null}
         {invite?.inviteUrl ? (
@@ -1248,7 +1282,7 @@ function InviteMemberDialog({
                   const key = item.key ?? item.id ?? item.name ?? 'viewer';
                   return (
                     <NativeSelectOption key={key} value={key}>
-                      {item.name ?? key}
+                      {getHubRoleLabel(item.name ?? key, translate)}
                     </NativeSelectOption>
                   );
                 })}

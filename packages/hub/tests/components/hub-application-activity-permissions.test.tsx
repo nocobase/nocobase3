@@ -98,7 +98,7 @@ describe('application activity and permissions', () => {
     renderDetail(fetcher);
     fireEvent.click(await screen.findByRole('tab', { name: 'Activity' }));
 
-    expect(await screen.findByText('deployment.succeeded')).toBeInTheDocument();
+    expect(await screen.findByText('Deployment succeeded')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Export audit CSV' }),
     ).toHaveAttribute('href', '/hub/api/audit-logs.csv?applicationId=app-1');

@@ -61,7 +61,7 @@ describe('Hub management pages', () => {
 
     render(<AuditLogPage fetcher={fetcher} />);
 
-    expect(await screen.findByText('deployment.succeeded')).toBeInTheDocument();
+    expect(await screen.findByText('Deployment succeeded')).toBeInTheDocument();
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Export audit CSV' }),
@@ -138,7 +138,7 @@ describe('Hub management pages', () => {
 
     expect(await screen.findByText('Deployer')).toBeInTheDocument();
     expect(
-      screen.getByText('read, deploy, rollback, redeploy'),
+      screen.getByText('View, Deploy, Roll back, Redeploy'),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Invite member' }));
@@ -687,7 +687,7 @@ describe('Hub management pages', () => {
     render(<HubSettingsPage fetcher={fetcher} />);
 
     expect(await screen.findByText('release-1')).toBeInTheDocument();
-    expect(screen.getByText('activeRelease: 1')).toBeInTheDocument();
+    expect(screen.getByText('Active Release: 1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(await screen.findByText('release-21')).toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledWith(

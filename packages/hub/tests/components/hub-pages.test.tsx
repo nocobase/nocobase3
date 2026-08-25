@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { Refine } from '@refinedev/core';
 
@@ -19,6 +19,9 @@ import { HubAuthGate } from '@/features/hub/gate';
 import { HubRuntimeProvider } from '@/features/hub/provider';
 import { createHubAuthRuntime } from '@/features/hub/runtime';
 import { appRoutes } from '@/routes';
+import { i18n, i18nProvider } from '@nocobase/app-portal-sdk/i18n';
+import '@/locales';
+import { portalI18nReady } from '@/providers/i18n/runtime';
 
 const application: HubApplication = {
   id: 'app-1',
@@ -105,6 +108,10 @@ function response<T>(data: T, meta = { total: 1, limit: 20, offset: 0 }) {
 }
 
 describe('Hub application pages', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en-US');
+  });
+
   it('offers card and list views with a direct application link', async () => {
     const summaryApplication = {
       ...application,
@@ -952,7 +959,7 @@ describe('Hub application pages', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Permissions' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Edit roles' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'developer' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /developer/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Save roles' }));
 
     await waitFor(() =>
@@ -963,6 +970,77 @@ describe('Hub application pages', () => {
           body: JSON.stringify({ roles: ['developer', 'viewer'] }),
         }),
       ),
+    );
+  });
+
+  it('shows an executable nb3 workflow in the development instruction', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.repository', actions: ['read', 'update'] },
+        { resource: 'hub.release', actions: ['read', 'create'] },
+      ],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps/app-1')) return response(application);
+      if (path.endsWith('/apps/app-1/releases')) return response([]);
+      if (path.endsWith('/apps/app-1/repository')) {
+        return response({
+          provider: 'hub',
+          cloneUrl: '/hub/git/inventory.git',
+          defaultBranch: 'main',
+          headCommit: 'abc123',
+          status: 'ready',
+          updatedAt: application.updatedAt,
+        });
+      }
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Developer'], capabilities });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/?tab=development']}>
+        <ApplicationDetailPage applicationId='app-1' fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    const developmentInstruction = await screen.findByText(
+      (_, element) =>
+        element?.tagName === 'PRE' &&
+        element.textContent?.includes('nb3 hub login') === true,
+    );
+    const hubUrl = new URL('/hub', window.location.origin).toString();
+    expect(developmentInstruction).toHaveTextContent(
+      'npm install -g @nocobase/nb3-cli',
+    );
+    expect(developmentInstruction).toHaveTextContent(
+      `nb3 hub login --hub ${hubUrl} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive`,
+    );
+    expect(developmentInstruction).toHaveTextContent(
+      `nb3 app pull inventory ./inventory --hub ${hubUrl} --non-interactive`,
+    );
+    expect(developmentInstruction).toHaveTextContent('Default branch: main');
+    expect(developmentInstruction).toHaveTextContent(
+      'Current Hub head: abc123',
+    );
+    expect(developmentInstruction).toHaveTextContent(
+      `nb3 app pull inventory ./inventory-fresh --hub ${hubUrl} --non-interactive`,
+    );
+    expect(developmentInstruction).toHaveTextContent('pnpm install');
+    expect(developmentInstruction).toHaveTextContent('nb3 app dev');
+    expect(developmentInstruction).toHaveTextContent('pnpm check');
+    expect(developmentInstruction).toHaveTextContent(
+      `nb3 app publish --bump patch --hub ${hubUrl} --dry-run --non-interactive --json`,
+    );
+    expect(developmentInstruction).toHaveTextContent(
+      `nb3 app publish --bump patch --hub ${hubUrl} --non-interactive --json`,
+    );
+    expect(developmentInstruction).not.toHaveTextContent(
+      '--scope runtime:read',
     );
   });
 
@@ -1696,6 +1774,48 @@ describe('Deployment detail page', () => {
       await screen.findByText('Readiness checks passed'),
     ).toBeInTheDocument();
     expect(screen.getByText('Health check failed')).toBeInTheDocument();
+  });
+
+  it('localizes deployment failure and event details in Simplified Chinese', async () => {
+    await portalI18nReady;
+    await i18n.changeLanguage('zh-CN');
+    const failed = {
+      ...deployment,
+      status: 'failed' as const,
+      failure: { code: 'READINESS_FAILED', message: 'Health check failed' },
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/deployments/deployment-1')) return response(failed);
+      if (path.endsWith('/deployments/deployment-1/events')) {
+        return response([event]);
+      }
+      if (path.endsWith('/me')) {
+        return response({
+          user: null,
+          roles: ['Viewer'],
+          capabilities: readOnly,
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <Refine i18nProvider={i18nProvider}>
+          <DeploymentDetailPage
+            deploymentId='deployment-1'
+            fetcher={fetchMock}
+          />
+        </Refine>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('就绪检查已通过。')).toBeInTheDocument();
+    expect(screen.getByText('就绪检查失败')).toBeInTheDocument();
+    expect(screen.getByText('运行时就绪检查失败。')).toBeInTheDocument();
+    expect(screen.queryByText('Health check failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('READINESS_FAILED')).not.toBeInTheDocument();
   });
 
   it('offers a retry action after a failed request', async () => {

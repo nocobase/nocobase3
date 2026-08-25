@@ -66,18 +66,7 @@ export function HubErrorState({
   title?: string;
 }) {
   const translate = useTranslate();
-  const apiError = error as Partial<HubApiError> | null | undefined;
-  const status = apiError?.status;
-  const message =
-    status === 403
-      ? translate(
-          'hub.error.forbidden',
-          'You do not have permission to view this resource.',
-        )
-      : status === 404
-        ? translate('hub.error.notFound', 'This resource could not be found.')
-        : error?.message ||
-          translate('hub.error.defaultMessage', 'Please try again.');
+  const message = getHubErrorMessage(error, translate);
   const resolvedTitle =
     title === 'Unable to load Hub data'
       ? translate('hub.error.defaultTitle', 'Unable to load Hub data')
@@ -97,6 +86,71 @@ export function HubErrorState({
       </AlertDescription>
     </Alert>
   );
+}
+
+export function getHubErrorMessage(
+  error: Error | null | undefined,
+  translate: ReturnType<typeof useTranslate>,
+): string {
+  const apiError = error as Partial<HubApiError> | null | undefined;
+  const code = apiError?.code?.toUpperCase() ?? '';
+  const status = apiError?.status;
+  const isSimplifiedChinese =
+    translate('locale.zh-CN', 'Simplified Chinese') === '简体中文';
+  if (!isSimplifiedChinese && status !== 403 && status !== 404) {
+    return (
+      error?.message ||
+      translate('hub.error.defaultMessage', 'Please try again.')
+    );
+  }
+  if (status === 401 || code === 'UNAUTHORIZED') {
+    return translate(
+      'hub.error.unauthorized',
+      'Your Hub session has expired. Sign in again.',
+    );
+  }
+  if (status === 403 || code === 'FORBIDDEN') {
+    return translate(
+      'hub.error.forbidden',
+      'You do not have permission to view this resource.',
+    );
+  }
+  if (status === 404 || code.endsWith('_NOT_FOUND')) {
+    return translate('hub.error.notFound', 'This resource could not be found.');
+  }
+  if (status === 409 || code.includes('CONFLICT')) {
+    if (!isSimplifiedChinese) return error?.message ?? 'Conflict';
+    return translate(
+      'hub.error.conflict',
+      'This information changed elsewhere. Reload and try again.',
+    );
+  }
+  if (
+    status === 422 ||
+    code.includes('VALIDATION') ||
+    code.startsWith('INVALID_')
+  ) {
+    if (!isSimplifiedChinese) return error?.message ?? 'Invalid request';
+    return translate(
+      'hub.error.invalidRequest',
+      'Check the entered information and try again.',
+    );
+  }
+  if (status === 0 || code === 'NETWORK_ERROR') {
+    if (!isSimplifiedChinese) return error?.message ?? 'Network error';
+    return translate(
+      'hub.error.network',
+      'Unable to reach Hub. Check the connection and retry.',
+    );
+  }
+  if (status && status >= 500) {
+    if (!isSimplifiedChinese) return error?.message ?? 'Server error';
+    return translate(
+      'hub.error.server',
+      'Hub could not complete the request. Try again.',
+    );
+  }
+  return translate('hub.error.defaultMessage', 'Please try again.');
 }
 
 export function HubEmptyState({
@@ -212,4 +266,39 @@ export function formatHubBytes(value: number | null | undefined): string {
   if (value < 1024 * 1024 * 1024 * 1024)
     return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   return `${(value / (1024 * 1024 * 1024 * 1024)).toFixed(1)} TB`;
+}
+
+export function formatHubDuration(
+  startedAt: string | null,
+  finishedAt: string | null,
+  translate: ReturnType<typeof useTranslate>,
+): string {
+  if (!startedAt) return '—';
+  if (!finishedAt) return translate('hub.common.inProgress', 'In progress');
+  const milliseconds =
+    new Date(finishedAt).valueOf() - new Date(startedAt).valueOf();
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '—';
+  const seconds = Math.round(milliseconds / 1000);
+  const values: Array<[number, string, string]> = [
+    [Math.floor(seconds / 3600), 'hub.duration.hours', '{{count}}h'],
+    [Math.floor((seconds % 3600) / 60), 'hub.duration.minutes', '{{count}}m'],
+    [seconds % 60, 'hub.duration.seconds', '{{count}}s'],
+  ];
+  const parts = values.flatMap(([count, key, fallback]) =>
+    count
+      ? [
+          translate(key, { count }, fallback).replace(
+            '{{count}}',
+            String(count),
+          ),
+        ]
+      : [],
+  );
+  return (
+    parts.join(' ') ||
+    translate('hub.duration.seconds', { count: 0 }, '{{count}}s').replace(
+      '{{count}}',
+      '0',
+    )
+  );
 }

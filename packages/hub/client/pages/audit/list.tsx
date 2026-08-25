@@ -48,6 +48,12 @@ import {
 } from '@/features/hub/management-components';
 import { useHubPageQuery } from '@/features/hub/pagination';
 import { useOptionalHubRuntime } from '@/features/hub/provider';
+import {
+  getHubAuditActionLabel,
+  getHubAuditResourceLabel,
+  getHubAuditSourceLabel,
+} from '@/features/hub/labels';
+import { getStatusLabel } from '@/features/hub/status';
 
 export interface AuditLogPageProps {
   fetcher?: HubFetcher;
@@ -199,7 +205,7 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
             </NativeSelectOption>
             {AUDIT_ACTIONS.map((value) => (
               <NativeSelectOption key={value} value={value}>
-                {value}
+                {getHubAuditActionLabel(value, translate)}
               </NativeSelectOption>
             ))}
           </FilterSelect>
@@ -213,7 +219,7 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
             </NativeSelectOption>
             {['success', 'failure', 'denied'].map((value) => (
               <NativeSelectOption key={value} value={value}>
-                {value}
+                {getStatusLabel(value, translate)}
               </NativeSelectOption>
             ))}
           </FilterSelect>
@@ -227,7 +233,7 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
             </NativeSelectOption>
             {['web', 'agent', 'git', 'system'].map((value) => (
               <NativeSelectOption key={value} value={value}>
-                {value}
+                {getHubAuditSourceLabel(value, translate)}
               </NativeSelectOption>
             ))}
           </FilterSelect>
@@ -332,9 +338,13 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
                       {log.application?.name ??
                         translate('hub.audit.hubScope', 'Hub')}
                     </TableCell>
-                    <TableCell className='font-medium'>{log.action}</TableCell>
+                    <TableCell className='font-medium'>
+                      {getHubAuditActionLabel(log.action, translate)}
+                    </TableCell>
                     <TableCell>
-                      <span>{log.resource}</span>
+                      <span>
+                        {getHubAuditResourceLabel(log.resource, translate)}
+                      </span>
                       <p className='max-w-48 truncate font-mono text-xs text-muted-foreground'>
                         {log.resourceId ?? '—'}
                       </p>
@@ -342,7 +352,9 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
                     <TableCell>
                       <HubStatusBadge status={log.result} />
                     </TableCell>
-                    <TableCell className='capitalize'>{log.source}</TableCell>
+                    <TableCell>
+                      {getHubAuditSourceLabel(log.source, translate)}
+                    </TableCell>
                     <TableCell className='pr-4 text-right'>
                       <Button
                         type='button'
@@ -351,7 +363,7 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
                         aria-label={`${translate(
                           'hub.audit.details.view',
                           'View details',
-                        )}: ${log.action}`}
+                        )}: ${getHubAuditActionLabel(log.action, translate)}`}
                         onClick={() => setSelectedLogId(log.id)}
                       >
                         <Eye aria-hidden='true' />
@@ -500,7 +512,12 @@ function AuditLogDetails({ log }: { log: HubAuditLog }) {
           secondary={
             [
               log.actor?.email,
-              log.actor?.type ?? (log.actor ? 'user' : 'system'),
+              log.actor?.type
+                ? translate(
+                    `hub.audit.actorType.${log.actor.type}`,
+                    log.actor.type,
+                  )
+                : translate('hub.audit.actorType.system', 'System'),
               log.actor?.id,
             ]
               .filter(Boolean)
@@ -520,12 +537,12 @@ function AuditLogDetails({ log }: { log: HubAuditLog }) {
         />
         <AuditDetailItem
           label={translate('hub.common.action', 'Action')}
-          value={log.action}
+          value={getHubAuditActionLabel(log.action, translate)}
           code
         />
         <AuditDetailItem
           label={translate('hub.audit.columns.resource', 'Resource')}
-          value={log.resource}
+          value={getHubAuditResourceLabel(log.resource, translate)}
           secondary={log.resourceId ?? '—'}
           code
         />
@@ -539,7 +556,7 @@ function AuditLogDetails({ log }: { log: HubAuditLog }) {
         </div>
         <AuditDetailItem
           label={translate('hub.common.source', 'Source')}
-          value={log.source}
+          value={getHubAuditSourceLabel(log.source, translate)}
         />
       </dl>
 

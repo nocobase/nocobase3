@@ -45,6 +45,8 @@ import {
 } from '@/features/hub/api';
 import {
   formatHubDate,
+  formatHubDuration,
+  getHubErrorMessage,
   HubEmptyState,
   HubErrorState,
   HubLoadingState,
@@ -57,6 +59,10 @@ import {
   getStatusLabel,
 } from '@/features/hub/status';
 import { useOptionalHubRuntime } from '@/features/hub/provider';
+import {
+  getHubDeploymentFailureLabel,
+  getHubEnvironmentLabel,
+} from '@/features/hub/labels';
 
 export interface DeploymentDetailPageProps {
   deploymentId?: string;
@@ -213,6 +219,9 @@ export function DeploymentDetailPage({
 
   const progress = getDeploymentProgress(deploymentData.status, translate);
   const failure = deploymentData.failure ?? null;
+  const failureLabel = failure
+    ? getHubDeploymentFailureLabel(failure.code, failure.message, translate)
+    : null;
 
   return (
     <div className='space-y-6'>
@@ -246,7 +255,10 @@ export function DeploymentDetailPage({
                 '{{type}} to {{environment}}',
                 {
                   type: getDeploymentTypeLabel(deploymentData.type, translate),
-                  environment: deploymentData.environmentId,
+                  environment: getHubEnvironmentLabel(
+                    deploymentData.environmentId,
+                    translate,
+                  ),
                 },
               )}
             </p>
@@ -297,11 +309,11 @@ export function DeploymentDetailPage({
         </CardContent>
       </Card>
 
-      {failure ? (
+      {failureLabel ? (
         <Alert variant='destructive'>
           <Activity aria-hidden='true' />
-          <AlertTitle>{failure.code}</AlertTitle>
-          <AlertDescription>{failure.message}</AlertDescription>
+          <AlertTitle>{failureLabel.title}</AlertTitle>
+          <AlertDescription>{failureLabel.message}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -400,7 +412,10 @@ export function DeploymentDetailPage({
               />
               <Detail
                 label={translate('hub.common.environment', 'Environment')}
-                value={deploymentData.environmentId}
+                value={getHubEnvironmentLabel(
+                  deploymentData.environmentId,
+                  translate,
+                )}
               />
               <Detail
                 label={translate(
@@ -427,9 +442,10 @@ export function DeploymentDetailPage({
                   'hub.deployments.columns.duration',
                   'Duration',
                 )}
-                value={formatDeploymentDuration(
+                value={formatHubDuration(
                   deploymentData.startedAt,
                   deploymentData.finishedAt,
+                  translate,
                 )}
               />
             </dl>
@@ -460,7 +476,10 @@ export function DeploymentDetailPage({
                 'Create a new Deployment for release {{release}} in {{environment}}. The existing record remains unchanged.',
                 {
                   release: deploymentData.targetReleaseId,
-                  environment: deploymentData.environmentId,
+                  environment: getHubEnvironmentLabel(
+                    deploymentData.environmentId,
+                    translate,
+                  ),
                 },
               )}
             </AlertDialogDescription>
@@ -473,7 +492,9 @@ export function DeploymentDetailPage({
                   'Unable to redeploy release',
                 )}
               </AlertTitle>
-              <AlertDescription>{redeployError.message}</AlertDescription>
+              <AlertDescription>
+                {getHubErrorMessage(redeployError, translate)}
+              </AlertDescription>
             </Alert>
           ) : null}
           <AlertDialogFooter>
@@ -564,7 +585,10 @@ function DeploymentTimeline({ events }: { events: HubDeploymentEvent[] }) {
             <div className='min-w-0 space-y-1'>
               <div className='flex flex-wrap items-center justify-between gap-2'>
                 <p className='font-medium'>
-                  {event.message ?? getStatusLabel(event.type, translate)}
+                  {translate(
+                    `hub.deployment.event.${event.type}`,
+                    event.message ?? getStatusLabel(event.type, translate),
+                  )}
                 </p>
                 <time
                   className='text-xs text-muted-foreground'
@@ -616,30 +640,6 @@ function Detail({
         {value}
       </dd>
     </div>
-  );
-}
-
-function formatDeploymentDuration(
-  startedAt: string | null,
-  finishedAt: string | null,
-): string {
-  if (!startedAt) return '—';
-  if (!finishedAt) return 'In progress';
-  const milliseconds =
-    new Date(finishedAt).valueOf() - new Date(startedAt).valueOf();
-  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '—';
-  const seconds = Math.round(milliseconds / 1000);
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = seconds % 60;
-  return (
-    [
-      hours ? `${hours}h` : '',
-      minutes ? `${minutes}m` : '',
-      remainder ? `${remainder}s` : '',
-    ]
-      .filter(Boolean)
-      .join(' ') || '0s'
   );
 }
 

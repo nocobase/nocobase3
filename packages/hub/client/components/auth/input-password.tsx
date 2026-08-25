@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import { translate } from '@nocobase/app-portal-sdk/i18n';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
@@ -19,7 +20,11 @@ export const InputPassword = ({ className, ...props }: InputPasswordProps) => {
       />
       <button
         type='button'
-        aria-label={showPassword ? 'Hide password' : 'Show password'}
+        aria-label={
+          showPassword
+            ? translate('auth.hidePassword', 'Hide password')
+            : translate('auth.showPassword', 'Show password')
+        }
         aria-pressed={showPassword}
         className={cn(
           'appearance-none',

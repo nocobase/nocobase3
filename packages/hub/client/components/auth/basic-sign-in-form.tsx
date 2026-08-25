@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useLink, useLogin } from '@refinedev/core';
+import { useLink, useLogin, useTranslate } from '@refinedev/core';
 import type { AuthenticatorComponentProps } from '@nocobase/app-portal-sdk/auth';
 
 import { InputPassword } from '@/components/auth/input-password';
@@ -21,6 +21,7 @@ export function BasicSignInForm({
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const Link = useLink();
+  const translate = useTranslate();
   const { mutate: login, isPending } = useLogin<LoginVariables>();
   const allowSignUp = authenticator.options?.allowSignUp === true;
   const enableResetPassword =
@@ -35,7 +36,7 @@ export function BasicSignInForm({
     <form onSubmit={handleSignIn} className='space-y-5'>
       <div className='space-y-2'>
         <Label htmlFor={`${authenticator.name}-account`}>
-          Username or email
+          {translate('auth.account', 'Username or email')}
         </Label>
         <Input
           id={`${authenticator.name}-account`}
@@ -49,7 +50,9 @@ export function BasicSignInForm({
       </div>
 
       <div className='space-y-2'>
-        <Label htmlFor={`${authenticator.name}-password`}>Password</Label>
+        <Label htmlFor={`${authenticator.name}-password`}>
+          {translate('auth.password', 'Password')}
+        </Label>
         <InputPassword
           id={`${authenticator.name}-password`}
           value={password}
@@ -60,7 +63,9 @@ export function BasicSignInForm({
       </div>
 
       <Button type='submit' className='w-full' disabled={isPending}>
-        {isPending ? 'Signing in…' : 'Sign in'}
+        {isPending
+          ? translate('auth.signingIn', 'Signing in…')
+          : translate('auth.signIn', 'Sign in')}
       </Button>
 
       {(allowSignUp || enableResetPassword) && (
@@ -72,19 +77,19 @@ export function BasicSignInForm({
               )}`}
               className='transition-colors hover:text-foreground hover:underline hover:underline-offset-4'
             >
-              Forgot password?
+              {translate('auth.forgotPassword', 'Forgot password?')}
             </Link>
           ) : (
             <span />
           )}
           {allowSignUp && (
             <span>
-              No account?{' '}
+              {translate('auth.noAccount', 'No account?')}{' '}
               <Link
                 to={`/register?name=${encodeURIComponent(authenticator.name)}`}
                 className='font-semibold text-foreground underline underline-offset-4'
               >
-                Sign up
+                {translate('auth.signUp', 'Sign up')}
               </Link>
             </span>
           )}

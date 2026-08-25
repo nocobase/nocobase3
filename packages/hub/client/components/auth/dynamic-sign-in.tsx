@@ -5,6 +5,7 @@ import {
   type Authenticator,
   type RenderAuthenticator,
 } from '@nocobase/app-portal-sdk/auth';
+import { useTranslate } from '@refinedev/core';
 
 import { authenticatorAdapterMap } from '@/components/auth/authenticator-adapters';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -39,6 +40,7 @@ function AuthenticatorFallback() {
 }
 
 export function DynamicSignIn({ renderAuthenticator }: DynamicSignInProps) {
+  const translate = useTranslate();
   const {
     data: authenticators = [],
     error,
@@ -104,11 +106,14 @@ export function DynamicSignIn({ renderAuthenticator }: DynamicSignInProps) {
     return (
       <Alert variant='destructive'>
         <AlertCircle />
-        <AlertTitle>Unable to load sign-in methods</AlertTitle>
+        <AlertTitle>
+          {translate('auth.signIn.loadError', 'Unable to load sign-in methods')}
+        </AlertTitle>
         <AlertDescription>
-          {import.meta.env.DEV && error instanceof Error
-            ? error.message
-            : 'Please try again or contact your administrator.'}
+          {translate(
+            'auth.signIn.loadErrorDescription',
+            'Please try again or contact your administrator.',
+          )}
         </AlertDescription>
       </Alert>
     );
@@ -124,10 +129,14 @@ export function DynamicSignIn({ renderAuthenticator }: DynamicSignInProps) {
           <EmptyMedia variant='icon'>
             <KeyRound />
           </EmptyMedia>
-          <EmptyTitle>No supported sign-in methods</EmptyTitle>
+          <EmptyTitle>
+            {translate('auth.signIn.noMethod', 'No supported sign-in methods')}
+          </EmptyTitle>
           <EmptyDescription>
-            No sign-in method is currently available. Contact your administrator
-            for access.
+            {translate(
+              'auth.signIn.noMethodDescription',
+              'No sign-in method is currently available. Contact your administrator for access.',
+            )}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -165,7 +174,7 @@ export function DynamicSignIn({ renderAuthenticator }: DynamicSignInProps) {
             <div className='flex items-center gap-4 py-1'>
               <Separator className='flex-1' />
               <span className='text-xs text-muted-foreground'>
-                Or continue with
+                {translate('auth.signIn.orContinueWith', 'Or continue with')}
               </span>
               <Separator className='flex-1' />
             </div>

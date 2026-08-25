@@ -19,7 +19,13 @@ import {
   type HubResolvedInvitation,
   useHubQuery,
 } from './api';
-import { formatHubDate, HubErrorState, HubLoadingState } from './components';
+import {
+  formatHubDate,
+  getHubErrorMessage,
+  HubErrorState,
+  HubLoadingState,
+} from './components';
+import { getHubRoleLabel } from './labels';
 
 interface HubSetupStatus {
   setupRequired: boolean;
@@ -119,7 +125,9 @@ function HubLoginForm({
           <AlertTitle>
             {translate('hub.auth.signIn.error', 'Unable to sign in')}
           </AlertTitle>
-          <AlertDescription>{error.message}</AlertDescription>
+          <AlertDescription>
+            {localizedAuthenticationError(error, translate)}
+          </AlertDescription>
         </Alert>
       ) : null}
       <div className='space-y-2'>
@@ -253,7 +261,9 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
                 'Unable to create the Owner',
               )}
             </AlertTitle>
-            <AlertDescription>{error.message}</AlertDescription>
+            <AlertDescription>
+              {getHubErrorMessage(error, translate)}
+            </AlertDescription>
           </Alert>
         ) : null}
         <div className='space-y-2'>
@@ -484,7 +494,9 @@ export function HubInvitationAcceptancePage({
                 'Unable to accept the invitation',
               )}
             </AlertTitle>
-            <AlertDescription>{submitError.message}</AlertDescription>
+            <AlertDescription>
+              {getHubErrorMessage(submitError, translate)}
+            </AlertDescription>
           </Alert>
         ) : null}
         <div className='space-y-2'>
@@ -712,7 +724,9 @@ export function HubAgentAuthorizationPage({
               'Unable to save your decision',
             )}
           </AlertTitle>
-          <AlertDescription>{decisionError.message}</AlertDescription>
+          <AlertDescription>
+            {getHubErrorMessage(decisionError, translate)}
+          </AlertDescription>
         </Alert>
       ) : null}
       <div className='space-y-4 rounded-xl border bg-muted/30 p-4'>
@@ -807,7 +821,7 @@ function InvitationSummary({
           <div className='mt-2 flex flex-wrap gap-1.5'>
             {invitation.access.globalRoles.map((role) => (
               <Badge key={role.id} variant='secondary'>
-                {role.name}
+                {getHubRoleLabel(role.name, translate)}
               </Badge>
             ))}
           </div>
@@ -822,7 +836,7 @@ function InvitationSummary({
           <span className='flex flex-wrap justify-end gap-1.5'>
             {application.roles.map((role) => (
               <Badge key={role.id} variant='outline'>
-                {role.name}
+                {getHubRoleLabel(role.name, translate)}
               </Badge>
             ))}
           </span>
@@ -863,6 +877,31 @@ function readLoginRedirect(state: unknown): string {
       ? location.hash
       : '';
   return `${location.pathname}${search}${hash}`;
+}
+
+function localizedAuthenticationError(
+  error: { message?: string; code?: string },
+  translate: ReturnType<typeof useTranslate>,
+): string {
+  const code = error.code?.toUpperCase();
+  if (code === 'VALIDATION_ERROR') {
+    return translate(
+      'hub.auth.error.validation',
+      'Enter your username or email and password.',
+    );
+  }
+  if (
+    code === 'INVALID_EMAIL_OR_PASSWORD' ||
+    code === 'INVALID_USERNAME_OR_PASSWORD' ||
+    code === 'INVALID_PASSWORD' ||
+    /invalid (?:username|email).*password/i.test(error.message ?? '')
+  ) {
+    return translate(
+      'hub.auth.error.invalidCredentials',
+      'Invalid username or password.',
+    );
+  }
+  return translate('hub.auth.error.default', 'Authentication failed.');
 }
 
 function readOwnerCreated(state: unknown): boolean {

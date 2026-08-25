@@ -32,6 +32,7 @@ import {
 } from '@/features/hub/api';
 import {
   formatHubDate,
+  formatHubDuration,
   HubEmptyState,
   HubErrorState,
   HubListSkeleton,
@@ -601,9 +602,10 @@ function DeploymentResults({
                       deployment.requestedBy}
                   </TableCell>
                   <TableCell>
-                    {formatDeploymentDuration(
+                    {formatHubDuration(
                       deployment.startedAt,
                       deployment.finishedAt,
+                      translate,
                     )}
                   </TableCell>
                 </TableRow>
@@ -694,9 +696,10 @@ function DeploymentResults({
                     {translate('hub.deployments.columns.duration', 'Duration')}
                   </dt>
                   <dd className='mt-1 font-medium'>
-                    {formatDeploymentDuration(
+                    {formatHubDuration(
                       deployment.startedAt,
                       deployment.finishedAt,
+                      translate,
                     )}
                   </dd>
                 </div>
@@ -801,30 +804,6 @@ function useDeploymentReferences(
   }, [fetcher, memberIds]);
 
   return { releaseVersions, memberNames };
-}
-
-function formatDeploymentDuration(
-  startedAt: string | null,
-  finishedAt: string | null,
-): string {
-  if (!startedAt) return '—';
-  if (!finishedAt) return 'In progress';
-  const milliseconds =
-    new Date(finishedAt).valueOf() - new Date(startedAt).valueOf();
-  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '—';
-  const seconds = Math.round(milliseconds / 1000);
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = seconds % 60;
-  return (
-    [
-      hours ? `${hours}h` : '',
-      minutes ? `${minutes}m` : '',
-      remainder ? `${remainder}s` : '',
-    ]
-      .filter(Boolean)
-      .join(' ') || '0s'
-  );
 }
 
 export default DeploymentsPage;

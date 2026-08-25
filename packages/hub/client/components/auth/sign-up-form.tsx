@@ -2,7 +2,12 @@
 
 import { AlertCircle, KeyRound } from 'lucide-react';
 import { useState } from 'react';
-import { useLink, useNotification, useRegister } from '@refinedev/core';
+import {
+  useLink,
+  useNotification,
+  useRegister,
+  useTranslate,
+} from '@refinedev/core';
 import {
   usePublicAuthenticators,
   type Authenticator,
@@ -170,6 +175,7 @@ function BasicSignUpForm({ authenticator }: { authenticator: Authenticator }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const { open } = useNotification();
   const Link = useLink();
+  const translate = useTranslate();
   const { mutate: register, isPending } = useRegister<SignUpVariables>();
   const fields = (authenticator.options?.signupForm ?? []).filter(
     (field) =>
@@ -191,7 +197,11 @@ function BasicSignUpForm({ authenticator }: { authenticator: Authenticator }) {
     if (missingField) {
       open?.({
         type: 'error',
-        message: `Please enter ${getFieldLabel(missingField)}`,
+        message: translate(
+          'auth.signUp.missingField',
+          { field: getFieldLabel(missingField) },
+          'Please enter {{field}}',
+        ),
       });
       return;
     }
@@ -199,8 +209,14 @@ function BasicSignUpForm({ authenticator }: { authenticator: Authenticator }) {
     if (password !== confirmPassword) {
       open?.({
         type: 'error',
-        message: "Passwords don't match",
-        description: 'Please make sure both password fields match.',
+        message: translate(
+          'auth.signUp.passwordMismatch',
+          "Passwords don't match",
+        ),
+        description: translate(
+          'auth.signUp.passwordMismatchDescription',
+          'Please make sure both password fields match.',
+        ),
       });
       return;
     }
@@ -226,7 +242,9 @@ function BasicSignUpForm({ authenticator }: { authenticator: Authenticator }) {
       ))}
 
       <div className='space-y-2'>
-        <Label htmlFor={`${authenticator.name}-password`}>Password</Label>
+        <Label htmlFor={`${authenticator.name}-password`}>
+          {translate('auth.password', 'Password')}
+        </Label>
         <InputPassword
           id={`${authenticator.name}-password`}
           value={password}
@@ -238,7 +256,7 @@ function BasicSignUpForm({ authenticator }: { authenticator: Authenticator }) {
 
       <div className='space-y-2'>
         <Label htmlFor={`${authenticator.name}-confirm-password`}>
-          Confirm password
+          {translate('auth.confirmPassword', 'Confirm password')}
         </Label>
         <InputPassword
           id={`${authenticator.name}-confirm-password`}
@@ -250,16 +268,18 @@ function BasicSignUpForm({ authenticator }: { authenticator: Authenticator }) {
       </div>
 
       <Button type='submit' className='w-full' disabled={isPending}>
-        {isPending ? 'Creating account…' : 'Sign up'}
+        {isPending
+          ? translate('auth.creatingAccount', 'Creating account…')
+          : translate('auth.signUp', 'Sign up')}
       </Button>
 
       <p className='text-center text-sm text-muted-foreground'>
-        Have an account?{' '}
+        {translate('auth.haveAccount', 'Have an account?')}{' '}
         <Link
           to='/login'
           className='font-semibold text-foreground underline underline-offset-4'
         >
-          Sign in
+          {translate('auth.signIn', 'Sign in')}
         </Link>
       </p>
     </form>
@@ -267,6 +287,7 @@ function BasicSignUpForm({ authenticator }: { authenticator: Authenticator }) {
 }
 
 export const SignUpForm = () => {
+  const translate = useTranslate();
   const [searchParams] = useSearchParams();
   const {
     data: authenticators = [],
@@ -280,8 +301,11 @@ export const SignUpForm = () => {
 
   return (
     <AuthLayout
-      title='Create your account'
-      description='Create your NocoBase account.'
+      title={translate('auth.createAccount', 'Create your account')}
+      description={translate(
+        'auth.createAccountDescription',
+        'Create your NocoBase account.',
+      )}
     >
       {isPending ? (
         <div className='flex min-h-64 items-center justify-center'>
@@ -290,11 +314,17 @@ export const SignUpForm = () => {
       ) : error ? (
         <Alert variant='destructive'>
           <AlertCircle />
-          <AlertTitle>Unable to load the sign-up method</AlertTitle>
+          <AlertTitle>
+            {translate(
+              'auth.signUp.loadError',
+              'Unable to load the sign-up method',
+            )}
+          </AlertTitle>
           <AlertDescription>
-            {import.meta.env.DEV && error instanceof Error
-              ? error.message
-              : 'Please try again or contact your administrator.'}
+            {translate(
+              'auth.signIn.loadErrorDescription',
+              'Please try again or contact your administrator.',
+            )}
           </AlertDescription>
         </Alert>
       ) : !authenticator || authenticator.authType !== 'Email/Password' ? (
@@ -303,10 +333,14 @@ export const SignUpForm = () => {
             <EmptyMedia variant='icon'>
               <KeyRound />
             </EmptyMedia>
-            <EmptyTitle>No sign-up method available</EmptyTitle>
+            <EmptyTitle>
+              {translate('auth.signUp.noMethod', 'No sign-up method available')}
+            </EmptyTitle>
             <EmptyDescription>
-              This sign-up link is invalid or the authentication method does not
-              support account registration.
+              {translate(
+                'auth.signUp.invalidMethodDescription',
+                'This sign-up link is invalid or the authentication method does not support account registration.',
+              )}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -316,9 +350,17 @@ export const SignUpForm = () => {
             <EmptyMedia variant='icon'>
               <KeyRound />
             </EmptyMedia>
-            <EmptyTitle>Account registration is disabled</EmptyTitle>
+            <EmptyTitle>
+              {translate(
+                'auth.signUp.disabled',
+                'Account registration is disabled',
+              )}
+            </EmptyTitle>
             <EmptyDescription>
-              Contact your administrator if you need an account.
+              {translate(
+                'auth.signUp.disabledDescription',
+                'Contact your administrator if you need an account.',
+              )}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
