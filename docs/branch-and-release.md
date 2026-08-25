@@ -68,7 +68,7 @@ git add .changeset && git commit -m "chore: add changeset"
 "@nocobase/core": minor
 ---
 
-新增导出能力。
+Add data export support to the core runtime.
 ```
 
 **这一步版本号不变。** changeset 只是一张纸条，会一直攒着：
@@ -1219,7 +1219,9 @@ dist-tag 是 registry 上的指针，不是分支。一个包可以同时挂任�
 
 **开发者不需要在本地执行任何 changeset 发版命令。** 日常只写 `pnpm changeset`，发版一律点对应 workflow 的运行按钮。
 
-两个发版 workflow 都有 `dry_run` 输入（默认 true），可以先空跑看算出的版本号再实发。共用 concurrency group `release-write`，不会并发写分支。
+发版 workflow 都有 `dry_run` 输入（默认不勾选），勾上可以先空跑看算出的版本号再实发。共用 concurrency group `release-write`，不会并发写分支。
+
+输入项的 description 用英文——它们直接显示在 GitHub 的运行面板上。
 
 它们都在**临时发版分支**上完成 `version` + `publish`，再通过 PR 合回，理由见「发版必须在临时分支上进行」。
 
@@ -1479,12 +1481,12 @@ npm 不允许覆盖已发布版本。处理方式：
 
 ### 阶段三：启用 develop 预览版
 
-1. 用 `dry_run` 空跑一次 `release-beta.yml`，确认算出的版本号符合预期。
-2. 关掉 `dry_run` 完成第一轮真实的 beta 发布。
+1. 勾上 `dry_run` 空跑一次 `release-beta.yml`，确认算出的版本号符合预期。
+2. 不勾 `dry_run` 再跑一次，完成第一轮真实的 beta 发布。
 
 ### 阶段四：走通一次完整转正
 
-1. `dry_run` 空跑 `merge-beta-to-stable.yml`，确认转正后的版本号。
+1. 勾上 `dry_run` 空跑 `merge-beta-to-stable.yml`，确认转正后的版本号。
 2. 实际执行：`pre exit` → `version` → 合进 `main` → `develop` 重新进 pre。
 3. 点 `release-stable.yml` 发布到 `latest`。
 4. 验证冲突处理规则和守卫链是否符合预期。

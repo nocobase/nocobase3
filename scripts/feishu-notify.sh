@@ -14,6 +14,7 @@
 #   BUILD_TIME    - Build timestamp (defaults to current time in Asia/Shanghai)
 #   ACTOR         - Who triggered the run; appended to the footer when set
 #   REPOSITORY    - owner/repo; appended to the footer when set
+#   REGISTRY_URL  - Package registry; adds a second button when set
 
 set -euo pipefail
 
@@ -36,12 +37,21 @@ fi
 
 # 状态、时间、触发者、仓库这几项每条通知都该有，但自定义 CONTENT 时
 # 容易漏掉，所以在脚本里统一追加，调用方只负责写正文。
-FOOTER="**状态：**${STATUS_EMOJI} ${STATUS_TEXT}\n**时间：**${BUILD_TIME}"
-[[ -n "${ACTOR:-}" ]] && FOOTER="${FOOTER}\n**触发者：**${ACTOR}"
-[[ -n "${REPOSITORY:-}" ]] && FOOTER="${FOOTER}\n**仓库：**${REPOSITORY}"
+#
+# 这里必须用真换行而不是字面的 \n：CONTENT 从 workflow 的 YAML 块标量
+# 传进来时带的就是真换行，jq --arg 会把两者分别转义成 \n 和 \\n，后者
+# 在飞书里原样显示成反斜杠加 n。
+FOOTER="**状态：**${STATUS_EMOJI} ${STATUS_TEXT}
+**时间：**${BUILD_TIME}"
+[[ -n "${ACTOR:-}" ]] && FOOTER="${FOOTER}
+**触发者：**${ACTOR}"
+[[ -n "${REPOSITORY:-}" ]] && FOOTER="${FOOTER}
+**仓库：**${REPOSITORY}"
 
 if [[ -n "${CONTENT:-}" ]]; then
-  CONTENT="${CONTENT}\n\n${FOOTER}"
+  CONTENT="${CONTENT}
+
+${FOOTER}"
 else
   CONTENT="${FOOTER}"
 fi
@@ -51,6 +61,7 @@ PAYLOAD=$(jq -n \
   --arg template "$HEADER_TEMPLATE" \
   --arg content "$CONTENT" \
   --arg url "$WORKFLOW_URL" \
+  --arg registry "${REGISTRY_URL:-}" \
   '{
     msg_type: "interactive",
     card: {
@@ -65,14 +76,24 @@ PAYLOAD=$(jq -n \
         },
         {
           tag: "action",
-          actions: [
-            {
-              tag: "button",
-              text: { tag: "plain_text", content: "查看构建详情" },
-              url: $url,
-              type: "primary"
-            }
-          ]
+          actions: (
+            [
+              {
+                tag: "button",
+                text: { tag: "plain_text", content: "查看构建详情" },
+                url: $url,
+                type: "primary"
+              }
+            ]
+            + (if $registry == "" then [] else [
+              {
+                tag: "button",
+                text: { tag: "plain_text", content: "打开 Registry" },
+                url: $registry,
+                type: "default"
+              }
+            ] end)
+          )
         }
       ]
     }

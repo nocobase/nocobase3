@@ -7,7 +7,9 @@
 //   node scripts/list-package-versions.mjs --changed <前值JSON文件>  列出版本号变了的
 //   node scripts/list-package-versions.mjs --candidates 列出可发布包的 name@version
 //   node scripts/list-package-versions.mjs --released <前值JSON文件>  列出本次发布的包，
-//                                          飞书通知用，每行 `name  version`
+//                                          飞书通知用，输出 Markdown 表格
+//   node scripts/list-package-versions.mjs --filters <前值JSON文件>   本次发布的包及其
+//                                          依赖的 pnpm --filter 参数
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -70,10 +72,23 @@ if (mode === '--table') {
   const released = packages.filter(
     (p) => !p.private && before[p.name] !== p.version,
   );
-  const width = Math.max(0, ...released.map((p) => p.name.length));
+  // Markdown 表格 —— 飞书的 lark_md 会渲染它。等宽空格对齐在手机上会串行。
   console.log(
-    released.map((p) => `${p.name.padEnd(width)}  ${p.version}`).join('\n'),
+    ['| Package | 版本 |', '| --- | --- |']
+      .concat(released.map((p) => `| \`${p.name}\` | \`${p.version}\` |`))
+      .join('\n'),
   );
+} else if (mode === '--filters') {
+  // 拼成 pnpm 的 filter 参数：`--filter <name>...` 表示这个包连同它依赖的包。
+  // 发版只需要构建将要发布的包和它们依赖的东西，其余的构建了也用不上。
+  const beforeFile = process.argv[3];
+  if (!beforeFile) {
+    console.error('--filters 需要指定前值 JSON 文件');
+    process.exit(2);
+  }
+  const before = JSON.parse(fs.readFileSync(beforeFile, 'utf8'));
+  const changed = packages.filter((p) => before[p.name] !== p.version);
+  console.log(changed.map((p) => `--filter ${p.name}...`).join(' '));
 } else if (mode === '--candidates') {
   for (const p of packages) {
     if (p.private) continue;

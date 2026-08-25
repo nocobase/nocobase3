@@ -24,17 +24,17 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: '从哪个分支发'
+        description: 'Branch to release from'
         type: string
         default: main
       keep_latest:
-        description: '不要动 latest 指针（给旧版本发 hotfix 时勾上，会发到 dist-tag legacy）'
+        description: 'Keep the latest dist-tag untouched (check this for hotfixes on older versions; publishes to legacy)'
         type: boolean
         default: false
       dry_run:
-        description: '只算版本号，不发布不推送'
+        description: 'Dry run: compute versions and run checks without publishing or pushing'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: release-write
@@ -340,6 +340,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
           TITLE: NocoBase 3 稳定版发布成功，但 PR 合回失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
@@ -360,6 +361,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
           TITLE: NocoBase 3 稳定版已发布，但同步到 develop 需要人工处理
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
@@ -388,6 +390,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
           TITLE: NocoBase 3 稳定版发布
           STATUS: success
           STATUS_TEXT_SUCCESS: 发布成功

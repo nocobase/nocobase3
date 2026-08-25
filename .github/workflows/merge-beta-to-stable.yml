@@ -23,9 +23,9 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: '只算版本号，不推送任何分支'
+        description: 'Dry run: compute versions and run checks without pushing any branch'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: release-write
@@ -254,6 +254,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
           TITLE: NocoBase 3 转正合并失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
@@ -275,6 +276,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
           TITLE: NocoBase 3 已合进 main，但同步回 develop 失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
@@ -299,6 +301,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
+          REGISTRY_URL: https://npm.nocobase.ai
           TITLE: NocoBase 3 转正合并完成
           STATUS: success
           STATUS_TEXT_SUCCESS: 待发布
