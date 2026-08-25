@@ -2,7 +2,7 @@ import { Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import type { ReactElement } from 'react';
 
-import { Button } from '@nocobase/ui';
+import { Button } from '@/components/ui/button';
 
 export function ThemeSettings(): ReactElement {
   const { resolvedTheme, setTheme } = useTheme();

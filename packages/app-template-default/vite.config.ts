@@ -82,13 +82,6 @@ export default createPortalViteConfig(
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],
         alias: [
-          {
-            find: /^@nocobase\/ui$/,
-            replacement: path.resolve(
-              __dirname,
-              './client/nocobase-ui/index.ts',
-            ),
-          },
           { find: '@', replacement: path.resolve(__dirname, './client') },
         ],
       },

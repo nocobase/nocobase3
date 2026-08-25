@@ -1,10 +1,11 @@
 import type { ComponentPropsWithoutRef, ReactElement } from 'react';
 
-import { cn } from './utils.js';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 
 export interface LoadingProps extends ComponentPropsWithoutRef<'div'> {
-  fullscreen?: boolean;
-  label?: string;
+  readonly fullscreen?: boolean;
+  readonly label?: string;
 }
 
 export function Loading({
@@ -15,29 +16,16 @@ export function Loading({
 }: LoadingProps): ReactElement {
   return (
     <div
-      role='status'
       aria-label={label}
       className={cn(
         'flex items-center justify-center',
         fullscreen && 'min-h-svh w-full bg-background',
         className,
       )}
+      role='status'
       {...props}
     >
-      <svg
-        data-slot='loading-indicator'
-        viewBox='0 0 24 24'
-        fill='none'
-        aria-hidden='true'
-        className='size-7 animate-spin text-primary motion-reduce:animate-none motion-reduce:opacity-65'
-      >
-        <path
-          d='M21 12a9 9 0 1 1-6.219-8.56'
-          stroke='currentColor'
-          strokeWidth='2'
-          strokeLinecap='round'
-        />
-      </svg>
+      <Spinner aria-hidden='true' role={undefined} />
     </div>
   );
 }

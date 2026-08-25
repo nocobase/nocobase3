@@ -10,4 +10,3 @@
   - @nocobase/app-database@0.0.1-beta.0
   - @nocobase/app-sdk@0.0.1-beta.0
   - @nocobase/caching@0.0.1-beta.0
-  - @nocobase/ui@0.0.1-beta.0

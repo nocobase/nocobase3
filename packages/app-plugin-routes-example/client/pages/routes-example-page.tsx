@@ -1,7 +1,7 @@
-import { Button } from '@nocobase/app-client/ui';
 import { createAppClient } from '@nocobase/app-sdk';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
+import { Button } from '../components/ui/button.js';
 import { useRoutesExample } from '../contexts/routes-example-context.js';
 
 interface RoutesExampleResponse {

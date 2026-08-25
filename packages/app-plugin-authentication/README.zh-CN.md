@@ -44,6 +44,11 @@ pnpm registry:build
 生成的安装入口为 `public/r/auth-ui.json`。Registry 源码变更后需要重新构建；消费方只需
 对已发布的 JSON 执行 `shadcn add`。
 
+插件自身的 fallback 页面不依赖宿主 UI 包，而是在 `client/components/ui` 按需持有
+shadcn `base-nova` 源码。新增基础组件可在本包目录执行 `pnpm exec shadcn add <name>`；
+由于本包会生成声明文件，生成后需要保留显式导出类型，并将内部引用写成带 `.js` 后缀的
+相对 ESM 路径。
+
 根入口是服务端入口，浏览器代码必须从 `@nocobase/app-plugin-authentication/client` 导入。
 
 ## 常用命令

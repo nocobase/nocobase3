@@ -1,8 +1,12 @@
+// shadcn base-nova source adapted for declaration-emitting ESM builds.
 import * as React from 'react';
+import type { ReactElement } from 'react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils.js';
 
-function Label({ className, ...props }: React.ComponentProps<'label'>) {
+export type LabelProps = React.ComponentProps<'label'>;
+
+export function Label({ className, ...props }: LabelProps): ReactElement {
   return (
     <label
       data-slot='label'
@@ -14,5 +18,3 @@ function Label({ className, ...props }: React.ComponentProps<'label'>) {
     />
   );
 }
-
-export { Label };

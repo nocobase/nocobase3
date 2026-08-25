@@ -3,7 +3,7 @@ import { ChevronRight, Home, List, ShieldCheck, X } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import { Link } from 'react-router';
 
-import { Button } from '@nocobase/ui';
+import { Button } from '@/components/ui/button';
 
 import { AppBrand } from './app-brand.js';
 import { HOME_NAVIGATION_ITEM } from './navigation.js';

@@ -13,6 +13,11 @@ plugin:
 - `client/pages/routes-example-page.tsx` is loaded only when that page route is
   visited and calls the server route through `@nocobase/app-sdk`.
 
+The plugin owns its required shadcn primitives under `client/components/ui`.
+Add more with `pnpm exec shadcn add <name>`, then retain explicit exported
+types and relative `.js` imports required by this declaration-emitting ESM
+package.
+
 The plugin manifest exposes the client contributions independently:
 
 ```json

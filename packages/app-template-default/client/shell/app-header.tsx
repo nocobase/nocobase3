@@ -2,7 +2,7 @@ import { resolveNocoBaseSettingsUrl } from '@nocobase/app-portal-sdk/runtime';
 import { PanelLeft, Settings } from 'lucide-react';
 import type { ReactElement } from 'react';
 
-import { Button } from '@nocobase/ui';
+import { Button } from '@/components/ui/button';
 
 import { ThemeSettings } from '../theme/index.js';
 import { AppBrand } from './app-brand.js';
