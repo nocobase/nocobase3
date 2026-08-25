@@ -2,11 +2,7 @@ import type { ReactElement } from 'react';
 
 export function AuthBrand(): ReactElement {
   return (
-    <div
-      aria-label='NocoBase Default App'
-      className='flex items-center gap-3'
-      role='img'
-    >
+    <div aria-label='NocoBase' className='flex items-center gap-3' role='img'>
       <svg
         aria-hidden='true'
         className='size-10 shrink-0 text-foreground'

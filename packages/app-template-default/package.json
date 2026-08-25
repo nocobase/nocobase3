@@ -187,6 +187,8 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:install": "playwright install chromium",
     "test:all": "pnpm typecheck && pnpm test && pnpm test:sdk && pnpm build && pnpm test:e2e",
+    "registry:build": "node ../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
     "start": "node ./scripts/start.mjs",
     "refine": "refine",
     "sdk:check": "pnpm exec portal-sdk check",

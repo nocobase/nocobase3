@@ -14,9 +14,7 @@ describe('application authentication UI', () => {
       </AuthLayout>,
     );
 
-    expect(
-      screen.getByRole('img', { name: 'NocoBase Default App' }),
-    ).toBeVisible();
+    expect(screen.getByRole('img', { name: 'NocoBase' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Welcome' })).toBeVisible();
     expect(
       screen.getByRole('complementary', { name: 'About this application' }),
