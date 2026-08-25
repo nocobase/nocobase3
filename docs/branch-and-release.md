@@ -1207,7 +1207,7 @@ dist-tag 是 registry 上的指针，不是分支。一个包可以同时挂任�
 
 ## GitHub Actions 设计
 
-沙盒仓库 `test-branch-version` 里有可运行的实现，全部通过 actionlint。
+实现在 `.github/workflows/` 下，全部通过 actionlint。沙盒仓库 `test-branch-version` 里有对应的实验脚本可以复现本文的验证结论。
 
 | Workflow                   | 触发               | 作用                                              |
 | -------------------------- | ------------------ | ------------------------------------------------- |
@@ -1442,38 +1442,40 @@ npm 不允许覆盖已发布版本。处理方式：
 
 ## 迁移步骤
 
-### 阶段零：解除前置阻塞
+### 阶段一：Changesets 基础设施（已完成）
 
-1. 处理 private 与可发布 package 的混合依赖链（见上文），确保 `changeset version` 能执行。
-2. 清理 `packages/logger`、`packages/storage` 等遗留目录。
-3. 为 `main` 配置 Merge Queue 和分支保护。
-4. 移植飞书通知脚本。
+- 安装 `@changesets/cli`，初始化 `.changeset/config.json`（`baseBranch` 设为 `develop`）
+- 落地全部 workflow 和 `scripts/` 下的配套脚本
+- 团队可以开始在 PR 中提交 changeset
 
-### 阶段一：建立 Changesets 基础设施
+> 早期版本的文档记录过一条前置阻塞：`private: false` 的 package 通过 `dependencies` 依赖 `private: true` 的 package 时，Changesets 会直接报错退出。当前仓库 30 个 package 全部是可发布的，这条阻塞已不存在。新增 private package 时需要重新检查，见「private 与可发布 package 不能混在同一条运行时依赖链上」。
 
-1. 安装 `@changesets/cli`，初始化 `.changeset/config.json`。
-2. 落地 `changeset-check.yml` 和 `guard-main.yml`。
-3. 团队开始在 PR 中提交 changeset，但暂不自动发布。
+### 阶段二：仓库配置（待办）
 
-这一阶段先让团队习惯「改代码就写 changeset」，发布仍走原有流程。
+这些只能人工做，做完才能真正发版：
 
-### 阶段二：启用 develop 预览版
+1. 为 `main` 和 `develop` 配置分支保护。
+2. 配置 secrets：`RELEASE_TOKEN`（能推受保护分支的 PAT）、`NPM_TOKEN`、`FEISHU_WEBHOOK`。
+3. 建立 `npm-publish` 和 `dry-run` 两个 GitHub Environment，前者开人工 approve。
+4. 在 `develop` 上执行一次 `pnpm changeset pre enter beta` 并提交——这是唯一需要人工执行的 changeset 命令，之后由 CI 维持。
 
-1. 在 `develop` 上执行一次 `changeset pre enter beta` 并提交。
-2. 落地 `release-beta.yml`，先用 `dry_run` 空跑确认版本号。
-3. 完成第一轮真实的 beta 发布。
+### 阶段三：启用 develop 预览版
 
-### 阶段三：走通一次完整转正
+1. 用 `dry_run` 空跑一次 `release-beta.yml`，确认算出的版本号符合预期。
+2. 关掉 `dry_run` 完成第一轮真实的 beta 发布。
 
-1. 落地 `merge-beta-to-stable.yml`，同样先 `dry_run`。
-2. 完成一次 `pre exit` → `version` → 发布 `latest` → 合进 `main` → `develop` 重新进 pre 的全流程。
-3. 验证冲突处理规则和守卫链是否符合预期。
+### 阶段四：走通一次完整转正
+
+1. `dry_run` 空跑 `merge-beta-to-stable.yml`，确认转正后的版本号。
+2. 实际执行：`pre exit` → `version` → 合进 `main` → `develop` 重新进 pre。
+3. 点 `release-stable.yml` 发布到 `latest`。
+4. 验证冲突处理规则和守卫链是否符合预期。
 
 这是 `main` 的**第一个稳定版**。在此之前 `main` 不发任何版本，它落后 `develop` 多少个 commit 都不要紧——首次合并是快进合并，不会冲突。
 
 这一步跑通之后，整套流程就闭环了：`develop` 持续发 beta，需要时转正到 `main`，`main` 上出问题就地打补丁。
 
-### 阶段四：按需补充
+### 阶段五：按需补充
 
 - `snapshot.yml`：为 PR 预览和 nightly 提供 `canary` 渠道。
 - 老版本维护分支：确实需要长期维护旧版本时再开。
