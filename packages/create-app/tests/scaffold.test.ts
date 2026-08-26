@@ -36,6 +36,8 @@ async function createTemplate(
     path.join(directory, 'package.json'),
     JSON.stringify({
       name: '@nocobase/app-template-default',
+      displayName: 'Default Template',
+      description: 'The default NocoBase application template.',
       version: '0.0.1-beta.2',
       dependencies: { knex: '^3.1.0' },
       publishConfig: { access: 'public' },
@@ -99,7 +101,7 @@ describe('assertTargetIsUsable', () => {
 });
 
 describe('scaffoldFromTemplate', () => {
-  it('renames the manifest and strips the publish metadata', async () => {
+  it('renames the manifest and strips the template identity', async () => {
     const templateDirectory = await createTemplate();
     const parent = await createTempDirectory();
     const targetDirectory = path.join(parent, 'crm');
@@ -115,10 +117,15 @@ describe('scaffoldFromTemplate', () => {
     );
 
     expect(manifest.name).toBe('crm');
-    expect(manifest.version).toBe('0.1.0');
-    expect(manifest.private).toBe(true);
     expect(manifest.publishConfig).toBeUndefined();
     expect(manifest.repository).toBeUndefined();
+
+    // A generated app must not keep the template's identity: without this it would be labelled "Default Template".
+    expect(manifest.displayName).toBeUndefined();
+    expect(manifest.description).toBeUndefined();
+
+    // The version records which template the app came from, so it is kept rather than reset.
+    expect(manifest.version).toBe('0.0.1-beta.2');
     // Ranges were already resolved when the tarball was packed; rewriting them would undo that.
     expect(manifest.dependencies.knex).toBe('^3.1.0');
   });

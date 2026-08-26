@@ -41,9 +41,9 @@ export interface BuildEnvFileOptions {
 export function buildEnvFile(options: BuildEnvFileOptions): string {
   const secret = options.authSecret ?? generateAuthSecret();
   const values = buildEnvValues(options.database, secret);
-  const preserved = (options.template ?? '')
-    .split(/\r?\n/u)
-    .filter((line) => !ownsKey(line));
+  const preserved = dropOrphanedComments(
+    (options.template ?? '').split(/\r?\n/u).filter((line) => !ownsKey(line)),
+  );
 
   while (preserved.at(-1) === '') {
     preserved.pop();
@@ -60,6 +60,42 @@ export function buildEnvFile(options: BuildEnvFileOptions): string {
     ...generated,
     '',
   ].join('\n');
+}
+
+/**
+ * Removes comment blocks left with nothing to describe.
+ *
+ * `.env.example` groups its keys under headings, and dropping every database key strips the body out from under
+ * headings like `# Database`, leaving a run of comments followed by a blank line. Those read as a damaged file, so a
+ * comment block is kept only when a setting still follows it before the next blank line.
+ */
+function dropOrphanedComments(lines: readonly string[]): string[] {
+  const kept: string[] = [];
+  let block: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('#')) {
+      block.push(line);
+      continue;
+    }
+
+    // A blank line closes a block. Comments with no setting under them described keys that are gone.
+    if (trimmed === '') {
+      block = [];
+      // Collapse the run of blank lines a removed block would otherwise leave behind.
+      if (kept.at(-1) !== '') {
+        kept.push(line);
+      }
+      continue;
+    }
+
+    kept.push(...block, line);
+    block = [];
+  }
+
+  return kept;
 }
 
 function ownsKey(line: string): boolean {

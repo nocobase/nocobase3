@@ -126,6 +126,13 @@ jobs:
       - name: Version
         run: pnpm changeset version
 
+      # changeset rewrites `version` but knows nothing about the `nocobase` block, so
+      # `defaultTemplateVersion` drifts on every release unless it is synchronized here.
+      # Running before the release commit means the aligned value is both published and
+      # committed back to the repository.
+      - name: Sync template version
+        run: node ./scripts/sync-template-version.mjs
+
       # version 跑完却没有任何版本号变化，说明本次 changeset 全是 empty，
       # 或者声明的 package 都被 ignore 掉了。继续跑会 publish 零个包。
       - name: Verify versions actually changed
