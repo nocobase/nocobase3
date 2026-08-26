@@ -7,16 +7,10 @@ V3 的基本思路：
 需要部署时，再准备 Hub。
 ```
 
-## 1. 安装 CLI
+## 1. 创建本地 App
 
 ```bash
-npm install -g @nocobase/nb3-cli
-```
-
-## 2. 创建本地 App
-
-```bash
-nb3 app create crm
+pnpm create @nocobase/app crm
 cd crm
 ```
 
@@ -24,21 +18,20 @@ cd crm
 
 ```bash
 crm/
-  .nb3/
   client/
   server/
   package.json
 ```
 
-## 3. 本地开发
+## 2. 本地开发
 
 ```bash
-nb3 app dev
+pnpm dev
 ```
 
 如果只是本地开发，到这里就够了，不需要安装 Hub。
 
-## 4. 准备 Hub
+## 3. 准备 Hub（未实现）
 
 Hub 是用于部署和管理 App 的应用中心。
 
@@ -47,13 +40,13 @@ Hub 是用于部署和管理 App 的应用中心。
 如果需要本地 Hub：
 
 ```bash
-nb3 hub create my-hub
+pnpm create @nocobase/hub my-hub
 cd my-hub
-nb3 hub start
-nb3 hub open
+pnpm build
+pnpm start
 ```
 
-## 5. 部署 App
+## 4. 部署 App（未实现）
 
 回到 App 目录：
 
@@ -61,22 +54,22 @@ nb3 hub open
 cd ../crm
 ```
 
-部署到本地 Hub：
+部署到本地 Hub（需要 oauth 认证）：
 
 ```bash
-nb3 app deploy --hub http://localhost:3000
+pnpm deploy --hub http://localhost:3000/crm
 ```
 
-部署到远端 Hub：
+部署到远端 Hub（需要 oauth 认证）：
 
 ```bash
-nb3 app deploy --hub https://apps.example.com
+pnpm deploy --hub http://localhost:3000/crm
 ```
 
 后续如果 App 已经记录了 Hub 地址，可以直接执行：
 
 ```bash
-nb3 app deploy
+pnpm deploy
 ```
 
 ## 常见问题
@@ -89,11 +82,10 @@ nb3 app deploy
 
 不需要。Hub 可以在本机、测试环境或线上。
 
-### `nb3 app create` 和 `nb3 hub create` 有什么区别？
+### `pnpm create @nocobase/app` 和 `pnpm create @nocobase/hub` 有什么区别？
 
-`nb3 app create` 创建业务 App 源码。
-
-`nb3 hub create` 创建应用中心运行环境。
+- `pnpm create @nocobase/app` 创建业务 App 源码。
+- `pnpm create @nocobase/hub` 创建应用中心运行环境。
 
 ## 架构介绍
 
