@@ -6,7 +6,7 @@ import { NotificationLogsPage } from '../../registry/nocobase-notification/logs/
 afterEach(() => vi.unstubAllGlobals());
 
 describe('notification logs', () => {
-  it('renders delivery attempts and opens the test send dialog', async () => {
+  it('renders delivery attempts', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
@@ -56,10 +56,6 @@ describe('notification logs', () => {
 
     expect(screen.getByText('primary')).toBeInTheDocument();
     expect(screen.getByText('SMTP unavailable')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Send test' }));
-    expect(
-      screen.getByRole('heading', { name: 'Send a test notification' }),
-    ).toBeInTheDocument();
   });
 });
 

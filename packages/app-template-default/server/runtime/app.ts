@@ -62,7 +62,6 @@ export function createPublicBasePathAdapter(
   }
 
   const mounted = new Hono() as AppServer;
-  mounted.start = (): Promise<void> => app.start();
 
   mounted.all(basePath, (context) =>
     dispatchMountedApp(app, context.req.raw, basePath),

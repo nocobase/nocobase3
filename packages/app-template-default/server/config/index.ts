@@ -6,7 +6,6 @@ import drive from './drive.js';
 import logging from './logging.js';
 import queue from './queue.js';
 import session from './session.js';
-import notification from './notification.js';
 import server from './server.js';
 import spa from './spa.js';
 import type { AppConfig } from './types.js';
@@ -20,7 +19,6 @@ const config: {
   logging: typeof logging;
   queue: typeof queue;
   session: typeof session;
-  notification: typeof notification;
   server: typeof server;
   spa: typeof spa;
 } = {
@@ -32,7 +30,6 @@ const config: {
   logging: logging,
   queue: queue,
   session: session,
-  notification: notification,
   server: server,
   spa: spa,
 };

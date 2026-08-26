@@ -62,29 +62,6 @@ export async function fetchNotificationLogs(
   return response.data;
 }
 
-export async function sendTestEmail(input: {
-  readonly addresses: readonly string[];
-  readonly subject: string;
-  readonly text: string;
-}): Promise<void> {
-  await request(`${notificationBase()}/test/email`, {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
-}
-
-export async function sendTestInApp(input: {
-  readonly userIds: readonly string[];
-  readonly title?: string;
-  readonly body: string;
-  readonly actionUrl?: string;
-}): Promise<void> {
-  await request(`${notificationBase()}/test/in-app`, {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
-}
-
 function notificationBase(): string {
   return `${getPortalBase().replace(/\/$/, '')}/api/notifications`;
 }
@@ -93,9 +70,12 @@ async function request<T = unknown>(
   url: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const method = init.method === 'POST' ? 'POST' : 'GET';
   const headers = new Headers(
-    nocobaseClient.getHeaders({ method, withAclMeta: false, body: init.body }),
+    nocobaseClient.getHeaders({
+      method: init.method ?? 'GET',
+      withAclMeta: false,
+      body: init.body,
+    }),
   );
   if (init.body) headers.set('content-type', 'application/json');
   const response = await fetch(url, {

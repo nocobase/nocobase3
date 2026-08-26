@@ -32,7 +32,7 @@ const result = await notification.send({
 
 ## 发送邮件
 
-当前默认 Email Channel 需要直接提供邮件地址：
+Email Channel 可以直接接收邮件地址：
 
 ```ts
 await notification.send({
@@ -45,7 +45,7 @@ await notification.send({
 });
 ```
 
-默认 renderer 将 `content.title` 映射为邮件主题，将 `content.body` 映射为纯文本正文。默认应用没有配置用户 ID 到邮箱地址的 resolver，因此只传用户 ID 无法发送邮件。
+默认 renderer 将 `content.title` 映射为邮件主题，将 `content.body` 映射为纯文本正文。如果宿主没有给 `createEmailChannelDefinition()` 配置用户 ID 到邮箱地址的 resolver，那么只传用户 ID 无法发送邮件。
 
 ## 多个接收人与 Channel
 
@@ -123,4 +123,5 @@ Channel 不支持某种接收人时，对应组合会创建一条失败的 Deliv
 
 - [通知概览](./overview.md)——了解一次发送如何拆分为 Delivery
 - [配置通知](./configuration.md)——启用站内信和 SMTP 邮件
-- [日志与测试发送](./logs-and-testing.md)——查询最终投递结果
+- [手动接入通知](./integration.md)——创建 manager 并注册 Channel / Provider
+- [通知日志](./logs.md)——查询最终投递结果

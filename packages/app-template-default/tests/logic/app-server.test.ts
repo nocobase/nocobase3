@@ -234,7 +234,6 @@ describe('app server', () => {
       'runtime',
       'app-deps',
       'realtime-service',
-      'app-services',
       'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
     ]);
 
@@ -1284,10 +1283,6 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
     drive: options.drive,
     logging: createSilentLoggingConfig(),
-    notification: {
-      enabled: false,
-      channels: [],
-    },
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
     server: {

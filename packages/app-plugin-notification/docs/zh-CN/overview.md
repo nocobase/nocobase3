@@ -1,14 +1,14 @@
 ---
 title: '通知概览'
-description: '了解 NocoBase 通知、站内信、邮件投递、Delivery 日志和测试发送能力。'
+description: '了解 NocoBase 通知、站内信、邮件投递和 Delivery 日志能力。'
 keywords: 'NocoBase,通知,站内信,邮件,Notification'
 ---
 
 # 通知概览
 
-NocoBase 通知用于向用户发送站内信或邮件，并记录每次投递的状态。启用通知后，你可以在应用中查看个人站内信、检查 Delivery 日志，还可以发送测试通知验证配置。
+NocoBase 通知用于向用户发送站内信或邮件，并记录每次投递的状态。通知包提供运行时和扩展点，不会自动修改应用宿主。接入时需要由应用显式创建 `NotificationManager`、注册 Channel 和 Provider，并管理启动与释放。
 
-默认应用提供两个 Channel：
+当前提供两个 Channel 实现：
 
 - `in-app`——把消息写入用户的站内信收件箱
 - `email`——通过 SMTP 发送邮件
@@ -34,7 +34,6 @@ Delivery 保存接收人、消息以及选中的 Provider。真正调用 Provide
 - 对明确失败的 Provider 调用进行延迟重试
 - 通过租约恢复 Worker 中断后的任务
 - 查看个人站内信、未读数以及已读状态
-- 从 Delivery 日志页面发送测试通知
 
 ## Provider 选择
 
@@ -50,12 +49,14 @@ Delivery 保存接收人、消息以及选中的 Provider。真正调用 Provide
 
 ## 文档地图
 
-- [配置通知](./configuration.md)——启用站内信和 SMTP 邮件
+- [手动接入通知](./integration.md)——接入 migrations、运行时、路由和生命周期
+- [配置通知](./configuration.md)——配置站内信和 SMTP 邮件
 - [发送通知](./sending.md)——从服务端业务代码发送消息
-- [日志与测试发送](./logs-and-testing.md)——查看状态并验证通知链路
+- [通知日志](./logs.md)——查看 Delivery 和 Attempt
 
 ## 相关链接
 
-- [配置通知](./configuration.md)——配置环境变量和 Provider
+- [手动接入通知](./integration.md)——创建并挂载通知运行时
+- [配置通知](./configuration.md)——构造 Channel 和 Provider 配置
 - [发送通知](./sending.md)——使用 `NotificationManager.send()`
-- [日志与测试发送](./logs-and-testing.md)——查看 Delivery 和 Attempt
+- [通知日志](./logs.md)——查看 Delivery 和 Attempt

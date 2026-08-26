@@ -72,7 +72,6 @@ export async function createStandaloneServer(
       websocketAbortController.signal,
       options,
     );
-    await app.start();
     lifecycle.registerDisposer('websocket-connections', () => {
       websocketAbortController.abort(new Error('app server closed'));
     });

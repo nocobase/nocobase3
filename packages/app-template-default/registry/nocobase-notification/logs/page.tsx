@@ -1,11 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  ChevronDown,
-  CircleDot,
-  FileClock,
-  RefreshCw,
-  Send,
-} from 'lucide-react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, FileClock, RefreshCw } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -18,24 +12,34 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   fetchNotificationLogs,
   type NotificationDeliveryDetails,
   type NotificationLogDetails,
   type NotificationStatus,
 } from './api.js';
-import { SendNotificationTestDialog } from './send-test-dialog.js';
 
 export function NotificationLogsPage(): React.ReactElement {
   const [logs, setLogs] = useState<readonly NotificationLogDetails[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
-  const [testOpen, setTestOpen] = useState(false);
+
+  const refresh = (): void => {
+    setLoading(true);
+    setError(undefined);
+    setRevision((value) => value + 1);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setError(undefined);
     fetchNotificationLogs(controller.signal)
       .then(setLogs)
       .catch((reason: Error) => {
@@ -69,16 +73,10 @@ export function NotificationLogsPage(): React.ReactElement {
             Trace each channel handoff and every provider attempt.
           </p>
         </div>
-        <div className='flex gap-2'>
-          <Button
-            variant='outline'
-            onClick={() => setRevision((value) => value + 1)}
-          >
+        <div>
+          <Button variant='outline' onClick={refresh}>
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
-          </Button>
-          <Button onClick={() => setTestOpen(true)}>
-            <Send /> Send test
           </Button>
         </div>
       </header>
@@ -114,24 +112,15 @@ export function NotificationLogsPage(): React.ReactElement {
               </div>
               <p className='font-medium'>No deliveries yet</p>
               <p className='text-sm text-muted-foreground'>
-                Send a test notification to verify the pipeline.
+                Delivery records will appear here after notifications are sent.
               </p>
             </div>
           ) : (
-            <div className='divide-y'>
-              {logs.map((item) => (
-                <LogRow key={item.log.id} details={item} />
-              ))}
-            </div>
+            <NotificationLogsTable logs={logs} />
           )}
         </CardContent>
       </Card>
 
-      <SendNotificationTestDialog
-        open={testOpen}
-        onOpenChange={setTestOpen}
-        onSent={() => setRevision((value) => value + 1)}
-      />
     </div>
   );
 }
@@ -157,103 +146,192 @@ function Metric({
   );
 }
 
-function LogRow({
+function NotificationLogsTable({
+  logs,
+}: {
+  readonly logs: readonly NotificationLogDetails[];
+}): React.ReactElement {
+  return (
+    <Table className='min-w-[860px]'>
+      <TableHeader className='bg-muted/35'>
+        <TableRow className='hover:bg-muted/35'>
+          <TableHead className='w-12' aria-label='Expand notification' />
+          <TableHead>Source</TableHead>
+          <TableHead>Notification ID</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead className='text-right'>Deliveries</TableHead>
+          <TableHead>Created</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {logs.map((details) => (
+          <NotificationTableRow key={details.log.id} details={details} />
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function NotificationTableRow({
   details,
 }: {
   readonly details: NotificationLogDetails;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (
-    <article>
-      <button
-        type='button'
-        className='flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/30 sm:px-5'
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-      >
-        <StatusDot status={details.log.status} />
-        <div className='min-w-0 flex-1'>
-          <div className='flex flex-wrap items-center gap-2'>
-            <span className='font-medium'>{details.log.sourceType}</span>
-            <StatusBadge status={details.log.status} />
-          </div>
-          <div className='mt-1 truncate font-mono text-xs text-muted-foreground'>
+    <Fragment>
+      <TableRow aria-expanded={open}>
+        <TableCell>
+          <Button
+            variant='ghost'
+            size='icon-sm'
+            aria-label={open ? 'Collapse notification' : 'Expand notification'}
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            <ChevronDown
+              className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`}
+            />
+          </Button>
+        </TableCell>
+        <TableCell>
+          <div className='font-medium'>{details.log.sourceType}</div>
+          {details.log.sourceReferenceId ? (
+            <div className='mt-0.5 max-w-48 truncate text-xs text-muted-foreground'>
+              {details.log.sourceReferenceId}
+            </div>
+          ) : null}
+        </TableCell>
+        <TableCell>
+          <code className='text-xs text-muted-foreground' title={details.log.id}>
             {details.log.id}
-          </div>
-        </div>
-        <div className='hidden text-right text-xs text-muted-foreground sm:block'>
-          <div>{details.deliveries.length} deliveries</div>
-          <time>{formatTime(details.log.createdAt)}</time>
-        </div>
-        <ChevronDown
-          className={`size-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
+          </code>
+        </TableCell>
+        <TableCell>
+          <StatusBadge status={details.log.status} />
+        </TableCell>
+        <TableCell className='text-right tabular-nums'>
+          {details.deliveries.length}
+        </TableCell>
+        <TableCell className='whitespace-nowrap text-muted-foreground'>
+          <time dateTime={details.log.createdAt}>
+            {formatTime(details.log.createdAt)}
+          </time>
+        </TableCell>
+      </TableRow>
       {open ? (
-        <div className='space-y-3 border-t bg-muted/15 p-4 sm:px-12'>
-          {details.deliveries.map((delivery) => (
-            <DeliveryCard key={delivery.delivery.id} details={delivery} />
-          ))}
-        </div>
+        <TableRow className='bg-muted/15 hover:bg-muted/15'>
+          <TableCell colSpan={6} className='p-4 sm:px-12'>
+            <DeliveryTable deliveries={details.deliveries} />
+          </TableCell>
+        </TableRow>
       ) : null}
-    </article>
+    </Fragment>
   );
 }
 
-function DeliveryCard({
-  details,
+function DeliveryTable({
+  deliveries,
 }: {
-  readonly details: NotificationDeliveryDetails;
+  readonly deliveries: readonly NotificationDeliveryDetails[];
 }): React.ReactElement {
+  if (deliveries.length === 0) {
+    return (
+      <p className='py-4 text-center text-sm text-muted-foreground'>
+        No deliveries recorded.
+      </p>
+    );
+  }
+
   return (
-    <div className='rounded-xl border bg-background p-4 shadow-xs'>
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <div className='flex items-center gap-2'>
-          <Badge variant='outline'>{details.delivery.channel}</Badge>
-          <StatusBadge status={details.delivery.status} />
-        </div>
-        <span className='font-mono text-xs text-muted-foreground'>
-          {details.delivery.id}
-        </span>
-      </div>
-      <div className='mt-4 grid gap-2'>
-        {details.attempts.length === 0 ? (
-          <p className='text-xs text-muted-foreground'>No attempts recorded.</p>
-        ) : (
-          details.attempts.map((attempt) => (
-            <div
-              key={attempt.id}
-              className='grid gap-1 rounded-lg bg-muted/35 px-3 py-2 text-xs sm:grid-cols-[2rem_1fr_auto] sm:items-center'
-            >
-              <span className='font-mono text-muted-foreground'>
-                #{attempt.sequence}
-              </span>
-              <span>
-                <strong>{attempt.providerName}</strong>
-                <span className='ml-2 text-muted-foreground'>
-                  {attempt.providerType}
-                </span>
-              </span>
-              <StatusBadge status={attempt.status} />
-              {attempt.error ? (
-                <p className='text-destructive sm:col-start-2 sm:col-span-2'>
-                  {attempt.error.message}
-                </p>
-              ) : null}
-            </div>
-          ))
-        )}
-      </div>
+    <div className='overflow-hidden rounded-lg border bg-background'>
+      <Table className='min-w-[760px]'>
+        <TableHeader className='bg-muted/35'>
+          <TableRow className='hover:bg-muted/35'>
+            <TableHead>Channel</TableHead>
+            <TableHead>Provider</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className='text-right'>Attempts</TableHead>
+            <TableHead>Updated</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {deliveries.map((details) => (
+            <Fragment key={details.delivery.id}>
+              <TableRow>
+                <TableCell>
+                  <Badge variant='outline'>{details.delivery.channel}</Badge>
+                </TableCell>
+                <TableCell>
+                  <div className='font-medium'>
+                    {details.delivery.providerName}
+                  </div>
+                  <div className='text-xs text-muted-foreground'>
+                    {details.delivery.providerType}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <StatusBadge status={details.delivery.status} />
+                </TableCell>
+                <TableCell className='text-right tabular-nums'>
+                  {details.attempts.length}
+                </TableCell>
+                <TableCell className='whitespace-nowrap text-muted-foreground'>
+                  {formatTime(details.delivery.updatedAt)}
+                </TableCell>
+              </TableRow>
+              <TableRow className='bg-muted/10 hover:bg-muted/10'>
+                <TableCell colSpan={5} className='px-4 py-3'>
+                  <AttemptTable details={details} />
+                </TableCell>
+              </TableRow>
+            </Fragment>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-function StatusDot({ status }: { readonly status: NotificationStatus }) {
-  const tone = statusTone(status);
+function AttemptTable({
+  details,
+}: {
+  readonly details: NotificationDeliveryDetails;
+}): React.ReactElement {
+  if (details.attempts.length === 0) {
+    return <p className='text-xs text-muted-foreground'>No attempts recorded.</p>;
+  }
+
   return (
-    <span className={`grid size-8 place-items-center rounded-full ${tone.dot}`}>
-      <CircleDot className='size-4' />
-    </span>
+    <div>
+      <div className='mb-2 text-xs font-medium text-muted-foreground'>
+        Provider attempts
+      </div>
+      <div className='grid gap-1.5'>
+        {details.attempts.map((attempt) => (
+          <div
+            key={attempt.id}
+            className='grid grid-cols-[2.5rem_minmax(8rem,1fr)_auto] items-center gap-3 rounded-md bg-muted/35 px-3 py-2 text-xs'
+          >
+            <span className='font-mono text-muted-foreground'>
+              #{attempt.sequence}
+            </span>
+            <span className='min-w-0'>
+              <strong>{attempt.providerName}</strong>
+              <span className='ml-2 text-muted-foreground'>
+                {attempt.providerType}
+              </span>
+              {attempt.error ? (
+                <span className='mt-1 block truncate text-destructive'>
+                  {attempt.error.message}
+                </span>
+              ) : null}
+            </span>
+            <StatusBadge status={attempt.status} />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -263,22 +341,18 @@ function StatusBadge({ status }: { readonly status: NotificationStatus }) {
 }
 
 function statusTone(status: NotificationStatus): {
-  readonly dot: string;
   readonly badge: string;
 } {
   if (status === 'completed' || status === 'accepted')
     return {
-      dot: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
       badge:
         'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
     };
   if (status === 'failed' || status === 'unknown' || status === 'partial')
     return {
-      dot: 'bg-destructive/10 text-destructive',
       badge: 'border-destructive/20 bg-destructive/10 text-destructive',
     };
   return {
-    dot: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
     badge:
       'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400',
   };

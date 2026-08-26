@@ -2,8 +2,13 @@
 
 Notification registry components are grouped by product feature:
 
-- `logs/` renders Delivery state and sequential Provider Attempts, and provides an authenticated test-send dialog for Email and In-app channels.
+- `logs/` renders Delivery state and sequential Provider Attempts.
 - `in-app/` renders the current user's message center and unread count.
 - `extension.tsx` contributes the menu and routes.
+
+The Registry item is optional application source. It expects authenticated
+notification APIs at `/api/notifications/logs` and
+`/api/notifications/in-app`; it does not create or configure the server
+runtime.
 
 The registry contains client components only. Notification orchestration, storage, Channel factories, and Providers remain in the server packages.

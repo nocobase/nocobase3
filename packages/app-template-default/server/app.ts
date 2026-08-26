@@ -37,7 +37,6 @@ export {
 
 export type AppServer = Hono & {
   websocket?: AppWebSocketHandler;
-  start(): Promise<void>;
 };
 
 export function createApp(
@@ -64,10 +63,6 @@ export function createApp(
     onceAsync(() => realtime.close()),
   );
   const services = createAppServices(runtime, deps, { realtime });
-  options.lifecycle.registerDisposer(
-    'app-services',
-    onceAsync(() => services.dispose()),
-  );
   const app = new Hono();
 
   for (const plugin of options.pluginBootstraps ?? []) {
@@ -118,6 +113,5 @@ export function createApp(
 
   return Object.assign(app, {
     websocket: createWebSocketHandler({ realtime }),
-    start: onceAsync(() => services.start()),
   });
 }

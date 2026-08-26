@@ -24,12 +24,10 @@ export async function createServer(scope: AppScope): Promise<EmbeddedServer> {
   );
   await prepareAppRuntime(runtime);
 
-  const app = await createAppFromRuntime(runtime, {
+  return await createAppFromRuntime(runtime, {
     viteDevUrl: false,
     lifecycle: scope,
   });
-  await app.start();
-  return app;
 }
 
 export default createServer;
