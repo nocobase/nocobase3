@@ -1,7 +1,6 @@
 {
   "name": "@nocobase/authorization",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.1-beta.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -14,9 +13,49 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
-    "./storage/collections/*": {
-      "types": "./src/storage/collections/*.ts",
-      "import": "./src/storage/collections/*.ts"
+    "./core": {
+      "types": "./src/core/index.ts",
+      "import": "./src/core/index.ts"
+    },
+    "./permissions": {
+      "types": "./src/plugins/permission-sets/index.ts",
+      "import": "./src/plugins/permission-sets/index.ts"
+    },
+    "./permissions/migrations/*": {
+      "types": "./src/plugins/permission-sets/migrations/*.ts",
+      "import": "./src/plugins/permission-sets/migrations/*.ts"
+    },
+    "./database": {
+      "types": "./src/plugins/database/index.ts",
+      "import": "./src/plugins/database/index.ts"
+    },
+    "./default-access": {
+      "types": "./src/plugins/default-access/index.ts",
+      "import": "./src/plugins/default-access/index.ts"
+    },
+    "./sharing-rules": {
+      "types": "./src/plugins/sharing-rules/index.ts",
+      "import": "./src/plugins/sharing-rules/index.ts"
+    },
+    "./restriction-rules": {
+      "types": "./src/plugins/restriction-rules/index.ts",
+      "import": "./src/plugins/restriction-rules/index.ts"
+    },
+    "./pages": {
+      "types": "./src/plugins/pages/index.ts",
+      "import": "./src/plugins/pages/index.ts"
+    },
+    "./default-access/migrations/*": {
+      "types": "./src/plugins/default-access/migrations/*.ts",
+      "import": "./src/plugins/default-access/migrations/*.ts"
+    },
+    "./sharing-rules/migrations/*": {
+      "types": "./src/plugins/sharing-rules/migrations/*.ts",
+      "import": "./src/plugins/sharing-rules/migrations/*.ts"
+    },
+    "./restriction-rules/migrations/*": {
+      "types": "./src/plugins/restriction-rules/migrations/*.ts",
+      "import": "./src/plugins/restriction-rules/migrations/*.ts"
     }
   },
   "publishConfig": {
@@ -25,14 +64,56 @@
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
       },
-      "./storage/collections/*": {
-        "types": "./dist/storage/collections/*.d.ts",
-        "import": "./dist/storage/collections/*.js"
+      "./core": {
+        "types": "./dist/core/index.d.ts",
+        "import": "./dist/core/index.js"
+      },
+      "./permissions": {
+        "types": "./dist/plugins/permission-sets/index.d.ts",
+        "import": "./dist/plugins/permission-sets/index.js"
+      },
+      "./permissions/migrations/*": {
+        "types": "./dist/plugins/permission-sets/migrations/*.d.ts",
+        "import": "./dist/plugins/permission-sets/migrations/*.js"
+      },
+      "./database": {
+        "types": "./dist/plugins/database/index.d.ts",
+        "import": "./dist/plugins/database/index.js"
+      },
+      "./default-access": {
+        "types": "./dist/plugins/default-access/index.d.ts",
+        "import": "./dist/plugins/default-access/index.js"
+      },
+      "./sharing-rules": {
+        "types": "./dist/plugins/sharing-rules/index.d.ts",
+        "import": "./dist/plugins/sharing-rules/index.js"
+      },
+      "./restriction-rules": {
+        "types": "./dist/plugins/restriction-rules/index.d.ts",
+        "import": "./dist/plugins/restriction-rules/index.js"
+      },
+      "./pages": {
+        "types": "./dist/plugins/pages/index.d.ts",
+        "import": "./dist/plugins/pages/index.js"
+      },
+      "./default-access/migrations/*": {
+        "types": "./dist/plugins/default-access/migrations/*.d.ts",
+        "import": "./dist/plugins/default-access/migrations/*.js"
+      },
+      "./sharing-rules/migrations/*": {
+        "types": "./dist/plugins/sharing-rules/migrations/*.d.ts",
+        "import": "./dist/plugins/sharing-rules/migrations/*.js"
+      },
+      "./restriction-rules/migrations/*": {
+        "types": "./dist/plugins/restriction-rules/migrations/*.d.ts",
+        "import": "./dist/plugins/restriction-rules/migrations/*.js"
       }
-    }
+    },
+    "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -46,7 +127,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/database": "workspace:^"
+    "@nocobase/app-database": "workspace:^",
+    "hono": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

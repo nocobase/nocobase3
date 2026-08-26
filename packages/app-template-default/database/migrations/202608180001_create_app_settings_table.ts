@@ -1,4 +1,4 @@
-import { defineMigration } from '@nocobase/database';
+import { defineMigration } from '@nocobase/app-database';
 
 export default defineMigration({
   name: '202608180001_create_app_settings_table',

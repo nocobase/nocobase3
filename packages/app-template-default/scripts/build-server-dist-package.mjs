@@ -212,7 +212,7 @@ const addPackage = (packageName) => {
     }
   }
 
-  if (packageName === '@nocobase/database') {
+  if (packageName === '@nocobase/app-database') {
     for (const driver of databaseRuntimeDrivers) {
       addExternalPackage(driver, packageDir, packageJson);
     }

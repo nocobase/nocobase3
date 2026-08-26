@@ -7,6 +7,7 @@ import application from './application';
 import { createApp } from './app';
 import routeComponentOverrides from './route-overrides';
 import { createAppRuntime } from './runtime';
+import sourceExtensions from './source-extensions';
 import { AppStartupError } from './startup';
 import './styles.css';
 
@@ -24,6 +25,7 @@ async function start(): Promise<void> {
       application,
       plugins: appClientPluginLoaders,
       routeComponentOverrides,
+      sourceExtensions,
     });
     const app = createApp(runtime);
 

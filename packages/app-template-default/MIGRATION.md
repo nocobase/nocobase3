@@ -1,9 +1,14 @@
 # Default Template migrations
 
 This guide describes source changes that derived Portal applications must merge
-from new releases of `@nocobase/app-template-default`. Updating
-`nocobase.defaultTemplateVersion` records a completed source upgrade; changing
-the value alone does not apply template changes.
+from new releases of `@nocobase/app-template-default`. In a derived
+application, `nocobase.defaultTemplateVersion` records a completed source
+upgrade; changing the value alone does not apply template changes.
+
+In this package the field means something different: it mirrors the package's
+own `version`, and the release workflow keeps the two aligned through
+`scripts/sync-template-version.mjs`. Do not edit it by hand here — a release
+will overwrite it.
 
 ## Upgrade checklist
 
@@ -12,9 +17,9 @@ the value alone does not apply template changes.
    fit the application.
 3. Merge template runtime and composition changes without overwriting business
    pages, translations, or customized installed extensions.
-4. Update `nocobase.defaultTemplateVersion` only after the corresponding source
-   changes have been incorporated.
-5. Update `@nocobase/portal-sdk` when the release requires a new compatible SDK.
+4. Update `nocobase.defaultTemplateVersion` in the derived application only
+   after the corresponding source changes have been incorporated.
+5. Update `@nocobase/app-portal-sdk` when the release requires a new compatible SDK.
 6. Run `pnpm sdk:check`, install dependencies, build, and verify direct URLs,
    nested route surfaces, authentication, ACL, and locale switching.
 
@@ -46,7 +51,7 @@ The loaded module must default-export its page component. Keep route placement,
 authentication boundaries, loading, and error presentation in `client/routing/`;
 do not add product routes there. Plugin-owned routes continue to be declared by
 the plugin and may be customized by the application through
-`client/route-overrides.ts`.
+`client/extensions/*/extension.ts` or `client/route-overrides.ts`.
 
 ### Keep loading feedback inside its surface
 

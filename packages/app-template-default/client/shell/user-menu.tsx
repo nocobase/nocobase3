@@ -18,19 +18,22 @@ export function UserMenu(): ReactElement {
 
   return (
     <details className='relative'>
-      <summary className='flex cursor-pointer list-none items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 text-left text-sm shadow-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden'>
+      <summary
+        aria-label='Open account menu'
+        className='flex size-10 cursor-pointer list-none items-center justify-center rounded-full border border-border/70 bg-background/60 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden'
+        title={name}
+      >
         {identity?.avatar ? (
           <img
             src={identity.avatar}
             alt=''
-            className='size-8 rounded-full object-cover'
+            className='size-full rounded-full object-cover'
           />
         ) : (
-          <span className='grid size-8 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground'>
+          <span className='grid size-full place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground'>
             {isLoading ? <UserRound className='size-4' /> : initials}
           </span>
         )}
-        <span className='hidden max-w-36 truncate sm:block'>{name}</span>
       </summary>
       <div className='absolute top-full right-0 z-50 mt-2 w-64 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg'>
         <div className='border-b border-border px-2 py-2'>

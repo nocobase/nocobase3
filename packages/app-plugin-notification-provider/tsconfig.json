@@ -3,6 +3,9 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "dist",
+    "paths": {
+      "@/*": ["./client/*"]
+    },
     "types": ["vite/client"]
   },
   "include": ["client/**/*.ts", "client/**/*.tsx"],

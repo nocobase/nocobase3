@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { DatabaseManager, Row, SelectQuery } from '@nocobase/database';
+import type { DatabaseManager, Row, SelectQuery } from '@nocobase/app-database';
 import { WORKFLOW_COLLECTIONS } from '../collections/index.js';
 import {
   loadWorkflow,

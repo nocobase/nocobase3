@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

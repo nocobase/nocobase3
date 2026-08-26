@@ -67,6 +67,31 @@ test('inspects configured client routes and providers', async () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-authorization:permission-sets',
+        path: '/settings/authorization/permission-sets',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization:default-access',
+        path: '/settings/authorization/default-access',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization:sharing-rules',
+        path: '/settings/authorization/sharing-rules',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization:restriction-rules',
+        path: '/settings/authorization/restriction-rules',
+      },
+      {
+        auth: 'guest',
+        id: '@nocobase/app-plugin-install:install',
+        path: '/install',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-notification-provider:demo',
         path: '/notification-provider',
       },
@@ -113,11 +138,16 @@ test('inspects configured client routes and providers', async () => {
       },
       {
         order: 3,
-        packageName: '@nocobase/app-plugin-data-provider',
+        packageName: '@nocobase/app-plugin-authorization',
         source: 'plugin',
       },
       {
         order: 4,
+        packageName: '@nocobase/app-plugin-data-provider',
+        source: 'plugin',
+      },
+      {
+        order: 5,
         packageName: '@nocobase/app-plugin-notification-provider',
         source: 'plugin',
       },
@@ -130,7 +160,10 @@ test('inspects configured client routes and providers', async () => {
   assert.match(output, /auth: guest/u);
   assert.match(output, /route source: plugin/u);
   assert.match(output, /component source: application/u);
-  assert.match(output, /client\/auth\/pages\/login-page/u);
+  assert.match(
+    output,
+    /client\/extensions\/nocobase-auth-ui\/pages\/login-page/u,
+  );
   assert.match(output, /Providers \(outer -> inner\)/u);
   assert.match(output, /layer: root/u);
 
@@ -182,10 +215,10 @@ test('inspects configured client routes and providers', async () => {
         routeSource,
       })),
     [
-      './client/auth/pages/login-page',
-      './client/auth/pages/register-page',
-      './client/auth/pages/forgot-password-page',
-      './client/auth/pages/reset-password-page',
+      './client/extensions/nocobase-auth-ui/pages/login-page',
+      './client/extensions/nocobase-auth-ui/pages/register-page',
+      './client/extensions/nocobase-auth-ui/pages/forgot-password-page',
+      './client/extensions/nocobase-auth-ui/pages/reset-password-page',
     ].map((componentEntry) => ({
       componentEntry,
       componentSource: 'application',

@@ -60,6 +60,7 @@ const report = {
   })),
   app: {
     name: config.app.name,
+    publicOrigin: config.app.publicOrigin ?? '(request-derived)',
     publicBasePath: config.app.publicBasePath || '/',
     internalBasePath: config.app.internalBasePath,
     internalApiProxyPath: config.app.internalApiProxyPath || '(disabled)',
@@ -420,6 +421,7 @@ function printReport(value: typeof report): void {
 
   printSection('App routing');
   printPair('App name', value.app.name);
+  printPair('Public origin', value.app.publicOrigin);
   printPair('Public base path', value.app.publicBasePath);
   printPair(
     'Internal base path',

@@ -2,7 +2,7 @@ import {
   createDatabaseManager,
   type DatabaseManager,
   type Row,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';

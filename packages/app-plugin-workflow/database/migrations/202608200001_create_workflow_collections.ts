@@ -1,4 +1,4 @@
-import { defineMigration } from '@nocobase/database';
+import { defineMigration } from '@nocobase/app-database';
 import { workflowCollectionSchemas } from '../../server/collections/index.js';
 
 export default defineMigration({

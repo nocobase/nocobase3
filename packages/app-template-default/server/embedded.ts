@@ -1,11 +1,13 @@
-import { createAppRuntime } from '@nocobase/app-server/runtime';
+import { createAppRuntime } from '@nocobase/app-server-kit/runtime';
 
 import type { AppServer } from './app.js';
 import {
   createAppFromRuntime,
-  loadEmbeddedAppConfig,
+  createRuntimeConfigPaths,
+  loadAppConfig,
   onceAsync,
   prepareAppRuntime,
+  resolveEmbeddedRuntimeOptions,
   type AppScope,
 } from './runtime/index.js';
 
@@ -17,7 +19,10 @@ export async function createServer(
   scope: AppScope,
   moduleUrl: string = import.meta.url,
 ): Promise<EmbeddedServer> {
-  const runtime = createAppRuntime(loadEmbeddedAppConfig(scope, moduleUrl));
+  const options = resolveEmbeddedRuntimeOptions(scope, moduleUrl);
+  const runtime = createAppRuntime(loadAppConfig(options), {
+    paths: createRuntimeConfigPaths(options.paths),
+  });
 
   scope.registerDisposer(
     'runtime',

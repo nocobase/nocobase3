@@ -3,7 +3,7 @@ import {
   filterMenuItemsByAcl,
   findFirstAccessibleRoute,
   useAclState,
-} from '@nocobase/portal-sdk/acl';
+} from '@nocobase/app-portal-sdk/acl';
 import { Navigate } from 'react-router';
 
 import { AccessDenied } from './access-denied';

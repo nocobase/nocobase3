@@ -1,0 +1,117 @@
+{
+  "name": "@nocobase/app-server-kit",
+  "version": "0.0.1-beta.1",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./config": {
+      "types": "./src/config/index.ts",
+      "import": "./src/config/index.ts"
+    },
+    "./database": {
+      "types": "./src/database/index.ts",
+      "import": "./src/database/index.ts"
+    },
+    "./plugins": {
+      "types": "./src/plugins/index.ts",
+      "import": "./src/plugins/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/index.ts",
+      "import": "./src/runtime/index.ts"
+    },
+    "./proxy": {
+      "types": "./src/proxy/index.ts",
+      "import": "./src/proxy/index.ts"
+    },
+    "./spa": {
+      "types": "./src/spa/index.ts",
+      "import": "./src/spa/index.ts"
+    },
+    "./support": {
+      "types": "./src/support/index.ts",
+      "import": "./src/support/index.ts"
+    },
+    "./websocket": {
+      "types": "./src/websocket.ts",
+      "import": "./src/websocket.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./config": {
+        "types": "./dist/config/index.d.ts",
+        "import": "./dist/config/index.js"
+      },
+      "./database": {
+        "types": "./dist/database/index.d.ts",
+        "import": "./dist/database/index.js"
+      },
+      "./plugins": {
+        "types": "./dist/plugins/index.d.ts",
+        "import": "./dist/plugins/index.js"
+      },
+      "./runtime": {
+        "types": "./dist/runtime/index.d.ts",
+        "import": "./dist/runtime/index.js"
+      },
+      "./proxy": {
+        "types": "./dist/proxy/index.d.ts",
+        "import": "./dist/proxy/index.js"
+      },
+      "./spa": {
+        "types": "./dist/spa/index.d.ts",
+        "import": "./dist/spa/index.js"
+      },
+      "./support": {
+        "types": "./dist/support/index.d.ts",
+        "import": "./dist/support/index.js"
+      },
+      "./websocket": {
+        "types": "./dist/websocket.d.ts",
+        "import": "./dist/websocket.js"
+      }
+    },
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "dependencies": {
+    "@nocobase/app-database": "workspace:^",
+    "hono": "catalog:"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

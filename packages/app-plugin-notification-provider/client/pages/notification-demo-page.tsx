@@ -1,6 +1,7 @@
-import { Button } from '@nocobase/app-client/ui';
 import { useNotification } from '@refinedev/core';
 import { useState, type ReactElement } from 'react';
+
+import { Button } from '../components/ui/button.js';
 
 export default function NotificationDemoPage(): ReactElement {
   const { open } = useNotification();

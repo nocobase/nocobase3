@@ -1,8 +1,8 @@
-import type { AppPluginServerContext } from '@nocobase/app-server/plugins';
+import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';
 import type {
   AppRuntime,
   AppRuntimeConfig,
-} from '@nocobase/app-server/runtime';
+} from '@nocobase/app-server-kit/runtime';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 

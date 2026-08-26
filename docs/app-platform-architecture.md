@@ -296,6 +296,7 @@ ReactProviders
   ├── BrowserRouter
   ├── ThemeProvider
   └── Other Providers
+  ↓
 Refine
   ↓
 Routes

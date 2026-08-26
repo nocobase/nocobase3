@@ -13,9 +13,10 @@ verify them at the route, service, and configuration boundary that changed.
 - `standalone.ts` is an adapter. It starts the app as its own HTTP server,
   reads `.env`, `.env.local`, and `process.env`, then strips the public base
   path before dispatching to the app-local server.
-- `embedded.ts` creates a server for an app-host scope. It reads `dist/.env`
-  and scope-provided config. App-host has already stripped the public base path
-  before requests reach the app-local server.
+- `embedded.ts` creates a server for an app-host scope. It reads `.env` and
+  `.env.local` from the resolved app root, then applies scope-provided config.
+  App-host has already stripped the public base path before requests reach the
+  app-local server.
 - `config/*` owns environment parsing and defaults. Prefer adding config there
   instead of reading `process.env` in routes or services.
 - `routes/*` owns HTTP shape. Keep business logic in `services/*`.
@@ -114,11 +115,11 @@ the function's return value, choose Service + Route.
 ## Proxy And SPA Runtime Rules
 
 - Keep NocoBase upstream proxy behavior and generic fetch proxy behavior in
-  `@nocobase/app-server/proxy`.
+  `@nocobase/app-server-kit/proxy`.
 - Preserve forwarded headers, referer/origin rewriting, and hop-by-hop header
   removal when changing proxy code.
 - SPA runtime globals are created in `server/spa/runtime-globals.ts` and
-  injected by `@nocobase/app-server/spa`.
+  injected by `@nocobase/app-server-kit/spa`.
   They are part of the browser SDK contract, not ordinary HTML decoration.
 - Static SPA assets must be served before the SPA fallback and missing assets
   must return JSON `404`, not the SPA index.

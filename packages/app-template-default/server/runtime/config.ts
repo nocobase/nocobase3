@@ -2,11 +2,10 @@ import path from 'node:path';
 
 import {
   createConfigEnv,
-  createConfigPaths,
   loadConfig,
   type ConfigContext,
-} from '@nocobase/app-server/config';
-import type { AppDatabaseConfig } from '@nocobase/app-server/database';
+} from '@nocobase/app-server-kit/config';
+import type { AppDatabaseConfig } from '@nocobase/app-server-kit/database';
 import type { AppQueueConfig } from '@nocobase/queue';
 
 import configFactories, { type AppConfig } from '../config/index.js';
@@ -20,6 +19,7 @@ import {
   type ResolvedAppPlugin,
 } from '../plugins/index.js';
 import {
+  createRuntimeConfigPaths,
   resolveEmbeddedRuntimeOptions,
   resolveStandaloneRuntimeOptions,
 } from './options.js';
@@ -107,12 +107,7 @@ function createConfigContext(
 ): ConfigContext {
   return {
     env: createConfigEnv(options.env),
-    paths: createConfigPaths({
-      rootDir: options.paths.rootDir,
-      serverDir: options.paths.serverDir,
-      databaseDir: options.paths.databaseDir,
-      storageDir: options.paths.storageDir,
-    }),
+    paths: createRuntimeConfigPaths(options.paths),
   };
 }
 

@@ -2,7 +2,7 @@ import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
   type CollectionDefinition,
-} from '@nocobase/database';
+} from '@nocobase/app-database';
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 

@@ -1,7 +1,7 @@
 import { type HttpError, useTranslate } from '@refinedev/core';
 import { useForm } from '@refinedev/react-hook-form';
 import { useMemo } from 'react';
-import { useRouteSurfaceClose } from '@nocobase/portal-sdk/routing';
+import { useRouteSurfaceClose } from '@nocobase/app-portal-sdk/routing';
 
 import { AccessDenied } from '@/components/access-control/access-denied';
 import { CanAccess } from '@/components/access-control/can-access';

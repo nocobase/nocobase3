@@ -24,8 +24,8 @@ import {
   useAclState,
   type AclIdentity,
   type Role,
-} from '@nocobase/portal-sdk/acl';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
+} from '@nocobase/app-portal-sdk/acl';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 import { cn } from '@/lib/utils';
 import {
   canSwitchRoles,

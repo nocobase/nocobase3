@@ -1,4 +1,4 @@
-import { defineMigration } from '@nocobase/database';
+import { defineMigration } from '@nocobase/app-database';
 import type { Knex } from 'knex';
 
 export default defineMigration({

@@ -1,5 +1,5 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server/plugins';
-import type { DatabaseManager } from '@nocobase/database';
+import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { MiddlewareHandler } from 'hono';
 
 export interface WorkflowPluginRouteDeps {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { NocoBaseClient } from '@nocobase/portal-sdk/client';
+import { NocoBaseClient } from '@nocobase/app-portal-sdk/client';
 import { NocoBaseChatTransport } from '../providers/chat-transport';
 import { StreamCoalescer } from '../providers/stream-coalescer';
 import { SubAgentStreamAccumulator } from '../providers/sub-agent-stream';

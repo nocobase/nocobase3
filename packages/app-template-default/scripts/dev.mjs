@@ -1,10 +1,11 @@
 import spawn from 'cross-spawn';
 import fs from 'node:fs';
-import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
+import { findAvailablePort } from './dev-ports.mjs';
+import { waitForHttpReady } from './dev-readiness.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -62,33 +63,6 @@ const loadEnv = () => {
   return { ...env, ...process.env };
 };
 
-const canListen = (host, port) =>
-  new Promise((resolve) => {
-    const server = net.createServer();
-
-    server.once('error', () => {
-      resolve(false);
-    });
-
-    server.listen(port, host, () => {
-      server.close(() => {
-        resolve(true);
-      });
-    });
-  });
-
-const findAvailablePort = async (host, preferredPort) => {
-  for (let port = preferredPort; port < preferredPort + 100; port += 1) {
-    if (await canListen(host, port)) {
-      return port;
-    }
-  }
-
-  throw new Error(
-    `Unable to find an available Vite dev port from ${preferredPort} to ${preferredPort + 99}.`,
-  );
-};
-
 const toUrlHost = (host) => {
   if (host === '0.0.0.0') return '127.0.0.1';
   if (host === '::') return '[::1]';
@@ -139,7 +113,9 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
   const child = spawn(command, args, {
     cwd: rootDir,
     env,
-    stdio: options.filterViteStartup ? ['inherit', 'pipe', 'pipe'] : 'inherit',
+    stdio:
+      options.stdio ??
+      (options.filterViteStartup ? ['inherit', 'pipe', 'pipe'] : 'inherit'),
   });
 
   if (options.filterViteStartup) {
@@ -166,10 +142,18 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
 
 let shuttingDown = false;
 const children = [];
+let envRestartTimer;
+let envWatcher;
 
 const shutdown = (exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
+
+  if (envRestartTimer) {
+    clearTimeout(envRestartTimer);
+    envRestartTimer = undefined;
+  }
+  envWatcher?.close();
 
   for (const child of children) {
     if (!child.killed && child.exitCode === null) {
@@ -192,29 +176,53 @@ process.once('SIGTERM', () => shutdown(0));
 
 const env = loadEnv();
 const viteDevHost = env.APP_VITE_DEV_HOST || '0.0.0.0';
-const vitePort = await findAvailablePort(viteDevHost, viteDevPreferredPort);
-const appBasePath = String(
-  env.APP_BASE_PATH || `/${env.APP_NAME || 'app-template-default'}`,
-)
-  .trim()
-  .replace(/^\/+|\/+$/g, '');
-const proxyApiPath =
-  env.NOCOBASE_API_URL ||
-  `/${[appBasePath, 'v2/api'].filter(Boolean).join('/')}`;
-const nextEnv = {
+const vitePort = await findAvailablePort({
+  host: viteDevHost,
+  label: 'Vite dev',
+  preferredPort: viteDevPreferredPort,
+});
+const initialEnv = {
   ...env,
   APP_SERVER_HOST: env.APP_SERVER_HOST || '0.0.0.0',
   APP_VITE_DEV_HOST: viteDevHost,
   APP_VITE_DEV_PORT: String(vitePort),
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
-  NOCOBASE_API_URL: proxyApiPath,
+  NOCOBASE_API_URL:
+    env.NOCOBASE_API_URL ||
+    `/${[
+      String(env.APP_BASE_PATH || '/main').replace(/^\/+|\/+$/g, ''),
+      'v2/api',
+    ]
+      .filter(Boolean)
+      .join('/')}`,
 };
-const appServerHost = nextEnv.APP_SERVER_HOST || '127.0.0.1';
-const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13000);
+const appServerHost = initialEnv.APP_SERVER_HOST || '127.0.0.1';
+const configuredAppServerPort = numberFromEnv(
+  initialEnv.APP_SERVER_PORT,
+  13000,
+);
+const appServerPort = await findAvailablePort({
+  excludedPorts: [vitePort],
+  host: appServerHost,
+  label: 'application server',
+  preferredPort: configuredAppServerPort,
+});
+const nextEnv = {
+  ...initialEnv,
+  APP_SERVER_HOST: appServerHost,
+  APP_SERVER_PORT: String(appServerPort),
+};
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;
+const appBasePath = String(nextEnv.APP_BASE_PATH || '/main')
+  .trim()
+  .replace(/^\/+|\/+$/g, '');
 const appUrl = appBasePath
   ? `${appServerUrl}/${appBasePath}/`
   : `${appServerUrl}/`;
+const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
+  .filter(Boolean)
+  .join('/')}`;
+const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
 const workflowBuild = spawn.sync(
   'tsx',
   ['--tsconfig', 'tsconfig.node.json', 'scripts/build-workflows.ts'],
@@ -224,9 +232,7 @@ if (workflowBuild.error) throw workflowBuild.error;
 if (workflowBuild.status !== 0) process.exit(workflowBuild.status ?? 1);
 const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);
 
-console.log(`\n  App dev server ready`);
-console.log(`  Local:     ${appUrl}`);
-console.log(`  Proxy API: ${appServerUrl}${proxyApiPath}\n`);
+console.log(`\n  Starting app dev server...`);
 
 spawnDevProcess(
   'client',
@@ -236,7 +242,19 @@ spawnDevProcess(
   { filterViteStartup: true },
 );
 
-spawnDevProcess(
+const serverEnv = {
+  ...nextEnv,
+  APP_VITE_DEV_HOST: viteDevHost,
+  APP_VITE_DEV_PORT: String(vitePort),
+  APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
+  APP_SERVER_HOST: appServerHost,
+  APP_SERVER_PORT: String(appServerPort),
+  APP_SERVER_START_LOG: 'false',
+  APP_PUBLIC_ORIGIN:
+    String(nextEnv.APP_PUBLIC_ORIGIN || '').trim() || appServerUrl,
+};
+
+const serverChild = spawnDevProcess(
   'server',
   'tsx',
   [
@@ -249,8 +267,58 @@ spawnDevProcess(
     ...pluginWatchIncludes.flatMap((include) => ['--include', include]),
     'server/standalone.ts',
   ],
-  {
-    ...nextEnv,
-    APP_SERVER_START_LOG: 'false',
-  },
+  serverEnv,
+  { stdio: ['pipe', 'inherit', 'inherit'] },
 );
+
+if (serverChild.stdin) {
+  process.stdin.pipe(serverChild.stdin);
+}
+
+envWatcher = fs.watch(rootDir, (_eventType, filename) => {
+  const changedFile = filename?.toString();
+  if (changedFile !== '.env' && changedFile !== '.env.local') return;
+
+  if (envRestartTimer) clearTimeout(envRestartTimer);
+  envRestartTimer = setTimeout(() => {
+    envRestartTimer = undefined;
+    console.log(`[dev] ${changedFile} changed; restarting server`);
+    serverChild.stdin?.write('\n');
+  }, 100);
+});
+
+try {
+  await Promise.all([
+    waitForHttpReady({
+      label: 'Vite dev server',
+      url: viteUrl,
+    }),
+    waitForHttpReady({
+      isReady: (response, body) => {
+        if (!response.ok) return false;
+
+        try {
+          return JSON.parse(body).ok === true;
+        } catch {
+          return false;
+        }
+      },
+      label: 'Application server',
+      url: healthUrl,
+    }),
+  ]);
+} catch (error) {
+  console.error(`[dev] ${error instanceof Error ? error.message : error}`);
+  shutdown(1);
+}
+
+if (!shuttingDown) {
+  console.log(`\n  App dev server ready`);
+  console.log(`  Local:     ${appUrl}`);
+  if (appServerPort !== configuredAppServerPort) {
+    console.log(
+      `  App server port ${configuredAppServerPort} is unavailable; using ${appServerPort}.`,
+    );
+  }
+  console.log();
+}

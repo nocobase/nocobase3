@@ -7,13 +7,13 @@ import { fileURLToPath } from 'node:url';
 import {
   createAppRuntime,
   type AppRuntime,
-} from '@nocobase/app-server/runtime';
+} from '@nocobase/app-server-kit/runtime';
 import {
   acceptWebSocketUpgrade,
   createWebSocketUpgradeRequest,
   isWebSocketUpgrade,
   rejectWebSocketUpgrade,
-} from '@nocobase/app-server/websocket';
+} from '@nocobase/app-server-kit/websocket';
 
 import type { AppServer } from './app.js';
 import type { AppConfig } from './config/index.js';
@@ -21,9 +21,11 @@ import {
   createAppDisposerRegistry,
   createAppFromRuntime,
   createPublicBasePathAdapter,
-  loadStandaloneAppConfig,
+  createRuntimeConfigPaths,
+  loadAppConfig,
   onceAsync,
   prepareAppRuntime,
+  resolveStandaloneRuntimeOptions,
   type AppDisposerRegistry,
 } from './runtime/index.js';
 
@@ -122,7 +124,10 @@ async function startServerAsync(
 export function createStandaloneRuntime(
   moduleUrl: string = import.meta.url,
 ): AppRuntime<AppConfig> {
-  return createAppRuntime(loadStandaloneAppConfig(moduleUrl));
+  const options = resolveStandaloneRuntimeOptions(moduleUrl);
+  return createAppRuntime(loadAppConfig(options), {
+    paths: createRuntimeConfigPaths(options.paths),
+  });
 }
 
 async function createStandaloneAppFromRuntime(

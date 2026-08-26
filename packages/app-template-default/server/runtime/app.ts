@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
 
-import { createOriginProxyHandler } from '@nocobase/app-server/proxy';
-import type { AppRuntime } from '@nocobase/app-server/runtime';
-import type { SpaHandler } from '@nocobase/app-server/spa';
-import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
+import { createOriginProxyHandler } from '@nocobase/app-server-kit/proxy';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import type { SpaHandler } from '@nocobase/app-server-kit/spa';
+import {
+  addBasePathToRedirectResponse,
+  joinBasePath,
+  normalizeBasePath,
+} from '@nocobase/app-server-kit/support';
 
 import { createApp, type AppServer } from '../app.js';
 import type { AppLifecycle } from '../app-options.js';
@@ -104,11 +108,11 @@ export function stripPublicBasePathFromRequest(
   return cloneRequestWithUrl(request, url);
 }
 
-function dispatchMountedApp(
+async function dispatchMountedApp(
   app: AppServer,
   request: Request,
   publicBasePath: string,
-): Response | Promise<Response> {
+): Promise<Response> {
   const strippedRequest = stripPublicBasePathFromRequest(
     request,
     publicBasePath,
@@ -117,7 +121,8 @@ function dispatchMountedApp(
     return Response.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return app.fetch(strippedRequest);
+  const response = await app.fetch(strippedRequest);
+  return addBasePathToRedirectResponse(response, publicBasePath);
 }
 
 function createPublicBasePathOriginProxyHandler(

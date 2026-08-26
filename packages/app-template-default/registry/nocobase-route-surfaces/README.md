@@ -31,7 +31,7 @@ child action to a fixed top-level resource URL. Preserve the complete opening
 URL in navigation state so closing restores list filters, pagination, tabs, and
 hash state; use the resolved parent route as the direct-entry fallback.
 Use `createRouteSurfaceNavigationState` and `resolveRouteSurfaceCloseTo` from
-`@nocobase/portal-sdk/routing` for that shared navigation protocol instead of
+`@nocobase/app-portal-sdk/routing` for that shared navigation protocol instead of
 copying host-specific state helpers.
 
 Route definitions, ACL guards, resource data fetching, and application-specific

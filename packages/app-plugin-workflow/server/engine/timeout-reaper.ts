@@ -1,4 +1,4 @@
-import type { DatabaseManager, Row } from '@nocobase/database';
+import type { DatabaseManager, Row } from '@nocobase/app-database';
 
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 import {

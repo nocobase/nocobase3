@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
-import { nocobaseClient } from '@nocobase/portal-sdk/client';
-import { resolvePortalUrl } from '@nocobase/portal-sdk/runtime';
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 
 import { LoadingState } from '@/components/app-shell/loading-state';
 

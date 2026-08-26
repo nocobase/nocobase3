@@ -26,7 +26,7 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 - Inherit Prettier through `"prettier": "@nocobase/dev-config/prettier"` in `package.json`.
 - Prefer `pnpm fix` after editing code. It always runs ESLint `--fix` before Prettier `--write`. `pnpm format:check` is a read-only incremental check.
 - Node tests use `createNodeVitestConfig`. React/jsdom tests use `createReactVitestConfig`. The React preset already installs jest-dom matchers and Testing Library cleanup.
-- Portal Vite configurations use `createPortalViteConfig` and inject the compatibility plugin from `@nocobase/portal-sdk/vite`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
+- Portal Vite configurations use `createPortalViteConfig` and inject the compatibility plugin from `@nocobase/app-portal-sdk/vite`. Keep `base`, API/proxy settings, `envPrefix`, and aliases local.
 - Keep Playwright configuration package-local for now; there is no shared Playwright preset.
 
 ### Dependencies and Runtime
@@ -36,13 +36,21 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 - After changing dependencies, run `CI=true pnpm install --no-frozen-lockfile` and commit the synchronized lockfile. CI uses a frozen lockfile.
 - Node runtime, server, and tooling packages declare Node `>=24.0.0`. A browser-only runtime must not declare a Node runtime requirement merely because its development tooling uses Node.
 
+### Package Publishing
+
+Every package in `packages/` is published to npm, so none of them set `private: true`. Root `pnpm pack:check` automatically discovers every package in that directory and rejects private packages, incomplete publish metadata, missing or stale changelogs, invalid tarballs, unresolved workspace protocols, and broken export or declaration metadata.
+
+A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
+
+Package names must not collide with what the v2 line already publishes. `@nocobase/database`, `@nocobase/app-server`, and `@nocobase/portal-sdk` are taken, which is why the v3 packages are `@nocobase/app-database`, `@nocobase/app-server-kit`, and `@nocobase/app-portal-sdk`. Check npm before settling on a name.
+
 ### Test Layout
 
-Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/database`, or `tests/logic` and `tests/components` in the Portal packages.
+Tests live in a `tests/` directory at the package root, never beside the source files they cover. A package with nested source roots puts `tests/` at the root of that source tree, as `packages/app-plugin-authentication/server/tests` does. Subdirectories inside `tests/` are free to reflect whatever the package needs, such as `tests/unit` and `tests/integration` in `packages/app-database`, or `tests/logic` and `tests/components` in the Portal packages.
 
 Name test files `*.test.ts` or `*.test.tsx`. Vitest discovers them by filename rather than by directory, so a test placed outside `tests/` still runs and will not fail loudly; keeping the layout consistent is a convention the tooling does not enforce for you.
 
-Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/database` does.
+Test files stay out of the build. Keep `include` in the package `tsconfig.json` pointed at `src` so `tests/` is excluded from the emitted output, unless the package deliberately typechecks its tests the way `packages/app-database` does.
 
 ### Validation
 
@@ -53,19 +61,52 @@ exports resolve to compiled ESM JavaScript and declarations in `dist`. When
 changing `packages/dev-config`, run
 `pnpm --filter @nocobase/dev-config check`; do not hand-edit generated output.
 
+## Native Dependencies in Generated Applications
+
+pnpm 11 does not run a dependency's install script unless the package is listed under `allowBuilds` in `pnpm-workspace.yaml`. That file is the only place the setting is read from: the `pnpm` field in `package.json` was removed in pnpm 11, and `.npmrc` has never carried build settings. A dependency that compiles a native addon and is missing from the list installs without building, `pnpm install` still reports success, and the failure surfaces much later as a runtime error that names nothing actionable — `better-sqlite3` reports `Could not locate the bindings file`.
+
+`@nocobase/create-app` writes this file into each application it generates, listing only the driver that application actually needs. `DRIVERS_NEEDING_BUILD` in `packages/create-app/src/lib/database.ts` is the list of drivers that require an entry; a pure-JavaScript driver such as `pg` or `mysql2` must not be added, because an entry it does not need is noise in every generated project.
+
+Do not put `pnpm-workspace.yaml` in `packages/app-template-default`, and do not generate it there at pack time either. pnpm treats any directory holding that file as a workspace root, so a copy inside the package severs it from the monorepo: `pnpm list` stops resolving `workspace:` dependencies, and `pnpm pack` fails outright with `ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC` because the package's `catalog:` ranges resolve against the nested file rather than the repository root. Copying the root catalog into the generated file does make `pack` succeed, but it duplicates the catalog into a second source of truth that silently goes stale.
+
+When another native dependency needs the same treatment, add it to `DRIVERS_NEEDING_BUILD` and cover it in `packages/create-app/tests/pnpm-workspace.test.ts`. If it belongs to the template rather than to a database choice, add it to the root `pnpm-workspace.yaml` so the monorepo builds it, and extend the generated file in `packages/create-app/src/lib/pnpm-workspace.ts` so applications built from the template get it too.
+
+A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's npm configuration suppresses install scripts globally and outranks `allowBuilds`, so a correct `allowBuilds` still yields an uncompiled addon. `pnpm install` cannot repair this — the package is already in the store, so pnpm skips it and reports success without building. `pnpm rebuild <package>` does, and works without changing the developer's configuration. `create-app` verifies the driver by loading it and runs that rebuild automatically.
+
+## Language
+
+Anything a person outside the team can read is written in English. Anything only the team reads may be written in Chinese.
+
+Write in English:
+
+- Commit messages and pull request titles
+- Code comments, including comments in workflow files
+- Identifiers, log output, and error messages
+- Changeset summaries — they are copied verbatim into the published CHANGELOG
+- Everything a GitHub Actions run produces that a contributor sees: `workflow_dispatch` input descriptions, job and step names, job summaries, `::error` and `::warning` annotations, and the body of any pull request the workflow opens
+
+Chinese is fine for:
+
+- Documents under `docs/`
+- Feishu notification titles and bodies, which only reach an internal group
+
+The distinction is the audience, not the file type. A comment inside a workflow is read by maintainers and stays English along with the rest of the code; the Feishu message that same workflow sends never leaves the team, so it stays Chinese.
+
+The workflow files under `.github/workflows/` still carry Chinese comments written before this rule existed. Translate the ones you touch; there is no need to convert the rest in a single pass.
+
 ## TypeScript Requirements for Library Development
 
 Every package that emits `.d.ts` files (`declaration: true`) enables both `isolatedDeclarations: true` and `isolatedModules: true`. This currently covers:
 
 | Configuration                                        | Purpose                    |
 | ---------------------------------------------------- | -------------------------- |
-| `packages/portal-sdk/tsconfig.json`                  | Portal SDK                 |
+| `packages/app-portal-sdk/tsconfig.json`              | Portal SDK                 |
 | `packages/app-sdk/tsconfig.json`                     | Browser app SDK            |
 | `packages/app-plugin-authentication/tsconfig.json`   | Authentication library     |
 | `packages/authorization/tsconfig.json`               | Authorization library      |
-| `packages/database/tsconfig.json`                    | Database package           |
+| `packages/app-database/tsconfig.json`                | Database package           |
 | `packages/app-host/tsconfig.json`                    | Application host           |
-| `packages/app-server/tsconfig.json`                  | Application server library |
+| `packages/app-server-kit/tsconfig.json`              | Application server library |
 | `packages/caching/tsconfig.json`                     | Caching library            |
 | `packages/drive/tsconfig.json`                       | File storage library       |
 | `packages/id-generator/tsconfig.json`                | ID generator library       |

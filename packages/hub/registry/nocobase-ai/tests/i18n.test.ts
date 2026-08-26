@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { i18n, translate } from '@nocobase/portal-sdk/i18n';
+import { i18n, translate } from '@nocobase/app-portal-sdk/i18n';
 import { portalI18nReady } from '@/providers/i18n/runtime';
 import '../locales';
 

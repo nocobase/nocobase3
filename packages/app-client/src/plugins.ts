@@ -28,6 +28,11 @@ export interface AppClientRouteDefinition {
   readonly name: string;
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
+  /** Authorization checked before the route component is loaded. */
+  readonly access?: {
+    readonly resource: string;
+    readonly action: string;
+  };
   readonly componentLoader: AppClientRouteComponentLoader;
 }
 
@@ -42,6 +47,11 @@ export interface AppClientRouteComponentOverrideDefinition {
   readonly routeId: string;
   readonly componentLoader: AppClientRouteComponentLoader;
   readonly componentEntry?: string;
+}
+
+export interface AppClientSourceExtension {
+  readonly name: string;
+  readonly routeComponentOverrides?: readonly AppClientRouteComponentOverrideDefinition[];
 }
 
 export interface AppClientProviderDefinition {
@@ -175,6 +185,22 @@ export function defineClientRouteComponentOverrides(
       }),
     ),
   );
+}
+
+export function defineClientSourceExtension(
+  extension: AppClientSourceExtension,
+): AppClientSourceExtension {
+  const name = extension.name.trim();
+  if (!name) {
+    throw new Error('A client source extension must define a non-empty name.');
+  }
+  return Object.freeze({
+    ...extension,
+    name,
+    routeComponentOverrides: extension.routeComponentOverrides
+      ? defineClientRouteComponentOverrides(extension.routeComponentOverrides)
+      : undefined,
+  });
 }
 
 function normalizeRouteOverrideId(routeId: string): string {
@@ -372,6 +398,7 @@ function createRegisteredRoute(
   const id = `${packageName}:${name}`;
   return Object.freeze({
     auth,
+    ...(route.access === undefined ? {} : { access: route.access }),
     componentLoader: wrapRouteComponentLoader(route.componentLoader, id),
     id,
     name,

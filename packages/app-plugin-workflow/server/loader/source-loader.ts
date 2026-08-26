@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { DatabaseManager } from '@nocobase/database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { WorkflowFlatIr } from '../instructions/definition.js';
 
 import { compileWorkflowSource } from './source-compiler.js';

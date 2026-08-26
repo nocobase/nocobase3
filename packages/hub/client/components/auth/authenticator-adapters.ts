@@ -1,4 +1,4 @@
-import type { AuthenticatorAdapter } from '@nocobase/portal-sdk/auth';
+import type { AuthenticatorAdapter } from '@nocobase/app-portal-sdk/auth';
 
 import { extensionAuthAdapters } from '@/app/extensions';
 import { BasicSignInForm } from '@/components/auth/basic-sign-in-form';

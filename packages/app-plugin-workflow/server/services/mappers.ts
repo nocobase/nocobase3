@@ -1,4 +1,4 @@
-import type { Row } from '@nocobase/database';
+import type { Row } from '@nocobase/app-database';
 import type {
   JsonObject,
   JsonValue,

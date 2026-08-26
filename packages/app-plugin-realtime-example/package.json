@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-realtime-example",
   "displayName": "Realtime Example App Plugin",
   "description": "Example app plugin with a realtime clock publisher and page.",
-  "version": "0.1.0",
+  "version": "0.0.1-beta.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -17,6 +17,9 @@
       "./package.json": "./package.json"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -29,7 +32,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

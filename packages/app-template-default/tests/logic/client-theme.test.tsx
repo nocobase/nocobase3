@@ -53,22 +53,25 @@ describe('app client theme', () => {
     });
   });
 
-  it('provides a top-right theme selector', async () => {
+  it('provides a top-right theme toggle', async () => {
     render(
       <AppThemeProvider>
         <ThemeSettings />
       </AppThemeProvider>,
     );
 
-    const selector = screen.getByRole('combobox', { name: 'Theme' });
-    expect(selector).toHaveValue('system');
+    const toggle = screen.getByRole('button', {
+      name: 'Switch to light theme',
+    });
 
-    fireEvent.change(selector, { target: { value: 'dark' } });
+    fireEvent.click(toggle);
 
     await waitFor(() => {
-      expect(document.documentElement).toHaveClass('dark');
-      expect(localStorage.getItem('nocobase-theme')).toBe('dark');
-      expect(selector).toHaveValue('dark');
+      expect(document.documentElement).toHaveClass('light');
+      expect(localStorage.getItem('nocobase-theme')).toBe('light');
+      expect(
+        screen.getByRole('button', { name: 'Switch to dark theme' }),
+      ).toBeVisible();
     });
   });
 });

@@ -89,8 +89,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-server": "workspace:^",
-    "@nocobase/database": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "esbuild": "^0.25.12",

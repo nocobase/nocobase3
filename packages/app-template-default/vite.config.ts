@@ -1,10 +1,11 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
-import { portalSdkCompatibilityPlugin } from '@nocobase/portal-sdk/vite';
+import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import fs from 'node:fs';
 import path from 'path';
 import { loadEnv } from 'vite';
 
+import { isAgentAnnotationsEnabled } from './scripts/agent-annotations.js';
 import { appClientPluginsPlugin } from './scripts/client-plugins.js';
 
 const portalTemplate = JSON.parse(
@@ -46,8 +47,11 @@ export default createPortalViteConfig(
   portalSdkCompatibilityPlugin,
   ({ command, mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
-    const appBase = normalizeBase(env.APP_BASE_PATH ?? '/app-template-default');
+    const appBase = normalizeBase(env.APP_BASE_PATH ?? '/main');
     const viteBase = appBase;
+    const annotationsEnabled = isAgentAnnotationsEnabled(
+      env.AGENT_ANNOTATIONS_ENABLED,
+    );
     const publicApiUrl =
       command === 'serve'
         ? mode === 'e2e' && env.NOCOBASE_E2E_API_URL?.trim()
@@ -83,24 +87,35 @@ export default createPortalViteConfig(
       define: defineEnv,
       envPrefix: ['VITE_'],
       plugins: [
-        agentAnnotations({ root: __dirname }),
+        ...(annotationsEnabled
+          ? [
+              agentAnnotations({
+                root: __dirname,
+                clientExtensions: [
+                  path.resolve(__dirname, 'client/agent-annotations-host.ts'),
+                ],
+              }),
+            ]
+          : []),
         appClientPluginsPlugin({ root: __dirname }),
       ],
-      resolve: {
-        dedupe: ['react', 'react-dom', 'react-router'],
-        alias: [
-          { find: '@', replacement: path.resolve(__dirname, './client') },
-        ],
-      },
-      server:
-        command === 'serve'
+      server: {
+        watch: { ignored: ['**/.agent-annotations/**'] },
+        ...(command === 'serve'
           ? {
               hmr: {
                 ...(viteHmrHost ? { host: viteHmrHost } : {}),
                 clientPort: viteDevPort,
               },
             }
-          : undefined,
+          : {}),
+      },
+      resolve: {
+        dedupe: ['react', 'react-dom', 'react-router'],
+        alias: [
+          { find: '@', replacement: path.resolve(__dirname, './client') },
+        ],
+      },
     };
   },
 );

@@ -1,4 +1,4 @@
-import { registerTranslationResources } from '@nocobase/portal-sdk/i18n';
+import { registerTranslationResources } from '@nocobase/app-portal-sdk/i18n';
 import enUS from './en-US';
 import zhCN from './zh-CN';
 

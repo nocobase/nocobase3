@@ -1,5 +1,6 @@
-import { Button } from '@nocobase/app-client/ui';
 import type { ReactElement } from 'react';
+
+import { Button } from '@/components/ui/button';
 
 export interface AppStartupErrorProps {
   error: unknown;

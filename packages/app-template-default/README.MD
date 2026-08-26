@@ -1,7 +1,7 @@
 # NocoBase Default App Template
 
 The reference full-stack application for the new NocoBase App architecture. It
-uses `@nocobase/app-server` on the backend and a React + Refine + shadcn client
+uses `@nocobase/app-server-kit` on the backend and a React + Refine + shadcn client
 from `@nocobase/app-client`.
 
 ## Quick start
@@ -22,10 +22,13 @@ The key settings are:
 
 ```env
 APP_BASE_PATH=/main
+# APP_PUBLIC_ORIGIN=https://apps.example.com
 NOCOBASE_API_PROXY_TARGET=
 ```
 
 `APP_BASE_PATH` is the public application mount path.
+`APP_PUBLIC_ORIGIN` is the optional external HTTP origin used for callbacks
+and redirects. It must not include `APP_BASE_PATH`; the runtime combines them.
 `NOCOBASE_API_PROXY_TARGET`, when configured, is the upstream NocoBase API
 origin used by the server-side proxy; it is not exposed as a Vite client
 variable.
@@ -114,14 +117,40 @@ and Provider source/layer/order.
 redirects, and the guest routes `/login`, `/register`, `/forgot-password`, and
 `/reset-password`. It also provides default fallback pages.
 
-The Default App customizes only those routes' lazy page components in
-`client/auth/`. It imports forms and links from the stable
-`@nocobase/app-plugin-authentication/client/ui` subpath. It does not duplicate
-guest routes or call Better Auth endpoints directly from page components.
+The Default App customizes only those routes' lazy page components in the
+installed `client/extensions/nocobase-auth-ui/` Registry source. `AuthLink` is
+imported from the stable `@nocobase/app-plugin-authentication/client/ui`
+subpath; the final password forms are application-owned Registry source and
+call the plugin's stable `client/actions` hooks. It does not duplicate guest
+routes or call Better Auth endpoints directly from page components.
 
-See [client/auth/README.md](client/auth/README.md) for the task-oriented edit
-map. Password reset still requires deployment-side configuration of Better
-Auth's `emailAndPassword.sendResetPassword` callback and a real mail transport.
+See
+[client/extensions/nocobase-auth-ui/README.md](client/extensions/nocobase-auth-ui/README.md)
+for the task-oriented edit map. Password reset still requires deployment-side
+configuration of Better Auth's `emailAndPassword.sendResetPassword` callback
+and a real mail transport.
+
+The upstream recipe and its Registry configuration are published by the
+authentication package at `registry/auth-ui` and `registry.config.json`. The
+Default Template commits only the materialized, application-owned snapshot.
+Build the authentication Registry payload from the repository root with:
+
+```bash
+pnpm registry build --package @nocobase/app-plugin-authentication
+```
+
+To initialize extensions in a new output tree, materialize them there:
+
+```bash
+pnpm registry materialize \
+  --package @nocobase/app-plugin-authentication \
+  --item auth-ui \
+  --output-root /path/to/new-template
+```
+
+Materialization refuses an existing target so it cannot silently overwrite
+application edits. Updating an installed Registry item must use an explicit
+three-way merge.
 
 ## Theme
 

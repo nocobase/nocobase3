@@ -7,6 +7,7 @@ import {
   defineClientProviders,
   defineClientRouteComponentOverrides,
   defineClientRoutes,
+  defineClientSourceExtension,
   resolveAppClientContributions,
 } from '../src/plugins.js';
 
@@ -19,6 +20,23 @@ function SecondProvider({ children }: PropsWithChildren): ReactElement {
 }
 
 describe('client plugin definitions', () => {
+  it('freezes source extension route overrides', () => {
+    const extension = defineClientSourceExtension({
+      name: 'authentication-ui',
+      routeComponentOverrides: [
+        {
+          routeId: '@nocobase/app-plugin-authentication:login',
+          componentLoader: async () => ({ default: () => null }),
+        },
+      ],
+    });
+
+    expect(extension.name).toBe('authentication-ui');
+    expect(Object.isFrozen(extension)).toBe(true);
+    expect(Object.isFrozen(extension.routeComponentOverrides)).toBe(true);
+    expect(Object.isFrozen(extension.routeComponentOverrides?.[0])).toBe(true);
+  });
+
   it('freezes route and provider definitions', () => {
     const application = defineClientApplication({
       packageName: '@nocobase/app-template-default',
@@ -54,6 +72,7 @@ describe('client plugin definitions', () => {
           {
             name: 'index',
             path: '/feature/',
+            access: { resource: 'feature.dashboard', action: 'access' },
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
@@ -78,6 +97,7 @@ describe('client plugin definitions', () => {
       id: '@nocobase/app-plugin-feature:index',
       path: '/feature',
       source: 'plugin',
+      access: { resource: 'feature.dashboard', action: 'access' },
     });
     expect(resolved.providers.map((provider) => provider.id)).toEqual([
       '@nocobase/app-plugin-foundation:first',

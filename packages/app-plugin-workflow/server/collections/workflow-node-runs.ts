@@ -1,4 +1,4 @@
-import type { CollectionDefinitionBuilder } from '@nocobase/database';
+import type { CollectionDefinitionBuilder } from '@nocobase/app-database';
 
 import { WORKFLOW_COLLECTIONS } from './names.js';
 
