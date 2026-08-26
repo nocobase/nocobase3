@@ -66,11 +66,6 @@ test('inspects configured client routes and providers', async () => {
         path: '/reset-password',
       },
       {
-        auth: 'guest',
-        id: '@nocobase/app-plugin-install:install',
-        path: '/install',
-      },
-      {
         auth: 'required',
         id: '@nocobase/app-plugin-authorization:permission-sets',
         path: '/settings/authorization/permission-sets',
@@ -89,6 +84,11 @@ test('inspects configured client routes and providers', async () => {
         auth: 'required',
         id: '@nocobase/app-plugin-authorization:restriction-rules',
         path: '/settings/authorization/restriction-rules',
+      },
+      {
+        auth: 'guest',
+        id: '@nocobase/app-plugin-install:install',
+        path: '/install',
       },
       {
         auth: 'required',
