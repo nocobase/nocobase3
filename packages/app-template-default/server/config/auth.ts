@@ -8,14 +8,16 @@ import {
 } from '@nocobase/app-server-kit/config';
 import type { AuthOptions } from '@nocobase/app-plugin-authentication';
 
-export type AppAuthConfig = Omit<AuthOptions, 'connection'>;
+export type AppAuthConfig = Omit<
+  AuthOptions,
+  'basePath' | 'baseURL' | 'connection'
+>;
 
 const authConfig: ConfigFactory<AppAuthConfig> = defineConfig(
   ({ env, paths }): AppAuthConfig => {
     const secret = resolveAuthSecret(env.string('AUTH_SECRET'), paths.root());
 
     return {
-      baseURL: env.string('NOCOBASE_AUTH_URL'),
       secret,
       emailAndPassword: {
         enabled: true,
