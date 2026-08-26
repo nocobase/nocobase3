@@ -1,5 +1,11 @@
 # @nocobase/hub
 
+## 0.0.1-beta.3
+
+### Patch Changes
+
+- 8fb9319: Declare the pnpm version this package is developed with, so working on it uses the same pnpm as the rest of the monorepo.
+
 ## 0.0.1-beta.2
 
 ### Patch Changes

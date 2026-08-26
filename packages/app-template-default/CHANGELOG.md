@@ -1,5 +1,11 @@
 # @nocobase/app-template-default
 
+## 0.0.1-beta.5
+
+### Patch Changes
+
+- 8fb9319: Declare the pnpm version this package is developed with, so working on it uses the same pnpm as the rest of the monorepo.
+
 ## 0.0.1-beta.4
 
 ### Patch Changes

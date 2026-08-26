@@ -1,5 +1,11 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.3
+
+### Patch Changes
+
+- 8fb9319: Pin the pnpm version in generated applications. Without it the project runs on whatever pnpm the machine defaults to, and pnpm 10 does not read `allowBuilds` at all, so the database driver installs without compiling its native addon and fails only at the first query.
+
 ## 0.1.0-beta.2
 
 ### Patch Changes
