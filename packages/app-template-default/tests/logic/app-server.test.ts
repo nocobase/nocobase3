@@ -152,6 +152,32 @@ describe('app server', () => {
     expect(response.headers.get('Location')).toBe('/main/install');
   });
 
+  it('routes authentication requests through the configured public auth URL', async () => {
+    const app = createTestApp({
+      publicOrigin: 'http://localhost',
+      publicBasePath: '/main',
+    });
+    const mounted = createPublicBasePathAdapter(app, '/main');
+
+    const response = await mounted.request(
+      'http://localhost/main/api/auth/sign-in/username',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          username: 'missing-user',
+          password: 'not-the-password',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({
+      code: 'INVALID_USERNAME',
+      message: 'Username is invalid',
+    });
+  });
+
   it('exposes an app-local WebSocket handler outside the API namespace', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
@@ -1271,6 +1297,7 @@ function createTestSession(): AppSessionConfig {
 }
 
 interface CreateTestAppOptions {
+  publicOrigin?: string;
   publicBasePath?: string;
   nocoBaseApiUrl?: string | false;
   database?: DatabaseManager | false;
@@ -1292,6 +1319,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   const config = {
     app: {
       name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
+      publicOrigin: options.publicOrigin,
       publicBasePath,
       internalBasePath: '',
       internalApiProxyPath,
