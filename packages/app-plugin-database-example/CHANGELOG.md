@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-database-example
 
+## 0.0.1-beta.1
+
+### Patch Changes
+
+- 0465323: Declare explicit publish files for the example plugins and Hub template, and add a safe Hub environment example for generated projects.
+
 ## 0.0.1-beta.0
 
 ### Patch Changes
