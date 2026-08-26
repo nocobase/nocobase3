@@ -91,10 +91,11 @@ export interface ScaffoldOptions {
 /**
  * Copies an extracted template into its final location and rewrites its manifest.
  *
- * The template's `package.json` name and version belong to the template rather than to what is created from it, so
- * both are replaced and the publish metadata is dropped — a generated app should never be publishable by accident.
- * Dependency ranges are left exactly as packed: pnpm already resolved `workspace:` and `catalog:` into real versions
- * when the tarball was built.
+ * Only what identifies the template is touched: the name becomes the app's, and the display name, description, and
+ * publish metadata are dropped so a generated app is not labelled "Default Template" or pointed at the template's own
+ * release. Everything else is kept as packed, including the version, which leaves a record of the template version the
+ * app came from, and the dependency ranges pnpm already resolved from `workspace:` and `catalog:` when it built the
+ * tarball.
  */
 export async function scaffoldFromTemplate(
   options: ScaffoldOptions,
@@ -112,8 +113,11 @@ export async function scaffoldFromTemplate(
   >;
 
   manifest.name = name;
-  manifest.version = '0.1.0';
-  manifest.private = true;
+
+  // Identity and publish metadata describe the template, not what is built from it. Leaving `displayName` behind would
+  // label a new app "Default Template", and leaving the publish fields would point it at the template's own release.
+  delete manifest.displayName;
+  delete manifest.description;
   delete manifest.publishConfig;
   delete manifest.repository;
 

@@ -62,12 +62,17 @@ const isWorkspaceInstallRoot = (packageInfo) =>
   fs.existsSync(path.join(packageInfo.directory, 'pnpm-workspace.yaml'));
 
 /**
- * Disabled while v3 is unreleased.
+ * Disabled while v3 versions are still pre-release.
  *
  * The check compares a project's `nocobase.defaultTemplateVersion` against the range this SDK supports, which only
- * means something once the template is published and its versions carry release history. Every v3 package currently
- * sits at 0.0.1, so the check would reject every project it was meant to protect. Re-enable it, and restore
- * `supportedDefaultTemplateRange` to a real range, once the template ships.
+ * means something once those versions carry release history. v3 packages sit at `0.0.1-beta.x` while
+ * `supportedDefaultTemplateRange` still declares the v2 range `>=3.0.0 <4.0.0`, so the check would reject every
+ * project it was meant to protect.
+ *
+ * Two things must happen together before re-enabling it, or it will fail on projects that are in fact compatible:
+ * set `supportedDefaultTemplateRange` to a range that matches the versions v3 actually publishes, and make sure
+ * `defaultTemplateVersion` is the value releases now synchronize (see `scripts/sync-template-version.mjs`) rather
+ * than the hand-maintained `0.0.1` it used to be.
  */
 const CHECK_DISABLED = true;
 

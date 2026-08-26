@@ -141,6 +141,75 @@ describe('buildEnvFile', () => {
     expect(contents).toContain('DB_PASSWORD="has spaces \\"and\\" quotes"');
   });
 
+  /**
+   * `.env.example` groups keys under headings. Dropping every database key strips the body out from under a heading
+   * like `# Database`, and the leftover comments read as a damaged file.
+   */
+  it('drops comment blocks left with nothing to describe', () => {
+    const contents = buildEnvFile({
+      database: defaultDatabaseConfig('postgres'),
+      template: [
+        '# Application',
+        'APP_BASE_PATH=/main',
+        '',
+        '# Database',
+        '# Supported dialects: sqlite, postgres, mysql.',
+        'DB_DIALECT=sqlite',
+        'DB_DATABASE=database.sqlite',
+        '',
+        '# Database lifecycle',
+        'DB_MIGRATIONS_AUTO_RUN=true',
+        '',
+      ].join('\n'),
+      authSecret: 'secret',
+    });
+
+    expect(contents).not.toContain('# Supported dialects');
+    expect(contents).toContain('# Application');
+    expect(contents).toContain('# Database lifecycle');
+    expect(parse(contents).DB_MIGRATIONS_AUTO_RUN).toBe('true');
+  });
+
+  /** These drive migrations and seeding, and are unrelated to the connection, so they must survive. */
+  it('keeps the database lifecycle switches', () => {
+    const values = parse(
+      buildEnvFile({
+        database: defaultDatabaseConfig('sqlite'),
+        template:
+          '# Database lifecycle\nDB_MIGRATIONS_AUTO_RUN=true\nDB_SEEDS_AUTO_RUN=true\n',
+        authSecret: 'secret',
+      }),
+    );
+
+    expect(values.DB_MIGRATIONS_AUTO_RUN).toBe('true');
+    expect(values.DB_SEEDS_AUTO_RUN).toBe('true');
+  });
+
+  /**
+   * The published template ships a bare `AUTH_SECRET=`. It has to lose to the generated secret rather than blanking
+   * it, which would leave the app unable to start.
+   */
+  it('never lets an empty template AUTH_SECRET win', () => {
+    const contents = buildEnvFile({
+      database: defaultDatabaseConfig('sqlite'),
+      template: 'NOCOBASE_AUTH_URL=\nAUTH_SECRET=\n',
+      authSecret: 'REAL-SECRET',
+    });
+
+    expect(parse(contents).AUTH_SECRET).toBe('REAL-SECRET');
+    expect(contents.match(/^AUTH_SECRET=/gmu)).toHaveLength(1);
+  });
+
+  it('does not leave a run of blank lines where a block was removed', () => {
+    const contents = buildEnvFile({
+      database: defaultDatabaseConfig('sqlite'),
+      template: '# Database\nDB_DIALECT=mysql\n\nAPP_BASE_PATH=/main\n',
+      authSecret: 'secret',
+    });
+
+    expect(contents).not.toMatch(/\n\n\n/u);
+  });
+
   it('ends with exactly one trailing newline', () => {
     const contents = buildEnvFile({
       database: defaultDatabaseConfig('sqlite'),
