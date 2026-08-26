@@ -266,6 +266,24 @@
       }
     },
     {
+      "name": "notification",
+      "type": "registry:block",
+      "title": "NocoBase Notification",
+      "description": "Email delivery log and in-app notification components backed by the NocoBase notification API.",
+      "dependencies": [
+        "@nocobase/app-portal-sdk@^2.0.0",
+        "lucide-react@^0.487.0",
+        "react-router@^7.0.2"
+      ],
+      "registryDependencies": ["alert", "badge", "button", "card", "table"],
+      "docs": "Provides the notification extension, email Delivery/Attempt log components, and the current user's in-app message center.",
+      "source": {
+        "root": "registry/nocobase-notification",
+        "target": "client/extensions/nocobase-notification",
+        "include": ["."]
+      }
+    },
+    {
       "name": "mail",
       "type": "registry:block",
       "title": "NocoBase Mail",

@@ -21,9 +21,11 @@ import {
   createAppDisposerRegistry,
   createAppFromRuntime,
   createPublicBasePathAdapter,
-  loadStandaloneAppConfig,
+  loadAppConfig,
   onceAsync,
   prepareAppRuntime,
+  createRuntimeConfigPaths,
+  resolveStandaloneRuntimeOptions,
   type AppDisposerRegistry,
 } from './runtime/index.js';
 
@@ -117,7 +119,10 @@ async function startServerAsync(): Promise<void> {
 }
 
 export function createStandaloneRuntime(): AppRuntime<AppConfig> {
-  return createAppRuntime(loadStandaloneAppConfig(import.meta.url));
+  const options = resolveStandaloneRuntimeOptions(import.meta.url);
+  return createAppRuntime(loadAppConfig(options), {
+    paths: createRuntimeConfigPaths(options.paths),
+  });
 }
 
 async function createStandaloneAppFromRuntime(

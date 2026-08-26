@@ -28,6 +28,11 @@ export interface AppClientRouteDefinition {
   readonly name: string;
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
+  /** Authorization checked before the route component is loaded. */
+  readonly access?: {
+    readonly resource: string;
+    readonly action: string;
+  };
   readonly componentLoader: AppClientRouteComponentLoader;
 }
 
@@ -393,6 +398,7 @@ function createRegisteredRoute(
   const id = `${packageName}:${name}`;
   return Object.freeze({
     auth,
+    ...(route.access === undefined ? {} : { access: route.access }),
     componentLoader: wrapRouteComponentLoader(route.componentLoader, id),
     id,
     name,

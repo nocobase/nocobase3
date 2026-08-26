@@ -61,6 +61,13 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
               });
             }
 
+            if (url.pathname === "/redirect") {
+              return new Response(null, {
+                status: 302,
+                headers: { Location: "/install" },
+              });
+            }
+
             return Response.json({
               id: scope.id,
               basePath: scope.basePath,
@@ -99,6 +106,13 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
     pathname: '/api/hello',
     search: '?x=1',
   });
+
+  const redirect = await fetch(
+    `http://127.0.0.1:${address.port}/customer/redirect`,
+    { redirect: 'manual' },
+  );
+  expect(redirect.status).toBe(302);
+  expect(redirect.headers.get('location')).toBe('/customer/install');
 
   const page = await fetch(`http://127.0.0.1:${address.port}/customer/`);
   const pageHtml = await page.text();

@@ -14,6 +14,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { Hono } from 'hono';
 import {
   createDefaultCachingConfig,
   type CachingConfig,
@@ -51,6 +52,7 @@ import type { AppConfig } from '../../server/config/index.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
+import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
@@ -207,6 +209,17 @@ describe('app server', () => {
     );
   });
 
+  it('adds the public base path to app-local redirects', async () => {
+    const app = new Hono();
+    app.get('/login', (context) => context.redirect('/install'));
+
+    const mounted = createPublicBasePathAdapter(app, '/main');
+    const response = await mounted.request('http://localhost/main/login');
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('/main/install');
+  });
+
   it('exposes an app-local WebSocket handler outside the API namespace', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
@@ -342,7 +355,7 @@ describe('app server', () => {
     );
   });
 
-  it('reads embedded runtime config from dist/.env without using process.env', async () => {
+  it('reads embedded runtime config from the application root without using process.env', async () => {
     const nocoBaseApiUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'application/json; charset=utf-8');
       response.end(
@@ -359,7 +372,7 @@ describe('app server', () => {
     const clientDir = path.join(appRoot, 'dist', 'client');
     mkdirSync(clientDir, { recursive: true });
     writeFileSync(
-      path.join(appRoot, 'dist', '.env'),
+      path.join(appRoot, '.env'),
       [
         `NOCOBASE_API_PROXY_TARGET=${nocoBaseApiUrl}/nocobase/api/`,
         'API_CLIENT_STORAGE_PREFIX=EMBEDDED_',
@@ -835,6 +848,30 @@ describe('app server', () => {
     await expect(response.json()).resolves.toMatchObject({
       message: expect.any(String),
     });
+  });
+
+  it('redirects HTML navigation to installation in install mode', async () => {
+    vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
+    const viteDevUrl = await startHttpStub((_request, response) => {
+      response.setHeader('content-type', 'text/html; charset=utf-8');
+      response.end('<main>installation page</main>');
+    });
+    const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
+
+    const redirectResponse = await app.request('http://localhost/main/', {
+      headers: { Accept: 'text/html' },
+    });
+    expect(redirectResponse.status).toBe(302);
+    expect(redirectResponse.headers.get('Location')).toBe('/main/install');
+
+    const installResponse = await app.request('http://localhost/main/install', {
+      headers: { Accept: 'text/html' },
+    });
+    expect(installResponse.status).toBe(200);
+    expect(installResponse.headers.get('Location')).toBeNull();
+    await expect(installResponse.text()).resolves.toContain(
+      'installation page',
+    );
   });
 
   it('dispatches jobs from enabled app plugins', async () => {
@@ -1338,7 +1375,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
     caching: options.caching ?? createDefaultCachingConfig(),
     database: {
-      default: 'sqlite',
+      default: 'main',
       connections: {},
       migrations: {
         directory: '',

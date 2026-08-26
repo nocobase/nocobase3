@@ -67,6 +67,31 @@ test('inspects configured client routes and providers', async () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-authorization:permission-sets',
+        path: '/settings/authorization/permission-sets',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization:default-access',
+        path: '/settings/authorization/default-access',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization:sharing-rules',
+        path: '/settings/authorization/sharing-rules',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization:restriction-rules',
+        path: '/settings/authorization/restriction-rules',
+      },
+      {
+        auth: 'guest',
+        id: '@nocobase/app-plugin-install:install',
+        path: '/install',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-notification-provider:demo',
         path: '/notification-provider',
       },
@@ -113,11 +138,16 @@ test('inspects configured client routes and providers', async () => {
       },
       {
         order: 3,
-        packageName: '@nocobase/app-plugin-data-provider',
+        packageName: '@nocobase/app-plugin-authorization',
         source: 'plugin',
       },
       {
         order: 4,
+        packageName: '@nocobase/app-plugin-data-provider',
+        source: 'plugin',
+      },
+      {
+        order: 5,
         packageName: '@nocobase/app-plugin-notification-provider',
         source: 'plugin',
       },
