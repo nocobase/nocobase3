@@ -198,13 +198,54 @@ jobs:
       # package.json，会给这批没发布的包也打上 tag。
       # 不能带 --tag —— pre 模式下 changeset 会直接拒绝：
       #   Releasing under custom tag is not allowed in pre mode!
-      # dist-tag 由 pre.json 里的 tag 决定（`pre enter beta` 时定的 beta），
-      # publish 自动用它。
+      # dist-tag 本该由 pre.json 里的 tag 决定（`pre enter beta` 时定的 beta），
+      # 但一个包如果已发布的版本全是预发布版，changeset 会把它当成首次发布，
+      # 改打 latest 而不是 beta —— 见下一步。
       - name: Publish to npm
         if: '!inputs.dry_run'
         run: pnpm changeset publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 把 beta 指向这次真正发出去的版本。
+      #
+      # changeset 判定一个包「已发布的版本全是预发布版」时，会认为这是首次发布，
+      # 于是打 latest 而不是 beta —— 用意是别让包只有 beta 没有 latest，那样
+      # `npm install <pkg>` 会直接失败。但这个条件在发出第一个稳定版之前每次发版
+      # 都成立，结果 beta 停在最早那个版本上，latest 反而比 beta 新。
+      #
+      # 所以在 publish 之后补打一次。发出稳定版之后这一步不再改变任何东西
+      # （changeset 那时就会自己打对 beta），留着也是无害的。
+      #
+      # 用 npm 而不是 pnpm：dist-tag 是 registry 操作，跟工作区无关，npm 的
+      # NODE_AUTH_TOKEN 认证在这里是现成的。
+      - name: Point the beta dist-tag at this release
+        if: '!inputs.dry_run'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # 先落盘再读，不用进程替换：管道会把 while 放进子 shell，FAILED 的赋值
+          # 就丢了，那样单个包失败会被静默吞掉。
+          node scripts/list-package-versions.mjs --released-specs /tmp/versions-before.json > /tmp/released-specs.txt
+          cat /tmp/released-specs.txt
+
+          FAILED=0
+          while IFS= read -r SPEC; do
+            [ -n "$SPEC" ] || continue
+            if npm dist-tag add "$SPEC" beta; then
+              echo "beta -> $SPEC"
+            else
+              # 单个包失败不该中断整轮：包已经发出去了，回滚不了，
+              # 剩下的包该打的 tag 还是要打上。汇总后统一报错。
+              echo "::warning::Could not point beta at $SPEC"
+              FAILED=1
+            fi
+          done < /tmp/released-specs.txt
+
+          if [ "$FAILED" = "1" ]; then
+            echo "::error::One or more packages kept a stale beta dist-tag. Fix them with npm dist-tag add <pkg>@<version> beta."
+            exit 1
+          fi
 
       - name: Push package tags
         if: '!inputs.dry_run'
