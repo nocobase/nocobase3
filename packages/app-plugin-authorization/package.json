@@ -78,6 +78,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
+    "prepack": "pnpm build",
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-plugin-authorization.tgz\" && pnpm exec publint .",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
@@ -94,7 +96,7 @@
     "lucide-react": "^0.487.0"
   },
   "peerDependencies": {
-    "@nocobase/app-client": "^0.1.0",
+    "@nocobase/app-client": "workspace:^",
     "react": "^19.0.0"
   },
   "devDependencies": {

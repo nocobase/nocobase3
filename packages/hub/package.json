@@ -10,6 +10,31 @@
   "nocobase": {
     "defaultTemplateVersion": "0.0.1"
   },
+  "files": [
+    "client",
+    "server",
+    "database",
+    "public",
+    "scripts/build-server-dist-package.mjs",
+    "scripts/build.mjs",
+    "scripts/clean-dist-bin.mjs",
+    "scripts/dev.mjs",
+    "scripts/start.mjs",
+    "index.html",
+    "components.json",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "eslint.config.js",
+    "tsconfig.json",
+    "tsconfig.node.json",
+    "tsconfig.server.json",
+    "Dockerfile",
+    ".env.example",
+    ".gitignore",
+    "README.MD",
+    "MIGRATION.md",
+    "AGENTS.md"
+  ],
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
     "@base-ui/react": "^1.6.0",
