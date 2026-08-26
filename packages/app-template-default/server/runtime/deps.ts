@@ -22,6 +22,10 @@ import {
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { joinBasePath } from '@nocobase/app-server-kit/support';
 import type { Auth } from '@nocobase/app-plugin-authentication';
+import {
+  createAppAuthorization,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
 
 import { createAppJobFactory } from '../jobs/dependencies.js';
 import type { AppConfig } from '../config/index.js';
@@ -29,6 +33,7 @@ import { createCookiePrefix } from './utils.js';
 
 export interface AppDeps {
   auth: Auth;
+  authz: AppAuthorization;
   caching: Caching;
   filesRuntime?: FilesRuntime;
   idGenerator: SnowflakeIdGenerator;
@@ -60,6 +65,9 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
         ...config.auth.advanced?.defaultCookieAttributes,
       },
     },
+  });
+  const authz = createAppAuthorization({
+    connection: runtime.database?.connection(),
   });
   const filesRuntime = config.plugins.some(
     (plugin) =>
@@ -93,6 +101,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   return {
     caching,
     auth,
+    authz,
     filesRuntime,
     idGenerator,
     logging,

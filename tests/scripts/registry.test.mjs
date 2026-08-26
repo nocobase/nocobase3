@@ -15,6 +15,10 @@ import {
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 const ownerRoot = path.join(repoRoot, 'packages/app-plugin-authentication');
 const filesOwnerRoot = path.join(repoRoot, 'packages/app-plugin-files');
+const exampleOwnerRoot = path.join(
+  repoRoot,
+  'packages/app-plugin-registry-example',
+);
 
 test('parses package-scoped Registry commands', () => {
   assert.deepEqual(
@@ -171,6 +175,102 @@ test('does not publish the legacy Hub file-upload protocol', () => {
   for (const contract of legacyContracts) {
     assert.doesNotMatch(hubRegistrySource, new RegExp(contract, 'u'));
   }
+});
+
+test('builds and materializes the plugin Registry example', async (t) => {
+  const buildRoot = await mkdtemp(
+    path.join(tmpdir(), 'nocobase-registry-example-build-'),
+  );
+  const applicationRoot = await mkdtemp(
+    path.join(tmpdir(), 'nocobase-registry-example-app-'),
+  );
+  t.after(() => rm(buildRoot, { force: true, recursive: true }));
+  t.after(() => rm(applicationRoot, { force: true, recursive: true }));
+
+  const buildResult = buildRegistry({
+    ownerRoot: exampleOwnerRoot,
+    outputDirectory: buildRoot,
+    repoRoot,
+  });
+  const pageItem = JSON.parse(
+    fs.readFileSync(path.join(buildRoot, 'page-ui.json'), 'utf8'),
+  );
+
+  assert.deepEqual(buildResult.items, [
+    { files: 3, name: 'page-ui' },
+    { files: 3, name: 'component-ui' },
+    { files: 4, name: 'provider-ui' },
+  ]);
+  assert.deepEqual(pageItem.registryDependencies, ['button']);
+  assert.equal(pageItem.files.length, 3);
+  assert.equal(
+    JSON.parse(
+      fs.readFileSync(path.join(buildRoot, 'component-ui.json'), 'utf8'),
+    ).files.length,
+    3,
+  );
+  assert.equal(
+    JSON.parse(
+      fs.readFileSync(path.join(buildRoot, 'provider-ui.json'), 'utf8'),
+    ).files.length,
+    4,
+  );
+
+  const materializeResult = materializeRegistry({
+    outputRoot: applicationRoot,
+    ownerRoot: exampleOwnerRoot,
+    repoRoot,
+  });
+  const installedRoot = path.join(
+    applicationRoot,
+    'client/extensions/nocobase-registry-example-page-ui',
+  );
+
+  assert.deepEqual(materializeResult.materialized, [
+    {
+      files: 3,
+      target: 'client/extensions/nocobase-registry-example-page-ui',
+    },
+    {
+      files: 3,
+      target: 'client/extensions/nocobase-registry-example-component-ui',
+    },
+    {
+      files: 4,
+      target: 'client/extensions/nocobase-registry-example-provider-ui',
+    },
+  ]);
+  assert.match(
+    fs.readFileSync(
+      path.join(installedRoot, 'pages/registry-example-page.tsx'),
+      'utf8',
+    ),
+    /from '@\/components\/ui\/button'/u,
+  );
+  assert.match(
+    fs.readFileSync(path.join(installedRoot, 'extension.ts'), 'utf8'),
+    /REGISTRY_EXAMPLE_ROUTE_IDS\.index/u,
+  );
+  assert.match(
+    fs.readFileSync(
+      path.join(
+        applicationRoot,
+        'client/extensions/nocobase-registry-example-component-ui/index.ts',
+      ),
+      'utf8',
+    ),
+    /EditablePanel/u,
+  );
+  assert.match(
+    fs.readFileSync(
+      path.join(
+        applicationRoot,
+        'client/extensions/nocobase-registry-example-provider-ui/index.ts',
+      ),
+      'utf8',
+    ),
+    /ExampleUiProvider/u,
+  );
 });
 
 function walkFiles(directory, root = directory) {
