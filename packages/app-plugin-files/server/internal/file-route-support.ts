@@ -17,6 +17,7 @@ import {
   type ScopedFileCapabilityAction,
   type ScopedFileCapabilityCodec,
 } from './scoped-capability.js';
+import type { FileRouteSchemaValidation } from './route-schema.js';
 import {
   createScopedCapabilityScope,
   readScopedRoutePath,
@@ -189,9 +190,14 @@ export async function readOptionalJson<T>(
 
 export function withFileRouteErrors(
   handler: FileRouteHandler,
+  schemaValidation?: FileRouteSchemaValidation,
 ): FileRouteHandler {
   return async (context) => {
     try {
+      const schemaError = await schemaValidation;
+      if (schemaError) {
+        throw schemaError;
+      }
       return await handler(context);
     } catch (error) {
       if (error instanceof Error) {

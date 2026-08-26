@@ -78,7 +78,7 @@ class FlydriveFilesStorage<TDriver extends 'local' | 's3'> {
   ): Promise<void> {
     this.#assertActive();
     const resolvedKey = this.#resolveKey(key);
-    await callFlydrive(() =>
+    await callFlydriveStream(contents, () =>
       this.#disk.putStream(resolvedKey, contents, {
         visibility: 'private',
         ...(options.contentType === undefined
@@ -315,6 +315,28 @@ async function callFlydrive<T>(operation: () => Promise<T>): Promise<T> {
     return await operation();
   } catch (error) {
     throw markFlydriveError(flydriveCause(error));
+  }
+}
+
+async function callFlydriveStream<T>(
+  contents: Readable,
+  operation: () => Promise<T>,
+): Promise<T> {
+  let producerError: Error | undefined;
+  const captureProducerError = (error: Error): void => {
+    producerError = error;
+  };
+  contents.once('error', captureProducerError);
+  try {
+    return await operation();
+  } catch (error) {
+    const cause = flydriveCause(error);
+    if (producerError !== undefined && cause === producerError) {
+      throw producerError;
+    }
+    throw markFlydriveError(cause);
+  } finally {
+    contents.off('error', captureProducerError);
   }
 }
 

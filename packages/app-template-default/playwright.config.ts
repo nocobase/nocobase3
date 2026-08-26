@@ -1,7 +1,25 @@
 import { devices, defineConfig } from '@playwright/test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadEnv } from 'vite';
 
+import { materializeRegistry } from '../../scripts/registry.mjs';
 import { loadPortalE2EEnvironment } from './e2e/support/environment';
+
+const packageRoot = fileURLToPath(new URL('.', import.meta.url));
+const repositoryRoot = path.resolve(packageRoot, '../..');
+const filesRegistryFixtureRoot = mkdtempSync(
+  path.join(packageRoot, '.files-registry-e2e-'),
+);
+materializeRegistry({
+  ownerRoot: path.join(repositoryRoot, 'packages/app-plugin-files'),
+  outputRoot: filesRegistryFixtureRoot,
+  repoRoot: repositoryRoot,
+});
+process.once('exit', () => {
+  rmSync(filesRegistryFixtureRoot, { force: true, recursive: true });
+});
 
 const fileEnvironment = loadEnv('e2e', process.cwd(), '');
 Object.entries(fileEnvironment).forEach(([key, value]) => {
@@ -38,6 +56,7 @@ export default defineConfig({
       NOCOBASE_E2E_FILES_SERVER_URL:
         process.env.NOCOBASE_E2E_FILES_SERVER_URL ??
         `http://127.0.0.1:${filesServerPort}`,
+      NOCOBASE_E2E_REGISTRY_ROOT: filesRegistryFixtureRoot,
     },
   },
   projects: [

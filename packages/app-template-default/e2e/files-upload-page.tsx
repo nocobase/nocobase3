@@ -2,10 +2,7 @@ import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import '../client/styles.css';
-import {
-  FileUploadField,
-  type StoredFile,
-} from '../client/extensions/nocobase-file-upload';
+import { FileUploadField, type StoredFile } from '@nocobase/e2e-file-upload';
 
 function FilesUploadPage() {
   const [files, setFiles] = useState<StoredFile[]>([]);

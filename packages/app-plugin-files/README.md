@@ -67,11 +67,19 @@ Create both routes and the `FileService` from the same `filesRuntime`.
 `authorize` must enforce business record existence and read/write/share
 permission. Foreign keys enforce referential integrity.
 
+`createFileRoute()` validates static option shapes synchronously and starts an
+asynchronous query check for the configured collection and required fields.
+Every scoped request waits for that check before authorization or handler code
+runs. The current database API does not expose portable column-type
+introspection, so exact type compatibility and custom physical name mappings
+remain migration responsibilities in Files V1.
+
 ## File upload Registry
 
 The plugin owns the `file-upload` Registry recipe under `registry/file-upload`.
-The Default Template keeps a materialized snapshot in
-`client/extensions/nocobase-file-upload` so applications can edit it directly.
+The Default Template does not preinstall this UI. Materialize the recipe into an
+application only when that application needs Files fields, then treat the
+installed source as application-owned code.
 
 ```bash
 pnpm registry build --package @nocobase/app-plugin-files

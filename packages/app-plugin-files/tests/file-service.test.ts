@@ -190,6 +190,25 @@ describe('public FileService', () => {
     expect(typeSourceRead).toBe(false);
   });
 
+  it('preserves AsyncIterable producer failures instead of mapping them to storage outage', async () => {
+    const fixture = await createFixture();
+    const producerError = new Error('simulated producer failure');
+    const content: AsyncIterable<Uint8Array> = {
+      async *[Symbol.asyncIterator]() {
+        yield new TextEncoder().encode('partial');
+        throw producerError;
+      },
+    };
+
+    await expect(
+      fixture.service.createFile({
+        name: 'producer.txt',
+        contentType: 'text/plain',
+        content,
+      }),
+    ).rejects.toBe(producerError);
+  });
+
   it('preserves getFiles order and null holes', async () => {
     const fixture = await createFixture();
     const first = await createTextFile(fixture.service, 'first.txt', 'one');
@@ -296,6 +315,34 @@ describe('public FileService', () => {
     await expect(fixture.service.openFile('missing')).rejects.toBeInstanceOf(
       FileServiceError,
     );
+  });
+
+  it('fails schema validation before the first scoped request reaches authorization', async () => {
+    const fixture = await createFixture();
+    let authorized = false;
+    const route = fixture.service.createFileRoute({
+      binding: {
+        type: 'field',
+        collection: 'missingDocuments',
+        recordParam: 'documentId',
+        fileField: 'fileId',
+      },
+      authorize() {
+        authorized = true;
+      },
+    });
+    const app = new Hono();
+    app.route('/documents/:documentId/file', route);
+
+    const response = await app.request('/documents/document-1/file');
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      code: 'FILE_ROUTE_INVALID',
+      error:
+        'File route collection "missingDocuments" cannot query the required fields.',
+    });
+    expect(authorized).toBe(false);
   });
 
   it('preserves disposed runtime and schema errors for direct callers', async () => {

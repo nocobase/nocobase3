@@ -492,24 +492,45 @@ describe('relation binding scoped file routes', () => {
     ).toMatchObject({ status: 'ready' });
   });
 
-  it('idempotently detaches a ready file that is not referenced by this record', async () => {
+  it('does not reveal global file state when the scope has no matching relation', async () => {
     const fixture = await createFixture();
-    const upload = await uploadAndComplete(
+    const ready = await uploadAndComplete(
       fixture,
       ORDER_TWO,
       'other-record.txt',
       'data',
     );
+    const pending = await createUpload(
+      fixture,
+      ORDER_TWO,
+      'pending-other-record.txt',
+      4,
+    );
 
-    expect(
-      (
-        await fixture.app.request(
-          `/orders/${ORDER_ONE}/files/${upload.file.id}`,
-          { method: 'DELETE' },
-        )
-      ).status,
-    ).toBe(200);
-    expect(await relationRows(fixture, ORDER_TWO)).toHaveLength(1);
+    for (const fileId of ['missing-file', ready.file.id, pending.file.id]) {
+      const response = await fixture.app.request(
+        `/orders/${ORDER_ONE}/files/${fileId}`,
+        { method: 'DELETE' },
+      );
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ success: true });
+    }
+    expect(await relationRows(fixture, ORDER_TWO)).toHaveLength(2);
+  });
+
+  it('rejects a pending relation only in its current scope', async () => {
+    const fixture = await createFixture();
+    const pending = await createUpload(fixture, ORDER_ONE, 'pending.txt', 4);
+
+    const response = await fixture.app.request(
+      `/orders/${ORDER_ONE}/files/${pending.file.id}`,
+      { method: 'DELETE' },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'FILE_NOT_FOUND',
+    });
   });
 });
 

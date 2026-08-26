@@ -1,5 +1,9 @@
+// @vitest-environment jsdom
+
+import '@testing-library/jest-dom/vitest';
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   renderHook,
@@ -14,27 +18,27 @@ import {
   FileClientError,
 } from '@nocobase/app-plugin-files/client';
 
-import { normalizeFileBasePath } from '../../client/extensions/nocobase-file-upload/base-path';
-import { appFileClient } from '../../client/extensions/nocobase-file-upload/app-client';
-import { FilePreviewField } from '../../client/extensions/nocobase-file-upload/file-preview-field';
-import { FileUploadField } from '../../client/extensions/nocobase-file-upload/file-upload-field';
+import { normalizeFileBasePath } from '../registry/file-upload/base-path';
+import { appFileClient } from '../registry/file-upload/app-client';
+import { FilePreviewField } from '../registry/file-upload/file-preview-field';
+import { FileUploadField } from '../registry/file-upload/file-upload-field';
 import {
   fetchFileContent,
   getDownloadUrl,
   getPreviewFileUrl,
   triggerFileDownload,
-} from '../../client/extensions/nocobase-file-upload/file-url';
-import { useFileUpload } from '../../client/extensions/nocobase-file-upload/use-file-upload';
+} from '../registry/file-upload/file-url';
+import { useFileUpload } from '../registry/file-upload/use-file-upload';
 import {
   matchesFileRules,
   validateFile,
-} from '../../client/extensions/nocobase-file-upload/validation';
+} from '../registry/file-upload/validation';
 import type {
   CreateScopedFileResponse,
   FileUploadPlan,
   FileUploadMessages,
   StoredFile,
-} from '../../client/extensions/nocobase-file-upload/types';
+} from '../registry/file-upload/types';
 
 vi.mock('@nocobase/app-plugin-files/client', async (importOriginal) => ({
   ...(await importOriginal<
@@ -67,6 +71,7 @@ const messages: FileUploadMessages = {
 };
 
 afterEach(() => {
+  cleanup();
   delete (window as Window & { NOCOBASE_PORTAL_BASE?: unknown })
     .NOCOBASE_PORTAL_BASE;
   vi.unstubAllGlobals();

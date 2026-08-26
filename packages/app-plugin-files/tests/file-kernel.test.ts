@@ -258,6 +258,29 @@ describe('file metadata kernel', () => {
     }
   });
 
+  it('retains a possibly referenced ready object when commit and readback are uncertain', async () => {
+    const upload = await kernel.createPending({ name: 'uncertain.bin' });
+    storage.put(upload.candidateKey, { contentLength: 5 });
+    const uncertainRepository = new UncertainCommitRepository(database);
+    const uncertainKernel = createFileKernel({
+      repository: uncertainRepository,
+      storage,
+      uploadExpiresInSeconds: 900,
+      clock: () => now,
+    });
+
+    const result = await uncertainKernel.completeUpload(upload);
+
+    expect(result).toMatchObject({
+      outcome: 'persistence-failed',
+      error: new Error('simulated uncertain commit result'),
+      cleanupStorageKeys: [],
+    });
+    const committed = await repository.getRequired(upload.file.id);
+    expect(committed.status).toBe('ready');
+    expect(storage.has(requireStorageKey(committed.storageKey))).toBe(true);
+  });
+
   it('rolls back file readiness and business writes in one transaction', async () => {
     await database.builder().createCollection('fileBindings', (collection) => {
       collection.string('id', { length: 64 }).notNull().primary();
@@ -605,6 +628,27 @@ class FailingCompleteRepository extends FilesRepository {
     ..._args: Parameters<FilesRepository['completePending']>
   ): Promise<boolean> {
     throw new Error('simulated CAS failure');
+  }
+}
+
+class UncertainCommitRepository extends FilesRepository {
+  #rejectReads = false;
+
+  override async get(
+    ...args: Parameters<FilesRepository['get']>
+  ): ReturnType<FilesRepository['get']> {
+    if (this.#rejectReads) {
+      throw new Error('simulated uncertain readback');
+    }
+    return super.get(...args);
+  }
+
+  override async transaction<T>(
+    callback: Parameters<FilesRepository['transaction']>[0],
+  ): Promise<T> {
+    await super.transaction(callback);
+    this.#rejectReads = true;
+    throw new Error('simulated uncertain commit result');
   }
 }
 

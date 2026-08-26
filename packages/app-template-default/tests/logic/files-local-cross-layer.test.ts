@@ -24,7 +24,7 @@ import {
 } from '@nocobase/app-plugin-files/server';
 
 import filesMigration from '../../../app-plugin-files/database/migrations/202608221000_files_create_files.ts';
-import { appFileClient } from '../../client/extensions/nocobase-file-upload/app-client.ts';
+import { appFileClient } from '../../../app-plugin-files/registry/file-upload/app-client.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 
 interface Fixture {

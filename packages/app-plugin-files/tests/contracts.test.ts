@@ -70,6 +70,10 @@ describe('@nocobase/app-plugin-files contracts', () => {
         '!dist/server/internal/**/*.d.ts.map',
       ]),
     );
+    expect(packageJson.default.scripts.build).toMatch(/^pnpm clean && /);
+    expect(packageJson.default.scripts.clean).toBe(
+      'node ./scripts/clean-dist.mjs',
+    );
   });
 
   it('restricts upload plans to PUT byte transfers', () => {

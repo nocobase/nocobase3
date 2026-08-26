@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -19,6 +20,10 @@ const exampleOwnerRoot = path.join(
   repoRoot,
   'packages/app-plugin-registry-example',
 );
+const requireFromPortalSdk = createRequire(
+  path.join(repoRoot, 'packages/app-portal-sdk/package.json'),
+);
+const semver = requireFromPortalSdk('semver');
 
 test('parses package-scoped Registry commands', () => {
   assert.deepEqual(
@@ -129,21 +134,64 @@ test('materializes the authentication recipe without overwriting it', async (t) 
   );
 });
 
-test('keeps the preinstalled Files Registry snapshot aligned with its plugin recipe', () => {
+test('builds and materializes the Files Registry without a Template snapshot', async (t) => {
+  const buildRoot = await mkdtemp(
+    path.join(tmpdir(), 'nocobase-files-registry-build-'),
+  );
+  const applicationRoot = await mkdtemp(
+    path.join(tmpdir(), 'nocobase-files-registry-materialize-'),
+  );
+  t.after(() => rm(buildRoot, { force: true, recursive: true }));
+  t.after(() => rm(applicationRoot, { force: true, recursive: true }));
+
   const recipeRoot = path.join(filesOwnerRoot, 'registry/file-upload');
-  const preinstalledRoot = path.join(
+  const installedRoot = path.join(
+    applicationRoot,
+    'client/extensions/nocobase-file-upload',
+  );
+  const templateRoot = path.join(
     repoRoot,
     'packages/app-template-default/client/extensions/nocobase-file-upload',
   );
   const recipeFiles = walkFiles(recipeRoot);
 
-  assert.deepEqual(walkFiles(preinstalledRoot), recipeFiles);
-  for (const file of recipeFiles) {
-    assert.equal(
-      fs.readFileSync(path.join(preinstalledRoot, file), 'utf8'),
-      fs.readFileSync(path.join(recipeRoot, file), 'utf8'),
+  const buildResult = buildRegistry({
+    ownerRoot: filesOwnerRoot,
+    outputDirectory: buildRoot,
+    repoRoot,
+  });
+  const item = JSON.parse(
+    fs.readFileSync(path.join(buildRoot, 'file-upload.json'), 'utf8'),
+  );
+  assert.deepEqual(buildResult.items, [
+    { files: recipeFiles.length, name: 'file-upload' },
+  ]);
+  for (const packageName of [
+    '@nocobase/app-plugin-files',
+    '@nocobase/app-sdk',
+  ]) {
+    const dependency = item.dependencies.find((value) =>
+      value.startsWith(`${packageName}@`),
     );
+    assert.equal(typeof dependency, 'string');
+    const range = dependency.slice(packageName.length + 1);
+    assert.equal(semver.satisfies('0.0.1-beta.0', range), true);
+    assert.equal(semver.satisfies('0.0.1-beta.1', range), true);
   }
+
+  const materializeResult = materializeRegistry({
+    ownerRoot: filesOwnerRoot,
+    outputRoot: applicationRoot,
+    repoRoot,
+  });
+  assert.deepEqual(materializeResult.materialized, [
+    {
+      files: recipeFiles.length,
+      target: 'client/extensions/nocobase-file-upload',
+    },
+  ]);
+  assert.deepEqual(walkFiles(installedRoot), recipeFiles);
+  assert.equal(fs.existsSync(templateRoot), false);
 });
 
 test('does not publish the legacy Hub file-upload protocol', () => {

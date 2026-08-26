@@ -43,7 +43,6 @@ export default createReactVitestConfig({
       'tests/logic/files-local-cross-layer.test.ts',
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugins.test.ts',
-      'tests/components/file-upload.test.tsx',
     ],
     coverage: {
       provider: 'v8',

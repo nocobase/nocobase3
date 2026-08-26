@@ -9,8 +9,8 @@
       "description": "V3 file upload and preview fields for Scoped Files Routes.",
       "dependencies": [
         "@base-ui/react@^1.6.0",
-        "@nocobase/app-plugin-files@^0.0.1",
-        "@nocobase/app-sdk@^0.1.0",
+        "@nocobase/app-plugin-files@^0.0.1-beta.0",
+        "@nocobase/app-sdk@^0.0.1-beta.0",
         "lucide-react@^0.487.0",
         "react-markdown@^10.1.0",
         "remark-gfm@^4.0.1"

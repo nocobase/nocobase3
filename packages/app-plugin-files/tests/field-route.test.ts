@@ -452,6 +452,55 @@ describe('field binding scoped file routes', () => {
       await getFilesRuntimeKernel(fixture.runtime).getFile(upload.file.id),
     ).toMatchObject({ status: 'ready' });
   });
+
+  it('does not reveal global file state when the scope has no matching binding', async () => {
+    const fixture = await createFixture();
+    const ready = await uploadAndComplete(fixture, EMPLOYEE_TWO, {
+      name: 'other-scope.txt',
+      size: 5,
+      contentType: 'text/plain',
+    });
+    const pending = await fixture.service.createUpload({
+      name: 'pending.txt',
+      size: 7,
+      contentType: 'text/plain',
+    });
+
+    for (const fileId of ['missing-file', ready.file.id, pending.fileId]) {
+      const response = await fixture.app.request(
+        `/employees/${EMPLOYEE_ONE}/avatar/${fileId}`,
+        { method: 'DELETE' },
+      );
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ success: true });
+    }
+    expect(await currentAvatar(fixture, EMPLOYEE_TWO)).toBe(ready.file.id);
+  });
+
+  it('rejects a non-ready file only when it is bound in the current scope', async () => {
+    const fixture = await createFixture();
+    const pending = await createUpload(fixture, EMPLOYEE_ONE, {
+      name: 'pending-bound.txt',
+      size: 1,
+      contentType: 'text/plain',
+    });
+    await fixture.database
+      .query()
+      .updateTable('employees')
+      .set({ avatarId: pending.file.id })
+      .where('id', '=', EMPLOYEE_ONE)
+      .execute();
+
+    const response = await fixture.app.request(
+      `/employees/${EMPLOYEE_ONE}/avatar/${pending.file.id}`,
+      { method: 'DELETE' },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'FILE_NOT_FOUND',
+    });
+  });
 });
 
 interface CreateFixtureOptions {

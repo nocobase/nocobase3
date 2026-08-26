@@ -72,8 +72,9 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.tests.json",
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.registry.json --noEmit && tsc -p tsconfig.tests.json",
     "test": "vitest run",
     "registry:build": "node ../../scripts/registry.mjs build --package .",
     "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
@@ -96,12 +97,23 @@
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/dev-config": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "better-sqlite3": "catalog:",
     "eslint": "catalog:",
+    "jsdom": "catalog:",
     "knex": "catalog:",
+    "lucide-react": "^0.487.0",
     "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

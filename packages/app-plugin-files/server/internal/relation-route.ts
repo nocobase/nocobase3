@@ -46,6 +46,7 @@ import {
   resolvePublicFileRoutePath,
 } from './scoped-route.js';
 import type { ScopedFileCapabilityCodec } from './scoped-capability.js';
+import { startRelationRouteSchemaValidation } from './route-schema.js';
 
 export interface CreateRelationFileRouteInput {
   options: CreateFileRouteOptions;
@@ -101,57 +102,84 @@ export function createRelationFileRoute(
     clock: input.state.clock,
     publicBasePath: input.publicBasePath,
   };
+  const schemaValidation = startRelationRouteSchemaValidation(
+    input.state.database,
+    input.state.connection,
+    binding,
+  );
   const routes = new Hono();
 
   routes.get(
     '/',
-    withFileRouteErrors((context) => handleList(state, context)),
+    withFileRouteErrors(
+      (context) => handleList(state, context),
+      schemaValidation,
+    ),
   );
   routes.post(
     '/',
-    withFileRouteErrors((context) => handleCreateUpload(state, context)),
+    withFileRouteErrors(
+      (context) => handleCreateUpload(state, context),
+      schemaValidation,
+    ),
   );
   routes.put(
     '/:fileId/upload',
-    withFileRouteErrors((context) => handleUpload(state, context)),
+    withFileRouteErrors(
+      (context) => handleUpload(state, context),
+      schemaValidation,
+    ),
   );
   routes.delete(
     '/:fileId/upload',
-    withFileRouteErrors((context) => handleCancel(state, context)),
+    withFileRouteErrors(
+      (context) => handleCancel(state, context),
+      schemaValidation,
+    ),
   );
   routes.post(
     '/:fileId/complete',
-    withFileRouteErrors((context) => handleComplete(state, context)),
+    withFileRouteErrors(
+      (context) => handleComplete(state, context),
+      schemaValidation,
+    ),
   );
   routes.on(
     ['GET', 'HEAD'],
     '/:fileId/content',
-    withFileRouteErrors((context) =>
-      handleContent(state, context, context.req.method === 'HEAD'),
+    withFileRouteErrors(
+      (context) => handleContent(state, context, context.req.method === 'HEAD'),
+      schemaValidation,
     ),
   );
   routes.delete(
     '/:fileId',
-    withFileRouteErrors((context) => handleDelete(state, context)),
+    withFileRouteErrors(
+      (context) => handleDelete(state, context),
+      schemaValidation,
+    ),
   );
 
   if (input.options.publicAccess) {
     routes.post(
       '/:fileId/public-access',
-      withFileRouteErrors((context) =>
-        handlePublicAccess(state, context, 'enable'),
+      withFileRouteErrors(
+        (context) => handlePublicAccess(state, context, 'enable'),
+        schemaValidation,
       ),
     );
     routes.post(
       '/:fileId/public-access/reset',
-      withFileRouteErrors((context) =>
-        handlePublicAccess(state, context, 'reset'),
+      withFileRouteErrors(
+        (context) => handlePublicAccess(state, context, 'reset'),
+        schemaValidation,
       ),
     );
     routes.delete(
       '/:fileId/public-access',
-      withFileRouteErrors((context) =>
-        handleDisablePublicAccess(state, context),
+      withFileRouteErrors(
+        (context) => handleDisablePublicAccess(state, context),
+        schemaValidation,
       ),
     );
   }
@@ -382,21 +410,20 @@ async function handleDelete(
     fileId,
   });
   const row = await state.repository.get(recordId, fileId);
+  if (!row) {
+    return context.json<FileOperationResponse>({ success: true });
+  }
+  if (row.reservationExpiresAt !== null) {
+    throw fileReferenceNotFound();
+  }
   const file = await state.kernel.getFile(fileId);
-  if (
-    row?.reservationExpiresAt === null &&
-    file?.status === 'ready' &&
-    (await state.repository.delete(recordId, fileId, false))
-  ) {
+  if (!file || file.status !== 'ready') {
+    throw fileReferenceNotFound();
+  }
+  if (await state.repository.delete(recordId, fileId, false)) {
     return context.json<FileOperationResponse>({ success: true });
   }
-  if (row) {
-    throw fileBindingConflict();
-  }
-  if (file?.status === 'ready') {
-    return context.json<FileOperationResponse>({ success: true });
-  }
-  throw fileReferenceNotFound();
+  throw fileBindingConflict();
 }
 
 async function handlePublicAccess(

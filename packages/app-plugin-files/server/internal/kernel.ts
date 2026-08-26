@@ -487,7 +487,7 @@ export class FileKernel {
     } catch {
       return {
         outcome: 'persistence-failed',
-        cleanupStorageKeys: [readyKey],
+        cleanupStorageKeys: [],
         error,
       };
     }
@@ -518,6 +518,8 @@ export class FileKernel {
       return undefined;
     }
     const file = toStoredFile(current);
+    const cleanupStorageKeys =
+      current.storageKey === readyKey ? [] : [readyKey];
     try {
       const binding = commitBinding
         ? await this.#repository.transaction((connection) =>
@@ -528,12 +530,12 @@ export class FileKernel {
         outcome: 'ready',
         file,
         ...(binding === undefined ? {} : { binding }),
-        cleanupStorageKeys: [readyKey],
+        cleanupStorageKeys,
       };
     } catch (error) {
       return {
         outcome: 'persistence-failed',
-        cleanupStorageKeys: [readyKey],
+        cleanupStorageKeys,
         error: toError(error, 'Files binding persistence failed.'),
       };
     }

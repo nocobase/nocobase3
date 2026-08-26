@@ -1,0 +1,14 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/client.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["../app-template-default/client/*"]
+    }
+  },
+  "include": [
+    "registry-env.d.ts",
+    "registry/**/*.ts",
+    "registry/**/*.tsx",
+    "tests/registry-file-upload.test.tsx"
+  ]
+}

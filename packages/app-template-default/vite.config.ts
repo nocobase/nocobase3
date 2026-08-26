@@ -3,13 +3,16 @@ import agentAnnotations from '@gchust/agent-annotations/vite';
 import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
 import fs from 'node:fs';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import { loadEnv } from 'vite';
 
 import { appClientPluginsPlugin } from './scripts/client-plugins.js';
 
+const packageRoot = fileURLToPath(new URL('.', import.meta.url));
 const portalTemplate = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
+  fs.readFileSync(path.resolve(packageRoot, 'package.json'), 'utf8'),
 ) as { displayName: string; version: string };
+const filesRegistryRoot = process.env.NOCOBASE_E2E_REGISTRY_ROOT?.trim();
 
 const normalizeBase = (base?: string) => {
   const normalized = String(base || '/').trim();
@@ -51,7 +54,7 @@ export default createPortalViteConfig(
         : undefined;
     const defineEnv: Record<string, string> = {
       __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
-        command === 'serve' ? path.resolve(__dirname) : '',
+        command === 'serve' ? path.resolve(packageRoot) : '',
       ),
       __PORTAL_TEMPLATE_NAME__: JSON.stringify(portalTemplate.displayName),
       __PORTAL_TEMPLATE_VERSION__: JSON.stringify(portalTemplate.version),
@@ -71,18 +74,18 @@ export default createPortalViteConfig(
     optionalDefineEnv(defineEnv, 'NOCOBASE_WS_PATH', env.NOCOBASE_WS_PATH);
 
     return {
-      root: __dirname,
+      root: packageRoot,
       base: viteBase,
       define: defineEnv,
       envPrefix: ['VITE_'],
       plugins: [
         agentAnnotations({
-          root: __dirname,
+          root: packageRoot,
           clientExtensions: [
-            path.resolve(__dirname, 'client/agent-annotations-host.ts'),
+            path.resolve(packageRoot, 'client/agent-annotations-host.ts'),
           ],
         }),
-        appClientPluginsPlugin({ root: __dirname }),
+        appClientPluginsPlugin({ root: packageRoot }),
       ],
       server: {
         watch: { ignored: ['**/.agent-annotations/**'] },
@@ -101,7 +104,18 @@ export default createPortalViteConfig(
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],
         alias: [
-          { find: '@', replacement: path.resolve(__dirname, './client') },
+          { find: '@', replacement: path.resolve(packageRoot, './client') },
+          ...(filesRegistryRoot
+            ? [
+                {
+                  find: '@nocobase/e2e-file-upload',
+                  replacement: path.join(
+                    filesRegistryRoot,
+                    'client/extensions/nocobase-file-upload',
+                  ),
+                },
+              ]
+            : []),
         ],
       },
     };

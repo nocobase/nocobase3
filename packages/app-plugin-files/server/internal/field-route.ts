@@ -43,6 +43,7 @@ import {
   resolvePublicFileRoutePath,
 } from './scoped-route.js';
 import type { ScopedFileCapabilityCodec } from './scoped-capability.js';
+import { startFieldRouteSchemaValidation } from './route-schema.js';
 
 export interface CreateFieldFileRouteInput {
   options: CreateFileRouteOptions;
@@ -95,55 +96,84 @@ export function createFieldFileRoute(input: CreateFieldFileRouteInput): Hono {
     capabilityCodec: input.state.scopedCapabilityCodec,
     publicBasePath: input.publicBasePath,
   };
+  const schemaValidation = startFieldRouteSchemaValidation(
+    input.state.database,
+    input.state.connection,
+    binding,
+  );
   const routes = new Hono();
 
   routes.get(
     '/',
-    withFileRouteErrors((context) => handleList(state, context)),
+    withFileRouteErrors(
+      (context) => handleList(state, context),
+      schemaValidation,
+    ),
   );
   routes.post(
     '/',
-    withFileRouteErrors((context) => handleCreateUpload(state, context)),
+    withFileRouteErrors(
+      (context) => handleCreateUpload(state, context),
+      schemaValidation,
+    ),
   );
   routes.put(
     '/:fileId/upload',
-    withFileRouteErrors((context) => handleUpload(state, context)),
+    withFileRouteErrors(
+      (context) => handleUpload(state, context),
+      schemaValidation,
+    ),
   );
   routes.delete(
     '/:fileId/upload',
-    withFileRouteErrors((context) => handleCancel(state, context)),
+    withFileRouteErrors(
+      (context) => handleCancel(state, context),
+      schemaValidation,
+    ),
   );
   routes.post(
     '/:fileId/complete',
-    withFileRouteErrors((context) => handleComplete(state, context)),
+    withFileRouteErrors(
+      (context) => handleComplete(state, context),
+      schemaValidation,
+    ),
   );
   routes.on(
     ['GET', 'HEAD'],
     '/:fileId/content',
-    withFileRouteErrors((context) =>
-      handleContent(state, context, context.req.method === 'HEAD'),
+    withFileRouteErrors(
+      (context) => handleContent(state, context, context.req.method === 'HEAD'),
+      schemaValidation,
     ),
   );
   routes.delete(
     '/:fileId',
-    withFileRouteErrors((context) => handleDelete(state, context)),
+    withFileRouteErrors(
+      (context) => handleDelete(state, context),
+      schemaValidation,
+    ),
   );
 
   if (input.options.publicAccess) {
     routes.post(
       '/:fileId/public-access',
-      withFileRouteErrors((context) =>
-        handleEnablePublicAccess(state, context),
+      withFileRouteErrors(
+        (context) => handleEnablePublicAccess(state, context),
+        schemaValidation,
       ),
     );
     routes.post(
       '/:fileId/public-access/reset',
-      withFileRouteErrors((context) => handleResetPublicAccess(state, context)),
+      withFileRouteErrors(
+        (context) => handleResetPublicAccess(state, context),
+        schemaValidation,
+      ),
     );
     routes.delete(
       '/:fileId/public-access',
-      withFileRouteErrors((context) =>
-        handleDisablePublicAccess(state, context),
+      withFileRouteErrors(
+        (context) => handleDisablePublicAccess(state, context),
+        schemaValidation,
       ),
     );
   }
@@ -368,9 +398,8 @@ async function handleDelete(
   if (!snapshot.recordExists) {
     throw businessRecordNotFound();
   }
-  const file = await state.kernel.getFile(fileId);
-
   if (snapshot.fileId === fileId) {
+    const file = await state.kernel.getFile(fileId);
     if (!file || file.status !== 'ready') {
       throw fileReferenceNotFound();
     }
@@ -380,10 +409,7 @@ async function handleDelete(
     return context.json<FileOperationResponse>({ success: true });
   }
 
-  if (snapshot.fileId === null && file?.status === 'ready') {
-    return context.json<FileOperationResponse>({ success: true });
-  }
-  throw fileBindingConflict();
+  return context.json<FileOperationResponse>({ success: true });
 }
 
 async function requireCurrentFile(

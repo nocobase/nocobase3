@@ -11,6 +11,8 @@
     "protocol.ts",
     "server/**/*.ts",
     "client/**/*.ts",
-    "tests/**/*.ts"
-  ]
+    "tests/**/*.ts",
+    "tests/**/*.tsx"
+  ],
+  "exclude": ["tests/registry-file-upload.test.tsx"]
 }
