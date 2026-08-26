@@ -1,5 +1,11 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.4
+
+### Patch Changes
+
+- ad7ffd8: Set `trustLockfile` in generated applications, so installs stop re-auditing every lockfile entry against the supply-chain policy each time. The check queries registry metadata per package and re-verifies versions the lockfile already pins; newly resolved packages are still checked.
+
 ## 0.1.0-beta.3
 
 ### Patch Changes
