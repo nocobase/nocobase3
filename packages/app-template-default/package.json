@@ -1,14 +1,15 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "0.0.1-beta.3",
+  "version": "0.0.1-beta.5",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
+  "packageManager": "pnpm@11.7.0",
   "nocobase": {
-    "defaultTemplateVersion": "0.0.1-beta.3",
+    "defaultTemplateVersion": "0.0.1-beta.5",
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true

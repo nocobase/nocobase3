@@ -49,6 +49,20 @@ describe('parseInput', () => {
     expect((await parseInput(['crm'])).flags.template).toBe('default');
   });
 
+  it('defaults the template tag to latest and accepts beta', async () => {
+    expect((await parseInput(['crm'])).flags['template-tag']).toBe('latest');
+    expect(
+      (await parseInput(['crm', '--template-tag=beta'])).flags['template-tag'],
+    ).toBe('beta');
+  });
+
+  /** oclif validates against the declared options, so a typo fails at parse time rather than at download. */
+  it('rejects an unknown template tag', async () => {
+    await expect(
+      parseInput(['crm', '--template-tag=nightly']),
+    ).rejects.toThrow();
+  });
+
   it('supports -h and --version', async () => {
     expect((await parseInput(['-h'])).flags.help).toBe(true);
     expect((await parseInput(['--version'])).flags.version).toBe(true);
@@ -69,6 +83,7 @@ describe('formatHelp', () => {
     const help = formatHelp('create-app');
 
     expect(help).toContain('--db-dialect');
+    expect(help).toContain('--template-tag');
     expect(help).toContain('default');
     expect(help).toContain('--[no-]install');
     expect(help).toContain('https://npm.nocobase.ai');

@@ -5,11 +5,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_REGISTRY,
   DEFAULT_TEMPLATE,
+  DEFAULT_TEMPLATE_TAG,
   downloadTemplate,
   isLocalTemplateSource,
   isTemplateAlias,
+  isTemplateTag,
+  parseTemplateTag,
   resolveTemplateSource,
   TEMPLATE_ALIASES,
+  TEMPLATE_TAGS,
 } from '../src/lib/template.ts';
 
 const created: string[] = [];
@@ -49,30 +53,79 @@ describe('DEFAULT_TEMPLATE', () => {
 
 describe('TEMPLATE_ALIASES', () => {
   it('maps the default name to the app template', () => {
-    expect(TEMPLATE_ALIASES.default).toContain(
-      '@nocobase/app-template-default',
-    );
+    expect(TEMPLATE_ALIASES.default).toBe('@nocobase/app-template-default');
   });
 
-  /**
-   * Pinning an exact version would make `create` reproducible, but there is no stable v3 release to pin to yet. The
-   * assertion only guarantees every alias carries an explicit channel or version — never a bare name that would
-   * silently resolve to `latest`.
-   */
-  it('gives every alias an explicit channel so create never falls back to latest', () => {
-    for (const specifier of Object.values(TEMPLATE_ALIASES)) {
-      expect(specifier).toMatch(/@(?:\d+\.\d+\.\d+|beta|alpha|next)$/u);
+  /** The channel is applied separately, so `--template-tag` can move every alias at once. */
+  it('carries no tag of its own', () => {
+    for (const packageName of Object.values(TEMPLATE_ALIASES)) {
+      expect(packageName).not.toMatch(/@(?:latest|beta|\d)/u);
     }
   });
 });
 
+describe('DEFAULT_TEMPLATE_TAG', () => {
+  /**
+   * changesets leaves the `beta` dist-tag on a package's first published version and tags every release since as
+   * `latest`, so `beta` names the oldest template rather than the newest. Defaulting to it handed everyone a stale
+   * template — an app scaffolded from it missed settings later releases added to `.env.example`.
+   */
+  it('is latest, because beta names the oldest published template', () => {
+    expect(DEFAULT_TEMPLATE_TAG).toBe('latest');
+    expect(TEMPLATE_TAGS).toContain('beta');
+  });
+});
+
+describe('parseTemplateTag', () => {
+  it('accepts the known channels', () => {
+    expect(parseTemplateTag('latest')).toBe('latest');
+    expect(parseTemplateTag('beta')).toBe('beta');
+    expect(parseTemplateTag('  beta  ')).toBe('beta');
+  });
+
+  it('rejects anything else, listing what is accepted', () => {
+    expect(() => parseTemplateTag('nightly')).toThrow(/Unknown template tag/u);
+    expect(() => parseTemplateTag('nightly')).toThrow(/latest/u);
+  });
+
+  it('recognizes only the listed channels', () => {
+    expect(isTemplateTag('latest')).toBe(true);
+    expect(isTemplateTag('canary')).toBe(false);
+  });
+});
+
 describe('resolveTemplateSource', () => {
-  it('expands a known name into its package', () => {
-    expect(resolveTemplateSource('default')).toBe(TEMPLATE_ALIASES.default);
+  it('expands a known name into its package at the default channel', () => {
+    expect(resolveTemplateSource('default')).toBe(
+      '@nocobase/app-template-default@latest',
+    );
+  });
+
+  it('applies the requested channel', () => {
+    expect(resolveTemplateSource('default', { tag: 'beta' })).toBe(
+      '@nocobase/app-template-default@beta',
+    );
+  });
+
+  /**
+   * A caller who spelled out a package already said which version they want, so appending a tag would override the
+   * more specific request — and appending one to a local path would not resolve at all.
+   */
+  it('leaves a package specifier and a path alone even when a tag is given', () => {
+    expect(
+      resolveTemplateSource('@nocobase/app-template-default@0.0.1', {
+        tag: 'beta',
+      }),
+    ).toBe('@nocobase/app-template-default@0.0.1');
+    expect(resolveTemplateSource('./local-template', { tag: 'beta' })).toBe(
+      './local-template',
+    );
   });
 
   it('ignores surrounding whitespace', () => {
-    expect(resolveTemplateSource('  default  ')).toBe(TEMPLATE_ALIASES.default);
+    expect(resolveTemplateSource('  default  ')).toBe(
+      '@nocobase/app-template-default@latest',
+    );
   });
 
   /**

@@ -38,7 +38,7 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 
 ### Package Publishing
 
-Every package in `packages/` is published to npm, so none of them set `private: true`. A new package that declares it is excluded from the release and from `pack:check`, which means nothing catches a broken publish setup until someone tries to release it.
+Every package in `packages/` is published to npm, so none of them set `private: true`. Root `pnpm pack:check` automatically discovers every package in that directory and rejects private packages, incomplete publish metadata, missing or stale changelogs, invalid tarballs, unresolved workspace protocols, and broken export or declaration metadata.
 
 A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
 
