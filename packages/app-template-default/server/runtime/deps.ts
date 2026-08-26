@@ -17,6 +17,7 @@ import {
   type NocoBaseSessionManager,
 } from '@nocobase/session';
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 
 import { createAppJobFactory } from '../jobs/dependencies.js';
@@ -26,6 +27,7 @@ import { createCookiePrefix } from './utils.js';
 export interface AppDeps {
   auth: Auth;
   caching: Caching;
+  database?: DatabaseManager;
   driveManager?: NocoBaseDriveManager;
   idGenerator: SnowflakeIdGenerator;
   logging: Logging;
@@ -80,6 +82,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   return {
     caching,
     auth,
+    database: runtime.database,
     driveManager,
     idGenerator,
     logging,

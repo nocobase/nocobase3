@@ -59,7 +59,9 @@
   },
   "dependencies": {
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/session": "workspace:^",
     "hono": "catalog:"
   },

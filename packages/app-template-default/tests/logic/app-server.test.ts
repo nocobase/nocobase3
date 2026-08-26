@@ -27,6 +27,7 @@ import type {
 import type { DatabaseManager, QueryAdapter } from '@nocobase/app-database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggingConfig } from '@nocobase/logging';
+import type { NotificationConfig } from '@nocobase/app-plugin-notification';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import {
   createNullSessionConfig,
@@ -40,6 +41,7 @@ import {
 
 import {
   createApp,
+  type CreateAppOptions,
   type AppDisposer,
   type AppScope,
   createServer as createEmbeddedServer,
@@ -53,6 +55,8 @@ import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
+import bootstrapNotificationPlugin from '../../../app-plugin-notification/server/bootstrap.ts';
+import bootstrapInAppNotificationPlugin from '../../../app-plugin-notification-in-app/server/bootstrap.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
@@ -247,6 +251,7 @@ describe('app server', () => {
       'runtime',
       'app-deps',
       'realtime-service',
+      'plugin:@nocobase/app-plugin-notification:manager',
       'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
     ]);
 
@@ -254,6 +259,41 @@ describe('app server', () => {
       await expect(disposer.dispose()).resolves.toBeUndefined();
       await expect(disposer.dispose()).resolves.toBeUndefined();
     }
+  });
+
+  it('registers in-app definitions before activating notifications', () => {
+    const app = createTestApp({
+      notification: {
+        channels: [
+          {
+            type: 'in-app',
+            enabled: true,
+            providers: [{ type: 'database', name: 'default' }],
+          },
+        ],
+      },
+      plugins: [
+        {
+          packageName: '@nocobase/app-plugin-notification',
+          version: '0.0.1',
+          enabled: true,
+          rootDir: '',
+          manifest: {},
+        },
+      ],
+      pluginBootstraps: [
+        {
+          packageName: '@nocobase/app-plugin-notification',
+          bootstrap: bootstrapNotificationPlugin,
+        },
+        {
+          packageName: '@nocobase/app-plugin-notification-in-app',
+          bootstrap: bootstrapInAppNotificationPlugin,
+        },
+      ],
+    });
+
+    expect(app).not.toHaveProperty('start');
   });
 
   it('serves embedded production SPA routes from the stripped app-host path', async () => {
@@ -1271,6 +1311,9 @@ interface CreateTestAppOptions {
   database?: DatabaseManager | false;
   caching?: CachingConfig;
   drive?: AppDriveConfig;
+  notification?: NotificationConfig;
+  plugins?: AppConfig['plugins'];
+  pluginBootstraps?: CreateAppOptions['pluginBootstraps'];
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
   spa?: {
@@ -1315,6 +1358,8 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
     drive: options.drive,
     logging: createSilentLoggingConfig(),
+    notification: options.notification ?? { channels: [] },
+    plugins: options.plugins ?? [],
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
     server: {
@@ -1344,9 +1389,15 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     dispose: () => Promise.resolve(),
   };
   const lifecycle = createAppDisposerRegistry();
-  const app = Object.assign(createApp(runtime, { lifecycle }), {
-    close: () => lifecycle.disposeAll(),
-  });
+  const app = Object.assign(
+    createApp(runtime, {
+      lifecycle,
+      pluginBootstraps: options.pluginBootstraps,
+    }),
+    {
+      close: () => lifecycle.disposeAll(),
+    },
+  );
 
   return trackCloseable(app);
 }
@@ -1417,7 +1468,10 @@ function createMockQuery(
 ): QueryAdapter {
   const selectQuery = {
     select: () => selectQuery,
+    selectAll: () => selectQuery,
+    where: () => selectQuery,
     orderBy: () => selectQuery,
+    limit: () => selectQuery,
     execute: () => Promise.resolve(rows),
   };
   const insertQuery = {
