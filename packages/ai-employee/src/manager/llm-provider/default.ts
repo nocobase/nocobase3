@@ -8,10 +8,10 @@ import type { LLMServiceEntity } from '../../repository/index.js';
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../app/context.js';
+import type { Context } from '../../runtime/context.js';
 import type { LLMServiceRepository } from '../../repository/index.js';
 
-import { getRecommendedModels } from '../../ai-employees/common/recommended-models.js';
+import { getRecommendedModels } from './recommended-models.js';
 import type {
   EnabledLLMModel,
   EnabledLLMService,

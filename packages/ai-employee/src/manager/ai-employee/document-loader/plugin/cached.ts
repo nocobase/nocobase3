@@ -11,8 +11,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Document } from '@langchain/core/documents';
-import type { Cache } from '@nocobase/caching';
-import type { Context } from '../../../../app/context.js';
+import type { RuntimeCache } from '../../../../runtime/context.js';
+import type { Context } from '../../../../runtime/context.js';
 import { DOCUMENT_PARSE_META_KEY } from './constants.js';
 import {
   DocumentLoaderLike,
@@ -44,7 +44,7 @@ export function getDocumentCacheKey(sourceFile: ParseableFile): string | null {
 }
 
 export class CachedDocumentLoader {
-  protected _cache: Cache | null = null;
+  protected _cache: RuntimeCache | null = null;
   constructor(
     private readonly ctx: Pick<Context, 'caching'>,
     private readonly options: CachedDocumentLoaderOptions,

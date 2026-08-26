@@ -8,7 +8,7 @@
  */
 
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import type { AIFileAttachment } from '../app/repository/ai-file.js';
+import type { AIFileAttachment } from '../repository/ai-file.js';
 import {
   checkUrlAgainstWhitelist,
   serverRequest,
@@ -16,16 +16,16 @@ import {
 import {
   AIChatContext,
   AIMessageInput,
-} from '../ai-employees/types/ai-chat-conversation.type.js';
+} from '../runtime/types/ai-chat-conversation.type.js';
 import {
   buildTool,
   encodeReadableStream,
   parseResponseMessage,
   stripToolCallTags,
-} from '../ai-employees/server-utils.js';
+} from '../runtime/server-utils.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
-import { Context } from '../app/context.js';
+import { Context } from '../runtime/context.js';
 import '@langchain/core/utils/stream';
 import { LLMResult } from '@langchain/core/outputs';
 import { ContentBlock } from '@langchain/core/messages';

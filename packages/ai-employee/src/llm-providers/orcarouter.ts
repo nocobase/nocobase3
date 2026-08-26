@@ -16,7 +16,7 @@ import _ from 'lodash';
 import { convertCompletionsDeltaToBaseMessageChunk } from '@langchain/openai';
 import { AIMessageChunk, BaseMessageChunk } from '@langchain/core/messages';
 import { ReasoningChatOpenAI } from './common/reasoning.js';
-import { AIFileAttachment } from '../app/repository/ai-file.js';
+import { AIFileAttachment } from '../repository/ai-file.js';
 
 export class OrcaRouterProvider extends LLMProvider {
   declare chatModel: ReasoningChatOpenAI;

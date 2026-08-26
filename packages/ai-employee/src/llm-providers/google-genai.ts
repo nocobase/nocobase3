@@ -17,14 +17,14 @@ import {
   ParsedAttachmentResult,
 } from './provider.js';
 import { serverRequest } from '../utils/server-request.js';
-import type { AIFileAttachment } from '../app/repository/ai-file.js';
+import type { AIFileAttachment } from '../repository/ai-file.js';
 import {
   LLMProviderMeta,
   SupportedModel,
 } from '../manager/llm-provider/types.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
-import { Context } from '../app/context.js';
-import { AIChatContext } from '../ai-employees/types/ai-chat-conversation.type.js';
+import { Context } from '../runtime/context.js';
+import { AIChatContext } from '../runtime/types/ai-chat-conversation.type.js';
 import { ChatGenerationChunk, LLMResult } from '@langchain/core/outputs';
 
 const GOOGLE_GEN_AI_URL = 'https://generativelanguage.googleapis.com';

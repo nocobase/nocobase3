@@ -1,0 +1,86 @@
+{
+  "name": "@nocobase/app-plugin-ai-employee",
+  "displayName": "AI Employee App Plugin",
+  "description": "Database-backed AI employee runtime, routes, resources, and built-in employees for NocoBase Apps.",
+  "version": "0.0.1",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "nocobase": {
+    "plugin": {
+      "server": "./server/bootstrap.ts"
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-builtin-resources.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "dependencies": {
+    "@langchain/core": "1.1.49",
+    "@langchain/langgraph": "1.4.4",
+    "@langchain/langgraph-checkpoint": "1.1.2",
+    "@nocobase/ai-employee": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/drive": "workspace:^",
+    "@nocobase/id-generator": "workspace:^",
+    "@nocobase/logging": "workspace:^",
+    "hono": "catalog:",
+    "lodash": "^4.17.21",
+    "zod": "^3",
+    "langchain": "1.2.39"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/lodash": "^4.17.0",
+    "@types/node": "catalog:",
+    "better-sqlite3": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@langchain/openai": "1.4.7"
+  }
+}

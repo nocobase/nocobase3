@@ -7,7 +7,7 @@ import type { MCPEntity } from '../../repository/index.js';
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../app/context.js';
+import type { Context } from '../../runtime/context.js';
 import {
   MultiServerMCPClient,
   StdioConnection,

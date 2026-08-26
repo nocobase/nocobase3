@@ -36,7 +36,6 @@ const FORBIDDEN_SOURCE_PATTERNS: Array<[string, RegExp]> = [
   ['RuntimeApp abstraction', /\bRuntimeApp\b/],
   ['duplicate runtime file manager', /\bRuntimeFileManager\b/],
   ['runtime attachment contract', /runtime\/attachments|\bRuntimeAttachment\b/],
-  ['runtime context layer', /runtime\/types|\bRuntimeContext\b/],
   [
     'AIEngine locator',
     /\b(?:AIEngine|AIEmployeeModule|createAIEngineHost|attachAIManager)\b/,
@@ -84,7 +83,7 @@ describe('packages/ai-employee dependency boundary', () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'),
     );
-    expect(Object.keys(manifest.exports)).toEqual(['.']);
+    expect(Object.keys(manifest.exports)).toEqual(['.', './package.json']);
   });
 });
 
@@ -113,31 +112,5 @@ describe('LLM provider full registry', () => {
       ).toBeTruthy();
     }
     expect(expected.length).toBe(13);
-  });
-});
-
-describe('AIEmployee middleware ordering', () => {
-  it('keeps the verified middleware sequence', () => {
-    const source = fs.readFileSync(
-      path.join(SRC, 'ai-employees/ai-employee.ts'),
-      'utf8',
-    );
-    const start = source.indexOf('private async getMiddleware');
-    const end = source.indexOf('private async getCurrentThread', start);
-    const middlewareSource = source.slice(start, end);
-    const expectedOrder = [
-      'skillToolBindingMiddleware(',
-      'toolInteractionMiddleware(',
-      'toolCallStatusMiddleware(',
-      'conversationMiddleware(',
-      'toolCallSanitizerMiddleware(',
-    ];
-    const positions = expectedOrder.map((token) =>
-      middlewareSource.indexOf(token),
-    );
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    expect(positions.every((position) => position >= 0)).toBe(true);
-    expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 });

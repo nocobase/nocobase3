@@ -2,14 +2,14 @@
  * Date-variable helpers used to resolve `{{$nDate...}}` template variables in AI employee prompts.
  */
 import dayjs from 'dayjs';
-import advancedFormat from 'dayjs/plugin/advancedFormat';
-import isoWeek from 'dayjs/plugin/isoWeek';
-import weekOfYear from 'dayjs/plugin/weekOfYear';
-import weekYear from 'dayjs/plugin/weekYear';
-import weekday from 'dayjs/plugin/weekday';
-import quarterOfYear from 'dayjs/plugin/quarterOfYear';
-import timezone from 'dayjs/plugin/timezone';
-import utc from 'dayjs/plugin/utc';
+import advancedFormat from 'dayjs/plugin/advancedFormat.js';
+import isoWeek from 'dayjs/plugin/isoWeek.js';
+import weekOfYear from 'dayjs/plugin/weekOfYear.js';
+import weekYear from 'dayjs/plugin/weekYear.js';
+import weekday from 'dayjs/plugin/weekday.js';
+import quarterOfYear from 'dayjs/plugin/quarterOfYear.js';
+import timezone from 'dayjs/plugin/timezone.js';
+import utc from 'dayjs/plugin/utc.js';
 import type { UnitType } from 'dayjs';
 
 dayjs.extend(weekday);

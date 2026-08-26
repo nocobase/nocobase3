@@ -1,8 +1,7 @@
-import { defineConfig } from 'vitest/config';
+import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
 
-export default defineConfig({
+export default createNodeVitestConfig({
   test: {
-    globals: true,
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
   },
 });

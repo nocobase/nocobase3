@@ -12,9 +12,9 @@ import { PPTXLoader } from '@langchain/community/document_loaders/fs/pptx';
 import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
 import type { Document } from '@langchain/core/documents';
 import { parentPort } from 'node:worker_threads';
-import { TextLoader } from './vendor/langchain/document_loaders/fs/text.js';
+import { TextLoader } from './vendor/langchain/document_loaders/fs/text.ts';
 import { CSVLoader } from '@langchain/community/document_loaders/fs/csv';
-import { loadXlsx } from './xlsx.js';
+import { loadXlsx } from './xlsx.ts';
 
 type ParsePayload = {
   extname: string;

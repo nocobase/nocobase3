@@ -9,14 +9,14 @@
 
 import { LLMProvider, ParsedAttachmentResult } from './provider.js';
 import { ChatAnthropic } from '@langchain/anthropic';
-import type { AIFileAttachment } from '../app/repository/ai-file.js';
+import type { AIFileAttachment } from '../repository/ai-file.js';
 import { serverRequest } from '../utils/server-request.js';
-import { stripToolCallTags } from '../ai-employees/server-utils.js';
+import { stripToolCallTags } from '../runtime/server-utils.js';
 import {
   LLMProviderMeta,
   SupportedModel,
 } from '../manager/llm-provider/types.js';
-import { Context } from '../app/context.js';
+import { Context } from '../runtime/context.js';
 import { AIMessageChunk } from '@langchain/core/messages';
 
 // Kimi code API only accept anthropic client

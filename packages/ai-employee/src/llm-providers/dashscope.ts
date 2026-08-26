@@ -17,11 +17,11 @@ import {
 } from './provider.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { SupportedModel } from '../manager/llm-provider/types.js';
-import { Context } from '../app/context.js';
+import { Context } from '../runtime/context.js';
 import _ from 'lodash';
 import path from 'node:path';
 import { ReasoningChatOpenAI } from './common/reasoning.js';
-import { AIFileAttachment } from '../app/repository/ai-file.js';
+import { AIFileAttachment } from '../repository/ai-file.js';
 
 const DASHSCOPE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 

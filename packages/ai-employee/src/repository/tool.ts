@@ -1,4 +1,4 @@
-import type { Context } from '../app/context.js';
+import type { Context } from '../runtime/context.js';
 
 export type ToolsScope = 'SPECIFIED' | 'GENERAL' | 'CUSTOM';
 export type ToolsPermission = 'ASK' | 'ALLOW';

@@ -1,6 +1,20 @@
 import { Readable } from 'node:stream';
-import type { NocoBaseDriveDisk, NocoBaseDriveManager } from '@nocobase/drive';
-import type { AIFileAttachment } from '../../app/repository/ai-file.js';
+import type { AIFileAttachment } from '../../repository/ai-file.js';
+export interface DriveDisk {
+  put(
+    key: string,
+    buffer: Uint8Array,
+    options?: { contentType?: string },
+  ): Promise<void>;
+  getStream(key: string): Promise<NodeJS.ReadableStream>;
+  getBytes(key: string): Promise<Uint8Array>;
+  getUrl(key: string): Promise<string>;
+  delete(key: string): Promise<void>;
+}
+
+export interface DriveManager {
+  use(name?: string): DriveDisk;
+}
 
 export interface ManagedFile {
   key: string;
@@ -28,10 +42,10 @@ export abstract class FileManager {
 
 /** Persists AI files through the application's configured NocoBase drive. */
 export class DriveFileManager extends FileManager {
-  private readonly disk: NocoBaseDriveDisk;
+  private readonly disk: DriveDisk;
 
   constructor(
-    drive: NocoBaseDriveManager,
+    drive: DriveManager,
     diskName?: string,
     private readonly prefix = 'ai-files',
   ) {

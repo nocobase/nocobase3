@@ -1,0 +1,15 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/server-library.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "isolatedDeclarations": false,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "strict": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": false
+  },
+  "include": ["index.ts", "server/**/*.ts", "database/**/*.ts"],
+  "exclude": ["dist", "node_modules", "tests"]
+}

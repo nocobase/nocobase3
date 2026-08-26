@@ -14,7 +14,7 @@ import {
   checkUrlAgainstWhitelist,
   serverRequest,
 } from '../utils/server-request.js';
-import { AIFileAttachment } from '../app/repository/ai-file.js';
+import { AIFileAttachment } from '../repository/ai-file.js';
 import {
   EmbeddingProvider,
   LLMProvider,
@@ -30,7 +30,7 @@ import {
 import {
   AIChatContext,
   AIMessageInput,
-} from '../ai-employees/types/ai-chat-conversation.type.js';
+} from '../runtime/types/ai-chat-conversation.type.js';
 
 const MISTRAL_URL = 'https://api.mistral.ai';
 const MISTRAL_REASONING_EFFORT = 'high';

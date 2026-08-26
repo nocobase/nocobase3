@@ -1,9 +1,9 @@
 # App AI resources
 
 This directory is the **application extension layer** for AI resources.
-`installAIEmployee()` loads the package-owned `@nocobase/ai-employee` builtin
-tree with the package resource loaders first. It then loads this directory so an
-App can add or override resources without copying package builtins.
+The `@nocobase/app-plugin-ai-employee` plugin loads its package-owned builtin
+tree with the resource loaders first. It then loads this directory so an App
+can add or override resources without copying package builtins.
 
 Only these application-owned files are intentionally present here:
 

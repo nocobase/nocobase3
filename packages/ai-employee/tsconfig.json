@@ -1,25 +1,11 @@
 {
+  "extends": "@nocobase/dev-config/tsconfig/server-library.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["DOM", "DOM.Iterable", "ES2024"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "allowImportingTsExtensions": false,
-    "rewriteRelativeImportExtensions": true,
-    "moduleDetection": "force",
-    "resolveJsonModule": true,
-    "typeRoots": [
-      "node_modules/@types",
-      "../app-template-default/node_modules/@types"
-    ],
-    "strict": false,
-    "skipLibCheck": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
     "rootDir": "src",
     "outDir": "dist",
-    "noEmit": false,
+    "isolatedDeclarations": false,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": false

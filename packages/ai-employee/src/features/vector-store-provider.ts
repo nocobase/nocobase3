@@ -10,7 +10,7 @@
 import {
   DocumentSegmentedWithScore,
   VectorStoreProp,
-} from '../ai-employees/types/index.js';
+} from '../runtime/types/index.js';
 
 export interface VectorStoreProviderFeature {
   register(vsp: VectorStoreProvider): void;

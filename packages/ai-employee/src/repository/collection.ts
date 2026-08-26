@@ -1,5 +1,3 @@
-import type { DatabaseConnection } from '@nocobase/app-database';
-
 export type QueryOperator<T> =
   | T
   | readonly T[]
@@ -33,7 +31,7 @@ export type CollectionMutation<T extends object> = {
 };
 
 export type RepositoryOptions = {
-  connection?: DatabaseConnection;
+  connection?: any;
 };
 
 export interface CollectionRepository<T extends object> {

@@ -17,21 +17,21 @@ import _ from 'lodash';
 import { existsSync } from 'fs';
 import { AIManager } from '../manager/index.js';
 import { LoadAndRegister } from './types.js';
-import type { Logger } from '@nocobase/logging';
+import type { RuntimeLogger } from '../runtime/context.js';
 import matter from 'gray-matter';
 import path from 'path';
 import type { SkillsScope } from '../repository/ai-skill.js';
 
 export type SkillsLoaderOptions = {
   scan: DirectoryScannerOptions;
-  logger?: Logger;
+  logger?: RuntimeLogger;
 };
 export class SkillsLoader extends LoadAndRegister<SkillsLoaderOptions> {
   protected readonly scanner: DirectoryScanner;
 
   protected files: FileDescriptor[] = [];
   protected skillsDescriptors: SkillsDescriptor[] = [];
-  protected logger: Logger;
+  protected logger: RuntimeLogger;
 
   constructor(
     protected readonly ai: AIManager,

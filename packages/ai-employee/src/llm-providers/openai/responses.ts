@@ -13,7 +13,7 @@ import {
   ReasoningOptions,
   ResolvedReasoningOptions,
 } from '../provider.js';
-import { stripToolCallTags } from '../../ai-employees/server-utils.js';
+import { stripToolCallTags } from '../../runtime/server-utils.js';
 import { AIMessageChunk } from '@langchain/core/messages';
 import { LLMResult } from '@langchain/core/outputs';
 

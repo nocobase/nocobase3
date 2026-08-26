@@ -8,12 +8,12 @@
  */
 
 import type { MultiServerMCPClient } from '@langchain/mcp-adapters';
-import type { Context } from '../../app/context.js';
-import type { Logger } from '@nocobase/logging';
+import type { Context } from '../../runtime/context.js';
+import type { RuntimeLogger } from '../../runtime/context.js';
 import type { DynamicToolsProvider, Permission } from '../tools/types.js';
 import type { MCPEntity } from '../../repository/index.js';
 export type MCPRuntime = {
-  logger?: Pick<Logger, 'error' | 'warn'>;
+  logger?: Pick<RuntimeLogger, 'error' | 'warn'>;
 };
 
 export interface MCPServerManager extends MCPRegistration {

@@ -15,7 +15,7 @@ import {
 } from '@langchain/mcp-adapters';
 import { StructuredToolInterface } from '@langchain/core/tools';
 import type { AIMCPRepository } from '../../repository/index.js';
-import type { Context } from '../../app/context.js';
+import type { Context } from '../../runtime/context.js';
 import type {
   MCPFilter,
   MCPServerManager,

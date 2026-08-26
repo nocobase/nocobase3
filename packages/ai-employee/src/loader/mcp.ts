@@ -9,7 +9,7 @@
 
 import { importModule } from '../utils/import-module.js';
 import { existsSync } from 'fs';
-import type { Logger } from '@nocobase/logging';
+import type { RuntimeLogger } from '../runtime/context.js';
 import { AIManager } from '../manager/index.js';
 import type { MCPOptions } from '../manager/mcp-server/types.js';
 import { LoadAndRegister } from './types.js';
@@ -22,7 +22,7 @@ import { isNonEmptyObject } from './utils.js';
 
 export type MCPLoaderOptions = {
   scan: DirectoryScannerOptions;
-  logger?: Logger;
+  logger?: RuntimeLogger;
 };
 
 export class MCPLoader extends LoadAndRegister<MCPLoaderOptions> {
@@ -30,7 +30,7 @@ export class MCPLoader extends LoadAndRegister<MCPLoaderOptions> {
 
   protected files: FileDescriptor[] = [];
   protected mcpDescriptors: MCPDescriptor[] = [];
-  protected logger: Logger;
+  protected logger: RuntimeLogger;
 
   constructor(
     protected readonly ai: AIManager,

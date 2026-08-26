@@ -24,4 +24,6 @@ loader behavior works in production.
 
 ## Persistence
 
-The package only defines repository and infrastructure ports. The default template provides the first-phase in-memory adapters. A later database adapter can replace them without changing loaders or runtime APIs.
+The package only defines repository and infrastructure ports. App integrations provide
+database-backed adapters, while tests and standalone consumers may use in-memory
+adapters without changing loaders or runtime APIs.

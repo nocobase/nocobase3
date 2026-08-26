@@ -12,7 +12,7 @@ import {
   KnowledgeBase,
   KnowledgeBaseGroup,
   SearchOptions,
-} from '../ai-employees/types/index.js';
+} from '../runtime/types/index.js';
 
 export interface KnowledgeBaseFeature {
   getKnowledgeBase(knowledgeBaseKeys: string[]): Promise<KnowledgeBase[]>;
