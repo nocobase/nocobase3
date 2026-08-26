@@ -1704,25 +1704,25 @@ nb3 --version
 
 nb3 hub login --hub {{hubUrl}} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive
 
-3. Choose a suitable local parent directory. If ./{{slug}} does not exist, pull the Hub-managed source with:
+3. Use ~/.nocobase/hub/apps/{{slug}} as the local workspace for this application. If that directory does not exist, pull the Hub-managed source with:
 
-nb3 app pull {{slug}} ./{{slug}} --hub {{hubUrl}} --non-interactive
+nb3 app pull {{slug}} ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --non-interactive
 
-If ./{{slug}} already exists, do not overwrite it and do not run the pull command against that non-empty directory. Inspect it first:
+If ~/.nocobase/hub/apps/{{slug}} already exists, do not overwrite it and do not run the pull command against that non-empty directory. Inspect it first:
 
-nb3 app info --dir ./{{slug}} --json
-git -C ./{{slug}} status --short
-git -C ./{{slug}} rev-parse HEAD
+nb3 app info --dir ~/.nocobase/hub/apps/{{slug}} --json
+git -C ~/.nocobase/hub/apps/{{slug}} status --short
+git -C ~/.nocobase/hub/apps/{{slug}} rev-parse HEAD
 
 Reuse it only when it is the same Hub application. Treat local changes or commits as user work: understand and preserve them before continuing. If the clean local HEAD does not equal the current Hub head shown above, pull a fresh copy into a different empty directory instead of overwriting or manually synchronizing the existing directory. For example, after choosing an unused path:
 
-nb3 app pull {{slug}} ./{{slug}}-fresh --hub {{hubUrl}} --non-interactive
+nb3 app pull {{slug}} ~/.nocobase/hub/apps/{{slug}}-fresh --hub {{hubUrl}} --non-interactive
 
 If the existing directory is a different project or cannot be reused safely, choose another empty destination. Substitute the directory you actually use in all remaining commands.
 
 4. Enter the application directory, install dependencies, and start the development server:
 
-cd ./{{slug}}
+cd ~/.nocobase/hub/apps/{{slug}}
 pnpm install
 nb3 app dev
 

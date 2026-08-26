@@ -756,25 +756,25 @@ nb3 --version
 
 nb3 hub login --hub {{hubUrl}} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive
 
-3. 选择合适的本地父目录。如果 ./{{slug}} 不存在，请使用下面的命令拉取 Hub 管理的源码：
+3. 使用 ~/.nocobase/hub/apps/{{slug}} 作为此应用的本地工作区。如果该目录不存在，请使用下面的命令拉取 Hub 管理的源码：
 
-nb3 app pull {{slug}} ./{{slug}} --hub {{hubUrl}} --non-interactive
+nb3 app pull {{slug}} ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --non-interactive
 
-如果 ./{{slug}} 已经存在，不要覆盖它，也不要对非空目录执行 pull。先检查：
+如果 ~/.nocobase/hub/apps/{{slug}} 已经存在，不要覆盖它，也不要对非空目录执行 pull。先检查：
 
-nb3 app info --dir ./{{slug}} --json
-git -C ./{{slug}} status --short
-git -C ./{{slug}} rev-parse HEAD
+nb3 app info --dir ~/.nocobase/hub/apps/{{slug}} --json
+git -C ~/.nocobase/hub/apps/{{slug}} status --short
+git -C ~/.nocobase/hub/apps/{{slug}} rev-parse HEAD
 
 只有确认它就是此 Hub 应用时才复用该目录。本地修改和本地提交都属于用户工作，继续之前必须理解并保留。如果干净工作区的本地 HEAD 与上面显示的 Hub 当前提交不同，请把最新源码拉取到另一个空目录，不要覆盖或手动同步现有目录。例如，选择一个尚未使用的路径后执行：
 
-nb3 app pull {{slug}} ./{{slug}}-fresh --hub {{hubUrl}} --non-interactive
+nb3 app pull {{slug}} ~/.nocobase/hub/apps/{{slug}}-fresh --hub {{hubUrl}} --non-interactive
 
 如果现有目录是其他项目，或者无法安全复用，请选择另一个空目录。后续所有命令都要替换成实际使用的目录。
 
 4. 进入应用目录、安装依赖并启动开发服务：
 
-cd ./{{slug}}
+cd ~/.nocobase/hub/apps/{{slug}}
 pnpm install
 nb3 app dev
 

@@ -1277,15 +1277,25 @@ describe('Hub application pages', () => {
       `nb3 hub login --hub ${hubUrl} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive`,
     );
     expect(developmentInstruction).toHaveTextContent(
-      `nb3 app pull inventory ./inventory --hub ${hubUrl} --non-interactive`,
+      `nb3 app pull inventory ~/.nocobase/hub/apps/inventory --hub ${hubUrl} --non-interactive`,
     );
     expect(developmentInstruction).toHaveTextContent('Default branch: main');
     expect(developmentInstruction).toHaveTextContent(
       'Current Hub head: abc123',
     );
     expect(developmentInstruction).toHaveTextContent(
-      `nb3 app pull inventory ./inventory-fresh --hub ${hubUrl} --non-interactive`,
+      `nb3 app pull inventory ~/.nocobase/hub/apps/inventory-fresh --hub ${hubUrl} --non-interactive`,
     );
+    expect(developmentInstruction).toHaveTextContent(
+      'nb3 app info --dir ~/.nocobase/hub/apps/inventory --json',
+    );
+    expect(developmentInstruction).toHaveTextContent(
+      'git -C ~/.nocobase/hub/apps/inventory status --short',
+    );
+    expect(developmentInstruction).toHaveTextContent(
+      'cd ~/.nocobase/hub/apps/inventory',
+    );
+    expect(developmentInstruction).not.toHaveTextContent('./inventory');
     expect(developmentInstruction).toHaveTextContent('pnpm install');
     expect(developmentInstruction).toHaveTextContent('nb3 app dev');
     expect(developmentInstruction).toHaveTextContent('pnpm check');
