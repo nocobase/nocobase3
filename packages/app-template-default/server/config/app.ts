@@ -12,12 +12,12 @@ import type { AppRoutingConfig } from './types.js';
 const appConfig: ConfigFactory<AppRoutingConfig> = defineConfig(
   ({ env }): AppRoutingConfig => {
     const publicBasePath = normalizeBasePath(
-      env.string('APP_BASE_PATH', '/app-template-default'),
+      env.string('APP_BASE_PATH', '/main'),
     );
     const internalApiProxyPath = '/v2/api';
 
     return {
-      name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
+      name: resolveAppNameFromBasePath(publicBasePath, 'main'),
       publicBasePath,
       internalBasePath: '',
       internalApiProxyPath,

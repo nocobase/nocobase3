@@ -16,6 +16,7 @@ import {
 } from '@nocobase/app-server-kit/config';
 
 import app from '../../server/config/app.ts';
+import auth, { resolveAuthSecret } from '../../server/config/auth.ts';
 import caching from '../../server/config/caching.ts';
 import configFactories from '../../server/config/index.ts';
 import database from '../../server/config/database.ts';
@@ -67,7 +68,7 @@ describe('config registry', () => {
       }),
     });
 
-    expect(config.app.name).toBe('app-template-default');
+    expect(config.app.name).toBe('main');
     expect(config.auth.emailAndPassword).toMatchObject({
       enabled: true,
       autoSignIn: false,
@@ -76,7 +77,7 @@ describe('config registry', () => {
       storeSessionInDatabase: true,
     });
     expect(config.caching.default).toBe('memory');
-    expect(config.database.default).toBe('sqlite');
+    expect(config.database.default).toBe('main');
     expect(config.drive.default).toBe('local');
     expect(config.logging.default).toBe('system');
     expect(config.queue.default).toBe('sync');
@@ -158,7 +159,7 @@ describe('app config', () => {
     expect(config.caching.providers.memory).toMatchObject({
       driver: 'memory',
     });
-    expect(config.database.connections.sqlite).toMatchObject({
+    expect(config.database.connections.main).toMatchObject({
       filename: path.join(dataDir, 'database.sqlite'),
     });
     expect(config.database.migrations.directory).toBe(
@@ -180,6 +181,35 @@ describe('app config', () => {
     expect(config.queue.jobs?.locations).toEqual([
       path.join(root, 'dist/server/jobs/**/*.{ts,js}'),
     ]);
+  });
+});
+
+describe('authentication config', () => {
+  it('uses an install-only secret before an environment file exists', () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-install-config-'),
+    );
+    tempDirs.push(root);
+
+    expect(resolveAuthSecret(undefined, root)).toContain('install-mode');
+    expect(
+      auth({
+        env: createConfigEnv({}),
+        paths: createConfigPaths({ rootDir: root }),
+      }).secret,
+    ).toContain('install-mode');
+  });
+
+  it('still rejects a configured environment without AUTH_SECRET', () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-auth-config-'),
+    );
+    tempDirs.push(root);
+    writeFileSync(path.join(root, '.env'), 'APP_BASE_PATH=/main\n');
+
+    expect(() => resolveAuthSecret(undefined, root)).toThrow(
+      'AUTH_SECRET is required.',
+    );
   });
 });
 
@@ -370,7 +400,7 @@ describe('queue config', () => {
       env: createConfigEnv({
         QUEUE_CONNECTION: 'redis',
         QUEUE_REDIS_PREFIX: 'portal:queue:',
-        QUEUE_DB_CONNECTION: 'postgres',
+        QUEUE_DB_CONNECTION: 'main',
         QUEUE_TABLE: 'jobs',
         QUEUE_SCHEDULES_TABLE: 'job_schedules',
         QUEUE_WORKER_CONNECTION: 'redis',
@@ -405,7 +435,7 @@ describe('queue config', () => {
     });
     expect(config.connections.database).toEqual({
       driver: 'database',
-      connection: 'postgres',
+      connection: 'main',
       table: 'jobs',
       schedulesTable: 'job_schedules',
     });
@@ -495,8 +525,10 @@ describe('database config', () => {
       }),
     });
 
-    expect(config.default).toBe('sqlite');
-    expect(config.connections.sqlite).toMatchObject({
+    expect(config.default).toBe('main');
+    expect(config.connections).toHaveProperty('main');
+    expect(Object.keys(config.connections)).toEqual(['main']);
+    expect(config.connections.main).toMatchObject({
       dialect: 'sqlite',
       filename: '/tmp/app-template-default/storage/database.sqlite',
       debug: false,
@@ -517,10 +549,10 @@ describe('database config', () => {
     });
   });
 
-  it('maps postgres env values into a named connection', () => {
+  it('maps postgres env values into the main connection', () => {
     const config = database({
       env: createConfigEnv({
-        DB_CONNECTION: 'postgres',
+        DB_DIALECT: 'postgres',
         DB_HOST: 'db.internal',
         DB_PORT: '15432',
         DB_DATABASE: 'orders',
@@ -538,8 +570,9 @@ describe('database config', () => {
       }),
     });
 
-    expect(config.default).toBe('postgres');
-    expect(config.connections.postgres).toMatchObject({
+    expect(config.default).toBe('main');
+    expect(Object.keys(config.connections)).toEqual(['main']);
+    expect(config.connections.main).toMatchObject({
       dialect: 'postgres',
       host: 'db.internal',
       port: 15432,
@@ -561,7 +594,7 @@ describe('database config', () => {
   it('does not consume database URL env values as connection config', () => {
     const config = database({
       env: createConfigEnv({
-        DB_CONNECTION: 'postgres',
+        DB_DIALECT: 'postgres',
         DB_URL: 'postgres://orders:secret@db.internal:5432/orders',
         DATABASE_URL: 'postgres://orders:secret@other.internal:5432/orders',
         DB_SCHEMA: 'public,tenant',
@@ -571,7 +604,7 @@ describe('database config', () => {
       }),
     });
 
-    expect(config.connections.postgres).toMatchObject({
+    expect(config.connections.main).toMatchObject({
       dialect: 'postgres',
       host: '127.0.0.1',
       port: 5432,
@@ -581,7 +614,51 @@ describe('database config', () => {
       ssl: false,
       schema: ['public', 'tenant'],
     });
-    expect(config.connections.postgres).not.toHaveProperty('url');
+    expect(config.connections.main).not.toHaveProperty('url');
+  });
+
+  it('maps mysql env values into the main connection', () => {
+    const config = database({
+      env: createConfigEnv({
+        DB_DIALECT: 'mysql',
+        DB_HOST: 'mysql.internal',
+        DB_PORT: '13306',
+        DB_DATABASE: 'orders',
+        DB_USERNAME: 'orders_user',
+        DB_PASSWORD: 'secret',
+        DB_CHARSET: 'utf8mb4',
+        DB_DEBUG: 'true',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.default).toBe('main');
+    expect(Object.keys(config.connections)).toEqual(['main']);
+    expect(config.connections.main).toMatchObject({
+      dialect: 'mysql',
+      host: 'mysql.internal',
+      port: 13306,
+      database: 'orders',
+      username: 'orders_user',
+      password: 'secret',
+      charset: 'utf8mb4',
+      debug: true,
+    });
+  });
+
+  it('rejects unsupported database dialects', () => {
+    expect(() =>
+      database({
+        env: createConfigEnv({ DB_DIALECT: 'postgresql' }),
+        paths: createConfigPaths({
+          rootDir: '/tmp/app-template-default',
+        }),
+      }),
+    ).toThrow(
+      'Invalid DB_DIALECT "postgresql". Expected "sqlite", "postgres", or "mysql".',
+    );
   });
 });
 
@@ -704,6 +781,9 @@ describe('app plugins', () => {
       (item) =>
         item.packageName === '@nocobase/app-plugin-notification-provider',
     );
+    const installPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-install',
+    );
     const databaseExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-database-example',
     );
@@ -769,6 +849,25 @@ describe('app plugins', () => {
     );
     expect(notificationProviderPlugin?.migrationsDirectory).toBeUndefined();
     expect(notificationProviderPlugin?.seedsDirectory).toBeUndefined();
+    expect(installPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-install',
+      version: declaredVersion('@nocobase/app-plugin-install'),
+      enabled: true,
+    });
+    expect(installPlugin?.manifest.client).toEqual({
+      routes: './client/routes',
+      providers: './client/providers',
+    });
+    expect(installPlugin?.bootstrapEntry).toMatch(
+      /app-plugin-install\/server\/bootstrap\.ts$/,
+    );
+    expect(installPlugin?.routesEntry).toMatch(
+      /app-plugin-install\/server\/routes\/index\.ts$/,
+    );
+    expect(installPlugin?.clientBootstrapEntry).toBeUndefined();
+    expect(installPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-install\/client\/routes\.ts$/,
+    );
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
       version: declaredVersion('@nocobase/app-plugin-database-example'),
@@ -905,7 +1004,7 @@ describe('standalone runtime database config', () => {
       },
     });
 
-    expect(config.database.default).toBe('sqlite');
+    expect(config.database.default).toBe('main');
     expect(config).not.toHaveProperty('auth');
     expect(config.database.migrations.sources).toEqual(
       expect.arrayContaining([
@@ -938,6 +1037,10 @@ describe('standalone runtime database config', () => {
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-notification-provider',
+          enabled: true,
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-install',
           enabled: true,
         }),
         expect.objectContaining({

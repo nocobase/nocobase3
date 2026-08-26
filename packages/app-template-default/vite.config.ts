@@ -41,7 +41,7 @@ export default createPortalViteConfig(
   portalSdkCompatibilityPlugin,
   ({ command, mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
-    const appBase = normalizeBase(env.APP_BASE_PATH ?? '/app-template-default');
+    const appBase = normalizeBase(env.APP_BASE_PATH ?? '/main');
     const viteBase = appBase;
     const publicApiUrl =
       command === 'serve'
@@ -76,9 +76,17 @@ export default createPortalViteConfig(
       define: defineEnv,
       envPrefix: ['VITE_'],
       plugins: [
-        agentAnnotations({ root: __dirname }),
+        agentAnnotations({
+          root: __dirname,
+          clientExtensions: [
+            path.resolve(__dirname, 'client/agent-annotations-host.ts'),
+          ],
+        }),
         appClientPluginsPlugin({ root: __dirname }),
       ],
+      server: {
+        watch: { ignored: ['**/.agent-annotations/**'] },
+      },
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],
         alias: [

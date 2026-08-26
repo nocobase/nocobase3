@@ -64,9 +64,9 @@ export function createApp(
   );
   const services = createAppServices(runtime, deps, { realtime });
   const app = new Hono();
-
   for (const plugin of options.pluginBootstraps ?? []) {
     plugin.bootstrap({
+      config,
       deps,
       services,
       lifecycle: {
@@ -88,7 +88,13 @@ export function createApp(
   });
 
   for (const plugin of options.pluginRoutes ?? []) {
-    plugin.registerRoutes({ app, deps, services });
+    plugin.registerRoutes({
+      app,
+      config,
+      deps,
+      services,
+      paths: runtime.paths,
+    });
   }
 
   registerNocoBaseApiProxyRoutes(app, {
