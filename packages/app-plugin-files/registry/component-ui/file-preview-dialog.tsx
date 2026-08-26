@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useFilesUi } from '@/extensions/nocobase-files-provider-ui';
 
 import { defaultFilePreviewMessages } from './file-preview-messages';
 import { getPreviewType } from './file-preview-types';
@@ -29,6 +30,7 @@ function OpenFilePreviewDialog({
   initialIndex = 0,
   messages: messageOverrides,
 }: Omit<FilePreviewDialogProps, 'open'>) {
+  const { buildFileUrl } = useFilesUi();
   const [index, setIndex] = useState(initialIndex);
   const messages = { ...defaultFilePreviewMessages, ...messageOverrides };
   const safeIndex = Math.min(index, Math.max(0, files.length - 1));
@@ -38,7 +40,7 @@ function OpenFilePreviewDialog({
 
   const Previewer = previewType.Previewer;
   const download = (downloadFile: StoredFile): void => {
-    void triggerFileDownload(basePath, downloadFile);
+    void triggerFileDownload(basePath, downloadFile, buildFileUrl);
   };
 
   return (
@@ -122,6 +124,7 @@ function OpenFilePreviewDialog({
             <Previewer
               key={`${basePath}:${file.id}:${file.updatedAt}`}
               basePath={basePath}
+              buildFileUrl={buildFileUrl}
               file={file}
               index={safeIndex}
               list={files}

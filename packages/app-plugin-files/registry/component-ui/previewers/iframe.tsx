@@ -15,6 +15,7 @@ function PreviewLabel({ icon, label }: { icon: ReactNode; label: string }) {
 
 export function AudioPreviewer({
   basePath,
+  buildFileUrl,
   file,
   messages,
 }: FilePreviewerProps) {
@@ -27,7 +28,7 @@ export function AudioPreviewer({
       <div className='flex flex-1 items-center justify-center p-6'>
         <audio
           controls
-          src={getPreviewFileUrl(basePath, file)}
+          src={getPreviewFileUrl(basePath, file, buildFileUrl)}
           className='w-full max-w-xl'
         />
       </div>
@@ -37,6 +38,7 @@ export function AudioPreviewer({
 
 export function VideoPreviewer({
   basePath,
+  buildFileUrl,
   file,
   messages,
 }: FilePreviewerProps) {
@@ -49,7 +51,7 @@ export function VideoPreviewer({
       <div className='flex flex-1 items-center justify-center bg-black'>
         <video
           controls
-          src={getPreviewFileUrl(basePath, file)}
+          src={getPreviewFileUrl(basePath, file, buildFileUrl)}
           className='max-h-full max-w-full'
         />
       </div>

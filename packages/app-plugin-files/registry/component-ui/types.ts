@@ -42,6 +42,13 @@ export type FileUploadMessages = {
   noFiles: string;
   fileSizeExceeded: (maxBytes: number) => string;
   fileTypeRejected: string;
+  required: string;
+  minimumFiles: (minimum: number) => string;
+  maximumFiles: (maximum: number) => string;
+  uploadInProgress: string;
+  uploadFailedValidation: string;
+  fileNotReady: string;
+  validationLabel: string;
 };
 
 export type FilePreviewMessages = {

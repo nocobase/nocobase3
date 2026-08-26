@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
+import { useFilesUi } from '@/extensions/nocobase-files-provider-ui';
 import { cn } from '@/lib/utils';
 
 import { getThumbnailUrl } from './file-url';
@@ -223,7 +224,9 @@ export function FileThumbnail({
   imageClassName,
   showExtensionBadge = true,
 }: FileThumbnailProps) {
-  const thumbnailUrl = file && basePath ? getThumbnailUrl(basePath, file) : '';
+  const { buildFileUrl } = useFilesUi();
+  const thumbnailUrl =
+    file && basePath ? getThumbnailUrl(basePath, file, buildFileUrl) : '';
   const [failedImageUrl, setFailedImageUrl] = useState('');
   const showImage = Boolean(
     file &&

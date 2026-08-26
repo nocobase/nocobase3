@@ -3,6 +3,7 @@ import type { FilePreviewerProps } from '../file-preview-types';
 
 export function ImagePreviewer({
   basePath,
+  buildFileUrl,
   file,
   messages,
 }: FilePreviewerProps) {
@@ -11,7 +12,7 @@ export function ImagePreviewer({
   return (
     <div className='flex h-full min-h-[320px] items-center justify-center bg-muted/30 p-4'>
       <img
-        src={getPreviewFileUrl(basePath, file)}
+        src={getPreviewFileUrl(basePath, file, buildFileUrl)}
         alt={messages.imageAlt(filename)}
         className='max-h-full max-w-full rounded-md object-contain'
       />

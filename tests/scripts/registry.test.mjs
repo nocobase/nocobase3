@@ -144,54 +144,126 @@ test('builds and materializes the Files Registry without a Template snapshot', a
   t.after(() => rm(buildRoot, { force: true, recursive: true }));
   t.after(() => rm(applicationRoot, { force: true, recursive: true }));
 
-  const recipeRoot = path.join(filesOwnerRoot, 'registry/file-upload');
-  const installedRoot = path.join(
-    applicationRoot,
-    'client/extensions/nocobase-file-upload',
-  );
-  const templateRoot = path.join(
-    repoRoot,
-    'packages/app-template-default/client/extensions/nocobase-file-upload',
-  );
-  const recipeFiles = walkFiles(recipeRoot);
+  const items = [
+    {
+      name: 'page-ui',
+      root: 'registry/page-ui',
+      target: 'client/extensions/nocobase-files-page-ui',
+    },
+    {
+      name: 'component-ui',
+      root: 'registry/component-ui',
+      target: 'client/extensions/nocobase-files-component-ui',
+    },
+    {
+      name: 'provider-ui',
+      root: 'registry/provider-ui',
+      target: 'client/extensions/nocobase-files-provider-ui',
+    },
+  ].map((item) => ({
+    ...item,
+    files: walkFiles(path.join(filesOwnerRoot, item.root)),
+  }));
 
   const buildResult = buildRegistry({
     ownerRoot: filesOwnerRoot,
     outputDirectory: buildRoot,
     repoRoot,
   });
-  const item = JSON.parse(
-    fs.readFileSync(path.join(buildRoot, 'file-upload.json'), 'utf8'),
+  assert.deepEqual(
+    buildResult.items,
+    items.map(({ files, name }) => ({ files: files.length, name })),
   );
-  assert.deepEqual(buildResult.items, [
-    { files: recipeFiles.length, name: 'file-upload' },
-  ]);
-  for (const packageName of [
-    '@nocobase/app-plugin-files',
-    '@nocobase/app-sdk',
-  ]) {
+  assert.deepEqual(
+    fs
+      .readdirSync(buildRoot)
+      .filter((file) => file.endsWith('.json'))
+      .sort(),
+    ['component-ui.json', 'page-ui.json', 'provider-ui.json', 'registry.json'],
+  );
+  const pageItem = JSON.parse(
+    fs.readFileSync(path.join(buildRoot, 'page-ui.json'), 'utf8'),
+  );
+  const componentItem = JSON.parse(
+    fs.readFileSync(path.join(buildRoot, 'component-ui.json'), 'utf8'),
+  );
+  const providerItem = JSON.parse(
+    fs.readFileSync(path.join(buildRoot, 'provider-ui.json'), 'utf8'),
+  );
+  for (const item of [pageItem, componentItem]) {
     const dependency = item.dependencies.find((value) =>
-      value.startsWith(`${packageName}@`),
+      value.startsWith('@nocobase/app-plugin-files@'),
     );
     assert.equal(typeof dependency, 'string');
-    const range = dependency.slice(packageName.length + 1);
+    const range = dependency.slice('@nocobase/app-plugin-files@'.length);
     assert.equal(semver.satisfies('0.0.1-beta.0', range), true);
     assert.equal(semver.satisfies('0.0.1-beta.1', range), true);
+    assert.equal(
+      item.registryDependencies.includes('@nocobase-files/provider-ui'),
+      true,
+    );
   }
+  assert.equal(
+    providerItem.dependencies.some((value) =>
+      value.startsWith('@nocobase/app-sdk@'),
+    ),
+    true,
+  );
 
   const materializeResult = materializeRegistry({
     ownerRoot: filesOwnerRoot,
     outputRoot: applicationRoot,
     repoRoot,
   });
-  assert.deepEqual(materializeResult.materialized, [
-    {
-      files: recipeFiles.length,
-      target: 'client/extensions/nocobase-file-upload',
-    },
-  ]);
-  assert.deepEqual(walkFiles(installedRoot), recipeFiles);
-  assert.equal(fs.existsSync(templateRoot), false);
+  assert.deepEqual(
+    materializeResult.materialized,
+    items.map(({ files, target }) => ({ files: files.length, target })),
+  );
+  for (const item of items) {
+    assert.deepEqual(
+      walkFiles(path.join(applicationRoot, item.target)),
+      item.files,
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(repoRoot, 'packages/app-template-default', item.target),
+      ),
+      false,
+    );
+  }
+  const pageSource = fs.readFileSync(
+    path.join(applicationRoot, items[0].target, 'extension.ts'),
+    'utf8',
+  );
+  assert.match(pageSource, /FILES_ROUTE_IDS\.index/u);
+  assert.doesNotMatch(pageSource, /path:\s*['"]\/files/u);
+  assert.doesNotMatch(pageSource, /auth:\s*/u);
+  assert.doesNotMatch(pageSource, /name:\s*['"]index/u);
+  const installedPage = fs.readFileSync(
+    path.join(applicationRoot, items[0].target, 'pages/files-page.tsx'),
+    'utf8',
+  );
+  assert.match(installedPage, /from '@\/components\/ui\/button'/u);
+  assert.doesNotMatch(installedPage, /client\/default-pages/u);
+  assert.doesNotMatch(installedPage, /client\/components\/ui/u);
+  assert.match(
+    fs.readFileSync(
+      path.join(applicationRoot, items[1].target, 'index.ts'),
+      'utf8',
+    ),
+    /FileUploadField/u,
+  );
+  assert.match(
+    fs.readFileSync(
+      path.join(applicationRoot, items[2].target, 'index.ts'),
+      'utf8',
+    ),
+    /FilesUiProvider/u,
+  );
+  assert.equal(
+    fs.existsSync(path.join(filesOwnerRoot, 'registry/file-upload')),
+    false,
+  );
 });
 
 test('does not publish the legacy Hub file-upload protocol', () => {

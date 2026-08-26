@@ -3,23 +3,75 @@
   "homepage": "https://www.nocobase.com",
   "items": [
     {
-      "name": "file-upload",
+      "name": "page-ui",
       "type": "registry:block",
-      "title": "NocoBase File Upload",
-      "description": "V3 file upload and preview fields for Scoped Files Routes.",
+      "title": "NocoBase Files Page UI",
+      "description": "Application-owned Files page that replaces only the Files plugin route component.",
+      "dependencies": [
+        "@nocobase/app-client@^1.0.0-beta.1",
+        "@nocobase/app-plugin-files@^0.0.1-beta.0"
+      ],
+      "registryDependencies": ["@nocobase-files/provider-ui", "button"],
+      "docs": "Requires @nocobase/app-plugin-files and provider-ui. The installed extension overrides only FILES_ROUTE_IDS.index; the plugin retains the /files path, route name, auth metadata, and fallback page.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-files": ">=0.0.1-beta.0 <0.1.0"
+          }
+        }
+      },
+      "source": {
+        "root": "registry/page-ui",
+        "target": "client/extensions/nocobase-files-page-ui",
+        "include": ["."]
+      }
+    },
+    {
+      "name": "component-ui",
+      "type": "registry:component",
+      "title": "NocoBase Files Component UI",
+      "description": "V3 controlled upload and preview components for Scoped Files Routes.",
       "dependencies": [
         "@base-ui/react@^1.6.0",
         "@nocobase/app-plugin-files@^0.0.1-beta.0",
-        "@nocobase/app-sdk@^0.0.1-beta.0",
         "lucide-react@^0.487.0",
         "react-markdown@^10.1.0",
         "remark-gfm@^4.0.1"
       ],
-      "registryDependencies": ["button"],
-      "docs": "Requires the NocoBase3 Files App Plugin. FileUploadField and FilePreviewField accept StoredFile[] plus a relative Scoped Files Route basePath and use the current App client internally.",
+      "registryDependencies": ["@nocobase-files/provider-ui", "button"],
+      "docs": "Requires @nocobase/app-plugin-files and provider-ui. FileUploadField and FilePreviewField use StoredFile[] and a relative Scoped Files Route basePath. Form submission validation covers required/minimum, upload state, maxFiles, maxBytes, and accept.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-files": ">=0.0.1-beta.0 <0.1.0"
+          }
+        }
+      },
       "source": {
-        "root": "registry/file-upload",
-        "target": "client/extensions/nocobase-file-upload",
+        "root": "registry/component-ui",
+        "target": "client/extensions/nocobase-files-component-ui",
+        "include": ["."]
+      }
+    },
+    {
+      "name": "provider-ui",
+      "type": "registry:component",
+      "title": "NocoBase Files Provider UI",
+      "description": "Shared Files App client Context, Provider, and hook configuration.",
+      "dependencies": ["@nocobase/app-sdk@^0.0.1-beta.0"],
+      "registryDependencies": [],
+      "docs": "Provides FilesUiProvider, FilesUiContext, useFilesUi, and usable App-local defaults. It does not declare routes, pages, adapters, or a general plugin framework.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge"
+      },
+      "source": {
+        "root": "registry/provider-ui",
+        "target": "client/extensions/nocobase-files-provider-ui",
         "include": ["."]
       }
     }

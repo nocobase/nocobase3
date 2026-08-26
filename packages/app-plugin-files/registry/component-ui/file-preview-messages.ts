@@ -1,6 +1,6 @@
 import type { FilePreviewMessages } from './types';
 
-export const defaultFilePreviewMessages: FilePreviewMessages = {
+export const defaultFilePreviewMessages: Readonly<FilePreviewMessages> = {
   preview: 'Preview',
   download: 'Download',
   previous: 'Previous file',

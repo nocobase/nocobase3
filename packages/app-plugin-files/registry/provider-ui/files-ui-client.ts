@@ -5,6 +5,8 @@ import {
   type AppClient,
 } from '@nocobase/app-sdk';
 
+import type { FilesUiContextValue } from './files-ui-context';
+
 export const appFileClient: AppClient = {
   async request<T>(path: string, init?: RequestInit): Promise<T> {
     try {
@@ -36,6 +38,11 @@ export function buildAppFileUrl(
   const search = query ? new URLSearchParams(query).toString() : '';
   return search ? `${base}${base.includes('?') ? '&' : '?'}${search}` : base;
 }
+
+export const defaultFilesUiContextValue: FilesUiContextValue = Object.freeze({
+  buildFileUrl: buildAppFileUrl,
+  client: appFileClient,
+});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

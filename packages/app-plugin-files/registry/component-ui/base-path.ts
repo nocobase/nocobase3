@@ -1,4 +1,4 @@
-const ABSOLUTE_URL_PATTERN = /^[a-z][a-z\d+.-]*:/i;
+const ABSOLUTE_URL_PATTERN: RegExp = /^[a-z][a-z\d+.-]*:/i;
 
 export function normalizeFileBasePath(basePath: string): string {
   const value = basePath.trim();

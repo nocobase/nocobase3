@@ -122,7 +122,11 @@ function PreviewLabel({ children }: { children: ReactNode }) {
   );
 }
 
-function useTextFile(basePath: string, file: FilePreviewerProps['file']) {
+function useTextFile(
+  basePath: string,
+  file: FilePreviewerProps['file'],
+  buildFileUrl: FilePreviewerProps['buildFileUrl'],
+) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -130,7 +134,12 @@ function useTextFile(basePath: string, file: FilePreviewerProps['file']) {
   useEffect(() => {
     const controller = new AbortController();
 
-    fetchFileContent(basePath, file, { signal: controller.signal })
+    fetchFileContent(
+      basePath,
+      file,
+      { signal: controller.signal },
+      buildFileUrl,
+    )
       .then((response) => response.text())
       .then(setContent)
       .catch((caught) => {
@@ -145,7 +154,7 @@ function useTextFile(basePath: string, file: FilePreviewerProps['file']) {
       });
 
     return () => controller.abort();
-  }, [basePath, file]);
+  }, [basePath, buildFileUrl, file]);
 
   return { content, loading, error };
 }
@@ -193,7 +202,7 @@ function TextPreviewLayout({
 }
 
 export function TextPreviewer(props: FilePreviewerProps) {
-  const state = useTextFile(props.basePath, props.file);
+  const state = useTextFile(props.basePath, props.file, props.buildFileUrl);
   return (
     <TextPreviewLayout
       {...props}
@@ -208,7 +217,7 @@ export function TextPreviewer(props: FilePreviewerProps) {
 }
 
 export function MarkdownPreviewer(props: FilePreviewerProps) {
-  const state = useTextFile(props.basePath, props.file);
+  const state = useTextFile(props.basePath, props.file, props.buildFileUrl);
   return (
     <TextPreviewLayout
       {...props}

@@ -18,27 +18,28 @@ import {
   FileClientError,
 } from '@nocobase/app-plugin-files/client';
 
-import { normalizeFileBasePath } from '../registry/file-upload/base-path';
-import { appFileClient } from '../registry/file-upload/app-client';
-import { FilePreviewField } from '../registry/file-upload/file-preview-field';
-import { FileUploadField } from '../registry/file-upload/file-upload-field';
+import { normalizeFileBasePath } from '../registry/component-ui/base-path';
+import { appFileClient } from '../registry/provider-ui/files-ui-client';
+import { FilePreviewField } from '../registry/component-ui/file-preview-field';
+import { FileUploadField } from '../registry/component-ui/file-upload-field';
 import {
   fetchFileContent,
   getDownloadUrl,
   getPreviewFileUrl,
   triggerFileDownload,
-} from '../registry/file-upload/file-url';
-import { useFileUpload } from '../registry/file-upload/use-file-upload';
+} from '../registry/component-ui/file-url';
+import { useFileUpload } from '../registry/component-ui/use-file-upload';
 import {
   matchesFileRules,
   validateFile,
-} from '../registry/file-upload/validation';
+  validateFileField,
+} from '../registry/component-ui/validation';
 import type {
   CreateScopedFileResponse,
   FileUploadPlan,
   FileUploadMessages,
   StoredFile,
-} from '../registry/file-upload/types';
+} from '../registry/component-ui/types';
 
 vi.mock('@nocobase/app-plugin-files/client', async (importOriginal) => ({
   ...(await importOriginal<
@@ -68,6 +69,13 @@ const messages: FileUploadMessages = {
   noFiles: 'No files',
   fileSizeExceeded: (size) => `Too large: ${size}`,
   fileTypeRejected: 'Type rejected',
+  required: 'A file is required',
+  minimumFiles: (minimum) => `Minimum files: ${minimum}`,
+  maximumFiles: (maximum) => `Maximum files: ${maximum}`,
+  uploadInProgress: 'Upload in progress',
+  uploadFailedValidation: 'Upload failed',
+  fileNotReady: 'File is not ready',
+  validationLabel: 'File field validation',
 };
 
 afterEach(() => {
@@ -463,6 +471,123 @@ describe('V3 file upload Registry', () => {
       />,
     );
     expect(screen.getByText('No files')).toBeTruthy();
+  });
+
+  it('blocks form submission for required and minimum file counts', () => {
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    const { rerender } = render(
+      <form data-testid='files-form' onSubmit={onSubmit}>
+        <FileUploadField
+          basePath='orders/order-1/files'
+          value={[]}
+          onChange={vi.fn()}
+          required
+        />
+        <button type='submit'>Save</button>
+      </form>,
+    );
+
+    fireEvent.submit(screen.getByTestId('files-form'));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'At least one file is required.',
+    );
+    expect(screen.getByTestId('files-form').firstElementChild).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+
+    rerender(
+      <form data-testid='files-form' onSubmit={onSubmit}>
+        <FileUploadField
+          basePath='orders/order-1/files'
+          value={[readyFile('one', 'one.txt', 'text/plain')]}
+          onChange={vi.fn()}
+          multiple
+          minimum={2}
+        />
+        <button type='submit'>Save</button>
+      </form>,
+    );
+    fireEvent.submit(screen.getByTestId('files-form'));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Add at least 2 files.',
+    );
+  });
+
+  it('blocks form submission when controlled files violate constraints', () => {
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    const tooLarge = {
+      ...readyFile('large', 'large.pdf', 'application/pdf'),
+      size: 12,
+    };
+    const { rerender } = render(
+      <form data-testid='files-form' onSubmit={onSubmit}>
+        <FileUploadField
+          basePath='orders/order-1/files'
+          value={[tooLarge]}
+          onChange={vi.fn()}
+          maxBytes={8}
+        />
+        <button type='submit'>Save</button>
+      </form>,
+    );
+
+    fireEvent.submit(screen.getByTestId('files-form'));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'File size exceeds 8 B.',
+    );
+
+    rerender(
+      <form data-testid='files-form' onSubmit={onSubmit}>
+        <FileUploadField
+          basePath='orders/order-1/files'
+          value={[readyFile('text', 'notes.txt', 'text/plain')]}
+          onChange={vi.fn()}
+          accept='.pdf'
+        />
+        <button type='submit'>Save</button>
+      </form>,
+    );
+    fireEvent.submit(screen.getByTestId('files-form'));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'File type is not allowed.',
+    );
+  });
+
+  it('validates active and failed upload states before submission', () => {
+    const baseOptions = {
+      value: [],
+      minimum: 0,
+      messages,
+    };
+    expect(
+      validateFileField({
+        ...baseOptions,
+        items: [
+          {
+            key: 'active',
+            displayName: 'active.txt',
+            status: 'uploading',
+          },
+        ],
+      }),
+    ).toBe('Upload in progress');
+    expect(
+      validateFileField({
+        ...baseOptions,
+        items: [
+          {
+            key: 'failed',
+            displayName: 'failed.txt',
+            status: 'error',
+          },
+        ],
+      }),
+    ).toBe('Upload failed');
   });
 
   it('does not render Cancel while an upload is completing', async () => {

@@ -2,13 +2,18 @@
   "extends": "@nocobase/dev-config/tsconfig/client.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["../app-template-default/client/*"]
+      "@/*": ["../app-template-default/client/*"],
+      "@/extensions/nocobase-files-provider-ui": [
+        "./registry/provider-ui/index.ts"
+      ],
+      "@/extensions/nocobase-files-provider-ui/*": ["./registry/provider-ui/*"]
     }
   },
   "include": [
     "registry-env.d.ts",
     "registry/**/*.ts",
     "registry/**/*.tsx",
-    "tests/registry-file-upload.test.tsx"
+    "tests/registry-component-ui.test.tsx",
+    "tests/registry-page-provider.test.tsx"
   ]
 }

@@ -1,5 +1,7 @@
 import type { ComponentProps, ComponentType } from 'react';
 
+import type { FilesUiContextValue } from '@/extensions/nocobase-files-provider-ui';
+
 import { AudioPreviewer, VideoPreviewer } from './previewers/iframe';
 import { ImagePreviewer } from './previewers/image';
 import { OfficePreviewer } from './previewers/office';
@@ -18,6 +20,7 @@ export type FilePreviewFieldProps = Omit<ComponentProps<'div'>, 'children'> & {
 
 export type FilePreviewerProps = {
   basePath: string;
+  buildFileUrl: FilesUiContextValue['buildFileUrl'];
   file: StoredFile;
   index: number;
   list: StoredFile[];
@@ -130,7 +133,7 @@ export function isActiveContentFile(file: StoredFile): boolean {
   );
 }
 
-export const defaultPreviewTypes: FilePreviewType[] = [
+export const defaultPreviewTypes: readonly FilePreviewType[] = [
   { key: 'office', match: isOfficeFile, Previewer: OfficePreviewer },
   { key: 'image', match: isImageFile, Previewer: ImagePreviewer },
   { key: 'pdf', match: isPdfFile, Previewer: PdfPreviewer },
@@ -150,5 +153,11 @@ export const defaultPreviewTypes: FilePreviewType[] = [
 ];
 
 export function getPreviewType(file: StoredFile): FilePreviewType {
-  return defaultPreviewTypes.find((previewType) => previewType.match(file))!;
+  const previewType = defaultPreviewTypes.find((candidate) =>
+    candidate.match(file),
+  );
+  if (!previewType) {
+    throw new Error('A Files preview type could not be resolved.');
+  }
+  return previewType;
 }

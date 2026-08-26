@@ -31,6 +31,8 @@
       "types": "./client/route-contracts.ts",
       "import": "./client/route-contracts.ts"
     },
+    "./components.json": "./components.json",
+    "./registry.config.json": "./registry.config.json",
     "./protocol": {
       "types": "./protocol.ts",
       "import": "./protocol.ts"
@@ -59,6 +61,8 @@
         "types": "./dist/client/route-contracts.d.ts",
         "import": "./dist/client/route-contracts.js"
       },
+      "./components.json": "./components.json",
+      "./registry.config.json": "./registry.config.json",
       "./protocol": {
         "types": "./dist/protocol.d.ts",
         "import": "./dist/protocol.js"
@@ -69,6 +73,8 @@
   },
   "files": [
     "dist",
+    "README.md",
+    "components.json",
     "registry",
     "registry.config.json",
     "public/r",
@@ -78,7 +84,9 @@
   "nocobase": {
     "registry": {
       "items": {
-        "file-upload": "./registry/file-upload"
+        "component-ui": "./registry/component-ui",
+        "page-ui": "./registry/page-ui",
+        "provider-ui": "./registry/provider-ui"
       }
     },
     "plugin": {

@@ -74,17 +74,64 @@ runs. The current database API does not expose portable column-type
 introspection, so exact type compatibility and custom physical name mappings
 remain migration responsibilities in Files V1.
 
-## File upload Registry
+## Files Registry UI
 
-The plugin owns the `file-upload` Registry recipe under `registry/file-upload`.
-The Default Template does not preinstall this UI. Materialize the recipe into an
-application only when that application needs Files fields, then treat the
-installed source as application-owned code.
+The plugin publishes exactly three application-owned Registry items. They are
+separate from the plugin's default `/files` page and use the consuming
+application's `@/components/ui/*` source.
+
+| Item           | Installed target                                | Integration                                            |
+| -------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| `page-ui`      | `client/extensions/nocobase-files-page-ui`      | Overrides only `FILES_ROUTE_IDS.index`                 |
+| `component-ui` | `client/extensions/nocobase-files-component-ui` | Direct import of V3 upload and preview components      |
+| `provider-ui`  | `client/extensions/nocobase-files-provider-ui`  | Context, Provider, hook, and App-local client defaults |
+
+Build all three items or one item at a time:
 
 ```bash
 pnpm registry build --package @nocobase/app-plugin-files
+pnpm registry build \
+  --package @nocobase/app-plugin-files \
+  --item component-ui
+```
+
+Repository-local materialization copies canonical source directly. Install the
+Provider with the component or page item because both import its stable
+application target.
+
+```bash
 pnpm registry materialize \
   --package @nocobase/app-plugin-files \
-  --item file-upload \
+  --item provider-ui \
+  --output-root /path/to/app
+pnpm registry materialize \
+  --package @nocobase/app-plugin-files \
+  --item component-ui \
+  --output-root /path/to/app
+pnpm registry materialize \
+  --package @nocobase/app-plugin-files \
+  --item page-ui \
   --output-root /path/to/app
 ```
+
+For remote shadcn installation, configure the Registry host in the consuming
+application's `components.json` before using the namespaced dependencies:
+
+```json
+{
+  "registries": {
+    "@nocobase-files": "https://registry.example.com/files/r/{name}.json"
+  }
+}
+```
+
+`FileUploadField` keeps `StoredFile[]` as its controlled value in single and
+multiple modes. It preserves progress, cancel, retry, replace, preview,
+download, detach, and read-only behavior. When rendered inside a form,
+`required`, `minimum`, active or failed uploads, `maxFiles`, `maxBytes`, and
+`accept` violations block submission and expose an accessible validation
+message. The Scoped Files Route remains authoritative for server-side policy
+and authorization.
+
+Installed source belongs to the application. Upgrade it with a three-way merge
+instead of overwriting application changes.

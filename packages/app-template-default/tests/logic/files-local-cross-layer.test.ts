@@ -25,7 +25,7 @@ import {
 
 import filesMigration from '../../../app-plugin-files/database/migrations/202608221000_files_create_files.ts';
 import cleanupMigration from '../../../app-plugin-files/database/migrations/202608261000_files_add_temporary_cleanup.ts';
-import { appFileClient } from '../../../app-plugin-files/registry/file-upload/app-client.ts';
+import { appFileClient } from '../../../app-plugin-files/registry/provider-ui/files-ui-client.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 
 interface Fixture {

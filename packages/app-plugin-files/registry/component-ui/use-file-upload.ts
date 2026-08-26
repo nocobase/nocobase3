@@ -13,7 +13,8 @@ import {
   type SetStateAction,
 } from 'react';
 
-import { appFileClient } from './app-client';
+import { useFilesUi } from '@/extensions/nocobase-files-provider-ui';
+
 import { normalizeFileBasePath } from './base-path';
 import { validateFile } from './validation';
 import type {
@@ -60,6 +61,7 @@ export function useFileUpload({
   onUploadComplete,
   onUploadError,
 }: UseFileUploadOptions) {
+  const { client } = useFilesUi();
   const path = useMemo(() => normalizeFileBasePath(basePath), [basePath]);
   const controlledValue = useMemo(
     () => (multiple ? value : value.slice(0, 1)),
@@ -137,20 +139,17 @@ export function useFileUpload({
             error: undefined,
             progress: { loaded: 0, total: source.size, percentage: 0 },
           }));
-          const created = await appFileClient.request<CreateScopedFileResponse>(
-            path,
-            {
-              method: 'POST',
-              body: JSON.stringify({
-                name: source.name,
-                size: source.size,
-                ...(source.type ? { contentType: source.type } : {}),
-                ...(item.replaceFileId
-                  ? { replaceFileId: item.replaceFileId }
-                  : {}),
-              }),
-            },
-          );
+          const created = await client.request<CreateScopedFileResponse>(path, {
+            method: 'POST',
+            body: JSON.stringify({
+              name: source.name,
+              size: source.size,
+              ...(source.type ? { contentType: source.type } : {}),
+              ...(item.replaceFileId
+                ? { replaceFileId: item.replaceFileId }
+                : {}),
+            }),
+          });
           assertCreatedUpload(created);
           completePlan = created.plan;
           ready = await executeFileUploadPlan(created.plan, source, {
@@ -209,6 +208,7 @@ export function useFileUpload({
     },
     [
       accept,
+      client,
       maxBytes,
       messages,
       multiple,
@@ -316,12 +316,9 @@ export function useFileUpload({
 
       setOperationError(null);
       try {
-        await appFileClient.request(
-          `${path}/${encodeURIComponent(item.record.id)}`,
-          {
-            method: 'DELETE',
-          },
-        );
+        await client.request(`${path}/${encodeURIComponent(item.record.id)}`, {
+          method: 'DELETE',
+        });
         const nextRecords = recordsRef.current.filter(
           (record) => record.id !== item.record?.id,
         );
@@ -331,7 +328,7 @@ export function useFileUpload({
         setOperationError(toError(error));
       }
     },
-    [items, onChange, path],
+    [client, items, onChange, path],
   );
 
   return {

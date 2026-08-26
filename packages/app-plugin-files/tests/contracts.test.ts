@@ -75,6 +75,8 @@ describe('@nocobase/app-plugin-files contracts', () => {
       './client',
       './client/routes',
       './client/route-contracts',
+      './components.json',
+      './registry.config.json',
       './protocol',
       './package.json',
     ]);

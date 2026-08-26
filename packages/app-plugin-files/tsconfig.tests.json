@@ -14,5 +14,8 @@
     "tests/**/*.ts",
     "tests/**/*.tsx"
   ],
-  "exclude": ["tests/registry-file-upload.test.tsx"]
+  "exclude": [
+    "tests/registry-component-ui.test.tsx",
+    "tests/registry-page-provider.test.tsx"
+  ]
 }

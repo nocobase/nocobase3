@@ -10,7 +10,15 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useMemo, useRef, useState, type ComponentProps } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactElement,
+} from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -20,7 +28,7 @@ import { defaultFilePreviewMessages } from './file-preview-messages';
 import { FileThumbnail } from './file-thumbnail';
 import { getFileName } from './file-url';
 import { useFileUpload } from './use-file-upload';
-import { getAcceptAttribute } from './validation';
+import { getAcceptAttribute, validateFileField } from './validation';
 import type {
   FilePreviewMessages,
   FileUploadItem,
@@ -37,6 +45,8 @@ export type FileUploadFieldProps = Omit<ComponentProps<'div'>, 'onChange'> & {
   readOnly?: boolean;
   multiple?: boolean;
   maxFiles?: number;
+  minimum?: number;
+  required?: boolean;
   maxBytes?: number;
   accept?: string | readonly string[];
   messages?: Partial<FileUploadMessages>;
@@ -68,6 +78,13 @@ const defaultMessages: FileUploadMessages = {
   fileSizeExceeded: (maxBytes) =>
     `File size exceeds ${formatFileSize(maxBytes)}.`,
   fileTypeRejected: 'File type is not allowed.',
+  required: 'At least one file is required.',
+  minimumFiles: (minimum) => `Add at least ${minimum} files.`,
+  maximumFiles: (maximum) => `Use no more than ${maximum} files.`,
+  uploadInProgress: 'Wait for all files to finish uploading.',
+  uploadFailedValidation: 'Retry or remove files that failed to upload.',
+  fileNotReady: 'Only ready files can be submitted.',
+  validationLabel: 'File field validation',
 };
 
 export function FileUploadField({
@@ -78,6 +95,8 @@ export function FileUploadField({
   readOnly,
   multiple = false,
   maxFiles,
+  minimum,
+  required,
   maxBytes,
   accept,
   className,
@@ -88,7 +107,12 @@ export function FileUploadField({
   onUploadComplete,
   onUploadError,
   ...rootProps
-}: FileUploadFieldProps) {
+}: FileUploadFieldProps): ReactElement {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const validationInputRef = useRef<HTMLInputElement>(null);
+  const validationMessageRef = useRef<string | null>(null);
+  const validationId = useId();
+  const [showValidation, setShowValidation] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -122,7 +146,7 @@ export function FileUploadField({
     disabled,
     readOnly,
     multiple,
-    maxFiles,
+    maxFiles: multiple ? maxFiles : 1,
     maxBytes,
     accept,
     messages,
@@ -140,6 +164,46 @@ export function FileUploadField({
         .map((item) => item.record!),
     [items],
   );
+  const validationMessage = validateFileField({
+    accept,
+    disabled,
+    items,
+    maxBytes,
+    maxFiles: multiple ? maxFiles : 1,
+    messages,
+    minimum: resolveMinimumFiles({ maxFiles, minimum, multiple, required }),
+    readOnly,
+    required,
+    value,
+  });
+  const validationVisible = showValidation && validationMessage !== null;
+  const describedBy = [
+    rootProps['aria-describedby'],
+    validationVisible ? validationId : undefined,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  useEffect(() => {
+    validationMessageRef.current = validationMessage;
+    validationInputRef.current?.setCustomValidity(validationMessage ?? '');
+  }, [validationMessage]);
+
+  useEffect(() => {
+    const form = rootRef.current?.closest('form');
+    if (!form) return;
+    const handleSubmit = (event: SubmitEvent): void => {
+      const message = validationMessageRef.current;
+      if (!message) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setShowValidation(true);
+      validationInputRef.current?.setCustomValidity(message);
+      validationInputRef.current?.reportValidity();
+    };
+    form.addEventListener('submit', handleSubmit, true);
+    return () => form.removeEventListener('submit', handleSubmit, true);
+  }, []);
 
   const handleDrop = (event: React.DragEvent<HTMLElement>): void => {
     event.preventDefault();
@@ -150,11 +214,27 @@ export function FileUploadField({
 
   return (
     <div
+      {...rootProps}
+      ref={rootRef}
       data-slot='file-upload-field'
       className={cn('space-y-3', className)}
       aria-busy={uploadActive || undefined}
-      {...rootProps}
+      aria-describedby={describedBy || undefined}
+      aria-invalid={validationVisible || undefined}
     >
+      <input
+        ref={validationInputRef}
+        className='sr-only'
+        tabIndex={-1}
+        type='text'
+        value={validationMessage === null ? 'valid' : ''}
+        readOnly
+        required={validationMessage !== null}
+        aria-label={messages.validationLabel}
+        aria-describedby={validationVisible ? validationId : undefined}
+        onInvalid={() => setShowValidation(true)}
+      />
+
       {operationError ? (
         <div
           className='rounded-lg border border-destructive/40 p-3 text-sm text-destructive'
@@ -337,6 +417,11 @@ export function FileUploadField({
       {readOnly && !items.length ? (
         <p className='text-sm text-muted-foreground'>{messages.noFiles}</p>
       ) : null}
+      {validationVisible ? (
+        <p id={validationId} className='text-sm text-destructive' role='alert'>
+          {validationMessage}
+        </p>
+      ) : null}
 
       <div className='sr-only' aria-live='polite'>
         {items
@@ -356,6 +441,31 @@ export function FileUploadField({
       />
     </div>
   );
+}
+
+function resolveMinimumFiles({
+  maxFiles,
+  minimum,
+  multiple,
+  required,
+}: Pick<
+  FileUploadFieldProps,
+  'maxFiles' | 'minimum' | 'multiple' | 'required'
+>): number {
+  if (
+    minimum !== undefined &&
+    (!Number.isSafeInteger(minimum) || minimum < 0)
+  ) {
+    throw new Error('File field minimum must be a non-negative integer.');
+  }
+  const resolved = Math.max(required ? 1 : 0, minimum ?? 0);
+  if (!multiple && resolved > 1) {
+    throw new Error('A single-file field cannot require multiple files.');
+  }
+  if (maxFiles !== undefined && resolved > maxFiles) {
+    throw new Error('File field minimum cannot exceed maxFiles.');
+  }
+  return resolved;
 }
 
 function formatFileSize(size: number): string {

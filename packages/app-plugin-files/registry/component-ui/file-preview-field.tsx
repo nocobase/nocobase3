@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactElement } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -17,7 +17,7 @@ export function FilePreviewField({
   className,
   messages: messageOverrides,
   ...rootProps
-}: FilePreviewFieldProps) {
+}: FilePreviewFieldProps): ReactElement {
   const path = useMemo(() => normalizeFileBasePath(basePath), [basePath]);
   const [open, setOpen] = useState(false);
   const [initialIndex, setInitialIndex] = useState(0);

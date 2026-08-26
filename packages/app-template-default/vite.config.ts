@@ -104,6 +104,17 @@ export default createPortalViteConfig(
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],
         alias: [
+          ...(filesRegistryRoot
+            ? [
+                {
+                  find: '@/extensions/nocobase-files-provider-ui',
+                  replacement: path.join(
+                    filesRegistryRoot,
+                    'client/extensions/nocobase-files-provider-ui',
+                  ),
+                },
+              ]
+            : []),
           { find: '@', replacement: path.resolve(packageRoot, './client') },
           ...(filesRegistryRoot
             ? [
@@ -111,7 +122,7 @@ export default createPortalViteConfig(
                   find: '@nocobase/e2e-file-upload',
                   replacement: path.join(
                     filesRegistryRoot,
-                    'client/extensions/nocobase-file-upload',
+                    'client/extensions/nocobase-files-component-ui',
                   ),
                 },
               ]
