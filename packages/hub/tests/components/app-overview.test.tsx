@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import AppOverview from '../../client/features/apps/app-overview';
@@ -63,5 +64,20 @@ describe('AppOverview', () => {
     expect(
       screen.queryByRole('button', { name: '停止运行' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('opens the non-sensitive development guide for an unpublished App', async () => {
+    const user = userEvent.setup();
+    render(<AppOverview />);
+
+    await user.click(screen.getByRole('button', { name: '开发与部署' }));
+
+    expect(
+      screen.getByRole('heading', { name: '本地开发与部署' }),
+    ).toBeVisible();
+    expect(screen.getByText(/部署令牌不会再次显示/)).toBeVisible();
+    expect(
+      screen.getByText('nb3 app create crm', { exact: false }),
+    ).toBeVisible();
   });
 });

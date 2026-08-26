@@ -248,6 +248,39 @@ describe('AppsHome', () => {
     expect(screen.queryByText('deploy-token-once')).not.toBeInTheDocument();
   });
 
+  it('reopens the non-sensitive development guide after the creation dialog closes', async () => {
+    const user = userEvent.setup();
+    state.inventory = 'placeholder';
+    state.createManagedApp.mockResolvedValue({
+      app: { appId: 'crm', name: '客户管理' },
+      deployToken: 'deploy-token-once',
+    });
+    render(<AppsHome />);
+
+    await user.click(screen.getByRole('button', { name: '创建应用' }));
+    await user.type(
+      screen.getByRole('textbox', { name: '应用名称' }),
+      '客户管理',
+    );
+    await user.type(screen.getByRole('textbox', { name: 'App ID' }), 'crm');
+    await user.click(screen.getByRole('button', { name: '创建空应用' }));
+    expect(
+      await screen.findByRole('heading', { name: '应用创建成功' }),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: '我已保存，完成' }));
+    await user.click(screen.getByRole('button', { name: '开发与部署' }));
+
+    expect(
+      screen.getByRole('heading', { name: '本地开发与部署' }),
+    ).toBeVisible();
+    expect(screen.getByText(/部署令牌不会再次显示/)).toBeVisible();
+    expect(
+      screen.getByText('nb3 app create crm', { exact: false }),
+    ).toBeVisible();
+    expect(screen.queryByText('deploy-token-once')).not.toBeInTheDocument();
+  });
+
   it('shows a duplicate App ID failure inside the dialog', async () => {
     const user = userEvent.setup();
     state.createManagedApp.mockRejectedValue(

@@ -7,8 +7,10 @@ import {
   PackageCheck,
   Rocket,
   ServerCog,
+  Terminal,
 } from 'lucide-react';
 import { useLink } from '@refinedev/core';
+import { useState } from 'react';
 import { useParams } from 'react-router';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -35,10 +37,12 @@ import {
 } from './presentation';
 import { AppAccessActions } from './app-access-actions';
 import { AppLifecycleActions } from './app-lifecycle-actions';
+import { DevelopmentGuideDialog } from './development-guide-dialog';
 
 export default function AppOverview() {
   const Link = useLink();
   const { appId = '' } = useParams();
+  const [developmentGuideOpen, setDevelopmentGuideOpen] = useState(false);
   const { scopedOverview, busy, error, refresh, runLifecycle } =
     useReleaseManagement({
       appId,
@@ -92,6 +96,11 @@ export default function AppOverview() {
             </p>
           </div>
           <div className='flex flex-wrap gap-2'>
+            {app && !deployed ? (
+              <Button size='lg' onClick={() => setDevelopmentGuideOpen(true)}>
+                <Terminal /> 开发与部署
+              </Button>
+            ) : null}
             <AppAccessActions
               accessUrl={app?.accessUrl ?? null}
               disabledReason={appAccessDisabledReason(app)}
@@ -117,6 +126,12 @@ export default function AppOverview() {
           </div>
         </div>
       </section>
+
+      <DevelopmentGuideDialog
+        appId={appId}
+        open={developmentGuideOpen}
+        onOpenChange={setDevelopmentGuideOpen}
+      />
 
       {error ? (
         <Alert variant='destructive'>

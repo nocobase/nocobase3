@@ -8,6 +8,7 @@ import {
   Plus,
   RefreshCw,
   ServerCog,
+  Terminal,
 } from 'lucide-react';
 import { useLink } from '@refinedev/core';
 import { useState, type ReactNode } from 'react';
@@ -37,10 +38,12 @@ import { AppAccessActions } from './app-access-actions';
 import { presentReleaseControlError } from './release-control-error';
 import { AppLifecycleActions } from './app-lifecycle-actions';
 import { CreateAppDialog } from './create-app-dialog';
+import { DevelopmentGuideDialog } from './development-guide-dialog';
 
 export default function AppsHome() {
   const Link = useLink();
   const [createOpen, setCreateOpen] = useState(false);
+  const [guideAppId, setGuideAppId] = useState<string | null>(null);
   const {
     overview,
     busy,
@@ -106,6 +109,15 @@ export default function AppsHome() {
         onOpenChange={setCreateOpen}
         onCreated={refresh}
       />
+      {guideAppId ? (
+        <DevelopmentGuideDialog
+          appId={guideAppId}
+          open
+          onOpenChange={(open) => {
+            if (!open) setGuideAppId(null);
+          }}
+        />
+      ) : null}
 
       {controlError ? (
         <Alert variant='destructive'>
@@ -248,7 +260,11 @@ export default function AppsHome() {
                           }
                         />
                       </>
-                    ) : null}
+                    ) : (
+                      <Button size='sm' onClick={() => setGuideAppId(app.id)}>
+                        <Terminal /> 开发与部署
+                      </Button>
+                    )}
                     <Button
                       size='sm'
                       variant='outline'

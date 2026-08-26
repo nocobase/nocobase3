@@ -1,4 +1,3 @@
-import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
 import { createManagedApp } from '@nocobase/hub-release-management/client';
 import { Check, Copy, LoaderCircle, Terminal } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -15,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DevelopmentGuideSteps } from './development-guide-dialog';
 
 interface CreatedAppGuide {
   appId: string;
@@ -218,15 +218,6 @@ function CreationGuide({
   const [tokenCopyState, setTokenCopyState] = useState<
     'idle' | 'copied' | 'error'
   >('idle');
-  const localCommands = [
-    `nb3 app create ${appId}`,
-    `cd ${appId}`,
-    'pnpm install',
-    'nb3 app dev',
-  ].join('\n');
-  const hubUrl = resolveCurrentHubUrl();
-  const deployCommand = `(printf 'Deploy token: '; read -r -s NB3_HUB_TOKEN && export NB3_HUB_TOKEN && printf '\\n' && nb3 app deploy --hub ${quoteForShell(hubUrl)}; NB3_DEPLOY_EXIT=$?; unset NB3_HUB_TOKEN; exit "$NB3_DEPLOY_EXIT")`;
-
   return (
     <>
       <DialogHeader>
@@ -273,19 +264,7 @@ function CreationGuide({
         </AlertDescription>
       </Alert>
 
-      <div className='space-y-4'>
-        <CommandBlock
-          title='1. 创建并启动本地应用'
-          command={localCommands}
-          copyLabel='复制开发命令'
-        />
-        <CommandBlock
-          title='2. 构建并部署到 Hub'
-          description='先运行命令并粘贴部署令牌；输入不会显示，也不会进入 Shell 历史。部署会上传构建产物并提交审批。'
-          command={deployCommand}
-          copyLabel='复制部署命令'
-        />
-      </div>
+      <DevelopmentGuideSteps appId={appId} />
 
       <DialogFooter>
         <Button type='button' onClick={onDone}>
@@ -293,54 +272,6 @@ function CreationGuide({
         </Button>
       </DialogFooter>
     </>
-  );
-}
-
-function CommandBlock({
-  title,
-  description,
-  command,
-  copyLabel,
-}: {
-  title: string;
-  description?: string;
-  command: string;
-  copyLabel: string;
-}) {
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>(
-    'idle',
-  );
-
-  return (
-    <section className='overflow-hidden rounded-xl border bg-card'>
-      <div className='flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3'>
-        <div className='min-w-0'>
-          <h3 className='font-medium'>{title}</h3>
-          {description ? (
-            <p className='mt-1 text-xs leading-5 text-muted-foreground'>
-              {description}
-            </p>
-          ) : null}
-        </div>
-        <Button
-          type='button'
-          size='sm'
-          variant='outline'
-          onClick={() => void copyText(command, setCopyState)}
-        >
-          {copyState === 'copied' ? <Check /> : <Copy />}
-          {copyState === 'copied' ? '已复制' : copyLabel}
-        </Button>
-      </div>
-      {copyState === 'error' ? (
-        <p role='alert' className='border-b px-4 py-2 text-xs text-destructive'>
-          无法访问剪贴板，请手动选择并复制命令。
-        </p>
-      ) : null}
-      <pre className='overflow-x-auto whitespace-pre-wrap bg-muted/30 p-4 font-mono text-xs leading-5 text-foreground'>
-        {command}
-      </pre>
-    </section>
   );
 }
 
@@ -408,13 +339,4 @@ function readErrorStatus(error: unknown): number | undefined {
     return undefined;
   }
   return typeof error.status === 'number' ? error.status : undefined;
-}
-
-function resolveCurrentHubUrl(): string {
-  if (typeof window === 'undefined') return getPortalBase().replace(/\/+$/, '');
-  return `${window.location.origin}${getPortalBase().replace(/\/+$/, '')}`;
-}
-
-function quoteForShell(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
