@@ -18,15 +18,16 @@ export function Button({
   ...props
 }: ButtonProps): ReactElement {
   const variantClass = {
-    default: 'bg-primary text-primary-foreground hover:bg-primary/80',
+    default:
+      'border-transparent bg-primary text-primary-foreground hover:bg-primary/80',
     outline: 'border-border bg-background hover:bg-muted',
-    ghost: 'hover:bg-muted',
+    ghost: 'border-transparent hover:bg-muted',
   }[variant];
   const sizeClass = size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-sm';
 
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-lg border border-transparent font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${variantClass} ${sizeClass} ${className}`}
+      className={`inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 ${variantClass} ${sizeClass} ${className}`}
       type={type}
       {...props}
     />
@@ -38,7 +39,7 @@ export type InputProps = InputHTMLAttributes<HTMLInputElement>;
 export function Input({ className = '', ...props }: InputProps): ReactElement {
   return (
     <input
-      className={`h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 ${className}`}
+      className={`h-8 w-full min-w-0 rounded-lg border border-input bg-background px-2.5 py-1 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 ${className}`}
       {...props}
     />
   );

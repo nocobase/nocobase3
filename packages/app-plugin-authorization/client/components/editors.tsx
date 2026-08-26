@@ -10,7 +10,7 @@ import type {
 } from '../authorization-client.js';
 
 const selectClass =
-  'h-9 w-full rounded-lg border border-input bg-background px-3 text-sm';
+  'h-8 w-full rounded-lg border border-input bg-background px-3 text-sm';
 
 export function Field({
   label,

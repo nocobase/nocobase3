@@ -1,5 +1,13 @@
 import type { AppClientPluginBootstrap } from '@nocobase/app-client/plugins';
 import type { AppClientRefineConfig } from '@nocobase/app-client';
+import {
+  KeyRound,
+  LockKeyhole,
+  Share2,
+  ShieldBan,
+  ShieldCheck,
+} from 'lucide-react';
+import { createElement } from 'react';
 
 import { configureAuthorizationClient } from './runtime.js';
 
@@ -32,27 +40,43 @@ const bootstrap: AppClientPluginBootstrap = ({ appClient, refine }) => {
   refine.addResources([
     {
       name: 'authorization',
-      meta: { label: 'Authorization' },
+      meta: { label: 'Authorization', icon: createElement(ShieldCheck) },
     },
     {
       name: 'authorization.settings.permission-sets',
       list: '/settings/authorization/permission-sets',
-      meta: { label: 'Permission Sets', parent: 'authorization' },
+      meta: {
+        label: 'Permission Sets',
+        parent: 'authorization',
+        icon: createElement(KeyRound),
+      },
     },
     {
       name: 'authorization.settings.default-access',
       list: '/settings/authorization/default-access',
-      meta: { label: 'Default Access', parent: 'authorization' },
+      meta: {
+        label: 'Default Access',
+        parent: 'authorization',
+        icon: createElement(LockKeyhole),
+      },
     },
     {
       name: 'authorization.settings.sharing-rules',
       list: '/settings/authorization/sharing-rules',
-      meta: { label: 'Sharing Rules', parent: 'authorization' },
+      meta: {
+        label: 'Sharing Rules',
+        parent: 'authorization',
+        icon: createElement(Share2),
+      },
     },
     {
       name: 'authorization.settings.restriction-rules',
       list: '/settings/authorization/restriction-rules',
-      meta: { label: 'Restriction Rules', parent: 'authorization' },
+      meta: {
+        label: 'Restriction Rules',
+        parent: 'authorization',
+        icon: createElement(ShieldBan),
+      },
     },
   ]);
 };

@@ -16,7 +16,7 @@ export function ManagementToolbar({
   return (
     <div className='flex flex-col gap-3 border-b bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between'>
       <Input
-        className='w-full sm:max-w-sm'
+        className='w-full sm:w-96 sm:flex-none'
         type='search'
         placeholder='Search'
         value={search}

@@ -402,9 +402,9 @@ function PermissionsSummary({
             Search and review resources without expanding every policy.
           </p>
         </div>
-        <div className='flex flex-wrap gap-2'>
+        <div className='flex w-full flex-wrap gap-2 lg:w-auto lg:flex-nowrap'>
           <Input
-            className='w-64'
+            className='max-w-72 flex-1 lg:w-72 lg:flex-none'
             type='search'
             placeholder='Search resources or actions'
             value={search}
@@ -412,7 +412,7 @@ function PermissionsSummary({
           />
           <select
             aria-label='Resource type'
-            className='h-9 rounded-md border bg-background px-3 text-sm'
+            className='h-8 min-w-48 rounded-lg border bg-background px-3 text-sm'
             value={type}
             onChange={(event) => setType(event.target.value)}
           >
@@ -423,9 +423,7 @@ function PermissionsSummary({
               </option>
             ))}
           </select>
-          <Button size='sm' onClick={onEdit}>
-            Edit permissions
-          </Button>
+          <Button onClick={onEdit}>Edit permissions</Button>
         </div>
       </div>
       <table className='w-full min-w-[42rem] text-left text-sm'>
@@ -568,7 +566,7 @@ function Assignments({
       <div className='flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between'>
         <div className='flex flex-wrap gap-2'>
           <Input
-            className='w-64'
+            className='max-w-72 flex-1'
             type='search'
             placeholder='Search name, username, or email'
             value={search}
@@ -576,7 +574,7 @@ function Assignments({
           />
           <select
             aria-label='Assignment type'
-            className='h-9 rounded-md border bg-background px-3 text-sm'
+            className='h-8 min-w-44 rounded-lg border bg-background px-3 text-sm'
             value={kind}
             onChange={(event) => setKind(event.target.value)}
           >
@@ -946,7 +944,7 @@ function PermissionSetEditor({
         </div>
         <div className='flex flex-wrap gap-2 border-b pb-4'>
           <Input
-            className='w-64'
+            className='max-w-72 flex-1'
             type='search'
             placeholder='Search resources or actions'
             value={resourceSearch}
@@ -954,7 +952,7 @@ function PermissionSetEditor({
           />
           <select
             aria-label='Permission resource type'
-            className='h-9 rounded-md border bg-background px-3 text-sm'
+            className='h-8 min-w-48 rounded-lg border bg-background px-3 text-sm'
             value={resourceType}
             onChange={(event) => setResourceType(event.target.value)}
           >
@@ -1549,7 +1547,7 @@ function RecordAccessEditor({
       <Field label='Record access'>
         <select
           aria-label={`${humanize(action)} record access`}
-          className='h-9 w-full rounded-md border bg-background px-2.5 text-sm'
+          className='h-8 w-full rounded-lg border bg-background px-2.5 text-sm'
           value={key}
           onChange={(event) =>
             onChange(
@@ -1604,7 +1602,7 @@ function RecordAccessEditor({
             >
               <select
                 aria-label='Filter field'
-                className='h-9 rounded-md border bg-background px-2 text-sm'
+                className='h-8 rounded-lg border bg-background px-2 text-sm'
                 value={condition.field}
                 onChange={(event) =>
                   updateConditions(
@@ -1624,7 +1622,7 @@ function RecordAccessEditor({
               </select>
               <select
                 aria-label='Filter operator'
-                className='h-9 rounded-md border bg-background px-2 text-sm'
+                className='h-8 rounded-lg border bg-background px-2 text-sm'
                 value={condition.operator}
                 onChange={(event) =>
                   updateConditions(
