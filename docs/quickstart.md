@@ -12,6 +12,7 @@ V3 的基本思路：
 ```bash
 pnpm create @nocobase/app crm
 cd crm
+pnpm install
 ```
 
 这个目录就是 App 源码目录，可以放在任意位置。
