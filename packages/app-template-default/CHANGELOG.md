@@ -1,5 +1,11 @@
 # @nocobase/app-template-default
 
+## 0.0.1-beta.3
+
+### Patch Changes
+
+- 31245b6: Align `nocobase.defaultTemplateVersion` with the package version. Releases now synchronize the two, so an application generated from the template no longer inherits a stale template version.
+
 ## 0.0.1-beta.2
 
 ### Patch Changes
