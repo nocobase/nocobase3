@@ -1,5 +1,5 @@
+import type { Context } from '../context.js';
 import type { RuntimeActor } from '@nocobase/ai-employee';
-import type { Context } from '@nocobase/ai-employee';
 import type { AIEmployeeAccessPolicy } from '../auth/access-policy.js';
 import {
   asRecord,
@@ -61,10 +61,6 @@ export class AIMCPServerService {
       url: optionalString(record.url) ?? current?.url,
       headers: stringRecord(record.headers) ?? current?.headers ?? {},
       restart: asRecord(record.restart) ?? current?.restart,
-      useUserContext:
-        typeof record.useUserContext === 'boolean'
-          ? record.useUserContext
-          : (current?.useUserContext ?? false),
     };
     await ctx.ai.mcpServerManager.registerMCP({ [name]: values as any });
     await ctx.ai.mcpServerManager.rebuildClient();

@@ -9,7 +9,7 @@
 
 import { importModule } from '../utils/import-module.js';
 import { existsSync } from 'fs';
-import type { RuntimeLogger } from '../runtime/context.js';
+import type { RuntimeLogger } from '../runtime/logger.js';
 import { AIManager } from '../manager/index.js';
 import type { MCPOptions } from '../manager/mcp-server/types.js';
 import { LoadAndRegister } from './types.js';

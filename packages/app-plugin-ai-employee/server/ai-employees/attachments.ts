@@ -7,7 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context, AIFileAttachment } from '@nocobase/ai-employee';
+import type { Context } from '../context.js';
+import type { AIFileAttachment } from '@nocobase/ai-employee';
 import type { DatabaseRepositoryFactory } from '../repository/index.js';
 
 export type AttachmentId = string | number;

@@ -18,16 +18,18 @@ import type {
 } from './types.js';
 import _ from 'lodash';
 
-export class DefaultToolsManager implements ToolsManager {
+export class DefaultToolsManager<
+  TContext = unknown,
+> implements ToolsManager<TContext> {
   constructor(
-    private readonly repository: ToolsRepository,
-    private readonly dynamicTools: DynamicToolsProvider[] = [],
+    private readonly repository: ToolsRepository<TContext>,
+    private readonly dynamicTools: DynamicToolsProvider<TContext>[] = [],
   ) {}
 
   async getTools(
     toolName: string,
-    filter?: ToolsFilter,
-  ): Promise<ToolsEntity | undefined> {
+    filter?: ToolsFilter<TContext>,
+  ): Promise<ToolsEntity<TContext> | undefined> {
     const target = await this.repository.getTools(toolName);
     if (target && this.matchesFilter(target, filter)) {
       return target;
@@ -36,7 +38,9 @@ export class DefaultToolsManager implements ToolsManager {
     return dynamicTools.find((tool) => tool.definition.name === toolName);
   }
 
-  async listTools(filter?: ToolsFilter): Promise<ToolsEntity[]> {
+  async listTools(
+    filter?: ToolsFilter<TContext>,
+  ): Promise<ToolsEntity<TContext>[]> {
     const [staticTools, dynamicTools] = await Promise.all([
       this.repository.listTools(filter),
       this.syncDynamicTools(filter),
@@ -62,7 +66,9 @@ export class DefaultToolsManager implements ToolsManager {
     return deleted;
   }
 
-  async registerTools(options: ToolsOptions | ToolsOptions[]): Promise<void> {
+  async registerTools(
+    options: ToolsOptions<TContext> | ToolsOptions<TContext>[],
+  ): Promise<void> {
     const list = _.isArray(options) ? options : [options];
     for (const option of list) {
       const entry = normalizeToolsEntity(option);
@@ -70,11 +76,14 @@ export class DefaultToolsManager implements ToolsManager {
     }
   }
 
-  registerDynamicTools(provider: DynamicToolsProvider): void {
+  registerDynamicTools(provider: DynamicToolsProvider<TContext>): void {
     this.dynamicTools.push(provider);
   }
 
-  private matchesFilter(entry: ToolsEntity, filter?: ToolsFilter): boolean {
+  private matchesFilter(
+    entry: ToolsEntity<TContext>,
+    filter?: ToolsFilter<TContext>,
+  ): boolean {
     if (!filter) return true;
     if (filter.scope && filter.scope !== entry.scope) return false;
     if (
@@ -87,11 +96,13 @@ export class DefaultToolsManager implements ToolsManager {
     return true;
   }
 
-  private async syncDynamicTools(filter?: ToolsFilter): Promise<ToolsEntity[]> {
+  private async syncDynamicTools(
+    filter?: ToolsFilter<TContext>,
+  ): Promise<ToolsEntity<TContext>[]> {
     if (this.dynamicTools.length === 0) return [];
 
-    const entries = new Map<string, ToolsEntity>();
-    const registration: ToolsRegistration = {
+    const entries = new Map<string, ToolsEntity<TContext>>();
+    const registration: ToolsRegistration<TContext> = {
       registerTools: async (options) => {
         const list = _.isArray(options) ? options : [options];
         for (const option of list) {
@@ -110,11 +121,13 @@ export class DefaultToolsManager implements ToolsManager {
   }
 }
 
-export function normalizeToolsEntity(options: ToolsOptions): ToolsEntity {
+export function normalizeToolsEntity<TContext = unknown>(
+  options: ToolsOptions<TContext>,
+): ToolsEntity<TContext> {
   const entry = {
     ...options,
     definition: { ...options.definition },
-  } as ToolsEntity;
+  } as ToolsEntity<TContext>;
   entry.from ??= 'loader';
   entry.execution ??= 'backend';
   entry.defaultPermission ??= 'ASK';
@@ -123,7 +136,9 @@ export function normalizeToolsEntity(options: ToolsOptions): ToolsEntity {
   return entry;
 }
 
-export function defineTools(options: ToolsOptions) {
+export function defineTools<TContext = unknown>(
+  options: ToolsOptions<TContext>,
+): ToolsOptions<TContext> {
   return options;
 }
 

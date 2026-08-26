@@ -1,6 +1,4 @@
 import type { RepositoryFactory } from '../repository/factory.js';
-import { MemoryRepositoryFactory } from '../repository/memory/factory.js';
-import type { Context } from '../runtime/context.js';
 import { DefaultAIEmployeeManager } from './ai-employee/index.js';
 import type { AIEmployeeManager } from './ai-employee/types.js';
 import { DocumentManager } from './document/index.js';
@@ -17,16 +15,12 @@ import type { SkillsManager } from './skills/types.js';
 import { DefaultToolsManager } from './tools/index.js';
 import type { ToolsManager } from './tools/types.js';
 
-/** Dependencies required to create the repository-backed AI manager aggregate. */
 export type AIManagerOptions = {
   repositories: RepositoryFactory;
-  context: Context;
   mcpRuntime?: MCPRuntime;
 };
 
-/** Aggregates repository-backed resource managers without depending on an App port. */
 export class AIManager {
-  readonly context: Context;
   documentManager: DocumentManager;
   toolsManager: ToolsManager;
   skillsManager: SkillsManager;
@@ -39,7 +33,6 @@ export class AIManager {
 
   constructor(options: AIManagerOptions) {
     const { repositories } = options;
-    this.context = options.context;
     this.documentManager = new DocumentManager();
     this.toolsManager = new DefaultToolsManager(repositories.toolsRepository);
     this.skillsManager = new DefaultSkillsManager(
@@ -56,7 +49,6 @@ export class AIManager {
       repositories.llmServiceRepository,
     );
     this.llmProviderManager = new LLMProviderManager(
-      options.context,
       repositories.llmServiceRepository,
     );
     this.mcpToolsManager = new McpToolsManager();

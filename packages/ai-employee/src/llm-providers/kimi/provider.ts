@@ -11,6 +11,8 @@ import { AIMessageChunk } from '@langchain/core/messages';
 import _ from 'lodash';
 import {
   LLMProvider,
+  AttachmentDocumentLoader,
+  AttachmentParseRuntime,
   ReasoningOptions,
   ResolvedReasoningOptions,
 } from '../provider.js';
@@ -27,7 +29,6 @@ const KIMI_THINKING_SWITCH_MODELS = new Set(['kimi-k2.5', 'kimi-k2.6']);
 
 export class KimiProvider extends LLMProvider {
   declare chatModel: ReasoningChatOpenAI;
-  private _documentLoader: CachedDocumentLoader | undefined;
 
   get baseURL() {
     return 'https://api.moonshot.cn/v1';
@@ -113,22 +114,20 @@ export class KimiProvider extends LLMProvider {
     return attachment.mimetype?.startsWith('image/') ?? false;
   }
 
-  protected get documentLoader(): CachedDocumentLoader {
-    if (!this._documentLoader) {
-      const loader = new KimiDocumentLoader(this.context.fileManager, {
-        apiKey: this.serviceOptions?.apiKey,
-        baseURL: this.getResolvedBaseURL(),
-      });
-      this._documentLoader = new CachedDocumentLoader(this.context, {
-        loader,
-        parserVersion: 'kimi-v1',
-        parsedMimetype: 'application/json',
-        parsedFileExtname: 'json',
-        supports: () => true,
-      });
-    }
-
-    return this._documentLoader;
+  protected resolveDocumentLoader(
+    runtime: AttachmentParseRuntime,
+  ): AttachmentDocumentLoader {
+    const loader = new KimiDocumentLoader(runtime.fileManager, {
+      apiKey: this.serviceOptions?.apiKey,
+      baseURL: this.getResolvedBaseURL(),
+    });
+    return new CachedDocumentLoader(runtime.caching, {
+      loader,
+      parserVersion: 'kimi-v1',
+      parsedMimetype: 'application/json',
+      parsedFileExtname: 'json',
+      supports: () => true,
+    });
   }
 }
 

@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { Context } from '../context.js';
 import _ from 'lodash';
 import {
   AIChatContext,
@@ -17,7 +18,6 @@ import {
   AIMessageQuery,
   AIMessageRemoveOptions,
 } from '@nocobase/ai-employee';
-import type { Context } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/app-database';
 import type { CollectionFilter } from '@nocobase/ai-employee';
 import { recordAIUsageEventsForMessages } from './ai-usage-events.js';

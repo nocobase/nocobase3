@@ -7,7 +7,6 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '@nocobase/ai-employee';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const serverRequestMock = vi.hoisted(() => vi.fn());
@@ -26,10 +25,6 @@ import {
   supportsChatCompletions,
 } from '../shengsuanyun.js';
 
-function createApp(): Context {
-  return {} as Context;
-}
-
 const originalWhitelist = process.env.SERVER_REQUEST_WHITELIST;
 
 describe('ShengSuanYunProvider', () => {
@@ -40,7 +35,6 @@ describe('ShengSuanYunProvider', () => {
 
   it('uses the ShengSuanYun OpenAI-compatible API base URL', () => {
     const provider = new ShengSuanYunProvider({
-      context: createApp(),
       serviceOptions: { apiKey: 'test-key' },
     });
 
@@ -54,7 +48,6 @@ describe('ShengSuanYunProvider', () => {
   it('adds the configured X-Title header to chat requests', () => {
     process.env.SERVER_REQUEST_WHITELIST = 'router.shengsuanyun.com';
     const provider = new ShengSuanYunProvider({
-      context: createApp(),
       serviceOptions: { apiKey: 'test-key', xTitle: 'Test App' },
       modelOptions: { model: 'deepseek/deepseek-v4-flash' },
     });
@@ -70,7 +63,6 @@ describe('ShengSuanYunProvider', () => {
   it('does not hardcode the X-Title header', () => {
     process.env.SERVER_REQUEST_WHITELIST = 'router.shengsuanyun.com';
     const provider = new ShengSuanYunProvider({
-      context: createApp(),
       serviceOptions: { apiKey: 'test-key' },
       modelOptions: { model: 'deepseek/deepseek-v4-flash' },
     });
@@ -114,7 +106,6 @@ describe('ShengSuanYunProvider', () => {
       },
     });
     const provider = new ShengSuanYunProvider({
-      context: createApp(),
       serviceOptions: { apiKey: 'test-key', xTitle: 'Test App' },
     });
 
@@ -133,9 +124,7 @@ describe('ShengSuanYunProvider', () => {
 
   it('requires an API key before loading models', async () => {
     process.env.SERVER_REQUEST_WHITELIST = 'router.shengsuanyun.com';
-    const provider = new ShengSuanYunProvider({
-      context: createApp(),
-    });
+    const provider = new ShengSuanYunProvider({});
 
     await expect(provider.listModels()).resolves.toEqual({
       code: 400,

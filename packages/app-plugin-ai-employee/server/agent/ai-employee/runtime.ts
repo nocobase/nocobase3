@@ -1,3 +1,4 @@
+import type { Context } from '../../context.js';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { SkillsEntity } from '@nocobase/ai-employee';
 /**
@@ -12,7 +13,6 @@ import type { SkillsEntity } from '@nocobase/ai-employee';
 import type { AIToolMessageEntity } from '../../repository/index.js';
 import type { DatabaseConnection } from '@nocobase/app-database';
 import { LLMProvider } from '@nocobase/ai-employee';
-import { parseVariables } from '@nocobase/ai-employee';
 import { getSystemPrompt } from '../../ai-employees/prompts.js';
 import _ from 'lodash';
 import {
@@ -33,7 +33,6 @@ import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { ToolsFilter, ToolsManager } from '@nocobase/ai-employee';
 import { AIToolMessage } from '@nocobase/ai-employee';
-import { Context } from '@nocobase/ai-employee';
 import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,
@@ -176,10 +175,7 @@ export class AIEmployeeCapabilities {
       return '';
     }
 
-    const about = await parseVariables(
-      this.ctx,
-      this.employee.about ?? this.employee.defaultPrompt ?? '',
-    );
+    const about = this.employee.about ?? this.employee.defaultPrompt ?? '';
     if (this.systemPromptMode === 'raw') {
       return about;
     }
@@ -193,7 +189,7 @@ export class AIEmployeeCapabilities {
 
     let background = '';
     if (this.systemMessage) {
-      background = await parseVariables(this.ctx, this.systemMessage);
+      background = this.systemMessage;
     }
 
     const aiMessages = await this.aiChatConversation.listMessages();
@@ -650,10 +646,12 @@ If information is missing, clearly state it in the summary.</Important>`;
         const contentBlocks = [];
         if (attachments?.length) {
           for (const attachment of attachments) {
-            const parsed = await provider.parseAttachment(
-              this.ctx,
-              attachment as any,
-            );
+            const parsed = await provider.parseAttachment(attachment as any, {
+              fileManager: this.ctx.fileManager,
+              documentLoader: this.ctx.documentLoaders.cached,
+              caching: this.ctx.caching,
+              getHeader: (name: string) => this.ctx.get(name),
+            });
             if (parsed.placement === 'system') {
               formattedMessages.push({
                 role: 'system',

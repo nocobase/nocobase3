@@ -15,7 +15,6 @@ import {
 } from '@langchain/mcp-adapters';
 import { StructuredToolInterface } from '@langchain/core/tools';
 import type { AIMCPRepository } from '../../repository/index.js';
-import type { Context } from '../../runtime/context.js';
 import type {
   MCPFilter,
   MCPServerManager,
@@ -30,28 +29,17 @@ import type {
   ToolsRegistration,
   ToolsOptions,
 } from '../tools/types.js';
-import {
-  normalizeMCPOptions,
-  renderMCPOptions,
-} from './mcp-options-renderer.js';
-import { UserContextMCPClientManager } from './mcp-user-context-client-manager.js';
+import { normalizeMCPOptions } from './mcp-options-renderer.js';
 
 export class DefaultMCPServerManager implements MCPServerManager {
   private client: MultiServerMCPClient | null = null;
   private toolsMap: Record<string, StructuredToolInterface[]> = {};
   private toolsPermissionMap: Record<string, Permission> = {};
-  private readonly userContextClientManager: UserContextMCPClientManager;
 
   constructor(
     private readonly repository: AIMCPRepository,
     private readonly runtime: MCPRuntime = {},
-  ) {
-    this.userContextClientManager = new UserContextMCPClientManager({
-      runtime,
-      listEntries: () => this.listMCP({ enabled: true, useUserContext: true }),
-      buildConnection: (options) => this.buildMCPConnection(options),
-    });
-  }
+  ) {}
 
   async registerMCP(registration: {
     [key: string | symbol]: MCPOptions;
@@ -78,9 +66,6 @@ export class DefaultMCPServerManager implements MCPServerManager {
       filter: {
         ...(filter.enabled == null ? {} : { enabled: filter.enabled }),
         ...(filter.transport ? { transport: filter.transport } : {}),
-        ...(filter.useUserContext == null
-          ? {}
-          : { useUserContext: filter.useUserContext }),
       },
       sort: ['sort', 'name'],
     });
@@ -100,10 +85,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
       this.toolsMap = {};
     }
 
-    const entries = await this.listMCP({
-      enabled: true,
-      useUserContext: false,
-    });
+    const entries = await this.listMCP({ enabled: true });
     if (entries.length === 0) return;
 
     const connections: Record<
@@ -112,7 +94,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
     > = {};
     for (const entry of entries) {
       connections[entry.name] = this.buildMCPConnection(
-        await renderMCPOptions(entry, this.runtime),
+        normalizeMCPOptions(entry),
       );
     }
 
@@ -136,23 +118,11 @@ export class DefaultMCPServerManager implements MCPServerManager {
       for (const [serverName, tools] of Object.entries(this.toolsMap)) {
         await this.registerToolsFromMap(register, serverName, tools);
       }
-
-      if (!filter?.ctx) return;
-      const userToolsMap = await this.userContextClientManager.getToolsMap(
-        filter.ctx,
-      );
-      for (const [serverName, tools] of Object.entries(userToolsMap)) {
-        await this.registerToolsFromMap(register, serverName, tools);
-      }
     };
   }
 
-  async listMCPTools(ctx?: Context): Promise<Record<string, MCPToolEntry[]>> {
-    const toolsMap = {
-      ...this.toolsMap,
-      ...(ctx ? await this.userContextClientManager.getToolsMap(ctx) : {}),
-    };
-    return this.formatMCPTools(toolsMap);
+  async listMCPTools(): Promise<Record<string, MCPToolEntry[]>> {
+    return this.formatMCPTools(this.toolsMap);
   }
 
   async updateMCPToolPermission(
@@ -162,19 +132,8 @@ export class DefaultMCPServerManager implements MCPServerManager {
     this.toolsPermissionMap[toolName] = permission;
   }
 
-  async clearUserContextCache(): Promise<void> {
-    await this.userContextClientManager.clear();
-  }
-
-  async testConnection(
-    options: MCPOptions,
-    ctx?: Context,
-  ): Promise<MCPTestResult> {
-    const renderedOptions = await renderMCPOptions(
-      normalizeMCPOptions(options),
-      this.runtime,
-      ctx,
-    );
+  async testConnection(options: MCPOptions): Promise<MCPTestResult> {
+    const renderedOptions = normalizeMCPOptions(options);
     const { transport } = renderedOptions;
     if (!transport)
       return { success: false, error: 'Transport type is required' };
@@ -251,7 +210,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
             tool.description || `MCP tool: ${tool.name} from ${serverName}`,
           schema: tool.schema,
         },
-        invoke: async (_ctx: Context, args: any) => {
+        invoke: async (_ctx: unknown, args: any) => {
           try {
             return await tool.invoke(args);
           } catch (error: any) {
@@ -325,7 +284,6 @@ export class DefaultMCPServerManager implements MCPServerManager {
       ...options,
       args: options.args ?? [],
       env: options.env ?? {},
-      useUserContext: options.useUserContext === true,
     } as MCPEntity) as MCPEntity;
   }
 

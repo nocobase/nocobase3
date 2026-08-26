@@ -7,6 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { Context } from './context.js';
+import { createWorkContextHandler } from './work-context/index.js';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -16,7 +18,7 @@ import type { Caching } from '@nocobase/caching';
 import type { DatabaseConnection } from '@nocobase/app-database';
 import type { SnowflakeIdGenerator } from '@nocobase/id-generator';
 import type { Env, Hono, MiddlewareHandler } from 'hono';
-import type { Context, CurrentUser, RuntimeActor } from '@nocobase/ai-employee';
+import type { CurrentUser, RuntimeActor } from '@nocobase/ai-employee';
 import {
   AIManager,
   type FileManager,
@@ -193,10 +195,8 @@ export function createAIEmployeeRuntime(
     ? new DriveFileManager(options.deps.driveManager)
     : new MemoryFileManager();
   const ai = options.deps.ai;
-  const ctx = ai.context;
-
   const accessPolicy = new AIEmployeeAccessPolicy();
-  Object.assign(ctx, {
+  const ctx = {
     ai,
     repositories,
     database: options.deps.database,
@@ -215,7 +215,15 @@ export function createAIEmployeeRuntime(
     skillService: new AISkillService(accessPolicy),
     llmService: new LLMService(accessPolicy),
     mcpServerService: new AIMCPServerService(accessPolicy),
-  });
+    aiEmployeesManager: null!,
+    aiConversationsManager: null!,
+    builtInManager: null!,
+    llmStreamCachedManager: null!,
+    subAgentsDispatcher: null!,
+    knowledgeBaseManager: null!,
+    workContextHandler: null!,
+    documentLoaders: null!,
+  } satisfies Context;
   Object.assign(ctx, createSupportingManagers(ctx));
   return ctx;
 }
@@ -264,7 +272,12 @@ export function registerAIEmployeeAppRoutes(
   >,
 ): void {
   if (installations.has(app)) return;
-  const ctx = options.deps.ai.context;
+  const ctx = runtimes.get(options.deps.ai);
+  if (!ctx) {
+    throw new Error(
+      'AI employee runtime is not initialized. Call initializeAIEmployee() before registering routes.',
+    );
+  }
   installations.add(app);
   app.use(
     '*',
@@ -311,25 +324,6 @@ export function createKnowledgeBaseManager(): any {
     },
     async retrievePrompt(): Promise<string> {
       return '';
-    },
-  };
-}
-
-export function createWorkContextHandler(): any {
-  return {
-    registerStrategy() {},
-    async resolve(_ctx: unknown, workContext: any[]): Promise<string[]> {
-      if (!Array.isArray(workContext)) return [];
-      return workContext
-        .map((item) =>
-          item && typeof item === 'object' && item.content != null
-            ? String(item.content)
-            : '',
-        )
-        .filter(Boolean);
-    },
-    async background(): Promise<string[]> {
-      return [];
     },
   };
 }

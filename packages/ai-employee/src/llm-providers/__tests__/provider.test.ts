@@ -8,7 +8,6 @@
  */
 
 import { describe, expect, it, afterEach } from 'vitest';
-import type { Context } from '@nocobase/ai-employee';
 import type { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 import {
@@ -87,13 +86,9 @@ class CapturingReasoningProvider extends LLMProvider {
 }
 
 function createApp(renderedValue?: Record<string, unknown>): {
-  context: Context;
   serviceOptions: Record<string, unknown>;
 } {
-  return {
-    context: {} as Context,
-    serviceOptions: renderedValue ?? {},
-  };
+  return { serviceOptions: renderedValue ?? {} };
 }
 
 const originalWhitelist = process.env.SERVER_REQUEST_WHITELIST;
@@ -505,7 +500,6 @@ describe('LLM provider baseURL guard', () => {
     });
 
     const parsed = await provider.parseAttachment(
-      {} as Context,
       {
         filename: 'secret.png',
         mimetype: 'image/png',
@@ -513,6 +507,7 @@ describe('LLM provider baseURL guard', () => {
         url: '.env',
         storageId: null,
       } as unknown as AIFileAttachment,
+      {} as never,
     );
 
     expect(parsed).toMatchObject({
@@ -522,20 +517,14 @@ describe('LLM provider baseURL guard', () => {
   });
 
   it('encodes attachment models through file manager streams', async () => {
-    const context = {
-      ...createApp().context,
-      fileManager: {
-        getFileStream: async () => ({
-          stream: Readable.from([Buffer.from('hello')]),
-        }),
-      },
-    } as unknown as Context;
-    const provider = new TestLLMProvider({ context });
+    const fileManager = {
+      getFileStream: async () => ({
+        stream: Readable.from([Buffer.from('hello')]),
+      }),
+    };
+    const provider = new TestLLMProvider({});
 
     const parsed = await provider.parseAttachment(
-      {
-        get: () => '',
-      } as unknown as Context,
       {
         id: 1,
         title: 'image',
@@ -544,6 +533,7 @@ describe('LLM provider baseURL guard', () => {
         path: '',
         storageId: 1,
       } as unknown as AIFileAttachment,
+      { fileManager, documentLoader: {} as never, getHeader: () => '' },
     );
 
     expect(parsed).toMatchObject({
@@ -557,20 +547,14 @@ describe('LLM provider baseURL guard', () => {
   });
 
   it('accepts external attachments without a local storage id', async () => {
-    const context = {
-      ...createApp().context,
-      fileManager: {
-        getFileStream: async () => ({
-          stream: Readable.from([Buffer.from('remote')]),
-        }),
-      },
-    } as unknown as Context;
-    const provider = new TestLLMProvider({ context });
+    const fileManager = {
+      getFileStream: async () => ({
+        stream: Readable.from([Buffer.from('remote')]),
+      }),
+    };
+    const provider = new TestLLMProvider({});
 
     const parsed = await provider.parseAttachment(
-      {
-        get: () => '',
-      } as unknown as Context,
       {
         id: 10,
         title: 'remote image',
@@ -583,6 +567,7 @@ describe('LLM provider baseURL guard', () => {
           collectionName: 'attachments',
         },
       } as unknown as AIFileAttachment,
+      { fileManager, documentLoader: {} as never, getHeader: () => '' },
     );
 
     expect(parsed).toMatchObject({

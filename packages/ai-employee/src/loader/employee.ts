@@ -18,7 +18,7 @@ import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { AIManager } from '../manager/index.js';
 import { LoadAndRegister } from './types.js';
-import type { RuntimeLogger } from '../runtime/context.js';
+import type { RuntimeLogger } from '../runtime/logger.js';
 import path from 'path';
 import type { AIEmployeeOptions } from '../manager/ai-employee/types.js';
 

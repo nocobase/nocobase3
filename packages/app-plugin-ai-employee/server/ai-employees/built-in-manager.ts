@@ -10,9 +10,9 @@
  * and defaults to the app package name.
  */
 
+import type { Context } from '../context.js';
 import type { AIEmployee } from '@nocobase/ai-employee';
 import _ from 'lodash';
-import { Context } from '@nocobase/ai-employee';
 
 export class BuiltInManager {
   constructor(private readonly i18nNamespace = 'app') {}

@@ -7,6 +7,7 @@ export {
   loadResources,
   registerAIEmployeeAppRoutes,
 } from './runtime.js';
+export type { Context } from './context.js';
 export type {
   AIEmployeeEnv,
   AppDeps,

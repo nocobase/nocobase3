@@ -1,6 +1,6 @@
+import type { Context } from '../context.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { RuntimeActor } from '@nocobase/ai-employee';
-import type { Context } from '@nocobase/ai-employee';
 import type { AIEmployeeDto } from '../routes/contracts.js';
 import type { AIEmployeeAccessPolicy } from '../auth/access-policy.js';
 import {

@@ -76,8 +76,7 @@ async function resolveAIEmployeeLLM(
   });
   const identity: AgentLLMIdentity = {
     providerName: resolved.service.provider,
-    llmService:
-      resolved.service.get?.('name') || (resolved.service as any).name,
+    llmService: resolved.service.name,
     model: resolved.model,
     getResponseMetadata: (id) => state.responseMetadata.get(id),
   };

@@ -1,5 +1,5 @@
+import type { Context } from '../context.js';
 import { randomUUID } from 'node:crypto';
-import type { Context } from '@nocobase/ai-employee';
 import type { EnabledLLMServiceDto } from '../routes/contracts.js';
 
 /**

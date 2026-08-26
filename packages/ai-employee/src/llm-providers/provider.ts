@@ -17,22 +17,20 @@ import {
   AIChatContext,
   AIMessageInput,
 } from '../runtime/types/ai-chat-conversation.type.js';
+import { buildTool } from '../runtime/tools.js';
+import { encodeReadableStream } from '../runtime/streams.js';
 import {
-  buildTool,
-  encodeReadableStream,
   parseResponseMessage,
   stripToolCallTags,
-} from '../runtime/server-utils.js';
+} from '../runtime/messages.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
-import { Context } from '../runtime/context.js';
+import type { FileManager } from '../manager/file/index.js';
+import type { RuntimeCaching } from '../runtime/caching.js';
 import '@langchain/core/utils/stream';
 import { LLMResult } from '@langchain/core/outputs';
 import { ContentBlock } from '@langchain/core/messages';
-import {
-  CachedDocumentLoader,
-  SUPPORTED_DOCUMENT_EXTNAMES,
-} from '../manager/ai-employee/document-loader/plugin/index.js';
+import { SUPPORTED_DOCUMENT_EXTNAMES } from '../manager/ai-employee/document-loader/plugin/index.js';
 import path from 'node:path';
 import { MODEL_KWARGS_KEY } from './common/reasoning.js';
 
@@ -70,9 +68,22 @@ export type LLMModelRequestBuilder = (input: {
 }) => LLMModelRequestBuilderResult;
 
 export interface LLMProviderOptions {
-  context: Context;
   serviceOptions?: Record<string, any>;
   modelOptions?: Record<string, any>;
+}
+
+export interface AttachmentDocumentLoader {
+  load(
+    attachment: AIFileAttachment,
+    options?: Record<string, unknown>,
+  ): Promise<{ supported: boolean; text: string }>;
+}
+
+export interface AttachmentParseRuntime {
+  fileManager: FileManager;
+  documentLoader: AttachmentDocumentLoader;
+  caching?: RuntimeCaching;
+  getHeader?(name: string): string | undefined;
 }
 
 function assertBaseURLString(baseURL: unknown): asserts baseURL is string {
@@ -116,7 +127,6 @@ function resolveServiceOptions(
 }
 
 export abstract class LLMProvider {
-  context: Context;
   serviceOptions: Record<string, any>;
   modelOptions: Record<string, any> | undefined;
   chatModel: any;
@@ -129,8 +139,7 @@ export abstract class LLMProvider {
   }
 
   constructor(opts: LLMProviderOptions) {
-    const { context, serviceOptions, modelOptions } = opts;
-    this.context = context;
+    const { serviceOptions, modelOptions } = opts;
     this.serviceOptions = resolveServiceOptions(serviceOptions);
     if (modelOptions) {
       const { _reasoning, ...restModelOptions } = modelOptions;
@@ -261,8 +270,8 @@ export abstract class LLMProvider {
   }
 
   async parseAttachment(
-    ctx: Context,
     attachment: AIFileAttachment,
+    runtime: AttachmentParseRuntime,
   ): Promise<ParsedAttachmentResult> {
     const dataSourceKey = attachment?.source?.dataSourceKey;
     const isExternalAttachment = Boolean(
@@ -279,18 +288,16 @@ export abstract class LLMProvider {
       };
     }
     if (this.isApiSupportedAttachment(attachment)) {
-      return await this.convertToContent(ctx, attachment);
-    } else if (this.isDocumentLoaderSupportedAttachment(attachment)) {
-      return await this.loadDocument(ctx, attachment);
-    } else {
-      const safeFilename = attachment.filename
-        ? path.basename(attachment.filename)
-        : 'document';
-      return {
-        placement: 'system',
-        content: `The user has uploaded a ${attachment.mimetype} file (filename: ${safeFilename}). Please inform the user directly that you do not support parsing ${attachment.mimetype} content.`,
-      };
+      return await this.convertToContent(attachment, runtime);
     }
+    if (this.isDocumentLoaderSupportedAttachment(attachment)) {
+      return await this.loadDocument(attachment, runtime);
+    }
+    const safeFilename = path.basename(attachment.filename);
+    return {
+      placement: 'system',
+      content: `The user has uploaded a ${attachment.mimetype} file (filename: ${safeFilename}). Please inform the user directly that you do not support parsing ${attachment.mimetype} content.`,
+    };
   }
 
   protected isApiSupportedAttachment(attachment: AIFileAttachment): boolean {
@@ -310,29 +317,35 @@ export abstract class LLMProvider {
     return SUPPORTED_DOCUMENT_EXTNAMES.includes(ext);
   }
 
-  protected async encodeAttachment(ctx: Context, attachment: AIFileAttachment) {
-    const fileManager = this.context.fileManager;
-    if (!fileManager) throw new Error('File manager is not configured');
-    if (typeof ctx.get !== 'function') {
-      const { stream } = await fileManager.getFileStream(attachment);
-      return await encodeReadableStream(stream);
-    }
-    const { stream } = await fileManager.getFileStream(attachment, {
-      requestOptions: {
-        headers: {
-          Referer: ctx.get('referer') || '',
-          'User-Agent': ctx.get('user-agent') || '',
-        },
-      },
-    });
+  protected async encodeAttachment(
+    attachment: AIFileAttachment,
+    runtime: AttachmentParseRuntime,
+  ): Promise<string> {
+    const referer = runtime.getHeader?.('referer') || '';
+    const userAgent = runtime.getHeader?.('user-agent') || '';
+    const options =
+      referer || userAgent
+        ? {
+            requestOptions: {
+              headers: {
+                Referer: referer,
+                'User-Agent': userAgent,
+              },
+            },
+          }
+        : undefined;
+    const { stream } = await runtime.fileManager.getFileStream(
+      attachment,
+      options,
+    );
     return await encodeReadableStream(stream);
   }
 
   protected async convertToContent(
-    ctx: Context,
     attachment: AIFileAttachment,
+    runtime: AttachmentParseRuntime,
   ): Promise<ParsedAttachmentResult> {
-    const data = await this.encodeAttachment(ctx, attachment);
+    const data = await this.encodeAttachment(attachment, runtime);
     if (attachment.mimetype.startsWith('image/')) {
       return {
         placement: 'contentBlocks',
@@ -343,39 +356,50 @@ export abstract class LLMProvider {
           },
         },
       } as ParsedAttachmentResult;
-    } else {
-      return {
-        placement: 'contentBlocks',
-        content: {
-          type: 'file',
-          mimeType: attachment.mimetype,
-          metadata: {
-            filename: attachment.filename,
-          },
-          data,
-        } as ContentBlock.Multimodal.File,
-      } as ParsedAttachmentResult;
     }
+    return {
+      placement: 'contentBlocks',
+      content: {
+        type: 'file',
+        mimeType: attachment.mimetype,
+        metadata: {
+          filename: attachment.filename,
+        },
+        data,
+      } as ContentBlock.Multimodal.File,
+    } as ParsedAttachmentResult;
   }
 
-  protected async loadDocument(ctx: Context, attachment: any): Promise<any> {
+  protected resolveDocumentLoader(
+    runtime: AttachmentParseRuntime,
+  ): AttachmentDocumentLoader {
+    return runtime.documentLoader;
+  }
+
+  protected async loadDocument(
+    attachment: AIFileAttachment,
+    runtime: AttachmentParseRuntime,
+  ): Promise<ParsedAttachmentResult> {
     const safeFilename = attachment.filename
       ? path.basename(attachment.filename)
       : 'document';
-
+    const referer = runtime.getHeader?.('referer') || '';
+    const userAgent = runtime.getHeader?.('user-agent') || '';
     const loaderOptions =
-      typeof ctx.get === 'function'
+      referer || userAgent
         ? {
             requestOptions: {
               headers: {
-                Referer: ctx.get('referer') || '',
-                'User-Agent': ctx.get('user-agent') || '',
+                Referer: referer,
+                'User-Agent': userAgent,
               },
             },
           }
         : undefined;
-
-    const parsed = await this.documentLoader.load(attachment, loaderOptions);
+    const parsed = await this.resolveDocumentLoader(runtime).load(
+      attachment,
+      loaderOptions,
+    );
     if (!parsed.supported) {
       return {
         placement: 'system',
@@ -495,9 +519,6 @@ export abstract class LLMProvider {
     aiMessage: AIMessage;
     values: AIMessageInput;
   }) {}
-  protected get documentLoader(): CachedDocumentLoader {
-    return this.context.documentLoaders.cached;
-  }
 
   protected getResolvedBaseURL(): string {
     const baseURL = getServiceBaseURL(this.serviceOptions) ?? this.baseURL;
@@ -518,18 +539,15 @@ export abstract class LLMProvider {
 }
 
 export interface EmbeddingProviderOptions {
-  context: Context;
   serviceOptions?: Record<string, any>;
   modelOptions?: Record<string, any>;
 }
 
 export abstract class EmbeddingProvider {
-  protected context: Context;
   protected serviceOptions?: Record<string, any>;
   protected modelOptions?: Record<string, any>;
   constructor(protected opts: EmbeddingProviderOptions) {
-    const { context, serviceOptions, modelOptions } = this.opts;
-    this.context = context;
+    const { serviceOptions, modelOptions } = this.opts;
     this.serviceOptions = resolveServiceOptions(serviceOptions);
     this.modelOptions = modelOptions;
   }

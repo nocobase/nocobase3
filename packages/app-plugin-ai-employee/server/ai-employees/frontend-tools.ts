@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '@nocobase/ai-employee';
+import type { Context } from '../context.js';
 import { z } from 'zod';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,

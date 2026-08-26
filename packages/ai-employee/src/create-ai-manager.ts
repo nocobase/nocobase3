@@ -15,7 +15,7 @@ import { shengsuanyunProviderOptions } from './llm-providers/shengsuanyun.js';
 import { xaiProviderOptions } from './llm-providers/xai.js';
 import { AIManager } from './manager/index.js';
 import { MemoryRepositoryFactory } from './repository/memory/factory.js';
-import type { Context, RuntimeLogger } from './runtime/context.js';
+import type { RuntimeLogger } from './runtime/logger.js';
 
 export function registerLLMProviders(ai: AIManager): void {
   ai.llmProviderManager.registerLLMProvider(
@@ -59,13 +59,10 @@ export function registerLLMProviders(ai: AIManager): void {
 
 /** Creates the framework-neutral manager aggregate with in-memory resource repositories. */
 export function createAIManager(logger?: RuntimeLogger): AIManager {
-  const context = { logger } as Context;
   const ai = new AIManager({
     repositories: new MemoryRepositoryFactory(),
-    context,
     mcpRuntime: { logger },
   });
-  context.ai = ai;
   registerLLMProviders(ai);
   return ai;
 }
@@ -75,9 +72,7 @@ export function createAIManagerWithRepositories(
   repositories: ConstructorParameters<typeof AIManager>[0]['repositories'],
   logger?: RuntimeLogger,
 ): AIManager {
-  const context = { logger } as Context;
-  const ai = new AIManager({ repositories, context, mcpRuntime: { logger } });
-  context.ai = ai;
+  const ai = new AIManager({ repositories, mcpRuntime: { logger } });
   registerLLMProviders(ai);
   return ai;
 }

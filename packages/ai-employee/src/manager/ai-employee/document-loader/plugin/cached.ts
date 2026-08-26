@@ -11,8 +11,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Document } from '@langchain/core/documents';
-import type { RuntimeCache } from '../../../../runtime/context.js';
-import type { Context } from '../../../../runtime/context.js';
+import type {
+  RuntimeCache,
+  RuntimeCaching,
+} from '../../../../runtime/caching.js';
 import { DOCUMENT_PARSE_META_KEY } from './constants.js';
 import {
   DocumentLoaderLike,
@@ -46,7 +48,7 @@ export function getDocumentCacheKey(sourceFile: ParseableFile): string | null {
 export class CachedDocumentLoader {
   protected _cache: RuntimeCache | null = null;
   constructor(
-    private readonly ctx: Pick<Context, 'caching'>,
+    private readonly caching: RuntimeCaching | undefined,
     private readonly options: CachedDocumentLoaderOptions,
   ) {}
 
@@ -94,6 +96,9 @@ export class CachedDocumentLoader {
   private async loadFromCache(
     sourceFile: ParseableFile,
   ): Promise<ParsedDocumentResult | null> {
+    if (!this.caching) {
+      return null;
+    }
     const cacheKey = this.getCacheKey(sourceFile);
     if (!cacheKey) {
       return null;
@@ -126,7 +131,13 @@ export class CachedDocumentLoader {
     };
   }
 
-  private async persistParsedText(sourceFile: ParseableFile, text: string) {
+  private async persistParsedText(
+    sourceFile: ParseableFile,
+    text: string,
+  ): Promise<null | void> {
+    if (!this.caching) {
+      return null;
+    }
     const cacheKey = this.getCacheKey(sourceFile);
     if (!cacheKey) {
       return null;
@@ -171,8 +182,11 @@ export class CachedDocumentLoader {
     return file as T;
   }
 
-  private async getCache() {
-    this._cache ??= this.ctx.caching.getCache({
+  private async getCache(): Promise<RuntimeCache> {
+    if (!this.caching) {
+      throw new Error('Document caching is not configured');
+    }
+    this._cache ??= this.caching.getCache({
       namespace: 'ai-employee:document-loader:parsed',
     });
     return this._cache;

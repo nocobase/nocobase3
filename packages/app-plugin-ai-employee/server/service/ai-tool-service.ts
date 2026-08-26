@@ -1,9 +1,9 @@
+import type { Context } from '../context.js';
 import type {
   RuntimeActor,
   ToolsEntity,
   ToolsOptions,
 } from '@nocobase/ai-employee';
-import type { Context } from '@nocobase/ai-employee';
 import type { AIEmployeeAccessPolicy } from '../auth/access-policy.js';
 import {
   asRecord,

@@ -11,7 +11,6 @@ export function createAIMCPClientCollection(
       c.string('description').nullable();
       c.boolean('enabled', { defaultValue: true }).notNull();
       c.string('transport').nullable();
-      c.boolean('useUserContext', { defaultValue: false }).notNull();
       c.string('command').nullable();
       c.json('args', { defaultValue: [] }).notNull();
       c.json('env', { defaultValue: {} }).notNull();

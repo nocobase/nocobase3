@@ -1,5 +1,3 @@
-import type { Context } from '../runtime/context.js';
-
 export type ToolsScope = 'SPECIFIED' | 'GENERAL' | 'CUSTOM';
 export type ToolsPermission = 'ASK' | 'ALLOW';
 export type ToolsFrom = 'loader' | 'workflow' | 'mcp';
@@ -9,7 +7,7 @@ export type ToolsRuntime = {
   writer: (chunk: any) => void;
 };
 
-export type ToolsEntity = {
+export type ToolsEntity<TContext = unknown> = {
   scope: ToolsScope;
   from?: ToolsFrom;
   execution?: 'frontend' | 'backend';
@@ -17,27 +15,29 @@ export type ToolsEntity = {
   silence?: boolean;
   introduction?: { title: string; about?: string };
   definition: { name: string; description: string; schema?: any };
-  invoke: (ctx: Context, args: any, runtime: ToolsRuntime) => Promise<any>;
+  invoke: (ctx: TContext, args: any, runtime: ToolsRuntime) => Promise<any>;
 };
 
-export type ToolsQuery = {
+export type ToolsQuery<TContext = unknown> = {
   scope?: ToolsScope;
   defaultPermission?: ToolsPermission;
   silence?: boolean;
   sessionId?: string;
-  ctx?: Context;
+  ctx?: TContext;
 };
 
-export interface ToolsRepository {
-  createTools(input: { value: ToolsEntity }): Promise<ToolsEntity>;
+export interface ToolsRepository<TContext = unknown> {
+  createTools(input: {
+    value: ToolsEntity<TContext>;
+  }): Promise<ToolsEntity<TContext>>;
   updateTools(input: {
     name: string;
-    value: Partial<ToolsEntity>;
-  }): Promise<ToolsEntity | undefined>;
+    value: Partial<ToolsEntity<TContext>>;
+  }): Promise<ToolsEntity<TContext> | undefined>;
   deleteTools(name: string): Promise<void>;
-  getTools(name: string): Promise<ToolsEntity | undefined>;
-  listTools(query?: ToolsQuery): Promise<ToolsEntity[]>;
+  getTools(name: string): Promise<ToolsEntity<TContext> | undefined>;
+  listTools(query?: ToolsQuery<TContext>): Promise<ToolsEntity<TContext>[]>;
   createOrUpdateTools(input: {
-    value: ToolsEntity;
-  }): Promise<{ value: ToolsEntity; replaced: boolean }>;
+    value: ToolsEntity<TContext>;
+  }): Promise<{ value: ToolsEntity<TContext>; replaced: boolean }>;
 }

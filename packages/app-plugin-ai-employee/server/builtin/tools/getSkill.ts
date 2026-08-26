@@ -7,12 +7,13 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { Context } from '../../context.js';
 import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
 // @ts-ignore
 import pkg from '../package.json';
 
-export default defineTools({
+export default defineTools<Context>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
@@ -27,7 +28,9 @@ export default defineTools({
     }),
   },
   invoke: async (ctx, args) => {
-    const target = await ctx.ai.skillsManager.getSkills(args.skillName);
+    const target = await ctx.ai.skillsManager.getSkills(
+      args.skillName as string,
+    );
     if (!target) {
       return {
         status: 'error',

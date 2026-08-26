@@ -8,7 +8,6 @@ import type { LLMServiceEntity } from '../../repository/index.js';
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../runtime/context.js';
 import type { LLMServiceRepository } from '../../repository/index.js';
 
 import { getRecommendedModels } from './recommended-models.js';
@@ -27,10 +26,7 @@ import { SupportedModel } from './types.js';
 export class LLMProviderManager {
   llmProviders = new Map<string, LLMProviderMeta>();
 
-  constructor(
-    protected context: Context,
-    private readonly llmServiceRepository: LLMServiceRepository,
-  ) {}
+  constructor(private readonly llmServiceRepository: LLMServiceRepository) {}
 
   registerLLMProvider(name: string, meta: LLMProviderMeta): void {
     this.llmProviders.set(name, meta);
@@ -92,7 +88,7 @@ export class LLMProviderManager {
     if (!enabledModels.length) return null;
 
     const Provider = providerMeta.provider;
-    const providerClient = new Provider({ context: this.context });
+    const providerClient = new Provider({});
     return {
       llmService: service.name,
       llmServiceTitle: service.title,
@@ -149,7 +145,6 @@ export class LLMProviderManager {
       );
     }
     return new providerOptions.embedding({
-      context: this.context,
       serviceOptions: service.options,
       modelOptions: { model },
     }).createEmbedding();
@@ -180,7 +175,6 @@ export class LLMProviderManager {
 
     const Provider = providerOptions.provider;
     const provider = new Provider({
-      context: this.context,
       serviceOptions: service.options,
       modelOptions,
     });

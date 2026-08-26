@@ -7,10 +7,10 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { Context } from '../context.js';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { AIEmployee } from './ai-employee.js';
 import { EEFeatures } from '@nocobase/ai-employee';
-import type { Context } from '@nocobase/ai-employee';
 import _ from 'lodash';
 
 export type KnowledgeBaseRetrieveOptions = {

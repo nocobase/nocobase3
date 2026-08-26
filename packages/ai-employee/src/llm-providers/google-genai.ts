@@ -14,6 +14,7 @@ import {
 import {
   EmbeddingProvider,
   LLMProvider,
+  AttachmentParseRuntime,
   ParsedAttachmentResult,
 } from './provider.js';
 import { serverRequest } from '../utils/server-request.js';
@@ -23,7 +24,6 @@ import {
   SupportedModel,
 } from '../manager/llm-provider/types.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
-import { Context } from '../runtime/context.js';
 import { AIChatContext } from '../runtime/types/ai-chat-conversation.type.js';
 import { ChatGenerationChunk, LLMResult } from '@langchain/core/outputs';
 
@@ -137,10 +137,10 @@ export class GoogleGenAIProvider extends LLMProvider {
   }
 
   protected async convertToContent(
-    ctx: Context,
     attachment: AIFileAttachment,
+    runtime: AttachmentParseRuntime,
   ): Promise<ParsedAttachmentResult> {
-    const data = await this.encodeAttachment(ctx, attachment);
+    const data = await this.encodeAttachment(attachment, runtime);
     if (attachment.mimetype?.startsWith('image/')) {
       return {
         placement: 'contentBlocks',

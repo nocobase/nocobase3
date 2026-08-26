@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '@nocobase/ai-employee';
+import type { Context } from '../../../../../../context.js';
 import { defineTools } from '@nocobase/ai-employee';
 // @ts-ignore
 import pkg from '../../../../../package.json';
@@ -48,7 +48,7 @@ const editPrompt = `## Existing Schema Editing Flow
    - Until the tool responds successfully, assume changes have not been saved — the user may continue editing.
    - **Do not say or imply the schema is being or has been updated until a tool response is received.**`;
 
-export default defineTools({
+export default defineTools<Context>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {

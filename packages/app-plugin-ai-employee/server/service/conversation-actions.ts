@@ -6,13 +6,9 @@
  * `AIEmployee` streaming / invocation flows.
  */
 
-import type { Context } from '@nocobase/ai-employee';
-import {
-  ResourceActionError,
-  sendSSEError,
-  type AIEmployeeEntity,
-  type AIMessageInput,
-} from '@nocobase/ai-employee';
+import type { Context } from '../context.js';
+import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
+import { ResourceActionError, sendSSEError } from '../utils/runtime.js';
 import type {
   AIMessageEntity,
   AIToolMessageEntity,

@@ -32,7 +32,7 @@ You have three core tools for orchestration:
 
 **Language**
 
-- Reply in {{$nLang}} whenever possible
+- Reply in the language used by the user's message whenever possible; if unclear, use English
 - Match the user's language and tone
 
 **Core behavior**

@@ -1,7 +1,8 @@
 import type { Context as HonoContext } from 'hono';
 import type { RuntimeActor } from '@nocobase/ai-employee';
-import { sendSSEError } from '@nocobase/ai-employee';
-import type { Context as AppContext, CurrentUser } from '@nocobase/ai-employee';
+import { sendSSEError } from '../utils/runtime.js';
+import type { Context as AppContext } from '../context.js';
+import type { CurrentUser } from '@nocobase/ai-employee';
 import { SSEStreamTarget, sseResponseHeaders } from './sse.js';
 
 export type AIActionRequest = {

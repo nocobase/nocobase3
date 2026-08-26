@@ -1,7 +1,7 @@
+import type { Context } from '../context.js';
 import { Buffer } from 'node:buffer';
 import path from 'node:path';
 import type { SnowflakeIdGenerator } from '@nocobase/id-generator';
-import type { Context } from '@nocobase/ai-employee';
 import type { FileManager } from '@nocobase/ai-employee';
 
 type UploadResult = {
@@ -59,17 +59,17 @@ export class AIFileService {
         repo.create({ values }, { connection }),
       );
       return {
-        id: String(record.id ?? id),
+        id: String((record as any).id ?? id),
         filename,
         size: buffer.length,
-        mimetype: record.mimetype,
+        mimetype: (record as any).mimetype,
         extname,
         url: previewUrl,
         preview: previewUrl,
         source: { collectionName: 'aiFiles' },
         storageId,
         data: {
-          ...record,
+          ...(record as any),
           url: previewUrl,
           preview: previewUrl,
           source: { collectionName: 'aiFiles' },

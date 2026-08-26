@@ -17,7 +17,6 @@ import {
 } from './provider.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { SupportedModel } from '../manager/llm-provider/types.js';
-import { Context } from '../runtime/context.js';
 import _ from 'lodash';
 import path from 'node:path';
 import { ReasoningChatOpenAI } from './common/reasoning.js';

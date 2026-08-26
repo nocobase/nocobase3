@@ -1,3 +1,4 @@
+import type { Context } from '../../context.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 /**
  * This file is part of the NocoBase (R) project.
@@ -8,7 +9,6 @@ import type { AIEmployeeEntity } from '@nocobase/ai-employee';
  * For more information, please visit: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import type { SubAgentConversationMetadata } from '@nocobase/ai-employee';
 

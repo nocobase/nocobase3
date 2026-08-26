@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '@nocobase/ai-employee';
+import type { Context } from '../../../../../../context.js';
 import { defineTools } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import { z } from 'zod';
@@ -104,7 +104,7 @@ class IntentError extends Error {
   }
 }
 
-export default defineTools({
+export default defineTools<Context>({
   scope: 'SPECIFIED',
   introduction: {
     title: `{{t("ai.tools.defineCollections.title", { ns: "${pkg.name}" })}}`,

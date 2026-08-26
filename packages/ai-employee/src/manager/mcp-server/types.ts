@@ -1,17 +1,8 @@
-/**
- * This file is part of the NocoBase (R) project.
- * Copyright (c) 2020-2024 NocoBase Team.
- * Authors: NocoBase Team.
- *
- * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
- * For more information, please refer to: https://www.nocobase.com/agreement.
- */
-
 import type { MultiServerMCPClient } from '@langchain/mcp-adapters';
-import type { Context } from '../../runtime/context.js';
-import type { RuntimeLogger } from '../../runtime/context.js';
+import type { RuntimeLogger } from '../../runtime/logger.js';
 import type { DynamicToolsProvider, Permission } from '../tools/types.js';
 import type { MCPEntity } from '../../repository/index.js';
+
 export type MCPRuntime = {
   logger?: Pick<RuntimeLogger, 'error' | 'warn'>;
 };
@@ -20,16 +11,15 @@ export interface MCPServerManager extends MCPRegistration {
   getMCP(name: string): Promise<MCPEntity | undefined>;
   listMCP(filter?: MCPFilter): Promise<MCPEntity[]>;
   deleteMCP(name: string): Promise<void>;
-  testConnection(options: MCPOptions, ctx?: Context): Promise<MCPTestResult>;
+  testConnection(options: MCPOptions): Promise<MCPTestResult>;
   rebuildClient(): Promise<void>;
   getClient(): MultiServerMCPClient | null;
   getMCPToolsProvider(): DynamicToolsProvider;
-  listMCPTools(ctx?: Context): Promise<Record<string, MCPToolEntry[]>>;
+  listMCPTools(): Promise<Record<string, MCPToolEntry[]>>;
   updateMCPToolPermission(
     toolName: string,
     permission: Permission,
   ): Promise<void>;
-  clearUserContextCache(): Promise<void>;
 }
 
 export interface MCPRegistration {
@@ -46,18 +36,15 @@ export type MCPOptions = {
   url?: string;
   headers?: Record<string, string>;
   restart?: Record<string, any>;
-  useUserContext?: boolean;
 };
 
 export type MCPFilter = {
   name?: string;
   enabled?: boolean;
   transport?: MCPTransport;
-  useUserContext?: boolean;
 };
 
 export type MCPTransport = 'stdio' | 'sse' | 'http';
-
 export type MCPTestResult = {
   success: boolean;
   message?: string;
@@ -67,7 +54,6 @@ export type MCPTestResult = {
   tools?: string[];
   toolsTruncated?: boolean;
 };
-
 export type MCPToolEntry = {
   name: string;
   title: string;

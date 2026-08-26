@@ -14,7 +14,6 @@ import {
   ToolMessage,
 } from '@langchain/core/messages';
 import { convertMessagesToResponsesInput } from '@langchain/openai';
-import type { Context } from '@nocobase/ai-employee';
 import type OpenAI from 'openai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AIMessageInput } from '../../runtime/types/index.js';
@@ -34,13 +33,9 @@ import {
 import { deepSeekThinkingModeFixture } from './fixtures/deepseek-thinking-mode.fixture.js';
 
 function createApp(renderedValue?: Record<string, unknown>): {
-  context: Context;
   serviceOptions: Record<string, unknown>;
 } {
-  return {
-    context: {} as Context,
-    serviceOptions: renderedValue ?? {},
-  };
+  return { serviceOptions: renderedValue ?? {} };
 }
 
 const originalWhitelist = process.env.SERVER_REQUEST_WHITELIST;
@@ -354,20 +349,17 @@ describe('DeepSeek final client routing', () => {
   });
 
   it('rejects web search for legacy DeepSeek models before provider invocation', async () => {
-    const manager = new LLMProviderManager(
-      createApp({ apiKey: 'test-key' }).context,
-      {
-        findOne: vi.fn().mockResolvedValue({
-          name: 'deepseek-service',
-          title: 'DeepSeek',
-          provider: 'deepseek',
-          options: { apiKey: 'test-key' },
-          enabledModels: ['deepseek-chat'],
-          enabled: true,
-          sort: 0,
-        }),
-      } as never,
-    );
+    const manager = new LLMProviderManager({
+      findOne: vi.fn().mockResolvedValue({
+        name: 'deepseek-service',
+        title: 'DeepSeek',
+        provider: 'deepseek',
+        options: { apiKey: 'test-key' },
+        enabledModels: ['deepseek-chat'],
+        enabled: true,
+        sort: 0,
+      }),
+    } as never);
     manager.registerLLMProvider('deepseek', deepseekProviderOptions);
 
     await expect(

@@ -7,11 +7,11 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '@nocobase/ai-employee';
+import type { Context } from '../../context.js';
 import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
 
-export default defineTools({
+export default defineTools<Context>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {

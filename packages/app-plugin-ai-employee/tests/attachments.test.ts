@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Context } from '@nocobase/ai-employee';
+import type { Context } from '../server/context.js';
 import {
   appendAIFileAttachmentSource,
   findMessageAttachments,

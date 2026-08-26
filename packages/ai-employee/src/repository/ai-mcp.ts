@@ -10,7 +10,6 @@ export type MCPEntity = {
   url?: string;
   headers?: Record<string, string>;
   restart?: Record<string, any>;
-  useUserContext?: boolean;
   sort?: number;
 };
 

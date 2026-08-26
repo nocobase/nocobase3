@@ -1,4 +1,3 @@
-import type { Context } from '../app/context.js';
 /**
  * Minimal test harness for repository-backed resource managers.
  */
@@ -13,13 +12,11 @@ import {
 
 export type TestAI = {
   aiManager: AIManager;
-  context: Context;
   destroy(): Promise<void>;
   init(): Promise<void>;
 };
 
 export async function createMockServer(_options?: any): Promise<TestAI> {
-  const context = {} as Context;
   const llmServiceRepository = new TestLLMServiceRepository();
   const aiManager = new AIManager({
     repositories: {
@@ -29,11 +26,9 @@ export async function createMockServer(_options?: any): Promise<TestAI> {
       mcpRepository: new TestMCPRepository(),
       llmServiceRepository,
     },
-    context,
   });
   return {
     aiManager,
-    context,
     destroy: async () => {},
     init: async () => {},
   };

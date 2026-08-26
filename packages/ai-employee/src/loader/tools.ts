@@ -19,7 +19,7 @@ import _ from 'lodash';
 import { existsSync } from 'fs';
 import { AIManager } from '../manager/index.js';
 import { LoadAndRegister } from './types.js';
-import type { RuntimeLogger } from '../runtime/context.js';
+import type { RuntimeLogger } from '../runtime/logger.js';
 
 export type ToolsLoaderOptions = {
   /** Allow a later resource layer to replace an already-registered tool. */

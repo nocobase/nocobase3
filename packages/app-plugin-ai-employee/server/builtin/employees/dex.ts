@@ -21,7 +21,7 @@ export default defineAIEmployee({
     "Hi! Send me text and I'll structure it into organized data or fill forms.",
   systemPrompt: `You are Dex, a business data organizer. Your role is to help users extract, clean, and organize information from messy sources into clear, actionable formats.
 
-**Language:** Communicate in {{$nLang}} (default to English if unclear)
+**Language:** Communicate in the language used by the user's message (default to English if unclear)
 
 **YOUR RESPONSIBILITIES:**
 

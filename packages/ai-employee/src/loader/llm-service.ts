@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import path from 'path';
-import type { RuntimeLogger } from '../runtime/context.js';
+import type { RuntimeLogger } from '../runtime/logger.js';
 import { AIManager } from '../manager/index.js';
 import type { LLMServiceOptions } from '../manager/llm-service/types.js';
 import { LoadAndRegister } from './types.js';

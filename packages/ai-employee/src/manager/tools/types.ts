@@ -1,13 +1,3 @@
-/**
- * This file is part of the NocoBase (R) project.
- * Copyright (c) 2020-2024 NocoBase Team.
- * Authors: NocoBase Team.
- *
- * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
- * For more information, please refer to: https://www.nocobase.com/agreement.
- */
-
-import type { Context } from '../../runtime/context.js';
 import type {
   ToolsEntity,
   ToolsFrom,
@@ -16,52 +6,49 @@ import type {
   ToolsScope,
 } from '../../repository/tool.js';
 
-export interface ToolsManager extends ToolsRegistration {
+export interface ToolsManager<
+  TContext = unknown,
+> extends ToolsRegistration<TContext> {
   getTools(
     toolName: string,
-    filter?: ToolsFilter,
-  ): Promise<ToolsEntity | undefined>;
-  listTools(filter?: ToolsFilter): Promise<ToolsEntity[]>;
+    filter?: ToolsFilter<TContext>,
+  ): Promise<ToolsEntity<TContext> | undefined>;
+  listTools(filter?: ToolsFilter<TContext>): Promise<ToolsEntity<TContext>[]>;
   isToolsExisted(toolName: string): Promise<boolean>;
   unregisterTools(toolName: string | string[]): Promise<number>;
 }
 
-export interface ToolsRegistration {
-  registerTools(options: ToolsOptions | ToolsOptions[]): Promise<void>;
-  registerDynamicTools(provider: DynamicToolsProvider): void;
+export interface ToolsRegistration<TContext = unknown> {
+  registerTools(
+    options: ToolsOptions<TContext> | ToolsOptions<TContext>[],
+  ): Promise<void>;
+  registerDynamicTools(provider: DynamicToolsProvider<TContext>): void;
 }
 
-export type ToolsOptions = ToolsEntity & {
+export type ToolsOptions<TContext = unknown> = ToolsEntity<TContext> & {
   scope: Scope;
   from?: From;
   execution?: 'frontend' | 'backend';
   defaultPermission?: Permission;
   silence?: boolean;
-  introduction?: {
-    title: string;
-    about?: string;
-  };
-  definition: {
-    name: string;
-    description: string;
-    schema?: any;
-  };
-  invoke: (ctx: Context, args: any, runtime: ToolsRuntime) => Promise<any>;
+  introduction?: { title: string; about?: string };
+  definition: { name: string; description: string; schema?: any };
+  invoke: (ctx: TContext, args: any, runtime: ToolsRuntime) => Promise<any>;
 };
 
 export type Scope = ToolsScope;
 export type Permission = ToolsPermission;
 export type From = ToolsFrom;
 export type { ToolsRuntime };
-export type DynamicToolsProvider = (
-  register: ToolsRegistration,
-  filter?: ToolsFilter,
+export type DynamicToolsProvider<TContext = unknown> = (
+  register: ToolsRegistration<TContext>,
+  filter?: ToolsFilter<TContext>,
 ) => Promise<void>;
 
-export type ToolsFilter = {
+export type ToolsFilter<TContext = unknown> = {
   scope?: Scope;
   defaultPermission?: Permission;
   silence?: boolean;
   sessionId?: string;
-  ctx?: Context;
+  ctx?: TContext;
 };

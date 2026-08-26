@@ -7,8 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { Context } from '../context.js';
 import type { DatabaseConnection } from '@nocobase/app-database';
-import type { Context } from '@nocobase/ai-employee';
 import {
   AIMessage,
   AIToolCall,
@@ -318,9 +318,7 @@ export class AIConversationsManager {
         return parseResponseMessage(row);
       }
       const Provider = providerOptions.provider;
-      const provider = new Provider({
-        context: this.ctx,
-      });
+      const provider = new Provider({});
       return provider.parseResponseMessage(row);
     };
 

@@ -7,16 +7,19 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { LLMProvider, ParsedAttachmentResult } from './provider.js';
+import {
+  LLMProvider,
+  ParsedAttachmentResult,
+  type AttachmentParseRuntime,
+} from './provider.js';
 import { ChatAnthropic } from '@langchain/anthropic';
 import type { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
 import { serverRequest } from '../utils/server-request.js';
-import { stripToolCallTags } from '../runtime/server-utils.js';
+import { stripToolCallTags } from '../runtime/messages.js';
 import {
   LLMProviderMeta,
   SupportedModel,
 } from '../manager/llm-provider/types.js';
-import { Context } from '../runtime/context.js';
 import { AIMessageChunk } from '@langchain/core/messages';
 
 // Kimi code API only accept anthropic client
@@ -220,10 +223,10 @@ export class AnthropicProvider extends LLMProvider {
   }
 
   protected async convertToContent(
-    ctx: Context,
     attachment: AIFileAttachment,
+    runtime: AttachmentParseRuntime,
   ): Promise<ParsedAttachmentResult> {
-    const data = await this.encodeAttachment(ctx, attachment);
+    const data = await this.encodeAttachment(attachment, runtime);
     if (attachment.mimetype.startsWith('image/')) {
       return {
         placement: 'contentBlocks',

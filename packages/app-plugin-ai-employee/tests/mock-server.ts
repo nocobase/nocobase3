@@ -1,4 +1,4 @@
-import type { Context } from '@nocobase/ai-employee';
+import type { Context } from '../server/context.js';
 /**
  * Minimal test harness for repository-backed resource managers.
  */
