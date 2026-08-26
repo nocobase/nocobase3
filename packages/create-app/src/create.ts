@@ -137,7 +137,7 @@ async function run(input: ParsedInput): Promise<void> {
   }
 
   await addDriverDependency(targetDirectory, driver);
-  await ensureAllowBuilds(targetDirectory, [driver]);
+  await ensureAllowBuilds(targetDirectory);
 
   log.success(`Created ${name} using ${dialect} (${driver}).`);
 
