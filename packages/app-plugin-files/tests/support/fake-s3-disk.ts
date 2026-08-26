@@ -29,6 +29,7 @@ export class FakeS3Disk implements FilesStorageDisk {
   writeChunkCount = 0;
   #copyPause: DeferredCopy | undefined;
   #readFailures = 0;
+  #deleteFailures = 0;
 
   constructor(readonly defaultContentType?: string) {}
 
@@ -132,6 +133,10 @@ export class FakeS3Disk implements FilesStorageDisk {
   }
 
   async delete(key: string): Promise<void> {
+    if (this.#deleteFailures > 0) {
+      this.#deleteFailures -= 1;
+      throw new Error('provider delete failed with signature=secret');
+    }
     this.#objects.delete(key);
   }
 
@@ -175,6 +180,10 @@ export class FakeS3Disk implements FilesStorageDisk {
 
   failNextRead(): void {
     this.#readFailures += 1;
+  }
+
+  failNextDelete(): void {
+    this.#deleteFailures += 1;
   }
 
   #require(key: string): FakeObject {

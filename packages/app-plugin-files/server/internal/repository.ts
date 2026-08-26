@@ -27,6 +27,19 @@ interface CompletePendingRecordInput {
   now: Date;
 }
 
+export interface ExpiredPendingRecordInput {
+  id: string;
+  uploadExpiresAt: Date;
+  cutoff: Date;
+  now: Date;
+}
+
+export interface TemporaryCleanupCandidate {
+  id: string;
+  status: 'pending' | 'failed';
+  uploadExpiresAt: Date;
+}
+
 interface PublicAccessRecordInput {
   id: string;
   tokenHash: string;
@@ -63,6 +76,7 @@ export class FilesRepository {
         size: null,
         contentType: null,
         uploadExpiresAt: input.uploadExpiresAt,
+        temporaryCleanupCompletedAt: null,
         publicTokenHash: null,
         publicDisposition: null,
         createdAt: input.now,
@@ -137,6 +151,45 @@ export class FilesRepository {
     return result.updatedCount === 1;
   }
 
+  async listTemporaryCleanupCandidates(
+    cutoff: Date,
+    limit: number,
+  ): Promise<TemporaryCleanupCandidate[]> {
+    const rows = await this.#query()
+      .selectFrom(FILES_TABLE)
+      .selectAll()
+      .where((eb) =>
+        eb.or([
+          eb.and([
+            eb('status', '=', 'pending'),
+            eb('uploadExpiresAt', '<=', cutoff),
+          ]),
+          eb.and([
+            eb('status', '=', 'failed'),
+            eb('uploadExpiresAt', '<=', cutoff),
+            eb('temporaryCleanupCompletedAt', 'is', null),
+          ]),
+        ]),
+      )
+      .orderBy('uploadExpiresAt', 'asc')
+      .orderBy('id', 'asc')
+      .limit(limit)
+      .execute<Record<string, unknown>>();
+    return rows.map((row) => {
+      const record = readFileRecord(row);
+      if (record.status === 'ready') {
+        throw new Error(
+          'A ready file cannot be a temporary cleanup candidate.',
+        );
+      }
+      return {
+        id: record.id,
+        status: record.status,
+        uploadExpiresAt: record.uploadExpiresAt,
+      };
+    });
+  }
+
   async failPending(
     id: string,
     now: Date,
@@ -147,6 +200,33 @@ export class FilesRepository {
       .set({ status: 'failed', updatedAt: now })
       .where('id', '=', id)
       .where('status', '=', 'pending')
+      .execute();
+    return result.updatedCount === 1;
+  }
+
+  async failExpiredPending(
+    input: ExpiredPendingRecordInput,
+    connection?: DatabaseConnection,
+  ): Promise<boolean> {
+    const result = await this.#query(connection)
+      .updateTable(FILES_TABLE)
+      .set({ status: 'failed', updatedAt: input.now })
+      .where('id', '=', input.id)
+      .where('status', '=', 'pending')
+      .where('uploadExpiresAt', '=', input.uploadExpiresAt)
+      .where('uploadExpiresAt', '<=', input.cutoff)
+      .execute();
+    return result.updatedCount === 1;
+  }
+
+  async markTemporaryCleanupCompleted(id: string, now: Date): Promise<boolean> {
+    const result = await this.#query()
+      .updateTable(FILES_TABLE)
+      .set({ temporaryCleanupCompletedAt: now, updatedAt: now })
+      .where('id', '=', id)
+      .where('status', '=', 'failed')
+      .where('uploadExpiresAt', '<=', now)
+      .where('temporaryCleanupCompletedAt', 'is', null)
       .execute();
     return result.updatedCount === 1;
   }

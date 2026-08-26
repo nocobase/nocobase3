@@ -11,6 +11,7 @@ export interface FileRecord {
   size: number | null;
   contentType: string | null;
   uploadExpiresAt: Date;
+  temporaryCleanupCompletedAt: Date | null;
   publicTokenHash: string | null;
   publicDisposition: PublicDisposition | null;
   createdAt: Date;
@@ -59,6 +60,10 @@ export function readFileRecord(row: Record<string, unknown>): FileRecord {
     size,
     contentType: readNullableString(row.contentType, 'contentType'),
     uploadExpiresAt: readDate(row.uploadExpiresAt, 'uploadExpiresAt'),
+    temporaryCleanupCompletedAt: readNullableDate(
+      row.temporaryCleanupCompletedAt,
+      'temporaryCleanupCompletedAt',
+    ),
     publicTokenHash,
     publicDisposition,
     createdAt: readDate(row.createdAt, 'createdAt'),
@@ -119,6 +124,13 @@ function readDate(value: unknown, field: string): Date {
     }
   }
   throw invalidRecord(`${field} is invalid`);
+}
+
+function readNullableDate(value: unknown, field: string): Date | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return readDate(value, field);
 }
 
 function normalizeDateInput(value: string | number): string | number {

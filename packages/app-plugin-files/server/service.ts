@@ -102,13 +102,6 @@ class RuntimeFileService implements FileService {
 
   async cancelUpload(fileId: string): Promise<void> {
     const kernel = this.#state().kernel;
-    const current = await kernel.getFile(fileId);
-    if (!current) {
-      throw fileNotFound();
-    }
-    if (current.status !== 'pending') {
-      throw fileNotReady();
-    }
     const result = await kernel.cancelUpload(fileId);
     if (result.outcome === 'missing') {
       throw fileNotFound();

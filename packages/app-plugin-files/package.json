@@ -93,6 +93,7 @@
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
+    "@nocobase/queue": "workspace:^",
     "flydrive": "^2.1.0",
     "hono": "catalog:"
   },

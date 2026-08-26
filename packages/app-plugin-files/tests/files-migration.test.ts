@@ -8,6 +8,7 @@ import {
 } from '@nocobase/app-database';
 
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
+import cleanupMigration from '../database/migrations/202608261000_files_add_temporary_cleanup.js';
 
 let database: DatabaseManager | undefined;
 
@@ -22,6 +23,7 @@ describe('files migration', () => {
     database = manager;
     const context = createMigrationContext(manager.connection());
     await filesMigration.up(context);
+    await cleanupMigration.up(context);
 
     expect(await knex.schema.hasTable('files')).toBe(true);
     const columns = await knex.raw('PRAGMA table_info(files)');
@@ -34,6 +36,7 @@ describe('files migration', () => {
         'size',
         'content_type',
         'upload_expires_at',
+        'temporary_cleanup_completed_at',
         'public_token_hash',
         'public_disposition',
         'created_at',
@@ -66,6 +69,14 @@ describe('files migration', () => {
           unique: 0,
           columns: ['status', 'upload_expires_at'],
         }),
+        expect.objectContaining({
+          unique: 0,
+          columns: [
+            'status',
+            'temporary_cleanup_completed_at',
+            'upload_expires_at',
+          ],
+        }),
       ]),
     );
 
@@ -94,6 +105,10 @@ describe('files migration', () => {
       }),
     ).rejects.toThrow(/unique/i);
 
+    await cleanupMigration.down(context);
+    expect(
+      await knex.schema.hasColumn('files', 'temporary_cleanup_completed_at'),
+    ).toBe(false);
     await filesMigration.down(context);
     expect(await knex.schema.hasTable('files')).toBe(false);
   });

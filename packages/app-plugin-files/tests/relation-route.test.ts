@@ -23,6 +23,7 @@ import {
 } from '@nocobase/app-plugin-files/server';
 
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
+import cleanupMigration from '../database/migrations/202608261000_files_add_temporary_cleanup.js';
 import {
   createOpaqueFilesRuntime,
   getFilesRuntimeDataPlane,
@@ -636,6 +637,7 @@ async function createFixture(
     },
   });
   await filesMigration.up(createMigrationContext(database.connection()));
+  await cleanupMigration.up(createMigrationContext(database.connection()));
   await database.builder().createCollection('purchaseOrders', (collection) => {
     collection.string('id', { length: 64 }).notNull().primary();
   });

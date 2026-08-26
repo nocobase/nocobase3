@@ -3,8 +3,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import { Job } from '@nocobase/queue';
 
 import type { AppConfig } from '../../server/config/index.ts';
+import {
+  createAppJobFactory,
+  type AppJobDependencies,
+} from '../../server/jobs/dependencies.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import {
   createAppDeps,
@@ -36,6 +41,26 @@ describe('Files app composition', () => {
     expect(services.fileService).toBeDefined();
 
     realtime.close();
+  });
+
+  it('injects the shared Files runtime into application Jobs', () => {
+    const runtime = trackRuntime(createStandaloneRuntime());
+    const deps = trackDeps(createAppDeps(runtime));
+    const filesRuntime = deps.filesRuntime;
+    expect(filesRuntime).toBeDefined();
+    if (!filesRuntime) {
+      throw new Error('Expected Files runtime to be initialized.');
+    }
+    const dependencies: AppJobDependencies = {
+      filesRuntime,
+      logger: deps.logging.getLogger(),
+    };
+    const job = createAppJobFactory(dependencies)(RuntimeProbeJob);
+
+    expect(job).toBeInstanceOf(RuntimeProbeJob);
+    expect((job as RuntimeProbeJob).dependencies.filesRuntime).toBe(
+      filesRuntime,
+    );
   });
 
   it('does not initialize Files runtime or service when the plugin is disabled', () => {
@@ -87,4 +112,15 @@ function trackRuntime(runtime: AppRuntime<AppConfig>): AppRuntime<AppConfig> {
 function trackDeps(deps: AppDeps): AppDeps {
   dependencies.push(deps);
   return deps;
+}
+
+class RuntimeProbeJob extends Job {
+  readonly dependencies: AppJobDependencies;
+
+  constructor(dependencies: AppJobDependencies) {
+    super();
+    this.dependencies = dependencies;
+  }
+
+  async execute(): Promise<void> {}
 }

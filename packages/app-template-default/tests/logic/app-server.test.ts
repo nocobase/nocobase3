@@ -250,6 +250,7 @@ describe('app server', () => {
       'runtime',
       'app-deps',
       'realtime-service',
+      'plugin:@nocobase/app-plugin-files:cleanup-worker',
       'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
     ]);
 

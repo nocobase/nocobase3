@@ -24,6 +24,7 @@ import {
 } from '@nocobase/app-plugin-files/server';
 
 import filesMigration from '../../../app-plugin-files/database/migrations/202608221000_files_create_files.ts';
+import cleanupMigration from '../../../app-plugin-files/database/migrations/202608261000_files_add_temporary_cleanup.ts';
 import { appFileClient } from '../../../app-plugin-files/registry/file-upload/app-client.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 
@@ -183,6 +184,7 @@ async function createFixture(): Promise<Fixture> {
     },
   });
   await filesMigration.up(createMigrationContext(database.connection()));
+  await cleanupMigration.up(createMigrationContext(database.connection()));
   await database.builder().createCollection('documents', (collection) => {
     collection.string('id', { length: 64 }).notNull().primary();
     collection.string('fileId', { length: 64 }).nullable();

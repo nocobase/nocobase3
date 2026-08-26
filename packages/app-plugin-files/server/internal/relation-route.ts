@@ -79,6 +79,14 @@ export function createRelationFileRoute(
 ): Hono {
   const binding = validateRelationBinding(input.binding);
   validateOptions(input.options);
+  const repository = createRelationBindingRepository({
+    database: input.state.database,
+    ...(input.state.connection === undefined
+      ? {}
+      : { connection: input.state.connection }),
+    collection: binding.collection,
+    recordField: binding.recordField,
+  });
   const state: RelationRouteState = {
     scope: createScopedRouteIdentity(input.state.audience, 'relation', {
       collection: binding.collection,
@@ -87,14 +95,7 @@ export function createRelationFileRoute(
       maxFiles: binding.maxFiles,
     }),
     binding,
-    repository: createRelationBindingRepository({
-      database: input.state.database,
-      ...(input.state.connection === undefined
-        ? {}
-        : { connection: input.state.connection }),
-      collection: binding.collection,
-      recordField: binding.recordField,
-    }),
+    repository,
     options: input.options,
     dataPlane: input.state.dataPlane,
     kernel: input.state.kernel,
@@ -102,6 +103,7 @@ export function createRelationFileRoute(
     clock: input.state.clock,
     publicBasePath: input.publicBasePath,
   };
+  input.state.registerRelationCleanupTarget({ repository });
   const schemaValidation = startRelationRouteSchemaValidation(
     input.state.database,
     input.state.connection,

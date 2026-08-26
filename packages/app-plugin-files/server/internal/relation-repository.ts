@@ -18,6 +18,17 @@ export interface RelationBindingRow {
   reservationExpiresAt: Date | null;
 }
 
+export interface ExpiredRelationReservation extends RelationBindingRow {
+  recordId: string;
+}
+
+export interface ReleaseExpiredRelationReservationInput {
+  id: string;
+  recordId: string;
+  fileId: string;
+  cutoff: Date;
+}
+
 export interface CreateRelationReservationInput {
   id: string;
   recordId: string;
@@ -71,6 +82,31 @@ export class RelationBindingRepository {
     );
   }
 
+  async listExpiredReservations(
+    cutoff: Date,
+    limit: number,
+  ): Promise<ExpiredRelationReservation[]> {
+    const rows = await this.#query()
+      .selectFrom(this.#table)
+      .select([
+        this.#idColumn,
+        this.#recordColumn,
+        this.#fileColumn,
+        this.#slotColumn,
+        this.#reservationColumn,
+      ])
+      .where(this.#reservationColumn, 'is not', null)
+      .where(this.#reservationColumn, '<=', cutoff)
+      .orderBy(this.#reservationColumn, 'asc')
+      .orderBy(this.#idColumn, 'asc')
+      .limit(limit)
+      .execute<Record<string, unknown>>();
+    return rows.map((row) => ({
+      ...this.#readRow(row),
+      recordId: readRecordId(row[this.#recordColumn]),
+    }));
+  }
+
   async list(recordId: string): Promise<RelationBindingRow[]> {
     const rows = await this.#query()
       .selectFrom(this.#table)
@@ -98,6 +134,16 @@ export class RelationBindingRepository {
       fileId,
     );
     return row === undefined ? undefined : this.#readRow(row);
+  }
+
+  async hasFile(fileId: string): Promise<boolean> {
+    const row = await this.#query()
+      .selectFrom(this.#table)
+      .select(this.#idColumn)
+      .where(this.#fileColumn, '=', fileId)
+      .limit(1)
+      .executeTakeFirst<Record<string, unknown>>();
+    return row !== undefined;
   }
 
   async reserve(
@@ -294,6 +340,21 @@ export class RelationBindingRepository {
     await this.#database.transaction(cancel, this.#connectionName);
   }
 
+  async releaseExpiredReservation(
+    input: ReleaseExpiredRelationReservationInput,
+    connection: DatabaseConnection,
+  ): Promise<boolean> {
+    const result = await connection.query
+      .deleteFrom(this.#table)
+      .where(this.#idColumn, '=', input.id)
+      .where(this.#recordColumn, '=', input.recordId)
+      .where(this.#fileColumn, '=', input.fileId)
+      .where(this.#reservationColumn, 'is not', null)
+      .where(this.#reservationColumn, '<=', input.cutoff)
+      .execute();
+    return result.deletedCount === 1;
+  }
+
   #query(connection?: DatabaseConnection): QueryAdapter {
     return connection?.query ?? this.#database.query(this.#connectionName);
   }
@@ -373,6 +434,13 @@ function readId(value: unknown): string {
 function readFileId(value: unknown): string {
   if (typeof value !== 'string' || !value || value.length > 64) {
     throw new Error('A relation binding row contains an invalid fileId.');
+  }
+  return value;
+}
+
+function readRecordId(value: unknown): string {
+  if (typeof value !== 'string' || !value || value.length > 64) {
+    throw new Error('A relation binding row contains an invalid record id.');
   }
   return value;
 }

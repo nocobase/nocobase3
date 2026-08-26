@@ -8,6 +8,7 @@ import {
 } from '@nocobase/app-database';
 
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
+import cleanupMigration from '../database/migrations/202608261000_files_add_temporary_cleanup.js';
 import {
   createFileKernel,
   type FileKernel,
@@ -40,6 +41,7 @@ describe('file metadata kernel', () => {
     const connection = database.connection();
     knex = await connection.client<Knex>();
     await filesMigration.up(createMigrationContext(connection));
+    await cleanupMigration.up(createMigrationContext(connection));
     repository = createFilesRepository(database);
     storage = new FakeFilesStorage();
     now = new Date('2026-08-24T00:00:00.000Z');

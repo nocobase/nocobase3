@@ -77,8 +77,18 @@ export interface CancelFileBindingInput {
   file: StoredFile | undefined;
 }
 
+export interface CancelFileOptions {
+  expectedUploadExpiresAt?: Date;
+  cutoff?: Date;
+}
+
 export type CancelFileResult<TBinding = undefined> =
-  | { outcome: 'failed'; file: StoredFile; binding?: TBinding }
+  | {
+      outcome: 'failed';
+      file: StoredFile;
+      binding?: TBinding;
+      cleanupCompleted: boolean;
+    }
   | { outcome: 'ready'; file: StoredFile }
   | { outcome: 'missing'; binding?: TBinding };
 
@@ -337,16 +347,30 @@ export class FileKernel {
   async cancelUpload<TBinding = undefined>(
     fileId: string,
     cancelBinding?: (input: CancelFileBindingInput) => Promise<TBinding>,
+    options: CancelFileOptions = {},
   ): Promise<CancelFileResult<TBinding>> {
     const normalizedFileId = readFileId(fileId);
     const candidateKey = pendingStorageKey(normalizedFileId);
+    const now = this.#now();
+    const cutoff = options.cutoff === undefined ? now : readNow(options.cutoff);
     const result = await this.#repository.transaction(
       async (connection): Promise<CancelFileResult<TBinding>> => {
-        const failed = await this.#repository.failPending(
-          normalizedFileId,
-          this.#now(),
-          connection,
-        );
+        const failed =
+          options.expectedUploadExpiresAt === undefined
+            ? await this.#repository.failPending(
+                normalizedFileId,
+                now,
+                connection,
+              )
+            : await this.#repository.failExpiredPending(
+                {
+                  id: normalizedFileId,
+                  uploadExpiresAt: options.expectedUploadExpiresAt,
+                  cutoff,
+                  now,
+                },
+                connection,
+              );
         const current = await this.#repository.get(
           normalizedFileId,
           connection,
@@ -361,6 +385,15 @@ export class FileKernel {
           };
         }
         if (failed || current.status === 'failed') {
+          if (
+            options.expectedUploadExpiresAt !== undefined &&
+            current.uploadExpiresAt.getTime() !==
+              options.expectedUploadExpiresAt.getTime()
+          ) {
+            throw new Error(
+              'Files cleanup CAS ended with a different upload expiry.',
+            );
+          }
           const file = toStoredFile(current);
           const binding = cancelBinding
             ? await cancelBinding({ connection, file })
@@ -369,6 +402,10 @@ export class FileKernel {
             outcome: 'failed',
             file,
             ...(binding === undefined ? {} : { binding }),
+            cleanupCompleted:
+              current.temporaryCleanupCompletedAt !== null &&
+              current.temporaryCleanupCompletedAt.getTime() >=
+                current.uploadExpiresAt.getTime(),
           };
         }
         if (current.status === 'ready') {
@@ -379,16 +416,28 @@ export class FileKernel {
         );
       },
     );
-    await Promise.all(
-      [candidateKey].map(async (key) => {
-        try {
-          await this.#storage.delete(key);
-        } catch {
-          // Cleanup is best-effort; failed state and reservation release are durable.
-        }
-      }),
-    );
-    return result;
+    if (result.outcome !== 'failed') {
+      try {
+        await this.#storage.delete(candidateKey);
+      } catch {
+        // The terminal database state wins; temporary object cleanup is best-effort.
+      }
+      return result;
+    }
+    if (result.cleanupCompleted) {
+      return result;
+    }
+    try {
+      await this.#storage.delete(candidateKey);
+      const cleanupCompleted =
+        await this.#repository.markTemporaryCleanupCompleted(
+          normalizedFileId,
+          this.#now(),
+        );
+      return { ...result, cleanupCompleted };
+    } catch {
+      return result;
+    }
   }
 
   async enablePublicAccess(
@@ -662,6 +711,10 @@ function cloneFileRecord(record: FileRecord): FileRecord {
   return {
     ...record,
     uploadExpiresAt: new Date(record.uploadExpiresAt.getTime()),
+    temporaryCleanupCompletedAt:
+      record.temporaryCleanupCompletedAt === null
+        ? null
+        : new Date(record.temporaryCleanupCompletedAt.getTime()),
     createdAt: new Date(record.createdAt.getTime()),
     updatedAt: new Date(record.updatedAt.getTime()),
   };

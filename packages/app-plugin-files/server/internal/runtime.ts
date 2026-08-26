@@ -1,4 +1,5 @@
 import type { CreateFilesRuntimeOptions, FilesRuntime } from '../runtime.js';
+import { FilesCleanup, type RelationCleanupTarget } from './cleanup.js';
 import { createFileCapabilityCodec } from './capability.js';
 import { createFilesDataPlane, type FilesDataPlane } from './data-plane.js';
 import { createFileKernel, type FileKernel } from './kernel.js';
@@ -21,6 +22,8 @@ interface FilesRuntimeState {
   connection: string | undefined;
   kernel: FileKernel;
   storage: InternalFilesStorage;
+  cleanup: FilesCleanup;
+  relationCleanupTargets: Set<RelationCleanupTarget>;
   clock: () => Date;
 }
 
@@ -28,6 +31,7 @@ export interface CreateOpaqueFilesRuntimeInternalOptions {
   basePath?: string;
   clock?: () => Date;
   disk?: FilesStorageDisk;
+  elapsed?: () => number;
 }
 
 const runtimeStates = new WeakMap<FilesRuntime, FilesRuntimeState>();
@@ -69,6 +73,16 @@ export function createOpaqueFilesRuntime(
     uploadExpiresInSeconds: options.config.upload.expiresInSeconds,
     clock,
   });
+  const relationCleanupTargets = new Set<RelationCleanupTarget>();
+  const cleanup = new FilesCleanup({
+    repository,
+    kernel,
+    relationTargets: relationCleanupTargets,
+    clock,
+    ...(internalOptions.elapsed === undefined
+      ? {}
+      : { elapsed: internalOptions.elapsed }),
+  });
   const capabilityCodec = createFileCapabilityCodec({
     audience: options.audience,
     secret: options.secret,
@@ -98,6 +112,8 @@ export function createOpaqueFilesRuntime(
     connection: options.connection,
     kernel,
     storage,
+    cleanup,
+    relationCleanupTargets,
     clock,
   });
   return runtime;
@@ -110,6 +126,7 @@ export interface FilesRuntimeServiceState {
   database: CreateFilesRuntimeOptions['database'];
   connection: string | undefined;
   kernel: FileKernel;
+  registerRelationCleanupTarget(target: RelationCleanupTarget): void;
   clock: () => Date;
 }
 
@@ -127,6 +144,9 @@ export function getFilesRuntimeServiceState(
     database: state.database,
     connection: state.connection,
     kernel: state.kernel,
+    registerRelationCleanupTarget(target: RelationCleanupTarget): void {
+      state.relationCleanupTargets.add(target);
+    },
     clock: state.clock,
   };
 }
@@ -147,4 +167,20 @@ export function getFilesRuntimeDataPlane(
     throw new Error('Files runtime is invalid or disposed.');
   }
   return state.dataPlane;
+}
+
+export function getFilesRuntimeCleanup(runtime: FilesRuntime): FilesCleanup {
+  const state = runtimeStates.get(runtime);
+  if (!state) {
+    throw new Error('Files runtime is invalid or disposed.');
+  }
+  return state.cleanup;
+}
+
+export function getFilesRuntimeAudience(runtime: FilesRuntime): string {
+  const state = runtimeStates.get(runtime);
+  if (!state) {
+    throw new Error('Files runtime is invalid or disposed.');
+  }
+  return state.audience;
 }

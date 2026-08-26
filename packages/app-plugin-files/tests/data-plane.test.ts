@@ -17,6 +17,7 @@ import {
 } from '@nocobase/app-plugin-files/server';
 
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
+import cleanupMigration from '../database/migrations/202608261000_files_add_temporary_cleanup.js';
 import type { FileUploadPlan } from '../client/types.js';
 import { createFileCapabilityCodec } from '../server/internal/capability.js';
 import {
@@ -905,6 +906,7 @@ async function createTestRuntime(
     },
   });
   await filesMigration.up(createMigrationContext(database.connection()));
+  await cleanupMigration.up(createMigrationContext(database.connection()));
   const storageRoot = await mkdtemp(path.join(tmpdir(), 'files-data-plane-'));
   const config = resolveFilesConfig({
     appStorageRoot: storageRoot,

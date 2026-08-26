@@ -20,6 +20,7 @@ import {
 } from '@nocobase/app-plugin-files/server';
 
 import filesMigration from '../database/migrations/202608221000_files_create_files.js';
+import cleanupMigration from '../database/migrations/202608261000_files_add_temporary_cleanup.js';
 import {
   createOpaqueFilesRuntime,
   getFilesRuntimeDataPlane,
@@ -233,6 +234,9 @@ describe('public FileService', () => {
         error instanceof FileServiceError && error.code === 'FILE_NOT_READY',
     );
     await fixture.service.cancelUpload(pending.fileId);
+    await expect(
+      fixture.service.cancelUpload(pending.fileId),
+    ).resolves.toBeUndefined();
     await expect(
       fixture.service.getFile(pending.fileId),
     ).resolves.toMatchObject({
@@ -450,6 +454,7 @@ async function createFixture(
     },
   });
   await filesMigration.up(createMigrationContext(database.connection()));
+  await cleanupMigration.up(createMigrationContext(database.connection()));
   const storageRoot = await mkdtemp(path.join(tmpdir(), 'file-service-'));
   const runtime = createOpaqueFilesRuntime(
     {
