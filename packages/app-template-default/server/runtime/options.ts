@@ -1,7 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readEnvFiles, type EnvMap } from '@nocobase/app-server-kit/config';
+import {
+  createConfigPaths,
+  readEnvFiles,
+  type ConfigPaths,
+  type EnvMap,
+} from '@nocobase/app-server-kit/config';
 import {
   joinBasePath,
   normalizeBasePath,
@@ -55,28 +60,24 @@ export interface ResolvedAppRuntimeOptions {
   routing: AppRoutingOptions;
 }
 
-interface EmbeddedPathOptions extends AppRuntimePathOptions {
-  distRoot: string;
-}
-
 export function resolveStandaloneRuntimeOptions(
   moduleUrl: string,
 ): ResolvedAppRuntimeOptions {
   const serverDir = getModuleDir(moduleUrl);
   const rootDir = path.resolve(serverDir, '..');
-  const env = loadStandaloneEnv(rootDir);
-  const publicBasePath =
-    stringFromEnv(env, 'APP_BASE_PATH') ?? '/app-template-default';
+  const paths: AppRuntimePathOptions = {
+    rootDir,
+    serverDir,
+    databaseDir: path.join(rootDir, 'database'),
+  };
+  const env = loadStandaloneEnv(createRuntimeConfigPaths(paths));
+  const publicBasePath = stringFromEnv(env, 'APP_BASE_PATH') ?? '/main';
   return {
     mode: 'standalone',
     env,
-    paths: {
-      rootDir,
-      serverDir,
-      databaseDir: path.join(rootDir, 'database'),
-    },
+    paths,
     routing: createAppRouting({
-      name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
+      name: resolveAppNameFromBasePath(publicBasePath, 'main'),
       publicBasePath,
     }),
   };
@@ -87,8 +88,9 @@ export function resolveEmbeddedRuntimeOptions(
   moduleUrl: string,
 ): ResolvedAppRuntimeOptions {
   const paths = resolveEmbeddedPaths(scope, moduleUrl);
+  const configPaths = createRuntimeConfigPaths(paths);
   const env = {
-    ...readEnvFiles([path.join(paths.distRoot, '.env')]),
+    ...readEnvFiles([configPaths.root('.env'), configPaths.root('.env.local')]),
     ...createScopeEnv(scope),
   };
   return {
@@ -108,6 +110,17 @@ export function resolveEmbeddedRuntimeOptions(
   };
 }
 
+export function createRuntimeConfigPaths(
+  paths: AppRuntimePathOptions,
+): ConfigPaths {
+  return createConfigPaths({
+    rootDir: paths.rootDir,
+    serverDir: paths.serverDir,
+    databaseDir: paths.databaseDir,
+    storageDir: paths.storageDir,
+  });
+}
+
 export function createAppRouting(options: {
   name: string;
   publicBasePath: string;
@@ -124,11 +137,8 @@ export function createAppRouting(options: {
   };
 }
 
-function loadStandaloneEnv(rootDir: string): EnvMap {
-  const envFiles = [
-    path.join(rootDir, '.env'),
-    path.join(rootDir, '.env.local'),
-  ];
+function loadStandaloneEnv(paths: ConfigPaths): EnvMap {
+  const envFiles = [paths.root('.env'), paths.root('.env.local')];
   return {
     ...readEnvFiles(envFiles, process.env),
     ...process.env,
@@ -138,14 +148,13 @@ function loadStandaloneEnv(rootDir: string): EnvMap {
 function resolveEmbeddedPaths(
   scope: AppScope,
   moduleUrl: string,
-): EmbeddedPathOptions {
+): AppRuntimePathOptions {
   if (scope.rootDir) {
     const rootDir = path.resolve(scope.rootDir);
     const distRoot = path.join(rootDir, 'dist');
 
     return {
       rootDir,
-      distRoot,
       serverDir: path.join(distRoot, 'server'),
       databaseDir: path.join(distRoot, 'database'),
       clientDir: scope.clientDir ?? path.join(distRoot, 'client'),
@@ -166,7 +175,6 @@ function resolveEmbeddedPaths(
 
   return {
     rootDir: moduleRoot,
-    distRoot,
     serverDir,
     databaseDir,
     clientDir: scope.clientDir ?? path.join(distRoot, 'client'),

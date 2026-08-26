@@ -522,6 +522,70 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/app-plugin-install:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.1.0)
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
+    devDependencies:
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../app-client
+      '@nocobase/app-sdk':
+        specifier: workspace:*
+        version: link:../app-sdk
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../dev-config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.1.0
+      shadcn:
+        specifier: ^4.13.1
+        version: 4.18.0(supports-color@8.1.1)(typescript@6.0.3)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.3.3
+      tw-animate-css:
+        specifier: ^1.2.5
+        version: 1.4.0
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/app-plugin-notification-provider:
     dependencies:
       '@base-ui/react':
@@ -844,7 +908,7 @@ importers:
         version: 5.3.0
       '@gchust/agent-annotations':
         specifier: 0.1.x
-        version: 0.1.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+        version: 0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.1(hono@4.13.2)
@@ -872,6 +936,9 @@ importers:
       '@nocobase/app-plugin-files':
         specifier: workspace:^
         version: link:../app-plugin-files
+      '@nocobase/app-plugin-install':
+        specifier: workspace:^
+        version: link:../app-plugin-install
       '@nocobase/app-plugin-notification-provider':
         specifier: workspace:^
         version: link:../app-plugin-notification-provider
@@ -1301,7 +1368,7 @@ importers:
         version: 5.3.0
       '@gchust/agent-annotations':
         specifier: 0.1.x
-        version: 0.1.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+        version: 0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.1(hono@4.13.2)
@@ -2672,8 +2739,8 @@ packages:
   '@fontsource-variable/geist@5.3.0':
     resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
 
-  '@gchust/agent-annotations@0.1.3':
-    resolution: {integrity: sha512-/Aajzs5tTzGEb9lzAsqd5MgKd0mhp2hglBWfUvSZnllHI08boA0iQxocB7e/QyCWxLHGtuKxMvdW5z+kYOTOJg==}
+  '@gchust/agent-annotations@0.1.5':
+    resolution: {integrity: sha512-5eNMyczCPEPsWl0d1z5vJnKJBu8w9TVtuWhHCX7g3AEYpFHn7CkbHMg6uYsCivTD2WFJxpedHYFVVC4tkyUs/g==}
     engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
@@ -9327,7 +9394,7 @@ snapshots:
 
   '@fontsource-variable/geist@5.3.0': {}
 
-  '@gchust/agent-annotations@0.1.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))':
+  '@gchust/agent-annotations@0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))':
     dependencies:
       magic-string: 0.30.21
       react: 19.1.0

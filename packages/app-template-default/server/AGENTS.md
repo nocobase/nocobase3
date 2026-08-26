@@ -13,9 +13,10 @@ verify them at the route, service, and configuration boundary that changed.
 - `standalone.ts` is an adapter. It starts the app as its own HTTP server,
   reads `.env`, `.env.local`, and `process.env`, then strips the public base
   path before dispatching to the app-local server.
-- `embedded.ts` creates a server for an app-host scope. It reads `dist/.env`
-  and scope-provided config. App-host has already stripped the public base path
-  before requests reach the app-local server.
+- `embedded.ts` creates a server for an app-host scope. It reads `.env` and
+  `.env.local` from the resolved app root, then applies scope-provided config.
+  App-host has already stripped the public base path before requests reach the
+  app-local server.
 - `config/*` owns environment parsing and defaults. Prefer adding config there
   instead of reading `process.env` in routes or services.
 - `routes/*` owns HTTP shape. Keep business logic in `services/*`.

@@ -30,7 +30,14 @@ export default createPortalViteConfig(
 
     return {
       base: viteBase,
-      plugins: [agentAnnotations({ root: __dirname })],
+      plugins: [
+        agentAnnotations({
+          root: __dirname,
+          clientExtensions: [
+            path.resolve(__dirname, 'client/agent-annotations-host.ts'),
+          ],
+        }),
+      ],
       define: {
         __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
           command === 'serve' ? path.resolve(__dirname) : '',
