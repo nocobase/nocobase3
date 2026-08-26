@@ -40,6 +40,7 @@ export interface PendingFileUpload {
 export interface CompleteFileInput<TBinding = undefined> {
   fileId: string;
   candidateKey: string;
+  now?: Date;
   validateMetadata?: (metadata: StorageObjectMetadata) => void;
   commitBinding?(
     connection: DatabaseConnection,
@@ -56,6 +57,11 @@ export type CompleteFileResult<TBinding = undefined> =
     }
   | {
       outcome: 'failed';
+      file: StoredFile;
+      cleanupStorageKeys: readonly string[];
+    }
+  | {
+      outcome: 'expired';
       file: StoredFile;
       cleanupStorageKeys: readonly string[];
     }
@@ -175,6 +181,7 @@ export class FileKernel {
     const candidateKey = normalizeStorageKey(input.candidateKey);
     assertStorageKeyOwnership(fileId, candidateKey, 'pending');
     const commitBinding = input.commitBinding?.bind(input);
+    const now = input.now === undefined ? this.#now() : readNow(input.now);
     const current = await this.#repository.get(fileId);
 
     if (!current) {
@@ -206,6 +213,13 @@ export class FileKernel {
     if (current.status === 'failed') {
       return {
         outcome: 'failed',
+        file: toStoredFile(current),
+        cleanupStorageKeys: [candidateKey],
+      };
+    }
+    if (isUploadExpired(current, now)) {
+      return {
+        outcome: 'expired',
         file: toStoredFile(current),
         cleanupStorageKeys: [candidateKey],
       };
@@ -264,7 +278,7 @@ export class FileKernel {
                 storageKey: readyKey,
                 size: metadata.contentLength,
                 contentType: metadata.contentType ?? null,
-                now: this.#now(),
+                now,
               },
               connection,
             );
@@ -277,6 +291,13 @@ export class FileKernel {
             }
           }
           if (readyRecord.status === 'pending') {
+            if (isUploadExpired(readyRecord, now)) {
+              return {
+                outcome: 'expired',
+                file: toStoredFile(readyRecord),
+                cleanupStorageKeys: [candidateKey, readyKey],
+              };
+            }
             throw new Error(
               'Files completion CAS ended without a terminal state.',
             );
@@ -624,6 +645,17 @@ function readyStorageKey(fileId: string): string {
 
 function toError(value: unknown, message: string): Error {
   return value instanceof Error ? value : new Error(message, { cause: value });
+}
+
+function isUploadExpired(record: FileRecord, now: Date): boolean {
+  return record.uploadExpiresAt.getTime() <= now.getTime();
+}
+
+function readNow(value: Date): Date {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new Error('Files completion time is invalid.');
+  }
+  return new Date(value.getTime());
 }
 
 function cloneFileRecord(record: FileRecord): FileRecord {

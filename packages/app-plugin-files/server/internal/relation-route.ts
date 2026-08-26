@@ -358,14 +358,19 @@ async function handleComplete(
     'complete',
   );
   const completed = await state.dataPlane.completeUpload(capability, {
-    commit: (connection) =>
-      state.repository.commit(
+    commit: async (connection) => {
+      const result = await state.repository.commit(
         recordId,
         fileId,
         capability.replaceFileId,
         now(state),
         connection,
-      ),
+      );
+      if (result.outcome !== 'committed') {
+        throw fileBindingConflict();
+      }
+      return result;
+    },
   });
   if (completed.binding === undefined) {
     throw new Error('Files relation completion returned no binding result.');

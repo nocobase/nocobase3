@@ -320,13 +320,13 @@ async function handleComplete(
     commit: async (connection, file) => {
       const snapshot = await state.repository.get(recordId, connection);
       if (!snapshot.recordExists) {
-        return { outcome: 'record-missing' as const };
+        throw businessRecordNotFound();
       }
       if (snapshot.fileId === file.id) {
         return { outcome: 'committed' as const };
       }
       if (snapshot.fileId !== capability.replaceFileId) {
-        return { outcome: 'conflict' as const };
+        throw fileBindingConflict();
       }
       const updated = await state.repository.compareAndSet(
         recordId,
@@ -339,23 +339,18 @@ async function handleComplete(
       }
       const winner = await state.repository.get(recordId, connection);
       if (!winner.recordExists) {
-        return { outcome: 'record-missing' as const };
+        throw businessRecordNotFound();
       }
-      return {
-        outcome:
-          winner.fileId === file.id
-            ? ('committed' as const)
-            : ('conflict' as const),
-      };
+      if (winner.fileId !== file.id) {
+        throw fileBindingConflict();
+      }
+      return { outcome: 'committed' as const };
     },
   });
-  if (completed.binding?.outcome === 'record-missing') {
-    throw businessRecordNotFound();
-  }
   if (completed.binding === undefined) {
     throw new Error('Files field completion returned no binding result.');
   }
-  if (completed.binding?.outcome !== 'committed') {
+  if (completed.binding.outcome !== 'committed') {
     throw fileBindingConflict();
   }
   return context.json({ file: completed.file });

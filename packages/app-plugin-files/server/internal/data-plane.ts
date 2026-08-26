@@ -6,6 +6,7 @@ import type { DatabaseConnection } from '@nocobase/app-database';
 import type { FileUploadPlan, StoredFile } from '../../protocol.js';
 import type { FilesConfig } from '../config.js';
 import type { CreateFileInput, FileConstraints, OpenedFile } from '../types.js';
+import { FileServiceError } from '../error.js';
 import {
   ExpiredFileCapabilityError,
   FileCapabilityCodec,
@@ -230,6 +231,9 @@ export class FilesDataPlane {
       }
       if (result.outcome === 'failed') {
         throw fileNotReady();
+      }
+      if (result.outcome === 'expired') {
+        throw uploadExpired();
       }
       throw uploadPersistenceFailed();
     } catch (error) {
@@ -466,13 +470,14 @@ export class FilesDataPlane {
     transfer: FileTransferDescriptor,
     binding?: CompleteUploadBinding<TBinding>,
   ): Promise<CompletedFileUpload<TBinding>> {
+    const now = new Date(this.#now());
     const record = await this.#kernel.getRecord(transfer.fileId);
     if (!record) {
       await this.#deleteBestEffort(transfer.candidateKey);
       throw fileNotFound();
     }
     if (record.status === 'pending') {
-      assertBeforeUploadDeadline(record, this.#now());
+      assertBeforeUploadDeadline(record, now.getTime());
       assertUploadPolicy(record.name, transfer);
     }
     if (record.status === 'failed') {
@@ -485,6 +490,7 @@ export class FilesDataPlane {
       result = await this.#kernel.completeUpload({
         fileId: transfer.fileId,
         candidateKey: transfer.candidateKey,
+        now,
         validateMetadata: (metadata) =>
           validateStorageMetadata(metadata, transfer),
         ...(binding === undefined
@@ -525,7 +531,12 @@ export class FilesDataPlane {
         throw fileNotFound();
       case 'failed':
         throw uploadFailed('The pending upload was cancelled.');
+      case 'expired':
+        throw uploadExpired();
       case 'persistence-failed':
+        if (result.error instanceof FileServiceError) {
+          throw result.error;
+        }
         throw uploadPersistenceFailed();
     }
   }

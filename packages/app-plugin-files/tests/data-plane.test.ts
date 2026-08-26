@@ -583,6 +583,78 @@ describe('Files S3-compatible data plane', () => {
 describe.each(['local', 's3'] as const)(
   'Files %s completion retry contract',
   (driver) => {
+    it('rejects an expiry change at the final CAS using one completion time', async () => {
+      let now = new Date('2026-08-24T00:00:00.000Z');
+      let clockCalls = 0;
+      const provider = driver === 's3' ? new FakeS3Disk() : undefined;
+      const fixture = await createTestRuntime(
+        driver === 's3'
+          ? { storage: { driver: 's3', bucket: 'managed-files' } }
+          : {},
+        {
+          ...(provider === undefined ? {} : { disk: provider }),
+          clock: () => {
+            clockCalls += 1;
+            return now;
+          },
+        },
+      );
+      const attempt = await fixture.dataPlane.createUploadAttempt({
+        name: 'expiry-race.txt',
+        size: 4,
+        contentType: 'text/plain',
+      });
+      if (provider) {
+        provider.putUpload(
+          attempt.plan,
+          { contentLength: 4, contentType: 'text/plain' },
+          'data',
+        );
+      } else {
+        expect(
+          (
+            await fixture.app.request(attempt.plan.upload.url, {
+              method: 'PUT',
+              headers: attempt.plan.upload.headers,
+              body: 'data',
+            })
+          ).status,
+        ).toBe(200);
+      }
+      clockCalls = 0;
+      const transaction = fixture.database.transaction.bind(fixture.database);
+      let expireBeforeTransaction = true;
+      fixture.database.transaction = async (operation, connection) => {
+        if (expireBeforeTransaction) {
+          expireBeforeTransaction = false;
+          return transaction(async (activeConnection) => {
+            await activeConnection.query
+              .updateTable('files')
+              .set({ uploadExpiresAt: now })
+              .where('id', '=', attempt.file.id)
+              .execute();
+            return operation(activeConnection);
+          }, connection);
+        }
+        return transaction(operation, connection);
+      };
+
+      await expect(
+        fixture.dataPlane.completeUpload(attempt.transfer),
+      ).rejects.toMatchObject({ code: 'UPLOAD_EXPIRED', status: 410 });
+
+      expect(clockCalls).toBe(1);
+      await expect(
+        fixture.kernel.getRecord(attempt.file.id),
+      ).resolves.toMatchObject({ status: 'pending', storageKey: null });
+      if (provider) {
+        expect(provider.keys()).toEqual([]);
+      } else {
+        expect(await listFiles(fixture.storageRoot)).toEqual([]);
+      }
+      now = new Date('2026-08-24T00:00:01.000Z');
+    });
+
     it('keeps the pending candidate when binding fails and retries the same plan', async () => {
       const provider = driver === 's3' ? new FakeS3Disk() : undefined;
       const fixture = await createTestRuntime(

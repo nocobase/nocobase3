@@ -30,6 +30,7 @@ import {
   getFilesRuntimeDataPlane,
   getFilesRuntimeKernel,
 } from '../server/internal/runtime.js';
+import { FakeS3Disk } from './support/fake-s3-disk.js';
 
 const EMPLOYEE_ONE = 'employee-1';
 const EMPLOYEE_TWO = 'employee-2';
@@ -40,6 +41,7 @@ interface TestFixture {
   runtime: FilesRuntime;
   service: FileService;
   storageRoot: string;
+  provider?: FakeS3Disk;
   deniedActions: Set<'read' | 'write' | 'share'>;
   authorizeCalls: Array<{
     action: 'read' | 'write' | 'share';
@@ -236,48 +238,73 @@ describe('field binding scoped file routes', () => {
     ).toBe(403);
   });
 
-  it('keeps the old file when concurrent replacements conflict', async () => {
-    const fixture = await createFixture();
-    const original = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
-      name: 'old.txt',
-      size: 3,
-      contentType: 'text/plain',
-    });
-    const left = await createUpload(fixture, EMPLOYEE_ONE, {
-      name: 'left.txt',
-      size: 4,
-      contentType: 'text/plain',
-      replaceFileId: original.file.id,
-    });
-    const right = await createUpload(fixture, EMPLOYEE_ONE, {
-      name: 'right.txt',
-      size: 5,
-      contentType: 'text/plain',
-      replaceFileId: original.file.id,
-    });
-    await putBytes(fixture, left, 'left');
-    await putBytes(fixture, right, 'right');
+  it.each(['local', 's3'] as const)(
+    'keeps the old file and rolls back the losing %s replacement',
+    async (driver) => {
+      const provider = driver === 's3' ? new FakeS3Disk() : undefined;
+      const fixture = await createFixture(
+        provider === undefined ? {} : { provider },
+      );
+      const original = await uploadAndComplete(fixture, EMPLOYEE_ONE, {
+        name: 'old.txt',
+        size: 3,
+        contentType: 'text/plain',
+      });
+      const left = await createUpload(fixture, EMPLOYEE_ONE, {
+        name: 'left.txt',
+        size: 4,
+        contentType: 'text/plain',
+        replaceFileId: original.file.id,
+      });
+      const right = await createUpload(fixture, EMPLOYEE_ONE, {
+        name: 'right.txt',
+        size: 5,
+        contentType: 'text/plain',
+        replaceFileId: original.file.id,
+      });
+      await putBytes(fixture, left, 'left');
+      await putBytes(fixture, right, 'right');
 
-    const [leftResult, rightResult] = await Promise.all([
-      completeUpload(fixture, left),
-      completeUpload(fixture, right),
-    ]);
-    expect([leftResult.status, rightResult.status].sort()).toEqual([200, 409]);
-    const conflict = leftResult.status === 409 ? leftResult : rightResult;
-    expect(await json<FileErrorResponse>(conflict)).toMatchObject({
-      code: 'FILE_BINDING_CONFLICT',
-    });
-    const winner = await currentAvatar(fixture, EMPLOYEE_ONE);
-    expect([left.file.id, right.file.id]).toContain(winner);
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getFile(
-        leftResult.status === 409 ? left.file.id : right.file.id,
-      ),
-    ).toMatchObject({ status: 'ready' });
-    expect(
-      await getFilesRuntimeKernel(fixture.runtime).getFile(original.file.id),
-    ).toMatchObject({ status: 'ready' });
-  });
+      const [leftResult, rightResult] = await Promise.all([
+        completeUpload(fixture, left),
+        completeUpload(fixture, right),
+      ]);
+      expect([leftResult.status, rightResult.status].sort()).toEqual([
+        200, 409,
+      ]);
+      const conflict = leftResult.status === 409 ? leftResult : rightResult;
+      expect(await json<FileErrorResponse>(conflict)).toMatchObject({
+        code: 'FILE_BINDING_CONFLICT',
+      });
+      const winner = await currentAvatar(fixture, EMPLOYEE_ONE);
+      expect([left.file.id, right.file.id]).toContain(winner);
+      const loser = leftResult.status === 409 ? left : right;
+      const loserRecord = await getFilesRuntimeKernel(
+        fixture.runtime,
+      ).getRecord(loser.file.id);
+      expect(loserRecord).toMatchObject({
+        status: 'pending',
+        storageKey: null,
+      });
+      expect(
+        await getFilesRuntimeKernel(fixture.runtime).getFile(winner ?? ''),
+      ).toMatchObject({ status: 'ready' });
+      expect(
+        await getFilesRuntimeKernel(fixture.runtime).getFile(original.file.id),
+      ).toMatchObject({ status: 'ready' });
+      expect((await completeUpload(fixture, loser)).status).toBe(409);
+      expect(
+        await getFilesRuntimeKernel(fixture.runtime).getRecord(loser.file.id),
+      ).toMatchObject({ status: 'pending', storageKey: null });
+      if (provider) {
+        expect(
+          provider
+            .keys()
+            .some((key) => key.startsWith(`ready/${loser.file.id}/`)),
+        ).toBe(false);
+      }
+    },
+  );
 
   it('cancels pending attempts without detaching a ready replacement target', async () => {
     const fixture = await createFixture();
@@ -507,6 +534,7 @@ interface CreateFixtureOptions {
   publicAccess?: boolean;
   routePublicAccess?: boolean;
   clock?: () => Date;
+  provider?: FakeS3Disk;
 }
 
 async function createFixture(
@@ -547,12 +575,20 @@ async function createFixture(
       database,
       config: resolveFilesConfig({
         appStorageRoot: storageRoot,
-        config: { publicAccess: { enabled: options.publicAccess ?? false } },
+        config: {
+          storage: options.provider
+            ? { driver: 's3', bucket: 'managed-files' }
+            : { driver: 'local', root: storageRoot },
+          publicAccess: { enabled: options.publicAccess ?? false },
+        },
       }),
       audience: 'field-route-test',
       secret: 'field-route-test-secret-at-least-32-characters',
     },
-    options.clock === undefined ? {} : { clock: options.clock },
+    {
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
+      ...(options.provider === undefined ? {} : { disk: options.provider }),
+    },
   );
   const service = createFileService({ runtime });
   const deniedActions = new Set<'read' | 'write' | 'share'>();
@@ -591,6 +627,7 @@ async function createFixture(
     runtime,
     service,
     storageRoot,
+    ...(options.provider === undefined ? {} : { provider: options.provider }),
     deniedActions,
     authorizeCalls,
   };
@@ -639,6 +676,17 @@ function putBytes(
   upload: CreateBusinessFileResponse,
   body: string,
 ): Promise<Response> {
+  if (fixture.provider) {
+    fixture.provider.putUpload(
+      upload.plan,
+      {
+        contentLength: Buffer.byteLength(body),
+        contentType: 'text/plain',
+      },
+      body,
+    );
+    return Promise.resolve(new Response(null, { status: 200 }));
+  }
   return Promise.resolve(
     fixture.app.request(upload.plan.upload.url, {
       method: 'PUT',

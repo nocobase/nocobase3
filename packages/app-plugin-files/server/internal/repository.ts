@@ -132,6 +132,7 @@ export class FilesRepository {
       })
       .where('id', '=', input.id)
       .where('status', '=', 'pending')
+      .where('uploadExpiresAt', '>', input.now)
       .execute();
     return result.updatedCount === 1;
   }

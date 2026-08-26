@@ -170,6 +170,39 @@ describe('file metadata kernel', () => {
     expect(storage.has(winnerKey)).toBe(true);
   });
 
+  it('rejects a completion whose expiry changes before the final CAS', async () => {
+    const upload = await kernel.createPending({ name: 'expiry-race.bin' });
+    storage.put(upload.candidateKey, { contentLength: 4 });
+    let clockCalls = 0;
+    const expiringRepository = new ExpiringCompleteRepository(database);
+    const expiringKernel = createFileKernel({
+      repository: expiringRepository,
+      storage,
+      uploadExpiresInSeconds: 900,
+      clock: () => {
+        clockCalls += 1;
+        return now;
+      },
+    });
+
+    const result = await expiringKernel.completeUpload(upload);
+
+    expect(clockCalls).toBe(1);
+    expect(result).toMatchObject({
+      outcome: 'expired',
+      file: { id: upload.file.id, status: 'pending' },
+      cleanupStorageKeys: expect.arrayContaining([upload.candidateKey]),
+    });
+    expect(result.cleanupStorageKeys).toHaveLength(2);
+    const record = await repository.getRequired(upload.file.id);
+    expect(record).toMatchObject({ status: 'pending', storageKey: null });
+    for (const storageKey of result.cleanupStorageKeys) {
+      await storage.delete(storageKey);
+    }
+    expect(storage.readyKeys(upload.file.id)).toEqual([]);
+    expect(storage.has(upload.candidateKey)).toBe(false);
+  });
+
   it('commits metadata from the copied ready candidate when the source changes after HEAD', async () => {
     const upload = await kernel.createPending({ name: 'changing.bin' });
     storage.put(
@@ -628,6 +661,27 @@ class FailingCompleteRepository extends FilesRepository {
     ..._args: Parameters<FilesRepository['completePending']>
   ): Promise<boolean> {
     throw new Error('simulated CAS failure');
+  }
+}
+
+class ExpiringCompleteRepository extends FilesRepository {
+  readonly #database: DatabaseManager;
+
+  constructor(database: DatabaseManager) {
+    super(database);
+    this.#database = database;
+  }
+
+  override async completePending(
+    ...args: Parameters<FilesRepository['completePending']>
+  ): Promise<boolean> {
+    const [input, connection] = args;
+    await (connection?.query ?? this.#database.query())
+      .updateTable('files')
+      .set({ uploadExpiresAt: input.now })
+      .where('id', '=', input.id)
+      .execute();
+    return super.completePending(...args);
   }
 }
 

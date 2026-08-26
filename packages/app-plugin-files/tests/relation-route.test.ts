@@ -203,6 +203,83 @@ describe('relation binding scoped file routes', () => {
     ).toMatchObject({ status: 'ready' });
   });
 
+  it.each(['local', 's3'] as const)(
+    'rolls back a conflicting %s replacement without detaching the old file',
+    async (driver) => {
+      const provider = driver === 's3' ? new FakeS3Disk() : undefined;
+      const fixture = await createFixture({
+        maxFiles: 1,
+        ...(provider === undefined ? {} : { provider }),
+      });
+      const original = await uploadAndComplete(
+        fixture,
+        ORDER_ONE,
+        'old.txt',
+        'old',
+      );
+      const originalRow = (await relationRows(fixture, ORDER_ONE))[0];
+      if (!originalRow) {
+        throw new Error('Expected the original relation row.');
+      }
+      const replacement = await createUpload(
+        fixture,
+        ORDER_ONE,
+        'new.txt',
+        3,
+        original.file.id,
+      );
+      await putBytes(fixture, replacement, 'new');
+      await fixture.database
+        .query()
+        .updateTable('purchaseOrderAttachments')
+        .set({ reservationExpiresAt: new Date('2099-01-01T00:00:00.000Z') })
+        .where('id', '=', originalRow.id)
+        .execute();
+
+      const conflict = await completeUpload(fixture, replacement);
+
+      expect(conflict.status).toBe(409);
+      await expect(json<FileErrorResponse>(conflict)).resolves.toMatchObject({
+        code: 'FILE_BINDING_CONFLICT',
+      });
+      expect((await relationRows(fixture, ORDER_ONE))[0]).toMatchObject({
+        id: originalRow.id,
+        slot: originalRow.slot,
+        fileId: original.file.id,
+      });
+      expect(
+        await getFilesRuntimeKernel(fixture.runtime).getRecord(
+          replacement.file.id,
+        ),
+      ).toMatchObject({ status: 'pending', storageKey: null });
+      expect(
+        await getFilesRuntimeKernel(fixture.runtime).getFile(original.file.id),
+      ).toMatchObject({ status: 'ready' });
+      if (provider) {
+        expect(
+          provider
+            .keys()
+            .some((key) => key.startsWith(`ready/${replacement.file.id}/`)),
+        ).toBe(false);
+      }
+
+      await fixture.database
+        .query()
+        .updateTable('purchaseOrderAttachments')
+        .set({ reservationExpiresAt: null })
+        .where('id', '=', originalRow.id)
+        .execute();
+      expect((await completeUpload(fixture, replacement)).status).toBe(200);
+      expect((await completeUpload(fixture, replacement)).status).toBe(200);
+      expect((await relationRows(fixture, ORDER_ONE))[0]).toMatchObject({
+        id: originalRow.id,
+        slot: originalRow.slot,
+        fileId: replacement.file.id,
+        reservationExpiresAt: null,
+      });
+    },
+  );
+
   it('retries relation completion after a persistence result is uncertain', async () => {
     const fixture = await createFixture();
     const upload = await createUpload(fixture, ORDER_ONE, 'retry.txt', 5);
@@ -671,7 +748,7 @@ async function uploadAndComplete(
     name,
     Buffer.byteLength(contents),
   );
-  expect((await putLocal(fixture, upload, contents)).status).toBe(200);
+  expect((await putBytes(fixture, upload, contents)).status).toBe(200);
   expect((await completeUpload(fixture, upload)).status).toBe(200);
   return upload;
 }
@@ -691,6 +768,22 @@ function putLocal(
       body,
     }),
   );
+}
+
+function putBytes(
+  fixture: RelationFixture,
+  upload: CreateBusinessFileResponse,
+  body: string,
+): Promise<Response> {
+  if (fixture.provider) {
+    fixture.provider.putUpload(
+      upload.plan,
+      { contentLength: Buffer.byteLength(body), contentType: 'text/plain' },
+      body,
+    );
+    return Promise.resolve(new Response(null, { status: 200 }));
+  }
+  return putLocal(fixture, upload, body);
 }
 
 function completeUpload(

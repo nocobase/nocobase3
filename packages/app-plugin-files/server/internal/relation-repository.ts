@@ -176,7 +176,7 @@ export class RelationBindingRepository {
       if (current) {
         const row = this.#readRow(current);
         if (row.reservationExpiresAt !== null) {
-          await activeConnection.query
+          const updated = await activeConnection.query
             .updateTable(this.#table)
             .set({
               [this.#reservationColumn]: null,
@@ -184,7 +184,22 @@ export class RelationBindingRepository {
             })
             .where(this.#recordColumn, '=', recordId)
             .where(this.#fileColumn, '=', fileId)
+            .where(this.#idColumn, '=', row.id)
+            .where(this.#reservationColumn, 'is not', null)
             .execute();
+          if (updated.updatedCount !== 1) {
+            const winner = await this.#selectRow(
+              activeConnection.query,
+              recordId,
+              fileId,
+            );
+            if (
+              !winner ||
+              this.#readRow(winner).reservationExpiresAt !== null
+            ) {
+              return { outcome: 'conflict' };
+            }
+          }
           return {
             outcome: 'committed',
             row: { ...row, reservationExpiresAt: null },
