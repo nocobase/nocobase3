@@ -100,6 +100,36 @@ describe('native AI employee persistence', () => {
     ).toMatchObject({ content: { type: 'text', content: 'hello' } });
   });
 
+  it('sorts AI employee lists by sort ascending by default', async () => {
+    const database = await createDatabase();
+    const repositories = new CollectionRepositoryFactory(database.connection());
+    await repositories.aiEmployees.create({
+      values: [
+        {
+          username: 'third',
+          sort: 30,
+          skillSettings: { skills: [], tools: [] },
+        },
+        {
+          username: 'first',
+          sort: 10,
+          skillSettings: { skills: [], tools: [] },
+        },
+        {
+          username: 'second',
+          sort: 20,
+          skillSettings: { skills: [], tools: [] },
+        },
+      ],
+    });
+
+    await expect(repositories.aiEmployees.find()).resolves.toMatchObject([
+      { username: 'first', sort: 10 },
+      { username: 'second', sort: 20 },
+      { username: 'third', sort: 30 },
+    ]);
+  });
+
   it('round-trips plain-text values stored in JSON tool-message content', async () => {
     const database = await createDatabase();
     const repositories = new CollectionRepositoryFactory(database.connection());

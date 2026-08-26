@@ -23,7 +23,6 @@ import type {
   UserAIEmployeeRepository,
 } from '../index.js';
 import type {
-  AIEmployeeEntity,
   AIEmployeeRepository,
   AIMCPRepository,
   CollectionRepository,
@@ -32,17 +31,11 @@ import type {
   MCPEntity,
 } from '@nocobase/ai-employee';
 import type { DatabaseRepositoryFactory } from '../runtime-factory.js';
+import { DatabaseAIEmployeeRepository } from './ai-employee.js';
 import { BaseCollectionRepository } from './base-collection-repository.js';
 
 const JSON_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
   aiConversations: new Set(['options']),
-  aiEmployees: new Set([
-    'chatSettings',
-    'skillSettings',
-    'modelSettings',
-    'dataSourceSettings',
-    'knowledgeBase',
-  ]),
   aiFiles: new Set(['meta']),
   aiMcpClients: new Set(['args', 'env', 'headers', 'restart']),
   aiMessages: new Set([
@@ -87,7 +80,16 @@ export class CollectionRepositoryFactory implements DatabaseRepositoryFactory {
     return this.collectionRepository<AIConversationEntity>('aiConversations');
   }
   get aiEmployees(): AIEmployeeRepository {
-    return this.collectionRepository<AIEmployeeEntity>('aiEmployees');
+    const name = 'aiEmployees';
+    let repository = this.records.get(name);
+    if (!repository) {
+      repository = new DatabaseAIEmployeeRepository(
+        this.connection,
+        this.generateId,
+      );
+      this.records.set(name, repository);
+    }
+    return repository as DatabaseAIEmployeeRepository;
   }
   get aiFiles(): AIFileRepository {
     return this.collectionRepository<AIFileEntity>('aiFiles');

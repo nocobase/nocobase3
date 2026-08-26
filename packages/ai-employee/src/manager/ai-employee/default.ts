@@ -25,13 +25,14 @@ const DEFAULT_KNOWLEDGE_BASE_PROMPT =
   "From knowledge base:\n{knowledgeBaseData}\nanswer user's question using this information.";
 
 /**
- * The employee manager owns loader-to-entity conversion only.  Storage is
- * supplied by the host through AIEmployeeRepository, so a loader write is
- * immediately visible to management APIs and the runtime; there is no delayed
- * registry-to-store promotion.
+ * The employee manager owns loader-to-entity conversion and can promote
+ * resources from its initial repository into host-provided persistent storage.
  */
 export class DefaultAIEmployeeManager implements AIEmployeeManager {
-  constructor(private readonly repository: AIEmployeeRepository) {}
+  private repository: AIEmployeeRepository;
+  constructor(repository: AIEmployeeRepository) {
+    this.repository = repository;
+  }
 
   async getEmployee(username: string): Promise<AIEmployeeEntity | undefined> {
     return (
@@ -57,17 +58,21 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
   }
 
   async registerEmployee(options: AIEmployeeOptions): Promise<void> {
-    const current =
-      (await await this.repository.findOne({
-        filter: { username: options.username },
-      })) ?? undefined;
-    const value = this.toBuiltInEmployee(options, current);
-    if (current)
-      await this.repository.update({
-        filter: { username: options.username },
-        values: value,
-      });
-    else await this.repository.create({ values: value });
+    await this.registerEmployeeInRepository(this.repository, options);
+  }
+
+  async switchRepository(repository: AIEmployeeRepository): Promise<void> {
+    if (repository === this.repository) return;
+    const employees = await this.repository.find({
+      sort: ['sort', 'username'],
+    });
+    for (const employee of employees) {
+      await this.registerEmployeeInRepository(
+        repository,
+        this.toEmployeeOptions(employee),
+      );
+    }
+    this.repository = repository;
   }
 
   async upsertEmployee(entry: AIEmployeeEntity): Promise<AIEmployeeEntity> {
@@ -86,6 +91,43 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
 
   async deleteEmployee(username: string): Promise<void> {
     await this.repository.destroy({ filter: { username } });
+  }
+
+  private async registerEmployeeInRepository(
+    repository: AIEmployeeRepository,
+    options: AIEmployeeOptions,
+  ): Promise<void> {
+    const current =
+      (await repository.findOne({
+        filter: { username: options.username },
+      })) ?? undefined;
+    const value = this.toBuiltInEmployee(options, current);
+    if (current) {
+      await repository.update({
+        filter: { username: options.username },
+        values: value,
+      });
+      return;
+    }
+    await repository.create({ values: value });
+  }
+
+  private toEmployeeOptions(employee: AIEmployeeEntity): AIEmployeeOptions {
+    return {
+      username: employee.username,
+      category: employee.category,
+      description: employee.description,
+      skills: [...(employee.skillSettings?.skills ?? [])],
+      tools: [...(employee.skillSettings?.tools ?? [])],
+      chatSettings: employee.chatSettings,
+      avatar: employee.avatar,
+      nickname: employee.nickname,
+      position: employee.position,
+      bio: employee.bio,
+      greeting: employee.greeting,
+      systemPrompt: employee.defaultPrompt,
+      sort: employee.sort,
+    };
   }
 
   private toBuiltInEmployee(

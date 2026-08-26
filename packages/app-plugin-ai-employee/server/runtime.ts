@@ -243,6 +243,7 @@ export function initializeAIEmployee(
   );
   const aiDirectory = resolveAIDirectory(options.aiDirectory);
   ctx.ready = (async () => {
+    await ctx.ai.employeeManager.switchRepository(ctx.repositories.aiEmployees);
     await loadResources({
       ctx,
       aiDirectory: packageAIDirectory,

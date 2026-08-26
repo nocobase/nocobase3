@@ -9,6 +9,7 @@
 
 import type {
   AIEmployeeEntity,
+  AIEmployeeRepository,
   AIEmployeeKnowledgeBase,
   AIEmployeeToolSetting,
 } from '../../repository/index.js';
@@ -47,6 +48,7 @@ export interface AIEmployeeManager {
   getEmployee(username: string): Promise<AIEmployeeEntity | undefined>;
   listEmployees(filter?: AIEmployeeFilter): Promise<AIEmployeeEntity[]>;
   registerEmployee(options: AIEmployeeOptions): Promise<void>;
+  switchRepository(repository: AIEmployeeRepository): Promise<void>;
   upsertEmployee(entry: AIEmployeeEntity): Promise<AIEmployeeEntity>;
   deleteEmployee(username: string): Promise<void>;
 }
