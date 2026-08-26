@@ -1,9 +1,9 @@
 import type {
   WorkflowExecutionOverlay,
   WorkflowGraph,
+  WorkflowNestedDefinition,
+  JsonObject,
 } from '@nocobase/app-plugin-workflow/client';
-import type { WorkflowSourceAst } from '@nocobase/app-plugin-workflow';
-import type { JsonObject } from '@nocobase/app-plugin-workflow';
 
 export interface WorkflowListRecord {
   id: string;
@@ -34,7 +34,7 @@ export interface WorkflowDetailRecord extends WorkflowListRecord {
   description: string | null;
   hash: string | null;
   version: string | null;
-  contextSchema: object;
+  contextSchema: JsonObject;
   inputSchema: Record<string, WorkflowInputDeclaration>;
   inputValues: Record<string, string | number | boolean>;
   nodes: WorkflowNodeRecord[];
@@ -81,7 +81,7 @@ export interface WorkflowNodeRunPayload {
   truncated: boolean;
 }
 export interface WorkflowCanvasProps {
-  definition: WorkflowSourceAst;
+  definition: WorkflowNestedDefinition;
   overlay?: WorkflowExecutionOverlay;
   nodeRuns?: readonly WorkflowNodeRunRecord[];
   selectedNodeKey?: string | null;

@@ -100,21 +100,31 @@ export function WorkflowCanvas({
   onViewStartContext,
 }: WorkflowCanvasProps) {
   const graph = useMemo(() => projectWorkflowGraph(definition), [definition]);
-  const [positions, setPositions] = useState<
-    ReadonlyMap<string, { id: string; x: number; y: number }>
-  >(new Map());
-  const [viewportReady, setViewportReady] = useState(false);
+  const [layout, setLayout] = useState<{
+    graph: typeof graph;
+    positions: ReadonlyMap<string, { id: string; x: number; y: number }>;
+  }>(() => ({ graph, positions: new Map() }));
+  const [fittedGraph, setFittedGraph] = useState<typeof graph | null>(null);
   useEffect(() => {
     let active = true;
-    setPositions(new Map());
-    setViewportReady(false);
     void layoutWithElk(createLayoutInput(graph)).then((result) => {
-      if (active) setPositions(applyLayoutResult(graph, result).positions);
+      if (active)
+        setLayout({
+          graph,
+          positions: applyLayoutResult(graph, result).positions,
+        });
     });
     return () => {
       active = false;
     };
   }, [graph]);
+  const positions = useMemo<
+    ReadonlyMap<string, { id: string; x: number; y: number }>
+  >(
+    () => (layout.graph === graph ? layout.positions : new Map()),
+    [graph, layout],
+  );
+  const viewportReady = fittedGraph === graph;
   const attemptsByNode = useMemo(() => {
     const result = new Map<string, WorkflowNodeRunRecord[]>();
     for (const run of nodeRuns)
@@ -262,7 +272,7 @@ export function WorkflowCanvas({
               window.requestAnimationFrame(() => {
                 void instance
                   .fitView({ padding: 0.22, minZoom: 0.35, maxZoom: 1.15 })
-                  .then(() => setViewportReady(true));
+                  .then(() => setFittedGraph(graph));
               });
             }}
             minZoom={0.2}

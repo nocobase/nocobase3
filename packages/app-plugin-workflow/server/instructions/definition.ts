@@ -92,10 +92,10 @@ export function createNodeExpression<TConfig, TBranch extends string = never>(
         branch: branching.branch,
       } as BranchingNodeExpression<TBranch> & InternalExpression;
       Object.defineProperty(next, EXPRESSION_BRANCHES, { value: branches });
-      return Object.freeze(next) as NodeExpression<TBranch>;
+      return Object.freeze(next);
     },
   };
-  return Object.freeze(branching) as NodeExpression<TBranch>;
+  return Object.freeze(branching);
 }
 
 function validateNodeOptions(

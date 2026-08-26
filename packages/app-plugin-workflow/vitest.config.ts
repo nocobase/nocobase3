@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vitest/config';
 
-export default defineConfig({
+import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
+
+export default createNodeVitestConfig({
   resolve: {
     alias: {
       '@nocobase/app-database': fileURLToPath(
@@ -13,7 +14,6 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
     include: ['tests/**/*.test.ts'],
   },
 });

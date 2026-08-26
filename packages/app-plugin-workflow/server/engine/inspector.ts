@@ -32,7 +32,7 @@ export function projectRunNodeInspector(
     sourceManaged: true,
     argsKeys:
       args && typeof args === 'object' && !Array.isArray(args)
-        ? Object.keys(args as object).sort()
+        ? Object.keys(args).sort()
         : [],
   };
 }

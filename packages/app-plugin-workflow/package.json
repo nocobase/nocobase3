@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,6 +28,21 @@
       "source": "./client/index.ts",
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js"
+    },
+    "./client/routes": {
+      "source": "./client/routes.ts",
+      "types": "./dist/client/routes.d.ts",
+      "import": "./dist/client/routes.js"
+    },
+    "./client/bootstrap": {
+      "source": "./client/bootstrap.ts",
+      "types": "./dist/client/bootstrap.d.ts",
+      "import": "./dist/client/bootstrap.js"
+    },
+    "./client/route-contracts": {
+      "source": "./client/route-contracts.ts",
+      "types": "./dist/client/route-contracts.d.ts",
+      "import": "./dist/client/route-contracts.js"
     },
     "./build": {
       "source": "./build/index.ts",
@@ -56,6 +71,18 @@
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
       },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./client/bootstrap": {
+        "types": "./dist/client/bootstrap.d.ts",
+        "import": "./dist/client/bootstrap.js"
+      },
+      "./client/route-contracts": {
+        "types": "./dist/client/route-contracts.d.ts",
+        "import": "./dist/client/route-contracts.js"
+      },
       "./build": {
         "types": "./dist/build/index.d.ts",
         "import": "./dist/build/index.js"
@@ -67,8 +94,23 @@
       "./package.json": "./package.json"
     }
   },
+  "files": [
+    "dist",
+    "registry",
+    "registry.config.json",
+    "public/r"
+  ],
   "nocobase": {
+    "registry": {
+      "items": {
+        "workflow-management": "./registry/workflow-management"
+      }
+    },
     "plugin": {
+      "client": {
+        "bootstrap": "./client/bootstrap",
+        "routes": "./client/routes"
+      },
       "database": {
         "migrations": "./database/migrations",
         "seeds": "./database/seeds"
@@ -76,16 +118,20 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit",
     "test": "vitest run --passWithNoTests",
+    "registry:build": "node ../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
+    "prepack": "pnpm registry:build",
     "eval:skill": "node --import tsx skill-evals/nocobase3-workflow-manage/runner/cli.ts",
     "eval:skill:test": "vitest run --config skill-evals/nocobase3-workflow-manage/vitest.config.ts",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
@@ -96,11 +142,21 @@
     "esbuild": "^0.25.12",
     "hono": "catalog:"
   },
+  "peerDependencies": {
+    "@nocobase/app-client": "workspace:^",
+    "react": "^19.0.0",
+    "react-router": "^7.0.2"
+  },
   "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
+    "@types/react": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "react": "catalog:",
+    "react-router": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",

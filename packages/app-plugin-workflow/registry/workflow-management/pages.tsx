@@ -10,8 +10,9 @@ import {
   buildExecutionOverlay,
   projectWorkflowGraph,
   restoreFromFlatIr,
+  type JsonObject,
+  type WorkflowNestedDefinition,
 } from '@nocobase/app-plugin-workflow/client';
-import type { WorkflowSourceAst } from '@nocobase/app-plugin-workflow';
 import { workflowApi } from './data';
 import {
   WorkflowContextDialog,
@@ -103,12 +104,12 @@ function displayInputValue(value: unknown): string {
     return '[Unserializable value]';
   }
 }
-function definition(workflow: WorkflowDetailRecord): WorkflowSourceAst {
+function definition(workflow: WorkflowDetailRecord): WorkflowNestedDefinition {
   return restoreFromFlatIr({
     title: workflow.title ?? workflow.key,
     ...(workflow.description ? { description: workflow.description } : {}),
-    contextSchema: workflow.contextSchema as WorkflowSourceAst['contextSchema'],
-    inputs: workflow.inputSchema,
+    contextSchema: workflow.contextSchema,
+    inputs: normalizeWorkflowInputs(workflow.inputSchema),
     start: workflow.nodes.find((node) => node.upstreamKey == null)?.key ?? null,
     nodes: workflow.nodes.map((node) => ({
       key: node.key,
@@ -122,26 +123,50 @@ function definition(workflow: WorkflowDetailRecord): WorkflowSourceAst {
     })),
   });
 }
+function normalizeWorkflowInputs(
+  inputSchema: WorkflowDetailRecord['inputSchema'],
+): JsonObject {
+  return Object.fromEntries(
+    Object.entries(inputSchema).map(([key, input]) => [
+      key,
+      {
+        type: input.type,
+        ...(input.title === undefined ? {} : { title: input.title }),
+        ...(input.description === undefined
+          ? {}
+          : { description: input.description }),
+        ...(input.default === undefined ? {} : { default: input.default }),
+        ...(input.enum === undefined ? {} : { enum: input.enum }),
+      },
+    ]),
+  );
+}
 function useAsync<T>(load: () => Promise<T>): {
   value: T | null;
   error: string | null;
 } {
-  const [value, setValue] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    load: () => Promise<T>;
+    value: T | null;
+    error: string | null;
+  }>(() => ({ load, value: null, error: null }));
   useEffect(() => {
     let active = true;
-    setError(null);
     void load().then(
-      (next) => active && setValue(next),
+      (next) => active && setResult({ load, value: next, error: null }),
       (cause: unknown) =>
         active &&
-        setError(cause instanceof Error ? cause.message : String(cause)),
+        setResult({
+          load,
+          value: null,
+          error: cause instanceof Error ? cause.message : String(cause),
+        }),
     );
     return () => {
       active = false;
     };
   }, [load]);
-  return { value, error };
+  return result.load === load ? result : { value: null, error: null };
 }
 
 function InputDialog({
@@ -506,10 +531,16 @@ export function WorkflowDetailPage(): React.ReactElement {
   const [dialog, setDialog] = useState<'inputs' | 'runs' | 'manual' | null>(
     null,
   );
-  const [enabled, setEnabled] = useState(false);
+  const [enabledState, setEnabledState] = useState<{
+    workflowId: string;
+    value: boolean;
+  }>(() => ({ workflowId: '', value: false }));
   const workflow = loaded.value;
-  useEffect(() => setEnabled(workflow?.enabled ?? false), [workflow?.enabled]);
   if (!workflow) return <main>{loaded.error ?? 'Loading workflow…'}</main>;
+  const enabled =
+    enabledState.workflowId === workflow.id
+      ? enabledState.value
+      : workflow.enabled;
   const hasContext =
     Object.keys(contextProperties(workflow.contextSchema)).length > 0;
   return (
@@ -527,7 +558,7 @@ export function WorkflowDetailPage(): React.ReactElement {
             Version{' '}
             <select
               value={workflow.id}
-              onChange={(event) => navigate(`../${event.target.value}`)}
+              onChange={(event) => void navigate(`../${event.target.value}`)}
             >
               {(revisions.value ?? [workflow]).map((item) => (
                 <option key={item.id} value={item.id}>
@@ -556,7 +587,12 @@ export function WorkflowDetailPage(): React.ReactElement {
                 onChange={(event) =>
                   void workflowApi
                     .status(workflow.id, event.target.checked)
-                    .then((next) => setEnabled(next.enabled))
+                    .then((next) =>
+                      setEnabledState({
+                        workflowId: workflow.id,
+                        value: next.enabled,
+                      }),
+                    )
                 }
               />
               {enabled ? 'Enabled' : 'Disabled'}

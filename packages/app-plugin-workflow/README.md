@@ -27,9 +27,37 @@ the plugin owns workflow discovery, validation, compilation, and Artifact
 emission.
 
 Register it with `pnpm plugin:register workflow --app app-template-default`.
-Application-owned workflow source and Portal Registry UI may remain in the
-application package. The default application only loads the Workflow runtime,
-migrations, services, and routes when this plugin is enabled.
+Application-owned workflow source remains in the application package. This
+package publishes the canonical `workflow-management` Registry recipe. Once
+materialized, its editable UI snapshot belongs to the consuming application
+and calls only this plugin's stable public exports. The default application
+only loads the Workflow runtime, migrations, services, and routes when this
+plugin is enabled.
+
+Build the Registry payload with:
+
+```sh
+pnpm registry build --package @nocobase/app-plugin-workflow
+```
+
+Materialize it into a new application output tree with:
+
+```sh
+pnpm registry materialize \
+  --package @nocobase/app-plugin-workflow \
+  --item workflow-management \
+  --output-root /path/to/application
+```
+
+Materialization refuses to overwrite an existing extension. Update an
+installed snapshot with an explicit three-way merge.
+
+## Development dependencies
+
+The Workflow integration tests intentionally pin `better-sqlite3` 13 and the
+matching Knex range instead of using the workspace catalog. The queue test
+adapter currently exercises that newer native-driver combination; move these
+entries back to `catalog:` once the workspace database fixture is upgraded.
 
 ## Agent Skill
 

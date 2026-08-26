@@ -16,11 +16,7 @@ import type {
   WorkflowInstructionContext,
   WorkflowInstructionResult,
 } from '../base.js';
-import type {
-  JsonObject,
-  WorkflowNode,
-  WorkflowNodeRun,
-} from '../../engine/types.js';
+import type { JsonObject, WorkflowNodeRun } from '../../engine/types.js';
 
 export const CONDITION_BRANCH_KEYS: { readonly yes: 'yes'; readonly no: 'no' } =
   { yes: 'yes', no: 'no' };
@@ -84,7 +80,7 @@ export class ConditionInstruction extends WorkflowInstruction<ConditionConfig> {
   };
 
   constructor(context: WorkflowInstructionContext) {
-    super({ ...context, node: context.node as WorkflowNode<ConditionConfig> });
+    super({ ...context, node: context.node });
   }
 
   static create(

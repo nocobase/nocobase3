@@ -112,20 +112,40 @@ export function WorkflowRunResultDialog({
   nodeTitle,
   onClose,
 }: WorkflowRunResultDialogProps) {
+  return (
+    <WorkflowRunResultDialogContent
+      key={`${runId}:${nodeRun.id}`}
+      runId={runId}
+      nodeRun={nodeRun}
+      nodeTitle={nodeTitle}
+      onClose={onClose}
+    />
+  );
+}
+function WorkflowRunResultDialogContent({
+  runId,
+  nodeRun,
+  nodeTitle,
+  onClose,
+}: WorkflowRunResultDialogProps) {
   const [attemptId, setAttemptId] = useState(nodeRun.id);
-  const [attempts, setAttempts] = useState<WorkflowNodeRunRecord[]>([nodeRun]);
-  const [payload, setPayload] = useState<WorkflowNodeRunPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const attemptsKey = `${runId}:${nodeRun.nodeKey}`;
+  const [attemptsResult, setAttemptsResult] = useState<{
+    key: string;
+    value: WorkflowNodeRunRecord[];
+  }>(() => ({ key: attemptsKey, value: [nodeRun] }));
+  const payloadKey = `${runId}:${attemptId}`;
+  const [payloadResult, setPayloadResult] = useState<{
+    key: string;
+    value: WorkflowNodeRunPayload | null;
+    error: string | null;
+  }>(() => ({ key: payloadKey, value: null, error: null }));
   const animatedClose = useAnimatedDialogClose(onClose);
   useEffect(() => {
-    setAttemptId(nodeRun.id);
-  }, [nodeRun.id]);
-  useEffect(() => {
     let active = true;
-    setAttempts([nodeRun]);
     void workflowApi.nodeRuns(runId, nodeRun.nodeKey).then(
       (next) => {
-        if (active) setAttempts(next);
+        if (active) setAttemptsResult({ key: attemptsKey, value: next });
       },
       () => {
         /* The latest summary remains enough to display the selected run. */
@@ -134,24 +154,31 @@ export function WorkflowRunResultDialog({
     return () => {
       active = false;
     };
-  }, [nodeRun, runId]);
+  }, [attemptsKey, nodeRun.nodeKey, runId]);
   useEffect(() => {
     let active = true;
-    setPayload(null);
-    setError(null);
     void workflowApi.payload(runId, attemptId).then(
       (next) => {
-        if (active) setPayload(next);
+        if (active)
+          setPayloadResult({ key: payloadKey, value: next, error: null });
       },
       (cause: unknown) => {
         if (active)
-          setError(cause instanceof Error ? cause.message : String(cause));
+          setPayloadResult({
+            key: payloadKey,
+            value: null,
+            error: cause instanceof Error ? cause.message : String(cause),
+          });
       },
     );
     return () => {
       active = false;
     };
-  }, [attemptId, runId]);
+  }, [attemptId, payloadKey, runId]);
+  const attempts =
+    attemptsResult.key === attemptsKey ? attemptsResult.value : [nodeRun];
+  const payload = payloadResult.key === payloadKey ? payloadResult.value : null;
+  const error = payloadResult.key === payloadKey ? payloadResult.error : null;
   const current =
     attempts.find((attempt) => attempt.id === attemptId) ?? nodeRun;
   return (

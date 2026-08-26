@@ -951,9 +951,19 @@ describe('app plugins', () => {
     );
     expect(workflowPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-workflow',
-      version: '0.1.0',
+      version: declaredVersion('@nocobase/app-plugin-workflow'),
       enabled: true,
     });
+    expect(workflowPlugin?.manifest.client).toEqual({
+      bootstrap: './client/bootstrap',
+      routes: './client/routes',
+    });
+    expect(workflowPlugin?.clientBootstrapEntry).toMatch(
+      /app-plugin-workflow\/client\/bootstrap\.ts$/,
+    );
+    expect(workflowPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-workflow\/client\/routes\.ts$/,
+    );
     expect(workflowPlugin?.migrationsDirectory).toMatch(
       /app-plugin-workflow\/database\/migrations$/,
     );

@@ -1,4 +1,0 @@
-# Development-only workflow skill evaluations and generated reports.
-skill-evals/
-tsconfig.skill-evals.json
-.tmp/
