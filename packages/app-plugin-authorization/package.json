@@ -2,8 +2,7 @@
   "name": "@nocobase/app-plugin-authorization",
   "displayName": "Authorization App Plugin",
   "description": "Authorization integration and permission management UI for NocoBase applications.",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.1-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -32,6 +31,10 @@
     },
     "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public",
     "exports": {
@@ -75,6 +78,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
+    "prepack": "pnpm build",
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-plugin-authorization.tgz\" && pnpm exec publint .",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
@@ -91,7 +96,7 @@
     "lucide-react": "^0.487.0"
   },
   "peerDependencies": {
-    "@nocobase/app-client": "^0.1.0",
+    "@nocobase/app-client": "workspace:^",
     "react": "^19.0.0"
   },
   "devDependencies": {

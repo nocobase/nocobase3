@@ -6,6 +6,7 @@ import {
   assertTargetIsUsable,
   assertValidAppName,
   readEnvExample,
+  REQUIRED_PACKAGE_MANAGER,
   scaffoldFromTemplate,
 } from '../src/lib/scaffold.ts';
 import { addDriverDependency, DRIVER_VERSIONS } from '../src/lib/manifest.ts';
@@ -36,6 +37,8 @@ async function createTemplate(
     path.join(directory, 'package.json'),
     JSON.stringify({
       name: '@nocobase/app-template-default',
+      displayName: 'Default Template',
+      description: 'The default NocoBase application template.',
       version: '0.0.1-beta.2',
       dependencies: { knex: '^3.1.0' },
       publishConfig: { access: 'public' },
@@ -99,7 +102,7 @@ describe('assertTargetIsUsable', () => {
 });
 
 describe('scaffoldFromTemplate', () => {
-  it('renames the manifest and strips the publish metadata', async () => {
+  it('renames the manifest and strips the template identity', async () => {
     const templateDirectory = await createTemplate();
     const parent = await createTempDirectory();
     const targetDirectory = path.join(parent, 'crm');
@@ -115,10 +118,15 @@ describe('scaffoldFromTemplate', () => {
     );
 
     expect(manifest.name).toBe('crm');
-    expect(manifest.version).toBe('0.1.0');
-    expect(manifest.private).toBe(true);
     expect(manifest.publishConfig).toBeUndefined();
     expect(manifest.repository).toBeUndefined();
+
+    // A generated app must not keep the template's identity: without this it would be labelled "Default Template".
+    expect(manifest.displayName).toBeUndefined();
+    expect(manifest.description).toBeUndefined();
+
+    // The version records which template the app came from, so it is kept rather than reset.
+    expect(manifest.version).toBe('0.0.1-beta.2');
     // Ranges were already resolved when the tarball was packed; rewriting them would undo that.
     expect(manifest.dependencies.knex).toBe('^3.1.0');
   });
@@ -182,6 +190,76 @@ describe('scaffoldFromTemplate', () => {
     await expect(
       readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
     ).resolves.toBeTruthy();
+  });
+});
+
+describe('packageManager', () => {
+  /**
+   * `pnpm pack` strips this field from the tarball, so the template cannot pass it through and it has to be written
+   * here. Without it the project runs on whatever pnpm the machine defaults to, and pnpm 10 ignores `allowBuilds`
+   * entirely — the native driver installs without compiling and fails only at the first query.
+   */
+  it('pins the pnpm version in the generated app', async () => {
+    const templateDirectory = await createTemplate();
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    const manifest = JSON.parse(
+      await readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
+    );
+
+    expect(manifest.packageManager).toBe(REQUIRED_PACKAGE_MANAGER);
+  });
+
+  /**
+   * `packageManager` accepts one exact version. A range is silently ignored rather than rejected, which would leave
+   * the project on whatever pnpm the machine already had while looking pinned.
+   */
+  it('pins an exact version, since a range would be ignored', () => {
+    expect(REQUIRED_PACKAGE_MANAGER).toMatch(/^pnpm@\d+\.\d+\.\d+$/u);
+  });
+
+  /** `allowBuilds` does not exist before pnpm 11, so an older version would not build the native driver. */
+  it('requires pnpm 11 or newer', () => {
+    const major = Number(
+      /^pnpm@(\d+)/u.exec(REQUIRED_PACKAGE_MANAGER)?.[1] ?? '0',
+    );
+
+    expect(major).toBeGreaterThanOrEqual(11);
+  });
+
+  it('keeps a version the template already pinned', async () => {
+    const templateDirectory = await createTemplate();
+    await writeFile(
+      path.join(templateDirectory, 'package.json'),
+      JSON.stringify({
+        name: '@nocobase/app-template-default',
+        version: '0.0.1-beta.2',
+        packageManager: 'pnpm@11.9.0',
+      }),
+      'utf8',
+    );
+
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    const manifest = JSON.parse(
+      await readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
+    );
+
+    expect(manifest.packageManager).toBe('pnpm@11.9.0');
   });
 });
 

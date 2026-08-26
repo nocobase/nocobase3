@@ -364,7 +364,7 @@ async function verifyDefaultResources(root, packageDirectory) {
   ]);
   assertExcluded(
     sourceFiles,
-    /(?:^|\/)(?:\.agent-annotations|\.nocobase|app-dist|dist|node_modules|public\/storage|storage)(?:\/|$)/,
+    /^(?:\.agent-annotations|\.nocobase|\.playwright-cli|app-dist|dist|node_modules|playwright-report|public\/storage|storage)(?:\/|$)/,
   );
   assertExcluded(sourceFiles, /(?:^|\/)\.env(?:\.|$)/);
   if (/^120000 /m.test(sourceModes)) {
@@ -393,7 +393,7 @@ async function verifyDefaultResources(root, packageDirectory) {
   }
   assertExcluded(
     archiveEntries,
-    /(?:^|\/)(?:\.agent-annotations|\.nocobase|app-dist|public\/storage|storage)(?:\/|$)/,
+    /^dist\/(?:\.agent-annotations|\.nocobase|\.playwright-cli|app-dist|playwright-report|public\/storage|storage)(?:\/|$)/,
   );
   assertExcluded(archiveEntries, /(?:^|\/)\.env(?:\.|$)/);
   const release = path.join(root, 'default-release');

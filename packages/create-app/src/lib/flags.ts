@@ -1,7 +1,12 @@
 import { Args, Flags } from '@oclif/core';
 import { parse } from '@oclif/core/parser';
 import { DATABASE_DIALECTS } from './database.ts';
-import { DEFAULT_TEMPLATE, TEMPLATE_ALIASES } from './template.ts';
+import {
+  DEFAULT_TEMPLATE,
+  DEFAULT_TEMPLATE_TAG,
+  TEMPLATE_ALIASES,
+  TEMPLATE_TAGS,
+} from './template.ts';
 
 /**
  * `pnpm create @nocobase/app crm --db-dialect=postgres` passes every argument after the package name through verbatim,
@@ -28,6 +33,11 @@ export const CREATE_FLAGS = {
     default: DEFAULT_TEMPLATE,
     description: `Template to scaffold from: a name (${Object.keys(TEMPLATE_ALIASES).join(', ')}), a published package, or a path to a local package directory.`,
   }),
+  'template-tag': Flags.string({
+    default: DEFAULT_TEMPLATE_TAG,
+    options: [...TEMPLATE_TAGS],
+    description: `Channel to fetch a named template from: ${TEMPLATE_TAGS.join(', ')}. Ignored when --template names a package or a path, which already say which version to use.`,
+  }),
   registry: Flags.string({
     description: 'npm registry to download the template from.',
   }),
@@ -48,6 +58,7 @@ export interface ParsedInput {
     'db-dialect'?: string;
     install: boolean;
     template: string;
+    'template-tag': string;
     registry?: string;
     help: boolean;
     version: boolean;
@@ -81,13 +92,14 @@ export function formatHelp(binary: string): string {
     ...Object.entries(CREATE_FLAGS).map(([name, flag]) => {
       const label =
         'allowNo' in flag && flag.allowNo ? `--[no-]${name}` : `--${name}`;
-      return `  ${label.padEnd(16)} ${flag.description ?? ''}`;
+      return `  ${label.padEnd(18)} ${flag.description ?? ''}`;
     }),
     '',
     'EXAMPLES',
     `  $ ${binary} crm`,
     `  $ ${binary} crm --db-dialect=postgres`,
     `  $ ${binary} crm --db-dialect=sqlite --no-install`,
+    `  $ ${binary} crm --template-tag=beta`,
     '',
     'NOTES',
     '  The template is downloaded from https://npm.nocobase.ai by default.',
