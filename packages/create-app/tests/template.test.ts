@@ -7,6 +7,9 @@ import {
   DEFAULT_TEMPLATE,
   downloadTemplate,
   isLocalTemplateSource,
+  isTemplateAlias,
+  resolveTemplateSource,
+  TEMPLATE_ALIASES,
 } from '../src/lib/template.ts';
 
 const created: string[] = [];
@@ -38,13 +41,71 @@ describe('isLocalTemplateSource', () => {
 });
 
 describe('DEFAULT_TEMPLATE', () => {
+  it('is a name rather than a package specifier', () => {
+    expect(DEFAULT_TEMPLATE).toBe('default');
+    expect(isTemplateAlias(DEFAULT_TEMPLATE)).toBe(true);
+  });
+});
+
+describe('TEMPLATE_ALIASES', () => {
+  it('maps the default name to the app template', () => {
+    expect(TEMPLATE_ALIASES.default).toContain(
+      '@nocobase/app-template-default',
+    );
+  });
+
   /**
    * Pinning an exact version would make `create` reproducible, but there is no stable v3 release to pin to yet. The
-   * assertion only guarantees the specifier carries an explicit channel or version — never a bare name that would
+   * assertion only guarantees every alias carries an explicit channel or version — never a bare name that would
    * silently resolve to `latest`.
    */
-  it('carries an explicit channel so create never falls back to latest', () => {
-    expect(DEFAULT_TEMPLATE).toMatch(/@(?:\d+\.\d+\.\d+|beta|alpha|next)$/u);
+  it('gives every alias an explicit channel so create never falls back to latest', () => {
+    for (const specifier of Object.values(TEMPLATE_ALIASES)) {
+      expect(specifier).toMatch(/@(?:\d+\.\d+\.\d+|beta|alpha|next)$/u);
+    }
+  });
+});
+
+describe('resolveTemplateSource', () => {
+  it('expands a known name into its package', () => {
+    expect(resolveTemplateSource('default')).toBe(TEMPLATE_ALIASES.default);
+  });
+
+  it('ignores surrounding whitespace', () => {
+    expect(resolveTemplateSource('  default  ')).toBe(TEMPLATE_ALIASES.default);
+  });
+
+  /**
+   * An alias table that swallowed package specifiers and paths would make the flag less capable than it was, so
+   * anything unknown passes through untouched.
+   */
+  it('passes a package specifier through untouched', () => {
+    expect(resolveTemplateSource('@nocobase/app-template-default@0.0.1')).toBe(
+      '@nocobase/app-template-default@0.0.1',
+    );
+    expect(resolveTemplateSource('some-other-template')).toBe(
+      'some-other-template',
+    );
+  });
+
+  it('passes a local path through untouched', () => {
+    expect(resolveTemplateSource('./packages/app-template-default')).toBe(
+      './packages/app-template-default',
+    );
+  });
+});
+
+describe('isTemplateAlias', () => {
+  it('recognizes only the names in the table', () => {
+    expect(isTemplateAlias('default')).toBe(true);
+    expect(isTemplateAlias('@nocobase/app-template-default')).toBe(false);
+    expect(isTemplateAlias('./local')).toBe(false);
+  });
+
+  /** Inherited Object properties must not read as templates. */
+  it('is not fooled by inherited properties', () => {
+    expect(isTemplateAlias('constructor')).toBe(false);
+    expect(isTemplateAlias('toString')).toBe(false);
   });
 });
 

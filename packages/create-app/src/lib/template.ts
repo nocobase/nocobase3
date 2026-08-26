@@ -12,7 +12,34 @@ import { CommandFailedError, runCommand } from './run-command.ts';
  */
 export const DEFAULT_REGISTRY = 'https://npm.nocobase.ai';
 
-export const DEFAULT_TEMPLATE = '@nocobase/app-template-default@beta';
+/**
+ * Templates that can be named instead of spelled out as a package. A short name is what people will reach for, and it
+ * keeps the published package name and its channel an implementation detail — switching `default` to a stable range,
+ * or repointing it at a different package, then costs nothing on the command line.
+ *
+ * More templates are expected here. Add an entry rather than asking anyone to type the package specifier.
+ */
+export const TEMPLATE_ALIASES: Readonly<Record<string, string>> = {
+  default: '@nocobase/app-template-default@beta',
+};
+
+export const DEFAULT_TEMPLATE = 'default';
+
+/**
+ * Resolves what `--template` was given into something `downloadTemplate` can fetch.
+ *
+ * A known name maps to its package. Anything else passes through untouched, so a package specifier or a local path
+ * still works — an alias table that swallowed those would make the flag less capable than it was.
+ */
+export function resolveTemplateSource(template: string): string {
+  const name = template.trim();
+
+  return TEMPLATE_ALIASES[name] ?? name;
+}
+
+export function isTemplateAlias(template: string): boolean {
+  return Object.hasOwn(TEMPLATE_ALIASES, template.trim());
+}
 
 const PACK_TIMEOUT_MS = 5 * 60 * 1000;
 

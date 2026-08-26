@@ -10,11 +10,31 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app@beta crm
 
 ## 为什么要带 `npm_config_registry`
 
-这个包目前只发布在自建 registry `https://npm.nocobase.ai`，而 `pnpm create` 默认从公共 npm 解析包名。`pnpm create` 不支持 `--registry`——写在包名之后会被当作透传参数，写在包名之前会被当成包名的一部分。所以只能用环境变量（或在 `.npmrc` 里配 `@nocobase:registry`）把解析地址指过去。
+这里涉及两次下载，发生在不同阶段，各自读不同的配置：
 
-包发到公共 npm 之后，这个前缀就不需要了。
+```
+阶段 1  pnpm 去 registry 找 @nocobase/create-app 这个包
+        ← npm_config_registry 管这里（此时我们的代码还没运行）
 
-注意这里有两个 registry，互不相关：环境变量控制的是**从哪里下载 create-app 这个包本身**，而 create-app 下载**应用模板**时默认就指向自建 registry，不需要额外配置。
+阶段 2  create-app 跑起来，去下载应用模板
+        ← --registry 管这里，默认已经是 https://npm.nocobase.ai
+```
+
+这个包目前只发布在自建 registry，而 `pnpm create` 默认从公共 npm 解析包名，所以阶段 1 需要把解析地址指过去，否则会直接 404：
+
+```
+ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/@nocobase%2Fcreate-app: Not Found
+```
+
+`pnpm create` 自己不支持 `--registry`——写在包名之后会被当作透传参数交给我们的程序，写在包名之前会被当成包名的一部分。所以只能用环境变量，或者在 `~/.npmrc` 里配一次：
+
+```
+@nocobase:registry=https://npm.nocobase.ai
+```
+
+配过之后命令里就不用带前缀了。包发布到公共 npm 之后，这一节整个都不再需要。
+
+注意 `--registry` 替代不了它：那是本程序自己的参数，只有进程启动之后才会被解析，而阶段 1 失败时进程根本没起来。反过来，阶段 2 的默认值本来就是自建 registry，所以日常也不需要写 `--registry`。
 
 ## 为什么要带 `@beta`
 
@@ -52,12 +72,27 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app@beta
 | `[目录]`       | 应用目录，相对当前目录。省略时进入交互式询问                    |
 | `--db-dialect` | 数据库类型：`postgres`、`sqlite`、`mysql`。省略时进入交互式选择 |
 | `--no-install` | 生成后不自动安装依赖                                            |
-| `--template`   | 模板来源，可以是已发布的包，也可以是本地包目录                  |
+| `--template`   | 模板，默认 `default`。也接受已发布的包或本地包目录              |
 | `--registry`   | 下载模板用的 registry，默认 `https://npm.nocobase.ai`           |
 | `-h, --help`   | 查看帮助                                                        |
 | `--version`    | 查看版本                                                        |
 
 `--db-dialect` 接受常见别名，`postgresql`、`pg` 都会归一化成 `postgres`，`sqlite3` 归一化成 `sqlite`，`mysql2`、`mariadb` 归一化成 `mysql`。这三个规范名才是模板 `server/config/database.ts` 里 `DB_DIALECT` 认的值，写别的会在启动时抛错。
+
+`--template` 用具名模板，目前只有一个 `default`，指向 `@nocobase/app-template-default`。以后新增模板会加新的名字，用户不需要知道背后的包名和版本渠道：
+
+```bash
+pnpm create @nocobase/app@beta crm --template=default   # 默认值，可以不写
+```
+
+名字之外的值原样使用，所以指定具体版本或本地目录照常可用：
+
+```bash
+pnpm create @nocobase/app@beta crm --template=@nocobase/app-template-default@0.0.1
+pnpm create @nocobase/app@beta crm --template=./packages/app-template-default
+```
+
+依赖默认会自动安装，`--no-install` 可以跳过。
 
 全部用参数指定就不会有任何交互，适合脚本：
 
@@ -68,7 +103,7 @@ pnpm create @nocobase/app@beta crm --db-dialect=sqlite --no-install
 
 ## 生成的内容
 
-从 `@nocobase/app-template-default@beta` 下载模板，并在此基础上：
+下载模板（默认 `default`，即 `@nocobase/app-template-default@beta`），并在此基础上：
 
 - 改写 `package.json`：换成应用自己的名字和版本，置为 `private`，去掉 `publishConfig` 和 `repository`，避免误发布
 - 按数据库类型装一个驱动：sqlite 装 `better-sqlite3`，postgres 装 `pg`，mysql 装 `mysql2`。模板本身只依赖 `knex`，三个驱动一个都不带

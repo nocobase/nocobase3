@@ -32,8 +32,8 @@ import {
 } from './lib/scaffold.ts';
 import {
   DEFAULT_REGISTRY,
-  DEFAULT_TEMPLATE,
   downloadTemplate,
+  resolveTemplateSource,
 } from './lib/template.ts';
 
 export interface CreateAppOptions {
@@ -105,7 +105,7 @@ async function run(input: ParsedInput): Promise<void> {
   // this code ran, while the template is fetched here and defaults to the self-hosted registry carrying v3.
   const registry =
     input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
-  const templateSource = input.flags.template ?? DEFAULT_TEMPLATE;
+  const templateSource = resolveTemplateSource(input.flags.template);
 
   const download = spinner();
   download.start(`Downloading ${templateSource}`);

@@ -1,6 +1,7 @@
 import { Args, Flags } from '@oclif/core';
 import { parse } from '@oclif/core/parser';
 import { DATABASE_DIALECTS } from './database.ts';
+import { DEFAULT_TEMPLATE, TEMPLATE_ALIASES } from './template.ts';
 
 /**
  * `pnpm create @nocobase/app crm --db-dialect=postgres` passes every argument after the package name through verbatim,
@@ -24,8 +25,8 @@ export const CREATE_FLAGS = {
     description: 'Install dependencies after scaffolding.',
   }),
   template: Flags.string({
-    description:
-      'Template to scaffold from: a published package, or a path to a local package directory.',
+    default: DEFAULT_TEMPLATE,
+    description: `Template to scaffold from: a name (${Object.keys(TEMPLATE_ALIASES).join(', ')}), a published package, or a path to a local package directory.`,
   }),
   registry: Flags.string({
     description: 'npm registry to download the template from.',
@@ -46,7 +47,7 @@ export interface ParsedInput {
   flags: {
     'db-dialect'?: string;
     install: boolean;
-    template?: string;
+    template: string;
     registry?: string;
     help: boolean;
     version: boolean;

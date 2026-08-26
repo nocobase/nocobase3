@@ -44,6 +44,11 @@ describe('parseInput', () => {
     expect(input.flags.registry).toBe('https://registry.npmjs.org');
   });
 
+  /** The default is a name, so the package it points at stays an implementation detail. */
+  it('defaults the template to the default name', async () => {
+    expect((await parseInput(['crm'])).flags.template).toBe('default');
+  });
+
   it('supports -h and --version', async () => {
     expect((await parseInput(['-h'])).flags.help).toBe(true);
     expect((await parseInput(['--version'])).flags.version).toBe(true);
@@ -64,6 +69,7 @@ describe('formatHelp', () => {
     const help = formatHelp('create-app');
 
     expect(help).toContain('--db-dialect');
+    expect(help).toContain('default');
     expect(help).toContain('--[no-]install');
     expect(help).toContain('https://npm.nocobase.ai');
     expect(help).toContain('create-app crm');
