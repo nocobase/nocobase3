@@ -170,12 +170,25 @@ async function run(input: ParsedInput): Promise<void> {
   finish(name, { installed: true, dialect });
 }
 
+/**
+ * Prints what the user has to do next, in the order they have to do it.
+ *
+ * Editing `.env.local` is a step rather than a trailing remark, because for postgres and mysql it is the one thing
+ * standing between a generated project and a running one: the file holds stock credentials pointing at localhost, so
+ * `pnpm dev` fails on connection until it is filled in. SQLite needs no server and its generated defaults already
+ * work, so there the file is only worth mentioning.
+ */
 function finish(
   name: string,
   state: { installed: boolean; dialect: DatabaseDialect },
   message = 'Done.',
 ): void {
+  const mustEditEnv = needsConnectionDetails(state.dialect);
   const steps = [`cd ${name}`];
+
+  if (mustEditEnv) {
+    steps.push(`edit .env.local — set your ${state.dialect} connection`);
+  }
 
   if (!state.installed) {
     steps.push('pnpm install');
@@ -185,15 +198,11 @@ function finish(
 
   note(steps.join('\n'), 'Next steps');
 
-  // SQLite needs no server, so its generated defaults are already runnable. The other two point at a local server with
-  // stock credentials, which is a starting shape rather than a working connection.
-  if (needsConnectionDetails(state.dialect)) {
-    log.info(
-      `Edit .env.local to set your ${state.dialect} host, database, and credentials before starting the app.`,
-    );
-  } else {
-    log.info('Database settings were written to .env.local.');
-  }
+  log.info(
+    mustEditEnv
+      ? `.env.local has DB_HOST, DB_DATABASE, DB_USERNAME, and DB_PASSWORD set to defaults. Point them at your ${state.dialect} server before starting the app.`
+      : 'Database settings were written to .env.local, and the defaults work as they are.',
+  );
 
   outro(message);
 }

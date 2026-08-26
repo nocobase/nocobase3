@@ -3,7 +3,7 @@
 创建 NocoBase 3 应用。
 
 ```bash
-npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app crm
+npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app@beta crm
 ```
 
 `pnpm create @nocobase/app` 会解析成 `@nocobase/create-app` 包并执行它，包名之后的所有参数原样透传。
@@ -16,12 +16,31 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app crm
 
 注意这里有两个 registry，互不相关：环境变量控制的是**从哪里下载 create-app 这个包本身**，而 create-app 下载**应用模板**时默认就指向自建 registry，不需要额外配置。
 
+## 为什么要带 `@beta`
+
+`develop` 分支上的发布走 changesets 的 pre 模式，发出来的版本只带 `beta` 这个 dist-tag。而 `pnpm create` 不指定版本时找的是 `latest`，找不到就直接报错：
+
+```
+Other releases are:
+  * beta: 0.1.0-beta.0
+```
+
+所以要显式写成 `@nocobase/app@beta`。参数透传不受影响，照常写在包名之后。
+
+发布之后可以确认一下实际的 tag：
+
+```bash
+npm view @nocobase/create-app dist-tags --registry=https://npm.nocobase.ai
+```
+
+有 `latest` 的话不带 `@beta` 也能跑，但带上在两种情况下都有效。
+
 ## 交互
 
 不带参数时会依次询问目录和数据库类型：
 
 ```bash
-npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
+npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app@beta
 ```
 
 只有数据库类型这一项需要选择，其余连接参数走默认值写进 `.env.local`。
@@ -43,8 +62,8 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 全部用参数指定就不会有任何交互，适合脚本：
 
 ```bash
-pnpm create @nocobase/app crm --db-dialect=postgres
-pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
+pnpm create @nocobase/app@beta crm --db-dialect=postgres
+pnpm create @nocobase/app@beta crm --db-dialect=sqlite --no-install
 ```
 
 ## 生成的内容
