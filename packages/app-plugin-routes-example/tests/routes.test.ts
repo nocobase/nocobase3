@@ -1,3 +1,4 @@
+import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
@@ -9,7 +10,9 @@ describe('routes example plugin', () => {
 
     registerRoutes({
       app,
+      config: undefined,
       deps: undefined,
+      paths: createConfigPaths({ rootDir: '/missing' }),
       services: undefined,
     });
 

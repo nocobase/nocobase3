@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "0.0.1-beta.1",
+  "version": "0.0.1-beta.2",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -14,6 +14,9 @@
         "enabled": true
       },
       "@nocobase/app-plugin-data-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-install": {
         "enabled": true
       },
       "@nocobase/app-plugin-notification-provider": {
@@ -46,6 +49,7 @@
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-data-provider": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",

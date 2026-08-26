@@ -1,3 +1,4 @@
+import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -27,7 +28,9 @@ describe('queue example plugin routes', () => {
 
     registerRoutes({
       app,
+      config: undefined,
       deps: { queueManager },
+      paths: createConfigPaths({ rootDir: '/missing' }),
       services: undefined,
     });
 
