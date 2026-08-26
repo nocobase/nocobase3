@@ -2,7 +2,13 @@
 
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -164,9 +170,11 @@ describe('app config', () => {
     expect(config.database.migrations.directory).toBe(
       path.join(root, 'dist', 'database', 'migrations'),
     );
+    expect(config.database.migrations.autoRun).toBe(true);
     expect(config.database.seeds?.directory).toBe(
       path.join(root, 'dist', 'database', 'seeds'),
     );
+    expect(config.database.seeds?.autoRun).toBe(false);
     expect(config.drive.disks.local).toMatchObject({
       location: path.join(dataDir, 'app/private'),
     });
@@ -690,6 +698,75 @@ describe('database migrations', () => {
 });
 
 describe('app plugins', () => {
+  it('resolves plugin database sources from a packaged embedded dist', () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-release-'),
+    );
+    tempDirs.push(root);
+    const distRoot = path.join(root, 'dist');
+    const pluginRoot = path.join(
+      distRoot,
+      'node_modules/@nocobase/app-plugin-fixture',
+    );
+    mkdirSync(path.join(pluginRoot, 'database/migrations'), {
+      recursive: true,
+    });
+    writeFileSync(
+      path.join(distRoot, 'package.json'),
+      JSON.stringify({
+        name: '@nocobase/packaged-app',
+        nocobase: {
+          plugins: {
+            '@nocobase/app-plugin-fixture': { enabled: true },
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      path.join(pluginRoot, 'package.json'),
+      JSON.stringify({
+        name: '@nocobase/app-plugin-fixture',
+        version: '1.0.0',
+        nocobase: {
+          plugin: {
+            database: { migrations: './database/migrations' },
+          },
+        },
+      }),
+    );
+    const resolvedPluginRoot = realpathSync(pluginRoot);
+
+    const config = loadEmbeddedAppConfig(
+      {
+        id: 'packaged-app',
+        basePath: '/packaged-app',
+        rootDir: root,
+        dataDir: path.join(root, 'data'),
+        config: { authSecret: 'test-auth-secret-at-least-32-characters' },
+      },
+      new URL('../../server/embedded.ts', import.meta.url).href,
+    );
+
+    expect(config.plugins).toEqual([
+      expect.objectContaining({
+        packageName: '@nocobase/app-plugin-fixture',
+        enabled: true,
+        migrationsDirectory: path.join(
+          resolvedPluginRoot,
+          'database/migrations',
+        ),
+      }),
+    ]);
+    expect(config.database.migrations.sources).toEqual(
+      expect.arrayContaining([
+        {
+          packageName: '@nocobase/app-plugin-fixture',
+          directory: path.join(resolvedPluginRoot, 'database/migrations'),
+        },
+      ]),
+    );
+  });
+
   it('resolves enabled plugins and their database sources', async () => {
     const runtime = createStandaloneRuntime();
     const authenticationPlugin = runtime.config.plugins.find(

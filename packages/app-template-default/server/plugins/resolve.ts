@@ -26,13 +26,14 @@ export interface ResolvedAppPlugins {
 }
 
 export function resolveAppPlugins(rootDir: string): ResolvedAppPlugins {
-  const appPackagePath = path.join(rootDir, 'package.json');
+  const appPackageRoot = resolveAppPackageRoot(rootDir);
+  const appPackagePath = path.join(appPackageRoot, 'package.json');
   const packageJson = existsSync(appPackagePath)
     ? (readJson(appPackagePath) as AppPackageJson)
     : {};
   const registry = readPluginRegistry(packageJson.nocobase?.plugins);
   const plugins = Object.entries(registry).map(([packageName, registration]) =>
-    resolvePlugin(rootDir, packageName, registration.enabled),
+    resolvePlugin(appPackageRoot, packageName, registration.enabled),
   );
 
   return {
@@ -42,6 +43,15 @@ export function resolveAppPlugins(rootDir: string): ResolvedAppPlugins {
         : '@nocobase/app-template-default',
     plugins,
   };
+}
+
+function resolveAppPackageRoot(rootDir: string): string {
+  if (existsSync(path.join(rootDir, 'package.json'))) {
+    return rootDir;
+  }
+
+  const distRoot = path.join(rootDir, 'dist');
+  return existsSync(path.join(distRoot, 'package.json')) ? distRoot : rootDir;
 }
 
 export function createPluginMigrationSources(

@@ -122,6 +122,74 @@ describe('app server', () => {
     });
   });
 
+  it('prepares a fresh embedded database before accepting registrations', async () => {
+    const dataDir = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-embedded-auth-'),
+    );
+    tempDirs.push(dataDir);
+    const firstDisposers: RegisteredTestDisposer[] = [];
+    const firstApp = await createEmbeddedServer(
+      createEmbeddedTestScope(
+        {
+          id: 'fresh-embedded-app',
+          basePath: '/fresh-embedded-app',
+          dataDir,
+        },
+        firstDisposers,
+      ),
+    );
+
+    const signedUp = await firstApp.request(
+      'http://localhost/api/auth/sign-up/email',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'fresh-embedded@example.com',
+          password: 'correct horse battery staple',
+          name: 'Fresh Embedded User',
+          username: 'fresh.embedded',
+        }),
+      },
+    );
+
+    expect(signedUp.status).toBe(200);
+    await expect(signedUp.json()).resolves.toMatchObject({
+      user: {
+        email: 'fresh-embedded@example.com',
+        username: 'fresh.embedded',
+      },
+    });
+
+    for (const disposer of [...firstDisposers].reverse()) {
+      await disposer.dispose();
+    }
+
+    const restartedApp = await createEmbeddedServer(
+      createEmbeddedTestScope({
+        id: 'fresh-embedded-app',
+        basePath: '/fresh-embedded-app',
+        dataDir,
+      }),
+    );
+    const signedIn = await restartedApp.request(
+      'http://localhost/api/auth/sign-in/email',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'fresh-embedded@example.com',
+          password: 'correct horse battery staple',
+        }),
+      },
+    );
+
+    expect(signedIn.status).toBe(200);
+    await expect(signedIn.json()).resolves.toMatchObject({
+      user: { email: 'fresh-embedded@example.com' },
+    });
+  });
+
   it('serves an app-local HTML route outside the API namespace', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
@@ -1324,12 +1392,21 @@ function createEmbeddedTestScope(
   registeredDisposers: RegisteredTestDisposer[] = [],
 ): AppScope {
   const lifecycle = createAppDisposerRegistry();
+  const dataDir =
+    options.dataDir ??
+    mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-embedded-data-'),
+    );
+  if (!options.dataDir) {
+    tempDirs.push(dataDir);
+  }
   apps.push({
     close: () => lifecycle.disposeAll(),
   });
 
   return {
     ...options,
+    dataDir,
     config: options.config ?? {
       authSecret: 'test-auth-secret-at-least-32-characters',
     },

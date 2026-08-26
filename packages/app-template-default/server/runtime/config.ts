@@ -43,7 +43,20 @@ export function loadEmbeddedAppConfig(
   scope: AppScope,
   moduleUrl: string,
 ): AppConfig {
-  return loadAppConfig(resolveEmbeddedRuntimeOptions(scope, moduleUrl));
+  const config = loadAppConfig(resolveEmbeddedRuntimeOptions(scope, moduleUrl));
+
+  // App Host owns the embedded lifecycle, so an embedded app has no separate
+  // migration command to run before it starts accepting requests.
+  return {
+    ...config,
+    database: {
+      ...config.database,
+      migrations: {
+        ...config.database.migrations,
+        autoRun: true,
+      },
+    },
+  };
 }
 
 export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
