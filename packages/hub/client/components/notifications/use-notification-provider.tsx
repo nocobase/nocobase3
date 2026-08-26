@@ -1,4 +1,5 @@
 import type { NotificationProvider } from '@refinedev/core';
+import { translate } from '@nocobase/app-portal-sdk/i18n';
 import { toast } from 'sonner';
 import { UndoableNotification } from '@/components/notifications/undoable-notification';
 
@@ -22,9 +23,9 @@ export function useNotificationProvider(): NotificationProvider {
           return;
 
         case 'error':
-          toast.error(message, {
+          toast.error(localizeErrorMessage(key, message), {
             id: key,
-            description,
+            description: localizeErrorDescription(key, description),
             richColors: true,
           });
           return;
@@ -59,4 +60,35 @@ export function useNotificationProvider(): NotificationProvider {
       toast.dismiss(id);
     },
   };
+}
+
+function localizeErrorMessage(
+  key: string | number | undefined,
+  message: React.ReactNode,
+): React.ReactNode {
+  if (key !== 'login-error' || !isSimplifiedChinese()) return message;
+  return translate('hub.auth.signIn.error', 'Unable to sign in');
+}
+
+function localizeErrorDescription(
+  key: string | number | undefined,
+  description: React.ReactNode,
+): React.ReactNode {
+  if (key !== 'login-error' || !isSimplifiedChinese()) return description;
+  if (
+    typeof description === 'string' &&
+    /invalid.*(?:username|email|password)|(?:username|email|password).*invalid/i.test(
+      description,
+    )
+  ) {
+    return translate(
+      'hub.auth.error.invalidCredentials',
+      'Invalid username or password.',
+    );
+  }
+  return translate('hub.auth.error.default', 'Authentication failed.');
+}
+
+function isSimplifiedChinese(): boolean {
+  return translate('locale.zh-CN', 'Simplified Chinese') === '简体中文';
 }

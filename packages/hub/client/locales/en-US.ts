@@ -1092,6 +1092,7 @@ Do not add --deploy unless I explicitly request deployment. If a command reports
   'hub.auth.error.invalidCredentials': 'Invalid username or password.',
   'ui.close': 'Close',
   'ui.loading': 'Loading',
+  'ui.notifications.label': 'Notifications',
   'ui.sidebar.title': 'Sidebar',
   'ui.sidebar.description': 'Displays the mobile sidebar.',
   'ui.sidebar.toggle': 'Toggle sidebar',

@@ -1028,6 +1028,7 @@ nb3 app publish --bump patch --hub {{hubUrl}} --non-interactive --json
   'hub.auth.error.invalidCredentials': '用户名、邮箱或密码错误。',
   'ui.close': '关闭',
   'ui.loading': '加载中',
+  'ui.notifications.label': '通知',
   'ui.sidebar.title': '侧边栏',
   'ui.sidebar.description': '显示移动端侧边栏。',
   'ui.sidebar.toggle': '切换侧边栏',
