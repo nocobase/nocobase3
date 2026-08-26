@@ -3,7 +3,7 @@ import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import type {
   AIConversationRepository,
   AIMessageRepository,
-} from '@nocobase/ai-employee';
+} from '../../repository/index.js';
 
 export type AIConversationsType = {
   sessionId: string;

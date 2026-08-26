@@ -50,7 +50,7 @@ import { convertAIMessage } from './utils.js';
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { LLMResult } from '@langchain/core/outputs';
 import type { Context } from '@nocobase/ai-employee';
-import type { AIToolMessageEntity } from '@nocobase/ai-employee';
+import type { AIToolMessageEntity } from '../repository/index.js';
 import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,

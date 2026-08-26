@@ -9,7 +9,7 @@ import type { SkillsEntity } from '@nocobase/ai-employee';
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { AIToolMessageEntity } from '@nocobase/ai-employee';
+import type { AIToolMessageEntity } from '../../repository/index.js';
 import type { DatabaseConnection } from '@nocobase/app-database';
 import { LLMProvider } from '@nocobase/ai-employee';
 import { parseVariables } from '@nocobase/ai-employee';

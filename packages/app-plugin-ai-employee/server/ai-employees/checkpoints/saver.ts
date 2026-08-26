@@ -20,7 +20,7 @@ import type {
   LCCheckpointRepository,
   LCCheckpointWriteEntity,
   LCCheckpointWriteRepository,
-} from '@nocobase/ai-employee';
+} from '../../repository/index.js';
 
 export interface CheckpointRepositories {
   checkpoints: LCCheckpointRepository;

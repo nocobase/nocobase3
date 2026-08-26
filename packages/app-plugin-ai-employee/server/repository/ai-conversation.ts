@@ -1,5 +1,5 @@
-import type { CollectionRepository } from './collection.js';
-import type { AIEmployeeEntity } from './ai-employee.js';
+import type { CollectionRepository } from '@nocobase/ai-employee';
+import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 
 export type AIConversationEntity = {
   id?: string | number | bigint;

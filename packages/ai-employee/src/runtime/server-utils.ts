@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { AIMessageEntity } from '../repository/index.js';
+import type { AIMessage } from './types/ai-message.type.js';
 import { getDateVars } from '../utils/date.js';
 import { parse } from '../utils/template.js';
 import { serverRequest } from '../utils/server-request.js';
@@ -47,7 +47,7 @@ export function stripToolCallTags(content: string): string | null {
   );
 }
 
-export function parseResponseMessage(row: AIMessageEntity) {
+export function parseResponseMessage(row: AIMessage) {
   const {
     content: rawContent,
     messageId,

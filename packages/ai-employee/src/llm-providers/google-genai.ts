@@ -17,7 +17,7 @@ import {
   ParsedAttachmentResult,
 } from './provider.js';
 import { serverRequest } from '../utils/server-request.js';
-import type { AIFileAttachment } from '../repository/ai-file.js';
+import type { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
 import {
   LLMProviderMeta,
   SupportedModel,

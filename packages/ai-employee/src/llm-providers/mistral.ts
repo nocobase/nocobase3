@@ -14,7 +14,7 @@ import {
   checkUrlAgainstWhitelist,
   serverRequest,
 } from '../utils/server-request.js';
-import { AIFileAttachment } from '../repository/ai-file.js';
+import { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
 import {
   EmbeddingProvider,
   LLMProvider,

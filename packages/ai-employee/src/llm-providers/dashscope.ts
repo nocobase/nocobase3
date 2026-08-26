@@ -21,7 +21,7 @@ import { Context } from '../runtime/context.js';
 import _ from 'lodash';
 import path from 'node:path';
 import { ReasoningChatOpenAI } from './common/reasoning.js';
-import { AIFileAttachment } from '../repository/ai-file.js';
+import { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
 
 const DASHSCOPE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 

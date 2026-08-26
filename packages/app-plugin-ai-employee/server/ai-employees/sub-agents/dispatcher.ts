@@ -8,7 +8,8 @@
  */
 
 import { Context } from '@nocobase/ai-employee';
-import type { AIEmployeeEntity, AIMessageEntity } from '@nocobase/ai-employee';
+import type { AIEmployeeEntity } from '@nocobase/ai-employee';
+import type { AIMessageEntity } from '../../repository/index.js';
 import { ModelRef } from '../ai-employee.js';
 import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
 import type {

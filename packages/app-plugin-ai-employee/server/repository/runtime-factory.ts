@@ -1,19 +1,21 @@
 import type {
-  AIConversationRepository,
   AIEmployeeRepository,
+  AIMCPRepository,
+  CollectionRepository,
+  LLMServiceRepository,
+} from '@nocobase/ai-employee';
+import type {
+  AIConversationRepository,
   AIFileRepository,
   AIMessageRepository,
-  AIMCPRepository,
   AISettingsRepository,
   AIToolMessageRepository,
   AIUsageEventRepository,
   LCCheckpointBlobRepository,
   LCCheckpointRepository,
   LCCheckpointWriteRepository,
-  LLMServiceRepository,
   UserAIEmployeeRepository,
 } from './index.js';
-import type { CollectionRepository } from './collection.js';
 
 /** Provides the database-backed repository instances consumed by one AI runtime. */
 export interface DatabaseRepositoryFactory {

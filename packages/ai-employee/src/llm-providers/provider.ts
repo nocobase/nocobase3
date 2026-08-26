@@ -8,7 +8,7 @@
  */
 
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import type { AIFileAttachment } from '../repository/ai-file.js';
+import type { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
 import {
   checkUrlAgainstWhitelist,
   serverRequest,

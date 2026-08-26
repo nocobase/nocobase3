@@ -3,13 +3,10 @@ import type { DatabaseConnection } from '@nocobase/app-database';
 import type {
   AIConversationEntity,
   AIConversationRepository,
-  AIEmployeeEntity,
-  AIEmployeeRepository,
   AIFileEntity,
   AIFileRepository,
   AIMessageEntity,
   AIMessageRepository,
-  AIMCPRepository,
   AISettingsEntity,
   AISettingsRepository,
   AIToolMessageEntity,
@@ -22,16 +19,19 @@ import type {
   LCCheckpointRepository,
   LCCheckpointWriteEntity,
   LCCheckpointWriteRepository,
+  UserAIEmployeeEntity,
+  UserAIEmployeeRepository,
+} from '../index.js';
+import type {
+  AIEmployeeEntity,
+  AIEmployeeRepository,
+  AIMCPRepository,
+  CollectionRepository,
   LLMServiceEntity,
   LLMServiceRepository,
   MCPEntity,
-  UserAIEmployeeEntity,
-  UserAIEmployeeRepository,
 } from '@nocobase/ai-employee';
-import type {
-  CollectionRepository,
-  DatabaseRepositoryFactory,
-} from '@nocobase/ai-employee';
+import type { DatabaseRepositoryFactory } from '../runtime-factory.js';
 import { BaseCollectionRepository } from './base-collection-repository.js';
 
 const JSON_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {

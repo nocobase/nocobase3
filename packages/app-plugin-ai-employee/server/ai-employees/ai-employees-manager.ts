@@ -7,10 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type {
-  DatabaseRepositoryFactory,
-  AIEmployeeEntity,
-} from '@nocobase/ai-employee';
+import type { AIEmployeeEntity } from '@nocobase/ai-employee';
+import type { DatabaseRepositoryFactory } from '../repository/index.js';
 import type { AIManager } from '@nocobase/ai-employee';
 import type { ModelRef } from './ai-employee.js';
 

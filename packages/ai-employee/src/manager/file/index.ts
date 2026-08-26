@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import type { AIFileAttachment } from '../../repository/ai-file.js';
+import type { AIFileAttachment } from '../../runtime/types/ai-file-attachment.js';
 export interface DriveDisk {
   put(
     key: string,

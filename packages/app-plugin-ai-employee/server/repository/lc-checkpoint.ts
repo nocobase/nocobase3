@@ -1,4 +1,4 @@
-import type { CollectionRepository } from './collection.js';
+import type { CollectionRepository } from '@nocobase/ai-employee';
 
 export type LCCheckpointEntity = {
   threadId: string;

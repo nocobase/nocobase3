@@ -7,8 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '@nocobase/ai-employee';
-import type { AIFileAttachment } from '@nocobase/ai-employee';
+import type { Context, AIFileAttachment } from '@nocobase/ai-employee';
+import type { DatabaseRepositoryFactory } from '../repository/index.js';
 
 export type AttachmentId = string | number;
 
@@ -106,7 +106,7 @@ function isValidFileCollectionSource(lookup: AttachmentLookup): boolean {
 }
 
 async function findSourceAttachments(
-  ctx: Context,
+  ctx: Context<DatabaseRepositoryFactory>,
   lookups: AttachmentLookup[],
 ) {
   const attachmentsByLookup = new Map<string, AIFileAttachment>();

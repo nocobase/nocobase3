@@ -1,5 +1,5 @@
-import type { CollectionRepository } from './collection.js';
-import type { AIMessage } from '../runtime/types/ai-message.type.js';
+import type { CollectionRepository } from '@nocobase/ai-employee';
+import type { AIMessage } from '@nocobase/ai-employee';
 
 export type AIMessageEntity = AIMessage & {
   id?: string | number | bigint;

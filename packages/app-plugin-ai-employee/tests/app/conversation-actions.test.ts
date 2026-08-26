@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AIMessageEntity, AIMessageInput } from '@nocobase/ai-employee';
+import type { AIMessageInput } from '@nocobase/ai-employee';
+import type { AIMessageEntity } from '../../server/repository/index.js';
 import {
   normalizeIncomingMessageAttachments,
   prependCancelledToolContinuation,

@@ -9,7 +9,7 @@
 
 import { LLMProvider, ParsedAttachmentResult } from './provider.js';
 import { ChatAnthropic } from '@langchain/anthropic';
-import type { AIFileAttachment } from '../repository/ai-file.js';
+import type { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
 import { serverRequest } from '../utils/server-request.js';
 import { stripToolCallTags } from '../runtime/server-utils.js';
 import {

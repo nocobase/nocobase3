@@ -1,5 +1,4 @@
 import type { FileManager } from '../manager/file/index.js';
-import type { DatabaseRepositoryFactory } from '../repository/runtime-factory.js';
 
 export interface RuntimeLogger {
   trace(message: string, context?: Record<string, unknown>): void;
@@ -53,9 +52,9 @@ export interface ActionParams {
 }
 
 /** Framework-neutral structural context shared by the AI core and App plugin. */
-export interface Context {
+export interface Context<TRepositories = any> {
   database: any;
-  repositories: DatabaseRepositoryFactory;
+  repositories: TRepositories;
   ai?: any;
   logger: any;
   caching: any;

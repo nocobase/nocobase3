@@ -11,10 +11,12 @@ import {
   ResourceActionError,
   sendSSEError,
   type AIEmployeeEntity,
-  type AIMessageEntity,
   type AIMessageInput,
-  type AIToolMessageEntity,
 } from '@nocobase/ai-employee';
+import type {
+  AIMessageEntity,
+  AIToolMessageEntity,
+} from '../repository/index.js';
 import { AIEmployee } from '../ai-employees/ai-employee.js';
 import { AgentSSEAdapter } from '../agent/sse.js';
 import { createAIEmployeeAgentService } from '../agent/ai-employee/index.js';

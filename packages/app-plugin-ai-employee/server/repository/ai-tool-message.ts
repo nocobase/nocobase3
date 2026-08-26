@@ -1,5 +1,5 @@
-import type { CollectionRepository } from './collection.js';
-import type { UserDecision } from '../runtime/types/ai-message.type.js';
+import type { CollectionRepository } from '@nocobase/ai-employee';
+import type { UserDecision } from '@nocobase/ai-employee';
 
 export type AIToolMessageEntity = {
   id?: string | number | bigint;

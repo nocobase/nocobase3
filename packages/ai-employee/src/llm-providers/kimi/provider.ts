@@ -21,7 +21,7 @@ import {
 import { CachedDocumentLoader } from '../../manager/ai-employee/document-loader/plugin/index.js';
 import { KimiDocumentLoader } from './document-loader.js';
 import { ReasoningChatOpenAI } from '../common/reasoning.js';
-import { AIFileAttachment } from '../../repository/ai-file.js';
+import { AIFileAttachment } from '../../runtime/types/ai-file-attachment.js';
 
 const KIMI_THINKING_SWITCH_MODELS = new Set(['kimi-k2.5', 'kimi-k2.6']);
 
