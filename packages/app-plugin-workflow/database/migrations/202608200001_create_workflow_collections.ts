@@ -1,8 +1,5 @@
 import { defineMigration } from '@nocobase/database';
-import {
-  createWorkflowCollections,
-  workflowCollectionSchemas,
-} from '../../engine/index.js';
+import { workflowCollectionSchemas } from '../../server/collections/index.js';
 
 export default defineMigration({
   name: '202608200001_create_workflow_collections',
@@ -12,7 +9,9 @@ export default defineMigration({
   ],
 
   async up({ builder }): Promise<void> {
-    await createWorkflowCollections(builder);
+    for (const schema of workflowCollectionSchemas) {
+      await builder.createCollection(schema.name, schema.define);
+    }
   },
 
   async down({ builder }): Promise<void> {

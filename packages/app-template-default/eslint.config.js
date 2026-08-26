@@ -12,17 +12,6 @@ export default createPortalConfig({
   ],
   overrides: [
     {
-      name: 'app-template-default/workflow-dsl-server-project',
-      files: ['server/workflows/dsl.ts'],
-      languageOptions: {
-        parserOptions: {
-          project: './tsconfig.server.json',
-          projectService: false,
-          tsconfigRootDir: import.meta.dirname,
-        },
-      },
-    },
-    {
       name: 'app-template-default/database-task-project',
       files: ['database/{migrations,seeds}/*.ts'],
       languageOptions: {

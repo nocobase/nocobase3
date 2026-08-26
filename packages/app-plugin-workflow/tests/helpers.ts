@@ -1,20 +1,35 @@
 import {
   createDatabaseManager,
+  type BuilderExecOptions,
+  type BuilderResult,
+  type CollectionBuilder,
   type DatabaseManager,
   type Row,
 } from '@nocobase/database';
 
-import {
-  createWorkflowCollections,
-  loadRun,
-  loadWorkflow,
-  WORKFLOW_COLLECTIONS,
-  type JsonObject,
-  type WorkflowDefinition,
-  type WorkflowId,
-  type WorkflowRun,
-  type WorkflowNodeRun,
-} from '../engine/index.js';
+import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
+import type {
+  JsonObject,
+  WorkflowDefinition,
+  WorkflowId,
+  WorkflowNodeRun,
+  WorkflowRun,
+} from '../server/engine/types.js';
+import { loadRun, loadWorkflow } from '../server/engine/utils.js';
+import { workflowCollectionSchemas } from '../server/collections/index.js';
+
+export async function createWorkflowCollections(
+  builder: CollectionBuilder,
+  options: BuilderExecOptions = {},
+): Promise<BuilderResult[]> {
+  const results: BuilderResult[] = [];
+  for (const schema of workflowCollectionSchemas) {
+    results.push(
+      await builder.createCollection(schema.name, schema.define, options),
+    );
+  }
+  return results;
+}
 
 export type TestNodeInput = {
   key: string;

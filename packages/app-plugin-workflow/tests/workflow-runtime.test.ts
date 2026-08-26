@@ -8,19 +8,22 @@ import {
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
-  ConditionInstruction,
   EXECUTION_REASON,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
-  WORKFLOW_COLLECTIONS,
-  WORKFLOW_QUEUE_NAME,
-  WorkflowRuntime,
-  type JsonObject,
-  type WorkflowId,
-  type WorkflowInstructionClass,
-  type WorkflowRuntimeOptions,
-} from '../engine/index.js';
+} from '../server/engine/constants.js';
+import WorkflowRuntime from '../server/engine/engine.js';
+import { loadWorkflow } from '../server/engine/utils.js';
+import type {
+  JsonObject,
+  WorkflowId,
+  WorkflowRuntimeOptions,
+} from '../server/engine/types.js';
+import type { WorkflowInstructionClass } from '../server/instructions/base.js';
+import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
+import { WORKFLOW_QUEUE_NAME } from '../server/queue.js';
 import {
   createCounterInstruction,
   createFailingInstruction,
@@ -94,12 +97,12 @@ describe('workflow runtime', () => {
     return runtime;
   }
 
-  async function startRuntime(
+  async function initializeRuntime(
     instructions: Map<string, WorkflowInstructionClass>,
     overrides: RuntimeOverrides = {},
   ): Promise<WorkflowRuntime> {
     const runtime = buildRuntime(instructions, overrides);
-    await runtime.start();
+    await runtime.initialize();
     return runtime;
   }
 
@@ -148,7 +151,7 @@ describe('workflow runtime', () => {
   afterEach(async () => {
     // The queue adapter claims its queue name in a module-global registry, so a
     // failing test must not leak it into the next one.
-    await Promise.allSettled(runtimes.map((runtime) => runtime.stop()));
+    await Promise.allSettled(runtimes.map((runtime) => runtime.dispose()));
     runtimes.length = 0;
     await queueManager?.close();
     queueManager = null;
@@ -156,7 +159,7 @@ describe('workflow runtime', () => {
   });
 
   describe('assembly', () => {
-    it('exposes key-based invocation with context validation and an event-key receipt', async () => {
+    it('uses one workflow-definition trigger interface for internal calls', async () => {
       const workflow = await createTestWorkflow(
         database,
         defineWorkflow({
@@ -178,45 +181,18 @@ describe('workflow runtime', () => {
         .where('id', '=', workflow.id)
         .execute();
       const runtime = buildRuntime(new Map([['echo', echoInstruction]]));
-      await runtime.start();
-      await expect(
-        runtime.trigger('invocation', { enabled: 'yes' }),
-      ).rejects.toMatchObject({ code: 'INVALID_CONTEXT' });
-      await expect(
-        runtime.trigger('invocation', { enabled: true }, { eventKey: 'once' }),
-      ).resolves.toEqual({ status: 'accepted', eventKey: 'once' });
-      const generated = await runtime.trigger('invocation', { enabled: true });
-      expect(generated.eventKey).toMatch(/^[0-9a-f-]{36}$/);
-      await expect(
-        runtime.trigger(
-          'invocation',
-          { enabled: true },
-          { parentRunId: 'missing' },
-        ),
-      ).rejects.toMatchObject({ code: 'PARENT_RUN_NOT_FOUND' });
-      const parent = await runIdOf(
-        (
-          await runtime.trigger(
-            'invocation',
-            { enabled: true },
-            { eventKey: 'parent' },
-          )
-        ).eventKey,
+      await runtime.initialize();
+      await runtime.trigger(
+        { ...workflow, contextSchema: { type: 'object' } },
+        { enabled: true },
+        { eventKey: 'once' },
       );
       await expect(
-        runtime.trigger(
-          'invocation',
-          { enabled: true },
-          { eventKey: 'child', parentRunId: parent },
-        ),
-      ).rejects.toMatchObject({ code: 'STACK_LIMIT_EXCEEDED' });
-      await expect(
-        database
-          .query()
-          .selectFrom(WORKFLOW_COLLECTIONS.runs)
-          .where('eventKey', '=', 'child')
-          .exists(),
-      ).resolves.toBe(false);
+        readRun(database, await runIdOf('once')),
+      ).resolves.toMatchObject({
+        workflowId: workflow.id,
+        context: { enabled: true },
+      });
     });
 
     it('pins revision, context and input snapshots before a new current revision appears', async () => {
@@ -250,14 +226,18 @@ describe('workflow runtime', () => {
         })
         .where('id', '=', first.id)
         .execute();
-      const runtime = await startRuntime(new Map([['echo', echoInstruction]]));
+      const runtime = await initializeRuntime(
+        new Map([['echo', echoInstruction]]),
+      );
       const context = {
         falseValue: false,
         zero: 0,
         empty: '',
         nested: { value: 0 },
       };
-      const receipt = await runtime.trigger('pinned', context);
+      const pinned = await loadWorkflow(database.query(), first.id);
+      if (!pinned) throw new Error('Pinned workflow was not found');
+      await runtime.trigger(pinned, context, { eventKey: 'pinned-event' });
       await database
         .query()
         .updateTable(WORKFLOW_COLLECTIONS.workflows)
@@ -281,7 +261,7 @@ describe('workflow runtime', () => {
         })
         .where('id', '=', second.id)
         .execute();
-      const runId = await runIdOf(receipt.eventKey);
+      const runId = await runIdOf('pinned-event');
       await expect(readRun(database, runId)).resolves.toMatchObject({
         workflowId: first.id,
         context,
@@ -298,39 +278,7 @@ describe('workflow runtime', () => {
       expect(overriding.instructions.get('condition')).toBe(echoInstruction);
     });
 
-    it('only accepts events between start() and stop()', async () => {
-      const workflow = await createTestWorkflow(
-        database,
-        defineWorkflow({
-          key: 'gated',
-          nodes: [{ key: 'only', type: 'echo', config: { value: 'ok' } }],
-        }),
-      );
-      const runtime = buildRuntime(new Map([['echo', echoInstruction]]));
-
-      expect(runtime.started).toBe(false);
-      await expect(
-        runtime.trigger(workflow, {}, { eventKey: 'before' }),
-      ).rejects.toThrow(/not ready/);
-
-      await runtime.start();
-      expect(runtime.started).toBe(true);
-      await runtime.trigger(workflow, {}, { eventKey: 'during' });
-      await expect(
-        readRun(database, await runIdOf('during')),
-      ).resolves.toMatchObject({
-        status: EXECUTION_STATUS.RESOLVED,
-        output: 'ok',
-      });
-
-      await runtime.stop();
-      expect(runtime.started).toBe(false);
-      await expect(
-        runtime.trigger(workflow, {}, { eventKey: 'after' }),
-      ).rejects.toThrow(/not ready/);
-    });
-
-    it('is idempotent on start() and drains in-flight work on stop()', async () => {
+    it('drains in-flight work when disposed', async () => {
       const workflow = await createTestWorkflow(
         database,
         defineWorkflow({
@@ -341,22 +289,19 @@ describe('workflow runtime', () => {
       const runtime = buildRuntime(
         new Map([['slow', createSlowInstruction(60)]]),
       );
-      await runtime.start();
-      await runtime.start();
-      expect(runtime.started).toBe(true);
+      await runtime.initialize();
 
       const runId = await insertTestRun(database, {
         workflowId: workflow.id,
         workflowKey: workflow.key,
         eventKey: 'drain-me',
       });
-      // Not awaited on purpose: `stop()` has to go through `beforeStop()` and
+      // Not awaited on purpose: `dispose()` has to drain the dispatcher and
       // wait for it, otherwise the run is abandoned half-finished.
       void runtime.dispatch({ executionId: runId });
-      await runtime.stop();
-      await runtime.stop();
+      await runtime.dispose();
 
-      expect(runtime.idle).toBe(false);
+      expect(runtime.idle).toBe(true);
       await expect(readRun(database, runId)).resolves.toMatchObject({
         status: EXECUTION_STATUS.RESOLVED,
       });
@@ -379,7 +324,7 @@ describe('workflow runtime', () => {
         createdAt: new Date(Date.now() - 60_000).toISOString(),
       });
 
-      await startRuntime(new Map([['echo', echoInstruction]]));
+      await initializeRuntime(new Map([['echo', echoInstruction]]));
 
       await expect(readRun(database, runId)).resolves.toMatchObject({
         status: EXECUTION_STATUS.RESOLVED,
@@ -401,7 +346,7 @@ describe('workflow runtime', () => {
         eventKey: 'fresh',
       });
 
-      await startRuntime(new Map([['echo', echoInstruction]]), {
+      await initializeRuntime(new Map([['echo', echoInstruction]]), {
         recoverGracePeriod: 60_000,
       });
 
@@ -417,7 +362,9 @@ describe('workflow runtime', () => {
         enabled: false,
         nodes: [{ key: 'only', type: 'echo', config: { value: 'manual' } }],
       });
-      const runtime = await startRuntime(new Map([['echo', echoInstruction]]));
+      const runtime = await initializeRuntime(
+        new Map([['echo', echoInstruction]]),
+      );
 
       await runtime.trigger(
         workflow,
@@ -452,7 +399,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([['trace', createTraceInstruction(trace)]]),
       );
 
@@ -496,7 +443,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([['trace', createTraceInstruction([])]]),
       );
 
@@ -548,7 +495,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([['trace', createTraceInstruction([])]]),
       );
 
@@ -592,7 +539,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([['trace', createTraceInstruction([])]]),
       );
 
@@ -642,7 +589,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([
           ['trace', createTraceInstruction([])],
           ['fail', createFailingInstruction()],
@@ -697,7 +644,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([['fail', createFailingInstruction(NODE_RUN_STATUS.ERROR)]]),
       );
 
@@ -746,7 +693,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([
           ['trace', createTraceInstruction([])],
           ['pending', pendingInstruction],
@@ -813,7 +760,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([
           ['trace', createTraceInstruction([])],
           ['pending', pendingInstruction],
@@ -869,7 +816,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([
           ['trace', createTraceInstruction([])],
           ['error-resume', errorResumeInstruction],
@@ -912,7 +859,7 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([
           ['trace', createTraceInstruction([])],
           ['error-resume', errorResumeInstruction],
@@ -968,9 +915,12 @@ describe('workflow runtime', () => {
           ],
         }),
       );
-      const runtime = await startRuntime(new Map([['echo', echoInstruction]]), {
-        queue,
-      });
+      const runtime = await initializeRuntime(
+        new Map([['echo', echoInstruction]]),
+        {
+          queue,
+        },
+      );
 
       // Not synchronous, so `trigger()` only publishes; the worker does the work.
       await runtime.trigger(workflow, {}, { eventKey: 'queued-1' });
@@ -1016,14 +966,9 @@ describe('workflow runtime', () => {
           .where('status', '=', 'pending')
           .execute(),
       ).resolves.toHaveLength(1);
-      await publisher.stop();
+      await publisher.dispose();
 
-      const consumer = await startRuntime(
-        new Map([['echo', echoInstruction]]),
-        { queue },
-      );
-      expect(consumer.started).toBe(true);
-
+      await initializeRuntime(new Map([['echo', echoInstruction]]), { queue });
       await waitFor(
         async () =>
           (await readRun(database, runId)).status === EXECUTION_STATUS.RESOLVED,
@@ -1044,7 +989,7 @@ describe('workflow runtime', () => {
           nodes: [{ key: 'slow', type: 'slow' }],
         }),
       );
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([['slow', createSlowInstruction(300)]]),
         {
           timeoutReaper: false,
@@ -1092,7 +1037,7 @@ describe('workflow runtime', () => {
         })
         .execute();
 
-      await startRuntime(new Map([['pending', pendingInstruction]]), {
+      await initializeRuntime(new Map([['pending', pendingInstruction]]), {
         timeoutReaperIntervalMs: 5,
       });
 
@@ -1161,7 +1106,7 @@ describe('workflow runtime', () => {
         }),
       );
       const counter = createCounterInstruction();
-      const runtime = await startRuntime(
+      const runtime = await initializeRuntime(
         new Map([
           ['counter', counter],
           ['pending', pendingInstruction],
@@ -1222,7 +1167,9 @@ describe('workflow runtime', () => {
           nodes: [{ key: 'only', type: 'echo' }],
         }),
       );
-      const runtime = await startRuntime(new Map([['echo', echoInstruction]]));
+      const runtime = await initializeRuntime(
+        new Map([['echo', echoInstruction]]),
+      );
 
       await runtime.trigger(workflow, {}, { eventKey: 'stack-default-0' });
       const first = await runIdOf('stack-default-0');
@@ -1255,7 +1202,9 @@ describe('workflow runtime', () => {
           nodes: [{ key: 'only', type: 'echo' }],
         }),
       );
-      const runtime = await startRuntime(new Map([['echo', echoInstruction]]));
+      const runtime = await initializeRuntime(
+        new Map([['echo', echoInstruction]]),
+      );
 
       await runtime.trigger(workflow, {}, { eventKey: 'stack-0' });
       const first = await runIdOf('stack-0');

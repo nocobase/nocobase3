@@ -7,13 +7,10 @@ import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 
 import {
-  DatabaseWorkflowService,
-  UnavailableWorkflowService,
-} from './services/workflow.js';
-import {
   bindRuntimeWorkflow,
   createAppWorkflowRuntime,
-} from './workflows/runtime.js';
+  disposeAppWorkflowRuntime,
+} from './runtime/runtime.js';
 
 export interface WorkflowPluginConfig extends AppRuntimeConfig {
   drive: AppDriveConfig;
@@ -43,14 +40,10 @@ export type WorkflowPluginServerContext = AppPluginServerContext<
 
 export default function bootstrapWorkflowPlugin({
   deps,
-  services,
   lifecycle,
 }: WorkflowPluginServerContext): void {
   const { runtime } = deps;
-  if (!runtime.database) {
-    services.plugins.workflow = new UnavailableWorkflowService();
-    return;
-  }
+  if (!runtime.database) return;
 
   const workflowRuntime = createAppWorkflowRuntime({
     database: runtime.database,
@@ -64,20 +57,8 @@ export default function bootstrapWorkflowPlugin({
     warn: (message: string): void => deps.logging.getLogger().warn(message),
   });
   bindRuntimeWorkflow(runtime, workflowRuntime);
-  services.plugins.workflow = new DatabaseWorkflowService(
-    runtime.database,
-    workflowRuntime,
-  );
-  const startup = workflowRuntime.start().catch((error: unknown) => {
-    deps.logging
-      .getLogger()
-      .warn(
-        `Workflow Engine background startup failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-  });
   lifecycle.registerDisposer('runtime', async () => {
-    await startup;
-    await workflowRuntime.stop();
+    await disposeAppWorkflowRuntime(workflowRuntime);
   });
 }
 

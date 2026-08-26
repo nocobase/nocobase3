@@ -5,21 +5,23 @@ import {
 } from '@nocobase/database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
-  ConditionInstruction,
-  createWorkflowCollections,
-  Dispatcher,
   EXECUTION_REASON,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
-  loadWorkflow,
-  Processor,
-  WORKFLOW_COLLECTIONS,
-  type WorkflowDefinition,
-  type WorkflowId,
-  type WorkflowInstructionClass,
-  type WorkflowNode,
-} from '../engine/index.js';
+} from '../server/engine/constants.js';
+import Dispatcher from '../server/engine/dispatcher.js';
+import Processor from '../server/engine/processor.js';
+import type {
+  WorkflowDefinition,
+  WorkflowId,
+  WorkflowNode,
+} from '../server/engine/types.js';
+import { loadWorkflow } from '../server/engine/utils.js';
+import type { WorkflowInstructionClass } from '../server/instructions/base.js';
+import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
+import { createWorkflowCollections } from './helpers.js';
 import {
   defineTestInstruction,
   echoInstruction,
@@ -116,7 +118,6 @@ describe('workflow dispatcher and processor', () => {
       database,
       instructions: new Map([['echo', echo]]),
     });
-    dispatcher.setReady(true);
     await dispatcher.trigger(
       workflow!,
       { orderId: 10 },
@@ -206,7 +207,6 @@ describe('workflow dispatcher and processor', () => {
         ],
       ]),
     });
-    dispatcher.setReady(true);
     await expect(dispatcher.recover()).resolves.toBe(1);
 
     await expect(

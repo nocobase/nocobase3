@@ -9,11 +9,6 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
     },
-    "./server/workflow-source": {
-      "source": "./server/workflows/dsl.ts",
-      "types": "./dist/server/workflows/dsl.d.ts",
-      "import": "./dist/server/workflows/dsl.js"
-    },
     "./server/migrations/app-settings": {
       "source": "./database/migrations/202608180001_create_app_settings_table.ts",
       "types": "./dist/database/migrations/202608180001_create_app_settings_table.d.ts",
@@ -167,7 +162,7 @@
     "dev": "node ./scripts/dev.mjs",
     "server:config": "tsx --tsconfig tsconfig.node.json ./scripts/server-config.ts",
     "build": "node ./scripts/build.mjs",
-    "build:server": "tsc -p tsconfig.server.json && tsc-alias -p tsconfig.server.json && tsc -p tsconfig.migrations.json && tsc-alias -p tsconfig.migrations.json",
+    "build:server": "tsc -p tsconfig.server.json && tsc-alias -p tsconfig.server.json && tsc -p tsconfig.migrations.json && tsc-alias -p tsconfig.migrations.json && tsx --tsconfig tsconfig.node.json ./scripts/build-workflows.ts",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",

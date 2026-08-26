@@ -1,71 +1,16 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  buildWorkflowPackage,
-  coreInstructions,
-  writeWorkflowArtifact,
-  type WorkflowInstructionClass,
-} from '@nocobase/app-plugin-workflow';
+  buildApplicationWorkflows,
+  type ApplicationWorkflowBuildOptions,
+  type ApplicationWorkflowBuildSummary,
+} from '@nocobase/app-plugin-workflow/build';
 
-export interface WorkflowBuildSummary {
-  packages: number;
-  artifacts: readonly string[];
-}
-export interface WorkflowBuildOptions {
-  sourceRoot: string;
-  distRoot: string;
-}
-
-export async function buildApplicationWorkflows(
-  options: WorkflowBuildOptions,
-): Promise<WorkflowBuildSummary> {
-  const { sourceRoot, distRoot } = options;
-  const entries = await fs.readdir(sourceRoot, { withFileTypes: true });
-  const packageNames: string[] = [];
-  for (const entry of entries) {
-    if (
-      entry.isDirectory() &&
-      (await exists(path.join(sourceRoot, entry.name, 'workflow.ts')))
-    )
-      packageNames.push(entry.name);
-  }
-  await fs.mkdir(distRoot, { recursive: true });
-  for (const entry of await fs.readdir(distRoot, { withFileTypes: true })) {
-    await fs.rm(path.join(distRoot, entry.name), {
-      recursive: true,
-      force: true,
-    });
-  }
-  const instructions: Map<string, WorkflowInstructionClass> = new Map(
-    coreInstructions,
-  );
-  const artifacts: string[] = [];
-  for (const packageName of packageNames.sort()) {
-    try {
-      const built = await buildWorkflowPackage(
-        path.join(sourceRoot, packageName),
-        { instructions },
-      );
-      artifacts.push(await writeWorkflowArtifact(built, distRoot));
-    } catch (error) {
-      throw new Error(
-        `Workflow package "${packageName}" at "${path.join(sourceRoot, packageName)}" failed to build: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
-      );
-    }
-  }
-  return { packages: packageNames.length, artifacts };
-}
-
-async function exists(target: string): Promise<boolean> {
-  try {
-    await fs.access(target);
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { buildApplicationWorkflows };
+export type {
+  ApplicationWorkflowBuildOptions as WorkflowBuildOptions,
+  ApplicationWorkflowBuildSummary as WorkflowBuildSummary,
+};
 
 async function main(): Promise<void> {
   const appRoot: string = path.resolve(

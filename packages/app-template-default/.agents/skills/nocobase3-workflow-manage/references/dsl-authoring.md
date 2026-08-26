@@ -4,6 +4,7 @@
 
 - [Package and imports](#package-and-imports)
 - [Complete current example](#complete-current-example)
+- [Default application lifecycle](#default-application-lifecycle)
 - [Top-level definition](#top-level-definition)
 - [Context Schema](#context-schema)
 - [Administrator inputs](#administrator-inputs)
@@ -17,20 +18,41 @@
 
 ## Package and imports
 
-Each direct child directory of the configured workflow source root is one workflow package. The directory name is its stable workflow key. It must contain `workflow.ts` (or a compiled `workflow.js` for loading); package scanning additionally recognizes `workflow.package.yaml` for include/exclude/entry controls and requires one of those workflow entry files.
+Each direct child directory of the configured workflow source root is one workflow package. The directory name is its stable workflow key. In the default application it must contain `workflow.ts`. The low-level package scanner also recognizes `workflow.js`, but the checker, Artifact builder, and default application's build script currently resolve `workflow.ts`; do not offer `workflow.js` as a default-project authoring option.
 
-In the default initialized app, workflow packages are direct children of `server/workflows`, next to `server/workflows/dsl.ts`. Import that application-owned aggregation from a package's `workflow.ts`:
+In the default initialized app, workflow packages are direct children of `server/workflows`. Import the definition helper and registered Instruction classes directly from the workflow plugin:
 
 ```ts
-import { defineWorkflow, node } from '../dsl.js';
+import {
+  ConditionInstruction,
+  defineWorkflow,
+  RunInstruction,
+} from '@nocobase/app-plugin-workflow';
 ```
 
-If the application uses another source root or publishes a stable application package subpath, resolve its aggregation entry before authoring. The aggregation is the discoverable list of node factories available in that application. The default template currently contains `node.condition` and `node.run`. Do not bypass it to guess plugin-private nodes.
+Only use Instruction classes exported by an installed plugin and registered in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction` and `RunInstruction`.
 
 ## Complete current example
 
+Create all of these files; the DSL alone is not a complete package:
+
+```text
+server/workflows/quotation-decision/
+├── workflow.ts
+└── server/
+    ├── calculate-risk.ts
+    ├── record-decision.ts
+    └── request-approval.ts
+```
+
+`workflow.ts`:
+
 ```ts
-import { defineWorkflow, node } from '../dsl.js';
+import {
+  ConditionInstruction,
+  defineWorkflow,
+  RunInstruction,
+} from '@nocobase/app-plugin-workflow';
 
 export default defineWorkflow({
   title: 'Quotation decision',
@@ -52,7 +74,7 @@ export default defineWorkflow({
     },
   },
   nodes: [
-    node.run({
+    RunInstruction.create({
       key: 'calculateRisk',
       title: 'Calculate risk',
       config: {
@@ -69,31 +91,29 @@ export default defineWorkflow({
         additionalProperties: false,
       },
     }),
-    node
-      .condition({
-        key: 'needsApproval',
-        config: {
-          expression: {
-            '>': [
-              { var: 'nodeResults.calculateRisk.score' },
-              { var: 'input.approvalLimit' },
-            ],
-          },
+    ConditionInstruction.create({
+      key: 'needsApproval',
+      config: {
+        expression: {
+          '>': [
+            { var: 'nodeResults.calculateRisk.score' },
+            { var: 'input.approvalLimit' },
+          ],
         },
-      })
-      .branch({
-        yes: [
-          node.run({
-            key: 'requestApproval',
-            config: {
-              script: './server/request-approval.ts',
-              args: { quotationId: '{{$context.quotationId}}' },
-            },
-          }),
-        ],
-        no: [],
-      }),
-    node.run({
+      },
+    }).branch({
+      yes: [
+        RunInstruction.create({
+          key: 'requestApproval',
+          config: {
+            script: './server/request-approval.ts',
+            args: { quotationId: '{{$context.quotationId}}' },
+          },
+        }),
+      ],
+      no: [],
+    }),
+    RunInstruction.create({
       key: 'recordDecision',
       config: {
         script: './server/record-decision.ts',
@@ -105,6 +125,102 @@ export default defineWorkflow({
 ```
 
 The common successor `recordDecision` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST.
+
+`server/calculate-risk.ts`:
+
+```ts
+import type {
+  WorkflowRunFunction,
+  WorkflowRunJsonValue,
+} from '@nocobase/app-plugin-workflow';
+
+interface CalculateRiskArgs {
+  quotationId?: unknown;
+  amount?: unknown;
+}
+
+export const run: WorkflowRunFunction = (
+  rawArgs: unknown,
+  runtime,
+): WorkflowRunJsonValue => {
+  runtime.signal.throwIfAborted();
+  const args = rawArgs as CalculateRiskArgs;
+  if (typeof args.quotationId !== 'string' || typeof args.amount !== 'number') {
+    throw new Error('quotationId and amount are required.');
+  }
+  return { score: args.amount };
+};
+```
+
+`server/request-approval.ts`:
+
+```ts
+import type { WorkflowRunFunction } from '@nocobase/app-plugin-workflow';
+
+export const run: WorkflowRunFunction = async (
+  rawArgs: unknown,
+  runtime,
+): Promise<null> => {
+  runtime.signal.throwIfAborted();
+  const quotationId = (rawArgs as { quotationId?: unknown }).quotationId;
+  if (typeof quotationId !== 'string')
+    throw new Error('quotationId is required.');
+  // Call an idempotent application service through runtime.app here.
+  runtime.logger.info('Approval requested');
+  return null;
+};
+```
+
+`server/record-decision.ts`:
+
+```ts
+import type { WorkflowRunFunction } from '@nocobase/app-plugin-workflow';
+
+export const run: WorkflowRunFunction = async (
+  rawArgs: unknown,
+  runtime,
+): Promise<null> => {
+  runtime.signal.throwIfAborted();
+  const needsApproval = (rawArgs as { approved?: unknown }).approved;
+  if (typeof needsApproval !== 'boolean')
+    throw new Error('approved must be boolean.');
+  // Persist by a stable business id; retries may execute this script again.
+  runtime.logger.info('Decision recorded');
+  return null;
+};
+```
+
+The comments are intentional integration seams; replace them with application-specific typed service calls. Do not introduce imports outside this Workflow package unless the application's Artifact builder explicitly allowlists the bare package import.
+
+## Default application lifecycle
+
+From `packages/app-template-default` (or the corresponding initialized application root), use this evidence-driven sequence:
+
+1. Create `server/workflows/<stable-key>/workflow.ts` and every referenced run script.
+2. Check the DSL source:
+
+   ```bash
+   pnpm exec workflow check server/workflows/<stable-key>
+   ```
+
+   Expect `Workflow check passed: ... (<n> nodes)`. This is only the six-phase DSL/IR check described below.
+
+3. Build the complete Workflow Artifacts:
+
+   ```bash
+   pnpm exec tsx --tsconfig tsconfig.node.json ./scripts/build-workflows.ts
+   ```
+
+   The normal `pnpm build` also invokes this step. The standalone command scans every direct Workflow package and replaces the configured Artifact output tree, so do not point `--dist-root` at source or an unrelated directory.
+
+4. Verify `dist/server/workflows/<stable-key>/<digest>/workflow.json` and each mapped `server/run/*.cjs`. The digest is the deployed hash used by management concurrency checks.
+5. Start the application/runtime and call `list()` or `GET /api/workflows` to discover the deployed definition. Do not assume Artifact build itself writes database definitions.
+6. If `registered` is false, first-enable with the discovered hash: `enable(key, deployedHash)` or `POST /api/workflows/<key>/enable` with `{ "deployedHash": "<digest>" }`. Read back `enabled`, `current`, version, and hash.
+7. Read/update administrator input overrides only if needed, and read them back.
+8. Invoke business events through `services.plugins.workflow.trigger()`, explicitly handling both `accepted` and `skipped`. Use the authenticated management `run` route only for an authorized manual run of an explicitly selected definition revision; it may be historical or disabled without changing enablement.
+9. For an accepted trigger, wait for asynchronous persistence, then inspect the run, all relevant node attempts, and selected redacted payload/log records.
+
+Keep those stages separate: source check does not prove run-entry buildability; Artifact build does not enable a definition; enablement does not invoke it.
 
 ## Top-level definition
 
@@ -162,7 +278,7 @@ Every node source has `key`, optional `title`/`description`, required `config`, 
 
 ## Condition nodes
 
-`node.condition()` config accepts only optional `expression`. An omitted expression evaluates to `true`. The expression must evaluate to a boolean.
+`ConditionInstruction.create()` config accepts only optional `expression`. An omitted expression evaluates to `true`. The expression must evaluate to a boolean.
 
 Supported JSON Logic operators are exactly:
 
@@ -174,7 +290,7 @@ Condition has a built-in boolean result contract. It may therefore be referenced
 
 ## Run nodes and scripts
 
-`node.run()` config accepts only:
+`RunInstruction.create()` config accepts only:
 
 ```ts
 {
@@ -257,20 +373,31 @@ The checker performs, in order:
 5. `semantic`: registered types, unique/safe keys, branches, declared inputs, and visible result references.
 6. `compile`: flat IR topology must have one start, one owner per non-start node, no missing targets, cycles, or unreachable nodes.
 
-`check` does not write the database. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
+`check` does not scan the complete package or write the database. In particular, it does not prove that `config.script` exists or was included, validate a script's relative/bare imports, bundle the run entry, or verify its named `run` export. Its `bundle` phase bundles and evaluates `workflow.ts`, not the run scripts. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
 
-The default app build path scans each direct workflow package, builds immutable artifacts, and writes them to its configured dist root. Runtime loading materializes new revisions; activation and enablement are separate management concerns.
+The default app's separate Artifact build scans each direct Workflow package, applies secret/path limits, resolves run scripts inside the package, enforces local-import containment and the bare-import allowlist, bundles every entry, checks for named export `run`, and writes immutable Artifacts to its configured dist root. Runtime loading materializes new revisions; activation and enablement are separate management concerns.
+
+### Deterministic definition builds
+
+`workflow.ts` executes during check/build. Its evaluated JSON becomes part of the Artifact identity. Keep it a pure deterministic definition:
+
+- Do not use `Date.now()`, random/UUID generation, current locale/time zone, machine absolute paths, environment-dependent branching, network calls, or mutable external state.
+- Do not read undeclared files or reach outside the package during definition construction.
+- Keep node array order intentional and stable; avoid filesystem/object enumeration whose order or contents vary by machine.
+- Put runtime lookups and changing business data in `run` scripts, context, or declared administrator inputs.
+
+Rebuild twice from unchanged sources when determinism is in doubt and compare the emitted digest. An unexpected digest change is a deployment change and must not be silently accepted during enable.
 
 ## Error-prevention checklist
 
 - No legacy YAML, `trigger`, `start`, node map, numeric branch, or edge-list syntax.
-- No direct core `condition()`/`run()` imports when an application aggregation entry exists.
+- Import only Instruction classes exported by installed plugins and registered by the application.
 - No invented nodes/operators/config fields.
 - All objects and evaluated helpers produce JSON-only values.
 - Context root is `object`; extra fields are deliberately allowed or rejected.
 - Every input reference is declared and has no inline default/nested path.
 - Every node key is safe, global, unique, and stable.
 - Every branch belongs to the node contract.
-- Every run script is static, bundled, named-exported, abort-aware, and idempotent.
+- Every run script is static, named-exported, abort-aware, and idempotent.
 - Every referenced run result has an accurate, lexically visible schema.
-- The real six-phase checker passes before build/load.
+- The real six-phase checker passes, then the separate Artifact build proves package inclusion, import policy, and run bundling before load.

@@ -7,24 +7,28 @@ import type { DatabaseManager } from '@nocobase/database';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  assertWorkflowRunResult,
-  createRunInstruction,
-  createSourceDirResolver,
-  Dispatcher,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
-  unboundRunModuleResolver,
+} from '../server/engine/constants.js';
+import Dispatcher from '../server/engine/dispatcher.js';
+import type { WorkflowInstructionClass } from '../server/instructions/base.js';
+import {
+  assertWorkflowRunResult,
+  createRunInstruction,
   validateRunConfig,
   WorkflowRunModuleError,
-  ArtifactResolver,
-  buildWorkflowArtifact,
-  LocalWorkflowArtifactStore,
-  type WorkflowInstructionClass,
   type WorkflowRunModule,
   type WorkflowRunModuleRequest,
   type WorkflowRunModuleResolver,
   type WorkflowRunRuntime,
-} from '../engine/index.js';
+} from '../server/instructions/run/instruction.js';
+import { ArtifactResolver } from '../server/loader/artifact-resolver.js';
+import { buildWorkflowArtifact } from '../server/loader/artifact-builder.js';
+import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
+import {
+  createSourceDirResolver,
+  unboundRunModuleResolver,
+} from '../server/loader/module-resolver.js';
 import { pendingInstruction } from './fixtures/instructions.js';
 import {
   createTestDatabase,
@@ -99,7 +103,6 @@ describe('run instruction', () => {
       database,
       instructions: instructionsWith(resolver),
     });
-    dispatcher.setReady(true);
     await dispatcher.trigger(workflow, context, {
       eventKey: key,
       manually: true,
@@ -178,7 +181,6 @@ describe('run instruction', () => {
         ['run', createRunInstruction({ resolver, app })],
       ]),
     });
-    dispatcher.setReady(true);
 
     await dispatcher.trigger(
       workflow,
@@ -238,7 +240,6 @@ describe('run instruction', () => {
       ),
       logger: { debug: vi.fn(), info, warn: vi.fn(), error: vi.fn() },
     });
-    dispatcher.setReady(true);
     await dispatcher.trigger(
       workflow,
       {},
@@ -288,7 +289,6 @@ describe('run instruction', () => {
       database,
       instructions: instructionsWith(resolver),
     });
-    dispatcher.setReady(true);
     await dispatcher.trigger(
       workflow,
       { order: { id: 7 } },
@@ -407,7 +407,6 @@ describe('run instruction', () => {
       database,
       instructions: instructionsWith(resolver),
     });
-    dispatcher.setReady(true);
     await dispatcher.trigger(
       workflow,
       {},

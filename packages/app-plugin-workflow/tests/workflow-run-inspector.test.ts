@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   logRunExecution,
   projectRunNodeInspector,
-  type WorkflowLogger,
-  type WorkflowNode,
-} from '../engine/index.js';
+} from '../server/engine/inspector.js';
+import type { WorkflowLogger } from '../server/engine/inspector.js';
+import type { WorkflowNode } from '../server/engine/types.js';
 describe('run inspector and safe logs', () => {
   it('summarizes argument keys without values or an entry digest', () => {
     const node = {

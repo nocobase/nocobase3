@@ -2,18 +2,24 @@ import type { DatabaseManager } from '@nocobase/database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  ConditionInstruction,
-  coreInstructions,
-  Dispatcher,
-  evaluateJsonLogic,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
-  Processor,
-  RunInstruction,
+} from '../server/engine/constants.js';
+import Dispatcher from '../server/engine/dispatcher.js';
+import Processor from '../server/engine/processor.js';
+import type { WorkflowInstructionClass } from '../server/instructions/base.js';
+import {
+  ConditionInstruction,
   validateConditionConfig,
+} from '../server/instructions/condition/instruction.js';
+import {
+  evaluateJsonLogic,
   type JsonLogicExpression,
-  type WorkflowInstructionClass,
-} from '../engine/index.js';
+} from '../server/instructions/condition/json-logic/index.js';
+import {
+  coreInstructions,
+  RunInstruction,
+} from '../server/instructions/index.js';
 import { defineTestInstruction } from './fixtures/instructions.js';
 import {
   createTestDatabase,
@@ -50,7 +56,6 @@ function createDispatcher(database: DatabaseManager): Dispatcher {
     database,
     instructions,
   });
-  dispatcher.setReady(true);
   return dispatcher;
 }
 

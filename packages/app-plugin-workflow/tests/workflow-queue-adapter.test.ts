@@ -16,7 +16,7 @@ import {
   WorkflowTaskJob,
   type WorkflowQueueAdapter,
   type WorkflowQueueTask,
-} from '../engine/index.js';
+} from '../server/queue.js';
 import { createTestDatabase } from './helpers.js';
 
 const QUEUE_TABLE = 'queue_jobs';

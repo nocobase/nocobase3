@@ -1,23 +1,16 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
-import registerWorkflowRoutes from '../server/routes/api/workflows.js';
-import type { WorkflowService } from '../server/services/workflow.js';
+import { createNodeRunRoutes } from '../server/routes/node-runs.js';
+import { createWorkflowRunRoutes } from '../server/routes/workflow-runs.js';
+import { createWorkflowDefinitionRoutes } from '../server/routes/workflows.js';
 
 describe('@nocobase/app-plugin-workflow routes', () => {
   it('registers the protected workflow API routes', async () => {
     const app = new Hono();
-    const workflow = createWorkflowService();
+    const workflow = createWorkflowRepositories();
 
-    registerWorkflowRoutes({
-      app,
-      deps: {
-        auth: {
-          required: () => async (_context, next) => next(),
-        },
-      },
-      services: { plugins: { workflow } },
-    });
+    registerTestRoutes(app, workflow);
 
     const response = await app.request('/api/workflows');
 
@@ -30,18 +23,14 @@ describe('@nocobase/app-plugin-workflow routes', () => {
 
   it('passes workflow filters and pagination to the service', async () => {
     const app = new Hono();
-    const workflow = createWorkflowService();
-    registerWorkflowRoutes({
-      app,
-      deps: { auth: { required: () => async (_context, next) => next() } },
-      services: { plugins: { workflow } },
-    });
+    const workflow = createWorkflowRepositories();
+    registerTestRoutes(app, workflow);
 
     await app.request(
       '/api/workflows?q=approval&enabled=false&page=2&pageSize=10',
     );
 
-    expect(workflow.list).toHaveBeenCalledWith({
+    expect(workflow.workflows.list).toHaveBeenCalledWith({
       query: 'approval',
       enabled: false,
       page: 2,
@@ -51,18 +40,14 @@ describe('@nocobase/app-plugin-workflow routes', () => {
 
   it('passes execution filters and pagination to the service', async () => {
     const app = new Hono();
-    const workflow = createWorkflowService();
-    registerWorkflowRoutes({
-      app,
-      deps: { auth: { required: () => async (_context, next) => next() } },
-      services: { plugins: { workflow } },
-    });
+    const workflow = createWorkflowRepositories();
+    registerTestRoutes(app, workflow);
 
     await app.request(
       '/api/workflow-runs?workflowKey=leave&workflowTitle=Leave&status=-1&page=3&pageSize=5',
     );
 
-    expect(workflow.runs).toHaveBeenCalledWith({
+    expect(workflow.workflowRuns.list).toHaveBeenCalledWith({
       workflowKey: 'leave',
       workflowTitle: 'Leave',
       status: -1,
@@ -70,28 +55,77 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       pageSize: 5,
     });
   });
+
+  it('passes the manual run event key through service options', async () => {
+    const app = new Hono();
+    const workflow = createWorkflowRepositories();
+    vi.mocked(workflow.workflowRuns.run).mockResolvedValue({
+      id: 'run-1',
+      workflowId: 'definition-1',
+      workflowKey: 'approval',
+      workflowTitle: 'Approval',
+      workflowVersion: 'version-1',
+      eventKey: 'operator-request-42',
+      status: null,
+      startedAt: null,
+      finishedAt: null,
+      createdAt: '2026-08-26T00:00:00.000Z',
+    });
+    registerTestRoutes(app, workflow);
+
+    const response = await app.request('/api/workflows/definition-1/run', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'event-key': 'operator-request-42',
+      },
+      body: JSON.stringify({ context: { amount: 100 } }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(workflow.workflowRuns.run).toHaveBeenCalledWith(
+      'definition-1',
+      { amount: 100 },
+      { eventKey: 'operator-request-42' },
+    );
+  });
 });
 
-function createWorkflowService(): WorkflowService {
+interface TestRepositories {
+  workflows: Parameters<typeof createWorkflowDefinitionRoutes>[0];
+  workflowRuns: Parameters<typeof createWorkflowRunRoutes>[0] &
+    Parameters<typeof createNodeRunRoutes>[0];
+}
+
+function registerTestRoutes(app: Hono, repositories: TestRepositories): void {
+  app.route('/api', createWorkflowDefinitionRoutes(repositories.workflows));
+  app.route('/api', createWorkflowRunRoutes(repositories.workflowRuns));
+  app.route('/api', createNodeRunRoutes(repositories.workflowRuns));
+}
+
+function createWorkflowRepositories(): TestRepositories {
   return {
-    list: vi
-      .fn()
-      .mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 }),
-    enable: vi.fn(),
-    disable: vi.fn(),
-    setStatus: vi.fn(),
-    getInputs: vi.fn(),
-    updateInputs: vi.fn(),
-    runs: vi
-      .fn()
-      .mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 }),
-    runsForWorkflow: vi.fn(),
-    getWorkflow: vi.fn(),
-    revisions: vi.fn(),
-    getRun: vi.fn(),
-    nodeRuns: vi.fn(),
-    nodeRunPayload: vi.fn(),
-    trigger: vi.fn(),
-    run: vi.fn(),
+    workflows: {
+      list: vi
+        .fn()
+        .mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 }),
+      enable: vi.fn(),
+      disable: vi.fn(),
+      setStatus: vi.fn(),
+      getInputs: vi.fn(),
+      updateInputs: vi.fn(),
+      get: vi.fn(),
+      revisions: vi.fn(),
+    },
+    workflowRuns: {
+      list: vi
+        .fn()
+        .mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 }),
+      listForWorkflow: vi.fn(),
+      get: vi.fn(),
+      nodeRuns: vi.fn(),
+      nodeRunPayload: vi.fn(),
+      run: vi.fn(),
+    },
   };
 }

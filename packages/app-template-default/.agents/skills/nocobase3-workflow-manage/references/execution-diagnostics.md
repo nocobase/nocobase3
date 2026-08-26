@@ -25,22 +25,23 @@ Workflow Run status:
 
 Node Run status uses `0 PENDING`, `1 RESOLVED`, `-1 FAILED`, `-2 ERROR`, and `-3 ABORTED`. Run reason `timeout` indicates timeout termination.
 
-Do not infer success from HTTP 200 alone: `trigger()` only confirms scheduling and returns an event key. Do not infer the current attempt from the first matching node run: reruns create multiple attempts.
+Do not infer success from a service call alone. `trigger()` may return `{ status: 'skipped', reason: 'not-found' | 'disabled' }`; an accepted receipt only confirms scheduling and supplies an event key. Do not infer the current attempt from the first matching node run: reruns create multiple attempts.
 
 ## Diagnostic sequence
 
 Follow this order so evidence remains tied to the executed revision:
 
-1. Resolve the workflow key/definition and list revisions.
-2. Inspect the run, capturing workflow id/key, workflow version, artifact hash, event key, context, timestamps, manual flag, parent relationship where available, status, and reason.
-3. Use the run's definition id/hash, not merely the current workflow, to understand its code and topology.
-4. Inspect `getRun(id).nodeRuns` for the latest attempt per node key and reconstruct the visible executed path.
-5. Call `nodeRuns(runId, nodeKey?)` when reruns or repeated attempts are possible; compare ids/timestamps/statuses in ascending order.
-6. Fetch `nodeRunPayload(runId, nodeRunId)` only for relevant attempts. Record result, error, log, and `truncated`.
-7. Correlate structured server logs by run/execution id, node id/key, artifact digest, and script. Run-node logs include duration and `success/error/aborted`.
-8. Compare the failing node's config, resolved inputs/context, expected result contract, timeout, and artifact script path.
-9. Separate root cause from propagated failure. A condition parent can fail because its selected branch child failed.
-10. Recommend a source fix, setting fix, retry with the same event identity, new business invocation, or compensation. Do not erase history.
+1. Inspect the service trigger receipt first. For `skipped`, diagnose key/current/enabled state and do not poll for a run. For `accepted`, record its event key; a run may not be persisted until asynchronous scheduling advances.
+2. Resolve the workflow key/definition and list revisions.
+3. Inspect the run, capturing workflow id/key, workflow version, artifact hash, event key, context, timestamps, manual flag, parent relationship where available, status, and reason.
+4. Use the run's definition id/hash, not merely the current workflow, to understand its code and topology.
+5. Inspect `getRun(id).nodeRuns` for the latest attempt per node key and reconstruct the visible executed path.
+6. Call `nodeRuns(runId, nodeKey?)` when reruns or repeated attempts are possible; compare ids/timestamps/statuses in ascending order.
+7. Fetch `nodeRunPayload(runId, nodeRunId)` only for relevant attempts. Record result, error, log, and `truncated`.
+8. Correlate structured server logs by run/execution id, node id/key, artifact digest, and script. Run-node logs include duration and `success/error/aborted`.
+9. Compare the failing node's config, resolved inputs/context, expected result contract, timeout, and artifact script path.
+10. Separate root cause from propagated failure. A condition parent can fail because its selected branch child failed.
+11. Recommend a source fix, setting fix, retry with the same event identity, new business invocation, or compensation. Do not erase history.
 
 ## Definition and version checks
 
@@ -101,22 +102,24 @@ For an unexpected path:
 
 ## Common symptoms
 
-| Symptom                          | Likely checks                                                                           |
-| -------------------------------- | --------------------------------------------------------------------------------------- |
-| `WORKFLOW_NOT_FOUND`             | wrong directory-derived key, no current revision, source not loaded                     |
-| `WORKFLOW_DISABLED`              | current revision disabled; use authorized management decision, not a bypass             |
-| `INVALID_CONTEXT`                | root/field type, missing required field, undeclared extra field, unsupported assumption |
-| `CONTEXT_TOO_LARGE`              | serialized UTF-8 context exceeds 65,536 bytes; pass identifiers rather than documents   |
-| duplicate-looking trigger        | caller generated different event keys for the same event                                |
-| no second run                    | same event key was intentionally deduplicated                                           |
-| stuck queueing                   | worker/runtime/queue not started, queue failure, retry/dead letter                      |
-| run node module error            | script omitted from artifact, bad relative path, missing named `run`, digest mismatch   |
-| run node serialization error     | BigInt, model/class instance, circular reference, function/symbol, non-finite number    |
-| condition type error             | expression produced non-boolean or mixed comparison types                               |
-| unexpected empty arg             | missing path resolved to `undefined`; embedded template converted it to empty string    |
-| node result not visible at check | reference is self/later/sibling-branch/branch-internal or node has no result schema     |
-| apparent old settings            | run correctly uses its invocation-time input snapshot                                   |
-| rerun disagreement               | inspected an old attempt; enumerate all node runs by node key                           |
+| Symptom                          | Likely checks                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------ |
+| trigger `skipped: not-found`     | wrong directory-derived key, no current revision, source not loaded                        |
+| trigger `skipped: disabled`      | current revision disabled; enable separately if authorized, never poll for this trigger    |
+| manual run of disabled revision  | valid for authorized `run(definitionId, ...)`; verify selected version/hash and permission |
+| `INVALID_CONTEXT`                | root/field type, missing required field, undeclared extra field, unsupported assumption    |
+| `CONTEXT_TOO_LARGE`              | serialized UTF-8 context exceeds 65,536 bytes; pass identifiers rather than documents      |
+| duplicate-looking trigger        | caller generated different event keys for the same event                                   |
+| no second run                    | same event key was intentionally deduplicated                                              |
+| stuck queueing                   | worker/runtime/queue not started, queue failure, retry/dead letter                         |
+| run node module error            | script omitted from artifact, bad relative path, missing named `run`, digest mismatch      |
+| source check passes, build fails | inspect package scan/include, run path/import policy, bundling, and named `run` export     |
+| run node serialization error     | BigInt, model/class instance, circular reference, function/symbol, non-finite number       |
+| condition type error             | expression produced non-boolean or mixed comparison types                                  |
+| unexpected empty arg             | missing path resolved to `undefined`; embedded template converted it to empty string       |
+| node result not visible at check | reference is self/later/sibling-branch/branch-internal or node has no result schema        |
+| apparent old settings            | run correctly uses its invocation-time input snapshot                                      |
+| rerun disagreement               | inspected an old attempt; enumerate all node runs by node key                              |
 
 ## Diagnostic report
 
@@ -128,8 +131,11 @@ Report at least:
 - Executed node keys in attempt order and the first failing leaf attempt.
 - Node type, script or condition expression, status, duration/timestamps, error, and log availability.
 - Whether any result/error/log was redacted or truncated.
+- Trigger receipt status/reason; omit event key/run claims for a skipped receipt.
 - Root-cause category: source/compile, activation/config, invocation contract, queue/worker, artifact/module, business script, timeout/cancellation, or authorization/observability.
 - Safest recovery: source revision, configuration correction, idempotent retry, new invocation, or explicit compensation.
+
+Permission identifiers in route documentation are not proof of enforcement. `createWorkflowRoutes()` enforces fine-grained permissions only when the application supplies its optional `authorize` hook. The default plugin registration currently supplies authentication but no `authorize` or `audit` hook, so diagnose actual route wiring before attributing a 200/403 or hidden log to ACL behavior.
 
 ## Installed implementation discovery
 

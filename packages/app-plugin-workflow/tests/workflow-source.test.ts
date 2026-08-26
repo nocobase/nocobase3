@@ -4,11 +4,11 @@ import {
   createNodeExpression,
   defineWorkflow,
   restoreFromFlatIr,
-} from '../engine/workflow-source/core.js';
+} from '../server/instructions/definition.js';
 import type {
   NodeExpression,
   WorkflowNodeSourceInput,
-} from '../engine/index.js';
+} from '../server/instructions/types.js';
 
 class LeafInstruction {
   static readonly type: 'leaf' = 'leaf';

@@ -2,11 +2,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  buildWorkflowServerEntries,
-  scanWorkflowPackage,
-  type WorkflowFlatIr,
-} from '../engine/index.js';
+import type { WorkflowFlatIr } from '../server/instructions/types.js';
+import { scanWorkflowPackage } from '../server/loader/package-scanner.js';
+import { buildWorkflowServerEntries } from '../server/loader/server-entry-builder.js';
 const roots: string[] = [];
 afterEach(async () =>
   Promise.all(

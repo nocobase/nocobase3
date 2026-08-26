@@ -4,14 +4,30 @@ description: 'Use when agents need to define, validate, invoke, inspect, or diag
 argument-hint: '[action: explain|define|validate|invoke|inspect|diagnose] [workflow-key-or-path]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: workflow
-version: 1.0.1
+version: 1.1.0
 last-reviewed: 2026-08-25
 risk-level: medium
+metadata:
+  domain-owner: '@nocobase/app-plugin-workflow'
+  current-scope: 'app-template-default team development'
 ---
 
 # Goal
 
 Define, validate, invoke, inspect, and diagnose NocoBase 3 workflows against the current `@nocobase/app-plugin-workflow` contracts, without guessing DSL fields, node capabilities, or runtime semantics.
+
+# Ownership and Current Placement
+
+This Skill is currently kept under `app-template-default/.agents/skills` for
+team development and is not a separately published or independently versioned
+artifact. Its domain owner is `@nocobase/app-plugin-workflow`; keep the Skill
+synchronized with changes to that plugin's DSL, registered instructions,
+checker, Artifact builder, service APIs, or runtime contracts.
+
+The current instructions are tailored to the default application's
+`server/workflows` source root. Before reusing the Skill for another
+application, inspect that application's source root, exported Instruction
+classes, and registered node contracts.
 
 # Scope
 
@@ -40,7 +56,7 @@ Define, validate, invoke, inspect, and diagnose NocoBase 3 workflows against the
 
 Rules:
 
-- Read current source contracts before authoring. The default application currently aggregates only `node.condition` and `node.run`; another application may expose more.
+- Read current source contracts before authoring. The workflow plugin currently exports `ConditionInstruction` and `RunInstruction`; another application may register more.
 - If the process, target, or required context cannot be resolved safely, stop mutation and ask.
 - If the user says "you decide", choose code for a single atomic operation and Workflow for a durable, auditable, multi-step process; use `inspect` before changing an existing target.
 - Never infer database ids from keys. Resolve them through the service/API when an id-based operation is required.
@@ -52,21 +68,21 @@ Rules:
 - Read-only explanation and inspection may proceed with an unambiguous path, key, or run id.
 - Before writing DSL, confirm the business context contract, ordered steps, branch conditions, side effects, and stable node keys.
 - Before invoking, confirm the exact workflow and context; for intentional retries confirm whether to reuse or replace the event key.
-- Before enabling, changing input overrides, or manually running a disabled workflow, confirm authorization and expected impact.
+- Before enabling, changing input overrides, or manually running a workflow, confirm authorization and expected impact. `run()` is a privileged manual execution of the selected definition id and does not require that revision to be current or enabled; use the shared `eventKey` option for idempotency.
 - If required information is absent, stop mutation or invocation and report the missing contract.
 
 # Workflow
 
 1. Classify the request with [Workflow Concepts](references/workflow-concepts.md). Use Workflow only when process state, orchestration, visibility, or auditability is the primary requirement.
-2. Discover the application-owned DSL aggregation entry and registered instruction contracts. Never assume optional nodes are installed.
+2. Discover the installed plugins' exported Instruction classes and the application's registered instruction contracts. Never assume optional nodes are installed.
 3. For authoring, read [DSL Authoring](references/dsl-authoring.md) completely, place one package below the configured workflow source root, and keep its stable directory name as the workflow key.
 4. Declare the invocation `contextSchema` separately from administrator `inputs`. Design stable, globally unique node keys before writing nodes.
 5. Express order with arrays and branches only with `.branch({...})`. Put executable business work in `run` scripts and declare each dynamic result contract.
-6. Validate before any load or publication. Run the actual checker against the package or `workflow.ts`; do not substitute a TypeScript-only check.
+6. Validate the DSL before any load or publication. Run the actual checker against the package; do not substitute a TypeScript-only check. This six-phase source check does not inspect or bundle `run` scripts.
 7. Fix every reported phase in order: `typecheck`, `bundle`, `evaluate`, `schema`, `semantic`, then `compile`. Re-run until it passes.
-8. Build/load through the owning application's workflow build/runtime path. Do not write definitions or nodes directly to the database.
-9. For invocation, choose the correct contract from [Invocation and Service API](references/invocation-and-service-api.md): business logic uses `trigger(key, context, options)`; management uses `run(id, context, idempotencyKey)`.
-10. Read back the trigger receipt or run record. Poll/query by the persisted run only when asynchronous scheduling has created it.
+8. Build the complete package through the owning application's Workflow Artifact build, which separately scans the package and validates/bundles every `run` entry. Then load through the runtime path. Do not write definitions or nodes directly to the database.
+9. For invocation, choose the correct contract from [Invocation and Service API](references/invocation-and-service-api.md): business logic uses `trigger(key, context, options)`; management uses `run(definitionId, context, options)` with the common `eventKey` option.
+10. Read back the trigger receipt or run record. A service trigger returns `accepted` or `skipped`; only an accepted receipt has an `eventKey`. Poll/query by the persisted run only when asynchronous scheduling has created it.
 11. For inspection or failure, follow [Execution Diagnostics](references/execution-diagnostics.md): definition/revision, run, latest node runs, then selected node payload and structured server logs.
 12. Report the exact version/hash, event key, run id, status, failing node, error, and whether payload/log output was truncated.
 
@@ -83,7 +99,7 @@ Rules:
 
 - Treat workflow invocation as a real side effect: a `run` script may write data, call external systems, or send notifications.
 - Do not invoke, enable/disable, or change administrator input overrides during a request that only asks for explanation, authoring, validation, inspection, or diagnosis.
-- Use stable `eventKey`/`idempotencyKey` values for retried business events. Reusing a key intentionally deduplicates; inventing a new key creates a new run.
+- Use stable `eventKey` values for retried business events and manual runs. Reusing a key intentionally deduplicates; inventing a new key creates a new run.
 - Never put secrets in DSL `inputs`, context, node args, results, or logs. Node payload endpoints redact common secrets and truncate output, but that is defense in depth.
 - Require explicit secondary confirmation before destructive package replacement, production enable/disable, bulk invocation, or an invocation known to make irreversible external changes.
 
@@ -101,11 +117,11 @@ Rollback guidance:
 
 - The package directory resolves to the intended stable workflow key.
 - `workflow.ts` default-exports exactly the value returned by `defineWorkflow()`.
-- The DSL imports from the application aggregation entry and uses only registered node factories.
+- The DSL imports Instruction classes from their owning plugins and uses only classes registered by the application.
 - Context Schema has object root and only supported keywords; representative allowed and denied contexts are checked.
 - Inputs, templates, JSON Logic variables, result schemas, and node-result visibility obey current contracts.
 - Node keys are valid, globally unique, stable, and branch keys belong to the node contract.
-- Every `run.config.script` is static, package-relative, bundled, and exports named `run`.
+- The source check passes, then the package Artifact build separately proves every `run.config.script` is included, package-relative, import-policy compliant, bundled, and exports named `run`.
 - Every run-script result is JSON-storable and every referenced dynamic result has an accurate `result` schema.
 - The real workflow checker passes all six phases and compilation produces a reachable acyclic tree topology.
 - Every source or setting write has an immediate readback or rebuild/check result.
@@ -115,10 +131,10 @@ Rollback guidance:
 # Minimal Test Scenarios
 
 1. Valid package: typecheck, bundle, evaluate, validate, and compile a condition with `yes`/`no` branches and a common successor.
-2. Valid invocation: trigger an enabled workflow with matching context and verify receipt, persisted run, and resolved node runs.
+2. Valid invocation: trigger an enabled workflow with matching context, discriminate `accepted`/`skipped`, and for `accepted` verify the persisted run and resolved node runs.
 3. Invalid DSL: reject an unknown node/config field, duplicate node key, illegal branch, or invisible node-result reference before database writes.
-4. Invalid invocation: reject missing/disabled workflow, invalid or oversized context, or missing parent run with a precise error code.
-5. Authorization/diagnosis: deny a payload/log request without permission while allowing permitted run metadata inspection.
+4. Invalid invocation: service-trigger missing/disabled workflows return `skipped`; accepted workflows still reject invalid/oversized context or a missing parent run with a precise error code.
+5. Authorization/diagnosis: first verify that the application actually wires the optional authorization hook; where it does, deny payload/log access without permission while allowing permitted run metadata inspection.
 
 # Output Contract
 

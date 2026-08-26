@@ -1,28 +1,31 @@
 import type { DatabaseManager } from '@nocobase/database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { DatabaseWorkflowService } from '../server/services/workflow.js';
-import type { AppWorkflowRuntime } from '../server/workflows/runtime.js';
+import { WorkflowRepository } from '../server/services/workflow-repository.js';
+import { WorkflowRunRepository } from '../server/services/workflow-run-repository.js';
+import type { AppWorkflowRuntime } from '../server/runtime/runtime.js';
 import {
   createTestDatabase,
   createTestWorkflow,
   insertTestRun,
 } from './helpers.js';
+import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 
-describe('DatabaseWorkflowService lists', () => {
+describe('workflow repositories', () => {
   let database: DatabaseManager;
-  let service: DatabaseWorkflowService;
+  let workflows: WorkflowRepository;
+  let workflowRuns: WorkflowRunRepository;
 
   beforeEach(async () => {
     database = await createTestDatabase();
     const runtime: AppWorkflowRuntime = {
-      start: async (): Promise<void> => undefined,
-      stop: async (): Promise<void> => undefined,
+      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
       publishArtifact: async (): Promise<void> => undefined,
     };
-    service = new DatabaseWorkflowService(database, runtime);
+    workflows = new WorkflowRepository(database, runtime);
+    workflowRuns = new WorkflowRunRepository(database, runtime);
   });
 
   afterEach(async () => {
@@ -41,7 +44,7 @@ describe('DatabaseWorkflowService lists', () => {
       nodes: [],
     });
 
-    const page = await service.list({
+    const page = await workflows.list({
       query: 'approval',
       enabled: false,
       page: 1,
@@ -80,7 +83,7 @@ describe('DatabaseWorkflowService lists', () => {
       status: -1,
     });
 
-    const page = await service.runs({
+    const page = await workflowRuns.list({
       workflowTitle: 'leave',
       status: -1,
       page: 1,
@@ -89,5 +92,53 @@ describe('DatabaseWorkflowService lists', () => {
 
     expect(page).toMatchObject({ page: 1, pageSize: 1, total: 1 });
     expect(page.data.map((item) => item.eventKey)).toEqual(['leave-failed']);
+  });
+
+  it('keeps enabled exclusive to the current revision', async () => {
+    const first = await createTestWorkflow(database, {
+      key: 'versioned',
+      enabled: true,
+      nodes: [],
+    });
+    await database
+      .query()
+      .updateTable(WORKFLOW_COLLECTIONS.workflows)
+      .set({ current: null })
+      .where('id', '=', first.id)
+      .execute();
+    await database
+      .query()
+      .insertInto(WORKFLOW_COLLECTIONS.workflows)
+      .values({
+        key: 'versioned',
+        title: 'versioned v2',
+        enabled: false,
+        current: true,
+        contextSchema: JSON.stringify({ type: 'object' }),
+        inputSchema: JSON.stringify({}),
+        inputValues: JSON.stringify({}),
+        options: JSON.stringify({}),
+      })
+      .execute();
+    const second = await database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .where('key', '=', 'versioned')
+      .where('current', '=', true)
+      .executeTakeFirstOrThrow();
+
+    await workflows.setStatus(second.id, true);
+
+    const revisions = await database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .select(['id', 'current', 'enabled'])
+      .where('key', '=', 'versioned')
+      .orderBy('id')
+      .execute();
+    expect(revisions).toEqual([
+      expect.objectContaining({ id: first.id, current: null, enabled: 0 }),
+      expect.objectContaining({ id: second.id, current: 1, enabled: 1 }),
+    ]);
   });
 });

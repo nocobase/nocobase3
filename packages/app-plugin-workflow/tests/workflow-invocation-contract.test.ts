@@ -5,7 +5,7 @@ import {
   WORKFLOW_INVOCATION_SCHEDULING,
   validateContextSchema,
   validateContextValue,
-} from '../engine/server/invocation-contract.js';
+} from '../server/engine/invocation.js';
 
 describe('workflow invocation contract decisions', () => {
   it('freezes scheduling and schema decisions', () => {

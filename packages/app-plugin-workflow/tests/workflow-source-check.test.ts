@@ -5,18 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import {
-  checkWorkflowPackage,
-  typecheckWorkflowSource,
-  validateWorkflowFlatIrTopology,
-} from '../engine/index.js';
+import { checkWorkflowPackage } from '../server/loader/source-check.js';
+import { validateWorkflowFlatIrTopology } from '../server/loader/source-compiler.js';
+import { typecheckWorkflowSource } from '../server/loader/source-parser.js';
 
-const dslPath = fileURLToPath(
-  new URL(
-    '../../app-template-default/server/workflows/dsl.ts',
-    import.meta.url,
-  ),
-);
+const authoringEntry = fileURLToPath(new URL('../index.ts', import.meta.url));
 const temporaryDirectories: string[] = [];
 
 async function sourceFile(body: string): Promise<string> {
@@ -27,7 +20,7 @@ async function sourceFile(body: string): Promise<string> {
   const file = path.join(directory, 'workflow.ts');
   await fs.writeFile(
     file,
-    `import { defineWorkflow, node } from ${JSON.stringify(dslPath)};\n${body}`,
+    `import { ConditionInstruction, defineWorkflow, RunInstruction } from ${JSON.stringify(authoringEntry)};\n${body}`,
   );
   return file;
 }
@@ -44,27 +37,27 @@ describe('workflow check', () => {
   it.each([
     [
       'wrong config value type',
-      `export default defineWorkflow({ title: 'x', nodes: [node.run({ key: 'run', config: { script: 1 } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [RunInstruction.create({ key: 'run', config: { script: 1 } })] });`,
       'TS2322',
     ],
     [
       'wrong branch name',
-      `export default defineWorkflow({ title: 'x', nodes: [node.condition({ key: 'c', config: {} }).branch({ maybe: [] })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ maybe: [] })] });`,
       'TS2353',
     ],
     [
       'branch on non-branch node',
-      `export default defineWorkflow({ title: 'x', nodes: [node.run({ key: 'run', config: { script: './x.ts' } }).branch({})] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [RunInstruction.create({ key: 'run', config: { script: './x.ts' } }).branch({})] });`,
       'TS2339',
     ],
     [
-      'unaggregated node type',
-      `export default defineWorkflow({ title: 'x', nodes: [node.approval({ key: 'a', config: {} })] });`,
-      'TS2339',
+      'unknown instruction export',
+      `export default defineWorkflow({ title: 'x', nodes: [ApprovalInstruction.create({ key: 'a', config: {} })] });`,
+      'TS2304',
     ],
     [
       'unknown condition operator',
-      `export default defineWorkflow({ title: 'x', nodes: [node.condition({ key: 'c', config: { expression: { execute: ['process.exit()'] } } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { expression: { execute: ['process.exit()'] } } })] });`,
       'TS2353',
     ],
   ])('rejects %s during typecheck', async (_name, body, code) => {
@@ -76,7 +69,7 @@ describe('workflow check', () => {
 
   it('runs typecheck, bundle, evaluate, schema, semantic, and compile without writing a database', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', nodes: [node.condition({ key: 'c', config: {} }).branch({ yes: [node.run({ key: 'inside', config: { script: './inside.ts' } })] }), node.run({ key: 'after', config: { script: './after.ts' } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: {} }).branch({ yes: [RunInstruction.create({ key: 'inside', config: { script: './inside.ts' } })] }), RunInstruction.create({ key: 'after', config: { script: './after.ts' } })] });`,
     );
     await expect(checkWorkflowPackage(file)).resolves.toMatchObject({
       ir: {
@@ -88,7 +81,7 @@ describe('workflow check', () => {
 
   it('reports a JSON Logic validation error at the expression path', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', nodes: [node.condition({ key: 'c', config: { expression: { var: 'context.constructor.secret' } } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { expression: { var: 'context.constructor.secret' } } })] });`,
     );
     await expect(checkWorkflowPackage(file)).rejects.toMatchObject({
       issues: [

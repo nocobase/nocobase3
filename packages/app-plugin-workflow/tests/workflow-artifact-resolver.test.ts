@@ -2,11 +2,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  ArtifactResolver,
-  buildWorkflowArtifact,
-  LocalWorkflowArtifactStore,
-} from '../engine/index.js';
+import { ArtifactResolver } from '../server/loader/artifact-resolver.js';
+import { buildWorkflowArtifact } from '../server/loader/artifact-builder.js';
+import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
 const roots: string[] = [];
 afterEach(async () =>
   Promise.all(

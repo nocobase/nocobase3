@@ -1,14 +1,14 @@
 import type { DatabaseManager, Row } from '@nocobase/database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
-  createTimeoutReaper,
   EXECUTION_REASON,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
-  WORKFLOW_COLLECTIONS,
-  type WorkflowId,
-} from '../engine/index.js';
+} from '../server/engine/constants.js';
+import { createTimeoutReaper } from '../server/engine/timeout-reaper.js';
+import type { WorkflowId } from '../server/engine/types.js';
 import { createTestDatabase, createTestWorkflow } from './helpers.js';
 
 type RunInput = {

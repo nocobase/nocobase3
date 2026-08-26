@@ -4,8 +4,14 @@ export default createNodeLibraryConfig({
   tsconfigRootDir: import.meta.dirname,
   overrides: [
     {
+      name: 'workflow-plugin/intentional-invalid-eval-fixture',
+      ignores: [
+        'skill-evals/nocobase3-workflow-manage/fixtures/workflows/unsupported-approval/**',
+      ],
+    },
+    {
       name: 'workflow-plugin/migrated-engine-compatibility',
-      files: ['engine/**/*.ts', 'tests/workflow-*.test.ts'],
+      files: ['server/**/*.ts', 'tests/workflow-*.test.ts'],
       rules: {
         // The engine predates the shared type-aware lint preset. Keep its
         // existing runtime behavior while it moves into the plugin boundary;
@@ -32,6 +38,17 @@ export default createNodeLibraryConfig({
       languageOptions: {
         parserOptions: {
           project: './tsconfig.migrations.json',
+          projectService: false,
+          tsconfigRootDir: import.meta.dirname,
+        },
+      },
+    },
+    {
+      name: 'workflow-plugin/skill-evals',
+      files: ['skill-evals/**/*.ts'],
+      languageOptions: {
+        parserOptions: {
+          project: './tsconfig.skill-evals.json',
           projectService: false,
           tsconfigRootDir: import.meta.dirname,
         },

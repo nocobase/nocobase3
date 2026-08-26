@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertPackageRelativePath,
   scanWorkflowPackage,
-} from '../engine/server/package-scanner.js';
+} from '../server/loader/package-scanner.js';
 
 const roots: string[] = [];
 async function fixture(): Promise<string> {
@@ -29,33 +29,6 @@ describe('workflow package scanner', () => {
       expect(() => assertPackageRelativePath(candidate)).toThrow();
     },
   );
-  it.each(['/absolute', '../escape', 'nul\0file'])(
-    'rejects unsafe descriptor include %s',
-    async (candidate) => {
-      const root = await fixture();
-      await fs.writeFile(
-        path.join(root, 'workflow.package.yaml'),
-        `include:\n  - ${JSON.stringify(candidate)}\n`,
-      );
-      await expect(scanWorkflowPackage(root)).rejects.toThrow();
-    },
-  );
-  it('expands descriptor include/exclude and validates declared entries', async () => {
-    const root = await fixture();
-    await fs.mkdir(path.join(root, 'server'));
-    await fs.writeFile(path.join(root, 'server/run.ts'), 'run');
-    await fs.writeFile(path.join(root, 'server/skip.ts'), 'skip');
-    await fs.writeFile(
-      path.join(root, 'workflow.package.yaml'),
-      'include:\n  - workflow.ts\n  - server/**\nexclude:\n  - server/skip.ts\nentries:\n  - server/run.ts\n',
-    );
-    await expect(scanWorkflowPackage(root)).resolves.toMatchObject({
-      entries: expect.arrayContaining([
-        expect.objectContaining({ path: 'workflow.ts' }),
-        expect.objectContaining({ path: 'server/run.ts' }),
-      ]),
-    });
-  });
   it('rejects case collisions', async () => {
     const root = await fixture();
     await fs.writeFile(path.join(root, 'A.ts'), 'a');

@@ -1,17 +1,13 @@
-export * from '../engine/server/index.js';
-export { createWorkflowRoutes } from './routes/api/workflows.js';
-export { default as registerWorkflowRoutes } from './routes/api/workflows.js';
 export { default as bootstrapWorkflowPlugin } from './bootstrap.js';
-export {
-  DatabaseWorkflowService,
-  UnavailableWorkflowService,
-} from './services/workflow.js';
+export { createWorkflowRoutes } from './routes/routes.js';
+export { default as registerWorkflowRoutes } from './routes/routes.js';
+export type { WorkflowPluginRoutesContext } from './routes/types.js';
+export { trigger } from './trigger.js';
 export type {
-  WorkflowListItem,
-  WorkflowRunListItem,
-  WorkflowService,
-} from './services/workflow.js';
-export type { WorkflowPluginRoutesContext } from './routes/api/workflows.js';
+  JsonObject,
+  WorkflowEventOptions,
+  WorkflowTriggerReceipt,
+} from './engine/index.js';
 export {
   AppServiceError,
   BadRequestError,
@@ -21,13 +17,15 @@ export {
   bindRuntimeWorkflow,
   createAppWorkflowRuntime,
   getRuntimeWorkflow,
-  isAppWorkflowRuntimeStarted,
-  startRuntimeWorkflow,
-  triggerAppWorkflow,
-  getWorkflowEngine,
-  getWorkflowArtifactStore,
-} from './workflows/runtime.js';
+} from './runtime/runtime.js';
 export type {
   AppWorkflowRuntime,
   CreateAppWorkflowRuntimeOptions,
-} from './workflows/runtime.js';
+} from './runtime/runtime.js';
+export {
+  WorkflowInstruction,
+  type WorkflowInstructionClass,
+  type WorkflowInstructionContext,
+  type WorkflowInstructionResult,
+} from './instructions/base.js';
+export { coreInstructions } from './instructions/index.js';

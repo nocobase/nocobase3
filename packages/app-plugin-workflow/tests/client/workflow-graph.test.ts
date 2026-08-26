@@ -5,8 +5,8 @@ import {
   createLayoutInput,
   overlayExecution,
   projectWorkflowGraph,
-} from '../../engine/client/index.js';
-import type { WorkflowSourceAst } from '../../engine/workflow-source/types.js';
+} from '../../client/index.js';
+import type { WorkflowSourceAst } from '../../server/instructions/types.js';
 
 const contextSchema = { type: 'object' } as const;
 function definition(nodes: WorkflowSourceAst['nodes']): WorkflowSourceAst {

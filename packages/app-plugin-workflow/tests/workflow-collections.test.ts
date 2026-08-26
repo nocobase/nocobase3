@@ -7,10 +7,10 @@ import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  createWorkflowCollections,
   WORKFLOW_COLLECTIONS,
   workflowCollectionSchemas,
-} from '../engine/index.js';
+} from '../server/collections/index.js';
+import { createWorkflowCollections } from './helpers.js';
 
 describe('workflow collections', () => {
   let database: ReturnType<typeof createDatabaseManager>;

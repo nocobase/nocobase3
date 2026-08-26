@@ -12,7 +12,7 @@ export const workflowApi = {
   payload: (runId: string, nodeRunId: string): Promise<WorkflowNodeRunPayload> => request(`/workflow-runs/${encodeURIComponent(runId)}/node-runs/${encodeURIComponent(nodeRunId)}/payload`),
   status: (id: string, enabled: boolean): Promise<WorkflowListRecord> => request(`/workflows/${encodeURIComponent(id)}/status`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
   inputs: (id: string, inputValues: Record<string, string | number | boolean>): Promise<object> => request(`/workflows/${encodeURIComponent(id)}/input-values`, { method: 'PUT', body: JSON.stringify({ inputValues }) }),
-  execute: (id: string, context: object, idempotencyKey: string): Promise<WorkflowRunRecord> => request(`/workflows/${encodeURIComponent(id)}/run`, { method: 'POST', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify({ context }) }),
+  execute: (id: string, context: object, eventKey: string): Promise<WorkflowRunRecord> => request(`/workflows/${encodeURIComponent(id)}/run`, { method: 'POST', headers: { 'event-key': eventKey }, body: JSON.stringify({ context }) }),
 };
 
 export function shouldPollRuns(runs: readonly WorkflowRunRecord[]): boolean { return runs.some((run) => run.status == null || run.status === 0); }

@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  ConditionInstruction,
-  RunInstruction,
-  compileWorkflowSource,
-  defineWorkflow,
   getAvailableNodeResults,
   getAvailableNodeResultsAt,
-  run,
-  condition,
   validateNodeResultReference,
   validateNodeResultSchema,
-  validateWorkflowSourceAst,
-} from '../engine/index.js';
+} from '../server/engine/node-results.js';
+import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
+import { RunInstruction } from '../server/instructions/index.js';
+import { defineWorkflow } from '../server/instructions/definition.js';
 import type {
   NodeResultSchema,
   WorkflowSourceAst,
-  WorkflowSourceContracts,
-} from '../engine/index.js';
+} from '../server/instructions/types.js';
+import { compileWorkflowSource } from '../server/loader/source-compiler.js';
+import {
+  validateWorkflowSourceAst,
+  type WorkflowSourceContracts,
+} from '../server/loader/source-validator.js';
 
 const contracts: WorkflowSourceContracts = {
   nodes: new Map([
@@ -45,14 +45,21 @@ describe('workflow node result schemas', () => {
     const ast = defineWorkflow({
       title: 'results',
       nodes: [
-        condition({ key: 'defaulted', config: {} }),
-        condition({
+        ConditionInstruction.create({ key: 'defaulted', config: {} }),
+        ConditionInstruction.create({
           key: 'overridden',
           result: { type: 'string' },
           config: {},
         }),
-        condition({ key: 'disabled', result: null, config: {} }),
-        run({ key: 'undeclared', config: { script: './x.ts' } }),
+        ConditionInstruction.create({
+          key: 'disabled',
+          result: null,
+          config: {},
+        }),
+        RunInstruction.create({
+          key: 'undeclared',
+          config: { script: './x.ts' },
+        }),
       ],
     });
     expect(ast.nodes.map((node) => node.result)).toEqual([
@@ -77,19 +84,19 @@ describe('workflow node result schemas', () => {
     const ast = defineWorkflow({
       title: 'scope',
       nodes: [
-        run({
+        RunInstruction.create({
           key: 'first',
           result: objectResult,
           config: { script: './x.ts' },
         }),
-        condition({
+        ConditionInstruction.create({
           key: 'owner',
           config: {
             expression: { '===': [{ var: 'nodeResults.first.value' }, 1] },
           },
         }).branch({
           yes: [
-            run({
+            RunInstruction.create({
               key: 'inside',
               result: objectResult,
               config: {
@@ -100,9 +107,12 @@ describe('workflow node result schemas', () => {
                 },
               },
             }),
-            condition({ key: 'nestedOwner', config: {} }).branch({
+            ConditionInstruction.create({
+              key: 'nestedOwner',
+              config: {},
+            }).branch({
               yes: [
-                run({
+                RunInstruction.create({
                   key: 'nested',
                   config: {
                     script: './x.ts',
@@ -114,7 +124,7 @@ describe('workflow node result schemas', () => {
                 }),
               ],
             }),
-            run({
+            RunInstruction.create({
               key: 'laterInside',
               config: {
                 script: './x.ts',
@@ -126,7 +136,7 @@ describe('workflow node result schemas', () => {
             }),
           ],
           no: [
-            run({
+            RunInstruction.create({
               key: 'sibling',
               config: {
                 script: './x.ts',
@@ -135,7 +145,7 @@ describe('workflow node result schemas', () => {
             }),
           ],
         }),
-        run({
+        RunInstruction.create({
           key: 'after',
           config: {
             script: './x.ts',
@@ -145,7 +155,7 @@ describe('workflow node result schemas', () => {
             },
           },
         }),
-        run({
+        RunInstruction.create({
           key: 'last',
           result: objectResult,
           config: {

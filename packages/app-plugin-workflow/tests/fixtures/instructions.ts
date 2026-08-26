@@ -1,13 +1,15 @@
+import { NODE_RUN_STATUS } from '../../server/engine/constants.js';
+import type { JsonObject, WorkflowNodeRun } from '../../server/engine/types.js';
 import {
-  NODE_RUN_STATUS,
   WorkflowInstruction,
-  type ConfigIssue,
   type WorkflowInstructionClass,
   type WorkflowInstructionResult,
-  type WorkflowNodeSourceInput,
-  type NodeExpression,
-  type WorkflowNodeRun,
-} from '../../engine/index.js';
+} from '../../server/instructions/base.js';
+import type {
+  ConfigIssue,
+  NodeExpression,
+  WorkflowNodeSourceInput,
+} from '../../server/instructions/types.js';
 
 export function defineTestInstruction(
   type: string,
@@ -20,9 +22,7 @@ export function defineTestInstruction(
     static readonly type: string = type;
     static readonly branches: null = null;
     static create(
-      _source: WorkflowNodeSourceInput<
-        import('../../engine/index.js').JsonObject
-      >,
+      _source: WorkflowNodeSourceInput<JsonObject>,
     ): NodeExpression {
       throw new Error('Test-only instruction');
     }

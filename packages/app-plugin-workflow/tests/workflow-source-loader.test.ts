@@ -8,31 +8,27 @@ import {
   type Row,
 } from '@nocobase/database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  ConditionInstruction,
-  createWorkflowCollections,
-  loadWorkflow,
-  resolveWorkflowInput,
-  WORKFLOW_COLLECTIONS,
-  WorkflowRuntime,
-  WorkflowSourceLoader,
-} from '../engine/index.js';
+import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
+import WorkflowRuntime from '../server/engine/engine.js';
+import { resolveWorkflowInput } from '../server/engine/inputs.js';
+import { loadWorkflow } from '../server/engine/utils.js';
+import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
+import WorkflowSourceLoader from '../server/loader/source-loader.js';
 import {
   createTraceInstruction,
   defineTestInstruction,
 } from './fixtures/instructions.js';
+import { createWorkflowCollections } from './helpers.js';
 
-const dslImport = fileURLToPath(
-  new URL('../engine/workflow-source/index.ts', import.meta.url),
-);
+const dslImport = fileURLToPath(new URL('../index.ts', import.meta.url));
 
 function workflowSource(title: string, defaultValue: number = 100): string {
-  return `import { defineWorkflow, condition, run } from ${JSON.stringify(dslImport)};
+  return `import { ConditionInstruction, defineWorkflow, RunInstruction } from ${JSON.stringify(dslImport)};
 export default defineWorkflow({ title: ${JSON.stringify(title)},
   inputs: { limit: { type: 'number', default: 100 }, threshold: { type: 'number', default: ${defaultValue} }, flag: { type: 'boolean', default: true }, label: { type: 'string', default: 'default' } },
   nodes: [
-    condition({ key: 'condition', config: { expression: { '>': [{ var: 'input.limit' }, 0] } } }).branch({ yes: [run({ key: 'branchAction', config: { script: './server/action.ts' } })], no: [] }),
-    run({ key: 'finalAction', config: { script: './server/final.ts' } }),
+    ConditionInstruction.create({ key: 'condition', config: { expression: { '>': [{ var: 'input.limit' }, 0] } } }).branch({ yes: [RunInstruction.create({ key: 'branchAction', config: { script: './server/action.ts' } })], no: [] }),
+    RunInstruction.create({ key: 'finalAction', config: { script: './server/final.ts' } }),
   ] });`;
 }
 
@@ -140,7 +136,7 @@ describe('workflow TypeScript source loader', () => {
       ]),
       timeoutReaper: false,
     });
-    await runtime.start();
+    await runtime.initialize();
     if (!definition)
       throw new Error('Expected the materialized workflow definition');
     await runtime.trigger(
@@ -148,7 +144,7 @@ describe('workflow TypeScript source loader', () => {
       {},
       { manually: true, eventKey: 'dsl-integration' },
     );
-    await runtime.stop();
+    await runtime.dispose();
     expect(trace).toEqual(['branchAction', 'finalAction']);
   });
 
@@ -208,6 +204,13 @@ describe('workflow TypeScript source loader', () => {
       .where('id', '=', revisions[1].id)
       .executeTakeFirstOrThrow<Row>();
     expect(activated).toMatchObject({ current: 1, enabled: 1 });
+    const deactivated = await database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .selectAll()
+      .where('id', '=', revisions[0].id)
+      .executeTakeFirstOrThrow<Row>();
+    expect(deactivated).toMatchObject({ current: null, enabled: 0 });
   });
 
   it('stores no DSL defaults when there are no administrator overrides', async () => {

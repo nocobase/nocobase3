@@ -3,13 +3,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DatabaseManager, Row } from '@nocobase/database';
+import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
   buildWorkflowArtifact,
-  LocalWorkflowArtifactStore,
-  WorkflowPublisher,
-  WORKFLOW_COLLECTIONS,
   type WorkflowDistArtifact,
-} from '../engine/index.js';
+} from '../server/loader/artifact-builder.js';
+import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
+import { WorkflowPublisher } from '../server/loader/synchronizer.js';
 import { createTestDatabase, insertTestRun } from './helpers.js';
 const roots: string[] = [];
 async function artifact(
