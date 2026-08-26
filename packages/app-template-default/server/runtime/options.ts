@@ -92,6 +92,11 @@ export function resolveEmbeddedRuntimeOptions(
   const env = {
     ...readEnvFiles([configPaths.root('.env'), configPaths.root('.env.local')]),
     ...createScopeEnv(scope),
+    // App Host owns the embedded lifecycle, so migrations must finish before
+    // the application starts accepting requests. Seed data remains an
+    // explicit installation action.
+    DB_MIGRATIONS_AUTO_RUN: 'true',
+    DB_SEEDS_AUTO_RUN: 'false',
   };
   return {
     mode: 'embedded',

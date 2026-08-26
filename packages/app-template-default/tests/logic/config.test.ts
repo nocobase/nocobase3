@@ -140,6 +140,10 @@ describe('app config', () => {
     const dataDir = path.join(root, 'data');
     const clientDir = path.join(root, 'dist/client');
     tempDirs.push(root);
+    writeFileSync(
+      path.join(root, '.env'),
+      'DB_MIGRATIONS_AUTO_RUN=false\nDB_SEEDS_AUTO_RUN=true\n',
+    );
 
     const config = loadEmbeddedAppConfig(
       {
