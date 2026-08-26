@@ -12,6 +12,7 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 | ----------------- | ------------------------------------------------------ |
 | `nb3 app create`  | 从 npm 下载模板包并生成本地 App 项目                   |
 | `nb3 app dev`     | 用项目自身的包管理器运行其 `dev` 脚本                  |
+| `nb3 app deploy`  | 构建、打包并上传不可变 Release，然后提交管理员审批     |
 | `nb3 app info`    | 显示 App 名称、目录、模板来源、依赖是否已安装          |
 | `nb3 app config`  | 读写 `.nb3/config.json`                                |
 | `nb3 app destroy` | 删除本地 App 目录，带确认和路径防护                    |
@@ -24,7 +25,23 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 | `nb3 hub logs`    | 查看日志，支持 `--tail` 和 `--follow`                  |
 | `nb3 hub open`    | 打开 App Console                                       |
 
-`nb3 app deploy`、`nb3 app pull`、`nb3 app list` 需要 Hub 提供 App 管理 API，而 v3 的 Hub 目前只有健康检查和一个 API 代理，因此这三条命令以退出码 3 明确报错，不打印占位输出——脚本里 deploy 返回成功却什么都没做，比直接失败危险得多。
+`nb3 app pull` 和 `nb3 app list` 尚未实现，会以退出码 3 明确报错。
+
+`nb3 app deploy` 默认运行 App 的 `build` 脚本，对 `dist` 计算确定性校验值，然后上传 Release 并提交审批。部署令牌通过静默输入后设置的 `NB3_HUB_TOKEN` 提供（也可传 `--token`）：
+
+```bash
+(
+  read -r -s NB3_HUB_TOKEN
+  export NB3_HUB_TOKEN
+  printf '\n'
+  nb3 app deploy --hub http://127.0.0.1:13001/hub
+  deploy_exit=$?
+  unset NB3_HUB_TOKEN
+  exit "$deploy_exit"
+)
+```
+
+已有构建产物时可传 `--no-build`；发布前可用 `--dry-run` 只构建和校验，不访问网络。命令只提交审批，不会绕过 Hub 中的「批准并上线」步骤。
 
 `nb3 hub` 的 8 条命令全部可用。
 

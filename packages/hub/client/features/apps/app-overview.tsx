@@ -98,7 +98,7 @@ export default function AppOverview() {
               showCopy={false}
               size='lg'
             />
-            {app ? (
+            {app && deployed ? (
               <AppLifecycleActions
                 app={app}
                 busy={busy}

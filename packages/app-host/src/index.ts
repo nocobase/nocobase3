@@ -28,6 +28,7 @@ import {
   toFetchRequest,
 } from './http-adapter.ts';
 import { DirectoryAppCatalog } from './app-catalog.ts';
+import { AppReleaseUploader } from './app-release-upload.ts';
 import {
   AppReleaseStateStore,
   type ActiveReleaseRecord,
@@ -100,6 +101,9 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const releaseStateStore = new AppReleaseStateStore({
     appsDir: appCatalog.appsDir,
   });
+  const releaseUploader = new AppReleaseUploader({
+    appsDir: appCatalog.appsDir,
+  });
   const lifecycleStateStore = new AppLifecycleStateStore({
     stateDir: releaseStateStore.stateDir,
   });
@@ -127,6 +131,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
         path,
         registry,
         appCatalog,
+        releaseUploader,
         releaseStateStore,
         lifecycle,
         options.controlToken,
@@ -424,17 +429,20 @@ async function managementApi(
   path: string,
   registry: AppRuntimeRegistry,
   appCatalog: DirectoryAppCatalog,
+  releaseUploader: AppReleaseUploader,
   releaseStateStore: AppReleaseStateStore,
   lifecycle: AppLifecycleManager,
   controlToken?: string,
   publicUrl?: URL,
 ): Promise<Response | null> {
   const method = req.method ?? 'GET';
+  const releaseUploadRequiresConfiguredToken =
+    method === 'PUT' && isReleaseUploadPath(path);
 
   if (
     isProtectedControlPath(path) &&
-    controlToken &&
-    !hasControlAccess(req, controlToken)
+    ((controlToken && !hasControlAccess(req, controlToken)) ||
+      (!controlToken && releaseUploadRequiresConfiguredToken))
   ) {
     return jsonResponse(
       {
@@ -530,6 +538,26 @@ async function managementApi(
 
     const evicted = await registry.evictIdle();
     return jsonResponse({ evicted });
+  }
+
+  const releaseUploadMatch = path.match(
+    /^\/__apps\/([^/]+)\/releases\/([^/]+)$/,
+  );
+  if (releaseUploadMatch) {
+    if (method !== 'PUT') {
+      return methodNotAllowed('PUT');
+    }
+
+    const appId = decodePathSegment(releaseUploadMatch[1]);
+    const releaseId = decodePathSegment(releaseUploadMatch[2]);
+    const upload = await releaseUploader.upload(req, appId, releaseId);
+    return jsonResponse(
+      {
+        status: upload.status,
+        release: toReleaseSummary(upload.release),
+      },
+      { status: upload.status === 'created' ? 201 : 200 },
+    );
   }
 
   const releasesMatch = path.match(/^\/__apps\/([^/]+)\/releases$/);
@@ -731,6 +759,7 @@ function notFoundResponse(): Response {
         'POST /__apps/:id/restart',
         'POST /__apps/:id/deploy',
         'GET /__apps/:id/releases',
+        'PUT /__apps/:id/releases/:releaseId',
         'POST /__apps/:id/rollback',
         'POST /__apps/:id/evict',
         'POST /__apps/:id/reload',
@@ -822,6 +851,18 @@ function numberFromValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch (cause) {
+    throw new AppRegistryError('Control route contains invalid encoding', {
+      status: 400,
+      code: 'APP_CONTROL_PATH_INVALID',
+      cause,
+    });
+  }
 }
 
 function numberFromEnv(name: string): number | undefined {
@@ -919,6 +960,10 @@ function isProtectedControlPath(path: string): boolean {
     path.startsWith('/__apps/') ||
     path === '/__releases'
   );
+}
+
+function isReleaseUploadPath(path: string): boolean {
+  return /^\/__apps\/[^/]+\/releases\/[^/]+$/.test(path);
 }
 
 function hasControlAccess(

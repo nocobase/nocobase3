@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { AppHostRequestError } from './errors.js';
 import type { AppHostClient } from './app-host-client.js';
 import type { DeploymentStore } from './deployment-store.js';
+import type { ManagedAppStore } from './managed-app-store.js';
 import {
   InMemoryAppLifecycleOperationStore,
   type AppLifecycleOperationStore,
@@ -65,24 +66,38 @@ export class ReleaseManagementService {
     string,
     Promise<AppLifecycleOperationRecord>
   >();
+  private readonly lifecycleStore: AppLifecycleOperationStore;
+  private readonly managedApps?: ManagedAppStore;
 
   constructor(
     private readonly appHost: AppHostClient,
     private readonly store: DeploymentStore,
     private readonly workflow:
       ReleaseApprovalWorkflowOptions | undefined = undefined,
-    private readonly lifecycleStore: AppLifecycleOperationStore = new InMemoryAppLifecycleOperationStore(),
-  ) {}
+    lifecycleStore?: AppLifecycleOperationStore,
+    managedApps?: ManagedAppStore,
+  ) {
+    this.lifecycleStore =
+      lifecycleStore ?? new InMemoryAppLifecycleOperationStore();
+    this.managedApps = managedApps;
+  }
 
   async overview(): Promise<ReleaseOverview> {
-    const [host, deployments, lifecycleOperations, approvals, notifications] =
-      await Promise.all([
-        this.appHost.overview(),
-        this.store.list(),
-        this.lifecycleStore.list(),
-        this.workflow?.store.listApprovals() ?? Promise.resolve(undefined),
-        this.workflow?.store.listNotifications() ?? Promise.resolve(undefined),
-      ]);
+    const [
+      host,
+      deployments,
+      lifecycleOperations,
+      approvals,
+      notifications,
+      managedApps,
+    ] = await Promise.all([
+      this.appHost.overview(),
+      this.store.list(),
+      this.lifecycleStore.list(),
+      this.workflow?.store.listApprovals() ?? Promise.resolve(undefined),
+      this.workflow?.store.listNotifications() ?? Promise.resolve(undefined),
+      this.managedApps?.list() ?? Promise.resolve([]),
+    ]);
     const activeById = new Map(host.active.map((app) => [app.id, app]));
     const definitionsById = new Map(
       host.definitions.map((definition) => [definition.id, definition]),
@@ -93,7 +108,11 @@ export class ReleaseManagementService {
     const lifecycleById = new Map(
       (host.lifecycle ?? []).map((status) => [status.appId, status]),
     );
-    const appIds = new Set(host.releases.map((release) => release.appId));
+    const managedById = new Map(managedApps.map((app) => [app.appId, app]));
+    const appIds = new Set([
+      ...host.releases.map((release) => release.appId),
+      ...managedApps.map((app) => app.appId),
+    ]);
     const apps: AppReleaseOverview[] = [...appIds]
       .sort((a, b) => a.localeCompare(b))
       .map((id) => {
@@ -106,6 +125,7 @@ export class ReleaseManagementService {
           (release) => release.appId === id && release.id === activeReleaseId,
         );
         const lifecycle = lifecycleById.get(id);
+        const managed = managedById.get(id);
         const desiredState = lifecycle?.desiredState ?? 'running';
         const runtimeState =
           lifecycle?.runtimeState ?? (active ? 'active' : 'stopped');
@@ -113,6 +133,7 @@ export class ReleaseManagementService {
         return {
           id,
           name:
+            managed?.name ??
             active?.displayName ??
             definition?.displayName ??
             active?.appName ??

@@ -14,7 +14,7 @@ describe('Hub product navigation', () => {
     expect(resources[0]).toMatchObject({
       name: 'apps',
       list: '/apps',
-      meta: { label: '应用', priority: 0 },
+      meta: { label: '应用中心', priority: 0 },
     });
     expect(resources[1]).toMatchObject({
       name: 'agent-deliveries',

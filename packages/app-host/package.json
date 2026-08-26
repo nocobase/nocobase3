@@ -41,7 +41,8 @@
     "README.md"
   ],
   "dependencies": {
-    "@nocobase/app-server-kit": "workspace:^"
+    "@nocobase/app-server-kit": "workspace:^",
+    "tar-stream": "^3.2.1"
   },
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",

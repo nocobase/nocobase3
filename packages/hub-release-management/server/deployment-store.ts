@@ -103,6 +103,38 @@ export class JsonDeploymentStore implements DeploymentStore {
   }
 }
 
+export class InMemoryDeploymentStore implements DeploymentStore {
+  private readonly records: DeploymentRecord[] = [];
+
+  async list(appId?: string): Promise<DeploymentRecord[]> {
+    return this.records
+      .filter((record) => !appId || record.appId === appId)
+      .map((record) => structuredClone(record));
+  }
+
+  async findByIdempotencyKey(
+    appId: string,
+    kind: DeploymentKind,
+    idempotencyKey: string,
+  ): Promise<DeploymentRecord | null> {
+    const record = this.records.find(
+      (candidate) =>
+        candidate.appId === appId &&
+        candidate.kind === kind &&
+        candidate.idempotencyKey === idempotencyKey,
+    );
+    return record ? structuredClone(record) : null;
+  }
+
+  async save(record: DeploymentRecord): Promise<void> {
+    const index = this.records.findIndex(
+      (candidate) => candidate.id === record.id,
+    );
+    if (index < 0) this.records.push(structuredClone(record));
+    else this.records[index] = structuredClone(record);
+  }
+}
+
 function isStoreFile(value: unknown): value is DeploymentStoreFile {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;

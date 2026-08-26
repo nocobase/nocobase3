@@ -94,7 +94,11 @@ describe('documented argument contract', () => {
   it.each([
     ['app:create', ['name'], ['dir', 'template', 'registry']],
     ['app:pull', ['name', 'dir'], ['hub']],
-    ['app:deploy', [], ['dir', 'hub']],
+    [
+      'app:deploy',
+      [],
+      ['dir', 'hub', 'token', 'release-id', 'no-build', 'dry-run', 'json'],
+    ],
     ['app:config', ['key', 'value'], ['dir', 'json']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
@@ -165,7 +169,6 @@ describe('unimplemented commands', () => {
   });
 
   it.each([
-    ['app:deploy', ['--dir']],
     ['app:list', []],
     ['app:pull', ['crm']],
   ])('%s fails with exit 3', async (id, argv) => {

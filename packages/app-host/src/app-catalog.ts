@@ -23,6 +23,7 @@ import type {
 } from './app-types.ts';
 import type { AppRuntimeRegistry } from './app-registry.ts';
 import { readAppRelease, type AppCatalogRelease } from './app-release.ts';
+import { AppRuntimeSecretStore } from './app-runtime-secrets.ts';
 
 export interface DirectoryAppCatalogOptions {
   appsDir?: string;
@@ -62,8 +63,13 @@ const CLIENT_DIR_CANDIDATES = ['dist/client'];
 export class DirectoryAppCatalog {
   readonly appsDir: string;
 
+  private readonly runtimeSecretStore: AppRuntimeSecretStore;
+
   constructor(options: DirectoryAppCatalogOptions = {}) {
     this.appsDir = path.resolve(options.appsDir ?? defaultAppsDir());
+    this.runtimeSecretStore = new AppRuntimeSecretStore(
+      path.join(this.appsDir, '.app-host'),
+    );
   }
 
   async discover(): Promise<AppDefinition[]> {
@@ -139,7 +145,8 @@ export class DirectoryAppCatalog {
         `Release ${appId}/${releaseId} does not contain dist/server/embedded.js`,
       );
     }
-    return definition;
+    const authSecret = await this.runtimeSecretStore.getOrCreate(appId);
+    return injectRuntimeAuthSecret(definition, authSecret);
   }
 
   async syncDiscovered(
@@ -515,6 +522,27 @@ function definitionsEquivalent(a: AppDefinition, b: AppDefinition): boolean {
     JSON.stringify(definitionToOptions(a)) ===
     JSON.stringify(definitionToOptions(b))
   );
+}
+
+function injectRuntimeAuthSecret(
+  definition: AppDefinition,
+  authSecret: string,
+): AppDefinition {
+  const config = isRecord(definition.config) ? { ...definition.config } : {};
+  Object.defineProperty(config, 'authSecret', {
+    value: authSecret,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return {
+    ...definition,
+    config,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function assertInside(rootDir: string, targetPath: string): void {

@@ -22,6 +22,9 @@ Hub is also the browser gateway for managed Apps. For example, CRM is opened at
 Hub and App Host stay independently deployable, while users see one origin and
 never need the App Host port.
 
+For the current App creation, CLI deployment, approval, and operator workflow,
+see the [Simplified Chinese user guide](./USER_GUIDE.zh-CN.md).
+
 ## Configuration
 
 The minimum local configuration is:
@@ -48,11 +51,18 @@ APP_SERVER_PORT=13001
 
 ## Release management control plane
 
-Hub's `/hub/deployments` page is the platform-level release control plane for
+Hub's `/hub/deliveries` page is the platform-level release control plane for
 App Host applications. App Host owns immutable releases, readiness checks,
 atomic traffic switching, restart recovery, and rollback. Hub owns authenticated
 operator workflows and persists every deployment attempt in its own local audit
 store for the preview release.
+
+An administrator first reserves an App ID from `/hub/apps`. Hub displays an
+App-scoped deployment token once. From that App's source directory,
+`nb3 app deploy` runs the build, creates and uploads a deterministic immutable
+Release, and submits it for approval. The token cannot approve the Release or
+operate another App; an administrator must still approve it in Hub before App
+Host performs readiness checks and switches traffic.
 
 Apply the committed audit collection contract to the selected environment. For
 the local demo, run this command twice; both passes resolve the same collection

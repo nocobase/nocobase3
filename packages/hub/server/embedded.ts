@@ -108,6 +108,7 @@ export async function createServer(scope: AppScope): Promise<Hono> {
       getScopeConfigBoolean(scope.config, 'apiClientShareToken') ??
       getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
     nativeAuth,
+    appManagement: releaseManagement.apps,
     releaseManagement,
     settings: { ...settingsManagement, defaultAppId: scope.id },
   });

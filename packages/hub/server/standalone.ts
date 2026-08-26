@@ -108,6 +108,7 @@ export function createStandaloneServer(
     apiClientStorageType: getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
     apiClientShareToken: getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
     nativeAuth,
+    appManagement: releaseManagement.apps,
     releaseManagement,
     settings: { ...settingsManagement, defaultAppId: appName },
     appRuntimeGateway: {

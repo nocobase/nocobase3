@@ -5,11 +5,12 @@ import {
   CheckCircle2,
   Clock3,
   PackageCheck,
+  Plus,
   RefreshCw,
   ServerCog,
 } from 'lucide-react';
 import { useLink } from '@refinedev/core';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -35,9 +36,11 @@ import {
 import { AppAccessActions } from './app-access-actions';
 import { presentReleaseControlError } from './release-control-error';
 import { AppLifecycleActions } from './app-lifecycle-actions';
+import { CreateAppDialog } from './create-app-dialog';
 
 export default function AppsHome() {
   const Link = useLink();
+  const [createOpen, setCreateOpen] = useState(false);
   const {
     overview,
     busy,
@@ -80,18 +83,29 @@ export default function AppsHome() {
               </p>
             </div>
           </div>
-          <Button
-            variant='outline'
-            size='lg'
-            className='w-fit bg-background/75'
-            disabled={busy}
-            onClick={() => void refresh()}
-          >
-            <RefreshCw className={cn(busy && 'animate-spin')} />
-            刷新状态
-          </Button>
+          <div className='flex w-fit flex-wrap gap-2'>
+            <Button size='lg' onClick={() => setCreateOpen(true)}>
+              <Plus /> 创建应用
+            </Button>
+            <Button
+              variant='outline'
+              size='lg'
+              className='bg-background/75'
+              disabled={busy}
+              onClick={() => void refresh()}
+            >
+              <RefreshCw className={cn(busy && 'animate-spin')} />
+              刷新状态
+            </Button>
+          </div>
         </div>
       </section>
+
+      <CreateAppDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={refresh}
+      />
 
       {controlError ? (
         <Alert variant='destructive'>
@@ -167,8 +181,11 @@ export default function AppsHome() {
                 暂无应用
               </h3>
               <p className='mt-2 text-sm leading-6 text-muted-foreground'>
-                应用接入运行平台后会自动出现在这里。
+                创建一个空应用，然后按照指引在本地开发并部署到 Hub。
               </p>
+              <Button className='mt-5' onClick={() => setCreateOpen(true)}>
+                <Plus /> 创建应用
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -214,20 +231,24 @@ export default function AppsHome() {
                     />
                   </CardContent>
                   <CardFooter className='flex-wrap justify-end gap-2'>
-                    <AppAccessActions
-                      accessUrl={app.accessUrl}
-                      disabledReason={appAccessDisabledReason(app)}
-                      showCopy={false}
-                      size='sm'
-                    />
-                    <AppLifecycleActions
-                      app={app}
-                      busy={busy}
-                      compact
-                      onExecute={(action) =>
-                        void runLifecycle({ appId: app.id, action })
-                      }
-                    />
+                    {deployed ? (
+                      <>
+                        <AppAccessActions
+                          accessUrl={app.accessUrl}
+                          disabledReason={appAccessDisabledReason(app)}
+                          showCopy={false}
+                          size='sm'
+                        />
+                        <AppLifecycleActions
+                          app={app}
+                          busy={busy}
+                          compact
+                          onExecute={(action) =>
+                            void runLifecycle({ appId: app.id, action })
+                          }
+                        />
+                      </>
+                    ) : null}
                     <Button
                       size='sm'
                       variant='outline'

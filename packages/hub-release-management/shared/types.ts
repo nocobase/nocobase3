@@ -25,6 +25,35 @@ export interface ReleaseSummary {
   runtime: Record<string, unknown>;
 }
 
+export type ManagedAppStatus = 'not-deployed';
+
+export interface ManagedAppSummary {
+  appId: string;
+  name: string;
+  status: ManagedAppStatus;
+  createdAt: string;
+  createdBy: ReleaseActor;
+}
+
+export interface CreateManagedAppInput {
+  appId: string;
+  name: string;
+}
+
+export interface CreateManagedAppResult {
+  app: ManagedAppSummary;
+  deployToken: string;
+}
+
+export interface RotateDeployTokenResult {
+  deployToken: string;
+}
+
+export interface AppReleaseUploadResult {
+  status: 'created' | 'unchanged';
+  release: ReleaseSummary;
+}
+
 export type AppRuntimeResourceStatus =
   'applying' | 'active' | 'restart-required' | 'error';
 

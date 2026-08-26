@@ -16,7 +16,7 @@ export const appRoutes = defineAppRoutes([
     lazy: () => import('./pages/apps'),
     resource: {
       meta: {
-        label: '应用',
+        label: '应用中心',
         icon: <Boxes />,
         priority: 0,
         description: '查看 Hub 管理的所有 App',

@@ -8,6 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { AppReleaseIntegrityError } from './errors.ts';
@@ -373,7 +374,14 @@ async function hashArtifactDirectory(rootDir: string): Promise<string> {
     const relative = path.relative(rootDir, file).split(path.sep).join('/');
     hash.update(relative);
     hash.update('\0');
-    hash.update(await readFile(file));
+    for await (const chunk of createReadStream(
+      file,
+    ) as AsyncIterable<unknown>) {
+      if (!(chunk instanceof Uint8Array)) {
+        throw new Error(`Could not read artifact file ${relative}`);
+      }
+      hash.update(chunk);
+    }
     hash.update('\0');
   }
 

@@ -8,9 +8,12 @@ import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 import {
+  AppHostClient,
+  AppManagementService,
   createApp,
   createServer as createEmbeddedServer,
   createStandaloneServer,
+  JsonManagedAppStore,
 } from '../../server/index.ts';
 import { createNocoBaseApiProxyHeaders } from '../../server/app.ts';
 
@@ -40,6 +43,36 @@ afterEach(async () => {
 });
 
 describe('app server', () => {
+  it('mounts managed App APIs below the configured Hub base path', async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-hub-managed-app-api-'),
+    );
+    tempDirs.push(directory);
+    const appHost = new AppHostClient({
+      baseUrl: 'http://app-host.internal:3000',
+      fetch: (async () =>
+        Response.json({
+          active: [],
+          definitions: [],
+          releases: [],
+        })) as typeof fetch,
+    });
+    const app = createApp({
+      basePath: '/hub',
+      appManagement: {
+        service: new AppManagementService(
+          appHost,
+          new JsonManagedAppStore(path.join(directory, 'apps.json')),
+        ),
+        authorize: async () => ({ id: 'admin', name: 'Admin', role: 'admin' }),
+      },
+    });
+
+    const response = await app.request('http://localhost/hub/api/apps');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ apps: [] });
+  });
+
   it('creates embedded apps from a scope', async () => {
     const app = await createEmbeddedServer({
       id: 'hub',

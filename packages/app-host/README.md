@@ -109,6 +109,20 @@ app-dist/orders/releases/release-v1/
   dist/client/...
 ```
 
+Hub uploads a Release archive to the protected control API before requesting a
+deployment. The upload is streamed, validated, and immutable by Release ID:
+
+```bash
+curl -X PUT http://127.0.0.1:3000/__apps/orders/releases/release-v1 \
+  -H 'authorization: Bearer <app-host-control-token>' \
+  -H 'content-type: application/vnd.nocobase.release+tar+gzip' \
+  --data-binary @release-v1.tar.gz
+```
+
+The endpoint returns `201` when it creates the Release and `200` when the same
+content already exists. Reusing the ID with different content returns `409`.
+Upload does not activate the Release.
+
 Deploy a release through the control API:
 
 ```bash
@@ -124,6 +138,12 @@ failed readiness check or state write leaves the previous runtime active. On
 restart, the host verifies the persisted checksum again and restores every
 recorded release before opening its listening socket. Invalid state or replaced
 release content therefore fails closed.
+
+For deployed Releases, App Host generates a separate runtime authentication
+secret for each App. It stores these secrets in
+`APP_DIST_DIR/.app-host/runtime-secrets.json` with mode `0600` and injects the
+current App's value into `scope.config.authSecret` at activation time. Runtime
+secrets do not belong in Release archives.
 
 Rollback uses the same promotion path:
 

@@ -1,4 +1,6 @@
 import type {
+  CreateManagedAppInput,
+  CreateManagedAppResult,
   DeploymentKind,
   DeploymentRecord,
   AppLifecycleAction,
@@ -24,6 +26,15 @@ export interface ExecuteReleaseInput {
   releaseId: string;
   kind: DeploymentKind;
   idempotencyKey: string;
+}
+
+export async function createManagedApp(
+  input: CreateManagedAppInput,
+): Promise<CreateManagedAppResult> {
+  return requestHub<CreateManagedAppResult>('/api/apps', {
+    method: 'POST',
+    body: input,
+  });
 }
 
 export async function fetchReleaseOverview(
@@ -140,9 +151,54 @@ async function request<T>(
   return payload as T;
 }
 
+async function requestHub<T>(
+  path: string,
+  options: {
+    method?: 'GET' | 'POST';
+    headers?: Record<string, string>;
+    body?: unknown;
+    signal?: AbortSignal;
+  } = {},
+): Promise<T> {
+  const method = options.method ?? 'GET';
+  const response = await fetch(resolveHubUrl(path), {
+    method,
+    headers: {
+      Accept: 'application/json',
+      'X-Requested-With': 'NocoBase3',
+      ...(options.body === undefined
+        ? {}
+        : { 'Content-Type': 'application/json' }),
+      ...options.headers,
+    },
+    credentials: 'include',
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal,
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  if (!response.ok) {
+    throw new ReleaseApiError(
+      typeof payload.error === 'string'
+        ? payload.error
+        : `Hub 请求失败 (${response.status})`,
+      typeof payload.code === 'string' ? payload.code : 'HUB_API_ERROR',
+      response.status,
+    );
+  }
+  return payload as T;
+}
+
 function resolveReleaseApiUrl(path: string): string {
   const basePath = getPortalBase().replace(/\/+$/, '');
   return `${basePath}/api/release-management${path}`;
+}
+
+function resolveHubUrl(path: string): string {
+  const basePath = getPortalBase().replace(/\/+$/, '');
+  return `${basePath}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 function getPortalBase(): string {

@@ -1,11 +1,17 @@
 import { Hono } from 'hono';
 import { ReleaseManagementError } from './errors.js';
 import type { ReleaseAuthorizer } from './authorization.js';
+import { isAppDeployToken, readBearerToken } from './app-management.js';
 import type { ReleaseManagementService } from './service.js';
+import type { ReleaseActor } from './types.js';
 
 export interface ReleaseManagementRoutesOptions {
   service: ReleaseManagementService;
   authorize: ReleaseAuthorizer;
+  authorizeAppDeployToken?: (
+    token: string,
+    appId: string,
+  ) => Promise<ReleaseActor>;
 }
 
 export function createReleaseManagementRoutes(
@@ -70,11 +76,12 @@ export function createReleaseManagementRoutes(
 
   routes.post('/apps/:appId/deployments', async (context) => {
     const request = context.req.raw;
-    const actor = await options.authorize(request);
+    const appId = context.req.param('appId');
+    const actor = await authorizeDeploymentRequest(options, request, appId);
     const idempotencyKey = requireIdempotencyKey(request);
-    const releaseId = await readReleaseId(request, context.req.param('appId'));
+    const releaseId = await readReleaseId(request, appId);
     const approval = await options.service.requestApproval({
-      appId: context.req.param('appId'),
+      appId,
       releaseId,
       kind: 'deploy',
       idempotencyKey,
@@ -129,6 +136,18 @@ export function createReleaseManagementRoutes(
   });
 
   return routes;
+}
+
+async function authorizeDeploymentRequest(
+  options: ReleaseManagementRoutesOptions,
+  request: Request,
+  appId: string,
+): Promise<ReleaseActor> {
+  const bearer = readBearerToken(request);
+  if (bearer && isAppDeployToken(bearer) && options.authorizeAppDeployToken) {
+    return options.authorizeAppDeployToken(bearer, appId);
+  }
+  return options.authorize(request);
 }
 
 function requireIdempotencyKey(request: Request): string {

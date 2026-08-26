@@ -2,11 +2,14 @@ import path from 'node:path';
 import type { DatabaseManager } from '@nocobase/app-database';
 import { AppHostClient } from './app-host-client.js';
 import {
+  AppManagementService,
+  type AppManagementRoutesOptions,
+} from './app-management.js';
+import {
   createNativeReleaseAuthorizer,
   createNocoBaseReleaseAuthorizer,
   unavailableReleaseAuthorizer,
   type ReleaseNativeSessionReader,
-  type ReleaseAuthorizer,
 } from './authorization.js';
 import {
   JsonDeploymentStore,
@@ -15,6 +18,8 @@ import {
 import { ReleaseManagementError } from './errors.js';
 import { NocoBaseDeploymentStore } from './nocobase-deployment-store.js';
 import { JsonAppLifecycleOperationStore } from './lifecycle-operation-store.js';
+import { JsonManagedAppStore } from './managed-app-store.js';
+import type { ReleaseManagementRoutesOptions } from './routes.js';
 import { ReleaseManagementService } from './service.js';
 import {
   JsonReleaseWorkflowStore,
@@ -36,9 +41,8 @@ export interface ReleaseManagementConfig {
   allowedRoles?: string[];
 }
 
-export interface ReleaseManagementComponents {
-  service: ReleaseManagementService;
-  authorize: ReleaseAuthorizer;
+export interface ReleaseManagementComponents extends ReleaseManagementRoutesOptions {
+  apps: AppManagementRoutesOptions;
 }
 
 export function createReleaseManagement(
@@ -51,6 +55,9 @@ export function createReleaseManagement(
   const store = createDeploymentStore(config);
   const workflowStore = new JsonReleaseWorkflowStore(
     path.resolve(config.workflowStorePath ?? `${config.storePath}.workflow`),
+  );
+  const managedAppStore = new JsonManagedAppStore(
+    path.resolve(`${config.storePath}.apps`),
   );
   const authorize =
     config.nativeAuth && config.database
@@ -66,19 +73,26 @@ export function createReleaseManagement(
           })
         : unavailableReleaseAuthorizer();
 
-  return {
-    service: new ReleaseManagementService(
-      appHost,
-      store,
-      {
-        store: workflowStore,
-        notifications: new StoreReleaseNotificationSink(workflowStore),
-      },
-      new JsonAppLifecycleOperationStore(
-        path.resolve(`${config.storePath}.lifecycle`),
-      ),
+  const apps = new AppManagementService(appHost, managedAppStore);
+  const service = new ReleaseManagementService(
+    appHost,
+    store,
+    {
+      store: workflowStore,
+      notifications: new StoreReleaseNotificationSink(workflowStore),
+    },
+    new JsonAppLifecycleOperationStore(
+      path.resolve(`${config.storePath}.lifecycle`),
     ),
+    managedAppStore,
+  );
+
+  return {
+    service,
     authorize,
+    authorizeAppDeployToken: (token, appId) =>
+      apps.authorizeDeployToken(token, appId),
+    apps: { service: apps, authorize },
   };
 }
 

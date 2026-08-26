@@ -18,7 +18,9 @@ import {
 } from '@nocobase/app-server-kit/support';
 
 import {
+  createAppManagementRoutes,
   createReleaseManagementRoutes,
+  type AppManagementRoutesOptions,
   type ReleaseManagementRoutesOptions,
 } from '@nocobase/hub-release-management/server';
 import {
@@ -47,6 +49,7 @@ export interface CreateAppOptions {
   apiClientStorageType?: string;
   apiClientShareToken?: boolean;
   nativeAuth?: NativeAuthRuntime;
+  appManagement?: AppManagementRoutesOptions;
   releaseManagement?: ReleaseManagementRoutesOptions;
   settings?: SettingsRoutesOptions;
   appRuntimeGateway?: AppRuntimeGatewayOptions;
@@ -97,7 +100,11 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       basePath: publicBasePath,
     }),
   );
-  api.get('/apps', (context) => context.json({ apps: [] }));
+  if (options.appManagement) {
+    api.route('/apps', createAppManagementRoutes(options.appManagement));
+  } else {
+    api.get('/apps', (context) => context.json({ apps: [] }));
+  }
 
   if (options.nativeAuth) {
     api.route('/auth', createNativeAuthRoutes(options.nativeAuth));
