@@ -3,7 +3,7 @@ import path from 'node:path';
 import { expect, test } from 'vitest';
 
 const livePage = fs.readFileSync(
-  path.resolve('client/live/knowledge-bases-page.tsx'),
+  path.resolve('client/page/knowledge-bases-page.tsx'),
   'utf8',
 );
 const cardComponents = fs.readFileSync(
@@ -11,7 +11,11 @@ const cardComponents = fs.readFileSync(
   'utf8',
 );
 const editor = fs.readFileSync(
-  path.resolve('client/live/knowledge-base-editor-sheet.tsx'),
+  path.resolve('client/page/knowledge-base-editor-sheet.tsx'),
+  'utf8',
+);
+const selectComponent = fs.readFileSync(
+  path.resolve('client/components/ui/select.tsx'),
   'utf8',
 );
 
@@ -21,7 +25,8 @@ test('directory is a fixed card layout with create, menu, and enabled controls',
     /KnowledgeBaseSwitchableDirectory|KnowledgeBaseList/,
   );
   expect(livePage).not.toMatch(/Search knowledge bases|onQueryChange|view=/);
-  expect(livePage).toMatch(/New knowledge base/);
+  expect(livePage).toMatch(/Add new/);
+  expect(livePage).not.toMatch(/ChevronDown|setCreateType/);
   expect(livePage).toMatch(/<Ellipsis/);
   expect(livePage).toMatch(/variant=['"]destructive['"]/);
   expect(livePage).toMatch(/Settings/);
@@ -35,4 +40,14 @@ test('create and settings use a right-side half-width sheet', () => {
   expect(editor).toMatch(/createKnowledgeBase/);
   expect(editor).toMatch(/updateKnowledgeBase/);
   expect(editor).toMatch(/listKnowledgeBaseManagementOptions/);
+  expect(editor).toMatch(/knowledgeBaseType: 'LOCAL'/);
+  expect(editor).toMatch(/storageId: '0'/);
+  expect(editor).not.toMatch(/<Label>\{t\('Type'\)\}<\/Label>/);
+  expect(editor).not.toMatch(/<Label>\{t\('Storage'\)\}<\/Label>/);
+  expect(editor).not.toMatch(/md:grid-cols-2/);
+  expect(editor).toMatch(/<EditableOptionInput/);
+  expect(editor).toMatch(/<ComboboxInput/);
+  expect(editor).not.toMatch(/<datalist/);
+  expect(selectComponent).toMatch(/alignItemWithTrigger = false/);
+  expect(selectComponent).toMatch(/var\(--anchor-width\)/);
 });

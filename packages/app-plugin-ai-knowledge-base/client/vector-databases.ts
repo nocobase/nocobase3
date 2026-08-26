@@ -1,1 +1,1 @@
-export { Component, default } from './live/vector-databases-page.js';
+export { Component, default } from './page/vector-databases-page.js';

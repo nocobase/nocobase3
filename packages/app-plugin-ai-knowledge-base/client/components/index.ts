@@ -7,5 +7,5 @@ export * from './segments.js';
 export * from './upload.js';
 export * from './i18n.js';
 export * from './nocobase-plugin-prerequisite.js';
-export { default as VectorDatabasesPage } from '../live/vector-databases-page.js';
+export { default as VectorDatabasesPage } from '../page/vector-databases-page.js';
 export * from './nocobase-plugin-prerequisite-gate.js';

@@ -14,7 +14,7 @@ export default createClientLibraryConfig({
       files: [
         'client/components/**/*.{ts,tsx}',
         'client/hooks/**/*.{ts,tsx}',
-        'client/live/**/*.{ts,tsx}',
+        'client/page/**/*.{ts,tsx}',
       ],
       rules: {
         // The copied Live state machines intentionally reset identity-bound state in effects.

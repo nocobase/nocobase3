@@ -289,6 +289,7 @@ export default {
   'Select vector database': '选择向量数据库',
   'Select LLM service': '选择大模型服务',
   'Select embedding model': '选择嵌入模型',
+  'Select or enter an embedding model': '选择或输入嵌入模型',
   'Select an LLM service first': '请先选择大模型服务',
   'Configure the knowledge base, vector database, and embedding model used for retrieval.':
     '配置知识库及检索所使用的向量数据库和嵌入模型。',

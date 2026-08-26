@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import { useNotification } from '@refinedev/core';
-import { ChevronDown, Ellipsis, Plus, Settings, Trash2 } from 'lucide-react';
+import { Ellipsis, Plus, Settings, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 
 import {
@@ -30,7 +30,7 @@ import {
 } from '../components/index.js';
 import { useKnowledgeBase } from '../hooks/index.js';
 import { useKnowledgeBaseService } from '../providers/context.js';
-import type { KnowledgeBase, KnowledgeBaseType } from '../providers/types.js';
+import type { KnowledgeBase } from '../providers/types.js';
 import { knowledgeBaseLiveRoutes } from '../knowledge-base-routes.js';
 import { useT } from '../locales/index.js';
 import { liveLocationPath } from './url-state.js';
@@ -48,7 +48,6 @@ export default function LiveKnowledgeBasesPage(): ReactElement {
   const [page, setPage] = useState(1);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<KnowledgeBase>();
-  const [createType, setCreateType] = useState<KnowledgeBaseType>('LOCAL');
   const [deleting, setDeleting] = useState<KnowledgeBase>();
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const knowledgeBase = useKnowledgeBase({
@@ -137,31 +136,16 @@ export default function LiveKnowledgeBasesPage(): ReactElement {
   return (
     <main className='space-y-3 px-4 pb-12 pt-4 sm:px-6 lg:px-8'>
       <header className='flex justify-end'>
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button type='button' />}>
-            <Plus aria-hidden='true' />
-            {t('New knowledge base')}
-            <ChevronDown aria-hidden='true' />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align='end' className='w-48'>
-            {(['LOCAL', 'READONLY', 'EXTERNAL'] as const).map((type) => (
-              <DropdownMenuItem
-                key={type}
-                onClick={() => {
-                  setEditing(undefined);
-                  setCreateType(type);
-                  setEditorOpen(true);
-                }}
-              >
-                {type === 'LOCAL'
-                  ? t('Local')
-                  : type === 'READONLY'
-                    ? t('Read-only')
-                    : t('External')}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          type='button'
+          onClick={() => {
+            setEditing(undefined);
+            setEditorOpen(true);
+          }}
+        >
+          <Plus aria-hidden='true' />
+          {t('Add new')}
+        </Button>
       </header>
 
       {!rows.length ? (
@@ -235,7 +219,6 @@ export default function LiveKnowledgeBasesPage(): ReactElement {
 
       <KnowledgeBaseEditorSheet
         open={editorOpen}
-        createType={createType}
         record={editing}
         onOpenChange={(open) => {
           setEditorOpen(open);

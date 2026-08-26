@@ -7,7 +7,7 @@ import {
   liveReturnTo,
   parseKnowledgeBaseWorkspaceState,
   parseLiveListState,
-} from '../client/live/url-state.ts';
+} from '../client/page/url-state.ts';
 
 test('list and workspace state round-trip through the URL', () => {
   const list = parseLiveListState(

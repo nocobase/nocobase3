@@ -7,6 +7,7 @@ import { createTestAIEmployeeRuntime } from './test-context.js';
 const expectedActions = [
   'ai:listAllEnabledModels',
   'ai:listLLMProviders',
+  'ai:listLLMServices',
   'ai:listModels',
   'ai:listProviderModels',
   'ai:testFlight',

@@ -17,9 +17,23 @@ export function createAIRouter(app: Hono, apiBasePath: string): void {
   );
 
   app.all(
+    aiActionPath(apiBasePath, 'ai:listLLMServices'),
+    createAIActionHandler('ai:listLLMServices', ({ ctx, url }) =>
+      ctx.modelService.listLLMServices(
+        ctx,
+        url.searchParams.get('model') ?? undefined,
+      ),
+    ),
+  );
+
+  app.all(
     aiActionPath(apiBasePath, 'ai:listModels'),
-    createAIActionHandler('ai:listModels', () =>
-      unsupportedAIAction('ai:listModels'),
+    createAIActionHandler('ai:listModels', ({ ctx, url }) =>
+      ctx.modelService.listModels(
+        ctx,
+        url.searchParams.get('llmService') ?? '',
+        url.searchParams.get('model') ?? undefined,
+      ),
     ),
   );
 

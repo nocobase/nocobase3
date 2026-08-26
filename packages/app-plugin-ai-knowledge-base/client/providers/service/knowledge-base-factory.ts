@@ -504,43 +504,30 @@ export function createKnowledgeBaseService(
         query: { 'filterByTk[]': [id] },
       }),
     async listKnowledgeBaseManagementOptions() {
-      const [
-        vectorsPayload,
-        servicesPayload,
-        providersPayload,
-        storagesPayload,
-        externalProvidersPayload,
-      ] = await Promise.all([
-        action(client, 'aiVectorDatabases', 'listEnabled', { method: 'GET' }),
-        action(client, 'ai', 'listAllEnabledModels', { method: 'POST' }),
-        action(client, 'ai', 'listLLMProviders', { method: 'POST' }),
-        action(client, 'aiSettings', 'listStorages', { method: 'POST' }),
-        action(client, 'aiKnowledgeBase', 'listExternalVectorStoreProviders', {
-          method: 'GET',
-        }),
-      ]);
-      const providerValues = responseData(providersPayload);
-      const embeddingProviders = new Set(
-        (Array.isArray(providerValues) ? providerValues : []).flatMap(
-          (value): string[] => {
-            const item = isRecord(value) ? value : {};
-            const name = text(item.name);
-            const supported = Array.isArray(item.supportedModel)
-              ? item.supportedModel
-              : [];
-            return name && supported.includes('EMBEDDING') ? [name] : [];
-          },
-        ),
-      );
+      const [vectorsPayload, servicesPayload, externalProvidersPayload] =
+        await Promise.all([
+          action(client, 'aiVectorDatabases', 'listEnabled', { method: 'GET' }),
+          action(client, 'ai', 'listLLMServices', {
+            method: 'GET',
+            query: { model: 'EMBEDDING' },
+          }),
+          action(
+            client,
+            'aiKnowledgeBase',
+            'listExternalVectorStoreProviders',
+            {
+              method: 'GET',
+            },
+          ).catch(() => undefined),
+        ]);
       const serviceValues = responseData(servicesPayload);
       const llmServices = (
         Array.isArray(serviceValues) ? serviceValues : []
       ).flatMap((value): KnowledgeBaseManagementOption[] => {
         const item = isRecord(value) ? value : {};
-        const service = text(item.llmService);
-        const provider = text(item.provider);
-        return service && provider && embeddingProviders.has(provider)
-          ? [{ value: service, label: text(item.llmServiceTitle) ?? service }]
+        const service = text(item.name);
+        return service
+          ? [{ value: service, label: text(item.title) ?? service }]
           : [];
       });
       const vectorValues = responseData(vectorsPayload);
@@ -550,13 +537,9 @@ export function createKnowledgeBaseService(
         const option = toManagementOption(value, ['key']);
         return option ? [option] : [];
       });
-      const storageValues = responseData(storagesPayload);
-      const storages = (
-        Array.isArray(storageValues) ? storageValues : []
-      ).flatMap((value): KnowledgeBaseManagementOption[] => {
-        const option = toManagementOption(value);
-        return option ? [option] : [];
-      });
+      const storages: KnowledgeBaseManagementOption[] = [
+        { value: '0', label: 'Default' },
+      ];
       const externalProviderValues = responseData(externalProvidersPayload);
       const externalProviders = (
         Array.isArray(externalProviderValues) ? externalProviderValues : []
@@ -574,23 +557,16 @@ export function createKnowledgeBaseService(
     },
     async listEmbeddingModels(llmService) {
       const payload = responseData(
-        await action(client, 'ai', 'listAllEnabledModels', { method: 'POST' }),
+        await action(client, 'ai', 'listModels', {
+          method: 'GET',
+          query: { llmService, model: 'EMBEDDING' },
+        }),
       );
       if (!Array.isArray(payload)) return [];
-      const selected = payload.find((value) => {
-        const item = isRecord(value) ? value : {};
-        return text(item.llmService) === llmService;
+      return payload.flatMap((value): KnowledgeBaseManagementOption[] => {
+        const option = toManagementOption(value, ['id', 'value', 'name']);
+        return option ? [option] : [];
       });
-      const item = isRecord(selected) ? selected : {};
-      return Array.isArray(item.enabledModels)
-        ? item.enabledModels.flatMap(
-            (value): KnowledgeBaseManagementOption[] => {
-              if (typeof value === 'string') return [{ value, label: value }];
-              const option = toManagementOption(value, ['value', 'id', 'name']);
-              return option ? [option] : [];
-            },
-          )
-        : [];
     },
     async listVectorDatabaseProviders() {
       const payload = responseData(

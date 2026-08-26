@@ -1,3 +1,4 @@
+import { SupportedModel } from '@nocobase/ai-employee';
 import type { Context } from '../context.js';
 import { randomUUID } from 'node:crypto';
 import type { EnabledLLMServiceDto } from '../routes/contracts.js';
@@ -22,6 +23,48 @@ export class ModelService {
 
   async listLLMProviders(ctx: Context): Promise<unknown[]> {
     return ctx.ai.llmProviderManager.listLLMProviders();
+  }
+
+  async listLLMServices(
+    ctx: Context,
+    model?: string,
+  ): Promise<Array<{ name: string; title: string; provider: string }>> {
+    const supportedProviders = model
+      ? new Set(
+          ctx.ai.llmProviderManager.getSupportedProvider(
+            model as SupportedModel,
+          ),
+        )
+      : undefined;
+    if (supportedProviders && !supportedProviders.size) return [];
+    const services = await ctx.ai.llmServiceManager.listLLMServices({
+      enabled: true,
+    });
+    return services
+      .filter(
+        (service) =>
+          !supportedProviders || supportedProviders.has(service.provider),
+      )
+      .map(({ name, title, provider }) => ({ name, title, provider }));
+  }
+
+  async listModels(
+    ctx: Context,
+    llmService: string,
+    model?: string,
+  ): Promise<Array<{ id: string }>> {
+    const service = await ctx.ai.llmServiceManager.getLLMService(llmService);
+    if (!service || service.enabled === false) return [];
+    const provider = ctx.ai.llmProviderManager.llmProviders.get(
+      service.provider,
+    );
+    if (!provider) return [];
+    if (model) {
+      const type = model as SupportedModel;
+      if (!provider.supportedModel?.includes(type)) return [];
+      return (provider.models?.[type] ?? []).map((id) => ({ id }));
+    }
+    return [];
   }
 
   async getSupportedProvider(ctx: Context, model: string): Promise<string[]> {

@@ -79,10 +79,7 @@ export default function registerRoutes({ app, deps }: RoutesContext): void {
     const session = await deps.auth.getSession(context.req.raw.headers);
     if (!session?.user?.id)
       return error(context, 401, 'Authentication required');
-    context.set(
-      'knowledgeBaseActorId' as never,
-      String(session.user.id) as never,
-    );
+    context.set('knowledgeBaseActorId', String(session.user.id));
     await next();
   });
   const actor = (context: Context): string =>

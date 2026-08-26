@@ -169,19 +169,12 @@ test('knowledge base management actions use flat create, update, delete, and ena
   const { calls, client } = recordingClient(({ action }) => {
     if (action === 'listEnabled')
       return { data: [{ key: 'vector', name: 'Vector' }] };
-    if (action === 'listLLMProviders')
-      return { data: [{ name: 'openai', supportedModel: ['EMBEDDING'] }] };
-    if (action === 'listAllEnabledModels')
+    if (action === 'listLLMServices')
       return {
-        data: [
-          {
-            llmService: 'embedding-service',
-            llmServiceTitle: 'Embedding service',
-            provider: 'openai',
-            enabledModels: ['text-embedding-3-small'],
-          },
-        ],
+        data: [{ name: 'embedding-service', title: 'Embedding service' }],
       };
+    if (action === 'listModels')
+      return { data: [{ id: 'text-embedding-3-small' }] };
     if (action === 'listExternalVectorStoreProviders')
       return { data: ['ExternalProvider'] };
     if (action === 'listStorages')
@@ -208,7 +201,7 @@ test('knowledge base management actions use flat create, update, delete, and ena
   await expect(service.listKnowledgeBaseManagementOptions()).resolves.toEqual({
     vectorDatabases: [{ value: 'vector', label: 'Vector' }],
     llmServices: [{ value: 'embedding-service', label: 'Embedding service' }],
-    storages: [{ value: 'default', label: 'Default' }],
+    storages: [{ value: '0', label: 'Default' }],
     externalProviders: [
       { value: 'ExternalProvider', label: 'ExternalProvider' },
     ],
@@ -244,6 +237,19 @@ test('knowledge base management actions use flat create, update, delete, and ena
     resource: 'aiKnowledgeBase',
     action: 'destroy',
     options: { query: { 'filterByTk[]': [1] } },
+  });
+  expect(calls.find((call) => call.action === 'listLLMServices')).toMatchObject(
+    {
+      resource: 'ai',
+      options: { method: 'GET', query: { model: 'EMBEDDING' } },
+    },
+  );
+  expect(calls.find((call) => call.action === 'listModels')).toMatchObject({
+    resource: 'ai',
+    options: {
+      method: 'GET',
+      query: { llmService: 'embedding-service', model: 'EMBEDDING' },
+    },
   });
 });
 

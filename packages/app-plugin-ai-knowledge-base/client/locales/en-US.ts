@@ -298,6 +298,7 @@ export default {
   'Select vector database': 'Select vector database',
   'Select LLM service': 'Select LLM service',
   'Select embedding model': 'Select embedding model',
+  'Select or enter an embedding model': 'Select or enter an embedding model',
   'Select an LLM service first': 'Select an LLM service first',
   'Configure the knowledge base, vector database, and embedding model used for retrieval.':
     'Configure the knowledge base, vector database, and embedding model used for retrieval.',

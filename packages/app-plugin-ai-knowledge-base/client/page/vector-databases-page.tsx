@@ -81,11 +81,12 @@ export default function VectorDatabasesPage(): React.ReactElement {
   const [form, setForm] = useState<VectorDatabaseMutation>(blank);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [formError, setFormError] = useState('');
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
-    setError('');
+    setPageError('');
     try {
       const result = await service.listVectorDatabases({
         mode: 'server',
@@ -96,7 +97,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
       setCount(result.count);
       if (!result.rows.length && page > 1) setPage(page - 1);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setPageError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setLoading(false);
     }
@@ -109,7 +110,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
       .listVectorDatabaseProviders()
       .then(setProviders)
       .catch((cause) =>
-        setError(cause instanceof Error ? cause.message : String(cause)),
+        setPageError(cause instanceof Error ? cause.message : String(cause)),
       );
   }, [service]);
 
@@ -117,7 +118,8 @@ export default function VectorDatabasesPage(): React.ReactElement {
     row?: VectorDatabase,
     requestedProvider?: VectorDatabaseProvider,
   ): Promise<void> => {
-    setError('');
+    setPageError('');
+    setFormError('');
     setEditing(row);
     if (row) {
       try {
@@ -132,7 +134,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
           connectProps: { ...full.connectProps, password: '' },
         });
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        setPageError(cause instanceof Error ? cause.message : String(cause));
         return;
       }
     } else {
@@ -172,7 +174,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
 
   const testConnection = async (): Promise<void> => {
     setBusy(true);
-    setError('');
+    setFormError('');
     try {
       const values = normalizeVectorDatabaseMutation(form, editing);
       const tested = await service.testVectorDatabaseConnection({
@@ -184,14 +186,14 @@ export default function VectorDatabasesPage(): React.ReactElement {
       }
       window.alert(t('Connection test succeeded.'));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setFormError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
     }
   };
   const save = async (): Promise<void> => {
     setBusy(true);
-    setError('');
+    setFormError('');
     try {
       const values = normalizeVectorDatabaseMutation(form, editing);
       if (editing) {
@@ -225,7 +227,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
       setOpen(false);
       await load();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setFormError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
     }
@@ -234,7 +236,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
     try {
       const related = await service.findRelatedKnowledgeBases(row.key);
       if (related.length) {
-        setError(
+        setPageError(
           t('Cannot delete {{name}} because it is used by: {{names}}', {
             name: row.name,
             names: related.map((item) => item.name).join(', '),
@@ -246,7 +248,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
       await service.deleteVectorDatabase(row.id);
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setPageError(cause instanceof Error ? cause.message : String(cause));
       return false;
     }
   };
@@ -262,7 +264,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
     )
       return;
     setBusy(true);
-    setError('');
+    setPageError('');
     const failures: string[] = [];
     for (const row of selectedRows) {
       const related = await service
@@ -286,7 +288,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
     }
     setSelected(new Set());
     if (failures.length)
-      setError(
+      setPageError(
         t('Some vector databases were not deleted: {{names}}', {
           names: failures.join('; '),
         }),
@@ -346,9 +348,9 @@ export default function VectorDatabasesPage(): React.ReactElement {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          {error ? (
+          {pageError ? (
             <p role='alert' className='text-sm text-destructive'>
-              {error}
+              {pageError}
             </p>
           ) : null}
           <div className='overflow-hidden rounded-md border'>
@@ -464,6 +466,14 @@ export default function VectorDatabasesPage(): React.ReactElement {
             </SheetTitle>
           </SheetHeader>
           <div className='grid flex-1 content-start gap-4 overflow-y-auto px-6 py-5'>
+            {formError ? (
+              <p
+                role='alert'
+                className='rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'
+              >
+                {formError}
+              </p>
+            ) : null}
             <div>
               <Label htmlFor='vector-spec'>{t('Vector database')}</Label>
               <Input

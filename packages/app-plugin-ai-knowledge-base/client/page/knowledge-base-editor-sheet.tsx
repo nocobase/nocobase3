@@ -1,6 +1,14 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
 import { Button } from '../components/ui/button.js';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '../components/ui/combobox.js';
 import { Input } from '../components/ui/input.js';
 import { Label } from '../components/ui/label.js';
 import {
@@ -26,7 +34,6 @@ import type {
   KnowledgeBaseManagementOption,
   KnowledgeBaseManagementOptions,
   KnowledgeBaseMutation,
-  KnowledgeBaseType,
 } from '../providers/types.js';
 import { normalizeKnowledgeBaseMutation } from '../providers/service/knowledge-base-factory.js';
 import { useT } from '../locales/index.js';
@@ -43,14 +50,13 @@ const emptyOptions: KnowledgeBaseManagementOptions = {
   externalProviders: [],
 };
 
-function newKnowledgeBase(
-  knowledgeBaseType: KnowledgeBaseType = 'LOCAL',
-): KnowledgeBaseMutation {
+function newKnowledgeBase(): KnowledgeBaseMutation {
   return {
     key: `kb-${Date.now().toString(36)}`,
     name: '',
     description: '',
-    knowledgeBaseType,
+    knowledgeBaseType: 'LOCAL',
+    storageId: '0',
     enabled: true,
     segmentOptions: defaultSegmentOptions,
   };
@@ -111,16 +117,55 @@ function OptionSelect({
   );
 }
 
+function EditableOptionInput({
+  value,
+  options,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  value?: string;
+  options: KnowledgeBaseManagementOption[];
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}): ReactElement {
+  const items = options.map((option) => option.value);
+  return (
+    <Combobox
+      items={items}
+      value={value ?? null}
+      onValueChange={(next) => next && onChange(next)}
+      onInputValueChange={onChange}
+    >
+      <ComboboxInput
+        className='w-full'
+        placeholder={placeholder}
+        disabled={disabled}
+        showClear
+      />
+      <ComboboxContent className='w-(--anchor-width) min-w-0'>
+        <ComboboxEmpty>{placeholder}</ComboboxEmpty>
+        <ComboboxList>
+          {(item: string) => (
+            <ComboboxItem key={item} value={item}>
+              {options.find((option) => option.value === item)?.label ?? item}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  );
+}
+
 export function KnowledgeBaseEditorSheet({
   open,
   record,
-  createType,
   onOpenChange,
   onSaved,
 }: {
   open: boolean;
   record?: KnowledgeBase;
-  createType?: KnowledgeBaseType;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }): ReactElement {
@@ -139,9 +184,7 @@ export function KnowledgeBaseEditorSheet({
 
   useEffect(() => {
     if (!open) return;
-    const initial = record
-      ? editKnowledgeBase(record)
-      : newKnowledgeBase(createType);
+    const initial = record ? editKnowledgeBase(record) : newKnowledgeBase();
     setValues(initial);
     setExternalProps(JSON.stringify(initial.vectorStoreProps ?? [], null, 2));
     setEmbeddingModels([]);
@@ -154,7 +197,7 @@ export function KnowledgeBaseEditorSheet({
         setError(cause instanceof Error ? cause.message : String(cause)),
       )
       .finally(() => setLoadingOptions(false));
-  }, [createType, open, record, service]);
+  }, [open, record, service]);
 
   useEffect(() => {
     if (
@@ -185,8 +228,6 @@ export function KnowledgeBaseEditorSheet({
         if (!values.vectorDatabaseKey)
           throw new Error(t('Select a vector database.'));
         if (!values.llmService) throw new Error(t('Select an LLM service.'));
-        if (!values.embeddingModel)
-          throw new Error(t('Select an embedding model.'));
       } else if (!values.vectorStoreProvider) {
         throw new Error(t('Select an external vector-store provider.'));
       }
@@ -321,45 +362,6 @@ export function KnowledgeBaseEditorSheet({
               }
             />
           </div>
-          <div className='grid gap-2'>
-            <Label>{t('Type')}</Label>
-            <Select
-              value={values.knowledgeBaseType}
-              disabled={!!record}
-              onValueChange={(value) =>
-                value &&
-                setValues((current) => ({
-                  ...current,
-                  knowledgeBaseType: value,
-                }))
-              }
-            >
-              <SelectTrigger className='w-full'>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='LOCAL'>{t('Local')}</SelectItem>
-                <SelectItem value='READONLY'>{t('Read-only')}</SelectItem>
-                <SelectItem value='EXTERNAL'>{t('External')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {local ? (
-            <div className='grid gap-2'>
-              <Label>{t('Storage')}</Label>
-              <OptionSelect
-                value={values.storageId}
-                options={options.storages}
-                placeholder={
-                  loadingOptions ? t('Loading…') : t('Select storage')
-                }
-                disabled={loadingOptions}
-                onChange={(storageId) =>
-                  setValues((current) => ({ ...current, storageId }))
-                }
-              />
-            </div>
-          ) : null}
           {!external ? (
             <>
               <div className='grid gap-2'>
@@ -376,7 +378,7 @@ export function KnowledgeBaseEditorSheet({
                   }
                 />
               </div>
-              <div className='grid gap-2 md:grid-cols-2'>
+              <div className='grid gap-5'>
                 <div className='grid gap-2'>
                   <Label>{t('LLM service')}</Label>
                   <OptionSelect
@@ -397,12 +399,12 @@ export function KnowledgeBaseEditorSheet({
                 </div>
                 <div className='grid gap-2'>
                   <Label>{t('Embedding model')}</Label>
-                  <OptionSelect
+                  <EditableOptionInput
                     value={values.embeddingModel}
                     options={embeddingModels}
                     placeholder={
                       values.llmService
-                        ? t('Select embedding model')
+                        ? t('Select or enter an embedding model')
                         : t('Select an LLM service first')
                     }
                     disabled={!values.llmService}

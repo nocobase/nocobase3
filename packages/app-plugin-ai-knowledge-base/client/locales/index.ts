@@ -16,12 +16,18 @@ export function useT() {
   const translate = useTranslate();
 
   return useCallback(
-    (key: string, options: Record<string, unknown> = {}) =>
-      translate(
+    (key: string, options: Record<string, unknown> = {}) => {
+      const translated = translate(
         key,
         { ...options, ns: NOCOBASE_AI_KNOWLEDGE_BASE_I18N_NAMESPACE },
         key,
-      ),
+      );
+      return Object.entries(options).reduce(
+        (value, [name, replacement]) =>
+          value.split(`{{${name}}}`).join(String(replacement)),
+        translated,
+      );
+    },
     [translate],
   );
 }
