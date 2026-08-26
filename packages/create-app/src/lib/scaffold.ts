@@ -9,6 +9,15 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 
+/**
+ * pnpm version a generated app pins.
+ *
+ * The exact version matters: `packageManager` only accepts one, and a range like `pnpm@11` is silently ignored rather
+ * than rejected, leaving the project on whatever pnpm the machine already had. It must stay on pnpm 11 or newer,
+ * because `allowBuilds` — which lets the database driver compile its native addon — did not exist before then.
+ */
+export const REQUIRED_PACKAGE_MANAGER = 'pnpm@11.7.0';
+
 async function isEmptyDirectory(directory: string): Promise<boolean> {
   try {
     const entries = await readdir(directory);
@@ -120,6 +129,11 @@ export async function scaffoldFromTemplate(
   delete manifest.description;
   delete manifest.publishConfig;
   delete manifest.repository;
+
+  // `pnpm pack` strips `packageManager` from the tarball, so the template cannot carry it through to the app on its
+  // own — it has to be written here. Without it the project uses whatever pnpm the machine defaults to, and pnpm 10
+  // does not read `allowBuilds` at all: the native driver installs without compiling and only fails much later.
+  manifest.packageManager ??= REQUIRED_PACKAGE_MANAGER;
 
   await writeFile(
     manifestPath,
