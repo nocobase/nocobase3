@@ -53,7 +53,7 @@
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-nb3-cli.tgz\" && pnpm exec publint ."
   },
   "dependencies": {
-    "@oclif/core": "^4.14.0",
+    "@oclif/core": "catalog:",
     "tar-stream": "^3.2.1"
   },
   "devDependencies": {

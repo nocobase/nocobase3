@@ -176,6 +176,13 @@ jobs:
         if: steps.mode.outputs.needs_version == 'true'
         run: pnpm changeset version
 
+      # changeset rewrites `version` but knows nothing about the `nocobase` block, so
+      # `defaultTemplateVersion` drifts on every release unless it is synchronized here.
+      # This runs unconditionally: when merge-beta-to-stable already wrote the versions
+      # there is no `changeset version` step, and the two still have to be aligned.
+      - name: Sync template version
+        run: node ./scripts/sync-template-version.mjs
+
       - name: Verify versions actually changed
         if: steps.mode.outputs.needs_version == 'true'
         id: changed
