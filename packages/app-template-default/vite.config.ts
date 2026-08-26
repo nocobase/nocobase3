@@ -107,6 +107,13 @@ export default createPortalViteConfig(
           ...(filesRegistryRoot
             ? [
                 {
+                  find: '@nocobase/e2e-files-page-ui',
+                  replacement: path.join(
+                    filesRegistryRoot,
+                    'client/extensions/nocobase-files-page-ui/extension.ts',
+                  ),
+                },
+                {
                   find: '@/extensions/nocobase-files-provider-ui',
                   replacement: path.join(
                     filesRegistryRoot,

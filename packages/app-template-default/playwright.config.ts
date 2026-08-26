@@ -1,5 +1,6 @@
 import { devices, defineConfig } from '@playwright/test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnv } from 'vite';
@@ -10,7 +11,12 @@ import { loadPortalE2EEnvironment } from './e2e/support/environment';
 const packageRoot = fileURLToPath(new URL('.', import.meta.url));
 const repositoryRoot = path.resolve(packageRoot, '../..');
 const filesRegistryFixtureRoot = mkdtempSync(
-  path.join(packageRoot, '.files-registry-e2e-'),
+  path.join(tmpdir(), 'nocobase-files-registry-e2e-'),
+);
+symlinkSync(
+  path.join(packageRoot, 'node_modules'),
+  path.join(filesRegistryFixtureRoot, 'node_modules'),
+  'dir',
 );
 materializeRegistry({
   ownerRoot: path.join(repositoryRoot, 'packages/app-plugin-files'),

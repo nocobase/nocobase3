@@ -3,12 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Files lifecycle E2E</title>
+    <title>Files route E2E</title>
   </head>
   <body>
-    <main class="mx-auto max-w-xl p-8">
-      <div id="root"></div>
-    </main>
+    <div id="root"></div>
     <script>
       const marker = '/e2e/';
       const markerIndex = window.location.pathname.indexOf(marker);
@@ -17,6 +15,6 @@
           ? '/'
           : `${window.location.pathname.slice(0, markerIndex)}/`;
     </script>
-    <script type="module" src="./files-upload-page.tsx"></script>
+    <script type="module" src="./files-routes-page.tsx"></script>
   </body>
 </html>
