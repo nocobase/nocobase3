@@ -14,6 +14,7 @@ describe('realtime example plugin bootstrap', () => {
     };
 
     bootstrap({
+      config: undefined,
       deps: undefined,
       services: { realtime },
       lifecycle: { registerDisposer },

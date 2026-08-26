@@ -116,8 +116,9 @@ provider 会合并并缓存并发的 session 查询。login、register、logout 
 
 `bootstrap` 注册 Refine `authProvider`；`routes` 使用 `defineClientRoutes()` 声明
 四个 `auth: 'guest'` 的认证路由。每个页面通过 `componentLoader` 独立按需加载，
-不会进入初始客户端 bundle。插件 fallback 表单只依赖 `@nocobase/ui`、Refine 和
-语义化主题 class，因此即使未安装 Registry 也能独立工作。它们不属于插件公共 UI API。
+不会进入初始客户端 bundle。插件 fallback 表单持有自身按需生成的 shadcn 基础组件，
+并依赖 Refine 和语义化主题 class，因此即使未安装 Registry 也能独立工作。它们不属于
+插件公共 UI API。
 
 插件默认页面只提供最小 fallback 布局，不包含应用品牌或营销区域。应用安装
 `auth-ui` Registry 后，最终页面和四个密码表单都来自应用拥有的源码。完全自定义表单可从

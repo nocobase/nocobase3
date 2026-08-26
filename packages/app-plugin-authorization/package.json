@@ -1,0 +1,110 @@
+{
+  "name": "@nocobase/app-plugin-authorization",
+  "displayName": "Authorization App Plugin",
+  "description": "Authorization integration and permission management UI for NocoBase applications.",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
+    },
+    "./server": {
+      "types": "./server/index.ts",
+      "import": "./server/index.ts"
+    },
+    "./client/bootstrap": {
+      "types": "./client/bootstrap.ts",
+      "import": "./client/bootstrap.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    },
+    "./client/providers": {
+      "types": "./client/providers.ts",
+      "import": "./client/providers.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "./server": {
+        "types": "./dist/server/index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "./client/bootstrap": {
+        "types": "./dist/client/bootstrap.d.ts",
+        "import": "./dist/client/bootstrap.js"
+      },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      },
+      "./client/providers": {
+        "types": "./dist/client/providers.d.ts",
+        "import": "./dist/client/providers.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "nocobase": {
+    "plugin": {
+      "client": {
+        "bootstrap": "./client/bootstrap",
+        "routes": "./client/routes",
+        "providers": "./client/providers"
+      },
+      "database": {
+        "migrations": "./database/migrations",
+        "seeds": "./database/seeds"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "dependencies": {
+    "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-sdk": "workspace:^",
+    "@nocobase/authorization": "workspace:^",
+    "@nocobase/app-database": "workspace:^",
+    "hono": "catalog:",
+    "lucide-react": "^0.487.0"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "^0.1.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

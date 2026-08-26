@@ -144,5 +144,5 @@ run('Install server production dependencies', 'npm', [
 run('Clean server dependency bins', 'node', ['./scripts/clean-dist-bin.mjs']);
 
 console.log(
-  '\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json',
+  '\nBuild complete: dist/client, dist/server, dist/scripts, optional dist/.env, and dist/package.json',
 );

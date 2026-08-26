@@ -32,17 +32,17 @@ jobs:
             FOUND="$FOUND .changeset/pre/"
           fi
           if [ -n "$FOUND" ]; then
-            echo "::error::main 上不允许存在预发布状态文件：$FOUND"
-            echo "如果这是一次转正合并，说明 changeset version 没有跑，或者跑之前就合了。"
+            echo "::error::Prerelease state files are not allowed on main: $FOUND"
+            echo "If this is a promotion merge, changeset version either did not run or the merge happened before it did."
             exit 1
           fi
-          echo "未发现预发布状态文件"
+          echo "No prerelease state files found"
 
       - name: Check for prerelease versions
         run: |
           LEFT=$(node scripts/list-package-versions.mjs --prerelease)
           if [ -n "$LEFT" ]; then
-            echo "::error::main 上不允许预发布版本号：$LEFT"
+            echo "::error::Prerelease versions are not allowed on main: $LEFT"
             exit 1
           fi
-          echo "未发现预发布版本号"
+          echo "No prerelease versions found"

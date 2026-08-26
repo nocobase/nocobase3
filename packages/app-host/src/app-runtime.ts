@@ -7,6 +7,8 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { addBasePathToRedirectResponse } from '@nocobase/app-server-kit/support';
+
 import {
   AppEventBus,
   type AppEvent,
@@ -247,7 +249,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
         durationMs: Date.now() - startedAt,
         activeRequests: this.activeRequests,
       });
-      return response;
+      return addBasePathToRedirectResponse(response, this.basePath);
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
       this.emit('app:requestError', {

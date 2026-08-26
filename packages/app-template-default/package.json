@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "0.0.1-beta.0",
+  "version": "0.0.1-beta.2",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -13,7 +13,13 @@
       "@nocobase/app-plugin-authentication": {
         "enabled": true
       },
+      "@nocobase/app-plugin-authorization": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-data-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-install": {
         "enabled": true
       },
       "@nocobase/app-plugin-notification-provider": {
@@ -47,8 +53,10 @@
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-data-provider": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-plugin-settings": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
@@ -64,7 +72,6 @@
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
-    "@nocobase/ui": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",

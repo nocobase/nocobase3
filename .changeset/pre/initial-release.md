@@ -23,7 +23,6 @@
 '@nocobase/nb3-cli': patch
 '@nocobase/queue': patch
 '@nocobase/session': patch
-'@nocobase/ui': patch
 ---
 
-首次发布。
+Initial release.

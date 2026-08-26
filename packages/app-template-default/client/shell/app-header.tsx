@@ -3,7 +3,7 @@ import { PanelLeft, Settings, Settings2 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
 
-import { Button } from '@nocobase/ui';
+import { Button } from '@/components/ui/button';
 
 import { ThemeSettings } from '../theme/index.js';
 import { AppBrand } from './app-brand.js';

@@ -47,8 +47,5 @@ describe('client bootstrap', () => {
       getIdentity: expect.any(Function),
       onError: expect.any(Function),
     });
-    expect(
-      appClient.services.has('@nocobase/app-plugin-settings:registry'),
-    ).toBe(true);
   });
 });
