@@ -15,6 +15,7 @@ import {
   AppNotFoundError,
   AppRegistryError,
   AppReloadFailedError,
+  AppStoppedError,
 } from './errors.ts';
 import { AppEventBus } from './events.ts';
 import { InProcessAppBackend } from './in-process-backend.ts';
@@ -32,6 +33,7 @@ import type {
   AppRequestMetadata,
   AppSnapshot,
   ConfigureInactiveAppOptions,
+  DeactivateAppOptions,
 } from './app-types.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 30_000;
@@ -108,6 +110,7 @@ export class AppRuntimeRegistry {
     string,
     Readonly<Record<string, unknown>>
   >();
+  private readonly deactivatedApps = new Set<string>();
   private readonly operations = new Map<string, Promise<unknown>>();
   private readonly backend: AppActivationBackend;
   private readonly resolveFactory: (
@@ -183,7 +186,7 @@ export class AppRuntimeRegistry {
     options: CreateAppDefinitionOptions = {},
   ): Promise<AppDefinition> {
     return this.withAppLock(id, async () => {
-      this.requireDefinition(id);
+      this.requireRegisteredDefinition(id);
       if (this.runtimes.has(id)) {
         throw new AppRegistryError(
           `App "${id}" has an active runtime; deploy a release instead of replacing its definition`,
@@ -194,7 +197,10 @@ export class AppRuntimeRegistry {
         );
       }
 
-      const definition = this.createDefinition(id, options);
+      const definition = this.createDefinition(id, {
+        ...options,
+        ...(this.deactivatedApps.has(id) ? { enabled: false } : {}),
+      });
       this.definitions.set(id, definition);
       return definition;
     });
@@ -234,6 +240,11 @@ export class AppRuntimeRegistry {
       } else {
         this.runtimeConfigs.set(id, runtimeConfig);
       }
+      if (definition.enabled) {
+        this.deactivatedApps.delete(id);
+      } else {
+        this.deactivatedApps.add(id);
+      }
 
       return definition;
     });
@@ -244,6 +255,39 @@ export class AppRuntimeRegistry {
     options: DestroyAppOptions = {},
   ): Promise<boolean> {
     return this.destroy(id, { ...options, removeDefinition: true });
+  }
+
+  async deactivate(
+    id: string,
+    options: DeactivateAppOptions,
+  ): Promise<AppDefinition> {
+    return this.withAppLock(id, async () => {
+      this.requireRegisteredDefinition(id);
+      if (options.target.id !== id) {
+        throw new AppRegistryError(
+          `Definition target "${options.target.id}" does not match app "${id}"`,
+          {
+            status: 400,
+            code: 'APP_DEFINITION_TARGET_INVALID',
+          },
+        );
+      }
+
+      const definition = this.createDefinition(id, {
+        ...options.target,
+        enabled: false,
+      });
+      this.definitions.set(id, definition);
+      this.deactivatedApps.add(id);
+      if (options.runtimeConfig === null) {
+        this.runtimeConfigs.delete(id);
+      } else if (options.runtimeConfig !== undefined) {
+        this.runtimeConfigs.set(id, { ...options.runtimeConfig });
+      }
+
+      await this.evictUnlocked(id, options, 'manual');
+      return definition;
+    });
   }
 
   async ensureActive(id: string): Promise<AppSnapshot> {
@@ -285,7 +329,7 @@ export class AppRuntimeRegistry {
     options: ReloadAppOptions = {},
   ): Promise<AppSnapshot> {
     return this.withAppLock(id, async () => {
-      const definition = this.requireDefinition(id);
+      const definition = this.requireRunnableDefinition(id);
       const oldRuntime = this.runtimes.get(id);
 
       try {
@@ -339,6 +383,7 @@ export class AppRuntimeRegistry {
 
       let candidate: ActiveAppHandle | null = null;
       let bindingSwitched = false;
+      const exposeAfterReadiness = this.deactivatedApps.has(id);
 
       try {
         if (!oldRuntime) {
@@ -356,7 +401,9 @@ export class AppRuntimeRegistry {
           'before switching',
         );
 
-        this.definitions.set(id, targetDefinition);
+        if (!exposeAfterReadiness) {
+          this.definitions.set(id, targetDefinition);
+        }
         this.runtimes.set(id, candidate);
         bindingSwitched = true;
 
@@ -383,11 +430,16 @@ export class AppRuntimeRegistry {
           throw error;
         }
 
+        if (exposeAfterReadiness) {
+          this.definitions.set(id, targetDefinition);
+        }
+
         if (targetRuntimeConfig === undefined) {
           this.runtimeConfigs.delete(id);
         } else {
           this.runtimeConfigs.set(id, targetRuntimeConfig);
         }
+        this.deactivatedApps.delete(id);
 
         if (oldRuntime) {
           await oldRuntime.destroy({
@@ -446,6 +498,7 @@ export class AppRuntimeRegistry {
       if (destroyOptions.removeDefinition !== false) {
         this.definitions.delete(id);
         this.runtimeConfigs.delete(id);
+        this.deactivatedApps.delete(id);
       }
 
       return Boolean(runtime || hadDefinition);
@@ -505,7 +558,7 @@ export class AppRuntimeRegistry {
 
   status(id: string): { definition: AppDefinition; app: AppSnapshot | null } {
     return {
-      definition: this.requireDefinition(id),
+      definition: this.requireRegisteredDefinition(id),
       app: this.snapshot(id) ?? null,
     };
   }
@@ -578,6 +631,7 @@ export class AppRuntimeRegistry {
   }
 
   async ensureActiveHandle(id: string): Promise<ActiveAppHandle> {
+    this.requireRunnableDefinition(id);
     const active = this.runtimes.get(id);
     if (active?.state === 'active') {
       return active;
@@ -589,7 +643,7 @@ export class AppRuntimeRegistry {
         return existing;
       }
 
-      const definition = this.requireDefinition(id);
+      const definition = this.requireRunnableDefinition(id);
       await this.evictForCapacity();
       const runtime = await this.activateDefinition(
         definition,
@@ -607,7 +661,7 @@ export class AppRuntimeRegistry {
       return existing.snapshot();
     }
 
-    const definition = this.requireDefinition(id);
+    const definition = this.requireRunnableDefinition(id);
     await this.evictForCapacity();
     const runtime = await this.activateDefinition(
       definition,
@@ -623,7 +677,7 @@ export class AppRuntimeRegistry {
     runtimeConfig?: Readonly<Record<string, unknown>>,
   ): Promise<ActiveAppHandle> {
     if (!definition.enabled) {
-      throw new AppNotFoundError(definition.id);
+      throw new AppStoppedError(definition.id);
     }
 
     const version = ++this.versionSequence;
@@ -972,12 +1026,20 @@ export class AppRuntimeRegistry {
     };
   }
 
-  private requireDefinition(id: string): AppDefinition {
+  private requireRegisteredDefinition(id: string): AppDefinition {
     const definition = this.definitions.get(id);
-    if (!definition || !definition.enabled) {
+    if (!definition) {
       throw new AppNotFoundError(id);
     }
 
+    return definition;
+  }
+
+  private requireRunnableDefinition(id: string): AppDefinition {
+    const definition = this.requireRegisteredDefinition(id);
+    if (!definition.enabled || this.deactivatedApps.has(id)) {
+      throw new AppStoppedError(id);
+    }
     return definition;
   }
 

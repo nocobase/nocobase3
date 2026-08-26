@@ -3,10 +3,13 @@
 import { Auth } from '@nocobase/app-plugin-authentication';
 import { AppRuntimeRegistry } from '@nocobase/app-host';
 import { Hono } from 'hono';
+import type { Knex } from 'knex';
 import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createHubApi, type HubApi } from '../../server/hub/api.ts';
@@ -21,6 +24,7 @@ import { HubStore } from '../../server/hub/store.ts';
 const origin = 'http://127.0.0.1:13224';
 const authSecret = 'hub-runtime-control-test-secret-at-least-32-characters';
 const encryptionKey = { key: Buffer.alloc(32, 6), keyId: 'runtime-test-key' };
+const execFileAsync = promisify(execFile);
 
 interface RuntimeFixture {
   readonly root: string;
@@ -33,6 +37,7 @@ interface RuntimeFixture {
   readonly cookie: string;
   readonly ownerId: string;
   readonly applicationId: string;
+  readonly applicationSlug: string;
   readonly releaseId: string;
   setReadinessFailure(value: boolean): void;
 }
@@ -67,9 +72,20 @@ describe('Hub Runtime control API', () => {
     });
     expect(started.status).toBe(200);
     await expect(started.json()).resolves.toMatchObject({
-      data: { state: 'running', releaseId: fixture.releaseId },
+      data: {
+        state: 'running',
+        releaseId: fixture.releaseId,
+        url: expect.any(String),
+      },
       meta: { idempotent: false },
     });
+    await expect(
+      fixture.store.connection.query
+        .selectFrom('hubApplications')
+        .select('desiredRuntimeState')
+        .where('id', '=', fixture.applicationId)
+        .executeTakeFirstOrThrow(),
+    ).resolves.toMatchObject({ desiredRuntimeState: 'running' });
 
     const repeatedStart = await request(fixture, '/runtime/start', {
       method: 'POST',
@@ -80,13 +96,52 @@ describe('Hub Runtime control API', () => {
       meta: { idempotent: true },
     });
 
+    await fixture.registry.evict(fixture.applicationSlug);
+    const idle = await request(fixture, '/runtime', { method: 'GET' });
+    await expect(idle.json()).resolves.toMatchObject({
+      data: {
+        state: 'idle',
+        releaseId: fixture.releaseId,
+        url: expect.any(String),
+      },
+    });
+    await fixture.registry.ensureActive(fixture.applicationSlug);
+    const coldStarted = await request(fixture, '/runtime', { method: 'GET' });
+    await expect(coldStarted.json()).resolves.toMatchObject({
+      data: {
+        state: 'running',
+        releaseId: fixture.releaseId,
+        url: expect.any(String),
+      },
+    });
+
     const stopped = await request(fixture, '/runtime/stop', {
       method: 'POST',
       body: '{}',
     });
     await expect(stopped.json()).resolves.toMatchObject({
-      data: { state: 'stopped' },
+      data: { state: 'stopped', url: null },
       meta: { idempotent: false },
+    });
+    await expect(
+      fixture.store.connection.query
+        .selectFrom('hubApplications')
+        .select('desiredRuntimeState')
+        .where('id', '=', fixture.applicationId)
+        .executeTakeFirstOrThrow(),
+    ).resolves.toMatchObject({ desiredRuntimeState: 'stopped' });
+    expect(fixture.registry.definition(fixture.applicationSlug)).toMatchObject({
+      enabled: false,
+    });
+    await expect(
+      fixture.registry.ensureActive(fixture.applicationSlug),
+    ).rejects.toMatchObject({ status: 503, code: 'APP_STOPPED' });
+    const stoppedApplication = await requestAbsolute(
+      fixture,
+      `/apps/${fixture.applicationId}`,
+    );
+    await expect(stoppedApplication.json()).resolves.toMatchObject({
+      data: { links: { open: null } },
     });
 
     const repeatedStop = await request(fixture, '/runtime/stop', {
@@ -97,6 +152,166 @@ describe('Hub Runtime control API', () => {
       data: { state: 'stopped' },
       meta: { idempotent: true },
     });
+  });
+
+  it('keeps a stopped application disabled when Hub reconciles after restart', async () => {
+    const fixture = await createRuntimeFixture();
+    await request(fixture, '/runtime/start', { method: 'POST', body: '{}' });
+    await request(fixture, '/runtime/stop', { method: 'POST', body: '{}' });
+
+    const restartedRegistry = new AppRuntimeRegistry({
+      startEvictionLoop: false,
+      resolveFactory: () => () => ({
+        fetch: () => Response.json({ ok: true }),
+      }),
+    });
+    const restartedApi = createHubApi({
+      database: fixture.database,
+      auth: fixture.auth,
+      bootstrapAuth: fixture.auth,
+      registry: restartedRegistry,
+      releaseRoot: path.join(fixture.root, 'releases'),
+      runtimeSecretEncryptionKey: encryptionKey,
+      appName: 'hub',
+      publicBasePath: '/hub',
+      authoritativeOrigin: origin,
+      appPublicOrigin: 'http://127.0.0.1:3000',
+    });
+
+    try {
+      await restartedApi.ready;
+      expect(
+        restartedRegistry.snapshot(fixture.applicationSlug),
+      ).toBeUndefined();
+      expect(
+        restartedRegistry.definition(fixture.applicationSlug),
+      ).toMatchObject({
+        enabled: false,
+        release: { releaseId: fixture.releaseId },
+      });
+      await expect(
+        restartedRegistry.ensureActive(fixture.applicationSlug),
+      ).rejects.toMatchObject({ status: 503, code: 'APP_STOPPED' });
+    } finally {
+      await restartedApi.close();
+      await restartedRegistry.destroyAll({ reason: 'restart test cleanup' });
+    }
+  });
+
+  it('keeps stopped applications disabled across secret rotation and archive restore', async () => {
+    const fixture = await createRuntimeFixture();
+    await request(fixture, '/runtime/start', { method: 'POST', body: '{}' });
+    await request(fixture, '/runtime/stop', { method: 'POST', body: '{}' });
+
+    const rotation = await request(fixture, '/runtime-secret/rotate', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'rotate-while-stopped' },
+      body: '{}',
+    });
+    expect(rotation.status).toBe(200);
+    expect(fixture.registry.definition(fixture.applicationSlug)).toMatchObject({
+      enabled: false,
+    });
+
+    const current = await requestAbsolute(
+      fixture,
+      `/apps/${fixture.applicationId}`,
+    );
+    const archived = await requestAbsolute(
+      fixture,
+      `/apps/${fixture.applicationId}/archive`,
+      {
+        method: 'POST',
+        headers: { 'if-match': current.headers.get('etag') ?? '' },
+        body: '{}',
+      },
+    );
+    expect(archived.status).toBe(200);
+    expect(
+      fixture.registry.definition(fixture.applicationSlug),
+    ).toBeUndefined();
+
+    const restored = await requestAbsolute(
+      fixture,
+      `/apps/${fixture.applicationId}/restore`,
+      {
+        method: 'POST',
+        headers: { 'if-match': archived.headers.get('etag') ?? '' },
+        body: '{}',
+      },
+    );
+    expect(restored.status).toBe(200);
+    await expect(restored.json()).resolves.toMatchObject({
+      data: { links: { open: null } },
+    });
+    expect(fixture.registry.definition(fixture.applicationSlug)).toMatchObject({
+      enabled: false,
+    });
+    await expect(
+      fixture.registry.ensureActive(fixture.applicationSlug),
+    ).rejects.toMatchObject({ code: 'APP_STOPPED', status: 503 });
+  });
+
+  it('compensates Host state when persisting a runtime transition fails', async () => {
+    const fixture = await createRuntimeFixture();
+    await request(fixture, '/runtime/start', { method: 'POST', body: '{}' });
+    const knex = await fixture.database.connection.client<Knex>();
+    const tables = await knex('sqlite_master')
+      .select<{ name: string }[]>('name')
+      .where('type', '=', 'table');
+    const applicationsTable = tables.find(
+      ({ name }) =>
+        name.replaceAll('_', '').toLowerCase() === 'hubapplications',
+    )?.name;
+    expect(applicationsTable).toBeTruthy();
+
+    await knex.raw(`
+      CREATE TRIGGER reject_runtime_stop_state
+      BEFORE UPDATE OF desired_runtime_state ON "${applicationsTable?.replaceAll('"', '""')}"
+      WHEN NEW.desired_runtime_state = 'stopped'
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated runtime stop persistence failure');
+      END
+    `);
+    const failedStop = await request(fixture, '/runtime/stop', {
+      method: 'POST',
+      body: '{}',
+    });
+    expect(failedStop.status).toBe(500);
+    expect(fixture.registry.snapshot(fixture.applicationSlug)).toMatchObject({
+      state: 'active',
+    });
+    expect(fixture.registry.definition(fixture.applicationSlug)).toMatchObject({
+      enabled: true,
+    });
+
+    await knex.raw('DROP TRIGGER reject_runtime_stop_state');
+    const stopped = await request(fixture, '/runtime/stop', {
+      method: 'POST',
+      body: '{}',
+    });
+    expect(stopped.status).toBe(200);
+
+    await knex.raw(`
+      CREATE TRIGGER reject_runtime_start_state
+      BEFORE UPDATE OF desired_runtime_state ON "${applicationsTable?.replaceAll('"', '""')}"
+      WHEN NEW.desired_runtime_state = 'running'
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated runtime start persistence failure');
+      END
+    `);
+    const failedStart = await request(fixture, '/runtime/start', {
+      method: 'POST',
+      body: '{}',
+    });
+    expect(failedStart.status).toBe(500);
+    expect(fixture.registry.snapshot(fixture.applicationSlug)).toBeUndefined();
+    expect(fixture.registry.definition(fixture.applicationSlug)).toMatchObject({
+      enabled: false,
+    });
+    await expect(
+      fixture.registry.ensureActive(fixture.applicationSlug),
+    ).rejects.toMatchObject({ code: 'APP_STOPPED', status: 503 });
   });
 
   it('rejects archived applications and unfinished deployments', async () => {
@@ -160,7 +375,7 @@ describe('Hub Runtime control API', () => {
     };
     expect(firstPayload).toMatchObject({
       data: { state: 'running', releaseId: fixture.releaseId },
-      meta: { idempotent: false, previousState: 'stopped' },
+      meta: { idempotent: false, previousState: 'idle' },
     });
     const runtimeId = firstPayload.data.runtimeId;
 
@@ -171,7 +386,7 @@ describe('Hub Runtime control API', () => {
     });
     await expect(replay.json()).resolves.toMatchObject({
       data: { runtimeId },
-      meta: { idempotent: true, previousState: 'stopped' },
+      meta: { idempotent: true, previousState: 'idle' },
     });
   });
 
@@ -300,6 +515,7 @@ describe('Hub Runtime control API', () => {
 
 async function createRuntimeFixture(): Promise<RuntimeFixture> {
   const root = await mkdtemp(path.join(tmpdir(), 'hub-runtime-control-api-'));
+  const repositorySeedPath = await createRepositorySeed(root);
   const database = createHubDatabase({
     filename: path.join(root, 'hub.sqlite'),
   });
@@ -332,6 +548,8 @@ async function createRuntimeFixture(): Promise<RuntimeFixture> {
     publicBasePath: '/hub',
     authoritativeOrigin: origin,
     appPublicOrigin: 'http://127.0.0.1:3000',
+    sourceRoot: path.join(root, 'sources'),
+    repositorySeedPath,
   });
   const mounted = new Hono();
   mounted.route('/hub/api', api);
@@ -402,6 +620,7 @@ async function createRuntimeFixture(): Promise<RuntimeFixture> {
     cookie,
     ownerId,
     applicationId: application.id,
+    applicationSlug: application.slug,
     releaseId: release.id,
     setReadinessFailure(value: boolean): void {
       failReadiness = value;
@@ -409,6 +628,32 @@ async function createRuntimeFixture(): Promise<RuntimeFixture> {
   };
   fixtures.push(fixture);
   return fixture;
+}
+
+async function createRepositorySeed(root: string): Promise<string> {
+  const worktree = path.join(root, 'seed-worktree');
+  const bare = path.join(root, 'default-template.git');
+  await mkdir(worktree, { recursive: true });
+  await execFileAsync('git', ['init', '--initial-branch=main'], {
+    cwd: worktree,
+  });
+  await writeFile(
+    path.join(worktree, 'package.json'),
+    `${JSON.stringify({ name: 'runtime-test-template', private: true })}\n`,
+  );
+  await execFileAsync('git', ['add', 'package.json'], { cwd: worktree });
+  await execFileAsync('git', ['commit', '-m', 'Initial template'], {
+    cwd: worktree,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'NocoBase',
+      GIT_AUTHOR_EMAIL: 'support@nocobase.com',
+      GIT_COMMITTER_NAME: 'NocoBase',
+      GIT_COMMITTER_EMAIL: 'support@nocobase.com',
+    },
+  });
+  await execFileAsync('git', ['clone', '--bare', '--', worktree, bare]);
+  return bare;
 }
 
 function request(

@@ -143,7 +143,7 @@ const auditActionLabels: Record<string, LabelDefinition> = {
   },
   'runtime.evicted': {
     i18nKey: 'hub.audit.action.runtime.evicted',
-    defaultLabel: 'Runtime evicted',
+    defaultLabel: 'Application stopped',
   },
   'runtime.restarted': {
     i18nKey: 'hub.audit.action.runtime.restarted',

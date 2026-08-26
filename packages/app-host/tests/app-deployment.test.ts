@@ -220,6 +220,89 @@ describe('AppRuntimeRegistry release deployment', () => {
     });
   });
 
+  it('atomically deactivates a deployed app without losing its private runtime config', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
+    const { host, origin } = await startEmptyHost(fixture.appsDir);
+    const runtimeConfig = {
+      authSecret: 'deactivated-runtime-auth-secret-at-least-32-characters',
+    };
+
+    await host.registry.deploy('customer', {
+      target: v1.definition,
+      operationId: 'deactivate-v1',
+      expectedCurrentReleaseId: null,
+      runtimeConfig,
+    });
+
+    await expect(
+      host.registry.deactivate('customer', {
+        target: { ...v1.definition, enabled: false },
+        runtimeConfig,
+        reason: 'test administrative stop',
+      }),
+    ).resolves.toMatchObject({ id: 'customer', enabled: false });
+    expect(host.registry.snapshot('customer')).toBeUndefined();
+    expect(host.registry.definition('customer')).toMatchObject({
+      enabled: false,
+      release: { releaseId: 'release-v1' },
+    });
+    await expect(host.registry.ensureActive('customer')).rejects.toMatchObject({
+      status: 503,
+      code: 'APP_STOPPED',
+    });
+
+    await host.registry.deploy('customer', {
+      target: v1.definition,
+      operationId: 'reactivate-v1',
+      expectedCurrentReleaseId: null,
+    });
+    await expect(fetchScopeConfig(origin)).resolves.toEqual(runtimeConfig);
+  });
+
+  it('keeps a deactivated app unavailable when restart readiness fails', async () => {
+    const fixture = await createDeploymentFixture();
+    const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');
+    const broken = await fixture.createRelease(
+      'release-broken',
+      '2.0.0',
+      'fail',
+    );
+    const { host, origin } = await startEmptyHost(fixture.appsDir);
+
+    await host.registry.deploy('customer', {
+      target: v1.definition,
+      operationId: 'deactivate-before-failed-start',
+      expectedCurrentReleaseId: null,
+    });
+    await host.registry.deactivate('customer', {
+      target: { ...v1.definition, enabled: false },
+      runtimeConfig: null,
+    });
+
+    await expect(
+      host.registry.deploy('customer', {
+        target: broken.definition,
+        operationId: 'failed-reactivation',
+        expectedCurrentReleaseId: null,
+        readiness: {
+          timeoutMs: 60,
+          intervalMs: 5,
+          successThreshold: 1,
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'APP_READINESS_FAILED' });
+
+    expect(host.registry.definition('customer')).toMatchObject({
+      enabled: false,
+      release: { releaseId: 'release-v1' },
+    });
+    expect(host.registry.snapshot('customer')).toBeUndefined();
+    await expect(
+      fetch(`${origin}/customer/api/version`),
+    ).resolves.toMatchObject({ status: 503 });
+  });
+
   it('deploys the first release without publishing a provisional definition', async () => {
     const fixture = await createDeploymentFixture();
     const v1 = await fixture.createRelease('release-v1', '1.0.0', 'ready');

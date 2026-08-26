@@ -112,6 +112,103 @@ it('dispatches non-asset requests to the embedded server with the app mount stri
   await expect(asset.text()).resolves.toContain('customer');
 });
 
+it('returns APP_STOPPED for pages, APIs, assets, and WebSocket upgrades without cold activation', async () => {
+  const appsDir = await mkdtemp(
+    path.join(os.tmpdir(), 'nocobase-app-host-stopped-'),
+  );
+  tempDirs.push(appsDir);
+
+  const appRoot = path.join(appsDir, 'customer');
+  await mkdir(path.join(appRoot, 'dist', 'client', 'assets'), {
+    recursive: true,
+  });
+  await mkdir(path.join(appRoot, 'dist', 'server'), { recursive: true });
+  await writeFile(
+    path.join(appRoot, 'package.json'),
+    JSON.stringify({
+      name: '@example/customer-app',
+      version: '1.2.3',
+      type: 'module',
+    }),
+  );
+  await writeFile(
+    path.join(appRoot, 'dist', 'client', 'index.html'),
+    '<!doctype html><main>Customer App</main>',
+  );
+  await writeFile(
+    path.join(appRoot, 'dist', 'client', 'assets', 'app.js'),
+    'console.log("customer");',
+  );
+  await writeFile(
+    path.join(appRoot, 'dist', 'server', 'embedded.js'),
+    `
+      export function createServer() {
+        return {
+          fetch() {
+            return Response.json({ ok: true });
+          },
+        };
+      }
+    `,
+  );
+
+  const host = createAppHost({
+    host: '127.0.0.1',
+    port: 0,
+    appDistDir: appsDir,
+    idleTtlMs: 60_000,
+  });
+  runningHosts.push(host);
+  await host.start();
+  await host.registry.ensureActive('customer');
+  const definition = host.registry.definition('customer');
+  if (!definition) throw new Error('Customer definition was not registered');
+  await host.registry.deactivate('customer', {
+    target: { ...definition, enabled: false },
+    runtimeConfig: null,
+    reason: 'test administrative stop',
+  });
+
+  const address = host.server.address();
+  if (!address || typeof address !== 'object') {
+    throw new Error('App host did not expose a TCP address');
+  }
+  const appOrigin = `http://127.0.0.1:${address.port}`;
+
+  const page = await fetch(`${appOrigin}/customer/`, {
+    headers: { accept: 'text/html' },
+  });
+  expect(page.status).toBe(503);
+  expect(page.headers.get('cache-control')).toBe('no-store');
+  await expect(page.text()).resolves.toContain('Application is stopped');
+
+  for (const pathname of ['/customer/api/info', '/customer/assets/app.js']) {
+    const response = await fetch(`${appOrigin}${pathname}`, {
+      headers: { accept: 'application/json' },
+    });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Application is stopped',
+      code: 'APP_STOPPED',
+    });
+    expect(host.registry.snapshot('customer')).toBeUndefined();
+  }
+
+  await expect(
+    requestWebSocketUpgradeStatus(
+      new URL(`ws://127.0.0.1:${address.port}/customer/ws`),
+    ),
+  ).resolves.toBe(503);
+  expect(host.registry.snapshot('customer')).toBeUndefined();
+
+  const management = await fetch(`${appOrigin}/__apps/customer`);
+  expect(management.status).toBe(200);
+  await expect(management.json()).resolves.toMatchObject({
+    definition: { id: 'customer', enabled: false },
+    app: null,
+  });
+});
+
 it('does not discover a client-only app without a server artifact', async () => {
   const appsDir = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-app-host-client-'),
@@ -661,6 +758,32 @@ function readFirstWebSocketMessage(url: string): Promise<string> {
       },
       { once: true },
     );
+  });
+}
+
+function requestWebSocketUpgradeStatus(url: URL): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const request = http.request(
+      {
+        host: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        headers: {
+          connection: 'Upgrade',
+          upgrade: 'websocket',
+          'sec-websocket-key':
+            Buffer.from('stopped-app-test').toString('base64'),
+          'sec-websocket-version': '13',
+        },
+      },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode ?? 0);
+      },
+    );
+    request.once('upgrade', () => resolve(101));
+    request.once('error', reject);
+    request.end();
   });
 }
 

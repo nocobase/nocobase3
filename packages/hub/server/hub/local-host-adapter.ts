@@ -176,9 +176,30 @@ export class LocalHostAdapter {
     });
   }
 
+  async deactivate(
+    application: HubApplication,
+    release: HubRelease,
+    runtimeSecret?: string,
+  ): Promise<AppDefinition> {
+    const registry = this.requireRegistry();
+    const target = await this.createTarget(application, release);
+    const runtimeConfig = this.runtimeConfig(runtimeSecret);
+    if (!registry.definition(target.id)) {
+      return registry.configureInactive(target.id, {
+        target: { ...target, enabled: false },
+        runtimeConfig: runtimeConfig ?? null,
+      });
+    }
+    return registry.deactivate(target.id, {
+      target: { ...target, enabled: false },
+      runtimeConfig,
+      reason: `Hub stopped application ${application.id}`,
+    });
+  }
+
   async evict(application: HubApplication): Promise<boolean> {
     return this.requireRegistry().evict(application.slug, {
-      reason: `Hub stopped application ${application.id}`,
+      reason: `Hub evicted application ${application.id}`,
     });
   }
 

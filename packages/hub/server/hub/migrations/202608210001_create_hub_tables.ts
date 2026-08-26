@@ -70,6 +70,10 @@ async function createApplicationCollection(
     collection.string('name', { length: 255 }).notNull();
     collection.text('description').nullable();
     collection.string('status', { length: 32 }).notNull();
+    collection
+      .string('desiredRuntimeState', { length: 32 })
+      .notNull()
+      .defaultTo('stopped');
     collection.string('defaultEnvironmentId', { length: 64 }).notNull();
     collection.string('activeReleaseId', { length: 64 }).nullable();
     collection.string('createdBy', { length: 64 }).notNull();

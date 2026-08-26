@@ -86,6 +86,7 @@ import {
   DefaultApplicationBootstrap,
   type DefaultApplicationStatus,
 } from './default-application-bootstrap.ts';
+import { InitialReleaseService } from './initial-release-service.ts';
 
 export interface HubApiDeps {
   database: HubDatabaseRuntime;
@@ -263,6 +264,14 @@ export function createHubApi(
           maxArchiveBytes: deps.maxUploadBytes,
           maxExtractedBytes: deps.maxArtifactBytes,
           uploadTtlSeconds: deps.uploadTtlSeconds,
+        })
+      : undefined;
+  const initialReleases =
+    releaseUploads && deps.defaultAppResourcesDirectory
+      ? new InitialReleaseService({
+          resourcesDirectory: deps.defaultAppResourcesDirectory,
+          uploads: releaseUploads,
+          store,
         })
       : undefined;
   let runtimeSecrets: RuntimeSecretService | undefined;
@@ -914,7 +923,7 @@ export function createHubApi(
             managementStore,
             repository: requireRepositoryService(),
             runtimeSecrets: requireRuntimeSecretService(),
-            releaseRoot: deps.releaseRoot,
+            initialReleases,
           });
           return await projectApplication(application.id, actor, true);
         },
@@ -1108,7 +1117,7 @@ export function createHubApi(
           toHubApplication(application),
           release,
           secret.secret,
-          true,
+          application.desiredRuntimeState === 'running',
         );
       }
       return managementStore.restoreApplication(
@@ -1203,7 +1212,10 @@ export function createHubApi(
       assertRuntimeControlApplication(application);
       await assertRuntimeControlAvailable(store, applicationId);
       const current = host.getRuntime(toHubApplication(application));
-      if (current?.state === 'active') {
+      if (
+        current?.state === 'active' &&
+        application.desiredRuntimeState === 'running'
+      ) {
         assertRuntimeReleaseMatches(application, current);
         return {
           application,
@@ -1215,12 +1227,33 @@ export function createHubApi(
       const release = await getActiveRelease(store, application);
       const service = requireRuntimeSecretService();
       const secret = await service.getActive(applicationId);
-      const result = await host.start(
-        toHubApplication(application),
-        release,
-        secret.secret,
-        `runtime-start-${crypto.randomUUID()}`,
-      );
+      const hubApplication = toHubApplication(application);
+      const result = current
+        ? { app: current }
+        : await host.start(
+            hubApplication,
+            release,
+            secret.secret,
+            `runtime-start-${crypto.randomUUID()}`,
+          );
+      let persisted: ManagedApplication;
+      try {
+        persisted = (
+          await managementStore.setDesiredRuntimeState(applicationId, 'running')
+        ).application;
+      } catch (error) {
+        if (application.desiredRuntimeState === 'stopped') {
+          await host
+            .deactivate(hubApplication, release, secret.secret)
+            .catch((compensationError: unknown) => {
+              logServerError(compensationError, {
+                operation: 'runtime-start-compensation',
+                applicationId,
+              });
+            });
+        }
+        throw error;
+      }
       await service.markInjected(applicationId, secret.version);
       await managementStore.appendAuditLog({
         actorId: actor.user.id,
@@ -1234,7 +1267,7 @@ export function createHubApi(
         requestId: context.get('requestId'),
       });
       return {
-        application,
+        application: persisted,
         snapshot: result.app,
         idempotent: false,
       };
@@ -1266,9 +1299,38 @@ export function createHubApi(
       assertRuntimeControlApplication(application);
       await assertRuntimeControlAvailable(store, applicationId);
       const current = host.getRuntime(toHubApplication(application));
-      if (!current) return { application, idempotent: true };
       assertRuntimeSnapshotControllable(current);
-      await host.evict(toHubApplication(application));
+      if (current) assertRuntimeReleaseMatches(application, current);
+      const release = await getActiveRelease(store, application);
+      const service = requireRuntimeSecretService();
+      const secret = await service.getActive(applicationId);
+      const hubApplication = toHubApplication(application);
+      await host.deactivate(hubApplication, release, secret.secret);
+      if (application.desiredRuntimeState === 'stopped') {
+        return { application, idempotent: true };
+      }
+      let persisted: ManagedApplication;
+      try {
+        persisted = (
+          await managementStore.setDesiredRuntimeState(applicationId, 'stopped')
+        ).application;
+      } catch (error) {
+        const compensate = current
+          ? host.start(
+              hubApplication,
+              release,
+              secret.secret,
+              `runtime-stop-compensation-${crypto.randomUUID()}`,
+            )
+          : host.prepare(hubApplication, release, secret.secret, true);
+        await compensate.catch((compensationError: unknown) => {
+          logServerError(compensationError, {
+            operation: 'runtime-stop-compensation',
+            applicationId,
+          });
+        });
+        throw error;
+      }
       await managementStore.appendAuditLog({
         actorId: actor.user.id,
         applicationId,
@@ -1280,7 +1342,7 @@ export function createHubApi(
         details: {},
         requestId: context.get('requestId'),
       });
-      return { application, idempotent: false };
+      return { application: persisted, idempotent: false };
     });
     return successResponse(
       context,
@@ -1323,7 +1385,11 @@ export function createHubApi(
           const current = host.getRuntime(toHubApplication(application));
           assertRuntimeSnapshotControllable(current);
           if (current) assertRuntimeReleaseMatches(application, current);
-          const previousState = current ? 'running' : 'stopped';
+          const previousState = current
+            ? 'running'
+            : application.desiredRuntimeState === 'running'
+              ? 'idle'
+              : 'stopped';
           const release = await getActiveRelease(store, application);
           const service = requireRuntimeSecretService();
           const secret = await service.getActive(applicationId);
@@ -1346,6 +1412,31 @@ export function createHubApi(
                 secret.secret,
                 operationId,
               );
+          let persisted: ManagedApplication;
+          try {
+            persisted = (
+              await managementStore.setDesiredRuntimeState(
+                applicationId,
+                'running',
+              )
+            ).application;
+          } catch (error) {
+            if (application.desiredRuntimeState === 'stopped') {
+              await host
+                .deactivate(
+                  toHubApplication(application),
+                  release,
+                  secret.secret,
+                )
+                .catch((compensationError: unknown) => {
+                  logServerError(compensationError, {
+                    operation: 'runtime-restart-compensation',
+                    applicationId,
+                  });
+                });
+            }
+            throw error;
+          }
           await service.markInjected(applicationId, secret.version);
           await managementStore.appendAuditLog({
             actorId: actor.user.id,
@@ -1360,7 +1451,7 @@ export function createHubApi(
           });
           return {
             runtime: projectRuntime(
-              application,
+              persisted,
               result.app,
               deps.appPublicOrigin,
             ),
@@ -3275,11 +3366,26 @@ class DeploymentCoordinator {
       const runtimeSecret = runtimeSecretService
         ? await runtimeSecretService.getActive(projection.application.id)
         : undefined;
-      await this.host.restore(
-        projection.application,
-        projection.release,
-        runtimeSecret?.secret,
-      );
+      if (projection.application.desiredRuntimeState === 'running') {
+        await this.host.restore(
+          projection.application,
+          projection.release,
+          runtimeSecret?.secret,
+        );
+      } else if (runtimeSecret) {
+        await this.host.prepare(
+          projection.application,
+          projection.release,
+          runtimeSecret.secret,
+          false,
+        );
+      } else {
+        throw new HubDomainError(
+          'RUNTIME_SECRET_NOT_CONFIGURED',
+          'The application runtime secret is not configured.',
+          { status: 500 },
+        );
+      }
       if (runtimeSecretService && runtimeSecret) {
         await runtimeSecretService.markInjected(
           projection.application.id,
@@ -3542,7 +3648,7 @@ interface CreateManagedApplicationDeps {
   readonly managementStore: HubManagementStore;
   readonly repository: HubRepositoryService;
   readonly runtimeSecrets: RuntimeSecretService;
-  readonly releaseRoot?: string;
+  readonly initialReleases?: InitialReleaseService;
 }
 
 async function createManagedApplication(
@@ -3589,14 +3695,24 @@ async function createManagedApplication(
         details: { slug: input.slug },
       });
     });
+    if (deps.initialReleases) {
+      await deps.initialReleases.create({
+        applicationId,
+        slug: input.slug,
+        sourceCommit: createdRepository.headCommit,
+        actor: {
+          userId: deps.actor.user.id,
+          credentialId: null,
+          isAdmin:
+            deps.actor.roles.includes('owner') ||
+            deps.actor.roles.includes('admin'),
+        },
+      });
+    }
   } catch (error) {
     await deps.repository.remove(applicationId).catch(() => undefined);
     if (applicationCreated) {
-      await deps.store.connection.query
-        .deleteFrom('hubApplications')
-        .where('id', '=', applicationId)
-        .execute()
-        .catch(() => undefined);
+      await cleanupIncompleteManagedApplication(deps.store, applicationId);
     }
     throw error;
   }
@@ -3610,6 +3726,55 @@ async function createManagedApplication(
     );
   }
   return application;
+}
+
+async function cleanupIncompleteManagedApplication(
+  store: HubStore,
+  applicationId: string,
+): Promise<void> {
+  await store.connection
+    .transaction(async (connection) => {
+      const releases = await connection.query
+        .selectFrom('hubReleases')
+        .select('id')
+        .where('applicationId', '=', applicationId)
+        .execute<{ id: string }>();
+      if (releases.length > 0) {
+        await connection.query
+          .deleteFrom('hubReleaseRetentions')
+          .where(
+            'releaseId',
+            'in',
+            releases.map((release) => release.id),
+          )
+          .execute();
+      }
+      await connection.query
+        .deleteFrom('hubReleaseUploads')
+        .where('applicationId', '=', applicationId)
+        .execute();
+      await connection.query
+        .deleteFrom('hubReleases')
+        .where('applicationId', '=', applicationId)
+        .execute();
+      await connection.query
+        .deleteFrom('hubRuntimeSecrets')
+        .where('applicationId', '=', applicationId)
+        .execute();
+      await connection.query
+        .deleteFrom('hubRepositories')
+        .where('applicationId', '=', applicationId)
+        .execute();
+      await connection.query
+        .deleteFrom('hubAuditLogs')
+        .where('applicationId', '=', applicationId)
+        .execute();
+      await connection.query
+        .deleteFrom('hubApplications')
+        .where('id', '=', applicationId)
+        .execute();
+    })
+    .catch(() => undefined);
 }
 
 async function requireManagedApplicationAccess(
@@ -3728,14 +3893,22 @@ async function convergeRuntimeSecretRotation(
   );
   assertRuntimeSnapshotControllable(current);
   if (current) {
-    assertRuntimeReleaseMatches(options.application, current);
     const release = await getActiveRelease(options.store, options.application);
-    await options.host.restart(
-      toHubApplication(options.application),
-      release,
-      options.pending.secret,
-      options.operationId,
-    );
+    assertRuntimeReleaseMatches(options.application, current);
+    if (options.application.desiredRuntimeState === 'stopped') {
+      await options.host.deactivate(
+        toHubApplication(options.application),
+        release,
+        options.pending.secret,
+      );
+    } else {
+      await options.host.restart(
+        toHubApplication(options.application),
+        release,
+        options.pending.secret,
+        options.operationId,
+      );
+    }
     return options.service.activatePending(
       options.application.id,
       options.operationId,
@@ -3749,7 +3922,7 @@ async function convergeRuntimeSecretRotation(
       toHubApplication(options.application),
       release,
       options.pending.secret,
-      true,
+      options.application.desiredRuntimeState === 'running',
     );
     return options.service.activatePending(
       options.application.id,
@@ -3830,6 +4003,7 @@ function toHubApplication(application: ManagedApplication): HubApplication {
     name: application.name,
     description: application.description,
     status: application.status,
+    desiredRuntimeState: application.desiredRuntimeState,
     defaultEnvironmentId: application.defaultEnvironmentId,
     activeReleaseId: application.activeReleaseId,
     createdBy: application.createdBy,
@@ -3844,7 +4018,9 @@ function projectRuntime(
   appPublicOrigin: string | undefined,
 ): Record<string, unknown> {
   const openUrl =
-    application.status === 'active' && application.activeReleaseId
+    application.status === 'active' &&
+    application.desiredRuntimeState === 'running' &&
+    application.activeReleaseId
       ? applicationOpenUrl(application.slug, appPublicOrigin)
       : null;
   if (!snapshot) {
@@ -3852,7 +4028,7 @@ function projectRuntime(
       applicationId: application.id,
       environmentId: application.defaultEnvironmentId,
       runtimeId: null,
-      state: 'stopped',
+      state: application.desiredRuntimeState === 'running' ? 'idle' : 'stopped',
       health: 'unknown',
       releaseId: application.activeReleaseId,
       url: openUrl,
@@ -3894,7 +4070,9 @@ function applicationLinks(
   return {
     self: `${normalizePath(publicBasePath)}/api/apps/${encodeURIComponent(application.id)}`,
     open:
-      application.status === 'active' && application.activeReleaseId
+      application.status === 'active' &&
+      application.desiredRuntimeState === 'running' &&
+      application.activeReleaseId
         ? applicationOpenUrl(application.slug, appPublicOrigin)
         : null,
   };

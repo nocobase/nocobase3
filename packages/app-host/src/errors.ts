@@ -52,6 +52,15 @@ export class AppNotFoundError extends AppRegistryError {
   }
 }
 
+export class AppStoppedError extends AppRegistryError {
+  constructor(id: string) {
+    super(`App "${id}" is stopped`, {
+      status: 503,
+      code: 'APP_STOPPED',
+    });
+  }
+}
+
 export class AppCreateFailedError extends AppRegistryError {
   constructor(id: string, cause: unknown) {
     super(`App "${id}" failed to initialize`, {

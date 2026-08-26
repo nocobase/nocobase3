@@ -5,6 +5,7 @@ import type {
 } from '@nocobase/app-database';
 
 import { HubDomainError } from './store.ts';
+import type { DesiredRuntimeState } from './types.ts';
 
 const SETTINGS_KEY = 'hub.management.settings';
 const DEFAULT_LIMIT = 20;
@@ -73,6 +74,7 @@ export interface ManagedApplication {
   readonly name: string;
   readonly description: string | null;
   readonly status: ApplicationManagementStatus;
+  readonly desiredRuntimeState: DesiredRuntimeState;
   readonly isDefault: boolean;
   readonly revision: number;
   readonly defaultEnvironmentId: string;
@@ -91,6 +93,8 @@ export interface ApplicationMutationResult {
   readonly application: ManagedApplication;
   readonly idempotent: boolean;
 }
+
+export type RuntimeStateMutationResult = ApplicationMutationResult;
 
 export interface RepositoryMetadata {
   readonly id: string;
@@ -350,6 +354,7 @@ interface DbApplicationRow extends Row {
   name: string;
   description: string | null;
   status: string;
+  desiredRuntimeState: string;
   isDefault: boolean | number;
   revision: number;
   defaultEnvironmentId: string;
@@ -546,6 +551,32 @@ export class HubManagementStore {
     expectedRevision: number,
   ): Promise<ApplicationMutationResult> {
     return this.setApplicationStatus(id, 'active', expectedRevision);
+  }
+
+  async setDesiredRuntimeState(
+    id: string,
+    desiredRuntimeState: DesiredRuntimeState,
+  ): Promise<RuntimeStateMutationResult> {
+    const current = await this.requireApplication(id);
+    if (current.desiredRuntimeState === desiredRuntimeState) {
+      return { application: current, idempotent: true };
+    }
+    const result = await this.connection.query
+      .updateTable<DbApplicationRow>('hubApplications')
+      .set({ desiredRuntimeState, updatedAt: new Date() })
+      .where('id', '=', id)
+      .where('desiredRuntimeState', '=', current.desiredRuntimeState)
+      .execute();
+    if (result.updatedCount !== 1) {
+      throw conflict(
+        'RUNTIME_STATE_CONFLICT',
+        'The desired runtime state changed concurrently.',
+      );
+    }
+    return {
+      application: await this.requireApplication(id),
+      idempotent: false,
+    };
   }
 
   async createRepository(
@@ -1775,6 +1806,8 @@ function toApplication(row: DbApplicationRow): ManagedApplication {
     name: row.name,
     description: row.description,
     status: row.status === 'archived' ? 'archived' : 'active',
+    desiredRuntimeState:
+      row.desiredRuntimeState === 'running' ? 'running' : 'stopped',
     isDefault: Boolean(row.isDefault),
     revision: numberValue(row.revision, 1),
     defaultEnvironmentId: row.defaultEnvironmentId,

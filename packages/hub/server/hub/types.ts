@@ -1,6 +1,9 @@
 export const APPLICATION_STATUSES = ['active', 'disabled', 'archived'] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
+export const DESIRED_RUNTIME_STATES = ['running', 'stopped'] as const;
+export type DesiredRuntimeState = (typeof DESIRED_RUNTIME_STATES)[number];
+
 export const RELEASE_STATUSES = ['pending', 'verified', 'rejected'] as const;
 export type ReleaseVerificationStatus = (typeof RELEASE_STATUSES)[number];
 
@@ -35,6 +38,7 @@ export interface HubApplication {
   name: string;
   description: string | null;
   status: ApplicationStatus;
+  desiredRuntimeState: DesiredRuntimeState;
   defaultEnvironmentId: string;
   activeReleaseId: string | null;
   createdBy: string;

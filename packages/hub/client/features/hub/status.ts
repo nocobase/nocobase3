@@ -24,6 +24,7 @@ const labels: Record<string, string> = {
   failed: 'Failed',
   cancelled: 'Cancelled',
   running: 'Running',
+  idle: 'Idle',
   starting: 'Starting',
   stopping: 'Stopping',
   stopped: 'Stopped',

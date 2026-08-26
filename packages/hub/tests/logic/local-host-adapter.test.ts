@@ -51,7 +51,7 @@ describe('LocalHostAdapter runtime control', () => {
     expect(fixture.activatedSecrets).toEqual(['app-private-secret']);
   });
 
-  it('starts, stops, and restarts only the selected active release', async () => {
+  it('starts, deactivates, and restarts only the selected active release', async () => {
     const fixture = await createFixture();
     await fixture.adapter.prepare(
       fixture.application,
@@ -69,9 +69,21 @@ describe('LocalHostAdapter runtime control', () => {
     expect(started.app.releaseId).toBe(fixture.release.id);
     expect(started.app.state).toBe('active');
 
-    await fixture.adapter.evict(fixture.application);
+    await fixture.adapter.deactivate(
+      fixture.application,
+      fixture.release,
+      'secret-v1',
+    );
     expect(fixture.registry.snapshot(fixture.application.slug)).toBeUndefined();
-    expect(fixture.registry.definition(fixture.application.slug)).toBeDefined();
+    expect(fixture.registry.definition(fixture.application.slug)).toMatchObject(
+      {
+        enabled: false,
+        release: { releaseId: fixture.release.id },
+      },
+    );
+    await expect(
+      fixture.registry.ensureActive(fixture.application.slug),
+    ).rejects.toMatchObject({ code: 'APP_STOPPED', status: 503 });
 
     const restarted = await fixture.adapter.restart(
       fixture.application,
@@ -157,6 +169,7 @@ function applicationFixture(): HubApplication {
     name: 'Sales',
     description: null,
     status: 'active',
+    desiredRuntimeState: 'stopped',
     defaultEnvironmentId: 'default',
     activeReleaseId: null,
     createdBy: 'user-1',

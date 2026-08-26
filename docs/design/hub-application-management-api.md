@@ -134,11 +134,16 @@ interface HubHostAdapter {
     enabled: boolean,
   ): Promise<void>;
   deploy(request: HubHostDeploymentRequest): Promise<HubHostDeploymentResult>;
-  activate(
+  start(
     application: HubApplication,
     release: HubRelease,
     runtimeSecret: string,
   ): Promise<HubRuntime>;
+  deactivate(
+    application: HubApplication,
+    release: HubRelease,
+    runtimeSecret: string,
+  ): Promise<void>;
   evict(application: HubApplication): Promise<HubRuntime>;
   restart(
     application: HubApplication,
@@ -150,7 +155,7 @@ interface HubHostAdapter {
 }
 ```
 
-`evict` 和 `unregister` 直接复用 Registry 已有方法。`restart` 和运行中的密钥轮换一律使用同 Release 的 `deploy()`，不使用缺少 readiness 和新 runtime config 的 `reload()`。
+`evict` 只用于空闲或容量回收，保留后续访问冷启动语义。用户主动停止走 `deactivate`；`unregister` 用于归档。`start`、`restart` 和运行中的密钥轮换一律使用同 Release 的 `deploy()`，不使用缺少 readiness 和新 runtime config 的 `reload()`。
 
 现有 Registry 还缺少「原子写入 definition 和私有 runtime config，但不启动」的能力。为了让恢复后的 APP 可以安全冷启动，并让 inactive Runtime 在不启动进程的情况下轮换密钥，设计增加第一个 App Host 导出 API：
 
@@ -170,7 +175,22 @@ class AppRuntimeRegistry {
 
 它必须在 Registry 的 APP lock 内原子创建或替换 definition 和私有 runtime config；`null` 明确表示删除 config，避免用省略字段同时表达“保留”或“删除”。存在活动 Runtime 时返回 `409 APP_DEFINITION_ACTIVE`；`target.id` 不匹配时返回 `400 APP_DEFINITION_TARGET_INVALID`。它不激活 Runtime，也不在 snapshot、事件或日志中暴露 config。Hub Adapter 的 `prepare()` 是对该能力的封装。
 
-现有 `register()` / `updateDefinition()` 只写 definition，无法写私有 runtime config；`unregister()` 又会同时删除二者，所以不能安全满足归档恢复。其他方案都有明显副作用：用 `deploy()` 后立即 `evict()` 会在“只恢复配置”时实际启动 APP 并执行启动副作用；只依赖进程内旧 config 则在重启后失效。`configureInactive()` 是最小的导出面扩展，不改变现有调用者行为，但会增加一个可写私有配置的核心入口，必须用活动 Runtime 拒绝、APP lock、secret 不可观测和声明文件契约测试约束。该 App Host API 变化需要在实现前单独确认。
+现有 `register()` / `updateDefinition()` 只写 definition，无法写私有 runtime config；`unregister()` 又会同时删除二者，所以不能安全满足归档恢复。其他方案都有明显副作用：用 `deploy()` 后立即 `evict()` 会在“只恢复配置”时实际启动 APP 并执行启动副作用；只依赖进程内旧 config 则在重启后失效。`configureInactive()` 是最小的导出面扩展，不改变现有调用者行为，但会增加一个可写私有配置的核心入口，必须用活动 Runtime 拒绝、APP lock、secret 不可观测和声明文件契约测试约束。
+
+用户主动停止还需要第二个原子 Registry 操作。不能在 Hub 中先调用 `evict()` 再调用 `configureInactive()`：两次 APP lock 之间，请求可能再次冷启动。设计增加：
+
+```ts
+interface DeactivateAppOptions extends AppDestroyOptions {
+  target: AppDefinition;
+  runtimeConfig?: Readonly<Record<string, unknown>> | null;
+}
+
+class AppRuntimeRegistry {
+  deactivate(id: string, options: DeactivateAppOptions): Promise<AppDefinition>;
+}
+```
+
+`deactivate()` 在同一 APP lock 内先写入 `enabled: false` 的 definition 和私有 runtime config，再销毁当前 Runtime。页面、API、静态资源和 WebSocket 都在激活前检查 disabled definition，统一返回 `503 APP_STOPPED`；管理状态查询仍可读取 definition。普通 `evict()`、空闲回收和容量回收不改变 definition，仍允许下次访问冷启动。通过 `deploy()` 重新启动时，只有候选 Runtime readiness 成功后才重新开放访问；启动失败继续保持 stopped。
 
 当前 Registry readiness 只判断 `response.ok`，默认模板的 SPA fallback 也可能返回 HTML 200。为了让候选 Runtime 在切换前验证真实 health 响应，设计增加第二个向后兼容的导出契约：
 
@@ -344,7 +364,7 @@ APP 状态、仓库状态、Release、Runtime 和 Health 必须分开，不能�
 | Release verification | `verified`                                                                        | 第一版只在验证成功后创建 Release |
 | Upload               | `created`, `uploaded`, `verifying`, `completed`, `failed`, `expired`, `cancelled` | 产物上传和验证状态               |
 | Deployment           | `queued`, `preparing`, `activating`, `succeeded`, `failed`, `cancelled`           | 一次发布或回滚任务               |
-| Runtime              | `stopped`, `starting`, `running`, `stopping`, `failed`                            | 当前运行实例状态                 |
+| Runtime              | `stopped`, `idle`, `starting`, `running`, `stopping`, `failed`                    | 目标状态与当前运行实例状态       |
 | Health               | `unknown`, `checking`, `healthy`, `unhealthy`                                     | 当前健康探测结果                 |
 
 现有 `disabled` Application 状态不在第一版界面暴露，可保留为系统策略预留值。`pending` 和 `rejected` Release 也不会对外创建；失败状态留在 Upload 会话中。
@@ -398,7 +418,7 @@ APP 状态、仓库状态、Release、Runtime 和 Health 必须分开，不能�
 }
 ```
 
-`links.open` 由服务端根据权威 `APP_PUBLIC_ORIGIN` 和 APP 固定 `basePath` 生成，不能从请求 Host、转发 header 或 Hub origin 猜测。第一版 `basePath` 始终是 `/<slug>`，Release manifest 只能声明相同值，不能覆盖它。未发布或已归档时 `links.open` 为 `null`。Runtime 被回收后仍可以打开 APP，首次请求会触发按需启动。
+`links.open` 由服务端根据权威 `APP_PUBLIC_ORIGIN` 和 APP 固定 `basePath` 生成，不能从请求 Host、转发 header 或 Hub origin 猜测。第一版 `basePath` 始终是 `/<slug>`，Release manifest 只能声明相同值，不能覆盖它。未发布、已归档或被用户主动停止时 `links.open` 为 `null`。仅因空闲或容量回收而没有活动进程时，Runtime 投影为 `idle`，链接仍存在，首次请求触发按需启动。
 
 Summary 是 capability-aware projection。顶层 APP 字段和 `links` 需要 `hub.app:read`；`repository`、`latestRelease`、`activeRelease` 和 `runtime` 分别还需要 `hub.repository:read`、`hub.release:read` 和 `hub.runtime:read`。`latestRelease` 表示最新上传的版本，`activeRelease` 表示当前已部署版本；两者可以不同。获得 Release 读取权限但尚未部署时，`activeRelease` 为 `null`。浏览器 Session 按用户 capability 判断；Agent 还必须分别带 `source:read`、`releases:read` 和 `runtime:read` scope。未授权的嵌套字段直接省略，不返回占位数据，也不靠 `hub.app:read` 旁路细分权限。公开 Application 响应不返回内部 `activeReleaseId`。
 
@@ -486,6 +506,8 @@ Application Detail 在 Summary 基础上把 `activeRelease` 扩展为完整 Rele
 ```
 
 `runtimeId` 可以由当前 Host snapshot 的 APP ID 和进程内 activation version 组成，只保证在当前 Hub 进程内标识一次激活，客户端不得解析或持久依赖其格式。`startedAt` 映射 Host `createdAt`，`lastSeenAt` 映射 `lastAccessedAt`，`failure` 来自安全脱敏后的 `lastError`。
+
+`state: "stopped"` 表示持久目标状态是停止，APP 入口不可访问，`url` 为 `null`。`state: "idle"` 表示目标状态仍是运行，但当前进程已因空闲或容量策略被回收；入口仍可访问并在首次请求时冷启动。两者不能只根据 Host 是否存在 snapshot 来判断。
 
 `activeRequests` 是当前进程快照，不是持久化趋势。列表使用最近一次 Deployment、`start` 或 `restart` readiness 留下的 Health observation；没有 observation 或 observation 已过期时返回 `unknown`。`GET /apps/:id/runtime` 是无副作用查询，不做主动探测，也不触发冷启动。第一版不提供后台健康监控或历史趋势；如果后续需要实时探测，应另行设计 Host probe API 和 cadence，不能用一个看似只读的 GET 隐式启动 APP。
 
@@ -748,14 +770,14 @@ Content-Type: application/json
 
 ### 端点
 
-| 方法    | 路径                | 权限              | 说明                                     |
-| ------- | ------------------- | ----------------- | ---------------------------------------- |
-| `GET`   | `/apps`             | `hub.app:read`    | 分页查询 APP Summary                     |
-| `POST`  | `/apps`             | `hub.app:create`  | 创建 APP、Git 仓库和 Runtime Secret      |
-| `GET`   | `/apps/:id`         | `hub.app:read`    | 查询 APP Detail                          |
-| `PATCH` | `/apps/:id`         | `hub.app:update`  | 更新名称和描述                           |
-| `POST`  | `/apps/:id/archive` | `hub.app:archive` | 归档 APP、回收 Runtime 并移除 definition |
-| `POST`  | `/apps/:id/restore` | `hub.app:restore` | 恢复 APP 并准备冷启动 definition         |
+| 方法    | 路径                | 权限              | 说明                                              |
+| ------- | ------------------- | ----------------- | ------------------------------------------------- |
+| `GET`   | `/apps`             | `hub.app:read`    | 分页查询 APP Summary                              |
+| `POST`  | `/apps`             | `hub.app:create`  | 创建 APP、Git 仓库、Runtime Secret 和初始 Release |
+| `GET`   | `/apps/:id`         | `hub.app:read`    | 查询 APP Detail                                   |
+| `PATCH` | `/apps/:id`         | `hub.app:update`  | 更新名称和描述                                    |
+| `POST`  | `/apps/:id/archive` | `hub.app:archive` | 归档 APP、回收 Runtime 并移除 definition          |
+| `POST`  | `/apps/:id/restore` | `hub.app:restore` | 恢复 APP，并按恢复前目标运行状态准备 definition   |
 
 `GET /apps` 支持：
 
@@ -790,11 +812,12 @@ Content-Type: application/json
 2. 在服务端临时目录初始化默认模板 Git 仓库
 3. 创建固定的初始 commit，将 bare repo 原子移到 `HUB_SOURCE_ROOT/<application-id>.git`
 4. 在数据库事务中创建 Application、Repository metadata 和加密 Runtime Secret
-5. 记录审计日志
+5. 从打包的默认模板 Release 派生当前 slug 专属的产物，重写 `basePath` 和源码 commit，并通过标准 Release Upload 验证流程创建一个 `verified`、尚未部署的初始 Release
+6. 记录审计日志
 
 文件系统和数据库不能共享一个 ACID 事务，因此任意步骤失败后必须执行补偿清理。对客户端只有两种结果：完整的 `201` Application，或者错误响应。不应返回缺少仓库的「半成品 APP」。
 
-新 APP 创建后只有源码，还没有 Release，所以 `links.open` 为 `null`。开发者完成开发并首次发布后才能直接访问。
+新 APP 创建后已经有一个与默认模板对应的、可直接部署的初始 Release，但不会自动启动或部署 Runtime。创建接口返回的 `latestRelease` 有值、`activeRelease` 为 `null`，`links.open` 仍为 `null`；用户可以直接调用部署接口，或点击应用列表中的「部署」操作。部署成功后才可以访问 APP。
 
 ### 更新 APP
 
@@ -831,10 +854,10 @@ Content-Type: application/json
 `POST /apps/:id/restore` 在同一 APP control operation lock 内执行：
 
 1. 读取当前 `activeReleaseId` 和 active Runtime Secret
-2. 有活动 Release 时，通过 `HostAdapter.prepare(..., enabled: true)` 原子写回 definition 和私有 runtime config，但不启动 Runtime
-3. 把 APP 恢复为 `active`，重新允许 Git push、发布和访问
+2. 有活动 Release 时，通过 `HostAdapter.prepare()` 原子写回 definition 和私有 runtime config；`enabled` 取持久化的 `desiredRuntimeState`
+3. 把 APP 恢复为 `active`，重新允许 Git push 和发布；只有目标状态为 `running` 时恢复访问入口
 
-没有活动 Release 时只恢复 Application 和 Git 权限，`links.open` 仍为 `null`。Host prepare 或数据库提交失败时执行补偿并保持 `archived`；不能返回「数据库已恢复但访问仍 404」的半成品状态。恢复成功后首次访问会安全冷启动，`restore` 本身不启动 Runtime。重复恢复返回 `200` 和 `meta.idempotent: true`。
+没有活动 Release 时只恢复 Application 和 Git 权限，`links.open` 仍为 `null`。Host prepare 或数据库提交失败时执行补偿并保持 `archived`；不能返回「数据库已恢复但 Host 状态不一致」的半成品状态。恢复成功且目标状态为 `running` 时，首次访问会安全冷启动；目标状态为 `stopped` 时继续返回 `503 APP_STOPPED`，直到显式启动。`restore` 本身不启动 Runtime。重复恢复返回 `200` 和 `meta.idempotent: true`。
 
 ## Repository 和 Git API
 
@@ -1227,20 +1250,20 @@ Events 按 `sequence` 升序返回，第一版每个 Deployment 最多 64 条且
 
 ## Runtime API
 
-Runtime API 控制的是运行实例，不改变源码、Release 或 Deployment 历史。「停止」的准确含义是回收当前运行实例；APP definition、私有 runtime config 和活动 Release 仍保留。
+Runtime API 控制 APP 的持久目标运行状态，不改变源码、Release 或 Deployment 历史。「停止」会禁用 APP definition 并回收当前运行实例；私有 runtime config 和活动 Release 仍保留。
 
 | 方法   | 路径                        | 权限                  | 说明                            |
 | ------ | --------------------------- | --------------------- | ------------------------------- |
 | `GET`  | `/apps/:id/runtime`         | `hub.runtime:read`    | 查询当前 Runtime 和 Health 快照 |
 | `POST` | `/apps/:id/runtime/start`   | `hub.runtime:control` | 使用当前活动 Release 启动       |
-| `POST` | `/apps/:id/runtime/stop`    | `hub.runtime:control` | 回收当前运行实例                |
+| `POST` | `/apps/:id/runtime/stop`    | `hub.runtime:control` | 持久停止并关闭所有访问入口      |
 | `POST` | `/apps/:id/runtime/restart` | `hub.runtime:control` | 使用当前活动 Release 重启       |
 
 三个 mutation 的 JSON body 都是空对象 `{}`。`start` 和 `stop` 是天然幂等的：已在目标状态时返回当前 Runtime 和 `meta.idempotent: true`。`restart` 必须带 `Idempotency-Key`。
 
-`stop` 不是持久化的 desired state。APP 被访问、Hub 重新 reconcile 或显式 `start` 后都可以再次运行；管理界面应显示「回收运行实例」，不能承诺持续停机。以后若需要维护窗口或永久停止，需要单独增加 `desiredRuntimeState`，并让入口路由、冷启动和 reconcile 一起遵守。
+`stop` 把内部 `desiredRuntimeState` 持久化为 `stopped`，通过 Registry 原子禁用 definition 并销毁 Runtime。Hub 重启 reconcile、普通访问、静态资源请求和 WebSocket 都不能绕过停机；统一返回 `503 APP_STOPPED`。管理界面显示「停止应用」，隐藏打开入口。普通空闲或容量回收不修改 `desiredRuntimeState`，Runtime 投影为 `idle`，仍允许冷启动，也仍可以执行停止操作。
 
-`start` 在 APP lock 内读取活动 Release 和 active Runtime Secret，用 `expectedCurrentReleaseId: null` 执行同 Release `deploy()`，从而在对外返回前完成 readiness。`restart` 在 Runtime 已运行时同样使用同 Release `deploy()`；Runtime 已停止时只执行一次 `start`，返回 `meta.previousState: "stopped"`，不会先启动再重启。
+`start` 在 APP lock 内读取活动 Release 和 active Runtime Secret，用 `expectedCurrentReleaseId: null` 执行同 Release `deploy()`，从而在对外返回前完成 readiness，再把 `desiredRuntimeState` 写为 `running`。`restart` 在 Runtime 已运行时同样使用同 Release `deploy()`；Runtime 为 `idle` 或 `stopped` 时只执行一次 `start`，分别返回 `meta.previousState: "idle"` 或 `"stopped"`，不会先启动再重启。Host 成功而持久状态写入失败时，Hub 必须补偿回操作前的 Host 状态。
 
 第一版的 Runtime control 是同步命令，完成或失败后返回当前 Runtime 快照，不新增 Runtime Operation 资源。如果实际测量表明它会经常超过 HTTP 超时，再统一改成异步 Operation，不为第一版预造两种模型。
 
@@ -1280,9 +1303,9 @@ Runtime Secret 用于一个 APP 自己的 Session 和签名。它与 Hub Session
 3. Registry 完成候选 readiness、路由切换和旧 Runtime drain 后返回
 4. Hub 把 pending secret 标记为 active
 
-如果候选 Runtime 失败，Registry 保留原密钥和原 Runtime，Hub 把 pending 记录为 failed。如果 Runtime 已停止且已有活动 Release，Hub 使用 `configureInactive()` 原子替换 definition 和私有 runtime config，然后把 pending 标记为 active；该操作不启动 Runtime。没有活动 Release 时只切换加密存储，首次部署读取 active secret。
+如果候选 Runtime 失败，Registry 保留原密钥和原 Runtime，Hub 把 pending 记录为 failed。如果 APP 是持久 stopped 且已有活动 Release，Hub 使用 `deactivate()` 保持禁用 definition 并原子替换私有 runtime config；如果只是 `idle`，使用 `configureInactive(..., enabled: true)`。两种操作都不启动 Runtime。没有活动 Release 时只切换加密存储，首次部署读取 active secret。
 
-Host 成功后数据库提交仍可能失败。Hub 在 Host 调用前持久化 pending operation；其他 APP control operation 或重启恢复看到 pending 时，必须用同一个 pending secret 幂等地重新收敛 Host：运行中执行同 Release `deploy()`，停止时执行 `configureInactive()`，然后再提交 active。这样不需要从 Host 读回 secret 或猜测哪一版已生效。失败时恢复旧 active secret；旧 ciphertext 至少保留到 operation 进入终态，不能在 Host 返回前删除。
+Host 成功后数据库提交仍可能失败。Hub 在 Host 调用前持久化 pending operation；其他 APP control operation 或重启恢复看到 pending 时，必须用同一个 pending secret 幂等地重新收敛 Host：运行中执行同 Release `deploy()`，idle 时执行 enabled definition 的 `configureInactive()`，持久 stopped 时执行 `deactivate()`，然后再提交 active。这样不需要从 Host 读回 secret 或猜测哪一版已生效。失败时恢复旧 active secret；旧 ciphertext 至少保留到 operation 进入终态，不能在 Host 返回前删除。
 
 非 loopback 部署必须提供与 `AUTH_SECRET` 不同的 `HUB_SECRET_ENCRYPTION_KEY`。loopback 开发若未提供，Hub 在 `HUB_SECRET_ENCRYPTION_KEY_FILE` 指定的位置，或默认在 `HUB_DATABASE_PATH` 同目录，原子创建独立的 32-byte key 文件并设置 `0600`，以后重启复用；不能生成仅存在内存中的 key，也不能回退复用 `AUTH_SECRET` 或明文存储。数据库只存储带版本的 AEAD ciphertext、nonce 和 key ID，日志与审计不记录明文或 ciphertext。
 
@@ -2112,9 +2135,11 @@ sequenceDiagram
   Git-->>API: initial commit
   API->>Git: 原子移入 HUB_SOURCE_ROOT
   API->>Store: 创建 APP、Repository 和加密 Runtime Secret
-  Store-->>API: Application Detail
+  API->>API: 基于默认 Release 派生 slug 专属产物
+  API->>Store: 创建 verified 初始 Release（不部署）
+  Store-->>API: Application Detail + latestRelease
   API-->>Web: 201 Application
-  Web-->>User: 展示「复制给 Coding Agent」
+  Web-->>User: 展示初始版本和「部署」操作
 ```
 
 用户不在 Web 表单中填写「源码工作区」。Web 只创建远程权威仓库；开发者或 Agent 在执行 `nb3 app pull` 时选择本地目录。
@@ -2205,6 +2230,7 @@ sequenceDiagram
 
 | 资源                       | 主要字段                                                                                                                                        |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application                | `id`, `slug`, profile, status, `desiredRuntimeState`, active Release, environment, `revision`, actor, timestamps                                |
 | Repository                 | `applicationId`, `provider`, `defaultBranch`, `headCommit`, `status`, `initialCommit`, timestamps                                               |
 | Release Upload             | `id`, `applicationId`, `version`, checksums, sizes, `sourceCommit`, `manifest`, `status`, `releaseId`, `failureCode`, expiry, actor, timestamps |
 | Runtime Secret             | `applicationId`, `version`, `ciphertext`, `nonce`, `keyId`, `state`, operation ID, timestamps                                                   |
@@ -2218,7 +2244,7 @@ sequenceDiagram
 | Assignment revision        | global member assignment revision；per-APP assignment-set revision                                                                              |
 | Hub settings               | editable settings JSON, `revision`, `updatedAt`                                                                                                 |
 
-Application 表增加 `revision`。Health observation 只保存当前 Runtime 的最近一次有效观测，不作为历史监控数据；读取时必须同时匹配当前 `runtimeId` 和 `releaseId`，过期或不匹配就返回 `unknown`。成员全局权限集合、每个 APP 的 assignment set 和 Hub settings 分别维护独立 revision，供对应的 `ETag` / `If-Match` 契约使用。
+Application 表增加 `revision` 和内部 `desiredRuntimeState`。后者只允许 `running` / `stopped`，由 Deployment 成功和 Runtime control 原子更新，不作为普通 APP patch 字段。Health observation 只保存当前 Runtime 的最近一次有效观测，不作为历史监控数据；读取时必须同时匹配当前 `runtimeId` 和 `releaseId`，过期或不匹配就返回 `unknown`。成员全局权限集合、每个 APP 的 assignment set 和 Hub settings 分别维护独立 revision，供对应的 `ETag` / `If-Match` 契约使用。
 
 现有 Audit Log 需要增加 `applicationId`、`result`、`source`、客户端摘要和有限的 failure code。现有 Role Assignment 增加 `developer`，授权引擎增加 Repository、Runtime Secret 和更精确的 Deployment actions。
 
@@ -2341,33 +2367,33 @@ Hub standalone 将 App Host catalog 固定为 `<HUB_RELEASE_ROOT>/.catalog`。�
 
 ## 现有契约迁移表
 
-| 现有契约                                                 | 提议后                                            | 原因                                     |
-| -------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------- |
-| API 位于 `<APP_BASE_PATH>/api`                           | 保留                                              | 没有必要增加 `/v1`                       |
-| 默认无 `/v2/api/*` 代理                                  | 保留                                              | 代理只由环境变量显式启用                 |
-| 统一 success / error envelope                            | 保留                                              | 已经稳定且适合 Web / Agent               |
-| `limit/offset`                                           | 保留并增加筛选 / sort                             | 满足表格页码分页，不增加第二套分页协议   |
-| `POST /apps` 只写 Application                            | 同步创建模板 Git 仓库和 Runtime Secret            | 避免缺仓库的半成品 APP                   |
-| `GET /apps` 只返回 Application                           | 返回 Summary projection                           | 避免列表 N+1 请求                        |
-| `GET /apps/:id` 只返回 Application                       | 返回 Detail projection                            | 满足详情页首屏                           |
-| Application 响应公开 `activeReleaseId`                   | 改由 `activeRelease` 投影表达                     | 避免客户端再查一次 Release               |
-| 默认 APP 只能靠 slug / name 判断                         | 增加只读 `isDefault`                              | 名称可编辑，客户端不能靠展示文本猜测     |
-| `POST /apps/:id/releases` 接收服务器本地 `storageKey`    | 移除，改为 Release Upload 会话                    | 支持远程 Agent，隐藏服务器路径           |
-| Release 响应包含 `storageKey`                            | 移除公开字段                                      | 该字段是存储实现细节                     |
-| Deployment 可从 body 接收 `idempotencyKey`               | 只接收 `Idempotency-Key` header                   | 使所有 mutation 幂等约定一致             |
-| Deployment 响应公开 `idempotencyKey` / `hostOperationId` | 移除公开字段                                      | 两者是恢复与存储实现细节                 |
-| Deployment 使用 `failureCode` / `failureMessage`         | 合并为 `failure: { code, message }`               | 与 Runtime 和统一错误模型一致            |
-| Deployment 暴露 Host 内部细阶段                          | 收窄为真实可观察阶段                              | 当前 Registry 没有实时 phase callback    |
-| `hub.deployment:create`                                  | `deploy`, `rollback`, `redeploy`                  | 区分不同风险的操作权限                   |
-| Hub `AUTH_SECRET` 注入所有 APP                           | 每 APP 加密 Runtime Secret                        | 避免一个 APP 密钥泄漏影响全部 APP 和 Hub |
-| `owner`, `admin`, `deployer`, `viewer`                   | 增加 `developer`，重新定义 `deployer`             | 区分源码 / Release 与 Deployment 权限    |
-| Release / Runtime data 路径使用 APP slug                 | 新数据改用不可变 Application UUID                 | slug 保留给 URL，不成为物理存储边界      |
-| Hub 把 `HUB_RELEASE_ROOT` 直接交给 DirectoryAppCatalog   | 改用隔离的空 `.catalog`                           | 避免手工目录成为第二套 APP 权威来源      |
-| App Host 只有 definition 更新和 deploy                   | 增加进程内 `configureInactive()`                  | 安全保存私有配置且不激活 Runtime         |
-| App Host `/__apps/*`                                     | 不作为 Hub 公开契约                               | 第一版继续进程内 Registry 调用           |
-| CLI 文档中的 `nb3 app create` 只创建本地源码             | 带 `--hub` 时先创建 Hub APP 再 clone              | Hub 是源码权威入口，本地目录只是工作副本 |
-| CLI 文档中的 `nb3 app deploy` 隐含构建和部署             | `publish` 创建 Release，`deploy` 选择已有 Release | 分离 Developer / Deployer 权限           |
-| CLI 文档中的 `nb3 app destroy`                           | 第一版不实现；管理端只 archive / restore          | 避免不可恢复地删除源码与运行数据         |
+| 现有契约                                                 | 提议后                                               | 原因                                     |
+| -------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------- |
+| API 位于 `<APP_BASE_PATH>/api`                           | 保留                                                 | 没有必要增加 `/v1`                       |
+| 默认无 `/v2/api/*` 代理                                  | 保留                                                 | 代理只由环境变量显式启用                 |
+| 统一 success / error envelope                            | 保留                                                 | 已经稳定且适合 Web / Agent               |
+| `limit/offset`                                           | 保留并增加筛选 / sort                                | 满足表格页码分页，不增加第二套分页协议   |
+| `POST /apps` 只写 Application                            | 同步创建模板 Git 仓库、Runtime Secret 和初始 Release | 新 APP 创建后即可部署，避免半成品 APP    |
+| `GET /apps` 只返回 Application                           | 返回 Summary projection                              | 避免列表 N+1 请求                        |
+| `GET /apps/:id` 只返回 Application                       | 返回 Detail projection                               | 满足详情页首屏                           |
+| Application 响应公开 `activeReleaseId`                   | 改由 `activeRelease` 投影表达                        | 避免客户端再查一次 Release               |
+| 默认 APP 只能靠 slug / name 判断                         | 增加只读 `isDefault`                                 | 名称可编辑，客户端不能靠展示文本猜测     |
+| `POST /apps/:id/releases` 接收服务器本地 `storageKey`    | 移除，改为 Release Upload 会话                       | 支持远程 Agent，隐藏服务器路径           |
+| Release 响应包含 `storageKey`                            | 移除公开字段                                         | 该字段是存储实现细节                     |
+| Deployment 可从 body 接收 `idempotencyKey`               | 只接收 `Idempotency-Key` header                      | 使所有 mutation 幂等约定一致             |
+| Deployment 响应公开 `idempotencyKey` / `hostOperationId` | 移除公开字段                                         | 两者是恢复与存储实现细节                 |
+| Deployment 使用 `failureCode` / `failureMessage`         | 合并为 `failure: { code, message }`                  | 与 Runtime 和统一错误模型一致            |
+| Deployment 暴露 Host 内部细阶段                          | 收窄为真实可观察阶段                                 | 当前 Registry 没有实时 phase callback    |
+| `hub.deployment:create`                                  | `deploy`, `rollback`, `redeploy`                     | 区分不同风险的操作权限                   |
+| Hub `AUTH_SECRET` 注入所有 APP                           | 每 APP 加密 Runtime Secret                           | 避免一个 APP 密钥泄漏影响全部 APP 和 Hub |
+| `owner`, `admin`, `deployer`, `viewer`                   | 增加 `developer`，重新定义 `deployer`                | 区分源码 / Release 与 Deployment 权限    |
+| Release / Runtime data 路径使用 APP slug                 | 新数据改用不可变 Application UUID                    | slug 保留给 URL，不成为物理存储边界      |
+| Hub 把 `HUB_RELEASE_ROOT` 直接交给 DirectoryAppCatalog   | 改用隔离的空 `.catalog`                              | 避免手工目录成为第二套 APP 权威来源      |
+| App Host 只有 definition 更新和 deploy                   | 增加进程内 `configureInactive()`                     | 安全保存私有配置且不激活 Runtime         |
+| App Host `/__apps/*`                                     | 不作为 Hub 公开契约                                  | 第一版继续进程内 Registry 调用           |
+| CLI 文档中的 `nb3 app create` 只创建本地源码             | 带 `--hub` 时先创建 Hub APP 再 clone                 | Hub 是源码权威入口，本地目录只是工作副本 |
+| CLI 文档中的 `nb3 app deploy` 隐含构建和部署             | `publish` 创建 Release，`deploy` 选择已有 Release    | 分离 Developer / Deployer 权限           |
+| CLI 文档中的 `nb3 app destroy`                           | 第一版不实现；管理端只 archive / restore             | 避免不可恢复地删除源码与运行数据         |
 
 由于 Hub 是未发布新功能，上述替换不需要为开发期临时请求和数据增加 legacy endpoint、双写或 backfill。
 
@@ -2451,36 +2477,36 @@ Hub standalone 将 App Host catalog 固定为 `<HUB_RELEASE_ROOT>/.catalog`。�
 
 下表记录本设计采用的契约方案及其主要取舍。具体实现严格以已经过 API 负责人确认的范围为准；本轮已经确认并实现 Deployment CSV、Application `activeRelease` 投影，以及由 Release Upload 会话替换旧 Release 注册端点。
 
-|   # | 决策                      | 设计采用方案                                                                                           | 可选方案与代价                                                                                                    |
-| --: | ------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-|   1 | API 路径是否增加版本段    | 继续使用 `<APP_BASE_PATH>/api`，不加 `/v1`                                                             | 现在就加 `/v1` 可以预留多版本，但在尚无稳定外部消费者时增加了路由和文档噪声                                       |
-|   2 | APP 源码的权威位置        | 每 APP 一个 Hub 托管 bare Git 仓库                                                                     | 使用 GitHub / GitLab 会引入外部帐号、Webhook 和密钥管理；仅在本地保存则无法在多台电脑继续开发                     |
-|   3 | Coding Agent 认证         | Device Authorization + 短期 access token + 轮换 refresh token                                          | 把长期 token 放进开发指令最简单，但容易泄漏；浏览器 Cookie 不适合 CLI                                             |
-|   4 | Git 传输协议              | Smart HTTP，复用 Agent token                                                                           | SSH 需要单独的 key 生命周期和端口；逐文件 REST 会重新发明一套不完整 Git                                           |
-|   5 | 创建 APP 时是否返回半成品 | 同步 saga，只返回完整 APP                                                                              | 异步 Application Operation 对大模板更强，但第一版增加了额外资源和恢复页                                           |
-|   6 | 默认 APP 创建时机         | Hub 启动时幂等 bootstrap，Owner 前就准备                                                               | Owner setup 后才创建更容易展示错误，但首次体验更慢，且 Owner 操作与系统默认资源耦合                               |
-|   7 | 第一版模板契约            | 固定默认模板，不传 `templateId`，不提供模板升级                                                        | 现在暴露 `templateId` 会过早冻结模板 Registry 和版本契约                                                          |
-|   8 | Release 传输              | Create Upload + 单 PUT + Complete                                                                      | multipart 或分片续传对超大产物更好，但需要 part 状态、合并和更复杂的清理                                          |
-|   9 | Release 本地路径          | 移除公开 `storageKey`，完全由服务端生成                                                                | 保留它只适合 Hub 本机手工拷贝，无法安全支持远程 Agent                                                             |
-|  10 | Release 构建信任          | 第一版 Agent 构建 + commit / checksum 验证                                                             | Hub-side Builder 可以达到更强的可重现性，但需要容器隔离、依赖缓存、资源配额和供应链策略                           |
-|  11 | Runtime 环境配置          | 第一版只由 Hub 注入 data directory 和 Runtime Secret，禁止 `dist/.env`                                 | 立即支持任意 env / secret 需要新的加密配置资源、权限、脱敏和轮换契约                                              |
-|  12 | APP 访问路径              | 固定 `/<slug>`，Release 不得改变                                                                       | 允许每 Release 改 base path 会让 APP URL、Cookie path、路由切换和回滚变得不稳定                                   |
-|  13 | Runtime Secret            | 每 APP 自动生成、AEAD 存储；生产用独立 env key，本地持久化独立 key file                                | 让用户自己输入容易复用或误显示；只在内存生成加密 key 会导致重启后无法解密                                         |
-|  14 | Deployment 状态更新       | 第一版轮询                                                                                             | SSE 能降低延迟，但需要断线续传、反向代理和长连接运维                                                              |
-|  15 | Runtime control 模型      | 第一版同步返回 snapshot；stop 仅回收实例，允许再次冷启动                                               | 持续停止需要 `desiredRuntimeState`，入口路由和 reconcile 都必须遵守                                               |
-|  16 | 角色                      | 内置 Owner / Admin / Developer / Deployer / Viewer，第一版只读                                         | 自定义角色可以更精细，但需要角色 CRUD、能力版本和删除引用规则                                                     |
-|  17 | Deployer 命名             | 用 `deployer`，不用原型的 `releaser`                                                                   | `releaser` 容易被理解为创建 Release，与 Developer 的 publish 权限冲突                                             |
-|  18 | 成员权限写入              | 原子 PUT 完整替换角色绑定                                                                              | 逐条 assignment CRUD 更细，但界面保存需要处理多请求中途失败                                                       |
-|  19 | APP 删除                  | 第一版只归档 / 恢复；恢复 prepare definition 但不启动                                                  | 永久删除需要源码、Release、Runtime data、审计和合规的独立保留策略                                                 |
-|  20 | Hub 与 App Host           | standalone 进程内 Adapter；新增 `configureInactive()` 和声明式 readiness expectation，无 Host HTTP API | 不改 Registry 就会在恢复时实际启动 APP、重启后丢失私有 config，且 HTML 200 可能被误判健康；远程 Host 另需安全协议 |
-|  21 | 环境                      | 第一版固定内部 `default`，不提供环境 API                                                               | 多环境会影响 Release promotion、独立密钥、URL、Runtime 和权限，需要单独设计                                       |
-|  22 | 存储清理                  | 先提供用量和 cleanup plan，自动删除放到 Phase 6                                                        | 立即提供删除 API 实现快，但在引用图和恢复测试前风险过高                                                           |
-|  23 | APP 公网地址              | 独立 `APP_PUBLIC_ORIGIN`；生产 ingress 只转发 APP path 并阻断 Host 管理路由                            | 从 Hub origin 猜测在双 listener 拓扑下不可用；让 Hub 代理全部 APP 流量还要处理 WebSocket 和流式响应               |
-|  24 | Upload 认证               | 返回 `hub-bearer` / `provided-headers` auth mode，CLI 严格按 origin 发 token                           | CLI 永远附带 Bearer 会在未来预签名对象存储时泄漏 Hub token                                                        |
-|  25 | APP Summary 投影          | 按 capability 和 Agent scope 省略未授权嵌套字段                                                        | 让 `hub.app:read` 隐式包含全部 metadata 会使细分 capability 和最小 scope 失去意义                                 |
-|  26 | 管理写入并发              | APP、成员权限和设置使用 revision + `If-Match`                                                          | last-write-wins 更简单，但多个管理员会静默覆盖彼此修改                                                            |
-|  27 | CLI 发布语义              | `publish` 生成 Release，`deploy` 只部署已有 Release，完整流程用 `publish --deploy`                     | 单个 deploy 命令更短，但无法分离角色权限，也难表达“已发布但未部署”                                                |
-|  28 | CLI 中断恢复              | 每次命令使用 operation ID 和本地 journal；Upload 创建后只复用 checksum 一致的 operation cache          | 每次重跑都新建资源会产生重复 APP / Release / Deployment；静默重建后复用旧 Upload 会破坏 checksum 契约             |
+|   # | 决策                      | 设计采用方案                                                                                               | 可选方案与代价                                                                                          |
+| --: | ------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+|   1 | API 路径是否增加版本段    | 继续使用 `<APP_BASE_PATH>/api`，不加 `/v1`                                                                 | 现在就加 `/v1` 可以预留多版本，但在尚无稳定外部消费者时增加了路由和文档噪声                             |
+|   2 | APP 源码的权威位置        | 每 APP 一个 Hub 托管 bare Git 仓库                                                                         | 使用 GitHub / GitLab 会引入外部帐号、Webhook 和密钥管理；仅在本地保存则无法在多台电脑继续开发           |
+|   3 | Coding Agent 认证         | Device Authorization + 短期 access token + 轮换 refresh token                                              | 把长期 token 放进开发指令最简单，但容易泄漏；浏览器 Cookie 不适合 CLI                                   |
+|   4 | Git 传输协议              | Smart HTTP，复用 Agent token                                                                               | SSH 需要单独的 key 生命周期和端口；逐文件 REST 会重新发明一套不完整 Git                                 |
+|   5 | 创建 APP 时是否返回半成品 | 同步 saga，只返回完整 APP                                                                                  | 异步 Application Operation 对大模板更强，但第一版增加了额外资源和恢复页                                 |
+|   6 | 默认 APP 创建时机         | Hub 启动时幂等 bootstrap，Owner 前就准备                                                                   | Owner setup 后才创建更容易展示错误，但首次体验更慢，且 Owner 操作与系统默认资源耦合                     |
+|   7 | 第一版模板契约            | 固定默认模板，不传 `templateId`，不提供模板升级                                                            | 现在暴露 `templateId` 会过早冻结模板 Registry 和版本契约                                                |
+|   8 | Release 传输              | Create Upload + 单 PUT + Complete                                                                          | multipart 或分片续传对超大产物更好，但需要 part 状态、合并和更复杂的清理                                |
+|   9 | Release 本地路径          | 移除公开 `storageKey`，完全由服务端生成                                                                    | 保留它只适合 Hub 本机手工拷贝，无法安全支持远程 Agent                                                   |
+|  10 | Release 构建信任          | 第一版 Agent 构建 + commit / checksum 验证                                                                 | Hub-side Builder 可以达到更强的可重现性，但需要容器隔离、依赖缓存、资源配额和供应链策略                 |
+|  11 | Runtime 环境配置          | 第一版只由 Hub 注入 data directory 和 Runtime Secret，禁止 `dist/.env`                                     | 立即支持任意 env / secret 需要新的加密配置资源、权限、脱敏和轮换契约                                    |
+|  12 | APP 访问路径              | 固定 `/<slug>`，Release 不得改变                                                                           | 允许每 Release 改 base path 会让 APP URL、Cookie path、路由切换和回滚变得不稳定                         |
+|  13 | Runtime Secret            | 每 APP 自动生成、AEAD 存储；生产用独立 env key，本地持久化独立 key file                                    | 让用户自己输入容易复用或误显示；只在内存生成加密 key 会导致重启后无法解密                               |
+|  14 | Deployment 状态更新       | 第一版轮询                                                                                                 | SSE 能降低延迟，但需要断线续传、反向代理和长连接运维                                                    |
+|  15 | Runtime control 模型      | 同步返回 snapshot；stop 持久写入 `desiredRuntimeState` 并关闭入口，idle 回收仍允许冷启动                   | stop 只回收实例会被访问和重启 reconcile 立即拉起，无法表达用户主动停机                                  |
+|  16 | 角色                      | 内置 Owner / Admin / Developer / Deployer / Viewer，第一版只读                                             | 自定义角色可以更精细，但需要角色 CRUD、能力版本和删除引用规则                                           |
+|  17 | Deployer 命名             | 用 `deployer`，不用原型的 `releaser`                                                                       | `releaser` 容易被理解为创建 Release，与 Developer 的 publish 权限冲突                                   |
+|  18 | 成员权限写入              | 原子 PUT 完整替换角色绑定                                                                                  | 逐条 assignment CRUD 更细，但界面保存需要处理多请求中途失败                                             |
+|  19 | APP 删除                  | 第一版只归档 / 恢复；恢复按持久目标状态 prepare definition 但不启动                                        | 永久删除需要源码、Release、Runtime data、审计和合规的独立保留策略                                       |
+|  20 | Hub 与 App Host           | standalone 进程内 Adapter；新增 `configureInactive()`、`deactivate()` 和声明式 readiness，无 Host HTTP API | 分步 evict / disable 存在冷启动竞态；不校验响应内容时 HTML 200 也可能被误判健康；远程 Host 另需安全协议 |
+|  21 | 环境                      | 第一版固定内部 `default`，不提供环境 API                                                                   | 多环境会影响 Release promotion、独立密钥、URL、Runtime 和权限，需要单独设计                             |
+|  22 | 存储清理                  | 先提供用量和 cleanup plan，自动删除放到 Phase 6                                                            | 立即提供删除 API 实现快，但在引用图和恢复测试前风险过高                                                 |
+|  23 | APP 公网地址              | 独立 `APP_PUBLIC_ORIGIN`；生产 ingress 只转发 APP path 并阻断 Host 管理路由                                | 从 Hub origin 猜测在双 listener 拓扑下不可用；让 Hub 代理全部 APP 流量还要处理 WebSocket 和流式响应     |
+|  24 | Upload 认证               | 返回 `hub-bearer` / `provided-headers` auth mode，CLI 严格按 origin 发 token                               | CLI 永远附带 Bearer 会在未来预签名对象存储时泄漏 Hub token                                              |
+|  25 | APP Summary 投影          | 按 capability 和 Agent scope 省略未授权嵌套字段                                                            | 让 `hub.app:read` 隐式包含全部 metadata 会使细分 capability 和最小 scope 失去意义                       |
+|  26 | 管理写入并发              | APP、成员权限和设置使用 revision + `If-Match`                                                              | last-write-wins 更简单，但多个管理员会静默覆盖彼此修改                                                  |
+|  27 | CLI 发布语义              | `publish` 生成 Release，`deploy` 只部署已有 Release，完整流程用 `publish --deploy`                         | 单个 deploy 命令更短，但无法分离角色权限，也难表达“已发布但未部署”                                      |
+|  28 | CLI 中断恢复              | 每次命令使用 operation ID 和本地 journal；Upload 创建后只复用 checksum 一致的 operation cache              | 每次重跑都新建资源会产生重复 APP / Release / Deployment；静默重建后复用旧 Upload 会破坏 checksum 契约   |
 
 ### 后续需要单独评审的能力
 

@@ -246,6 +246,11 @@ export interface ConfigureInactiveAppOptions {
   runtimeConfig: Readonly<Record<string, unknown>> | null;
 }
 
+export interface DeactivateAppOptions extends AppDestroyOptions {
+  target: AppDefinition;
+  runtimeConfig?: Readonly<Record<string, unknown>> | null;
+}
+
 export interface DeployAppOptions {
   target: AppDefinition;
   operationId: string;

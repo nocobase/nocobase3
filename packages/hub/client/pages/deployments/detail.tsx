@@ -31,6 +31,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Progress, ProgressLabel } from '@/components/ui/progress';
+import { Spinner } from '@/components/ui/spinner';
 import {
   type HubDeployment,
   type HubDeploymentEvent,
@@ -535,6 +536,7 @@ export function DeploymentDetailPage({
                   .finally(() => setRedeploying(false));
               }}
             >
+              {redeploying ? <Spinner aria-hidden='true' /> : null}
               {redeploying
                 ? translate('hub.common.starting', 'Starting…')
                 : translate(

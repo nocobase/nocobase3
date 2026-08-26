@@ -418,6 +418,7 @@ export class HubStore {
       name,
       description: normalizeOptionalText(input.description, 10_000),
       status: 'active',
+      desiredRuntimeState: 'stopped',
       isDefault: options.isDefault ?? false,
       revision: 1,
       defaultEnvironmentId: DEFAULT_ENVIRONMENT_ID,
@@ -928,6 +929,7 @@ export class HubStore {
           .updateTable('hubApplications')
           .set({
             activeReleaseId: current.targetReleaseId,
+            desiredRuntimeState: 'running',
             updatedAt: new Date(),
           })
           .where('id', '=', current.applicationId);
@@ -945,6 +947,14 @@ export class HubStore {
             "The application's active release changed while the deployment was running.",
           );
         }
+      }
+
+      if (recoveredAlreadyActive) {
+        await connection.query
+          .updateTable('hubApplications')
+          .set({ desiredRuntimeState: 'running', updatedAt: new Date() })
+          .where('id', '=', current.applicationId)
+          .execute();
       }
 
       const finishedAt = new Date();
@@ -1094,7 +1104,11 @@ export class HubStore {
   ): Promise<void> {
     await this.connection.query
       .updateTable('hubApplications')
-      .set({ activeReleaseId: releaseId, updatedAt: new Date() })
+      .set({
+        activeReleaseId: releaseId,
+        desiredRuntimeState: 'running',
+        updatedAt: new Date(),
+      })
       .where('id', '=', applicationId)
       .execute();
   }
@@ -1290,6 +1304,8 @@ function toApplication(row: Row): HubApplication {
     name: String(row.name),
     description: nullableString(row.description),
     status: row.status as HubApplication['status'],
+    desiredRuntimeState:
+      row.desiredRuntimeState === 'running' ? 'running' : 'stopped',
     defaultEnvironmentId: String(row.defaultEnvironmentId),
     activeReleaseId: nullableString(row.activeReleaseId),
     createdBy: String(row.createdBy),

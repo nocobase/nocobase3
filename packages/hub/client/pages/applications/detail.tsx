@@ -60,6 +60,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Spinner } from '@/components/ui/spinner';
 import {
   type HubApplication,
   type HubApplicationAccess,
@@ -775,6 +776,7 @@ export function ApplicationDetailPage({
                 submitDeployment(selectedRelease, selectedDeploymentType);
               }}
             >
+              {submittingDeployment ? <Spinner aria-hidden='true' /> : null}
               {submittingDeployment
                 ? translate('hub.application.deploy.starting', 'Starting…')
                 : selectedDeploymentType === 'redeploy'
@@ -2424,24 +2426,64 @@ function ApplicationSettings({
   const [description, setDescription] = useState(application.description ?? '');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [pendingAction, setPendingAction] =
+    useState<ApplicationSettingsAction | null>(null);
   const encodedId = encodeURIComponent(application.id);
-  const run = (key: string, request: Promise<unknown>) => {
+  const revisionHeaders = application.revision
+    ? { 'if-match': `"rev-${application.revision}"` }
+    : undefined;
+  const run = (
+    key: string,
+    request: () => Promise<unknown>,
+    onSuccess?: () => void,
+  ) => {
     setBusy(key);
     setError(null);
-    void request
-      .then(onChanged)
+    void request()
+      .then(() => {
+        onSuccess?.();
+        onChanged();
+      })
       .catch((reason: unknown) =>
         setError(reason instanceof Error ? reason : new Error(String(reason))),
       )
       .finally(() => setBusy(null));
   };
-  const revisionHeaders = application.revision
-    ? { 'if-match': `"rev-${application.revision}"` }
-    : undefined;
+  const executeAction = (action: ApplicationSettingsAction) => {
+    run(
+      action,
+      () =>
+        createApplicationSettingsActionRequest({
+          action,
+          encodedId,
+          fetcher,
+          revisionHeaders,
+        }),
+      () => setPendingAction(null),
+    );
+  };
+  const requestAction = (
+    action: ApplicationSettingsAction,
+    confirmationEnabled = true,
+  ) => {
+    setError(null);
+    if (!confirmationEnabled) {
+      executeAction(action);
+      return;
+    }
+    setPendingAction(action);
+  };
+  const actionCopy = pendingAction
+    ? getApplicationSettingsActionCopy(
+        pendingAction,
+        application.name,
+        translate,
+      )
+    : null;
 
   return (
     <div className='grid gap-4 xl:grid-cols-2'>
-      {error ? (
+      {error && !pendingAction ? (
         <div className='xl:col-span-2'>
           <HubErrorState error={error} />
         </div>
@@ -2497,8 +2539,7 @@ function ApplicationSettings({
             <Button
               disabled={busy !== null || !name.trim()}
               onClick={() =>
-                run(
-                  'save',
+                run('save', () =>
                   hubPatch(
                     `/apps/${encodedId}`,
                     {
@@ -2511,7 +2552,11 @@ function ApplicationSettings({
                 )
               }
             >
-              <Settings2 aria-hidden='true' />
+              {busy === 'save' ? (
+                <Spinner aria-hidden='true' />
+              ) : (
+                <Settings2 aria-hidden='true' />
+              )}
               {busy === 'save'
                 ? translate('hub.applicationSettings.saving', 'Saving…')
                 : translate('hub.applicationSettings.save', 'Save changes')}
@@ -2564,50 +2609,42 @@ function ApplicationSettings({
             </dl>
             {canControlRuntime ? (
               <div className='flex flex-wrap gap-2'>
-                <Button
-                  variant='outline'
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run(
-                      'start',
-                      hubPost(`/apps/${encodedId}/runtime/start`, {}, fetcher),
-                    )
-                  }
-                >
-                  {translate('hub.runtime.start', 'Start')}
-                </Button>
-                <Button
-                  variant='outline'
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run(
-                      'restart',
-                      hubRequest(
-                        `/apps/${encodedId}/runtime/restart`,
-                        {
-                          method: 'POST',
-                          headers: { 'idempotency-key': crypto.randomUUID() },
-                          body: '{}',
-                        },
-                        fetcher,
-                      ),
-                    )
-                  }
-                >
-                  {translate('hub.runtime.restart', 'Restart')}
-                </Button>
-                <Button
-                  variant='outline'
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run(
-                      'stop',
-                      hubPost(`/apps/${encodedId}/runtime/stop`, {}, fetcher),
-                    )
-                  }
-                >
-                  {translate('hub.runtime.evict', 'Evict runtime')}
-                </Button>
+                {runtime.state === 'stopped' ? (
+                  <Button
+                    variant='outline'
+                    disabled={busy !== null}
+                    onClick={() => requestAction('start')}
+                  >
+                    {busy === 'start' ? <Spinner aria-hidden='true' /> : null}
+                    {busy === 'start'
+                      ? translate('hub.runtime.starting', 'Starting…')
+                      : translate('hub.runtime.start', 'Start')}
+                  </Button>
+                ) : null}
+                {runtime.state === 'running' ? (
+                  <Button
+                    variant='outline'
+                    disabled={busy !== null}
+                    onClick={() => requestAction('restart')}
+                  >
+                    {busy === 'restart' ? <Spinner aria-hidden='true' /> : null}
+                    {busy === 'restart'
+                      ? translate('hub.runtime.restarting', 'Restarting…')
+                      : translate('hub.runtime.restart', 'Restart')}
+                  </Button>
+                ) : null}
+                {runtime.state === 'running' || runtime.state === 'idle' ? (
+                  <Button
+                    variant='outline'
+                    disabled={busy !== null}
+                    onClick={() => requestAction('stop')}
+                  >
+                    {busy === 'stop' ? <Spinner aria-hidden='true' /> : null}
+                    {busy === 'stop'
+                      ? translate('hub.runtime.stopping', 'Stopping…')
+                      : translate('hub.runtime.stop', 'Stop application')}
+                  </Button>
+                ) : null}
               </div>
             ) : null}
           </CardContent>
@@ -2642,32 +2679,17 @@ function ApplicationSettings({
               <Button
                 variant='outline'
                 disabled={busy !== null}
-                onClick={() => {
-                  if (
-                    confirmation?.rotateRuntimeSecret !== false &&
-                    !window.confirm(
-                      translate(
-                        'hub.runtimeSecret.confirm',
-                        'Rotating the secret signs all existing application sessions out. Continue?',
-                      ),
-                    )
-                  )
-                    return;
-                  run(
+                onClick={() =>
+                  requestAction(
                     'rotate',
-                    hubRequest(
-                      `/apps/${encodedId}/runtime-secret/rotate`,
-                      {
-                        method: 'POST',
-                        headers: { 'idempotency-key': crypto.randomUUID() },
-                        body: '{}',
-                      },
-                      fetcher,
-                    ),
-                  );
-                }}
+                    confirmation?.rotateRuntimeSecret !== false,
+                  )
+                }
               >
-                {translate('hub.runtimeSecret.rotate', 'Rotate secret')}
+                {busy === 'rotate' ? <Spinner aria-hidden='true' /> : null}
+                {busy === 'rotate'
+                  ? translate('hub.runtimeSecret.rotating', 'Rotating…')
+                  : translate('hub.runtimeSecret.rotate', 'Rotate secret')}
               </Button>
             ) : null}
           </CardContent>
@@ -2693,17 +2715,9 @@ function ApplicationSettings({
             {application.status === 'archived' && canRestore ? (
               <Button
                 disabled={busy !== null}
-                onClick={() =>
-                  run(
-                    'restore',
-                    hubRequest(
-                      `/apps/${encodedId}/restore`,
-                      { method: 'POST', headers: revisionHeaders, body: '{}' },
-                      fetcher,
-                    ),
-                  )
-                }
+                onClick={() => requestAction('restore')}
               >
+                {busy === 'restore' ? <Spinner aria-hidden='true' /> : null}
                 {busy === 'restore'
                   ? translate('hub.applicationSettings.restoring', 'Restoring…')
                   : translate(
@@ -2715,38 +2729,240 @@ function ApplicationSettings({
               <Button
                 variant='destructive'
                 disabled={busy !== null}
-                onClick={() => {
-                  if (
-                    confirmation?.archiveApplication !== false &&
-                    !window.confirm(
-                      translate(
-                        'hub.applicationSettings.archiveConfirm',
-                        'Archive this application?',
-                      ),
-                    )
-                  )
-                    return;
-                  run(
+                onClick={() =>
+                  requestAction(
                     'archive',
-                    hubRequest(
-                      `/apps/${encodedId}/archive`,
-                      { method: 'POST', headers: revisionHeaders, body: '{}' },
-                      fetcher,
-                    ),
-                  );
-                }}
+                    confirmation?.archiveApplication !== false,
+                  )
+                }
               >
-                {translate(
-                  'hub.applicationSettings.archive',
-                  'Archive application',
-                )}
+                {busy === 'archive' ? <Spinner aria-hidden='true' /> : null}
+                {busy === 'archive'
+                  ? translate('hub.applicationSettings.archiving', 'Archiving…')
+                  : translate(
+                      'hub.applicationSettings.archive',
+                      'Archive application',
+                    )}
               </Button>
             ) : null}
           </CardContent>
         </Card>
       ) : null}
+      <AlertDialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => {
+          if (!open && busy === null) {
+            setPendingAction(null);
+            setError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{actionCopy?.title}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {actionCopy?.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error ? (
+            <Alert variant='destructive'>
+              <AlertTitle>{actionCopy?.errorTitle}</AlertTitle>
+              <AlertDescription>
+                {getHubErrorMessage(error, translate)}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy !== null}>
+              {translate('hub.common.cancel', 'Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant={pendingAction === 'archive' ? 'destructive' : 'default'}
+              disabled={busy !== null || pendingAction === null}
+              onClick={(event) => {
+                event.preventDefault();
+                if (pendingAction) executeAction(pendingAction);
+              }}
+            >
+              {busy ? <Spinner aria-hidden='true' /> : null}
+              {busy ? actionCopy?.pendingLabel : actionCopy?.confirmLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
+}
+
+type ApplicationSettingsAction =
+  'start' | 'restart' | 'stop' | 'rotate' | 'archive' | 'restore';
+
+interface ApplicationSettingsActionRequestOptions {
+  action: ApplicationSettingsAction;
+  encodedId: string;
+  fetcher?: HubFetcher;
+  revisionHeaders?: HeadersInit;
+}
+
+function createApplicationSettingsActionRequest({
+  action,
+  encodedId,
+  fetcher,
+  revisionHeaders,
+}: ApplicationSettingsActionRequestOptions): Promise<unknown> {
+  if (action === 'start' || action === 'stop') {
+    return hubPost(`/apps/${encodedId}/runtime/${action}`, {}, fetcher);
+  }
+  if (action === 'restart') {
+    return hubRequest(
+      `/apps/${encodedId}/runtime/restart`,
+      {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: '{}',
+      },
+      fetcher,
+    );
+  }
+  if (action === 'rotate') {
+    return hubRequest(
+      `/apps/${encodedId}/runtime-secret/rotate`,
+      {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: '{}',
+      },
+      fetcher,
+    );
+  }
+  return hubRequest(
+    `/apps/${encodedId}/${action}`,
+    { method: 'POST', headers: revisionHeaders, body: '{}' },
+    fetcher,
+  );
+}
+
+interface ApplicationSettingsActionCopy {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  pendingLabel: string;
+  errorTitle: string;
+}
+
+function getApplicationSettingsActionCopy(
+  action: ApplicationSettingsAction,
+  applicationName: string,
+  translate: ReturnType<typeof useTranslate>,
+): ApplicationSettingsActionCopy {
+  const values = { name: applicationName };
+  const definitions: Record<
+    ApplicationSettingsAction,
+    Record<
+      keyof ApplicationSettingsActionCopy,
+      readonly [i18nKey: string, fallback: string]
+    >
+  > = {
+    start: {
+      title: ['hub.runtime.confirm.startTitle', 'Start application'],
+      description: [
+        'hub.runtime.confirm.startDescription',
+        'Start the runtime for {{name}}?',
+      ],
+      confirmLabel: ['hub.runtime.confirm.start', 'Confirm start'],
+      pendingLabel: ['hub.runtime.starting', 'Starting…'],
+      errorTitle: ['hub.runtime.error.start', 'Unable to start application'],
+    },
+    restart: {
+      title: ['hub.runtime.confirm.restartTitle', 'Restart application'],
+      description: [
+        'hub.runtime.confirm.restartDescription',
+        'Restart the runtime for {{name}}? Active requests may be interrupted.',
+      ],
+      confirmLabel: ['hub.runtime.confirm.restart', 'Confirm restart'],
+      pendingLabel: ['hub.runtime.restarting', 'Restarting…'],
+      errorTitle: [
+        'hub.runtime.error.restart',
+        'Unable to restart application',
+      ],
+    },
+    stop: {
+      title: ['hub.runtime.confirm.stopTitle', 'Stop application'],
+      description: [
+        'hub.runtime.confirm.stopDescription',
+        'Stop the runtime for {{name}}? The application will be unavailable until it is started again.',
+      ],
+      confirmLabel: ['hub.runtime.confirm.stop', 'Confirm stop'],
+      pendingLabel: ['hub.runtime.stopping', 'Stopping…'],
+      errorTitle: ['hub.runtime.error.stop', 'Unable to stop application'],
+    },
+    rotate: {
+      title: ['hub.runtimeSecret.confirmTitle', 'Rotate runtime secret'],
+      description: [
+        'hub.runtimeSecret.confirm',
+        'Rotating the secret signs all existing application sessions out. Continue?',
+      ],
+      confirmLabel: ['hub.runtimeSecret.confirmAction', 'Confirm rotation'],
+      pendingLabel: ['hub.runtimeSecret.rotating', 'Rotating…'],
+      errorTitle: ['hub.runtimeSecret.rotateError', 'Unable to rotate secret'],
+    },
+    archive: {
+      title: ['hub.applicationSettings.archiveTitle', 'Archive application'],
+      description: [
+        'hub.applicationSettings.archiveConfirmDescription',
+        'Archive {{name}}? Development and deployment will be disabled, but its source, releases, data, and history will be preserved.',
+      ],
+      confirmLabel: [
+        'hub.applicationSettings.archiveAction',
+        'Confirm archive',
+      ],
+      pendingLabel: ['hub.applicationSettings.archiving', 'Archiving…'],
+      errorTitle: [
+        'hub.applicationSettings.archiveError',
+        'Unable to archive application',
+      ],
+    },
+    restore: {
+      title: ['hub.applicationSettings.restoreTitle', 'Restore application'],
+      description: [
+        'hub.applicationSettings.restoreConfirmDescription',
+        'Restore {{name}} and allow development and deployment again?',
+      ],
+      confirmLabel: [
+        'hub.applicationSettings.restoreAction',
+        'Confirm restore',
+      ],
+      pendingLabel: ['hub.applicationSettings.restoring', 'Restoring…'],
+      errorTitle: [
+        'hub.applicationSettings.restoreError',
+        'Unable to restore application',
+      ],
+    },
+  };
+  const definition = definitions[action];
+  return {
+    title: translateWithValues(translate, ...definition.title, values),
+    description: translateWithValues(
+      translate,
+      ...definition.description,
+      values,
+    ),
+    confirmLabel: translateWithValues(
+      translate,
+      ...definition.confirmLabel,
+      values,
+    ),
+    pendingLabel: translateWithValues(
+      translate,
+      ...definition.pendingLabel,
+      values,
+    ),
+    errorTitle: translateWithValues(
+      translate,
+      ...definition.errorTitle,
+      values,
+    ),
+  };
 }
 
 function resolveHubPublicUrl(): string {

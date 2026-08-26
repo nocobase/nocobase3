@@ -246,10 +246,92 @@ describe('Hub management pages', () => {
     expect(ifMatch).toBe('"rev-3"');
   });
 
+  it('confirms and shows progress before disabling a member', async () => {
+    let memberDisabled = false;
+    let resolveDisable: ((value: Response) => void) | undefined;
+    const disableResponse = new Promise<Response>((resolve) => {
+      resolveDisable = resolve;
+    });
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/members?sort=name')) {
+        return response([
+          {
+            id: 'member-1',
+            name: 'Alice',
+            email: 'alice@example.com',
+            username: 'alice',
+            status: memberDisabled ? 'disabled' : 'active',
+            globalRoles: ['viewer'],
+            visibleApplicationCount: 1,
+            lastActiveAt: '2026-08-25T01:00:00.000Z',
+            createdAt: '2026-08-20T01:00:00.000Z',
+            revision: 7,
+          },
+        ]);
+      }
+      if (path.endsWith('/apps?limit=100&offset=0&sort=name')) {
+        return response([]);
+      }
+      if (path.endsWith('/roles')) return response([]);
+      if (path.endsWith('/members/member-1')) {
+        expect(init?.method).toBe('PATCH');
+        expect(init?.body).toBe(JSON.stringify({ status: 'disabled' }));
+        return disableResponse;
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(<MembersPage fetcher={fetcher} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Disable' }));
+    expect(
+      screen.getByRole('alertdialog', { name: 'Disable member' }),
+    ).toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith('/members/member-1') &&
+          init?.method === 'PATCH',
+      ),
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm disable' }));
+
+    await waitFor(() =>
+      expect(fetcher).toHaveBeenCalledWith(
+        '/hub/api/members/member-1',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'disabled' }),
+        }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Disabling…' })).toBeDisabled();
+
+    memberDisabled = true;
+    resolveDisable?.(
+      response({
+        id: 'member-1',
+        name: 'Alice',
+        email: 'alice@example.com',
+        username: 'alice',
+        status: 'disabled',
+        revision: 8,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    );
+  });
+
   it('filters, paginates, and revokes invitations', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     let listRefreshesAfterRevoke = 0;
     let revoked = false;
+    let resolveRevoke: ((value: Response) => void) | undefined;
+    const revokeResponse = new Promise<Response>((resolve) => {
+      resolveRevoke = resolve;
+    });
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const path = String(input);
       if (path.endsWith('/members?sort=name')) return response([]);
@@ -259,8 +341,7 @@ describe('Hub management pages', () => {
       if (path.endsWith('/roles')) return response([]);
       if (path.endsWith('/invitations/invite-1')) {
         expect(init?.method).toBe('DELETE');
-        revoked = true;
-        return response({ id: 'invite-1', status: 'revoked' });
+        return revokeResponse;
       }
       if (path.includes('/invitations?')) {
         if (revoked) listRefreshesAfterRevoke += 1;
@@ -320,15 +401,32 @@ describe('Hub management pages', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Revoke invitation' }));
+    expect(
+      screen.getByRole('alertdialog', { name: 'Revoke invitation' }),
+    ).toBeInTheDocument();
+    expect(revoked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke' }));
+    await waitFor(() =>
+      expect(fetcher).toHaveBeenCalledWith(
+        '/hub/api/invitations/invite-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Revoking…' })).toBeDisabled();
+
+    revoked = true;
+    resolveRevoke?.(response({ id: 'invite-1', status: 'revoked' }));
     await waitFor(() => expect(revoked).toBe(true));
     await waitFor(() => expect(listRefreshesAfterRevoke).toBeGreaterThan(0));
-    confirm.mockRestore();
   });
 
   it('filters, paginates, and revokes the current user Agent credentials', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     let listRefreshesAfterRevoke = 0;
     let revoked = false;
+    let resolveRevoke: ((value: Response) => void) | undefined;
+    const revokeResponse = new Promise<Response>((resolve) => {
+      resolveRevoke = resolve;
+    });
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const path = String(input);
       if (path.endsWith('/members?sort=name')) return response([]);
@@ -338,8 +436,7 @@ describe('Hub management pages', () => {
       if (path.endsWith('/roles')) return response([]);
       if (path.endsWith('/agent-credentials/credential-1')) {
         expect(init?.method).toBe('DELETE');
-        revoked = true;
-        return response({ revoked: true });
+        return revokeResponse;
       }
       if (path.includes('/agent-credentials?')) {
         if (revoked) listRefreshesAfterRevoke += 1;
@@ -401,9 +498,23 @@ describe('Hub management pages', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Revoke credential' }));
+    expect(
+      screen.getByRole('alertdialog', { name: 'Revoke Agent credential' }),
+    ).toBeInTheDocument();
+    expect(revoked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke' }));
+    await waitFor(() =>
+      expect(fetcher).toHaveBeenCalledWith(
+        '/hub/api/agent-credentials/credential-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Revoking…' })).toBeDisabled();
+
+    revoked = true;
+    resolveRevoke?.(response({ revoked: true }));
     await waitFor(() => expect(revoked).toBe(true));
     await waitFor(() => expect(listRefreshesAfterRevoke).toBeGreaterThan(0));
-    confirm.mockRestore();
   });
 
   it('resolves an invitation from the URL fragment and creates the member without signing in', async () => {

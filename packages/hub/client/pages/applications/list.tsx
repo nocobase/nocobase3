@@ -11,10 +11,20 @@ import {
   Square,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useTranslate } from '@refinedev/core';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -46,9 +56,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Spinner } from '@/components/ui/spinner';
 import {
   type HubApplication,
   type HubCapabilities,
+  type HubDeployment,
   type HubFetcher,
   type HubMe,
   hasHubCapability,
@@ -667,13 +679,18 @@ function ApplicationQuickActions({
   align?: 'start' | 'end';
 }) {
   const translate = useTranslate();
+  const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [pendingAction, setPendingAction] =
+    useState<ApplicationQuickAction | null>(null);
   const encodedId = encodeURIComponent(application.id);
   const isActive = application.status === 'active';
   const isRunning = application.runtime?.state === 'running';
+  const isIdle = application.runtime?.state === 'idle';
   const isStopped = application.runtime?.state === 'stopped';
   const activeReleaseId = application.activeRelease?.id;
+  const latestReleaseId = application.latestRelease?.id;
   const hasActiveRelease = Boolean(activeReleaseId);
   const canManage = hasHubCapability(
     capabilities,
@@ -695,6 +712,11 @@ function ApplicationQuickActions({
     isActive &&
     hasActiveRelease &&
     hasHubCapability(capabilities, 'hub.runtime', 'control', application.id);
+  const canDeploy =
+    isActive &&
+    !hasActiveRelease &&
+    Boolean(latestReleaseId) &&
+    hasHubCapability(capabilities, 'hub.deployment', 'deploy', application.id);
   const canRedeploy =
     isActive &&
     isRunning &&
@@ -709,16 +731,31 @@ function ApplicationQuickActions({
     translateWithValues(translate, key, fallback, {
       name: application.name,
     });
-  const run = (action: string, request: Promise<unknown>) => {
+  const run = (action: ApplicationQuickAction) => {
+    const request = createQuickActionRequest({
+      action,
+      application,
+      encodedId,
+      fetcher,
+    });
     setBusy(action);
     setError(null);
     void request
-      .then(() => onChanged())
+      .then((result) => {
+        onChanged();
+        setPendingAction(null);
+        if (result.deploymentId) {
+          void navigate(`/deployments/${result.deploymentId}`);
+        }
+      })
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason : new Error(String(reason)));
       })
       .finally(() => setBusy(null));
   };
+  const actionCopy = pendingAction
+    ? getQuickActionCopy(pendingAction, application, translate)
+    : null;
 
   return (
     <div
@@ -779,6 +816,24 @@ function ApplicationQuickActions({
           {translate('hub.apps.develop', 'Develop')}
         </Button>
       ) : null}
+      {canDeploy && latestReleaseId ? (
+        <Button
+          type='button'
+          size='sm'
+          variant='outline'
+          disabled={busy !== null}
+          aria-label={translateWithValues(
+            translate,
+            'hub.releases.deployAria',
+            'Deploy {{version}}',
+            { version: application.latestRelease?.version ?? '' },
+          )}
+          onClick={() => setPendingAction('deploy')}
+        >
+          <Rocket aria-hidden='true' />
+          {translate('hub.releases.deploy', 'Deploy')}
+        </Button>
+      ) : null}
       {canControlRuntime && isStopped ? (
         <Button
           type='button'
@@ -786,61 +841,40 @@ function ApplicationQuickActions({
           variant='outline'
           disabled={busy !== null}
           aria-label={label('hub.apps.actions.startAria', 'Start {{name}}')}
-          onClick={() =>
-            run(
-              'start',
-              hubPost(`/apps/${encodedId}/runtime/start`, {}, fetcher),
-            )
-          }
+          onClick={() => setPendingAction('start')}
         >
           <Play aria-hidden='true' />
           {translate('hub.runtime.start', 'Start')}
         </Button>
       ) : null}
-      {canControlRuntime && isRunning ? (
+      {canControlRuntime && (isRunning || isIdle) ? (
         <>
-          <Button
-            type='button'
-            size='sm'
-            variant='outline'
-            disabled={busy !== null}
-            aria-label={label(
-              'hub.apps.actions.restartAria',
-              'Restart {{name}}',
-            )}
-            onClick={() =>
-              run(
-                'restart',
-                hubRequest(
-                  `/apps/${encodedId}/runtime/restart`,
-                  {
-                    method: 'POST',
-                    headers: { 'idempotency-key': crypto.randomUUID() },
-                    body: '{}',
-                  },
-                  fetcher,
-                ),
-              )
-            }
-          >
-            <RefreshCw aria-hidden='true' />
-            {translate('hub.runtime.restart', 'Restart')}
-          </Button>
+          {isRunning ? (
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              disabled={busy !== null}
+              aria-label={label(
+                'hub.apps.actions.restartAria',
+                'Restart {{name}}',
+              )}
+              onClick={() => setPendingAction('restart')}
+            >
+              <RefreshCw aria-hidden='true' />
+              {translate('hub.runtime.restart', 'Restart')}
+            </Button>
+          ) : null}
           <Button
             type='button'
             size='sm'
             variant='outline'
             disabled={busy !== null}
             aria-label={label('hub.apps.actions.stopAria', 'Stop {{name}}')}
-            onClick={() =>
-              run(
-                'stop',
-                hubPost(`/apps/${encodedId}/runtime/stop`, {}, fetcher),
-              )
-            }
+            onClick={() => setPendingAction('stop')}
           >
             <Square aria-hidden='true' />
-            {translate('hub.runtime.evict', 'Evict runtime')}
+            {translate('hub.runtime.stop', 'Stop application')}
           </Button>
         </>
       ) : null}
@@ -854,35 +888,222 @@ function ApplicationQuickActions({
             'hub.apps.actions.redeployAria',
             'Redeploy {{name}}',
           )}
-          onClick={() =>
-            run(
-              'redeploy',
-              hubRequest(
-                `/apps/${encodedId}/deployments`,
-                {
-                  method: 'POST',
-                  headers: { 'idempotency-key': crypto.randomUUID() },
-                  body: JSON.stringify({
-                    targetReleaseId: activeReleaseId,
-                    type: 'redeploy',
-                  }),
-                },
-                fetcher,
-              ),
-            )
-          }
+          onClick={() => setPendingAction('redeploy')}
         >
           <Rocket aria-hidden='true' />
           {translate('hub.deployment.redeploy', 'Redeploy')}
         </Button>
       ) : null}
-      {error ? (
-        <p className='basis-full text-xs text-destructive' role='alert'>
-          {getHubErrorMessage(error, translate)}
-        </p>
-      ) : null}
+      <AlertDialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => {
+          if (!open && busy === null) {
+            setPendingAction(null);
+            setError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{actionCopy?.title}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {actionCopy?.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error ? (
+            <Alert variant='destructive'>
+              <AlertTitle>{actionCopy?.errorTitle}</AlertTitle>
+              <AlertDescription>
+                {getHubErrorMessage(error, translate)}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy !== null}>
+              {translate('hub.common.cancel', 'Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy !== null || pendingAction === null}
+              onClick={(event) => {
+                event.preventDefault();
+                if (pendingAction) run(pendingAction);
+              }}
+            >
+              {busy ? <Spinner aria-hidden='true' /> : null}
+              {busy ? actionCopy?.pendingLabel : actionCopy?.confirmLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
+}
+
+type ApplicationQuickAction =
+  'deploy' | 'redeploy' | 'start' | 'restart' | 'stop';
+
+interface QuickActionRequestOptions {
+  action: ApplicationQuickAction;
+  application: HubApplication;
+  encodedId: string;
+  fetcher?: HubFetcher;
+}
+
+interface QuickActionResult {
+  deploymentId?: string;
+}
+
+function createQuickActionRequest({
+  action,
+  application,
+  encodedId,
+  fetcher,
+}: QuickActionRequestOptions): Promise<QuickActionResult> {
+  if (action === 'deploy' || action === 'redeploy') {
+    const targetReleaseId =
+      action === 'deploy'
+        ? application.latestRelease?.id
+        : application.activeRelease?.id;
+    return hubRequest<HubDeployment>(
+      `/apps/${encodedId}/deployments`,
+      {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: JSON.stringify({ targetReleaseId, type: action }),
+      },
+      fetcher,
+    ).then((result) => ({ deploymentId: result.data.id }));
+  }
+  if (action === 'restart') {
+    return hubRequest(
+      `/apps/${encodedId}/runtime/restart`,
+      {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: '{}',
+      },
+      fetcher,
+    ).then(() => ({}));
+  }
+  return hubPost(`/apps/${encodedId}/runtime/${action}`, {}, fetcher).then(
+    () => ({}),
+  );
+}
+
+interface QuickActionCopy {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  pendingLabel: string;
+  errorTitle: string;
+}
+
+type QuickActionCopyDefinition = Record<
+  keyof QuickActionCopy,
+  readonly [i18nKey: string, fallback: string]
+>;
+
+function getQuickActionCopy(
+  action: ApplicationQuickAction,
+  application: HubApplication,
+  translate: ReturnType<typeof useTranslate>,
+): QuickActionCopy {
+  const values = {
+    name: application.name,
+    version:
+      action === 'deploy'
+        ? (application.latestRelease?.version ?? '—')
+        : (application.activeRelease?.version ?? '—'),
+  };
+  const definitions: Record<ApplicationQuickAction, QuickActionCopyDefinition> =
+    {
+      deploy: {
+        title: ['hub.application.deploy.title', 'Deploy release'],
+        description: [
+          'hub.apps.actions.deployConfirmDescription',
+          'Deploy release {{version}} for {{name}}?',
+        ],
+        confirmLabel: ['hub.application.deploy.confirm', 'Confirm deployment'],
+        pendingLabel: ['hub.apps.actions.deploying', 'Deploying…'],
+        errorTitle: [
+          'hub.application.deploy.error',
+          'Unable to create deployment',
+        ],
+      },
+      redeploy: {
+        title: ['hub.application.redeploy.title', 'Redeploy current release'],
+        description: [
+          'hub.apps.actions.redeployConfirmDescription',
+          'Redeploy release {{version}} for {{name}}?',
+        ],
+        confirmLabel: [
+          'hub.application.redeploy.confirm',
+          'Confirm redeployment',
+        ],
+        pendingLabel: ['hub.apps.actions.redeploying', 'Redeploying…'],
+        errorTitle: [
+          'hub.deployment.redeployDialog.error',
+          'Unable to redeploy release',
+        ],
+      },
+      start: {
+        title: ['hub.runtime.confirm.startTitle', 'Start application'],
+        description: [
+          'hub.runtime.confirm.startDescription',
+          'Start the runtime for {{name}}?',
+        ],
+        confirmLabel: ['hub.runtime.confirm.start', 'Confirm start'],
+        pendingLabel: ['hub.runtime.starting', 'Starting…'],
+        errorTitle: ['hub.runtime.error.start', 'Unable to start application'],
+      },
+      restart: {
+        title: ['hub.runtime.confirm.restartTitle', 'Restart application'],
+        description: [
+          'hub.runtime.confirm.restartDescription',
+          'Restart the runtime for {{name}}? Active requests may be interrupted.',
+        ],
+        confirmLabel: ['hub.runtime.confirm.restart', 'Confirm restart'],
+        pendingLabel: ['hub.runtime.restarting', 'Restarting…'],
+        errorTitle: [
+          'hub.runtime.error.restart',
+          'Unable to restart application',
+        ],
+      },
+      stop: {
+        title: ['hub.runtime.confirm.stopTitle', 'Stop application'],
+        description: [
+          'hub.runtime.confirm.stopDescription',
+          'Stop the runtime for {{name}}? The application will be unavailable until it is started again.',
+        ],
+        confirmLabel: ['hub.runtime.confirm.stop', 'Confirm stop'],
+        pendingLabel: ['hub.runtime.stopping', 'Stopping…'],
+        errorTitle: ['hub.runtime.error.stop', 'Unable to stop application'],
+      },
+    };
+  const definition = definitions[action];
+  return {
+    title: translateWithValues(translate, ...definition.title, values),
+    description: translateWithValues(
+      translate,
+      ...definition.description,
+      values,
+    ),
+    confirmLabel: translateWithValues(
+      translate,
+      ...definition.confirmLabel,
+      values,
+    ),
+    pendingLabel: translateWithValues(
+      translate,
+      ...definition.pendingLabel,
+      values,
+    ),
+    errorTitle: translateWithValues(
+      translate,
+      ...definition.errorTitle,
+      values,
+    ),
+  };
 }
 
 function currentReleaseLabel(

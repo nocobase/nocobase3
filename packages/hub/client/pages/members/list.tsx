@@ -3,6 +3,16 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useTranslate } from '@refinedev/core';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +46,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Spinner } from '@/components/ui/spinner';
 import {
   type HubApplication,
   type HubAgentCredential,
@@ -313,7 +324,11 @@ function MemberRow({
   const translate = useTranslate();
   const [busy, setBusy] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [statusActionOpen, setStatusActionOpen] = useState(false);
+  const [statusError, setStatusError] = useState<Error | null>(null);
   const roles = member.roles ?? member.globalRoles ?? [];
+  const enabling = member.status === 'disabled';
+  const nextStatus = enabling ? 'active' : 'disabled';
   return (
     <TableRow>
       <TableCell className='pl-4'>
@@ -362,29 +377,11 @@ function MemberRow({
             variant='outline'
             disabled={busy}
             onClick={() => {
-              const next = member.status === 'disabled' ? 'active' : 'disabled';
-              if (
-                next === 'disabled' &&
-                !window.confirm(
-                  translate(
-                    'hub.members.disableConfirm',
-                    'Disable this member and revoke active sessions?',
-                  ),
-                )
-              )
-                return;
-              setBusy(true);
-              void hubPatch<HubMember>(
-                `/members/${encodeURIComponent(member.id)}`,
-                { status: next },
-                fetcher,
-                { 'if-match': `"rev-${member.revision}"` },
-              )
-                .then(onChanged)
-                .finally(() => setBusy(false));
+              setStatusError(null);
+              setStatusActionOpen(true);
             }}
           >
-            {member.status === 'disabled'
+            {enabling
               ? translate('hub.members.enable', 'Enable')
               : translate('hub.members.disable', 'Disable')}
           </Button>
@@ -397,6 +394,62 @@ function MemberRow({
           applications={applications}
           fetcher={fetcher}
           onSaved={onChanged}
+        />
+        <ConfirmActionDialog
+          open={statusActionOpen}
+          busy={busy}
+          error={statusError}
+          destructive={!enabling}
+          title={
+            enabling
+              ? translate('hub.members.enableTitle', 'Enable member')
+              : translate('hub.members.disableTitle', 'Disable member')
+          }
+          description={
+            enabling
+              ? translate(
+                  'hub.members.enableConfirm',
+                  'Enable this member and allow them to sign in again?',
+                )
+              : translate(
+                  'hub.members.disableConfirm',
+                  'Disable this member and revoke active sessions?',
+                )
+          }
+          confirmLabel={
+            enabling
+              ? translate('hub.members.enableAction', 'Confirm enable')
+              : translate('hub.members.disableAction', 'Confirm disable')
+          }
+          pendingLabel={
+            enabling
+              ? translate('hub.members.enabling', 'Enabling…')
+              : translate('hub.members.disabling', 'Disabling…')
+          }
+          errorTitle={translate(
+            'hub.members.statusError',
+            'Unable to update member status',
+          )}
+          onOpenChange={(open) => {
+            setStatusActionOpen(open);
+            if (!open) setStatusError(null);
+          }}
+          onConfirm={() => {
+            setBusy(true);
+            setStatusError(null);
+            void hubPatch<HubMember>(
+              `/members/${encodeURIComponent(member.id)}`,
+              { status: nextStatus },
+              fetcher,
+              { 'if-match': `"rev-${member.revision}"` },
+            )
+              .then(() => {
+                setStatusActionOpen(false);
+                onChanged();
+              })
+              .catch((reason: unknown) => setStatusError(toError(reason)))
+              .finally(() => setBusy(false));
+          }}
         />
       </TableCell>
     </TableRow>
@@ -651,6 +704,8 @@ function InvitationList({ fetcher }: { fetcher?: HubFetcher }) {
   const [status, setStatus] = useState('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [pendingInvitation, setPendingInvitation] =
+    useState<HubInvitation | null>(null);
   const path = useMemo(() => {
     const params = new URLSearchParams({ sort: '-createdAt' });
     if (deferredSearch.trim()) params.set('query', deferredSearch.trim());
@@ -692,7 +747,7 @@ function InvitationList({ fetcher }: { fetcher?: HubFetcher }) {
           ))}
         </NativeSelect>
       </div>
-      {error ? (
+      {error && !pendingInvitation ? (
         <Alert variant='destructive'>
           <AlertTitle>
             {translate(
@@ -766,26 +821,8 @@ function InvitationList({ fetcher }: { fetcher?: HubFetcher }) {
                             'Revoke invitation',
                           )}
                           onClick={() => {
-                            if (
-                              !window.confirm(
-                                translate(
-                                  'hub.invitations.revokeConfirm',
-                                  'Revoke this invitation?',
-                                ),
-                              )
-                            )
-                              return;
-                            setBusyId(invitation.id);
                             setError(null);
-                            void hubDelete<HubInvitation>(
-                              `/invitations/${encodeURIComponent(invitation.id)}`,
-                              fetcher,
-                            )
-                              .then(invitations.reload)
-                              .catch((reason: unknown) =>
-                                setError(toError(reason)),
-                              )
-                              .finally(() => setBusyId(null));
+                            setPendingInvitation(invitation);
                           }}
                         >
                           {translate('hub.invitations.revokeShort', 'Revoke')}
@@ -809,6 +846,47 @@ function InvitationList({ fetcher }: { fetcher?: HubFetcher }) {
           />
         </Card>
       )}
+      <ConfirmActionDialog
+        open={pendingInvitation !== null}
+        busy={busyId !== null}
+        error={error}
+        destructive
+        title={translate('hub.invitations.revokeTitle', 'Revoke invitation')}
+        description={translate(
+          'hub.invitations.revokeConfirm',
+          'Revoke this invitation? The invitation link will stop working immediately.',
+        )}
+        confirmLabel={translate(
+          'hub.invitations.revokeAction',
+          'Confirm revoke',
+        )}
+        pendingLabel={translate('hub.invitations.revoking', 'Revoking…')}
+        errorTitle={translate(
+          'hub.invitations.revokeError',
+          'Unable to revoke invitation',
+        )}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingInvitation(null);
+            setError(null);
+          }
+        }}
+        onConfirm={() => {
+          if (!pendingInvitation) return;
+          setBusyId(pendingInvitation.id);
+          setError(null);
+          void hubDelete<HubInvitation>(
+            `/invitations/${encodeURIComponent(pendingInvitation.id)}`,
+            fetcher,
+          )
+            .then(() => {
+              setPendingInvitation(null);
+              invitations.reload();
+            })
+            .catch((reason: unknown) => setError(toError(reason)))
+            .finally(() => setBusyId(null));
+        }}
+      />
     </div>
   );
 }
@@ -820,6 +898,8 @@ function AgentCredentialList({ fetcher }: { fetcher?: HubFetcher }) {
   const [status, setStatus] = useState('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [pendingCredential, setPendingCredential] =
+    useState<HubAgentCredential | null>(null);
   const path = useMemo(() => {
     const params = new URLSearchParams({ sort: '-createdAt' });
     if (deferredSearch.trim()) params.set('query', deferredSearch.trim());
@@ -864,7 +944,7 @@ function AgentCredentialList({ fetcher }: { fetcher?: HubFetcher }) {
           ))}
         </NativeSelect>
       </div>
-      {error ? (
+      {error && !pendingCredential ? (
         <Alert variant='destructive'>
           <AlertTitle>
             {translate(
@@ -978,26 +1058,8 @@ function AgentCredentialList({ fetcher }: { fetcher?: HubFetcher }) {
                             'Revoke credential',
                           )}
                           onClick={() => {
-                            if (
-                              !window.confirm(
-                                translate(
-                                  'hub.agentCredentials.revokeConfirm',
-                                  'Revoke this Agent credential?',
-                                ),
-                              )
-                            )
-                              return;
-                            setBusyId(credential.id);
                             setError(null);
-                            void hubDelete<{ revoked: boolean }>(
-                              `/agent-credentials/${encodeURIComponent(credential.id)}`,
-                              fetcher,
-                            )
-                              .then(credentials.reload)
-                              .catch((reason: unknown) =>
-                                setError(toError(reason)),
-                              )
-                              .finally(() => setBusyId(null));
+                            setPendingCredential(credential);
                           }}
                         >
                           {translate(
@@ -1024,6 +1086,50 @@ function AgentCredentialList({ fetcher }: { fetcher?: HubFetcher }) {
           />
         </Card>
       )}
+      <ConfirmActionDialog
+        open={pendingCredential !== null}
+        busy={busyId !== null}
+        error={error}
+        destructive
+        title={translate(
+          'hub.agentCredentials.revokeTitle',
+          'Revoke Agent credential',
+        )}
+        description={translate(
+          'hub.agentCredentials.revokeConfirm',
+          'Revoke this Agent credential? The Agent will lose Hub access immediately.',
+        )}
+        confirmLabel={translate(
+          'hub.agentCredentials.revokeAction',
+          'Confirm revoke',
+        )}
+        pendingLabel={translate('hub.agentCredentials.revoking', 'Revoking…')}
+        errorTitle={translate(
+          'hub.agentCredentials.revokeError',
+          'Unable to revoke credential',
+        )}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingCredential(null);
+            setError(null);
+          }
+        }}
+        onConfirm={() => {
+          if (!pendingCredential) return;
+          setBusyId(pendingCredential.id);
+          setError(null);
+          void hubDelete<{ revoked: boolean }>(
+            `/agent-credentials/${encodeURIComponent(pendingCredential.id)}`,
+            fetcher,
+          )
+            .then(() => {
+              setPendingCredential(null);
+              credentials.reload();
+            })
+            .catch((reason: unknown) => setError(toError(reason)))
+            .finally(() => setBusyId(null));
+        }}
+      />
     </div>
   );
 }
@@ -1058,6 +1164,74 @@ function invitationAccessText(invitation: HubInvitation): string {
 
 function toError(reason: unknown): Error {
   return reason instanceof Error ? reason : new Error(String(reason));
+}
+
+function ConfirmActionDialog({
+  open,
+  busy,
+  error,
+  destructive = false,
+  title,
+  description,
+  confirmLabel,
+  pendingLabel,
+  errorTitle,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  busy: boolean;
+  error: Error | null;
+  destructive?: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  pendingLabel: string;
+  errorTitle: string;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
+  const translate = useTranslate();
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && busy) return;
+        onOpenChange(nextOpen);
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        {error ? (
+          <Alert variant='destructive'>
+            <AlertTitle>{errorTitle}</AlertTitle>
+            <AlertDescription>
+              {getHubErrorMessage(error, translate)}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>
+            {translate('hub.common.cancel', 'Cancel')}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            variant={destructive ? 'destructive' : 'default'}
+            disabled={busy}
+            onClick={(event) => {
+              event.preventDefault();
+              onConfirm();
+            }}
+          >
+            {busy ? <Spinner aria-hidden='true' /> : null}
+            {busy ? pendingLabel : confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 
 function RoleCatalog({

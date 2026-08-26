@@ -101,6 +101,11 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
           return;
         }
 
+        if (!definition.enabled) {
+          await applyFetchResponse(res, appStoppedResponse(req));
+          return;
+        }
+
         const pathInside = getPathInsideApp(definition, path);
 
         if (isAppAssetPath(pathInside)) {
@@ -251,7 +256,24 @@ async function dispatchAppWebSocket(
   }
 
   const definition = registry.definition(appId);
-  if (!definition?.server) {
+  if (!definition) {
+    rejectWebSocketUpgrade(socket, 404);
+    return;
+  }
+
+  if (!definition.enabled) {
+    rejectWebSocketUpgrade(
+      socket,
+      503,
+      new Headers({
+        'cache-control': 'no-store',
+        'x-nocobase-error-code': 'APP_STOPPED',
+      }),
+    );
+    return;
+  }
+
+  if (!definition.server) {
     rejectWebSocketUpgrade(socket, 404);
     return;
   }
@@ -521,6 +543,33 @@ function notFoundResponse(): Response {
       ],
     },
     { status: 404 },
+  );
+}
+
+function appStoppedResponse(req: IncomingMessage): Response {
+  const acceptHeader = req.headers.accept;
+  const accept = Array.isArray(acceptHeader)
+    ? acceptHeader.join(',')
+    : (acceptHeader ?? '');
+  if (accept.toLowerCase().includes('text/html')) {
+    return new Response(
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Application is stopped</title></head><body><h1>Application is stopped</h1><p>Start the application from Hub and try again.</p></body></html>',
+      {
+        status: 503,
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/html; charset=utf-8',
+        },
+      },
+    );
+  }
+
+  return jsonResponse(
+    { error: 'Application is stopped', code: 'APP_STOPPED' },
+    {
+      status: 503,
+      headers: { 'cache-control': 'no-store' },
+    },
   );
 }
 

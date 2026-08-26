@@ -229,7 +229,23 @@ describe('Hub application pages', () => {
       },
       links: {
         self: '/hub/api/apps/app-2',
-        open: 'https://apps.example.com/orders/',
+        open: null,
+      },
+    };
+    const idleApplication: HubApplication = {
+      ...runningApplication,
+      id: 'app-3',
+      slug: 'billing',
+      name: 'Billing',
+      runtime: {
+        state: 'idle',
+        health: 'unknown',
+        releaseId: 'release-2',
+        lastCheckedAt: application.updatedAt,
+      },
+      links: {
+        self: '/hub/api/apps/app-3',
+        open: 'https://apps.example.com/billing/',
       },
     };
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
@@ -238,11 +254,14 @@ describe('Hub application pages', () => {
         return response({ user: null, roles: ['Deployer'], capabilities });
       }
       if (path.endsWith('/apps')) {
-        return response([runningApplication, stoppedApplication], {
-          total: 2,
-          limit: 20,
-          offset: 0,
-        });
+        return response(
+          [runningApplication, stoppedApplication, idleApplication],
+          {
+            total: 3,
+            limit: 20,
+            offset: 0,
+          },
+        );
       }
       if (path.endsWith('/apps/app-1/runtime/restart')) {
         expect(init?.method).toBe('POST');
@@ -312,8 +331,24 @@ describe('Hub application pages', () => {
     expect(
       screen.queryByRole('button', { name: 'Restart Orders' }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open Orders' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Open Billing' }),
+    ).toHaveAttribute('href', 'https://apps.example.com/billing/');
+    expect(
+      screen.getByRole('button', { name: 'Stop Billing' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Restart Billing' }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Restart Inventory' }));
+    expect(
+      screen.getByRole('alertdialog', { name: 'Restart application' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm restart' }));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         '/hub/api/apps/app-1/runtime/restart',
@@ -321,7 +356,13 @@ describe('Hub application pages', () => {
       ),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start Orders' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Start Orders' }),
+    );
+    expect(
+      screen.getByRole('alertdialog', { name: 'Start application' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm start' }));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         '/hub/api/apps/app-2/runtime/start',
@@ -329,11 +370,17 @@ describe('Hub application pages', () => {
       ),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
     const redeploy = await screen.findByRole('button', {
       name: 'Redeploy Inventory',
     });
     fireEvent.click(redeploy);
+    expect(
+      screen.getByRole('alertdialog', { name: 'Redeploy current release' }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm redeployment' }),
+    );
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -442,6 +489,110 @@ describe('Hub application pages', () => {
     fireEvent.click(screen.getByRole('button', { name: /list view/i }));
     expect(screen.getByText('1.2.0')).toBeInTheDocument();
     expect(screen.queryByText('1.3.0')).not.toBeInTheDocument();
+  });
+
+  it('confirms an initial deployment, shows progress, and opens its deployment', async () => {
+    const initialRelease = {
+      id: 'release-initial',
+      version: '0.0.1',
+      sourceCommit: 'abc123',
+      createdAt: '2026-08-22T09:00:00.000Z',
+    };
+    const undeployedApplication: HubApplication = {
+      ...application,
+      activeRelease: null,
+      latestRelease: initialRelease,
+      links: { self: '/hub/api/apps/app-1', open: null },
+      runtime: {
+        state: 'stopped',
+        health: 'unknown',
+        releaseId: null,
+        lastCheckedAt: null,
+      },
+    };
+    const deployCapabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.release', actions: ['read'] },
+        { resource: 'hub.deployment', actions: ['read', 'deploy'] },
+      ],
+      application: [],
+    };
+    let resolveDeployment: ((value: Response) => void) | undefined;
+    const deploymentResponse = new Promise<Response>((resolve) => {
+      resolveDeployment = resolve;
+    });
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/me')) {
+        return response({
+          user: null,
+          roles: ['Deployer'],
+          capabilities: deployCapabilities,
+        });
+      }
+      if (path.endsWith('/apps/app-1/deployments')) {
+        expect(init).toMatchObject({ method: 'POST' });
+        return deploymentResponse;
+      }
+      if (path.endsWith('/apps')) {
+        return response([undeployedApplication]);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path='/' element={<ApplicationsPage fetcher={fetchMock} />} />
+          <Route
+            path='/deployments/:deploymentId'
+            element={<p>Deployment accepted</p>}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /deploy 0\.0\.1/i }),
+    );
+
+    expect(
+      screen.getByRole('alertdialog', { name: 'Deploy release' }),
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith('/apps/app-1/deployments') &&
+          init?.method === 'POST',
+      ),
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm deployment' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/hub/api/apps/app-1/deployments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            targetReleaseId: initialRelease.id,
+            type: 'deploy',
+          }),
+        }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: /deploying/i })).toBeDisabled();
+
+    resolveDeployment?.(
+      response({
+        ...deployment,
+        id: 'initial-deployment',
+        targetReleaseId: initialRelease.id,
+      }),
+    );
+
+    expect(await screen.findByText('Deployment accepted')).toBeInTheDocument();
   });
 
   it('declares the governance routes shown by the application platform', () => {
@@ -743,17 +894,17 @@ describe('Hub application pages', () => {
       global: [{ resource: 'hub.app', actions: ['read', 'restore'] }],
       application: [],
     };
+    let resolveRestore: ((value: Response) => void) | undefined;
+    const restoreResponse = new Promise<Response>((resolve) => {
+      resolveRestore = resolve;
+    });
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
       const path = String(input);
       if (path.endsWith('/apps/app-1/restore')) {
         expect(init?.method).toBe('POST');
         expect(new Headers(init?.headers).get('if-match')).toBe('"rev-4"');
         expect(init?.body).toBe('{}');
-        return response({
-          ...archivedApplication,
-          status: 'active',
-          revision: 5,
-        });
+        return restoreResponse;
       }
       if (path.endsWith('/apps/app-1')) return response(archivedApplication);
       if (path.endsWith('/me')) {
@@ -773,11 +924,35 @@ describe('Hub application pages', () => {
       await screen.findByRole('button', { name: 'Restore application' }),
     );
 
+    expect(
+      screen.getByRole('alertdialog', { name: 'Restore application' }),
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith('/apps/app-1/restore') &&
+          init?.method === 'POST',
+      ),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm restore' }));
+
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         '/hub/api/apps/app-1/restore',
         expect.objectContaining({ method: 'POST', body: '{}' }),
       ),
+    );
+    expect(screen.getByRole('button', { name: 'Restoring…' })).toBeDisabled();
+
+    resolveRestore?.(
+      response({
+        ...archivedApplication,
+        status: 'active',
+        revision: 5,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
     );
   });
 
@@ -835,6 +1010,87 @@ describe('Hub application pages', () => {
       ),
     );
   });
+
+  it.each([
+    {
+      state: 'stopped',
+      open: null,
+      visibleAction: 'Start',
+      hiddenActions: ['Restart', 'Stop application'],
+    },
+    {
+      state: 'idle',
+      open: '/inventory/',
+      visibleAction: 'Stop application',
+      hiddenActions: ['Start', 'Restart'],
+    },
+  ])(
+    'projects $state runtime controls and application access consistently',
+    async ({ state, open, visibleAction, hiddenActions }) => {
+      const capabilities: HubCapabilities = {
+        global: [
+          { resource: 'hub.app', actions: ['read'] },
+          { resource: 'hub.runtime', actions: ['read', 'control'] },
+        ],
+        application: [],
+      };
+      const fetchMock = vi.fn<typeof fetch>(async (input) => {
+        const path = String(input);
+        if (path.endsWith('/apps/app-1')) {
+          return response({
+            ...application,
+            links: { self: '/hub/api/apps/app-1', open },
+          });
+        }
+        if (path.endsWith('/apps/app-1/runtime')) {
+          return response({
+            applicationId: 'app-1',
+            environmentId: 'default',
+            runtimeId: null,
+            state,
+            health: 'unknown',
+            releaseId: 'release-2',
+            releaseVersion: '1.2.0',
+            url: open,
+            startedAt: null,
+            lastSeenAt: null,
+            lastCheckedAt: null,
+            activeRequests: 0,
+            failure: null,
+          });
+        }
+        if (path.endsWith('/me')) {
+          return response({ user: null, roles: ['Deployer'], capabilities });
+        }
+        throw new Error(`Unexpected request: ${path}`);
+      });
+
+      render(
+        <MemoryRouter initialEntries={['/apps/app-1?tab=settings']}>
+          <ApplicationDetailPage applicationId='app-1' fetcher={fetchMock} />
+        </MemoryRouter>,
+      );
+
+      await screen.findByRole('tab', { name: 'Settings' });
+      fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
+      expect(await screen.findByText('Runtime and health')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: visibleAction }),
+      ).toBeInTheDocument();
+      for (const action of hiddenActions) {
+        expect(screen.queryByRole('button', { name: action })).toBeNull();
+      }
+      if (open) {
+        expect(
+          screen.getByRole('button', { name: 'Open application' }),
+        ).toHaveAttribute('href', open);
+      } else {
+        expect(
+          screen.queryByRole('button', { name: 'Open application' }),
+        ).toBeNull();
+      }
+    },
+  );
 
   it('shows development, permissions, and settings sections when authorized', async () => {
     const capabilities: HubCapabilities = {

@@ -276,6 +276,7 @@ describe('Hub application-management schema migration', () => {
       name: 'Existing app',
       isDefault: 0,
       revision: 1,
+      desiredRuntimeState: 'stopped',
     });
     await expect(
       upgraded.connection.query
