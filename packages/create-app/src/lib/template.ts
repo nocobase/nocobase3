@@ -14,27 +14,75 @@ export const DEFAULT_REGISTRY = 'https://npm.nocobase.ai';
 
 /**
  * Templates that can be named instead of spelled out as a package. A short name is what people will reach for, and it
- * keeps the published package name and its channel an implementation detail — switching `default` to a stable range,
- * or repointing it at a different package, then costs nothing on the command line.
+ * keeps the published package name an implementation detail — repointing `default` at a different package then costs
+ * nothing on the command line.
+ *
+ * The entries carry no tag: which channel a name resolves to is chosen separately, so that `--template-tag` can move
+ * every alias at once rather than having to be spelled into each one.
  *
  * More templates are expected here. Add an entry rather than asking anyone to type the package specifier.
  */
 export const TEMPLATE_ALIASES: Readonly<Record<string, string>> = {
-  default: '@nocobase/app-template-default@beta',
+  default: '@nocobase/app-template-default',
 };
 
 export const DEFAULT_TEMPLATE = 'default';
 
+/** Channels a template can be fetched from. */
+export const TEMPLATE_TAGS: readonly string[] = ['latest', 'beta'];
+
+/**
+ * The channel a named template resolves to when `--template-tag` is not given.
+ *
+ * `latest` rather than `beta`, because `beta` names the oldest template rather than the newest. changesets leaves that
+ * tag on a package's first published version and tags every release since as `latest`: it treats a package whose
+ * versions are all prereleases as publishing for the first time, and tags `latest` to keep the package installable.
+ * That holds on every release until a stable version ships, so defaulting to `beta` would hand everyone a stale
+ * template. `latest` is the newest published version today, and the right default once stable versions exist.
+ */
+export const DEFAULT_TEMPLATE_TAG = 'latest';
+
+export function isTemplateTag(value: string): boolean {
+  return TEMPLATE_TAGS.includes(value.trim());
+}
+
+export function parseTemplateTag(value: string): string {
+  const tag = value.trim();
+
+  if (!isTemplateTag(tag)) {
+    throw new Error(
+      `Unknown template tag "${value}". Expected one of: ${TEMPLATE_TAGS.join(', ')}.`,
+    );
+  }
+
+  return tag;
+}
+
+export interface ResolveTemplateSourceOptions {
+  /** Channel a named template resolves to. Ignored for a package specifier or a local path. */
+  tag?: string;
+}
+
 /**
  * Resolves what `--template` was given into something `downloadTemplate` can fetch.
  *
- * A known name maps to its package. Anything else passes through untouched, so a package specifier or a local path
- * still works — an alias table that swallowed those would make the flag less capable than it was.
+ * A known name becomes its package at the requested channel. Anything else passes through untouched, so a package
+ * specifier or a local path still works — an alias table that swallowed those would make the flag less capable than it
+ * was. That also means `--template-tag` only applies to a name: a caller who spelled out `pkg@1.2.3` already said
+ * which version they want, and silently appending a tag would override the more specific request.
  */
-export function resolveTemplateSource(template: string): string {
+export function resolveTemplateSource(
+  template: string,
+  options: ResolveTemplateSourceOptions = {},
+): string {
   const name = template.trim();
+  const packageName = TEMPLATE_ALIASES[name];
 
-  return TEMPLATE_ALIASES[name] ?? name;
+  if (packageName === undefined) {
+    return name;
+  }
+
+  return `${packageName}@${options.tag ?? DEFAULT_TEMPLATE_TAG}`;
 }
 
 export function isTemplateAlias(template: string): boolean {
