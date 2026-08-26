@@ -49,11 +49,11 @@ describe('reportStub', () => {
   });
 
   it('joins array values', () => {
-    const { command, lines } = createCommand('app:deploy');
+    const { command, lines } = createCommand('app:pull');
     reportStub(command, { flags: { tags: ['a', 'b'] } });
 
     expect(lines).toEqual([
-      '[nb3] app deploy (not implemented)',
+      '[nb3] app pull (not implemented)',
       '  --tags  a, b',
     ]);
   });

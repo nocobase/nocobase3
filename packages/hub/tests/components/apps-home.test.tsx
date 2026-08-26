@@ -171,12 +171,12 @@ describe('AppsHome', () => {
     expect(screen.getByText('deploy-token-once')).toBeVisible();
 
     const localCommands = [
-      'nb3 app create crm',
+      'pnpm config set @nocobase:registry https://npm.nocobase.ai/',
+      'pnpm create @nocobase/app@latest crm',
       'cd crm',
-      'pnpm install',
-      'nb3 app dev',
+      'pnpm dev',
     ].join('\n');
-    const deployCommand = `(printf 'Deploy token: '; read -r -s NB3_HUB_TOKEN && export NB3_HUB_TOKEN && printf '\\n' && nb3 app deploy --hub '${window.location.origin}/hub'; NB3_DEPLOY_EXIT=$?; unset NB3_HUB_TOKEN; exit "$NB3_DEPLOY_EXIT")`;
+    const deployCommand = `pnpm run deploy --hub ${window.location.origin}/hub`;
     expect(
       screen.getByText(
         (_, element) =>
@@ -276,7 +276,9 @@ describe('AppsHome', () => {
     ).toBeVisible();
     expect(screen.getByText(/部署令牌不会再次显示/)).toBeVisible();
     expect(
-      screen.getByText('nb3 app create crm', { exact: false }),
+      screen.getByText('pnpm create @nocobase/app@latest crm', {
+        exact: false,
+      }),
     ).toBeVisible();
     expect(screen.queryByText('deploy-token-once')).not.toBeInTheDocument();
   });

@@ -22,7 +22,7 @@ Hub is also the browser gateway for managed Apps. For example, CRM is opened at
 Hub and App Host stay independently deployable, while users see one origin and
 never need the App Host port.
 
-For the current App creation, CLI deployment, approval, and operator workflow,
+For the current App creation, deployment, approval, and operator workflow,
 see the [Simplified Chinese user guide](./USER_GUIDE.zh-CN.md).
 
 ## Configuration
@@ -59,7 +59,7 @@ store for the preview release.
 
 An administrator first reserves an App ID from `/hub/apps`. Hub displays an
 App-scoped deployment token once. From that App's source directory,
-`nb3 app deploy` runs the build, creates and uploads a deterministic immutable
+`pnpm run deploy --hub <hub-url>` runs the build, creates and uploads a deterministic immutable
 Release, and submits it for approval. The token cannot approve the Release or
 operate another App; an administrator must still approve it in Hub before App
 Host performs readiness checks and switches traffic.

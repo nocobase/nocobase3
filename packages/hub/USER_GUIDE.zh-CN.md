@@ -1,6 +1,6 @@
 ---
 title: NocoBase 3 Hub 使用说明书
-description: NocoBase 3 Hub 的 App 创建、部署令牌、CLI Release 发布、审批、回滚、运行资源和常见问题说明。
+description: NocoBase 3 Hub 的 App 创建、部署令牌、Release 发布、审批、回滚、运行资源和常见问题说明。
 keywords:
   - NocoBase 3
   - Hub
@@ -21,7 +21,7 @@ Hub 会创建 App 记录，不过不会在开发者电脑上创建源码目录�
 Hub 创建空 App 并发放部署令牌
         │
         ▼
-nb3 CLI 在开发者电脑上构建并上传 App Release
+App 项目内置脚本在开发者电脑上构建并上传 App Release
         │
         ▼
 Hub 接收 Release、提交审批并记录发布流程
@@ -41,19 +41,19 @@ Hub 目前处于预览阶段。本说明只覆盖当前源码中已经接通的�
 
 ## 当前可以做什么
 
-| 需求                                          | 当前入口                   | 能力状态                        |
-| --------------------------------------------- | -------------------------- | ------------------------------- |
-| 创建空 App 并获取部署令牌                     | 「应用中心 / 创建应用」    | 可用                            |
-| 使用 `nb3 app deploy` 构建并上传 App          | 本地 CLI                   | 可用，会自动提交管理员审批      |
-| 查看所有 App 和运行状态                       | 「应用中心」               | 可用                            |
-| 打开、启动、停止或重启 App                    | 「应用中心」或 App「概览」 | 可用                            |
-| 审批 Release 并上线                           | 「版本与发布」             | 可用                            |
-| 将 App 回滚到历史 Release                     | 「版本与发布」             | 可用                            |
-| 查看数据库等运行资源的生效状态                | App「运行资源」            | 只读预览                        |
-| 查看 Hub、App Host 和发布数据的运行状态       | `/hub/settings`            | 只读页面，主导航暂未提供入口    |
-| 在 Hub 中配置数据库、文件存储、缓存或运行参数 | 无                         | 页面入口未开放                  |
-| 在测试、预发布和生产环境间晋级                | 无                         | 未实现，当前只有单环境受控发布  |
-| 使用 Worker、独立进程或外部服务运行 App       | 无                         | 未实现，当前只支持 `in-process` |
+| 需求                                            | 当前入口                   | 能力状态                        |
+| ----------------------------------------------- | -------------------------- | ------------------------------- |
+| 创建空 App 并获取部署令牌                       | 「应用中心 / 创建应用」    | 可用                            |
+| 使用 `pnpm run deploy --hub ...` 构建并上传 App | 本地 App                   | 可用，会自动提交管理员审批      |
+| 查看所有 App 和运行状态                         | 「应用中心」               | 可用                            |
+| 打开、启动、停止或重启 App                      | 「应用中心」或 App「概览」 | 可用                            |
+| 审批 Release 并上线                             | 「版本与发布」             | 可用                            |
+| 将 App 回滚到历史 Release                       | 「版本与发布」             | 可用                            |
+| 查看数据库等运行资源的生效状态                  | App「运行资源」            | 只读预览                        |
+| 查看 Hub、App Host 和发布数据的运行状态         | `/hub/settings`            | 只读页面，主导航暂未提供入口    |
+| 在 Hub 中配置数据库、文件存储、缓存或运行参数   | 无                         | 页面入口未开放                  |
+| 在测试、预发布和生产环境间晋级                  | 无                         | 未实现，当前只有单环境受控发布  |
+| 使用 Worker、独立进程或外部服务运行 App         | 无                         | 未实现，当前只支持 `in-process` |
 
 ## 启动和维护 Hub
 
@@ -323,13 +323,13 @@ App Host 当前固定限制单个压缩包不超过 512 MiB、解压内容不超
 Hub 创建的是一个「未发布」App 记录，不会在你的电脑上创建源码目录。创建结果会给出类似下面的本地开发命令：
 
 ```bash
-nb3 app create crm
+pnpm config set @nocobase:registry https://npm.nocobase.ai/
+pnpm create @nocobase/app@latest crm
 cd crm
-pnpm install
-nb3 app dev
+pnpm dev
 ```
 
-本地 App 名称必须跟 Hub 中预留的 App ID 一致。`nb3 app create` 会把这个名称写入 `.nb3/config.json`，后续部署会用它作为目标 App ID。
+本地 App 的 `package.json.name` 必须跟 Hub 中预留的 App ID 一致。部署脚本会读取这个字段作为目标 App ID。
 
 :::warning 注意
 
@@ -379,27 +379,19 @@ nb3 app dev
 
 你也可以在页面顶部打开、启动、停止或重启 App。如果页面提示「App 不存在或尚未被 App Host 发现」，先检查 App Host 是否连接到了包含该 App 的 `APP_DIST_DIR`。
 
-## 使用 CLI 构建并上传 Release
+## 使用 App 项目脚本构建并上传 Release
 
-默认推荐使用 `nb3 app deploy`。它会在 App 源码目录中完成构建、Release 打包、上传和提交审批，不需要手工写入 App Host 的 `app-dist/`。
+默认推荐使用 App 项目内置的 `deploy` 脚本。它会在 App 源码目录中完成构建、Release 打包、上传和提交审批，不需要手工写入 App Host 的 `app-dist/`。
 
-把下面命令复制到本地 App 目录中执行。运行 `read` 后粘贴令牌并按回车；这种方式不会把令牌写入 Shell 历史：
+把下面命令复制到本地 App 根目录中执行。交互终端会提示输入部署令牌，并隐藏输入内容：
 
 ```bash
-(
-  read -r -s NB3_HUB_TOKEN
-  export NB3_HUB_TOKEN
-  printf '\n'
-  nb3 app deploy --hub 'http://127.0.0.1:13001/hub'
-  deploy_exit=$?
-  unset NB3_HUB_TOKEN
-  exit "$deploy_exit"
-)
+pnpm run deploy --hub 'http://127.0.0.1:13001/hub'
 ```
 
-`nb3 app deploy` 会依次执行：
+部署脚本会依次执行：
 
-1. 读取 `.nb3/config.json` 中的 App ID
+1. 读取 `package.json.name` 中的 App ID
 2. 运行当前 App `package.json` 中的 `build` 脚本
 3. 检查 `package.json` 有非空版本号，且存在 `dist/server/embedded.js`
 4. 按稳定顺序计算 `dist/` 的 SHA-256
@@ -410,29 +402,23 @@ nb3 app dev
 默认 Release ID 是 `<package-version>-<artifact-hash-prefix>`，比如 `0.1.0-a1b2c3d4e5f6`。也可以显式指定一个新的 ID：
 
 ```bash
-nb3 app deploy \
+pnpm run deploy \
   --hub 'https://hub.example.com/hub' \
   --release-id '2026.08.26-1'
 ```
 
 常用选项如下：
 
-| 选项                | 用途                                               |
-| ------------------- | -------------------------------------------------- |
-| `--hub <url>`       | 指定目标 Hub，必须包含 Hub 的挂载路径，比如 `/hub` |
-| `--token <token>`   | 直接提供部署令牌，默认读取 `NB3_HUB_TOKEN`         |
-| `--release-id <id>` | 指定不可变 Release ID                              |
-| `--no-build`        | 跳过 `build`，上传已有的 `dist/`                   |
-| `--dry-run`         | 只构建和校验，不连接 Hub                           |
-| `--json`            | 输出单个机器可读的 JSON 结果                       |
-| `--dir <directory>` | 指定 App 目录，默认使用当前目录                    |
+| 选项                | 用途                                       |
+| ------------------- | ------------------------------------------ |
+| `--hub <url>`       | 指定目标 Hub，当前必填，且必须包含挂载路径 |
+| `--token <token>`   | 直接提供部署令牌，默认读取 `NB3_HUB_TOKEN` |
+| `--release-id <id>` | 指定不可变 Release ID                      |
+| `--no-build`        | 跳过 `build`，上传已有的 `dist/`           |
+| `--dry-run`         | 只构建和校验，不连接 Hub                   |
+| `--json`            | 输出单个机器可读的 JSON 结果               |
 
-如果不想每次传 `--hub`，可以在 App 目录中保存地址：
-
-```bash
-nb3 app config hub 'https://hub.example.com/hub'
-nb3 app deploy
-```
+部署脚本只在 App 根目录工作，不支持 `--dir`，也不会从 `.nb3` 读取已保存的 Hub 地址。每次部署都要显式传 `--hub`。CI 中通过 `NB3_HUB_TOKEN` 或 `--token` 提供部署令牌。
 
 部署命令成功只表示 Release 已上传且审批已提交。它不会绕过 Hub 的「批准并上线」门禁。命令输出中的发布工作台地址可以交给管理员继续处理。
 
@@ -479,12 +465,12 @@ App Release 不需要携带 `AUTH_SECRET`。App Host 会在 App 第一次进入�
 主导航中的「版本与发布」对应 `/hub/deliveries`，这是日常发布工作台。标准流程是：
 
 ```text
-CLI 构建并上传 → 自动提交审批 → 管理员批准 → 上线前检查 → 切换在线版本
+App 构建并上传 → 自动提交审批 → 管理员批准 → 上线前检查 → 切换在线版本
 ```
 
 ### 1. 上传并提交审批
 
-开发者执行 `nb3 app deploy` 后，Release 会进入「待审批」状态。一次命令同时完成上传和提交审批，不需要开发者再到 Hub 中点击「提交审批」。
+开发者执行 `pnpm run deploy --hub ...` 后，Release 会进入「待审批」状态。一次命令同时完成上传和提交审批，不需要开发者再到 Hub 中点击「提交审批」。
 
 管理员也可以在 Release 仓库中对尚未提交的候选版本点击「提交审批」。这种情况主要用于通过其他受控方式已经存在于 App Host 中的 Release。
 
@@ -644,7 +630,7 @@ Release 行中的按钮含义如下：
 
 ## 自动化调用的限制
 
-Hub 现在提供按 App 隔离的部署令牌，供 `nb3 app deploy` 上传 Release 和提交发布审批。部署令牌不是通用服务账号：它不能创建 App、读取 Hub 控制面、批准或拒绝审批、发起回滚、操作 App 生命周期，也不能访问另一个 App。
+Hub 现在提供按 App 隔离的部署令牌，供 App 项目内置的部署脚本上传 Release 和提交发布审批。部署令牌不是通用服务账号：它不能创建 App、读取 Hub 控制面、批准或拒绝审批、发起回滚、操作 App 生命周期，也不能访问另一个 App。
 
 创建 App、轮换部署令牌、批准或拒绝审批、回滚和生命周期控制仍要求有效的 Hub 管理员 Session。页面写操作会执行同源保护，Hub 客户端会发送 `X-Requested-With: NocoBase3`。
 
@@ -652,14 +638,14 @@ Hub 现在提供按 App 隔离的部署令牌，供 `nb3 app deploy` 上传 Rele
 
 发布申请、回滚申请和 App 生命周期操作还必须提供最长 128 个字符的 `Idempotency-Key`。批准或拒绝审批不要求这个 Header，服务端会按审批 ID 防止冲突决定。
 
-CLI 使用的上传和提交审批路径分别是：
+部署脚本使用的上传和提交审批路径分别是：
 
 ```text
 PUT  /hub/api/apps/:appId/releases/:releaseId
 POST /hub/api/release-management/apps/:appId/deployments
 ```
 
-两次请求都使用 `Authorization: Bearer <deploy-token>`。上传必须使用 `Content-Type: application/vnd.nocobase.release+tar+gzip`，提交审批还必须带 `Idempotency-Key`。默认推荐直接使用 `nb3 app deploy`，让 CLI 生成确定性的压缩包、校验值和幂等键。
+两次请求都使用 `Authorization: Bearer <deploy-token>`。上传必须使用 `Content-Type: application/vnd.nocobase.release+tar+gzip`，提交审批还必须带 `Idempotency-Key`。默认推荐直接使用 `pnpm run deploy --hub ...`，让部署脚本生成确定性的压缩包、校验值和幂等键。
 
 不要把页面中展示的 `POST /deployments` 简写当成可直接调用的完整地址。管理员批准仍然只能使用管理员 Session，部署令牌不能实现无人值守上线。
 
@@ -675,9 +661,9 @@ POST /hub/api/release-management/apps/:appId/deployments
 4. Hub 的 `APP_HOST_CONTROL_URL` 是否指向实际 App Host
 5. Hub 和 App Host 的 `APP_HOST_CONTROL_TOKEN` 是否相同
 
-### `nb3 app deploy` 成功，但 App 还没有上线
+### `pnpm run deploy` 成功，但 App 还没有上线
 
-CLI 成功只表示 Release 已上传并提交审批。管理员还需要进入「版本与发布」，点击「批准并上线」，并等待完整性检查和健康检查通过。
+部署命令成功只表示 Release 已上传并提交审批。管理员还需要进入「版本与发布」，点击「批准并上线」，并等待完整性检查和健康检查通过。
 
 ### 部署提示 `APP_DEPLOY_TOKEN_INVALID` 或返回 `401`
 
@@ -685,7 +671,7 @@ CLI 成功只表示 Release 已上传并提交审批。管理员还需要进入�
 
 ### 部署提示 `APP_DEPLOY_TOKEN_FORBIDDEN` 或返回 `403`
 
-当前部署令牌绑定的是另一个 App。检查本地 `.nb3/config.json` 中的 `name` 是否跟 Hub 中预留的 App ID 一致，并改用该 App 自己的部署令牌。
+当前部署令牌绑定的是另一个 App。检查本地 `package.json.name` 是否跟 Hub 中预留的 App ID 一致，并改用该 App 自己的部署令牌。
 
 ### 上传提示 `APP_RELEASE_UPLOAD_LIMIT_EXCEEDED`
 
@@ -727,7 +713,7 @@ App Host 尚未找到目标 Release。确认 CLI 的上传步骤已经成功，H
 
 这两个配置在生产环境中是必填项。为 Hub 生成高强度 `AUTH_SECRET`，并把 `NOCOBASE_AUTH_URL` 配成外部可访问的 Hub 认证地址，比如 `https://hub.example.com/hub/api/auth`。
 
-### `nb3 app deploy` 提示缺少构建脚本或 `embedded.js`
+### `pnpm run deploy` 提示缺少构建脚本或 `embedded.js`
 
 默认部署要求 `package.json` 包含 `build` 脚本，并在构建后生成 `dist/server/embedded.js`。先修复 App 的构建配置；如果已经有完整的 `dist/`，可以使用 `--no-build` 跳过构建，不过 CLI 仍会检查服务端入口。
 
@@ -738,11 +724,11 @@ Hub 挂载在 `/hub` 时，完整 API 前缀是 `/hub/api/release-management`。
 ## 发布前检查清单
 
 - App 构建和针对性测试已经通过
-- Hub 已创建目标 App，本地 `.nb3/config.json` 中的名称跟 App ID 一致
+- Hub 已创建目标 App，本地 `package.json.name` 跟 App ID 一致
 - 部署令牌来自目标 App，并通过 `NB3_HUB_TOKEN`、`--token` 或 CI Secret 安全注入
 - 使用了新的 `releaseId`，或确认默认的版本号 + 产物哈希 ID 符合预期
 - `package.json` 包含版本号和 `build` 脚本，构建结果包含 `dist/server/embedded.js`
-- `nb3 app deploy --dry-run` 已经通过，或已完成等价的本地构建检查
+- `pnpm run deploy --hub <hub-url> --dry-run` 已经通过，或已完成等价的本地构建检查
 - App Host 读取了正确的 `APP_DIST_DIR`
 - Hub 和 App Host 使用相同的控制 token
 - App Host 的上传大小和文件项限制能容纳当前 Release

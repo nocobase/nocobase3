@@ -57,13 +57,13 @@ export function DevelopmentGuideDialog({
 
 export function DevelopmentGuideSteps({ appId }: { appId: string }) {
   const localCommands = [
-    `nb3 app create ${appId}`,
+    'pnpm config set @nocobase:registry https://npm.nocobase.ai/',
+    `pnpm create @nocobase/app@latest ${appId}`,
     `cd ${appId}`,
-    'pnpm install',
-    'nb3 app dev',
+    'pnpm dev',
   ].join('\n');
   const hubUrl = resolveCurrentHubUrl();
-  const deployCommand = `(printf 'Deploy token: '; read -r -s NB3_HUB_TOKEN && export NB3_HUB_TOKEN && printf '\\n' && nb3 app deploy --hub ${quoteForShell(hubUrl)}; NB3_DEPLOY_EXIT=$?; unset NB3_HUB_TOKEN; exit "$NB3_DEPLOY_EXIT")`;
+  const deployCommand = `pnpm run deploy --hub ${hubUrl}`;
 
   return (
     <div className='space-y-4'>
@@ -147,8 +147,4 @@ async function copyText(
 function resolveCurrentHubUrl(): string {
   if (typeof window === 'undefined') return getPortalBase().replace(/\/+$/, '');
   return `${window.location.origin}${getPortalBase().replace(/\/+$/, '')}`;
-}
-
-function quoteForShell(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }

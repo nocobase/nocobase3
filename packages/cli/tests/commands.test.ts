@@ -1,8 +1,5 @@
 import type { Config } from '@oclif/core';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { loadTestConfig, runCommand } from './helpers.ts';
 
 /**
@@ -12,7 +9,6 @@ import { loadTestConfig, runCommand } from './helpers.ts';
 const APP_COMMANDS = [
   'config',
   'create',
-  'deploy',
   'destroy',
   'dev',
   'info',
@@ -94,11 +90,6 @@ describe('documented argument contract', () => {
   it.each([
     ['app:create', ['name'], ['dir', 'template', 'registry']],
     ['app:pull', ['name', 'dir'], ['hub']],
-    [
-      'app:deploy',
-      [],
-      ['dir', 'hub', 'token', 'release-id', 'no-build', 'dry-run', 'json'],
-    ],
     ['app:config', ['key', 'value'], ['dir', 'json']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
@@ -136,45 +127,15 @@ describe('documented argument contract', () => {
 
 /**
  * These commands are blocked on work outside the CLI. They must fail rather than print a placeholder and succeed: a
- * script that deploys, sees exit 0, and carries on would be badly misled. Exit 3 marks "not built yet" specifically,
+ * an automation script that sees exit 0 and carries on would be badly misled. Exit 3 marks "not built yet" specifically,
  * so it can be told apart from a runtime error (1) or a bad argument (2).
  */
 describe('unimplemented commands', () => {
-  // `app deploy` and `hub start` resolve their project before reporting, so they need one to reach that point.
-  let workspace: string;
-
-  beforeAll(async () => {
-    workspace = await mkdtemp(path.join(os.tmpdir(), 'nb3-unimplemented-'));
-
-    await mkdir(path.join(workspace, '.nb3'), { recursive: true });
-    await writeFile(
-      path.join(workspace, '.nb3', 'config.json'),
-      JSON.stringify({
-        hub: 'http://localhost:3000',
-        name: 'demo',
-        template: 't',
-        templateVersion: '1.0.0',
-      }),
-      'utf8',
-    );
-    await writeFile(
-      path.join(workspace, '.nb3', 'hub.json'),
-      JSON.stringify({ host: '127.0.0.1', name: 'demo', port: 3000 }),
-      'utf8',
-    );
-  });
-
-  afterAll(async () => {
-    await rm(workspace, { force: true, recursive: true });
-  });
-
   it.each([
     ['app:list', []],
     ['app:pull', ['crm']],
   ])('%s fails with exit 3', async (id, argv) => {
-    const withWorkspace = argv.at(-1) === '--dir' ? [...argv, workspace] : argv;
-
-    await expect(runCommand(config, id, withWorkspace)).rejects.toMatchObject({
+    await expect(runCommand(config, id, argv)).rejects.toMatchObject({
       oclif: { exit: 3 },
     });
   });
@@ -189,7 +150,7 @@ describe('argument errors', () => {
 
   it('rejects an unknown flag', async () => {
     await expect(
-      runCommand(config, 'app:deploy', ['--nonexistent']),
+      runCommand(config, 'app:info', ['--nonexistent']),
     ).rejects.toMatchObject({
       oclif: { exit: 2 },
     });

@@ -33,6 +33,31 @@ and redirects. It must not include `APP_BASE_PATH`; the runtime combines them.
 origin used by the server-side proxy; it is not exposed as a Vite client
 variable.
 
+## Deploy to Hub
+
+First reserve an App with the same ID as `package.json.name` in Hub's App
+Center, then save the App-scoped deployment token. From the App root, run:
+
+```bash
+pnpm run deploy --hub http://127.0.0.1:13001/hub
+```
+
+An interactive terminal prompts for the deployment token with masked input. In
+CI, set `NB3_HUB_TOKEN` or pass `--token`. The `--hub` option is required and
+must include Hub's mount path. The command does not read a saved Hub URL from
+`.nb3` and does not support `--dir`.
+
+Use `--dry-run` to build and validate without credentials or network access,
+or `--no-build` to deploy an existing trusted `dist` directory:
+
+```bash
+pnpm run deploy --hub http://127.0.0.1:13001/hub --dry-run
+pnpm run deploy --hub http://127.0.0.1:13001/hub --no-build
+```
+
+The command uploads an immutable Release and submits it for approval. An
+administrator must still approve it in Hub before it goes online.
+
 ## App plugins
 
 The App loads enabled packages listed in `package.json` under

@@ -1,6 +1,6 @@
 # nb3 app
 
-`nb3 app` 用来创建、开发和部署业务 App。
+`nb3 app` 用来创建、开发和管理本地业务 App。部署由 App 项目内置的脚本负责。
 
 App 是用户实际开发的应用，比如 CRM、客服工作台、数据看板。
 
@@ -12,7 +12,6 @@ nb3 app dev       本地开发 App
 nb3 app info      查看 App 信息
 nb3 app config    查看或修改 App 配置
 nb3 app destroy   删除本地 App
-nb3 app deploy    构建并部署 App 到 Hub
 nb3 app pull      从 Hub 拉取已有 App（待实现）
 nb3 app list      查看 Hub 中的 App（待实现）
 ```
@@ -24,7 +23,7 @@ nb3 app list      查看 Hub 中的 App（待实现）
 ```text
 nb3 app create
 nb3 app dev
-nb3 app deploy
+pnpm run deploy --hub <hub-url>
 ```
 
 ## 创建 App
@@ -121,19 +120,13 @@ deploy token 只显示一次。关闭创建结果前，请先复制并妥善保�
 
 :::
 
-本地 App 的 `.nb3/config.json` 中，`name` 必须跟 Hub 中的 App ID 一致。为了避免 token 进入 Shell 历史，使用静默输入，再从 App 目录部署：
+本地 App 的 `package.json.name` 必须跟 Hub 中的 App ID 一致。从 App 根目录运行部署命令：
 
 ```bash
-(
-  read -r -s NB3_HUB_TOKEN
-  export NB3_HUB_TOKEN
-  printf '\n'
-  nb3 app deploy --hub http://127.0.0.1:13001/hub
-  deploy_exit=$?
-  unset NB3_HUB_TOKEN
-  exit "$deploy_exit"
-)
+pnpm run deploy --hub http://127.0.0.1:13001/hub
 ```
+
+交互终端会提示输入 deploy token，并隐藏输入内容。CI 中可以通过 `NB3_HUB_TOKEN` 环境变量提供，也可以显式传 `--token`。
 
 `--hub` 接收 Hub 的公开基址，必须包含实际挂载路径，比如 `/hub`。不要填写 App Host 的内部地址，也不要把 App ID 拼在地址后面。
 
@@ -150,19 +143,19 @@ deploy token 只显示一次。关闭创建结果前，请先复制并妥善保�
 如果已经有可信的构建产物，可以跳过构建：
 
 ```bash
-nb3 app deploy --hub http://127.0.0.1:13001/hub --no-build
+pnpm run deploy --hub http://127.0.0.1:13001/hub --no-build
 ```
 
 发布前想先检查本地产物，可以使用 `--dry-run`。这个模式会构建并校验 Release，但不会读取 deploy token，也不会访问 Hub：
 
 ```bash
-nb3 app deploy --hub http://127.0.0.1:13001/hub --dry-run
+pnpm run deploy --hub http://127.0.0.1:13001/hub --dry-run
 ```
 
 默认 Release ID 是 `<package-version>-<artifact-hash-prefix>`。只有需要外部发布编号时，才显式指定新的 ID：
 
 ```bash
-nb3 app deploy \
+pnpm run deploy \
   --hub https://apps.example.com/hub \
   --release-id 2026.08.26-1
 ```
@@ -173,22 +166,16 @@ nb3 app deploy \
 
 | 选项                | 用途                                          |
 | ------------------- | --------------------------------------------- |
-| `--dir <directory>` | 指定 App 目录，默认使用当前目录               |
-| `--hub <url>`       | 指定 Hub 的公开基址                           |
+| `--hub <url>`       | 指定 Hub 的公开基址，当前必填                 |
 | `--token <token>`   | 直接提供 deploy token，默认读 `NB3_HUB_TOKEN` |
 | `--release-id <id>` | 指定不可变 Release ID                         |
 | `--no-build`        | 跳过构建，使用已有的 `dist/`                  |
 | `--dry-run`         | 只构建和校验，不访问 Hub                      |
 | `--json`            | 输出单个机器可读的 JSON 结果                  |
 
-如果当前 App 已经记录了 Hub 地址，后续可以省略 `--hub`：
+部署脚本只在 App 根目录工作，不支持 `--dir`，也不会从 `.nb3/config.json` 读取 Hub 地址。每次部署都要显式传 `--hub`。
 
-```bash
-nb3 app config hub http://127.0.0.1:13001/hub
-nb3 app deploy
-```
-
-不建议把 token 写入 `.nb3/config.json`、命令脚本或 Git。部署完成后，可以从当前 Shell 中清除它：
+不建议把 token 写入 `.nb3/config.json`、命令脚本或 Git。通过环境变量提供 token 后，可以从当前 Shell 中清除它：
 
 ```bash
 unset NB3_HUB_TOKEN
@@ -222,5 +209,5 @@ nb3 hub start
 
 ```bash
 cd ../crm
-nb3 app deploy --hub http://localhost:3000/hub
+pnpm run deploy --hub http://localhost:3000/hub
 ```

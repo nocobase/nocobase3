@@ -14,7 +14,6 @@ export interface AppPackageManifest {
   name?: string;
   displayName?: string;
   version?: string;
-  packageManager?: string;
   scripts?: Record<string, string>;
 }
 
@@ -113,7 +112,6 @@ export async function readAppPackageManifest(
     name: optionalString(value.name),
     displayName: optionalString(value.displayName),
     version: optionalString(value.version),
-    packageManager: optionalString(value.packageManager),
     scripts: readScripts(value.scripts),
   };
 }
@@ -179,7 +177,7 @@ export async function prepareAppRelease(options: {
 
 /**
  * Produces a deterministic gzip stream. Artifact files are read one at a time,
- * so a large client bundle is never assembled in memory by the CLI.
+ * so a large client bundle is never assembled in memory by the deploy command.
  */
 export function createAppReleaseArchive(release: PreparedAppRelease): Readable {
   const archive = pack();
@@ -256,9 +254,7 @@ async function listArtifactFiles(
           `Release dist contains an unsupported file type: dist/${relativePath}`,
         );
       }
-      if (isEnvironmentFile(relativePath)) {
-        continue;
-      }
+      if (isEnvironmentFile(relativePath)) continue;
 
       const stats = await lstat(absolutePath);
       if (stats.isSymbolicLink()) {
@@ -287,10 +283,10 @@ async function hashArtifactFiles(files: ArtifactFile[]): Promise<string> {
     for await (const chunk of createReadStream(
       file.absolutePath,
     ) as AsyncIterable<unknown>) {
-      if (!(chunk instanceof Uint8Array)) {
+      if (!Buffer.isBuffer(chunk) && !(chunk instanceof Uint8Array)) {
         throw new Error(`Could not read artifact file ${file.relativePath}.`);
       }
-      hash.update(chunk);
+      hash.update(Buffer.from(chunk));
     }
     hash.update('\0');
   }
@@ -328,11 +324,8 @@ function writeBufferEntry(
       normalizedHeader(name, contents.byteLength),
       contents,
       (error?: Error | null) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve();
-        }
+        if (error) reject(error);
+        else resolve();
       },
     );
   });
@@ -344,11 +337,8 @@ function writeFileEntry(archive: Pack, file: ArtifactFile): Promise<void> {
     const entry = archive.entry(
       normalizedHeader(`dist/${file.relativePath}`, file.size),
       (error?: Error | null) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve();
-        }
+        if (error) reject(error);
+        else resolve();
       },
     );
 
@@ -388,9 +378,7 @@ function optionalString(value: unknown): string | undefined {
 }
 
 function readScripts(value: unknown): Record<string, string> | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
+  if (!isRecord(value)) return undefined;
   return Object.fromEntries(
     Object.entries(value).filter(
       (entry): entry is [string, string] => typeof entry[1] === 'string',

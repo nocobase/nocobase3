@@ -140,5 +140,5 @@ nb3 app dev
 需要部署时，再指定目标 Hub：
 
 ```bash
-nb3 app deploy --hub http://localhost:3000
+pnpm run deploy --hub http://localhost:3000/hub
 ```

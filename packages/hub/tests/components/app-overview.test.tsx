@@ -77,7 +77,9 @@ describe('AppOverview', () => {
     ).toBeVisible();
     expect(screen.getByText(/部署令牌不会再次显示/)).toBeVisible();
     expect(
-      screen.getByText('nb3 app create crm', { exact: false }),
+      screen.getByText('pnpm create @nocobase/app@latest crm', {
+        exact: false,
+      }),
     ).toBeVisible();
   });
 });

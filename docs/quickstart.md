@@ -10,9 +10,9 @@ V3 的基本思路：
 ## 1. 创建本地 App
 
 ```bash
-pnpm create @nocobase/app crm
+pnpm config set @nocobase:registry https://npm.nocobase.ai/
+pnpm create @nocobase/app@latest crm
 cd crm
-pnpm install
 ```
 
 这个目录就是 App 源码目录，可以放在任意位置。
@@ -32,7 +32,7 @@ pnpm dev
 
 如果只是本地开发，到这里就够了，不需要安装 Hub。
 
-## 3. 准备 Hub（未实现）
+## 3. 准备 Hub
 
 Hub 是用于部署和管理 App 的应用中心。
 
@@ -47,7 +47,7 @@ pnpm build
 pnpm start
 ```
 
-## 4. 部署 App（未实现）
+## 4. 部署 App
 
 回到 App 目录：
 
@@ -55,23 +55,20 @@ pnpm start
 cd ../crm
 ```
 
-部署到本地 Hub（需要 oauth 认证）：
+先在 Hub 的「应用中心」创建同名 App，并保存只显示一次的 deploy token。然后部署到本地 Hub：
 
 ```bash
-pnpm deploy --hub http://localhost:3000/crm
+pnpm run deploy --hub http://127.0.0.1:13001/hub
 ```
 
-部署到远端 Hub（需要 oauth 认证）：
+交互终端会隐藏输入 deploy token。CI 中通过 `NB3_HUB_TOKEN` 或 `--token` 提供 token：
 
 ```bash
-pnpm deploy --hub http://localhost:3000/crm
+NB3_HUB_TOKEN="$DEPLOY_TOKEN" \
+  pnpm run deploy --hub https://hub.example.com/hub
 ```
 
-后续如果 App 已经记录了 Hub 地址，可以直接执行：
-
-```bash
-pnpm deploy
-```
+`--hub` 当前必填，地址需要包含 Hub 的挂载路径，比如 `/hub`。部署脚本只在 App 根目录工作，不支持 `--dir`，也不会读取 `.nb3` 中保存的 Hub 地址。
 
 ## 常见问题
 
