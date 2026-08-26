@@ -105,7 +105,9 @@ async function run(input: ParsedInput): Promise<void> {
   // this code ran, while the template is fetched here and defaults to the self-hosted registry carrying v3.
   const registry =
     input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
-  const templateSource = resolveTemplateSource(input.flags.template);
+  const templateSource = resolveTemplateSource(input.flags.template, {
+    tag: input.flags['template-tag'],
+  });
 
   const download = spinner();
   download.start(`Downloading ${templateSource}`);
