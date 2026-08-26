@@ -1,0 +1,303 @@
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  assertTargetIsUsable,
+  assertValidAppName,
+  readEnvExample,
+  scaffoldFromTemplate,
+} from '../src/lib/scaffold.ts';
+import { addDriverDependency, DRIVER_VERSIONS } from '../src/lib/manifest.ts';
+
+const created: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    created
+      .splice(0)
+      .map((directory) => rm(directory, { force: true, recursive: true })),
+  );
+});
+
+async function createTempDirectory(): Promise<string> {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'create-app-test-'));
+  created.push(directory);
+
+  return directory;
+}
+
+async function createTemplate(
+  files: Record<string, string> = {},
+): Promise<string> {
+  const directory = await createTempDirectory();
+
+  await writeFile(
+    path.join(directory, 'package.json'),
+    JSON.stringify({
+      name: '@nocobase/app-template-default',
+      version: '0.0.1-beta.2',
+      dependencies: { knex: '^3.1.0' },
+      publishConfig: { access: 'public' },
+      repository: { type: 'git', url: 'git+https://example.com/repo.git' },
+    }),
+    'utf8',
+  );
+
+  for (const [name, contents] of Object.entries(files)) {
+    await writeFile(path.join(directory, name), contents, 'utf8');
+  }
+
+  return directory;
+}
+
+describe('assertValidAppName', () => {
+  it('accepts ordinary names', () => {
+    expect(() => assertValidAppName('crm')).not.toThrow();
+    expect(() => assertValidAppName('my-app')).not.toThrow();
+    expect(() => assertValidAppName('app2')).not.toThrow();
+  });
+
+  /** The name is written into `package.json` and used as the directory, so both constraints apply. */
+  it('rejects names npm would not accept', () => {
+    expect(() => assertValidAppName('')).toThrow(/cannot be empty/u);
+    expect(() => assertValidAppName('My-App')).toThrow(/not a valid app name/u);
+    expect(() => assertValidAppName('-leading')).toThrow(
+      /not a valid app name/u,
+    );
+  });
+
+  it('rejects a path separator, which would escape the target directory', () => {
+    expect(() => assertValidAppName('apps/crm')).toThrow(/path separator/u);
+    expect(() => assertValidAppName('..\\crm')).toThrow(/path separator/u);
+  });
+});
+
+describe('assertTargetIsUsable', () => {
+  it('accepts a directory that does not exist yet', async () => {
+    const parent = await createTempDirectory();
+
+    await expect(
+      assertTargetIsUsable(path.join(parent, 'new-app')),
+    ).resolves.toBeUndefined();
+  });
+
+  it('accepts an existing empty directory', async () => {
+    const directory = await createTempDirectory();
+
+    await expect(assertTargetIsUsable(directory)).resolves.toBeUndefined();
+  });
+
+  it('refuses to overwrite a directory with contents', async () => {
+    const directory = await createTempDirectory();
+    await writeFile(path.join(directory, 'keep.txt'), 'x', 'utf8');
+
+    await expect(assertTargetIsUsable(directory)).rejects.toThrow(
+      /already exists and is not empty/u,
+    );
+  });
+});
+
+describe('scaffoldFromTemplate', () => {
+  it('renames the manifest and strips the publish metadata', async () => {
+    const templateDirectory = await createTemplate();
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    const manifest = JSON.parse(
+      await readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
+    );
+
+    expect(manifest.name).toBe('crm');
+    expect(manifest.version).toBe('0.1.0');
+    expect(manifest.private).toBe(true);
+    expect(manifest.publishConfig).toBeUndefined();
+    expect(manifest.repository).toBeUndefined();
+    // Ranges were already resolved when the tarball was packed; rewriting them would undo that.
+    expect(manifest.dependencies.knex).toBe('^3.1.0');
+  });
+
+  /**
+   * npm refuses to publish a `.gitignore`, so templates ship it under another name. Without restoring it the generated
+   * project would commit `node_modules` and its `.env.local`.
+   */
+  it('restores .gitignore from the name npm allows', async () => {
+    const templateDirectory = await createTemplate({
+      '.npmignore': 'node_modules\n.env.local\n',
+    });
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    expect(
+      await readFile(path.join(targetDirectory, '.gitignore'), 'utf8'),
+    ).toContain('node_modules');
+  });
+
+  it('writes extra files, creating directories as needed', async () => {
+    const templateDirectory = await createTemplate();
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+      extraFiles: {
+        '.env.local': 'DB_DIALECT=sqlite\n',
+        'nested/file.txt': 'content',
+      },
+    });
+
+    expect(
+      await readFile(path.join(targetDirectory, '.env.local'), 'utf8'),
+    ).toBe('DB_DIALECT=sqlite\n');
+    expect(
+      await readFile(path.join(targetDirectory, 'nested/file.txt'), 'utf8'),
+    ).toBe('content');
+  });
+
+  it('creates the target when its parent does not exist', async () => {
+    const templateDirectory = await createTemplate();
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'deep', 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    await expect(
+      readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
+    ).resolves.toBeTruthy();
+  });
+});
+
+describe('readEnvExample', () => {
+  it('reads the template example when present', async () => {
+    const directory = await createTemplate({
+      '.env.example': 'APP_BASE_PATH=/main\n',
+    });
+
+    expect(await readEnvExample(directory)).toBe('APP_BASE_PATH=/main\n');
+  });
+
+  it('returns undefined when the template ships none', async () => {
+    const directory = await createTemplate();
+
+    expect(await readEnvExample(directory)).toBeUndefined();
+  });
+});
+
+describe('addDriverDependency', () => {
+  /** The template depends on `knex` alone, so exactly one driver is added based on the selected dialect. */
+  it('adds the driver to dependencies, not devDependencies', async () => {
+    const directory = await createTemplate();
+
+    await addDriverDependency(directory, 'pg');
+
+    const manifest = JSON.parse(
+      await readFile(path.join(directory, 'package.json'), 'utf8'),
+    );
+
+    expect(manifest.dependencies.pg).toBe(DRIVER_VERSIONS.pg);
+    expect(manifest.dependencies.knex).toBe('^3.1.0');
+    expect(manifest.devDependencies?.pg).toBeUndefined();
+  });
+
+  it('removes a devDependency copy that would pin a conflicting range', async () => {
+    const directory = await createTempDirectory();
+
+    await writeFile(
+      path.join(directory, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        version: '0.1.0',
+        devDependencies: { pg: '^7.0.0' },
+      }),
+      'utf8',
+    );
+    await addDriverDependency(directory, 'pg');
+
+    const manifest = JSON.parse(
+      await readFile(path.join(directory, 'package.json'), 'utf8'),
+    );
+
+    expect(manifest.dependencies.pg).toBe(DRIVER_VERSIONS.pg);
+    expect(manifest.devDependencies.pg).toBeUndefined();
+  });
+
+  it('rejects a driver it has no version range for', async () => {
+    const directory = await createTemplate();
+
+    await expect(addDriverDependency(directory, 'oracledb')).rejects.toThrow(
+      /No version range/u,
+    );
+  });
+
+  it('knows a range for every driver it can install', async () => {
+    for (const driver of ['better-sqlite3', 'pg', 'mysql2']) {
+      expect(DRIVER_VERSIONS[driver]).toMatch(/^\^\d+\.\d+\.\d+$/u);
+    }
+  });
+});
+
+describe('gitignore handling', () => {
+  /**
+   * The published `@nocobase/app-template-default` ships no ignore file of any name. Without a fallback the generated
+   * project would put `node_modules` and the secret-bearing `.env.local` on its first commit.
+   */
+  it('writes a fallback when the template ships no ignore file', async () => {
+    const templateDirectory = await createTemplate();
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    const contents = await readFile(
+      path.join(targetDirectory, '.gitignore'),
+      'utf8',
+    );
+
+    expect(contents).toContain('node_modules');
+    expect(contents).toContain('.env.local');
+  });
+
+  it('prefers the template gitignore over the fallback', async () => {
+    const templateDirectory = await createTemplate({
+      gitignore: '# from template\ncustom-output/\n',
+    });
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    const contents = await readFile(
+      path.join(targetDirectory, '.gitignore'),
+      'utf8',
+    );
+
+    expect(contents).toContain('custom-output/');
+    expect(contents).not.toContain('# Local application state.');
+  });
+});
