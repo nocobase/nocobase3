@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'path';
 import { loadEnv } from 'vite';
 
+import { isAgentAnnotationsEnabled } from './scripts/agent-annotations.js';
+
 const portalTemplate = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
 ) as { displayName: string; version: string };
@@ -42,6 +44,9 @@ export default createPortalViteConfig(
     const env = loadEnv(mode, process.cwd(), '');
     const appBase = normalizeBase(env.APP_BASE_PATH ?? '/main');
     const viteBase = appBase;
+    const annotationsEnabled = isAgentAnnotationsEnabled(
+      env.AGENT_ANNOTATIONS_ENABLED,
+    );
     const publicApiUrl =
       command === 'serve'
         ? mode === 'e2e' && env.NOCOBASE_E2E_API_URL?.trim()
@@ -75,12 +80,16 @@ export default createPortalViteConfig(
       define: defineEnv,
       envPrefix: ['VITE_'],
       plugins: [
-        agentAnnotations({
-          root: __dirname,
-          clientExtensions: [
-            path.resolve(__dirname, 'client/agent-annotations-host.ts'),
-          ],
-        }),
+        ...(annotationsEnabled
+          ? [
+              agentAnnotations({
+                root: __dirname,
+                clientExtensions: [
+                  path.resolve(__dirname, 'client/agent-annotations-host.ts'),
+                ],
+              }),
+            ]
+          : []),
         appClientPluginsPlugin({ root: __dirname }),
       ],
       server: {

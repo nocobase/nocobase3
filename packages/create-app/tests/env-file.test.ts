@@ -192,7 +192,7 @@ describe('buildEnvFile', () => {
   it('never lets an empty template AUTH_SECRET win', () => {
     const contents = buildEnvFile({
       database: defaultDatabaseConfig('sqlite'),
-      template: 'NOCOBASE_AUTH_URL=\nAUTH_SECRET=\n',
+      template: 'APP_PUBLIC_ORIGIN=\nAUTH_SECRET=\n',
       authSecret: 'REAL-SECRET',
     });
 
