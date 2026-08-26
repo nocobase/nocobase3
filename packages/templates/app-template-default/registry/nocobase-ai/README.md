@@ -12,7 +12,7 @@ but should supply their own `AIService` adapter and integration entry.
 - `@nocobase/ai-runtime`: NocoBase service adapter, chat state, streaming transport, conversation history, Tool execution, and page-context registries.
 - `@nocobase/ai-chat`: Chat windows, containers, triggers, page-element APIs, built-in Tool cards, and the high-level `NocoBaseAIRootProvider`.
 - `@nocobase/ai-react-hook-form`: Optional React Hook Form adapter for the built-in Form filler.
-- `@nocobase/ai`: The complete Demo extension and routes.
+- `@nocobase/ai-employee`: The complete Demo extension and routes.
 
 ## Recommended provider
 

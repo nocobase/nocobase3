@@ -1,0 +1,6 @@
+{
+  "name": "app-template-default-ai-resources",
+  "private": true,
+  "type": "commonjs",
+  "description": "Application-owned AI validation resources and the LLM models manifest. Compiled to CommonJS and copied into dist/ai by the app build."
+}

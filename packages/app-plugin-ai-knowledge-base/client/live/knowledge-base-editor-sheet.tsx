@@ -1,0 +1,573 @@
+import { useEffect, useState, type ReactElement } from 'react';
+
+import { Button } from '../components/ui/button.js';
+import { Input } from '../components/ui/input.js';
+import { Label } from '../components/ui/label.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select.js';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '../components/ui/sheet.js';
+import { Switch } from '../components/ui/switch.js';
+import { Textarea } from '../components/ui/textarea.js';
+import { useKnowledgeBaseService } from '../providers/context.js';
+import type {
+  KnowledgeBase,
+  KnowledgeBaseManagementOption,
+  KnowledgeBaseManagementOptions,
+  KnowledgeBaseMutation,
+  KnowledgeBaseType,
+} from '../providers/types.js';
+import { normalizeKnowledgeBaseMutation } from '../providers/service/knowledge-base-factory.js';
+import { useT } from '../locales/index.js';
+
+const defaultSegmentOptions = {
+  enabled: true,
+  chunkSize: 6000,
+  chunkOverlap: 1200,
+};
+const emptyOptions: KnowledgeBaseManagementOptions = {
+  vectorDatabases: [],
+  llmServices: [],
+  storages: [],
+  externalProviders: [],
+};
+
+function newKnowledgeBase(
+  knowledgeBaseType: KnowledgeBaseType = 'LOCAL',
+): KnowledgeBaseMutation {
+  return {
+    key: `kb-${Date.now().toString(36)}`,
+    name: '',
+    description: '',
+    knowledgeBaseType,
+    enabled: true,
+    segmentOptions: defaultSegmentOptions,
+  };
+}
+
+function editKnowledgeBase(record: KnowledgeBase): KnowledgeBaseMutation {
+  return {
+    key: record.key,
+    name: record.name,
+    description: record.description ?? '',
+    knowledgeBaseType: record.knowledgeBaseType,
+    enabled: record.enabled,
+    storageId: record.storageId,
+    vectorDatabaseKey: record.vectorDatabaseKey ?? record.vectorStoreConfigKey,
+    vectorStoreConfigKey: record.vectorStoreConfigKey,
+    llmService: record.llmService,
+    embeddingModel: record.embeddingModel,
+    vectorStoreProvider: record.vectorStoreProvider,
+    vectorStoreProps: record.vectorStoreProps,
+    segmentOptions: record.segmentOptions ?? defaultSegmentOptions,
+  };
+}
+
+function OptionSelect({
+  value,
+  options,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  value?: string;
+  options: KnowledgeBaseManagementOption[];
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}): ReactElement {
+  return (
+    <Select
+      value={value ?? null}
+      disabled={disabled}
+      onValueChange={(next) => next && onChange(next)}
+    >
+      <SelectTrigger className='w-full'>
+        <SelectValue>
+          {value
+            ? (options.find((option) => option.value === value)?.label ?? value)
+            : placeholder}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export function KnowledgeBaseEditorSheet({
+  open,
+  record,
+  createType,
+  onOpenChange,
+  onSaved,
+}: {
+  open: boolean;
+  record?: KnowledgeBase;
+  createType?: KnowledgeBaseType;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}): ReactElement {
+  const t = useT();
+  const service = useKnowledgeBaseService();
+  const [values, setValues] = useState<KnowledgeBaseMutation>(newKnowledgeBase);
+  const [options, setOptions] =
+    useState<KnowledgeBaseManagementOptions>(emptyOptions);
+  const [embeddingModels, setEmbeddingModels] = useState<
+    KnowledgeBaseManagementOption[]
+  >([]);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
+  const [externalProps, setExternalProps] = useState('[]');
+
+  useEffect(() => {
+    if (!open) return;
+    const initial = record
+      ? editKnowledgeBase(record)
+      : newKnowledgeBase(createType);
+    setValues(initial);
+    setExternalProps(JSON.stringify(initial.vectorStoreProps ?? [], null, 2));
+    setEmbeddingModels([]);
+    setError(undefined);
+    setLoadingOptions(true);
+    void service
+      .listKnowledgeBaseManagementOptions()
+      .then(setOptions)
+      .catch((cause: unknown) =>
+        setError(cause instanceof Error ? cause.message : String(cause)),
+      )
+      .finally(() => setLoadingOptions(false));
+  }, [createType, open, record, service]);
+
+  useEffect(() => {
+    if (
+      !open ||
+      !values.llmService ||
+      values.knowledgeBaseType === 'EXTERNAL'
+    ) {
+      setEmbeddingModels([]);
+      return;
+    }
+    void service
+      .listEmbeddingModels(values.llmService)
+      .then(setEmbeddingModels)
+      .catch((cause: unknown) =>
+        setError(cause instanceof Error ? cause.message : String(cause)),
+      );
+  }, [open, service, values.knowledgeBaseType, values.llmService]);
+
+  const save = async (): Promise<void> => {
+    if (!values.name.trim() || saving) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      if (!values.key?.trim()) throw new Error(t('Key is required.'));
+      if (values.knowledgeBaseType === 'LOCAL' && !values.storageId)
+        throw new Error(t('Select a storage engine.'));
+      if (values.knowledgeBaseType !== 'EXTERNAL') {
+        if (!values.vectorDatabaseKey)
+          throw new Error(t('Select a vector database.'));
+        if (!values.llmService) throw new Error(t('Select an LLM service.'));
+        if (!values.embeddingModel)
+          throw new Error(t('Select an embedding model.'));
+      } else if (!values.vectorStoreProvider) {
+        throw new Error(t('Select an external vector-store provider.'));
+      }
+      const visible = new Set<string>([
+        'key',
+        'name',
+        'description',
+        'knowledgeBaseType',
+        'enabled',
+      ]);
+      if (values.knowledgeBaseType === 'LOCAL') visible.add('storageId');
+      if (values.knowledgeBaseType !== 'EXTERNAL') {
+        visible.add('vectorDatabaseKey');
+        visible.add('llmService');
+        visible.add('embeddingModel');
+      }
+      visible.add('segmentOptions');
+      if (external) visible.add('vectorStoreProps');
+      let parsedExternalProps: KnowledgeBaseMutation['vectorStoreProps'];
+      if (external) {
+        try {
+          const parsed: unknown = JSON.parse(externalProps);
+          if (!Array.isArray(parsed))
+            throw new Error('Provider properties must be a JSON array.');
+          parsedExternalProps = parsed.flatMap(
+            (
+              value,
+            ): NonNullable<
+              KnowledgeBaseMutation['vectorStoreProps']
+            >[number][] => {
+              if (!value || typeof value !== 'object' || Array.isArray(value))
+                return [];
+              const item = value as Record<string, unknown>;
+              return typeof item.key === 'string'
+                ? [{ key: item.key, value: item.value }]
+                : [];
+            },
+          );
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+          setSaving(false);
+          return;
+        }
+      }
+      const payload = normalizeKnowledgeBaseMutation(
+        {
+          ...values,
+          ...(external ? { vectorStoreProps: parsedExternalProps } : {}),
+        },
+        record,
+        visible,
+      );
+      if (record) await service.updateKnowledgeBase(record.id, payload);
+      else await service.createKnowledgeBase(payload);
+      onOpenChange(false);
+      onSaved();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const local = values.knowledgeBaseType === 'LOCAL';
+  const external = values.knowledgeBaseType === 'EXTERNAL';
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side='right'
+        className='w-full overflow-y-auto sm:max-w-none md:w-1/2'
+      >
+        <SheetHeader className='border-b px-6 py-5'>
+          <SheetTitle>
+            {record ? t('Edit knowledge base') : t('New knowledge base')}
+          </SheetTitle>
+          <SheetDescription>
+            {t(
+              'Configure the knowledge base, vector database, and embedding model used for retrieval.',
+            )}
+          </SheetDescription>
+        </SheetHeader>
+        <form
+          className='grid gap-5 px-6 pb-6'
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <div className='grid gap-2'>
+            <Label htmlFor='knowledge-base-key'>{t('Key')}</Label>
+            <Input
+              id='knowledge-base-key'
+              value={values.key ?? ''}
+              disabled={!!record}
+              onChange={(event) =>
+                setValues((current) => ({
+                  ...current,
+                  key: event.target.value,
+                }))
+              }
+            />
+          </div>
+          <div className='grid gap-2'>
+            <Label htmlFor='knowledge-base-name'>{t('Name')}</Label>
+            <Input
+              id='knowledge-base-name'
+              autoFocus
+              required
+              value={values.name}
+              onChange={(event) =>
+                setValues((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
+              }
+            />
+          </div>
+          <div className='grid gap-2'>
+            <Label htmlFor='knowledge-base-description'>
+              {t('Description')}
+            </Label>
+            <Textarea
+              id='knowledge-base-description'
+              rows={4}
+              value={values.description ?? ''}
+              onChange={(event) =>
+                setValues((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
+            />
+          </div>
+          <div className='grid gap-2'>
+            <Label>{t('Type')}</Label>
+            <Select
+              value={values.knowledgeBaseType}
+              disabled={!!record}
+              onValueChange={(value) =>
+                value &&
+                setValues((current) => ({
+                  ...current,
+                  knowledgeBaseType: value,
+                }))
+              }
+            >
+              <SelectTrigger className='w-full'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='LOCAL'>{t('Local')}</SelectItem>
+                <SelectItem value='READONLY'>{t('Read-only')}</SelectItem>
+                <SelectItem value='EXTERNAL'>{t('External')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {local ? (
+            <div className='grid gap-2'>
+              <Label>{t('Storage')}</Label>
+              <OptionSelect
+                value={values.storageId}
+                options={options.storages}
+                placeholder={
+                  loadingOptions ? t('Loading…') : t('Select storage')
+                }
+                disabled={loadingOptions}
+                onChange={(storageId) =>
+                  setValues((current) => ({ ...current, storageId }))
+                }
+              />
+            </div>
+          ) : null}
+          {!external ? (
+            <>
+              <div className='grid gap-2'>
+                <Label>{t('Vector database')}</Label>
+                <OptionSelect
+                  value={values.vectorDatabaseKey}
+                  options={options.vectorDatabases}
+                  placeholder={
+                    loadingOptions ? t('Loading…') : t('Select vector database')
+                  }
+                  disabled={loadingOptions}
+                  onChange={(vectorDatabaseKey) =>
+                    setValues((current) => ({ ...current, vectorDatabaseKey }))
+                  }
+                />
+              </div>
+              <div className='grid gap-2 md:grid-cols-2'>
+                <div className='grid gap-2'>
+                  <Label>{t('LLM service')}</Label>
+                  <OptionSelect
+                    value={values.llmService}
+                    options={options.llmServices}
+                    placeholder={
+                      loadingOptions ? t('Loading…') : t('Select LLM service')
+                    }
+                    disabled={loadingOptions}
+                    onChange={(llmService) =>
+                      setValues((current) => ({
+                        ...current,
+                        llmService,
+                        embeddingModel: undefined,
+                      }))
+                    }
+                  />
+                </div>
+                <div className='grid gap-2'>
+                  <Label>{t('Embedding model')}</Label>
+                  <OptionSelect
+                    value={values.embeddingModel}
+                    options={embeddingModels}
+                    placeholder={
+                      values.llmService
+                        ? t('Select embedding model')
+                        : t('Select an LLM service first')
+                    }
+                    disabled={!values.llmService}
+                    onChange={(embeddingModel) =>
+                      setValues((current) => ({ ...current, embeddingModel }))
+                    }
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className='grid gap-4 rounded-xl border p-4'>
+              <div className='grid gap-2'>
+                <Label>{t('External vector-store provider')}</Label>
+                <OptionSelect
+                  value={values.vectorStoreProvider}
+                  options={options.externalProviders}
+                  placeholder={
+                    loadingOptions
+                      ? t('Loading…')
+                      : t('Select external vector-store provider')
+                  }
+                  disabled={loadingOptions}
+                  onChange={(vectorStoreProvider) =>
+                    setValues((current) => ({
+                      ...current,
+                      vectorStoreProvider,
+                    }))
+                  }
+                />
+              </div>
+              <div className='grid gap-2'>
+                <Label htmlFor='external-provider-properties'>
+                  {t('Provider properties')}
+                </Label>
+                <Textarea
+                  id='external-provider-properties'
+                  rows={8}
+                  className='font-mono text-xs'
+                  value={externalProps}
+                  onChange={(event) => setExternalProps(event.target.value)}
+                />
+                <p className='text-xs text-muted-foreground'>
+                  {t(
+                    'Enter provider properties as a JSON array of key and value objects.',
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
+          {local ? (
+            <div className='grid gap-3 rounded-xl border p-4'>
+              <div className='flex items-center justify-between gap-4'>
+                <div>
+                  <Label>{t('Split document')}</Label>
+                  <p className='text-xs text-muted-foreground'>
+                    {t(
+                      'Create searchable segments when documents are uploaded.',
+                    )}
+                  </p>
+                </div>
+                <Switch
+                  checked={values.segmentOptions?.enabled !== false}
+                  onCheckedChange={(enabled) =>
+                    setValues((current) => ({
+                      ...current,
+                      segmentOptions: {
+                        ...defaultSegmentOptions,
+                        ...current.segmentOptions,
+                        enabled,
+                      },
+                    }))
+                  }
+                />
+              </div>
+              <div className='grid grid-cols-2 gap-3'>
+                <div className='grid gap-2'>
+                  <Label htmlFor='chunk-size'>{t('Chunk size')}</Label>
+                  <Input
+                    id='chunk-size'
+                    type='number'
+                    min={1}
+                    value={
+                      values.segmentOptions?.chunkSize ??
+                      defaultSegmentOptions.chunkSize
+                    }
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        segmentOptions: {
+                          ...defaultSegmentOptions,
+                          ...current.segmentOptions,
+                          chunkSize: Math.max(
+                            1,
+                            Number(event.target.value) || 1,
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div className='grid gap-2'>
+                  <Label htmlFor='chunk-overlap'>{t('Chunk overlap')}</Label>
+                  <Input
+                    id='chunk-overlap'
+                    type='number'
+                    min={0}
+                    value={
+                      values.segmentOptions?.chunkOverlap ??
+                      defaultSegmentOptions.chunkOverlap
+                    }
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        segmentOptions: {
+                          ...defaultSegmentOptions,
+                          ...current.segmentOptions,
+                          chunkOverlap: Math.max(
+                            0,
+                            Number(event.target.value) || 0,
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <div className='flex items-center justify-between rounded-xl border p-4'>
+            <div>
+              <Label>{t('Enabled')}</Label>
+              <p className='text-xs text-muted-foreground'>
+                {t('Enabled knowledge bases are available for retrieval.')}
+              </p>
+            </div>
+            <Switch
+              checked={values.enabled !== false}
+              onCheckedChange={(enabled) =>
+                setValues((current) => ({ ...current, enabled }))
+              }
+            />
+          </div>
+          {error ? (
+            <p className='text-sm text-destructive' role='alert'>
+              {error}
+            </p>
+          ) : null}
+          <SheetFooter className='-mx-6 border-t px-6 pt-4'>
+            <div className='flex justify-end gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                disabled={saving}
+                onClick={() => onOpenChange(false)}
+              >
+                {t('Cancel')}
+              </Button>
+              <Button type='submit' disabled={saving || !values.name.trim()}>
+                {saving ? t('Saving…') : t('Save')}
+              </Button>
+            </div>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}

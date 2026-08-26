@@ -43,6 +43,7 @@ catalog:
   better-auth: ^1.7.1
   better-sqlite3: ^12.11.1
   bloom-filters: ^3.0.4
+  cron: ^4.4.0
   eslint: ^10.0.0
   eslint-config-prettier: ^10.1.8
   eslint-plugin-react-hooks: ^7.1.1

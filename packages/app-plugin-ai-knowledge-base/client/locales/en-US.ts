@@ -1,0 +1,364 @@
+export default {
+  '(empty)': '(empty)',
+  Actions: 'Actions',
+  'Add question': 'Add question',
+  'Adopt server version': 'Adopt server version',
+  'AI Employees': 'AI Employees',
+  'Ask this knowledge base': 'Ask this knowledge base',
+  'Back to workspace': 'Back to workspace',
+  'Browse knowledge bases available to a workspace, switch between layouts, and search by name.':
+    'Browse knowledge bases available to a workspace, switch between layouts, and search by name.',
+  Cancel: 'Cancel',
+  'Card view': 'Card view',
+  'Change the search or clear the current filter.':
+    'Change the search or clear the current filter.',
+  Characters: 'Characters',
+  'Choose a file to upload.': 'Choose a file to upload.',
+  'Choose filename encodings for a selected ZIP archive before upload.':
+    'Choose filename encodings for a selected ZIP archive before upload.',
+  'Choose one of the supported file types: {{types}}.':
+    'Choose one of the supported file types: {{types}}.',
+  'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.':
+    'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.',
+  'Chunk overlap': 'Chunk overlap',
+  'Chunk size': 'Chunk size',
+  Close: 'Close',
+  'Content saved; related questions were not saved':
+    'Content saved; related questions were not saved',
+  'Created at': 'Created at',
+  'Created {{date}}': 'Created {{date}}',
+  'Decrease {{label}} by 100': 'Decrease {{label}} by 100',
+  Delete: 'Delete',
+  'Delete segment': 'Delete segment',
+  'Delete segment?': 'Delete segment?',
+  'Delete {{count}} {{item}}': 'Delete {{count}} {{item}}',
+  'Delete {{count}} {{item}}?': 'Delete {{count}} {{item}}?',
+  'Disable segment': 'Disable segment',
+  'Disable segment?': 'Disable segment?',
+  'Disabled segments are not used by retrieval until enabled again.':
+    'Disabled segments are not used by retrieval until enabled again.',
+  'Disabled segments will not be used for retrieval.':
+    'Disabled segments will not be used for retrieval.',
+  Document: 'Document',
+  document: 'document',
+  'Document action failed': 'Document action failed',
+  'Document indexing failed': 'Document indexing failed',
+  'Document management': 'Document management',
+  'Document processing is in progress': 'Document processing is in progress',
+  'Document retrieval': 'Document retrieval',
+  'Document unavailable or not authorized for this knowledge base.':
+    'Document unavailable or not authorized for this knowledge base.',
+  'Document upload': 'Document upload',
+  Documents: 'Documents',
+  documents: 'documents',
+  'Documents and segments are unavailable for this knowledge base type.':
+    'Documents and segments are unavailable for this knowledge base type.',
+  'Documents deleted': 'Documents deleted',
+  Download: 'Download',
+  'Download failed': 'Download failed',
+  'Drop one file or choose one': 'Drop one file or choose one',
+  Edit: 'Edit',
+  'Edit query': 'Edit query',
+  'Edit segment': 'Edit segment',
+  "Edit this segment's content and related questions. Save changes to keep the current segment up to date.":
+    "Edit this segment's content and related questions. Save changes to keep the current segment up to date.",
+  'Enable the AI Knowledge Base plugin to use the Knowledge base workspace. Contact your system administrator, then try again.':
+    'Enable the AI Knowledge Base plugin to use the Knowledge base workspace. Contact your system administrator, then try again.',
+  'Enable segment': 'Enable segment',
+  'Enable segment {{number}}': 'Enable segment {{number}}',
+  'Enable segment?': 'Enable segment?',
+  Enabled: 'Enabled',
+  'Enabled only': 'Enabled only',
+  'Enabled segments can be used for retrieval.':
+    'Enabled segments can be used for retrieval.',
+  'Evaluate how a query matches knowledge-base content by tuning retrieval settings and reviewing ranked results.':
+    'Evaluate how a query matches knowledge-base content by tuning retrieval settings and reviewing ranked results.',
+  External: 'External',
+  Failed: 'Failed',
+  'File selected': 'File selected',
+  Filename: 'Filename',
+  'Five focused knowledge-base workflows and an isolated Knowledge base workspace.':
+    'Five focused knowledge-base workflows and an isolated Knowledge base workspace.',
+  'Go to first page': 'Go to first page',
+  'Go to last page': 'Go to last page',
+  'Go to next page': 'Go to next page',
+  'Go to previous page': 'Go to previous page',
+  'Hit test failed.': 'Hit test failed.',
+  'Hit tests': 'Hit tests',
+  'How to read ZIP filenames': 'How to read ZIP filenames',
+  ID: 'ID',
+  'Increase {{label}} by 100': 'Increase {{label}} by 100',
+  'Input matching text': 'Input matching text',
+  'Keep my draft': 'Keep my draft',
+  'Keeping your draft refreshes the baseline and requires an explicit save.':
+    'Keeping your draft refreshes the baseline and requires an explicit save.',
+  'Knowledge base': 'Knowledge base',
+  'Knowledge base components': 'Knowledge base components',
+  'Knowledge base entrance': 'Knowledge base entrance',
+  'Knowledge base plugin is not enabled':
+    'Knowledge base plugin is not enabled',
+  'Knowledge base unavailable or not authorized.':
+    'Knowledge base unavailable or not authorized.',
+  'Knowledge base workspace': 'Knowledge base workspace',
+  'Knowledge bases': 'Knowledge bases',
+  'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.':
+    'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.',
+  'List view': 'List view',
+  'Loading more knowledge bases…': 'Loading more knowledge bases…',
+  'Loading upload requirements. Try again in a moment.':
+    'Loading upload requirements. Try again in a moment.',
+  Local: 'Local',
+  'Matched questions': 'Matched questions',
+  Mine: 'Mine',
+  'More document actions': 'More document actions',
+  No: 'No',
+  'No documents are available in this knowledge base.':
+    'No documents are available in this knowledge base.',
+  'No knowledge bases': 'No knowledge bases',
+  'No matching documents found': 'No matching documents found',
+  'No matching results': 'No matching results',
+  'No passage content': 'No passage content',
+  'No related questions yet.': 'No related questions yet.',
+  'No segments': 'No segments',
+  'No.': 'No.',
+  'Open result {{number}}': 'Open result {{number}}',
+  'Open the upload dialog or review selected-file states before adding source documents, including filename encoding choices for ZIP archives.':
+    'Open the upload dialog or review selected-file states before adding source documents, including filename encoding choices for ZIP archives.',
+  'Open upload dialog': 'Open upload dialog',
+  'Open {{name}}': 'Open {{name}}',
+  'Page {{page}} of {{pages}}': 'Page {{page}} of {{pages}}',
+  Pagination: 'Pagination',
+  Passage: 'Passage',
+  Pending: 'Pending',
+  Preview: 'Preview',
+  'Re-index {{count}} {{item}}': 'Re-index {{count}} {{item}}',
+  'Re-index {{count}} {{item}}?': 'Re-index {{count}} {{item}}?',
+  'Re-indexing submitted': 'Re-indexing submitted',
+  'Re-indexing was submitted. The status will update when processing finishes.':
+    'Re-indexing was submitted. The status will update when processing finishes.',
+  'Read-only': 'Read-only',
+  Refresh: 'Refresh',
+  Regenerate: 'Regenerate',
+  'Regenerate segments': 'Regenerate segments',
+  'Regenerate segments?': 'Regenerate segments?',
+  'Regenerating segments will overwrite edited segments and related questions.':
+    'Regenerating segments will overwrite edited segments and related questions.',
+  'Related question {{number}}': 'Related question {{number}}',
+  'Related questions': 'Related questions',
+  'Related questions saved': 'Related questions saved',
+  'Remove related question {{number}}': 'Remove related question {{number}}',
+  'Remove selected file': 'Remove selected file',
+  'Replace selected file': 'Replace selected file',
+  'Retrieval query': 'Retrieval query',
+  'Retrieval result': 'Retrieval result',
+  Retry: 'Retry',
+  'Retry related questions': 'Retry related questions',
+  'Retrying questions…': 'Retrying questions…',
+  'Review a selected source file and its details before upload.':
+    'Review a selected source file and its details before upload.',
+  'Review source documents for a knowledge base and use the available table actions to inspect, download, re-index, or remove permitted content.':
+    'Review source documents for a knowledge base and use the available table actions to inspect, download, re-index, or remove permitted content.',
+  'Review the segments generated from a document and edit their content or related questions.':
+    'Review the segments generated from a document and edit their content or related questions.',
+  'Rows per page': 'Rows per page',
+  Save: 'Save',
+  'Save changes': 'Save changes',
+  'Saving…': 'Saving…',
+  Score: 'Score',
+  'Score {{score}}': 'Score {{score}}',
+  Search: 'Search',
+  'Search documents': 'Search documents',
+  'Search knowledge bases': 'Search knowledge bases',
+  'Segment content': 'Segment content',
+  'Segment deleted': 'Segment deleted',
+  'Segment disabled': 'Segment disabled',
+  'Segment editor': 'Segment editor',
+  'Segment edits and enablement changes are unavailable until indexing and segmentation finish.':
+    'Segment edits and enablement changes are unavailable until indexing and segmentation finish.',
+  'Segment enabled': 'Segment enabled',
+  'Segment generation failed': 'Segment generation failed',
+  'Segment is disabled': 'Segment is disabled',
+  'Segment maintenance is unavailable until processing finishes.':
+    'Segment maintenance is unavailable until processing finishes.',
+  'Segment management': 'Segment management',
+  'Segment regeneration submitted': 'Segment regeneration submitted',
+  'Segment saved': 'Segment saved',
+  'Segment settings': 'Segment settings',
+  'Segment unavailable': 'Segment unavailable',
+  'Segment {{number}}': 'Segment {{number}}',
+  Segments: 'Segments',
+  'Segments are being generated': 'Segments are being generated',
+  'Select a retrieval result to inspect its passage.':
+    'Select a retrieval result to inspect its passage.',
+  Send: 'Send',
+  Settings: 'Settings',
+  Shared: 'Shared',
+  'Show ZIP filename encoding options': 'Show ZIP filename encoding options',
+  Size: 'Size',
+  'Someone else updated this segment': 'Someone else updated this segment',
+  'Split document': 'Split document',
+  Status: 'Status',
+  Submit: 'Submit',
+  'Submitting…': 'Submitting…',
+  'Test the matching between user input and the knowledge base':
+    'Test the matching between user input and the knowledge base',
+  'The document file is unavailable.': 'The document file is unavailable.',
+  'The document was uploaded. Refreshing the document list.':
+    'The document was uploaded. Refreshing the document list.',
+  'The matching documents are displayed here':
+    'The matching documents are displayed here',
+  'The plugin status could not be loaded. Check the connection and try again.':
+    'The plugin status could not be loaded. Check the connection and try again.',
+  'The requested knowledge-base data could not be loaded.':
+    'The requested knowledge-base data could not be loaded.',
+  'The segment changed and is no longer available. Refresh the document list.':
+    'The segment changed and is no longer available. Refresh the document list.',
+  'The upload task was submitted. Indexing may take a few moments.':
+    'The upload task was submitted. Indexing may take a few moments.',
+  'There are no knowledge bases available to this user.':
+    'There are no knowledge bases available to this user.',
+  'This document has no segments yet.': 'This document has no segments yet.',
+  'This file exceeds the server upload limit.':
+    'This file exceeds the server upload limit.',
+  'This file exceeds the {{size}} MB upload limit.':
+    'This file exceeds the {{size}} MB upload limit.',
+  'This permanently deletes {{count}} selected {{item}} and their segments.':
+    'This permanently deletes {{count}} selected {{item}} and their segments.',
+  'This segment and its vectors will be deleted.':
+    'This segment and its vectors will be deleted.',
+  'This segment is no longer available. Return to the document and refresh the list.':
+    'This segment is no longer available. Return to the document and refresh the list.',
+  'This submits asynchronous vectorization tasks for {{count}} {{item}}.':
+    'This submits asynchronous vectorization tasks for {{count}} {{item}}.',
+  'Top K': 'Top K',
+  'Try again': 'Try again',
+  'Type an encoding name, then press Enter to add it.':
+    'Type an encoding name, then press Enter to add it.',
+  'Unable to check the knowledge base plugin':
+    'Unable to check the knowledge base plugin',
+  'Unable to load more knowledge bases.':
+    'Unable to load more knowledge bases.',
+  'Unable to load this view': 'Unable to load this view',
+  'Unable to reload the updated segment':
+    'Unable to reload the updated segment',
+  'Unable to save related questions': 'Unable to save related questions',
+  'Unable to save segment': 'Unable to save segment',
+  'Unable to update segments': 'Unable to update segments',
+  'Unknown source': 'Unknown source',
+  'Untitled document': 'Untitled document',
+  'Untitled passage': 'Untitled passage',
+  'Updated at': 'Updated at',
+  Upload: 'Upload',
+  'Upload a document': 'Upload a document',
+  'Upload a ZIP archive to import multiple documents in one go.':
+    'Upload a ZIP archive to import multiple documents in one go.',
+  'Upload document': 'Upload document',
+  'Upload failed': 'Upload failed',
+  'Upload panel': 'Upload panel',
+  'Upload requirements are unavailable. The document was not submitted.':
+    'Upload requirements are unavailable. The document was not submitted.',
+  'Upload submitted': 'Upload submitted',
+  'Uploading documents is unavailable for this knowledge base.':
+    'Uploading documents is unavailable for this knowledge base.',
+  'Uploading…': 'Uploading…',
+  'Uses UTF-8 and {{encoding}} by default':
+    'Uses UTF-8 and {{encoding}} by default',
+  'Uses UTF-8 by default': 'Uses UTF-8 by default',
+  Vectorize: 'Vectorize',
+  View: 'View',
+  'View layout': 'View layout',
+  'View the knowledge bases you can access and manage permitted content.':
+    'View the knowledge bases you can access and manage permitted content.',
+  Yes: 'Yes',
+  'You can view shared segments. Only the document uploader can change, regenerate, or delete them.':
+    'You can view shared segments. Only the document uploader can change, regenerate, or delete them.',
+  'You can view this shared document. Only its uploader can change segments, re-index, or delete it.':
+    'You can view this shared document. Only its uploader can change segments, re-index, or delete it.',
+  'Your draft is retained. Server content: {{content}}':
+    'Your draft is retained. Server content: {{content}}',
+  'Your draft: {{content}}': 'Your draft: {{content}}',
+  'ZIP encoding options unavailable': 'ZIP encoding options unavailable',
+  'ZIP file selected': 'ZIP file selected',
+  'ZIP filename encoding help': 'ZIP filename encoding help',
+  'ZIP filename encodings': 'ZIP filename encodings',
+  '{{count}} chars': '{{count}} chars',
+  '{{count}} row(s)': '{{count}} row(s)',
+  '{{count}} segments': '{{count}} segments',
+  Description: 'Description',
+  Key: 'Key',
+  'LLM service': 'LLM service',
+  'New knowledge base': 'New knowledge base',
+  'Edit knowledge base': 'Edit knowledge base',
+  Name: 'Name',
+  Storage: 'Storage',
+  Type: 'Type',
+  'Vector database': 'Vector database',
+  'Embedding model': 'Embedding model',
+  'Select storage': 'Select storage',
+  'Select vector database': 'Select vector database',
+  'Select LLM service': 'Select LLM service',
+  'Select embedding model': 'Select embedding model',
+  'Select an LLM service first': 'Select an LLM service first',
+  'Configure the knowledge base, vector database, and embedding model used for retrieval.':
+    'Configure the knowledge base, vector database, and embedding model used for retrieval.',
+  'External knowledge bases keep their provider configuration on the server.':
+    'External knowledge bases keep their provider configuration on the server.',
+  'Create searchable segments when documents are uploaded.':
+    'Create searchable segments when documents are uploaded.',
+  'Enabled knowledge bases are available for retrieval.':
+    'Enabled knowledge bases are available for retrieval.',
+  'Knowledge base actions': 'Knowledge base actions',
+  'Knowledge base enabled': 'Knowledge base enabled',
+  'Knowledge base disabled': 'Knowledge base disabled',
+  'Knowledge base deleted': 'Knowledge base deleted',
+  'Enable knowledge base': 'Enable knowledge base',
+  'Disable knowledge base': 'Disable knowledge base',
+  'Unable to update knowledge base': 'Unable to update knowledge base',
+  'Delete knowledge base?': 'Delete knowledge base?',
+  'This permanently deletes the knowledge base, its documents, segments, and vectors.':
+    'This permanently deletes the knowledge base, its documents, segments, and vectors.',
+  'External vector-store provider': 'External vector-store provider',
+  'Select external vector-store provider':
+    'Select external vector-store provider',
+  'Provider properties': 'Provider properties',
+  'Enter provider properties as a JSON array of key and value objects.':
+    'Enter provider properties as a JSON array of key and value objects.',
+  'Key is required.': 'Key is required.',
+  'Select a storage engine.': 'Select a storage engine.',
+  'Select a vector database.': 'Select a vector database.',
+  'Select an LLM service.': 'Select an LLM service.',
+  'Select an embedding model.': 'Select an embedding model.',
+  'Select an external vector-store provider.':
+    'Select an external vector-store provider.',
+  'Add new': 'Add new',
+  'Add {{spec}}': 'Add {{spec}}',
+  'Cannot delete {{name}} because it is used by: {{names}}':
+    'Cannot delete {{name}} because it is used by: {{names}}',
+  'Connection test failed.': 'Connection test failed.',
+  'Connection test succeeded.': 'Connection test succeeded.',
+  Database: 'Database',
+  'Delete this vector database?': 'Delete this vector database?',
+  'Delete {{count}} selected vector database(s)?':
+    'Delete {{count}} selected vector database(s)?',
+  Disabled: 'Disabled',
+  'Edit {{spec}}': 'Edit {{spec}}',
+  Host: 'Host',
+  Next: 'Next',
+  'No vector databases yet.': 'No vector databases yet.',
+  Password: 'Password',
+  Port: 'Port',
+  Previous: 'Previous',
+  'Provider metadata is unavailable. This configuration cannot be submitted.':
+    'Provider metadata is unavailable. This configuration cannot be submitted.',
+  Select: 'Select',
+  'Select {{name}}': 'Select {{name}}',
+  'Some vector databases were not deleted: {{names}}':
+    'Some vector databases were not deleted: {{names}}',
+  'Table already exists. Continue saving?':
+    'Table already exists. Continue saving?',
+  'Table name': 'Table name',
+  Test: 'Test',
+  'This change affects related knowledge bases: {{names}}. Continue?':
+    'This change affects related knowledge bases: {{names}}. Continue?',
+  Username: 'Username',
+} as const;

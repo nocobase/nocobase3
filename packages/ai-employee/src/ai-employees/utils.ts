@@ -1,0 +1,197 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { AIMessage, HumanMessage, ToolMessage } from 'langchain';
+import { AIMessageContent, AIMessageInput } from './types/index.js';
+import type { Logger } from '@nocobase/logging';
+import { LLMProvider } from '../llm-providers/provider.js';
+import { sanitizeAdditionalKwargsForToolCalls } from './tool-call-sanitizer.js';
+
+export const convertAIMessage = ({
+  aiEmployee,
+  providerName: provider,
+  provider: providerInstance,
+  llmService,
+  model,
+  aiMessage,
+}: {
+  aiEmployee: {
+    employee: { username?: string; get?: (name: string) => unknown };
+    skillSettings?: Record<string, any>;
+    logger?: Logger;
+  };
+  providerName: string;
+  provider: LLMProvider;
+  llmService?: string;
+  model: string;
+  aiMessage: AIMessage;
+}): AIMessageInput => {
+  const message = aiMessage.content;
+  const toolCalls = aiMessage.tool_calls;
+  const tools = aiEmployee.skillSettings?.tools;
+
+  if (message == null && !toolCalls?.length) {
+    return null;
+  }
+
+  // Extract text content and references from array content (e.g., Anthropic web search response)
+  let textContent: any = message;
+  let reference: { title: string; url: string }[] | undefined;
+
+  if (Array.isArray(message)) {
+    const textBlocks = message.filter((block: any) => block.type === 'text');
+    textContent = textBlocks.map((block: any) => block.text).join('') || '';
+
+    for (const block of message) {
+      if (
+        block.type === 'web_search_tool_result' &&
+        Array.isArray(block.content)
+      ) {
+        reference = reference || [];
+        for (const item of block.content) {
+          if (item.type === 'web_search_result' && item.url) {
+            reference.push({ title: item.title || '', url: item.url });
+          }
+        }
+      }
+    }
+  }
+
+  const values: AIMessageInput = {
+    role: String(
+      aiEmployee.employee.username ??
+        aiEmployee.employee.get?.('username') ??
+        '',
+    ),
+    content: {
+      type: 'text',
+      content: textContent,
+      ...(reference?.length ? { reference } : {}),
+    },
+    metadata: {
+      id: aiMessage.id,
+      model,
+      provider,
+      llmService,
+      usage_metadata: {},
+    },
+    toolCalls: null,
+  };
+
+  if (toolCalls?.length) {
+    values.toolCalls = toolCalls as any;
+    values.metadata.autoCallTools = toolCalls
+      .filter((tool: { name: string }) => {
+        return tools?.some(
+          (s: { name: string; autoCall?: boolean }) =>
+            s.name === tool.name && s.autoCall,
+        );
+      })
+      .map((tool: { name: string }) => tool.name);
+  }
+
+  if (aiMessage.usage_metadata) {
+    values.metadata.usage_metadata = aiMessage.usage_metadata;
+  }
+  if (aiMessage.response_metadata) {
+    values.metadata.response_metadata = aiMessage.response_metadata;
+  }
+  const sanitizedToolCalls = sanitizeAdditionalKwargsForToolCalls(
+    aiMessage.additional_kwargs,
+    toolCalls,
+    {
+      onDiscard: (info) => {
+        aiEmployee.logger?.warn(
+          {
+            phase: 'convertAIMessage',
+            messageId: aiMessage.id,
+            invalidToolCallCount: aiMessage.invalid_tool_calls?.length ?? 0,
+            ...info,
+          },
+          'Discard malformed raw tool calls from AI message',
+        );
+      },
+    },
+  );
+  const additionalKwargs = sanitizedToolCalls.additionalKwargs;
+  if (additionalKwargs) {
+    values.metadata.additional_kwargs = additionalKwargs;
+  }
+  if (sanitizedToolCalls.malformedToolCalls?.length) {
+    values.metadata.diagnostics = {
+      malformedToolCalls: sanitizedToolCalls.malformedToolCalls,
+    };
+  }
+
+  providerInstance.reshapeAIMessage({ aiMessage, values });
+
+  return values;
+};
+
+export const convertHumanMessage = ({
+  providerName: provider,
+  llmService,
+  model,
+  humanMessage,
+}: {
+  providerName: string;
+  llmService?: string;
+  model: string;
+  humanMessage: HumanMessage;
+}): AIMessageInput => {
+  if (!humanMessage.additional_kwargs.userContent) {
+    return null;
+  }
+
+  const values: AIMessageInput = {
+    role: 'user',
+    content: humanMessage.additional_kwargs?.userContent as AIMessageContent,
+    metadata: {
+      id: humanMessage.id,
+      model,
+      provider,
+      llmService,
+    },
+  };
+
+  values.attachments = humanMessage.additional_kwargs.attachments as any;
+  values.workContext = humanMessage.additional_kwargs.workContext as any;
+
+  return values;
+};
+
+export const convertToolMessage = ({
+  providerName: provider,
+  llmService,
+  model,
+  toolMessage,
+}: {
+  providerName: string;
+  llmService?: string;
+  model: string;
+  toolMessage: ToolMessage;
+}): AIMessageInput => {
+  const values: AIMessageInput = {
+    role: 'tool',
+    content: {
+      type: 'text',
+      content: toolMessage.content,
+    },
+    metadata: {
+      id: toolMessage.id,
+      model,
+      provider,
+      llmService,
+      toolCallId: toolMessage.tool_call_id,
+      toolName: toolMessage.name,
+    },
+  };
+
+  return values;
+};
