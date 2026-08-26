@@ -14,13 +14,20 @@ export const DEFAULT_REGISTRY = 'https://npm.nocobase.ai';
 
 /**
  * Templates that can be named instead of spelled out as a package. A short name is what people will reach for, and it
- * keeps the published package name and its channel an implementation detail — switching `default` to a stable range,
- * or repointing it at a different package, then costs nothing on the command line.
+ * keeps the published package name and its channel an implementation detail — repointing `default` at another channel
+ * or another package then costs nothing on the command line.
+ *
+ * `default` tracks `latest` rather than `beta`. changesets leaves the `beta` dist-tag on a package's first published
+ * version while every release since is only tagged `latest`: it treats a package whose versions are all prereleases as
+ * publishing for the first time, so it tags `latest` to keep the package installable. That condition holds on every
+ * release until a stable version ships, so `beta` points at the oldest template rather than the newest, and pointing
+ * `default` there would hand everyone a stale template. `latest` is the newest published version today, and the right
+ * thing to scaffold from once stable versions exist.
  *
  * More templates are expected here. Add an entry rather than asking anyone to type the package specifier.
  */
 export const TEMPLATE_ALIASES: Readonly<Record<string, string>> = {
-  default: '@nocobase/app-template-default@beta',
+  default: '@nocobase/app-template-default@latest',
 };
 
 export const DEFAULT_TEMPLATE = 'default';

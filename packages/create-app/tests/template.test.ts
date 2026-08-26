@@ -56,13 +56,24 @@ describe('TEMPLATE_ALIASES', () => {
 
   /**
    * Pinning an exact version would make `create` reproducible, but there is no stable v3 release to pin to yet. The
-   * assertion only guarantees every alias carries an explicit channel or version — never a bare name that would
-   * silently resolve to `latest`.
+   * assertion only guarantees every alias names its channel outright, so which versions an alias resolves to is a
+   * decision recorded here rather than whatever a bare package name happens to resolve to.
    */
-  it('gives every alias an explicit channel so create never falls back to latest', () => {
+  it('gives every alias an explicit channel or version', () => {
     for (const specifier of Object.values(TEMPLATE_ALIASES)) {
-      expect(specifier).toMatch(/@(?:\d+\.\d+\.\d+|beta|alpha|next)$/u);
+      expect(specifier).toMatch(/@(?:\d+\.\d+\.\d+|latest|beta|alpha|next)$/u);
     }
+  });
+
+  /**
+   * changesets leaves the `beta` dist-tag on a package's first published version and tags every release since as
+   * `latest`, so `beta` points at the oldest template rather than the newest. Pointing `default` there handed everyone
+   * a stale template — an app scaffolded from it missed settings later releases added to `.env.example`.
+   */
+  it('tracks latest rather than the stale beta tag', () => {
+    expect(TEMPLATE_ALIASES.default).toBe(
+      '@nocobase/app-template-default@latest',
+    );
   });
 });
 
