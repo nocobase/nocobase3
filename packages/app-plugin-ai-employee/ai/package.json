@@ -1,0 +1,6 @@
+{
+  "name": "@nocobase/app-template-default",
+  "type": "module",
+  "private": true,
+  "description": "Translation namespace metadata retained for migrated built-in AI resources."
+}

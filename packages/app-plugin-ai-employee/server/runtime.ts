@@ -26,7 +26,6 @@ import {
   MemoryFileManager,
 } from '@nocobase/ai-employee';
 import { CollectionRepositoryFactory } from './repository/database/factory.js';
-import { initializeAIEmployeeCollections } from '../database/collections/index.js';
 import { AIEmployeeAccessPolicy } from './auth/access-policy.js';
 import type { CurrentActorResolver } from './auth/current-actor.js';
 import { AIEmployeeService } from './service/ai-employee-service.js';
@@ -237,16 +236,16 @@ export function initializeAIEmployee(
   const ctx = createAIEmployeeRuntime(options);
   runtimes.set(options.deps.ai, ctx);
   const { logger } = ctx;
-  const builtinDirectory = path.resolve(
+  const packageAIDirectory = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    'builtin',
+    '..',
+    'ai',
   );
   const aiDirectory = resolveAIDirectory(options.aiDirectory);
   ctx.ready = (async () => {
-    await initializeAIEmployeeCollections(options.deps.database);
     await loadResources({
       ctx,
-      aiDirectory: builtinDirectory,
+      aiDirectory: packageAIDirectory,
       loadLLMServices: false,
     });
     const summary = await loadResources({

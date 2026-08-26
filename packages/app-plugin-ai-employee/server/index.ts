@@ -15,4 +15,3 @@ export type {
   ResourceLoadOptions,
   ResourceLoadSummary,
 } from './runtime.js';
-export { initializeAIEmployeeCollections } from '../database/collections/index.js';

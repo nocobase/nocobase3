@@ -1,10 +1,13 @@
+import { fileURLToPath } from 'node:url';
+
+import { createMigrator } from '@nocobase/app-database';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   createAIEmployeeContextMiddleware,
   createAIEmployeeRuntime,
-  installAIEmployee,
+  initializeAIEmployee,
   type AIEmployeeEnv,
 } from '../server/runtime.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
@@ -76,31 +79,32 @@ describe('AI employee facade', () => {
     });
   });
 
-  it('observes initialization failures while preserving the rejecting ready promise', async () => {
+  it('initializes resources without invoking database schema builders', async () => {
     const deps = createTestAppDeps();
-    vi.spyOn(deps.database.builder, 'createCollection').mockRejectedValueOnce(
-      new Error('collection initialization failed'),
+    await deps.database.connect();
+    const migrator = createMigrator({
+      database: { connection: () => deps.database },
+      packageName: '@nocobase/app-plugin-ai-employee',
+      directory: fileURLToPath(
+        new URL('../database/migrations', import.meta.url),
+      ),
+    });
+    await migrator.latest();
+    const createCollection = vi.spyOn(
+      deps.database.builder,
+      'createCollection',
     );
-    const app = new Hono<AIEmployeeEnv>();
-    let ready: Promise<void> | undefined;
-    const captureReady = (): void => {
-      app.get('/ready', (context) => {
-        ready = context.var.ctx.ready;
-        return context.json({ installed: true });
-      });
-    };
-    const unhandled = vi.fn();
-    process.on('unhandledRejection', unhandled);
-    try {
-      installAIEmployee(app, { apiBasePath: '/v2/api', deps });
-      captureReady();
-      await app.request('http://localhost/ready');
-      await new Promise((resolve) => setImmediate(resolve));
 
-      expect(unhandled).not.toHaveBeenCalled();
-      await expect(ready).rejects.toThrow('collection initialization failed');
+    try {
+      const runtime = initializeAIEmployee({
+        apiBasePath: '/v2/api',
+        deps,
+      });
+
+      await expect(runtime.ready).resolves.toBeUndefined();
+      expect(createCollection).not.toHaveBeenCalled();
     } finally {
-      process.off('unhandledRejection', unhandled);
+      await deps.database.disconnect();
     }
   });
 });

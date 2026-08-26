@@ -10,6 +10,6 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": false
   },
-  "include": ["index.ts", "server/**/*.ts", "database/**/*.ts"],
+  "include": ["index.ts", "ai/**/*.ts", "server/**/*.ts", "database/**/*.ts"],
   "exclude": ["dist", "node_modules", "tests"]
 }

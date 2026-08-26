@@ -1,9 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseManager,
+  createMigrator,
   type DatabaseManager,
 } from '@nocobase/app-database';
-import { initializeAIEmployeeCollections } from '../database/collections/index.js';
 import { CollectionRepositoryFactory } from '../server/repository/database/factory.js';
 
 const managers: DatabaseManager[] = [];
@@ -25,7 +26,14 @@ async function createDatabase(): Promise<DatabaseManager> {
     collection.boolean('allowNewAiEmployee').nullable();
     collection.primary('name');
   });
-  await initializeAIEmployeeCollections(database.connection());
+  const migrator = createMigrator({
+    database,
+    packageName: '@nocobase/app-plugin-ai-employee',
+    directory: fileURLToPath(
+      new URL('../database/migrations', import.meta.url),
+    ),
+  });
+  await migrator.latest();
   return database;
 }
 

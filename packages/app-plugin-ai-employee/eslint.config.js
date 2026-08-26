@@ -9,7 +9,7 @@ export default createNodeLibraryConfig({
     'server/agent/**',
     'server/auth/**',
     'server/ai-employees/**',
-    'server/builtin/**',
+    'ai/**',
     'server/repository/**',
     'server/routes/*.ts',
     'server/service/**',

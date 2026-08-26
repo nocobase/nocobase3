@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+
+import { describe, expect, it } from 'vitest';
 
 import { AIEmployeeLoader } from '@nocobase/ai-employee';
 import { MCPLoader } from '@nocobase/ai-employee';
@@ -34,10 +36,10 @@ const resourcePatterns = {
   ],
 };
 
-describe('package built-in AI resources', () => {
+describe('package AI resources', () => {
   it('discovers package-owned definitions with the generic resource loaders', async () => {
     const fixture = await createMockServer();
-    const basePath = path.resolve(process.cwd(), 'server', 'builtin');
+    const basePath = path.resolve(process.cwd(), 'ai');
 
     await new ToolsLoader(fixture.aiManager, {
       scan: { basePath, pattern: resourcePatterns.tools },
@@ -81,6 +83,14 @@ describe('package built-in AI resources', () => {
       definition: { name: 'chartGenerator' },
     });
 
-    expect(basePath).toBe(path.resolve(process.cwd(), 'server', 'builtin'));
+    expect(basePath).toBe(path.resolve(process.cwd(), 'ai'));
+  });
+
+  it('keeps built-in TypeScript resources inside an ESM package boundary', async () => {
+    const packageJson = JSON.parse(
+      await readFile(path.resolve(process.cwd(), 'ai', 'package.json'), 'utf8'),
+    ) as { type?: string };
+
+    expect(packageJson.type).toBe('module');
   });
 });
