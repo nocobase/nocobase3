@@ -184,6 +184,7 @@ function resolveEmbeddedPaths(
 
 function createScopeEnv(scope: AppScope): EnvMap {
   return removeUndefinedValues({
+    APP_PUBLIC_ORIGIN: getScopeConfigString(scope.config, 'publicOrigin'),
     NOCOBASE_API_PROXY_TARGET: getScopeConfigString(
       scope.config,
       'nocoBaseApiUrl',

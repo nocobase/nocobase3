@@ -15,7 +15,7 @@ import {
   loadConfig,
 } from '@nocobase/app-server-kit/config';
 
-import app from '../../server/config/app.ts';
+import app, { resolvePublicOrigin } from '../../server/config/app.ts';
 import auth, { resolveAuthSecret } from '../../server/config/auth.ts';
 import caching from '../../server/config/caching.ts';
 import configFactories from '../../server/config/index.ts';
@@ -106,11 +106,37 @@ describe('app config', () => {
 
     expect(config).toMatchObject({
       name: 'main',
+      publicOrigin: undefined,
       publicBasePath: '/main',
       internalBasePath: '',
       internalApiProxyPath: '/v2/api',
       publicApiUrl: '/main/v2/api',
     });
+  });
+
+  it('normalizes the configured public origin', () => {
+    const config = app({
+      env: createConfigEnv({
+        APP_BASE_PATH: '/main',
+        APP_PUBLIC_ORIGIN: ' https://apps.example.com/ ',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config.publicOrigin).toBe('https://apps.example.com');
+  });
+
+  it.each([
+    'apps.example.com',
+    'ftp://apps.example.com',
+    'https://user:password@apps.example.com',
+    'https://apps.example.com/main',
+    'https://apps.example.com?tenant=main',
+    'https://apps.example.com/#main',
+  ])('rejects invalid public origin %s', (value) => {
+    expect(() => resolvePublicOrigin(value)).toThrow(/APP_PUBLIC_ORIGIN/);
   });
 
   it('derives nested standalone routing from the public base path', () => {
@@ -148,13 +174,17 @@ describe('app config', () => {
         rootDir: root,
         clientDir,
         dataDir,
-        config: { authSecret: 'test-auth-secret-at-least-32-characters' },
+        config: {
+          authSecret: 'test-auth-secret-at-least-32-characters',
+          publicOrigin: 'https://apps.example.com',
+        },
       },
       new URL('../../server/embedded.ts', import.meta.url).href,
     );
 
     expect(config.app).toMatchObject({
       name: 'main-app',
+      publicOrigin: 'https://apps.example.com',
       publicBasePath: '/main',
       internalBasePath: '',
       internalApiProxyPath: '/v2/api',

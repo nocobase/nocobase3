@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
 import { findAvailablePort } from './dev-ports.mjs';
+import { waitForHttpReady } from './dev-readiness.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -209,17 +210,13 @@ const appBasePath = String(nextEnv.APP_BASE_PATH || '/main')
 const appUrl = appBasePath
   ? `${appServerUrl}/${appBasePath}/`
   : `${appServerUrl}/`;
-const proxyApiPath = `/${[appBasePath, 'v2/api'].filter(Boolean).join('/')}`;
+const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
+  .filter(Boolean)
+  .join('/')}`;
+const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
 const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);
 
-console.log(`\n  App dev server ready`);
-console.log(`  Local:     ${appUrl}`);
-if (appServerPort !== configuredAppServerPort) {
-  console.log(
-    `  App server port ${configuredAppServerPort} is unavailable; using ${appServerPort}.`,
-  );
-}
-console.log(`  Proxy API: ${appServerUrl}${proxyApiPath}\n`);
+console.log(`\n  Starting app dev server...`);
 
 spawnDevProcess(
   'client',
@@ -230,13 +227,15 @@ spawnDevProcess(
 );
 
 const serverEnv = {
-  ...process.env,
+  ...nextEnv,
   APP_VITE_DEV_HOST: viteDevHost,
   APP_VITE_DEV_PORT: String(vitePort),
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
   APP_SERVER_HOST: appServerHost,
   APP_SERVER_PORT: String(appServerPort),
   APP_SERVER_START_LOG: 'false',
+  APP_PUBLIC_ORIGIN:
+    String(nextEnv.APP_PUBLIC_ORIGIN || '').trim() || appServerUrl,
 };
 
 const serverChild = spawnDevProcess(
@@ -271,3 +270,39 @@ envWatcher = fs.watch(rootDir, (_eventType, filename) => {
     serverChild.stdin?.write('\n');
   }, 100);
 });
+
+try {
+  await Promise.all([
+    waitForHttpReady({
+      label: 'Vite dev server',
+      url: viteUrl,
+    }),
+    waitForHttpReady({
+      isReady: (response, body) => {
+        if (!response.ok) return false;
+
+        try {
+          return JSON.parse(body).ok === true;
+        } catch {
+          return false;
+        }
+      },
+      label: 'Application server',
+      url: healthUrl,
+    }),
+  ]);
+} catch (error) {
+  console.error(`[dev] ${error instanceof Error ? error.message : error}`);
+  shutdown(1);
+}
+
+if (!shuttingDown) {
+  console.log(`\n  App dev server ready`);
+  console.log(`  Local:     ${appUrl}`);
+  if (appServerPort !== configuredAppServerPort) {
+    console.log(
+      `  App server port ${configuredAppServerPort} is unavailable; using ${appServerPort}.`,
+    );
+  }
+  console.log();
+}
