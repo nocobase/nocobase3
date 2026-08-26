@@ -72,6 +72,7 @@ describe('client plugin definitions', () => {
           {
             name: 'index',
             path: '/feature/',
+            access: { resource: 'feature.dashboard', action: 'access' },
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
@@ -96,6 +97,7 @@ describe('client plugin definitions', () => {
       id: '@nocobase/app-plugin-feature:index',
       path: '/feature',
       source: 'plugin',
+      access: { resource: 'feature.dashboard', action: 'access' },
     });
     expect(resolved.providers.map((provider) => provider.id)).toEqual([
       '@nocobase/app-plugin-foundation:first',
