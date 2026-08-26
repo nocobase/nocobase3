@@ -21,15 +21,27 @@ import type {
 
 describe('@nocobase/app-plugin-files contracts', () => {
   it('exposes importable package entry points', async () => {
-    const [rootEntry, serverEntry, clientEntry] = await Promise.all([
+    const [
+      rootEntry,
+      serverEntry,
+      clientEntry,
+      clientRoutesEntry,
+      clientRouteContractsEntry,
+    ] = await Promise.all([
       import('@nocobase/app-plugin-files'),
       import('@nocobase/app-plugin-files/server'),
       import('@nocobase/app-plugin-files/client'),
+      import('@nocobase/app-plugin-files/client/routes'),
+      import('@nocobase/app-plugin-files/client/route-contracts'),
     ]);
 
     expect(rootEntry).toBeDefined();
     expect(serverEntry).toBeDefined();
     expect(clientEntry).toBeDefined();
+    expect(clientRoutesEntry.default).toHaveLength(1);
+    expect(clientRouteContractsEntry.FILES_ROUTE_IDS.index).toBe(
+      '@nocobase/app-plugin-files:index',
+    );
     expect(Object.keys(serverEntry)).toContain('createFilesRuntime');
     expect(Object.keys(serverEntry)).toContain('createFileService');
     expect(Object.keys(serverEntry)).toContain('createCoreFilesRoute');
@@ -61,9 +73,14 @@ describe('@nocobase/app-plugin-files contracts', () => {
       '.',
       './server',
       './client',
+      './client/routes',
+      './client/route-contracts',
       './protocol',
       './package.json',
     ]);
+    expect(packageJson.default.nocobase.plugin.client).toEqual({
+      routes: './client/routes',
+    });
     expect(packageJson.default.files).toEqual(
       expect.arrayContaining([
         '!dist/server/internal/**/*.d.ts',
