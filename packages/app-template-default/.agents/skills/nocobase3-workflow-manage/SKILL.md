@@ -134,7 +134,7 @@ Rollback guidance:
 2. Valid invocation: trigger an enabled workflow with matching context, discriminate `accepted`/`skipped`, and for `accepted` verify the persisted run and resolved node runs.
 3. Invalid DSL: reject an unknown node/config field, duplicate node key, illegal branch, or invisible node-result reference before database writes.
 4. Invalid invocation: service-trigger missing/disabled workflows return `skipped`; accepted workflows still reject invalid/oversized context or a missing parent run with a precise error code.
-5. Authorization/diagnosis: first verify that the application actually wires the optional authorization hook; where it does, deny payload/log access without permission while allowing permitted run metadata inspection.
+5. Authentication/diagnosis: verify unauthenticated management requests are rejected and authenticated requests can inspect run metadata and redacted payload/log output.
 
 # Output Contract
 

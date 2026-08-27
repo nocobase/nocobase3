@@ -67,16 +67,8 @@ export function createWorkflowDefinitionRoutes(
     return c.json({ data });
   });
   routes.post('/workflows/:id/enable', async (c) => {
-    const body = await readBody(c.req.raw);
-    const deployedHash =
-      body !== null &&
-      typeof body === 'object' &&
-      'deployedHash' in body &&
-      typeof Reflect.get(body, 'deployedHash') === 'string'
-        ? String(Reflect.get(body, 'deployedHash'))
-        : undefined;
     return c.json({
-      data: await workflows.enable(c.req.param('id'), deployedHash),
+      data: await workflows.enable(c.req.param('id')),
     });
   });
   routes.post('/workflows/:id/disable', async (c) =>

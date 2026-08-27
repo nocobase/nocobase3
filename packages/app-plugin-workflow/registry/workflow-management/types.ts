@@ -6,7 +6,7 @@ import type {
 } from '@nocobase/app-plugin-workflow/client';
 
 export interface WorkflowListRecord {
-  id: string;
+  id: string | null;
   key: string;
   title: string | null;
   description?: string | null;

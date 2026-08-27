@@ -176,6 +176,9 @@ function InputDialog({
   workflow: WorkflowDetailRecord;
   onClose: () => void;
 }): React.ReactElement {
+  if (!workflow.id)
+    throw new Error('Workflow must be synchronized before editing inputs.');
+  const workflowId = workflow.id;
   const [values, setValues] = useState(workflow.inputValues);
   return (
     <div className='workflow-result-backdrop' onMouseDown={onClose}>
@@ -221,7 +224,7 @@ function InputDialog({
           <button
             type='button'
             onClick={() =>
-              void workflowApi.inputs(workflow.id, values).then(onClose)
+              void workflowApi.inputs(workflowId, values).then(onClose)
             }
           >
             Save
@@ -238,6 +241,9 @@ function ManualRunDialog({
   workflow: WorkflowDetailRecord;
   onClose: () => void;
 }): React.ReactElement {
+  if (!workflow.id)
+    throw new Error('Workflow must be synchronized before manual execution.');
+  const workflowId = workflow.id;
   const properties = contextProperties(workflow.contextSchema);
   const [values, setValues] = useState<
     Record<string, string | number | boolean | undefined>
@@ -255,7 +261,7 @@ function ManualRunDialog({
       ),
     ) as Record<string, string | number | boolean>;
     void workflowApi
-      .execute(workflow.id, context, crypto.randomUUID())
+      .execute(workflowId, context, crypto.randomUUID())
       .then(onClose);
   };
   return (
@@ -386,30 +392,36 @@ function WorkflowRow({
 }: {
   item: WorkflowListRecord;
   onChange: (item: WorkflowListRecord) => void;
-}): React.ReactElement {
+}): React.ReactElement | null {
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
   const [settings, setSettings] = useState<WorkflowDetailRecord | null>(null);
+  const identifier = item.id ?? item.hash;
+  if (!identifier) return null;
   return (
     <>
       <li>
-        <Link to={item.id}>{item.title ?? item.key}</Link>
+        <Link to={identifier}>{item.title ?? item.key}</Link>
         <div className='workflow-row-actions'>
           <label className='workflow-switch'>
             <input
               type='checkbox'
               checked={item.enabled}
-              onChange={(event) =>
-                void workflowApi
-                  .status(item.id, event.target.checked)
-                  .then(onChange)
-              }
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                const update = enabled
+                  ? workflowApi.enable(identifier)
+                  : workflowApi.status(identifier, false);
+                void update.then(onChange);
+              }}
             />
             {item.enabled ? 'Enabled' : 'Disabled'}
           </label>
           <button
             type='button'
             className='workflow-execution-link'
-            onClick={() => void workflowApi.workflowRuns(item.id).then(setRuns)}
+            onClick={() =>
+              void workflowApi.workflowRuns(identifier).then(setRuns)
+            }
           >
             Executed {item.executed} times
           </button>
@@ -420,7 +432,7 @@ function WorkflowRow({
                 type='button'
                 disabled={!item.hasInputs}
                 onClick={() =>
-                  void workflowApi.workflow(item.id).then(setSettings)
+                  void workflowApi.workflow(identifier).then(setSettings)
                 }
               >
                 Parameter settings
@@ -428,7 +440,7 @@ function WorkflowRow({
               <button
                 type='button'
                 onClick={() =>
-                  void workflowApi.execute(item.id, {}, crypto.randomUUID())
+                  void workflowApi.execute(identifier, {}, crypto.randomUUID())
                 }
               >
                 Run
@@ -493,12 +505,12 @@ export function WorkflowListPage(): React.ReactElement {
         <ul className='workflow-list'>
           {items.map((item) => (
             <WorkflowRow
-              key={item.id}
+              key={item.id ?? item.hash ?? item.key}
               item={item}
               onChange={(next) =>
                 setItems((current) =>
                   current.map((candidate) =>
-                    candidate.id === next.id ? next : candidate,
+                    candidate.key === next.key ? next : candidate,
                   ),
                 )
               }
@@ -537,8 +549,13 @@ export function WorkflowDetailPage(): React.ReactElement {
   }>(() => ({ workflowId: '', value: false }));
   const workflow = loaded.value;
   if (!workflow) return <main>{loaded.error ?? 'Loading workflow…'}</main>;
+  const identifier = workflow.id ?? workflow.hash;
+  if (!identifier)
+    return (
+      <main>Workflow has neither a synchronized id nor an artifact hash.</main>
+    );
   const enabled =
-    enabledState.workflowId === workflow.id
+    enabledState.workflowId === identifier
       ? enabledState.value
       : workflow.enabled;
   const hasContext =
@@ -557,11 +574,14 @@ export function WorkflowDetailPage(): React.ReactElement {
           <label>
             Version{' '}
             <select
-              value={workflow.id}
+              value={identifier}
               onChange={(event) => void navigate(`../${event.target.value}`)}
             >
               {(revisions.value ?? [workflow]).map((item) => (
-                <option key={item.id} value={item.id}>
+                <option
+                  key={item.id ?? item.hash ?? item.key}
+                  value={item.id ?? item.hash ?? item.key}
+                >
                   {item.version ?? 'Unpublished'}
                 </option>
               ))}
@@ -585,14 +605,16 @@ export function WorkflowDetailPage(): React.ReactElement {
                 type='checkbox'
                 checked={enabled}
                 onChange={(event) =>
-                  void workflowApi
-                    .status(workflow.id, event.target.checked)
-                    .then((next) =>
-                      setEnabledState({
-                        workflowId: workflow.id,
-                        value: next.enabled,
-                      }),
-                    )
+                  void (
+                    event.target.checked
+                      ? workflowApi.enable(identifier)
+                      : workflowApi.status(identifier, false)
+                  ).then((next) =>
+                    setEnabledState({
+                      workflowId: next.id ?? next.hash ?? identifier,
+                      value: next.enabled,
+                    }),
+                  )
                 }
               />
               {enabled ? 'Enabled' : 'Disabled'}
@@ -600,7 +622,7 @@ export function WorkflowDetailPage(): React.ReactElement {
             <button
               type='button'
               onClick={() => setDialog('inputs')}
-              disabled={!workflow.hasInputs}
+              disabled={!workflow.id || !workflow.hasInputs}
             >
               Parameter settings
             </button>
@@ -610,11 +632,12 @@ export function WorkflowDetailPage(): React.ReactElement {
                 hasContext
                   ? setDialog('manual')
                   : void workflowApi.execute(
-                      workflow.id,
+                      identifier,
                       {},
                       crypto.randomUUID(),
                     )
               }
+              disabled={!workflow.id}
             >
               Run manually
             </button>

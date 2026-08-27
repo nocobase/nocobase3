@@ -132,12 +132,10 @@ describe('application workflow Artifact lazy synchronization', () => {
     const discovered = await firstService.list();
     expect(discovered.data).toEqual([
       expect.objectContaining({
+        id: null,
         key: 'sample',
-        registered: false,
         enabled: false,
-        canEnable: true,
-        deployedHash: v1,
-        currentHash: null,
+        hash: v1,
       }),
     ]);
     expect(
@@ -146,7 +144,7 @@ describe('application workflow Artifact lazy synchronization', () => {
         .selectFrom(WORKFLOW_COLLECTIONS.workflows)
         .exists(),
     ).toBe(false);
-    await firstService.enable('sample', v1);
+    await firstService.enable(v1);
     const first = await f.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
@@ -158,6 +156,10 @@ describe('application workflow Artifact lazy synchronization', () => {
     expect(
       await fs.readdir(path.join(f.storeRoot, 'workflows/sample', v1)),
     ).toEqual(expect.arrayContaining(['workflow.json', 'server']));
+    await firstService.setStatus(first.id as string, false);
+    await expect(
+      firstService.enable(first.id as string),
+    ).resolves.toMatchObject({ id: String(first.id), enabled: true, hash: v1 });
     await trigger(firstRuntime, 'sample', {}, { eventKey: 'artifact-run' });
     const run = await f.database
       .query()

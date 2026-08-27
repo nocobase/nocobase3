@@ -115,7 +115,7 @@ export class WorkflowRunRepository {
   }
 
   async listForWorkflow(id: WorkflowId): Promise<WorkflowRunListItem[]> {
-    const workflow = await this.repository.loadCurrentWorkflow(id);
+    const workflow = await this.repository.get(id);
     return (await this.list({ workflowKey: workflow.key, pageSize: 50 })).data;
   }
 

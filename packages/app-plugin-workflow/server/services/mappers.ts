@@ -59,14 +59,6 @@ export function toWorkflowListItem(
               : String(latestRun.createdAt ?? ''),
         }
       : null,
-    registered: true,
-    canEnable: !(
-      row.enabled === true ||
-      row.enabled === 1 ||
-      row.enabled === '1'
-    ),
-    deployedHash: null,
-    currentHash: row.hash == null ? null : String(row.hash),
   };
 }
 
@@ -74,7 +66,7 @@ export function toDiscoveredWorkflowDefinition(
   artifact: WorkflowDistArtifact,
 ): WorkflowDefinitionView {
   return {
-    id: artifact.key,
+    id: null,
     key: artifact.key,
     title: artifact.workflow.title ?? null,
     description: artifact.workflow.description ?? null,

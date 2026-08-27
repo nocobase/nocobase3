@@ -11,28 +11,33 @@
 
 ## Choose the correct entry
 
-| Intent                                                   | Contract                        | Identifier                | Result                                                                        |
-| -------------------------------------------------------- | ------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
-| Business/domain event starts an enabled current workflow | `WorkflowService.trigger()`     | workflow key              | immediate `accepted`/`skipped` receipt; accepted run creation is asynchronous |
-| Authorized administrator manually executes a definition  | `WorkflowService.run()`         | definition id             | persisted run list item                                                       |
-| Manage/inspect workflows and runs                        | other `WorkflowService` methods | mostly definition/run ids | typed view/list/detail                                                        |
-| Browser/admin client                                     | authenticated `/api` routes     | definition/run ids        | `{ data }` or paged response                                                  |
+| Intent                                                   | Contract                                   | Identifier                | Result                                                                        |
+| -------------------------------------------------------- | ------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------- |
+| Business/domain event starts an enabled current workflow | `trigger(runtime, key, context, options?)` | workflow key              | immediate `accepted`/`skipped` receipt; accepted run creation is asynchronous |
+| Authorized administrator manually executes a definition  | authenticated management HTTP API          | definition id             | persisted run list item                                                       |
+| Manage/inspect workflows and runs                        | authenticated management HTTP API          | mostly definition/run ids | typed view/list/detail                                                        |
+| Browser/admin client                                     | authenticated `/api` routes                | definition/run ids        | `{ data }` or paged response                                                  |
 
 There is intentionally no generic public `POST /workflows/:key/trigger`. A cron, webhook, route, or domain module authenticates and validates its own event, constructs the declared context, then calls the internal service.
 
 ## Internal service access
 
-The plugin bootstrap registers the service as `services.plugins.workflow`. Its public interface is `WorkflowService`.
-
-`services` below is the application/plugin bootstrap context's service container; it is not a module-level global. Import the public type from the server export when needed.
+The public server entry exports `trigger(runtime, key, context, options?)`. Obtain
+the runtime from the application/plugin context with the plugin's runtime
+binding; do not assume a `services.plugins.workflow` service exists.
 
 Business invocation:
 
 ```ts
-import type { WorkflowService } from '@nocobase/app-plugin-workflow/server';
+import {
+  getRuntimeWorkflow,
+  trigger,
+} from '@nocobase/app-plugin-workflow/server';
 
-const workflow = services.plugins.workflow as WorkflowService;
-const receipt = await workflow.trigger(
+const runtime = getRuntimeWorkflow(appRuntime);
+if (!runtime) throw new Error('Workflow runtime is not configured.');
+const receipt = await trigger(
+  runtime,
   'quotation-decision',
   { quotationId: 'Q-100', amount: 150000 },
   { eventKey: 'quotation-submitted:Q-100' },
@@ -43,7 +48,7 @@ if (receipt.status === 'skipped') {
 const { eventKey } = receipt;
 ```
 
-`trigger(key, context, options?)`:
+`trigger(runtime, key, context, options?)`:
 
 - Resolves the current version by stable key.
 - Returns `{ status: 'skipped', reason: 'not-found' }` when no current definition exists, and `{ status: 'skipped', reason: 'disabled' }` when it is disabled. These normal service outcomes have no `eventKey` and create no run to poll.
@@ -54,72 +59,66 @@ const { eventKey } = receipt;
 - Enqueues work and immediately returns `{ status: 'accepted', eventKey }`; the Workflow Run may not exist yet.
 - Uses event key for idempotency. Reusing it must represent the same business event.
 
-After the service accepts a current enabled workflow, validation/dispatch can still throw `INVALID_CONTEXT`, `CONTEXT_TOO_LARGE`, `PARENT_RUN_NOT_FOUND`, or `STACK_LIMIT_EXCEEDED`. `WORKFLOW_NOT_FOUND` and `WORKFLOW_DISABLED` belong to the lower-level `WorkflowRuntime.trigger()` contract; do not document them as the missing/disabled outcome of `DatabaseWorkflowService.trigger()`.
+After the runtime accepts a current enabled workflow, validation/dispatch can still throw `INVALID_CONTEXT`, `CONTEXT_TOO_LARGE`, `PARENT_RUN_NOT_FOUND`, or `STACK_LIMIT_EXCEEDED`.
 
-Manual management invocation:
+The management run endpoint resolves the exact materialized database definition/version identified by `definitionId`. It does not require that revision to be `current` or `enabled`, so an authenticated operator can run a historical revision. The Run is marked manual and preserves that definition's version, hash, Context Schema, and input snapshot. The optional event key uses the same idempotency mechanism as `trigger()`; the server generates one when it is omitted. The current DSL has no top-level trigger-source field.
 
-```ts
-const run = await workflow.run(
-  definitionId,
-  { quotationId: 'Q-100', amount: 150000 },
-  { eventKey: 'operator-request-42' },
-);
-```
+## Management operation map
 
-`run(definitionId, context, options?)` resolves the exact materialized database definition/version identified by `definitionId`. It does not require that revision to be `current` or `enabled`, so an authorized administrator can run a historical revision. The Run is marked manual and preserves that definition's version, hash, Context Schema, and input snapshot. `options.eventKey` is used directly by the same event-key idempotency mechanism as `trigger()`; the service generates an event key when it is omitted. This privileged management operation must be protected by `workflow:run` when fine-grained authorization is wired. The current DSL has no top-level trigger-source field.
+These names describe the repository behavior behind the authenticated routes;
+they are not additional package-root service exports.
 
-## Service method map
-
-| Method                                 | Purpose                                                                                             |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `list()`                               | Current definitions with enabled/current flags, version/hash, executed/active counts, latest run    |
-| `getWorkflow(id)`                      | One definition and its materialized nodes/context/input settings                                    |
-| `revisions(id)`                        | All revisions sharing the selected definition's key                                                 |
-| `enable(id, expectedDeployedHash?)`    | Publish current deployed Artifact if present, activate the selected/current revision, and enable it |
-| `disable(id)`                          | Disable the current definition                                                                      |
-| `setStatus(id, enabled)`               | Change enabled state on a current definition                                                        |
-| `getInputs(id)`                        | Read administrator input schema and explicit override values                                        |
-| `updateInputs(id, values)`             | Replace validated override values on a current definition                                           |
-| `runs(options?)`                       | Paged runs across workflows; default page size is 20                                                |
-| `runsForWorkflow(id)`                  | Latest 50 runs for the selected definition's workflow key                                           |
-| `getRun(id)`                           | Run context, version identity, timing/reason, and latest attempt per node key                       |
-| `nodeRuns(id, nodeKey?)`               | All node attempts, optionally filtered by node key                                                  |
-| `nodeRunPayload(runId, nodeRunId)`     | Redacted/truncated result, error, and log for one attempt                                           |
-| `trigger(key, context, options?)`      | Internal asynchronous business invocation                                                           |
-| `run(definitionId, context, options?)` | Authorized manual execution of the selected revision; accepts the common `eventKey` option          |
+| Method                                 | Purpose                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `list()`                               | Current definitions with enabled/current flags, version/hash, executed/active counts, latest run |
+| `getWorkflow(id)`                      | One definition and its materialized nodes/context/input settings                                 |
+| `revisions(id)`                        | All revisions sharing the selected definition's key                                              |
+| `enable(idOrArtifactHash)`             | Enable a synchronized definition by id or publish/enable an unsynchronized Artifact by hash      |
+| `disable(id)`                          | Disable the current definition                                                                   |
+| `setStatus(id, enabled)`               | Change enabled state on a current definition                                                     |
+| `getInputs(id)`                        | Read administrator input schema and explicit override values                                     |
+| `updateInputs(id, values)`             | Replace validated override values on a current definition                                        |
+| `runs(options?)`                       | Paged runs across workflows; default page size is 20                                             |
+| `runsForWorkflow(id)`                  | Latest 50 runs for the selected definition's workflow key                                        |
+| `getRun(id)`                           | Run context, version identity, timing/reason, and latest attempt per node key                    |
+| `nodeRuns(id, nodeKey?)`               | All node attempts, optionally filtered by node key                                               |
+| `nodeRunPayload(runId, nodeRunId)`     | Redacted/truncated result, error, and log for one attempt                                        |
+| `run(definitionId, context, options?)` | Authorized manual execution of the selected revision; accepts the common `eventKey` option       |
 
 Input override updates accept only declared scalar values with exact types and enum membership. The stored map contains explicit overrides, not resolved defaults. Read back after changing it.
 
-### Enable with deployed-hash concurrency control
+### Enable by synchronized id or Artifact hash
 
-Read before writing. `list()` exposes `registered`, `deployedHash`, `currentHash`, and `canEnable`.
+Read before writing. A synchronized item has a database `id`; an unsynchronized
+Artifact has no id and is identified by its deployed `hash`.
 
-- For a discovered but unregistered Artifact, call `enable(key, deployedHash)`. Omitting the hash fails with `deployedHash is required.`
-- If a supplied expected hash no longer equals the discovered deployment, enable fails with conflict `deployment-changed`; refresh the list and obtain authorization for the new digest.
-- For an already registered workflow, `enable(id)` selects and enables the current revision; supplying the last-read deployed hash adds deployment-change protection.
+- For an unsynchronized Artifact, call `enable(hash)` or `POST /api/workflows/<hash>/enable`.
+- For a synchronized workflow, call `enable(id)` or `POST /api/workflows/<id>/enable`.
 - After enable, read back id/key, `enabled`, `current`, version, and hash before configuring inputs or running it.
 
 ## Authenticated management HTTP API
 
-All current routes are below `/api` and require authentication. The route factory declares the permission identifiers below, but only enforces them when the application passes its optional `authorize` hook. The default plugin registration currently calls `createWorkflowRoutes({ workflow })`, so it does not wire fine-grained authorization or audit hooks. Authentication is not equivalent to ACL enforcement; verify target-app wiring before relying on these identifiers.
+All current routes are below `/api` and require authentication. The current
+implementation does not provide per-action ACL or audit hooks; do not claim
+finer-grained enforcement than authentication.
 
-| Method and path                                          | Permission                                                      | Purpose/body                                                                                      |
-| -------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `GET /workflows`                                         | `workflow:list`                                                 | filters `q`, `enabled`; paged with `page`, `pageSize`                                             |
-| `GET /workflows/:id`                                     | `workflow:view`                                                 | definition detail                                                                                 |
-| `GET /workflows/:id/revisions`                           | `workflow:view`                                                 | revision list                                                                                     |
-| `PATCH /workflows/:id/status`                            | `workflow:updateStatus`                                         | `{ "enabled": boolean }`                                                                          |
-| `POST /workflows/:id/enable`                             | `workflow:updateStatus`                                         | optional `{ "deployedHash": string }`; required for first enable of discovered Artifact           |
-| `POST /workflows/:id/disable`                            | `workflow:updateStatus`                                         | disable current revision                                                                          |
-| `GET /workflows/:id/inputs`                              | `workflow:view`                                                 | input settings                                                                                    |
-| `PUT /workflows/:id/inputs`                              | `workflow:updateInputs`                                         | raw override object                                                                               |
-| `PUT /workflows/:id/input-values`                        | `workflow:updateInputs`                                         | raw overrides or `{ inputValues }`; audited route                                                 |
-| `POST /workflows/:id/run`                                | `workflow:run`                                                  | raw context or `{ context }`; optional `Event-Key` header; id is the selected definition revision |
-| `GET /workflows/:id/runs`                                | `workflowRun:list`                                              | runs for workflow key                                                                             |
-| `GET /workflow-runs`                                     | `workflowRun:list`                                              | filters key/title/status; paged                                                                   |
-| `GET /workflow-runs/:id`                                 | `workflowRun:view`                                              | run detail                                                                                        |
-| `GET /workflow-runs/:id/node-runs`                       | `workflowRun:view`                                              | optional `nodeKey` query                                                                          |
-| `GET /workflow-runs/:runId/node-runs/:nodeRunId/payload` | `workflowRun:viewPayload`; log also needs `workflowRun:viewLog` | node result/error/log                                                                             |
+| Method and path                                          | Purpose/body                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /workflows`                                         | filters `q`, `enabled`; paged with `page`, `pageSize`                                             |
+| `GET /workflows/:id`                                     | definition detail; id may be an unsynchronized Artifact hash                                      |
+| `GET /workflows/:id/revisions`                           | revision list                                                                                     |
+| `PATCH /workflows/:id/status`                            | `{ "enabled": boolean }` for a synchronized definition                                            |
+| `POST /workflows/:id/enable`                             | id is a synchronized definition id or an unsynchronized Artifact hash                             |
+| `POST /workflows/:id/disable`                            | disable current revision                                                                          |
+| `GET /workflows/:id/inputs`                              | input settings                                                                                    |
+| `PUT /workflows/:id/inputs`                              | raw override object                                                                               |
+| `PUT /workflows/:id/input-values`                        | raw overrides or `{ inputValues }`                                                                |
+| `POST /workflows/:id/run`                                | raw context or `{ context }`; optional `Event-Key` header; id is the selected definition revision |
+| `GET /workflows/:id/runs`                                | runs for workflow key                                                                             |
+| `GET /workflow-runs`                                     | filters key/title/status; paged                                                                   |
+| `GET /workflow-runs/:id`                                 | run detail                                                                                        |
+| `GET /workflow-runs/:id/node-runs`                       | optional `nodeKey` query                                                                          |
+| `GET /workflow-runs/:runId/node-runs/:nodeRunId/payload` | node result/error/log                                                                             |
 
 The run endpoint maps the `Event-Key` header to `{ eventKey }`; it must not accept arbitrary runtime options from the request body. Do not allow clients to inject `parentRunId` or bypass authorization through arbitrary bodies.
 
@@ -129,8 +128,7 @@ Example authenticated management calls (replace the base URL, credentials, ids, 
 curl --fail-with-body \
   -H 'Authorization: Bearer <session-token>' \
   -H 'Content-Type: application/json' \
-  -d '{"deployedHash":"<last-read-deployed-hash>"}' \
-  https://app.example/api/workflows/quotation-decision/enable
+  https://app.example/api/workflows/<artifact-hash>/enable
 
 curl --fail-with-body \
   -H 'Authorization: Bearer <session-token>' \
@@ -144,18 +142,18 @@ curl --fail-with-body \
   https://app.example/api/workflow-runs/<run-id>
 ```
 
-The first discovered item uses its workflow key as the temporary management id. After enable, use the persisted definition id returned/read back by the API. These are management routes only; business modules still call the internal service and handle its `accepted`/`skipped` receipt.
+An unsynchronized Artifact is addressed by its hash; after enable, use the persisted definition id returned/read back by the API. These are management routes only; business modules call the public `trigger` export and handle its `accepted`/`skipped` receipt.
 
 ## Invocation verification
 
 1. Resolve the intended definition id/revision and record its version, hash, current/enabled flags, and input settings. `trigger()` requires current+enabled; manual `run()` may intentionally select a historical/disabled revision.
 2. Validate the exact context locally against the declared schema, including extra fields and byte size.
 3. Choose/reuse a stable event key for the same source event.
-4. Call `trigger()` for business logic or authorized `run()` for manual management.
+4. Call the public `trigger(runtime, key, context, options)` for business logic or the authenticated `run` route for manual management.
 5. Discriminate the receipt. For `skipped`, record the reason and stop; there is no event key or run. For `accepted`, record its event key and allow for queue delay before looking up a run.
 6. Once persisted, verify its workflow id/key, version, hash, context, event key, status, and timestamps.
 7. Verify side-effecting run scripts by their business idempotency evidence, not merely a resolved workflow status.
 
 ## Installed implementation discovery
 
-Resolve `@nocobase/app-plugin-workflow/server` through the project's package manager and inspect its installed declarations when verifying the current `WorkflowService`, server bootstrap, or route exports. Keep application calls on public package exports rather than importing plugin-internal file paths.
+Resolve `@nocobase/app-plugin-workflow/server` through the project's package manager and inspect its installed declarations when verifying the runtime and route exports. Keep application calls on public package exports rather than importing plugin-internal file paths.

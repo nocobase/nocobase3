@@ -154,16 +154,13 @@ cases:
     action: invoke
     risk: side-effecting
     prompt: >-
-      /api/workflows 列出了 quotation-decision，registered=false，deployedHash=abc123。
-      请首次启用它，但如果部署已变化就不要继续。
+      /api/workflows 列出了 quotation-decision，id=null，hash=abc123。请首次启用它。
     expected:
-      - Reads the current deployed hash immediately before mutation and requests the required authorization/confirmation.
-      - Calls enable with the workflow key and expected deployed hash, or sends deployedHash in the HTTP body.
-      - Stops on deployment-changed conflict and refreshes rather than silently accepting another Artifact.
-      - Reads back registered, enabled/current, version, and hash after success.
+      - Reads the current Artifact hash immediately before mutation and requests the required authorization/confirmation.
+      - Calls enable with the unsynchronized Artifact hash.
+      - Reads back the synchronized id, enabled/current, version, and hash after success.
     forbidden:
-      - Omitting deployedHash on first enable.
-      - Enabling a changed deployment without renewed review/authorization.
+      - Using a workflow key or an absent id instead of the Artifact hash.
 
   - id: invoke-business-event
     action: invoke
@@ -177,7 +174,7 @@ cases:
       业务事件 key 是 quotation-submitted:Q-100。请确认它最终是否执行成功。
     expected:
       - Resolves the enabled current definition and verifies the exact context and input snapshot before invocation.
-      - Uses WorkflowService.trigger with the workflow key and supplied stable event key, not management run by definition id.
+      - Uses trigger(runtime, workflowKey, context, options) with the supplied stable event key, not management run by definition id.
       - Discriminates accepted from skipped; only an accepted receipt has an event key and permits polling for an asynchronously persisted run.
       - Reports receipt/event key, run id, status, definition version, and artifact hash.
     forbidden:
@@ -232,10 +229,10 @@ cases:
     action: diagnose
     risk: read-only
     prompt: >-
-      调用 WorkflowService.trigger("quotation-decision", context) 返回了
+      调用 trigger(runtime, "quotation-decision", context) 返回了
       { "status": "skipped", "reason": "disabled" }。请帮我检查发生了什么，不要修改状态。
     expected:
-      - Treats skipped as the DatabaseWorkflowService contract rather than an exception or accepted scheduling receipt.
+      - Treats skipped as the public trigger contract rather than an exception or accepted scheduling receipt.
       - States that the receipt has no event key and no run should be polled for this call.
       - Inspects current definition and enabled state without enabling or invoking it.
     forbidden:

@@ -45,6 +45,10 @@ export const workflowApi = {
       method: 'PATCH',
       body: JSON.stringify({ enabled }),
     }),
+  enable: (idOrHash: string): Promise<WorkflowListRecord> =>
+    request(`/workflows/${encodeURIComponent(idOrHash)}/enable`, {
+      method: 'POST',
+    }),
   inputs: (
     id: string,
     inputValues: Record<string, string | number | boolean>,

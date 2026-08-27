@@ -89,6 +89,32 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       { eventKey: 'operator-request-42' },
     );
   });
+
+  it('enables a workflow by synchronized id or unsynchronized artifact hash', async () => {
+    const app = new Hono();
+    const workflow = createWorkflowRepositories();
+    vi.mocked(workflow.workflows.enable).mockResolvedValue({
+      id: 'definition-1',
+      key: 'approval',
+      title: 'Approval',
+      enabled: true,
+      current: true,
+      hasInputs: false,
+      executed: 0,
+      version: 'version-1',
+      hash: 'artifact-hash',
+      activeRunCount: 0,
+      latestRun: null,
+    });
+    registerTestRoutes(app, workflow);
+
+    const response = await app.request('/api/workflows/artifact-hash/enable', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(workflow.workflows.enable).toHaveBeenCalledWith('artifact-hash');
+  });
 });
 
 interface TestRepositories {

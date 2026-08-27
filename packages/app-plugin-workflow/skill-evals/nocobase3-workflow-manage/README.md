@@ -69,7 +69,7 @@ private database, so prompts can refer to Run `781`, `9001`, or `9002` without
 colliding with another parallel case. Cleanup removes the entire case root in a
 `finally` block unless `--keep-workspaces` is supplied.
 
-The runtime fixture CLI uses the real `DatabaseWorkflowService` for read-only
+The runtime fixture CLI uses the real workflow repositories for read-only
 inspection. Static DSL fixtures are checked with the real `workflow check`
 binary and do not need a database.
 

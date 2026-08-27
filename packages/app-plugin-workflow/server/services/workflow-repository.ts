@@ -12,7 +12,7 @@ import {
 } from '../engine/index.js';
 import { activateWorkflowSource } from '../loader/index.js';
 import type { AppWorkflowRuntime } from '../runtime/runtime.js';
-import { BadRequestError, ConflictError } from './errors.js';
+import { BadRequestError } from './errors.js';
 import {
   asWorkflowId,
   normalizePage,
@@ -92,15 +92,23 @@ export class WorkflowRepository {
       );
       const artifact = deployedByKey.get(key);
       deployedByKey.delete(key);
-      return {
-        ...item,
-        deployedHash: artifact?.digest ?? null,
-        currentHash: item.hash,
-      };
+      if (artifact && artifact.digest !== item.hash) {
+        return {
+          ...item,
+          id: null,
+          title: artifact.workflow.title ?? null,
+          enabled: false,
+          current: null,
+          hasInputs: Object.keys(artifact.workflow.inputs ?? {}).length > 0,
+          version: null,
+          hash: artifact.digest,
+        };
+      }
+      return item;
     });
     for (const artifact of deployedByKey.values()) {
       items.push({
-        id: artifact.key,
+        id: null,
         key: artifact.key,
         title: artifact.workflow.title ?? null,
         enabled: false,
@@ -108,13 +116,9 @@ export class WorkflowRepository {
         hasInputs: Object.keys(artifact.workflow.inputs ?? {}).length > 0,
         executed: 0,
         version: null,
-        hash: null,
+        hash: artifact.digest,
         activeRunCount: 0,
         latestRun: null,
-        registered: false,
-        canEnable: true,
-        deployedHash: artifact.digest,
-        currentHash: null,
       });
     }
     const query = options.query?.toLowerCase();
@@ -134,39 +138,42 @@ export class WorkflowRepository {
     };
   }
 
-  async enable(
-    id: WorkflowId,
-    expectedDeployedHash?: string,
-  ): Promise<WorkflowListItem> {
-    const existing = await this.findCurrentRow(id);
-    const key = existing ? String(existing.key) : String(id);
-    const deployed = (await this.runtime.discoverArtifacts()).find(
-      (artifact) => artifact.key === key,
-    );
-    if (
-      expectedDeployedHash !== undefined &&
-      deployed?.digest !== expectedDeployedHash
-    )
-      throw new ConflictError('deployment-changed');
+  async enable(idOrHash: WorkflowId): Promise<WorkflowListItem> {
+    const existing = await this.findCurrentRowById(idOrHash);
+    const deployed = existing
+      ? undefined
+      : (await this.runtime.discoverArtifacts()).find(
+          (artifact) => artifact.digest === String(idOrHash),
+        );
     if (!existing) {
       if (!deployed)
-        throw new BadRequestError(`Workflow ${String(id)} was not found.`);
-      if (expectedDeployedHash === undefined)
-        throw new BadRequestError('deployedHash is required.');
-      await this.runtime.publishArtifact(key, 'enable');
-      const created = await this.findCurrentRow(key);
-      if (!created) throw new BadRequestError(`Workflow ${key} was not found.`);
+        throw new BadRequestError(
+          `Workflow id or hash ${String(idOrHash)} was not found.`,
+        );
+      await this.runtime.publishArtifact(deployed.key, 'enable');
+      const created = await this.findCurrentRowByKey(deployed.key);
+      if (!created)
+        throw new BadRequestError(`Workflow ${deployed.key} was not found.`);
       return this.listItemFromRow(created);
     }
-    if (deployed) await this.runtime.publishArtifact(key, 'enable');
-    const current = await this.findCurrentRow(key);
+    const key = String(existing.key);
+    const current = await this.findCurrentRowByKey(key);
     if (!current) throw new BadRequestError(`Workflow ${key} was not found.`);
-    id = current.id as WorkflowId;
+    const id = current.id as WorkflowId;
     const workflow = await this.database.transaction(
       async (connection): Promise<WorkflowListItem> => {
         const selected = await connection.query
           .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-          .select(['id', 'key', 'title', 'enabled', 'current', 'inputSchema'])
+          .select([
+            'id',
+            'key',
+            'title',
+            'enabled',
+            'current',
+            'inputSchema',
+            'version',
+            'hash',
+          ])
           .where('id', '=', id)
           .executeTakeFirst<Row>();
         if (!selected)
@@ -237,7 +244,7 @@ export class WorkflowRepository {
     const workflow = await loadWorkflow(this.database.query(), id);
     if (!workflow) {
       const artifact = (await this.runtime.discoverArtifacts()).find(
-        (candidate) => candidate.key === String(id),
+        (candidate) => candidate.digest === String(id),
       );
       if (!artifact)
         throw new BadRequestError(`Workflow ${String(id)} was not found.`);
@@ -261,7 +268,8 @@ export class WorkflowRepository {
       .where('key', '=', workflow.key)
       .orderBy('id', 'desc')
       .execute<Row>();
-    const result: WorkflowDefinitionView[] = [];
+    const result: WorkflowDefinitionView[] =
+      workflow.id === null ? [workflow] : [];
     for (const row of rows) {
       const revision = await loadWorkflow(
         this.database.query(),
@@ -325,14 +333,7 @@ export class WorkflowRepository {
 
   private async listItemFromRow(row: Row): Promise<WorkflowListItem> {
     const key = String(row.key);
-    const deployed = (await this.runtime.discoverArtifacts()).find(
-      (artifact) => artifact.key === key,
-    );
-    return {
-      ...toWorkflowListItem(row, await this.getExecutedCount(key)),
-      deployedHash: deployed?.digest ?? null,
-      currentHash: row.hash == null ? null : String(row.hash),
-    };
+    return toWorkflowListItem(row, await this.getExecutedCount(key));
   }
 
   async getExecutedCount(
@@ -346,21 +347,23 @@ export class WorkflowRepository {
     return Number(executed ?? 0);
   }
 
-  async findCurrentRow(idOrKey: WorkflowId): Promise<Row | undefined> {
-    const byId = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .selectAll()
-      .where('current', '=', true)
-      .where('id', '=', idOrKey)
-      .executeTakeFirst<Row>();
-    if (byId) return byId;
+  async findCurrentRowById(id: WorkflowId): Promise<Row | undefined> {
     return this.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
       .selectAll()
       .where('current', '=', true)
-      .where('key', '=', String(idOrKey))
+      .where('id', '=', id)
+      .executeTakeFirst<Row>();
+  }
+
+  async findCurrentRowByKey(key: string): Promise<Row | undefined> {
+    return this.database
+      .query()
+      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
+      .selectAll()
+      .where('current', '=', true)
+      .where('key', '=', key)
       .executeTakeFirst<Row>();
   }
 

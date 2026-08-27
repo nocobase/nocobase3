@@ -95,8 +95,8 @@ For an unexpected path:
 `nodeRunPayload()` returns `{ id, result, error, log, truncated }`.
 
 - Result, error, and log are capped around 64 KiB; oversized content is truncated.
-- Payloads/logs pass through redaction of common secret material, but callers still need `workflowRun:viewPayload`; logs additionally require `workflowRun:viewLog`.
-- A `null` log can mean no captured log or insufficient log permission. Check authorization before concluding the script emitted nothing.
+- Payloads/logs pass through redaction of common secret material. Current routes require authentication but do not enforce separate payload/log permissions.
+- A `null` log means no captured log after redaction.
 - If `truncated` is true, use correlated structured server logs or reproduce safely with smaller diagnostic data. Do not weaken redaction or copy secrets into a new log.
 - Node Run summary currently reports `branchKey: null`; reconstruct branch topology from the definition and condition result rather than relying on that summary field.
 
@@ -135,7 +135,9 @@ Report at least:
 - Root-cause category: source/compile, activation/config, invocation contract, queue/worker, artifact/module, business script, timeout/cancellation, or authorization/observability.
 - Safest recovery: source revision, configuration correction, idempotent retry, new invocation, or explicit compensation.
 
-Permission identifiers in route documentation are not proof of enforcement. `createWorkflowRoutes()` enforces fine-grained permissions only when the application supplies its optional `authorize` hook. The default plugin registration currently supplies authentication but no `authorize` or `audit` hook, so diagnose actual route wiring before attributing a 200/403 or hidden log to ACL behavior.
+The current management routes enforce authentication only. Do not attribute a
+response or missing log to per-action ACL or audit behavior that is not
+implemented.
 
 ## Installed implementation discovery
 

@@ -182,7 +182,8 @@
     ".env.example",
     "README.MD",
     "MIGRATION.md",
-    "AGENTS.md"
+    "AGENTS.md",
+    ".agents"
   ],
   "publishConfig": {
     "access": "public"

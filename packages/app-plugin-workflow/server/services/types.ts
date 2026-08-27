@@ -7,7 +7,7 @@ import type {
 } from '../engine/index.js';
 
 export interface WorkflowListItem {
-  id: WorkflowId;
+  id: WorkflowId | null;
   key: string;
   title: string | null;
   enabled: boolean;
@@ -18,10 +18,6 @@ export interface WorkflowListItem {
   hash: string | null;
   activeRunCount: number;
   latestRun: { id: string; status: number | null; createdAt: string } | null;
-  registered: boolean;
-  canEnable: boolean;
-  deployedHash: string | null;
-  currentHash: string | null;
 }
 
 export interface WorkflowRunListItem extends Pick<
@@ -84,7 +80,7 @@ export interface WorkflowInputSettings {
   values: WorkflowInputValues;
 }
 export interface WorkflowDefinitionView {
-  id: string;
+  id: string | null;
   key: string;
   title: string | null;
   description: string | null;
