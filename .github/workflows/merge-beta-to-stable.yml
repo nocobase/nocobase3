@@ -116,12 +116,8 @@ jobs:
           fi
           echo "$CHANGED"
 
-          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
-          {
-            echo "released<<RELEASED_EOF"
-            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
-            echo "RELEASED_EOF"
-          } >> "$GITHUB_OUTPUT"
+          # 发布清单留给飞书通知的表格用。单行 JSON，不需要 heredoc 定界符。
+          echo "rows=$(node scripts/list-package-versions.mjs --released-rows /tmp/versions-before.json)" >> "$GITHUB_OUTPUT"
 
       # 转正后不允许残留预发布版本号，也不允许 pre.json 还在——
       # 它会随合并流进 main 污染稳定线。
@@ -298,13 +294,11 @@ jobs:
           STATUS: success
           STATUS_TEXT_SUCCESS: 待发布
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TABLE_JSON: ${{ steps.changed.outputs.rows }}
           CONTENT: |
             `develop` 已合入 `main`，版本号不再带 `-beta` 后缀，`develop` 已重新进入 pre 模式。
 
             **尚未发布到 npm。** 点 `release-stable.yml` 完成发布（输入保持默认）。
 
             待发布的 package：
-            ```
-            ${{ steps.changed.outputs.released }}
-            ```
         run: ./scripts/feishu-notify.sh
