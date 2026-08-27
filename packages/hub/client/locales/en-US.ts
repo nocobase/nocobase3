@@ -256,7 +256,7 @@ export const starter = {
   'hub.apps.createDialog.submit': 'Create',
   'hub.apps.createDialog.submitting': 'Creating…',
   'hub.apps.columns.application': 'Application',
-  'hub.apps.columns.status': 'Status',
+  'hub.apps.columns.status': 'Runtime status',
   'hub.apps.columns.currentRelease': 'Current release',
   'hub.apps.columns.environment': 'Environment',
   'hub.apps.columns.updated': 'Updated',

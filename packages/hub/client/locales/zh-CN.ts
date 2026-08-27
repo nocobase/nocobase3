@@ -238,7 +238,7 @@ export const starter = {
   'hub.apps.createDialog.submit': '创建',
   'hub.apps.createDialog.submitting': '正在创建…',
   'hub.apps.columns.application': '应用',
-  'hub.apps.columns.status': '状态',
+  'hub.apps.columns.status': '运行状态',
   'hub.apps.columns.currentRelease': '当前版本',
   'hub.apps.columns.environment': '环境',
   'hub.apps.columns.updated': '更新时间',

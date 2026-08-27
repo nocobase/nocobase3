@@ -573,7 +573,9 @@ function ApplicationResults({
               <TableHead className='pl-4'>
                 {translate('hub.common.application', 'Application')}
               </TableHead>
-              <TableHead>{translate('hub.common.status', 'Status')}</TableHead>
+              <TableHead>
+                {translate('hub.apps.columns.status', 'Runtime status')}
+              </TableHead>
               <TableHead>
                 {translate('hub.apps.columns.health', 'Health')}
               </TableHead>
@@ -609,7 +611,9 @@ function ApplicationResults({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <HubStatusBadge status={application.status} />
+                  <HubStatusBadge
+                    status={application.runtime?.state ?? 'unknown'}
+                  />
                 </TableCell>
                 <TableCell>
                   <HubStatusBadge
@@ -673,13 +677,11 @@ function ApplicationQuickActions({
   const isStopped = application.runtime?.state === 'stopped';
   const activeReleaseId = application.activeRelease?.id;
   const latestReleaseId = application.latestRelease?.id;
+  const hasRelease = Boolean(activeReleaseId || latestReleaseId);
   const hasActiveRelease = Boolean(activeReleaseId);
-  const canManage = hasHubCapability(
-    capabilities,
-    'hub.app',
-    'read',
-    application.id,
-  );
+  const canManage =
+    hasRelease &&
+    hasHubCapability(capabilities, 'hub.app', 'read', application.id);
   const canDevelop =
     isActive &&
     hasHubCapability(capabilities, 'hub.release', 'create', application.id);
@@ -738,7 +740,7 @@ function ApplicationQuickActions({
         align === 'end' ? 'justify-end' : ''
       }`}
     >
-      {application.links?.open ? (
+      {hasRelease && application.links?.open ? (
         <Button
           size='sm'
           nativeButton={false}

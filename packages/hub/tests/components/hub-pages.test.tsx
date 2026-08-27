@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { Refine } from '@refinedev/core';
@@ -162,7 +168,135 @@ describe('Hub application pages', () => {
     fireEvent.click(screen.getByRole('button', { name: /list view/i }));
     expect(screen.getByRole('table')).toBeInTheDocument();
     expect(
+      screen.getByRole('columnheader', { name: 'Runtime status' }),
+    ).toBeInTheDocument();
+    const applicationRow = screen.getByRole('row', {
+      name: /Inventory inventory/,
+    });
+    expect(within(applicationRow).getByText('Running')).toBeInTheDocument();
+    expect(
+      within(applicationRow).queryByText('Active'),
+    ).not.toBeInTheDocument();
+    expect(
       screen.getByRole('button', { name: /card view/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('only offers development before the first release is uploaded', async () => {
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.release', actions: ['read', 'create'] },
+        { resource: 'hub.deployment', actions: ['read', 'deploy'] },
+      ],
+      application: [],
+    };
+    const emptyApplication: HubApplication = {
+      ...application,
+      id: 'app-empty',
+      slug: 'wms',
+      name: 'WMS',
+      activeRelease: null,
+      latestRelease: null,
+      runtime: {
+        state: 'stopped',
+        health: 'unknown',
+        releaseId: null,
+        lastCheckedAt: null,
+      },
+      links: {
+        self: '/hub/api/apps/app-empty',
+        open: 'https://apps.example.com/wms/',
+      },
+    };
+    const releasedApplication: HubApplication = {
+      ...emptyApplication,
+      id: 'app-released',
+      slug: 'crm',
+      name: 'CRM',
+      latestRelease: {
+        id: 'release-crm',
+        version: '0.0.1',
+        createdAt: release.createdAt,
+      },
+      links: { self: '/hub/api/apps/app-released', open: null },
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps')) {
+        return response([emptyApplication, releasedApplication], {
+          total: 2,
+          limit: 20,
+          offset: 0,
+        });
+      }
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Developer'], capabilities });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationsPage fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    const cardDevelopAction = await screen.findByRole('button', {
+      name: 'Develop WMS',
+    });
+    expect(cardDevelopAction).toBeInTheDocument();
+    expect(
+      cardDevelopAction.parentElement?.querySelectorAll(
+        'button, [role=button]',
+      ),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', { name: 'Manage WMS' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open WMS' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Start WMS' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Restart WMS' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Stop WMS' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Redeploy WMS' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Manage CRM' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Deploy 0.0.1' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /list view/i }));
+    const listDevelopAction = screen.getByRole('button', {
+      name: 'Develop WMS',
+    });
+    expect(listDevelopAction).toBeInTheDocument();
+    expect(
+      listDevelopAction.parentElement?.querySelectorAll(
+        'button, [role=button]',
+      ),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', { name: 'Manage WMS' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open WMS' }),
+    ).not.toBeInTheDocument();
+    const wmsRow = screen.getByRole('row', { name: /WMS wms/ });
+    expect(within(wmsRow).getByText('Stopped')).toBeInTheDocument();
+    expect(within(wmsRow).queryByText('Active')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Manage CRM' }),
     ).toBeInTheDocument();
   });
 
