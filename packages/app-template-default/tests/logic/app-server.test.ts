@@ -819,6 +819,7 @@ describe('app server', () => {
   });
 
   it('redirects HTML navigation to installation in install mode', async () => {
+    vi.stubEnv('APP_BASE_PATH', '/main');
     vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
     const viteDevUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'text/html; charset=utf-8');
