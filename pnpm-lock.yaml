@@ -537,7 +537,7 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
 
-  packages/app-plugin-files:
+  packages/app-plugin-file:
     dependencies:
       '@base-ui/react':
         specifier: ^1.6.0
@@ -1217,9 +1217,9 @@ importers:
       '@nocobase/app-plugin-database-example':
         specifier: workspace:^
         version: link:../app-plugin-database-example
-      '@nocobase/app-plugin-files':
+      '@nocobase/app-plugin-file':
         specifier: workspace:^
-        version: link:../app-plugin-files
+        version: link:../app-plugin-file
       '@nocobase/app-plugin-install':
         specifier: workspace:^
         version: link:../app-plugin-install

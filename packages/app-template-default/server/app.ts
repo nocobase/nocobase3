@@ -87,15 +87,19 @@ export function createApp(
     services,
   });
 
+  const protectedPluginRoutes = new Hono();
+  protectedPluginRoutes.use('/api/*', deps.auth.required());
   for (const plugin of options.pluginRoutes ?? []) {
     plugin.registerRoutes({
-      app,
+      app: protectedPluginRoutes,
+      publicApp: app,
       config,
       deps,
       services,
       paths: runtime.paths,
     });
   }
+  app.route('/', protectedPluginRoutes);
 
   app.all('/api/*', () =>
     Response.json({ error: 'Not found' }, { status: 404 }),

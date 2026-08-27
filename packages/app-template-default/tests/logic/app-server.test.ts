@@ -658,7 +658,7 @@ describe('app server', () => {
     });
   });
 
-  it('does not expose the legacy upload route for GET or POST', async () => {
+  it('does not expose the legacy upload route anonymously', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
@@ -669,11 +669,11 @@ describe('app server', () => {
       method: 'POST',
     });
 
-    expect(getResponse.status).toBe(404);
-    expect(postResponse.status).toBe(404);
+    expect(getResponse.status).toBe(401);
+    expect(postResponse.status).toBe(401);
   });
 
-  it('does not apply default API auth to plugin Public content routes', async () => {
+  it('requires authentication for plugin API routes by default', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
@@ -682,6 +682,29 @@ describe('app server', () => {
           packageName: '@nocobase/app-plugin-public-file-test',
           registerRoutes({ app }): void {
             app.get('/api/public-file-content', (context) =>
+              context.text('public file'),
+            );
+          },
+        },
+      ],
+    });
+
+    const response = await app.request(
+      'http://localhost/api/public-file-content',
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it('allows plugins to declare a narrow Public API boundary', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      pluginRoutes: [
+        {
+          packageName: '@nocobase/app-plugin-public-file-test',
+          registerRoutes({ publicApp }): void {
+            publicApp.get('/api/public-file-content', (context) =>
               context.text('public file'),
             );
           },
@@ -786,13 +809,10 @@ describe('app server', () => {
       `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-    });
+    expect(response.status).toBe(401);
   });
 
-  it('mounts the enabled files plugin API routes', async () => {
+  it('mounts the enabled file plugin API routes', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),

@@ -87,8 +87,8 @@ test('inspects configured client routes and providers', async () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-files:demo',
-        path: '/files-demo',
+        id: '@nocobase/app-plugin-file:demo',
+        path: '/file-demo',
       },
       {
         auth: 'guest',
@@ -153,7 +153,7 @@ test('inspects configured client routes and providers', async () => {
       },
       {
         order: 5,
-        packageName: '@nocobase/app-plugin-files',
+        packageName: '@nocobase/app-plugin-file',
         source: 'plugin',
       },
       {

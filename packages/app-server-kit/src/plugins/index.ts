@@ -7,6 +7,7 @@ export interface AppPluginRoutesContext<
   TConfig = unknown,
 > {
   readonly app: Hono;
+  readonly publicApp?: Hono;
   readonly config: TConfig;
   readonly deps: TDeps;
   readonly services: TServices;
