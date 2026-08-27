@@ -7,7 +7,7 @@ import bootstrapInAppNotificationPlugin from '../server/bootstrap.js';
 import registerInAppNotificationRoutes from '../server/routes/index.js';
 
 describe('@nocobase/app-plugin-notification-in-app routes', () => {
-  it('owns its authentication boundary', async () => {
+  it('authenticates through the router user resolver', async () => {
     const notification = {
       registry: {
         registerChannel() {
@@ -26,17 +26,11 @@ describe('@nocobase/app-plugin-notification-in-app routes', () => {
     });
     const app = new Hono();
     const getSession = vi.fn(async () => null);
-    const required = vi.fn(() => async (context, next) => {
-      if (!(await getSession())) {
-        return context.json({ code: 'UNAUTHORIZED' }, 401);
-      }
-      await next();
-    });
 
     registerInAppNotificationRoutes({
       app,
       config: undefined,
-      deps: { auth: { getSession, required } },
+      deps: { auth: { getSession } },
       services: { notification },
       paths: {} as never,
     });
@@ -44,9 +38,8 @@ describe('@nocobase/app-plugin-notification-in-app routes', () => {
     const response = await app.request('/api/notifications/in-app');
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
-      code: 'UNAUTHORIZED',
+      error: 'Authentication required.',
     });
-    expect(required).toHaveBeenCalledOnce();
     expect(getSession).toHaveBeenCalledOnce();
   });
 });

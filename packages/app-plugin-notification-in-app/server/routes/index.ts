@@ -7,7 +7,7 @@ import { getInAppNotificationStore } from '../bootstrap.js';
 import { createInAppRouter } from '../router.js';
 
 export interface InAppNotificationPluginRoutesDeps {
-  readonly auth: Pick<Auth, 'getSession' | 'required'>;
+  readonly auth: Pick<Auth, 'getSession'>;
 }
 
 export type InAppNotificationPluginRoutesContext = AppPluginRoutesContext<
@@ -31,7 +31,6 @@ export default function registerInAppNotificationRoutes({
   }
 
   const routes = new Hono();
-  routes.use('*', deps.auth.required());
   routes.route(
     '/',
     createInAppRouter(store, {
