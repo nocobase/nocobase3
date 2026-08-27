@@ -92,7 +92,10 @@ describe('file plugin public contracts', () => {
     const providersEntry = ['./client', 'providers'].join('/');
 
     expect(packageJson.files).toContain('.agents');
-    expect(packageJson.exports).toHaveProperty(`./${skillPath}`);
+    expect(packageJson.exports).not.toHaveProperty(`./${skillPath}`);
+    expect(packageJson.publishConfig.exports).not.toHaveProperty(
+      `./${skillPath}`,
+    );
     expect(packageJson.exports).not.toHaveProperty(bootstrapEntry);
     expect(packageJson.exports).not.toHaveProperty(providersEntry);
     expect(packageJson.publishConfig.exports).not.toHaveProperty(

@@ -41,7 +41,6 @@
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
     },
-    "./.agents/skills/nocobase-app-plugin-file/SKILL.md": "./.agents/skills/nocobase-app-plugin-file/SKILL.md",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -79,7 +78,6 @@
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
       },
-      "./.agents/skills/nocobase-app-plugin-file/SKILL.md": "./.agents/skills/nocobase-app-plugin-file/SKILL.md",
       "./package.json": "./package.json"
     }
   },
