@@ -153,11 +153,6 @@ test('inspects configured client routes and providers', async () => {
       },
       {
         order: 5,
-        packageName: '@nocobase/app-plugin-file',
-        source: 'plugin',
-      },
-      {
-        order: 6,
         packageName: '@nocobase/app-plugin-notification-provider',
         source: 'plugin',
       },
