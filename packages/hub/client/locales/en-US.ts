@@ -250,8 +250,8 @@ export const starter = {
     'Change the search text or status filter to see other applications.',
   'hub.apps.summary': 'Showing {{visible}} of {{total}} applications',
   'hub.apps.createDialog.title': 'Create application',
-  'hub.apps.createDialog.description':
-    'Register the stable identity used by releases and deployments.',
+  'hub.apps.createDialog.slugDescription':
+    'A stable identifier used by releases and deployments. It cannot be changed after creation.',
   'hub.apps.createDialog.error': 'Unable to create application',
   'hub.apps.createDialog.submit': 'Create',
   'hub.apps.createDialog.submitting': 'Creating…',
@@ -528,9 +528,6 @@ export const starter = {
   'hub.apps.columns.latestRelease': 'Latest release',
   'hub.apps.columns.health': 'Health',
   'hub.apps.columns.healthChecked': 'Health checked',
-  'hub.apps.createDialog.templateTitle': 'Default application template',
-  'hub.apps.createDialog.templateDescription':
-    'Hub prepares a deployable initial Release from the default template. Application source remains on the developer machine.',
   'hub.application.open': 'Open application',
   'hub.application.develop': 'Develop',
   'hub.application.tabs.development': 'Development',

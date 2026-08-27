@@ -39,7 +39,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -369,27 +368,7 @@ function CreateApplicationDialog({
             <DialogTitle>
               {translate('hub.apps.createDialog.title', 'Create application')}
             </DialogTitle>
-            <DialogDescription>
-              {translate(
-                'hub.apps.createDialog.description',
-                'Register the stable identity used by releases and deployments.',
-              )}
-            </DialogDescription>
           </DialogHeader>
-          <div className='rounded-lg border bg-muted/35 p-3 text-sm'>
-            <p className='font-medium'>
-              {translate(
-                'hub.apps.createDialog.templateTitle',
-                'Default application template',
-              )}
-            </p>
-            <p className='mt-1 text-muted-foreground'>
-              {translate(
-                'hub.apps.createDialog.templateDescription',
-                'Hub prepares a deployable initial Release from the default template. Application source remains on the developer machine.',
-              )}
-            </p>
-          </div>
           {error ? (
             <Alert variant='destructive'>
               <AlertTitle>
@@ -427,6 +406,12 @@ function CreateApplicationDialog({
               placeholder='orders'
               required
             />
+            <p className='text-xs text-muted-foreground'>
+              {translate(
+                'hub.apps.createDialog.slugDescription',
+                'A stable identifier used by releases and deployments. It cannot be changed after creation.',
+              )}
+            </p>
           </div>
           <div className='space-y-2'>
             <Label htmlFor='hub-application-description'>

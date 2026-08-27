@@ -634,6 +634,19 @@ describe('Hub application pages', () => {
         })
       )[0],
     );
+    expect(
+      screen.getByText(
+        'A stable identifier used by releases and deployments. It cannot be changed after creation.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Register the stable identity used by releases and deployments.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Default application template'),
+    ).not.toBeInTheDocument();
     const slugInput = screen.getByLabelText('Slug');
     const slugPattern = slugInput.getAttribute('pattern');
     expect(slugPattern).toContain('\\-');

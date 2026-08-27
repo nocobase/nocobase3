@@ -232,7 +232,8 @@ export const starter = {
   'hub.apps.noMatches.description': '请修改搜索内容或状态筛选条件。',
   'hub.apps.summary': '显示 {{visible}} 个，共 {{total}} 个应用',
   'hub.apps.createDialog.title': '创建应用',
-  'hub.apps.createDialog.description': '注册供版本和部署使用的稳定应用标识。',
+  'hub.apps.createDialog.slugDescription':
+    '用于版本和部署的稳定应用标识，创建后不可修改。',
   'hub.apps.createDialog.error': '无法创建应用',
   'hub.apps.createDialog.submit': '创建',
   'hub.apps.createDialog.submitting': '正在创建…',
@@ -493,9 +494,6 @@ export const starter = {
   'hub.apps.columns.latestRelease': '最新版本',
   'hub.apps.columns.health': '健康状态',
   'hub.apps.columns.healthChecked': '健康检查时间',
-  'hub.apps.createDialog.templateTitle': '默认应用模板',
-  'hub.apps.createDialog.templateDescription':
-    'Hub 会根据默认模板准备一个可部署的初始版本，应用源码保留在开发者本地。',
   'hub.application.open': '打开应用',
   'hub.application.develop': '开发',
   'hub.application.tabs.development': '开发',
