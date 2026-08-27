@@ -835,17 +835,9 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 `plugin:register` 成功后自动调用（带 `--plugin` 指向刚注册的插件），`plugin:unregister` 触发前缀清理。
 
-#### postinstall（补充入口，有明确盲区）
+#### 不使用 postinstall
 
-`create-app` 在生成的应用里挂上：
-
-```json
-{ "scripts": { "postinstall": "nb3 app skills-sync" } }
-```
-
-这只作用于独立应用。monorepo 不挂 postinstall——本仓库的插件通过 workspace 链接，源码改动不改变版本号，postinstall 不会触发（见下表），挂了也是无效开销。
-
-实测 pnpm 11 的行为如下，**这决定了 postinstall 不能作为唯一入口**：
+`create-app` 不在生成的应用里挂 postinstall。实测 pnpm 11 的行为如下：
 
 | 场景                                     | postinstall 是否执行 |
 | ---------------------------------------- | -------------------- |
@@ -856,11 +848,13 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 | 二次 `install` 且无任何变更              | 不执行               |
 | `--ignore-scripts`（或用户全局配置该项） | 不执行               |
 
-其中两个盲区影响最大：`pnpm update <plugin>` 是更新插件最常用的命令，不触发；monorepo 内插件源码变化不经过版本号，也不触发。
+两个盲区恰好落在「更新插件」这件事上：`pnpm update <plugin>` 是最常用的更新命令，不触发；monorepo 内插件源码变化不经过版本号，也不触发。挂上 postinstall 只能覆盖「新装 / 换版本」，却会让人以为同步是自动的，反而更容易漏。
 
-所以定位是：**postinstall 覆盖独立应用的「新装 / 换版本」路径，手动命令覆盖其余所有情况。** 文档需要写明：更新插件后如果技能没有变化，在应用里跑 `pnpm nb3 app skills:sync`，在本仓库里跑 `pnpm plugin:skills:sync`。
+替代方案是在 App 里提供一条 `pnpm plugin:update`，把升级插件和同步 skills 合成一步。升级本来就是一个显式动作，同步挂在它上面比挂在 install 的副作用上更可靠。该命令尚未实现。
 
-同步脚本必须对 postinstall 场景健壮：找不到 `.agents/skills/` 就静默跳过（大部分插件没有技能，不该刷警告），任何失败都不能让 `pnpm install` 整体失败——只输出警告。install 因为文档复制失败而中断是不可接受的。
+在此之前，升级插件后手动跑一次同步：应用内 `pnpm plugin:skills:sync`（即 `nb3 app skills-sync`），本仓库内 `pnpm plugin:skills:sync`。
+
+同步实现本身仍需保持健壮：找不到 `.agents/skills/` 就静默跳过（大部分插件没有技能，不该刷警告），失败只输出警告而不中断调用方。
 
 ### 8.5 产物是否进 git
 
@@ -946,11 +940,11 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 ### 9.5 独立应用侧
 
-| 位置                             | 改动                                                                  |
-| -------------------------------- | --------------------------------------------------------------------- |
-| `packages/cli/src/commands/app/` | 新增 `skills-sync.ts`，注册为 `nb3 app skills:sync`                   |
-| `packages/create-app`            | 生成的应用挂 `postinstall`；`.agents/` 纳入生成的 `.gitignore` 白名单 |
-| `packages/app-template-default`  | `files` 加入 `.agents`，使模板自带的技能随包发布                      |
+| 位置                             | 改动                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `packages/cli/src/commands/app/` | 新增 `skills-sync.ts`，注册为 `nb3 app skills:sync`                    |
+| `packages/create-app`            | `.agents/` 纳入生成的 `.gitignore` 白名单（不挂 postinstall，见 §8.4） |
+| `packages/app-template-default`  | `files` 加入 `.agents`，使模板自带的技能随包发布                       |
 
 ### 9.6 测试与文档
 
@@ -974,14 +968,14 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 本文是设计稿，以下几处最终实现与文中描述不同，以实现为准：
 
-| 位置                | 本文                                  | 实现                                                      |
-| ------------------- | ------------------------------------- | --------------------------------------------------------- |
-| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现  |
-| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名 |
-| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 命令已实现，id 为 `nb3 app skills-sync`；postinstall 未接 |
-| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`   |
+| 位置                | 本文                                  | 实现                                                          |
+| ------------------- | ------------------------------------- | ------------------------------------------------------------- |
+| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现      |
+| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名     |
+| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 命令已实现，id 为 `nb3 app skills-sync`；postinstall 改为不做 |
+| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`       |
 
-`create-app` 生成的应用还没有自动挂 postinstall，升级插件后需要手动跑一次 `pnpm plugin:skills:sync`（应用内为 `nb3 app skills-sync`）。
+postinstall 经实测覆盖不到「更新插件」这条主路径，已决定不挂（§8.4）。后续由 App 侧的 `pnpm plugin:update` 把升级与同步合并成一步，该命令尚未实现；在此之前手动跑一次同步命令。
 
 ## 11. 分阶段落地
 
