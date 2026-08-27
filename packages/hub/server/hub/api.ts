@@ -443,7 +443,7 @@ export function createHubApi(
     const defaultApplication = defaultApplicationBootstrap
       ? await defaultApplicationBootstrap.status()
       : managementEnabled
-        ? await getDefaultApplicationStatus(managementStore, store)
+        ? await getDefaultApplicationStatus(managementStore)
         : undefined;
     return successResponse(context, {
       setupRequired,
@@ -465,7 +465,7 @@ export function createHubApi(
     if (!bootstrap) {
       throw new HubDomainError(
         'DEFAULT_APP_BOOTSTRAP_UNAVAILABLE',
-        'Default application bootstrap resources are unavailable.',
+        'Default application bootstrap is unavailable.',
         { status: 503, retryable: false },
       );
     }
@@ -2600,7 +2600,7 @@ export function createHubApi(
     if (options.recoverDeployments !== false) {
       await coordinator.recover();
     }
-    if (releaseUploads && runtimeSecrets && deps.defaultAppResourcesDirectory) {
+    if (releaseUploads && runtimeSecrets) {
       defaultApplicationBootstrap = new DefaultApplicationBootstrap({
         connection: deps.database.connection,
         store,
@@ -2608,7 +2608,10 @@ export function createHubApi(
         runtimeSecrets,
         releaseUploads,
         host,
-        resourcesDirectory: deps.defaultAppResourcesDirectory,
+        resourcesDirectory:
+          deps.defaultAppResourcesDirectory ??
+          deps.releaseRoot ??
+          process.cwd(),
         scheduleDeployment: (deployment) => coordinator.schedule(deployment),
         appName: deps.appName,
       });
@@ -3644,22 +3647,14 @@ function compactObject(
 
 async function getDefaultApplicationStatus(
   managementStore: HubManagementStore,
-  store: HubStore,
 ): Promise<{
   status: 'preparing' | 'ready' | 'failed';
   retryable: boolean;
   errorCode: string | null;
 }> {
   const application = await managementStore.getDefaultApplication();
-  if (application?.activeReleaseId) {
-    const deployments = await store.listDeployments({
-      applicationId: application.id,
-      statuses: ['succeeded'],
-      limit: 1,
-    });
-    if (deployments.items.length > 0) {
-      return { status: 'ready', retryable: false, errorCode: null };
-    }
+  if (application) {
+    return { status: 'ready', retryable: false, errorCode: null };
   }
   return { status: 'preparing', retryable: false, errorCode: null };
 }

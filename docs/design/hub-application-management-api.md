@@ -163,7 +163,7 @@ Content-Type: application/json
 
 `POST /setup/owner` 接收 `email`、`password`、`name` 和可选的 `username`。Owner 创建完成后，公开注册入口保持关闭。
 
-默认 APP 状态为 `preparing`、`ready` 或 `failed`。初始化会准备系统默认 APP、默认模板初始 Release 和首次 Deployment。重试接口在已有状态为 `ready` 时直接返回幂等成功。
+默认 APP 状态为 `preparing`、`ready` 或 `failed`。初始化只创建系统默认 APP 及其 Runtime Secret，不创建 Release、Deployment，也不启动 Runtime。`ready` 表示默认 APP 记录已经可供本地开发项目绑定，不表示 APP 已经部署或可以访问。重试接口在已有状态为 `ready` 时直接返回幂等成功。
 
 ### 登录与 Session
 
@@ -313,6 +313,26 @@ Hub 使用内置角色，不提供自定义角色 CRUD：
 `latestRelease` 表示最近创建的 Release，`activeRelease` 表示当前部署成功的 Release，两者可以不同。调用方缺少 Release 或 Runtime 读取权限时，对应嵌套字段不会出现在响应中。
 
 只有 APP 处于 `active`、期望状态为 `running` 且已有 active Release 时，`links.open` 才返回可访问地址；其他状态为 `null`。
+
+Hub 初始化完成后，系统默认 APP 是一个空 APP。具备读取权限时，其关键字段为：
+
+```json
+{
+  "slug": "default",
+  "isDefault": true,
+  "latestRelease": null,
+  "activeRelease": null,
+  "runtime": {
+    "state": "stopped",
+    "releaseId": null
+  },
+  "links": {
+    "open": null
+  }
+}
+```
+
+开发者需要在本地使用已有 APP 源码，或者通过默认模板创建新的本地 APP，然后将构建产物发布到这个 APP。首次创建 Release 或部署时显式指定 `--app default`。
 
 ### 端点
 
@@ -816,6 +836,14 @@ APP 源码一直留在开发者本地。`pnpm create @nocobase/app` 从 npm 或�
 pnpm run release --hub https://hub.example.com/hub --app sales --bump patch
 pnpm run deploy --release 0.0.2
 ```
+
+首次发布并部署到 Hub 预创建的空默认 APP：
+
+```bash
+pnpm run deploy --hub https://hub.example.com/hub --app default
+```
+
+该命令在开发者电脑上构建 APP，只把产物上传到 Hub，然后为默认 APP 创建第一个 Release 和 Deployment。Hub 不会从默认模板自动填充这个 APP。
 
 首次发布时省略 `--app`，script 会在 Hub 创建一个新 APP，再把 Hub URL、APP ID 和 slug 写入项目内的 `.nocobase/config.json`。如果 Hub 已有同名 APP，则必须显式传入 `--app`，不会静默绑定。
 

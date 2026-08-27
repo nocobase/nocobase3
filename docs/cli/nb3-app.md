@@ -85,6 +85,16 @@ pnpm run release \
   --bump patch
 ```
 
+Hub 预创建的 `default` APP 没有 Release。首次将本地 APP 构建并部署到这个默认 APP 时，显式绑定它：
+
+```bash
+pnpm run deploy \
+  --hub https://hub.example.com/hub \
+  --app default
+```
+
+省略 `--app` 会创建另一个 Hub APP，不会自动选择预创建的默认 APP。
+
 绑定成功后，Hub URL、APP ID 和 slug 会作为一个整体写入 `.nocobase/config.json`。已经绑定的项目不能通过参数静默切换到其他 Hub 或 APP。
 
 ## 部署 APP

@@ -1,17 +1,14 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-
 import type { DatabaseConnection } from '@nocobase/app-database';
 
 import {
   HubManagementStore,
   type ManagedApplication,
 } from './management-store.ts';
-import { ReleaseUploadService } from './release-upload-service.ts';
+import type { ReleaseUploadService } from './release-upload-service.ts';
 import { RuntimeSecretService } from './runtime-secret-service.ts';
 import { HubDomainError, HubStore } from './store.ts';
-import type { HubDeployment, HubRelease } from './types.ts';
-import { LocalHostAdapter } from './local-host-adapter.ts';
+import type { HubDeployment } from './types.ts';
+import type { LocalHostAdapter } from './local-host-adapter.ts';
 
 export const DEFAULT_BOOTSTRAP_SETTING_KEY =
   'setup.defaultApplication.bootstrap';
@@ -58,29 +55,10 @@ export interface DefaultApplicationBootstrapOptions {
   readonly appName?: string;
 }
 
-interface DefaultResourceMetadata {
-  readonly schemaVersion: 1;
-  readonly resourceDigest: string;
-  readonly application: {
-    readonly slug: string;
-    readonly name: string;
-    readonly description: string | null;
-  };
-  readonly release: {
-    readonly version: string;
-    readonly checksum: string;
-    readonly sizeBytes: number;
-    readonly archiveChecksum: string;
-    readonly archiveSizeBytes: number;
-    readonly archiveFormat: 'tar.gz';
-    readonly manifest: Record<string, unknown>;
-  };
-}
-
 /**
- * Coordinates the system default APP as a resumable saga. The durable state and
- * resource uniqueness constraints let another process resume and converge the
- * same operation after a crash.
+ * Creates the empty system default APP and its Runtime Secret as a resumable
+ * saga. Releases and Deployments are created only after a developer publishes
+ * a local application build to Hub.
  */
 export class DefaultApplicationBootstrap {
   private readonly options: DefaultApplicationBootstrapOptions;
@@ -91,10 +69,7 @@ export class DefaultApplicationBootstrap {
   });
 
   constructor(options: DefaultApplicationBootstrapOptions) {
-    this.options = {
-      ...options,
-      resourcesDirectory: path.resolve(options.resourcesDirectory),
-    };
+    this.options = options;
   }
 
   async status(): Promise<DefaultApplicationStatus> {
@@ -104,11 +79,8 @@ export class DefaultApplicationBootstrap {
     }
     const application =
       await this.options.managementStore.getDefaultApplication();
-    if (application?.activeReleaseId) {
-      const deployment = await this.findSuccessfulDeployment(application.id);
-      if (deployment) {
-        return { status: 'ready', retryable: false, errorCode: null };
-      }
+    if (application) {
+      return { status: 'ready', retryable: false, errorCode: null };
     }
     return { status: 'preparing', retryable: false, errorCode: null };
   }
@@ -143,50 +115,27 @@ export class DefaultApplicationBootstrap {
     if (current?.status === 'ready') return projectStatus(current);
 
     let state: DefaultApplicationBootstrapState | undefined;
-    let operationId = current?.operationId ?? 'default-bootstrap-resources';
+    const operationId =
+      current?.operationId ?? 'default-bootstrap-empty-application';
     try {
-      const metadata = await this.readMetadata();
-      if (
-        current?.status === 'failed' &&
-        !current.retryable &&
-        !forceRetry &&
-        current.resourceDigest === metadata.resourceDigest
-      ) {
+      if (current?.status === 'failed' && !current.retryable && !forceRetry) {
         return projectStatus(current);
       }
-      operationId =
-        current?.operationId ?? `default-bootstrap-${metadata.resourceDigest}`;
       state = await this.claimState({
         current,
         operationId,
-        resourceDigest: metadata.resourceDigest,
+        resourceDigest: null,
         forceRetry,
       });
-      const application = await this.ensureApplication(state, metadata);
-      const release = await this.ensureRelease(application.id, metadata, state);
-      const deployment = await this.ensureDeployment(
-        application.id,
-        release,
-        state,
-      );
-      if (deployment.status !== 'succeeded') {
-        await this.options.scheduleDeployment(deployment);
-      }
-      const completed = await this.options.store.getDeployment(deployment.id);
-      if (!completed || completed.status !== 'succeeded') {
-        throw new HubDomainError(
-          completed?.failureCode ?? 'RUNTIME_READINESS_FAILED',
-          completed?.failureMessage ?? 'Default application deployment failed.',
-          { status: 503, retryable: true },
-        );
-      }
+      const application = await this.ensureApplication(state);
       const ready = await this.writeState({
         ...state,
         status: 'ready',
         step: 'ready',
         applicationId: application.id,
-        releaseId: release.id,
-        deploymentId: deployment.id,
+        releaseId: null,
+        deploymentId: null,
+        resourceDigest: null,
         errorCode: null,
         retryable: false,
       });
@@ -195,8 +144,8 @@ export class DefaultApplicationBootstrap {
         'success',
         {
           applicationId: application.id,
-          releaseId: release.id,
-          deploymentId: deployment.id,
+          releaseId: null,
+          deploymentId: null,
           operationId,
         },
       );
@@ -235,7 +184,6 @@ export class DefaultApplicationBootstrap {
 
   private async ensureApplication(
     state: DefaultApplicationBootstrapState,
-    metadata: DefaultResourceMetadata,
   ): Promise<ManagedApplication> {
     const existing = await this.options.managementStore.getDefaultApplication();
     const applicationId =
@@ -257,9 +205,9 @@ export class DefaultApplicationBootstrap {
         });
         const created = await store.createApplication(
           {
-            slug: metadata.application.slug,
-            name: metadata.application.name,
-            description: metadata.application.description,
+            slug: 'default',
+            name: 'Default application',
+            description: null,
           },
           DEFAULT_APPLICATION_ACTOR_ID,
           { id: applicationId, isDefault: true },
@@ -297,155 +245,6 @@ export class DefaultApplicationBootstrap {
       applicationId: application.id,
     });
     return application;
-  }
-
-  private async ensureRelease(
-    applicationId: string,
-    metadata: DefaultResourceMetadata,
-    state: DefaultApplicationBootstrapState,
-  ): Promise<HubRelease> {
-    const existingPage = await this.options.store.listReleases(applicationId, {
-      limit: 100,
-    });
-    const existing = existingPage.items.find(
-      (release) =>
-        release.version === metadata.release.version &&
-        release.checksum === metadata.release.checksum,
-    );
-    if (existing) {
-      await this.writeState({
-        ...state,
-        step: 'release',
-        releaseId: existing.id,
-      });
-      return existing;
-    }
-    const archive = new Uint8Array(
-      await readFile(
-        path.join(this.options.resourcesDirectory, 'initial-release.tar.gz'),
-      ),
-    );
-    const actor = {
-      userId: DEFAULT_APPLICATION_ACTOR_ID,
-      credentialId: null,
-      isAdmin: true,
-    } as const;
-    const upload = await this.options.releaseUploads.create(
-      applicationId,
-      {
-        version: metadata.release.version,
-        checksum: metadata.release.checksum,
-        sizeBytes: metadata.release.sizeBytes,
-        archiveChecksum: metadata.release.archiveChecksum,
-        archiveSizeBytes: metadata.release.archiveSizeBytes,
-        archiveFormat: metadata.release.archiveFormat,
-        manifest: metadata.release.manifest,
-      },
-      actor,
-    );
-    await this.options.releaseUploads.putContent(upload.id, actor, archive);
-    await this.options.releaseUploads.startCompletion(upload.id, actor);
-    const completed = await this.options.releaseUploads.waitForCompletion(
-      upload.id,
-    );
-    if (completed.status !== 'completed' || !completed.release) {
-      throw new HubDomainError(
-        completed.failure?.code ?? 'RELEASE_VERIFICATION_FAILED',
-        completed.failure?.message ??
-          'The default release could not be verified.',
-        { status: 422, retryable: false },
-      );
-    }
-    const release = await this.options.store.getRelease(completed.release.id);
-    if (!release) {
-      throw new HubDomainError(
-        'DEFAULT_RELEASE_NOT_FOUND',
-        'The verified default release could not be loaded.',
-        { status: 500, retryable: true },
-      );
-    }
-    await this.writeState({ ...state, step: 'release', releaseId: release.id });
-    return release;
-  }
-
-  private async ensureDeployment(
-    applicationId: string,
-    release: HubRelease,
-    state: DefaultApplicationBootstrapState,
-  ): Promise<HubDeployment> {
-    const deployments = await this.options.store.listDeployments({
-      applicationId,
-      limit: 100,
-    });
-    const key = `${state.operationId}:deployment:${state.attempt}`;
-    const existing = deployments.items.find(
-      (deployment) =>
-        deployment.idempotencyKey === key &&
-        deployment.targetReleaseId === release.id,
-    );
-    if (existing) {
-      await this.writeState({
-        ...state,
-        step: 'deployment',
-        deploymentId: existing.id,
-      });
-      return existing;
-    }
-    const created = await this.options.store.createDeployment(
-      applicationId,
-      {
-        targetReleaseId: release.id,
-        type: 'deploy',
-        idempotencyKey: key,
-      },
-      DEFAULT_APPLICATION_ACTOR_ID,
-    );
-    await this.writeState({
-      ...state,
-      step: 'deployment',
-      deploymentId: created.deployment.id,
-    });
-    return created.deployment;
-  }
-
-  private async readMetadata(): Promise<DefaultResourceMetadata> {
-    let value: Partial<DefaultResourceMetadata>;
-    try {
-      value = JSON.parse(
-        await readFile(
-          path.join(this.options.resourcesDirectory, 'metadata.json'),
-          'utf8',
-        ),
-      ) as Partial<DefaultResourceMetadata>;
-    } catch (error) {
-      throw new HubDomainError(
-        'DEFAULT_APP_RESOURCES_INVALID',
-        'Default application resources are invalid.',
-        { status: 500, retryable: false, cause: error },
-      );
-    }
-    if (
-      value.schemaVersion !== 1 ||
-      typeof value.resourceDigest !== 'string' ||
-      value.application?.slug !== 'default' ||
-      typeof value.application.name !== 'string' ||
-      value.release?.archiveFormat !== 'tar.gz' ||
-      typeof value.release.version !== 'string' ||
-      typeof value.release.checksum !== 'string' ||
-      typeof value.release.sizeBytes !== 'number' ||
-      typeof value.release.archiveChecksum !== 'string' ||
-      typeof value.release.archiveSizeBytes !== 'number' ||
-      !value.release.manifest ||
-      typeof value.release.manifest !== 'object' ||
-      Array.isArray(value.release.manifest)
-    ) {
-      throw new HubDomainError(
-        'DEFAULT_APP_RESOURCES_INVALID',
-        'Default application resources are invalid.',
-        { status: 500, retryable: false },
-      );
-    }
-    return value as DefaultResourceMetadata;
   }
 
   private async readState(): Promise<
@@ -538,17 +337,6 @@ export class DefaultApplicationBootstrap {
       }
     }
     return next;
-  }
-
-  private async findSuccessfulDeployment(
-    applicationId: string,
-  ): Promise<HubDeployment | undefined> {
-    const deployments = await this.options.store.listDeployments({
-      applicationId,
-      statuses: ['succeeded'],
-      limit: 1,
-    });
-    return deployments.items[0];
   }
 
   private async appendBootstrapAudit(

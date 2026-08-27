@@ -272,6 +272,16 @@ export const starter = {
   'hub.application.deploy.error': '无法创建部署',
   'hub.application.deploy.confirm': '确认部署',
   'hub.application.deploy.starting': '正在启动…',
+  'hub.application.onboarding.title': '构建并部署此应用',
+  'hub.application.onboarding.description':
+    '默认 APP 会以没有 Release 的空应用开始。源码保留在你的电脑上，请选择准备首次构建的方式。',
+  'hub.application.onboarding.existing.title': '使用已有本地应用',
+  'hub.application.onboarding.existing.description':
+    '继续使用这台电脑上已有的源码，由 Coding Agent 在本地构建，并且只发布产物。',
+  'hub.application.onboarding.create.title': '创建新的本地应用',
+  'hub.application.onboarding.create.description':
+    '在这台电脑上从默认模板创建源码，然后进行开发、发布和部署。',
+  'hub.application.onboarding.action': '查看开发指令',
   'hub.application.overview.currentRelease': '当前版本',
   'hub.application.overview.notDeployed': '尚未部署',
   'hub.application.overview.verifiedAt': '已于 {{date}} 验证',
@@ -289,6 +299,8 @@ export const starter = {
   'hub.releases.empty.title': '暂无版本',
   'hub.releases.empty.description':
     '让 Coding Agent 将已验证的应用构建发布到 Hub 后，即可进行部署。',
+  'hub.releases.empty.defaultDescription':
+    '使用已有本地源码，或从默认模板创建新的应用，然后发布它的第一个 Release。',
   'hub.releases.columns.version': '版本',
   'hub.releases.columns.verification': '验证状态',
   'hub.releases.columns.size': '大小',

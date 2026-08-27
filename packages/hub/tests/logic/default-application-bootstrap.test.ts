@@ -1,20 +1,16 @@
 // @vitest-environment node
 
 import { execFile } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { AppRuntimeRegistry } from '@nocobase/app-host';
-import { Auth } from '@nocobase/app-plugin-authentication';
-import { Hono } from 'hono';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../server/app.ts';
-import { createHubApi } from '../../server/hub/api.ts';
-import { createHubDatabase } from '../../server/hub/database.ts';
-import { HubStore } from '../../server/hub/store.ts';
+import { RuntimeSecretService } from '../../server/hub/runtime-secret-service.ts';
 
 const execFileAsync = promisify(execFile);
 const packageRoot = path.resolve(
@@ -30,6 +26,7 @@ const apps: Array<ReturnType<typeof createApp>> = [];
 const registries: AppRuntimeRegistry[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(apps.splice(0).map((app) => app.close?.()));
   await Promise.all(
     registries
@@ -42,190 +39,55 @@ afterEach(async () => {
 });
 
 describe('default application bootstrap', () => {
-  it('persists invalid packaged resources as a non-retryable bootstrap failure', async () => {
-    const fixture = await createFixture();
-    await writeFile(path.join(fixture.resources, 'metadata.json'), '{invalid');
+  it('creates an empty default APP without packaged template resources', async () => {
+    const fixture = await createFixture({ buildResources: false });
     const registry = createRegistry();
-    const app = createFixtureApp(fixture, registry);
+    const app = createFixtureApp(fixture, registry, false);
     apps.push(app);
 
     await expect(app.hubReady).resolves.toBeUndefined();
     await expect(setupStatus(app)).resolves.toMatchObject({
       data: {
+        setupRequired: true,
         defaultApp: {
-          status: 'failed',
+          status: 'ready',
           retryable: false,
-          errorCode: 'DEFAULT_APP_RESOURCES_INVALID',
+          errorCode: null,
         },
       },
     });
+    expect(registry.snapshot('default')).toBeUndefined();
 
     const state = await readBootstrapState(fixture.databasePath);
     expect(state).toMatchObject({
-      status: 'failed',
-      step: 'failed',
+      status: 'ready',
+      step: 'ready',
+      applicationId: 'system-default-application',
+      releaseId: null,
+      deploymentId: null,
+      resourceDigest: null,
       attempt: 1,
-      errorCode: 'DEFAULT_APP_RESOURCES_INVALID',
+      errorCode: null,
       retryable: false,
     });
-  });
-
-  it('recovers automatically after invalid packaged resources are replaced', async () => {
-    const fixture = await createFixture();
-    const validMetadata = await readFile(
-      path.join(fixture.resources, 'metadata.json'),
-      'utf8',
-    );
-    await writeFile(path.join(fixture.resources, 'metadata.json'), '{invalid');
-    const firstRegistry = createRegistry();
-    const first = createFixtureApp(fixture, firstRegistry);
-    apps.push(first);
-    await first.hubReady;
-    await expect(setupStatus(first)).resolves.toMatchObject({
-      data: { defaultApp: { status: 'failed' } },
-    });
-    await first.close?.();
-    apps.splice(apps.indexOf(first), 1);
-    await firstRegistry.destroyAll({ reason: 'replace resources' });
-    registries.splice(registries.indexOf(firstRegistry), 1);
-
-    await writeFile(
-      path.join(fixture.resources, 'metadata.json'),
-      validMetadata,
-    );
-    const secondRegistry = createRegistry();
-    const second = createFixtureApp(fixture, secondRegistry);
-    apps.push(second);
-    await second.hubReady;
-
-    await expect(setupStatus(second)).resolves.toMatchObject({
-      data: { defaultApp: { status: 'ready' } },
-    });
-  });
-
-  it('retries transient startup failures a bounded number of times', async () => {
-    const fixture = await createFixture();
-    let activation = 0;
-    const registry = new AppRuntimeRegistry({
-      startEvictionLoop: false,
-      readinessTimeoutMs: 25,
-      readinessIntervalMs: 5,
-      resolveFactory: () => {
-        activation += 1;
-        const healthy = activation >= 3;
-        return () => ({
-          fetch: () =>
-            healthy
-              ? Response.json({ ok: true })
-              : Response.json({ ok: false }, { status: 503 }),
-        });
-      },
-    });
-    registries.push(registry);
-    const app = createFixtureApp(fixture, registry);
-    apps.push(app);
-
-    await app.hubReady;
-
-    expect(activation).toBe(3);
-    await expect(setupStatus(app)).resolves.toMatchObject({
-      data: { defaultApp: { status: 'ready' } },
-    });
     await expect(
-      readBootstrapState(fixture.databasePath),
+      readDefaultRecords(fixture.databasePath),
     ).resolves.toMatchObject({
-      status: 'ready',
-      attempt: 3,
-    });
-  });
-
-  it('bootstraps when unfinished deployment recovery is disabled', async () => {
-    const fixture = await createFixture();
-    const registry = createRegistry();
-    const database = createHubDatabase({ filename: fixture.databasePath });
-    const authOptions = {
-      connection: database.connection,
-      baseURL: 'http://127.0.0.1:13000',
-      basePath: '/hub/api/auth',
-      secret: 'default-bootstrap-auth-secret-at-least-32-chars',
-    } as const;
-    const auth = new Auth({
-      ...authOptions,
-      emailAndPassword: { enabled: true, disableSignUp: true },
-    });
-    const bootstrapAuth = new Auth({
-      ...authOptions,
-      emailAndPassword: { enabled: true },
-    });
-    const api = createHubApi(
-      {
-        database,
-        auth,
-        bootstrapAuth,
-        appName: 'hub',
-        publicBasePath: '/hub',
-        releaseRoot: fixture.releaseRoot,
-        defaultAppResourcesDirectory: fixture.resources,
-        runtimeSecretEncryptionKey: {
-          key: Buffer.alloc(32, 7),
-          keyId: 'test-default-bootstrap-key',
-        },
-        registry,
+      application: {
+        slug: 'default',
+        active_release_id: null,
+        desired_runtime_state: 'stopped',
       },
-      { recoverDeployments: false },
-    );
-    const mounted = new Hono();
-    mounted.route('/hub/api', api);
-
-    try {
-      await api.ready;
-      const status = await mounted.request(
-        'http://127.0.0.1:13000/hub/api/setup/status',
-      );
-      await expect(status.json()).resolves.toMatchObject({
-        data: { defaultApp: { status: 'ready' } },
-      });
-    } finally {
-      await api.close();
-      await database.close();
-    }
-  });
-
-  it('does not report an incomplete default application as ready without resources', async () => {
-    const fixture = await createFixture();
-    const database = createHubDatabase({ filename: fixture.databasePath });
-    await database.ready;
-    await new HubStore(database.connection).createApplication(
-      { slug: 'default', name: 'Default application' },
-      'system',
-      { id: 'system-default-application', isDefault: true },
-    );
-    await database.close();
-
-    const registry = createRegistry();
-    const app = createApp({
-      appName: 'hub',
-      basePath: '/hub',
-      nocoBaseApiUrl: false,
-      databasePath: fixture.databasePath,
-      authSecret: 'default-bootstrap-auth-secret-at-least-32-chars',
-      authBaseUrl: 'http://127.0.0.1:13000/hub/api/auth',
-      releaseRoot: fixture.releaseRoot,
-      runtimeSecretEncryptionKey: Buffer.alloc(32, 7).toString('base64url'),
-      appHostRegistry: registry,
-    });
-    apps.push(app);
-
-    await app.hubReady;
-    await expect(setupStatus(app)).resolves.toMatchObject({
-      data: { defaultApp: { status: 'preparing' } },
+      releases: 0,
+      deployments: 0,
+      runtimeSecrets: 1,
     });
   });
 
-  it('creates, releases, deploys, and resumes exactly one default APP', async () => {
+  it('ignores packaged template resources and resumes one empty default APP', async () => {
     const fixture = await createFixture();
     const firstRegistry = createRegistry();
-    const first = createFixtureApp(fixture, firstRegistry);
+    const first = createFixtureApp(fixture, firstRegistry, true);
     apps.push(first);
 
     await first.hubReady;
@@ -239,17 +101,14 @@ describe('default application bootstrap', () => {
         },
       },
     });
-    expect(firstRegistry.snapshot('default')).toMatchObject({
-      state: 'active',
-      releaseId: expect.any(String),
-    });
+    expect(firstRegistry.snapshot('default')).toBeUndefined();
     await first.close?.();
     apps.splice(apps.indexOf(first), 1);
     await firstRegistry.destroyAll({ reason: 'restart' });
     registries.splice(registries.indexOf(firstRegistry), 1);
 
     const secondRegistry = createRegistry();
-    const second = createFixtureApp(fixture, secondRegistry);
+    const second = createFixtureApp(fixture, secondRegistry, true);
     apps.push(second);
     await second.hubReady;
 
@@ -266,21 +125,25 @@ describe('default application bootstrap', () => {
       expect(applications).toHaveLength(1);
       expect(applications[0]).toMatchObject({
         slug: 'default',
-        active_release_id: expect.any(String),
+        active_release_id: null,
+        desired_runtime_state: 'stopped',
       });
-      expect(releases).toHaveLength(1);
-      expect(deployments).toHaveLength(1);
-      expect(deployments[0]).toMatchObject({ status: 'succeeded' });
+      expect(releases).toHaveLength(0);
+      expect(deployments).toHaveLength(0);
+      expect(secondRegistry.snapshot('default')).toBeUndefined();
     } finally {
       await database.destroy();
     }
   });
 
-  it('persists a retryable failure, then retries it through the approved API', async () => {
-    const fixture = await createFixture();
-    let hostHealthy = false;
-    const registry = createRegistry(() => hostHealthy);
-    const app = createFixtureApp(fixture, registry);
+  it('persists a retryable creation failure, then retries it through the approved API', async () => {
+    const fixture = await createFixture({ buildResources: false });
+    const ensureInitial = RuntimeSecretService.prototype.ensureInitial;
+    const ensureSecret = vi
+      .spyOn(RuntimeSecretService.prototype, 'ensureInitial')
+      .mockRejectedValue(new Error('transient secret storage failure'));
+    const registry = createRegistry();
+    const app = createFixtureApp(fixture, registry, false);
     apps.push(app);
     await app.hubReady;
 
@@ -289,15 +152,22 @@ describe('default application bootstrap', () => {
         defaultApp: {
           status: 'failed',
           retryable: true,
-          errorCode: 'RUNTIME_READINESS_FAILED',
+          errorCode: 'DEFAULT_APP_BOOTSTRAP_FAILED',
         },
       },
     });
+    expect(ensureSecret).toHaveBeenCalledTimes(3);
 
     const browserOrigin = 'http://127.0.0.1:13000';
     const cookie = await createOwnerAndSignIn(app, browserOrigin);
-    hostHealthy = true;
-    const idempotencyKey = crypto.randomUUID();
+    let continueRetry: (() => void) | undefined;
+    const retryGate = new Promise<void>((resolve) => {
+      continueRetry = resolve;
+    });
+    ensureSecret.mockImplementation(async function (applicationId) {
+      await retryGate;
+      return ensureInitial.call(this, applicationId);
+    });
     const retry = await app.request(
       `${browserOrigin}/hub/api/setup/default-app/retry`,
       {
@@ -306,7 +176,7 @@ describe('default application bootstrap', () => {
           cookie,
           origin: browserOrigin,
           'content-type': 'application/json',
-          'idempotency-key': idempotencyKey,
+          'idempotency-key': crypto.randomUUID(),
         },
         body: '{}',
       },
@@ -317,25 +187,7 @@ describe('default application bootstrap', () => {
       meta: { idempotent: false },
     });
 
-    const replayInProgress = await app.request(
-      `${browserOrigin}/hub/api/setup/default-app/retry`,
-      {
-        method: 'POST',
-        headers: {
-          cookie,
-          origin: browserOrigin,
-          'content-type': 'application/json',
-          'idempotency-key': idempotencyKey,
-        },
-        body: '{}',
-      },
-    );
-    expect(replayInProgress.status).toBe(202);
-    await expect(replayInProgress.json()).resolves.toMatchObject({
-      data: { defaultApp: { status: 'preparing' } },
-      meta: { idempotent: true },
-    });
-
+    continueRetry?.();
     await expect(waitForDefaultStatus(app, 'ready')).resolves.toMatchObject({
       status: 'ready',
       retryable: false,
@@ -359,7 +211,15 @@ describe('default application bootstrap', () => {
       data: { defaultApp: { status: 'ready' } },
       meta: { idempotent: true },
     });
-  }, 15_000);
+    await expect(
+      readDefaultRecords(fixture.databasePath),
+    ).resolves.toMatchObject({
+      application: { active_release_id: null },
+      releases: 0,
+      deployments: 0,
+      runtimeSecrets: 1,
+    });
+  });
 });
 
 interface Fixture {
@@ -369,29 +229,33 @@ interface Fixture {
   readonly resources: string;
 }
 
-async function createFixture(): Promise<Fixture> {
+async function createFixture(
+  options: { readonly buildResources?: boolean } = {},
+): Promise<Fixture> {
   const root = await mkdtemp(path.join(tmpdir(), 'hub-default-bootstrap-'));
   roots.push(root);
   const build = path.join(root, 'template-build');
   const resources = path.join(root, 'resources');
-  await mkdir(path.join(build, 'server'), { recursive: true });
-  await mkdir(path.join(build, 'client'), { recursive: true });
-  const fixtureServer = path.resolve(
-    packageRoot,
-    'tests/fixtures/default-app-embedded.mjs',
-  );
-  await cp(fixtureServer, path.join(build, 'server/embedded.js'));
-  await writeFile(
-    path.join(build, 'client/index.html'),
-    '<main>Default</main>',
-  );
-  await execFileAsync(process.execPath, [
-    resourceGenerator,
-    '--build-dir',
-    build,
-    '--output-dir',
-    resources,
-  ]);
+  if (options.buildResources !== false) {
+    await mkdir(path.join(build, 'server'), { recursive: true });
+    await mkdir(path.join(build, 'client'), { recursive: true });
+    const fixtureServer = path.resolve(
+      packageRoot,
+      'tests/fixtures/default-app-embedded.mjs',
+    );
+    await cp(fixtureServer, path.join(build, 'server/embedded.js'));
+    await writeFile(
+      path.join(build, 'client/index.html'),
+      '<main>Default</main>',
+    );
+    await execFileAsync(process.execPath, [
+      resourceGenerator,
+      '--build-dir',
+      build,
+      '--output-dir',
+      resources,
+    ]);
+  }
   return {
     root,
     databasePath: path.join(root, 'hub.sqlite'),
@@ -403,6 +267,7 @@ async function createFixture(): Promise<Fixture> {
 function createFixtureApp(
   fixture: Fixture,
   registry: AppRuntimeRegistry,
+  includeResources: boolean,
 ): ReturnType<typeof createApp> {
   return createApp({
     appName: 'hub',
@@ -412,25 +277,18 @@ function createFixtureApp(
     authSecret: 'default-bootstrap-auth-secret-at-least-32-chars',
     authBaseUrl: 'http://127.0.0.1:13000/hub/api/auth',
     releaseRoot: fixture.releaseRoot,
-    defaultAppResourcesDirectory: fixture.resources,
+    defaultAppResourcesDirectory: includeResources
+      ? fixture.resources
+      : undefined,
     runtimeSecretEncryptionKey: Buffer.alloc(32, 7).toString('base64url'),
     appHostRegistry: registry,
   });
 }
 
-function createRegistry(
-  healthy: () => boolean = () => true,
-): AppRuntimeRegistry {
+function createRegistry(): AppRuntimeRegistry {
   const registry = new AppRuntimeRegistry({
     startEvictionLoop: false,
-    readinessTimeoutMs: 50,
-    readinessIntervalMs: 5,
-    resolveFactory: () => () => ({
-      fetch: () =>
-        healthy()
-          ? Response.json({ ok: true })
-          : Response.json({ ok: false }, { status: 503 }),
-    }),
+    resolveFactory: () => () => ({ fetch: () => Response.json({ ok: true }) }),
   });
   registries.push(registry);
   return registry;
@@ -499,6 +357,37 @@ async function readBootstrapState(
       .where({ key: 'setup.defaultApplication.bootstrap' })
       .first<{ value: string }>();
     return JSON.parse(row?.value ?? '{}') as Record<string, unknown>;
+  } finally {
+    await database.destroy();
+  }
+}
+
+async function readDefaultRecords(filename: string): Promise<{
+  application: Record<string, unknown> | undefined;
+  releases: number;
+  deployments: number;
+  runtimeSecrets: number;
+}> {
+  const database = await openSqlite(filename);
+  try {
+    const application = await database('hub_applications')
+      .where({ is_default: 1 })
+      .first<Record<string, unknown>>();
+    const [{ total: releases }] = await database('hub_releases').count<
+      Array<{ total: number }>
+    >({ total: '*' });
+    const [{ total: deployments }] = await database('hub_deployments').count<
+      Array<{ total: number }>
+    >({ total: '*' });
+    const [{ total: runtimeSecrets }] = await database(
+      'hub_runtime_secrets',
+    ).count<Array<{ total: number }>>({ total: '*' });
+    return {
+      application,
+      releases: Number(releases),
+      deployments: Number(deployments),
+      runtimeSecrets: Number(runtimeSecrets),
+    };
   } finally {
     await database.destroy();
   }

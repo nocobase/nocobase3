@@ -30,7 +30,7 @@ export interface CreateAppOptions {
   authBaseUrl?: string;
   releaseRoot?: string;
   appPublicOrigin?: string;
-  /** Packaged deterministic resources used to initialize the system default APP. */
+  /** Packaged template resources used to seed an initial Release for new APPs. */
   defaultAppResourcesDirectory?: string;
   runtimeSecretEncryptionKey?: string;
   runtimeSecretEncryptionKeyFile?: string;

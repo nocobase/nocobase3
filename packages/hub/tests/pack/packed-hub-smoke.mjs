@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { setTimeout } from 'node:timers/promises';
-import { pathToFileURL, URL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -123,16 +123,14 @@ try {
         `Packaged Hub did not bootstrap its default APP: ${JSON.stringify(setupBody)}`,
       );
     }
-    const defaultAppHealth = await globalThis.fetch(
-      `http://127.0.0.1:${appHostPort}/default/api/healthz`,
+    const emptyDefaultApp = await globalThis.fetch(
+      `http://127.0.0.1:${appHostPort}/default/`,
     );
-    const defaultAppHealthBody = await defaultAppHealth.json();
-    if (!defaultAppHealth.ok || defaultAppHealthBody?.ok !== true) {
+    if (emptyDefaultApp.status !== 404) {
       throw new Error(
-        `Packaged default APP health check failed: ${JSON.stringify(defaultAppHealthBody)}`,
+        `Packaged empty default APP unexpectedly returned ${emptyDefaultApp.status}.`,
       );
     }
-    await verifyDefaultAppClient(appHostPort);
     assertDatabaseState(root, path.join(root, 'runtime/hub.sqlite'));
   } finally {
     child.kill('SIGTERM');
@@ -215,39 +213,6 @@ async function findFreePort() {
   });
 }
 
-async function verifyDefaultAppClient(appHostPort) {
-  const origin = `http://127.0.0.1:${appHostPort}`;
-  const response = await globalThis.fetch(`${origin}/default/`);
-  if (!response.ok) {
-    throw new Error(
-      `Packaged default APP document returned ${response.status}.`,
-    );
-  }
-
-  const html = await response.text();
-  const references = [...html.matchAll(/\b(?:href|src)=["']([^"']+)["']/g)]
-    .map((match) => match[1])
-    .filter((reference) => !/^(?:#|data:|https?:|\/\/)/.test(reference));
-  if (references.length === 0) {
-    throw new Error('Packaged default APP document has no client resources.');
-  }
-
-  for (const reference of references) {
-    const resourceUrl = new URL(reference, `${origin}/default/`);
-    if (!resourceUrl.pathname.startsWith('/default/')) {
-      throw new Error(
-        `Packaged default APP document references a resource outside /default/: ${reference}`,
-      );
-    }
-    const resourceResponse = await globalThis.fetch(resourceUrl);
-    if (!resourceResponse.ok) {
-      throw new Error(
-        `Packaged default APP resource ${resourceUrl.pathname} returned ${resourceResponse.status}.`,
-      );
-    }
-  }
-}
-
 function assertDatabaseState(root, databasePath) {
   if (!existsSync(databasePath)) {
     throw new Error(
@@ -275,19 +240,25 @@ function assertDatabaseState(root, databasePath) {
     );
     if (
       counts.hub_applications !== 1 ||
-      counts.hub_releases !== 1 ||
-      counts.hub_deployments !== 1
+      counts.hub_releases !== 0 ||
+      counts.hub_deployments !== 0
     ) {
       throw new Error(
         `Packaged Hub bootstrap created unexpected records: ${JSON.stringify(counts)}`,
       );
     }
-    const deployment = database
-      .prepare('select status from hub_deployments limit 1')
+    const application = database
+      .prepare(
+        'select slug, active_release_id as activeReleaseId, desired_runtime_state as desiredRuntimeState from hub_applications where is_default = 1 limit 1',
+      )
       .get();
-    if (deployment?.status !== 'succeeded') {
+    if (
+      application?.slug !== 'default' ||
+      application?.activeReleaseId !== null ||
+      application?.desiredRuntimeState !== 'stopped'
+    ) {
       throw new Error(
-        `Packaged Hub deployment did not succeed: ${JSON.stringify(deployment)}`,
+        `Packaged Hub default APP is not empty and stopped: ${JSON.stringify(application)}`,
       );
     }
   } finally {

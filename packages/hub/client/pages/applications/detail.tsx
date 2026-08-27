@@ -447,7 +447,17 @@ export function ApplicationDetailPage({
               <h1 className='font-heading text-2xl font-semibold tracking-tight'>
                 {applicationData.name}
               </h1>
-              <HubStatusBadge status={applicationData.status} />
+              {applicationData.isDefault === true &&
+              applicationData.latestRelease === null ? (
+                <Badge variant='outline'>
+                  {translate(
+                    'hub.application.overview.notDeployed',
+                    'Not deployed',
+                  )}
+                </Badge>
+              ) : (
+                <HubStatusBadge status={applicationData.status} />
+              )}
             </div>
             <p className='font-mono text-xs text-muted-foreground'>
               {applicationData.slug}
@@ -546,6 +556,7 @@ export function ApplicationDetailPage({
             releases={releases.data ?? []}
             deployments={deployments.data ?? []}
             releaseTotal={releases.meta?.total}
+            canDevelop={canDevelop}
             canReadReleases={canReadReleases}
             canReadDeployments={canReadDeployments}
           />
@@ -569,6 +580,7 @@ export function ApplicationDetailPage({
               canDeploy={canDeploy}
               canRollback={canRollback}
               canRedeploy={canRedeploy}
+              canDevelop={canDevelop}
               canUpdate={canUpdateReleases}
               onDeployRelease={requestDeployment}
               onRedeployRelease={(release, app) =>
@@ -784,6 +796,7 @@ function ApplicationOverview({
   releases,
   deployments,
   releaseTotal,
+  canDevelop,
   canReadReleases,
   canReadDeployments,
 }: {
@@ -791,11 +804,16 @@ function ApplicationOverview({
   releases: HubRelease[];
   deployments: HubDeployment[];
   releaseTotal?: number;
+  canDevelop: boolean;
   canReadReleases: boolean;
   canReadDeployments: boolean;
 }) {
   const translate = useTranslate();
   const activeRelease = application.activeRelease;
+  const showEmptyDefaultOnboarding =
+    application.isDefault === true &&
+    canReadReleases &&
+    application.latestRelease === null;
   const latestDeployment = useMemo(
     () =>
       [...deployments].sort(
@@ -807,99 +825,168 @@ function ApplicationOverview({
   );
 
   return (
-    <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-      <OverviewCard
-        icon={<Rocket aria-hidden='true' />}
-        label={translate(
-          'hub.application.overview.currentRelease',
-          'Current release',
-        )}
-        value={
-          activeRelease?.version ??
-          translate('hub.application.overview.notDeployed', 'Not deployed')
-        }
-        detail={
-          activeRelease
-            ? translateWithValues(
-                translate,
-                'hub.application.overview.verifiedAt',
-                'Verified {{date}}',
-                { date: formatHubDate(activeRelease.createdAt) },
-              )
-            : translate(
-                'hub.application.overview.noActiveMetadata',
-                'No active release metadata',
-              )
-        }
-      />
-      <OverviewCard
-        icon={<Boxes aria-hidden='true' />}
-        label={translate('hub.application.overview.environment', 'Environment')}
-        value={getHubEnvironmentLabel(
-          application.defaultEnvironmentId,
-          translate,
-        )}
-        detail={translate(
-          'hub.application.overview.mvpTarget',
-          'MVP deployment target',
-        )}
-      />
-      <OverviewCard
-        icon={<Activity aria-hidden='true' />}
-        label={translate(
-          'hub.application.overview.latestDeployment',
-          'Latest deployment',
-        )}
-        value={
-          canReadDeployments
-            ? latestDeployment
-              ? latestDeployment.status
-              : translate(
-                  'hub.application.overview.noDeployments',
-                  'No deployments',
+    <div className='space-y-4'>
+      {showEmptyDefaultOnboarding ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <h2>
+                {translate(
+                  'hub.application.onboarding.title',
+                  'Build and deploy this application',
+                )}
+              </h2>
+            </CardTitle>
+            <CardDescription>
+              {translate(
+                'hub.application.onboarding.description',
+                'The default APP intentionally starts without a Release. Keep source on your computer and choose how to prepare its first build.',
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-3 md:grid-cols-2'>
+            <div className='rounded-lg border p-4'>
+              <div className='font-medium'>
+                {translate(
+                  'hub.application.onboarding.existing.title',
+                  'Use an existing local application',
+                )}
+              </div>
+              <p className='mt-1 text-sm text-muted-foreground'>
+                {translate(
+                  'hub.application.onboarding.existing.description',
+                  'Continue from source already stored on this computer. The Coding Agent builds it locally and publishes only the artifact.',
+                )}
+              </p>
+            </div>
+            <div className='rounded-lg border p-4'>
+              <div className='font-medium'>
+                {translate(
+                  'hub.application.onboarding.create.title',
+                  'Create a new local application',
+                )}
+              </div>
+              <p className='mt-1 text-sm text-muted-foreground'>
+                {translate(
+                  'hub.application.onboarding.create.description',
+                  'Create source from the default template on this computer, then develop, publish, and deploy it.',
+                )}
+              </p>
+            </div>
+            {canDevelop ? (
+              <div className='md:col-span-2'>
+                <Button
+                  nativeButton={false}
+                  render={<Link to='?tab=development' />}
+                >
+                  <SquareTerminal aria-hidden='true' />
+                  {translate(
+                    'hub.application.onboarding.action',
+                    'Open development instructions',
+                  )}
+                </Button>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
+        <OverviewCard
+          icon={<Rocket aria-hidden='true' />}
+          label={translate(
+            'hub.application.overview.currentRelease',
+            'Current release',
+          )}
+          value={
+            activeRelease?.version ??
+            translate('hub.application.overview.notDeployed', 'Not deployed')
+          }
+          detail={
+            activeRelease
+              ? translateWithValues(
+                  translate,
+                  'hub.application.overview.verifiedAt',
+                  'Verified {{date}}',
+                  { date: formatHubDate(activeRelease.createdAt) },
                 )
-            : translate('hub.common.restricted', 'Restricted')
-        }
-        detail={
-          !canReadDeployments
-            ? translate(
-                'hub.application.overview.deploymentRestricted',
-                'Deployment access not granted',
-              )
-            : latestDeployment
-              ? formatHubDate(latestDeployment.createdAt)
               : translate(
-                  'hub.application.overview.publishToBegin',
-                  'Publish a verified release to begin',
+                  'hub.application.overview.noActiveMetadata',
+                  'No active release metadata',
                 )
-        }
-        status={canReadDeployments ? latestDeployment?.status : undefined}
-      />
-      <OverviewCard
-        icon={<PackageCheck aria-hidden='true' />}
-        label={translate(
-          'hub.application.overview.availableReleases',
-          'Available releases',
-        )}
-        value={
-          canReadReleases
-            ? String(releaseTotal ?? releases.length)
-            : translate('hub.common.restricted', 'Restricted')
-        }
-        detail={
-          canReadReleases
-            ? translateWithValues(
-                translate,
-                'hub.application.overview.updatedAt',
-                'Updated {{date}}',
-                { date: formatHubDate(application.updatedAt) },
-              )
-            : translate(
-                'hub.application.overview.releaseRestricted',
-                'Release access not granted',
-              )
-        }
-      />
+          }
+        />
+        <OverviewCard
+          icon={<Boxes aria-hidden='true' />}
+          label={translate(
+            'hub.application.overview.environment',
+            'Environment',
+          )}
+          value={getHubEnvironmentLabel(
+            application.defaultEnvironmentId,
+            translate,
+          )}
+          detail={translate(
+            'hub.application.overview.mvpTarget',
+            'MVP deployment target',
+          )}
+        />
+        <OverviewCard
+          icon={<Activity aria-hidden='true' />}
+          label={translate(
+            'hub.application.overview.latestDeployment',
+            'Latest deployment',
+          )}
+          value={
+            canReadDeployments
+              ? latestDeployment
+                ? latestDeployment.status
+                : translate(
+                    'hub.application.overview.noDeployments',
+                    'No deployments',
+                  )
+              : translate('hub.common.restricted', 'Restricted')
+          }
+          detail={
+            !canReadDeployments
+              ? translate(
+                  'hub.application.overview.deploymentRestricted',
+                  'Deployment access not granted',
+                )
+              : latestDeployment
+                ? formatHubDate(latestDeployment.createdAt)
+                : translate(
+                    'hub.application.overview.publishToBegin',
+                    'Publish a verified release to begin',
+                  )
+          }
+          status={canReadDeployments ? latestDeployment?.status : undefined}
+        />
+        <OverviewCard
+          icon={<PackageCheck aria-hidden='true' />}
+          label={translate(
+            'hub.application.overview.availableReleases',
+            'Available releases',
+          )}
+          value={
+            canReadReleases
+              ? String(releaseTotal ?? releases.length)
+              : translate('hub.common.restricted', 'Restricted')
+          }
+          detail={
+            canReadReleases
+              ? translateWithValues(
+                  translate,
+                  'hub.application.overview.updatedAt',
+                  'Updated {{date}}',
+                  { date: formatHubDate(application.updatedAt) },
+                )
+              : translate(
+                  'hub.application.overview.releaseRestricted',
+                  'Release access not granted',
+                )
+          }
+        />
+      </div>
     </div>
   );
 }
@@ -947,6 +1034,7 @@ function ApplicationReleases({
   canDeploy,
   canRollback,
   canRedeploy,
+  canDevelop,
   canUpdate,
   onDeployRelease,
   onRedeployRelease,
@@ -964,6 +1052,7 @@ function ApplicationReleases({
   canDeploy: boolean;
   canRollback: boolean;
   canRedeploy: boolean;
+  canDevelop: boolean;
   canUpdate: boolean;
   onDeployRelease?: (release: HubRelease, application: HubApplication) => void;
   onRedeployRelease?: (
@@ -995,13 +1084,36 @@ function ApplicationReleases({
   }
   if (error) return <HubErrorState error={error} onRetry={onRetry} />;
   if (releases.length === 0) {
+    const isEmptyDefaultApplication =
+      application.isDefault === true && application.latestRelease === null;
     return (
       <HubEmptyState
         title={translate('hub.releases.empty.title', 'No releases')}
-        description={translate(
-          'hub.releases.empty.description',
-          'Ask your Coding Agent to publish the verified application build to Hub.',
-        )}
+        description={
+          isEmptyDefaultApplication
+            ? translate(
+                'hub.releases.empty.defaultDescription',
+                'Use existing local source or create a new application from the default template, then publish its first Release.',
+              )
+            : translate(
+                'hub.releases.empty.description',
+                'Ask your Coding Agent to publish the verified application build to Hub.',
+              )
+        }
+        action={
+          isEmptyDefaultApplication && canDevelop ? (
+            <Button
+              nativeButton={false}
+              render={<Link to='?tab=development' />}
+            >
+              <SquareTerminal aria-hidden='true' />
+              {translate(
+                'hub.application.onboarding.action',
+                'Open development instructions',
+              )}
+            </Button>
+          ) : undefined
+        }
       />
     );
   }

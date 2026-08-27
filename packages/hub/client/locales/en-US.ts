@@ -291,6 +291,17 @@ export const starter = {
   'hub.application.deploy.error': 'Unable to create deployment',
   'hub.application.deploy.confirm': 'Confirm deployment',
   'hub.application.deploy.starting': 'Starting…',
+  'hub.application.onboarding.title': 'Build and deploy this application',
+  'hub.application.onboarding.description':
+    'The default APP intentionally starts without a Release. Keep source on your computer and choose how to prepare its first build.',
+  'hub.application.onboarding.existing.title':
+    'Use an existing local application',
+  'hub.application.onboarding.existing.description':
+    'Continue from source already stored on this computer. The Coding Agent builds it locally and publishes only the artifact.',
+  'hub.application.onboarding.create.title': 'Create a new local application',
+  'hub.application.onboarding.create.description':
+    'Create source from the default template on this computer, then develop, publish, and deploy it.',
+  'hub.application.onboarding.action': 'Open development instructions',
   'hub.application.overview.currentRelease': 'Current release',
   'hub.application.overview.notDeployed': 'Not deployed',
   'hub.application.overview.verifiedAt': 'Verified {{date}}',
@@ -310,6 +321,8 @@ export const starter = {
   'hub.releases.empty.title': 'No releases',
   'hub.releases.empty.description':
     'Ask your Coding Agent to publish the verified application build to Hub.',
+  'hub.releases.empty.defaultDescription':
+    'Use existing local source or create a new application from the default template, then publish its first Release.',
   'hub.releases.columns.version': 'Version',
   'hub.releases.columns.verification': 'Verification',
   'hub.releases.columns.size': 'Size',

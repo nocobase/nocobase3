@@ -1245,6 +1245,110 @@ describe('Hub application pages', () => {
     ).toBe(false);
   });
 
+  it('guides an empty default APP through its first local build and deployment', async () => {
+    const emptyDefaultApplication: HubApplication = {
+      ...application,
+      id: 'system-default-application',
+      slug: 'default',
+      name: 'Default application',
+      description: null,
+      isDefault: true,
+      activeRelease: null,
+      latestRelease: null,
+      runtime: {
+        state: 'stopped',
+        health: 'unknown',
+        releaseId: null,
+        lastCheckedAt: null,
+      },
+      links: {
+        self: '/hub/api/apps/system-default-application',
+        open: null,
+      },
+    };
+    const capabilities: HubCapabilities = {
+      global: [
+        { resource: 'hub.app', actions: ['read'] },
+        { resource: 'hub.release', actions: ['read', 'create'] },
+        { resource: 'hub.deployment', actions: ['read', 'deploy'] },
+      ],
+      application: [],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps/system-default-application')) {
+        return response(emptyDefaultApplication);
+      }
+      if (path.endsWith('/apps/system-default-application/releases')) {
+        return response([], { total: 0, limit: 20, offset: 0 });
+      }
+      if (path.endsWith('/apps/system-default-application/deployments')) {
+        return response([], { total: 0, limit: 20, offset: 0 });
+      }
+      if (path.endsWith('/me')) {
+        return response({ user: null, roles: ['Developer'], capabilities });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationDetailPage
+          applicationId='system-default-application'
+          fetcher={fetchMock}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Build and deploy this application',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Use an existing local application'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Create a new local application'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Not deployed').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Active')).toBeNull();
+    expect(screen.getByText('No deployments')).toBeInTheDocument();
+    expect(await screen.findByText('0')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Open development instructions' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Open application' }),
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Deploy$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Start$/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Releases' }));
+    expect(
+      await screen.findByText(
+        'Use existing local source or create a new application from the default template, then publish its first Release.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Open development instructions' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open development instructions' }),
+    );
+    expect(
+      await screen.findByText(
+        (_, element) =>
+          element?.tagName === 'PRE' &&
+          element.textContent?.includes(
+            'pnpm create @nocobase/app <directory>',
+          ) === true &&
+          element.textContent?.includes('--app default') === true,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('does not request or misreport resources outside an app-only scope', async () => {
     const appOnly: HubCapabilities = {
       global: [],

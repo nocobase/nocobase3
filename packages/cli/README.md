@@ -45,6 +45,15 @@ creates the next patch Release, and deploys it. Pass `--hub <url> --app <slug>` 
 an existing Hub application explicitly. `pnpm run deploy --release`, `--rollback`, and `--redeploy` operate on existing
 Releases instead. `pnpm run release` builds and creates a Release without deploying it.
 
+Hub starts with a pre-created empty application named `default`. It has no Release or Deployment. To build local source
+and create its first Release and Deployment, bind it explicitly:
+
+```bash
+pnpm run deploy --hub https://hub.example.com/hub --app default
+```
+
+Omitting `--app` during first association creates another Hub application instead of selecting `default`.
+
 ## `nb3` command surface
 
 The existing executable remains part of the published package:

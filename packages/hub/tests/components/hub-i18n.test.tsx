@@ -13,6 +13,7 @@ import { Header } from '@/components/app-shell/header';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { ApplicationsPage } from '@/pages/applications/list';
+import { ApplicationDetailPage } from '@/pages/applications/detail';
 import { DeploymentDetailPage } from '@/pages/deployments/detail';
 import { portalI18nReady } from '@/providers/i18n/runtime';
 
@@ -192,5 +193,83 @@ describe('Hub Chinese application page', () => {
     expect(screen.getByText('部署进度')).toBeInTheDocument();
     expect(screen.getByText('事件时间线')).toBeInTheDocument();
     expect(screen.getByText('操作详情')).toBeInTheDocument();
+  });
+
+  it('renders the empty default APP onboarding in Simplified Chinese', async () => {
+    await i18n.changeLanguage('zh-CN');
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps/system-default-application')) {
+        return response({
+          id: 'system-default-application',
+          slug: 'default',
+          name: 'Default application',
+          description: null,
+          status: 'active',
+          defaultEnvironmentId: 'default',
+          isDefault: true,
+          latestRelease: null,
+          activeRelease: null,
+          createdBy: 'system',
+          createdAt: '2026-08-27T09:00:00.000Z',
+          updatedAt: '2026-08-27T09:00:00.000Z',
+          links: {
+            self: '/hub/api/apps/system-default-application',
+            open: null,
+          },
+        });
+      }
+      if (path.endsWith('/apps/system-default-application/releases')) {
+        return Response.json({
+          data: [],
+          meta: { total: 0, limit: 20, offset: 0 },
+          requestId: 'i18n-test',
+        });
+      }
+      if (path.endsWith('/apps/system-default-application/deployments')) {
+        return Response.json({
+          data: [],
+          meta: { total: 0, limit: 20, offset: 0 },
+          requestId: 'i18n-test',
+        });
+      }
+      if (path.endsWith('/me')) {
+        return response({
+          user: null,
+          roles: ['Developer'],
+          capabilities: {
+            global: [
+              { resource: 'hub.app', actions: ['read'] },
+              { resource: 'hub.release', actions: ['read', 'create'] },
+              { resource: 'hub.deployment', actions: ['read', 'deploy'] },
+            ],
+            application: [],
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <Refine i18nProvider={portalI18nProvider}>
+          <ApplicationDetailPage
+            applicationId='system-default-application'
+            fetcher={fetcher}
+          />
+        </Refine>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: '构建并部署此应用' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('使用已有本地应用')).toBeInTheDocument();
+    expect(screen.getByText('创建新的本地应用')).toBeInTheDocument();
+    expect(screen.getAllByText('尚未部署').length).toBeGreaterThan(0);
+    expect(screen.queryByText('运行中')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: '查看开发指令' }),
+    ).toBeInTheDocument();
   });
 });
