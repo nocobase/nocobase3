@@ -73,7 +73,7 @@ describe('HubCredentialManager', () => {
     });
   });
 
-  it('gives a copyable nb3 login command when a scope is missing', async () => {
+  it('gives a copyable legacy login command when a scope is missing', async () => {
     const store = await createStore();
     await store.set({
       hub: HUB,
@@ -92,6 +92,61 @@ describe('HubCredentialManager', () => {
     ).rejects.toMatchObject<Partial<HubCredentialError>>({
       code: 'INSUFFICIENT_SCOPE',
       hint: `nb3 hub login --hub ${HUB} --scope source:read`,
+    });
+  });
+
+  it('can start device authorization and retry the operation for app package scripts', async () => {
+    const store = await createStore();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              deviceCode: 'device',
+              userCode: 'ABCD',
+              verificationUri: `${HUB}/agent-authorize`,
+              expiresIn: 600,
+              interval: 0,
+            },
+          }),
+          { status: 201 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              credentialId: 'credential',
+              accessToken: 'access',
+              tokenType: 'Bearer',
+              expiresIn: 900,
+              refreshToken: 'refresh',
+              refreshExpiresIn: 3600,
+              scope: 'apps:read source:read',
+              applicationScope: { mode: 'all-authorized' },
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const manager = new HubCredentialManager(HUB, { store });
+    const report = vi.fn();
+
+    const result = await manager.authorizedWithDeviceLogin(
+      ['apps:read', 'source:read'],
+      { clientName: 'NocoBase app scripts test', reportAuthorization: report },
+      async (_client, credential) => credential.accessToken,
+    );
+
+    expect(result).toBe('access');
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ userCode: 'ABCD' }),
+    );
+    expect(await store.get(HUB)).toMatchObject({
+      accessToken: 'access',
+      scopes: ['apps:read', 'source:read'],
     });
   });
 });

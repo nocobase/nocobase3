@@ -21,8 +21,12 @@ export const CREATE_ARGS = {
 };
 
 export const CREATE_FLAGS = {
+  app: Flags.string({
+    description:
+      'Exact APP slug to pull from a Hub. Must be used together with --hub.',
+  }),
   'db-dialect': Flags.string({
-    description: `Database type: ${DATABASE_DIALECTS.join(', ')}. Aliases such as postgresql, pg, and sqlite3 are accepted. Prompted for when omitted.`,
+    description: `Database type: ${DATABASE_DIALECTS.join(', ')}. Aliases such as postgresql, pg, and sqlite3 are accepted. Hub working copies default to sqlite; new apps prompt when omitted.`,
   }),
   install: Flags.boolean({
     allowNo: true,
@@ -41,6 +45,10 @@ export const CREATE_FLAGS = {
   registry: Flags.string({
     description: 'npm registry to download the template from.',
   }),
+  hub: Flags.string({
+    description:
+      'Public Hub root URL used to pull an existing APP. Must be used together with --app.',
+  }),
   help: Flags.boolean({
     char: 'h',
     default: false,
@@ -55,11 +63,13 @@ export const CREATE_FLAGS = {
 export interface ParsedInput {
   directory?: string;
   flags: {
+    app?: string;
     'db-dialect'?: string;
     install: boolean;
     template: string;
     'template-tag': string;
     registry?: string;
+    hub?: string;
     help: boolean;
     version: boolean;
   };
@@ -72,9 +82,13 @@ export async function parseInput(argv: string[]): Promise<ParsedInput> {
     strict: true,
   });
 
+  const flags = parsed.flags as ParsedInput['flags'];
+  if (Boolean(flags.hub) !== Boolean(flags.app)) {
+    throw new Error('--hub and --app must be used together.');
+  }
   return {
     directory: parsed.args.directory,
-    flags: parsed.flags as ParsedInput['flags'],
+    flags,
   };
 }
 
@@ -100,12 +114,14 @@ export function formatHelp(binary: string): string {
     `  $ ${binary} crm --db-dialect=postgres`,
     `  $ ${binary} crm --db-dialect=sqlite --no-install`,
     `  $ ${binary} crm --template-tag=beta`,
+    `  $ ${binary} crm --hub=https://hub.example.com/hub --app=sales`,
     '',
     'NOTES',
     '  The template is downloaded from https://npm.nocobase.ai by default.',
     '  Override it with --registry, or set the NOCOBASE_REGISTRY environment variable.',
     '',
     '  Database connection settings are written to .env.local with defaults.',
+    '  An APP pulled from Hub uses SQLite when --db-dialect is omitted.',
     '  For postgres and mysql, edit that file before starting the app.',
   ].join('\n');
 }

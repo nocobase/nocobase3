@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-/** Local state for a hub lives here, mirroring the `.nb3/` an app keeps. */
+/** Local state for an nb3-managed hub stays in the legacy-compatible directory. */
 export const HUB_STATE_DIR = '.nb3';
 
 export interface HubConfig {
@@ -34,8 +34,8 @@ async function readConfig(directory: string): Promise<HubConfig | undefined> {
 }
 
 /**
- * Walks up looking for the `.nb3/hub.json` a hub carries, so the hub commands work from anywhere inside a hub
- * directory. A hub is told apart from an app by which file `.nb3/` holds.
+ * Walks up looking for the `.nb3/hub.json` a hub carries, so the legacy commands keep working from anywhere inside a
+ * hub directory. A hub is told apart from an app by which file `.nb3/` holds.
  */
 export async function findHubProject(
   startDirectory: string,

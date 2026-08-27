@@ -1,14 +1,15 @@
 {
   "name": "@nocobase/nb3-cli",
   "version": "0.0.1-beta.0",
-  "description": "NocoBase 3 command line tool.",
+  "description": "NocoBase 3 CLI and application package-script commands.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
   "bin": {
-    "nb3": "./bin/run.js"
+    "nb3": "./bin/run.js",
+    "nocobase-app": "./bin/app.js"
   },
   "files": [
     "bin",
@@ -27,8 +28,8 @@
       "flagSortOrder": "none"
     },
     "commands": {
-      "strategy": "explicit",
-      "target": "./dist/registry.js"
+      "strategy": "pattern",
+      "target": "./dist/commands"
     },
     "topics": {
       "app": {

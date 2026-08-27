@@ -69,16 +69,18 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 
 ## 参数
 
-| 参数             | 说明                                                            |
-| ---------------- | --------------------------------------------------------------- |
-| `[目录]`         | 应用目录，相对当前目录。省略时进入交互式询问                    |
-| `--db-dialect`   | 数据库类型：`postgres`、`sqlite`、`mysql`。省略时进入交互式选择 |
-| `--no-install`   | 生成后不自动安装依赖                                            |
-| `--template`     | 模板，默认 `default`。也接受已发布的包或本地包目录              |
-| `--template-tag` | 具名模板走哪个渠道：`latest`（默认）或 `beta`                   |
-| `--registry`     | 下载模板用的 registry，默认 `https://npm.nocobase.ai`           |
-| `-h, --help`     | 查看帮助                                                        |
-| `--version`      | 查看版本                                                        |
+| 参数             | 说明                                                                     |
+| ---------------- | ------------------------------------------------------------------------ |
+| `[目录]`         | 应用目录，相对当前目录。省略时进入交互式询问                             |
+| `--hub`          | Hub 的公开根 URL。获取已有 APP 时与 `--app` 一起使用                     |
+| `--app`          | Hub 中已有 APP 的准确 slug。与 `--hub` 一起使用                          |
+| `--db-dialect`   | 数据库类型：`postgres`、`sqlite`、`mysql`。Hub 工作副本默认使用 `sqlite` |
+| `--no-install`   | 生成后不自动安装依赖                                                     |
+| `--template`     | 模板，默认 `default`。也接受已发布的包或本地包目录                       |
+| `--template-tag` | 具名模板走哪个渠道：`latest`（默认）或 `beta`                            |
+| `--registry`     | 下载模板用的 registry，默认 `https://npm.nocobase.ai`                    |
+| `-h, --help`     | 查看帮助                                                                 |
+| `--version`      | 查看版本                                                                 |
 
 `--db-dialect` 接受常见别名，`postgresql`、`pg` 都会归一化成 `postgres`，`sqlite3` 归一化成 `sqlite`，`mysql2`、`mariadb` 归一化成 `mysql`。这三个规范名才是模板 `server/config/database.ts` 里 `DB_DIALECT` 认的值，写别的会在启动时抛错。
 
@@ -111,6 +113,27 @@ pnpm create @nocobase/app crm --template=./packages/app-template-default
 pnpm create @nocobase/app crm --db-dialect=postgres
 pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
 ```
+
+## 从 Hub 获取已有 APP
+
+如果 APP 已经在 Hub 中，可以把最新源码快照初始化到一个新目录：
+
+```bash
+pnpm create @nocobase/app crm \
+  --hub https://hub.example.com/hub \
+  --app sales
+```
+
+首次连接时，命令会显示 Device Authorization 页面和一次性 code。批准后，命令会拉取源码、写入本地关联信息、生成 `.env.local` 并安装依赖。本地开发数据库默认使用 SQLite；只有需要连接 PostgreSQL 或 MySQL 时，才需要增加 `--db-dialect`。
+
+进入 APP 目录后，使用项目自带的 scripts 继续同步：
+
+```bash
+pnpm run pull
+pnpm run push
+```
+
+`pull` 获取 Hub 的最新源码，`push` 把当前源码推回 Hub。两条命令都会检查本地与 Hub 是否同时出现修改，遇到分叉时会停止，不会直接覆盖源码。
 
 ## 生成的内容
 

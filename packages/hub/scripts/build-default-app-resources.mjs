@@ -133,7 +133,7 @@ async function generateResources(options) {
       relative === 'dist' ||
       relative.startsWith('dist/') ||
       isRuntimeDataPath(relative) ||
-      isEnvironmentFile(relative),
+      isSourceSecretEnvironmentFile(relative),
   });
   await run('git', ['init', '--initial-branch=main'], { cwd: gitWorktree });
   await run('git', ['add', '--all'], { cwd: gitWorktree });
@@ -390,6 +390,11 @@ function writeChecksum(buffer, value) {
 function isEnvironmentFile(relative) {
   const basename = path.posix.basename(relative.split(path.sep).join('/'));
   return basename === '.env' || basename.startsWith('.env.');
+}
+
+function isSourceSecretEnvironmentFile(relative) {
+  const basename = path.posix.basename(relative.split(path.sep).join('/'));
+  return basename !== '.env.example' && isEnvironmentFile(relative);
 }
 
 function isRuntimeDataPath(relative) {

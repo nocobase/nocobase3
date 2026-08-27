@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import {
   defaultDatabaseConfig,
   driverFor,
@@ -9,6 +11,7 @@ import {
 } from './lib/database.ts';
 import { buildEnvFile } from './lib/env-file.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
+import { pullHubSource } from './lib/hub-source.ts';
 import { installDependencies, verifyDriver } from './lib/install.ts';
 import { addDriverDependency } from './lib/manifest.ts';
 import { ensureAllowBuilds } from './lib/pnpm-workspace.ts';
@@ -28,6 +31,7 @@ import {
   assertValidAppName,
   readEnvExample,
   removeDirectory,
+  preparePulledSource,
   scaffoldFromTemplate,
 } from './lib/scaffold.ts';
 import {
@@ -92,12 +96,19 @@ async function run(input: ParsedInput): Promise<void> {
   intro('Create a NocoBase app');
 
   const name = input.directory ?? (await promptAppName());
-  assertValidAppName(name);
+  const hubSource =
+    input.flags.hub && input.flags.app
+      ? { hub: input.flags.hub, app: input.flags.app }
+      : undefined;
+  if (!hubSource) assertValidAppName(name);
 
   const targetDirectory = path.resolve(process.cwd(), name);
   await assertTargetIsUsable(targetDirectory);
 
-  const dialect = await resolveDialect(input);
+  const dialect =
+    hubSource && input.flags['db-dialect'] === undefined
+      ? 'sqlite'
+      : await resolveDialect(input);
   const database = defaultDatabaseConfig(dialect);
   const driver = driverFor(dialect);
 
@@ -105,6 +116,59 @@ async function run(input: ParsedInput): Promise<void> {
   // this code ran, while the template is fetched here and defaults to the self-hosted registry carrying v3.
   const registry =
     input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
+
+  if (hubSource) {
+    const stagingDirectory = await createStagingDirectory(targetDirectory);
+    try {
+      await pullHubSource({
+        app: hubSource.app,
+        hub: hubSource.hub,
+        targetDirectory: stagingDirectory,
+      });
+      const envExample = await readEnvExample(stagingDirectory);
+      await preparePulledSource(stagingDirectory);
+      await writeFile(
+        path.join(stagingDirectory, '.env.local'),
+        buildEnvFile({ database, template: envExample }),
+        'utf8',
+      );
+      await addDriverDependency(stagingDirectory, driver);
+      await ensureAllowBuilds(stagingDirectory);
+
+      log.success(
+        `Pulled ${hubSource.app} from ${hubSource.hub} using ${dialect} (${driver}).`,
+      );
+
+      if (!input.flags.install) {
+        await commitStagedDirectory(stagingDirectory, targetDirectory);
+        finish(name, { installed: false, dialect });
+        return;
+      }
+
+      const install = spinner();
+      install.start('Installing dependencies with pnpm');
+      try {
+        await installDependencies({
+          directory: stagingDirectory,
+          driver,
+          registry,
+        });
+        install.stop('Installed dependencies.');
+      } catch (error) {
+        install.stop('Installing dependencies failed.');
+        throw error;
+      }
+
+      await reportDriverVerification(stagingDirectory, driver);
+      await commitStagedDirectory(stagingDirectory, targetDirectory);
+      finish(name, { installed: true, dialect });
+      return;
+    } catch (error) {
+      await removeDirectory(stagingDirectory);
+      throw error;
+    }
+  }
+
   const templateSource = resolveTemplateSource(input.flags.template, {
     tag: input.flags['template-tag'],
   });
@@ -159,17 +223,67 @@ async function run(input: ParsedInput): Promise<void> {
     return;
   }
 
-  if (driverNeedsBuild(driver)) {
-    const verification = await verifyDriver(targetDirectory, driver);
+  await reportDriverVerification(targetDirectory, driver);
 
-    if (verification.rebuilt) {
-      log.info(`Compiled the native addon for ${driver}.`);
-    } else if (!verification.ok && verification.reason) {
-      log.warn(verification.reason);
+  finish(name, { installed: true, dialect });
+}
+
+async function createStagingDirectory(
+  targetDirectory: string,
+): Promise<string> {
+  const parent = path.dirname(targetDirectory);
+  await mkdir(parent, { recursive: true });
+  const stagingDirectory = path.join(
+    parent,
+    `.${path.basename(targetDirectory)}-create-${randomUUID()}`,
+  );
+  await mkdir(stagingDirectory);
+  return stagingDirectory;
+}
+
+async function commitStagedDirectory(
+  stagingDirectory: string,
+  targetDirectory: string,
+): Promise<void> {
+  try {
+    await rename(stagingDirectory, targetDirectory);
+    return;
+  } catch (error) {
+    if (
+      !['EEXIST', 'ENOTEMPTY'].includes(
+        (error as NodeJS.ErrnoException).code ?? '',
+      )
+    ) {
+      throw error;
     }
   }
 
-  finish(name, { installed: true, dialect });
+  // Some platforms do not replace an existing empty directory with rename. Keep it as a recoverable backup until
+  // the staged working copy is in place.
+  await assertTargetIsUsable(targetDirectory);
+  const backupDirectory = `${targetDirectory}.empty-${randomUUID()}`;
+  await rename(targetDirectory, backupDirectory);
+  try {
+    await rename(stagingDirectory, targetDirectory);
+  } catch (error) {
+    await rename(backupDirectory, targetDirectory).catch(() => undefined);
+    throw error;
+  }
+  await rm(backupDirectory, { force: true, recursive: true });
+}
+
+async function reportDriverVerification(
+  targetDirectory: string,
+  driver: string,
+): Promise<void> {
+  if (!driverNeedsBuild(driver)) return;
+
+  const verification = await verifyDriver(targetDirectory, driver);
+  if (verification.rebuilt) {
+    log.info(`Compiled the native addon for ${driver}.`);
+  } else if (!verification.ok && verification.reason) {
+    log.warn(verification.reason);
+  }
 }
 
 /**

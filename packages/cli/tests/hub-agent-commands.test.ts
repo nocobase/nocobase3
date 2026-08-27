@@ -121,7 +121,7 @@ describe('Hub agent commands', () => {
     expect(await new CredentialStore().get(HUB)).toBeUndefined();
   });
 
-  it('pulls an exact slug and records its Hub identity in local .nb3 state', async () => {
+  it('pulls an exact slug and records its Hub identity in local .nocobase state', async () => {
     await saveCredential();
     const destination = path.join(root, 'sales');
     const invocation = path.join(root, 'git-invocation.json');
@@ -186,17 +186,22 @@ fs.writeFileSync('${invocation}', JSON.stringify({ args, askpass: Boolean(proces
     });
     expect(
       JSON.parse(
-        await readFile(path.join(destination, '.nb3', 'config.json'), 'utf8'),
+        await readFile(
+          path.join(destination, '.nocobase', 'config.json'),
+          'utf8',
+        ),
       ),
     ).toEqual({
       applicationId: 'app-1',
       hub: HUB,
       name: 'Sales',
+      repositoryMode: 'clone',
       slug: 'sales',
+      sourceCommit: 'abc123',
     });
     expect(
       await readFile(path.join(destination, '.git', 'info', 'exclude'), 'utf8'),
-    ).toContain('/.nb3/');
+    ).toContain('/.nocobase/');
     const gitInvocation = JSON.parse(await readFile(invocation, 'utf8')) as {
       args: string[];
       askpass: boolean;

@@ -1,18 +1,12 @@
 import os from 'node:os';
 import { Command, Flags } from '@oclif/core';
-import {
-  CredentialStore,
-  type StoredCredential,
-} from '../../lib/credential-store.ts';
-import { HUB_CLI_CLIENT_ID, parseScope } from '../../lib/hub-auth.ts';
+import { CredentialStore } from '../../lib/credential-store.ts';
+import { authorizeDevice } from '../../lib/hub-auth.ts';
 import { failHubCommand } from '../../lib/hub-command.ts';
 import {
   AGENT_SCOPES,
-  HubApiError,
-  HubClient,
   normalizeHubUrl,
   type AgentScope,
-  type AgentToken,
   type DeviceAuthorization,
 } from '../../lib/hub-client.ts';
 
@@ -25,7 +19,7 @@ const DEFAULT_SCOPES: readonly AgentScope[] = [
 export default class HubLogin extends Command {
   static override summary = 'Log in to a Hub for Coding Agent access.';
   static override description =
-    'Starts device authorization, prints the Hub approval page, and saves the resulting Agent credential in the nb3 user data directory.';
+    'Starts device authorization, prints the Hub approval page, and saves the resulting Agent credential outside the app source directory.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> --hub http://127.0.0.1:13000/hub',
@@ -62,28 +56,16 @@ export default class HubLogin extends Command {
     const scopes = uniqueScopes(
       (flags.scope as AgentScope[] | undefined) ?? DEFAULT_SCOPES,
     );
-    const client = new HubClient(hub);
     try {
-      const authorization = await client.createDeviceAuthorization({
-        clientId: HUB_CLI_CLIENT_ID,
-        clientName: `nb3 on ${os.hostname() || 'device'}`,
-        scopes,
-        applicationScope: { mode: 'all-authorized' },
-      });
-      this.reportAuthorization(authorization, flags.json);
-      const token = await pollForToken(client, authorization);
-      const now = Date.now();
-      const credential: StoredCredential = {
+      const credential = await authorizeDevice({
         hub,
-        clientId: HUB_CLI_CLIENT_ID,
-        credentialId: token.credentialId,
-        accessToken: token.accessToken,
-        accessTokenExpiresAt: now + token.expiresIn * 1000,
-        refreshToken: token.refreshToken,
-        refreshTokenExpiresAt: now + token.refreshExpiresIn * 1000,
-        scopes: parseScope(token.scope),
-        applicationScope: token.applicationScope,
-      };
+        clientName: isAppScriptSurface(this)
+          ? `NocoBase app scripts on ${os.hostname() || 'device'}`
+          : `nb3 on ${os.hostname() || 'device'}`,
+        scopes,
+        reportAuthorization: (authorization) =>
+          this.reportAuthorization(authorization, flags.json),
+      });
       await new CredentialStore().set(credential);
       if (flags.json) {
         this.log(
@@ -101,7 +83,7 @@ export default class HubLogin extends Command {
       this.log(`credential_id: ${credential.credentialId}`);
       this.log(`scopes: ${credential.scopes.join(' ')}`);
     } catch (error) {
-      failHubCommand(this, error, flags.json, `nb3 hub login --hub ${hub}`);
+      failHubCommand(this, error, flags.json, formatLoginHint(this, hub));
     }
   }
 
@@ -110,7 +92,7 @@ export default class HubLogin extends Command {
     json: boolean,
   ): void {
     const lines = [
-      'Authorize this nb3 device in your browser:',
+      'Authorize this device in your browser:',
       authorization.verificationUriComplete ?? authorization.verificationUri,
       `Code: ${authorization.userCode}`,
       'Waiting for approval...',
@@ -122,34 +104,15 @@ export default class HubLogin extends Command {
   }
 }
 
-async function pollForToken(
-  client: HubClient,
-  authorization: DeviceAuthorization,
-): Promise<AgentToken> {
-  const deadline = Date.now() + authorization.expiresIn * 1000;
-  let intervalMs = authorization.interval * 1000;
-  while (Date.now() < deadline) {
-    try {
-      return await client.exchangeToken({
-        grantType: 'urn:ietf:params:oauth:grant-type:device_code',
-        clientId: HUB_CLI_CLIENT_ID,
-        deviceCode: authorization.deviceCode,
-      });
-    } catch (error) {
-      if (!(error instanceof HubApiError)) throw error;
-      if (error.code === 'SLOW_DOWN') intervalMs += 5_000;
-      else if (error.code !== 'AUTHORIZATION_PENDING') throw error;
-      await wait(intervalMs);
-    }
+function formatLoginHint(command: Command, hub: string): string {
+  if (isAppScriptSurface(command)) {
+    return `pnpm run hub:login --hub ${hub}`;
   }
-  throw new HubApiError('Device authorization expired before approval.', {
-    code: 'DEVICE_AUTHORIZATION_EXPIRED',
-    status: 410,
-  });
+  return `nb3 hub login --hub ${hub}`;
 }
 
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function isAppScriptSurface(command: Command): boolean {
+  return command.config.bin === 'pnpm run';
 }
 
 function uniqueScopes(scopes: readonly AgentScope[]): AgentScope[] {

@@ -8,6 +8,8 @@ import {
   HubClient,
   normalizeHubUrl,
   type AgentScope,
+  type AgentToken,
+  type DeviceAuthorization,
 } from './hub-client.ts';
 import { formatShellCommand } from './shell.ts';
 
@@ -33,6 +35,13 @@ export class HubCredentialError extends Error {
 export interface HubCredentialManagerOptions {
   store?: CredentialStorage;
   clock?: () => number;
+}
+
+export interface DeviceLoginOptions {
+  readonly clientName: string;
+  readonly reportAuthorization: (
+    authorization: DeviceAuthorization,
+  ) => void | Promise<void>;
 }
 
 export class HubCredentialManager {
@@ -90,6 +99,42 @@ export class HubCredentialManager {
         credential,
       );
     }
+  }
+
+  /**
+   * Runs an authenticated operation and starts Device Authorization only when no usable credential is available.
+   * Package scripts use this for the first deploy or source sync, while the legacy nb3 surface keeps its explicit
+   * login command and actionable error.
+   */
+  public async authorizedWithDeviceLogin<T>(
+    requiredScopes: readonly AgentScope[],
+    options: DeviceLoginOptions,
+    operation: (client: HubClient, credential: StoredCredential) => Promise<T>,
+  ): Promise<T> {
+    let existing: StoredCredential | undefined;
+    try {
+      return await this.authorized(requiredScopes, operation);
+    } catch (error) {
+      if (
+        !(error instanceof HubCredentialError) ||
+        !['NOT_LOGGED_IN', 'INSUFFICIENT_SCOPE'].includes(error.code)
+      ) {
+        throw error;
+      }
+      existing = await this.store.get(this.hub);
+    }
+
+    const credential = await authorizeDevice({
+      clientName: options.clientName,
+      hub: this.hub,
+      reportAuthorization: options.reportAuthorization,
+      scopes: [...new Set([...(existing?.scopes ?? []), ...requiredScopes])],
+    });
+    await this.store.set(credential);
+    return operation(
+      new HubClient(this.hub, { accessToken: credential.accessToken }),
+      credential,
+    );
   }
 
   private async refresh(
@@ -176,4 +221,71 @@ export function loginHint(hub: string, scopes: readonly AgentScope[]): string {
     hub,
     ...scopes.flatMap((scope) => ['--scope', scope]),
   ]);
+}
+
+export async function authorizeDevice(options: {
+  readonly clientName: string;
+  readonly hub: string;
+  readonly reportAuthorization: (
+    authorization: DeviceAuthorization,
+  ) => void | Promise<void>;
+  readonly scopes: readonly AgentScope[];
+}): Promise<StoredCredential> {
+  const hub = normalizeHubUrl(options.hub);
+  const client = new HubClient(hub);
+  const scopes = [...new Set(options.scopes)];
+  const authorization = await client.createDeviceAuthorization({
+    applicationScope: { mode: 'all-authorized' },
+    clientId: HUB_CLI_CLIENT_ID,
+    clientName: options.clientName,
+    scopes,
+  });
+  await options.reportAuthorization(authorization);
+  const token = await pollForDeviceToken(client, authorization);
+  return credentialFromToken(hub, token);
+}
+
+function credentialFromToken(hub: string, token: AgentToken): StoredCredential {
+  const now = Date.now();
+  return {
+    hub,
+    clientId: HUB_CLI_CLIENT_ID,
+    credentialId: token.credentialId,
+    accessToken: token.accessToken,
+    accessTokenExpiresAt: now + token.expiresIn * 1000,
+    refreshToken: token.refreshToken,
+    refreshTokenExpiresAt: now + token.refreshExpiresIn * 1000,
+    scopes: parseScope(token.scope),
+    applicationScope: token.applicationScope,
+  };
+}
+
+async function pollForDeviceToken(
+  client: HubClient,
+  authorization: DeviceAuthorization,
+): Promise<AgentToken> {
+  const deadline = Date.now() + authorization.expiresIn * 1000;
+  let intervalMs = authorization.interval * 1000;
+  while (Date.now() < deadline) {
+    try {
+      return await client.exchangeToken({
+        grantType: 'urn:ietf:params:oauth:grant-type:device_code',
+        clientId: HUB_CLI_CLIENT_ID,
+        deviceCode: authorization.deviceCode,
+      });
+    } catch (error) {
+      if (!(error instanceof HubApiError)) throw error;
+      if (error.code === 'SLOW_DOWN') intervalMs += 5_000;
+      else if (error.code !== 'AUTHORIZATION_PENDING') throw error;
+      await wait(intervalMs);
+    }
+  }
+  throw new HubApiError('Device authorization expired before approval.', {
+    code: 'DEVICE_AUTHORIZATION_EXPIRED',
+    status: 410,
+  });
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

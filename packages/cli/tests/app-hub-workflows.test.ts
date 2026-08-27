@@ -99,7 +99,7 @@ describe('nb3 Hub application workflows', () => {
     });
     expect(
       JSON.parse(
-        await readFile(path.join(destination, '.nb3/config.json'), 'utf8'),
+        await readFile(path.join(destination, '.nocobase/config.json'), 'utf8'),
       ),
     ).toMatchObject({
       applicationId: 'app-1',
@@ -881,17 +881,19 @@ process.exit(0);
 
 async function createProject(): Promise<string> {
   const project = path.join(root, `project-${crypto.randomUUID()}`);
-  await mkdir(path.join(project, '.nb3'), { recursive: true });
+  await mkdir(path.join(project, '.nocobase'), { recursive: true });
   await mkdir(path.join(project, 'dist/client'), { recursive: true });
   await mkdir(path.join(project, 'dist/server'), { recursive: true });
   await mkdir(path.join(project, '.git/info'), { recursive: true });
   await writeFile(
-    path.join(project, '.nb3/config.json'),
+    path.join(project, '.nocobase/config.json'),
     `${JSON.stringify({
       applicationId: 'app-1',
       hub: HUB,
       name: 'Sales',
+      repositoryMode: 'clone',
       slug: 'sales',
+      sourceCommit: COMMIT,
     })}\n`,
   );
   await writeFile(

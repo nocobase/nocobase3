@@ -1150,6 +1150,9 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../cli
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../queue
@@ -1465,6 +1468,9 @@ importers:
       '@clack/prompts':
         specifier: 'catalog:'
         version: 1.7.0
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../cli
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0

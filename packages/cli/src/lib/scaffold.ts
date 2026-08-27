@@ -9,15 +9,19 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 
-/** Local state for a generated app lives here, mirroring the `.nb3/` a hub keeps. */
-export const APP_STATE_DIR = '.nb3';
+/** Local state for a generated app lives here, mirroring the `.nocobase/` a hub keeps. */
+export const APP_STATE_DIR = '.nocobase';
 
 export interface AppConfig {
   name: string;
-  /** Hub application identity for projects cloned with `nb3 app pull`. */
+  /** Hub application identity for projects cloned from the Hub-managed repository. */
   applicationId?: string;
   hub?: string;
   slug?: string;
+  /** How this working copy exchanges source with the Hub repository. */
+  repositoryMode?: 'clone' | 'snapshot';
+  /** Last Hub source commit synchronized with this working copy. */
+  sourceCommit?: string;
   /** Template provenance exists for locally scaffolded apps, but not necessarily for Hub clones. */
   template?: string;
   templateVersion?: string;

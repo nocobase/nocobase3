@@ -132,10 +132,13 @@ describe('default APP resources', () => {
       'ls-files',
     ]);
     expect(sourceFiles).toContain('client/index.ts');
+    expect(sourceFiles).toContain('.env.example');
     expect(sourceFiles).not.toMatch(
       /(?:^|\/)(?:storage|\.nocobase|node_modules|dist)(?:\/|$)/m,
     );
-    expect(sourceFiles).not.toMatch(/(?:^|\/)\.env(?:\.|$)/m);
+    expect(sourceFiles).not.toContain('.env\n');
+    expect(sourceFiles).not.toContain('.env.local\n');
+    expect(sourceFiles).not.toContain('.env.production\n');
   });
 
   it('rejects symbolic links instead of following them into a release', async () => {
@@ -206,6 +209,12 @@ async function createFixture(): Promise<{
   );
   await mkdir(path.join(source, '.nocobase'), { recursive: true });
   await writeFile(path.join(source, '.nocobase/state.json'), '{}\n');
+  await writeFile(
+    path.join(source, '.env.example'),
+    'DATABASE_URL=sqlite://storage/database.sqlite\n',
+  );
+  await writeFile(path.join(source, '.env'), 'SECRET=source-secret\n');
+  await writeFile(path.join(source, '.env.local'), 'SECRET=local-secret\n');
   await writeFile(
     path.join(source, '.env.production'),
     'SECRET=source-secret\n',

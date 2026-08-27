@@ -54,8 +54,25 @@ describe('findHubProject', () => {
     expect((await findHubProject(nested))?.directory).toBe(directory);
   });
 
+  it('keeps the nb3 Hub state directory compatible', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'nb3-legacy-hub-'));
+    created.push(root);
+    await mkdir(path.join(root, '.nb3'), { recursive: true });
+    await writeFile(
+      path.join(root, '.nb3', 'hub.json'),
+      `${JSON.stringify({
+        host: DEFAULT_HUB_HOST,
+        name: 'legacy-hub',
+        port: DEFAULT_HUB_PORT,
+      })}\n`,
+      'utf8',
+    );
+
+    expect((await findHubProject(root))?.config.name).toBe('legacy-hub');
+  });
+
   /**
-   * Apps and hubs both keep a `.nb3/` directory, so the file inside it is what tells them apart. Without this an app
+   * Apps and hubs can both keep a `.nb3/` directory, so the file inside it is what tells them apart. Without this an app
    * directory would resolve as a hub and the hub commands would act on the wrong project.
    */
   it('does not mistake an app for a hub', async () => {

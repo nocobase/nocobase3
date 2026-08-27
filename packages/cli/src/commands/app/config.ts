@@ -8,7 +8,7 @@ const WRITABLE_KEYS = new Set(['hub', 'name']);
 export default class AppConfig extends Command {
   static override summary = 'Show or change app configuration.';
   static override description =
-    'Reads and writes the app configuration stored in .nb3/. Prints all values when no key is given, prints one value when a key is given, and sets it when a value follows.';
+    'Reads and writes the app configuration stored in .nocobase/. Prints all values when no key is given, prints one value when a key is given, and sets it when a value follows.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',

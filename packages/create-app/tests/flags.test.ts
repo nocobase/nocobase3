@@ -44,6 +44,26 @@ describe('parseInput', () => {
     expect(input.flags.registry).toBe('https://registry.npmjs.org');
   });
 
+  it('parses an existing Hub app source request', async () => {
+    const input = await parseInput([
+      'crm',
+      '--hub=https://hub.example.com/hub',
+      '--app=sales',
+    ]);
+
+    expect(input.flags.hub).toBe('https://hub.example.com/hub');
+    expect(input.flags.app).toBe('sales');
+  });
+
+  it('requires --hub and --app together', async () => {
+    await expect(
+      parseInput(['crm', '--hub=https://hub.example.com/hub']),
+    ).rejects.toThrow(/--hub and --app must be used together/u);
+    await expect(parseInput(['crm', '--app=sales'])).rejects.toThrow(
+      /--hub and --app must be used together/u,
+    );
+  });
+
   /** The default is a name, so the package it points at stays an implementation detail. */
   it('defaults the template to the default name', async () => {
     expect((await parseInput(['crm'])).flags.template).toBe('default');
@@ -84,9 +104,15 @@ describe('formatHelp', () => {
 
     expect(help).toContain('--db-dialect');
     expect(help).toContain('--template-tag');
+    expect(help).toContain('--hub');
+    expect(help).toContain('--app');
     expect(help).toContain('default');
     expect(help).toContain('--[no-]install');
     expect(help).toContain('https://npm.nocobase.ai');
+    expect(help).toContain('uses SQLite when --db-dialect is omitted');
     expect(help).toContain('create-app crm');
+    expect(help).toContain(
+      'create-app crm --hub=https://hub.example.com/hub --app=sales',
+    );
   });
 });

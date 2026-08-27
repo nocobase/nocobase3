@@ -108,8 +108,8 @@ export class LocalOperationError extends Error {
 }
 
 export function resolveCliRoot(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env.NB3_CLI_ROOT?.trim();
-  return path.resolve(override || path.join(os.homedir(), '.nb3'));
+  const override = env.NOCOBASE_CLI_ROOT?.trim() || env.NB3_CLI_ROOT?.trim();
+  return path.resolve(override || path.join(os.homedir(), '.nocobase'));
 }
 
 export async function createOperation(

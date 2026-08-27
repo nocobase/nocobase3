@@ -1,30 +1,70 @@
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  access,
+  lstat,
+  mkdir,
+  readFile,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { APP_STATE_DIR, type AppConfig } from './scaffold.ts';
 
 export interface AppProject {
-  /** Root of the app, i.e. the directory holding `.nb3/`. */
+  /** Root of the app, i.e. the directory holding `.nocobase/`. */
   directory: string;
   config: AppConfig;
+  /** Existing legacy projects keep their `.nb3` state until the next explicit migration. */
+  stateDirectory?: string;
 }
 
-function configPath(directory: string): string {
-  return path.join(directory, APP_STATE_DIR, 'config.json');
+async function readConfig(
+  directory: string,
+): Promise<{ config: AppConfig; stateDirectory: string } | undefined> {
+  for (const stateDirectory of [APP_STATE_DIR, '.nb3']) {
+    try {
+      return {
+        config: JSON.parse(
+          await readFile(
+            path.join(directory, stateDirectory, 'config.json'),
+            'utf8',
+          ),
+        ) as AppConfig,
+        stateDirectory,
+      };
+    } catch {
+      // Try the compatibility directory next.
+    }
+  }
+  return undefined;
 }
 
-async function readConfig(directory: string): Promise<AppConfig | undefined> {
+async function readUnlinkedApp(
+  directory: string,
+): Promise<AppConfig | undefined> {
   try {
-    return JSON.parse(
-      await readFile(configPath(directory), 'utf8'),
-    ) as AppConfig;
+    const manifest = JSON.parse(
+      await readFile(path.join(directory, 'package.json'), 'utf8'),
+    ) as {
+      name?: unknown;
+      nocobase?: { plugins?: unknown };
+    };
+    if (
+      typeof manifest.name !== 'string' ||
+      !manifest.nocobase ||
+      typeof manifest.nocobase.plugins !== 'object' ||
+      manifest.nocobase.plugins === null
+    ) {
+      return undefined;
+    }
+    return { name: manifest.name };
   } catch {
     return undefined;
   }
 }
 
 /**
- * Walks up from `startDirectory` looking for the `.nb3/` an app carries, so the app commands work from anywhere inside
- * a project rather than only at its root — the same way git and package managers behave.
+ * Walks up from `startDirectory` looking for local app state or an application manifest, so scripts also work before
+ * the first Hub association.
  */
 export async function findAppProject(
   startDirectory: string,
@@ -32,10 +72,11 @@ export async function findAppProject(
   let directory = path.resolve(startDirectory);
 
   for (;;) {
-    const config = await readConfig(directory);
+    const stored = await readConfig(directory);
+    const config = stored?.config ?? (await readUnlinkedApp(directory));
 
     if (config) {
-      return { config, directory };
+      return { config, directory, stateDirectory: stored?.stateDirectory };
     }
 
     const parent = path.dirname(directory);
@@ -52,7 +93,7 @@ export function formatMissingAppMessage(startDirectory: string): string {
   return [
     `No app found in "${startDirectory}" or any directory above it.`,
     `An app directory contains a ${APP_STATE_DIR}/config.json file.`,
-    'Run this from inside an app, pass --dir, or create one with `nb3 app create <name>`.',
+    'Run this from inside an app, pass --dir, or create one with `pnpm create @nocobase/app <name>`.',
   ].join('\n');
 }
 
@@ -79,24 +120,39 @@ export async function writeAppConfig(
   project: AppProject,
   config: AppConfig,
 ): Promise<void> {
+  const stateDirectory =
+    project.stateDirectory ?? (await hasStateDirectory(project.directory));
+  await mkdir(path.join(project.directory, stateDirectory), {
+    recursive: true,
+  });
   await writeFile(
-    configPath(project.directory),
+    path.join(project.directory, stateDirectory, 'config.json'),
     `${JSON.stringify(config, null, 2)}\n`,
     'utf8',
   );
+  project.stateDirectory = stateDirectory;
 }
 
 /**
- * Records the remote Hub identity in the existing `.nb3/config.json` format used by every app command. The file is
+ * Records the remote Hub identity in `.nocobase/config.json`. The file is
  * local working-copy state, so it is also excluded through Git's per-clone exclude file rather than committed.
  */
 export async function writePulledAppConfig(
   directory: string,
-  config: Pick<AppConfig, 'applicationId' | 'hub' | 'name' | 'slug'>,
+  config: Pick<
+    AppConfig,
+    | 'applicationId'
+    | 'hub'
+    | 'name'
+    | 'repositoryMode'
+    | 'slug'
+    | 'sourceCommit'
+  >,
 ): Promise<void> {
   const project: AppProject = {
     directory: path.resolve(directory),
     config: { ...config },
+    stateDirectory: APP_STATE_DIR,
   };
   await mkdir(path.join(project.directory, APP_STATE_DIR), { recursive: true });
   await writeAppConfig(project, project.config);
@@ -104,6 +160,12 @@ export async function writePulledAppConfig(
 }
 
 async function excludeAppStateFromGit(directory: string): Promise<void> {
+  try {
+    if (!(await lstat(path.join(directory, '.git'))).isDirectory()) return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
   const excludePath = path.join(directory, '.git', 'info', 'exclude');
   await mkdir(path.dirname(excludePath), { recursive: true });
   let existing = '';
@@ -112,8 +174,24 @@ async function excludeAppStateFromGit(directory: string): Promise<void> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
-  const rule = `/${APP_STATE_DIR}/`;
-  if (existing.split(/\r?\n/).includes(rule)) return;
+  const rules = [`/${APP_STATE_DIR}/`, '/.nb3/'];
+  const lines = new Set(existing.split(/\r?\n/));
+  const missing = rules.filter((rule) => !lines.has(rule));
+  if (missing.length === 0) return;
   const prefix = existing && !existing.endsWith('\n') ? '\n' : '';
-  await appendFile(excludePath, `${prefix}${rule}\n`, 'utf8');
+  await appendFile(excludePath, `${prefix}${missing.join('\n')}\n`, 'utf8');
+}
+
+async function hasStateDirectory(directory: string): Promise<string> {
+  try {
+    await access(path.join(directory, APP_STATE_DIR));
+    return APP_STATE_DIR;
+  } catch {
+    try {
+      await access(path.join(directory, '.nb3'));
+      return '.nb3';
+    } catch {
+      return APP_STATE_DIR;
+    }
+  }
 }

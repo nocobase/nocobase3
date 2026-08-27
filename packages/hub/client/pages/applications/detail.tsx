@@ -1688,72 +1688,60 @@ Expected source repository: {{cloneUrl}}
 Default branch: {{branch}}
 Current Hub head: {{headCommit}}
 
-Use the nb3 CLI and follow these steps. Do not clone with git directly, do not request or expose a password or access token, and do not discard any existing local changes.
+Use the application-local pnpm scripts and follow these steps. Do not clone the Hub repository with git directly, do not request or expose a password or access token, and do not discard any existing local changes.
 
-1. Check the local prerequisites. Node.js 24 or later is required.
+1. Check the local prerequisites. Node.js 24 or later and pnpm 11 or later are required.
 
 node --version
-nb3 --version
+pnpm --version
 
-If nb3 is not installed, install it and check the version again:
+2. Use ~/.nocobase/hub/apps/{{slug}} as the local workspace. If that directory does not exist, pull the latest Hub-managed source and initialize the development environment with:
 
-npm install -g @nocobase/nb3-cli
-nb3 --version
+pnpm create @nocobase/app ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --app {{slug}}
 
-2. Authorize this computer to read and publish this application. Run the following command and ask me to approve the browser authorization page if it opens:
+This command initializes only an empty destination, writes local database and environment configuration, and installs dependencies. If Device Authorization opens a browser page, ask me to approve it and then let the command continue.
 
-nb3 hub login --hub {{hubUrl}} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive
-
-3. Use ~/.nocobase/hub/apps/{{slug}} as the local workspace for this application. If that directory does not exist, pull the Hub-managed source with:
-
-nb3 app pull {{slug}} ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --non-interactive
-
-If ~/.nocobase/hub/apps/{{slug}} already exists, do not overwrite it and do not run the pull command against that non-empty directory. Inspect it first:
-
-nb3 app info --dir ~/.nocobase/hub/apps/{{slug}} --json
-git -C ~/.nocobase/hub/apps/{{slug}} status --short
-git -C ~/.nocobase/hub/apps/{{slug}} rev-parse HEAD
-
-Reuse it only when it is the same Hub application. Treat local changes or commits as user work: understand and preserve them before continuing. If the clean local HEAD does not equal the current Hub head shown above, pull a fresh copy into a different empty directory instead of overwriting or manually synchronizing the existing directory. For example, after choosing an unused path:
-
-nb3 app pull {{slug}} ~/.nocobase/hub/apps/{{slug}}-fresh --hub {{hubUrl}} --non-interactive
-
-If the existing directory is a different project or cannot be reused safely, choose another empty destination. Substitute the directory you actually use in all remaining commands.
-
-4. Enter the application directory, install dependencies, and start the development server:
+If the workspace already exists, do not overwrite it or run the create command against it. Enter it, confirm that it belongs to this Hub application, preserve every local change, and then pull the latest source snapshot:
 
 cd ~/.nocobase/hub/apps/{{slug}}
-pnpm install
-nb3 app dev
+pnpm run status --json
+pnpm run pull --non-interactive
 
-Keep the development server running while making the requested changes. Record the local URL printed by the command and verify the relevant user flows in a browser.
+If pull reports that both local and Hub source changed, stop and preserve the local work. Do not force an overwrite; report the conflict so it can be resolved deliberately.
 
-5. Implement only the requested application changes. Run focused tests while developing. Before publishing, stop the development server if needed and run the complete project checks:
+3. Enter the application directory and start the development server:
+
+cd ~/.nocobase/hub/apps/{{slug}}
+pnpm run dev
+
+Keep the development server running while making the requested changes. Record the local URL and verify the relevant user flows in a browser.
+
+4. Implement only the requested application changes. Run focused tests while developing. Before sending anything to Hub, stop the development server if needed and run the complete project checks:
 
 pnpm check
 
 Fix any failure instead of skipping or weakening checks.
 
-6. Review and commit only the intended source changes. Use a concise English Conventional Commit message that describes the actual work:
+5. Push the finished source snapshot to Hub. This excludes dependencies, build output, runtime data, secrets, and local Hub state:
 
-git status --short
-git diff --check
-git add <changed-files-replace-with-the-actual-paths>
-git commit -m "feat(app): <summary-replace-with-the-actual-change>"
+pnpm run push --non-interactive --json
 
-The worktree must be clean after the commit. Do not run git push manually; nb3 app publish pushes the committed source to the Hub repository before it builds the same commit.
+If Hub source advanced, the command must reject the push. Pull and resolve the conflict instead of forcing an overwrite.
 
-7. Validate the publish plan without changing Hub state:
+6. Choose only the result I requested:
 
-nb3 app publish --bump patch --hub {{hubUrl}} --dry-run --non-interactive --json
+- To create a verified Release without deploying it, validate and then release:
 
-If the dry run succeeds, publish the new Release:
+pnpm run release --bump patch --dry-run --non-interactive --json
+pnpm run release --bump patch --non-interactive --json
 
-nb3 app publish --bump patch --hub {{hubUrl}} --non-interactive --json
+- To deploy the current source, do not create a separate Release first. Run the complete source-to-runtime workflow:
 
-Do not add --deploy unless I explicitly request deployment. If a command reports missing or expired authorization, run the exact nb3 hub login command printed by the CLI and ask me to approve it. If publishing is interrupted, resume with the --operation-id command printed by the CLI instead of starting a duplicate operation.
+pnpm run deploy --non-interactive --json
 
-8. Read the successful publish command's JSON output and report the source commit, Release version, Release ID, and all verification results. Do not request deployment or Runtime permissions just to inspect status.`,
+The deploy script pushes the source, creates the next patch Release, and deploys it. Do not deploy unless I explicitly requested deployment. If Device Authorization is required, ask me to approve the browser page. If a Release or Deployment is interrupted, resume with the --operation-id command printed by the script instead of starting a duplicate operation.
+
+7. Report the synchronized source commit and every requested Release or Deployment ID, version, status, URL, and verification result.`,
     {
       branch: repository.defaultBranch,
       headCommit: repository.headCommit ?? 'none',

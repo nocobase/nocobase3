@@ -203,7 +203,9 @@ export default class AppCreate extends Command {
             applicationId: application.id,
             hub,
             name: application.name,
+            repositoryMode: 'clone',
             slug: application.slug,
+            sourceCommit: repository.headCommit,
           });
           await updateOperation(operationId, (current) => ({
             ...current,

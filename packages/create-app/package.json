@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
+    "@nocobase/nb3-cli": "workspace:^",
     "@oclif/core": "catalog:"
   },
   "devDependencies": {

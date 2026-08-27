@@ -88,21 +88,23 @@ export default class AppStatus extends Command {
       this.log(`recent_releases: ${result.releases.length}`);
       this.log(`recent_deployments: ${result.deployments.length}`);
     } catch (error) {
+      const invocation =
+        this.config.bin === 'pnpm run'
+          ? ['pnpm', 'run', 'status']
+          : ['nb3', 'app', 'status'];
       failHubCommand(
         this,
         error,
         flags.json,
         hub
           ? formatShellCommand([
-              'nb3',
-              'app',
-              'status',
+              ...invocation,
               '--hub',
               hub,
               ...(flags.app ? ['--app', flags.app] : []),
               '--json',
             ])
-          : 'nb3 app status --hub <hub-url> --app <slug> --json',
+          : `${invocation.join(' ')} --hub <hub-url> --app <slug> --json`,
       );
     }
   }

@@ -54,9 +54,13 @@ const FALLBACK_GITIGNORE = [
   '',
   '# Local application state.',
   '/storage/',
+  '/.nocobase/',
+  '/.nb3/',
   '*.log',
   '',
 ].join('\n');
+
+const HUB_STATE_GITIGNORE_ENTRIES = ['/.nocobase/', '/.nb3/'];
 
 /**
  * Ensures the generated project has a `.gitignore`.
@@ -87,6 +91,49 @@ async function restoreGitignore(directory: string): Promise<void> {
   } catch {
     // The file already exists, which is the outcome this function is for.
   }
+}
+
+/**
+ * Prepares source pulled from Hub without rewriting its application identity or version.
+ *
+ * Unlike template scaffolding, a Hub snapshot is already an application. Changing its name or publish metadata here
+ * would make a fresh working copy differ from the authoritative source before the developer edits anything.
+ */
+export async function preparePulledSource(directory: string): Promise<void> {
+  await restoreGitignore(directory);
+  await ensureGitignoreEntries(directory, HUB_STATE_GITIGNORE_ENTRIES);
+
+  const manifestPath = path.join(directory, 'package.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<
+    string,
+    unknown
+  >;
+  if (manifest.packageManager !== undefined) return;
+
+  manifest.packageManager = REQUIRED_PACKAGE_MANAGER;
+  await writeFile(
+    manifestPath,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    'utf8',
+  );
+}
+
+async function ensureGitignoreEntries(
+  directory: string,
+  entries: string[],
+): Promise<void> {
+  const gitignorePath = path.join(directory, '.gitignore');
+  const existing = await readFile(gitignorePath, 'utf8');
+  const existingLines = new Set(existing.split(/\r?\n/u));
+  const missing = entries.filter((entry) => !existingLines.has(entry));
+  if (missing.length === 0) return;
+
+  const separator = existing === '' || existing.endsWith('\n') ? '' : '\n';
+  await writeFile(
+    gitignorePath,
+    `${existing}${separator}${missing.join('\n')}\n`,
+    'utf8',
+  );
 }
 
 export interface ScaffoldOptions {

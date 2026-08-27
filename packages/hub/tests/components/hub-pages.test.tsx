@@ -1229,7 +1229,7 @@ describe('Hub application pages', () => {
     );
   });
 
-  it('shows an executable nb3 workflow in the development instruction', async () => {
+  it('shows an executable APP script workflow in the development instruction', async () => {
     const capabilities: HubCapabilities = {
       global: [
         { resource: 'hub.app', actions: ['read'] },
@@ -1267,47 +1267,29 @@ describe('Hub application pages', () => {
     const developmentInstruction = await screen.findByText(
       (_, element) =>
         element?.tagName === 'PRE' &&
-        element.textContent?.includes('nb3 hub login') === true,
+        element.textContent?.includes('pnpm create @nocobase/app') === true,
     );
     const hubUrl = new URL('/hub', window.location.origin).toString();
     expect(developmentInstruction).toHaveTextContent(
-      'npm install -g @nocobase/nb3-cli',
-    );
-    expect(developmentInstruction).toHaveTextContent(
-      `nb3 hub login --hub ${hubUrl} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive`,
-    );
-    expect(developmentInstruction).toHaveTextContent(
-      `nb3 app pull inventory ~/.nocobase/hub/apps/inventory --hub ${hubUrl} --non-interactive`,
+      `pnpm create @nocobase/app ~/.nocobase/hub/apps/inventory --hub ${hubUrl} --app inventory`,
     );
     expect(developmentInstruction).toHaveTextContent('Default branch: main');
     expect(developmentInstruction).toHaveTextContent(
       'Current Hub head: abc123',
     );
     expect(developmentInstruction).toHaveTextContent(
-      `nb3 app pull inventory ~/.nocobase/hub/apps/inventory-fresh --hub ${hubUrl} --non-interactive`,
-    );
-    expect(developmentInstruction).toHaveTextContent(
-      'nb3 app info --dir ~/.nocobase/hub/apps/inventory --json',
-    );
-    expect(developmentInstruction).toHaveTextContent(
-      'git -C ~/.nocobase/hub/apps/inventory status --short',
-    );
-    expect(developmentInstruction).toHaveTextContent(
       'cd ~/.nocobase/hub/apps/inventory',
     );
     expect(developmentInstruction).not.toHaveTextContent('./inventory');
-    expect(developmentInstruction).toHaveTextContent('pnpm install');
-    expect(developmentInstruction).toHaveTextContent('nb3 app dev');
+    expect(developmentInstruction).toHaveTextContent('pnpm run pull');
+    expect(developmentInstruction).toHaveTextContent('pnpm run dev');
     expect(developmentInstruction).toHaveTextContent('pnpm check');
+    expect(developmentInstruction).toHaveTextContent('pnpm run push');
     expect(developmentInstruction).toHaveTextContent(
-      `nb3 app publish --bump patch --hub ${hubUrl} --dry-run --non-interactive --json`,
+      'pnpm run release --bump patch',
     );
-    expect(developmentInstruction).toHaveTextContent(
-      `nb3 app publish --bump patch --hub ${hubUrl} --non-interactive --json`,
-    );
-    expect(developmentInstruction).not.toHaveTextContent(
-      '--scope runtime:read',
-    );
+    expect(developmentInstruction).toHaveTextContent('pnpm run deploy');
+    expect(developmentInstruction).not.toHaveTextContent('nb3 ');
   });
 
   it('does not request or misreport resources outside an app-only scope', async () => {

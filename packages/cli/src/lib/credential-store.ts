@@ -37,7 +37,9 @@ export interface CredentialStorage {
 
 export function defaultCliRoot(): string {
   return path.resolve(
-    process.env.NB3_CLI_ROOT?.trim() || path.join(os.homedir(), '.nb3'),
+    process.env.NOCOBASE_CLI_ROOT?.trim() ||
+      process.env.NB3_CLI_ROOT?.trim() ||
+      path.join(os.homedir(), '.nocobase'),
   );
 }
 

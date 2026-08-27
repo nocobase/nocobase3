@@ -1,145 +1,142 @@
 ---
-title: 'nb3 app'
-description: '使用 nb3 创建、拉取、开发、发布和部署 NocoBase 3 APP。'
-keywords: 'nb3,CLI,APP,Hub,NocoBase 3'
+title: 'APP 管理脚本'
+description: '使用 APP 项目自带的 pnpm scripts 同步源码、创建 Release、部署和查看状态。'
+keywords: 'pnpm scripts,APP,Hub,源码同步,Release,部署,NocoBase 3'
 ---
 
-# nb3 app
+# APP 管理脚本
 
-`nb3 app` 用来创建、开发、发布和部署业务 APP。APP 源码可以放在开发者电脑的任意目录，Hub 保存远程 Git 仓库、Release 和部署状态。
+NocoBase APP 创建后，项目的 `package.json` 已经带上连接 Hub 所需的脚本。日常开发不需要全局安装额外工具。
 
-## 命令
+`nb3` 可执行入口仍然保留，已有的 `nb3 app` 和 `nb3 hub` 命令可以继续使用。下面介绍的是 APP 项目内的新脚本入口。
+
+## 可用脚本
 
 ```text
-nb3 app create    创建本地 APP，或在 Hub 中创建后 clone 到本地
-nb3 app pull      clone Hub 中已有 APP 的源码
-nb3 app dev       启动本地开发环境
-nb3 app publish   push 源码并创建 Release，可选直接部署
-nb3 app deploy    部署、回滚或重新部署已有 Release
-nb3 app status    查看 Repository、Release、Deployment 和 Runtime 状态
-nb3 app list      查看有权访问的 APP
-nb3 app info      查看本地 APP 信息
-nb3 app config    查看或修改本地配置
-nb3 app destroy   删除本地 APP 目录
+pnpm run pull         拉取 Hub 的最新源码快照
+pnpm run push         把当前源码快照推送到 Hub
+pnpm run release      同步源码并创建 Release，不部署
+pnpm run deploy       完整部署，或操作一个已有 Release
+pnpm run status       查看 Repository、Release、Deployment 和 Runtime 状态
+pnpm run hub:login    登录 Hub 并保存 Agent credential
+pnpm run hub:logout   撤销并删除本地 credential
 ```
 
-每条命令都有独立的 `--help` 和可复制的 Examples：
+每个脚本都有独立的 `--help` 和可复制的 Examples：
 
 ```bash
-nb3 app publish --help
-nb3 app deploy --help
+pnpm run pull --help
+pnpm run release --help
+pnpm run deploy --help
 ```
+
+## 获取 Hub 中已有的 APP
+
+APP scripts 存放在 APP 自己的 `package.json` 中，所以首次获取源码时使用 `pnpm create`。下面的命令把 Hub 中 `sales` 的最新源码快照下载到本地 `crm` 目录：
+
+```bash
+pnpm create @nocobase/app crm \
+  --hub https://hub.example.com/hub \
+  --app sales
+cd crm
+```
+
+命令会记录 Hub URL、APP ID、slug 和最近一次同步的源码版本，并默认为本地开发配置 SQLite。需要其他数据库时可以增加 `--db-dialect postgres` 或 `--db-dialect mysql`。依赖安装完成后，可以直接启动本地开发环境：
+
+```bash
+pnpm dev
+```
+
+## 拉取和推送源码
+
+在已有工作副本中拉取 Hub 的最新源码：
+
+```bash
+pnpm run pull
+```
+
+开发完成后，把当前源码推送回 Hub：
+
+```bash
+pnpm run push
+```
+
+Hub 同步的是源码快照，不是本地 Git 仓库。快照不会包含：
+
+- 本地 Git 历史
+- `node_modules` 等依赖
+- `dist`、测试报告等构建产物
+- `.env`、`.npmrc`、credential 等 secret
+- 本地 Hub 关联信息和运行数据
+
+`pull` 只会在能够安全更新时写入本地目录。如果本地源码已经修改，同时 Hub 也有更新，命令会停止，避免覆盖本地修改。`push` 发现 Hub 已经出现更新时同样会停止，需要先处理远端更新。
 
 ## 登录 Hub
 
-首次连接 Hub 时，在浏览器中批准设备授权：
+首次连接 Hub 时，在 APP 源码目录中执行：
 
 ```bash
-nb3 hub login --hub http://127.0.0.1:13000/hub
+pnpm run hub:login --hub http://127.0.0.1:13000/hub
 ```
 
-CLI 会把 Agent credential 保存在本机。APP 命令发现 scope 不足时，会返回一条可复制的 `nb3 hub login` 重新授权命令，不需要把密钥复制到命令行。
+脚本会显示浏览器授权地址和一次性 code。批准后，credential 保存在本机，不会写入 APP 源码。如果命令遇到 scope 不足，会返回一条可以直接复制的 `pnpm run hub:login` 重新授权命令。
 
-## 创建 APP
-
-只在本地创建源码：
+不再使用某个 Hub 时，可以撤销 credential：
 
 ```bash
-nb3 app create crm
-cd crm
-pnpm install
-nb3 app dev
+pnpm run hub:logout --hub http://127.0.0.1:13000/hub
 ```
 
-模板通过 npm 下载，只会拉取模板包，不会 clone 整个 NocoBase 仓库。也可以指定模板来源：
+## 创建 Release
+
+`release` 会先把当前源码快照同步到 Hub，然后构建、上传并创建一个不可变 Release。它只创建 Release，不会部署：
 
 ```bash
-nb3 app create crm --template @nocobase/app-template-default@beta
-nb3 app create crm --template ./packages/app-template-default
-nb3 app create crm --registry https://registry.npmmirror.com
+pnpm run release --bump patch --non-interactive
 ```
 
-在 Hub 中创建 APP，并把 Hub 初始化的默认模板源码 clone 到本地：
+也可以指定准确版本：
 
 ```bash
-nb3 app create crm \
-  --display-name "Sales CRM" \
-  --hub http://127.0.0.1:13000/hub \
-  --non-interactive
-```
-
-Hub 是源码的远程权威入口，本地目录只是工作副本。如果 clone 在远程 APP 创建后失败，CLI 会返回 APP ID 和可重试的 `nb3 app pull` 命令，不会自动归档已经创建的 APP。
-
-## 拉取已有 APP
-
-通过 APP slug clone Hub 中的源码：
-
-```bash
-nb3 app pull crm ./crm \
-  --hub http://127.0.0.1:13000/hub \
-  --non-interactive
-cd crm
-pnpm install
-nb3 app dev
-```
-
-CLI 会在 `.nb3/config.json` 中记录 Hub URL、APP ID 和 slug。后续发布、部署和查看状态时可以直接复用。
-
-## 本地开发
-
-```bash
-nb3 app dev
-```
-
-命令会用项目自身的包管理器运行 `dev` 脚本。可以从 APP 的任意子目录执行，也可以调整开发服务地址：
-
-```bash
-nb3 app dev --port 3100
-nb3 app dev --host 0.0.0.0
-```
-
-## 发布 Release
-
-开发完成后，先提交源码，确保 Git 工作区没有未提交修改，再发布一个 Release：
-
-```bash
-nb3 app publish --bump patch --non-interactive
-```
-
-也可以指定准确版本，并在 Release 验证成功后直接部署：
-
-```bash
-nb3 app publish \
+pnpm run release \
   --version 1.4.0 \
-  --deploy \
   --non-interactive \
   --json
 ```
 
-`--version` 和 `--bump patch|minor|major` 二选一。`--dry-run` 只验证发布计划，不 push 源码、不构建、不上传。发生中断后，可以使用错误输出中的 `--operation-id` 恢复同一个操作。
+`--version` 和 `--bump patch|minor|major` 二选一。`--dry-run` 只验证发布计划，不推送源码、不构建、不上传。如果操作中断，使用错误输出中的 `--operation-id` 恢复同一个操作。
 
-## 部署、回滚和重新部署
+## 部署 APP
+
+不带 Release 参数的 `deploy` 是从本地源码到运行状态的完整入口：
+
+```bash
+pnpm run deploy --hub https://hub.example.com/hub
+```
+
+它会依次完成：
+
+1. 首次使用时关联已有 APP，或在 Hub 中创建 APP
+2. 推送当前源码快照
+3. 创建下一个 patch Release
+4. 部署新 Release，并等待 Deployment 进入终态
+
+完成首次关联后，可以直接执行：
+
+```bash
+pnpm run deploy
+```
 
 部署一个已有 Release：
 
 ```bash
-nb3 app deploy --release 1.4.0 --non-interactive
-```
-
-在 APP 目录外执行时，需要明确指定目标 APP 和 Hub：
-
-```bash
-nb3 app deploy \
-  --app crm \
-  --release 1.4.0 \
-  --hub http://127.0.0.1:13000/hub \
-  --non-interactive
+pnpm run deploy --release 1.4.0 --non-interactive
 ```
 
 回滚是高风险操作。自动化环境必须显式确认：
 
 ```bash
-nb3 app deploy \
+pnpm run deploy \
   --release 1.3.0 \
   --rollback \
   --non-interactive \
@@ -149,52 +146,48 @@ nb3 app deploy \
 重新部署当前活动 Release：
 
 ```bash
-nb3 app deploy --redeploy --non-interactive
+pnpm run deploy --redeploy --non-interactive
 ```
 
 `--dry-run` 只校验权限、APP 和目标 Release，不创建 Deployment。
 
-## 查看 APP
+## 查看 APP 状态
 
-查看一个 APP 的完整状态：
-
-```bash
-nb3 app status
-nb3 app status --app crm --hub http://127.0.0.1:13000/hub --json
-```
-
-查看当前凭据有权访问的 APP，并使用服务端分页：
+在已经记录 Hub 信息的 APP 目录中，可以直接查看状态：
 
 ```bash
-nb3 app list --hub http://127.0.0.1:13000/hub
-nb3 app list --hub http://127.0.0.1:13000/hub --limit 20 --offset 20 --json
+pnpm run status
+pnpm run status --json
 ```
 
-## 本地信息和配置
+如果本地还没有记录 Hub 和 APP，可以显式传入：
 
 ```bash
-nb3 app info
-nb3 app info --json
-nb3 app config
-nb3 app config hub
-nb3 app config hub http://127.0.0.1:13000/hub
+pnpm run status \
+  --app crm \
+  --hub http://127.0.0.1:13000/hub \
+  --json
 ```
 
-可修改的键是 `hub` 和 `name`。模板来源等元数据由 CLI 维护。
+## 本地状态
 
-## 删除本地目录
-
-```bash
-nb3 app destroy ./crm
-```
-
-命令只删除本地 APP 根目录，不会删除 Hub 中的 APP。它会要求输入 APP 名称确认；自动化环境必须显式使用 `--yes`。
+- APP 与 Hub 的关联信息保存在项目的 `.nocobase/config.json`
+- credential 和可恢复操作记录保存在用户目录的 `~/.nocobase`
+- 源码快照不会包含这两类本地状态
 
 ## 给 Coding Agent 的常用指令
 
+首次获取已有 APP：
+
 ```text
-请使用 nb3 开发 Hub http://127.0.0.1:13000/hub 中的 crm APP。
-如果尚未登录，先执行 nb3 hub login --hub http://127.0.0.1:13000/hub；
-然后执行 nb3 app pull crm ./crm --hub http://127.0.0.1:13000/hub，安装依赖并运行 nb3 app dev。
-开发完成并提交源码后，执行 nb3 app publish --bump patch --deploy --non-interactive。
+请执行 pnpm create @nocobase/app crm --hub https://hub.example.com/hub --app sales，
+然后进入 crm 目录并运行 pnpm dev。开发前先执行 pnpm run pull；
+开发完成后执行 pnpm run push。需要发布但不部署时执行 pnpm run release --bump patch；
+需要直接部署时执行 pnpm run deploy。
 ```
+
+## 相关链接
+
+- [Quickstart](../quickstart.md) — 创建 APP、本地开发和部署的基本流程
+- [Hub 应用管理 API](../design/hub-application-management-api.md) — APP scripts 调用的 Hub API 契约
+- [连接 Hub](./nb3-hub.md) — Device Authorization 和 credential 的使用方式

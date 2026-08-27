@@ -740,72 +740,60 @@ Hub 地址：{{hubUrl}}
 默认分支：{{branch}}
 Hub 当前提交：{{headCommit}}
 
-请使用 nb3 CLI 按以下步骤执行。不要直接使用 git clone，不要索取或暴露密码、访问令牌，不要丢弃任何现有的本地修改。
+请使用 APP 内的 pnpm 脚本按以下步骤执行。不要直接使用 git clone 拉取 Hub 仓库，不要索取或暴露密码、访问令牌，也不要丢弃任何现有的本地修改。
 
-1. 检查本地环境。Node.js 需要 24 或更高版本。
+1. 检查本地环境。Node.js 需要 24 或更高版本，pnpm 需要 11 或更高版本。
 
 node --version
-nb3 --version
+pnpm --version
 
-如果尚未安装 nb3，请先安装，然后再次检查版本：
+2. 使用 ~/.nocobase/hub/apps/{{slug}} 作为本地工作区。如果该目录不存在，使用下面的命令拉取 Hub 中的最新源码并初始化开发环境：
 
-npm install -g @nocobase/nb3-cli
-nb3 --version
+pnpm create @nocobase/app ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --app {{slug}}
 
-2. 为当前电脑授权，以便读取并发布此应用。执行下面的命令；如果打开浏览器授权页面，请让我批准：
+该命令只会初始化空目录，同时写入本地数据库与环境配置并安装依赖。如果 Device Authorization 打开浏览器授权页，请让我批准，然后让命令继续执行。
 
-nb3 hub login --hub {{hubUrl}} --scope apps:read --scope source:read --scope source:write --scope releases:read --scope releases:publish --non-interactive
-
-3. 使用 ~/.nocobase/hub/apps/{{slug}} 作为此应用的本地工作区。如果该目录不存在，请使用下面的命令拉取 Hub 管理的源码：
-
-nb3 app pull {{slug}} ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --non-interactive
-
-如果 ~/.nocobase/hub/apps/{{slug}} 已经存在，不要覆盖它，也不要对非空目录执行 pull。先检查：
-
-nb3 app info --dir ~/.nocobase/hub/apps/{{slug}} --json
-git -C ~/.nocobase/hub/apps/{{slug}} status --short
-git -C ~/.nocobase/hub/apps/{{slug}} rev-parse HEAD
-
-只有确认它就是此 Hub 应用时才复用该目录。本地修改和本地提交都属于用户工作，继续之前必须理解并保留。如果干净工作区的本地 HEAD 与上面显示的 Hub 当前提交不同，请把最新源码拉取到另一个空目录，不要覆盖或手动同步现有目录。例如，选择一个尚未使用的路径后执行：
-
-nb3 app pull {{slug}} ~/.nocobase/hub/apps/{{slug}}-fresh --hub {{hubUrl}} --non-interactive
-
-如果现有目录是其他项目，或者无法安全复用，请选择另一个空目录。后续所有命令都要替换成实际使用的目录。
-
-4. 进入应用目录、安装依赖并启动开发服务：
+如果工作区已经存在，不要覆盖它，也不要对它执行 create 命令。进入目录，确认它属于当前 Hub APP，保留所有本地修改，然后拉取最新源码快照：
 
 cd ~/.nocobase/hub/apps/{{slug}}
-pnpm install
-nb3 app dev
+pnpm run status --json
+pnpm run pull --non-interactive
 
-修改代码时保持开发服务运行，记录命令输出的本地访问地址，并在浏览器中验证相关用户流程。
+如果 pull 提示本地源码与 Hub 源码都发生了变化，请停止并保留本地工作，不要强制覆盖；报告冲突，等待明确处理。
 
-5. 只实现我提出的应用修改。开发过程中运行相关的专项测试。发布前，如有必要先停止开发服务，然后执行完整检查：
+3. 进入 APP 目录并启动开发服务：
+
+cd ~/.nocobase/hub/apps/{{slug}}
+pnpm run dev
+
+修改代码时保持开发服务运行，记录本地访问地址，并在浏览器中验证相关用户流程。
+
+4. 只实现我提出的 APP 修改。开发过程中运行相关专项测试。向 Hub 发送任何内容之前，如有必要先停止开发服务，然后执行完整检查：
 
 pnpm check
 
 遇到失败必须修复，不要跳过或削弱检查。
 
-6. 只审查并提交本次实际修改的源码。使用能够描述实际工作的简短英文 Conventional Commit 提交信息：
+5. 将完成的源码快照推送到 Hub。依赖、构建产物、运行数据、密钥和本地 Hub 状态不会被推送：
 
-git status --short
-git diff --check
-git add <changed-files-replace-with-the-actual-paths>
-git commit -m "feat(app): <summary-replace-with-the-actual-change>"
+pnpm run push --non-interactive --json
 
-提交后工作区必须干净。不要手动执行 git push；nb3 app publish 会先把已提交的源码推送到 Hub 仓库，再基于同一个提交构建。
+如果 Hub 源码已经更新，该命令必须拒绝推送。请先 pull 并解决冲突，不要强制覆盖。
 
-7. 先验证发布计划，此步骤不会改变 Hub 状态：
+6. 只执行我要求的结果：
 
-nb3 app publish --bump patch --hub {{hubUrl}} --dry-run --non-interactive --json
+- 只创建已验证的 Release、不部署时，先验证计划，再创建 Release：
 
-dry-run 成功后，发布新的 Release：
+pnpm run release --bump patch --dry-run --non-interactive --json
+pnpm run release --bump patch --non-interactive --json
 
-nb3 app publish --bump patch --hub {{hubUrl}} --non-interactive --json
+- 需要部署当前源码时，不要先单独创建 Release，直接执行完整的源码到运行时流程：
 
-除非我明确要求部署，否则不要添加 --deploy。如果命令提示授权缺失或已过期，请执行 CLI 输出的完整 nb3 hub login 命令，并让我批准授权。如果发布中断，请使用 CLI 输出的 --operation-id 命令恢复同一个操作，不要重新开始造成重复操作。
+pnpm run deploy --non-interactive --json
 
-8. 从成功的发布命令 JSON 输出中读取并报告源码提交、Release 版本、Release ID 以及所有检查结果。不要仅为了查看状态而额外申请部署或 Runtime 权限。`,
+deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。除非我明确要求，否则不要部署。如果需要 Device Authorization，请让我批准浏览器授权页。如果 Release 或 Deployment 中断，请使用脚本输出的 --operation-id 命令恢复同一操作，不要重新开始造成重复操作。
+
+7. 报告同步后的源码提交，以及所有按要求创建的 Release 或 Deployment 的 ID、版本、状态、访问地址与验证结果。`,
   'hub.repository.description':
     'Hub 保存权威源码和提交历史，本地工作区只是可随时重新创建的工作副本。',
   'hub.repository.unavailable': '源码仓库不可用',

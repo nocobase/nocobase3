@@ -40,6 +40,7 @@ export function failHubCommand(
   resources: HubCommandFailureResources = {},
 ): never {
   const details = hubCommandErrorDetails(error, fallbackHint);
+  const hint = commandHint(command, details.hint);
   if (json) {
     command.log(
       JSON.stringify({
@@ -55,7 +56,7 @@ export function failHubCommand(
           message: details.message,
           retryable: details.retryable,
           ...(details.requestId ? { requestId: details.requestId } : {}),
-          ...(details.hint ? { hint: details.hint } : {}),
+          ...(hint ? { hint } : {}),
         },
       }),
     );
@@ -65,10 +66,19 @@ export function failHubCommand(
     [
       `${details.code}: ${details.message}`,
       ...(details.requestId ? [`Request ID: ${details.requestId}`] : []),
-      ...(details.hint ? [`Next: ${details.hint}`] : []),
+      ...(hint ? [`Next: ${hint}`] : []),
     ].join('\n'),
     { exit: details.exitCode },
   );
+}
+
+function commandHint(
+  command: Command,
+  hint: string | undefined,
+): string | undefined {
+  if (!hint || command.config.bin !== 'pnpm run') return hint;
+  if (!hint.startsWith('nb3 hub login ')) return hint;
+  return `pnpm run hub:login ${hint.slice('nb3 hub login '.length)}`;
 }
 
 export function hubCommandErrorDetails(

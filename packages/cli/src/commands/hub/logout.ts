@@ -7,7 +7,7 @@ import { HubClient, normalizeHubUrl } from '../../lib/hub-client.ts';
 export default class HubLogout extends Command {
   static override summary = 'Log out of a Hub and revoke the saved credential.';
   static override description =
-    'Revokes the current Agent refresh-token family on the Hub, then removes the local nb3 credential.';
+    'Revokes the current Agent refresh-token family on the Hub, then removes the locally saved credential.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> --hub http://127.0.0.1:13000/hub',
@@ -43,7 +43,14 @@ export default class HubLogout extends Command {
       await store.remove(hub);
       this.printResult(hub, false, flags.json);
     } catch (error) {
-      failHubCommand(this, error, flags.json, `nb3 hub logout --hub ${hub}`);
+      failHubCommand(
+        this,
+        error,
+        flags.json,
+        this.config.bin === 'pnpm run'
+          ? `pnpm run hub:logout --hub ${hub}`
+          : `nb3 hub logout --hub ${hub}`,
+      );
     }
   }
 

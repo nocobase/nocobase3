@@ -16,7 +16,7 @@ import { formatShellCommand } from '../../lib/shell.ts';
 export default class AppPull extends Command {
   static override summary = 'Pull an existing app from a hub.';
   static override description =
-    'Clones an app source repository from a Hub and records its remote identity in local .nb3/config.json.';
+    'Clones an app source repository from a Hub and records its remote identity in local .nocobase/config.json.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> crm ./crm --hub http://127.0.0.1:13000/hub',
@@ -71,7 +71,9 @@ export default class AppPull extends Command {
             applicationId: application.id,
             hub,
             name: application.name,
+            repositoryMode: 'clone',
             slug: application.slug,
+            sourceCommit: repository.headCommit,
           });
           return { application, repository };
         },

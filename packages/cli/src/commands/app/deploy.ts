@@ -91,8 +91,9 @@ export default class AppDeploy extends Command {
         !flags.yes &&
         !flags['dry-run']
       ) {
+        const invocation = deploymentInvocation(this);
         throw new Error(
-          'A non-interactive rollback requires --yes. Example: nb3 app deploy --release <version> --rollback --non-interactive --yes',
+          `A non-interactive rollback requires --yes. Example: ${invocation.join(' ')} --release <version> --rollback --non-interactive --yes`,
         );
       }
       const context = await resolveRemoteApplicationContext({
@@ -164,6 +165,7 @@ export default class AppDeploy extends Command {
                 releases,
                 requestedRelease: flags.release,
                 type,
+                invocation: deploymentInvocation(this),
               });
           if (recordedReleaseId && flags.release) {
             const requestedRelease = resolveRelease(releases, flags.release);
@@ -248,6 +250,7 @@ export default class AppDeploy extends Command {
           operationId,
           journal?.resourceIds,
           journal?.parameters,
+          this.config.bin === 'pnpm run',
         ),
         operationId,
         {
@@ -322,6 +325,7 @@ function resolveDeploymentRelease(input: {
   readonly releases: readonly Release[];
   readonly requestedRelease?: string;
   readonly type: 'deploy' | 'rollback' | 'redeploy';
+  readonly invocation: readonly string[];
 }): Release {
   const reference =
     input.requestedRelease ??
@@ -332,7 +336,7 @@ function resolveDeploymentRelease(input: {
     throw new Error(
       input.type === 'redeploy'
         ? 'The application has no active Release to redeploy.'
-        : 'Specify --release <id-or-version>. Example: nb3 app deploy --release 1.4.0 --non-interactive',
+        : `Specify --release <id-or-version>. Example: ${input.invocation.join(' ')} --release 1.4.0 --non-interactive`,
     );
   }
   const release = resolveRelease(input.releases, reference);
@@ -374,8 +378,11 @@ function deployFailureHint(
   operationId: string,
   recorded: Readonly<Record<string, string>> | undefined,
   recordedParameters: Readonly<Record<string, string>> | undefined,
+  appScriptSurface: boolean,
 ): string {
-  const parts = ['nb3', 'app', 'deploy'];
+  const parts = appScriptSurface
+    ? ['pnpm', 'run', 'deploy']
+    : ['nb3', 'app', 'deploy'];
   if (flags.dir) parts.push('--dir', flags.dir);
   const application = recorded?.applicationId ?? flags.app;
   if (application) parts.push('--app', application);
@@ -393,6 +400,12 @@ function deployFailureHint(
   }
   parts.push('--operation-id', operationId, '--non-interactive');
   return formatShellCommand(parts);
+}
+
+function deploymentInvocation(command: Command): readonly string[] {
+  return command.config.bin === 'pnpm run'
+    ? ['pnpm', 'run', 'deploy']
+    : ['nb3', 'app', 'deploy'];
 }
 
 async function confirmRollback(

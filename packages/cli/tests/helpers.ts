@@ -9,14 +9,30 @@ export const packageRoot: string = path.resolve(
 );
 
 /**
- * Loads the CLI the same way `bin/run.js` does in development, by pointing oclif at the TypeScript sources rather than
- * at `dist`. Tests therefore exercise the command tree they can see in `src`, with no build step in between.
+ * Loads the legacy command implementations directly for regression coverage. They are no longer a published command
+ * surface, but the application package scripts still share selected classes from this tree.
  */
 export async function loadTestConfig(): Promise<Config> {
   const pjson = JSON.parse(
     readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
   );
   pjson.oclif.commands = './src/commands';
+  pjson.oclif.helpClass = './src/help/runtime-help.ts';
+
+  return Config.load({ pjson, root: packageRoot });
+}
+
+/**
+ * Loads the commands exposed by generated applications through their package scripts. The business logic still
+ * lives in the ordinary command classes; this separate tree controls only the public invocation shape and help text.
+ */
+export async function loadAppScriptTestConfig(): Promise<Config> {
+  const pjson = JSON.parse(
+    readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
+  );
+  pjson.oclif.bin = 'pnpm run';
+  pjson.oclif.dirname = 'nocobase-app';
+  pjson.oclif.commands = './src/app-scripts';
   pjson.oclif.helpClass = './src/help/runtime-help.ts';
 
   return Config.load({ pjson, root: packageRoot });
