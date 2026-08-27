@@ -285,12 +285,17 @@ describe('Hub application pages', () => {
       </MemoryRouter>,
     );
 
-    expect(
-      await screen.findByRole('button', { name: 'Manage Inventory' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Develop Inventory' }),
-    ).toBeInTheDocument();
+    const manageAction = await screen.findByRole('button', {
+      name: 'Manage Inventory',
+    });
+    expect(manageAction).toHaveClass('border-border');
+    expect(manageAction.querySelector('svg')).not.toBeNull();
+
+    const developAction = screen.getByRole('button', {
+      name: 'Develop Inventory',
+    });
+    expect(developAction).toHaveClass('border-border');
+    expect(developAction.querySelector('svg')).not.toBeNull();
     expect(
       screen.getByRole('button', { name: 'Restart Inventory' }),
     ).toBeInTheDocument();

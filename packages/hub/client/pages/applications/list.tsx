@@ -8,7 +8,9 @@ import {
   RefreshCw,
   Rocket,
   Search,
+  Settings2,
   Square,
+  SquareTerminal,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -786,13 +788,14 @@ function ApplicationQuickActions({
             />
           }
         >
+          <Settings2 aria-hidden='true' />
           {translate('hub.apps.manage', 'Manage')}
         </Button>
       ) : null}
       {canDevelop ? (
         <Button
           size='sm'
-          variant='ghost'
+          variant='outline'
           nativeButton={false}
           render={
             <Link
@@ -804,6 +807,7 @@ function ApplicationQuickActions({
             />
           }
         >
+          <SquareTerminal aria-hidden='true' />
           {translate('hub.apps.develop', 'Develop')}
         </Button>
       ) : null}
