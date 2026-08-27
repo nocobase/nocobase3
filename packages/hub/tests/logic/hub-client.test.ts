@@ -133,7 +133,7 @@ describe('Hub client API', () => {
 });
 
 describe('Hub route configuration', () => {
-  it('exposes the approved business routes without Registry routes', () => {
+  it('keeps Hub settings routable without exposing it in navigation', () => {
     expect(registryRoutesEnabled).toBe(false);
     expect(appRoutes.map((route) => route.path)).toEqual([
       '/apps',
@@ -160,8 +160,10 @@ describe('Hub route configuration', () => {
       { name: 'deployments', capability: 'hub.deployment' },
       { name: 'audit', capability: 'hub.auditLog' },
       { name: 'members', capability: 'hub.member' },
-      { name: 'settings', capability: 'hub.setting' },
     ]);
+    expect(appRoutes.find((route) => route.name === 'settings')?.resource).toBe(
+      undefined,
+    );
   });
 });
 

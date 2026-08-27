@@ -1,5 +1,5 @@
 import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
-import { Activity, Boxes, ScrollText, Settings, Users } from 'lucide-react';
+import { Activity, Boxes, ScrollText, Users } from 'lucide-react';
 import type { ComponentType } from 'react';
 
 import { HubCapabilityRouteGate } from '@/features/hub/provider';
@@ -116,19 +116,6 @@ export const appRoutes = defineAppRoutes([
     path: '/settings',
     lazy: () =>
       import('@/pages/settings/index').then(withCapability('hub.setting')),
-    resource: {
-      meta: {
-        label: 'Hub settings',
-        singularLabel: 'Hub setting',
-        description: 'Storage, retention, and management policies.',
-        descriptionI18nKey: 'hub.resources.settings.description',
-        i18nKey: 'hub.resources.settings.label',
-        i18nSingularKey: 'hub.resources.settings.singular',
-        icon: <Settings />,
-        priority: 50,
-        hubResource: 'hub.setting',
-      },
-    },
   },
 ]);
 
