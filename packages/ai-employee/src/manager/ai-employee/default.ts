@@ -19,7 +19,8 @@ import type {
 const DEFAULT_KNOWLEDGE_BASE = {
   topK: 3,
   score: '0.6',
-  knowledgeBaseIds: [],
+  knowledgeBaseKeys: [],
+  retrievalStrategy: 'onDemand' as const,
 };
 const DEFAULT_KNOWLEDGE_BASE_PROMPT =
   "From knowledge base:\n{knowledgeBaseData}\nanswer user's question using this information.";

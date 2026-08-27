@@ -44,7 +44,7 @@ import {
   ToolsLoader,
 } from '@nocobase/ai-employee';
 import { AIConversationsManager } from './ai-employees/ai-conversations.js';
-import { KnowledgeBaseManager } from './ai-employees/ai-knowledge-base.js';
+import { KnowledgeBaseManager } from './agent/ai-employee/ai-knowledge-base.js';
 import { AIEmployeesManager } from './ai-employees/ai-employees-manager.js';
 import { BuiltInManager } from './ai-employees/built-in-manager.js';
 import { LLMStreamCachedManager } from './ai-employees/llm-stream-manager.js';
@@ -311,20 +311,9 @@ export function createSupportingManagers(ctx: Context) {
     llmStreamCachedManager: new LLMStreamCachedManager(ctx),
     builtInManager: new BuiltInManager(ctx.i18nNamespace),
     subAgentsDispatcher: new SubAgentsDispatcher(),
-    knowledgeBaseManager: createKnowledgeBaseManager(),
+    knowledgeBaseManager: new KnowledgeBaseManager(ctx),
     workContextHandler: createWorkContextHandler(),
     documentLoaders: new DocumentLoaders(ctx),
-  };
-}
-
-export function createKnowledgeBaseManager(): any {
-  return {
-    async isEnabledKnowledgeBase(): Promise<boolean> {
-      return false;
-    },
-    async retrievePrompt(): Promise<string> {
-      return '';
-    },
   };
 }
 

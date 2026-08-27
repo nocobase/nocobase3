@@ -57,4 +57,5 @@ export type SearchOptions = {
   query: string;
   topK?: number;
   score?: string;
+  roleNames?: string[];
 };

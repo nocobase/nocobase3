@@ -6,9 +6,10 @@ export type AIEmployeeToolSetting = {
 };
 
 export type AIEmployeeKnowledgeBase = {
-  topK: number;
-  score: string;
-  knowledgeBaseIds: string[];
+  topK?: number;
+  score?: string;
+  knowledgeBaseKeys?: string[];
+  retrievalStrategy?: 'always' | 'onDemand';
 };
 
 export type AIEmployeeEntity = {

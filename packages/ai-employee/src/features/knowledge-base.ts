@@ -14,10 +14,17 @@ import {
   SearchOptions,
 } from '../runtime/types/index.js';
 
+export type KnowledgeBaseAccessOptions = Pick<
+  SearchOptions,
+  'knowledgeBaseKeys' | 'roleNames'
+>;
 export interface KnowledgeBaseFeature {
   getKnowledgeBase(knowledgeBaseKeys: string[]): Promise<KnowledgeBase[]>;
   getKnowledgeBaseGroup(
     knowledgeBaseKeys: string[],
   ): Promise<KnowledgeBaseGroup[]>;
+  getAccessibleKnowledgeBaseKeys?(
+    options: KnowledgeBaseAccessOptions,
+  ): Promise<string[]>;
   search(options: SearchOptions): Promise<DocumentSegmentedWithScore[]>;
 }

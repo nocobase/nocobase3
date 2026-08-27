@@ -132,9 +132,10 @@ export type AIEmployee = {
   dataSourceSettings?: unknown;
   knowledgeBasePrompt?: string;
   knowledgeBase?: {
-    topK: number;
-    score: string;
-    knowledgeBaseKeys: string[];
+    topK?: number;
+    score?: string;
+    knowledgeBaseKeys?: string[];
+    retrievalStrategy?: 'always' | 'onDemand';
   };
   enableKnowledgeBase: boolean;
   enabled: boolean;

@@ -10,6 +10,7 @@ import type {
 import type { DatabaseConnection } from '@nocobase/app-database';
 import type { Caching } from '@nocobase/caching';
 import type { WorkContextHandler } from './work-context/index.js';
+import type { KnowledgeBaseManager } from './agent/ai-employee/ai-knowledge-base.js';
 
 export interface ActionParams {
   values?: any;
@@ -38,7 +39,7 @@ export interface Context<TRepositories = any> {
   builtInManager: any;
   llmStreamCachedManager: any;
   subAgentsDispatcher: any;
-  knowledgeBaseManager: any;
+  knowledgeBaseManager: KnowledgeBaseManager;
   workContextHandler: WorkContextHandler;
   documentLoaders: DocumentLoaders;
   i18nNamespace?: string;
