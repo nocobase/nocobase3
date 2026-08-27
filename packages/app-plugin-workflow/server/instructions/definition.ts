@@ -3,7 +3,7 @@ export type {
   BaseNodeExpression,
   BranchingNodeExpression,
   ConfigIssue,
-  ContextSchema,
+  WorkflowInputSchema,
   JSONSchema,
   JsonObject,
   NodeResultArraySchema,
@@ -22,9 +22,9 @@ export type {
   WorkflowDefinition,
   WorkflowFlatIr,
   WorkflowFlatNode,
-  WorkflowInputDeclaration,
-  WorkflowInputOption,
-  WorkflowInputSchema,
+  WorkflowParameterDeclaration,
+  WorkflowParameterOption,
+  WorkflowParameterSchema,
   WorkflowSourceAst,
   WorkflowSourceInput,
   WorkflowNodeOptions,
@@ -196,8 +196,10 @@ export function defineWorkflow(source: WorkflowSourceInput): WorkflowSourceAst {
       ? {}
       : { description: source.description }),
     ...(source.options === undefined ? {} : { options: source.options }),
-    ...(source.inputs === undefined ? {} : { inputs: source.inputs }),
-    contextSchema: source.contextSchema ?? { type: 'object' },
+    ...(source.parameters === undefined
+      ? {}
+      : { parameters: source.parameters }),
+    inputSchema: source.inputSchema ?? { type: 'object' },
     nodes: source.nodes.map((node, index) =>
       unwrapNode(node, `workflow.nodes[${index}]`),
     ),
@@ -266,8 +268,8 @@ export function compileToFlatIr(
     title: ast.title,
     ...(ast.description === undefined ? {} : { description: ast.description }),
     ...(ast.options === undefined ? {} : { options: ast.options }),
-    ...(ast.inputs === undefined ? {} : { inputs: ast.inputs }),
-    contextSchema: ast.contextSchema,
+    ...(ast.parameters === undefined ? {} : { parameters: ast.parameters }),
+    inputSchema: ast.inputSchema,
     start: ast.nodes[0]?.key ?? null,
     nodes,
   };
@@ -328,8 +330,8 @@ export function restoreFromFlatIr(ir: WorkflowFlatIr): WorkflowSourceAst {
     title: ir.title,
     ...(ir.description === undefined ? {} : { description: ir.description }),
     ...(ir.options === undefined ? {} : { options: ir.options }),
-    ...(ir.inputs === undefined ? {} : { inputs: ir.inputs }),
-    contextSchema: ir.contextSchema,
+    ...(ir.parameters === undefined ? {} : { parameters: ir.parameters }),
+    inputSchema: ir.inputSchema,
     nodes: buildBlock(ir.start),
   };
 }

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -10,6 +11,27 @@ import {
 } from '../../scripts/inspect-app-client.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
+
+test('resolves workflow route contracts from source before packages are built', async () => {
+  const packageJson = JSON.parse(
+    await readFile(
+      path.join(repoRoot, 'packages/app-plugin-workflow/package.json'),
+      'utf8',
+    ),
+  );
+
+  assert.deepEqual(packageJson.exports['./client/route-contracts'], {
+    types: './client/route-contracts.ts',
+    import: './client/route-contracts.ts',
+  });
+  assert.deepEqual(
+    packageJson.publishConfig.exports['./client/route-contracts'],
+    {
+      types: './dist/client/route-contracts.d.ts',
+      import: './dist/client/route-contracts.js',
+    },
+  );
+});
 
 test('parses app client inspection options', () => {
   assert.deepEqual(
@@ -100,6 +122,26 @@ test('inspects configured client routes and providers', async () => {
         id: '@nocobase/app-plugin-routes-example:index',
         path: '/routes-example',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-workflow:workflow-list',
+        path: '/workflow/workflows',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-workflow:workflow-detail',
+        path: '/workflow/workflows/:workflowId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-workflow:workflow-run-list',
+        path: '/workflow/runs',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-workflow:workflow-run-detail',
+        path: '/workflow/runs/:runId',
+      },
     ],
   );
   assert.deepEqual(
@@ -149,6 +191,11 @@ test('inspects configured client routes and providers', async () => {
       {
         order: 5,
         packageName: '@nocobase/app-plugin-notification-provider',
+        source: 'plugin',
+      },
+      {
+        order: 6,
+        packageName: '@nocobase/app-plugin-workflow',
         source: 'plugin',
       },
     ],
@@ -221,6 +268,20 @@ test('inspects configured client routes and providers', async () => {
       './client/extensions/nocobase-auth-ui/pages/reset-password-page',
     ].map((componentEntry) => ({
       componentEntry,
+      componentSource: 'application',
+      routeSource: 'plugin',
+    })),
+  );
+  assert.deepEqual(
+    inspection.routes
+      .filter(({ packageName }) => packageName.endsWith('app-plugin-workflow'))
+      .map(({ componentEntry, componentSource, routeSource }) => ({
+        componentEntry,
+        componentSource,
+        routeSource,
+      })),
+    Array.from({ length: 4 }, () => ({
+      componentEntry: './client/extensions/nocobase-workflow-management/pages',
       componentSource: 'application',
       routeSource: 'plugin',
     })),

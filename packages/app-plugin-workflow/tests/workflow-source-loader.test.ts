@@ -9,8 +9,8 @@ import {
 } from '@nocobase/app-database';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
-import WorkflowRuntime from '../server/engine/engine.js';
-import { resolveWorkflowInput } from '../server/engine/inputs.js';
+import WorkflowEngine from '../server/engine/engine.js';
+import { resolveWorkflowParameters } from '../server/engine/parameters.js';
 import { loadWorkflow } from '../server/engine/utils.js';
 import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
 import WorkflowSourceLoader from '../server/loader/source-loader.js';
@@ -25,9 +25,9 @@ const dslImport = fileURLToPath(new URL('../index.ts', import.meta.url));
 function workflowSource(title: string, defaultValue: number = 100): string {
   return `import { ConditionInstruction, defineWorkflow, RunInstruction } from ${JSON.stringify(dslImport)};
 export default defineWorkflow({ title: ${JSON.stringify(title)},
-  inputs: { limit: { type: 'number', default: 100 }, threshold: { type: 'number', default: ${defaultValue} }, flag: { type: 'boolean', default: true }, label: { type: 'string', default: 'default' } },
+  parameters: { limit: { type: 'number', default: 100 }, threshold: { type: 'number', default: ${defaultValue} }, flag: { type: 'boolean', default: true }, label: { type: 'string', default: 'default' } },
   nodes: [
-    ConditionInstruction.create({ key: 'condition', config: { expression: { '>': [{ var: 'input.limit' }, 0] } } }).branch({ yes: [RunInstruction.create({ key: 'branchAction', config: { script: './server/action.ts' } })], no: [] }),
+    ConditionInstruction.create({ key: 'condition', config: { expression: { '>': [{ var: 'parameters.limit' }, 0] } } }).branch({ yes: [RunInstruction.create({ key: 'branchAction', config: { script: './server/action.ts' } })], no: [] }),
     RunInstruction.create({ key: 'finalAction', config: { script: './server/final.ts' } }),
   ] });`;
 }
@@ -128,7 +128,7 @@ describe('workflow TypeScript source loader', () => {
       String(workflow.id),
     );
     const trace: string[] = [];
-    const runtime = new WorkflowRuntime({
+    const runtime = new WorkflowEngine({
       database,
       instructions: new Map([
         ['condition', ConditionInstruction],
@@ -162,7 +162,7 @@ describe('workflow TypeScript source loader', () => {
       .updateTable(WORKFLOW_COLLECTIONS.workflows)
       .set({
         enabled: true,
-        inputValues: JSON.stringify({ limit: 0, flag: false, label: '' }),
+        parameterValues: JSON.stringify({ limit: 0, flag: false, label: '' }),
       })
       .where('id', '=', first.id)
       .execute();
@@ -187,14 +187,17 @@ describe('workflow TypeScript source loader', () => {
     expect(revisions[1]).toMatchObject({
       current: null,
       enabled: 0,
-      inputValues: JSON.stringify({ limit: 0, flag: false, label: '' }),
+      parameterValues: JSON.stringify({ limit: 0, flag: false, label: '' }),
     });
     const second = await loadWorkflow(
       database.query(),
       String(revisions[1].id),
     );
     expect(
-      resolveWorkflowInput(second?.inputSchema, second?.inputValues),
+      resolveWorkflowParameters(
+        second?.parametersSchema,
+        second?.parameterValues,
+      ),
     ).toEqual({ limit: 0, threshold: 200, flag: false, label: '' });
     await loader.activate(String(revisions[1].id));
     const activated = await database
@@ -221,7 +224,7 @@ describe('workflow TypeScript source loader', () => {
         .query()
         .selectFrom(WORKFLOW_COLLECTIONS.workflows)
         .where('key', '=', 'quotation')
-        .value('inputValues'),
+        .value('parameterValues'),
     ).resolves.toBe('{}');
   });
 
@@ -229,7 +232,7 @@ describe('workflow TypeScript source loader', () => {
     await writeSource(
       rootPath,
       'bad',
-      workflowSource('Bad').replace('input.limit', 'input.missing'),
+      workflowSource('Bad').replace('parameters.limit', 'parameters.missing'),
     );
     await expect(loader.load(rootPath)).rejects.toMatchObject({
       issues: [

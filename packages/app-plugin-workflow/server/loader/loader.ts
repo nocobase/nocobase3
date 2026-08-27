@@ -11,7 +11,7 @@ export interface WorkflowLoaderOptions {
   database: DatabaseManager;
   artifactStore: WorkflowArtifactStore;
   distRoot: string;
-  refreshRuntime(): Promise<void>;
+  refreshEngine(): Promise<void>;
 }
 
 export class WorkflowLoader {
@@ -68,7 +68,7 @@ export class WorkflowLoader {
           .where('id', '=', result.workflowId)
           .execute();
       }
-      await this.options.refreshRuntime();
+      await this.options.refreshEngine();
     });
   }
 

@@ -1,8 +1,11 @@
 import type { DatabaseManager } from '@nocobase/app-database';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 
-import type { WorkflowInputSchema, WorkflowInputValues } from './inputs.js';
-import type { ContextSchema } from './invocation.js';
+import type {
+  WorkflowParameterSchema,
+  WorkflowParameterValues,
+} from './parameters.js';
+import type { WorkflowInputSchema } from './invocation.js';
 import type { WorkflowArtifactStore } from '../loader/artifact-store.js';
 import type { WorkflowNodeOptions } from '../instructions/types.js';
 import type { WorkflowInstructionClass } from '../instructions/base.js';
@@ -44,9 +47,9 @@ export interface WorkflowDefinition {
   title: string | null;
   enabled: boolean;
   description: string | null;
-  contextSchema: ContextSchema;
   inputSchema: WorkflowInputSchema;
-  inputValues: WorkflowInputValues;
+  parametersSchema: WorkflowParameterSchema;
+  parameterValues: WorkflowParameterValues;
   current: boolean | null;
   options: JsonObject;
   nodes: WorkflowNode[];
@@ -58,8 +61,8 @@ export interface WorkflowRun {
   workflowKey: string;
   hash: string | null;
   eventKey: string;
-  context: JsonObject;
-  input: WorkflowInputValues;
+  input: JsonObject;
+  parameters: WorkflowParameterValues;
   status: number | null;
   dispatched: boolean;
   parentRunId: WorkflowId | null;
@@ -106,10 +109,10 @@ export interface WorkflowEventOptions {
   force?: boolean;
   stack?: WorkflowId[];
   parentRunId?: WorkflowId;
-  inputValues?: WorkflowInputValues;
+  parameterValues?: WorkflowParameterValues;
   onTriggerFail?: (
     workflow: WorkflowDefinition,
-    context: unknown,
+    input: unknown,
     options: WorkflowEventOptions,
     error?: unknown,
   ) => void | Promise<void>;
@@ -133,7 +136,7 @@ export interface ProcessorRerunOptions {
   overwrite?: boolean;
 }
 
-export interface WorkflowRuntimeSourceOptions {
+export interface WorkflowEngineSourceOptions {
   /** Directory containing one `<workflow-key>/workflow.ts` package per workflow. */
   rootPath: string;
   /** Make newly materialized revisions current immediately. */
@@ -142,13 +145,13 @@ export interface WorkflowRuntimeSourceOptions {
   autoEnable?: boolean;
 }
 
-export interface WorkflowRuntimeOptions {
+export interface WorkflowEngineOptions {
   database: DatabaseManager;
   connectionName?: string;
   /**
    * Instructions contributed by the application.
    *
-   * `WorkflowRuntime` layers this map on top of `coreInstructions`, so an entry
+   * `WorkflowEngine` layers this map on top of `coreInstructions`, so an entry
    * here adds a node type or replaces a core one under the same key.
    */
   instructions: Map<string, WorkflowInstructionClass>;
@@ -158,7 +161,7 @@ export interface WorkflowRuntimeOptions {
   /** Application value exposed to `run` scripts as `runtime.app`. */
   app?: unknown;
   /** Source packages discovered and registered before the runtime accepts work. */
-  sources?: WorkflowRuntimeSourceOptions;
+  sources?: WorkflowEngineSourceOptions;
   /** Immutable production artifacts. When present, run nodes never read source directories. */
   artifactStore?: WorkflowArtifactStore;
   /** Explicit development-only opt-in for executing package source. Default false. */

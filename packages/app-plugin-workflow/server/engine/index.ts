@@ -8,11 +8,10 @@ export type {
   ProcessorRunOptions,
 } from './processor.js';
 export { default as WorkflowEngine } from './engine.js';
-export { default as WorkflowRuntime } from './engine.js';
 export * from './types.js';
 export * from './invocation.js';
 export * from './node-results.js';
-export * from './inputs.js';
+export * from './parameters.js';
 export * from './value-resolver.js';
 export { createTimeoutReaper } from './timeout-reaper.js';
 export type { TimeoutReaper, TimeoutReaperOptions } from './timeout-reaper.js';

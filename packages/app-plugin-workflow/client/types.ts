@@ -36,8 +36,8 @@ export interface WorkflowFlatDefinition {
   readonly title: string;
   readonly description?: string;
   readonly options?: JsonObject;
-  readonly inputs?: JsonObject;
-  readonly contextSchema: JsonObject;
+  readonly parameters?: JsonObject;
+  readonly inputSchema: JsonObject;
   readonly start: string | null;
   readonly nodes: readonly WorkflowFlatDefinitionNode[];
 }
@@ -45,6 +45,6 @@ export interface WorkflowFlatDefinition {
 export interface WorkflowNestedDefinition extends WorkflowGraphDefinition {
   readonly description?: string;
   readonly options?: JsonObject;
-  readonly inputs?: JsonObject;
-  readonly contextSchema: JsonObject;
+  readonly parameters?: JsonObject;
+  readonly inputSchema: JsonObject;
 }

@@ -4,7 +4,7 @@ import type { WorkflowFlatIr } from '../instructions/definition.js';
 import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 import type { WorkflowId } from '../engine/types.js';
 import { asId, hydrateWorkflow, serializeJson } from '../engine/utils.js';
-import { retainCompatibleWorkflowInputValues } from '../engine/inputs.js';
+import { retainCompatibleWorkflowParameterValues } from '../engine/parameters.js';
 
 export interface MaterializedWorkflowSource {
   key: string;
@@ -39,10 +39,10 @@ export async function materializeWorkflowSource(
   if (unchanged) return { action: 'unchanged', workflowId: asId(unchanged.id) };
   const currentRow = revisions.find((row) => Boolean(row.current));
   const current = currentRow ? hydrateWorkflow(currentRow) : null;
-  const inputSchema = loaded.ir.inputs ?? {};
-  const inheritedInputValues = retainCompatibleWorkflowInputValues(
-    inputSchema,
-    current?.inputValues,
+  const parametersSchema = loaded.ir.parameters ?? {};
+  const inheritedInputValues = retainCompatibleWorkflowParameterValues(
+    parametersSchema,
+    current?.parameterValues,
   );
   await query
     .insertInto(WORKFLOW_COLLECTIONS.workflows)
@@ -53,9 +53,9 @@ export async function materializeWorkflowSource(
       title: loaded.ir.title,
       description: loaded.ir.description ?? null,
       options: serializeJson(loaded.ir.options ?? {}),
-      contextSchema: serializeJson(loaded.ir.contextSchema),
-      inputSchema: serializeJson(inputSchema),
-      inputValues: serializeJson(inheritedInputValues),
+      inputSchema: serializeJson(loaded.ir.inputSchema),
+      parametersSchema: serializeJson(parametersSchema),
+      parameterValues: serializeJson(inheritedInputValues),
       enabled: false,
       current: null,
     })

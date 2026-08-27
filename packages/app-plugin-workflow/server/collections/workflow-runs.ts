@@ -19,8 +19,8 @@ export function defineWorkflowRuns(
     .hasMany('nodeRuns', WORKFLOW_COLLECTIONS.nodeRuns)
     .foreignKey('workflowRunId')
     .onDelete('cascade');
-  collection.json('context');
   collection.json('input').notNull().defaultTo({});
+  collection.json('parameters').notNull().defaultTo({});
   collection.integer('status');
   collection.boolean('dispatched').notNull().defaultTo(false);
   collection.bigInt('parentRunId');

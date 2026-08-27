@@ -6,4 +6,5 @@
 
 - Add the Workflow application plugin with workflow authoring, build tooling,
   persistence, runtime execution, queue integration, management APIs, stable
-  client routes, and an application-owned Workflow Management Registry recipe.
+  client routes, an application-owned Workflow Management Registry recipe, and
+  the Workflow Agent Skill published with its owning plugin.

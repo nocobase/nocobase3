@@ -27,7 +27,7 @@ import type {
   WorkflowInstructionClass,
   WorkflowLogger,
   WorkflowQueueTask,
-  WorkflowRuntimeOptions,
+  WorkflowEngineOptions,
 } from './types.js';
 import { noopWorkflowLogger } from './utils.js';
 import { loadNodeRun, serializeJson } from './utils.js';
@@ -48,7 +48,7 @@ export default class WorkflowEngine {
   readonly dispatcher: Dispatcher;
   readonly logger: WorkflowLogger;
 
-  private readonly options: WorkflowRuntimeOptions;
+  private readonly options: WorkflowEngineOptions;
   private readonly queueAdapter: WorkflowQueueAdapter | null;
   private readonly reaper: TimeoutReaper | null;
   private readonly sourceLoader: WorkflowSourceLoader | null;
@@ -56,7 +56,7 @@ export default class WorkflowEngine {
     string,
     WorkflowRunModuleResolver
   >;
-  constructor(options: WorkflowRuntimeOptions) {
+  constructor(options: WorkflowEngineOptions) {
     this.options = options;
     this.database = options.database;
     this.logger = options.logger ?? noopWorkflowLogger;
@@ -258,10 +258,10 @@ export default class WorkflowEngine {
 
   async trigger(
     workflow: WorkflowDefinition,
-    context: JsonObject,
+    input: JsonObject,
     options: WorkflowEventOptions = {},
   ): Promise<Processor | null | void> {
-    return this.dispatcher.trigger(workflow, context, options);
+    return this.dispatcher.trigger(workflow, input, options);
   }
 
   async resume(

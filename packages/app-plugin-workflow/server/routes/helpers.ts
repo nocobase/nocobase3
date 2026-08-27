@@ -15,23 +15,23 @@ export function readEnabled(body: unknown): boolean | undefined {
   return typeof enabled === 'boolean' ? enabled : undefined;
 }
 
-export async function readInputValues(request: Request): Promise<unknown> {
+export async function readParameterValues(request: Request): Promise<unknown> {
   const body = await readBody(request);
   return body !== null &&
     typeof body === 'object' &&
     !Array.isArray(body) &&
-    Object.hasOwn(body, 'inputValues')
-    ? Reflect.get(body, 'inputValues')
+    Object.hasOwn(body, 'parameterValues')
+    ? Reflect.get(body, 'parameterValues')
     : body;
 }
 
-export async function readContext(request: Request): Promise<unknown> {
+export async function readInput(request: Request): Promise<unknown> {
   const body = await readBody(request);
   return body !== null &&
     typeof body === 'object' &&
     !Array.isArray(body) &&
-    Object.hasOwn(body, 'context')
-    ? Reflect.get(body, 'context')
+    Object.hasOwn(body, 'input')
+    ? Reflect.get(body, 'input')
     : body;
 }
 

@@ -4,7 +4,7 @@ import {
   parseBoolean,
   readBody,
   readEnabled,
-  readInputValues,
+  readParameterValues,
   readPage,
   toPageResponse,
 } from './helpers.js';
@@ -17,8 +17,8 @@ export function createWorkflowDefinitionRoutes(
     | 'enable'
     | 'disable'
     | 'setStatus'
-    | 'getInputs'
-    | 'updateInputs'
+    | 'getParameters'
+    | 'updateParameters'
     | 'get'
     | 'revisions'
   >,
@@ -41,21 +41,13 @@ export function createWorkflowDefinitionRoutes(
   routes.get('/workflows/:id/revisions', async (c) =>
     c.json({ data: await workflows.revisions(c.req.param('id')) }),
   );
-  routes.get('/workflows/:id/inputs', async (c) =>
-    c.json({ data: await workflows.getInputs(c.req.param('id')) }),
+  routes.get('/workflows/:id/parameters', async (c) =>
+    c.json({ data: await workflows.getParameters(c.req.param('id')) }),
   );
-  routes.put('/workflows/:id/inputs', async (c) =>
-    c.json({
-      data: await workflows.updateInputs(
-        c.req.param('id'),
-        await readBody(c.req.raw),
-      ),
-    }),
-  );
-  routes.put('/workflows/:id/input-values', async (c) => {
-    const data = await workflows.updateInputs(
+  routes.put('/workflows/:id/parameters', async (c) => {
+    const data = await workflows.updateParameters(
       c.req.param('id'),
-      await readInputValues(c.req.raw),
+      await readParameterValues(c.req.raw),
     );
     return c.json({ data });
   });

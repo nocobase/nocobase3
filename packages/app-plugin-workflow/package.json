@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -40,9 +40,8 @@
       "import": "./dist/client/bootstrap.js"
     },
     "./client/route-contracts": {
-      "source": "./client/route-contracts.ts",
-      "types": "./dist/client/route-contracts.d.ts",
-      "import": "./dist/client/route-contracts.js"
+      "types": "./client/route-contracts.ts",
+      "import": "./client/route-contracts.ts"
     },
     "./build": {
       "source": "./build/index.ts",
@@ -98,7 +97,8 @@
     "dist",
     "registry",
     "registry.config.json",
-    "public/r"
+    "public/r",
+    ".agents"
   ],
   "nocobase": {
     "registry": {

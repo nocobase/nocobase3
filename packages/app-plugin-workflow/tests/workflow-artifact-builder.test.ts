@@ -17,7 +17,7 @@ afterEach(async () =>
 );
 const definition = {
   title: 'x',
-  contextSchema: { type: 'object' as const },
+  inputSchema: { type: 'object' as const },
   nodes: [],
 };
 const flatIr = { ...definition, start: null, nodes: [] };

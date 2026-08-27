@@ -57,7 +57,7 @@ export class CodexAppServerAdapter {
         input: [
           {
             type: 'skill',
-            name: 'nocobase3-workflow-manage',
+            name: 'nocobase-app-plugin-workflow',
             path: options.skillPath,
           },
           { type: 'text', text: options.prompt, text_elements: [] },

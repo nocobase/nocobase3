@@ -125,7 +125,7 @@ describe('run instruction', () => {
       const code = `exports.run = () => ${JSON.stringify(version)};`;
       const definition = {
         title: version,
-        contextSchema: { type: 'object' as const },
+        inputSchema: { type: 'object' as const },
         nodes: [],
       };
       const built = buildWorkflowArtifact({
@@ -252,7 +252,7 @@ describe('run instruction', () => {
   });
 
   // §11.2 (1)
-  it('resolves args from $context, $input and earlier nodeRun results', async () => {
+  it('resolves args from $input, $parameters and earlier nodeRun results', async () => {
     const seen: unknown[] = [];
     const workflow = await createTestWorkflow(database, {
       key: 'args',
@@ -269,9 +269,9 @@ describe('run instruction', () => {
           config: {
             script: './second',
             args: {
-              orderId: '{{$context.order.id}}',
+              orderId: '{{$input.order.id}}',
               previous: '{{$nodeResults.first.total}}',
-              label: 'order-{{$context.order.id}}',
+              label: 'order-{{$input.order.id}}',
             },
           },
           upstreamKey: 'first',
@@ -497,7 +497,7 @@ describe('validateRunConfig', () => {
     expect(
       validateRunConfig({
         script: './server/calculate.ts',
-        args: { id: '{{$context.id}}' },
+        args: { id: '{{$input.id}}' },
       }),
     ).toBeNull();
   });
@@ -508,7 +508,7 @@ describe('validateRunConfig', () => {
       script: expect.any(String),
     });
     expect(
-      validateRunConfig({ script: './server/{{$input.name}}.ts' }),
+      validateRunConfig({ script: './server/{{$parameters.name}}.ts' }),
     ).toMatchObject({ script: expect.stringContaining('variable template') });
     expect(validateRunConfig({ script: './a.ts', args: [1] })).toMatchObject({
       args: expect.any(String),

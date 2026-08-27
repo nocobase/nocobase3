@@ -33,8 +33,8 @@ interface WorkflowSeed {
   current: boolean;
   version: string;
   hash: string;
-  inputSchema?: object;
-  inputValues?: object;
+  parametersSchema?: object;
+  parameterValues?: object;
   nodes: Array<{
     id: number;
     key: string;
@@ -56,10 +56,10 @@ const workflowSeeds: Record<string, WorkflowSeed[]> = {
       current: true,
       version: 'fixture-v1',
       hash: 'fixture-hash-quotation-v1',
-      inputSchema: {
+      parametersSchema: {
         approvalLimit: { type: 'number', default: 100000 },
       },
-      inputValues: { approvalLimit: 100000 },
+      parameterValues: { approvalLimit: 100000 },
       nodes: [
         {
           id: 4201,
@@ -102,8 +102,8 @@ const workflowSeeds: Record<string, WorkflowSeed[]> = {
       current: true,
       version: 'fixture-v1',
       hash: 'fixture-hash-quotation-v1',
-      inputSchema: { approvalLimit: { type: 'number', default: 100000 } },
-      inputValues: { approvalLimit: 100000 },
+      parametersSchema: { approvalLimit: { type: 'number', default: 100000 } },
+      parameterValues: { approvalLimit: 100000 },
       nodes: [
         {
           id: 4401,
@@ -196,8 +196,8 @@ const workflowSeeds: Record<string, WorkflowSeed[]> = {
       current: true,
       version: 'fixture-v1',
       hash: 'fixture-hash-quotation-v1',
-      inputSchema: { approvalLimit: { type: 'number', default: 120000 } },
-      inputValues: { approvalLimit: 120000 },
+      parametersSchema: { approvalLimit: { type: 'number', default: 120000 } },
+      parameterValues: { approvalLimit: 120000 },
       nodes: [
         {
           id: 5001,
@@ -212,7 +212,10 @@ const workflowSeeds: Record<string, WorkflowSeed[]> = {
           upstreamKey: 'calculateRisk',
           config: {
             expression: {
-              '>': [{ var: 'context.amount' }, { var: 'input.approvalLimit' }],
+              '>': [
+                { var: 'input.amount' },
+                { var: 'parameters.approvalLimit' },
+              ],
             },
           },
         },
@@ -370,12 +373,12 @@ async function insertWorkflow(
       current: seed.current,
       version: seed.version,
       hash: seed.hash,
-      contextSchema: JSON.stringify({
+      inputSchema: JSON.stringify({
         type: 'object',
         additionalProperties: true,
       }),
-      inputSchema: JSON.stringify(seed.inputSchema ?? {}),
-      inputValues: JSON.stringify(seed.inputValues ?? {}),
+      parametersSchema: JSON.stringify(seed.parametersSchema ?? {}),
+      parameterValues: JSON.stringify(seed.parameterValues ?? {}),
       options: JSON.stringify({}),
     })
     .execute();
@@ -435,8 +438,8 @@ async function insertRun(
           (item) => item.id === seed.workflowId,
         )?.hash ?? null,
       eventKey: seed.eventKey,
-      context: JSON.stringify(seed.context),
-      input: JSON.stringify(seed.input ?? {}),
+      input: JSON.stringify(seed.context),
+      parameters: JSON.stringify(seed.input ?? {}),
       status: seed.status,
       dispatched: true,
       stack: JSON.stringify([]),

@@ -19,7 +19,7 @@ async function artifact(
 ): Promise<WorkflowDistArtifact> {
   const definition = {
     title,
-    contextSchema: { type: 'object' as const },
+    inputSchema: { type: 'object' as const },
     nodes: [],
   };
   const built = buildWorkflowArtifact({

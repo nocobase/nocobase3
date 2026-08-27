@@ -33,13 +33,13 @@ Follow this order so evidence remains tied to the executed revision:
 
 1. Inspect the service trigger receipt first. For `skipped`, diagnose key/current/enabled state and do not poll for a run. For `accepted`, record its event key; a run may not be persisted until asynchronous scheduling advances.
 2. Resolve the workflow key/definition and list revisions.
-3. Inspect the run, capturing workflow id/key, workflow version, artifact hash, event key, context, timestamps, manual flag, parent relationship where available, status, and reason.
+3. Inspect the run, capturing workflow id/key, workflow version, artifact hash, event key, input, timestamps, manual flag, parent relationship where available, status, and reason.
 4. Use the run's definition id/hash, not merely the current workflow, to understand its code and topology.
 5. Inspect `getRun(id).nodeRuns` for the latest attempt per node key and reconstruct the visible executed path.
 6. Call `nodeRuns(runId, nodeKey?)` when reruns or repeated attempts are possible; compare ids/timestamps/statuses in ascending order.
 7. Fetch `nodeRunPayload(runId, nodeRunId)` only for relevant attempts. Record result, error, log, and `truncated`.
 8. Correlate structured server logs by run/execution id, node id/key, artifact digest, and script. Run-node logs include duration and `success/error/aborted`.
-9. Compare the failing node's config, resolved inputs/context, expected result contract, timeout, and artifact script path.
+9. Compare the failing node's config, resolved parameters/input, expected result contract, timeout, and artifact script path.
 10. Separate root cause from propagated failure. A condition parent can fail because its selected branch child failed.
 11. Recommend a source fix, setting fix, retry with the same event identity, new business invocation, or compensation. Do not erase history.
 
@@ -54,7 +54,7 @@ Inspect:
 - Did administrator input overrides change after this run? Remember the run uses the snapshot created at invocation.
 - Is the artifact available on the configured private filesystem drive and does its digest match the run hash?
 
-Use `list()`, `getWorkflow(id)`, `revisions(id)`, and `getInputs(id)`. Current definition nodes show materialized config and tree links (`upstreamKey`, `downstreamKey`, `branchKey`), but historical execution interpretation must follow the run's fixed version/hash.
+Use `list()`, `getWorkflow(id)`, `revisions(id)`, and `getParameters(id)`. Current definition nodes show materialized config and tree links (`upstreamKey`, `downstreamKey`, `branchKey`), but historical execution interpretation must follow the run's fixed version/hash.
 
 ## Run and node-run checks
 
@@ -86,7 +86,7 @@ For `ABORTED`:
 For an unexpected path:
 
 - Read the condition Node Run result (`true`/`false`) and exact expression.
-- Compare persisted context and input snapshot, not current external records/settings.
+- Compare persisted input and input snapshot, not current external records/settings.
 - Confirm template typing: an exact template preserves number/boolean/object, while interpolation produces a string.
 - Confirm the referenced node result was declared and actually returned the matching runtime shape. Result schemas are compile-time contracts, not a universal runtime validator.
 
@@ -107,8 +107,8 @@ For an unexpected path:
 | trigger `skipped: not-found`     | wrong directory-derived key, no current revision, source not loaded                        |
 | trigger `skipped: disabled`      | current revision disabled; enable separately if authorized, never poll for this trigger    |
 | manual run of disabled revision  | valid for authorized `run(definitionId, ...)`; verify selected version/hash and permission |
-| `INVALID_CONTEXT`                | root/field type, missing required field, undeclared extra field, unsupported assumption    |
-| `CONTEXT_TOO_LARGE`              | serialized UTF-8 context exceeds 65,536 bytes; pass identifiers rather than documents      |
+| `INVALID_INPUT`                  | root/field type, missing required field, undeclared extra field, unsupported assumption    |
+| `INPUT_TOO_LARGE`                | serialized UTF-8 input exceeds 65,536 bytes; pass identifiers rather than documents        |
 | duplicate-looking trigger        | caller generated different event keys for the same event                                   |
 | no second run                    | same event key was intentionally deduplicated                                              |
 | stuck queueing                   | worker/runtime/queue not started, queue failure, retry/dead letter                         |
@@ -127,7 +127,7 @@ Report at least:
 
 - Workflow key, definition id, version, artifact hash, and enabled/current state.
 - Event key, run id, status name/value, reason, manual flag, and timestamps.
-- Context/input facts relevant to the decision, with sensitive values omitted.
+- Input/input facts relevant to the decision, with sensitive values omitted.
 - Executed node keys in attempt order and the first failing leaf attempt.
 - Node type, script or condition expression, status, duration/timestamps, error, and log availability.
 - Whether any result/error/log was redacted or truncated.

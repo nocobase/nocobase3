@@ -55,6 +55,12 @@ describe('workflow collections', () => {
     await expect(
       db.schema.hasColumn('workflow_runs', 'event_key'),
     ).resolves.toBe(true);
+    await expect(db.schema.hasColumn('workflow_runs', 'input')).resolves.toBe(
+      true,
+    );
+    await expect(
+      db.schema.hasColumn('workflow_runs', 'parameters'),
+    ).resolves.toBe(true);
     await expect(
       db.schema.hasColumn('workflow_runs', 'parent_run_id'),
     ).resolves.toBe(true);

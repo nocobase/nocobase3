@@ -31,9 +31,9 @@ import {
   serializeJson,
 } from './utils.js';
 import {
-  normalizeWorkflowInputValues,
-  resolveWorkflowInput,
-} from './inputs.js';
+  normalizeWorkflowParameterValues,
+  resolveWorkflowParameters,
+} from './parameters.js';
 
 export interface DispatcherOptions {
   database: DatabaseManager;
@@ -73,10 +73,10 @@ export default class Dispatcher {
 
   trigger(
     workflow: WorkflowDefinition,
-    context: unknown,
+    input: unknown,
     options: WorkflowEventOptions = {},
   ): Promise<Processor | null | void> {
-    const operation = this.triggerEvent(workflow, context, options);
+    const operation = this.triggerEvent(workflow, input, options);
     this.inFlight.add(operation);
     return operation.finally(() => {
       this.inFlight.delete(operation);
@@ -85,7 +85,7 @@ export default class Dispatcher {
 
   private async triggerEvent(
     workflow: WorkflowDefinition,
-    context: unknown,
+    input: unknown,
     options: WorkflowEventOptions,
   ): Promise<Processor | null | void> {
     const logger = this.getLogger(workflow.id);
@@ -93,9 +93,9 @@ export default class Dispatcher {
       logger.warn(`Workflow "${workflow.key}" is disabled; event ignored`);
       return;
     }
-    if (context == null) {
-      const error = new Error('Workflow context must not be null');
-      await this.handleTriggerFail(workflow, context, options, error);
+    if (input == null) {
+      const error = new Error('Workflow input must not be null');
+      await this.handleTriggerFail(workflow, input, options, error);
       throw error;
     }
 
@@ -119,7 +119,7 @@ export default class Dispatcher {
 
     this.pendingEventKeys.add(eventKey);
     try {
-      const execution = await this.createExecution(workflow, context, {
+      const execution = await this.createExecution(workflow, input, {
         ...options,
         eventKey,
       });
@@ -242,14 +242,12 @@ export default class Dispatcher {
 
   private async createExecution(
     workflow: WorkflowDefinition,
-    context: unknown,
+    input: unknown,
     options: WorkflowEventOptions,
   ): Promise<WorkflowRun> {
     const stack = await this.resolveStack(options);
     try {
-      if (
-        !(await this.validateEvent(workflow, context, { ...options, stack }))
-      ) {
+      if (!(await this.validateEvent(workflow, input, { ...options, stack }))) {
         throw new Error('Workflow event is not valid');
       }
 
@@ -257,14 +255,14 @@ export default class Dispatcher {
         const query = connection.query;
         const eventKey = options.eventKey ?? randomUUID();
         const createdAt = new Date().toISOString();
-        const input = resolveWorkflowInput(
-          workflow.inputSchema,
-          options.inputValues
-            ? normalizeWorkflowInputValues(
-                workflow.inputSchema,
-                options.inputValues,
+        const parameters = resolveWorkflowParameters(
+          workflow.parametersSchema,
+          options.parameterValues
+            ? normalizeWorkflowParameterValues(
+                workflow.parametersSchema,
+                options.parameterValues,
               )
-            : workflow.inputValues,
+            : workflow.parameterValues,
         );
         await query
           .insertInto(WORKFLOW_COLLECTIONS.runs)
@@ -273,8 +271,8 @@ export default class Dispatcher {
             workflowKey: workflow.key,
             hash: workflow.hash,
             eventKey,
-            context: serializeJson(context),
             input: serializeJson(input),
+            parameters: serializeJson(parameters),
             status: options.deferred
               ? EXECUTION_STATUS.STARTED
               : EXECUTION_STATUS.QUEUEING,
@@ -303,7 +301,7 @@ export default class Dispatcher {
         return execution;
       }, this.options.connectionName);
     } catch (error) {
-      await this.handleTriggerFail(workflow, context, options, error);
+      await this.handleTriggerFail(workflow, input, options, error);
       throw error;
     }
   }
@@ -472,12 +470,12 @@ export default class Dispatcher {
 
   private async handleTriggerFail(
     workflow: WorkflowDefinition,
-    context: unknown,
+    input: unknown,
     options: WorkflowEventOptions,
     error?: unknown,
   ): Promise<void> {
     try {
-      await options.onTriggerFail?.(workflow, context, options, error);
+      await options.onTriggerFail?.(workflow, input, options, error);
     } catch (callbackError) {
       this.getLogger(workflow.id).error(
         'Workflow trigger failure callback failed',

@@ -1,23 +1,30 @@
-export type WorkflowInputScalar = string | number | boolean;
+export type WorkflowParameterScalar = string | number | boolean;
 
-export type WorkflowInputOption = {
+export type WorkflowParameterOption = {
   label: string;
   value: string | number;
 };
 
-export type WorkflowInputDeclaration = {
+export type WorkflowParameterDeclaration = {
   type: 'string' | 'number' | 'boolean';
   title?: string;
   description?: string;
-  default?: WorkflowInputScalar;
-  enum?: WorkflowInputOption[];
+  default?: WorkflowParameterScalar;
+  enum?: WorkflowParameterOption[];
 };
 
-export type WorkflowInputSchema = Record<string, WorkflowInputDeclaration>;
-export type WorkflowInputValues = Record<string, WorkflowInputScalar>;
+export type WorkflowParameterSchema = Record<
+  string,
+  WorkflowParameterDeclaration
+>;
+export type WorkflowParameterValues = Record<string, WorkflowParameterScalar>;
 
-const INPUT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const FORBIDDEN_INPUT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const PARAMETER_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const FORBIDDEN_PARAMETER_KEYS = new Set([
+  '__proto__',
+  'prototype',
+  'constructor',
+]);
 const DECLARATION_FIELDS = new Set([
   'type',
   'title',
@@ -27,10 +34,10 @@ const DECLARATION_FIELDS = new Set([
 ]);
 const OPTION_FIELDS = new Set(['label', 'value']);
 
-export class WorkflowInputValidationError extends Error {
+export class WorkflowParameterValidationError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'WorkflowInputValidationError';
+    this.name = 'WorkflowParameterValidationError';
   }
 }
 
@@ -40,8 +47,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isScalarOfType(
   value: unknown,
-  type: WorkflowInputDeclaration['type'],
-): value is WorkflowInputScalar {
+  type: WorkflowParameterDeclaration['type'],
+): value is WorkflowParameterScalar {
   return typeof value === type && (type !== 'number' || Number.isFinite(value));
 }
 
@@ -52,36 +59,36 @@ function assertKnownFields(
 ): void {
   for (const field of Object.keys(value)) {
     if (!fields.has(field)) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${location} contains unknown field "${field}"`,
       );
     }
   }
 }
 
-export function normalizeWorkflowInputSchema(
+export function normalizeWorkflowParameterSchema(
   value: unknown,
-  location: string = 'workflow.inputs',
-): WorkflowInputSchema {
+  location: string = 'workflow.parameters',
+): WorkflowParameterSchema {
   if (value === undefined) {
     return {};
   }
   if (!isRecord(value)) {
-    throw new WorkflowInputValidationError(`${location} must be an object`);
+    throw new WorkflowParameterValidationError(`${location} must be an object`);
   }
 
-  const result: WorkflowInputSchema = Object.create(
+  const result: WorkflowParameterSchema = Object.create(
     null,
-  ) as WorkflowInputSchema;
+  ) as WorkflowParameterSchema;
   for (const [key, rawDeclaration] of Object.entries(value)) {
     const declarationLocation = `${location}.${key}`;
-    if (!INPUT_KEY_PATTERN.test(key) || FORBIDDEN_INPUT_KEYS.has(key)) {
-      throw new WorkflowInputValidationError(
+    if (!PARAMETER_KEY_PATTERN.test(key) || FORBIDDEN_PARAMETER_KEYS.has(key)) {
+      throw new WorkflowParameterValidationError(
         `${declarationLocation} has an invalid input key`,
       );
     }
     if (!isRecord(rawDeclaration)) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${declarationLocation} must be an object`,
       );
     }
@@ -89,16 +96,16 @@ export function normalizeWorkflowInputSchema(
     if (
       !['string', 'number', 'boolean'].includes(String(rawDeclaration.type))
     ) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${declarationLocation}.type must be string, number, or boolean`,
       );
     }
-    const type = rawDeclaration.type as WorkflowInputDeclaration['type'];
+    const type = rawDeclaration.type as WorkflowParameterDeclaration['type'];
     if (
       Object.hasOwn(rawDeclaration, 'title') &&
       typeof rawDeclaration.title !== 'string'
     ) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${declarationLocation}.title must be a string`,
       );
     }
@@ -106,7 +113,7 @@ export function normalizeWorkflowInputSchema(
       Object.hasOwn(rawDeclaration, 'description') &&
       typeof rawDeclaration.description !== 'string'
     ) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${declarationLocation}.description must be a string`,
       );
     }
@@ -114,20 +121,20 @@ export function normalizeWorkflowInputSchema(
       Object.hasOwn(rawDeclaration, 'default') &&
       !isScalarOfType(rawDeclaration.default, type)
     ) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${declarationLocation}.default must be a ${type}`,
       );
     }
 
-    let inputEnum: WorkflowInputOption[] | undefined;
+    let inputEnum: WorkflowParameterOption[] | undefined;
     if (Object.hasOwn(rawDeclaration, 'enum')) {
       if (type === 'boolean') {
-        throw new WorkflowInputValidationError(
-          `${declarationLocation}.enum is not supported for boolean inputs`,
+        throw new WorkflowParameterValidationError(
+          `${declarationLocation}.enum is not supported for boolean parameters`,
         );
       }
       if (!Array.isArray(rawDeclaration.enum)) {
-        throw new WorkflowInputValidationError(
+        throw new WorkflowParameterValidationError(
           `${declarationLocation}.enum must be an array`,
         );
       }
@@ -135,24 +142,24 @@ export function normalizeWorkflowInputSchema(
       inputEnum = rawDeclaration.enum.map((rawOption, index) => {
         const optionLocation = `${declarationLocation}.enum[${index}]`;
         if (!isRecord(rawOption)) {
-          throw new WorkflowInputValidationError(
+          throw new WorkflowParameterValidationError(
             `${optionLocation} must be an object`,
           );
         }
         assertKnownFields(rawOption, OPTION_FIELDS, optionLocation);
         if (typeof rawOption.label !== 'string') {
-          throw new WorkflowInputValidationError(
+          throw new WorkflowParameterValidationError(
             `${optionLocation}.label must be a string`,
           );
         }
         if (!isScalarOfType(rawOption.value, type)) {
-          throw new WorkflowInputValidationError(
+          throw new WorkflowParameterValidationError(
             `${optionLocation}.value must be a ${type}`,
           );
         }
         const optionValue = rawOption.value as string | number;
         if (seen.has(optionValue)) {
-          throw new WorkflowInputValidationError(
+          throw new WorkflowParameterValidationError(
             `${declarationLocation}.enum contains duplicate value ${optionValue}`,
           );
         }
@@ -163,7 +170,7 @@ export function normalizeWorkflowInputSchema(
         Object.hasOwn(rawDeclaration, 'default') &&
         !seen.has(rawDeclaration.default as string | number)
       ) {
-        throw new WorkflowInputValidationError(
+        throw new WorkflowParameterValidationError(
           `${declarationLocation}.default must be one of the enum values`,
         );
       }
@@ -178,7 +185,7 @@ export function normalizeWorkflowInputSchema(
         ? {}
         : { description: rawDeclaration.description as string }),
       ...(Object.hasOwn(rawDeclaration, 'default')
-        ? { default: rawDeclaration.default as WorkflowInputScalar }
+        ? { default: rawDeclaration.default as WorkflowParameterScalar }
         : {}),
       ...(inputEnum === undefined ? {} : { enum: inputEnum }),
     };
@@ -186,27 +193,27 @@ export function normalizeWorkflowInputSchema(
   return result;
 }
 
-export function normalizeWorkflowInputValues(
-  schema: WorkflowInputSchema | null | undefined,
+export function normalizeWorkflowParameterValues(
+  schema: WorkflowParameterSchema | null | undefined,
   value: unknown,
-  location: string = 'inputValues',
-): WorkflowInputValues {
+  location: string = 'parameterValues',
+): WorkflowParameterValues {
   if (!isRecord(value)) {
-    throw new WorkflowInputValidationError(`${location} must be an object`);
+    throw new WorkflowParameterValidationError(`${location} must be an object`);
   }
   const declarations = schema ?? {};
-  const result: WorkflowInputValues = Object.create(
+  const result: WorkflowParameterValues = Object.create(
     null,
-  ) as WorkflowInputValues;
+  ) as WorkflowParameterValues;
   for (const [key, inputValue] of Object.entries(value)) {
     if (!Object.hasOwn(declarations, key)) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${location}.${key} is not declared`,
       );
     }
     const declaration = declarations[key];
     if (!isScalarOfType(inputValue, declaration.type)) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${location}.${key} must be a ${declaration.type}`,
       );
     }
@@ -214,7 +221,7 @@ export function normalizeWorkflowInputValues(
       declaration.enum &&
       !declaration.enum.some((option) => Object.is(option.value, inputValue))
     ) {
-      throw new WorkflowInputValidationError(
+      throw new WorkflowParameterValidationError(
         `${location}.${key} must be one of the declared enum values`,
       );
     }
@@ -223,16 +230,16 @@ export function normalizeWorkflowInputValues(
   return result;
 }
 
-export function retainCompatibleWorkflowInputValues(
-  schema: WorkflowInputSchema,
+export function retainCompatibleWorkflowParameterValues(
+  schema: WorkflowParameterSchema,
   value: unknown,
-): WorkflowInputValues {
+): WorkflowParameterValues {
   if (!isRecord(value)) {
     return {};
   }
-  const result: WorkflowInputValues = Object.create(
+  const result: WorkflowParameterValues = Object.create(
     null,
-  ) as WorkflowInputValues;
+  ) as WorkflowParameterValues;
   for (const [key, inputValue] of Object.entries(value)) {
     const declaration = schema[key];
     if (!declaration || !isScalarOfType(inputValue, declaration.type)) {
@@ -249,18 +256,18 @@ export function retainCompatibleWorkflowInputValues(
   return result;
 }
 
-export function resolveWorkflowInput(
-  schema: WorkflowInputSchema | null | undefined,
-  values: WorkflowInputValues | null | undefined,
-): WorkflowInputValues {
-  const result: WorkflowInputValues = Object.create(
+export function resolveWorkflowParameters(
+  schema: WorkflowParameterSchema | null | undefined,
+  values: WorkflowParameterValues | null | undefined,
+): WorkflowParameterValues {
+  const result: WorkflowParameterValues = Object.create(
     null,
-  ) as WorkflowInputValues;
+  ) as WorkflowParameterValues;
   for (const [key, declaration] of Object.entries(schema ?? {})) {
     if (Object.hasOwn(values ?? {}, key)) {
-      result[key] = (values as WorkflowInputValues)[key];
+      result[key] = (values as WorkflowParameterValues)[key];
     } else if (Object.hasOwn(declaration, 'default')) {
-      result[key] = declaration.default as WorkflowInputScalar;
+      result[key] = declaration.default as WorkflowParameterScalar;
     }
   }
   return result;

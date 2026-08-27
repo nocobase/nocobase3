@@ -6,11 +6,7 @@ import type {
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 
-import {
-  bindRuntimeWorkflow,
-  createAppWorkflowRuntime,
-  disposeAppWorkflowRuntime,
-} from './runtime/runtime.js';
+import { bindWorkflowService, WorkflowService } from './runtime/runtime.js';
 
 export interface WorkflowPluginConfig extends AppRuntimeConfig {
   drive: AppDriveConfig;
@@ -45,7 +41,7 @@ export default function bootstrapWorkflowPlugin({
   const { runtime } = deps;
   if (!runtime.database) return;
 
-  const workflowRuntime = createAppWorkflowRuntime({
+  const workflowService = new WorkflowService({
     database: runtime.database,
     queue: deps.queueManager,
     app: runtime,
@@ -56,9 +52,9 @@ export default function bootstrapWorkflowPlugin({
     sourceResolverDiagnostic: runtime.config.workflow.sourceResolverDiagnostic,
     warn: (message: string): void => deps.logging.getLogger().warn(message),
   });
-  bindRuntimeWorkflow(runtime, workflowRuntime);
+  bindWorkflowService(runtime, workflowService);
   lifecycle.registerDisposer('runtime', async () => {
-    await disposeAppWorkflowRuntime(workflowRuntime);
+    await workflowService.dispose();
   });
 }
 

@@ -6,7 +6,7 @@ import {
 
 export default defineWorkflow({
   title: 'Fixture quotation decision',
-  contextSchema: {
+  inputSchema: {
     type: 'object',
     required: ['quotationId', 'amount'],
     properties: {
@@ -15,7 +15,7 @@ export default defineWorkflow({
     },
     additionalProperties: false,
   },
-  inputs: {
+  parameters: {
     approvalLimit: { type: 'number', default: 100000 },
   },
   nodes: [
@@ -23,7 +23,7 @@ export default defineWorkflow({
       key: 'calculateRisk',
       config: {
         script: './server/calculate-risk.ts',
-        args: { amount: '{{$context.amount}}' },
+        args: { amount: '{{$input.amount}}' },
       },
       result: {
         type: 'object',
@@ -38,7 +38,7 @@ export default defineWorkflow({
         expression: {
           '>': [
             { var: 'nodeResults.calculateRisk.score' },
-            { var: 'input.approvalLimit' },
+            { var: 'parameters.approvalLimit' },
           ],
         },
       },

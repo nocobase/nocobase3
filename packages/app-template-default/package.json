@@ -3,18 +3,6 @@
   "displayName": "Default Template",
   "version": "0.0.1-beta.5",
   "type": "module",
-  "exports": {
-    "./server": {
-      "source": "./server/index.ts",
-      "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js"
-    },
-    "./server/migrations/app-settings": {
-      "source": "./database/migrations/202608180001_create_app_settings_table.ts",
-      "types": "./dist/database/migrations/202608180001_create_app_settings_table.d.ts",
-      "import": "./dist/database/migrations/202608180001_create_app_settings_table.js"
-    }
-  },
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
@@ -182,8 +170,7 @@
     ".env.example",
     "README.MD",
     "MIGRATION.md",
-    "AGENTS.md",
-    ".agents"
+    "AGENTS.md"
   ],
   "publishConfig": {
     "access": "public"

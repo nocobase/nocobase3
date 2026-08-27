@@ -30,7 +30,7 @@ interface CanvasNodeData extends Record<string, unknown> {
   status: string;
   attempts: readonly WorkflowNodeRunRecord[];
   onViewNodeRun?: (nodeRun: WorkflowNodeRunRecord) => void;
-  onViewStartContext?: () => void;
+  onViewStartInput?: () => void;
 }
 function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>) {
   const boundary = data.kind === 'start' || data.kind === 'end';
@@ -97,7 +97,7 @@ export function WorkflowCanvas({
   selectedNodeKey,
   onSelectNode,
   onViewNodeRun,
-  onViewStartContext,
+  onViewStartInput,
 }: WorkflowCanvasProps) {
   const graph = useMemo(() => projectWorkflowGraph(definition), [definition]);
   const [layout, setLayout] = useState<{
@@ -148,7 +148,7 @@ export function WorkflowCanvas({
             ? (attemptsByNode.get(node.workflowNodeKey) ?? [])
             : [],
           onViewNodeRun,
-          onViewStartContext,
+          onViewStartInput,
         },
         draggable: false,
         selectable: node.kind !== 'end',
@@ -163,7 +163,7 @@ export function WorkflowCanvas({
       attemptsByNode,
       graph,
       onViewNodeRun,
-      onViewStartContext,
+      onViewStartInput,
       overlay,
       positions,
       selectedNodeKey,
@@ -230,7 +230,7 @@ export function WorkflowCanvas({
             : node.data.kind === 'start' || node.data.kind === 'end'
               ? 'var(--workflow-emphasis-soft)'
               : 'var(--border)';
-  const interactive = Boolean(onViewNodeRun || onViewStartContext);
+  const interactive = Boolean(onViewNodeRun || onViewStartInput);
   return (
     <div
       className='workflow-canvas'
@@ -257,7 +257,7 @@ export function WorkflowCanvas({
                     );
                     if (!graphNode) return;
                     onSelectNode?.(graphNode.workflowNodeKey ?? null);
-                    if (graphNode.kind === 'start') onViewStartContext?.();
+                    if (graphNode.kind === 'start') onViewStartInput?.();
                     else {
                       const latest = graphNode.workflowNodeKey
                         ? attemptsByNode.get(graphNode.workflowNodeKey)?.at(-1)

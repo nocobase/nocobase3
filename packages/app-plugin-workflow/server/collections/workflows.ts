@@ -10,9 +10,9 @@ export function defineWorkflows(collection: CollectionDefinitionBuilder): void {
   collection.string('title');
   collection.boolean('enabled').notNull().defaultTo(false);
   collection.text('description');
-  collection.json('contextSchema').notNull().defaultTo({ type: 'object' });
-  collection.json('inputSchema').notNull().defaultTo({});
-  collection.json('inputValues').notNull().defaultTo({});
+  collection.json('inputSchema').notNull().defaultTo({ type: 'object' });
+  collection.json('parametersSchema').notNull().defaultTo({});
+  collection.json('parameterValues').notNull().defaultTo({});
   collection
     .hasMany('nodes', WORKFLOW_COLLECTIONS.nodes)
     .foreignKey('workflowId')

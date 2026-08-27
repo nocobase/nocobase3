@@ -79,7 +79,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
         'content-type': 'application/json',
         'event-key': 'operator-request-42',
       },
-      body: JSON.stringify({ context: { amount: 100 } }),
+      body: JSON.stringify({ input: { amount: 100 } }),
     });
 
     expect(response.status).toBe(200);
@@ -99,7 +99,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       title: 'Approval',
       enabled: true,
       current: true,
-      hasInputs: false,
+      hasParameters: false,
       executed: 0,
       version: 'version-1',
       hash: 'artifact-hash',
@@ -138,8 +138,8 @@ function createWorkflowRepositories(): TestRepositories {
       enable: vi.fn(),
       disable: vi.fn(),
       setStatus: vi.fn(),
-      getInputs: vi.fn(),
-      updateInputs: vi.fn(),
+      getParameters: vi.fn(),
+      updateParameters: vi.fn(),
       get: vi.fn(),
       revisions: vi.fn(),
     },

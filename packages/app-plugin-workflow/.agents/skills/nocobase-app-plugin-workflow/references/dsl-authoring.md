@@ -6,8 +6,8 @@
 - [Complete current example](#complete-current-example)
 - [Default application lifecycle](#default-application-lifecycle)
 - [Top-level definition](#top-level-definition)
-- [Context Schema](#context-schema)
-- [Administrator inputs](#administrator-inputs)
+- [Input Schema](#input-schema)
+- [Administrator parameters](#administrator-parameters)
 - [Topology and keys](#topology-and-keys)
 - [Condition nodes](#condition-nodes)
 - [Run nodes and scripts](#run-nodes-and-scripts)
@@ -57,7 +57,7 @@ import {
 export default defineWorkflow({
   title: 'Quotation decision',
   description: 'Calculates a quotation and routes high-value cases.',
-  contextSchema: {
+  inputSchema: {
     type: 'object',
     required: ['quotationId', 'amount'],
     properties: {
@@ -66,7 +66,7 @@ export default defineWorkflow({
     },
     additionalProperties: false,
   },
-  inputs: {
+  parameters: {
     approvalLimit: {
       type: 'number',
       title: 'Approval limit',
@@ -80,8 +80,8 @@ export default defineWorkflow({
       config: {
         script: './server/calculate-risk.ts',
         args: {
-          quotationId: '{{$context.quotationId}}',
-          amount: '{{$context.amount}}',
+          quotationId: '{{$input.quotationId}}',
+          amount: '{{$input.amount}}',
         },
       },
       result: {
@@ -97,7 +97,7 @@ export default defineWorkflow({
         expression: {
           '>': [
             { var: 'nodeResults.calculateRisk.score' },
-            { var: 'input.approvalLimit' },
+            { var: 'parameters.approvalLimit' },
           ],
         },
       },
@@ -107,7 +107,7 @@ export default defineWorkflow({
           key: 'requestApproval',
           config: {
             script: './server/request-approval.ts',
-            args: { quotationId: '{{$context.quotationId}}' },
+            args: { quotationId: '{{$input.quotationId}}' },
           },
         }),
       ],
@@ -214,10 +214,10 @@ From `packages/app-template-default` (or the corresponding initialized applicati
    The normal `pnpm build` also invokes this step. The standalone command scans every direct Workflow package and replaces the configured Artifact output tree, so do not point `--dist-root` at source or an unrelated directory.
 
 4. Verify `dist/server/workflows/<stable-key>/<digest>/workflow.json` and each mapped `server/run/*.cjs`. The digest is the deployed hash used by management concurrency checks.
-5. Start the application/runtime and call `list()` or `GET /api/workflows` to discover the deployed definition. Do not assume Artifact build itself writes database definitions.
+5. Start the application/runtime and invoke by the DSL package directory key after obtaining the bound runtime. Do not assume Artifact build itself writes database definitions.
 6. If the Artifact has no synchronized id, first-enable with its deployed hash: `enable(hash)` or `POST /api/workflows/<hash>/enable`. Synchronized definitions use their database id.
 7. Read/update administrator input overrides only if needed, and read them back.
-8. Invoke business events through the public `trigger(runtime, key, context, options?)` export, explicitly handling both `accepted` and `skipped`. Use the authenticated management `run` route only for an authorized manual run of an explicitly selected definition revision; it may be historical or disabled without changing enablement.
+8. Invoke business events by obtaining the bound runtime with `getRuntimeWorkflow(appRuntime)` and calling `workflowRuntime.trigger(key, input, options?)`, explicitly handling both `accepted` and `skipped`. Use the authenticated management `run` route only for an authorized manual run of an explicitly selected definition revision; it may be historical or disabled without changing enablement.
 9. For an accepted trigger, wait for asynchronous persistence, then inspect the run, all relevant node attempts, and selected redacted payload/log records.
 
 Keep those stages separate: source check does not prove run-entry buildability; Artifact build does not enable a definition; enablement does not invoke it.
@@ -226,31 +226,31 @@ Keep those stages separate: source check does not prove run-entry buildability; 
 
 `defineWorkflow()` accepts:
 
-| Field           | Required | Contract                                                           |
-| --------------- | -------: | ------------------------------------------------------------------ |
-| `title`         |      yes | string                                                             |
-| `description`   |       no | string                                                             |
-| `options`       |       no | JSON object; only use fields understood by the runtime/application |
-| `inputs`        |       no | administrator scalar parameter declarations                        |
-| `contextSchema` |       no | object-root Context Schema; default is `{ type: 'object' }`        |
-| `nodes`         |      yes | ordered array of node expressions; may be empty                    |
+| Field         | Required | Contract                                                           |
+| ------------- | -------: | ------------------------------------------------------------------ |
+| `title`       |      yes | string                                                             |
+| `description` |       no | string                                                             |
+| `options`     |       no | JSON object; only use fields understood by the runtime/application |
+| `parameters`  |       no | administrator scalar parameter declarations                        |
+| `inputSchema` |       no | object-root Input Schema; default is `{ type: 'object' }`          |
+| `nodes`       |      yes | ordered array of node expressions; may be empty                    |
 
 There is no top-level `trigger`, `start`, node map, or edge list. The default export must be the direct/derived value returned by `defineWorkflow()` and the evaluated AST must be JSON-compatible: no functions, symbols, BigInt, Date, Map, class instances, circular references, or non-finite numbers.
 
-## Context Schema
+## Input Schema
 
-Context is supplied for each invocation and is persisted in the run. The root schema must have exactly `type: 'object'`. The current implementation accepts this subset:
+Input is supplied for each invocation and is persisted in the run. The root schema must have exactly `type: 'object'`. The current implementation accepts this subset:
 
 - Metadata: `$schema` (2020-12 literal), `title`, `description`.
 - Types: `null`, `boolean`, `number`, `integer`, `string`, `array`, `object`, including a type array.
 - Structure: `properties`, `required`, `additionalProperties`, `items`.
 - Values/limits: `enum`, `const`, `minimum`, `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`.
 
-`$ref`, `$dynamicRef`, `format`, and `$async` are explicitly rejected. Do not assume arbitrary JSON Schema keywords are implemented. At runtime, omitted `additionalProperties` behaves as `false`, so declare all accepted fields or explicitly set `true`/a schema. Context must be a JSON object, use finite numbers, and serialize to at most 65,536 UTF-8 bytes.
+`$ref`, `$dynamicRef`, `format`, and `$async` are explicitly rejected. Do not assume arbitrary JSON Schema keywords are implemented. At runtime, omitted `additionalProperties` behaves as `false`, so declare all accepted fields or explicitly set `true`/a schema. Input must be a JSON object, use finite numbers, and serialize to at most 65,536 UTF-8 bytes.
 
-## Administrator inputs
+## Administrator parameters
 
-`inputs` declares deploy-time settings; it is not invocation context. Each key must match `^[A-Za-z_][A-Za-z0-9_]*$` and cannot be `__proto__`, `prototype`, or `constructor`.
+`parameters` declares deploy-time settings; it is not invocation input. Each key must match `^[A-Za-z_][A-Za-z0-9_]*$` and cannot be `__proto__`, `prototype`, or `constructor`.
 
 Each declaration accepts only:
 
@@ -261,7 +261,7 @@ Each declaration accepts only:
 
 Enum values must be type-correct and unique; the default must occur in the enum. Boolean enum is invalid. Unknown declaration/option fields are invalid. There is no required marker: a missing override falls back to the DSL default, otherwise the value is absent.
 
-Use an exact template such as `{{$input.approvalLimit}}` or JSON Logic `{ var: 'input.approvalLimit' }`. The key must be declared. `$input` templates cannot use inline defaults or nested paths.
+Use an exact template such as `{{$parameters.approvalLimit}}` or JSON Logic `{ var: 'parameters.approvalLimit' }`. The key must be declared. `$parameters` templates cannot use inline defaults or nested paths.
 
 ## Topology and keys
 
@@ -284,7 +284,7 @@ Supported JSON Logic operators are exactly:
 
 `and`, `or`, `!`, `===`, `!==`, `>`, `>=`, `<`, `<=`, `in`, `var`, `startsWith`, `endsWith`.
 
-Variable roots are exactly `context`, `input`, and `nodeResults`. Forbidden property segments are `__proto__`, `prototype`, and `constructor`. Limits are depth 32, total nodes 256, array length 64, and variable path length 256. Operator arity is validated; comparisons use same-type numeric or string ordering. The only branches are `yes` and `no`.
+Variable roots are exactly `input`, `parameters`, and `nodeResults`. Forbidden property segments are `__proto__`, `prototype`, and `constructor`. Limits are depth 32, total nodes 256, array length 64, and variable path length 256. Operator arity is validated; comparisons use same-type numeric or string ordering. The only branches are `yes` and `no`.
 
 Condition has a built-in boolean result contract. It may therefore be referenced later as `$nodeResults.<conditionKey>` unless explicitly disabled with `result: null`.
 
@@ -332,13 +332,13 @@ Honor `runtime.signal` in cancellable I/O. Keep secrets out of args/results/logs
 
 Run args may contain templates anywhere in JSON-compatible objects/arrays:
 
-- `{{$context.path}}` reads invocation context.
-- `{{$input.key}}` reads the resolved administrator setting snapshot.
+- `{{$input.path}}` reads invocation input.
+- `{{$parameters.key}}` reads the resolved administrator setting snapshot.
 - `{{$nodeResults.nodeKey.path}}` reads a visible declared upstream result.
 
-An exact template preserves the underlying type. For example `{{$context.amount}}` can become a number. An embedded template such as `Amount: {{$context.amount}}` always becomes a string; `null`/`undefined` interpolate as empty text and objects as JSON text. Bare variable strings like `$context.amount` are also resolved, but explicit braces are clearer in DSL args.
+An exact template preserves the underlying type. For example `{{$input.amount}}` can become a number. An embedded template such as `Amount: {{$input.amount}}` always becomes a string; `null`/`undefined` interpolate as empty text and objects as JSON text. Bare variable strings like `$input.amount` are also resolved, but explicit braces are clearer in DSL args.
 
-JSON Logic drops the `$` and uses `context.path`, `input.key`, or `nodeResults.nodeKey.path`.
+JSON Logic drops the `$` and uses `input.path`, `parameters.key`, or `nodeResults.nodeKey.path`.
 
 ## Node result schemas
 
@@ -369,8 +369,8 @@ The checker performs, in order:
 1. `typecheck`: strict NodeNext TypeScript with the `source` export condition.
 2. `bundle`: esbuild bundles the workflow and imports; authoring imports are redirected to the canonical DSL entry.
 3. `evaluate`: a bounded VM evaluates the bundle and requires a valid default AST export.
-4. `schema`: Context Schema, inputs, node config, condition expression, and result schemas.
-5. `semantic`: registered types, unique/safe keys, branches, declared inputs, and visible result references.
+4. `schema`: Input Schema, parameters, node config, condition expression, and result schemas.
+5. `semantic`: registered types, unique/safe keys, branches, declared parameters, and visible result references.
 6. `compile`: flat IR topology must have one start, one owner per non-start node, no missing targets, cycles, or unreachable nodes.
 
 `check` does not scan the complete package or write the database. In particular, it does not prove that `config.script` exists or was included, validate a script's relative/bare imports, bundle the run entry, or verify its named `run` export. Its `bundle` phase bundles and evaluates `workflow.ts`, not the run scripts. Do not publish/load after any issue. Error output contains phase, code, file/line where available, AST path, node key, and contract type; fix the earliest phase first because later phases depend on it.
@@ -384,7 +384,7 @@ The default app's separate Artifact build scans each direct Workflow package, ap
 - Do not use `Date.now()`, random/UUID generation, current locale/time zone, machine absolute paths, environment-dependent branching, network calls, or mutable external state.
 - Do not read undeclared files or reach outside the package during definition construction.
 - Keep node array order intentional and stable; avoid filesystem/object enumeration whose order or contents vary by machine.
-- Put runtime lookups and changing business data in `run` scripts, context, or declared administrator inputs.
+- Put runtime lookups and changing business data in `run` scripts, input, or declared administrator parameters.
 
 Rebuild twice from unchanged sources when determinism is in doubt and compare the emitted digest. An unexpected digest change is a deployment change and must not be silently accepted during enable.
 
@@ -394,7 +394,7 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 - Import only Instruction classes exported by installed plugins and registered by the application.
 - No invented nodes/operators/config fields.
 - All objects and evaluated helpers produce JSON-only values.
-- Context root is `object`; extra fields are deliberately allowed or rejected.
+- Input root is `object`; extra fields are deliberately allowed or rejected.
 - Every input reference is declared and has no inline default/nested path.
 - Every node key is safe, global, unique, and stable.
 - Every branch belongs to the node contract.

@@ -25,6 +25,31 @@ afterEach(async () => {
 });
 
 describe('workflow skill prompt fixtures', () => {
+  it('keeps the published skill in its owning plugin package', async () => {
+    const manifest = JSON.parse(
+      await fs.readFile(path.join(packageRoot, 'package.json'), 'utf8'),
+    ) as { files?: string[] };
+
+    expect(manifest.files).toContain('.agents');
+    await expect(
+      fs.readFile(
+        path.join(
+          packageRoot,
+          '.agents/skills/nocobase-app-plugin-workflow/SKILL.md',
+        ),
+        'utf8',
+      ),
+    ).resolves.toContain('name: nocobase-app-plugin-workflow');
+    await expect(
+      fs.stat(
+        path.join(
+          repoRoot,
+          'packages/app-template-default/.agents/skills/nocobase3-workflow-manage',
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+
   it('loads unique cases from both suites', async () => {
     const cases = await loadPromptCases(testsRoot);
     expect(cases.length).toBeGreaterThanOrEqual(28);
@@ -102,6 +127,10 @@ describe('workflow skill prompt fixtures', () => {
         status: 'accepted' as const,
         eventKey: 'test-event',
       }),
+      triggerRevision: async () => ({
+        status: 'accepted' as const,
+        eventKey: 'test-event',
+      }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
       publishArtifact: async (): Promise<void> => undefined,
@@ -152,6 +181,10 @@ describe('workflow skill prompt fixtures', () => {
     const secondFixture = await openRuntimeFixture(secondDatabase);
     const runtime = {
       trigger: async () => ({
+        status: 'accepted' as const,
+        eventKey: 'test-event',
+      }),
+      triggerRevision: async () => ({
         status: 'accepted' as const,
         eventKey: 'test-event',
       }),

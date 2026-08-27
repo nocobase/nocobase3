@@ -1,8 +1,8 @@
 import type {
   JsonObject,
   WorkflowId,
-  WorkflowInputSchema,
-  WorkflowInputValues,
+  WorkflowParameterSchema,
+  WorkflowParameterValues,
   WorkflowRun,
 } from '../engine/index.js';
 
@@ -12,7 +12,7 @@ export interface WorkflowListItem {
   title: string | null;
   enabled: boolean;
   current: boolean | null;
-  hasInputs: boolean;
+  hasParameters: boolean;
   executed: number;
   version: string | null;
   hash: string | null;
@@ -52,7 +52,7 @@ export interface WorkflowRunListOptions {
 }
 export interface WorkflowRunDetail extends WorkflowRunListItem {
   hash: string | null;
-  context: unknown;
+  input: unknown;
   manually: boolean;
   reason: string | null;
   nodeRuns: WorkflowNodeRunSummary[];
@@ -74,10 +74,10 @@ export interface WorkflowNodeRunPayload {
   log: string | null;
   truncated: boolean;
 }
-export interface WorkflowInputSettings {
+export interface WorkflowParameterSettings {
   id: WorkflowId;
-  schema: WorkflowInputSchema;
-  values: WorkflowInputValues;
+  schema: WorkflowParameterSchema;
+  values: WorkflowParameterValues;
 }
 export interface WorkflowDefinitionView {
   id: string | null;
@@ -90,9 +90,9 @@ export interface WorkflowDefinitionView {
   current: boolean | null;
   executed: number;
   latestRun: { id: string; status: number | null; createdAt: string } | null;
-  contextSchema: unknown;
-  inputSchema: WorkflowInputSchema;
-  inputValues: WorkflowInputValues;
+  inputSchema: unknown;
+  parametersSchema: WorkflowParameterSchema;
+  parameterValues: WorkflowParameterValues;
   nodes: Array<{
     id: string;
     key: string;

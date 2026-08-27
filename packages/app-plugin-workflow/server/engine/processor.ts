@@ -292,7 +292,7 @@ export default class Processor {
       };
       const input = node.upstreamKey
         ? this.nodeRunsMapByNodeKey[node.upstreamKey]
-        : { result: this.execution.context };
+        : { result: this.execution.input };
       if (node.upstreamKey && !input) {
         throw new Error(
           `Upstream node run of node "${node.key}" was not found`,
@@ -592,8 +592,8 @@ export default class Processor {
         ? this.environment()
         : (this.environment ?? {});
     const base = {
-      $context: this.execution.context,
       $input: this.execution.input,
+      $parameters: this.execution.parameters,
       $nodeResults: this.nodeResultsByNodeKey,
       $system: this.functions,
       $scopes: scopes,
@@ -620,8 +620,8 @@ export default class Processor {
   /** Data-only bindings exposed to condition expressions. */
   getConditionDataBindings(): JsonLogicDataBindings {
     return Object.freeze({
-      context: Object.freeze({ ...this.execution.context }),
       input: Object.freeze({ ...this.execution.input }),
+      parameters: Object.freeze({ ...this.execution.parameters }),
       nodeResults: Object.freeze({ ...this.nodeResultsByNodeKey }),
     });
   }

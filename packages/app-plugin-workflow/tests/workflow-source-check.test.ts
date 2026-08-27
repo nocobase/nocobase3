@@ -81,7 +81,7 @@ describe('workflow check', () => {
 
   it('reports a JSON Logic validation error at the expression path', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { expression: { var: 'context.constructor.secret' } } })] });`,
+      `export default defineWorkflow({ title: 'x', nodes: [ConditionInstruction.create({ key: 'c', config: { expression: { var: 'input.constructor.secret' } } })] });`,
     );
     await expect(checkWorkflowPackage(file)).rejects.toMatchObject({
       issues: [
@@ -97,24 +97,24 @@ describe('workflow check', () => {
 
   it('checks a trigger-free definition and exposes the same context schema in AST and flat IR', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', contextSchema: { type: 'object', required: ['active'], properties: { active: { type: 'boolean' } }, additionalProperties: false }, nodes: [] });`,
+      `export default defineWorkflow({ title: 'x', inputSchema: { type: 'object', required: ['active'], properties: { active: { type: 'boolean' } }, additionalProperties: false }, nodes: [] });`,
     );
     await expect(checkWorkflowPackage(file)).resolves.toMatchObject({
-      ast: { contextSchema: { type: 'object', required: ['active'] } },
-      ir: { contextSchema: { type: 'object', required: ['active'] } },
+      ast: { inputSchema: { type: 'object', required: ['active'] } },
+      ir: { inputSchema: { type: 'object', required: ['active'] } },
     });
   });
 
   it('reports unsupported context schema capabilities with a structured path', async () => {
     const file = await sourceFile(
-      `export default defineWorkflow({ title: 'x', contextSchema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } }, nodes: [] });`,
+      `export default defineWorkflow({ title: 'x', inputSchema: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } }, nodes: [] });`,
     );
     await expect(checkWorkflowPackage(file)).rejects.toMatchObject({
       issues: [
         expect.objectContaining({
-          code: 'INVALID_CONTEXT_SCHEMA',
-          astPath: 'workflow.contextSchema.properties.id.format',
-          contractType: 'ContextSchema',
+          code: 'INVALID_INPUT_SCHEMA',
+          astPath: 'workflow.inputSchema.properties.id.format',
+          contractType: 'WorkflowInputSchema',
         }),
       ],
     });
@@ -177,7 +177,7 @@ describe('workflow check', () => {
       expect(() =>
         validateWorkflowFlatIrTopology({
           title: 'bad',
-          contextSchema: { type: 'object' },
+          inputSchema: { type: 'object' },
           start: 'start',
           nodes,
         }),

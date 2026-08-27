@@ -69,9 +69,9 @@ export async function createTestWorkflow(
       title: input.key,
       enabled: input.enabled ?? true,
       current: true,
-      contextSchema: JSON.stringify({ type: 'object' }),
-      inputSchema: JSON.stringify({}),
-      inputValues: JSON.stringify({}),
+      inputSchema: JSON.stringify({ type: 'object' }),
+      parametersSchema: JSON.stringify({}),
+      parameterValues: JSON.stringify({}),
       options: JSON.stringify(input.options ?? {}),
     })
     .execute();
@@ -156,7 +156,7 @@ export type TestRunInput = {
   startedAt?: string | null;
   expiresAt?: string | null;
   createdAt?: string;
-  context?: unknown;
+  input?: unknown;
   hash?: string | null;
 };
 
@@ -173,8 +173,8 @@ export async function insertTestRun(
       workflowKey: input.workflowKey,
       hash: input.hash ?? null,
       eventKey: input.eventKey,
-      context: JSON.stringify(input.context ?? {}),
-      input: JSON.stringify({}),
+      input: JSON.stringify(input.input ?? {}),
+      parameters: JSON.stringify({}),
       status: input.status ?? null,
       dispatched: input.dispatched ?? false,
       stack: JSON.stringify([]),

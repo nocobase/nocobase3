@@ -26,12 +26,10 @@ const testsRoot = fileURLToPath(new URL('..', import.meta.url));
 const packageRoot = path.resolve(testsRoot, '../..');
 const repoRoot = path.resolve(packageRoot, '../..');
 const skillPath = path.join(
-  repoRoot,
-  'packages',
-  'app-template-default',
+  packageRoot,
   '.agents',
   'skills',
-  'nocobase3-workflow-manage',
+  'nocobase-app-plugin-workflow',
   'SKILL.md',
 );
 const options = parseArgs(process.argv.slice(2));

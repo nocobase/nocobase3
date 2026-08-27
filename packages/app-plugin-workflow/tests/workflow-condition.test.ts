@@ -59,9 +59,9 @@ function createDispatcher(database: DatabaseManager): Dispatcher {
   return dispatcher;
 }
 
-/** `{{$context.amount}} > limit` */
+/** `{{$input.amount}} > limit` */
 function amountGreaterThan(limit: number): Record<string, unknown> {
-  return { '>': [{ var: 'context.amount' }, limit] };
+  return { '>': [{ var: 'input.amount' }, limit] };
 }
 
 describe('condition instruction', () => {
@@ -363,7 +363,7 @@ describe('condition instruction', () => {
         {
           key: 'check',
           type: 'condition',
-          config: { expression: { var: 'context.amount' } },
+          config: { expression: { var: 'input.amount' } },
         },
       ],
     });
@@ -383,8 +383,8 @@ describe('condition instruction', () => {
 
 describe('condition JSON Logic evaluation', () => {
   const data = {
-    context: { amount: 500 },
-    input: { status: 'approved' },
+    input: { amount: 500 },
+    parameters: { status: 'approved' },
     nodeResults: { lookup: ['a', 'b'] },
   };
 
@@ -392,11 +392,11 @@ describe('condition JSON Logic evaluation', () => {
     expect(evaluateJsonLogic({ '===': [1, 1] }, data)).toBe(true);
     expect(evaluateJsonLogic({ '===': ['1', 1] }, data)).toBe(false);
     expect(
-      evaluateJsonLogic({ '>': [{ var: 'context.amount' }, 100] }, data),
+      evaluateJsonLogic({ '>': [{ var: 'input.amount' }, 100] }, data),
     ).toBe(true);
     expect(
       evaluateJsonLogic(
-        { in: [{ var: 'input.status' }, ['approved', 'pending']] },
+        { in: [{ var: 'parameters.status' }, ['approved', 'pending']] },
         data,
       ),
     ).toBe(true);
@@ -419,8 +419,8 @@ describe('condition JSON Logic evaluation', () => {
   });
 
   it('returns null for a missing variable and supports a default', () => {
-    expect(evaluateJsonLogic({ var: 'context.missing' }, data)).toBeNull();
-    expect(evaluateJsonLogic({ var: ['context.missing', false] }, data)).toBe(
+    expect(evaluateJsonLogic({ var: 'input.missing' }, data)).toBeNull();
+    expect(evaluateJsonLogic({ var: ['input.missing', false] }, data)).toBe(
       false,
     );
   });
@@ -436,7 +436,7 @@ describe('validateConditionConfig', () => {
     expect(validateConditionConfig({})).toBeNull();
     expect(
       validateConditionConfig({
-        expression: { '>': [{ var: 'context.amount' }, 100] },
+        expression: { '>': [{ var: 'input.amount' }, 100] },
       }),
     ).toBeNull();
   });
@@ -458,7 +458,7 @@ describe('validateConditionConfig', () => {
       validateConditionConfig({ expression: { '>': [1] } }),
     ).not.toBeNull();
     expect(
-      validateConditionConfig({ expression: { var: 'context.__proto__.x' } }),
+      validateConditionConfig({ expression: { var: 'input.__proto__.x' } }),
     ).not.toBeNull();
     expect(
       validateConditionConfig({ expression: { var: 'system.secret' } }),
@@ -547,8 +547,8 @@ describe('Processor.getBranches', () => {
         workflowId: workflow.id,
         workflowKey: workflow.key,
         eventKey: 'ordering',
-        context: {},
         input: {},
+        parameters: {},
         status: EXECUTION_STATUS.STARTED,
         dispatched: true,
         parentRunId: null,

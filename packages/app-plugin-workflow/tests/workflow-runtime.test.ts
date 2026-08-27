@@ -14,12 +14,12 @@ import {
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
 } from '../server/engine/constants.js';
-import WorkflowRuntime from '../server/engine/engine.js';
+import WorkflowEngine from '../server/engine/engine.js';
 import { loadWorkflow } from '../server/engine/utils.js';
 import type {
   JsonObject,
   WorkflowId,
-  WorkflowRuntimeOptions,
+  WorkflowEngineOptions,
 } from '../server/engine/types.js';
 import type { WorkflowInstructionClass } from '../server/instructions/base.js';
 import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
@@ -48,7 +48,7 @@ const QUEUE_TABLE = 'queue_jobs';
 const SCHEDULES_TABLE = 'queue_schedules';
 
 type RuntimeOverrides = Omit<
-  Partial<WorkflowRuntimeOptions>,
+  Partial<WorkflowEngineOptions>,
   'database' | 'instructions'
 >;
 
@@ -81,14 +81,14 @@ function databaseQueueConfig(): AppQueueConfig {
 
 describe('workflow runtime', () => {
   let database: DatabaseManager;
-  const runtimes: WorkflowRuntime[] = [];
+  const runtimes: WorkflowEngine[] = [];
   let queueManager: NocoBaseQueueManager | null = null;
 
   function buildRuntime(
     instructions: Map<string, WorkflowInstructionClass>,
     overrides: RuntimeOverrides = {},
-  ): WorkflowRuntime {
-    const runtime = new WorkflowRuntime({
+  ): WorkflowEngine {
+    const runtime = new WorkflowEngine({
       database,
       instructions,
       ...overrides,
@@ -100,7 +100,7 @@ describe('workflow runtime', () => {
   async function initializeRuntime(
     instructions: Map<string, WorkflowInstructionClass>,
     overrides: RuntimeOverrides = {},
-  ): Promise<WorkflowRuntime> {
+  ): Promise<WorkflowEngine> {
     const runtime = buildRuntime(instructions, overrides);
     await runtime.initialize();
     return runtime;
@@ -171,7 +171,7 @@ describe('workflow runtime', () => {
         .query()
         .updateTable(WORKFLOW_COLLECTIONS.workflows)
         .set({
-          contextSchema: JSON.stringify({
+          inputSchema: JSON.stringify({
             type: 'object',
             required: ['enabled'],
             properties: { enabled: { type: 'boolean' } },
@@ -183,7 +183,7 @@ describe('workflow runtime', () => {
       const runtime = buildRuntime(new Map([['echo', echoInstruction]]));
       await runtime.initialize();
       await runtime.trigger(
-        { ...workflow, contextSchema: { type: 'object' } },
+        { ...workflow, inputSchema: { type: 'object' } },
         { enabled: true },
         { eventKey: 'once' },
       );
@@ -191,11 +191,11 @@ describe('workflow runtime', () => {
         readRun(database, await runIdOf('once')),
       ).resolves.toMatchObject({
         workflowId: workflow.id,
-        context: { enabled: true },
+        input: { enabled: true },
       });
     });
 
-    it('pins revision, context and input snapshots before a new current revision appears', async () => {
+    it('pins revision, input and parameter snapshots before a new current revision appears', async () => {
       const first = await createTestWorkflow(
         database,
         defineWorkflow({
@@ -207,7 +207,7 @@ describe('workflow runtime', () => {
         .query()
         .updateTable(WORKFLOW_COLLECTIONS.workflows)
         .set({
-          contextSchema: JSON.stringify({
+          inputSchema: JSON.stringify({
             type: 'object',
             required: ['falseValue', 'zero', 'empty', 'nested'],
             properties: {
@@ -220,7 +220,7 @@ describe('workflow runtime', () => {
               },
             },
           }),
-          inputSchema: JSON.stringify({
+          parametersSchema: JSON.stringify({
             limit: { type: 'number', default: 3 },
           }),
         })
@@ -255,7 +255,7 @@ describe('workflow runtime', () => {
         .query()
         .updateTable(WORKFLOW_COLLECTIONS.workflows)
         .set({
-          inputSchema: JSON.stringify({
+          parametersSchema: JSON.stringify({
             limit: { type: 'number', default: 9 },
           }),
         })
@@ -264,8 +264,8 @@ describe('workflow runtime', () => {
       const runId = await runIdOf('pinned-event');
       await expect(readRun(database, runId)).resolves.toMatchObject({
         workflowId: first.id,
-        context,
-        input: { limit: 3 },
+        input: context,
+        parameters: { limit: 3 },
       });
     });
     it('registers core instructions and lets the caller override them', () => {
@@ -427,7 +427,7 @@ describe('workflow runtime', () => {
             {
               key: 'gate',
               type: 'condition',
-              config: equals('context.mode', 'yes'),
+              config: equals('input.mode', 'yes'),
               downstreamKey: 'after',
             },
             {
@@ -482,7 +482,7 @@ describe('workflow runtime', () => {
             {
               key: 'gate',
               type: 'condition',
-              config: equals('context.mode', 'yes'),
+              config: equals('input.mode', 'yes'),
               downstreamKey: 'after',
             },
             {
@@ -516,14 +516,14 @@ describe('workflow runtime', () => {
             {
               key: 'outer',
               type: 'condition',
-              config: equals('context.mode', 'yes'),
+              config: equals('input.mode', 'yes'),
               upstreamKey: 'start',
               downstreamKey: 'tail',
             },
             {
               key: 'inner',
               type: 'condition',
-              config: equals('context.deep', 'yes'),
+              config: equals('input.deep', 'yes'),
               upstreamKey: 'outer',
               branchKey: 'yes',
             },
@@ -1089,7 +1089,7 @@ describe('workflow runtime', () => {
 
   describe('rerun', () => {
     type SuspendedRun = {
-      runtime: WorkflowRuntime;
+      runtime: WorkflowEngine;
       runId: WorkflowId;
       counter: WorkflowInstructionClass & { readonly calls: () => number };
     };

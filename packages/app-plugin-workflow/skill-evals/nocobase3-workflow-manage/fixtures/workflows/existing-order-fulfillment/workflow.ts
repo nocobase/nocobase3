@@ -6,7 +6,7 @@ import {
 
 export default defineWorkflow({
   title: 'Existing order fulfillment',
-  contextSchema: {
+  inputSchema: {
     type: 'object',
     required: ['orderId'],
     properties: {
@@ -19,7 +19,7 @@ export default defineWorkflow({
       key: 'loadOrder',
       config: {
         script: './server/load-order.ts',
-        args: { orderId: '{{$context.orderId}}' },
+        args: { orderId: '{{$input.orderId}}' },
       },
       result: {
         type: 'object',
@@ -39,7 +39,7 @@ export default defineWorkflow({
           key: 'reserveInventory',
           config: {
             script: './server/reserve-inventory.ts',
-            args: { orderId: '{{$context.orderId}}' },
+            args: { orderId: '{{$input.orderId}}' },
           },
         }),
       ],
@@ -48,7 +48,7 @@ export default defineWorkflow({
           key: 'markBackorder',
           config: {
             script: './server/mark-backorder.ts',
-            args: { orderId: '{{$context.orderId}}' },
+            args: { orderId: '{{$input.orderId}}' },
           },
         }),
       ],
@@ -57,7 +57,7 @@ export default defineWorkflow({
       key: 'recordOutcome',
       config: {
         script: './server/record-outcome.ts',
-        args: { orderId: '{{$context.orderId}}' },
+        args: { orderId: '{{$input.orderId}}' },
       },
     }),
   ],

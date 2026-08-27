@@ -1,17 +1,17 @@
 import type { JsonObject, JsonValue } from './types.js';
 
-export type ContextSchemaType =
+export type WorkflowInputSchemaType =
   'null' | 'boolean' | 'number' | 'integer' | 'string' | 'array' | 'object';
 
-export interface ContextSchema {
+export interface WorkflowInputSchema {
   $schema?: 'https://json-schema.org/draft/2020-12/schema';
-  type?: ContextSchemaType | ContextSchemaType[];
+  type?: WorkflowInputSchemaType | WorkflowInputSchemaType[];
   title?: string;
   description?: string;
-  properties?: Record<string, ContextSchema>;
+  properties?: Record<string, WorkflowInputSchema>;
   required?: string[];
-  additionalProperties?: boolean | ContextSchema;
-  items?: ContextSchema;
+  additionalProperties?: boolean | WorkflowInputSchema;
+  items?: WorkflowInputSchema;
   enum?: JsonValue[];
   const?: JsonValue;
   minimum?: number;
@@ -22,15 +22,15 @@ export interface ContextSchema {
   maxItems?: number;
 }
 
-export interface ContextValidationIssue {
+export interface InputValidationIssue {
   path: string;
   keyword: string;
   message: string;
 }
 
-export interface ContextValidationResult {
+export interface InputValidationResult {
   valid: boolean;
-  issues: ContextValidationIssue[];
+  issues: InputValidationIssue[];
 }
 
 export type WorkflowTriggerSkipReason = 'not-found' | 'disabled';
@@ -39,9 +39,9 @@ export type WorkflowTriggerReceipt =
   | { status: 'accepted'; eventKey: string }
   | { status: 'skipped'; reason: WorkflowTriggerSkipReason; eventKey?: never };
 
-export const WORKFLOW_CONTEXT_SCHEMA_DIALECT: 'https://json-schema.org/draft/2020-12/schema' =
+export const WORKFLOW_INPUT_SCHEMA_DIALECT: 'https://json-schema.org/draft/2020-12/schema' =
   'https://json-schema.org/draft/2020-12/schema';
-export const WORKFLOW_CONTEXT_MAX_BYTES: 65536 = 65_536;
+export const WORKFLOW_INPUT_MAX_BYTES: 65536 = 65_536;
 export const WORKFLOW_INVOCATION_SCHEDULING: 'enqueue' = 'enqueue';
 
 export class WorkflowInvocationError extends Error {
@@ -49,19 +49,19 @@ export class WorkflowInvocationError extends Error {
     readonly code:
       | 'WORKFLOW_NOT_FOUND'
       | 'WORKFLOW_DISABLED'
-      | 'INVALID_CONTEXT'
-      | 'CONTEXT_TOO_LARGE'
+      | 'INVALID_INPUT'
+      | 'INPUT_TOO_LARGE'
       | 'PARENT_RUN_NOT_FOUND'
       | 'STACK_LIMIT_EXCEEDED',
     message: string,
-    readonly issues: readonly ContextValidationIssue[] = [],
+    readonly issues: readonly InputValidationIssue[] = [],
   ) {
     super(message);
     this.name = 'WorkflowInvocationError';
   }
 }
 
-function jsonType(value: JsonValue): ContextSchemaType {
+function jsonType(value: JsonValue): WorkflowInputSchemaType {
   if (value === null) return 'null';
   if (Array.isArray(value)) return 'array';
   if (typeof value === 'number')
@@ -74,10 +74,10 @@ function sameJson(left: JsonValue, right: JsonValue): boolean {
 }
 
 function validateValue(
-  schema: ContextSchema,
+  schema: WorkflowInputSchema,
   value: JsonValue,
   path: string,
-  issues: ContextValidationIssue[],
+  issues: InputValidationIssue[],
 ): void {
   const actual = jsonType(value);
   const types =
@@ -194,37 +194,37 @@ function validateValue(
   }
 }
 
-export function validateContextValue(
-  schema: ContextSchema,
-  context: JsonObject,
-): ContextValidationResult {
-  const issues: ContextValidationIssue[] = [];
-  validateValue(schema, context, '$', issues);
+export function validateInputValue(
+  schema: WorkflowInputSchema,
+  input: JsonObject,
+): InputValidationResult {
+  const issues: InputValidationIssue[] = [];
+  validateValue(schema, input, '$', issues);
   return { valid: issues.length === 0, issues };
 }
 
-export function assertContextSize(context: JsonObject): void {
-  const bytes = Buffer.byteLength(JSON.stringify(context), 'utf8');
-  if (bytes > WORKFLOW_CONTEXT_MAX_BYTES) {
+export function assertInputSize(input: JsonObject): void {
+  const bytes = Buffer.byteLength(JSON.stringify(input), 'utf8');
+  if (bytes > WORKFLOW_INPUT_MAX_BYTES) {
     throw new WorkflowInvocationError(
-      'CONTEXT_TOO_LARGE',
-      `Workflow context exceeds ${WORKFLOW_CONTEXT_MAX_BYTES} bytes`,
+      'INPUT_TOO_LARGE',
+      `Workflow input exceeds ${WORKFLOW_INPUT_MAX_BYTES} bytes`,
     );
   }
 }
 
-export function validateContextSchema(
-  schema: ContextSchema,
-): ContextValidationResult {
-  const issues: ContextValidationIssue[] = [];
+export function validateWorkflowInputSchema(
+  schema: WorkflowInputSchema,
+): InputValidationResult {
+  const issues: InputValidationIssue[] = [];
   if (schema.type !== 'object')
     issues.push({
       path: '$.type',
       keyword: 'type',
-      message: 'context schema root type must be object',
+      message: 'input schema root type must be object',
     });
   const unsupported = ['$ref', '$dynamicRef', 'format', '$async'];
-  const visit = (candidate: ContextSchema, path: string): void => {
+  const visit = (candidate: WorkflowInputSchema, path: string): void => {
     const record = candidate as object;
     for (const keyword of unsupported) {
       if (Object.hasOwn(record, keyword))

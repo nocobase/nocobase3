@@ -26,7 +26,7 @@ async function fixture(
 function ir(scripts: string[]): WorkflowFlatIr {
   return {
     title: 'x',
-    contextSchema: { type: 'object' },
+    inputSchema: { type: 'object' },
     start: scripts.length ? 'n0' : null,
     nodes: scripts.map((script, index) => ({
       key: `n${index}`,

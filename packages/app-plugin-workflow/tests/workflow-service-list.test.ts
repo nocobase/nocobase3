@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { WorkflowRepository } from '../server/services/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/services/workflow-run-repository.js';
-import type { AppWorkflowRuntime } from '../server/runtime/runtime.js';
+import type { WorkflowServiceApi } from '../server/runtime/runtime.js';
+import type { WorkflowDistArtifact } from '../server/loader/index.js';
 import {
   createTestDatabase,
   createTestWorkflow,
@@ -18,14 +19,18 @@ describe('workflow repositories', () => {
 
   beforeEach(async () => {
     database = await createTestDatabase();
-    const runtime: AppWorkflowRuntime = {
+    const service: WorkflowServiceApi = {
       trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
       refreshSourceResolvers: async (): Promise<void> => undefined,
       discoverArtifacts: async () => [],
       publishArtifact: async (): Promise<void> => undefined,
     };
-    workflows = new WorkflowRepository(database, runtime);
-    workflowRuns = new WorkflowRunRepository(database, runtime);
+    workflows = new WorkflowRepository(database, service);
+    workflowRuns = new WorkflowRunRepository(database, service);
   });
 
   afterEach(async () => {
@@ -53,6 +58,70 @@ describe('workflow repositories', () => {
 
     expect(page).toMatchObject({ page: 1, pageSize: 1, total: 1 });
     expect(page.data.map((item) => item.key)).toEqual(['expense-approval']);
+  });
+
+  it('loads run summaries only for the requested workflow page', async () => {
+    const older = await createTestWorkflow(database, {
+      key: 'older-workflow',
+      nodes: [],
+    });
+    const newer = await createTestWorkflow(database, {
+      key: 'newer-workflow',
+      nodes: [],
+    });
+    await insertTestRun(database, {
+      workflowId: older.id,
+      workflowKey: older.key,
+      eventKey: 'older-active',
+      status: 0,
+    });
+    await insertTestRun(database, {
+      workflowId: newer.id,
+      workflowKey: newer.key,
+      eventKey: 'newer-completed',
+      status: 1,
+    });
+    await insertTestRun(database, {
+      workflowId: newer.id,
+      workflowKey: newer.key,
+      eventKey: 'newer-active',
+      status: null,
+    });
+
+    const page = await workflows.list({ page: 1, pageSize: 1 });
+
+    expect(page).toMatchObject({ page: 1, pageSize: 1, total: 2 });
+    expect(page.data).toEqual([
+      expect.objectContaining({
+        key: 'newer-workflow',
+        activeRunCount: 1,
+        latestRun: expect.objectContaining({ status: null }),
+      }),
+    ]);
+  });
+
+  it('paginates matching undeployed artifacts after database workflows', async () => {
+    await createTestWorkflow(database, { key: 'database-workflow', nodes: [] });
+    const artifacts: WorkflowDistArtifact[] = [
+      createArtifact('artifact-one'),
+      createArtifact('artifact-two'),
+    ];
+    const service: WorkflowServiceApi = {
+      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
+      refreshSourceResolvers: async (): Promise<void> => undefined,
+      discoverArtifacts: async () => artifacts,
+      publishArtifact: async (): Promise<void> => undefined,
+    };
+    workflows = new WorkflowRepository(database, service);
+
+    const page = await workflows.list({ page: 2, pageSize: 1 });
+
+    expect(page).toMatchObject({ page: 2, pageSize: 1, total: 3 });
+    expect(page.data.map((item) => item.key)).toEqual(['artifact-one']);
   });
 
   it('filters executions before applying pagination', async () => {
@@ -114,9 +183,9 @@ describe('workflow repositories', () => {
         title: 'versioned v2',
         enabled: false,
         current: true,
-        contextSchema: JSON.stringify({ type: 'object' }),
-        inputSchema: JSON.stringify({}),
-        inputValues: JSON.stringify({}),
+        inputSchema: JSON.stringify({ type: 'object' }),
+        parametersSchema: JSON.stringify({}),
+        parameterValues: JSON.stringify({}),
         options: JSON.stringify({}),
       })
       .execute();
@@ -142,3 +211,18 @@ describe('workflow repositories', () => {
     ]);
   });
 });
+
+function createArtifact(key: string): WorkflowDistArtifact {
+  return {
+    key,
+    digest: key.padEnd(64, '0'),
+    directory: `/tmp/${key}`,
+    workflow: {
+      formatVersion: 1,
+      key,
+      inputSchema: { type: 'object' },
+      parameters: {},
+      nodes: [],
+    },
+  };
+}

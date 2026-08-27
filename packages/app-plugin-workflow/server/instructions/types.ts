@@ -3,20 +3,23 @@ export type JsonValue =
   JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 
-export interface WorkflowInputOption {
+export interface WorkflowParameterOption {
   label: string;
   value: string | number;
 }
 
-export interface WorkflowInputDeclaration {
+export interface WorkflowParameterDeclaration {
   type: 'string' | 'number' | 'boolean';
   title?: string;
   description?: string;
   default?: string | number | boolean;
-  enum?: WorkflowInputOption[];
+  enum?: WorkflowParameterOption[];
 }
 
-export type WorkflowInputSchema = Record<string, WorkflowInputDeclaration>;
+export type WorkflowParameterSchema = Record<
+  string,
+  WorkflowParameterDeclaration
+>;
 
 export interface ConfigIssue {
   path: string;
@@ -27,7 +30,7 @@ export interface JSONSchema {
   readonly [key: string]: JsonValue;
 }
 
-export interface ContextSchema extends JSONSchema {
+export interface WorkflowInputSchema extends JSONSchema {
   readonly type: 'object';
 }
 
@@ -118,8 +121,8 @@ export interface WorkflowSourceInput {
   title: string;
   description?: string;
   options?: JsonObject;
-  inputs?: WorkflowInputSchema;
-  contextSchema?: ContextSchema;
+  parameters?: WorkflowParameterSchema;
+  inputSchema?: WorkflowInputSchema;
   nodes: readonly AnyNodeExpression[];
 }
 
@@ -138,8 +141,8 @@ export interface WorkflowSourceAst {
   title: string;
   description?: string;
   options?: JsonObject;
-  inputs?: WorkflowInputSchema;
-  contextSchema: ContextSchema;
+  parameters?: WorkflowParameterSchema;
+  inputSchema: WorkflowInputSchema;
   nodes: NodeSourceAst[];
 }
 
@@ -162,8 +165,8 @@ export interface WorkflowFlatIr {
   title: string;
   description?: string;
   options?: JsonObject;
-  inputs?: WorkflowInputSchema;
-  contextSchema: ContextSchema;
+  parameters?: WorkflowParameterSchema;
+  inputSchema: WorkflowInputSchema;
   start: string | null;
   nodes: WorkflowFlatNode[];
 }

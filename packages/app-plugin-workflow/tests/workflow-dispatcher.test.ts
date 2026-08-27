@@ -62,9 +62,9 @@ describe('workflow dispatcher and processor', () => {
         title: 'Key topology',
         enabled: true,
         current: true,
-        contextSchema: { type: 'object' },
-        inputSchema: {},
-        inputValues: {},
+        inputSchema: { type: 'object' },
+        parametersSchema: {},
+        parameterValues: {},
         options: {},
       })
       .execute();
@@ -154,9 +154,9 @@ describe('workflow dispatcher and processor', () => {
         key: 'recoverable',
         enabled: true,
         current: true,
-        contextSchema: { type: 'object' },
-        inputSchema: {},
-        inputValues: {},
+        inputSchema: { type: 'object' },
+        parametersSchema: {},
+        parameterValues: {},
         options: {},
       })
       .execute();
@@ -185,8 +185,8 @@ describe('workflow dispatcher and processor', () => {
         workflowId,
         workflowKey: 'recoverable',
         eventKey: 'recover-event',
-        context: JSON.stringify({}),
         input: JSON.stringify({}),
+        parameters: JSON.stringify({}),
         status: null,
         dispatched: false,
         stack: JSON.stringify([]),
@@ -255,7 +255,7 @@ describe('Processor public API', () => {
       status: EXECUTION_STATUS.STARTED,
       dispatched: true,
       startedAt: new Date().toISOString(),
-      context: { amount: 7 },
+      input: { amount: 7 },
     });
     const execution = await readRun(database, runId);
     // A fresh definition per processor: `prepare()` links `upstream` /
@@ -483,13 +483,13 @@ describe('Processor public API', () => {
     const b1 = processor.nodesMap.get('b1');
 
     const scope = processor.getScope(b1);
-    expect(scope.$context).toEqual({ amount: 7 });
-    expect(scope.$input).toEqual({});
+    expect(scope.$input).toEqual({ amount: 7 });
+    expect(scope.$parameters).toEqual({});
     expect(scope.$node).toBe(b1);
     expect(scope.ctx).toBeDefined();
 
-    expect(processor.getParsedValue('{{$context.amount}}', b1)).toBe(7);
-    expect(processor.getParsedValue('amount is {{$context.amount}}', b1)).toBe(
+    expect(processor.getParsedValue('{{$input.amount}}', b1)).toBe(7);
+    expect(processor.getParsedValue('amount is {{$input.amount}}', b1)).toBe(
       'amount is 7',
     );
     expect(

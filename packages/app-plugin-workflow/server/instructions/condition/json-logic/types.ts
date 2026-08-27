@@ -26,7 +26,7 @@ export interface JsonLogicCapabilities {
   engine: 'json-logic';
   version: 1;
   operators: readonly JsonLogicOperatorCapability[];
-  variableRoots: readonly ('context' | 'input' | 'nodeResults')[];
+  variableRoots: readonly ('input' | 'parameters' | 'nodeResults')[];
   limits: {
     maxDepth: number;
     maxNodes: number;
@@ -73,7 +73,7 @@ export interface JsonLogicValidationResult {
 }
 
 export interface JsonLogicDataBindings {
-  readonly context: Readonly<Record<string, unknown>>;
   readonly input: Readonly<Record<string, unknown>>;
+  readonly parameters: Readonly<Record<string, unknown>>;
   readonly nodeResults: Readonly<Record<string, unknown>>;
 }

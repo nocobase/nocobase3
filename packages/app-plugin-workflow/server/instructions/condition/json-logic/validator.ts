@@ -29,8 +29,8 @@ export const JSON_LOGIC_OPERATORS: readonly JsonLogicOperator[] = [
   'endsWith',
 ];
 export const JSON_LOGIC_VARIABLE_ROOTS: readonly (
-  'context' | 'input' | 'nodeResults'
-)[] = ['context', 'input', 'nodeResults'];
+  'input' | 'parameters' | 'nodeResults'
+)[] = ['input', 'parameters', 'nodeResults'];
 
 const OPERATORS: ReadonlySet<JsonLogicOperator> = new Set<JsonLogicOperator>(
   JSON_LOGIC_OPERATORS,

@@ -12,7 +12,7 @@ export interface WorkflowListRecord {
   description?: string | null;
   enabled: boolean;
   current: boolean | null;
-  hasInputs: boolean;
+  hasParameters: boolean;
   executed: number;
   version?: string | null;
   hash?: string | null;
@@ -34,12 +34,12 @@ export interface WorkflowDetailRecord extends WorkflowListRecord {
   description: string | null;
   hash: string | null;
   version: string | null;
-  contextSchema: JsonObject;
-  inputSchema: Record<string, WorkflowInputDeclaration>;
-  inputValues: Record<string, string | number | boolean>;
+  inputSchema: JsonObject;
+  parametersSchema: Record<string, WorkflowParameterDeclaration>;
+  parameterValues: Record<string, string | number | boolean>;
   nodes: WorkflowNodeRecord[];
 }
-export interface WorkflowInputDeclaration {
+export interface WorkflowParameterDeclaration {
   type: 'string' | 'number' | 'boolean';
   title?: string;
   description?: string;
@@ -54,7 +54,7 @@ export interface WorkflowRunRecord {
   workflowVersion?: string | null;
   eventKey: string;
   status: number | null;
-  context?: unknown;
+  input?: unknown;
   nodeRuns?: WorkflowNodeRunRecord[];
   createdAt: string;
   startedAt?: string | null;
@@ -87,7 +87,7 @@ export interface WorkflowCanvasProps {
   selectedNodeKey?: string | null;
   onSelectNode?: (nodeKey: string | null) => void;
   onViewNodeRun?: (nodeRun: WorkflowNodeRunRecord) => void;
-  onViewStartContext?: () => void;
+  onViewStartInput?: () => void;
 }
 export interface WorkflowCanvasModel {
   graph: WorkflowGraph;

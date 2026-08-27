@@ -62,8 +62,8 @@ export function restoreFromFlatIr(
     title: ir.title,
     ...(ir.description === undefined ? {} : { description: ir.description }),
     ...(ir.options === undefined ? {} : { options: ir.options }),
-    ...(ir.inputs === undefined ? {} : { inputs: ir.inputs }),
-    contextSchema: ir.contextSchema,
+    ...(ir.parameters === undefined ? {} : { parameters: ir.parameters }),
+    inputSchema: ir.inputSchema,
     nodes: buildBlock(ir.start),
   };
 }

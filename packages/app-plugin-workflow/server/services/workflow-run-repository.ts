@@ -8,8 +8,7 @@ import {
   type WorkflowId,
   type WorkflowTriggerReceipt,
 } from '../engine/index.js';
-import type { AppWorkflowRuntime } from '../runtime/runtime.js';
-import { triggerWorkflowDefinition } from '../runtime/runtime.js';
+import type { WorkflowServiceApi } from '../runtime/runtime.js';
 import { BadRequestError } from './errors.js';
 import {
   normalizePage,
@@ -38,9 +37,9 @@ export class WorkflowRunRepository {
 
   constructor(
     private readonly database: DatabaseManager,
-    private readonly runtime: AppWorkflowRuntime,
+    private readonly service: WorkflowServiceApi,
   ) {
-    this.repository = new WorkflowRepository(database, runtime);
+    this.repository = new WorkflowRepository(database, service);
   }
 
   async list(
@@ -134,7 +133,7 @@ export class WorkflowRunRepository {
     return {
       ...toRunItem(row),
       hash: row.hash == null ? null : String(row.hash),
-      context: parsePayload(row.context),
+      input: parsePayload(row.input),
       startedAt: row.startedAt == null ? null : String(row.startedAt),
       finishedAt: row.finishedAt == null ? null : String(row.finishedAt),
       manually:
@@ -146,10 +145,10 @@ export class WorkflowRunRepository {
 
   async trigger(
     workflowKey: string,
-    context: JsonObject,
+    input: JsonObject,
     options: WorkflowEventOptions = {},
   ): Promise<WorkflowTriggerReceipt> {
-    return this.runtime.trigger(workflowKey, context, options);
+    return this.service.trigger(workflowKey, input, options);
   }
 
   async nodeRuns(
@@ -207,7 +206,7 @@ export class WorkflowRunRepository {
 
   async run(
     id: WorkflowId,
-    context: unknown,
+    input: unknown,
     options: WorkflowEventOptions = {},
   ): Promise<WorkflowRunListItem> {
     const workflow = await loadWorkflow(this.database.query(), id);
@@ -221,16 +220,11 @@ export class WorkflowRunRepository {
       .where('eventKey', '=', eventKey)
       .executeTakeFirst<Row>();
     if (existing) return toRunItem(existing);
-    await triggerWorkflowDefinition(
-      this.runtime,
-      workflow,
-      requireJsonObject(context),
-      {
-        ...options,
-        eventKey,
-        manually: true,
-      },
-    );
+    await this.service.triggerRevision(id, requireJsonObject(input), {
+      ...options,
+      eventKey,
+      manually: true,
+    });
     return this.findRun(
       eventKey,
       workflow.key,

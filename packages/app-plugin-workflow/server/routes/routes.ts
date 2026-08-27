@@ -2,8 +2,8 @@ import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
 import { Hono } from 'hono';
 
 import {
-  getRuntimeWorkflow,
-  type AppWorkflowRuntime,
+  getWorkflowService,
+  type WorkflowService,
 } from '../runtime/runtime.js';
 import { AppServiceError } from '../services/errors.js';
 import { WorkflowRepository } from '../services/workflow-repository.js';
@@ -21,10 +21,10 @@ export function createWorkflowRoutes(
   database: NonNullable<
     WorkflowPluginRoutesContext['deps']['runtime']['database']
   >,
-  runtime: AppWorkflowRuntime,
+  service: WorkflowService,
 ): Hono {
-  const workflows = new WorkflowRepository(database, runtime);
-  const workflowRuns = new WorkflowRunRepository(database, runtime);
+  const workflows = new WorkflowRepository(database, service);
+  const workflowRuns = new WorkflowRunRepository(database, service);
   const routes = new Hono();
   routes.route('/', createWorkflowDefinitionRoutes(workflows));
   routes.route('/', createWorkflowRunRoutes(workflowRuns));
@@ -44,15 +44,15 @@ export default function registerWorkflowRoutes({
     return context.json({ error: 'Internal server error.' }, 500);
   });
   protectedRoutes.use('*', deps.auth.required());
-  const workflowRuntime = getRuntimeWorkflow(deps.runtime);
-  if (deps.runtime.database && workflowRuntime) {
+  const workflowService = getWorkflowService(deps.runtime);
+  if (deps.runtime.database && workflowService) {
     protectedRoutes.route(
       '/',
-      createWorkflowRoutes(deps.runtime.database, workflowRuntime),
+      createWorkflowRoutes(deps.runtime.database, workflowService),
     );
   } else {
     protectedRoutes.all('*', (context) =>
-      context.json({ error: 'Workflow runtime is not configured.' }, 503),
+      context.json({ error: 'Workflow service is not configured.' }, 503),
     );
   }
   app.route('/api', protectedRoutes);

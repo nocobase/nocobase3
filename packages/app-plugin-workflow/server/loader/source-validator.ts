@@ -5,11 +5,11 @@ import type {
 
 import type { WorkflowInstructionClass } from '../engine/types.js';
 import {
-  normalizeWorkflowInputSchema,
-  type WorkflowInputSchema,
-} from '../engine/inputs.js';
+  normalizeWorkflowParameterSchema,
+  type WorkflowParameterSchema,
+} from '../engine/parameters.js';
 import type { WorkflowSourceIssue } from './source-issues.js';
-import { validateContextSchema } from '../engine/invocation.js';
+import { validateWorkflowInputSchema } from '../engine/invocation.js';
 import {
   resolveNodeResultSchema,
   validateNodeResultReference,
@@ -109,22 +109,26 @@ export function validateWorkflowSourceAst(
   contracts: WorkflowSourceContracts | WorkflowSourceRuntimeContracts,
 ): WorkflowSourceIssue[] {
   const issues: WorkflowSourceIssue[] = [];
-  for (const schemaIssue of validateContextSchema(ast.contextSchema).issues) {
+  for (const schemaIssue of validateWorkflowInputSchema(ast.inputSchema)
+    .issues) {
     issues.push(
       issue(
         file,
         'schema',
-        'INVALID_CONTEXT_SCHEMA',
+        'INVALID_INPUT_SCHEMA',
         schemaIssue.message,
-        `workflow.contextSchema${schemaIssue.path.slice(1)}`,
-        'ContextSchema',
+        `workflow.inputSchema${schemaIssue.path.slice(1)}`,
+        'WorkflowInputSchema',
         'workflow',
       ),
     );
   }
-  let inputs: WorkflowInputSchema = {};
+  let parameters: WorkflowParameterSchema = {};
   try {
-    inputs = normalizeWorkflowInputSchema(ast.inputs, 'workflow.inputs');
+    parameters = normalizeWorkflowParameterSchema(
+      ast.parameters,
+      'workflow.parameters',
+    );
   } catch (error) {
     issues.push(
       issue(
@@ -132,8 +136,8 @@ export function validateWorkflowSourceAst(
         'schema',
         'INVALID_INPUT_SCHEMA',
         error instanceof Error ? error.message : String(error),
-        'workflow.inputs',
-        'WorkflowInputSchema',
+        'workflow.parameters',
+        'WorkflowParameterSchema',
         'workflow',
       ),
     );
@@ -256,15 +260,17 @@ export function validateWorkflowSourceAst(
             );
           continue;
         }
-        if (!parameter.key.includes('$input')) continue;
-        const match = /^\$input\.([A-Za-z_][A-Za-z0-9_]*)$/.exec(parameter.key);
+        if (!parameter.key.includes('$parameters')) continue;
+        const match = /^\$parameters\.([A-Za-z_][A-Za-z0-9_]*)$/.exec(
+          parameter.key,
+        );
         const message =
           parameter.defaultValue !== undefined
-            ? `Workflow input reference "${parameter.key}" cannot have an inline default`
+            ? `Workflow parameter reference "${parameter.key}" cannot have an inline default`
             : !match
-              ? `Invalid workflow input reference "${parameter.key}"`
-              : !Object.hasOwn(inputs, match[1])
-                ? `Workflow input "${match[1]}" is not declared`
+              ? `Invalid workflow parameter reference "${parameter.key}"`
+              : !Object.hasOwn(parameters, match[1])
+                ? `Workflow parameter "${match[1]}" is not declared`
                 : null;
         if (message)
           issues.push(
@@ -303,14 +309,16 @@ export function validateWorkflowSourceAst(
             );
           continue;
         }
-        const match = /^input\.([A-Za-z_][A-Za-z0-9_]*)(?:\.|$)/.exec(variable);
+        const match = /^parameters\.([A-Za-z_][A-Za-z0-9_]*)(?:\.|$)/.exec(
+          variable,
+        );
         if (
-          variable.startsWith('input.') &&
-          (!match || !Object.hasOwn(inputs, match[1]))
+          variable.startsWith('parameters.') &&
+          (!match || !Object.hasOwn(parameters, match[1]))
         ) {
           const message = !match
-            ? `Invalid workflow input reference "${variable}"`
-            : `Workflow input "${match[1]}" is not declared`;
+            ? `Invalid workflow parameter reference "${variable}"`
+            : `Workflow parameter "${match[1]}" is not declared`;
           issues.push(
             issue(
               file,

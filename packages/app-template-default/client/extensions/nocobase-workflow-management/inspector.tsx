@@ -264,14 +264,14 @@ function WorkflowRunResultDialogContent({
   );
 }
 
-export interface WorkflowContextDialogProps {
-  context: unknown;
+export interface WorkflowInputDialogProps {
+  input: unknown;
   onClose: () => void;
 }
-export function WorkflowContextDialog({
-  context,
+export function WorkflowInputDialog({
+  input,
   onClose,
-}: WorkflowContextDialogProps) {
+}: WorkflowInputDialogProps) {
   const animatedClose = useAnimatedDialogClose(onClose);
   return (
     <div
@@ -287,25 +287,25 @@ export function WorkflowContextDialog({
         className='workflow-result-dialog'
         role='dialog'
         aria-modal='true'
-        aria-labelledby='workflow-context-title'
+        aria-labelledby='workflow-input-title'
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
           <div>
-            <h2 id='workflow-context-title'>Workflow context</h2>
+            <h2 id='workflow-input-title'>Workflow input</h2>
             <p>Input context available when this execution started.</p>
           </div>
           <button
             type='button'
-            aria-label='Close context'
+            aria-label='Close input'
             onClick={animatedClose.close}
           >
             ×
           </button>
         </header>
         <div className='workflow-result-content'>
-          <h3>Context</h3>
-          <pre>{displayValue(context)}</pre>
+          <h3>Input</h3>
+          <pre>{displayValue(input)}</pre>
         </div>
       </section>
     </div>

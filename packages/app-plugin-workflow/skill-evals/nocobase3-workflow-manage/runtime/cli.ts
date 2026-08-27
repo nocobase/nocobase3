@@ -30,6 +30,10 @@ try {
       status: 'accepted' as const,
       eventKey: 'fixture-event',
     }),
+    triggerRevision: async () => ({
+      status: 'accepted' as const,
+      eventKey: 'fixture-event',
+    }),
     refreshSourceResolvers: async (): Promise<void> => undefined,
     discoverArtifacts: async () => [],
     publishArtifact: async (): Promise<void> => undefined,

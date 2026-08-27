@@ -10,8 +10,11 @@ import type {
   WorkflowRun,
   WorkflowNodeRun,
 } from './types.js';
-import type { WorkflowInputSchema, WorkflowInputValues } from './inputs.js';
-import type { ContextSchema } from './invocation.js';
+import type {
+  WorkflowParameterSchema,
+  WorkflowParameterValues,
+} from './parameters.js';
+import type { WorkflowInputSchema } from './invocation.js';
 
 export const noopWorkflowLogger: WorkflowLogger = {
   debug: () => undefined,
@@ -86,11 +89,17 @@ export function hydrateWorkflow(
     title: asNullableString(row.title),
     enabled: asBoolean(row.enabled),
     description: asNullableString(row.description),
-    contextSchema: parseJson<ContextSchema>(row.contextSchema, {
+    inputSchema: parseJson<WorkflowInputSchema>(row.inputSchema, {
       type: 'object',
     }),
-    inputSchema: parseJson<WorkflowInputSchema>(row.inputSchema, {}),
-    inputValues: parseJson<WorkflowInputValues>(row.inputValues, {}),
+    parametersSchema: parseJson<WorkflowParameterSchema>(
+      row.parametersSchema,
+      {},
+    ),
+    parameterValues: parseJson<WorkflowParameterValues>(
+      row.parameterValues,
+      {},
+    ),
     current: row.current == null ? null : asBoolean(row.current),
     options: parseJson<JsonObject>(row.options, {}),
     nodes,
@@ -104,8 +113,8 @@ export function hydrateRun(row: Row): WorkflowRun {
     workflowKey: String(row.workflowKey),
     hash: asNullableString(row.hash),
     eventKey: String(row.eventKey),
-    context: parseJson<JsonObject>(row.context, {}),
-    input: parseJson<WorkflowInputValues>(row.input, {}),
+    input: parseJson<JsonObject>(row.input, {}),
+    parameters: parseJson<WorkflowParameterValues>(row.parameters, {}),
     status: row.status == null ? null : Number(row.status),
     dispatched: asBoolean(row.dispatched),
     parentRunId:

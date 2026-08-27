@@ -8,9 +8,9 @@ import {
 } from '../../client/index.js';
 import type { WorkflowSourceAst } from '../../server/instructions/types.js';
 
-const contextSchema = { type: 'object' } as const;
+const inputSchema = { type: 'object' } as const;
 function definition(nodes: WorkflowSourceAst['nodes']): WorkflowSourceAst {
-  return { title: 'test', contextSchema, nodes };
+  return { title: 'test', inputSchema, nodes };
 }
 
 describe('workflow client graph', () => {

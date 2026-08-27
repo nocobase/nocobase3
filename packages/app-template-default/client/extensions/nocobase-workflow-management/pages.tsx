@@ -15,7 +15,7 @@ import {
 } from '@nocobase/app-plugin-workflow/client';
 import { workflowApi } from './data';
 import {
-  WorkflowContextDialog,
+  WorkflowInputDialog,
   WorkflowInspector,
   WorkflowRunResultDialog,
 } from './inspector';
@@ -108,8 +108,8 @@ function definition(workflow: WorkflowDetailRecord): WorkflowNestedDefinition {
   return restoreFromFlatIr({
     title: workflow.title ?? workflow.key,
     ...(workflow.description ? { description: workflow.description } : {}),
-    contextSchema: workflow.contextSchema,
-    inputs: normalizeWorkflowInputs(workflow.inputSchema),
+    inputSchema: workflow.inputSchema,
+    parameters: normalizeWorkflowParameters(workflow.parametersSchema),
     start: workflow.nodes.find((node) => node.upstreamKey == null)?.key ?? null,
     nodes: workflow.nodes.map((node) => ({
       key: node.key,
@@ -123,11 +123,11 @@ function definition(workflow: WorkflowDetailRecord): WorkflowNestedDefinition {
     })),
   });
 }
-function normalizeWorkflowInputs(
-  inputSchema: WorkflowDetailRecord['inputSchema'],
+function normalizeWorkflowParameters(
+  parametersSchema: WorkflowDetailRecord['parametersSchema'],
 ): JsonObject {
   return Object.fromEntries(
-    Object.entries(inputSchema).map(([key, input]) => [
+    Object.entries(parametersSchema).map(([key, input]) => [
       key,
       {
         type: input.type,
@@ -177,9 +177,9 @@ function InputDialog({
   onClose: () => void;
 }): React.ReactElement {
   if (!workflow.id)
-    throw new Error('Workflow must be synchronized before editing inputs.');
+    throw new Error('Workflow must be synchronized before editing parameters.');
   const workflowId = workflow.id;
-  const [values, setValues] = useState(workflow.inputValues);
+  const [values, setValues] = useState(workflow.parameterValues);
   return (
     <div className='workflow-result-backdrop' onMouseDown={onClose}>
       <section
@@ -193,7 +193,7 @@ function InputDialog({
             ×
           </button>
         </header>
-        {Object.entries(workflow.inputSchema).map(([key, item]) => (
+        {Object.entries(workflow.parametersSchema).map(([key, item]) => (
           <label key={key}>
             {item.title ?? key}
             <input
@@ -224,7 +224,7 @@ function InputDialog({
           <button
             type='button'
             onClick={() =>
-              void workflowApi.inputs(workflowId, values).then(onClose)
+              void workflowApi.parameters(workflowId, values).then(onClose)
             }
           >
             Save
@@ -244,7 +244,7 @@ function ManualRunDialog({
   if (!workflow.id)
     throw new Error('Workflow must be synchronized before manual execution.');
   const workflowId = workflow.id;
-  const properties = contextProperties(workflow.contextSchema);
+  const properties = contextProperties(workflow.inputSchema);
   const [values, setValues] = useState<
     Record<string, string | number | boolean | undefined>
   >(() =>
@@ -255,13 +255,13 @@ function ManualRunDialog({
     ),
   );
   const run = (): void => {
-    const context = Object.fromEntries(
+    const input = Object.fromEntries(
       Object.entries(values).filter(
         ([, value]) => value !== undefined && value !== '',
       ),
     ) as Record<string, string | number | boolean>;
     void workflowApi
-      .execute(workflowId, context, crypto.randomUUID())
+      .execute(workflowId, input, crypto.randomUUID())
       .then(onClose);
   };
   return (
@@ -274,7 +274,7 @@ function ManualRunDialog({
         <header>
           <div>
             <h2>Run manually</h2>
-            <p>Fill in the workflow context.</p>
+            <p>Fill in the workflow input.</p>
           </div>
           <button type='button' onClick={onClose}>
             ×
@@ -430,7 +430,7 @@ function WorkflowRow({
             <div>
               <button
                 type='button'
-                disabled={!item.hasInputs}
+                disabled={!item.hasParameters}
                 onClick={() =>
                   void workflowApi.workflow(identifier).then(setSettings)
                 }
@@ -540,7 +540,7 @@ export function WorkflowDetailPage(): React.ReactElement {
   const loaded = useAsync(loadWorkflow);
   const revisions = useAsync(loadRevisions);
   const runs = useAsync(loadRuns);
-  const [dialog, setDialog] = useState<'inputs' | 'runs' | 'manual' | null>(
+  const [dialog, setDialog] = useState<'parameters' | 'runs' | 'manual' | null>(
     null,
   );
   const [enabledState, setEnabledState] = useState<{
@@ -558,8 +558,8 @@ export function WorkflowDetailPage(): React.ReactElement {
     enabledState.workflowId === identifier
       ? enabledState.value
       : workflow.enabled;
-  const hasContext =
-    Object.keys(contextProperties(workflow.contextSchema)).length > 0;
+  const hasInput =
+    Object.keys(contextProperties(workflow.inputSchema)).length > 0;
   return (
     <main className='workflow-page'>
       <Link to='..'>← Workflows</Link>
@@ -621,15 +621,15 @@ export function WorkflowDetailPage(): React.ReactElement {
             </label>
             <button
               type='button'
-              onClick={() => setDialog('inputs')}
-              disabled={!workflow.id || !workflow.hasInputs}
+              onClick={() => setDialog('parameters')}
+              disabled={!workflow.id || !workflow.hasParameters}
             >
               Parameter settings
             </button>
             <button
               type='button'
               onClick={() =>
-                hasContext
+                hasInput
                   ? setDialog('manual')
                   : void workflowApi.execute(
                       identifier,
@@ -645,7 +645,7 @@ export function WorkflowDetailPage(): React.ReactElement {
         </header>
         <WorkflowCanvas definition={definition(workflow)} />
       </section>
-      {dialog === 'inputs' ? (
+      {dialog === 'parameters' ? (
         <InputDialog workflow={workflow} onClose={() => setDialog(null)} />
       ) : null}
       {dialog === 'runs' ? (
@@ -727,7 +727,7 @@ export function WorkflowRunDetailPage(): React.ReactElement {
   const { runId = '' } = useParams();
   const [search, setSearch] = useSearchParams();
   const [nodeRun, setNodeRun] = useState<WorkflowNodeRunRecord | null>(null);
-  const [contextOpen, setContextOpen] = useState(false);
+  const [inputOpen, setInputOpen] = useState(false);
   const loadRun = useCallback(() => workflowApi.run(runId), [runId]);
   const state = useAsync(loadRun);
   const run = state.value;
@@ -770,7 +770,7 @@ export function WorkflowRunDetailPage(): React.ReactElement {
           })
         }
         onViewNodeRun={setNodeRun}
-        onViewStartContext={() => setContextOpen(true)}
+        onViewStartInput={() => setInputOpen(true)}
       />
       <WorkflowInspector
         nodeKey={selected}
@@ -784,10 +784,10 @@ export function WorkflowRunDetailPage(): React.ReactElement {
           onClose={() => setNodeRun(null)}
         />
       ) : null}
-      {contextOpen ? (
-        <WorkflowContextDialog
-          context={run.context}
-          onClose={() => setContextOpen(false)}
+      {inputOpen ? (
+        <WorkflowInputDialog
+          input={run.input}
+          onClose={() => setInputOpen(false)}
         />
       ) : null}
     </main>

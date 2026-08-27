@@ -47,7 +47,7 @@ export async function loadPromptCases(
     const parsed = YAML.parse(await fs.readFile(file, 'utf8')) as PromptSuite;
     if (
       parsed.version !== 1 ||
-      parsed.skill !== 'nocobase3-workflow-manage' ||
+      parsed.skill !== 'nocobase-app-plugin-workflow' ||
       !Array.isArray(parsed.cases)
     ) {
       throw new Error(`Invalid prompt suite root: ${file}`);

@@ -2,7 +2,7 @@ import { defineWorkflow, RunInstruction } from '@nocobase/app-plugin-workflow';
 
 export default defineWorkflow({
   title: 'Broken quotation fixture',
-  contextSchema: {
+  inputSchema: {
     type: 'object',
     properties: {
       quotationId: { type: 'string', format: 'uuid' },

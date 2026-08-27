@@ -17,17 +17,13 @@ import {
   buildWorkflowArtifact,
   writeWorkflowArtifact,
 } from '../server/loader/artifact-builder.js';
-import {
-  createAppWorkflowRuntime,
-  disposeAppWorkflowRuntime,
-} from '../server/runtime/runtime.js';
+import { WorkflowService } from '../server/runtime/runtime.js';
 import { WorkflowRepository } from '../server/services/workflow-repository.js';
 import { WorkflowRunRepository } from '../server/services/workflow-run-repository.js';
 import {
   WORKFLOW_COLLECTIONS,
   workflowCollectionSchemas,
 } from '../server/collections/index.js';
-import { trigger } from '../server/trigger.js';
 
 const roots: string[] = [];
 const databases: DatabaseManager[] = [];
@@ -86,13 +82,13 @@ async function emit(distRoot: string, title: string): Promise<string> {
   };
   const flatIr = {
     title,
-    contextSchema: { type: 'object' as const },
+    inputSchema: { type: 'object' as const },
     start: 'run',
     nodes: [node],
   };
   const built = buildWorkflowArtifact({
     scanned: { key: 'sample', root: '/ci/source', entries: [] },
-    definition: { title, contextSchema: flatIr.contextSchema, nodes: [] },
+    definition: { title, inputSchema: flatIr.inputSchema, nodes: [] },
     flatIr,
     serverEntries: {
       one: {
@@ -108,8 +104,8 @@ async function emit(distRoot: string, title: string): Promise<string> {
   await writeWorkflowArtifact(built, distRoot);
   return built.digest;
 }
-function runtime(f: Awaited<ReturnType<typeof fixture>>) {
-  return createAppWorkflowRuntime({
+function createService(f: Awaited<ReturnType<typeof fixture>>) {
+  return new WorkflowService({
     database: f.database,
     queue: f.queue,
     sourceRoot: path.join(f.root, 'server/workflows'),
@@ -127,9 +123,9 @@ describe('application workflow Artifact lazy synchronization', () => {
   it('discovers without writes, materializes on enable, and publishes a new deployed revision on trigger', async () => {
     const f = await fixture();
     const v1 = await emit(f.distRoot, 'v1');
-    const firstRuntime = runtime(f);
-    const firstService = new WorkflowRepository(f.database, firstRuntime);
-    const discovered = await firstService.list();
+    const firstService = createService(f);
+    const firstRepository = new WorkflowRepository(f.database, firstService);
+    const discovered = await firstRepository.list();
     expect(discovered.data).toEqual([
       expect.objectContaining({
         id: null,
@@ -144,7 +140,7 @@ describe('application workflow Artifact lazy synchronization', () => {
         .selectFrom(WORKFLOW_COLLECTIONS.workflows)
         .exists(),
     ).toBe(false);
-    await firstService.enable(v1);
+    await firstRepository.enable(v1);
     const first = await f.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
@@ -156,11 +152,11 @@ describe('application workflow Artifact lazy synchronization', () => {
     expect(
       await fs.readdir(path.join(f.storeRoot, 'workflows/sample', v1)),
     ).toEqual(expect.arrayContaining(['workflow.json', 'server']));
-    await firstService.setStatus(first.id as string, false);
+    await firstRepository.setStatus(first.id as string, false);
     await expect(
-      firstService.enable(first.id as string),
+      firstRepository.enable(first.id as string),
     ).resolves.toMatchObject({ id: String(first.id), enabled: true, hash: v1 });
-    await trigger(firstRuntime, 'sample', {}, { eventKey: 'artifact-run' });
+    await firstService.trigger('sample', {}, { eventKey: 'artifact-run' });
     const run = await f.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.runs)
@@ -175,15 +171,15 @@ describe('application workflow Artifact lazy synchronization', () => {
       .where('workflowRunId', '=', run.id)
       .executeTakeFirstOrThrow<Row>();
     expect(JSON.parse(String(nodeRun.result))).toBe('v1');
-    await disposeAppWorkflowRuntime(firstRuntime);
+    await firstService.dispose();
 
     const v2 = await emit(f.distRoot, 'v2');
-    const upgradeRuntime = runtime(f);
-    const upgradeService = new WorkflowRunRepository(
+    const upgradeService = createService(f);
+    const upgradeRepository = new WorkflowRunRepository(
       f.database,
-      upgradeRuntime,
+      upgradeService,
     );
-    await trigger(upgradeRuntime, 'sample', {}, { eventKey: 'artifact-v2' });
+    await upgradeService.trigger('sample', {}, { eventKey: 'artifact-v2' });
     const revisions = await f.database
       .query()
       .selectFrom(WORKFLOW_COLLECTIONS.workflows)
@@ -200,7 +196,7 @@ describe('application workflow Artifact lazy synchronization', () => {
     expect(Boolean(revisions[1].current)).toBe(true);
     expect(run.hash).toBe(v1);
 
-    const manual = await upgradeService.run(
+    const manual = await upgradeRepository.run(
       revisions[0].id as string,
       {},
       {
@@ -220,51 +216,54 @@ describe('application workflow Artifact lazy synchronization', () => {
       .executeTakeFirstOrThrow<Row>();
     expect(Boolean(manualRow.manually)).toBe(true);
     expect(manualRow.hash).toBe(v1);
-    await disposeAppWorkflowRuntime(upgradeRuntime);
+    await upgradeService.dispose();
   });
   it('does not inspect deployment for an unknown trigger and validates deployment only on discovery', async () => {
     const f = await fixture();
-    const missing = runtime(f);
-    const missingService = new WorkflowRepository(f.database, missing);
-    await expect(trigger(missing, 'sample', {})).resolves.toEqual({
+    const missing = createService(f);
+    const missingRepository = new WorkflowRepository(f.database, missing);
+    await expect(missing.trigger('sample', {})).resolves.toEqual({
       status: 'skipped',
       reason: 'not-found',
     });
-    await expect(missingService.list()).resolves.toMatchObject({ data: [] });
-    await disposeAppWorkflowRuntime(missing);
+    await expect(missingRepository.list()).resolves.toMatchObject({ data: [] });
+    await missing.dispose();
 
     const digest = await emit(f.distRoot, 'bad');
     await fs.writeFile(
       path.join(f.distRoot, 'sample', digest, 'workflow.json'),
       '{}',
     );
-    const tampered = runtime(f);
-    const tamperedService = new WorkflowRepository(f.database, tampered);
-    await expect(tamperedService.list()).rejects.toThrow(
+    const tampered = createService(f);
+    const tamperedRepository = new WorkflowRepository(f.database, tampered);
+    await expect(tamperedRepository.list()).rejects.toThrow(
       /invalid workflow.json/,
     );
-    await disposeAppWorkflowRuntime(tampered);
+    await tampered.dispose();
 
     await fs.mkdir(path.join(f.distRoot, 'sample', 'a'.repeat(64)), {
       recursive: true,
     });
-    const multiple = runtime(f);
-    const multipleService = new WorkflowRepository(f.database, multiple);
-    await expect(multipleService.list()).rejects.toThrow(/exactly one digest/);
-    await disposeAppWorkflowRuntime(multiple);
-    expect(() =>
-      createAppWorkflowRuntime({
-        database: f.database,
-        queue: f.queue,
-        distRoot: f.distRoot,
-        artifactDisk: {
-          driver: 'fs',
-          location: f.storeRoot,
-          visibility: 'private',
-        },
-        production: true,
-        sourceResolverDiagnostic: true,
-      }),
+    const multiple = createService(f);
+    const multipleRepository = new WorkflowRepository(f.database, multiple);
+    await expect(multipleRepository.list()).rejects.toThrow(
+      /exactly one digest/,
+    );
+    await multiple.dispose();
+    expect(
+      () =>
+        new WorkflowService({
+          database: f.database,
+          queue: f.queue,
+          distRoot: f.distRoot,
+          artifactDisk: {
+            driver: 'fs',
+            location: f.storeRoot,
+            visibility: 'private',
+          },
+          production: true,
+          sourceResolverDiagnostic: true,
+        }),
     ).toThrow(/forbidden in production/);
   });
 });

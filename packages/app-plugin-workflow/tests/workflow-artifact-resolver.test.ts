@@ -19,7 +19,7 @@ describe('ArtifactResolver', () => {
     roots.push(root);
     const definition = {
       title: 'x',
-      contextSchema: { type: 'object' as const },
+      inputSchema: { type: 'object' as const },
       nodes: [],
     };
     const code = 'exports.run = (args) => ({ version: args.version });';

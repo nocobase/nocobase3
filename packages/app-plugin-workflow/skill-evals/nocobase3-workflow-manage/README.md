@@ -79,11 +79,11 @@ Run the deterministic runner/fixture tests with:
 pnpm eval:skill:test
 ```
 
-The evaluated skill itself remains in
-`packages/app-template-default/.agents/skills/nocobase3-workflow-manage`. The
-runner resolves that path from the repository root. This `skill-evals`
-directory is development-only and is excluded from the workflow package's npm
-tarball by `.npmignore`.
+The evaluated skill lives in
+`packages/app-plugin-workflow/.agents/skills/nocobase-app-plugin-workflow`.
+The runner resolves it from the package root. This `skill-evals` directory is
+development-only and is excluded from the workflow package's npm tarball by
+the package `files` allowlist.
 
 ## Adding another agent
 

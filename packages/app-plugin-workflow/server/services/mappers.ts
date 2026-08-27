@@ -44,7 +44,7 @@ export function toWorkflowListItem(
       row.current == null
         ? null
         : row.current === true || row.current === 1 || row.current === '1',
-    hasInputs: hasObjectKeys(row.inputSchema),
+    hasParameters: hasObjectKeys(row.parametersSchema),
     executed,
     version: row.version == null ? null : String(row.version),
     hash: row.hash == null ? null : String(row.hash),
@@ -76,9 +76,9 @@ export function toDiscoveredWorkflowDefinition(
     current: null,
     executed: 0,
     latestRun: null,
-    contextSchema: artifact.workflow.contextSchema,
-    inputSchema: artifact.workflow.inputs ?? {},
-    inputValues: {},
+    inputSchema: artifact.workflow.inputSchema,
+    parametersSchema: artifact.workflow.parameters ?? {},
+    parameterValues: {},
     nodes: artifact.workflow.nodes.map((node, index) => ({
       id: `${artifact.key}:${index}`,
       key: node.key,
@@ -105,9 +105,9 @@ export function toWorkflowDefinitionView(
     version: workflow.version,
     enabled: workflow.enabled,
     current: workflow.current,
-    contextSchema: workflow.contextSchema,
     inputSchema: workflow.inputSchema,
-    inputValues: workflow.inputValues,
+    parametersSchema: workflow.parametersSchema,
+    parameterValues: workflow.parameterValues,
     nodes: workflow.nodes.map((node) => ({
       id: String(node.id),
       key: node.key,
@@ -185,7 +185,7 @@ export function redactLog(value: string): string {
 
 export function requireJsonObject(value: unknown): JsonObject {
   if (!isJsonObject(value))
-    throw new BadRequestError('Workflow context must be a JSON object.');
+    throw new BadRequestError('Workflow input must be a JSON object.');
   return value;
 }
 

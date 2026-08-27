@@ -18,7 +18,7 @@ async function artifact(
   const source = path.join(base, 'source');
   const definition = {
     title: 'x',
-    contextSchema: { type: 'object' as const },
+    inputSchema: { type: 'object' as const },
     nodes: [],
   };
   const built = buildWorkflowArtifact({

@@ -1,11 +1,6 @@
 import { Hono } from 'hono';
 
-import {
-  parseStatus,
-  readContext,
-  readPage,
-  toPageResponse,
-} from './helpers.js';
+import { parseStatus, readInput, readPage, toPageResponse } from './helpers.js';
 import type { WorkflowRunRepository } from '../services/workflow-run-repository.js';
 
 export function createWorkflowRunRoutes(
@@ -38,7 +33,7 @@ export function createWorkflowRunRoutes(
   routes.post('/workflows/:id/run', async (c) => {
     const data = await workflowRuns.run(
       c.req.param('id'),
-      await readContext(c.req.raw),
+      await readInput(c.req.raw),
       { eventKey: c.req.header('event-key') ?? undefined },
     );
     return c.json({ data });

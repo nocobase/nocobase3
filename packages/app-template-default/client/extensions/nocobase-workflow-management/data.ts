@@ -49,23 +49,23 @@ export const workflowApi = {
     request(`/workflows/${encodeURIComponent(idOrHash)}/enable`, {
       method: 'POST',
     }),
-  inputs: (
+  parameters: (
     id: string,
-    inputValues: Record<string, string | number | boolean>,
+    parameterValues: Record<string, string | number | boolean>,
   ): Promise<object> =>
-    request(`/workflows/${encodeURIComponent(id)}/input-values`, {
+    request(`/workflows/${encodeURIComponent(id)}/parameters`, {
       method: 'PUT',
-      body: JSON.stringify({ inputValues }),
+      body: JSON.stringify({ parameterValues }),
     }),
   execute: (
     id: string,
-    context: object,
+    input: object,
     eventKey: string,
   ): Promise<WorkflowRunRecord> =>
     request(`/workflows/${encodeURIComponent(id)}/run`, {
       method: 'POST',
       headers: { 'event-key': eventKey },
-      body: JSON.stringify({ context }),
+      body: JSON.stringify({ input }),
     }),
 };
 

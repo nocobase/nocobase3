@@ -24,7 +24,7 @@
         "tabs",
         "textarea"
       ],
-      "docs": "Provides workflow and execution lists, hidden detail routes, a read-only canvas, visibility-aware HTTP refreshes for non-terminal execution views, input overrides, status management and manual execution. These client refreshes are unrelated to server-side workflow timeout detection.",
+      "docs": "Provides workflow and execution lists, hidden detail routes, a read-only canvas, visibility-aware HTTP refreshes for non-terminal execution views, parameter overrides, status management and manual execution. These client refreshes are unrelated to server-side workflow timeout detection.",
       "meta": {
         "ownership": "application",
         "upgradePolicy": "three-way-merge",
