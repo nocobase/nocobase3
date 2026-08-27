@@ -21,6 +21,7 @@ import {
 import type {
   NotificationManagerOptions,
   NotificationRecipient,
+  NotificationProviderIdentity,
   NotificationSendInput,
   NotificationSendResult,
 } from './types.js';
@@ -159,27 +160,55 @@ export class NotificationManager<
       );
     }
 
-    return this.sendExpanded({
-      source: input.source,
-      recipients: recipients.map((recipient) => ({
-        channels: channels.map((channel) => {
-          const resolved = this.channelManager.resolveRecipient(
+    const expandedRecipients: {
+      readonly channels: readonly {
+        readonly channel: string;
+        readonly provider: NotificationProviderIdentity;
+        readonly recipient: object;
+        readonly error?: NotificationErrorRecord;
+      }[];
+    }[] = [];
+    for (const recipient of recipients) {
+      const targets: {
+        readonly channel: string;
+        readonly provider: NotificationProviderIdentity;
+        readonly recipient: object;
+        readonly error?: NotificationErrorRecord;
+      }[] = [];
+      for (const channel of channels) {
+        const providers = this.channelManager.providerIdentities(channel);
+        if (providers.length === 0)
+          throw new Error(
+            `Notification Channel "${channel}" has no matching enabled Provider.`,
+          );
+        for (const provider of providers) {
+          const resolved = await this.channelManager.resolveRecipient(
             channel,
             recipient,
+            provider,
           );
-          return resolved
-            ? { channel, recipient: resolved }
-            : {
-                channel,
-                recipient,
-                error: {
-                  code: 'RECIPIENT_UNSUPPORTED',
-                  category: 'recipient',
-                  message: `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
+          targets.push(
+            resolved
+              ? { channel, provider, recipient: resolved }
+              : {
+                  channel,
+                  provider,
+                  recipient,
+                  error: {
+                    code: 'RECIPIENT_UNSUPPORTED',
+                    category: 'recipient',
+                    message: `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
+                  },
                 },
-              };
-        }),
-      })),
+          );
+        }
+      }
+      expandedRecipients.push({ channels: targets });
+    }
+
+    return this.sendExpanded({
+      source: input.source,
+      recipients: expandedRecipients,
       message,
     });
   }
@@ -192,6 +221,7 @@ export class NotificationManager<
     readonly recipients: readonly {
       readonly channels: readonly {
         readonly channel: string;
+        readonly provider: NotificationProviderIdentity;
         readonly recipient: object;
         readonly error?: NotificationErrorRecord;
       }[];
@@ -214,29 +244,20 @@ export class NotificationManager<
           throw new Error(
             `Notification Channel "${target.channel}" is not enabled.`,
           );
-        const providers = this.channelManager.providerIdentities(
-          target.channel,
-        );
-        if (providers.length === 0)
-          throw new Error(
-            `Notification Channel "${target.channel}" has no matching enabled Provider.`,
-          );
-        for (const provider of providers) {
-          deliveries.push({
-            id: randomUUID(),
-            notificationId,
-            channel: target.channel,
-            recipientSnapshot: target.recipient,
-            messageSnapshot: message,
-            providerName: provider.name,
-            providerType: provider.type,
-            attemptCount: 0,
-            status: target.error ? 'failed' : 'pending',
-            lastError: target.error,
-            createdAt: now,
-            updatedAt: now,
-          });
-        }
+        deliveries.push({
+          id: randomUUID(),
+          notificationId,
+          channel: target.channel,
+          recipientSnapshot: target.recipient,
+          messageSnapshot: message,
+          providerName: target.provider.name,
+          providerType: target.provider.type,
+          attemptCount: 0,
+          status: target.error ? 'failed' : 'pending',
+          lastError: target.error,
+          createdAt: now,
+          updatedAt: now,
+        });
       }
     }
     if (deliveries.length === 0)
@@ -371,13 +392,14 @@ export class NotificationManager<
       throw new Error(
         `Notification Channel definition "${type}" is not registered.`,
       );
-    const context = {
-      database: this.options.database,
+    const channel = await definition.createChannel(
+      { logger: this.options.logger },
+      config,
+    );
+    const providerContext = {
       logger: this.options.logger,
-      queue: this.options.queue,
-      store: this.store,
+      now: (): Promise<string> => this.store.now(),
     };
-    const channel = await definition.createChannel(context, config);
     const providers: import('./types.js').NotificationProvider[] = [];
     try {
       const providerNames = new Set<string>();
@@ -397,7 +419,7 @@ export class NotificationManager<
             `Provider definition "${providerConfig.type}" is not registered for Channel "${type}".`,
           );
         const provider = await providerDefinition.createProvider(
-          context,
+          providerContext,
           providerConfig,
         );
         providers.push(provider);
