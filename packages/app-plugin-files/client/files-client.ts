@@ -6,30 +6,232 @@ import type {
   FileUploadOptions,
 } from './types.js';
 
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { resolveNocoBaseServerUrl } from '@nocobase/app-portal-sdk/runtime';
+
+declare global {
+  interface ImportMeta {
+    readonly env?: {
+      readonly BASE_URL?: string;
+      readonly API_CLIENT_SHARE_TOKEN?: string;
+      readonly API_CLIENT_STORAGE_PREFIX?: string;
+      readonly API_CLIENT_STORAGE_TYPE?: string;
+      readonly NOCOBASE_API_TOKEN?: string;
+      readonly NOCOBASE_API_URL?: string;
+      readonly NOCOBASE_AUTHENTICATOR?: string;
+      readonly NOCOBASE_WS_PATH?: string;
+      readonly NOCOBASE_WS_URL?: string;
+    };
+  }
+
+  interface Window {
+    NOCOBASE_API_URL?: string;
+    NOCOBASE_PORTAL_BASE?: string;
+    NOCOBASE_WS_PATH?: string;
+    NOCOBASE_WS_URL?: string;
+  }
+}
+
+export class FilesClientError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly serverMessage: string;
+
+  constructor(
+    message: string,
+    options: { status?: number; code?: string; serverMessage?: string } = {},
+  ) {
+    super(message);
+    this.name = 'FilesClientError';
+    this.status = options.status ?? 0;
+    this.code = options.code;
+    this.serverMessage = options.serverMessage ?? message;
+  }
+}
+
+function normalizeEndpoint(endpoint: string): string {
+  const value = endpoint.trim();
+  if (!value) throw new FilesClientError('Files client endpoint is required.');
+  return value.replace(/\/+$/, '') || '/';
+}
+
+function resolveEndpoint(endpoint: string): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(endpoint)) return endpoint;
+  return resolveNocoBaseServerUrl(endpoint);
+}
+
+function joinEndpoint(endpoint: string, suffix = ''): string {
+  return suffix ? `${endpoint}/${suffix.replace(/^\/+/, '')}` : `${endpoint}/`;
+}
+
+function encodeId(id: string): string {
+  return encodeURIComponent(id);
+}
+
+function toClientError(error: unknown): FilesClientError {
+  if (error instanceof FilesClientError) return error;
+  if (error && typeof error === 'object') {
+    const value = error as {
+      status?: unknown;
+      code?: unknown;
+      message?: unknown;
+      payload?: unknown;
+    };
+    const payload = value.payload;
+    const detail =
+      payload && typeof payload === 'object'
+        ? (payload as {
+            code?: unknown;
+            message?: unknown;
+            error?: { code?: unknown; message?: unknown };
+          })
+        : undefined;
+    const nested = detail?.error;
+    const code =
+      typeof value.code === 'string'
+        ? value.code
+        : typeof nested?.code === 'string'
+          ? nested.code
+          : typeof detail?.code === 'string'
+            ? detail.code
+            : undefined;
+    const serverMessage =
+      typeof nested?.message === 'string'
+        ? nested.message
+        : typeof detail?.message === 'string'
+          ? detail.message
+          : typeof value.message === 'string'
+            ? value.message
+            : 'Files request failed.';
+    return new FilesClientError(serverMessage, {
+      status: typeof value.status === 'number' ? value.status : undefined,
+      code,
+      serverMessage,
+    });
+  }
+  return new FilesClientError('Files request failed.');
+}
+
 export function createFilesClient(
-  _options: CreateFilesClientOptions,
+  options: CreateFilesClientOptions,
 ): FilesClient {
-  const notImplemented = (): Error =>
-    new Error('Files client behavior is not implemented yet.');
+  const endpoint = resolveEndpoint(normalizeEndpoint(options.endpoint)).replace(
+    /\/+$/,
+    '',
+  );
+
+  async function request<T>(
+    path: string,
+    requestOptions: {
+      method: 'GET' | 'POST' | 'DELETE';
+      body?: unknown;
+    },
+  ): Promise<T> {
+    try {
+      const headers = nocobaseClient.getHeaders({
+        method: requestOptions.method,
+        body: requestOptions.body,
+      });
+      const response = await fetch(path, {
+        method: requestOptions.method,
+        headers,
+        credentials: 'include',
+        body:
+          requestOptions.body === undefined
+            ? undefined
+            : requestOptions.body instanceof FormData
+              ? requestOptions.body
+              : JSON.stringify(requestOptions.body),
+      });
+      const renewedToken = response.headers.get('x-new-token');
+      if (renewedToken) nocobaseClient.setToken(renewedToken);
+      const text = await response.text();
+      let payload: unknown;
+      try {
+        payload = text ? JSON.parse(text) : undefined;
+      } catch {
+        payload = text;
+      }
+      if (!response.ok) {
+        const detail =
+          payload && typeof payload === 'object'
+            ? (payload as {
+                code?: unknown;
+                message?: unknown;
+                error?: { code?: unknown; message?: unknown };
+              })
+            : undefined;
+        const nested = detail?.error;
+        const code =
+          typeof nested?.code === 'string'
+            ? nested.code
+            : typeof detail?.code === 'string'
+              ? detail.code
+              : undefined;
+        const serverMessage =
+          typeof payload === 'string'
+            ? payload
+            : typeof nested?.message === 'string'
+              ? nested.message
+              : typeof detail?.message === 'string'
+                ? detail.message
+                : `Files request failed (${response.status}).`;
+        throw new FilesClientError(serverMessage, {
+          status: response.status,
+          code,
+          serverMessage,
+        });
+      }
+      if (!payload || typeof payload !== 'object' || !('data' in payload)) {
+        throw new FilesClientError(
+          'Files response is missing its data envelope.',
+          {
+            status: response.status,
+          },
+        );
+      }
+      return (payload as { data: T }).data;
+    } catch (error) {
+      throw toClientError(error);
+    }
+  }
 
   return {
     list(): Promise<readonly FileRecord[]> {
-      return Promise.reject(notImplemented());
+      return request<readonly FileRecord[]>(joinEndpoint(endpoint), {
+        method: 'GET',
+      });
     },
-    upload(
-      _file: File,
-      _uploadOptions?: FileUploadOptions,
-    ): Promise<FileRecord> {
-      return Promise.reject(notImplemented());
+    upload(file: File, uploadOptions?: FileUploadOptions): Promise<FileRecord> {
+      const body = new FormData();
+      body.append('file', file, file.name);
+      if (uploadOptions?.public !== undefined) {
+        body.append('public', String(uploadOptions.public));
+      }
+      return request<FileRecord>(joinEndpoint(endpoint), {
+        method: 'POST',
+        body,
+      });
     },
-    get(_id: string): Promise<FileRecord> {
-      return Promise.reject(notImplemented());
+    get(id: string): Promise<FileRecord> {
+      return request<FileRecord>(joinEndpoint(endpoint, encodeId(id)), {
+        method: 'GET',
+      });
     },
-    createAccessUrl(_id: string, _expiresIn?: number): Promise<FileAccessUrl> {
-      return Promise.reject(notImplemented());
+    createAccessUrl(id: string, expiresIn?: number): Promise<FileAccessUrl> {
+      const body = expiresIn === undefined ? undefined : { expiresIn };
+      return request<FileAccessUrl>(
+        joinEndpoint(endpoint, `${encodeId(id)}/token`),
+        {
+          method: 'POST',
+          body,
+        },
+      );
     },
-    remove(_id: string): Promise<void> {
-      return Promise.reject(notImplemented());
+    async remove(id: string): Promise<void> {
+      await request<unknown>(joinEndpoint(endpoint, encodeId(id)), {
+        method: 'DELETE',
+      });
     },
   };
 }
