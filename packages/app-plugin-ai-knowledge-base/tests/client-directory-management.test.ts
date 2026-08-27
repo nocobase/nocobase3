@@ -26,7 +26,11 @@ test('directory is a fixed card layout with create, menu, and enabled controls',
   );
   expect(livePage).not.toMatch(/Search knowledge bases|onQueryChange|view=/);
   expect(livePage).toMatch(/Add new/);
-  expect(livePage).not.toMatch(/ChevronDown|setCreateType/);
+  expect(livePage).toMatch(/ChevronDown/);
+  expect(livePage).toMatch(/onMouseEnter/);
+  expect(livePage).toMatch(/setCreateType/);
+  expect(livePage).toMatch(/'LOCAL', 'READONLY', 'EXTERNAL'/);
+  expect(livePage).toMatch(/w-\(--anchor-width\) min-w-0/);
   expect(livePage).toMatch(/<Ellipsis/);
   expect(livePage).toMatch(/variant=['"]destructive['"]/);
   expect(livePage).toMatch(/Settings/);
@@ -40,10 +44,12 @@ test('create and settings use a right-side half-width sheet', () => {
   expect(editor).toMatch(/createKnowledgeBase/);
   expect(editor).toMatch(/updateKnowledgeBase/);
   expect(editor).toMatch(/listKnowledgeBaseManagementOptions/);
-  expect(editor).toMatch(/knowledgeBaseType: 'LOCAL'/);
+  expect(editor).toMatch(/newKnowledgeBase\(knowledgeBaseType/);
+  expect(editor).toMatch(/knowledgeBaseTypeDetails/);
+  expect(editor).toMatch(/Knowledge base type:/);
   expect(editor).toMatch(/storageId: '0'/);
-  expect(editor).not.toMatch(/<Label>\{t\('Type'\)\}<\/Label>/);
-  expect(editor).not.toMatch(/<Label>\{t\('Storage'\)\}<\/Label>/);
+  expect(editor).toMatch(/storageId: values\.storageId \?\? '0'/);
+  expect(editor).not.toMatch(/<Label>\{t\('File storage'\)\}<\/Label>/);
   expect(editor).not.toMatch(/md:grid-cols-2/);
   expect(editor).toMatch(/<EditableOptionInput/);
   expect(editor).toMatch(/<ComboboxInput/);

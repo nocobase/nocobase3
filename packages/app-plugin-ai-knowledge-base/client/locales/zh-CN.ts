@@ -282,6 +282,14 @@ export default {
   'Edit knowledge base': '编辑知识库',
   Name: '名称',
   Storage: '存储引擎',
+  'File storage': '文件存储',
+  'Knowledge base type:': '知识库类型：',
+  'Suitable for knowledge bases where documents, segments, and vector data are maintained in the current system.':
+    '适用于在当前系统中统一维护文档、分段和向量数据的知识库。',
+  'Suitable for scenarios that only connect an existing vector database as the RAG retrieval source. Document maintenance and vectorization are completed by an external system.':
+    '适用于仅将已有向量数据库接入为 RAG 检索源的场景，文档维护和向量化由外部系统完成。',
+  'Suitable for retrieval scenarios where you develop a plugin to connect external APIs or other vector databases.':
+    '适用于通过自行开发插件接入外部 API 或其他向量数据库的检索场景。',
   Type: '类型',
   'Vector database': '向量数据库',
   'Embedding model': '嵌入模型',

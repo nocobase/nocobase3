@@ -11,7 +11,12 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "client",
+    "server",
+    "database",
+    "ai",
+    "package.json"
   ],
   "exports": {
     ".": {
@@ -22,7 +27,19 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/bootstrap": {
+      "types": "./client/bootstrap.ts",
+      "import": "./client/bootstrap.ts"
+    },
+    "./client/routes": {
+      "types": "./client/routes.ts",
+      "import": "./client/routes.ts"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -35,7 +52,19 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/bootstrap": {
+        "types": "./dist/client/bootstrap.d.ts",
+        "import": "./dist/client/bootstrap.js"
+      },
+      "./client/routes": {
+        "types": "./dist/client/routes.d.ts",
+        "import": "./dist/client/routes.js"
+      }
     }
   },
   "nocobase": {
@@ -43,7 +72,11 @@
       "database": {
         "migrations": "./database/migrations"
       },
-      "server": "./server/bootstrap.ts"
+      "server": "./server/bootstrap.ts",
+      "client": {
+        "bootstrap": "./client/bootstrap",
+        "routes": "./client/routes"
+      }
     }
   },
   "scripts": {
@@ -59,10 +92,12 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@dicebear/core": "^9.4.3",
     "@langchain/core": "1.1.49",
     "@langchain/langgraph": "1.4.4",
     "@langchain/langgraph-checkpoint": "1.1.2",
     "@nocobase/ai-employee": "workspace:^",
+    "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
@@ -73,7 +108,10 @@
     "hono": "catalog:",
     "lodash": "^4.17.21",
     "zod": "^3",
-    "langchain": "1.2.39"
+    "langchain": "1.2.39",
+    "@nocobase/app-plugin-ai-knowledge-base": "workspace:^",
+    "@nocobase/app-portal-sdk": "workspace:^",
+    "lucide-react": "^0.487.0"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
@@ -84,6 +122,22 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "@langchain/openai": "1.4.7"
+    "@langchain/openai": "1.4.7",
+    "@nocobase/app-client": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "vite": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-client": "workspace:^",
+    "@refinedev/core": "^5.0.0",
+    "react": "^19.0.0",
+    "react-router": "^7.0.0"
   }
 }

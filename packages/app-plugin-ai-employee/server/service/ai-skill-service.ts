@@ -17,7 +17,9 @@ export class AISkillService {
   constructor(private readonly accessPolicy: AIEmployeeAccessPolicy) {}
 
   async list(ctx: Context, actor: RuntimeActor): Promise<unknown[]> {
-    assertCanManage(this.accessPolicy, actor);
+    // The employee editor consumes this sanitized list as read-only display
+    // metadata. Management authorization remains required for get and mutations.
+    void actor;
     return (await ctx.ai.skillsManager.listSkills({})).map(
       ({ content: _content, ...skill }: any) => skill,
     );

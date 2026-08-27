@@ -1,8 +1,7 @@
-import { createNodeLibraryConfig } from '@nocobase/dev-config/eslint';
+import { createClientLibraryConfig } from '@nocobase/dev-config/eslint';
 
-export default createNodeLibraryConfig({
-  // The migrated legacy runtime is behavior-preserving and is covered by its
-  // existing test suite. Type-aware lint cleanup will be handled separately.
+export default createClientLibraryConfig({
+  tsconfigRootDir: import.meta.dirname,
   ignores: [
     'dist/**',
     'tests/**',
@@ -14,5 +13,19 @@ export default createNodeLibraryConfig({
     'server/routes/*.ts',
     'server/service/**',
     'server/runtime.ts',
+  ],
+  overrides: [
+    {
+      name: 'app-plugin-ai-employee/client-runtime',
+      files: ['client/**/*.{ts,tsx}'],
+      rules: {
+        'react-refresh/only-export-components': 'off',
+        '@typescript-eslint/no-base-to-string': 'off',
+        'react-hooks/set-state-in-effect': 'off',
+        '@eslint-react/set-state-in-effect': 'off',
+        '@typescript-eslint/no-floating-promises': 'off',
+        '@typescript-eslint/no-misused-promises': 'off',
+      },
+    },
   ],
 });

@@ -21,7 +21,6 @@ import {
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetTitle,
@@ -31,6 +30,7 @@ import { Textarea } from '../components/ui/textarea.js';
 import { useKnowledgeBaseService } from '../providers/context.js';
 import type {
   KnowledgeBase,
+  KnowledgeBaseType,
   KnowledgeBaseManagementOption,
   KnowledgeBaseManagementOptions,
   KnowledgeBaseMutation,
@@ -49,16 +49,46 @@ const emptyOptions: KnowledgeBaseManagementOptions = {
   storages: [],
   externalProviders: [],
 };
+const knowledgeBaseTypeDetails: Record<
+  KnowledgeBaseType,
+  {
+    label: 'Local' | 'Read-only' | 'External';
+    description: string;
+    badgeClassName: string;
+  }
+> = {
+  LOCAL: {
+    label: 'Local',
+    description:
+      'Suitable for knowledge bases where documents, segments, and vector data are maintained in the current system.',
+    badgeClassName: 'bg-blue-50 text-blue-700 ring-blue-200',
+  },
+  READONLY: {
+    label: 'Read-only',
+    description:
+      'Suitable for scenarios that only connect an existing vector database as the RAG retrieval source. Document maintenance and vectorization are completed by an external system.',
+    badgeClassName: 'bg-muted text-muted-foreground ring-border',
+  },
+  EXTERNAL: {
+    label: 'External',
+    description:
+      'Suitable for retrieval scenarios where you develop a plugin to connect external APIs or other vector databases.',
+    badgeClassName: 'bg-purple-50 text-purple-700 ring-purple-200',
+  },
+};
 
-function newKnowledgeBase(): KnowledgeBaseMutation {
+function newKnowledgeBase(
+  knowledgeBaseType: KnowledgeBaseType,
+): KnowledgeBaseMutation {
   return {
     key: `kb-${Date.now().toString(36)}`,
     name: '',
     description: '',
-    knowledgeBaseType: 'LOCAL',
-    storageId: '0',
+    knowledgeBaseType,
+    ...(knowledgeBaseType === 'LOCAL'
+      ? { storageId: '0', segmentOptions: defaultSegmentOptions }
+      : {}),
     enabled: true,
-    segmentOptions: defaultSegmentOptions,
   };
 }
 
@@ -161,17 +191,21 @@ function EditableOptionInput({
 export function KnowledgeBaseEditorSheet({
   open,
   record,
+  knowledgeBaseType,
   onOpenChange,
   onSaved,
 }: {
   open: boolean;
   record?: KnowledgeBase;
+  knowledgeBaseType: KnowledgeBaseType;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }): ReactElement {
   const t = useT();
   const service = useKnowledgeBaseService();
-  const [values, setValues] = useState<KnowledgeBaseMutation>(newKnowledgeBase);
+  const [values, setValues] = useState<KnowledgeBaseMutation>(() =>
+    newKnowledgeBase(knowledgeBaseType),
+  );
   const [options, setOptions] =
     useState<KnowledgeBaseManagementOptions>(emptyOptions);
   const [embeddingModels, setEmbeddingModels] = useState<
@@ -184,7 +218,9 @@ export function KnowledgeBaseEditorSheet({
 
   useEffect(() => {
     if (!open) return;
-    const initial = record ? editKnowledgeBase(record) : newKnowledgeBase();
+    const initial = record
+      ? editKnowledgeBase(record)
+      : newKnowledgeBase(knowledgeBaseType);
     setValues(initial);
     setExternalProps(JSON.stringify(initial.vectorStoreProps ?? [], null, 2));
     setEmbeddingModels([]);
@@ -197,7 +233,7 @@ export function KnowledgeBaseEditorSheet({
         setError(cause instanceof Error ? cause.message : String(cause)),
       )
       .finally(() => setLoadingOptions(false));
-  }, [open, record, service]);
+  }, [knowledgeBaseType, open, record, service]);
 
   useEffect(() => {
     if (
@@ -222,8 +258,6 @@ export function KnowledgeBaseEditorSheet({
     setError(undefined);
     try {
       if (!values.key?.trim()) throw new Error(t('Key is required.'));
-      if (values.knowledgeBaseType === 'LOCAL' && !values.storageId)
-        throw new Error(t('Select a storage engine.'));
       if (values.knowledgeBaseType !== 'EXTERNAL') {
         if (!values.vectorDatabaseKey)
           throw new Error(t('Select a vector database.'));
@@ -244,7 +278,7 @@ export function KnowledgeBaseEditorSheet({
         visible.add('llmService');
         visible.add('embeddingModel');
       }
-      visible.add('segmentOptions');
+      if (local) visible.add('segmentOptions');
       if (external) visible.add('vectorStoreProps');
       let parsedExternalProps: KnowledgeBaseMutation['vectorStoreProps'];
       if (external) {
@@ -275,6 +309,7 @@ export function KnowledgeBaseEditorSheet({
       const payload = normalizeKnowledgeBaseMutation(
         {
           ...values,
+          ...(local ? { storageId: values.storageId ?? '0' } : {}),
           ...(external ? { vectorStoreProps: parsedExternalProps } : {}),
         },
         record,
@@ -293,7 +328,7 @@ export function KnowledgeBaseEditorSheet({
 
   const local = values.knowledgeBaseType === 'LOCAL';
   const external = values.knowledgeBaseType === 'EXTERNAL';
-
+  const typeDetails = knowledgeBaseTypeDetails[values.knowledgeBaseType];
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -304,11 +339,6 @@ export function KnowledgeBaseEditorSheet({
           <SheetTitle>
             {record ? t('Edit knowledge base') : t('New knowledge base')}
           </SheetTitle>
-          <SheetDescription>
-            {t(
-              'Configure the knowledge base, vector database, and embedding model used for retrieval.',
-            )}
-          </SheetDescription>
         </SheetHeader>
         <form
           className='grid gap-5 px-6 pb-6'
@@ -317,6 +347,21 @@ export function KnowledgeBaseEditorSheet({
             void save();
           }}
         >
+          <div className='grid gap-2 rounded-lg border bg-card p-4'>
+            <div className='flex items-center gap-2'>
+              <span className='text-sm font-semibold'>
+                {t('Knowledge base type:')}
+              </span>
+              <span
+                className={`inline-flex h-5 items-center rounded-full px-2 text-xs font-medium ring-1 ring-inset ${typeDetails.badgeClassName}`}
+              >
+                {t(typeDetails.label)}
+              </span>
+            </div>
+            <p className='text-sm leading-5 text-muted-foreground'>
+              {t(typeDetails.description)}
+            </p>
+          </div>
           <div className='grid gap-2'>
             <Label htmlFor='knowledge-base-key'>{t('Key')}</Label>
             <Input
@@ -346,22 +391,13 @@ export function KnowledgeBaseEditorSheet({
               }
             />
           </div>
-          <div className='grid gap-2'>
-            <Label htmlFor='knowledge-base-description'>
-              {t('Description')}
-            </Label>
-            <Textarea
-              id='knowledge-base-description'
-              rows={4}
-              value={values.description ?? ''}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
+          {local ? (
+            <input
+              type='hidden'
+              name='storageId'
+              value={values.storageId ?? '0'}
             />
-          </div>
+          ) : null}
           {!external ? (
             <>
               <div className='grid gap-2'>
@@ -378,94 +414,101 @@ export function KnowledgeBaseEditorSheet({
                   }
                 />
               </div>
-              <div className='grid gap-5'>
-                <div className='grid gap-2'>
-                  <Label>{t('LLM service')}</Label>
-                  <OptionSelect
-                    value={values.llmService}
-                    options={options.llmServices}
-                    placeholder={
-                      loadingOptions ? t('Loading…') : t('Select LLM service')
-                    }
-                    disabled={loadingOptions}
-                    onChange={(llmService) =>
-                      setValues((current) => ({
-                        ...current,
-                        llmService,
-                        embeddingModel: undefined,
-                      }))
-                    }
-                  />
-                </div>
-                <div className='grid gap-2'>
-                  <Label>{t('Embedding model')}</Label>
-                  <EditableOptionInput
-                    value={values.embeddingModel}
-                    options={embeddingModels}
-                    placeholder={
-                      values.llmService
-                        ? t('Select or enter an embedding model')
-                        : t('Select an LLM service first')
-                    }
-                    disabled={!values.llmService}
-                    onChange={(embeddingModel) =>
-                      setValues((current) => ({ ...current, embeddingModel }))
-                    }
-                  />
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className='grid gap-4 rounded-xl border p-4'>
               <div className='grid gap-2'>
-                <Label>{t('External vector-store provider')}</Label>
+                <Label>{t('LLM service')}</Label>
                 <OptionSelect
-                  value={values.vectorStoreProvider}
-                  options={options.externalProviders}
+                  value={values.llmService}
+                  options={options.llmServices}
                   placeholder={
-                    loadingOptions
-                      ? t('Loading…')
-                      : t('Select external vector-store provider')
+                    loadingOptions ? t('Loading…') : t('Select LLM service')
                   }
                   disabled={loadingOptions}
-                  onChange={(vectorStoreProvider) =>
+                  onChange={(llmService) =>
                     setValues((current) => ({
                       ...current,
-                      vectorStoreProvider,
+                      llmService,
+                      embeddingModel: undefined,
                     }))
                   }
                 />
               </div>
               <div className='grid gap-2'>
-                <Label htmlFor='external-provider-properties'>
-                  {t('Provider properties')}
-                </Label>
-                <Textarea
-                  id='external-provider-properties'
-                  rows={8}
-                  className='font-mono text-xs'
-                  value={externalProps}
-                  onChange={(event) => setExternalProps(event.target.value)}
+                <Label>{t('Embedding model')}</Label>
+                <EditableOptionInput
+                  value={values.embeddingModel}
+                  options={embeddingModels}
+                  placeholder={
+                    values.llmService
+                      ? t('Select or enter an embedding model')
+                      : t('Select an LLM service first')
+                  }
+                  disabled={!values.llmService}
+                  onChange={(embeddingModel) =>
+                    setValues((current) => ({ ...current, embeddingModel }))
+                  }
                 />
-                <p className='text-xs text-muted-foreground'>
-                  {t(
-                    'Enter provider properties as a JSON array of key and value objects.',
-                  )}
-                </p>
               </div>
+            </>
+          ) : (
+            <div className='grid gap-2'>
+              <Label>{t('External vector-store provider')}</Label>
+              <OptionSelect
+                value={values.vectorStoreProvider}
+                options={options.externalProviders}
+                placeholder={
+                  loadingOptions
+                    ? t('Loading…')
+                    : t('Select external vector-store provider')
+                }
+                disabled={loadingOptions || !!record}
+                onChange={(vectorStoreProvider) =>
+                  setValues((current) => ({
+                    ...current,
+                    vectorStoreProvider,
+                  }))
+                }
+              />
             </div>
           )}
+          <div className='grid gap-2'>
+            <Label htmlFor='knowledge-base-description'>
+              {t('Description')}
+            </Label>
+            <Textarea
+              id='knowledge-base-description'
+              rows={5}
+              value={values.description ?? ''}
+              onChange={(event) =>
+                setValues((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
+            />
+          </div>
+          {external ? (
+            <div className='grid gap-2'>
+              <Label htmlFor='external-provider-properties'>
+                {t('Provider properties')}
+              </Label>
+              <Textarea
+                id='external-provider-properties'
+                rows={8}
+                className='font-mono text-xs'
+                value={externalProps}
+                onChange={(event) => setExternalProps(event.target.value)}
+              />
+              <p className='text-xs text-muted-foreground'>
+                {t(
+                  'Enter provider properties as a JSON array of key and value objects.',
+                )}
+              </p>
+            </div>
+          ) : null}
           {local ? (
-            <div className='grid gap-3 rounded-xl border p-4'>
+            <>
               <div className='flex items-center justify-between gap-4'>
-                <div>
-                  <Label>{t('Split document')}</Label>
-                  <p className='text-xs text-muted-foreground'>
-                    {t(
-                      'Create searchable segments when documents are uploaded.',
-                    )}
-                  </p>
-                </div>
+                <Label>{t('Split document')}</Label>
                 <Switch
                   checked={values.segmentOptions?.enabled !== false}
                   onCheckedChange={(enabled) =>
@@ -480,67 +523,61 @@ export function KnowledgeBaseEditorSheet({
                   }
                 />
               </div>
-              <div className='grid grid-cols-2 gap-3'>
-                <div className='grid gap-2'>
-                  <Label htmlFor='chunk-size'>{t('Chunk size')}</Label>
-                  <Input
-                    id='chunk-size'
-                    type='number'
-                    min={1}
-                    value={
-                      values.segmentOptions?.chunkSize ??
-                      defaultSegmentOptions.chunkSize
-                    }
-                    onChange={(event) =>
-                      setValues((current) => ({
-                        ...current,
-                        segmentOptions: {
-                          ...defaultSegmentOptions,
-                          ...current.segmentOptions,
-                          chunkSize: Math.max(
-                            1,
-                            Number(event.target.value) || 1,
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                </div>
-                <div className='grid gap-2'>
-                  <Label htmlFor='chunk-overlap'>{t('Chunk overlap')}</Label>
-                  <Input
-                    id='chunk-overlap'
-                    type='number'
-                    min={0}
-                    value={
-                      values.segmentOptions?.chunkOverlap ??
-                      defaultSegmentOptions.chunkOverlap
-                    }
-                    onChange={(event) =>
-                      setValues((current) => ({
-                        ...current,
-                        segmentOptions: {
-                          ...defaultSegmentOptions,
-                          ...current.segmentOptions,
-                          chunkOverlap: Math.max(
-                            0,
-                            Number(event.target.value) || 0,
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                </div>
+              <div className='grid gap-2'>
+                <Label htmlFor='chunk-size'>{t('Chunk size')}</Label>
+                <Input
+                  id='chunk-size'
+                  className='w-36'
+                  type='number'
+                  min={1}
+                  step={100}
+                  value={
+                    values.segmentOptions?.chunkSize ??
+                    defaultSegmentOptions.chunkSize
+                  }
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      segmentOptions: {
+                        ...defaultSegmentOptions,
+                        ...current.segmentOptions,
+                        chunkSize: Math.max(1, Number(event.target.value) || 1),
+                      },
+                    }))
+                  }
+                />
               </div>
-            </div>
+              <div className='grid gap-2'>
+                <Label htmlFor='chunk-overlap'>{t('Chunk overlap')}</Label>
+                <Input
+                  id='chunk-overlap'
+                  className='w-36'
+                  type='number'
+                  min={0}
+                  step={100}
+                  value={
+                    values.segmentOptions?.chunkOverlap ??
+                    defaultSegmentOptions.chunkOverlap
+                  }
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      segmentOptions: {
+                        ...defaultSegmentOptions,
+                        ...current.segmentOptions,
+                        chunkOverlap: Math.max(
+                          0,
+                          Number(event.target.value) || 0,
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </div>
+            </>
           ) : null}
-          <div className='flex items-center justify-between rounded-xl border p-4'>
-            <div>
-              <Label>{t('Enabled')}</Label>
-              <p className='text-xs text-muted-foreground'>
-                {t('Enabled knowledge bases are available for retrieval.')}
-              </p>
-            </div>
+          <div className='flex items-center justify-between gap-4'>
+            <Label>{t('Enabled')}</Label>
             <Switch
               checked={values.enabled !== false}
               onCheckedChange={(enabled) =>

@@ -43,5 +43,8 @@ describe('legacy action contract', () => {
       expect(source).toContain(`/${action}`);
     expect(source).toContain("app.route('/v2/api', routes)");
     expect(source).toContain("error(context, 401, 'Authentication required')");
+    expect(source).toContain(
+      "(record) => ({ ...record, accessAbility: 'readWrite' })",
+    );
   });
 });

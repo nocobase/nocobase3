@@ -55,6 +55,7 @@ const paged = async <T extends Record<string, unknown>>(
     count(filter?: JsonRecord): Promise<number>;
   },
   filter: JsonRecord = {},
+  transform?: (row: T) => Record<string, unknown>,
 ): Promise<Response> => {
   const { page, pageSize, paginate } = paging(context);
   const rows = await repo.find({
@@ -63,7 +64,10 @@ const paged = async <T extends Record<string, unknown>>(
     ...(paginate ? { limit: pageSize, offset: (page - 1) * pageSize } : {}),
   });
   const count = await repo.count(filter);
-  return data(context, { data: rows, meta: { count, page, pageSize } });
+  return data(context, {
+    data: transform ? rows.map(transform) : rows,
+    meta: { count, page, pageSize },
+  });
 };
 
 export default function registerRoutes({ app, deps }: RoutesContext): void {
@@ -240,6 +244,7 @@ export default function registerRoutes({ app, deps }: RoutesContext): void {
         scalar(c, 'filter[knowledgeBaseKey]')
           ? { knowledgeBaseKey: scalar(c, 'filter[knowledgeBaseKey]')! }
           : {},
+        (record) => ({ ...record, accessAbility: 'readWrite' }),
       ),
     ),
   );

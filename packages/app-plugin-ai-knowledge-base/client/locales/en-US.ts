@@ -291,6 +291,14 @@ export default {
   'Edit knowledge base': 'Edit knowledge base',
   Name: 'Name',
   Storage: 'Storage',
+  'File storage': 'File storage',
+  'Knowledge base type:': 'Knowledge base type:',
+  'Suitable for knowledge bases where documents, segments, and vector data are maintained in the current system.':
+    'Suitable for knowledge bases where documents, segments, and vector data are maintained in the current system.',
+  'Suitable for scenarios that only connect an existing vector database as the RAG retrieval source. Document maintenance and vectorization are completed by an external system.':
+    'Suitable for scenarios that only connect an existing vector database as the RAG retrieval source. Document maintenance and vectorization are completed by an external system.',
+  'Suitable for retrieval scenarios where you develop a plugin to connect external APIs or other vector databases.':
+    'Suitable for retrieval scenarios where you develop a plugin to connect external APIs or other vector databases.',
   Type: 'Type',
   'Vector database': 'Vector database',
   'Embedding model': 'Embedding model',

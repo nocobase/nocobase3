@@ -1,4 +1,5 @@
 import type { Context } from '../context.js';
+import { EEFeatures } from '@nocobase/ai-employee';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { RuntimeActor } from '@nocobase/ai-employee';
 import type { AIEmployeeDto } from '../routes/contracts.js';
@@ -13,8 +14,52 @@ import {
   unwrapRecord,
 } from './resource-management-utils.js';
 
-function localizeBuiltInInfo(ctx: Context, employee: AIEmployeeEntity): void {
-  if (!employee.builtIn) {
+type AIEmployeeRecord = Omit<
+  AIEmployeeEntity,
+  'knowledgeBase' | 'knowledgeBasePrompt'
+> & {
+  knowledgeBase?: unknown;
+  knowledgeBasePrompt?: string | null;
+  missingKnowledgeBaseKeys?: string[];
+  [key: string]: any;
+};
+
+function cloneEmployee(employee: AIEmployeeEntity): AIEmployeeRecord {
+  const record = employee as AIEmployeeRecord;
+  const skillSettings = asRecord(record.skillSettings);
+  const knowledgeBase = asRecord(record.knowledgeBase);
+  return {
+    ...record,
+    ...(skillSettings
+      ? {
+          skillSettings: {
+            ...skillSettings,
+            skills: Array.isArray(skillSettings.skills)
+              ? [...skillSettings.skills]
+              : skillSettings.skills,
+            tools: Array.isArray(skillSettings.tools)
+              ? skillSettings.tools.map((tool) =>
+                  asRecord(tool) ? { ...tool } : tool,
+                )
+              : skillSettings.tools,
+          },
+        }
+      : {}),
+    ...(knowledgeBase
+      ? {
+          knowledgeBase: {
+            ...knowledgeBase,
+            knowledgeBaseKeys: Array.isArray(knowledgeBase.knowledgeBaseKeys)
+              ? [...knowledgeBase.knowledgeBaseKeys]
+              : knowledgeBase.knowledgeBaseKeys,
+          },
+        }
+      : {}),
+  };
+}
+
+function localizeBuiltInInfo(ctx: Context, employee: AIEmployeeRecord): void {
+  if (!employee.builtIn || !ctx.t) {
     return;
   }
   const options = { ns: ctx.i18nNamespace };
@@ -22,6 +67,105 @@ function localizeBuiltInInfo(ctx: Context, employee: AIEmployeeEntity): void {
   employee.position = ctx.t(employee.position ?? '', options);
   employee.bio = ctx.t(employee.bio ?? '', options);
   employee.greeting = ctx.t(employee.greeting ?? '', options);
+}
+
+function serializeEmployee(
+  ctx: Context,
+  employee: AIEmployeeEntity,
+): AIEmployeeRecord {
+  const serialized = cloneEmployee(employee);
+  localizeBuiltInInfo(ctx, serialized);
+  return serialized;
+}
+function hasOwn(record: Record<string, any>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function getEditableField(
+  record: Record<string, any>,
+  profile: Record<string, any>,
+  key: string,
+  current: AIEmployeeEntity | null,
+): unknown {
+  if (hasOwn(profile, key)) return profile[key];
+  if (profile !== record && hasOwn(record, key)) return record[key];
+  return current?.[key as keyof AIEmployeeEntity];
+}
+
+function getStringOrNullField(
+  record: Record<string, any>,
+  profile: Record<string, any>,
+  key: string,
+  current: AIEmployeeEntity | null,
+): string | null | undefined {
+  const value = getEditableField(record, profile, key, current);
+  if (typeof value === 'string') return value;
+  if (value === null) return null;
+  return undefined;
+}
+
+function getBooleanField(
+  record: Record<string, any>,
+  profile: Record<string, any>,
+  key: string,
+  current: AIEmployeeEntity | null,
+  fallback: boolean,
+): boolean {
+  const value = getEditableField(record, profile, key, current);
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function getJsonField(
+  record: Record<string, any>,
+  profile: Record<string, any>,
+  key: string,
+  current: AIEmployeeEntity | null,
+): unknown {
+  const value = getEditableField(record, profile, key, current);
+  return value === undefined ? current?.[key as keyof AIEmployeeEntity] : value;
+}
+
+function getStringField(
+  record: Record<string, any>,
+  profile: Record<string, any>,
+  key: string,
+  current: AIEmployeeEntity | null,
+): string | undefined {
+  const value = getEditableField(record, profile, key, current);
+  return typeof value === 'string' ? value : undefined;
+}
+
+function getKnowledgeBaseKeys(employee: AIEmployeeRecord): string[] {
+  const knowledgeBase = asRecord(employee.knowledgeBase);
+  if (!Array.isArray(knowledgeBase?.knowledgeBaseKeys)) {
+    return [];
+  }
+  return knowledgeBase.knowledgeBaseKeys.filter(
+    (key): key is string => typeof key === 'string',
+  );
+}
+
+async function enrichMissingKnowledgeBaseKeys(
+  ctx: Context,
+  employees: AIEmployeeRecord[],
+): Promise<void> {
+  if (!ctx.ai.features.isFeaturesEnabled([EEFeatures.knowledgeBase])) {
+    return;
+  }
+  const knowledgeBaseKeys = [
+    ...new Set(employees.flatMap(getKnowledgeBaseKeys)),
+  ];
+  const knowledgeBases = knowledgeBaseKeys.length
+    ? await ctx.ai.features.knowledgeBase.getKnowledgeBase(knowledgeBaseKeys)
+    : [];
+  const existingKeys = new Set(
+    knowledgeBases.map((knowledgeBase) => knowledgeBase.key),
+  );
+  for (const employee of employees) {
+    employee.missingKnowledgeBaseKeys = getKnowledgeBaseKeys(employee).filter(
+      (key) => !existingKeys.has(key),
+    );
+  }
 }
 
 /**
@@ -72,8 +216,11 @@ export class AIEmployeeService {
     });
 
     return sortedRows.map((row) => {
-      localizeBuiltInInfo(ctx, row);
-      const skillSettings: any = row.skillSettings ?? { skills: [], tools: [] };
+      const serialized = serializeEmployee(ctx, row);
+      const skillSettings: any = serialized.skillSettings ?? {
+        skills: [],
+        tools: [],
+      };
       if (!Array.isArray(skillSettings.skills)) skillSettings.skills = [];
       if (!Array.isArray(skillSettings.tools)) skillSettings.tools = [];
       for (const tool of tools) {
@@ -84,21 +231,22 @@ export class AIEmployeeService {
       }
       for (const skill of skills) skillSettings.skills.push(skill.name);
       return {
-        username: row.username,
-        nickname: row.nickname,
-        position: row.position,
-        avatar: row.avatar,
-        bio: row.bio,
-        greeting: row.greeting,
+        username: serialized.username,
+        nickname: serialized.nickname,
+        position: serialized.position,
+        avatar: serialized.avatar,
+        bio: serialized.bio,
+        greeting: serialized.greeting,
+        description: serialized.description,
         userConfig: {
-          prompt: userConfigs.get(row.username)?.prompt,
+          prompt: userConfigs.get(serialized.username)?.prompt,
         },
         skillSettings,
-        chatSettings: row.chatSettings,
-        modelSettings: row.modelSettings,
-        builtIn: row.builtIn,
-        category: row.category,
-        deprecated: row.deprecated,
+        chatSettings: serialized.chatSettings,
+        modelSettings: serialized.modelSettings,
+        builtIn: serialized.builtIn,
+        category: serialized.category,
+        deprecated: serialized.deprecated,
       };
     });
   }
@@ -136,7 +284,11 @@ export class AIEmployeeService {
 
   async list(ctx: Context, actor: RuntimeActor): Promise<unknown[]> {
     assertCanManage(this.accessPolicy, actor);
-    return ctx.repositories.aiEmployees.find({});
+    const employees = (await ctx.repositories.aiEmployees.find({})).map(
+      (employee) => serializeEmployee(ctx, employee),
+    );
+    await enrichMissingKnowledgeBaseKeys(ctx, employees);
+    return employees;
   }
 
   async get(
@@ -149,7 +301,9 @@ export class AIEmployeeService {
       filter: { username },
     });
     if (!employee) throw notFound('aiEmployees', username);
-    return employee;
+    const serialized = serializeEmployee(ctx, employee);
+    await enrichMissingKnowledgeBaseKeys(ctx, [serialized]);
+    return serialized;
   }
 
   async upsert(
@@ -165,7 +319,7 @@ export class AIEmployeeService {
     const current = await ctx.repositories.aiEmployees.findOne({
       filter: { username },
     });
-    const currentRecord = current ?? {};
+    const currentRecord = (current ?? {}) as AIEmployeeRecord;
     const profile = asRecord(record.profile) ?? record;
     const values: AIEmployeeEntity = {
       ...currentRecord,
@@ -186,6 +340,22 @@ export class AIEmployeeService {
         record.defaultPrompt === null
           ? record.defaultPrompt
           : (current?.defaultPrompt ?? null),
+      about: getStringOrNullField(record, profile, 'about', current),
+      knowledgeBasePrompt: getStringField(
+        record,
+        profile,
+        'knowledgeBasePrompt',
+        current,
+      ),
+      knowledgeBase: getJsonField(record, profile, 'knowledgeBase', current) as
+        AIEmployeeEntity['knowledgeBase'] | undefined,
+      enableKnowledgeBase: getBooleanField(
+        record,
+        profile,
+        'enableKnowledgeBase',
+        current,
+        false,
+      ),
       chatSettings: asRecord(record.chatSettings) ?? current?.chatSettings,
       skillSettings:
         (asRecord(record.skillSettings) as any) ?? current?.skillSettings,
