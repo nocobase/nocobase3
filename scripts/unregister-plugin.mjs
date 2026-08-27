@@ -4,6 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 import { normalizePluginName } from './create-plugin.mjs';
 import {
+  clientPluginsPath,
+  formatClientPlugins,
+  readClientPlugins,
+  removeClientPlugin,
+  writeClientPlugins,
+} from './lib/client-plugins.mjs';
+import {
   DEFAULT_APP,
   isRecord,
   parseJson,
@@ -115,11 +122,17 @@ export async function unregisterPlugin({
     packageName,
     application.packageJsonPath,
   );
+  const appRoot = path.dirname(application.packageJsonPath);
+  const clientPlugins = await prepareClientPluginRemoval(appRoot, packageName);
+  if (clientPlugins.changed) {
+    removedFrom.push('client/plugins.ts');
+  }
   const changed = removedFrom.length > 0;
   const result = {
     appPackageName: application.packageName,
     appPackagePath: application.packageJsonPath,
     changed,
+    clientPluginsPath: clientPlugins.filePath,
     packageName,
     removedFrom,
     shortName,
@@ -133,10 +146,16 @@ export async function unregisterPlugin({
   const lockfileSnapshot = install
     ? await readOptionalFile(lockfilePath)
     : undefined;
+  const clientPluginsSnapshot = clientPlugins.changed
+    ? await readOptionalFile(clientPlugins.filePath)
+    : undefined;
   await writeFile(
     application.packageJsonPath,
     `${JSON.stringify(applicationPackage, null, 2)}\n`,
   );
+  if (clientPlugins.changed) {
+    await writeClientPlugins(appRoot, clientPlugins.sourceText);
+  }
 
   if (!install) {
     return result;
@@ -156,6 +175,16 @@ export async function unregisterPlugin({
     } catch (recoveryError) {
       recoveryErrors.push(recoveryError);
     }
+    if (clientPlugins.changed) {
+      try {
+        await restoreOptionalFile(
+          clientPlugins.filePath,
+          clientPluginsSnapshot,
+        );
+      } catch (recoveryError) {
+        recoveryErrors.push(recoveryError);
+      }
+    }
 
     if (recoveryErrors.length > 0) {
       throw new AggregateError(
@@ -173,6 +202,23 @@ export async function unregisterPlugin({
   }
 
   return result;
+}
+
+async function prepareClientPluginRemoval(appRoot, packageName) {
+  const filePath = clientPluginsPath(appRoot);
+  const { exists, sourceText } = await readClientPlugins(appRoot);
+  if (!exists) {
+    return { changed: false, filePath };
+  }
+  const removed = removeClientPlugin(sourceText, packageName);
+  if (!removed.changed) {
+    return { changed: false, filePath };
+  }
+  return {
+    changed: true,
+    filePath,
+    sourceText: await formatClientPlugins(removed.sourceText, filePath),
+  };
 }
 
 function removePluginRegistration(

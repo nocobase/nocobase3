@@ -12,6 +12,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { normalizePluginName } from './create-plugin.mjs';
+import {
+  addClientPlugin,
+  clientPluginsPath,
+  formatClientPlugins,
+  readClientPlugins,
+  writeClientPlugins,
+} from './lib/client-plugins.mjs';
 
 const packagePrefix = '@nocobase/app-plugin-';
 const directoryPrefix = 'app-plugin-';
@@ -141,17 +148,25 @@ export async function registerPlugin({
     enabled,
     application.packageJsonPath,
   );
+  const appRoot = path.dirname(application.packageJsonPath);
+  // A disabled registration installs the dependency without wiring the client
+  // entry, so client/plugins.ts stays untouched in that case.
+  const clientPlugins = enabled
+    ? await prepareClientPluginEntry(appRoot, packageName)
+    : undefined;
   const result = {
     appPackageName: application.packageName,
     appPackagePath: application.packageJsonPath,
-    changed,
+    changed: changed || Boolean(clientPlugins?.changed),
+    clientPluginsChanged: Boolean(clientPlugins?.changed),
+    clientPluginsPath: clientPlugins?.filePath,
     enabled,
     packageName,
     pluginDirectory,
     shortName,
   };
 
-  if (dryRun || !changed) {
+  if (dryRun || !result.changed) {
     return result;
   }
 
@@ -159,10 +174,18 @@ export async function registerPlugin({
   const lockfileSnapshot = install
     ? await readOptionalFile(lockfilePath)
     : undefined;
-  await writeFile(
-    application.packageJsonPath,
-    `${JSON.stringify(applicationPackage, null, 2)}\n`,
-  );
+  const clientPluginsSnapshot = clientPlugins?.changed
+    ? await readOptionalFile(clientPlugins.filePath)
+    : undefined;
+  if (changed) {
+    await writeFile(
+      application.packageJsonPath,
+      `${JSON.stringify(applicationPackage, null, 2)}\n`,
+    );
+  }
+  if (clientPlugins?.changed) {
+    await writeClientPlugins(appRoot, clientPlugins.sourceText);
+  }
 
   if (!install) {
     return result;
@@ -182,6 +205,16 @@ export async function registerPlugin({
     } catch (recoveryError) {
       recoveryErrors.push(recoveryError);
     }
+    if (clientPlugins?.changed) {
+      try {
+        await restoreOptionalFile(
+          clientPlugins.filePath,
+          clientPluginsSnapshot,
+        );
+      } catch (recoveryError) {
+        recoveryErrors.push(recoveryError);
+      }
+    }
 
     if (recoveryErrors.length > 0) {
       throw new AggregateError(
@@ -199,6 +232,24 @@ export async function registerPlugin({
   }
 
   return result;
+}
+
+/**
+ * Produces the updated client/plugins.ts text without writing it, so the caller
+ * can honour --dry-run and snapshot the file before it changes.
+ */
+async function prepareClientPluginEntry(appRoot, packageName) {
+  const { sourceText } = await readClientPlugins(appRoot);
+  const added = addClientPlugin(sourceText, packageName);
+  const filePath = clientPluginsPath(appRoot);
+  if (!added.changed) {
+    return { changed: false, filePath };
+  }
+  return {
+    changed: true,
+    filePath,
+    sourceText: await formatClientPlugins(added.sourceText, filePath),
+  };
 }
 
 async function validatePluginPackage(pluginDirectory, packageName) {
