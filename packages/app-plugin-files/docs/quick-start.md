@@ -1,0 +1,157 @@
+# Quick start
+
+This is the shortest end-to-end path for adding attachments to a business
+module. The [data model guide](data-model.md) explains the table contract, the
+[Route API guide](route-api.md) lists the fixed HTTP surface, and the
+[security guide](security.md) covers Public and Private access.
+
+## 1. Confirm the host context
+
+Enable `@nocobase/app-plugin-files` in the application. In the server plugin
+context, confirm the existing `deps.database`, `deps.driveManager`, `deps.auth`,
+and `deps.authz` dependencies are available. The plugin context must also
+provide `config.app.publicBasePath`, `config.drive.default`, and
+`config.session.secret`.
+
+Create the service locally:
+
+```ts
+import {
+  createFileRoute,
+  createFilesService,
+} from '@nocobase/app-plugin-files/server';
+
+export default function registerPurchaseOrderFiles({
+  app,
+  config,
+  deps,
+}: PurchaseOrderPluginRoutesContext): void {
+  const files = createFilesService({
+    database: deps.database,
+    drive: deps.driveManager,
+    publicBasePath: config.app.publicBasePath,
+    defaultDisk: config.drive.default,
+    tokenSecret: config.session.secret,
+  });
+  // Continue with the migration, Store, and Route below.
+}
+```
+
+`PurchaseOrderPluginRoutesContext` is the business module's existing typed
+plugin context. Do not widen it or expose DatabaseManager to browser code.
+
+Do not add `AppServices.files`, another dependency injection mechanism, or a
+second DatabaseManager/Drive manager. Registry installation does not install
+this server code or a migration.
+
+## 2. Create the migration
+
+Create the business table and a separate standard file table. A one-to-many
+table uses an indexed owner key; use the [one-to-one recipe](recipes/one-to-one.md)
+for a unique owner key. The essential migration fragment is:
+
+```ts
+await builder.createCollection('purchaseOrderAttachments', (table) => {
+  table.string('id', { length: 64 }).notNull();
+  table.string('disk', { length: 64 }).notNull();
+  table.string('key', { length: 512 }).notNull();
+  table.string('filename', { length: 255 }).notNull();
+  table.string('mimeType', { length: 255 }).notNull();
+  table.bigInt('size').notNull();
+  table.boolean('public').notNull().defaultTo(false);
+  table.datetime('createdAt').notNull();
+  table.datetime('updatedAt').notNull();
+  table
+    .belongsTo('order', 'purchaseOrders')
+    .foreignKey('orderId')
+    .foreignKeyType('integer')
+    .constraints(true)
+    .index();
+  table.primary('id', { name: 'pk_purchase_order_attachments' });
+  table.unique(['disk', 'key'], {
+    name: 'uq_purchase_order_attachment_object',
+  });
+});
+```
+
+Use a reverse-order `down` migration. Register the logical inverse relation on
+the business table with `hasMany('attachments', 'purchaseOrderAttachments')`.
+See [data-model](data-model.md) for all fields and constraints.
+
+## 3. Create a scoped Store and Route
+
+Keep the table name in server code and derive the owner from the Route
+parameter. Validate the parameter before returning a scope:
+
+```ts
+const store = files.createDatabaseStore({
+  table: 'purchaseOrderAttachments',
+  scope: (context) => {
+    const raw = context.req.param('orderId');
+    const orderId = Number(raw);
+    if (!raw || !Number.isSafeInteger(orderId) || orderId < 1) {
+      throw new TypeError('A valid orderId is required.');
+    }
+    return { orderId };
+  },
+});
+
+app.route(
+  '/api/purchase-orders/:orderId/attachments',
+  createFileRoute({
+    files,
+    store,
+    audience: 'purchase-order-attachments',
+    auth: deps.auth.required(),
+    authorize: authorizePurchaseOrderFile,
+    visibility: { default: 'private', allowClientOverride: false },
+    limits: { maxSize: 50 * 1024 * 1024, maxFiles: 10 },
+  }),
+);
+```
+
+`authorizePurchaseOrderFile` must call the existing authorization system for
+the purchase order and action. It must not introduce a second file ACL. The
+Route has six fixed endpoints; see [route-api](route-api.md).
+
+## 4. Connect the client
+
+```tsx
+import { createFilesClient } from '@nocobase/app-plugin-files/client/files-client';
+import { FileUploadField } from '@nocobase/app-plugin-files/client/components';
+
+const client = createFilesClient({
+  endpoint: `/api/purchase-orders/${orderId}/attachments`,
+});
+
+<FileUploadField
+  client={client}
+  value={attachments}
+  onChange={setAttachments}
+  multiple
+  accept={['application/pdf']}
+  maxFiles={10}
+/>;
+```
+
+The business form submits the relation and owner ID. The client handles the
+plugin endpoint, same-origin base path, multipart upload, authentication, and
+content URL flow. The runtime Demo works without Registry; copy
+`file-field-ui` only when the application needs editable UI source.
+
+## 5. Validate
+
+Run the migration and focused business tests, including allowed/denied
+authorization, scope isolation, Public access, Private Token access, MIME and
+size limits, and deletion. Then run the package checks:
+
+```bash
+pnpm --filter @nocobase/app-plugin-files lint
+pnpm --filter @nocobase/app-plugin-files format:check
+pnpm --filter @nocobase/app-plugin-files typecheck
+pnpm --filter @nocobase/app-plugin-files test
+pnpm --filter @nocobase/app-plugin-files build
+```
+
+For a complete small implementation, compare the [one-to-many recipe](recipes/one-to-many.md)
+or [one-to-one recipe](recipes/one-to-one.md).
