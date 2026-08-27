@@ -7,17 +7,24 @@ describe('In-app Channel common input', () => {
   it('resolves user recipients and renders content with overrides', async () => {
     const definition = createInAppChannelDefinition();
     const channel = await definition.createChannel(
-      { store: {} } as NotificationChannelContext,
+      { logger: {} as NotificationChannelContext['logger'] },
       { type: 'in-app', enabled: true, providers: [] },
     );
 
-    expect(channel.resolveRecipient?.({ type: 'user', id: 'user-1' })).toEqual({
-      userId: 'user-1',
-    });
+    const provider = { name: 'primary', type: 'database' };
     expect(
-      channel.resolveRecipient?.({
-        type: 'email',
-        address: 'alice@example.com',
+      await channel.resolveRecipient?.({
+        recipient: { type: 'user', id: 'user-1' },
+        provider,
+      }),
+    ).toEqual({ userId: 'user-1' });
+    expect(
+      await channel.resolveRecipient?.({
+        recipient: {
+          type: 'email',
+          address: 'alice@example.com',
+        },
+        provider,
       }),
     ).toBeUndefined();
     expect(

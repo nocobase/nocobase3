@@ -1,9 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type {
-  AppWebSocket,
-  AppWebSocketMessageData,
-} from '@nocobase/app-server-kit/websocket';
+import type { AppWebSocket, AppWebSocketMessageData } from '../websocket.js';
 
 import {
   encodeRealtimeServerMessage,
@@ -18,6 +15,11 @@ const CLOSE_GOING_AWAY = 1001;
 
 export interface RealtimeConnectionContext {
   request?: Request;
+  principal?: RealtimePrincipal;
+}
+
+export interface RealtimePrincipal {
+  readonly userId: string;
 }
 
 export interface RealtimeConnection {
@@ -25,6 +27,7 @@ export interface RealtimeConnection {
   readonly ws: AppWebSocket;
   readonly connectedAt: Date;
   readonly request?: Request;
+  readonly principal?: RealtimePrincipal;
   readonly subscriptions: Set<string>;
 }
 
@@ -32,6 +35,7 @@ export interface RealtimeSubscription {
   readonly id: string;
   readonly connectionId: string;
   readonly topic: string;
+  readonly userId?: string;
   readonly createdAt: Date;
 }
 
@@ -39,6 +43,38 @@ export interface RealtimePublishResult {
   topic: string;
   subscriberCount: number;
 }
+
+export type RealtimeTopicAudience = 'public' | 'user';
+
+export interface RealtimeTopicOptions {
+  readonly audience: RealtimeTopicAudience;
+}
+
+export interface RealtimePublishOptions {
+  readonly userId?: string;
+}
+
+export interface RealtimeTopicBase {
+  readonly name: string;
+  close(): void;
+}
+
+export interface RealtimePublicTopic<Payload> extends RealtimeTopicBase {
+  readonly audience: 'public';
+  publish(payload: Payload): RealtimePublishResult;
+}
+
+export interface RealtimeUserTopic<Payload> extends RealtimeTopicBase {
+  readonly audience: 'user';
+  publishFor(userId: string, payload: Payload): RealtimePublishResult;
+}
+
+export type DefinedRealtimeTopic<
+  Payload,
+  Audience extends RealtimeTopicAudience,
+> = Audience extends 'user'
+  ? RealtimeUserTopic<Payload>
+  : RealtimePublicTopic<Payload>;
 
 export interface RealtimeServiceOptions {
   maxSubscriptionsPerConnection?: number;
@@ -62,7 +98,16 @@ export interface RealtimeService {
     connection: RealtimeConnection,
     data: AppWebSocketMessageData,
   ): void;
-  publish(topic: string, payload: unknown): RealtimePublishResult;
+  registerTopic(topic: string, options: RealtimeTopicOptions): () => void;
+  defineTopic<Payload, Audience extends RealtimeTopicAudience>(
+    topic: string,
+    options: { readonly audience: Audience },
+  ): DefinedRealtimeTopic<Payload, Audience>;
+  publish(
+    topic: string,
+    payload: unknown,
+    options?: RealtimePublishOptions,
+  ): RealtimePublishResult;
   subscriptionCount(topic: string): number;
   onTopicSubscriptionChange(
     topic: string,
@@ -80,6 +125,7 @@ export function createRealtimeService(
   const subscriptions = new Map<string, RealtimeSubscription>();
   const subscriptionsByTopic = new Map<string, Set<string>>();
   const listenersByTopic = new Map<string, Set<(count: number) => void>>();
+  const topicOptions = new Map<string, RealtimeTopicOptions>();
 
   const service: RealtimeService = {
     connect(ws, context = {}) {
@@ -88,6 +134,7 @@ export function createRealtimeService(
         ws,
         connectedAt: new Date(),
         request: context.request,
+        principal: context.principal,
         subscriptions: new Set(),
       };
       connections.set(connection.id, connection);
@@ -123,6 +170,7 @@ export function createRealtimeService(
         id: randomUUID(),
         connectionId: connection.id,
         topic,
+        userId: resolveSubscriptionUserId(connection, topic),
         createdAt: new Date(),
       };
       subscriptions.set(subscription.id, subscription);
@@ -202,8 +250,68 @@ export function createRealtimeService(
       }
     },
 
-    publish(topic, payload) {
+    registerTopic(topic, options) {
       validateRealtimeTopic(topic);
+      if (topicOptions.has(topic)) {
+        throw new RealtimeProtocolError(
+          'TOPIC_ALREADY_REGISTERED',
+          `Realtime topic "${topic}" is already registered.`,
+        );
+      }
+
+      topicOptions.set(topic, options);
+      return () => {
+        if (topicOptions.get(topic) !== options) {
+          return;
+        }
+
+        removeTopicSubscriptions(topic);
+        topicOptions.delete(topic);
+      };
+    },
+
+    defineTopic<Payload, Audience extends RealtimeTopicAudience>(
+      topic: string,
+      topicDefinition: { readonly audience: Audience },
+    ): DefinedRealtimeTopic<Payload, Audience> {
+      const close = service.registerTopic(topic, topicDefinition);
+      const definedTopic =
+        topicDefinition.audience === 'user'
+          ? {
+              name: topic,
+              audience: 'user' as const,
+              publishFor(userId: string, payload: Payload) {
+                return service.publish(topic, payload, { userId });
+              },
+              close,
+            }
+          : {
+              name: topic,
+              audience: 'public' as const,
+              publish(payload: Payload) {
+                return service.publish(topic, payload);
+              },
+              close,
+            };
+
+      return definedTopic as DefinedRealtimeTopic<Payload, Audience>;
+    },
+
+    publish(topic, payload, options = {}) {
+      validateRealtimeTopic(topic);
+      const audience = topicOptions.get(topic)?.audience ?? 'public';
+      if (audience === 'user' && !options.userId) {
+        throw new RealtimeProtocolError(
+          'USER_AUDIENCE_REQUIRED',
+          `Realtime topic "${topic}" requires a user audience.`,
+        );
+      }
+      if (audience === 'public' && options.userId) {
+        throw new RealtimeProtocolError(
+          'INVALID_AUDIENCE',
+          `Realtime topic "${topic}" does not accept a user audience.`,
+        );
+      }
 
       const subscriptionIds = subscriptionsByTopic.get(topic);
       if (!subscriptionIds?.size) {
@@ -229,6 +337,7 @@ export function createRealtimeService(
         if (
           !subscription ||
           !connection ||
+          (audience === 'user' && subscription.userId !== options.userId) ||
           sentConnections.has(connection.id)
         ) {
           continue;
@@ -281,6 +390,7 @@ export function createRealtimeService(
       subscriptions.clear();
       subscriptionsByTopic.clear();
       listenersByTopic.clear();
+      topicOptions.clear();
     },
   };
 
@@ -325,6 +435,41 @@ export function createRealtimeService(
         removeSubscription(connection, subscription);
       }
     }
+  }
+
+  function removeTopicSubscriptions(topic: string): void {
+    const subscriptionIds = subscriptionsByTopic.get(topic);
+    if (!subscriptionIds) {
+      return;
+    }
+
+    for (const subscriptionId of Array.from(subscriptionIds)) {
+      const subscription = subscriptions.get(subscriptionId);
+      const connection = subscription
+        ? connections.get(subscription.connectionId)
+        : undefined;
+      if (subscription && connection) {
+        removeSubscription(connection, subscription);
+      }
+    }
+  }
+
+  function resolveSubscriptionUserId(
+    connection: RealtimeConnection,
+    topic: string,
+  ): string | undefined {
+    if ((topicOptions.get(topic)?.audience ?? 'public') !== 'user') {
+      return undefined;
+    }
+
+    const userId = connection.principal?.userId;
+    if (!userId) {
+      throw new RealtimeProtocolError(
+        'AUTHENTICATION_REQUIRED',
+        `Realtime topic "${topic}" requires authentication.`,
+      );
+    }
+    return userId;
   }
 
   function removeSubscription(

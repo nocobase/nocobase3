@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-plugin-notification-in-app",
   "displayName": "In-app Notification App Plugin",
-  "description": "Provides the in-app notification Channel and database Provider.",
+  "description": "Provides the in-app notification Channel, database Provider, client runtime, and realtime invalidation.",
   "version": "0.1.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -23,6 +23,14 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/providers": {
+      "types": "./client/providers.ts",
+      "import": "./client/providers.ts"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -36,11 +44,22 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/providers": {
+        "types": "./dist/client/providers.d.ts",
+        "import": "./dist/client/providers.js"
+      },
       "./package.json": "./package.json"
     }
   },
   "nocobase": {
     "plugin": {
+      "client": {
+        "providers": "./client/providers"
+      },
       "database": {
         "migrations": "./database/migrations"
       }
@@ -57,19 +76,27 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
+  "peerDependencies": {
+    "@nocobase/app-client": "workspace:^",
+    "react": "^19.0.0"
+  },
   "dependencies": {
     "@nocobase/app-database": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/session": "workspace:^",
+    "@nocobase/app-sdk": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/app-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
+    "@types/react": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "react": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

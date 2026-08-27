@@ -1,4 +1,4 @@
-import type { AppWebSocketMessageData } from '@nocobase/app-server-kit/websocket';
+import type { AppWebSocketMessageData } from '../websocket.js';
 
 export const REALTIME_MAX_MESSAGE_BYTES: number = 64 * 1024;
 

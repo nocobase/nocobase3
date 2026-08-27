@@ -90,6 +90,7 @@ describe('NotificationManager registration', () => {
 
   it('emits structured lifecycle logs without notification content', async () => {
     const output = createMemoryDestination();
+    const resolvedProviders: object[] = [];
     const queue = createQueueManager(createSyncQueueConfig());
     const database = await createNotificationTestDatabase();
     const manager = createNotificationManager({
@@ -114,7 +115,8 @@ describe('NotificationManager registration', () => {
         async createChannel() {
           return {
             type: 'email',
-            resolveRecipient(recipient): object {
+            resolveRecipient({ recipient, provider }): object {
+              resolvedProviders.push(provider);
               return recipient;
             },
             render({ content }): object {
@@ -147,6 +149,7 @@ describe('NotificationManager registration', () => {
       content: { title: 'private subject', body: 'private body' },
     });
     const details = await manager.logs.get(result.notificationId);
+    expect(resolvedProviders).toEqual([{ name: 'primary', type: 'fake' }]);
     expect(details?.log).not.toHaveProperty('messageSnapshot');
     expect(details?.deliveries[0]?.delivery).not.toHaveProperty(
       'recipientSnapshot',
@@ -221,7 +224,9 @@ describe('NotificationManager registration', () => {
           async createChannel() {
             return {
               type: channelType,
-              resolveRecipient(recipient): object | undefined {
+              async resolveRecipient({
+                recipient,
+              }): Promise<object | undefined> {
                 if (recipient.type === 'user') return { userId: recipient.id };
                 if (channelType === 'email' && recipient.type === 'email')
                   return { address: recipient.address };

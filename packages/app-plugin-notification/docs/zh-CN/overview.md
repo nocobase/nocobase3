@@ -53,6 +53,7 @@ Delivery 保存接收人、消息以及选中的 Provider。真正调用 Provide
 - [配置通知](./configuration.md)——配置站内信和 SMTP 邮件
 - [发送通知](./sending.md)——从服务端业务代码发送消息
 - [通知日志](./logs.md)——查看 Delivery 和 Attempt
+- [Channel 与 Provider 接入规划](./channel-provider-research.md)——查看主流国内外 Provider、参考仓库和分批路线
 
 ## 相关链接
 

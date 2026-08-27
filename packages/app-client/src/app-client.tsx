@@ -3,6 +3,7 @@ import routerProvider from '@refinedev/react-router';
 import { type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter } from 'react-router';
 
+import { AppClientContext, defaultAppClient } from './app-client-context.js';
 import { normalizeAppClientBasename, type AppClientConfig } from './config.js';
 
 export interface AppClientRootProps {
@@ -31,8 +32,10 @@ export function AppClientRoot({ config }: AppClientRootProps): ReactElement {
   );
 
   return (
-    <BrowserRouter basename={normalizeAppClientBasename(config.basename)}>
-      {content}
-    </BrowserRouter>
+    <AppClientContext.Provider value={config.client ?? defaultAppClient}>
+      <BrowserRouter basename={normalizeAppClientBasename(config.basename)}>
+        {content}
+      </BrowserRouter>
+    </AppClientContext.Provider>
   );
 }

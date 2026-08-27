@@ -1,5 +1,5 @@
-import type { DatabaseManager } from '@nocobase/app-database';
 import type { Logger } from '@nocobase/logging';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import type { NotificationStore } from './store.js';
 import type { NotificationRegistry } from './registry.js';
@@ -23,7 +23,17 @@ export interface NotificationContent {
 export type NotificationRecipient =
   | { readonly type: 'user'; readonly id: string }
   | { readonly type: 'email'; readonly address: string }
-  | { readonly type: 'phone'; readonly number: string };
+  | { readonly type: 'phone'; readonly number: string }
+  | {
+      readonly type: 'external';
+      readonly namespace: string;
+      readonly id: string;
+    };
+
+export interface NotificationProviderIdentity {
+  readonly name: string;
+  readonly type: string;
+}
 
 export interface NotificationSendInput<
   TChannels extends NotificationChannelMap,
@@ -78,8 +88,21 @@ export interface NotificationConfig {
 export interface NotificationProviderSendError {
   readonly code?: string;
   readonly message: string;
-  readonly category?: string;
+  readonly category?: NotificationProviderErrorCategory;
 }
+
+export type NotificationProviderErrorCategory =
+  | 'authentication'
+  | 'channel'
+  | 'configuration'
+  | 'content'
+  | 'network'
+  | 'provider'
+  | 'rate_limit'
+  | 'recipient'
+  | 'storage'
+  | 'timeout'
+  | 'unknown';
 
 export type NotificationRetryDisposition = 'never' | 'same_provider';
 
@@ -123,7 +146,10 @@ export interface NotificationChannel<
   TPrepared = object,
 > {
   readonly type: string;
-  resolveRecipient?(recipient: NotificationRecipient): TRecipient | undefined;
+  resolveRecipient?(input: {
+    readonly recipient: NotificationRecipient;
+    readonly provider: NotificationProviderIdentity;
+  }): TRecipient | undefined | Promise<TRecipient | undefined>;
   render?(input: {
     readonly content: NotificationContent;
     readonly override?: Partial<TMessage>;
@@ -133,18 +159,19 @@ export interface NotificationChannel<
     readonly notificationId: string;
     readonly recipient: TRecipient;
     readonly message: TMessage;
+    readonly provider: NotificationProviderIdentity;
     readonly signal: AbortSignal;
   }): Promise<TPrepared>;
 }
 
 export interface NotificationProviderContext {
-  readonly database?: DatabaseManager;
   readonly logger: Logger;
-  readonly queue: NocoBaseQueueManager;
-  readonly store: NotificationStore;
+  now(): Promise<string>;
 }
 
-export type NotificationChannelContext = NotificationProviderContext;
+export interface NotificationChannelContext {
+  readonly logger: Logger;
+}
 
 export interface NotificationProviderDefinition<
   TConfig extends {

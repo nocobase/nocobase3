@@ -2,11 +2,8 @@ import type { AppExtension } from '@nocobase/app-portal-sdk/extensions';
 import { defineAppRoutes } from '@nocobase/app-portal-sdk/routing';
 import { Bell, FileClock, Mail } from 'lucide-react';
 
-import { NotificationInAppProvider } from './in-app/runtime.js';
-
 const notificationExtension: AppExtension = {
   id: 'nocobase-notification',
-  Provider: NotificationInAppProvider,
   resources: [
     {
       name: 'notifications',

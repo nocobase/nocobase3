@@ -271,6 +271,7 @@
       "title": "NocoBase Notification",
       "description": "Email delivery log and in-app notification components backed by the NocoBase notification API.",
       "dependencies": [
+        "@nocobase/app-plugin-notification-in-app@^0.1.0",
         "@nocobase/app-portal-sdk@^2.0.0",
         "lucide-react@^0.487.0",
         "react-router@^7.0.2"

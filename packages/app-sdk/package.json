@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./realtime": {
+      "types": "./src/realtime/index.ts",
+      "import": "./src/realtime/index.ts"
     }
   },
   "publishConfig": {
@@ -16,6 +20,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./realtime": {
+        "types": "./dist/realtime/index.d.ts",
+        "import": "./dist/realtime/index.js"
       }
     },
     "access": "public"

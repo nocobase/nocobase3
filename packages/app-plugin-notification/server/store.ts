@@ -1,4 +1,5 @@
 import type { DatabaseManager, Row } from '@nocobase/app-database';
+import type { NotificationProviderErrorCategory } from './types.js';
 
 export type NotificationLogStatus =
   'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';
@@ -10,7 +11,7 @@ export type NotificationAttemptStatus =
 export interface NotificationErrorRecord {
   readonly code?: string;
   readonly message: string;
-  readonly category?: string;
+  readonly category?: NotificationProviderErrorCategory;
 }
 
 export interface NotificationLogRecord {
@@ -628,7 +629,19 @@ function parseError(
     typeof parsed.message !== 'string'
   )
     throw new Error('Stored notification error is invalid.');
-  return parsed as NotificationErrorRecord;
+  const category =
+    'category' in parsed
+      ? normalizeStoredErrorCategory(parsed.category)
+      : undefined;
+  const code =
+    'code' in parsed && typeof parsed.code === 'string'
+      ? parsed.code
+      : undefined;
+  return {
+    message: parsed.message,
+    ...(code ? { code } : {}),
+    ...(category ? { category } : {}),
+  };
 }
 
 function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {
@@ -649,9 +662,10 @@ function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {
 }
 
 function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
+  const category = normalizeStoredErrorCategory(row.errorCategory);
   const error = row.errorMessage
     ? {
-        ...(row.errorCategory ? { category: row.errorCategory } : {}),
+        ...(category ? { category } : {}),
         ...(row.errorCode ? { code: row.errorCode } : {}),
         message: row.errorMessage,
       }
@@ -668,4 +682,29 @@ function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
     providerMessageId: row.providerMessageId,
     error,
   };
+}
+
+function normalizeStoredErrorCategory(
+  value: unknown,
+): NotificationProviderErrorCategory | undefined {
+  switch (value) {
+    case 'authentication':
+    case 'channel':
+    case 'configuration':
+    case 'content':
+    case 'network':
+    case 'provider':
+    case 'rate_limit':
+    case 'recipient':
+    case 'storage':
+    case 'timeout':
+    case 'unknown':
+      return value;
+    case undefined:
+    case null:
+    case '':
+      return undefined;
+    default:
+      return 'unknown';
+  }
 }

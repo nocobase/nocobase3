@@ -7,11 +7,18 @@ import {
   AppClientRoot,
   defineAppClient,
   normalizeAppClientBasename,
+  useAppClient,
 } from '../src/index.js';
+import { createAppClient } from '@nocobase/app-sdk';
 
 function RouterConsumer(): ReactElement {
   const go = useGo();
   return <button onClick={() => go({ to: '/configured' })}>Navigate</button>;
+}
+
+function ClientConsumer(): ReactElement {
+  const client = useAppClient();
+  return <span>{client.realtime ? 'realtime' : 'missing'}</span>;
 }
 
 describe('app client', () => {
@@ -71,5 +78,21 @@ describe('app client', () => {
     expect(
       screen.queryByText('Default application routes'),
     ).not.toBeInTheDocument();
+  });
+
+  it('provides the configured app client to plugin providers', () => {
+    const client = createAppClient({ fetch: vi.fn() });
+
+    render(
+      <AppClientRoot
+        config={{
+          client,
+          refine: { routerProvider: {} },
+          routes: <ClientConsumer />,
+        }}
+      />,
+    );
+
+    expect(screen.getByText('realtime')).toBeInTheDocument();
   });
 });

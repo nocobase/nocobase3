@@ -927,6 +927,9 @@ describe('app plugins', () => {
     expect(inAppNotificationPlugin?.routesEntry).toMatch(
       /app-plugin-notification-in-app\/server\/routes\/index\.ts$/,
     );
+    expect(inAppNotificationPlugin?.manifest.client).toEqual({
+      providers: './client/providers',
+    });
     expect(inAppNotificationPlugin?.migrationsDirectory).toMatch(
       /app-plugin-notification-in-app\/database\/migrations$/,
     );

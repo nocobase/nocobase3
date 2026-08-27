@@ -1,14 +1,12 @@
 import type {
   NotificationContent,
-  NotificationProviderContext,
   NotificationChannelDefinition,
+  NotificationProviderIdentity,
   NotificationProviderDefinition,
   NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
-import { createInAppStore, type InAppStore } from './store.js';
+import type { InAppStore } from './store.js';
 import type { InAppMessage, InAppRecipient } from './types.js';
-
-const stores = new WeakMap<object, InAppStore>();
 
 export interface InAppProviderConfig {
   readonly type: 'database';
@@ -45,9 +43,11 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
     async createChannel() {
       return {
         type: 'in-app',
-        resolveRecipient(
-          recipient: NotificationRecipient,
-        ): InAppRecipient | undefined {
+        resolveRecipient(input: {
+          readonly recipient: NotificationRecipient;
+          readonly provider: NotificationProviderIdentity;
+        }): InAppRecipient | undefined {
+          const { recipient } = input;
           return recipient.type === 'user'
             ? { userId: recipient.id }
             : undefined;
@@ -84,24 +84,23 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
   };
 }
 
-export function createDatabaseProviderDefinition(
-  options: { readonly store?: InAppStore } = {},
-): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
+export function createDatabaseProviderDefinition(options: {
+  readonly store: InAppStore;
+}): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
     async createProvider(context, config) {
-      const store = options.store ?? resolveInAppStore(context);
       return {
         name: config.name,
         type: 'database',
         async send({ message }) {
           try {
-            await store.deliver({
+            await options.store.deliver({
               deliveryId: message.deliveryId,
               notificationId: message.notificationId,
               userId: message.recipient.userId,
               message: message.content,
-              createdAt: await context.store.now(),
+              createdAt: await context.now(),
             });
             return { status: 'accepted' };
           } catch (error) {
@@ -118,12 +117,4 @@ export function createDatabaseProviderDefinition(
       };
     },
   };
-}
-
-function resolveInAppStore(context: NotificationProviderContext): InAppStore {
-  const existing = stores.get(context.store);
-  if (existing) return existing;
-  const store = createInAppStore(context.database);
-  stores.set(context.store, store);
-  return store;
 }

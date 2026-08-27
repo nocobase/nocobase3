@@ -230,7 +230,7 @@ pnpm registry materialize \
   --output-root /path/to/your-app
 ```
 
-它会写入 `client/extensions/nocobase-notification`。默认模板的 source extension loader 会自动读取其中的 `extension.tsx`，该文件已经声明 `NotificationInAppProvider`、Delivery 日志路由和个人站内信路由。
+它会写入 `client/extensions/nocobase-notification`。默认模板的 source extension loader 会自动读取其中的 `extension.tsx`；Realtime Provider 和个人站内信数据客户端由 `@nocobase/app-plugin-notification-in-app` 提供，Registry 只保留页面与路由。
 
 页面默认请求 `/api/notifications/logs` 和 `/api/notifications/in-app`，需要和第四步的服务端挂载路径保持一致。物化后的代码属于消费应用，可以按需修改；registry 扩展不会创建服务端 runtime。
 

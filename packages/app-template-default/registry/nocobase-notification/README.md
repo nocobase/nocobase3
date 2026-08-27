@@ -11,4 +11,6 @@ notification APIs at `/api/notifications/logs` and
 `/api/notifications/in-app`; it does not create or configure the server
 runtime.
 
-The registry contains client components only. Notification orchestration, storage, Channel factories, and Providers remain in the server packages.
+The registry contains application-owned client pages only. Notification
+orchestration, storage, Channel factories, the Realtime client Provider, and
+the data client remain in `@nocobase/app-plugin-notification-in-app`.
