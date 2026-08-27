@@ -120,7 +120,6 @@ export function NotificationLogsPage(): React.ReactElement {
           )}
         </CardContent>
       </Card>
-
     </div>
   );
 }
@@ -203,7 +202,10 @@ function NotificationTableRow({
           ) : null}
         </TableCell>
         <TableCell>
-          <code className='text-xs text-muted-foreground' title={details.log.id}>
+          <code
+            className='text-xs text-muted-foreground'
+            title={details.log.id}
+          >
             {details.log.id}
           </code>
         </TableCell>
@@ -299,7 +301,9 @@ function AttemptTable({
   readonly details: NotificationDeliveryDetails;
 }): React.ReactElement {
   if (details.attempts.length === 0) {
-    return <p className='text-xs text-muted-foreground'>No attempts recorded.</p>;
+    return (
+      <p className='text-xs text-muted-foreground'>No attempts recorded.</p>
+    );
   }
 
   return (
