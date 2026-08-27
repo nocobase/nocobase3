@@ -27,10 +27,6 @@ on:
         description: 'Branch to release from'
         type: string
         default: main
-      release_tag:
-        description: 'Existing release/YYYY-MM-DD.N Draft Release to resume or disambiguate (normally leave empty)'
-        type: string
-        default: ''
       keep_latest:
         description: 'Keep the latest dist-tag untouched (check this for hotfixes on older versions; publishes to legacy)'
         type: boolean
@@ -53,6 +49,11 @@ jobs:
     name: Publish from main
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      # 场景 A 的 tag 是转正时打的，场景 B 是这次新建的。
+      tag: ${{ steps.batch.outputs.name }}
+      merged: ${{ steps.merge.outputs.merged }}
+      needs_version: ${{ steps.mode.outputs.needs_version }}
     steps:
       - name: Check out the release branch
         uses: actions/checkout@v4
@@ -73,73 +74,6 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: https://npm.nocobase.ai
-
-      # A promotion leaves one stable Draft Release whose tagged source is already
-      # reachable from main. Selecting main is therefore sufficient in the normal
-      # case; release_tag is only needed to resume or disambiguate exceptional cases.
-      - name: Resolve an existing Draft Release
-        id: release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REQUESTED_TAG: ${{ inputs.release_tag }}
-          TARGET_BRANCH: ${{ inputs.branch }}
-        run: |
-          TAG="$REQUESTED_TAG"
-          COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
-          if [ -z "$TAG" ]; then
-            TAG=$(bash scripts/github-release.sh find-run unused stable "${{ github.run_id }}")
-          fi
-          if [ -z "$TAG" ]; then
-            PENDING_TAG=$(bash scripts/github-release.sh find-draft unused stable)
-            UNMERGED_TAG=$(bash scripts/github-release.sh find-unmerged unused stable "$TARGET_BRANCH")
-            if [ "$COUNT" = "0" ]; then
-              TAG="$PENDING_TAG"
-            elif [ -n "$PENDING_TAG" ]; then
-              echo "::error::$PENDING_TAG is still pending. Resume it before starting another stable release."
-              exit 1
-            elif [ -n "$UNMERGED_TAG" ]; then
-              TAG="$UNMERGED_TAG"
-            fi
-          fi
-          if [ -z "$TAG" ]; then
-            if [ "$COUNT" = "0" ]; then
-              echo "::error::There are no changesets and no pending stable Draft Release for $TARGET_BRANCH"
-              exit 1
-            fi
-            echo "resumed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          bash scripts/github-release.sh restore "$TAG" stable /tmp/release-manifest.json
-          if [ "$(jq -r '.targetBranch' /tmp/release-manifest.json)" != "$TARGET_BRANCH" ]; then
-            echo "::error::$TAG targets $(jq -r '.targetBranch' /tmp/release-manifest.json), not $TARGET_BRANCH"
-            exit 1
-          fi
-          KIND=$(jq -r '.releaseKind' /tmp/release-manifest.json)
-          if [ "$KIND" = "stable-promotion" ]; then
-            SOURCE_SHA=$(jq -r '.sourceSha' /tmp/release-manifest.json)
-            git fetch origin "$TARGET_BRANCH"
-            if ! git merge-base --is-ancestor "$SOURCE_SHA" "origin/$TARGET_BRANCH"; then
-              echo "::error::$TAG has not been merged into $TARGET_BRANCH yet"
-              exit 1
-            fi
-          fi
-          git checkout --detach "refs/tags/$TAG"
-          node scripts/release-manifest.mjs validate-tree \
-            --manifest /tmp/release-manifest.json
-          if IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
-            :
-          else
-            IS_DRAFT=true
-          fi
-          {
-            echo "resumed=true"
-            echo "name=$TAG"
-            echo "batch=$(jq -r '.batch' /tmp/release-manifest.json)"
-            echo "kind=$KIND"
-            echo "published=$([ "$IS_DRAFT" = "true" ] && echo false || echo true)"
-          } >> "$GITHUB_OUTPUT"
-          echo "Resuming $TAG"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -172,14 +106,7 @@ jobs:
         env:
           BRANCH: ${{ inputs.branch }}
           KEEP: ${{ inputs.keep_latest }}
-          RESUMED: ${{ steps.release.outputs.resumed }}
         run: |
-          if [ "$RESUMED" = "true" ]; then
-            VALUE=$(jq -r '.distTag' /tmp/release-manifest.json)
-            echo "value=$VALUE" >> "$GITHUB_OUTPUT"
-            echo "dist-tag: $VALUE (restored from Draft Release)"
-            exit 0
-          fi
           if [ "$KEEP" = "true" ]; then
             echo "value=legacy" >> "$GITHUB_OUTPUT"
             echo "dist-tag: legacy (the latest pointer stays where it is)"
@@ -198,12 +125,9 @@ jobs:
         id: mode
         run: |
           COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
-          if [ "${{ steps.release.outputs.resumed }}" = "true" ]; then
-            echo "Draft Release restored — versions and package list are frozen"
+          if [ "$COUNT" = "0" ]; then
+            echo "0 changesets — versions were already written by merge-beta-to-stable, publishing directly"
             echo "needs_version=false" >> "$GITHUB_OUTPUT"
-          elif [ "$COUNT" = "0" ]; then
-            echo "::error::No changesets and no Draft Release were resolved"
-            exit 1
           else
             echo "$COUNT changesets — versions need to be computed first"
             echo "needs_version=true" >> "$GITHUB_OUTPUT"
@@ -215,8 +139,9 @@ jobs:
       - name: Verify there is something to publish
         if: steps.mode.outputs.needs_version == 'false'
         run: |
-          echo "Packages frozen in the Draft Release:"
-          node scripts/release-manifest.mjs specs --manifest /tmp/release-manifest.json
+          echo "Publish candidates:"
+          node scripts/list-package-versions.mjs --candidates
+          echo "publish queries the registry per package and skips the ones already there"
 
       - name: Configure git
         run: |
@@ -229,10 +154,12 @@ jobs:
         run: |
           node scripts/list-package-versions.mjs > /tmp/versions-before.json
 
-      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支合并后会被删除）。
-      - name: Create release branch
-        if: steps.mode.outputs.needs_version == 'true'
-        id: branch
+      # 批次号两种场景都要算 —— 聚合 tag 只在这里打，转正阶段不再打。
+      #
+      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导而不是从分支：分支合并后
+      # 会被删除，只看分支会让序号回退并与已发布的版本重复。tag 是长期记录。
+      - name: Allocate the release batch
+        id: batch
         run: |
           git fetch --tags --force
           DAY=$(date -u +%Y-%m-%d)
@@ -244,13 +171,20 @@ jobs:
           done
           SEQ=$((MAX + 1))
           BATCH="${DAY}.${SEQ}"
-          NAME="release/${BATCH}"
-          git checkout -b "$NAME"
           {
-            echo "name=$NAME"
-            echo "batch=$BATCH"
+            echo "name=release/${BATCH}"
+            echo "value=$BATCH"
           } >> "$GITHUB_OUTPUT"
           echo "Version: $BATCH"
+
+      # 场景 B 独有：版本号要在临时发版分支上算，再 PR 合回。
+      # 场景 A 的版本号已经在 main 上了，没有需要合回的东西。
+      - name: Create release branch
+        if: steps.mode.outputs.needs_version == 'true'
+        id: branch
+        run: |
+          git checkout -b "${{ steps.batch.outputs.name }}"
+          echo "name=${{ steps.batch.outputs.name }}" >> "$GITHUB_OUTPUT"
 
       - name: Version
         if: steps.mode.outputs.needs_version == 'true'
@@ -261,12 +195,7 @@ jobs:
       # This runs unconditionally: when merge-beta-to-stable already wrote the versions
       # there is no `changeset version` step, and the two still have to be aligned.
       - name: Sync template version
-        run: |
-          if [ "${{ steps.mode.outputs.needs_version }}" = "true" ]; then
-            node ./scripts/sync-template-version.mjs
-          else
-            node ./scripts/sync-template-version.mjs --check
-          fi
+        run: node ./scripts/sync-template-version.mjs
 
       - name: Verify versions actually changed
         if: steps.mode.outputs.needs_version == 'true'
@@ -300,13 +229,9 @@ jobs:
           {
             echo "### Stable release"
             echo
-            if [ "${{ steps.release.outputs.resumed }}" = "true" ]; then
-              node scripts/release-manifest.mjs table --manifest /tmp/release-manifest.json
-            else
-              echo "| Package | Version |"
-              echo "| --- | --- |"
-              node scripts/list-package-versions.mjs --table
-            fi
+            echo "| Package | Version |"
+            echo "| --- | --- |"
+            node scripts/list-package-versions.mjs --table
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build and test
@@ -319,56 +244,32 @@ jobs:
         run: echo "dry_run=true — stopping here."
 
       # ── 场景 B 独有：提交版本号变更并推发版分支 ────────────────────
-      - name: Commit, tag and push release branch
+      - name: Commit and push release branch
         if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
         run: |
-          NAME="${{ steps.branch.outputs.name }}"
           git add -A
-          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
-          DIST_TAG="${{ steps.disttag.outputs.value }}"
-          [ -n "$DIST_TAG" ] || DIST_TAG=latest
-          node scripts/release-manifest.mjs create \
-            --before /tmp/versions-before.json \
-            --channel stable \
-            --release-kind stable-direct \
-            --batch "${{ steps.branch.outputs.batch }}" \
-            --tag "$NAME" \
-            --target-branch "${{ inputs.branch }}" \
-            --dist-tag "$DIST_TAG" \
-            --source-sha "$(git rev-parse HEAD)" \
-            --run-id "${{ github.run_id }}" \
-            > /tmp/release-manifest.json
-          git tag -a "$NAME" -F /tmp/release-manifest.json
-          git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
-          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
+          git commit -m "chore: release ${{ steps.batch.outputs.value }}"
+          git push origin "refs/heads/${{ steps.branch.outputs.name }}:refs/heads/${{ steps.branch.outputs.name }}"
 
-      - name: Create or update the Draft Release
+      # 两种场景共用：聚合 tag 打在即将 publish 的这个 commit 上。
+      #
+      # 必须在 publish 之前打：publish 会为每个实际发出去的 package 在 HEAD 上
+      # 打 name@version tag，聚合 tag 和它们落在同一个 commit，之后就能用
+      # `git tag --points-at` 读回「这批发了哪些包」。GitHub Release 靠的就是这个。
+      #
+      # 场景 B 里 tag 与发版分支同名，同名期间必须用完整 refspec ——
+      # `git push origin <name>` 会报 src refspec matches more than one。
+      - name: Tag the release
         if: '!inputs.dry_run'
-        id: metadata
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
         run: |
-          node scripts/release-manifest.mjs validate \
-            --manifest /tmp/release-manifest.json \
-            --channel stable \
-            --tag "$TAG"
-          node scripts/release-manifest.mjs notes \
-            --manifest /tmp/release-manifest.json \
-            > /tmp/release-notes.md
-          if [ "${{ steps.release.outputs.published }}" != "true" ]; then
-            bash scripts/github-release.sh draft "$TAG" stable \
-              /tmp/release-notes.md /tmp/release-manifest.json
-          fi
-          {
-            echo "released<<RELEASED_EOF"
-            node scripts/release-manifest.mjs table --manifest /tmp/release-manifest.json
-            echo "RELEASED_EOF"
-          } >> "$GITHUB_OUTPUT"
+          NAME="${{ steps.batch.outputs.name }}"
+          git tag "$NAME"
+          git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
+          echo "Tagged $(git rev-parse --short HEAD) as $NAME"
 
       # ── 两种场景共用：发布 ────────────────────────────────────────
       - name: Publish to npm
-        if: "!inputs.dry_run && steps.release.outputs.published != 'true'"
+        if: '!inputs.dry_run'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ steps.disttag.outputs.value }}
@@ -379,113 +280,33 @@ jobs:
             pnpm changeset publish
           fi
 
-      - name: Ensure and push package tags
-        if: "!inputs.dry_run && steps.release.outputs.published != 'true'"
-        run: |
-          SOURCE_SHA=$(jq -r '.sourceSha' /tmp/release-manifest.json)
-          node scripts/release-manifest.mjs specs \
-            --manifest /tmp/release-manifest.json \
-            > /tmp/released-specs.txt
-          while IFS= read -r PACKAGE_TAG; do
-            [ -n "$PACKAGE_TAG" ] || continue
-            if git show-ref --verify --quiet "refs/tags/$PACKAGE_TAG"; then
-              TAG_SHA=$(git rev-parse "refs/tags/$PACKAGE_TAG^{commit}")
-              if [ "$TAG_SHA" != "$SOURCE_SHA" ]; then
-                echo "::error::$PACKAGE_TAG points to $TAG_SHA, expected $SOURCE_SHA"
-                exit 1
-              fi
-            else
-              git tag "$PACKAGE_TAG" "$SOURCE_SHA"
-            fi
-          done < /tmp/released-specs.txt
-          git push origin --tags
-
-      - name: Verify the published stable release
+      - name: Push package tags
         if: '!inputs.dry_run'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DIST_TAG: ${{ steps.disttag.outputs.value || 'latest' }}
-        run: |
-          node scripts/release-manifest.mjs records \
-            --manifest /tmp/release-manifest.json \
-            > /tmp/released-records.txt
-          while IFS=$'\t' read -r NAME VERSION; do
-            [ -n "$NAME" ] || continue
-            PUBLISHED=$(npm view "$NAME@$VERSION" version --json | jq -r '.')
-            if [ "$PUBLISHED" != "$VERSION" ]; then
-              echo "::error::$NAME@$VERSION is not available from the registry"
-              exit 1
-            fi
-            POINTER=$(npm view "$NAME" "dist-tags.$DIST_TAG" --json | jq -r '.')
-            if [ "$POINTER" != "$VERSION" ]; then
-              echo "::error::$NAME has $DIST_TAG=$POINTER, expected $VERSION"
-              exit 1
-            fi
-          done < /tmp/released-records.txt
-
-      - name: Publish the GitHub Release
-        if: "!inputs.dry_run && steps.release.outputs.published != 'true'"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
-          DIST_TAG: ${{ steps.disttag.outputs.value || 'latest' }}
-        run: bash scripts/github-release.sh publish "$TAG" stable "$DIST_TAG"
+        run: git push origin --tags
 
       # ── 场景 B 独有：把版本号变更合回 main ────────────────────────
       - name: Merge back into the release branch
-        if: "!inputs.dry_run && (steps.mode.outputs.needs_version == 'true' || steps.release.outputs.kind == 'stable-direct')"
+        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
         id: merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NAME: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
-          BATCH: ${{ steps.release.outputs.batch || steps.branch.outputs.batch }}
         run: |
-          git fetch origin "${{ inputs.branch }}"
-          SOURCE_SHA=$(jq -r '.sourceSha' /tmp/release-manifest.json)
-          if git merge-base --is-ancestor "$SOURCE_SHA" "origin/${{ inputs.branch }}"; then
-            echo "The release commit is already in ${{ inputs.branch }}"
-            echo "merged=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if ! git ls-remote --exit-code --heads origin "$NAME" >/dev/null; then
-            SOURCE_SHA=$(git rev-parse "refs/tags/${NAME}^{commit}")
-            git push origin "$SOURCE_SHA:refs/heads/${NAME}"
-          fi
-          BRANCH_SHA=$(git ls-remote --refs origin "refs/heads/$NAME" | cut -f1)
-          if [ "$BRANCH_SHA" != "$SOURCE_SHA" ]; then
-            echo "::error::$NAME points to $BRANCH_SHA, expected frozen source $SOURCE_SHA"
-            exit 1
-          fi
-          PR_URL=$(gh pr list \
+          PR_URL=$(gh pr create \
+            --title "chore: release ${{ steps.batch.outputs.value }}" \
+            --body "Stable release \`${{ steps.batch.outputs.value }}\` published to npm under the \`latest\` dist-tag. Per-package versions are in the GitHub Release." \
             --base "${{ inputs.branch }}" \
-            --head "$NAME" \
-            --state open \
-            --json url \
-            --jq '.[0].url')
-          if [ -z "$PR_URL" ]; then
-            PR_URL=$(gh pr create \
-              --title "chore: release $BATCH" \
-              --body "Stable release \`$BATCH\` published to npm. Per-package versions are in the GitHub Release." \
-              --base "${{ inputs.branch }}" \
-              --head "$NAME")
-          fi
+            --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
-          gh pr merge "$PR_URL" --merge --delete-branch --match-head-commit "$SOURCE_SHA"
+          gh pr merge "$PR_URL" --merge --delete-branch
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
             echo "::warning::Failed to merge the PR back into ${{ inputs.branch }}; conflicts need manual work: $PR_URL"
             echo "merged=false" >> "$GITHUB_OUTPUT"
           else
-            git fetch origin "${{ inputs.branch }}"
-            if git merge-base --is-ancestor "$SOURCE_SHA" "origin/${{ inputs.branch }}"; then
-              echo "merged=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "::warning::The PR was accepted but the release commit is not in ${{ inputs.branch }} yet"
-              echo "merged=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "merged=true" >> "$GITHUB_OUTPUT"
           fi
 
       # main 上的补丁必须同步到 develop，否则下一次转正会把它覆盖掉。
@@ -495,14 +316,14 @@ jobs:
       # 旧版本分支的 hotfix 不适用：那条线与主线已经分叉，是否同步由人
       # 判断（通常是 cherry-pick 代码后在 develop 上单独写 changeset）。
       - name: Sync into develop
-        if: "!inputs.dry_run && inputs.branch == 'main' && (steps.mode.outputs.needs_version == 'true' || steps.release.outputs.kind == 'stable-direct') && steps.merge.outputs.merged == 'true'"
+        if: "!inputs.dry_run && inputs.branch == 'main' && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'true'"
         id: sync
         run: |
           git fetch origin main develop
           git checkout -B develop origin/develop
 
           set +e
-          git merge --no-ff origin/main -m "chore: sync ${{ steps.release.outputs.batch || steps.branch.outputs.batch }} into develop"
+          git merge --no-ff origin/main -m "chore: sync ${{ steps.batch.outputs.value }} into develop"
           MERGE_RC=$?
           set -e
 
@@ -533,7 +354,7 @@ jobs:
               echo "synced=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            git commit -m "chore: sync ${{ steps.release.outputs.batch || steps.branch.outputs.batch }} into develop"
+            git commit -m "chore: sync ${{ steps.batch.outputs.value }} into develop"
           fi
 
           # 合并不该带走 develop 的 pre 状态。带走了说明合进来的内容有问题，
@@ -548,7 +369,7 @@ jobs:
           echo "synced=true" >> "$GITHUB_OUTPUT"
 
       - name: Notify merge failure
-        if: "!inputs.dry_run && (steps.mode.outputs.needs_version == 'true' || steps.release.outputs.kind == 'stable-direct') && steps.merge.outputs.merged == 'false'"
+        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'false'"
         env:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
@@ -559,17 +380,17 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.release.outputs.batch || steps.branch.outputs.batch }}** 已成功发布到 npm。
+            版本 **${{ steps.batch.outputs.value }}** 已成功发布到 npm（dist-tag `latest`）。
 
             但版本提交合回 `main` 时发生冲突，需要人工解决：
             ${{ steps.merge.outputs.url }}
 
-            发版分支 `${{ steps.release.outputs.name || steps.branch.outputs.name }}` 已保留。
+            发版分支 `${{ steps.branch.outputs.name }}` 已保留。
             **在此之前不要再次发版**，否则版本号会从旧基线重新计算。
         run: ./scripts/feishu-notify.sh
 
       - name: Notify sync failure
-        if: "!inputs.dry_run && inputs.branch == 'main' && (steps.mode.outputs.needs_version == 'true' || steps.release.outputs.kind == 'stable-direct') && steps.merge.outputs.merged == 'true' && steps.sync.outputs.synced == 'false'"
+        if: "!inputs.dry_run && inputs.branch == 'main' && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'true' && steps.sync.outputs.synced == 'false'"
         env:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
@@ -580,7 +401,7 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.release.outputs.batch || steps.branch.outputs.batch }}** 已发布到 npm 并合进 `main`。
+            版本 **${{ steps.batch.outputs.value }}** 已发布到 npm 并合进 `main`。
 
             但同步到 `develop` 时有无法自动解决的冲突（源码冲突）。
             远端 `develop` 未被修改，在本地执行：
@@ -594,7 +415,7 @@ jobs:
         run: ./scripts/feishu-notify.sh
 
       - name: Fail the run when merge failed
-        if: "!inputs.dry_run && (steps.mode.outputs.needs_version == 'true' || steps.release.outputs.kind == 'stable-direct') && steps.merge.outputs.merged == 'false'"
+        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'false'"
         run: exit 1
 
       - name: Notify success
@@ -609,12 +430,29 @@ jobs:
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            已发布到 npm（dist-tag `${{ steps.disttag.outputs.value || 'latest' }}`）。
+            已发布到 npm（dist-tag `latest`）。
 
             本次发布的 package：
             ```
-            ${{ steps.metadata.outputs.released }}
+            ${{ steps.changed.outputs.released || '版本号由 merge-beta-to-stable 写好，清单见 workflow summary' }}
             ```
 
             ${{ steps.sync.outputs.synced == 'true' && '补丁已同步到 develop。' || '' }}
         run: ./scripts/feishu-notify.sh
+
+  # 与 release-beta 一样：把这批发布渲染成 GitHub Release。
+  # 场景 A 用转正时打的聚合 tag，场景 B 用这次新建的。
+  github-release:
+    name: Publish the GitHub Release
+    needs: release
+    # 合回 main 失败时 release job 是失败的，但 npm 已经发出去了，
+    # Release 还是要建。
+    if: >-
+      !cancelled() && !inputs.dry_run
+      && needs.release.outputs.tag != ''
+      && (needs.release.result == 'success' || needs.release.outputs.merged == 'false')
+    uses: ./.github/workflows/github-release.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    permissions:
+      contents: write

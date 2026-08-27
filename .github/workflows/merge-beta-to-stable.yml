@@ -22,10 +22,6 @@ name: Merge Beta to Stable
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'Existing release/YYYY-MM-DD.N promotion Draft Release to resume (normally leave empty)'
-        type: string
-        default: ''
       dry_run:
         description: 'Dry run: compute versions and run checks without pushing any branch'
         type: boolean
@@ -64,52 +60,11 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - name: Resolve an existing promotion Draft Release
-        id: release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REQUESTED_TAG: ${{ inputs.release_tag }}
-        run: |
-          TAG="$REQUESTED_TAG"
-          if [ -z "$TAG" ]; then
-            TAG=$(bash scripts/github-release.sh find-run unused stable "${{ github.run_id }}")
-          fi
-          if [ -z "$TAG" ]; then
-            TAG=$(bash scripts/github-release.sh find-draft unused stable)
-          fi
-          if [ -z "$TAG" ]; then
-            echo "resumed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          bash scripts/github-release.sh restore "$TAG" stable /tmp/release-manifest.json
-          if [ "$(jq -r '.releaseKind' /tmp/release-manifest.json)" != "stable-promotion" ] || \
-             [ "$(jq -r '.targetBranch' /tmp/release-manifest.json)" != "main" ]; then
-            echo "::error::$TAG is not a stable promotion for main"
-            exit 1
-          fi
-          git checkout --detach "refs/tags/$TAG"
-          node scripts/release-manifest.mjs validate-tree \
-            --manifest /tmp/release-manifest.json
-          if IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
-            :
-          else
-            IS_DRAFT=true
-          fi
-          {
-            echo "resumed=true"
-            echo "name=$TAG"
-            echo "batch=$(jq -r '.batch' /tmp/release-manifest.json)"
-            echo "published=$([ "$IS_DRAFT" = "true" ] && echo false || echo true)"
-          } >> "$GITHUB_OUTPUT"
-          echo "Resuming $TAG"
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       # 不在 pre 模式说明上一次转正没走完，或有人手工动过状态。
       - name: Verify develop is in pre mode
-        if: steps.release.outputs.resumed != 'true'
         run: |
           if [ ! -f .changeset/pre.json ]; then
             echo "::error::develop is not in pre mode — there is no prerelease to promote"
@@ -128,50 +83,30 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Snapshot versions before promotion
-        if: steps.release.outputs.resumed != 'true'
         run: |
           node scripts/list-package-versions.mjs > /tmp/versions-before.json
 
-      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支会被删除）。
-      - name: Create release branch
-        if: steps.release.outputs.resumed != 'true'
+      # 转正分支，不是发版分支：这一步只把版本号脱掉 -beta 后缀并合进 main，
+      # npm 上一个包都没发出去。所以这里既不占用 release/ 命名空间，也不打
+      # 聚合 tag —— 聚合 tag 由 release-stable 在真正 publish 时打，日期才准
+      # （今天转正、明天发版的话，今天打的 tag 日期就是错的）。
+      - name: Create promotion branch
         id: branch
         run: |
-          git fetch --tags --force
-          DAY=$(date -u +%Y-%m-%d)
-          MAX=0
-          for t in $(git tag -l "release/${DAY}.*"); do
-            N="${t##*.}"
-            case "$N" in ''|*[!0-9]*) continue ;; esac
-            [ "$N" -gt "$MAX" ] && MAX="$N"
-          done
-          SEQ=$((MAX + 1))
-          BATCH="${DAY}.${SEQ}"
-          NAME="release/${BATCH}"
+          NAME="chore/promote-$(date -u +%Y-%m-%d)"
           git checkout -b "$NAME"
-          {
-            echo "name=$NAME"
-            echo "batch=$BATCH"
-          } >> "$GITHUB_OUTPUT"
-          echo "Version: $BATCH"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Promotion branch: $NAME"
 
       # pre exit 只改状态，version 才真正脱后缀并删除 pre.json。
       - name: Exit pre mode and version
-        if: steps.release.outputs.resumed != 'true'
         run: |
           pnpm changeset pre exit
           pnpm changeset version
 
-      # Keep the published template metadata in the same immutable commit as the
-      # stable package versions. release-stable only verifies this frozen source.
-      - name: Sync template version
-        if: steps.release.outputs.resumed != 'true'
-        run: node ./scripts/sync-template-version.mjs
-
       # 这一轮 pre 期间从没发过 beta 时，pre exit + version 会以 0 退出、
       # 删掉 pre.json，但一个版本号都不改。
       - name: Verify promotion actually changed versions
-        if: steps.release.outputs.resumed != 'true'
         id: changed
         run: |
           CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
@@ -209,13 +144,9 @@ jobs:
             echo
             echo "Run \`release-stable.yml\` after this is merged to publish:"
             echo
-            if [ "${{ steps.release.outputs.resumed }}" = "true" ]; then
-              node scripts/release-manifest.mjs table --manifest /tmp/release-manifest.json
-            else
-              echo "| Package | Version |"
-              echo "| --- | --- |"
-              node scripts/list-package-versions.mjs --table
-            fi
+            echo "| Package | Version |"
+            echo "| --- | --- |"
+            node scripts/list-package-versions.mjs --table
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build and test
@@ -227,103 +158,42 @@ jobs:
         if: inputs.dry_run
         run: echo "dry_run=true — stopping here. The release branch was not pushed."
 
-      # 版本 tag 与发版分支同名。同名期间必须用完整 refspec ——
-      # `git push origin <name>` 会报 src refspec matches more than one。
-      - name: Commit, tag and push release branch
-        if: "!inputs.dry_run && steps.release.outputs.resumed != 'true'"
+      # 不打 tag —— 见上面 Create promotion branch 的说明。
+      # 分支名不再与任何 tag 同名，可以用简写 refspec。
+      #
+      # 用 --force：同一天跑第二次转正会撞上同名分支。这是 workflow 自己用的
+      # 临时分支，不会有人往里提交，上一次没跑完留下的内容直接覆盖即可；
+      # 不覆盖的话推送会以 non-fast-forward 失败。
+      - name: Commit and push the promotion branch
+        if: '!inputs.dry_run'
         run: |
           NAME="${{ steps.branch.outputs.name }}"
           git add -A
-          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
-          node scripts/release-manifest.mjs create \
-            --before /tmp/versions-before.json \
-            --channel stable \
-            --release-kind stable-promotion \
-            --batch "${{ steps.branch.outputs.batch }}" \
-            --tag "$NAME" \
-            --target-branch main \
-            --dist-tag latest \
-            --source-sha "$(git rev-parse HEAD)" \
-            --run-id "${{ github.run_id }}" \
-            > /tmp/release-manifest.json
-          git tag -a "$NAME" -F /tmp/release-manifest.json
-          git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
-          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
-
-      - name: Create the stable Draft Release
-        if: '!inputs.dry_run'
-        id: metadata
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
-        run: |
-          node scripts/release-manifest.mjs notes \
-            --manifest /tmp/release-manifest.json \
-            > /tmp/release-notes.md
-          if [ "${{ steps.release.outputs.published }}" != "true" ]; then
-            bash scripts/github-release.sh draft "$TAG" stable \
-              /tmp/release-notes.md /tmp/release-manifest.json
-          fi
-          {
-            echo "released<<RELEASED_EOF"
-            node scripts/release-manifest.mjs table --manifest /tmp/release-manifest.json
-            echo "RELEASED_EOF"
-          } >> "$GITHUB_OUTPUT"
+          git commit -m "chore: promote prerelease versions"
+          git push --force origin "$NAME"
 
       - name: Merge into main
         if: '!inputs.dry_run'
         id: merge_main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NAME: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
-          BATCH: ${{ steps.release.outputs.batch || steps.branch.outputs.batch }}
         run: |
-          git fetch origin main
-          SOURCE_SHA=$(jq -r '.sourceSha' /tmp/release-manifest.json)
-          if git merge-base --is-ancestor "$SOURCE_SHA" origin/main; then
-            echo "The promoted release is already in main"
-            echo "merged=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if ! git ls-remote --exit-code --heads origin "$NAME" >/dev/null; then
-            SOURCE_SHA=$(git rev-parse "refs/tags/${NAME}^{commit}")
-            git push origin "$SOURCE_SHA:refs/heads/${NAME}"
-          fi
-          BRANCH_SHA=$(git ls-remote --refs origin "refs/heads/$NAME" | cut -f1)
-          if [ "$BRANCH_SHA" != "$SOURCE_SHA" ]; then
-            echo "::error::$NAME points to $BRANCH_SHA, expected frozen source $SOURCE_SHA"
-            exit 1
-          fi
-          PR_URL=$(gh pr list \
+          PR_URL=$(gh pr create \
+            --title "chore: promote prerelease versions" \
+            --body "Promoted the prerelease: version numbers no longer carry the \`-beta\` suffix. **Not published to npm yet** — run \`release-stable.yml\` after merging, which is what tags the release and creates its GitHub Release. Per-package versions are in the workflow summary." \
             --base main \
-            --head "$NAME" \
-            --state open \
-            --json url \
-            --jq '.[0].url')
-          if [ -z "$PR_URL" ]; then
-            PR_URL=$(gh pr create \
-              --title "chore: release $BATCH" \
-              --body "Promoted the prerelease: version numbers no longer carry the \`-beta\` suffix. **Not published to npm yet** — run \`release-stable.yml\` after merging. Per-package versions are in the Draft Release." \
-              --base main \
-              --head "$NAME")
-          fi
+            --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
-          gh pr merge "$PR_URL" --merge --match-head-commit "$SOURCE_SHA"
+          gh pr merge "$PR_URL" --merge
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
             echo "::warning::Failed to merge the PR into main: $PR_URL"
             echo "merged=false" >> "$GITHUB_OUTPUT"
           else
-            git fetch origin main
-            if git merge-base --is-ancestor "$SOURCE_SHA" origin/main; then
-              echo "merged=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "::warning::The PR was accepted but the promoted release is not in main yet"
-              echo "merged=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "merged=true" >> "$GITHUB_OUTPUT"
           fi
 
       # 转正结果合回 develop，并重新进入 pre 模式。
@@ -333,77 +203,13 @@ jobs:
         id: merge_develop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NAME: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
-          BATCH: ${{ steps.release.outputs.batch || steps.branch.outputs.batch }}
         run: |
           git fetch origin develop
-          SOURCE_SHA=$(jq -r '.sourceSha' /tmp/release-manifest.json)
-          if git merge-base --is-ancestor "$SOURCE_SHA" origin/develop; then
-            MODE=$(git show "origin/develop:.changeset/pre.json" 2>/dev/null | jq -r '.mode // empty')
-            if [ "$MODE" = "pre" ]; then
-              echo "The promoted release is already in develop and pre mode is active"
-              echo "merged=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
-          if ! git ls-remote --exit-code --heads origin "$NAME" >/dev/null; then
-            SOURCE_SHA=$(git rev-parse "refs/tags/${NAME}^{commit}")
-            git push origin "$SOURCE_SHA:refs/heads/${NAME}"
-          fi
-          RELEASE_BRANCH_SHA=$(git ls-remote --refs origin "refs/heads/$NAME" | cut -f1)
-          if [ "$RELEASE_BRANCH_SHA" != "$SOURCE_SHA" ]; then
-            echo "::error::$NAME points to $RELEASE_BRANCH_SHA, expected frozen source $SOURCE_SHA"
-            exit 1
-          fi
-          SYNC="chore/sync-${BATCH}"
-          if git ls-remote --exit-code --heads origin "$SYNC" >/dev/null; then
-            git fetch origin "refs/heads/${SYNC}:refs/remotes/origin/${SYNC}"
-            SYNC_SHA=$(git rev-parse "refs/remotes/origin/$SYNC")
-            if ! git merge-base --is-ancestor "$SOURCE_SHA" "$SYNC_SHA"; then
-              echo "::error::$SYNC does not contain frozen release source $SOURCE_SHA"
-              exit 1
-            fi
-            MODE=$(git show "$SYNC_SHA:.changeset/pre.json" 2>/dev/null | jq -r '.mode // empty')
-            if [ "$MODE" != "pre" ]; then
-              echo "::error::$SYNC has not re-entered Changesets pre mode"
-              exit 1
-            fi
-            PR_URL=$(gh pr list \
-              --base develop \
-              --head "$SYNC" \
-              --state open \
-              --json url \
-              --jq '.[0].url')
-            if [ -z "$PR_URL" ]; then
-              PR_URL=$(gh pr create \
-                --title "chore: sync $BATCH back to develop" \
-                --body "Sync the promoted versions back to develop and re-enter pre mode." \
-                --base develop \
-                --head "$SYNC")
-            fi
-            echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
-            set +e
-            gh pr merge "$PR_URL" --merge --delete-branch --match-head-commit "$SYNC_SHA"
-            EXISTING_RC=$?
-            set -e
-            if [ $EXISTING_RC -ne 0 ]; then
-              echo "merged=false" >> "$GITHUB_OUTPUT"
-            else
-              git fetch origin develop
-              MODE=$(git show "origin/develop:.changeset/pre.json" 2>/dev/null | jq -r '.mode // empty')
-              if git merge-base --is-ancestor "$SOURCE_SHA" origin/develop && [ "$MODE" = "pre" ]; then
-                echo "merged=true" >> "$GITHUB_OUTPUT"
-              else
-                echo "::warning::The sync PR was accepted but develop is not synchronized in pre mode yet"
-                echo "merged=false" >> "$GITHUB_OUTPUT"
-              fi
-            fi
-            exit 0
-          fi
+          SYNC="chore/sync-$(date -u +%Y-%m-%d)"
           git checkout -B "$SYNC" origin/develop
 
           set +e
-          git merge --no-ff "origin/${NAME}" -m "chore: sync ${BATCH} back to develop"
+          git merge --no-ff "origin/${{ steps.branch.outputs.name }}" -m "chore: sync promoted versions back to develop"
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
@@ -415,36 +221,23 @@ jobs:
           pnpm changeset pre enter beta
           git add .changeset
           git commit -m "chore: re-enter pre mode for the next line"
-          SYNC_SHA=$(git rev-parse HEAD)
-          git push origin "$SYNC"
-          REMOTE_SYNC_SHA=$(git ls-remote --refs origin "refs/heads/$SYNC" | cut -f1)
-          if [ "$REMOTE_SYNC_SHA" != "$SYNC_SHA" ]; then
-            echo "::error::$SYNC points to $REMOTE_SYNC_SHA, expected $SYNC_SHA"
-            exit 1
-          fi
+          git push --force origin "$SYNC"
 
           PR_URL=$(gh pr create \
-            --title "chore: sync $BATCH back to develop" \
+            --title "chore: sync promoted versions back to develop" \
             --body "Sync the promoted versions back to develop and re-enter pre mode." \
             --base develop \
             --head "$SYNC")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
-          gh pr merge "$PR_URL" --merge --delete-branch --match-head-commit "$SYNC_SHA"
+          gh pr merge "$PR_URL" --merge --delete-branch
           RC2=$?
           set -e
           if [ $RC2 -ne 0 ]; then
             echo "merged=false" >> "$GITHUB_OUTPUT"
           else
-            git fetch origin develop
-            MODE=$(git show "origin/develop:.changeset/pre.json" 2>/dev/null | jq -r '.mode // empty')
-            if git merge-base --is-ancestor "$SOURCE_SHA" origin/develop && [ "$MODE" = "pre" ]; then
-              echo "merged=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "::warning::The sync PR was accepted but develop is not synchronized in pre mode yet"
-              echo "merged=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "merged=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Notify main merge failure
@@ -454,16 +247,16 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           REGISTRY_URL: https://npm.nocobase.ai
-          TITLE: NocoBase 3 转正合并失败
+          TITLE: NocoBase 3 develop 合入 main 失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.release.outputs.batch || steps.branch.outputs.batch }}** 的转正提交合进 `main` 时发生冲突：
+            `develop` 合入 `main` 时发生冲突：
             ${{ steps.merge_main.outputs.url }}
 
             npm 尚未发布，没有产生不一致状态。
-            发版分支 `${{ steps.release.outputs.name || steps.branch.outputs.name }}` 已保留。
+            分支 `${{ steps.branch.outputs.name }}` 已保留。
 
             **注意**：`develop` 仍处于已退出 pre 模式的状态，解决后需要
             合回 develop 并执行 `changeset pre enter beta`。
@@ -476,12 +269,12 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           REGISTRY_URL: https://npm.nocobase.ai
-          TITLE: NocoBase 3 已合进 main，但同步回 develop 失败
+          TITLE: NocoBase 3 已合入 main，但同步回 develop 失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.release.outputs.batch || steps.branch.outputs.batch }}** 已合进 `main`，可以发布了。
+            `develop` 已合入 `main`，可以发布了。
 
             但同步回 `develop` 失败，需要人工处理：
             ${{ steps.merge_develop.outputs.url || '（合并阶段就失败了，没有创建 PR）' }}
@@ -501,19 +294,17 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           REGISTRY_URL: https://npm.nocobase.ai
-          TITLE: NocoBase 3 转正合并完成
+          TITLE: NocoBase 3 develop 已合入 main
           STATUS: success
           STATUS_TEXT_SUCCESS: 待发布
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.release.outputs.batch || steps.branch.outputs.batch }}** 已转正并合进 `main`，`develop` 已重新进入 pre 模式。
+            `develop` 已合入 `main`，版本号不再带 `-beta` 后缀，`develop` 已重新进入 pre 模式。
 
-            **尚未发布到 npm。** 点 `release-stable.yml`，选择 `main` 并保持其余输入默认，完成发布。
-
-            GitHub Draft Release：`${{ steps.release.outputs.name || steps.branch.outputs.name }}`
+            **尚未发布到 npm。** 点 `release-stable.yml` 完成发布（输入保持默认）。
 
             待发布的 package：
             ```
-            ${{ steps.metadata.outputs.released }}
+            ${{ steps.changed.outputs.released }}
             ```
         run: ./scripts/feishu-notify.sh
