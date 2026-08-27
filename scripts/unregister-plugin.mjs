@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,6 +10,11 @@ import {
   removeClientPlugin,
   writeClientPlugins,
 } from './lib/client-plugins.mjs';
+import {
+  SKILLS_DIRECTORY,
+  isOwnedSkillName,
+  pluginSkillPrefix,
+} from './lib/skills-sync.mjs';
 import {
   DEFAULT_APP,
   isRecord,
@@ -156,6 +161,10 @@ export async function unregisterPlugin({
   if (clientPlugins.changed) {
     await writeClientPlugins(appRoot, clientPlugins.sourceText);
   }
+  // Sync only ever writes prefixes of registered plugins, so it will not clean
+  // up after an unregistration; this does. It is unrelated to installing, so it
+  // runs before the --no-install branch.
+  result.removedSkills = await removePluginSkills(appRoot, packageName);
 
   if (!install) {
     return result;
@@ -202,6 +211,33 @@ export async function unregisterPlugin({
   }
 
   return result;
+}
+
+async function removePluginSkills(appRoot, packageName) {
+  const skillsRoot = path.join(appRoot, SKILLS_DIRECTORY);
+  const prefix = pluginSkillPrefix(packageName);
+  let entries;
+  try {
+    entries = await readdir(skillsRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+
+  const removed = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !isOwnedSkillName(prefix, entry.name)) {
+      continue;
+    }
+    await rm(path.join(skillsRoot, entry.name), {
+      recursive: true,
+      force: true,
+    });
+    removed.push(entry.name);
+  }
+  return removed;
 }
 
 async function prepareClientPluginRemoval(appRoot, packageName) {

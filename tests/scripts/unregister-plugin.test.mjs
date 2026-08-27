@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -157,6 +164,54 @@ test('allows plugin removal after unregistration', async (t) => {
   });
 
   assert.equal(result.packageName, pluginPackageName);
+});
+
+test('removes the plugin skills it owns and leaves the rest', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  const appPackagePath = await createApplicationPackage(repoRoot);
+  const skillsRoot = path.join(
+    path.dirname(appPackagePath),
+    '.agents',
+    'skills',
+  );
+  const directories = [
+    'nocobase-app-plugin-audit-log',
+    'nocobase-app-plugin-audit-log-trigger',
+    'nocobase-app-plugin-other',
+    'my-own-skill',
+  ];
+  for (const directory of directories) {
+    await mkdir(path.join(skillsRoot, directory), { recursive: true });
+    await writeFile(path.join(skillsRoot, directory, 'SKILL.md'), 'x');
+  }
+
+  const result = await unregisterPlugin({
+    install: false,
+    name: 'audit-log',
+    repoRoot,
+  });
+
+  assert.deepEqual(result.removedSkills.sort(), [
+    'nocobase-app-plugin-audit-log',
+    'nocobase-app-plugin-audit-log-trigger',
+  ]);
+  assert.deepEqual((await readdir(skillsRoot)).sort(), [
+    'my-own-skill',
+    'nocobase-app-plugin-other',
+  ]);
+});
+
+test('tolerates an application without a skills directory', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  await createApplicationPackage(repoRoot);
+
+  const result = await unregisterPlugin({
+    install: false,
+    name: 'audit-log',
+    repoRoot,
+  });
+
+  assert.deepEqual(result.removedSkills, []);
 });
 
 test('restores the application and lockfile when installation fails', async (t) => {

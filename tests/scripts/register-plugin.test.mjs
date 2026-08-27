@@ -27,6 +27,7 @@ test('parses the application selector and registration options', () => {
       help: false,
       install: false,
       name: '@nocobase/app-plugin-audit-log',
+      skills: true,
     },
   );
 });

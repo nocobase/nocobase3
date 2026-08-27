@@ -19,6 +19,7 @@ import {
   readClientPlugins,
   writeClientPlugins,
 } from './lib/client-plugins.mjs';
+import { trySyncSkills } from './lib/skills-sync.mjs';
 
 const packagePrefix = '@nocobase/app-plugin-';
 const directoryPrefix = 'app-plugin-';
@@ -48,6 +49,7 @@ Options:
                     (default: app-template-default)
   --disabled        Register the plugin with enabled set to false
   --no-install      Do not synchronize pnpm-lock.yaml
+  --no-skills       Do not synchronize the plugin's skills into the application
   --dry-run         Validate and print the change without writing
   -h, --help        Show this help
 
@@ -65,6 +67,7 @@ export function parseRegisterPluginArgs(args) {
     help: false,
     install: true,
     name: undefined,
+    skills: true,
   };
   const positionals = [];
 
@@ -85,6 +88,10 @@ export function parseRegisterPluginArgs(args) {
     }
     if (argument === '--no-install') {
       options.install = false;
+      continue;
+    }
+    if (argument === '--no-skills') {
+      options.skills = false;
       continue;
     }
     if (argument === '--app') {
@@ -120,6 +127,7 @@ export async function registerPlugin({
   enabled = true,
   install = true,
   name,
+  skills = true,
   repoRoot = defaultRepoRoot,
   synchronize = synchronizeWorkspace,
 }) {
@@ -229,6 +237,17 @@ export async function registerPlugin({
       `Plugin registration failed and ${application.packageJsonPath} was restored: ${reason}`,
       { cause: error },
     );
+  }
+
+  // Skills are documentation: a failure here is reported but never fails the
+  // registration that already succeeded.
+  if (skills) {
+    const synced = await trySyncSkills({
+      app,
+      plugin: shortName,
+      repoRoot: resolvedRepoRoot,
+    });
+    result.skillsSynced = synced.succeeded;
   }
 
   return result;
