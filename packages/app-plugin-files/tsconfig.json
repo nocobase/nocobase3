@@ -9,7 +9,6 @@
   "include": [
     "index.ts",
     "protocol.ts",
-    "database/files-collection.ts",
     "server/**/*.ts",
     "client/**/*.ts",
     "client/**/*.tsx"
