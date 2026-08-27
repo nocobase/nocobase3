@@ -37,6 +37,9 @@ jobs:
     name: Publish beta
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.branch.outputs.name }}
+      merged: ${{ steps.merge.outputs.merged }}
     steps:
       - name: Check out develop
         uses: actions/checkout@v4
@@ -324,3 +327,20 @@ jobs:
             ${{ steps.changed.outputs.released }}
             ```
         run: ./scripts/feishu-notify.sh
+
+  # npm 已经发布成功，tag 也推上去了，这里只是把这批发布渲染成 GitHub Release。
+  # 独立 job：它失败不该影响已经完成的发布，重跑或手动 dispatch 都能补上。
+  github-release:
+    name: Publish the GitHub Release
+    needs: release
+    # 合回 develop 失败时 release job 会被判定为失败，但 npm 已经发出去了、
+    # tag 也推上去了，这批发布该有的 Release 还是要建。
+    if: >-
+      !cancelled() && !inputs.dry_run
+      && needs.release.outputs.tag != ''
+      && (needs.release.result == 'success' || needs.release.outputs.merged == 'false')
+    uses: ./.github/workflows/github-release.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    permissions:
+      contents: write
