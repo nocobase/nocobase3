@@ -2,6 +2,8 @@ import {
   Activity,
   ArrowLeft,
   Boxes,
+  Check,
+  Copy,
   Download,
   ExternalLink,
   KeyRound,
@@ -556,7 +558,6 @@ export function ApplicationDetailPage({
             releases={releases.data ?? []}
             deployments={deployments.data ?? []}
             releaseTotal={releases.meta?.total}
-            canDevelop={canDevelop}
             canReadReleases={canReadReleases}
             canReadDeployments={canReadDeployments}
           />
@@ -796,7 +797,6 @@ function ApplicationOverview({
   releases,
   deployments,
   releaseTotal,
-  canDevelop,
   canReadReleases,
   canReadDeployments,
 }: {
@@ -804,16 +804,11 @@ function ApplicationOverview({
   releases: HubRelease[];
   deployments: HubDeployment[];
   releaseTotal?: number;
-  canDevelop: boolean;
   canReadReleases: boolean;
   canReadDeployments: boolean;
 }) {
   const translate = useTranslate();
   const activeRelease = application.activeRelease;
-  const showEmptyDefaultOnboarding =
-    application.isDefault === true &&
-    canReadReleases &&
-    application.latestRelease === null;
   const latestDeployment = useMemo(
     () =>
       [...deployments].sort(
@@ -826,70 +821,6 @@ function ApplicationOverview({
 
   return (
     <div className='space-y-4'>
-      {showEmptyDefaultOnboarding ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <h2>
-                {translate(
-                  'hub.application.onboarding.title',
-                  'Build and deploy this application',
-                )}
-              </h2>
-            </CardTitle>
-            <CardDescription>
-              {translate(
-                'hub.application.onboarding.description',
-                'The default APP intentionally starts without a Release. Keep source on your computer and choose how to prepare its first build.',
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className='grid gap-3 md:grid-cols-2'>
-            <div className='rounded-lg border p-4'>
-              <div className='font-medium'>
-                {translate(
-                  'hub.application.onboarding.existing.title',
-                  'Use an existing local application',
-                )}
-              </div>
-              <p className='mt-1 text-sm text-muted-foreground'>
-                {translate(
-                  'hub.application.onboarding.existing.description',
-                  'Continue from source already stored on this computer. The Coding Agent builds it locally and publishes only the artifact.',
-                )}
-              </p>
-            </div>
-            <div className='rounded-lg border p-4'>
-              <div className='font-medium'>
-                {translate(
-                  'hub.application.onboarding.create.title',
-                  'Create a new local application',
-                )}
-              </div>
-              <p className='mt-1 text-sm text-muted-foreground'>
-                {translate(
-                  'hub.application.onboarding.create.description',
-                  'Create source from the default template on this computer, then develop, publish, and deploy it.',
-                )}
-              </p>
-            </div>
-            {canDevelop ? (
-              <div className='md:col-span-2'>
-                <Button
-                  nativeButton={false}
-                  render={<Link to='?tab=development' />}
-                >
-                  <SquareTerminal aria-hidden='true' />
-                  {translate(
-                    'hub.application.onboarding.action',
-                    'Open development instructions',
-                  )}
-                </Button>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
       <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
         <OverviewCard
           icon={<Rocket aria-hidden='true' />}
@@ -1731,106 +1662,142 @@ function ApplicationDevelopment({
   application: HubApplication;
 }) {
   const translate = useTranslate();
-  const [copied, setCopied] = useState(false);
   const hubUrl = resolveHubPublicUrl();
-  const prompt = translateWithValues(
-    translate,
-    'hub.development.prompt',
-    `Develop the NocoBase Hub application “{{name}}” (slug: {{slug}}) from source kept on my local machine.
+  const createCommands = `pnpm config set @nocobase:registry https://npm.nocobase.ai/
+pnpm create @nocobase/app ${application.slug}
+cd ${application.slug}
+pnpm dev`;
+  const existingCommands = `cd <existing-app-directory>
+pnpm install
+pnpm dev`;
+  const firstDeploymentCommand = `pnpm run deploy --hub ${hubUrl} --app ${application.slug}`;
 
-Hub URL: {{hubUrl}}
-Hub stores only build artifacts, Releases, and Deployments. It does not store or restore application source code.
-
-1. Check the local prerequisites. Node.js 24 or later and pnpm 11 or later are required.
-
-node --version
-pnpm --version
-
-2. Ask me for the existing local source directory before changing anything. Preserve every local change in that directory. Do not download, pull, or reconstruct source from Hub.
-
-If I confirm that no source directory exists and this APP should start again from the default template, create a new local project in an empty directory:
-
-pnpm create @nocobase/app <directory>
-
-This creates new template source; it does not recover the source used by an existing Release.
-
-3. Enter the confirmed application directory and start the development server:
-
-cd <directory>
-pnpm run dev
-
-Keep the development server running while making the requested changes. Record the local URL and verify the relevant user flows in a browser.
-
-4. Implement only the requested application changes. Run focused tests while developing. Before sending anything to Hub, stop the development server if needed and run the complete project checks:
-
-pnpm check
-
-Fix any failure instead of skipping or weakening checks.
-
-5. Choose only the result I requested. These commands build locally and send only the packaged artifact to Hub.
-
-- To create a verified Release without deploying it, validate and then release:
-
-pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --dry-run --non-interactive --json
-pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --non-interactive --json
-
-- To build, create the next patch Release, and deploy it:
-
-pnpm run deploy --hub {{hubUrl}} --app {{slug}} --non-interactive --json
-
-After the first successful association, the Hub and APP arguments are saved locally and may be omitted. Do not deploy unless I explicitly requested deployment. If Device Authorization is required, ask me to approve the browser page. If a Release or Deployment is interrupted, resume with the --operation-id command printed by the script instead of starting a duplicate operation.
-
-6. Report every requested Release or Deployment ID, version, status, URL, checksum, and verification result. Never upload source code, dependencies, local databases, secrets, or runtime data to Hub.`,
-    {
-      hubUrl,
-      name: application.name,
-      slug: application.slug,
-    },
-  );
   return (
-    <div className='grid gap-4'>
-      <Card>
-        <CardHeader>
-          <div className='flex items-start justify-between gap-4'>
-            <div>
-              <CardTitle>
-                {translate(
-                  'hub.development.title',
-                  'Develop with a Coding Agent',
-                )}
-              </CardTitle>
-              <CardDescription>
-                {translate(
-                  'hub.development.description',
-                  'Copy one instruction to your local Coding Agent. Source stays on your machine; only build artifacts are published to Hub.',
-                )}
-              </CardDescription>
-            </div>
-            <Button
-              type='button'
-              onClick={() => {
-                void navigator.clipboard?.writeText(prompt).then(() => {
-                  setCopied(true);
-                  window.setTimeout(() => setCopied(false), 1_500);
-                });
-              }}
-            >
-              <SquareTerminal aria-hidden='true' />
-              {copied
-                ? translate('hub.development.copied', 'Copied')
-                : translate(
-                    'hub.development.copy',
-                    'Copy development instruction',
-                  )}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <pre className='max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border bg-muted/35 p-4 font-mono text-xs leading-6'>
-            {prompt}
-          </pre>
-        </CardContent>
-      </Card>
+    <article className='max-w-4xl px-1 py-2 sm:px-4'>
+      <header className='space-y-2 border-b pb-6'>
+        <h2 className='text-2xl font-semibold tracking-tight'>
+          {translate('hub.development.title', 'Quick setup')}
+        </h2>
+        <p className='text-sm leading-6 text-muted-foreground'>
+          {translate(
+            'hub.development.description',
+            'Develop the APP locally, then deploy its build artifact to this Hub application.',
+          )}
+        </p>
+      </header>
+
+      <section className='space-y-6 py-8'>
+        <h3 className='text-xl font-semibold tracking-tight'>
+          {translate('hub.development.local.title', 'Development')}
+        </h3>
+
+        <div className='space-y-3'>
+          <h4 className='font-semibold'>
+            {translate('hub.development.create.title', 'No local APP source')}
+          </h4>
+          <p className='text-sm leading-6 text-muted-foreground'>
+            {translate(
+              'hub.development.create.description',
+              'Create an APP from the default template and start development.',
+            )}
+          </p>
+          <DevelopmentCommandBlock
+            commands={createCommands}
+            copyLabel={translate(
+              'hub.development.create.copy',
+              'Copy create APP commands',
+            )}
+          />
+        </div>
+
+        <div className='space-y-3'>
+          <h4 className='font-semibold'>
+            {translate(
+              'hub.development.existing.title',
+              'Existing local APP source',
+            )}
+          </h4>
+          <p className='text-sm leading-6 text-muted-foreground'>
+            {translate(
+              'hub.development.existing.description',
+              'Enter the source directory, install dependencies, and start development.',
+            )}
+          </p>
+          <DevelopmentCommandBlock
+            commands={existingCommands}
+            copyLabel={translate(
+              'hub.development.existing.copy',
+              'Copy existing APP commands',
+            )}
+          />
+        </div>
+      </section>
+
+      <section className='space-y-4 border-t pt-8'>
+        <h3 className='text-xl font-semibold tracking-tight'>
+          {translate('hub.development.deploy.title', 'Deploy to this Hub')}
+        </h3>
+        <p className='text-sm leading-6 text-muted-foreground'>
+          {translate(
+            'hub.development.deploy.description',
+            'Run this command in the APP source directory. It builds the APP, creates a Release, and deploys it to the current Hub application.',
+          )}
+        </p>
+        <DevelopmentCommandBlock
+          commands={firstDeploymentCommand}
+          copyLabel={translate(
+            'hub.development.deploy.copy',
+            'Copy deployment command',
+          )}
+        />
+        <p className='text-sm leading-6 text-muted-foreground'>
+          {translate(
+            'hub.development.deploy.nextDescription',
+            'After the first successful deployment, run',
+          )}{' '}
+          <code className='rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground'>
+            pnpm run deploy
+          </code>
+          {translate('hub.development.deploy.nextSuffix', ' next time.')}
+        </p>
+      </section>
+    </article>
+  );
+}
+
+function DevelopmentCommandBlock({
+  commands,
+  copyLabel,
+}: {
+  commands: string;
+  copyLabel: string;
+}) {
+  const translate = useTranslate();
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className='relative rounded-lg border bg-muted/35'>
+      <pre className='overflow-x-auto p-4 pr-12 font-mono text-xs leading-6'>
+        {commands}
+      </pre>
+      <Button
+        type='button'
+        variant='ghost'
+        size='icon-sm'
+        className='absolute right-2 top-2'
+        aria-label={
+          copied ? translate('hub.development.copied', 'Copied') : copyLabel
+        }
+        title={copyLabel}
+        onClick={() => {
+          void navigator.clipboard?.writeText(commands).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1_500);
+          });
+        }}
+      >
+        {copied ? <Check aria-hidden='true' /> : <Copy aria-hidden='true' />}
+      </Button>
     </div>
   );
 }

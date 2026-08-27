@@ -1191,7 +1191,7 @@ describe('Hub application pages', () => {
     );
   });
 
-  it('shows an artifact-only workflow for source kept on the developer machine', async () => {
+  it('shows a quick setup document for local development and deployment', async () => {
     const capabilities: HubCapabilities = {
       global: [
         { resource: 'hub.app', actions: ['read'] },
@@ -1215,29 +1215,53 @@ describe('Hub application pages', () => {
       </MemoryRouter>,
     );
 
-    const developmentInstruction = await screen.findByText(
-      (_, element) =>
-        element?.tagName === 'PRE' &&
-        element.textContent?.includes('pnpm run release') === true,
+    expect(
+      await screen.findByRole('heading', { name: 'Quick setup' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Development' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'No local APP source' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Existing local APP source' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Deploy to this Hub' }),
+    ).toBeInTheDocument();
+
+    const commandBlocks = await screen.findAllByText(
+      (_, element) => element?.tagName === 'PRE',
+    );
+    const commandText = commandBlocks.map(
+      (command) => command.textContent ?? '',
     );
     const hubUrl = new URL('/hub', window.location.origin).toString();
-    expect(developmentInstruction).toHaveTextContent(
-      `pnpm run release --hub ${hubUrl} --app inventory`,
+    expect(commandText).toContain(
+      'pnpm config set @nocobase:registry https://npm.nocobase.ai/\npnpm create @nocobase/app inventory\ncd inventory\npnpm dev',
     );
-    expect(developmentInstruction).toHaveTextContent(
-      'Ask me for the existing local source directory',
+    expect(commandText).toContain(
+      'cd <existing-app-directory>\npnpm install\npnpm dev',
     );
-    expect(developmentInstruction).toHaveTextContent(
-      'pnpm create @nocobase/app <directory>',
+    expect(commandText).toContain(
+      `pnpm run deploy --hub ${hubUrl} --app inventory`,
     );
-    expect(developmentInstruction).toHaveTextContent('pnpm run dev');
-    expect(developmentInstruction).toHaveTextContent('pnpm check');
-    expect(developmentInstruction).toHaveTextContent('pnpm run deploy');
-    expect(developmentInstruction).not.toHaveTextContent('pnpm run pull');
-    expect(developmentInstruction).not.toHaveTextContent('pnpm run push');
-    expect(developmentInstruction).not.toHaveTextContent('source commit');
-    expect(developmentInstruction).not.toHaveTextContent('Clone URL');
-    expect(developmentInstruction).not.toHaveTextContent('nb3 ');
+    expect(commandText).toHaveLength(3);
+    expect(commandText.join('\n')).not.toContain('pnpm check');
+    expect(commandText.join('\n')).not.toContain('--non-interactive');
+    expect(commandText.join('\n')).not.toContain('pnpm run pull');
+    expect(commandText.join('\n')).not.toContain('pnpm run push');
+    expect(commandText.join('\n')).not.toContain('nb3 ');
+    expect(
+      screen.getByRole('button', { name: 'Copy create APP commands' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Copy deployment command' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('pnpm run deploy')).toBeInTheDocument();
+    expect(screen.queryByText('Related commands')).toBeNull();
+    expect(screen.queryByText('Develop with a Coding Agent')).toBeNull();
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).endsWith('/apps/app-1/repository'),
@@ -1300,24 +1324,21 @@ describe('Hub application pages', () => {
       </MemoryRouter>,
     );
 
+    await screen.findByRole('heading', { name: 'Default application' });
     expect(
-      await screen.findByRole('heading', {
+      screen.queryByRole('heading', {
         name: 'Build and deploy this application',
       }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Use an existing local application'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Create a new local application'),
-    ).toBeInTheDocument();
+    ).toBeNull();
+    expect(screen.queryByText('Use an existing local application')).toBeNull();
+    expect(screen.queryByText('Create a new local application')).toBeNull();
     expect(screen.getAllByText('Not deployed').length).toBeGreaterThan(0);
     expect(screen.queryByText('Active')).toBeNull();
     expect(screen.getByText('No deployments')).toBeInTheDocument();
     expect(await screen.findByText('0')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Open development instructions' }),
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Open development instructions' }),
+    ).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Open application' }),
     ).toBeNull();
@@ -1337,16 +1358,18 @@ describe('Hub application pages', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Open development instructions' }),
     );
-    expect(
-      await screen.findByText(
-        (_, element) =>
-          element?.tagName === 'PRE' &&
-          element.textContent?.includes(
-            'pnpm create @nocobase/app <directory>',
-          ) === true &&
-          element.textContent?.includes('--app default') === true,
-      ),
-    ).toBeInTheDocument();
+    const developmentCommands = await screen.findAllByText(
+      (_, element) => element?.tagName === 'PRE',
+    );
+    const developmentCommandText = developmentCommands.map(
+      (command) => command.textContent ?? '',
+    );
+    expect(developmentCommandText).toContain(
+      'pnpm config set @nocobase:registry https://npm.nocobase.ai/\npnpm create @nocobase/app default\ncd default\npnpm dev',
+    );
+    expect(developmentCommandText).toContain(
+      `pnpm run deploy --hub ${new URL('/hub', window.location.origin).toString()} --app default`,
+    );
   });
 
   it('does not request or misreport resources outside an app-only scope', async () => {

@@ -195,7 +195,7 @@ describe('Hub Chinese application page', () => {
     expect(screen.getByText('操作详情')).toBeInTheDocument();
   });
 
-  it('renders the empty default APP onboarding in Simplified Chinese', async () => {
+  it('keeps the empty default APP overview free of onboarding copy', async () => {
     await i18n.changeLanguage('zh-CN');
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const path = String(input);
@@ -261,15 +261,14 @@ describe('Hub Chinese application page', () => {
       </MemoryRouter>,
     );
 
+    await screen.findByRole('heading', { name: 'Default application' });
     expect(
-      await screen.findByRole('heading', { name: '构建并部署此应用' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('使用已有本地应用')).toBeInTheDocument();
-    expect(screen.getByText('创建新的本地应用')).toBeInTheDocument();
+      screen.queryByRole('heading', { name: '构建并部署此应用' }),
+    ).toBeNull();
+    expect(screen.queryByText('使用已有本地应用')).toBeNull();
+    expect(screen.queryByText('创建新的本地应用')).toBeNull();
     expect(screen.getAllByText('尚未部署').length).toBeGreaterThan(0);
     expect(screen.queryByText('运行中')).toBeNull();
-    expect(
-      screen.getByRole('button', { name: '查看开发指令' }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '查看开发指令' })).toBeNull();
   });
 });

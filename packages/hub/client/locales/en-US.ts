@@ -291,16 +291,6 @@ export const starter = {
   'hub.application.deploy.error': 'Unable to create deployment',
   'hub.application.deploy.confirm': 'Confirm deployment',
   'hub.application.deploy.starting': 'Starting…',
-  'hub.application.onboarding.title': 'Build and deploy this application',
-  'hub.application.onboarding.description':
-    'The default APP intentionally starts without a Release. Keep source on your computer and choose how to prepare its first build.',
-  'hub.application.onboarding.existing.title':
-    'Use an existing local application',
-  'hub.application.onboarding.existing.description':
-    'Continue from source already stored on this computer. The Coding Agent builds it locally and publishes only the artifact.',
-  'hub.application.onboarding.create.title': 'Create a new local application',
-  'hub.application.onboarding.create.description':
-    'Create source from the default template on this computer, then develop, publish, and deploy it.',
   'hub.application.onboarding.action': 'Open development instructions',
   'hub.application.overview.currentRelease': 'Current release',
   'hub.application.overview.notDeployed': 'Not deployed',
@@ -546,9 +536,24 @@ export const starter = {
   'hub.application.tabs.development': 'Development',
   'hub.application.tabs.permissions': 'Permissions',
   'hub.application.tabs.settings': 'Settings',
-  'hub.development.title': 'Develop with a Coding Agent',
-  'hub.development.copy': 'Copy development instruction',
+  'hub.development.title': 'Quick setup',
   'hub.development.copied': 'Copied',
+  'hub.development.local.title': 'Development',
+  'hub.development.create.title': 'No local APP source',
+  'hub.development.create.description':
+    'Create an APP from the default template and start development.',
+  'hub.development.create.copy': 'Copy create APP commands',
+  'hub.development.existing.title': 'Existing local APP source',
+  'hub.development.existing.description':
+    'Enter the source directory, install dependencies, and start development.',
+  'hub.development.existing.copy': 'Copy existing APP commands',
+  'hub.development.deploy.title': 'Deploy to this Hub',
+  'hub.development.deploy.description':
+    'Run this command in the APP source directory. It builds the APP, creates a Release, and deploys it to the current Hub application.',
+  'hub.development.deploy.copy': 'Copy deployment command',
+  'hub.development.deploy.nextDescription':
+    'After the first successful deployment, run',
+  'hub.development.deploy.nextSuffix': ' next time.',
   'hub.permissions.membersTitle': 'Application members',
   'hub.permissions.addAuthorization': 'Add authorization',
   'hub.permissions.addAuthorizationTitle': 'Add application authorization',
@@ -789,52 +794,7 @@ export const starter = {
   'hub.application.redeploy.confirm': 'Confirm redeployment',
   'hub.deployment.details.activeRelease': 'Current active release',
   'hub.development.description':
-    'Copy one instruction to your local Coding Agent. Source stays on your machine; only build artifacts are published to Hub.',
-  'hub.development.prompt': `Develop the NocoBase Hub application “{{name}}” (slug: {{slug}}) from source kept on my local machine.
-
-Hub URL: {{hubUrl}}
-Hub stores only build artifacts, Releases, and Deployments. It does not store or restore application source code.
-
-1. Check the local prerequisites. Node.js 24 or later and pnpm 11 or later are required.
-
-node --version
-pnpm --version
-
-2. Ask me for the existing local source directory before changing anything. Preserve every local change in that directory. Do not download, pull, or reconstruct source from Hub.
-
-If I confirm that no source directory exists and this APP should start again from the default template, create a new local project in an empty directory:
-
-pnpm create @nocobase/app <directory>
-
-This creates new template source; it does not recover the source used by an existing Release.
-
-3. Enter the confirmed application directory and start the development server:
-
-cd <directory>
-pnpm run dev
-
-Keep the development server running while making the requested changes. Record the local URL and verify the relevant user flows in a browser.
-
-4. Implement only the requested application changes. Run focused tests while developing. Before sending anything to Hub, stop the development server if needed and run the complete project checks:
-
-pnpm check
-
-Fix any failure instead of skipping or weakening checks.
-
-5. Choose only the result I requested. These commands build locally and send only the packaged artifact to Hub.
-
-- To create a verified Release without deploying it, validate and then release:
-
-pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --dry-run --non-interactive --json
-pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --non-interactive --json
-
-- To build, create the next patch Release, and deploy it:
-
-pnpm run deploy --hub {{hubUrl}} --app {{slug}} --non-interactive --json
-
-After the first successful association, the Hub and APP arguments are saved locally and may be omitted. Do not deploy unless I explicitly requested deployment. If Device Authorization is required, ask me to approve the browser page. If a Release or Deployment is interrupted, resume with the --operation-id command printed by the script instead of starting a duplicate operation.
-
-6. Report every requested Release or Deployment ID, version, status, URL, checksum, and verification result. Never upload source code, dependencies, local databases, secrets, or runtime data to Hub.`,
+    'Develop the APP locally, then deploy its build artifact to this Hub application.',
   'hub.releases.redeploy': 'Redeploy',
   'hub.releases.pin': 'Pin release',
   'hub.releases.unpin': 'Unpin release',

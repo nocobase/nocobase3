@@ -272,15 +272,6 @@ export const starter = {
   'hub.application.deploy.error': '无法创建部署',
   'hub.application.deploy.confirm': '确认部署',
   'hub.application.deploy.starting': '正在启动…',
-  'hub.application.onboarding.title': '构建并部署此应用',
-  'hub.application.onboarding.description':
-    '默认 APP 会以没有 Release 的空应用开始。源码保留在你的电脑上，请选择准备首次构建的方式。',
-  'hub.application.onboarding.existing.title': '使用已有本地应用',
-  'hub.application.onboarding.existing.description':
-    '继续使用这台电脑上已有的源码，由 Coding Agent 在本地构建，并且只发布产物。',
-  'hub.application.onboarding.create.title': '创建新的本地应用',
-  'hub.application.onboarding.create.description':
-    '在这台电脑上从默认模板创建源码，然后进行开发、发布和部署。',
   'hub.application.onboarding.action': '查看开发指令',
   'hub.application.overview.currentRelease': '当前版本',
   'hub.application.overview.notDeployed': '尚未部署',
@@ -510,9 +501,23 @@ export const starter = {
   'hub.application.tabs.development': '开发',
   'hub.application.tabs.permissions': '权限',
   'hub.application.tabs.settings': '设置',
-  'hub.development.title': '通过 Coding Agent 开发',
-  'hub.development.copy': '复制开发指令',
+  'hub.development.title': '快速开始',
   'hub.development.copied': '已复制',
+  'hub.development.local.title': '开发',
+  'hub.development.create.title': '本地没有 APP 源码',
+  'hub.development.create.description':
+    '从默认模板创建 APP，然后启动开发服务。',
+  'hub.development.create.copy': '复制创建 APP 命令',
+  'hub.development.existing.title': '本地已有 APP 源码',
+  'hub.development.existing.description':
+    '进入源码目录，安装依赖，然后启动开发服务。',
+  'hub.development.existing.copy': '复制已有 APP 命令',
+  'hub.development.deploy.title': '部署到当前 Hub',
+  'hub.development.deploy.description':
+    '在 APP 源码目录中执行。该命令会构建 APP、创建 Release，并部署到当前 Hub APP。',
+  'hub.development.deploy.copy': '复制部署命令',
+  'hub.development.deploy.nextDescription': '首次部署成功后，下次只需运行',
+  'hub.development.deploy.nextSuffix': '。',
   'hub.permissions.membersTitle': '应用成员',
   'hub.permissions.addAuthorization': '添加授权',
   'hub.permissions.addAuthorizationTitle': '添加应用授权',
@@ -738,52 +743,7 @@ export const starter = {
   'hub.application.redeploy.confirm': '确认重新部署',
   'hub.deployment.details.activeRelease': '当前运行版本',
   'hub.development.description':
-    '复制一条指令给本地 Coding Agent。源码保留在本机，只有构建产物会发布到 Hub。',
-  'hub.development.prompt': `请使用保存在我本地电脑上的源码开发 NocoBase Hub 应用“{{name}}”（slug：{{slug}}）。
-
-Hub 地址：{{hubUrl}}
-Hub 只保存构建产物、Release 和 Deployment，不保存或恢复应用源码。
-
-1. 检查本地环境。Node.js 需要 24 或更高版本，pnpm 需要 11 或更高版本。
-
-node --version
-pnpm --version
-
-2. 修改任何内容前，先询问我现有的本地源码目录。保留该目录中的所有本地修改，不要尝试从 Hub 下载、拉取或还原源码。
-
-如果我确认不存在源码目录，并且该 APP 应该重新从默认模板开始，请在一个空目录中创建新的本地项目：
-
-pnpm create @nocobase/app <directory>
-
-这会创建一份新的模板源码，无法还原已有 Release 使用过的源码。
-
-3. 进入确认过的 APP 目录并启动开发服务：
-
-cd <directory>
-pnpm run dev
-
-修改代码时保持开发服务运行，记录本地访问地址，并在浏览器中验证相关用户流程。
-
-4. 只实现我提出的 APP 修改。开发过程中运行相关专项测试。向 Hub 发送任何内容之前，如有必要先停止开发服务，然后执行完整检查：
-
-pnpm check
-
-遇到失败必须修复，不要跳过或削弱检查。
-
-5. 只执行我要求的结果。下面的命令会在本地构建，并且只把打包后的产物发送到 Hub。
-
-- 只创建已验证的 Release、不部署时，先验证计划，再创建 Release：
-
-pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --dry-run --non-interactive --json
-pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --non-interactive --json
-
-- 需要构建、创建下一个 patch Release 并部署时：
-
-pnpm run deploy --hub {{hubUrl}} --app {{slug}} --non-interactive --json
-
-首次关联成功后，Hub 和 APP 参数会保存在本地，后续可以省略。除非我明确要求，否则不要部署。如果需要 Device Authorization，请让我批准浏览器授权页。如果 Release 或 Deployment 中断，请使用脚本输出的 --operation-id 命令恢复同一操作，不要重新开始造成重复操作。
-
-6. 报告所有按要求创建的 Release 或 Deployment 的 ID、版本、状态、访问地址、checksum 和验证结果。不要向 Hub 上传源码、依赖、本地数据库、密钥或运行数据。`,
+    '在本地开发 APP，然后将构建产物部署到当前 Hub APP。',
   'hub.releases.redeploy': '重新部署',
   'hub.releases.pin': '固定版本',
   'hub.releases.unpin': '取消固定版本',
