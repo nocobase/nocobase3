@@ -122,8 +122,10 @@ main 有 pre.json 吗：没有
 git checkout -b "release-beta/2026-08-24.1"   # 临时发版分支，避免推送竞争
 pnpm changeset version                       # 消费 changeset，算版本号
 git commit -am "chore: release 2026-08-24.1"
-git push origin "$BRANCH_NAME"
+git tag "release-beta/2026-08-24.1"
+# 创建绑定该 tag 的 GitHub Draft Release，记录 package 清单和 CHANGELOG
 pnpm changeset publish                       # dist-tag 由 pre.json 决定
+# 校验 package 和 beta dist-tag 后公开 GitHub Release
 gh pr merge --merge --delete-branch          # 合回 develop
 ```
 
@@ -153,6 +155,7 @@ pnpm changeset pre exit                  # 只改 pre.json 的 mode，版本号�
 pnpm changeset version                   # 这一步才脱掉 -beta 后缀
 git commit -am "chore: release 2026-08-24.1"
 git tag "release/2026-08-24.1"
+# 创建 GitHub Draft Release，冻结待发布 package 清单和 CHANGELOG
 # 合进 main，然后 develop 重新 pre enter
 ```
 
@@ -178,7 +181,7 @@ pnpm changeset pre enter beta               # 重新进 pre，下一轮开始
 
 第二步，**点一次 `release-stable.yml`**（输入保持默认：`branch=main`）。
 
-它检测到 `main` 上没有待消费的 changeset，就知道版本号已经就绪，直接发布到 `latest`。
+它找到转正阶段创建的唯一 stable Draft Release，校验其源码已经进入 `main`，然后按 Draft 中冻结的 package 清单发布到 `latest`。全部 package 与 npm dist-tag 校验成功后，Draft 才会公开。若有多个异常遗留的 Draft，需在 `release_tag` 中显式指定，workflow 不会猜。
 
 **两步分开是有意的。** 合并涉及三条分支的状态变更，需要自动化保证一致；「什么时候把版本推到 npm」是发布决策，由人掌握时机。延后发布是安全的——`changeset publish` 读的是 package.json 的版本号，逐个查 registry 有没有 `name@version`，与 changeset 是否还在无关。
 
@@ -203,7 +206,9 @@ git checkout -b "release/2026-08-24.2"   # 临时发版分支
 pnpm changeset version                   # 1.3.0 -> 1.3.1
 git commit -am "chore: release 2026-08-24.2"
 git tag "release/2026-08-24.2"
+# 创建 GitHub Draft Release
 pnpm changeset publish                   # -> dist-tag latest
+# 校验 package 和 latest 后公开 GitHub Release
 gh pr merge --merge --delete-branch      # 合回 main
 gh pr create --base develop              # 另开一个 PR 同步到 develop
 ```
@@ -1112,7 +1117,7 @@ if (gitTagReleases.length > 0) await createGitTags({ releases: gitTagReleases })
 
 既然 `publish` 已经打了准确的 tag，就没有理由再补一遍。
 
-### 不打产品级 tag
+### 不打统一 SemVer tag
 
 各 package 独立版本，**不存在一个能代表整个仓库的版本号**。拿某个包的版本当仓库版本（例如取 `packages/core` 的版本打成 `v1.3.0`）会产生误导性的 tag：
 
@@ -1120,12 +1125,24 @@ if (gitTagReleases.length > 0) await createGitTags({ releases: gitTagReleases })
 - tag `v1.3.0` 只反映了其中一个包
 - 使用者看到 `v1.3.0` 会以为整个仓库是这个版本
 
-所以仓库里的 tag 分两类，都不是「仓库版本号」：
+所以仓库里的 tag 分两类，都不是「仓库统一 SemVer」：
 
 ```text
 @nocobase/portal-sdk@2.2.0          package 级，changeset publish 自动打
 release/2026-08-24.1                版本级，标记一次发布
 ```
+
+每个 `release-beta/...` 或 `release/...` 聚合 tag 都绑定一个 GitHub Release。Release 汇总这批实际变化的所有 package、版本号和各自 CHANGELOG；它是批次记录，不代表所有 package 共享一个版本号。
+
+workflow 在 npm publish 前先创建 Draft Release：
+
+- Git tag 固定本批发布源码；
+- annotated 聚合 tag 的 message 固定精确 package 清单、目标 dist-tag 和源码 SHA；Draft asset `release-manifest.json` 保存同一份内容并在恢复时交叉校验；
+- Draft 正文展示从各 package `CHANGELOG.md` 提取的对应版本章节；
+- npm package 和 dist-tag 全部验证通过后，workflow 才公开 Draft；
+- beta Release 标记为 prerelease，且不会成为 GitHub Latest；`legacy` stable Release 同样不会成为 Latest。
+
+因此 Tags 页面可能看见仍在发布中的聚合 tag，但正常 Releases 页面只展示已经完成的批次。
 
 > 如果产品侧需要一个对外版本号（例如官网、Docker 镜像标签），可以选定某个核心 package 的版本作为代表，但那属于产品发布物料，不要塞进自动发版流程——否则每次发版都要编一个仓库版本号。
 
@@ -1242,6 +1259,8 @@ PR 触发，两层检查，严格程度不同：
 
 手动触发，在临时发版分支上执行 `changeset version` + `changeset publish`，再通过 PR 合回 `develop`。
 
+版本提交和聚合 tag 推送后，workflow 先创建 GitHub Draft Release；npm package 和 `beta` dist-tag 全部校验成功后再公开。失败重跑会恢复同一个 Draft，而不是重新计算批次。仅在显式恢复异常批次时填写 `release_tag`。
+
 dist-tag 由 `.changeset/pre.json` 决定，不能显式传 `--tag`——pre 模式下 changeset 会拒绝。
 
 运行前校验分支处于 pre 模式——不在 pre 模式时发版会直接发出稳定版号并占掉 `latest` 该用的号段。
@@ -1249,6 +1268,8 @@ dist-tag 由 `.changeset/pre.json` 决定，不能显式传 `--tag`——pre 模
 ### `merge-beta-to-stable.yml`
 
 把预览版转正并合进 `main`，**不发布 npm**：`pre exit` → `version` → 合进 `main` → `develop` 重新进 pre。
+
+转正版本提交会创建 stable Draft Release，保存后续 stable publish 所需的精确 package 清单。
 
 发布另点 `release-stable.yml`。合并涉及三条分支的状态变更，自动化保证一致性；发布时机是决策，交给人掌握。
 
@@ -1419,9 +1440,9 @@ Portal SDK major 或 Template major 变更时，CI 必须校验 SDK 与 Template
 
 ### package 部分发布成功
 
-直接重跑同一个 workflow。`changeset publish` 逐个查询 registry，已发布的 package 会被跳过，只补发失败的部分。
+直接重跑同一个 workflow。它会根据当前 Actions run、annotated 聚合 tag 或唯一未完成的 Draft 恢复原批次和 manifest；也可以在 `release_tag` 中显式指定。`changeset publish` 逐个查询 registry，已发布的 package 会被跳过，只补发失败的部分。
 
-不需要手工修改版本号或删除 changeset。
+全部 package、package tag 和 npm dist-tag 校验通过后，原 Draft Release 才会公开。不需要手工修改版本号或删除 changeset。
 
 ### 错误版本已发布
 

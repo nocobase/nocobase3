@@ -19,6 +19,10 @@ name: Release Beta
 on:
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: 'Existing release-beta/YYYY-MM-DD.N Draft Release to resume (normally leave empty)'
+        type: string
+        default: ''
       dry_run:
         description: 'Dry run: compute versions and run checks without publishing or pushing'
         type: boolean
@@ -58,11 +62,58 @@ jobs:
           cache: pnpm
           registry-url: https://npm.nocobase.ai
 
+      # A failed run keeps its aggregate tag and Draft Release. A rerun of the same
+      # Actions run, or the next dispatch while exactly one beta draft exists, resumes
+      # that immutable source instead of allocating another batch.
+      - name: Resolve an existing Draft Release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        run: |
+          TAG="$REQUESTED_TAG"
+          if [ -z "$TAG" ]; then
+            TAG=$(bash scripts/github-release.sh find-run unused beta "${{ github.run_id }}")
+          fi
+          if [ -z "$TAG" ]; then
+            TAG=$(bash scripts/github-release.sh find-draft unused beta)
+          fi
+          if [ -z "$TAG" ]; then
+            TAG=$(bash scripts/github-release.sh find-unmerged unused beta develop)
+          fi
+          if [ -z "$TAG" ]; then
+            echo "resumed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          bash scripts/github-release.sh restore "$TAG" beta /tmp/release-manifest.json
+          if [ "$(jq -r '.releaseKind' /tmp/release-manifest.json)" != "beta" ] || \
+             [ "$(jq -r '.targetBranch' /tmp/release-manifest.json)" != "develop" ]; then
+            echo "::error::$TAG is not a beta release for develop"
+            exit 1
+          fi
+          git checkout --detach "refs/tags/$TAG"
+          node scripts/release-manifest.mjs validate-tree \
+            --manifest /tmp/release-manifest.json
+          if IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            :
+          else
+            IS_DRAFT=true
+          fi
+          {
+            echo "resumed=true"
+            echo "name=$TAG"
+            echo "batch=$(jq -r '.batch' /tmp/release-manifest.json)"
+            echo "published=$([ "$IS_DRAFT" = "true" ] && echo false || echo true)"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resuming $TAG"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       # 不在 pre 模式就发版，会直接发出稳定版号并占掉 latest 该用的号段。
       - name: Verify develop is in pre mode
+        if: steps.release.outputs.resumed != 'true'
         run: |
           if [ ! -f .changeset/pre.json ]; then
             echo "::error::develop is not in pre mode. Run changeset pre enter beta locally and commit it first."
@@ -77,6 +128,7 @@ jobs:
       # 必须排除 README.md —— changeset init 会生成它，用 `ls .changeset/*.md`
       # 判断会永远为真。这只是粗筛，真正的判断在 version 之后比对版本号。
       - name: Verify there is something to release
+        if: steps.release.outputs.resumed != 'true'
         run: |
           COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
           if [ "$COUNT" = "0" ]; then
@@ -91,6 +143,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Snapshot versions before versioning
+        if: steps.release.outputs.resumed != 'true'
         run: |
           node scripts/list-package-versions.mjs > /tmp/versions-before.json
 
@@ -103,6 +156,7 @@ jobs:
       # 序号从 tag 推导而不是从分支——分支合并后会被删除，只看分支会让序号
       # 回退并与已发布的版本重复。tag 是长期记录。
       - name: Create release branch
+        if: steps.release.outputs.resumed != 'true'
         id: branch
         run: |
           git fetch --tags --force
@@ -124,6 +178,7 @@ jobs:
           echo "Version: $BATCH"
 
       - name: Version
+        if: steps.release.outputs.resumed != 'true'
         run: pnpm changeset version
 
       # changeset rewrites `version` but knows nothing about the `nocobase` block, so
@@ -131,11 +186,13 @@ jobs:
       # Running before the release commit means the aligned value is both published and
       # committed back to the repository.
       - name: Sync template version
+        if: steps.release.outputs.resumed != 'true'
         run: node ./scripts/sync-template-version.mjs
 
       # version 跑完却没有任何版本号变化，说明本次 changeset 全是 empty，
       # 或者声明的 package 都被 ignore 掉了。继续跑会 publish 零个包。
       - name: Verify versions actually changed
+        if: steps.release.outputs.resumed != 'true'
         id: changed
         run: |
           CHANGED=$(node scripts/list-package-versions.mjs --changed /tmp/versions-before.json)
@@ -153,6 +210,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Summarize
+        if: steps.release.outputs.resumed != 'true'
         run: |
           {
             echo "### Prerelease"
@@ -183,14 +241,49 @@ jobs:
       # 但在此期间必须用完整 refspec —— `git push origin <name>` 在同名时
       # 会直接报错：src refspec ... matches more than one
       - name: Commit, tag and push release branch
-        if: '!inputs.dry_run'
+        if: "!inputs.dry_run && steps.release.outputs.resumed != 'true'"
         run: |
           NAME="${{ steps.branch.outputs.name }}"
           git add -A
           git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
-          git tag "$NAME"
-          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
+          node scripts/release-manifest.mjs create \
+            --before /tmp/versions-before.json \
+            --channel beta \
+            --release-kind beta \
+            --batch "${{ steps.branch.outputs.batch }}" \
+            --tag "$NAME" \
+            --target-branch develop \
+            --dist-tag beta \
+            --source-sha "$(git rev-parse HEAD)" \
+            --run-id "${{ github.run_id }}" \
+            > /tmp/release-manifest.json
+          git tag -a "$NAME" -F /tmp/release-manifest.json
           git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
+          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
+
+      - name: Create or update the Draft Release
+        if: '!inputs.dry_run'
+        id: metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
+        run: |
+          node scripts/release-manifest.mjs validate \
+            --manifest /tmp/release-manifest.json \
+            --channel beta \
+            --tag "$TAG"
+          node scripts/release-manifest.mjs notes \
+            --manifest /tmp/release-manifest.json \
+            > /tmp/release-notes.md
+          if [ "${{ steps.release.outputs.published }}" != "true" ]; then
+            bash scripts/github-release.sh draft "$TAG" beta \
+              /tmp/release-notes.md /tmp/release-manifest.json
+          fi
+          {
+            echo "released<<RELEASED_EOF"
+            node scripts/release-manifest.mjs table --manifest /tmp/release-manifest.json
+            echo "RELEASED_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       # publish 会为**实际发布成功**的每个 package 打 name@version tag。
       # 这份 tag 基于真实发布结果，不是工作区状态，语义准确。
@@ -202,7 +295,7 @@ jobs:
       # 但一个包如果已发布的版本全是预发布版，changeset 会把它当成首次发布，
       # 改打 latest 而不是 beta —— 见下一步。
       - name: Publish to npm
-        if: '!inputs.dry_run'
+        if: "!inputs.dry_run && steps.release.outputs.published != 'true'"
         run: pnpm changeset publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -220,13 +313,15 @@ jobs:
       # 用 npm 而不是 pnpm：dist-tag 是 registry 操作，跟工作区无关，npm 的
       # NODE_AUTH_TOKEN 认证在这里是现成的。
       - name: Point the beta dist-tag at this release
-        if: '!inputs.dry_run'
+        if: "!inputs.dry_run && steps.release.outputs.published != 'true'"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           # 先落盘再读，不用进程替换：管道会把 while 放进子 shell，FAILED 的赋值
           # 就丢了，那样单个包失败会被静默吞掉。
-          node scripts/list-package-versions.mjs --released-specs /tmp/versions-before.json > /tmp/released-specs.txt
+          node scripts/release-manifest.mjs specs \
+            --manifest /tmp/release-manifest.json \
+            > /tmp/released-specs.txt
           cat /tmp/released-specs.txt
 
           FAILED=0
@@ -247,9 +342,58 @@ jobs:
             exit 1
           fi
 
-      - name: Push package tags
+      # A runner may disappear after npm accepted some packages but before Changesets
+      # pushed their tags. Once publish has completed, restore every tag from the
+      # frozen manifest so a retry cannot leave successful packages untagged.
+      - name: Ensure and push package tags
+        if: "!inputs.dry_run && steps.release.outputs.published != 'true'"
+        run: |
+          SOURCE_SHA=$(jq -r '.sourceSha' /tmp/release-manifest.json)
+          node scripts/release-manifest.mjs specs \
+            --manifest /tmp/release-manifest.json \
+            > /tmp/released-specs.txt
+          while IFS= read -r PACKAGE_TAG; do
+            [ -n "$PACKAGE_TAG" ] || continue
+            if git show-ref --verify --quiet "refs/tags/$PACKAGE_TAG"; then
+              TAG_SHA=$(git rev-parse "refs/tags/$PACKAGE_TAG^{commit}")
+              if [ "$TAG_SHA" != "$SOURCE_SHA" ]; then
+                echo "::error::$PACKAGE_TAG points to $TAG_SHA, expected $SOURCE_SHA"
+                exit 1
+              fi
+            else
+              git tag "$PACKAGE_TAG" "$SOURCE_SHA"
+            fi
+          done < /tmp/released-specs.txt
+          git push origin --tags
+
+      - name: Verify the published beta release
         if: '!inputs.dry_run'
-        run: git push origin --tags
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          node scripts/release-manifest.mjs records \
+            --manifest /tmp/release-manifest.json \
+            > /tmp/released-records.txt
+          while IFS=$'\t' read -r NAME VERSION; do
+            [ -n "$NAME" ] || continue
+            PUBLISHED=$(npm view "$NAME@$VERSION" version --json | jq -r '.')
+            if [ "$PUBLISHED" != "$VERSION" ]; then
+              echo "::error::$NAME@$VERSION is not available from the registry"
+              exit 1
+            fi
+            BETA=$(npm view "$NAME" 'dist-tags.beta' --json | jq -r '.')
+            if [ "$BETA" != "$VERSION" ]; then
+              echo "::error::$NAME has beta=$BETA, expected $VERSION"
+              exit 1
+            fi
+          done < /tmp/released-records.txt
+
+      - name: Publish the GitHub Release
+        if: "!inputs.dry_run && steps.release.outputs.published != 'true'"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
+        run: bash scripts/github-release.sh publish "$TAG" beta beta
 
       # 用 --merge 而不是 --squash：保留 tag 与 develop 历史的血缘，
       # git describe 才能用。不加 --admin：冲突时要让 PR 停下等人处理，
@@ -259,23 +403,55 @@ jobs:
         id: merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAME: ${{ steps.release.outputs.name || steps.branch.outputs.name }}
+          BATCH: ${{ steps.release.outputs.batch || steps.branch.outputs.batch }}
         run: |
-          PR_URL=$(gh pr create \
-            --title "chore: release ${{ steps.branch.outputs.batch }}" \
-            --body "Prerelease \`${{ steps.branch.outputs.batch }}\` published to npm under the \`beta\` dist-tag. Per-package versions are in the workflow summary." \
+          git fetch origin develop
+          SOURCE_SHA=$(jq -r '.sourceSha' /tmp/release-manifest.json)
+          if git merge-base --is-ancestor "$SOURCE_SHA" origin/develop; then
+            echo "The release commit is already in develop"
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git ls-remote --exit-code --heads origin "$NAME" >/dev/null; then
+            SOURCE_SHA=$(git rev-parse "refs/tags/${NAME}^{commit}")
+            git push origin "$SOURCE_SHA:refs/heads/${NAME}"
+          fi
+          BRANCH_SHA=$(git ls-remote --refs origin "refs/heads/$NAME" | cut -f1)
+          if [ "$BRANCH_SHA" != "$SOURCE_SHA" ]; then
+            echo "::error::$NAME points to $BRANCH_SHA, expected frozen source $SOURCE_SHA"
+            exit 1
+          fi
+          PR_URL=$(gh pr list \
             --base develop \
-            --head "${{ steps.branch.outputs.name }}")
+            --head "$NAME" \
+            --state open \
+            --json url \
+            --jq '.[0].url')
+          if [ -z "$PR_URL" ]; then
+            PR_URL=$(gh pr create \
+              --title "chore: release $BATCH" \
+              --body "Prerelease \`$BATCH\` published to npm under the \`beta\` dist-tag. Per-package versions are in the GitHub Release." \
+              --base develop \
+              --head "$NAME")
+          fi
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
-          gh pr merge "$PR_URL" --merge --delete-branch
+          gh pr merge "$PR_URL" --merge --delete-branch --match-head-commit "$SOURCE_SHA"
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
             echo "::warning::Failed to merge the PR back into develop; conflicts need manual work: $PR_URL"
             echo "merged=false" >> "$GITHUB_OUTPUT"
           else
-            echo "merged=true" >> "$GITHUB_OUTPUT"
+            git fetch origin develop
+            if git merge-base --is-ancestor "$SOURCE_SHA" origin/develop; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::The PR was accepted but the release commit is not in develop yet"
+              echo "merged=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       # npm 已经发布成功，只是仓库没同步。这个状态是安全的——版本号已经
@@ -292,12 +468,12 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `beta`）。
+            版本 **${{ steps.release.outputs.batch || steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `beta`）。
 
             但版本提交合回 `develop` 时发生冲突，需要人工解决：
             ${{ steps.merge.outputs.url }}
 
-            发版分支 `${{ steps.branch.outputs.name }}` 已保留，解决冲突后合并即可。
+            发版分支 `${{ steps.release.outputs.name || steps.branch.outputs.name }}` 已保留，解决冲突后合并即可。
             **在此之前不要再次发版**，否则版本号会从旧基线重新计算。
         run: ./scripts/feishu-notify.sh
 
@@ -317,10 +493,10 @@ jobs:
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm（dist-tag `beta`）。
+            版本 **${{ steps.release.outputs.batch || steps.branch.outputs.batch }}** 已发布到 npm（dist-tag `beta`）。
 
             本次发布的 package：
             ```
-            ${{ steps.changed.outputs.released }}
+            ${{ steps.metadata.outputs.released }}
             ```
         run: ./scripts/feishu-notify.sh
