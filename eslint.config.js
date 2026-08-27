@@ -20,7 +20,6 @@ const nodeLibraryRoots = [
   'packages/caching',
   'packages/app-database',
   'packages/app-host',
-  'packages/app-plugin-files',
   'packages/id-generator',
   'packages/logging',
   'packages/queue',

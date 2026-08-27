@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { Hono } from 'hono';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createDatabaseManager,
@@ -14,7 +14,6 @@ import type { CreateBusinessFileResponse } from '@nocobase/app-plugin-files/prot
 import {
   createFileService,
   resolveFilesConfig,
-  type FilesRuntime,
 } from '@nocobase/app-plugin-files/server';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 
@@ -23,40 +22,33 @@ import cleanupMigration from '../database/migrations/202608261000_files_add_temp
 import bootstrapFilesPlugin, {
   filesCleanupScheduleId,
 } from '../server/bootstrap.js';
-import { FilesCleanup } from '../server/internal/cleanup.js';
-import CleanupExpiredUploadsJob from '../server/internal/jobs/cleanup-expired-uploads.js';
-import type { FileRecord } from '../server/internal/model.js';
 import {
-  type CreateRelationBindingRepositoryOptions,
-  RelationBindingRepository,
-} from '../server/internal/relation-repository.js';
+  FilesCleanup,
+  type FilesCleanupOptions,
+  type FilesCleanupResult,
+} from '../server/internal/cleanup.js';
+import CleanupExpiredUploadsJob, {
+  runCleanupExpiredUploads,
+} from '../server/internal/jobs/cleanup-expired-uploads.js';
+import { RelationBindingRepository } from '../server/internal/relation-repository.js';
 import {
   createFilesRepository,
-  FilesRepository,
-  type TemporaryCleanupCandidate,
+  type FilesRepository,
 } from '../server/internal/repository.js';
 import {
   createOpaqueFilesRuntime,
   getFilesRuntimeCleanup,
   getFilesRuntimeKernel,
 } from '../server/internal/runtime.js';
-import { runCleanupExpiredUploads } from '../server/internal/jobs/cleanup-expired-uploads.js';
 import { FakeS3Disk } from './support/fake-s3-disk.js';
 
 const START = new Date('2026-08-26T00:00:00.000Z');
 const EXPIRED = new Date('2026-08-26T00:15:01.000Z');
 const EMPLOYEE_ID = 'employee-1';
 const ORDER_ID = 'order-1';
+const TEXT_OBJECT = { contentLength: 1, contentType: 'text/plain' } as const;
 
-interface CleanupFixture {
-  app: Hono;
-  database: DatabaseManager;
-  provider: FakeS3Disk;
-  runtime: FilesRuntime;
-  storageRoot: string;
-  setElapsedSequence(values: readonly number[]): void;
-  setNow(value: Date): void;
-}
+type CleanupFixture = Awaited<ReturnType<typeof createFixture>>;
 
 interface RelationRow {
   id: string;
@@ -66,31 +58,23 @@ interface RelationRow {
   reservationExpiresAt: Date | string | null;
 }
 
-const fixtures: CleanupFixture[] = [];
+let fixture: CleanupFixture;
+
+beforeEach(async () => {
+  fixture = await createFixture();
+});
 
 afterEach(async () => {
-  await Promise.all(
-    fixtures.splice(0).map(async (fixture) => {
-      await fixture.runtime.dispose();
-      await fixture.database.destroy();
-      await rm(fixture.storageRoot, { recursive: true, force: true });
-    }),
-  );
+  await fixture.dispose();
 });
 
 describe('expired upload cleanup', () => {
   it('cleans an expired field upload without changing the field binding', async () => {
-    const fixture = await createFixture();
-    const upload = await createFieldUpload(fixture, 'expired-field.txt');
-    const candidateKey = fixture.provider.putUpload(upload.plan, {
-      contentLength: 1,
-      contentType: 'text/plain',
-    });
+    const upload = await fixture.fieldUpload('expired-field.txt');
+    const candidateKey = fixture.putUpload(upload);
     fixture.setNow(EXPIRED);
 
-    await expect(
-      getFilesRuntimeCleanup(fixture.runtime).run(),
-    ).resolves.toEqual({
+    await expect(fixture.cleanup.run()).resolves.toEqual({
       selected: 1,
       attempted: 1,
       cleaned: 1,
@@ -99,154 +83,119 @@ describe('expired upload cleanup', () => {
       deleteFailures: 0,
       timedOut: false,
     });
-
-    expect(await fileRecord(fixture, upload.file.id)).toMatchObject({
+    expect(await fixture.record(upload.file.id)).toMatchObject({
       status: 'failed',
       temporaryCleanupCompletedAt: expect.any(Date),
     });
     expect(fixture.provider.has(candidateKey)).toBe(false);
-    await expect(employeeAvatarId(fixture)).resolves.toBeNull();
+    await expect(fixture.avatarId()).resolves.toBeNull();
   });
 
   it('releases an expired relation reservation and makes its slot reusable', async () => {
-    const fixture = await createFixture();
-    const upload = await createRelationUpload(fixture, 'expired-relation.txt');
-    const candidateKey = fixture.provider.putUpload(upload.plan, {
-      contentLength: 1,
-      contentType: 'text/plain',
-    });
-    expect((await relationRows(fixture))[0]).toMatchObject({ slot: 1 });
+    const upload = await fixture.relationUpload('expired-relation.txt');
+    const candidateKey = fixture.putUpload(upload);
+    expect((await fixture.relations())[0]).toMatchObject({ slot: 1 });
     fixture.setNow(EXPIRED);
 
-    const result = await getFilesRuntimeCleanup(fixture.runtime).run();
-
-    expect(result).toMatchObject({
+    await expectCleanup({
       cleaned: 1,
       releasedReservations: 1,
       deleteFailures: 0,
     });
-    expect(await relationRows(fixture)).toEqual([]);
+    expect(await fixture.relations()).toEqual([]);
     expect(fixture.provider.has(candidateKey)).toBe(false);
-    expect(await fileRecord(fixture, upload.file.id)).toMatchObject({
+    expect(await fixture.record(upload.file.id)).toMatchObject({
       status: 'failed',
     });
 
-    const replacement = await createRelationUpload(fixture, 'replacement.txt');
-    expect((await relationRows(fixture))[0]).toMatchObject({
+    const replacement = await fixture.relationUpload('replacement.txt');
+    expect((await fixture.relations())[0]).toMatchObject({
       fileId: replacement.file.id,
       slot: 1,
     });
   });
 
   it('leaves active reservations and ready files untouched', async () => {
-    const fixture = await createFixture();
-    const ready = await createFieldUpload(fixture, 'ready.txt');
-    fixture.provider.putUpload(
-      ready.plan,
-      { contentLength: 1, contentType: 'text/plain' },
-      'r',
-    );
+    const ready = await fixture.fieldUpload('ready.txt');
+    fixture.putUpload(ready, 'r');
     expect(
       (await fixture.app.request(ready.plan.complete.url, { method: 'POST' }))
         .status,
     ).toBe(200);
-    const readyRecord = await fileRecord(fixture, ready.file.id);
-    if (!readyRecord) {
-      throw new Error('Expected a ready file record.');
-    }
-    const readyKey = requireStorageKey(readyRecord.storageKey);
+    const readyKey = requireStorageKey(
+      (await fixture.record(ready.file.id))?.storageKey,
+    );
 
-    const expired = await createPendingObject(fixture, 'expired.txt');
+    const expired = await fixture.pending('expired.txt');
     fixture.setNow(EXPIRED);
-    const active = await createRelationUpload(fixture, 'active.txt');
-    const activeKey = fixture.provider.putUpload(active.plan, {
-      contentLength: 1,
-      contentType: 'text/plain',
-    });
+    const active = await fixture.relationUpload('active.txt');
+    const activeKey = fixture.putUpload(active);
 
-    const result = await getFilesRuntimeCleanup(fixture.runtime).run();
-
-    expect(result.cleaned).toBe(1);
-    expect(await fileRecord(fixture, expired.fileId)).toMatchObject({
+    await expectCleanup({ cleaned: 1 });
+    expect(await fixture.record(expired.fileId)).toMatchObject({
       status: 'failed',
     });
-    expect(await fileRecord(fixture, ready.file.id)).toMatchObject({
+    expect(await fixture.record(ready.file.id)).toMatchObject({
       status: 'ready',
       storageKey: readyKey,
     });
     expect(fixture.provider.has(readyKey)).toBe(true);
-    expect(await fileRecord(fixture, active.file.id)).toMatchObject({
+    expect(await fixture.record(active.file.id)).toMatchObject({
       status: 'pending',
     });
     expect(fixture.provider.has(activeKey)).toBe(true);
-    expect((await relationRows(fixture))[0]).toMatchObject({
+    expect((await fixture.relations())[0]).toMatchObject({
       fileId: active.file.id,
       reservationExpiresAt: expect.anything(),
     });
   });
 
   it('uses CAS to preserve a reservation renewed after selection', async () => {
-    const fixture = await createFixture();
-    const pending = await createPendingObject(fixture, 'renewed.txt');
-    await insertReservation(fixture, pending.fileId, START);
+    const pending = await fixture.pending('renewed.txt');
+    await fixture.reserve(pending.fileId, START);
     fixture.setNow(EXPIRED);
     const renewedUntil = new Date('2026-08-26T01:00:00.000Z');
-    const relationRepository = new RenewingRelationRepository(
-      relationRepositoryOptions(fixture.database),
+    const relationRepository = new RelationBindingRepository({
+      database: fixture.database,
+      collection: 'purchaseOrderAttachments',
+      recordField: 'purchaseOrderId',
+    });
+    renewFirstReservationAfterSelection(
+      relationRepository,
       fixture.database,
       renewedUntil,
     );
-    const cleanup = new FilesCleanup({
-      repository: createFilesRepository(fixture.database),
-      kernel: getFilesRuntimeKernel(fixture.runtime),
-      relationTargets: new Set([{ repository: relationRepository }]),
-      clock: () => EXPIRED,
-      elapsed: () => 0,
-    });
 
-    await expect(cleanup.run()).resolves.toMatchObject({
+    await expect(
+      createCleanup(fixture, { relationRepository }).run(),
+    ).resolves.toMatchObject({
       attempted: 1,
       cleaned: 0,
       releasedReservations: 0,
       skipped: 1,
     });
-
-    expect(await fileRecord(fixture, pending.fileId)).toMatchObject({
+    expect(await fixture.record(pending.fileId)).toMatchObject({
       status: 'pending',
     });
-    const renewed = (await relationRows(fixture))[0];
+    const renewed = (await fixture.relations())[0];
     expect(renewed).toMatchObject({ fileId: pending.fileId });
-    expect(readDateValue(renewed?.reservationExpiresAt).getTime()).toBe(
-      renewedUntil.getTime(),
-    );
+    expect(
+      new Date(renewed?.reservationExpiresAt ?? Number.NaN).getTime(),
+    ).toBe(renewedUntil.getTime());
     expect(fixture.provider.has(pending.candidateKey)).toBe(true);
   });
 
   it('uses CAS to preserve a file that became ready after selection', async () => {
-    const fixture = await createFixture();
-    const pending = await createPendingObject(fixture, 'ready-race.txt');
+    const pending = await fixture.pending('ready-race.txt');
     fixture.setNow(EXPIRED);
     const readyKey = `ready/${pending.fileId}/cleanup-race`;
-    const repository = new ReadyAfterSelectionRepository(
-      fixture.database,
-      fixture.provider,
-      readyKey,
-    );
-    const cleanup = new FilesCleanup({
-      repository,
-      kernel: getFilesRuntimeKernel(fixture.runtime),
-      relationTargets: new Set(),
-      clock: () => EXPIRED,
-      elapsed: () => 0,
-    });
+    const repository = createFilesRepository(fixture.database);
+    markFirstCandidateReadyAfterSelection(repository, fixture, readyKey);
 
-    await expect(cleanup.run()).resolves.toMatchObject({
-      attempted: 1,
-      cleaned: 0,
-      skipped: 1,
-    });
-
-    expect(await fileRecord(fixture, pending.fileId)).toMatchObject({
+    await expect(
+      createCleanup(fixture, { repository }).run(),
+    ).resolves.toMatchObject({ attempted: 1, cleaned: 0, skipped: 1 });
+    expect(await fixture.record(pending.fileId)).toMatchObject({
       status: 'ready',
       storageKey: readyKey,
       temporaryCleanupCompletedAt: null,
@@ -255,38 +204,31 @@ describe('expired upload cleanup', () => {
   });
 
   it('is idempotent and retries object deletion after a provider failure', async () => {
-    const fixture = await createFixture();
-    const pending = await createPendingObject(fixture, 'retry-delete.txt');
+    const pending = await fixture.pending('retry-delete.txt');
     fixture.setNow(EXPIRED);
     fixture.provider.failNextDelete();
 
-    await expect(
-      getFilesRuntimeCleanup(fixture.runtime).run(),
-    ).resolves.toMatchObject({
+    await expectCleanup({
       selected: 1,
       cleaned: 0,
       deleteFailures: 1,
     });
-    expect(await fileRecord(fixture, pending.fileId)).toMatchObject({
+    expect(await fixture.record(pending.fileId)).toMatchObject({
       status: 'failed',
       temporaryCleanupCompletedAt: null,
     });
     expect(fixture.provider.has(pending.candidateKey)).toBe(true);
 
-    await expect(
-      getFilesRuntimeCleanup(fixture.runtime).run(),
-    ).resolves.toMatchObject({
+    await expectCleanup({
       selected: 1,
       cleaned: 1,
       deleteFailures: 0,
     });
     expect(fixture.provider.has(pending.candidateKey)).toBe(false);
-    expect(await fileRecord(fixture, pending.fileId)).toMatchObject({
+    expect(await fixture.record(pending.fileId)).toMatchObject({
       temporaryCleanupCompletedAt: expect.any(Date),
     });
-    await expect(
-      getFilesRuntimeCleanup(fixture.runtime).run(),
-    ).resolves.toMatchObject({
+    await expectCleanup({
       selected: 0,
       attempted: 0,
       cleaned: 0,
@@ -294,72 +236,66 @@ describe('expired upload cleanup', () => {
   });
 
   it('stops at the batch limit and deterministic time boundary', async () => {
-    const fixture = await createFixture();
-    await Promise.all([
-      createPendingObject(fixture, 'one.txt'),
-      createPendingObject(fixture, 'two.txt'),
-      createPendingObject(fixture, 'three.txt'),
-      createPendingObject(fixture, 'four.txt'),
-    ]);
+    await Promise.all(
+      ['one.txt', 'two.txt', 'three.txt', 'four.txt'].map((name) =>
+        fixture.pending(name),
+      ),
+    );
     fixture.setNow(EXPIRED);
 
-    const batchResult = await getFilesRuntimeCleanup(fixture.runtime).run({
-      batchSize: 2,
-      timeBudgetMs: 100,
-    });
-    expect(batchResult).toMatchObject({
-      selected: 2,
-      attempted: 2,
-      cleaned: 2,
-      timedOut: false,
-    });
-    await expect(countFilesByStatus(fixture, 'pending')).resolves.toBe(2);
+    await expectCleanup(
+      {
+        selected: 2,
+        attempted: 2,
+        cleaned: 2,
+        timedOut: false,
+      },
+      { batchSize: 2, timeBudgetMs: 100 },
+    );
+    await expect(fixture.countByStatus('pending')).resolves.toBe(2);
 
     fixture.setElapsedSequence([0, 0, 10]);
-    const timedResult = await getFilesRuntimeCleanup(fixture.runtime).run({
-      batchSize: 10,
-      timeBudgetMs: 5,
-    });
-    expect(timedResult).toMatchObject({
-      selected: 2,
-      attempted: 1,
-      cleaned: 1,
-      timedOut: true,
-    });
-    await expect(countFilesByStatus(fixture, 'pending')).resolves.toBe(1);
+    await expectCleanup(
+      {
+        selected: 2,
+        attempted: 1,
+        cleaned: 1,
+        timedOut: true,
+      },
+      { batchSize: 10, timeBudgetMs: 5 },
+    );
+    await expect(fixture.countByStatus('pending')).resolves.toBe(1);
   });
 
   it('runs the Job cleanup against the supplied runtime and storage instance', async () => {
-    const fixture = await createFixture();
-    const pending = await createPendingObject(fixture, 'job-runtime.txt');
+    const pending = await fixture.pending('job-runtime.txt');
     fixture.setNow(EXPIRED);
 
-    const result = await runCleanupExpiredUploads(
-      {
-        filesRuntime: fixture.runtime,
-        logger: { info() {}, warn() {} },
-      },
-      { batchSize: 10, timeBudgetMs: 100 },
-    );
-
-    expect(result.cleaned).toBe(1);
+    await expect(
+      runCleanupExpiredUploads(
+        {
+          filesRuntime: fixture.runtime,
+          logger: { info() {}, warn() {} },
+        },
+        { batchSize: 10, timeBudgetMs: 100 },
+      ),
+    ).resolves.toMatchObject({ cleaned: 1 });
     expect(fixture.provider.has(pending.candidateKey)).toBe(false);
-    expect(await fileRecord(fixture, pending.fileId)).toMatchObject({
+    expect(await fixture.record(pending.fileId)).toMatchObject({
       status: 'failed',
       temporaryCleanupCompletedAt: expect.any(Date),
     });
   });
 
   it('registers one Queue schedule and stops its worker through the plugin lifecycle', async () => {
-    const fixture = await createFixture();
-    let stopWorker: (() => void) | undefined;
+    let stopWorker!: () => void;
     const workerStopped = new Promise<void>((resolve) => {
       stopWorker = resolve;
     });
     const worker = {
       id: 'cleanup-worker',
       start: vi.fn(async (): Promise<void> => workerStopped),
-      stop: vi.fn(async (): Promise<void> => stopWorker?.()),
+      stop: vi.fn(async (): Promise<void> => stopWorker()),
     };
     const queueManager = {
       init: vi.fn(async (): Promise<void> => undefined),
@@ -367,16 +303,14 @@ describe('expired upload cleanup', () => {
       createWorker: vi.fn(() => worker),
     } as unknown as NocoBaseQueueManager;
     const scheduleBuilder = {
-      id: vi.fn(),
-      every: vi.fn(),
+      id: vi.fn().mockReturnThis(),
+      every: vi.fn().mockReturnThis(),
       run: vi.fn(async () => ({ scheduleId: 'cleanup-schedule' })),
     };
-    scheduleBuilder.id.mockReturnValue(scheduleBuilder);
-    scheduleBuilder.every.mockReturnValue(scheduleBuilder);
     const schedule = vi
       .spyOn(CleanupExpiredUploadsJob, 'schedule')
       .mockReturnValue(scheduleBuilder as never);
-    const errors: Array<Record<string, unknown>> = [];
+    const logError = vi.fn();
     let dispose: (() => void | Promise<void>) | undefined;
 
     bootstrapFilesPlugin({
@@ -385,13 +319,7 @@ describe('expired upload cleanup', () => {
         filesRuntime: fixture.runtime,
         queueManager,
         logging: {
-          getLogger() {
-            return {
-              error(data: Record<string, unknown>): void {
-                errors.push(data);
-              },
-            };
-          },
+          getLogger: () => ({ error: logError }),
         },
       },
       services: undefined,
@@ -416,15 +344,15 @@ describe('expired upload cleanup', () => {
     );
     expect(scheduleBuilder.every).toHaveBeenCalledWith('5m');
     expect(scheduleBuilder.run).toHaveBeenCalledOnce();
-    expect(errors).toEqual([]);
+    expect(logError).not.toHaveBeenCalled();
 
     await dispose?.();
     expect(worker.stop).toHaveBeenCalledOnce();
-    expect(errors).toEqual([]);
+    expect(logError).not.toHaveBeenCalled();
   });
 });
 
-async function createFixture(): Promise<CleanupFixture> {
+async function createFixture() {
   const database = createDatabaseManager({
     default: 'sqlite',
     connections: {
@@ -436,9 +364,9 @@ async function createFixture(): Promise<CleanupFixture> {
       },
     },
   });
-  const context = createMigrationContext(database.connection());
-  await filesMigration.up(context);
-  await cleanupMigration.up(context);
+  const migrations = createMigrationContext(database.connection());
+  await filesMigration.up(migrations);
+  await cleanupMigration.up(migrations);
   await createBusinessSchema(database);
   const storageRoot = await mkdtemp(path.join(tmpdir(), 'files-cleanup-'));
   const provider = new FakeS3Disk();
@@ -460,8 +388,9 @@ async function createFixture(): Promise<CleanupFixture> {
       elapsed: () => elapsedSequence.shift() ?? 0,
     },
   );
-  const service = createFileService({ runtime });
+  const kernel = getFilesRuntimeKernel(runtime);
   const app = new Hono();
+  const service = createFileService({ runtime });
   app.route(
     '/employees/:employeeId/avatar',
     service.createFileRoute({
@@ -487,21 +416,101 @@ async function createFixture(): Promise<CleanupFixture> {
       authorize() {},
     }),
   );
-  const fixture: CleanupFixture = {
+
+  async function upload(
+    url: string,
+    name: string,
+  ): Promise<CreateBusinessFileResponse> {
+    const response = await app.request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, size: 1, contentType: 'text/plain' }),
+    });
+    expect(response.status).toBe(201);
+    return (await response.json()) as CreateBusinessFileResponse;
+  }
+
+  return {
     app,
     database,
     provider,
     runtime,
-    storageRoot,
-    setElapsedSequence(values): void {
-      elapsedSequence = [...values];
-    },
-    setNow(value): void {
+    kernel,
+    cleanup: getFilesRuntimeCleanup(runtime),
+    setNow(value: Date): void {
       now = new Date(value.getTime());
     },
+    setElapsedSequence(values: readonly number[]): void {
+      elapsedSequence = [...values];
+    },
+    fieldUpload(name: string): Promise<CreateBusinessFileResponse> {
+      return upload(`/employees/${EMPLOYEE_ID}/avatar`, name);
+    },
+    relationUpload(name: string): Promise<CreateBusinessFileResponse> {
+      return upload(`/orders/${ORDER_ID}/files`, name);
+    },
+    putUpload(
+      uploadResponse: CreateBusinessFileResponse,
+      contents = '',
+    ): string {
+      return provider.putUpload(uploadResponse.plan, TEXT_OBJECT, contents);
+    },
+    async pending(name: string) {
+      const pending = await kernel.createPending({ name });
+      provider.seed(pending.candidateKey, TEXT_OBJECT);
+      return { fileId: pending.fileId, candidateKey: pending.candidateKey };
+    },
+    record(fileId: string) {
+      return kernel.getRecord(fileId);
+    },
+    async avatarId(): Promise<string | null> {
+      const row = await database
+        .query()
+        .selectFrom('employees')
+        .select('avatarId')
+        .where('id', '=', EMPLOYEE_ID)
+        .executeTakeFirst<Record<string, unknown>>();
+      return typeof row?.avatarId === 'string' ? row.avatarId : null;
+    },
+    relations(): Promise<RelationRow[]> {
+      return database
+        .query()
+        .selectFrom('purchaseOrderAttachments')
+        .selectAll()
+        .where('purchaseOrderId', '=', ORDER_ID)
+        .orderBy('slot', 'asc')
+        .execute<RelationRow>();
+    },
+    countByStatus(status: 'pending' | 'ready' | 'failed'): Promise<number> {
+      return database
+        .query()
+        .selectFrom('files')
+        .select('id')
+        .where('status', '=', status)
+        .execute<Record<string, unknown>>()
+        .then((rows) => rows.length);
+    },
+    async reserve(fileId: string, at: Date): Promise<void> {
+      await database
+        .query()
+        .insertInto('purchaseOrderAttachments')
+        .values({
+          id: `reservation-${fileId.slice(0, 32)}`,
+          purchaseOrderId: ORDER_ID,
+          fileId,
+          slot: 1,
+          reservationExpiresAt: new Date(at.getTime() + 15 * 60 * 1_000),
+          createdAt: at,
+          updatedAt: at,
+        })
+        .execute();
+    },
+    async dispose(): Promise<void> {
+      await runtime.dispose();
+      await database.destroy();
+      await rm(storageRoot, { recursive: true, force: true });
+    },
   };
-  fixtures.push(fixture);
-  return fixture;
 }
 
 async function createBusinessSchema(database: DatabaseManager): Promise<void> {
@@ -549,211 +558,89 @@ async function createBusinessSchema(database: DatabaseManager): Promise<void> {
     .execute();
 }
 
-function createFieldUpload(
-  fixture: CleanupFixture,
-  name: string,
-): Promise<CreateBusinessFileResponse> {
-  return createUpload(fixture, `/employees/${EMPLOYEE_ID}/avatar`, name);
-}
-
-function createRelationUpload(
-  fixture: CleanupFixture,
-  name: string,
-): Promise<CreateBusinessFileResponse> {
-  return createUpload(fixture, `/orders/${ORDER_ID}/files`, name);
-}
-
-async function createUpload(
-  fixture: CleanupFixture,
-  url: string,
-  name: string,
-): Promise<CreateBusinessFileResponse> {
-  const response = await fixture.app.request(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name, size: 1, contentType: 'text/plain' }),
+function createCleanup(
+  current: CleanupFixture,
+  options: {
+    repository?: FilesRepository;
+    relationRepository?: RelationBindingRepository;
+  },
+): FilesCleanup {
+  return new FilesCleanup({
+    repository: options.repository ?? createFilesRepository(current.database),
+    kernel: current.kernel,
+    relationTargets: options.relationRepository
+      ? new Set([{ repository: options.relationRepository }])
+      : new Set(),
+    clock: () => EXPIRED,
+    elapsed: () => 0,
   });
-  expect(response.status).toBe(201);
-  return (await response.json()) as CreateBusinessFileResponse;
 }
 
-async function createPendingObject(
-  fixture: CleanupFixture,
-  name: string,
-): Promise<{ fileId: string; candidateKey: string }> {
-  const pending = await getFilesRuntimeKernel(fixture.runtime).createPending({
-    name,
-  });
-  fixture.provider.seed(pending.candidateKey, {
-    contentLength: 1,
-    contentType: 'text/plain',
-  });
-  return { fileId: pending.fileId, candidateKey: pending.candidateKey };
-}
-
-function fileRecord(
-  fixture: CleanupFixture,
-  fileId: string,
-): Promise<FileRecord | undefined> {
-  return getFilesRuntimeKernel(fixture.runtime).getRecord(fileId);
-}
-
-async function employeeAvatarId(
-  fixture: CleanupFixture,
-): Promise<string | null> {
-  const row = await fixture.database
-    .query()
-    .selectFrom('employees')
-    .select('avatarId')
-    .where('id', '=', EMPLOYEE_ID)
-    .executeTakeFirst<Record<string, unknown>>();
-  return typeof row?.avatarId === 'string' ? row.avatarId : null;
-}
-
-function relationRows(fixture: CleanupFixture): Promise<RelationRow[]> {
-  return fixture.database
-    .query()
-    .selectFrom('purchaseOrderAttachments')
-    .selectAll()
-    .where('purchaseOrderId', '=', ORDER_ID)
-    .orderBy('slot', 'asc')
-    .execute<RelationRow>();
-}
-
-function countFilesByStatus(
-  fixture: CleanupFixture,
-  status: 'pending' | 'ready' | 'failed',
-): Promise<number> {
-  return fixture.database
-    .query()
-    .selectFrom('files')
-    .select('id')
-    .where('status', '=', status)
-    .execute<Record<string, unknown>>()
-    .then((rows) => rows.length);
-}
-
-async function insertReservation(
-  fixture: CleanupFixture,
-  fileId: string,
-  now: Date,
+function expectCleanup(
+  expected: Partial<FilesCleanupResult>,
+  options?: FilesCleanupOptions,
 ): Promise<void> {
-  await fixture.database
-    .query()
-    .insertInto('purchaseOrderAttachments')
-    .values({
-      id: `reservation-${fileId.slice(0, 32)}`,
-      purchaseOrderId: ORDER_ID,
-      fileId,
-      slot: 1,
-      reservationExpiresAt: new Date(now.getTime() + 15 * 60 * 1_000),
-      createdAt: now,
-      updatedAt: now,
-    })
-    .execute();
+  return expect(fixture.cleanup.run(options)).resolves.toMatchObject(expected);
 }
 
-function relationRepositoryOptions(
+function renewFirstReservationAfterSelection(
+  repository: RelationBindingRepository,
   database: DatabaseManager,
-): CreateRelationBindingRepositoryOptions {
-  return {
-    database,
-    collection: 'purchaseOrderAttachments',
-    recordField: 'purchaseOrderId',
-  };
+  renewedUntil: Date,
+): void {
+  const listExpired = repository.listExpiredReservations.bind(repository);
+  vi.spyOn(repository, 'listExpiredReservations').mockImplementation(
+    async (cutoff, limit) => {
+      const reservations = await listExpired(cutoff, limit);
+      const first = reservations[0];
+      if (first) {
+        await database
+          .query()
+          .updateTable('purchaseOrderAttachments')
+          .set({ reservationExpiresAt: renewedUntil })
+          .where('id', '=', first.id)
+          .execute();
+      }
+      return reservations;
+    },
+  );
 }
 
-function requireStorageKey(value: string | null): string {
-  if (value === null) {
+function markFirstCandidateReadyAfterSelection(
+  repository: FilesRepository,
+  current: CleanupFixture,
+  readyKey: string,
+): void {
+  const listCandidates =
+    repository.listTemporaryCleanupCandidates.bind(repository);
+  vi.spyOn(repository, 'listTemporaryCleanupCandidates').mockImplementation(
+    async (cutoff, limit) => {
+      const candidates = await listCandidates(cutoff, limit);
+      const first = candidates[0];
+      if (first) {
+        current.provider.seed(readyKey, TEXT_OBJECT);
+        await current.database
+          .query()
+          .updateTable('files')
+          .set({
+            status: 'ready',
+            storageKey: readyKey,
+            size: 1,
+            contentType: 'text/plain',
+            updatedAt: cutoff,
+          })
+          .where('id', '=', first.id)
+          .where('status', '=', 'pending')
+          .execute();
+      }
+      return candidates;
+    },
+  );
+}
+
+function requireStorageKey(value: string | null | undefined): string {
+  if (value === null || value === undefined) {
     throw new Error('Expected a storage key.');
   }
   return value;
-}
-
-function readDateValue(value: Date | string | number | null | undefined): Date {
-  const date = value instanceof Date ? value : new Date(value ?? Number.NaN);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('Expected a date value.');
-  }
-  return date;
-}
-
-class RenewingRelationRepository extends RelationBindingRepository {
-  readonly #database: DatabaseManager;
-  readonly #renewedUntil: Date;
-
-  constructor(
-    options: CreateRelationBindingRepositoryOptions,
-    database: DatabaseManager,
-    renewedUntil: Date,
-  ) {
-    super(options);
-    this.#database = database;
-    this.#renewedUntil = renewedUntil;
-  }
-
-  override async listExpiredReservations(
-    cutoff: Date,
-    limit: number,
-  ): ReturnType<RelationBindingRepository['listExpiredReservations']> {
-    const reservations = await super.listExpiredReservations(cutoff, limit);
-    const first = reservations[0];
-    if (first) {
-      await this.#database
-        .query()
-        .updateTable('purchaseOrderAttachments')
-        .set({ reservationExpiresAt: this.#renewedUntil })
-        .where('id', '=', first.id)
-        .execute();
-    }
-    return reservations;
-  }
-}
-
-class ReadyAfterSelectionRepository extends FilesRepository {
-  readonly #database: DatabaseManager;
-  readonly #provider: FakeS3Disk;
-  readonly #readyKey: string;
-
-  constructor(
-    database: DatabaseManager,
-    provider: FakeS3Disk,
-    readyKey: string,
-  ) {
-    super(database);
-    this.#database = database;
-    this.#provider = provider;
-    this.#readyKey = readyKey;
-  }
-
-  override async listTemporaryCleanupCandidates(
-    cutoff: Date,
-    limit: number,
-  ): Promise<TemporaryCleanupCandidate[]> {
-    const candidates = await super.listTemporaryCleanupCandidates(
-      cutoff,
-      limit,
-    );
-    const first = candidates[0];
-    if (first) {
-      this.#provider.seed(this.#readyKey, {
-        contentLength: 1,
-        contentType: 'text/plain',
-      });
-      await this.#database
-        .query()
-        .updateTable('files')
-        .set({
-          status: 'ready',
-          storageKey: this.#readyKey,
-          size: 1,
-          contentType: 'text/plain',
-          updatedAt: cutoff,
-        })
-        .where('id', '=', first.id)
-        .where('status', '=', 'pending')
-        .execute();
-    }
-    return candidates;
-  }
 }
