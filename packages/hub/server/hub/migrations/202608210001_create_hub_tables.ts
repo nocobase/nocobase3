@@ -96,7 +96,6 @@ async function createReleaseCollection(
     collection.json('manifest').notNull();
     collection.string('storageKey', { length: 1024 }).nullable();
     collection.integer('sizeBytes').nullable();
-    collection.string('sourceCommit', { length: 255 }).nullable();
     collection.string('verificationStatus', { length: 32 }).notNull();
     collection.string('createdBy', { length: 64 }).notNull();
     collection.datetime('createdAt').notNull();

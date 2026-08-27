@@ -1267,7 +1267,7 @@ function RoleCatalog({
         <CardDescription>
           {translate(
             'hub.roles.description',
-            'These capability sets are read-only. Deployer controls Runtime and deployments; Developer controls source and Release creation.',
+            'These capability sets are read-only. Deployer controls Runtime and deployments; Developer publishes local build artifacts as Releases.',
           )}
         </CardDescription>
       </CardHeader>

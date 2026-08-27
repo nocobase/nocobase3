@@ -14,15 +14,11 @@ export const APP_STATE_DIR = '.nocobase';
 
 export interface AppConfig {
   name: string;
-  /** Hub application identity for projects cloned from the Hub-managed repository. */
+  /** Hub application identity associated with this local project. */
   applicationId?: string;
   hub?: string;
   slug?: string;
-  /** How this working copy exchanges source with the Hub repository. */
-  repositoryMode?: 'clone' | 'snapshot';
-  /** Last Hub source commit synchronized with this working copy. */
-  sourceCommit?: string;
-  /** Template provenance exists for locally scaffolded apps, but not necessarily for Hub clones. */
+  /** Template provenance for the locally scaffolded source project. */
   template?: string;
   templateVersion?: string;
 }

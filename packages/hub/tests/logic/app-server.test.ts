@@ -495,12 +495,10 @@ describe('app server', () => {
   it('wires approved Hub management storage and encryption environment', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nocobase-hub-env-'));
     tempDirs.push(root);
-    const sourceRoot = path.join(root, 'sources');
     setEnv('APP_NAME', 'hub');
     setEnv('APP_BASE_PATH', '/hub');
     setEnv('HUB_ENABLED', 'true');
     setEnv('HUB_DATABASE_PATH', path.join(root, 'hub.sqlite'));
-    setEnv('HUB_SOURCE_ROOT', sourceRoot);
     setEnv('HUB_RELEASE_ROOT', path.join(root, 'releases'));
     setEnv(
       'HUB_DEFAULT_APP_RESOURCES_DIR',
@@ -552,7 +550,6 @@ describe('app server', () => {
     await expect(settings.json()).resolves.toMatchObject({
       data: {
         readOnly: {
-          sourceStorage: 'local',
           releaseStorage: 'local',
         },
       },

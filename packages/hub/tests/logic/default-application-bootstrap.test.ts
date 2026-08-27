@@ -164,9 +164,7 @@ describe('default application bootstrap', () => {
         bootstrapAuth,
         appName: 'hub',
         publicBasePath: '/hub',
-        sourceRoot: fixture.sourceRoot,
         releaseRoot: fixture.releaseRoot,
-        repositorySeedPath: path.join(fixture.resources, 'source.bundle'),
         defaultAppResourcesDirectory: fixture.resources,
         runtimeSecretEncryptionKey: {
           key: Buffer.alloc(32, 7),
@@ -212,9 +210,7 @@ describe('default application bootstrap', () => {
       databasePath: fixture.databasePath,
       authSecret: 'default-bootstrap-auth-secret-at-least-32-chars',
       authBaseUrl: 'http://127.0.0.1:13000/hub/api/auth',
-      sourceRoot: fixture.sourceRoot,
       releaseRoot: fixture.releaseRoot,
-      repositorySeedPath: path.join(fixture.resources, 'source.bundle'),
       runtimeSecretEncryptionKey: Buffer.alloc(32, 7).toString('base64url'),
       appHostRegistry: registry,
     });
@@ -369,7 +365,6 @@ describe('default application bootstrap', () => {
 interface Fixture {
   readonly root: string;
   readonly databasePath: string;
-  readonly sourceRoot: string;
   readonly releaseRoot: string;
   readonly resources: string;
 }
@@ -377,11 +372,8 @@ interface Fixture {
 async function createFixture(): Promise<Fixture> {
   const root = await mkdtemp(path.join(tmpdir(), 'hub-default-bootstrap-'));
   roots.push(root);
-  const source = path.join(root, 'template-source');
   const build = path.join(root, 'template-build');
   const resources = path.join(root, 'resources');
-  await mkdir(path.join(source, 'server'), { recursive: true });
-  await writeFile(path.join(source, 'package.json'), '{"name":"fixture"}\n');
   await mkdir(path.join(build, 'server'), { recursive: true });
   await mkdir(path.join(build, 'client'), { recursive: true });
   const fixtureServer = path.resolve(
@@ -395,8 +387,6 @@ async function createFixture(): Promise<Fixture> {
   );
   await execFileAsync(process.execPath, [
     resourceGenerator,
-    '--source-dir',
-    source,
     '--build-dir',
     build,
     '--output-dir',
@@ -405,7 +395,6 @@ async function createFixture(): Promise<Fixture> {
   return {
     root,
     databasePath: path.join(root, 'hub.sqlite'),
-    sourceRoot: path.join(root, 'sources'),
     releaseRoot: path.join(root, 'releases'),
     resources,
   };
@@ -422,9 +411,7 @@ function createFixtureApp(
     databasePath: fixture.databasePath,
     authSecret: 'default-bootstrap-auth-secret-at-least-32-chars',
     authBaseUrl: 'http://127.0.0.1:13000/hub/api/auth',
-    sourceRoot: fixture.sourceRoot,
     releaseRoot: fixture.releaseRoot,
-    repositorySeedPath: path.join(fixture.resources, 'source.bundle'),
     defaultAppResourcesDirectory: fixture.resources,
     runtimeSecretEncryptionKey: Buffer.alloc(32, 7).toString('base64url'),
     appHostRegistry: registry,

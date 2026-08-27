@@ -31,14 +31,12 @@ export interface ReleaseManifest {
     readonly entrypoint: 'dist/server/embedded.js';
     readonly healthPath: '/api/healthz';
   };
-  readonly source: { readonly commit: string };
 }
 
 export interface BuildReleaseArtifactOptions {
   readonly applicationSlug: string;
   readonly buildDirectory: string;
   readonly outputPath: string;
-  readonly sourceCommit: string;
 }
 
 export interface BuiltReleaseArtifact {
@@ -76,7 +74,6 @@ export async function buildReleaseArtifact(
   options: BuildReleaseArtifactOptions,
 ): Promise<BuiltReleaseArtifact> {
   const applicationSlug = normalizeSlug(options.applicationSlug);
-  const sourceCommit = requireText(options.sourceCommit, 'source commit');
   const buildDirectory = path.resolve(options.buildDirectory);
   await assertRealDirectory(buildDirectory);
   const outputPath = path.resolve(options.outputPath);
@@ -95,7 +92,6 @@ export async function buildReleaseArtifact(
         entrypoint: 'dist/server/embedded.js',
         healthPath: '/api/healthz',
       },
-      source: { commit: sourceCommit },
     };
     await writeFile(
       path.join(stagingDirectory, 'nocobase-release.json'),

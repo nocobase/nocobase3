@@ -5,11 +5,9 @@ import { AppRuntimeRegistry } from '@nocobase/app-host';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createHubApi, type HubApi } from '../../server/hub/api.ts';
@@ -24,7 +22,6 @@ import { HubStore } from '../../server/hub/store.ts';
 const origin = 'http://127.0.0.1:13224';
 const authSecret = 'hub-runtime-control-test-secret-at-least-32-characters';
 const encryptionKey = { key: Buffer.alloc(32, 6), keyId: 'runtime-test-key' };
-const execFileAsync = promisify(execFile);
 
 interface RuntimeFixture {
   readonly root: string;
@@ -515,7 +512,6 @@ describe('Hub Runtime control API', () => {
 
 async function createRuntimeFixture(): Promise<RuntimeFixture> {
   const root = await mkdtemp(path.join(tmpdir(), 'hub-runtime-control-api-'));
-  const repositorySeedPath = await createRepositorySeed(root);
   const database = createHubDatabase({
     filename: path.join(root, 'hub.sqlite'),
   });
@@ -548,8 +544,6 @@ async function createRuntimeFixture(): Promise<RuntimeFixture> {
     publicBasePath: '/hub',
     authoritativeOrigin: origin,
     appPublicOrigin: 'http://127.0.0.1:3000',
-    sourceRoot: path.join(root, 'sources'),
-    repositorySeedPath,
   });
   const mounted = new Hono();
   mounted.route('/hub/api', api);
@@ -628,32 +622,6 @@ async function createRuntimeFixture(): Promise<RuntimeFixture> {
   };
   fixtures.push(fixture);
   return fixture;
-}
-
-async function createRepositorySeed(root: string): Promise<string> {
-  const worktree = path.join(root, 'seed-worktree');
-  const bare = path.join(root, 'default-template.git');
-  await mkdir(worktree, { recursive: true });
-  await execFileAsync('git', ['init', '--initial-branch=main'], {
-    cwd: worktree,
-  });
-  await writeFile(
-    path.join(worktree, 'package.json'),
-    `${JSON.stringify({ name: 'runtime-test-template', private: true })}\n`,
-  );
-  await execFileAsync('git', ['add', 'package.json'], { cwd: worktree });
-  await execFileAsync('git', ['commit', '-m', 'Initial template'], {
-    cwd: worktree,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'NocoBase',
-      GIT_AUTHOR_EMAIL: 'support@nocobase.com',
-      GIT_COMMITTER_NAME: 'NocoBase',
-      GIT_COMMITTER_EMAIL: 'support@nocobase.com',
-    },
-  });
-  await execFileAsync('git', ['clone', '--bare', '--', worktree, bare]);
-  return bare;
 }
 
 function request(

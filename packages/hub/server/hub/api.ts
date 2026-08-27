@@ -10,7 +10,6 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { createHash } from 'node:crypto';
-import { PassThrough, Readable, type Writable } from 'node:stream';
 
 import type { HubDatabaseRuntime } from './database.ts';
 import {
@@ -42,7 +41,6 @@ import {
   type MemberSort,
   type ReleaseListOptions,
 } from './management-store.ts';
-import { HubRepositoryService } from './repository-service.ts';
 import {
   RuntimeSecretService,
   type ActiveRuntimeSecret,
@@ -104,10 +102,6 @@ export interface HubApiDeps {
   authoritativeOrigin?: string;
   /** Public origin used to construct APP links; never inferred from a request. */
   appPublicOrigin?: string;
-  /** Hub-managed bare repository root. */
-  sourceRoot?: string;
-  /** Deterministic default-template bare repository or Git bundle. */
-  repositorySeedPath?: string;
   /** Directory containing metadata.json and the packaged initial Release. */
   defaultAppResourcesDirectory?: string;
   /** Encryption key resolved by the composition root. */
@@ -134,7 +128,6 @@ export interface HubApiOptions {
 
 export interface HubApi extends Hono<HubApiEnvironment> {
   readonly ready: Promise<void>;
-  handleGit(request: Request): Promise<Response>;
   close(): Promise<void>;
 }
 
@@ -151,8 +144,6 @@ const AGENT_SCOPE_CAPABILITIES: readonly [
 ][] = [
   ['apps:create', 'hub.app', 'create'],
   ['apps:read', 'hub.app', 'read'],
-  ['source:read', 'hub.repository', 'read'],
-  ['source:write', 'hub.repository', 'update'],
   ['releases:read', 'hub.release', 'read'],
   ['releases:publish', 'hub.release', 'create'],
   ['deployments:read', 'hub.deployment', 'read'],
@@ -179,7 +170,6 @@ const AUDIT_ACTIONS = new Set([
   'application.updated',
   'application.archived',
   'application.restored',
-  'repository.pushed',
   'release.published',
   'release.pinned',
   'release.unpinned',
@@ -216,13 +206,6 @@ export function createHubApi(
     releaseRoot: deps.releaseRoot,
     appAuthSecret: deps.appAuthSecret,
   });
-  const repository =
-    deps.sourceRoot && deps.repositorySeedPath
-      ? new HubRepositoryService({
-          sourceRoot: deps.sourceRoot,
-          seedPath: deps.repositorySeedPath,
-        })
-      : undefined;
   const idempotency = new HubIdempotencyService(deps.database.connection);
   const rateLimitCaching = createCaching();
   const invitationRateLimiter = new InvitationRateLimiter(
@@ -243,10 +226,7 @@ export function createHubApi(
     })),
     auth: deps.auth,
   });
-  const storage = new HubStorageService({
-    sourceRoot: deps.sourceRoot,
-    releaseRoot: deps.releaseRoot,
-  });
+  const storage = new HubStorageService({ releaseRoot: deps.releaseRoot });
   const agentAuth = deps.agentTokenHashSecret
     ? new AgentAuthService(deps.database.connection, {
         tokenHashSecret: deps.agentTokenHashSecret,
@@ -256,16 +236,14 @@ export function createHubApi(
         ).toString(),
       })
     : undefined;
-  const releaseUploads =
-    repository && deps.releaseRoot
-      ? new ReleaseUploadService(deps.database.connection, {
-          releaseRoot: deps.releaseRoot,
-          repository,
-          maxArchiveBytes: deps.maxUploadBytes,
-          maxExtractedBytes: deps.maxArtifactBytes,
-          uploadTtlSeconds: deps.uploadTtlSeconds,
-        })
-      : undefined;
+  const releaseUploads = deps.releaseRoot
+    ? new ReleaseUploadService(deps.database.connection, {
+        releaseRoot: deps.releaseRoot,
+        maxArchiveBytes: deps.maxUploadBytes,
+        maxExtractedBytes: deps.maxArtifactBytes,
+        uploadTtlSeconds: deps.uploadTtlSeconds,
+      })
+    : undefined;
   const initialReleases =
     releaseUploads && deps.defaultAppResourcesDirectory
       ? new InitialReleaseService({
@@ -298,17 +276,6 @@ export function createHubApi(
       );
     }
   });
-
-  const requireRepositoryService = (): HubRepositoryService => {
-    if (!repository) {
-      throw new HubDomainError(
-        'SOURCE_STORAGE_UNAVAILABLE',
-        'Hub source storage is not configured.',
-        { status: 503, retryable: false },
-      );
-    }
-    return repository;
-  };
 
   const requireRuntimeSecretService = (): RuntimeSecretService => {
     if (!runtimeSecrets) {
@@ -344,7 +311,7 @@ export function createHubApi(
   };
 
   const managementEnabled = Boolean(
-    repository && deps.runtimeSecretEncryptionKey,
+    deps.releaseRoot && deps.runtimeSecretEncryptionKey,
   );
   const authenticateActor = (
     context: HubContext,
@@ -367,37 +334,27 @@ export function createHubApi(
     if (!application) {
       throw concealedNotFound('APPLICATION_NOT_FOUND', applicationId);
     }
-    const [canReadRepository, canReadRelease, canReadRuntime, canReadSecret] =
-      await Promise.all([
-        agentScopeAllows(actor, 'source:read', applicationId) &&
-          authorization.can(actor.user.id, {
-            resource: 'hub.repository',
+    const [canReadRelease, canReadRuntime, canReadSecret] = await Promise.all([
+      agentScopeAllows(actor, 'releases:read', applicationId) &&
+        authorization.can(actor.user.id, {
+          resource: 'hub.release',
+          action: 'read',
+          applicationId,
+        }),
+      agentScopeAllows(actor, 'runtime:read', applicationId) &&
+        authorization.can(actor.user.id, {
+          resource: 'hub.runtime',
+          action: 'read',
+          applicationId,
+        }),
+      detail && !actor.agent
+        ? authorization.can(actor.user.id, {
+            resource: 'hub.runtimeSecret',
             action: 'read',
             applicationId,
-          }),
-        agentScopeAllows(actor, 'releases:read', applicationId) &&
-          authorization.can(actor.user.id, {
-            resource: 'hub.release',
-            action: 'read',
-            applicationId,
-          }),
-        agentScopeAllows(actor, 'runtime:read', applicationId) &&
-          authorization.can(actor.user.id, {
-            resource: 'hub.runtime',
-            action: 'read',
-            applicationId,
-          }),
-        detail && !actor.agent
-          ? authorization.can(actor.user.id, {
-              resource: 'hub.runtimeSecret',
-              action: 'read',
-              applicationId,
-            })
-          : Promise.resolve(false),
-      ]);
-    const repositoryMetadata = canReadRepository
-      ? await managementStore.getRepository(applicationId)
-      : undefined;
+          })
+        : Promise.resolve(false),
+    ]);
     const releases = canReadRelease
       ? await managementStore.listReleases(applicationId, {
           sort: '-createdAt',
@@ -429,15 +386,6 @@ export function createHubApi(
     );
     return compactObject({
       ...applicationProjection(application),
-      repository: repositoryMetadata
-        ? {
-            provider: repositoryMetadata.provider,
-            defaultBranch: repositoryMetadata.defaultBranch,
-            headCommit: repositoryMetadata.headCommit,
-            status: repositoryMetadata.status,
-            updatedAt: repositoryMetadata.updatedAt,
-          }
-        : undefined,
       latestRelease: canReadRelease
         ? latestRelease
           ? releaseSummary(latestRelease)
@@ -921,7 +869,6 @@ export function createHubApi(
             actor,
             store,
             managementStore,
-            repository: requireRepositoryService(),
             runtimeSecrets: requireRuntimeSecretService(),
             initialReleases,
           });
@@ -1144,31 +1091,6 @@ export function createHubApi(
     });
     setRevisionEtag(response, result.application);
     return response;
-  });
-
-  api.get('/apps/:id/repository', async (context) => {
-    const actor = await authenticateActor(context);
-    const applicationId = context.req.param('id');
-    const application = await requireManagedApplicationAccess(
-      managementStore,
-      authorization,
-      actor.user.id,
-      applicationId,
-      'read',
-      'hub.repository',
-    );
-    const metadata = await managementStore.getRepository(applicationId);
-    if (!metadata) {
-      throw concealedNotFound('REPOSITORY_NOT_FOUND', applicationId);
-    }
-    return successResponse(context, {
-      ...metadata,
-      cloneUrl: repositoryCloneUrl(
-        application.slug,
-        deps.authoritativeOrigin,
-        deps.publicBasePath,
-      ),
-    });
   });
 
   api.get('/apps/:id/runtime', async (context) => {
@@ -2035,7 +1957,6 @@ export function createHubApi(
     const data = {
       ...settings,
       readOnly: {
-        sourceStorage: deps.sourceRoot ? 'local' : 'unavailable',
         releaseStorage: deps.releaseRoot ? 'local' : 'unavailable',
         hostMode: host.available() ? 'in-process' : 'unavailable',
         environmentCount: 1,
@@ -2679,17 +2600,11 @@ export function createHubApi(
     if (options.recoverDeployments !== false) {
       await coordinator.recover();
     }
-    if (
-      repository &&
-      releaseUploads &&
-      runtimeSecrets &&
-      deps.defaultAppResourcesDirectory
-    ) {
+    if (releaseUploads && runtimeSecrets && deps.defaultAppResourcesDirectory) {
       defaultApplicationBootstrap = new DefaultApplicationBootstrap({
         connection: deps.database.connection,
         store,
         managementStore,
-        repository,
         runtimeSecrets,
         releaseUploads,
         host,
@@ -2705,24 +2620,6 @@ export function createHubApi(
   });
   Object.defineProperties(api, {
     ready: { configurable: false, enumerable: false, value: ready },
-    handleGit: {
-      configurable: false,
-      enumerable: false,
-      value: async (request: Request): Promise<Response> => {
-        await ready;
-        try {
-          return await handleGitSmartHttpRequest(request, {
-            publicBasePath: deps.publicBasePath,
-            repository: requireRepositoryService(),
-            agentAuth: requireAgentAuthService(),
-            authorization,
-            managementStore,
-          });
-        } catch (error) {
-          return gitErrorResponse(error);
-        }
-      },
-    },
     close: {
       configurable: false,
       enumerable: false,
@@ -2750,147 +2647,6 @@ export function createHubApi(
   return api;
 }
 
-interface GitRequestServices {
-  readonly publicBasePath: string;
-  readonly repository: HubRepositoryService;
-  readonly agentAuth: AgentAuthService;
-  readonly authorization: HubAuthorization;
-  readonly managementStore: HubManagementStore;
-}
-
-interface GitSmartHttpRoute {
-  readonly slug: string;
-  readonly operation: 'advertise' | 'rpc';
-  readonly service: 'git-upload-pack' | 'git-receive-pack';
-}
-
-interface GitCgiResponse {
-  readonly status: number;
-  readonly headers: Headers;
-  readonly body: PassThrough;
-}
-
-async function handleGitSmartHttpRequest(
-  request: Request,
-  services: GitRequestServices,
-): Promise<Response> {
-  const route = parseGitSmartHttpRoute(request, services.publicBasePath);
-  const accessToken = readGitBasicAccessToken(
-    request.headers.get('authorization'),
-  );
-  if (!accessToken) {
-    throw new HubDomainError(
-      'UNAUTHORIZED',
-      'Agent authentication is required.',
-      { status: 401 },
-    );
-  }
-  const writing = route.service === 'git-receive-pack';
-  const principal = await services.agentAuth.authenticateAccessToken(
-    accessToken,
-    { scope: writing ? 'source:write' : 'source:read' },
-  );
-  const application = await services.managementStore.getApplicationBySlug(
-    route.slug,
-  );
-  if (!application) {
-    throw new HubDomainError(
-      'REPOSITORY_NOT_FOUND',
-      'Repository was not found.',
-      { status: 404 },
-    );
-  }
-  if (!agentApplicationScopeAllows(principal, application.id)) {
-    throw new HubDomainError(
-      'INSUFFICIENT_SCOPE',
-      'Agent credential scope does not allow this application.',
-      { status: 403 },
-    );
-  }
-  if (writing && application.status === 'archived') {
-    throw new HubDomainError(
-      'APPLICATION_ARCHIVED',
-      'Archived applications do not accept source pushes.',
-      { status: 409 },
-    );
-  }
-  const member = await services.managementStore.getMember(principal.userId);
-  if (!member || member.status !== 'active') {
-    throw new HubDomainError('TOKEN_INVALID', 'Agent token is invalid.', {
-      status: 401,
-    });
-  }
-  await services.authorization.require(principal.userId, {
-    resource: 'hub.repository',
-    action: writing ? 'update' : 'read',
-    applicationId: application.id,
-  });
-
-  const previous = writing
-    ? await services.managementStore.getRepository(application.id)
-    : undefined;
-  const backend = await services.repository.openGitHttpBackend({
-    applicationId: application.id,
-    operation: route.operation,
-    service: route.service,
-    remoteUser: principal.userId,
-    contentLength: readGitContentLength(request),
-    gitProtocol: request.headers.get('git-protocol') ?? undefined,
-  });
-  backend.stderr.resume();
-  const inputCompletion = pipeGitRequestBody(request.body, backend.stdin).catch(
-    (error: unknown): never => {
-      backend.kill();
-      throw error;
-    },
-  );
-  const finalization = Promise.all([backend.completion, inputCompletion]).then(
-    async (): Promise<void> => {
-      if (!writing) return;
-      const status = await services.repository.getStatus(application.id);
-      if (previous?.headCommit === status.headCommit) return;
-      const metadata = await services.managementStore.updateRepository(
-        application.id,
-        {
-          defaultBranch: status.defaultBranch,
-          headCommit: status.headCommit,
-          status: status.status,
-        },
-      );
-      await services.managementStore.appendAuditLog({
-        actorId: principal.userId,
-        applicationId: application.id,
-        action: 'repository.pushed',
-        resource: 'repository',
-        resourceId: metadata.id,
-        result: 'success',
-        source: 'git',
-        client: {
-          credentialId: principal.credentialId,
-          name: principal.clientName,
-        },
-        details: {
-          branch: status.defaultBranch,
-          headCommit: status.headCommit,
-        },
-      });
-    },
-  );
-  void finalization.catch((error: unknown) => {
-    logServerError(error, {
-      operation: 'git-http-backend',
-      applicationId: application.id,
-      service: route.service,
-    });
-  });
-
-  const cgi = await readGitCgiResponse(backend.stdout);
-  const body = Readable.toWeb(cgi.body) as ConstructorParameters<
-    typeof Response
-  >[0];
-  return new Response(body, { status: cgi.status, headers: cgi.headers });
-}
-
 function agentApplicationScopeAllows(
   principal: AgentPrincipal,
   applicationId: string,
@@ -2899,246 +2655,6 @@ function agentApplicationScopeAllows(
     principal.applicationScope.mode === 'all-authorized' ||
     principal.applicationScope.applicationIds.includes(applicationId)
   );
-}
-
-function parseGitSmartHttpRoute(
-  request: Request,
-  publicBasePath: string,
-): GitSmartHttpRoute {
-  const url = new URL(request.url);
-  const prefix = `${normalizePath(publicBasePath)}/git/`;
-  if (!url.pathname.startsWith(prefix)) throw gitRouteNotFound();
-  const relative = url.pathname.slice(prefix.length);
-  const match =
-    /^([^/]+)\.git\/(info\/refs|git-upload-pack|git-receive-pack)$/.exec(
-      relative,
-    );
-  if (!match) throw gitRouteNotFound();
-  let slug: string;
-  try {
-    slug = decodeURIComponent(match[1]);
-  } catch {
-    throw gitRouteNotFound();
-  }
-  if (!slug || slug.includes('/') || slug.includes('\\')) {
-    throw gitRouteNotFound();
-  }
-  if (match[2] === 'info/refs') {
-    if (request.method !== 'GET') throw gitRouteNotFound();
-    const service = url.searchParams.get('service');
-    if (service !== 'git-upload-pack' && service !== 'git-receive-pack') {
-      throw new HubDomainError(
-        'INVALID_GIT_SERVICE',
-        'Git HTTP service is unsupported.',
-        { status: 400 },
-      );
-    }
-    return { slug, operation: 'advertise', service };
-  }
-  if (request.method !== 'POST') throw gitRouteNotFound();
-  const service = match[2] as 'git-upload-pack' | 'git-receive-pack';
-  const contentType = request.headers
-    .get('content-type')
-    ?.split(';', 1)[0]
-    ?.trim()
-    .toLowerCase();
-  if (contentType !== `application/x-${service}-request`) {
-    throw new HubDomainError(
-      'UNSUPPORTED_MEDIA_TYPE',
-      `Git ${service} requests must use application/x-${service}-request.`,
-      { status: 415 },
-    );
-  }
-  return { slug, operation: 'rpc', service };
-}
-
-function gitRouteNotFound(): HubDomainError {
-  return new HubDomainError(
-    'REPOSITORY_NOT_FOUND',
-    'Repository was not found.',
-    { status: 404 },
-  );
-}
-
-function readGitBasicAccessToken(value: string | null): string | undefined {
-  const match = /^Basic\s+([A-Za-z0-9+/]+={0,2})$/i.exec(value?.trim() ?? '');
-  if (!match) return undefined;
-  let decoded: string;
-  try {
-    decoded = Buffer.from(match[1], 'base64').toString('utf8');
-  } catch {
-    return undefined;
-  }
-  const separator = decoded.indexOf(':');
-  if (separator < 0 || decoded.slice(0, separator) !== 'oauth2') {
-    return undefined;
-  }
-  return decoded.slice(separator + 1) || undefined;
-}
-
-function readGitContentLength(request: Request): number | undefined {
-  if (request.method !== 'POST') return undefined;
-  const value = request.headers.get('content-length');
-  if (value === null) return undefined;
-  if (!/^\d+$/.test(value)) {
-    throw new HubDomainError(
-      'VALIDATION_ERROR',
-      'Git Content-Length is invalid.',
-      { status: 422 },
-    );
-  }
-  const size = Number(value);
-  if (!Number.isSafeInteger(size)) {
-    throw new HubDomainError(
-      'VALIDATION_ERROR',
-      'Git Content-Length is invalid.',
-      { status: 422 },
-    );
-  }
-  return size;
-}
-
-async function pipeGitRequestBody(
-  body: ReadableStream<Uint8Array> | null,
-  destination: Writable,
-): Promise<void> {
-  if (!body) {
-    destination.end();
-    return;
-  }
-  const reader = body.getReader();
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      if (!destination.write(chunk.value)) {
-        await new Promise<void>((resolve, reject) => {
-          const onDrain = (): void => {
-            cleanup();
-            resolve();
-          };
-          const onError = (error: Error): void => {
-            cleanup();
-            reject(error);
-          };
-          const cleanup = (): void => {
-            destination.off('drain', onDrain);
-            destination.off('error', onError);
-          };
-          destination.once('drain', onDrain);
-          destination.once('error', onError);
-        });
-      }
-    }
-    destination.end();
-  } catch (error) {
-    destination.destroy(
-      error instanceof Error ? error : new Error(String(error)),
-    );
-    throw error;
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-function readGitCgiResponse(stream: Readable): Promise<GitCgiResponse> {
-  const maximumHeaderBytes = 64 * 1024;
-  const body = new PassThrough();
-  return new Promise<GitCgiResponse>((resolve, reject) => {
-    let buffered = Buffer.alloc(0);
-    const cleanup = (): void => {
-      stream.off('data', onData);
-      stream.off('end', onEnd);
-      stream.off('error', onError);
-    };
-    const onEnd = (): void => {
-      cleanup();
-      reject(new Error('Git HTTP backend returned no CGI response body.'));
-    };
-    const onError = (error: Error): void => {
-      cleanup();
-      reject(error);
-    };
-    const onData = (chunk: Buffer | string): void => {
-      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      buffered = Buffer.concat([buffered, bytes]);
-      const crlfIndex = buffered.indexOf('\r\n\r\n');
-      const lfIndex = buffered.indexOf('\n\n');
-      const headerEnd = crlfIndex >= 0 ? crlfIndex : lfIndex;
-      const separatorSize = crlfIndex >= 0 ? 4 : 2;
-      if (headerEnd < 0) {
-        if (buffered.length > maximumHeaderBytes) {
-          cleanup();
-          stream.destroy();
-          reject(new Error('Git HTTP backend returned oversized CGI headers.'));
-        }
-        return;
-      }
-      stream.pause();
-      cleanup();
-      try {
-        const headerText = buffered.subarray(0, headerEnd).toString('latin1');
-        const parsed = parseGitCgiHeaders(headerText);
-        const remainder = buffered.subarray(headerEnd + separatorSize);
-        if (remainder.length > 0) body.write(remainder);
-        stream.pipe(body);
-        stream.resume();
-        resolve({ ...parsed, body });
-      } catch (error) {
-        const reason =
-          error instanceof Error ? error : new Error(String(error));
-        body.destroy(reason);
-        reject(reason);
-      }
-    };
-    stream.on('data', onData);
-    stream.once('end', onEnd);
-    stream.once('error', onError);
-  });
-}
-
-function parseGitCgiHeaders(value: string): {
-  status: number;
-  headers: Headers;
-} {
-  const headers = new Headers();
-  let status = 200;
-  for (const line of value.split(/\r?\n/)) {
-    const separator = line.indexOf(':');
-    if (separator <= 0) {
-      throw new Error('Git HTTP backend returned invalid CGI headers.');
-    }
-    const name = line.slice(0, separator).trim();
-    const headerValue = line.slice(separator + 1).trim();
-    if (name.toLowerCase() === 'status') {
-      const parsedStatus = Number.parseInt(headerValue, 10);
-      if (parsedStatus < 100 || parsedStatus > 599) {
-        throw new Error('Git HTTP backend returned an invalid status.');
-      }
-      status = parsedStatus;
-      continue;
-    }
-    headers.append(name, headerValue);
-  }
-  return { status, headers };
-}
-
-function gitErrorResponse(error: unknown): Response {
-  const domainError = toDomainError(error);
-  if (domainError.status >= 500) {
-    logServerError(error, { operation: 'git-request' });
-  }
-  const status = isContentfulStatus(domainError.status)
-    ? domainError.status
-    : 500;
-  const headers = new Headers({
-    'cache-control': 'no-store',
-    'content-type': 'text/plain; charset=utf-8',
-  });
-  if (status === 401) {
-    headers.set('www-authenticate', 'Basic realm="NocoBase Hub Git"');
-  }
-  return new Response(`${domainError.message}\n`, { status, headers });
 }
 
 class HubRateLimitError extends HubDomainError {
@@ -3646,7 +3162,6 @@ interface CreateManagedApplicationDeps {
   readonly actor: AuthorizedHubActor;
   readonly store: HubStore;
   readonly managementStore: HubManagementStore;
-  readonly repository: HubRepositoryService;
   readonly runtimeSecrets: RuntimeSecretService;
   readonly initialReleases?: InitialReleaseService;
 }
@@ -3662,7 +3177,6 @@ async function createManagedApplication(
   } satisfies CreateApplicationInput;
   assertApplicationSlugNotReserved(input.slug);
   const applicationId = crypto.randomUUID();
-  const createdRepository = await deps.repository.create(applicationId);
   let applicationCreated = false;
   try {
     await deps.store.connection.transaction(async (connection) => {
@@ -3674,13 +3188,6 @@ async function createManagedApplication(
         id: applicationId,
       });
       applicationCreated = true;
-      await transactionalManagement.createRepository(applicationId, {
-        provider: 'hub',
-        defaultBranch: createdRepository.defaultBranch,
-        headCommit: createdRepository.headCommit,
-        status: createdRepository.status,
-        initialCommit: createdRepository.initialCommit,
-      });
       await deps.runtimeSecrets
         .withConnection(connection)
         .ensureInitial(applicationId);
@@ -3699,7 +3206,6 @@ async function createManagedApplication(
       await deps.initialReleases.create({
         applicationId,
         slug: input.slug,
-        sourceCommit: createdRepository.headCommit,
         actor: {
           userId: deps.actor.user.id,
           credentialId: null,
@@ -3710,7 +3216,6 @@ async function createManagedApplication(
       });
     }
   } catch (error) {
-    await deps.repository.remove(applicationId).catch(() => undefined);
     if (applicationCreated) {
       await cleanupIncompleteManagedApplication(deps.store, applicationId);
     }
@@ -3718,7 +3223,6 @@ async function createManagedApplication(
   }
   const application = await deps.managementStore.getApplication(applicationId);
   if (!application) {
-    await deps.repository.remove(applicationId).catch(() => undefined);
     throw new HubDomainError(
       'APPLICATION_CREATION_INCOMPLETE',
       'The application could not be created completely.',
@@ -3759,10 +3263,6 @@ async function cleanupIncompleteManagedApplication(
         .execute();
       await connection.query
         .deleteFrom('hubRuntimeSecrets')
-        .where('applicationId', '=', applicationId)
-        .execute();
-      await connection.query
-        .deleteFrom('hubRepositories')
         .where('applicationId', '=', applicationId)
         .execute();
       await connection.query
@@ -4087,32 +3587,17 @@ function applicationOpenUrl(
   return new URL(`/${encodeURIComponent(slug)}/`, `${origin}/`).toString();
 }
 
-function repositoryCloneUrl(
-  slug: string,
-  authoritativeOrigin: string | undefined,
-  publicBasePath: string,
-): string {
-  const origin = authoritativeOrigin
-    ? new URL(authoritativeOrigin).origin
-    : 'http://localhost';
-  return new URL(
-    `${normalizePath(publicBasePath)}/git/${encodeURIComponent(slug)}.git`,
-    `${origin}/`,
-  ).toString();
-}
-
 function normalizePath(value: string): string {
   const normalized = value.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `/${normalized}` : '';
 }
 
 function releaseSummary(
-  release: Pick<PublicRelease, 'id' | 'version' | 'sourceCommit' | 'createdAt'>,
+  release: Pick<PublicRelease, 'id' | 'version' | 'createdAt'>,
 ): Record<string, unknown> {
   return {
     id: release.id,
     version: release.version,
-    sourceCommit: release.sourceCommit,
     createdAt: release.createdAt,
   };
 }
@@ -4125,7 +3610,6 @@ function releaseProjection(release: HubRelease): Record<string, unknown> {
     checksum: release.checksum,
     manifest: release.manifest,
     sizeBytes: release.sizeBytes,
-    sourceCommit: release.sourceCommit,
     verificationStatus: release.verificationStatus,
     createdBy: release.createdBy,
     createdAt: release.createdAt,
@@ -4293,7 +3777,6 @@ function assertApplicationSlugNotReserved(slug: string): void {
   const reserved = new Set([
     'api',
     'auth',
-    'git',
     'hub',
     '__apps',
     '__health',
@@ -4442,7 +3925,7 @@ function readAuditListOptions(
     ),
     source: optionalAllowedQuery(
       source,
-      ['web', 'agent', 'git', 'system'] as const,
+      ['web', 'agent', 'system'] as const,
       'source',
     ),
     query: context.req.query('query') || undefined,
@@ -4481,7 +3964,6 @@ function readReleaseListOptions(context: HubContext): ReleaseListOptions {
   return {
     ...pagination,
     query: context.req.query('query')?.trim() || undefined,
-    sourceCommit: context.req.query('sourceCommit')?.trim() || undefined,
     sort: optionalAllowedQuery(sort, allowedSort, 'sort'),
   };
 }
@@ -4533,7 +4015,6 @@ function parseReleaseUploadCreateInput(
 ): ReleaseUploadCreateInput {
   rejectUnknownKeys(body, [
     'version',
-    'sourceCommit',
     'checksum',
     'sizeBytes',
     'archiveChecksum',
@@ -4551,7 +4032,6 @@ function parseReleaseUploadCreateInput(
   }
   return {
     version: requiredString(body.version, 'version'),
-    sourceCommit: requiredString(body.sourceCommit, 'sourceCommit'),
     checksum: requiredString(body.checksum, 'checksum'),
     sizeBytes: requiredNonNegativeInteger(body.sizeBytes, 'sizeBytes'),
     archiveChecksum: requiredString(body.archiveChecksum, 'archiveChecksum'),
@@ -5311,9 +4791,6 @@ function agentRequirementForRequest(
     const suffix = applicationMatch[2] ?? '';
     if (!suffix && method === 'GET') {
       return { scope: 'apps:read', applicationId };
-    }
-    if (suffix === 'repository' && method === 'GET') {
-      return { scope: 'source:read', applicationId };
     }
     if (suffix === 'release-uploads' && method === 'POST') {
       return { scope: 'releases:publish', applicationId };

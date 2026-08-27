@@ -291,7 +291,6 @@ export const starter = {
     '让 Coding Agent 将已验证的应用构建发布到 Hub 后，即可进行部署。',
   'hub.releases.columns.version': '版本',
   'hub.releases.columns.verification': '验证状态',
-  'hub.releases.columns.source': '来源',
   'hub.releases.columns.size': '大小',
   'hub.releases.columns.created': '创建时间',
   'hub.releases.columns.action': '操作',
@@ -488,22 +487,17 @@ export const starter = {
   'hub.apps.open': '打开应用',
   'hub.apps.manage': '管理',
   'hub.apps.develop': '开发',
-  'hub.apps.columns.sourceRevision': '源码修订',
+  'hub.apps.columns.latestRelease': '最新版本',
   'hub.apps.columns.health': '健康状态',
   'hub.apps.columns.healthChecked': '健康检查时间',
   'hub.apps.createDialog.templateTitle': '默认应用模板',
   'hub.apps.createDialog.templateDescription':
-    'Hub 会基于默认模板创建独立 Git 仓库，并保存权威源码历史。',
+    'Hub 会根据默认模板准备一个可部署的初始版本，应用源码保留在开发者本地。',
   'hub.application.open': '打开应用',
   'hub.application.develop': '开发',
   'hub.application.tabs.development': '开发',
   'hub.application.tabs.permissions': '权限',
   'hub.application.tabs.settings': '设置',
-  'hub.repository.title': '源码仓库',
-  'hub.repository.loading': '正在加载源码仓库',
-  'hub.repository.cloneUrl': '克隆地址',
-  'hub.repository.branch': '默认分支',
-  'hub.repository.head': '最新提交',
   'hub.development.title': '通过 Coding Agent 开发',
   'hub.development.copy': '复制开发指令',
   'hub.development.copied': '已复制',
@@ -732,38 +726,28 @@ export const starter = {
   'hub.application.redeploy.confirm': '确认重新部署',
   'hub.deployment.details.activeRelease': '当前运行版本',
   'hub.development.description':
-    '复制一条指令给本地 Coding Agent，Agent 会准备本地工作区，并将完成的工作发布回 Hub。',
-  'hub.development.prompt': `请在本地工作副本中开发 NocoBase Hub 应用“{{name}}”（slug：{{slug}}）。
+    '复制一条指令给本地 Coding Agent。源码保留在本机，只有构建产物会发布到 Hub。',
+  'hub.development.prompt': `请使用保存在我本地电脑上的源码开发 NocoBase Hub 应用“{{name}}”（slug：{{slug}}）。
 
 Hub 地址：{{hubUrl}}
-预期源码仓库：{{cloneUrl}}
-默认分支：{{branch}}
-Hub 当前提交：{{headCommit}}
-
-请使用 APP 内的 pnpm 脚本按以下步骤执行。不要直接使用 git clone 拉取 Hub 仓库，不要索取或暴露密码、访问令牌，也不要丢弃任何现有的本地修改。
+Hub 只保存构建产物、Release 和 Deployment，不保存或恢复应用源码。
 
 1. 检查本地环境。Node.js 需要 24 或更高版本，pnpm 需要 11 或更高版本。
 
 node --version
 pnpm --version
 
-2. 使用 ~/.nocobase/hub/apps/{{slug}} 作为本地工作区。如果该目录不存在，使用下面的命令拉取 Hub 中的最新源码并初始化开发环境：
+2. 修改任何内容前，先询问我现有的本地源码目录。保留该目录中的所有本地修改，不要尝试从 Hub 下载、拉取或还原源码。
 
-pnpm create @nocobase/app ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --app {{slug}}
+如果我确认不存在源码目录，并且该 APP 应该重新从默认模板开始，请在一个空目录中创建新的本地项目：
 
-该命令只会初始化空目录，同时写入本地数据库与环境配置并安装依赖。如果 Device Authorization 打开浏览器授权页，请让我批准，然后让命令继续执行。
+pnpm create @nocobase/app <directory>
 
-如果工作区已经存在，不要覆盖它，也不要对它执行 create 命令。进入目录，确认它属于当前 Hub APP，保留所有本地修改，然后拉取最新源码快照：
+这会创建一份新的模板源码，无法还原已有 Release 使用过的源码。
 
-cd ~/.nocobase/hub/apps/{{slug}}
-pnpm run status --json
-pnpm run pull --non-interactive
+3. 进入确认过的 APP 目录并启动开发服务：
 
-如果 pull 提示本地源码与 Hub 源码都发生了变化，请停止并保留本地工作，不要强制覆盖；报告冲突，等待明确处理。
-
-3. 进入 APP 目录并启动开发服务：
-
-cd ~/.nocobase/hub/apps/{{slug}}
+cd <directory>
 pnpm run dev
 
 修改代码时保持开发服务运行，记录本地访问地址，并在浏览器中验证相关用户流程。
@@ -774,39 +758,27 @@ pnpm check
 
 遇到失败必须修复，不要跳过或削弱检查。
 
-5. 将完成的源码快照推送到 Hub。依赖、构建产物、运行数据、密钥和本地 Hub 状态不会被推送：
-
-pnpm run push --non-interactive --json
-
-如果 Hub 源码已经更新，该命令必须拒绝推送。请先 pull 并解决冲突，不要强制覆盖。
-
-6. 只执行我要求的结果：
+5. 只执行我要求的结果。下面的命令会在本地构建，并且只把打包后的产物发送到 Hub。
 
 - 只创建已验证的 Release、不部署时，先验证计划，再创建 Release：
 
-pnpm run release --bump patch --dry-run --non-interactive --json
-pnpm run release --bump patch --non-interactive --json
+pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --dry-run --non-interactive --json
+pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --non-interactive --json
 
-- 需要部署当前源码时，不要先单独创建 Release，直接执行完整的源码到运行时流程：
+- 需要构建、创建下一个 patch Release 并部署时：
 
-pnpm run deploy --non-interactive --json
+pnpm run deploy --hub {{hubUrl}} --app {{slug}} --non-interactive --json
 
-deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。除非我明确要求，否则不要部署。如果需要 Device Authorization，请让我批准浏览器授权页。如果 Release 或 Deployment 中断，请使用脚本输出的 --operation-id 命令恢复同一操作，不要重新开始造成重复操作。
+首次关联成功后，Hub 和 APP 参数会保存在本地，后续可以省略。除非我明确要求，否则不要部署。如果需要 Device Authorization，请让我批准浏览器授权页。如果 Release 或 Deployment 中断，请使用脚本输出的 --operation-id 命令恢复同一操作，不要重新开始造成重复操作。
 
-7. 报告同步后的源码提交，以及所有按要求创建的 Release 或 Deployment 的 ID、版本、状态、访问地址与验证结果。`,
-  'hub.repository.description':
-    'Hub 保存权威源码和提交历史，本地工作区只是可随时重新创建的工作副本。',
-  'hub.repository.unavailable': '源码仓库不可用',
-  'hub.repository.unavailableDescription':
-    'Hub 无法加载权威源码仓库，请在仓库初始化完成后重试。',
+6. 报告所有按要求创建的 Release 或 Deployment 的 ID、版本、状态、访问地址、checksum 和验证结果。不要向 Hub 上传源码、依赖、本地数据库、密钥或运行数据。`,
   'hub.releases.redeploy': '重新部署',
   'hub.releases.pin': '固定版本',
   'hub.releases.unpin': '取消固定版本',
   'hub.releases.retentionError': '无法更新版本保留状态',
   'hub.releases.detail.description':
-    '查看不可变的构建元数据、源码修订、校验和与保留状态。',
+    '查看不可变的构建元数据、校验和与保留状态。',
   'hub.releases.detail.loading': '正在加载版本详情',
-  'hub.releases.detail.sourceCommit': '源码提交',
   'hub.releases.detail.checksum': '校验和',
   'hub.releases.detail.createdBy': '创建人',
   'hub.releases.detail.retention': '保留状态',
@@ -822,7 +794,7 @@ deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。�
   'hub.permissions.missingRevision': '当前权限修订不可用，请刷新后重试。',
   'hub.permissions.savingRoles': '正在保存…',
   'hub.permissions.rolesDescription':
-    '角色能力集为只读。部署者负责部署；开发者负责源码与版本发布。',
+    '角色能力集为只读。部署者负责部署；开发者负责把本地构建产物发布为版本。',
   'hub.runtime.loading': '正在加载运行时',
   'hub.runtime.lastChecked': '最近检查时间',
   'hub.runtime.startedAt': '启动时间',
@@ -839,22 +811,22 @@ deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。�
   'hub.runtimeSecret.rotateError': '无法轮换密钥',
   'hub.applicationSettings.saving': '正在保存…',
   'hub.applicationSettings.slugImmutable':
-    '应用标识是稳定的访问地址和仓库标识，创建后不可修改。',
+    '应用标识是稳定的访问地址和部署标识，创建后不可修改。',
   'hub.applicationSettings.lifecycle': '应用生命周期',
   'hub.applicationSettings.archiveDescription':
-    '归档后将无法继续开发和部署，但会保留源码、版本、数据和历史记录。',
+    '归档后将无法继续发布和部署，但会保留版本、数据和历史记录。',
   'hub.applicationSettings.restore': '恢复应用',
   'hub.applicationSettings.restoring': '正在恢复…',
   'hub.applicationSettings.archiveConfirm': '确认归档此应用吗？',
   'hub.applicationSettings.archiveTitle': '归档应用',
   'hub.applicationSettings.archiveConfirmDescription':
-    '确定要归档 {{name}} 吗？归档后将无法继续开发和部署，但会保留源码、版本、数据和历史记录。',
+    '确定要归档 {{name}} 吗？归档后将无法继续发布和部署，但会保留版本、数据和历史记录。',
   'hub.applicationSettings.archiveAction': '确认归档',
   'hub.applicationSettings.archiving': '正在归档…',
   'hub.applicationSettings.archiveError': '无法归档应用',
   'hub.applicationSettings.restoreTitle': '恢复应用',
   'hub.applicationSettings.restoreConfirmDescription':
-    '确定要恢复 {{name}} 并重新允许开发和部署吗？',
+    '确定要恢复 {{name}} 并重新允许发布和部署吗？',
   'hub.applicationSettings.restoreAction': '确认恢复',
   'hub.applicationSettings.restoreError': '无法恢复应用',
   'hub.audit.description':
@@ -912,7 +884,7 @@ deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。�
   'hub.roles.empty.title': '暂无角色目录',
   'hub.roles.empty.description': '内置角色目录当前不可用。',
   'hub.roles.description':
-    '这些能力集为只读。部署者负责运行时和部署；开发者负责源码和版本发布。',
+    '这些能力集为只读。部署者负责运行时和部署；开发者负责把本地构建产物发布为版本。',
   'hub.roles.owner': '所有者',
   'hub.roles.admin': '管理员',
   'hub.roles.developer': '开发者',
@@ -920,14 +892,13 @@ deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。�
   'hub.roles.viewer': '查看者',
   'hub.roles.owner.description': '完全管理 Hub 和所有应用。',
   'hub.roles.admin.description': '管理应用、成员、设置、版本和部署。',
-  'hub.roles.developer.description': '开发应用源码并发布版本。',
+  'hub.roles.developer.description': '把本地构建的应用产物发布为版本。',
   'hub.roles.deployer.description': '部署、回滚并控制应用运行时。',
   'hub.roles.viewer.description': '查看应用、版本、部署、运行时和审计记录。',
   'hub.roleScope.global': '全局',
   'hub.roleScope.application': '应用',
   'hub.capability.resource.all': '全部资源',
   'hub.capability.resource.app': '应用',
-  'hub.capability.resource.repository': '源码仓库',
   'hub.capability.resource.release': '版本',
   'hub.capability.resource.deployment': '部署',
   'hub.capability.resource.runtime': '运行时',
@@ -952,7 +923,6 @@ deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。�
   'hub.audit.action.application.updated': '更新应用',
   'hub.audit.action.application.archived': '归档应用',
   'hub.audit.action.application.restored': '恢复应用',
-  'hub.audit.action.repository.pushed': '推送源码',
   'hub.audit.action.release.published': '发布版本',
   'hub.audit.action.release.pinned': '固定版本',
   'hub.audit.action.release.unpinned': '取消固定版本',
@@ -975,7 +945,6 @@ deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。�
   'hub.audit.action.setup.owner.created': '创建 Hub 所有者',
   'hub.audit.resource.hub': 'Hub',
   'hub.audit.resource.application': '应用',
-  'hub.audit.resource.repository': '源码仓库',
   'hub.audit.resource.release': '版本',
   'hub.audit.resource.deployment': '部署',
   'hub.audit.resource.runtime': '运行时',
@@ -984,7 +953,6 @@ deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。�
   'hub.audit.resource.member': '成员',
   'hub.audit.source.web': '网页',
   'hub.audit.source.agent': 'Coding Agent',
-  'hub.audit.source.git': 'Git',
   'hub.audit.source.system': '系统',
   'hub.audit.actorType.user': '用户',
   'hub.audit.actorType.agent': 'Coding Agent',
@@ -1011,16 +979,13 @@ deploy 脚本会推送源码、创建下一个 patch Release 并完成部署。�
   'hub.settings.loading': '正在加载设置',
   'hub.storage.loading': '正在统计存储用量',
   'hub.storage.description':
-    '监控 Hub 所在文件系统，避免源码仓库、版本产物、运行数据和日志耗尽磁盘空间。',
+    '监控 Hub 所在文件系统，避免版本产物、运行数据和日志耗尽磁盘空间。',
   'hub.storage.measuredAt': '统计于 {{date}}',
   'hub.storage.usedOf': '已使用，总容量 {{capacity}}',
   'hub.storage.available': '可用 {{available}}',
   'hub.storage.reclaimable': '可释放 {{value}}',
   'hub.storage.cleanupPreviewDescription':
     '{{count}} 个候选项预计可释放 {{size}}，此预览不会删除数据。',
-  'storage.sourceRepositories': '源码仓库',
-  'storage.sourceRepositories.description':
-    '裸 Git 对象、分支和提交历史，不包含本地工作区及 node_modules。',
   'storage.releaseArtifacts': '版本产物',
   'storage.releaseArtifacts.description':
     '已验证的不可变构建产物，只有保留策略选中的未引用版本可以释放。',

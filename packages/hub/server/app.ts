@@ -30,8 +30,6 @@ export interface CreateAppOptions {
   authBaseUrl?: string;
   releaseRoot?: string;
   appPublicOrigin?: string;
-  sourceRoot?: string;
-  repositorySeedPath?: string;
   /** Packaged deterministic resources used to initialize the system default APP. */
   defaultAppResourcesDirectory?: string;
   runtimeSecretEncryptionKey?: string;
@@ -95,7 +93,6 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
   let hubRuntime: HubDatabaseRuntime | undefined;
   let hubReady: Promise<void> | undefined;
   let closeHubApi: (() => Promise<void>) | undefined;
-  let handleHubGit: ((request: Request) => Promise<Response>) | undefined;
 
   if (hubEnabled) {
     if (!authSecret || authSecret.trim().length < 32) {
@@ -160,13 +157,11 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
       registry: options.appHostRegistry,
       releaseRoot: options.releaseRoot,
       appPublicOrigin: options.appPublicOrigin,
-      sourceRoot: options.sourceRoot,
-      repositorySeedPath: options.repositorySeedPath,
       defaultAppResourcesDirectory: options.defaultAppResourcesDirectory,
       runtimeSecretEncryptionKey:
         options.runtimeSecretEncryptionKey ||
         options.runtimeSecretEncryptionKeyFile ||
-        (options.sourceRoot && options.repositorySeedPath)
+        options.releaseRoot
           ? resolveRuntimeSecretEncryptionKey({
               authoritativeOrigin: configuredAuthBaseUrl
                 ? authUrl.origin
@@ -191,7 +186,6 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
     api.route('/', hubApi);
     hubReady = hubApi.ready;
     closeHubApi = () => hubApi.close();
-    handleHubGit = (request) => hubApi.handleGit(request);
   } else {
     api.get('/healthz', (context) => {
       return context.json({
@@ -213,9 +207,8 @@ export function createApp(options: CreateAppOptions = {}): HubApp {
   }
 
   app.route(`${basePath}/api`, api);
-  if (handleHubGit) {
-    app.all(`${basePath}/git/*`, (context) => handleHubGit!(context.req.raw));
-  }
+  app.all(`${basePath}/git`, () => notFound());
+  app.all(`${basePath}/git/*`, () => notFound());
   if (clientHandler) {
     app.all(basePath || '/', (context) =>
       dispatchClientRoute(context.req.raw, basePath, clientHandler),

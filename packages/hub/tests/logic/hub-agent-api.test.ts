@@ -1,18 +1,15 @@
 // @vitest-environment node
 
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createApp, type HubApp } from '../../server/index.ts';
 import { createHubDatabase } from '../../server/hub/database.ts';
 import { HubStore } from '../../server/hub/store.ts';
 
-const execFileAsync = promisify(execFile);
 const origin = 'http://127.0.0.1:13221';
 const authSecret = 'hub-agent-api-test-secret-at-least-32-characters';
 
@@ -25,7 +22,6 @@ describe('Hub Agent authorization API', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'hub-agent-api-'));
-    const seed = await createRepositorySeed(root);
     databasePath = path.join(root, 'hub.sqlite');
     app = createApp({
       appName: 'hub',
@@ -35,8 +31,6 @@ describe('Hub Agent authorization API', () => {
       databasePath,
       authSecret,
       authBaseUrl: `${origin}/hub/api/auth`,
-      sourceRoot: path.join(root, 'sources'),
-      repositorySeedPath: seed,
       releaseRoot: path.join(root, 'releases'),
       runtimeSecretEncryptionKey: Buffer.alloc(32, 8).toString('base64'),
     });
@@ -67,7 +61,7 @@ describe('Hub Agent authorization API', () => {
       body: JSON.stringify({
         clientId: 'nb-cli',
         clientName: 'Codex on Mac',
-        scopes: ['profile', 'apps:read', 'source:read'],
+        scopes: ['profile', 'apps:read'],
         applicationScope: { mode: 'selected', applicationIds: [applicationId] },
       }),
     });
@@ -92,7 +86,7 @@ describe('Hub Agent authorization API', () => {
       {
         method: 'POST',
         body: JSON.stringify({
-          scopes: ['profile', 'apps:read', 'source:read'],
+          scopes: ['profile', 'apps:read'],
           applicationScope: {
             mode: 'selected',
             applicationIds: [applicationId],
@@ -124,17 +118,14 @@ describe('Hub Agent authorization API', () => {
         credential: {
           id: tokens.credentialId,
           name: 'Codex on Mac',
-          scopes: ['profile', 'apps:read', 'source:read'],
+          scopes: ['profile', 'apps:read'],
         },
         capabilities: {
           global: [],
           application: [
             {
               applicationId,
-              capabilities: expect.arrayContaining([
-                { resource: 'hub.app', actions: ['read'] },
-                { resource: 'hub.repository', actions: ['read'] },
-              ]),
+              capabilities: [{ resource: 'hub.app', actions: ['read'] }],
             },
           ],
         },
@@ -157,7 +148,7 @@ describe('Hub Agent authorization API', () => {
     );
     expect(appDetail.status).toBe(200);
     const appPayload = await appDetail.json();
-    expect(appPayload.data).toHaveProperty('repository');
+    expect(appPayload.data).not.toHaveProperty('repository');
     expect(appPayload.data).not.toHaveProperty('latestRelease');
     expect(appPayload.data).not.toHaveProperty('activeRelease');
     expect(appPayload.data).not.toHaveProperty('runtime');
@@ -166,12 +157,6 @@ describe('Hub Agent authorization API', () => {
       (await agentRequest(`/apps/${otherApplicationId}`, tokens.accessToken))
         .status,
     ).toBe(403);
-    const repository = await agentRequest(
-      `/apps/${applicationId}/repository`,
-      tokens.accessToken,
-    );
-    expect(repository.status).toBe(200);
-
     const forbidden = await agentRequest(
       `/apps/${applicationId}/runtime`,
       tokens.accessToken,
@@ -212,11 +197,9 @@ describe('Hub Agent authorization API', () => {
       { mode: 'selected', applicationIds: [applicationId] },
       'Codex B',
     );
-    const sourceCommit = 'a'.repeat(40);
     const content = Buffer.from('x');
     const requestBody = JSON.stringify({
       version: '1.0.0',
-      sourceCommit,
       checksum: `sha256:${'b'.repeat(64)}`,
       sizeBytes: 1,
       archiveChecksum: `sha256:${createHash('sha256').update(content).digest('hex')}`,
@@ -230,7 +213,6 @@ describe('Hub Agent authorization API', () => {
           entrypoint: 'dist/server/embedded.js',
           healthPath: '/api/healthz',
         },
-        source: { commit: sourceCommit },
       },
     });
     const created = await agentRequest(
@@ -434,29 +416,4 @@ async function setupOwnerAndSignIn(app: HubApp): Promise<string> {
   });
   expect(signIn.status).toBe(200);
   return signIn.headers.get('set-cookie') ?? '';
-}
-
-async function createRepositorySeed(root: string): Promise<string> {
-  const worktree = path.join(root, 'seed-worktree');
-  const bare = path.join(root, 'default-template.git');
-  await mkdir(worktree, { recursive: true });
-  await execFileAsync('git', ['init', '--initial-branch=main'], {
-    cwd: worktree,
-  });
-  await writeFile(path.join(worktree, 'README.md'), '# Default APP\n');
-  await execFileAsync('git', ['add', 'README.md'], { cwd: worktree });
-  await execFileAsync('git', ['commit', '-m', 'Initial template'], {
-    cwd: worktree,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'NocoBase',
-      GIT_AUTHOR_EMAIL: 'support@nocobase.com',
-      GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z',
-      GIT_COMMITTER_NAME: 'NocoBase',
-      GIT_COMMITTER_EMAIL: 'support@nocobase.com',
-      GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z',
-    },
-  });
-  await execFileAsync('git', ['clone', '--bare', '--', worktree, bare]);
-  return bare;
 }

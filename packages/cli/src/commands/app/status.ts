@@ -12,7 +12,7 @@ import { formatShellCommand } from '../../lib/shell.ts';
 export default class AppStatus extends Command {
   static override summary = 'Show an app status from its Hub.';
   static override description =
-    'Shows the application, source repository, recent Releases, deployments, runtime state, and open URL.';
+    'Shows the application, recent Releases, deployments, runtime state, and open URL.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
@@ -49,24 +49,17 @@ export default class AppStatus extends Command {
       const normalizedHub = normalizeHubUrl(context.hub);
       hub = normalizedHub;
       const result = await new HubCredentialManager(normalizedHub).authorized(
-        [
-          'apps:read',
-          'source:read',
-          'releases:read',
-          'deployments:read',
-          'runtime:read',
-        ],
+        ['apps:read', 'releases:read', 'deployments:read', 'runtime:read'],
         async (client) => {
           const application = await resolveApplication(
             client,
             context.applicationReference,
           );
-          const [repository, releases, deployments] = await Promise.all([
-            client.getRepository(application.id),
+          const [releases, deployments] = await Promise.all([
             client.listReleases(application.id, { limit: 20 }),
             client.listDeployments(application.id, { limit: 20 }),
           ]);
-          return { application, deployments, releases, repository };
+          return { application, deployments, releases };
         },
       );
       const output = { ok: true, hub: normalizedHub, ...result };
@@ -80,7 +73,6 @@ export default class AppStatus extends Command {
       this.log(`application_id: ${result.application.id}`);
       this.log(`status: ${result.application.status}`);
       this.log(`active_release: ${activeRelease}`);
-      this.log(`repository_head: ${result.repository.headCommit || '-'}`);
       this.log(
         `runtime: ${runtime ? `${runtime.state}/${runtime.health}` : '-'}`,
       );

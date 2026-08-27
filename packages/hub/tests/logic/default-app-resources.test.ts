@@ -40,7 +40,7 @@ afterEach(async () => {
 });
 
 describe('default APP resources', () => {
-  it('generates a deterministic source bundle and matching release archive', async () => {
+  it('generates deterministic artifact-only release resources', async () => {
     const fixture = await createFixture();
     const first = path.join(fixture.root, 'first');
     const second = path.join(fixture.root, 'second');
@@ -51,23 +51,18 @@ describe('default APP resources', () => {
     const firstMetadata = await readMetadata(first);
     const secondMetadata = await readMetadata(second);
     expect(secondMetadata).toEqual(firstMetadata);
-    await expect(readFile(path.join(second, 'source.bundle'))).resolves.toEqual(
-      await readFile(path.join(first, 'source.bundle')),
-    );
+    expect((await readdir(first)).sort()).toEqual([
+      'initial-release.tar.gz',
+      'metadata.json',
+    ]);
+    expect((await readdir(second)).sort()).toEqual([
+      'initial-release.tar.gz',
+      'metadata.json',
+    ]);
     await expect(
       readFile(path.join(second, 'initial-release.tar.gz')),
     ).resolves.toEqual(
       await readFile(path.join(first, 'initial-release.tar.gz')),
-    );
-
-    const { stdout: bundleHeads } = await execFileAsync('git', [
-      'bundle',
-      'list-heads',
-      path.join(first, 'source.bundle'),
-      'refs/heads/main',
-    ]);
-    expect(bundleHeads.trim()).toBe(
-      `${firstMetadata.release.sourceCommit} refs/heads/main`,
     );
 
     const { stdout: archiveEntries } = await execFileAsync('tar', [
@@ -96,13 +91,27 @@ describe('default APP resources', () => {
     expect(manifest).toMatchObject({
       schemaVersion: 1,
       basePath: '/default',
-      source: { commit: firstMetadata.release.sourceCommit },
       client: { rootDir: 'dist/client' },
       server: {
         entrypoint: 'dist/server/embedded.js',
         healthPath: '/api/healthz',
       },
     });
+    expect(Object.keys(manifest).sort()).toEqual([
+      'basePath',
+      'client',
+      'schemaVersion',
+      'server',
+    ]);
+    expect(Object.keys(firstMetadata.release).sort()).toEqual([
+      'archiveChecksum',
+      'archiveFormat',
+      'archiveSizeBytes',
+      'checksum',
+      'manifest',
+      'sizeBytes',
+      'version',
+    ]);
     await expect(computeReleaseArtifactChecksum(extract)).resolves.toBe(
       firstMetadata.release.checksum,
     );
@@ -119,26 +128,16 @@ describe('default APP resources', () => {
     expect(releaseArchive.byteLength).toBe(
       firstMetadata.release.archiveSizeBytes,
     );
-
-    const clone = path.join(fixture.root, 'clone');
-    await execFileAsync('git', [
-      'clone',
-      path.join(first, 'source.bundle'),
-      clone,
-    ]);
-    const { stdout: sourceFiles } = await execFileAsync('git', [
-      '-C',
-      clone,
-      'ls-files',
-    ]);
-    expect(sourceFiles).toContain('client/index.ts');
-    expect(sourceFiles).toContain('.env.example');
-    expect(sourceFiles).not.toMatch(
-      /(?:^|\/)(?:storage|\.nocobase|node_modules|dist)(?:\/|$)/m,
+    expect(firstMetadata.resourceDigest).toBe(
+      `sha256:${createHash('sha256')
+        .update(
+          Buffer.concat([
+            Buffer.from('nocobase-default-app-resources-v1\0', 'utf8'),
+            createHash('sha256').update(releaseArchive).digest(),
+          ]),
+        )
+        .digest('hex')}`,
     );
-    expect(sourceFiles).not.toContain('.env\n');
-    expect(sourceFiles).not.toContain('.env.local\n');
-    expect(sourceFiles).not.toContain('.env.production\n');
   });
 
   it('rejects symbolic links instead of following them into a release', async () => {
@@ -166,7 +165,6 @@ interface ResourceMetadata {
   };
   readonly release: {
     readonly version: string;
-    readonly sourceCommit: string;
     readonly checksum: string;
     readonly sizeBytes: number;
     readonly archiveChecksum: string;
@@ -184,41 +182,11 @@ async function readMetadata(directory: string): Promise<ResourceMetadata> {
 
 async function createFixture(): Promise<{
   readonly root: string;
-  readonly source: string;
   readonly build: string;
 }> {
   const root = await mkdtemp(path.join(tmpdir(), 'hub-default-resources-'));
   temporaryDirectories.push(root);
-  const source = path.join(root, 'source');
   const build = path.join(root, 'build');
-  await mkdir(path.join(source, 'client'), { recursive: true });
-  await writeFile(
-    path.join(source, 'package.json'),
-    `${JSON.stringify({ name: 'fixture-app', version: '0.0.1' }, null, 2)}\n`,
-  );
-  await writeFile(
-    path.join(source, 'client/index.ts'),
-    'export const app = 1;\n',
-  );
-  await mkdir(path.join(source, 'storage'), { recursive: true });
-  await writeFile(path.join(source, 'storage/database.sqlite'), 'runtime data');
-  await mkdir(path.join(source, 'public/storage'), { recursive: true });
-  await writeFile(
-    path.join(source, 'public/storage/upload.txt'),
-    'runtime upload',
-  );
-  await mkdir(path.join(source, '.nocobase'), { recursive: true });
-  await writeFile(path.join(source, '.nocobase/state.json'), '{}\n');
-  await writeFile(
-    path.join(source, '.env.example'),
-    'DATABASE_URL=sqlite://storage/database.sqlite\n',
-  );
-  await writeFile(path.join(source, '.env'), 'SECRET=source-secret\n');
-  await writeFile(path.join(source, '.env.local'), 'SECRET=local-secret\n');
-  await writeFile(
-    path.join(source, '.env.production'),
-    'SECRET=source-secret\n',
-  );
   await mkdir(path.join(build, 'server'), { recursive: true });
   await mkdir(path.join(build, 'client'), { recursive: true });
   await writeFile(
@@ -267,7 +235,7 @@ async function createFixture(): Promise<{
     path.join(build, 'node_modules/example/test-results/results.json'),
     '{}\n',
   );
-  return { root, source, build };
+  return { root, build };
 }
 
 async function listRegularFiles(
@@ -300,13 +268,11 @@ async function totalFileSize(root: string, files: string[]): Promise<number> {
 }
 
 async function generate(
-  fixture: { readonly source: string; readonly build: string },
+  fixture: { readonly build: string },
   output: string,
 ): Promise<void> {
   await execFileAsync(process.execPath, [
     generator,
-    '--source-dir',
-    fixture.source,
     '--build-dir',
     fixture.build,
     '--output-dir',

@@ -73,7 +73,7 @@ function createFetcher() {
         },
         details: {
           version: '1.4.0',
-          sourceCommit: '95b5799',
+          checksum: 'sha256:95b5799',
           note: '<img src=x onerror=alert(1)>',
         },
         requestId: 'request-1',
@@ -116,7 +116,7 @@ describe('Hub audit details and filters', () => {
     expect(within(dialog).getByText('credential-1')).toBeInTheDocument();
     expect(within(dialog).getByText('203.0.113.10')).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/"sourceCommit": "95b5799"/),
+      within(dialog).getByText(/"checksum": "sha256:95b5799"/),
     ).toBeInTheDocument();
     expect(
       within(dialog).getByText(/<img src=x onerror=alert\(1\)>/),

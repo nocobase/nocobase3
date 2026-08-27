@@ -44,23 +44,12 @@ describe('parseInput', () => {
     expect(input.flags.registry).toBe('https://registry.npmjs.org');
   });
 
-  it('parses an existing Hub app source request', async () => {
-    const input = await parseInput([
-      'crm',
-      '--hub=https://hub.example.com/hub',
-      '--app=sales',
-    ]);
-
-    expect(input.flags.hub).toBe('https://hub.example.com/hub');
-    expect(input.flags.app).toBe('sales');
-  });
-
-  it('requires --hub and --app together', async () => {
+  it('rejects Hub source flags because creation only scaffolds templates', async () => {
     await expect(
       parseInput(['crm', '--hub=https://hub.example.com/hub']),
-    ).rejects.toThrow(/--hub and --app must be used together/u);
+    ).rejects.toThrow(/Nonexistent flag: --hub/u);
     await expect(parseInput(['crm', '--app=sales'])).rejects.toThrow(
-      /--hub and --app must be used together/u,
+      /Nonexistent flag: --app/u,
     );
   });
 
@@ -104,15 +93,13 @@ describe('formatHelp', () => {
 
     expect(help).toContain('--db-dialect');
     expect(help).toContain('--template-tag');
-    expect(help).toContain('--hub');
-    expect(help).toContain('--app');
+    expect(help).not.toContain('--hub');
+    expect(help).not.toContain('--app');
     expect(help).toContain('default');
     expect(help).toContain('--[no-]install');
     expect(help).toContain('https://npm.nocobase.ai');
-    expect(help).toContain('uses SQLite when --db-dialect is omitted');
+    expect(help).toContain('Prompted for when omitted');
     expect(help).toContain('create-app crm');
-    expect(help).toContain(
-      'create-app crm --hub=https://hub.example.com/hub --app=sales',
-    );
+    expect(help).not.toContain('Hub');
   });
 });

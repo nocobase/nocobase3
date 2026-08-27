@@ -8,10 +8,6 @@ import {
   type ManagedApplication,
 } from './management-store.ts';
 import { ReleaseUploadService } from './release-upload-service.ts';
-import {
-  HubRepositoryService,
-  type HubRepositoryStatus,
-} from './repository-service.ts';
 import { RuntimeSecretService } from './runtime-secret-service.ts';
 import { HubDomainError, HubStore } from './store.ts';
 import type { HubDeployment, HubRelease } from './types.ts';
@@ -31,13 +27,7 @@ export interface DefaultApplicationBootstrapState {
   readonly schemaVersion: 1;
   readonly status: DefaultApplicationBootstrapStatus;
   readonly step:
-    | 'preparing'
-    | 'repository'
-    | 'application'
-    | 'release'
-    | 'deployment'
-    | 'ready'
-    | 'failed';
+    'preparing' | 'application' | 'release' | 'deployment' | 'ready' | 'failed';
   readonly operationId: string;
   readonly applicationId: string | null;
   readonly releaseId: string | null;
@@ -60,7 +50,6 @@ export interface DefaultApplicationBootstrapOptions {
   readonly connection: DatabaseConnection;
   readonly store: HubStore;
   readonly managementStore: HubManagementStore;
-  readonly repository: HubRepositoryService;
   readonly runtimeSecrets: RuntimeSecretService;
   readonly releaseUploads: ReleaseUploadService;
   readonly host: LocalHostAdapter;
@@ -79,7 +68,6 @@ interface DefaultResourceMetadata {
   };
   readonly release: {
     readonly version: string;
-    readonly sourceCommit: string;
     readonly checksum: string;
     readonly sizeBytes: number;
     readonly archiveChecksum: string;
@@ -252,30 +240,7 @@ export class DefaultApplicationBootstrap {
     const existing = await this.options.managementStore.getDefaultApplication();
     const applicationId =
       existing?.id ?? state.applicationId ?? DEFAULT_APPLICATION_ID;
-    const repository =
-      await this.options.managementStore.getRepository(applicationId);
-    let repositoryStatus: HubRepositoryStatus | undefined;
-    if (!repository) {
-      try {
-        repositoryStatus = await this.options.repository.create(applicationId);
-      } catch (error) {
-        repositoryStatus = await this.options.repository
-          .getStatus(applicationId)
-          .catch(() => {
-            throw error;
-          });
-      }
-    }
     if (existing) {
-      if (!repository && repositoryStatus) {
-        await this.options.managementStore.createRepository(applicationId, {
-          provider: 'hub',
-          defaultBranch: repositoryStatus.defaultBranch,
-          headCommit: repositoryStatus.headCommit,
-          status: repositoryStatus.status,
-          initialCommit: repositoryStatus.headCommit,
-        });
-      }
       await this.options.runtimeSecrets.ensureInitial(applicationId);
       await this.writeState({
         ...state,
@@ -299,15 +264,6 @@ export class DefaultApplicationBootstrap {
           DEFAULT_APPLICATION_ACTOR_ID,
           { id: applicationId, isDefault: true },
         );
-        if (!(await managementStore.getRepository(applicationId))) {
-          await managementStore.createRepository(applicationId, {
-            provider: 'hub',
-            defaultBranch: repositoryStatus?.defaultBranch ?? 'main',
-            headCommit: repositoryStatus?.headCommit ?? null,
-            status: repositoryStatus?.status ?? 'ready',
-            initialCommit: repositoryStatus?.headCommit ?? null,
-          });
-        }
         await this.options.runtimeSecrets
           .withConnection(connection)
           .ensureInitial(applicationId);
@@ -354,8 +310,7 @@ export class DefaultApplicationBootstrap {
     const existing = existingPage.items.find(
       (release) =>
         release.version === metadata.release.version &&
-        release.checksum === metadata.release.checksum &&
-        release.sourceCommit === metadata.release.sourceCommit,
+        release.checksum === metadata.release.checksum,
     );
     if (existing) {
       await this.writeState({
@@ -379,7 +334,6 @@ export class DefaultApplicationBootstrap {
       applicationId,
       {
         version: metadata.release.version,
-        sourceCommit: metadata.release.sourceCommit,
         checksum: metadata.release.checksum,
         sizeBytes: metadata.release.sizeBytes,
         archiveChecksum: metadata.release.archiveChecksum,
@@ -477,7 +431,6 @@ export class DefaultApplicationBootstrap {
       typeof value.application.name !== 'string' ||
       value.release?.archiveFormat !== 'tar.gz' ||
       typeof value.release.version !== 'string' ||
-      typeof value.release.sourceCommit !== 'string' ||
       typeof value.release.checksum !== 'string' ||
       typeof value.release.sizeBytes !== 'number' ||
       typeof value.release.archiveChecksum !== 'string' ||
@@ -643,8 +596,6 @@ function publicBootstrapErrorCode(code: string): string {
   if (code === 'APP_READINESS_FAILED') return 'RUNTIME_READINESS_FAILED';
   const allowed = new Set([
     'DEFAULT_APP_RESOURCES_INVALID',
-    'REPOSITORY_INIT_FAILED',
-    'SOURCE_STORAGE_UNAVAILABLE',
     'RELEASE_STORAGE_UNAVAILABLE',
     'RELEASE_VERIFICATION_FAILED',
     'RELEASE_MANIFEST_INVALID',

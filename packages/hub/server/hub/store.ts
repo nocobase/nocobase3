@@ -63,7 +63,6 @@ export interface CreateReleaseInput {
   manifest: Record<string, unknown>;
   storageKey?: string | null;
   sizeBytes?: number | null;
-  sourceCommit?: string | null;
 }
 
 export interface CreateReleaseResult {
@@ -514,7 +513,6 @@ export class HubStore {
       manifest: JSON.stringify(input.manifest),
       storageKey: normalizeOptionalText(input.storageKey, 1024),
       sizeBytes: normalizeSize(input.sizeBytes),
-      sourceCommit: normalizeOptionalText(input.sourceCommit, 255),
       verificationStatus: 'verified',
       createdBy: actorId,
       createdAt: new Date(),
@@ -1326,7 +1324,6 @@ function toRelease(row: Row): HubRelease {
       row.sizeBytes === null || row.sizeBytes === undefined
         ? null
         : Number(row.sizeBytes),
-    sourceCommit: nullableString(row.sourceCommit),
     verificationStatus:
       row.verificationStatus as HubRelease['verificationStatus'],
     createdBy: String(row.createdBy),

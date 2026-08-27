@@ -24,7 +24,6 @@ export interface HubStorageMeasurement {
 }
 
 export interface HubStorageServiceOptions {
-  sourceRoot?: string;
   releaseRoot?: string;
   logsRoot?: string;
 }
@@ -32,10 +31,6 @@ export interface HubStorageServiceOptions {
 const CATEGORY_META: Readonly<
   Record<string, { labelKey: string; descriptionKey: string }>
 > = {
-  sourceRepositories: {
-    labelKey: 'storage.sourceRepositories',
-    descriptionKey: 'storage.sourceRepositories.description',
-  },
   releaseArtifacts: {
     labelKey: 'storage.releaseArtifacts',
     descriptionKey: 'storage.releaseArtifacts.description',
@@ -59,48 +54,37 @@ const CATEGORY_META: Readonly<
 };
 
 export class HubStorageService {
-  private readonly sourceRoot?: string;
   private readonly releaseRoot?: string;
   private readonly logsRoot?: string;
 
   constructor(options: HubStorageServiceOptions = {}) {
-    this.sourceRoot = resolveOptionalRoot(options.sourceRoot);
     this.releaseRoot = resolveOptionalRoot(options.releaseRoot);
     this.logsRoot = resolveOptionalRoot(options.logsRoot);
   }
 
   async measure(): Promise<HubStorageMeasurement> {
-    const [
-      sourceRepositories,
-      releaseArtifacts,
-      temporaryUploads,
-      runtimeData,
-      logs,
-    ] = await Promise.all([
-      measureDirectory(this.sourceRoot),
-      measureDirectory(this.releaseRoot, {
-        exclude: new Set(['.uploads', '.runtime', '.catalog']),
-      }),
-      measureDirectory(
-        this.releaseRoot ? path.join(this.releaseRoot, '.uploads') : undefined,
-      ),
-      measureDirectory(
-        this.releaseRoot ? path.join(this.releaseRoot, '.runtime') : undefined,
-      ),
-      measureDirectory(this.logsRoot),
-    ]);
+    const [releaseArtifacts, temporaryUploads, runtimeData, logs] =
+      await Promise.all([
+        measureDirectory(this.releaseRoot, {
+          exclude: new Set(['.uploads', '.runtime', '.catalog']),
+        }),
+        measureDirectory(
+          this.releaseRoot
+            ? path.join(this.releaseRoot, '.uploads')
+            : undefined,
+        ),
+        measureDirectory(
+          this.releaseRoot
+            ? path.join(this.releaseRoot, '.runtime')
+            : undefined,
+        ),
+        measureDirectory(this.logsRoot),
+      ]);
     const knownUsageBytes =
-      sourceRepositories +
-      releaseArtifacts +
-      temporaryUploads +
-      runtimeData +
-      logs;
-    const filesystem = await filesystemUsage(
-      this.releaseRoot ?? this.sourceRoot ?? process.cwd(),
-    );
+      releaseArtifacts + temporaryUploads + runtimeData + logs;
+    const filesystem = await filesystemUsage(this.releaseRoot ?? process.cwd());
     const other = Math.max(0, filesystem.usedBytes - knownUsageBytes);
     const categories: HubStorageCategory[] = [
-      category('sourceRepositories', sourceRepositories, 0, 'hub-managed'),
       category('releaseArtifacts', releaseArtifacts, 0, 'hub-managed'),
       category(
         'temporaryUploads',

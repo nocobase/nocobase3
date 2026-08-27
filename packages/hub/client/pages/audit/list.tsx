@@ -231,7 +231,7 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
             <NativeSelectOption value='all'>
               {translate('hub.audit.filter.allSources', 'All sources')}
             </NativeSelectOption>
-            {['web', 'agent', 'git', 'system'].map((value) => (
+            {['web', 'agent', 'system'].map((value) => (
               <NativeSelectOption key={value} value={value}>
                 {getHubAuditSourceLabel(value, translate)}
               </NativeSelectOption>
@@ -677,7 +677,6 @@ const AUDIT_ACTIONS = [
   'application.updated',
   'application.archived',
   'application.restored',
-  'repository.pushed',
   'release.published',
   'release.pinned',
   'release.unpinned',

@@ -22,7 +22,6 @@ const APP_COMMANDS = [
   'info',
   'list',
   'publish',
-  'pull',
   'status',
 ];
 const HUB_COMMANDS = [
@@ -100,28 +99,14 @@ describe('command tree', () => {
 
 describe('documented argument contract', () => {
   it.each([
-    [
-      'app:create',
-      ['name'],
-      [
-        'dir',
-        'template',
-        'registry',
-        'display-name',
-        'description',
-        'hub',
-        'non-interactive',
-        'json',
-        'operation-id',
-      ],
-    ],
-    ['app:pull', ['name', 'dir'], ['hub', 'non-interactive', 'json']],
+    ['app:create', ['name'], ['dir', 'template', 'registry', 'json']],
     [
       'app:publish',
       [],
       [
         'dir',
         'hub',
+        'app',
         'version',
         'bump',
         'deploy',
@@ -205,6 +190,29 @@ describe('argument errors', () => {
     await expect(
       runCommand(config, 'hub:logs', ['--tail', 'abc']),
     ).rejects.toBeTruthy();
+  });
+
+  it('does not allow changing a Hub association through app config', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'nb3-config-test-'));
+    try {
+      const directory = path.join(root, 'config-app');
+      await mkdir(path.join(directory, '.nocobase'), { recursive: true });
+      await writeFile(
+        path.join(directory, '.nocobase/config.json'),
+        JSON.stringify({ name: 'config-app' }),
+      );
+
+      const failed = await runCommandAllowFailure(config, 'app:config', [
+        'hub',
+        'https://hub.example.com/hub',
+        '--dir',
+        directory,
+      ]);
+
+      expect((failed.error as Error).message).toContain('cannot be changed');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 

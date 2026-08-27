@@ -27,7 +27,6 @@ export function createHubRuntimeEnvironment(
     APP_HOST_PORT: String(DEFAULT_APP_HOST_PORT),
     AUTH_BASE_URL: `${hubOrigin(config.host, config.port)}${DEFAULT_HUB_BASE_PATH}/api/auth`,
     HUB_DATABASE_PATH: path.join(root, '.nocobase/hub.sqlite'),
-    HUB_SOURCE_ROOT: path.join(root, '.nocobase/sources'),
     HUB_RELEASE_ROOT: path.join(root, 'app-dist'),
     APP_PUBLIC_ORIGIN: appHostOrigin(config.host, DEFAULT_APP_HOST_PORT),
   };
@@ -51,7 +50,6 @@ export function formatHubLocalEnvironment(
     `AUTH_BASE_URL=${hubOrigin(config.host, config.port)}${DEFAULT_HUB_BASE_PATH}/api/auth`,
     `AUTH_SECRET=${authSecret}`,
     'HUB_DATABASE_PATH=.nocobase/hub.sqlite',
-    'HUB_SOURCE_ROOT=.nocobase/sources',
     'HUB_RELEASE_ROOT=app-dist',
     `APP_PUBLIC_ORIGIN=http://${publicHost}:${DEFAULT_APP_HOST_PORT}`,
     '',

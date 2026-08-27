@@ -12,7 +12,6 @@ const migration: MigrationDefinition = defineMigration({
   async up(context) {
     await alterExistingCollections(context.builder);
     await createDefaultApplicationIndex(context);
-    await createRepositoryCollection(context.builder);
     await createReleaseUploadCollection(context.builder);
     await createRuntimeSecretCollection(context.builder);
     await createHealthObservationCollection(context.builder);
@@ -38,7 +37,6 @@ const migration: MigrationDefinition = defineMigration({
     await context.builder.dropCollection('hubHealthObservations');
     await context.builder.dropCollection('hubRuntimeSecrets');
     await context.builder.dropCollection('hubReleaseUploads');
-    await context.builder.dropCollection('hubRepositories');
     await context.builder.alterCollection('hubAuditLogs', (collection) => {
       collection.dropIndex('idx_hub_audit_logs_app_created');
       collection.dropIndex('idx_hub_audit_logs_result_source');
@@ -97,27 +95,6 @@ async function createDefaultApplicationIndex(
   );
 }
 
-async function createRepositoryCollection(
-  builder: CollectionBuilder,
-): Promise<void> {
-  await builder.createCollection('hubRepositories', (collection) => {
-    collection.string('id', { length: 64 }).notNull();
-    collection.string('applicationId', { length: 64 }).notNull();
-    collection.string('provider', { length: 32 }).notNull();
-    collection.string('defaultBranch', { length: 255 }).notNull();
-    collection.string('headCommit', { length: 255 }).nullable();
-    collection.string('status', { length: 32 }).notNull();
-    collection.string('initialCommit', { length: 255 }).nullable();
-    collection.datetime('createdAt').notNull();
-    collection.datetime('updatedAt').notNull();
-    collection.primary('id', { name: 'pk_hub_repositories' });
-    collection.unique('applicationId', {
-      name: 'uq_hub_repositories_application',
-    });
-    collection.index('status', { name: 'idx_hub_repositories_status' });
-  });
-}
-
 async function createReleaseUploadCollection(
   builder: CollectionBuilder,
 ): Promise<void> {
@@ -130,7 +107,6 @@ async function createReleaseUploadCollection(
     collection.string('archiveChecksum', { length: 128 }).notNull();
     collection.bigInt('archiveSizeBytes').notNull();
     collection.string('archiveFormat', { length: 32 }).notNull();
-    collection.string('sourceCommit', { length: 255 }).notNull();
     collection.json('manifest').notNull();
     collection.string('status', { length: 32 }).notNull();
     collection.string('storageKey', { length: 1024 }).nullable();

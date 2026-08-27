@@ -20,7 +20,6 @@ const application: HubApplication = {
   activeRelease: {
     id: 'release-2',
     version: '1.2.0',
-    sourceCommit: 'active',
     createdAt: '2026-08-21T09:00:00.000Z',
   },
   createdBy: 'owner',
@@ -36,7 +35,6 @@ const activeRelease: HubRelease = {
   checksum: 'sha256:active',
   manifest: {},
   sizeBytes: 2_000,
-  sourceCommit: 'active',
   verificationStatus: 'verified',
   createdBy: 'owner',
   createdAt: '2026-08-21T09:00:00.000Z',
@@ -47,7 +45,6 @@ const rollbackRelease: HubRelease = {
   id: 'release-1',
   version: '1.0.0',
   checksum: 'sha256:rollback',
-  sourceCommit: 'rollback',
   createdAt: '2026-08-20T09:00:00.000Z',
 };
 
@@ -64,7 +61,6 @@ const confirmationSettings = {
     rotateRuntimeSecret: false,
   },
   readOnly: {
-    sourceStorage: 'local',
     releaseStorage: 'local',
     hostMode: 'in-process',
     environmentCount: 1,

@@ -446,7 +446,7 @@ describe('Hub management pages', () => {
               id: 'credential-1',
               clientId: 'codex',
               clientName: 'Codex on Mac',
-              scopes: ['profile', 'source:read', 'source:write'],
+              scopes: ['profile', 'apps:read', 'releases:create'],
               applicationScope: {
                 mode: 'selected',
                 applicationIds: ['app-1'],
@@ -602,7 +602,7 @@ describe('Hub management pages', () => {
           id: 'authorization-1',
           clientId: 'codex',
           clientName: 'Codex on Mac',
-          requestedScopes: ['profile', 'source:read', 'source:write'],
+          requestedScopes: ['profile', 'apps:read', 'releases:create'],
           requestedApplicationScope: {
             mode: 'selected',
             applicationIds: ['app-1'],
@@ -613,7 +613,7 @@ describe('Hub management pages', () => {
       }
       if (path.endsWith('/agent-authorizations/authorization-1/approve')) {
         expect(body).toEqual({
-          scopes: ['profile', 'source:read', 'source:write'],
+          scopes: ['profile', 'apps:read', 'releases:create'],
           applicationScope: {
             mode: 'selected',
             applicationIds: ['app-1'],
@@ -631,7 +631,7 @@ describe('Hub management pages', () => {
     );
 
     expect(await screen.findByText('Codex on Mac')).toBeInTheDocument();
-    expect(screen.getByText('source:write')).toBeInTheDocument();
+    expect(screen.getByText('releases:create')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Authorize Agent' }));
     expect(await screen.findByText('Agent authorized')).toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledTimes(2);
@@ -654,7 +654,6 @@ describe('Hub management pages', () => {
             rotateRuntimeSecret: true,
           },
           readOnly: {
-            sourceStorage: 'local',
             releaseStorage: 'local',
             hostMode: 'in-process',
             environmentCount: 1,
@@ -674,9 +673,9 @@ describe('Hub management pages', () => {
           knownUsageBytes: 1_000,
           categories: [
             {
-              key: 'sourceRepositories',
-              labelKey: 'storage.sourceRepositories',
-              descriptionKey: 'storage.sourceRepositories.description',
+              key: 'releaseArtifacts',
+              labelKey: 'storage.releaseArtifacts',
+              descriptionKey: 'storage.releaseArtifacts.description',
               bytes: 1_000,
               reclaimableBytes: 0,
               scope: 'hub-managed',
@@ -709,9 +708,9 @@ describe('Hub management pages', () => {
 
     render(<HubSettingsPage fetcher={fetcher} />);
 
-    expect(await screen.findByText('Source repositories')).toBeInTheDocument();
+    expect(await screen.findByText('Release artifacts')).toBeInTheDocument();
     expect(
-      screen.getByText(/local workspaces and node_modules are not included/i),
+      screen.getByText(/Verified immutable build artifacts/i),
     ).toBeInTheDocument();
     expect(await screen.findByText('Release retention')).toBeInTheDocument();
     expect(
@@ -733,7 +732,6 @@ describe('Hub management pages', () => {
         rotateRuntimeSecret: true,
       },
       readOnly: {
-        sourceStorage: 'local',
         releaseStorage: 'local',
         hostMode: 'in-process',
         environmentCount: 1,

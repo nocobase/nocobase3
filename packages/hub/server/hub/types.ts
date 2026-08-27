@@ -54,7 +54,6 @@ export interface HubRelease {
   manifest: Record<string, unknown>;
   storageKey: string | null;
   sizeBytes: number | null;
-  sourceCommit: string | null;
   verificationStatus: ReleaseVerificationStatus;
   createdBy: string;
   createdAt: string;

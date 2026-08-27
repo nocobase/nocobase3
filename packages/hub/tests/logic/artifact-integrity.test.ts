@@ -213,7 +213,6 @@ function releaseFixture(
     manifest: {},
     storageKey,
     sizeBytes: null,
-    sourceCommit: null,
     verificationStatus: 'verified',
     createdBy: 'user-1',
     createdAt: new Date().toISOString(),

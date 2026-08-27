@@ -19,7 +19,6 @@ interface DefaultResourceMetadata {
   readonly schemaVersion: 1;
   readonly release: {
     readonly version: string;
-    readonly sourceCommit: string;
     readonly archiveFormat: 'tar.gz';
   };
 }
@@ -33,7 +32,6 @@ export interface InitialReleaseServiceOptions {
 export interface CreateInitialReleaseInput {
   readonly applicationId: string;
   readonly slug: string;
-  readonly sourceCommit: string;
   readonly actor: ReleaseUploadActor;
 }
 
@@ -53,13 +51,6 @@ export class InitialReleaseService {
     if (existing.items[0]) return existing.items[0];
 
     const metadata = await this.readMetadata();
-    if (metadata.release.sourceCommit !== input.sourceCommit) {
-      throw new HubDomainError(
-        'DEFAULT_APP_TEMPLATE_MISMATCH',
-        'The default source template and initial release do not match.',
-        { status: 500, retryable: false },
-      );
-    }
     const sourceArchive = new Uint8Array(
       await readFile(
         path.join(this.resourcesDirectory, 'initial-release.tar.gz'),
@@ -68,11 +59,9 @@ export class InitialReleaseService {
     const prepared = prepareInitialReleaseArchive({
       archive: sourceArchive,
       slug: input.slug,
-      sourceCommit: input.sourceCommit,
     });
     const createInput: ReleaseUploadCreateInput = {
       version: metadata.release.version,
-      sourceCommit: input.sourceCommit,
       checksum: prepared.checksum,
       sizeBytes: prepared.sizeBytes,
       archiveChecksum: sha256(prepared.archive),
@@ -125,8 +114,7 @@ export class InitialReleaseService {
       if (
         value.schemaVersion !== 1 ||
         value.release?.archiveFormat !== 'tar.gz' ||
-        typeof value.release.version !== 'string' ||
-        typeof value.release.sourceCommit !== 'string'
+        typeof value.release.version !== 'string'
       ) {
         throw new Error('invalid resource metadata');
       }
@@ -151,7 +139,6 @@ interface PreparedInitialRelease {
 function prepareInitialReleaseArchive(input: {
   readonly archive: Uint8Array;
   readonly slug: string;
-  readonly sourceCommit: string;
 }): PreparedInitialRelease {
   const targetBasePath = `/${input.slug}`;
   let files: TarFile[];
@@ -180,7 +167,6 @@ function prepareInitialReleaseArchive(input: {
     typeof manifest.basePath === 'string' ? manifest.basePath : undefined;
   if (!sourceBasePath || sourceBasePath === '/') throw invalidArchive();
   manifest.basePath = targetBasePath;
-  manifest.source = { commit: input.sourceCommit };
   manifestFile.content = Buffer.from(
     `${JSON.stringify(manifest, null, 2)}\n`,
     'utf8',

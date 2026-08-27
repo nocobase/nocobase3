@@ -114,32 +114,10 @@ describe('HubManagementStore applications', () => {
   });
 });
 
-describe('HubManagementStore repositories and releases', () => {
-  it('manages repository metadata and never exposes release storage keys', async () => {
+describe('HubManagementStore releases', () => {
+  it('manages retention and never exposes release storage keys', async () => {
     await seedUser('owner-1', 'Owner', 'owner@example.com');
     await seedApplication({ id: 'app-1', slug: 'app-one', name: 'App One' });
-
-    const repository = await store.createRepository('app-1', {
-      provider: 'hub',
-      defaultBranch: 'main',
-      headCommit: null,
-      initialCommit: null,
-      status: 'initializing',
-    });
-    expect(repository).toMatchObject({
-      applicationId: 'app-1',
-      status: 'initializing',
-    });
-    await expect(
-      store.updateRepository('app-1', {
-        headCommit: 'abc123',
-        initialCommit: 'abc123',
-        status: 'ready',
-      }),
-    ).resolves.toMatchObject({ status: 'ready', headCommit: 'abc123' });
-    await expect(store.getRepository('app-1')).resolves.toMatchObject({
-      status: 'ready',
-    });
 
     await seedRelease({
       id: 'release-1',
@@ -165,9 +143,6 @@ describe('HubManagementStore repositories and releases', () => {
     ).toBe(true);
     const unpinned = await store.unpinRelease('app-1', 'release-1');
     expect(unpinned.release.retention.pinned).toBe(false);
-
-    await expect(store.deleteRepository('app-1')).resolves.toBe(true);
-    await expect(store.getRepository('app-1')).resolves.toBeUndefined();
   });
 });
 
@@ -739,7 +714,6 @@ async function seedRelease(options: SeedReleaseOptions): Promise<void> {
       manifest: JSON.stringify({ schemaVersion: 1 }),
       storageKey: options.storageKey,
       sizeBytes: options.sizeBytes ?? 100,
-      sourceCommit: 'abc123',
       verificationStatus: 'verified',
       createdBy: 'owner-1',
       createdAt: new Date(options.createdAt),

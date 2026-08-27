@@ -1,13 +1,9 @@
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
 
-const execFileAsync = promisify(execFile);
-const FIXED_GIT_DATE = '2000-01-01T00:00:00Z';
 const ARTIFACT_DIGEST_PREFIX = Buffer.from(
   'nocobase-release-artifact-v1\0',
   'utf8',
@@ -29,21 +25,8 @@ async function main() {
   const stagingDirectory = path.join(stagingRoot, 'default-app');
 
   try {
-    const prepared = options.sourceDir
-      ? {
-          sourceDirectory: path.resolve(options.sourceDir),
-          buildDirectory: requiredPath(options.buildDir, '--build-dir'),
-        }
-      : {
-          sourceDirectory: await preparePublishedTemplateSource(
-            requiredPath(options.templateDir, '--template-dir'),
-            temporaryRoot,
-          ),
-          buildDirectory: requiredPath(options.buildDir, '--build-dir'),
-        };
     await generateResources({
-      sourceDirectory: prepared.sourceDirectory,
-      buildDirectory: prepared.buildDirectory,
+      buildDirectory: requiredPath(options.buildDir, '--build-dir'),
       outputDirectory: stagingDirectory,
       version: options.version,
       temporaryRoot,
@@ -65,17 +48,10 @@ function parseArgs(args) {
     }
     values.set(name.slice(2), value);
   }
-  const sourceDir = values.get('source-dir');
-  const templateDir = values.get('template-dir');
-  if (Boolean(sourceDir) === Boolean(templateDir)) {
-    throw new Error('Pass exactly one of --source-dir or --template-dir.');
-  }
   const outputDir = values.get('output-dir');
   if (!outputDir) throw new Error('--output-dir is required.');
   return {
-    sourceDir,
     buildDir: values.get('build-dir'),
-    templateDir,
     outputDir,
     version: values.get('version') ?? DEFAULT_VERSION,
   };
@@ -86,35 +62,7 @@ function requiredPath(value, name) {
   return path.resolve(value);
 }
 
-async function preparePublishedTemplateSource(
-  templateDirectory,
-  temporaryRoot,
-) {
-  const packDirectory = path.join(temporaryRoot, 'pack');
-  const sourceDirectory = path.join(temporaryRoot, 'source');
-  fs.mkdirSync(packDirectory, { recursive: true });
-  await run('pnpm', ['pack', '--pack-destination', packDirectory], {
-    cwd: templateDirectory,
-  });
-  const archives = fs
-    .readdirSync(packDirectory)
-    .filter((entry) => entry.endsWith('.tgz'));
-  if (archives.length !== 1) {
-    throw new Error('Template pack did not produce exactly one archive.');
-  }
-  fs.mkdirSync(sourceDirectory, { recursive: true });
-  await run('tar', [
-    '-xzf',
-    path.join(packDirectory, archives[0]),
-    '--strip-components=1',
-    '-C',
-    sourceDirectory,
-  ]);
-  return sourceDirectory;
-}
-
 async function generateResources(options) {
-  assertDirectory(options.sourceDirectory, 'source directory');
   assertDirectory(options.buildDirectory, 'build directory');
   if (
     !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(
@@ -123,38 +71,6 @@ async function generateResources(options) {
   ) {
     throw new Error('Release version must be valid SemVer.');
   }
-  const gitWorktree = path.join(options.temporaryRoot, 'git-worktree');
-  copyRegularTree(options.sourceDirectory, gitWorktree, {
-    exclude: (relative) =>
-      relative === '.git' ||
-      relative.startsWith('.git/') ||
-      relative === 'node_modules' ||
-      relative.startsWith('node_modules/') ||
-      relative === 'dist' ||
-      relative.startsWith('dist/') ||
-      isRuntimeDataPath(relative) ||
-      isSourceSecretEnvironmentFile(relative),
-  });
-  await run('git', ['init', '--initial-branch=main'], { cwd: gitWorktree });
-  await run('git', ['add', '--all'], { cwd: gitWorktree });
-  await run('git', ['commit', '--message', 'Initial NocoBase application'], {
-    cwd: gitWorktree,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'NocoBase',
-      GIT_AUTHOR_EMAIL: 'support@nocobase.com',
-      GIT_AUTHOR_DATE: FIXED_GIT_DATE,
-      GIT_COMMITTER_NAME: 'NocoBase',
-      GIT_COMMITTER_EMAIL: 'support@nocobase.com',
-      GIT_COMMITTER_DATE: FIXED_GIT_DATE,
-      TZ: 'UTC',
-    },
-  });
-  const { stdout: commitOutput } = await run('git', ['rev-parse', 'HEAD'], {
-    cwd: gitWorktree,
-  });
-  const sourceCommit = commitOutput.trim();
-
   const releaseDirectory = path.join(options.temporaryRoot, 'release');
   fs.mkdirSync(releaseDirectory, { recursive: true });
   copyRegularTree(options.buildDirectory, path.join(releaseDirectory, 'dist'), {
@@ -169,7 +85,6 @@ async function generateResources(options) {
       entrypoint: 'dist/server/embedded.js',
       healthPath: '/api/healthz',
     },
-    source: { commit: sourceCommit },
   };
   fs.writeFileSync(
     path.join(releaseDirectory, 'nocobase-release.json'),
@@ -191,11 +106,6 @@ async function generateResources(options) {
   const archiveChecksum = sha256(archive);
 
   fs.mkdirSync(options.outputDirectory, { recursive: true });
-  const bundlePath = path.join(options.outputDirectory, 'source.bundle');
-  await run('git', ['bundle', 'create', bundlePath, 'refs/heads/main'], {
-    cwd: gitWorktree,
-  });
-  const sourceBundle = fs.readFileSync(bundlePath);
   const releaseArchivePath = path.join(
     options.outputDirectory,
     'initial-release.tar.gz',
@@ -203,11 +113,7 @@ async function generateResources(options) {
   fs.writeFileSync(releaseArchivePath, archive, { mode: 0o644 });
   const resourceDigest = sha256(
     Buffer.concat([
-      Buffer.from(
-        `nocobase-default-app-resources-v1\0${sourceCommit}\0`,
-        'utf8',
-      ),
-      createHash('sha256').update(sourceBundle).digest(),
+      Buffer.from('nocobase-default-app-resources-v1\0', 'utf8'),
       createHash('sha256').update(archive).digest(),
     ]),
   );
@@ -221,7 +127,6 @@ async function generateResources(options) {
     },
     release: {
       version: options.version,
-      sourceCommit,
       checksum,
       sizeBytes,
       archiveChecksum,
@@ -392,11 +297,6 @@ function isEnvironmentFile(relative) {
   return basename === '.env' || basename.startsWith('.env.');
 }
 
-function isSourceSecretEnvironmentFile(relative) {
-  const basename = path.posix.basename(relative.split(path.sep).join('/'));
-  return basename !== '.env.example' && isEnvironmentFile(relative);
-}
-
 function isRuntimeDataPath(relative) {
   const normalized = relative.split(path.sep).join('/');
   return [
@@ -438,14 +338,6 @@ function compareUtf8(left, right) {
 
 function sha256(value) {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
-}
-
-async function run(command, args, options = {}) {
-  return execFileAsync(command, args, {
-    ...options,
-    encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024,
-  });
 }
 
 await main().catch((error) => {

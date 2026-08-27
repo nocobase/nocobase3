@@ -40,11 +40,6 @@ function createStandaloneServerWithRegistry(
     env,
     packageRoot,
   );
-  const repositorySeedPath =
-    getEnvString(env, 'HUB_REPOSITORY_SEED_PATH') ??
-    (defaultAppResourcesDirectory
-      ? path.join(defaultAppResourcesDirectory, 'source.bundle')
-      : undefined);
   const appName = getEnvString(env, 'APP_NAME') ?? 'hub';
   const basePath = normalizeBasePath(
     getEnvString(env, 'APP_BASE_PATH') ?? `/${appName}`,
@@ -73,8 +68,6 @@ function createStandaloneServerWithRegistry(
     authBaseUrl: getEnvString(env, 'AUTH_BASE_URL'),
     databasePath: getEnvString(env, 'HUB_DATABASE_PATH'),
     releaseRoot: getEnvString(env, 'HUB_RELEASE_ROOT'),
-    sourceRoot: getEnvString(env, 'HUB_SOURCE_ROOT'),
-    repositorySeedPath,
     defaultAppResourcesDirectory,
     appPublicOrigin: getEnvString(env, 'APP_PUBLIC_ORIGIN'),
     runtimeSecretEncryptionKey: getEnvString(env, 'HUB_SECRET_ENCRYPTION_KEY'),

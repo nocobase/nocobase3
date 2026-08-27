@@ -27,7 +27,6 @@ describe('createHubRuntimeEnvironment', () => {
       APP_HOST_PORT: '3000',
       AUTH_BASE_URL: 'http://127.0.0.1:13000/hub/api/auth',
       HUB_DATABASE_PATH: path.join(directory, '.nocobase/hub.sqlite'),
-      HUB_SOURCE_ROOT: path.join(directory, '.nocobase/sources'),
       HUB_RELEASE_ROOT: path.join(directory, 'app-dist'),
       PATH: '/bin',
     });
@@ -60,7 +59,6 @@ describe('createHubRuntimeEnvironment', () => {
         'AUTH_BASE_URL=http://127.0.0.1:13000/hub/api/auth',
         `AUTH_SECRET=${'a'.repeat(64)}`,
         'HUB_DATABASE_PATH=.nocobase/hub.sqlite',
-        'HUB_SOURCE_ROOT=.nocobase/sources',
         'HUB_RELEASE_ROOT=app-dist',
         'APP_PUBLIC_ORIGIN=http://127.0.0.1:3000',
         '',

@@ -23,7 +23,7 @@ export async function resolveRemoteApplicationContext(input: {
   const hub = input.hub ?? project?.config.hub;
   if (!hub) {
     throw new Error(
-      'No Hub was specified. Pass --hub <url> or run the command inside a pulled app.',
+      'No Hub was specified. Pass --hub <url> or run the command inside a project associated with a Hub.',
     );
   }
   const applicationReference =
@@ -37,7 +37,7 @@ export async function resolveApplication(
 ): Promise<ApplicationSummary> {
   if (!reference) {
     throw new Error(
-      'No app was specified. Pass --app <slug> or run the command inside a pulled app.',
+      'No app was specified. Pass --app <slug> or run the command inside a project associated with an app.',
     );
   }
   try {

@@ -36,7 +36,6 @@ export interface HubApplication {
   defaultEnvironmentId: string;
   isDefault?: boolean;
   revision?: number;
-  repository?: HubRepositorySummary;
   latestRelease?: HubReleaseSummary | null;
   activeRelease?: HubReleaseSummary | HubRelease | null;
   runtime?: HubRuntimeSummary;
@@ -52,22 +51,9 @@ export interface HubApplicationLinks {
   open: string | null;
 }
 
-export interface HubRepositorySummary {
-  provider: string;
-  defaultBranch: string;
-  headCommit: string | null;
-  status: string;
-  updatedAt: string | null;
-}
-
-export interface HubRepository extends HubRepositorySummary {
-  cloneUrl: string;
-}
-
 export interface HubReleaseSummary {
   id: string;
   version: string;
-  sourceCommit: string | null;
   createdAt: string;
 }
 
@@ -112,7 +98,6 @@ export interface HubRelease {
   checksum: string;
   manifest: Record<string, unknown>;
   sizeBytes: number | null;
-  sourceCommit: string | null;
   verificationStatus: HubReleaseVerificationStatus;
   retention?: {
     pinned: boolean;
@@ -292,7 +277,6 @@ export interface HubSettings {
     rotateRuntimeSecret: boolean;
   };
   readOnly: {
-    sourceStorage: string;
     releaseStorage: string;
     hostMode: string;
     environmentCount: number;

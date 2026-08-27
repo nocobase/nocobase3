@@ -1,7 +1,7 @@
 ---
 title: 'APP 管理脚本'
-description: '使用 APP 项目自带的 pnpm scripts 同步源码、创建 Release、部署和查看状态。'
-keywords: 'pnpm scripts,APP,Hub,源码同步,Release,部署,NocoBase 3'
+description: '使用 APP 项目自带的 pnpm scripts 构建产物、创建 Release、部署和查看状态。'
+keywords: 'pnpm scripts,APP,Hub,构建产物,Release,部署,NocoBase 3'
 ---
 
 # APP 管理脚本
@@ -13,11 +13,9 @@ NocoBase APP 创建后，项目的 `package.json` 已经带上连接 Hub 所需�
 ## 可用脚本
 
 ```text
-pnpm run pull         拉取 Hub 的最新源码快照
-pnpm run push         把当前源码快照推送到 Hub
-pnpm run release      同步源码并创建 Release，不部署
+pnpm run release      本地构建并创建 Release，不部署
 pnpm run deploy       完整部署，或操作一个已有 Release
-pnpm run status       查看 Repository、Release、Deployment 和 Runtime 状态
+pnpm run status       查看 APP、Release、Deployment 和 Runtime 状态
 pnpm run hub:login    登录 Hub 并保存 Agent credential
 pnpm run hub:logout   撤销并删除本地 credential
 ```
@@ -25,51 +23,23 @@ pnpm run hub:logout   撤销并删除本地 credential
 每个脚本都有独立的 `--help` 和可复制的 Examples：
 
 ```bash
-pnpm run pull --help
 pnpm run release --help
 pnpm run deploy --help
 ```
 
-## 获取 Hub 中已有的 APP
+## 源码和 Hub 的边界
 
-APP scripts 存放在 APP 自己的 `package.json` 中，所以首次获取源码时使用 `pnpm create`。下面的命令把 Hub 中 `sales` 的最新源码快照下载到本地 `crm` 目录：
+APP 源码只保存在开发者本地。Hub 不提供源码上传、下载或远程编辑能力，只接收构建产物并管理 Release、Deployment 和 Runtime。
+
+新 APP 从默认模板创建本地源码：
 
 ```bash
-pnpm create @nocobase/app crm \
-  --hub https://hub.example.com/hub \
-  --app sales
+pnpm create @nocobase/app crm
 cd crm
-```
-
-命令会记录 Hub URL、APP ID、slug 和最近一次同步的源码版本，并默认为本地开发配置 SQLite。需要其他数据库时可以增加 `--db-dialect postgres` 或 `--db-dialect mysql`。依赖安装完成后，可以直接启动本地开发环境：
-
-```bash
 pnpm dev
 ```
 
-## 拉取和推送源码
-
-在已有工作副本中拉取 Hub 的最新源码：
-
-```bash
-pnpm run pull
-```
-
-开发完成后，把当前源码推送回 Hub：
-
-```bash
-pnpm run push
-```
-
-Hub 同步的是源码快照，不是本地 Git 仓库。快照不会包含：
-
-- 本地 Git 历史
-- `node_modules` 等依赖
-- `dist`、测试报告等构建产物
-- `.env`、`.npmrc`、credential 等 secret
-- 本地 Hub 关联信息和运行数据
-
-`pull` 只会在能够安全更新时写入本地目录。如果本地源码已经修改，同时 Hub 也有更新，命令会停止，避免覆盖本地修改。`push` 发现 Hub 已经出现更新时同样会停止，需要先处理远端更新。
+如果需要继续开发已有 APP，请进入之前保存的真实源码目录。Hub 无法从已有 Release 还原源码，因此需要自行使用 Git 或团队已有方式备份源码。
 
 ## 登录 Hub
 
@@ -89,7 +59,7 @@ pnpm run hub:logout --hub http://127.0.0.1:13000/hub
 
 ## 创建 Release
 
-`release` 会先把当前源码快照同步到 Hub，然后构建、上传并创建一个不可变 Release。它只创建 Release，不会部署：
+`release` 会在本地构建、打包并上传产物，然后创建一个不可变 Release。它只创建 Release，不会部署：
 
 ```bash
 pnpm run release --bump patch --non-interactive
@@ -104,7 +74,18 @@ pnpm run release \
   --json
 ```
 
-`--version` 和 `--bump patch|minor|major` 二选一。`--dry-run` 只验证发布计划，不推送源码、不构建、不上传。如果操作中断，使用错误输出中的 `--operation-id` 恢复同一个操作。
+`--version` 和 `--bump patch|minor|major` 二选一。`--dry-run` 只验证发布计划，不构建、不上传。如果操作中断，使用错误输出中的 `--operation-id` 恢复同一个操作。
+
+首次把本地源码绑定到 Hub 中已有 APP 时，明确传入 Hub 和 APP：
+
+```bash
+pnpm run release \
+  --hub https://hub.example.com/hub \
+  --app sales \
+  --bump patch
+```
+
+绑定成功后，Hub URL、APP ID 和 slug 会作为一个整体写入 `.nocobase/config.json`。已经绑定的项目不能通过参数静默切换到其他 Hub 或 APP。
 
 ## 部署 APP
 
@@ -117,7 +98,7 @@ pnpm run deploy --hub https://hub.example.com/hub
 它会依次完成：
 
 1. 首次使用时关联已有 APP，或在 Hub 中创建 APP
-2. 推送当前源码快照
+2. 在本地构建并上传产物
 3. 创建下一个 patch Release
 4. 部署新 Release，并等待 Deployment 进入终态
 
@@ -173,17 +154,18 @@ pnpm run status \
 
 - APP 与 Hub 的关联信息保存在项目的 `.nocobase/config.json`
 - credential 和可恢复操作记录保存在用户目录的 `~/.nocobase`
-- 源码快照不会包含这两类本地状态
+- Hub 不保存 APP 源码，这两类本地状态也不会进入 Release 产物
 
 ## 给 Coding Agent 的常用指令
 
-首次获取已有 APP：
+开发并发布已有 APP：
 
 ```text
-请执行 pnpm create @nocobase/app crm --hub https://hub.example.com/hub --app sales，
-然后进入 crm 目录并运行 pnpm dev。开发前先执行 pnpm run pull；
-开发完成后执行 pnpm run push。需要发布但不部署时执行 pnpm run release --bump patch；
-需要直接部署时执行 pnpm run deploy。
+请先询问我 APP 的本地源码目录，不要尝试从 Hub 获取源码。进入该目录后运行 pnpm dev；
+开发完成后执行 pnpm check。需要发布但不部署时，执行
+pnpm run release --hub https://hub.example.com/hub --app sales --bump patch；
+需要直接部署时，执行 pnpm run deploy --hub https://hub.example.com/hub --app sales。
+只允许向 Hub 上传构建产物，不要上传源码、依赖、本地数据库、secret 或运行数据。
 ```
 
 ## 相关链接

@@ -2,8 +2,6 @@ export type AgentScope =
   | 'profile'
   | 'apps:create'
   | 'apps:read'
-  | 'source:read'
-  | 'source:write'
   | 'releases:read'
   | 'releases:publish'
   | 'deployments:read'
@@ -17,8 +15,6 @@ export const AGENT_SCOPES: readonly AgentScope[] = [
   'profile',
   'apps:create',
   'apps:read',
-  'source:read',
-  'source:write',
   'releases:read',
   'releases:publish',
   'deployments:read',
@@ -86,18 +82,6 @@ export interface ApplicationSummary {
   [key: string]: unknown;
 }
 
-export interface RepositoryMetadata {
-  applicationId: string;
-  provider: string;
-  cloneUrl: string;
-  defaultBranch: string;
-  headCommit: string;
-  status: string;
-  initialCommit?: string;
-  updatedAt: string;
-  [key: string]: unknown;
-}
-
 export interface PageMeta {
   total: number;
   limit: number;
@@ -126,7 +110,6 @@ export interface CreateApplicationInput {
 
 export interface ReleaseUploadInput {
   version: string;
-  sourceCommit: string;
   checksum: string;
   sizeBytes: number;
   archiveChecksum: string;
@@ -140,7 +123,6 @@ export interface ReleaseUpload {
   applicationId: string;
   status: string;
   version: string;
-  sourceCommit: string;
   expiresAt?: string;
   failure?: { code: string; message: string } | null;
   upload: {
@@ -171,7 +153,6 @@ export interface Release {
   id: string;
   applicationId: string;
   version: string;
-  sourceCommit?: string | null;
   checksum?: string;
   [key: string]: unknown;
 }
@@ -333,13 +314,6 @@ export class HubClient {
       },
       requestId: envelope.requestId,
     };
-  }
-
-  public getRepository(applicationId: string): Promise<RepositoryMetadata> {
-    return this.request<RepositoryMetadata>(
-      `/apps/${encodeURIComponent(applicationId)}/repository`,
-      { authenticated: true, method: 'GET' },
-    );
   }
 
   public createApplication(

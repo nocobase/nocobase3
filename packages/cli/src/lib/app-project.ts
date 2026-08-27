@@ -1,11 +1,4 @@
-import {
-  appendFile,
-  access,
-  lstat,
-  mkdir,
-  readFile,
-  writeFile,
-} from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { APP_STATE_DIR, type AppConfig } from './scaffold.ts';
 
@@ -23,12 +16,14 @@ async function readConfig(
   for (const stateDirectory of [APP_STATE_DIR, '.nb3']) {
     try {
       return {
-        config: JSON.parse(
-          await readFile(
-            path.join(directory, stateDirectory, 'config.json'),
-            'utf8',
+        config: parseAppConfig(
+          JSON.parse(
+            await readFile(
+              path.join(directory, stateDirectory, 'config.json'),
+              'utf8',
+            ),
           ),
-        ) as AppConfig,
+        ),
         stateDirectory,
       };
     } catch {
@@ -127,59 +122,47 @@ export async function writeAppConfig(
   });
   await writeFile(
     path.join(project.directory, stateDirectory, 'config.json'),
-    `${JSON.stringify(config, null, 2)}\n`,
+    `${JSON.stringify(cleanAppConfig(config), null, 2)}\n`,
     'utf8',
   );
   project.stateDirectory = stateDirectory;
 }
 
-/**
- * Records the remote Hub identity in `.nocobase/config.json`. The file is
- * local working-copy state, so it is also excluded through Git's per-clone exclude file rather than committed.
- */
-export async function writePulledAppConfig(
-  directory: string,
-  config: Pick<
-    AppConfig,
-    | 'applicationId'
-    | 'hub'
-    | 'name'
-    | 'repositoryMode'
-    | 'slug'
-    | 'sourceCommit'
-  >,
-): Promise<void> {
-  const project: AppProject = {
-    directory: path.resolve(directory),
-    config: { ...config },
-    stateDirectory: APP_STATE_DIR,
-  };
-  await mkdir(path.join(project.directory, APP_STATE_DIR), { recursive: true });
-  await writeAppConfig(project, project.config);
-  await excludeAppStateFromGit(project.directory);
+function parseAppConfig(value: unknown): AppConfig {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid app configuration.');
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.name !== 'string' || !record.name.trim()) {
+    throw new Error('Invalid app configuration name.');
+  }
+  return cleanAppConfig({
+    name: record.name,
+    ...(typeof record.hub === 'string' ? { hub: record.hub } : {}),
+    ...(typeof record.applicationId === 'string'
+      ? { applicationId: record.applicationId }
+      : {}),
+    ...(typeof record.slug === 'string' ? { slug: record.slug } : {}),
+    ...(typeof record.template === 'string'
+      ? { template: record.template }
+      : {}),
+    ...(typeof record.templateVersion === 'string'
+      ? { templateVersion: record.templateVersion }
+      : {}),
+  });
 }
 
-async function excludeAppStateFromGit(directory: string): Promise<void> {
-  try {
-    if (!(await lstat(path.join(directory, '.git'))).isDirectory()) return;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
-    throw error;
-  }
-  const excludePath = path.join(directory, '.git', 'info', 'exclude');
-  await mkdir(path.dirname(excludePath), { recursive: true });
-  let existing = '';
-  try {
-    existing = await readFile(excludePath, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  }
-  const rules = [`/${APP_STATE_DIR}/`, '/.nb3/'];
-  const lines = new Set(existing.split(/\r?\n/));
-  const missing = rules.filter((rule) => !lines.has(rule));
-  if (missing.length === 0) return;
-  const prefix = existing && !existing.endsWith('\n') ? '\n' : '';
-  await appendFile(excludePath, `${prefix}${missing.join('\n')}\n`, 'utf8');
+function cleanAppConfig(config: AppConfig): AppConfig {
+  return {
+    name: config.name,
+    ...(config.hub ? { hub: config.hub } : {}),
+    ...(config.applicationId ? { applicationId: config.applicationId } : {}),
+    ...(config.slug ? { slug: config.slug } : {}),
+    ...(config.template ? { template: config.template } : {}),
+    ...(config.templateVersion
+      ? { templateVersion: config.templateVersion }
+      : {}),
+  };
 }
 
 async function hasStateDirectory(directory: string): Promise<string> {

@@ -12,8 +12,6 @@ const EXPECTED_SCRIPT_IDS = [
   'deploy',
   'hub:login',
   'hub:logout',
-  'pull',
-  'push',
   'release',
   'status',
 ];
@@ -53,6 +51,14 @@ describe('generated app package scripts', () => {
     ]);
     expect(failed.error).toMatchObject({ oclif: { exit: 2 } });
     expect((failed.error as Error).message).toMatch(/--deploy/u);
+  });
+
+  it('lets release and deploy bind an existing Hub app', () => {
+    for (const id of ['release', 'deploy']) {
+      const command = config.findCommand(id, { must: true });
+
+      expect(command.flags).toHaveProperty('app');
+    }
   });
 
   it('keeps nb3 while publishing the app-script executable', async () => {

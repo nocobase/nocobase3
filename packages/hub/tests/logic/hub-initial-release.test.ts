@@ -60,8 +60,6 @@ describe('Hub initial application release', () => {
       authSecret,
       authBaseUrl: `${browserOrigin}/hub/api/auth`,
       appPublicOrigin: 'http://127.0.0.1:3000',
-      sourceRoot: fixture.sourceRoot,
-      repositorySeedPath: path.join(fixture.resources, 'source.bundle'),
       releaseRoot: fixture.releaseRoot,
       defaultAppResourcesDirectory: fixture.resources,
       runtimeSecretEncryptionKey: Buffer.alloc(32, 7).toString('base64'),
@@ -82,7 +80,6 @@ describe('Hub initial application release', () => {
       slug: 'sales',
       latestRelease: {
         version: '0.0.1',
-        sourceCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
       },
       activeRelease: null,
     });
@@ -98,7 +95,6 @@ describe('Hub initial application release', () => {
       verificationStatus: 'verified',
       manifest: {
         basePath: '/sales',
-        source: { commit: created.repository.headCommit },
       },
     });
 
@@ -153,14 +149,12 @@ describe('Hub initial application release', () => {
     });
   });
 
-  it('compensates application creation when the template resources do not match', async () => {
+  it('compensates application creation when the template artifact is invalid', async () => {
     const fixture = await createFixture();
-    const metadataPath = path.join(fixture.resources, 'metadata.json');
-    const metadata = JSON.parse(await readFile(metadataPath, 'utf8')) as {
-      release: { sourceCommit: string };
-    };
-    metadata.release.sourceCommit = '0'.repeat(40);
-    await writeFile(metadataPath, `${JSON.stringify(metadata)}\n`);
+    await writeFile(
+      path.join(fixture.resources, 'initial-release.tar.gz'),
+      'invalid archive',
+    );
     const app = createApp({
       appName: 'hub',
       basePath: '/hub',
@@ -169,8 +163,6 @@ describe('Hub initial application release', () => {
       databasePath: fixture.databasePath,
       authSecret,
       authBaseUrl: `${browserOrigin}/hub/api/auth`,
-      sourceRoot: fixture.sourceRoot,
-      repositorySeedPath: path.join(fixture.resources, 'source.bundle'),
       releaseRoot: fixture.releaseRoot,
       defaultAppResourcesDirectory: fixture.resources,
       runtimeSecretEncryptionKey: Buffer.alloc(32, 7).toString('base64'),
@@ -186,7 +178,7 @@ describe('Hub initial application release', () => {
     });
     expect(create.status).toBe(500);
     await expect(create.json()).resolves.toMatchObject({
-      error: { code: 'DEFAULT_APP_TEMPLATE_MISMATCH' },
+      error: { code: 'DEFAULT_APP_RESOURCES_INVALID' },
     });
     const applications = await request(app, cookie, '/apps?query=mismatched');
     await expect(applications.json()).resolves.toMatchObject({
@@ -199,7 +191,6 @@ describe('Hub initial application release', () => {
 interface Fixture {
   readonly root: string;
   readonly databasePath: string;
-  readonly sourceRoot: string;
   readonly releaseRoot: string;
   readonly resources: string;
 }
@@ -207,11 +198,8 @@ interface Fixture {
 async function createFixture(): Promise<Fixture> {
   const root = await mkdtemp(path.join(tmpdir(), 'hub-initial-release-'));
   roots.push(root);
-  const source = path.join(root, 'template-source');
   const build = path.join(root, 'template-build');
   const resources = path.join(root, 'resources');
-  await mkdir(source, { recursive: true });
-  await writeFile(path.join(source, 'package.json'), '{"name":"fixture"}\n');
   await mkdir(path.join(build, 'server'), { recursive: true });
   await mkdir(path.join(build, 'client/assets'), { recursive: true });
   await writeFile(
@@ -228,8 +216,6 @@ async function createFixture(): Promise<Fixture> {
   );
   await execFileAsync(process.execPath, [
     resourceGenerator,
-    '--source-dir',
-    source,
     '--build-dir',
     build,
     '--output-dir',
@@ -240,7 +226,6 @@ async function createFixture(): Promise<Fixture> {
   return {
     root,
     databasePath: path.join(root, 'hub.sqlite'),
-    sourceRoot: path.join(root, 'sources'),
     releaseRoot: path.join(root, 'releases'),
     resources,
   };

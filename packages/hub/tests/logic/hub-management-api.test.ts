@@ -34,7 +34,6 @@ describe('Hub management API', () => {
   beforeEach(async () => {
     temporaryRoot = await mkdtemp(path.join(tmpdir(), 'hub-management-api-'));
     databasePath = path.join(temporaryRoot, 'hub.sqlite');
-    const seedPath = await createRepositorySeed(temporaryRoot);
     app = createApp({
       appName: 'hub',
       basePath: '/hub',
@@ -44,8 +43,6 @@ describe('Hub management API', () => {
       authSecret,
       authBaseUrl: `${browserOrigin}/hub/api/auth`,
       appPublicOrigin: 'http://127.0.0.1:3000',
-      sourceRoot: path.join(temporaryRoot, 'sources'),
-      repositorySeedPath: seedPath,
       releaseRoot: path.join(temporaryRoot, 'releases'),
       runtimeSecretEncryptionKey: Buffer.alloc(32, 7).toString('base64'),
     });
@@ -56,6 +53,20 @@ describe('Hub management API', () => {
   afterEach(async () => {
     await app.close?.();
     await rm(temporaryRoot, { recursive: true, force: true });
+  });
+
+  it('does not expose repository metadata or Git Smart HTTP routes', async () => {
+    const repository = await app.request(
+      `${browserOrigin}/hub/api/apps/unknown/repository`,
+    );
+    expect(repository.status).toBe(404);
+    expect(repository.headers.get('www-authenticate')).toBeNull();
+
+    const git = await app.request(
+      `${browserOrigin}/hub/git/unknown.git/info/refs?service=git-upload-pack`,
+    );
+    expect(git.status).toBe(404);
+    expect(git.headers.get('www-authenticate')).toBeNull();
   });
 
   it('creates a complete application and replays the idempotent request', async () => {
@@ -76,12 +87,6 @@ describe('Hub management API', () => {
         slug: 'sales',
         status: 'active',
         revision: 1,
-        repository: {
-          provider: 'hub',
-          defaultBranch: 'main',
-          status: 'ready',
-          headCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
-        },
         runtimeSecret: { configured: true, version: 1 },
         links: { self: expect.stringContaining('/hub/api/apps/'), open: null },
       },
@@ -101,21 +106,9 @@ describe('Hub management API', () => {
     });
     expect(replay.status).toBe(200);
     await expect(replay.json()).resolves.toMatchObject({
-      data: { id: created.data.id, repository: { status: 'ready' } },
+      data: { id: created.data.id },
       meta: { idempotent: true },
     });
-
-    const repository = await request(`/apps/${created.data.id}/repository`);
-    expect(repository.status).toBe(200);
-    const repositoryPayload = await repository.json();
-    expect(repositoryPayload).toMatchObject({
-      data: {
-        applicationId: created.data.id,
-        cloneUrl: `${browserOrigin}/hub/git/sales.git`,
-        initialCommit: created.data.repository.headCommit,
-      },
-    });
-    expect(JSON.stringify(repositoryPayload)).not.toContain('token');
 
     const list = await request('/apps?query=sales&status=active&sort=name');
     expect(list.status).toBe(200);
@@ -298,7 +291,6 @@ describe('Hub management API', () => {
       data: {
         releaseRetention: { automaticCleanupEnabled: false },
         readOnly: {
-          sourceStorage: 'local',
           releaseStorage: 'local',
           hostMode: 'unavailable',
           environmentCount: 1,
@@ -320,7 +312,6 @@ describe('Hub management API', () => {
       data: {
         filesystem: expect.objectContaining({ usedBytes: expect.any(Number) }),
         categories: expect.arrayContaining([
-          expect.objectContaining({ key: 'sourceRepositories' }),
           expect.objectContaining({ key: 'releaseArtifacts' }),
         ]),
       },
@@ -348,11 +339,7 @@ describe('Hub management API', () => {
       body: JSON.stringify({ slug: 'published', name: 'Published' }),
     });
     const application = (await create.json()).data;
-    const fixture = await createReleaseArchive(
-      temporaryRoot,
-      application.slug,
-      application.repository.headCommit,
-    );
+    const fixture = await createReleaseArchive(temporaryRoot, application.slug);
 
     const createUpload = await request(
       `/apps/${application.id}/release-uploads`,
@@ -393,10 +380,7 @@ describe('Hub management API', () => {
     const completed = await waitForUpload(upload.id);
     expect(completed).toMatchObject({
       status: 'completed',
-      release: {
-        version: '1.0.0',
-        sourceCommit: application.repository.headCommit,
-      },
+      release: { version: '1.0.0' },
     });
     expect(JSON.stringify(completed)).not.toContain('storageKey');
 
@@ -519,9 +503,8 @@ describe('Hub management API', () => {
       {
         version: '1.0.0',
         checksum: 'sha256:active',
-        manifest: { source: { commit: 'active-commit' } },
+        manifest: {},
         storageKey: 'private/active/path',
-        sourceCommit: 'active-commit',
       },
       application.createdBy,
     );
@@ -531,9 +514,8 @@ describe('Hub management API', () => {
       {
         version: '2.0.0',
         checksum: 'sha256:latest',
-        manifest: { source: { commit: 'latest-commit' } },
+        manifest: {},
         storageKey: 'private/latest/path',
-        sourceCommit: 'latest-commit',
       },
       application.createdBy,
     );
@@ -547,12 +529,10 @@ describe('Hub management API', () => {
       activeRelease: {
         id: active.release.id,
         version: '1.0.0',
-        sourceCommit: 'active-commit',
       },
       latestRelease: {
         id: latest.release.id,
         version: '2.0.0',
-        sourceCommit: 'latest-commit',
       },
     });
     expect(listPayload.data[0]).not.toHaveProperty('activeReleaseId');
@@ -598,7 +578,6 @@ describe('Hub management API', () => {
         version: '1.0.0',
         checksum: 'sha256:deployment-export',
         manifest: {},
-        sourceCommit: 'export-commit',
       },
       application.createdBy,
     );
@@ -823,38 +802,9 @@ async function setupOwnerAndSignIn(app: HubApp): Promise<string> {
   return cookie ?? '';
 }
 
-async function createRepositorySeed(root: string): Promise<string> {
-  const worktree = path.join(root, 'seed-worktree');
-  const bare = path.join(root, 'default-template.git');
-  await mkdir(worktree, { recursive: true });
-  await execFileAsync('git', ['init', '--initial-branch=main'], {
-    cwd: worktree,
-  });
-  await writeFile(
-    path.join(worktree, 'package.json'),
-    `${JSON.stringify({ name: 'default-template', private: true }, null, 2)}\n`,
-  );
-  await execFileAsync('git', ['add', 'package.json'], { cwd: worktree });
-  await execFileAsync('git', ['commit', '-m', 'Initial template'], {
-    cwd: worktree,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'NocoBase',
-      GIT_AUTHOR_EMAIL: 'support@nocobase.com',
-      GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z',
-      GIT_COMMITTER_NAME: 'NocoBase',
-      GIT_COMMITTER_EMAIL: 'support@nocobase.com',
-      GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z',
-    },
-  });
-  await execFileAsync('git', ['clone', '--bare', '--', worktree, bare]);
-  return bare;
-}
-
 async function createReleaseArchive(
   root: string,
   slug: string,
-  commit: string,
 ): Promise<{
   archive: Uint8Array;
   input: Record<string, unknown>;
@@ -870,7 +820,6 @@ async function createReleaseArchive(
       entrypoint: 'dist/server/embedded.js',
       healthPath: '/api/healthz',
     },
-    source: { commit },
   };
   await writeFile(
     path.join(artifact, 'nocobase-release.json'),
@@ -893,7 +842,6 @@ async function createReleaseArchive(
     archive,
     input: {
       version: '1.0.0',
-      sourceCommit: commit,
       checksum: await computeReleaseArtifactChecksum(artifact),
       sizeBytes: await directorySize(artifact),
       archiveChecksum: `sha256:${createHash('sha256').update(archive).digest('hex')}`,

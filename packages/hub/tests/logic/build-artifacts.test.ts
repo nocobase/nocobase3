@@ -91,7 +91,6 @@ describe('Hub production build artifacts', () => {
         'APP_SERVER_PORT=14000',
         'HUB_ENABLED=true',
         'HUB_DATABASE_PATH=./storage/hub.sqlite',
-        'HUB_SOURCE_ROOT=./sources',
         'HUB_RELEASE_ROOT=./releases',
         'APP_PUBLIC_ORIGIN=http://127.0.0.1:3000',
         'HUB_MAX_UPLOAD_BYTES=536870912',
@@ -157,7 +156,6 @@ describe('Hub production build artifacts', () => {
         'APP_SERVER_PORT=14001',
         'HUB_ENABLED=true',
         'HUB_DATABASE_PATH=./storage/hub.sqlite',
-        'HUB_SOURCE_ROOT=./sources',
         'HUB_RELEASE_ROOT=./releases',
         'APP_PUBLIC_ORIGIN=http://127.0.0.1:3000',
         'HUB_MAX_UPLOAD_BYTES=536870912',
@@ -192,7 +190,6 @@ describe('Hub production build artifacts', () => {
       'APP_BASE_PATH=/default APP_BROWSER_BASE_PATH=/default',
     );
     expect(commands).toContain('./scripts/build-default-app-resources.mjs');
-    expect(commands).toContain('--template-dir');
     expect(commands).toContain('--build-dir');
     expect(commands).toContain('dist/resources/default-app');
   });

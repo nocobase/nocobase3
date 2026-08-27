@@ -49,7 +49,7 @@ describe('AgentAuthService device authorization', () => {
     const result = await service.createDeviceAuthorization({
       clientId: 'nb-cli',
       clientName: 'Codex on Apple-MacBook',
-      scopes: ['profile', 'apps:read', 'source:read'],
+      scopes: ['profile', 'apps:read', 'releases:read'],
       applicationScope: selected('app-1'),
     });
 
@@ -112,14 +112,19 @@ describe('AgentAuthService device authorization', () => {
     const created = await service.createDeviceAuthorization({
       clientId: 'nb-cli',
       clientName: 'Codex',
-      scopes: ['profile', 'apps:read', 'source:read', 'source:write'],
+      scopes: ['profile', 'apps:read', 'releases:read', 'releases:publish'],
       applicationScope: selected('app-1', 'app-2'),
     });
     const pending = await service.resolveAuthorization(created.userCode);
 
     expect(pending).toMatchObject({
       clientName: 'Codex',
-      requestedScopes: ['profile', 'apps:read', 'source:read', 'source:write'],
+      requestedScopes: [
+        'profile',
+        'apps:read',
+        'releases:read',
+        'releases:publish',
+      ],
       requestedApplicationScope: selected('app-1', 'app-2'),
       status: 'pending',
     });
@@ -127,13 +132,13 @@ describe('AgentAuthService device authorization', () => {
 
     const approval = {
       userId: 'user-1',
-      scopes: ['profile', 'source:write'] as AgentScope[],
+      scopes: ['profile', 'releases:publish'] as AgentScope[],
       applicationScope: selected('app-1'),
       allowedScopes: [
         'profile',
         'apps:read',
-        'source:read',
-        'source:write',
+        'releases:read',
+        'releases:publish',
       ] as AgentScope[],
       authorizedApplicationIds: ['app-1'],
     };
@@ -141,7 +146,7 @@ describe('AgentAuthService device authorization', () => {
     expect(approved).toMatchObject({
       id: pending.id,
       status: 'approved',
-      grantedScopes: ['profile', 'source:write'],
+      grantedScopes: ['profile', 'releases:publish'],
       grantedApplicationScope: selected('app-1'),
     });
     await expect(
@@ -158,9 +163,9 @@ describe('AgentAuthService device authorization', () => {
     await expect(
       service.approveAuthorization(secondPending.id, {
         userId: 'user-1',
-        scopes: ['apps:read', 'source:write'],
+        scopes: ['apps:read', 'releases:publish'],
         applicationScope: selected('app-1'),
-        allowedScopes: ['apps:read', 'source:write'],
+        allowedScopes: ['apps:read', 'releases:publish'],
         authorizedApplicationIds: ['app-1'],
       }),
     ).rejects.toMatchObject({
@@ -259,7 +264,7 @@ describe('AgentAuthService device authorization', () => {
 describe('AgentAuthService credentials', () => {
   it('exchanges an approved device code once and enforces scope and APP range', async () => {
     const { created } = await createApprovedAuthorization({
-      scopes: ['profile', 'apps:read', 'source:write'],
+      scopes: ['profile', 'apps:read', 'releases:publish'],
       applicationScope: selected('app-1'),
     });
 
@@ -272,7 +277,7 @@ describe('AgentAuthService credentials', () => {
       tokenType: 'Bearer',
       expiresIn: 900,
       refreshExpiresIn: 2_592_000,
-      scope: 'profile apps:read source:write',
+      scope: 'profile apps:read releases:publish',
       applicationScope: selected('app-1'),
     });
     expect(tokens.accessToken).toMatch(/^nba_[A-Za-z0-9_-]{43}$/);
@@ -280,17 +285,17 @@ describe('AgentAuthService credentials', () => {
 
     const principal = await service.authenticateAccessToken(
       tokens.accessToken,
-      { scope: 'source:write', applicationId: 'app-1' },
+      { scope: 'releases:publish', applicationId: 'app-1' },
     );
     expect(principal).toMatchObject({
       credentialId: tokens.credentialId,
       userId: 'user-1',
-      scopes: ['profile', 'apps:read', 'source:write'],
+      scopes: ['profile', 'apps:read', 'releases:publish'],
       applicationScope: selected('app-1'),
     });
     await expect(
       service.authenticateAccessToken(tokens.accessToken, {
-        scope: 'source:write',
+        scope: 'releases:publish',
         applicationId: 'app-2',
       }),
     ).rejects.toMatchObject({ code: 'INSUFFICIENT_SCOPE', status: 403 });

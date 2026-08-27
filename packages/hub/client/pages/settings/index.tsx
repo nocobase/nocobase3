@@ -779,7 +779,6 @@ function storageLabel(key: string): string {
   return (
     (
       {
-        sourceRepositories: 'Source repositories',
         releaseArtifacts: 'Release artifacts',
         temporaryUploads: 'Temporary uploads',
         runtimeData: 'Application data',
@@ -793,8 +792,6 @@ function storageDescription(key: string): string {
   return (
     (
       {
-        sourceRepositories:
-          'Bare Git objects, branches, and commit history; local workspaces and node_modules are not included.',
         releaseArtifacts:
           'Verified immutable build artifacts. Only unreferenced Releases selected by retention can be reclaimed.',
         temporaryUploads:

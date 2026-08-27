@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { computeReleaseArtifactChecksum } from '../../server/hub/artifact-integrity.ts';
 import {
@@ -48,12 +48,8 @@ afterEach(async () => {
 describe('ReleaseUploadService', () => {
   it('publishes an immutable release from an owned upload without exposing storageKey', async () => {
     const fixture = await createArchiveFixture();
-    const repository = {
-      assertCommitReachableFromMain: vi.fn().mockResolvedValue(fixture.commit),
-    };
     const service = new ReleaseUploadService(database.connection, {
       releaseRoot,
-      repository,
     });
     const actor = { userId: 'developer-1', credentialId: 'credential-1' };
     const credentialTime = new Date('2026-08-25T00:00:00.000Z');
@@ -107,15 +103,12 @@ describe('ReleaseUploadService', () => {
         applicationId: 'app-1',
         version: '1.2.3',
         checksum: fixture.input.checksum,
-        sourceCommit: fixture.commit,
       },
     });
     expect(completed).not.toHaveProperty('storageKey');
+    expect(completed).not.toHaveProperty('sourceCommit');
     expect(completed.release).not.toHaveProperty('storageKey');
-    expect(repository.assertCommitReachableFromMain).toHaveBeenCalledWith(
-      'app-1',
-      fixture.commit,
-    );
+    expect(completed.release).not.toHaveProperty('sourceCommit');
     const audit = await database.connection.query
       .selectFrom('hubAuditLogs')
       .select(['source', 'client'])
@@ -157,11 +150,6 @@ describe('ReleaseUploadService', () => {
     const fixture = await createArchiveFixture({ includeSecret: true });
     const service = new ReleaseUploadService(database.connection, {
       releaseRoot,
-      repository: {
-        assertCommitReachableFromMain: vi
-          .fn()
-          .mockResolvedValue(fixture.commit),
-      },
     });
     const actor = { userId: 'developer-1', credentialId: null };
     const upload = await service.create('app-1', fixture.input, actor);
@@ -197,11 +185,6 @@ describe('ReleaseUploadService', () => {
     const fixture = await createArchiveFixture();
     const service = new ReleaseUploadService(database.connection, {
       releaseRoot,
-      repository: {
-        assertCommitReachableFromMain: vi
-          .fn()
-          .mockResolvedValue(fixture.commit),
-      },
     });
     const owner = { userId: 'developer-1', credentialId: 'credential-1' };
     const other = { userId: 'developer-1', credentialId: 'credential-2' };
@@ -279,11 +262,6 @@ describe('ReleaseUploadService', () => {
     const fixture = await createArchiveFixture();
     const service = new ReleaseUploadService(database.connection, {
       releaseRoot,
-      repository: {
-        assertCommitReachableFromMain: vi
-          .fn()
-          .mockResolvedValue(fixture.commit),
-      },
     });
     const agent = { userId: 'developer-1', credentialId: 'credential-1' };
     const browserAdmin = {
@@ -317,10 +295,8 @@ describe('ReleaseUploadService', () => {
 
 interface ArchiveFixture {
   archive: string;
-  commit: string;
   input: {
     version: string;
-    sourceCommit: string;
     checksum: string;
     sizeBytes: number;
     archiveChecksum: string;
@@ -338,7 +314,6 @@ async function createArchiveFixture(
   const artifact = path.join(root, 'artifact');
   await mkdir(path.join(artifact, 'dist/server'), { recursive: true });
   await mkdir(path.join(artifact, 'dist/client'), { recursive: true });
-  const commit = 'a'.repeat(40);
   const manifest = {
     schemaVersion: 1,
     basePath: '/app-one',
@@ -347,7 +322,6 @@ async function createArchiveFixture(
       entrypoint: 'dist/server/embedded.js',
       healthPath: '/api/healthz',
     },
-    source: { commit },
   };
   await writeFile(
     path.join(artifact, 'nocobase-release.json'),
@@ -393,10 +367,8 @@ async function createArchiveFixture(
   const archiveBytes = await readFile(archive);
   return {
     archive,
-    commit,
     input: {
       version: '1.2.3',
-      sourceCommit: commit,
       checksum,
       sizeBytes: await directorySize(artifact, options.includeLink ?? false),
       archiveChecksum: `sha256:${createHash('sha256').update(archiveBytes).digest('hex')}`,

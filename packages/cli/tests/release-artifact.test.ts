@@ -56,7 +56,6 @@ describe('buildReleaseArtifact', () => {
       applicationSlug: 'sales',
       buildDirectory: build,
       outputPath: output,
-      sourceCommit: '95b5799ad8c628b73dd79a55a1c37d58b25a2a93',
     });
 
     const { stdout } = await execFileAsync('tar', ['-tzf', output]);
@@ -93,7 +92,6 @@ describe('buildReleaseArtifact', () => {
         entrypoint: 'dist/server/embedded.js',
         healthPath: '/api/healthz',
       },
-      source: { commit: '95b5799ad8c628b73dd79a55a1c37d58b25a2a93' },
     });
     expect(result.checksum).toBe(await computeReleaseArtifactChecksum(extract));
     expect(result.sizeBytes).toBe(
@@ -121,7 +119,6 @@ describe('buildReleaseArtifact', () => {
     const options = {
       applicationSlug: 'sales',
       buildDirectory: build,
-      sourceCommit: '95b5799ad8c628b73dd79a55a1c37d58b25a2a93',
     };
 
     const first = await buildReleaseArtifact({
@@ -154,7 +151,6 @@ describe('buildReleaseArtifact', () => {
         applicationSlug: 'sales',
         buildDirectory: build,
         outputPath: output,
-        sourceCommit: '95b5799ad8c628b73dd79a55a1c37d58b25a2a93',
       }),
     ).rejects.toMatchObject({ code: 'LOCAL_RELEASE_UNSUPPORTED_ENTRY' });
   });
@@ -170,7 +166,6 @@ describe('buildReleaseArtifact', () => {
       applicationSlug: 'sales',
       buildDirectory: build,
       outputPath: output,
-      sourceCommit: '95b5799ad8c628b73dd79a55a1c37d58b25a2a93',
     });
     const extract = path.join(root, 'extract-nested-env');
     await mkdir(extract);

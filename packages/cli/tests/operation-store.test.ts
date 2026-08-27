@@ -68,7 +68,6 @@ describe('operation journal', () => {
         resourceIds: { applicationId: 'app-1', uploadId: 'upload-1' },
         release: {
           version: '1.4.0',
-          sourceCommit: 'a'.repeat(40),
           checksum: sha256('artifact'),
           sizeBytes: 8,
           archiveChecksum: sha256('archive'),
@@ -89,7 +88,6 @@ describe('operation journal', () => {
       resourceIds: { applicationId: 'app-1', uploadId: 'upload-1' },
       release: {
         version: '1.4.0',
-        sourceCommit: 'a'.repeat(40),
         checksum: sha256('artifact'),
         sizeBytes: 8,
         archiveChecksum: sha256('archive'),

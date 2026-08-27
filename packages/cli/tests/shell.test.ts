@@ -22,11 +22,11 @@ describe('shell command formatting', () => {
       formatShellCommand([
         'nb3',
         'app',
-        'pull',
+        'create',
         '',
         '--hub',
         'https://hub.test/hub',
       ]),
-    ).toBe("nb3 app pull '' --hub https://hub.test/hub");
+    ).toBe("nb3 app create '' --hub https://hub.test/hub");
   });
 });

@@ -22,7 +22,6 @@ export interface ReleaseUploadActor {
 
 export interface ReleaseUploadCreateInput {
   readonly version: string;
-  readonly sourceCommit: string;
   readonly checksum: string;
   readonly sizeBytes: number;
   readonly archiveChecksum: string;
@@ -33,18 +32,10 @@ export interface ReleaseUploadCreateInput {
 
 export interface ReleaseUploadServiceOptions {
   readonly releaseRoot: string;
-  readonly repository: ReleaseUploadRepository;
   readonly now?: () => Date;
   readonly maxArchiveBytes?: number;
   readonly maxExtractedBytes?: number;
   readonly uploadTtlSeconds?: number;
-}
-
-export interface ReleaseUploadRepository {
-  assertCommitReachableFromMain(
-    applicationId: string,
-    commit: string,
-  ): Promise<string>;
 }
 
 export type ReleaseUploadStatus =
@@ -61,7 +52,6 @@ export interface PublicReleaseUpload {
   readonly applicationId: string;
   readonly status: ReleaseUploadStatus;
   readonly version: string;
-  readonly sourceCommit: string;
   readonly expiresAt: string;
   readonly createdAt: string;
   readonly uploadedAt: string | null;
@@ -75,7 +65,6 @@ export interface PublicReleaseUploadRelease {
   readonly applicationId: string;
   readonly version: string;
   readonly checksum: string;
-  readonly sourceCommit: string | null;
   readonly sizeBytes: number | null;
   readonly verificationStatus: string;
   readonly createdAt: string;
@@ -88,7 +77,6 @@ export interface ReleaseUploadMutationResult {
 
 export class ReleaseUploadService {
   private readonly releaseRoot: string;
-  private readonly repository: ReleaseUploadRepository;
   private readonly now: () => Date;
   private readonly maxArchiveBytes: number;
   private readonly maxExtractedBytes: number;
@@ -103,7 +91,6 @@ export class ReleaseUploadService {
     options: ReleaseUploadServiceOptions,
   ) {
     this.releaseRoot = path.resolve(options.releaseRoot);
-    this.repository = options.repository;
     this.now = options.now ?? (() => new Date());
     this.maxArchiveBytes = positiveLimit(
       options.maxArchiveBytes,
@@ -164,11 +151,7 @@ export class ReleaseUploadService {
         'Archived applications cannot publish releases.',
       );
     }
-    assertManifestContract(
-      input.manifest,
-      input.sourceCommit,
-      `/${String(application.slug)}`,
-    );
+    assertManifestContract(input.manifest, `/${String(application.slug)}`);
     const now = this.now();
     const id = crypto.randomUUID();
     const row = {
@@ -180,7 +163,6 @@ export class ReleaseUploadService {
       archiveChecksum: input.archiveChecksum,
       archiveSizeBytes: input.archiveSizeBytes,
       archiveFormat: input.archiveFormat,
-      sourceCommit: input.sourceCommit,
       manifest: JSON.stringify(input.manifest),
       status: 'created',
       storageKey: null,
@@ -406,18 +388,10 @@ export class ReleaseUploadService {
           'Archived applications cannot publish releases.',
         );
       }
-      assertManifestContract(
-        manifest,
-        String(row.sourceCommit),
-        `/${String(application.slug)}`,
-      );
+      assertManifestContract(manifest, `/${String(application.slug)}`);
       await assertRegularFile(
         path.join(extractionPath, 'dist/server/embedded.js'),
         'RELEASE_SERVER_ENTRYPOINT_MISSING',
-      );
-      await this.repository.assertCommitReachableFromMain(
-        String(row.applicationId),
-        String(row.sourceCommit),
       );
       const checksum = await computeReleaseArtifactChecksum(extractionPath);
       if (checksum !== String(row.checksum)) {
@@ -492,7 +466,6 @@ export class ReleaseUploadService {
             manifest: JSON.stringify(manifest),
             storageKey,
             sizeBytes: Number(row.sizeBytes),
-            sourceCommit: String(row.sourceCommit),
             verificationStatus: 'verified',
             createdBy: String(row.createdBy),
             createdAt: now,
@@ -530,10 +503,7 @@ export class ReleaseUploadService {
                 })
               : null,
             failureCode: null,
-            details: JSON.stringify({
-              version: String(row.version),
-              sourceCommit: String(row.sourceCommit),
-            }),
+            details: JSON.stringify({ version: String(row.version) }),
             requestId: null,
             createdAt: now,
           })
@@ -764,7 +734,6 @@ function parseManifest(bytes: Uint8Array): Record<string, unknown> {
 
 function assertManifestContract(
   manifest: Record<string, unknown>,
-  sourceCommit: string,
   basePath: string,
 ): void {
   if (manifest.schemaVersion !== 1 || manifest.basePath !== basePath) {
@@ -786,18 +755,6 @@ function assertManifestContract(
     throw new HubDomainError(
       'RELEASE_MANIFEST_INVALID',
       'Release manifest server contract is invalid.',
-      { status: 422 },
-    );
-  const source = manifest.source;
-  if (
-    !source ||
-    typeof source !== 'object' ||
-    Array.isArray(source) ||
-    (source as Record<string, unknown>).commit !== sourceCommit
-  )
-    throw new HubDomainError(
-      'RELEASE_SOURCE_COMMIT_MISMATCH',
-      'Release manifest source commit does not match the upload.',
       { status: 422 },
     );
 }
@@ -859,7 +816,6 @@ function toPublicUpload(row: Record<string, unknown>): PublicReleaseUpload {
     applicationId: String(row.applicationId),
     status: String(row.status) as ReleaseUploadStatus,
     version: String(row.version),
-    sourceCommit: String(row.sourceCommit),
     expiresAt: dateString(row.expiresAt),
     createdAt: dateString(row.createdAt),
     uploadedAt: hasDateValue(row.uploadedAt)
@@ -877,7 +833,6 @@ function toPublicUpload(row: Record<string, unknown>): PublicReleaseUpload {
           applicationId: String(row.applicationId),
           version: String(row.version),
           checksum: String(row.checksum),
-          sourceCommit: String(row.sourceCommit),
           sizeBytes: Number(row.sizeBytes),
           verificationStatus: 'verified',
           createdAt: hasDateValue(row.completedAt)

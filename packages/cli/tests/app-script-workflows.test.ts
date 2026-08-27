@@ -11,7 +11,6 @@ import {
 } from './helpers.ts';
 
 const HUB = 'https://hub.example.com/hub';
-const SOURCE_COMMIT = '95b5799ad8c628b73dd79a55a1c37d58b25a2a93';
 
 let root: string;
 let originalCliRoot: string | undefined;
@@ -24,7 +23,6 @@ beforeEach(async () => {
   process.env.NOCOBASE_CLI_ROOT = path.join(root, 'user-data');
   const bin = path.join(root, 'bin');
   await mkdir(bin);
-  await writeFakeGit(path.join(bin, 'git'));
   await writeFakePnpm(path.join(bin, 'pnpm'));
   process.env.PATH = `${bin}${path.delimiter}${originalPath ?? ''}`;
   await saveCredential();
@@ -38,9 +36,9 @@ afterEach(async () => {
 });
 
 describe('application package-script workflows', () => {
-  it('associates, releases, and deploys an unlinked app with bare deploy', async () => {
-    const project = await createUnlinkedProject();
-    const fetchMock = firstDeployFetch();
+  it('creates, binds, releases, and deploys an unlinked app from its build artifact', async () => {
+    const project = await createProject();
+    const fetchMock = releaseWorkflowFetch({ createApplication: true });
     vi.stubGlobal('fetch', fetchMock);
     const config = await loadAppScriptTestConfig();
 
@@ -66,12 +64,11 @@ describe('application package-script workflows', () => {
       JSON.parse(
         await readFile(path.join(project, '.nocobase', 'config.json'), 'utf8'),
       ),
-    ).toMatchObject({
-      applicationId: 'app-1',
+    ).toEqual({
+      name: '@example/sales',
       hub: HUB,
-      repositoryMode: 'snapshot',
+      applicationId: 'app-1',
       slug: 'sales',
-      sourceCommit: SOURCE_COMMIT,
     });
 
     const createApp = fetchMock.mock.calls.find(
@@ -87,35 +84,134 @@ describe('application package-script workflows', () => {
         String(input).endsWith('/api/apps/app-1/release-uploads') &&
         init?.method === 'POST',
     );
-    expect(JSON.parse(String(createUpload?.[1]?.body))).toMatchObject({
-      version: '0.0.2',
-      sourceCommit: SOURCE_COMMIT,
-    });
-    const createDeployment = fetchMock.mock.calls.find(
-      ([input, init]) =>
-        String(input).endsWith('/api/apps/app-1/deployments') &&
-        init?.method === 'POST',
+    const uploadBody = JSON.parse(String(createUpload?.[1]?.body));
+    expect(Object.keys(uploadBody).sort()).toEqual(
+      [
+        'archiveChecksum',
+        'archiveFormat',
+        'archiveSizeBytes',
+        'checksum',
+        'manifest',
+        'sizeBytes',
+        'version',
+      ].sort(),
     );
-    expect(JSON.parse(String(createDeployment?.[1]?.body))).toEqual({
-      targetReleaseId: 'release-1',
-      type: 'deploy',
+    expect(uploadBody.manifest).not.toHaveProperty('source');
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes('/repository'),
+      ),
+    ).toBe(false);
+  });
+
+  it('binds an existing Hub app explicitly before releasing it', async () => {
+    const project = await createProject();
+    const fetchMock = releaseWorkflowFetch({ createApplication: false });
+    vi.stubGlobal('fetch', fetchMock);
+    const config = await loadAppScriptTestConfig();
+
+    const result = await runCommand(config, 'release', [
+      '--dir',
+      project,
+      '--hub',
+      HUB,
+      '--app',
+      'sales',
+      '--bump',
+      'patch',
+      '--non-interactive',
+      '--json',
+      '--operation-id',
+      'bind-existing',
+    ]);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      application: { id: 'app-1', slug: 'sales' },
+      release: { id: 'release-1', version: '0.0.2' },
     });
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith('/api/apps') && init?.method === 'POST',
+      ),
+    ).toBe(false);
+    expect(
+      JSON.parse(
+        await readFile(path.join(project, '.nocobase', 'config.json'), 'utf8'),
+      ),
+    ).toMatchObject({ applicationId: 'app-1', hub: HUB, slug: 'sales' });
+  });
+
+  it.each([
+    [
+      ['--hub', 'https://other.example.com/hub'],
+      /already associated with Hub/u,
+    ],
+    [['--app', 'billing'], /already associated with application/u],
+  ] as const)(
+    'rejects an explicit target that conflicts with the saved association',
+    async (target, message) => {
+      const project = await createProject({ linked: true });
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const config = await loadAppScriptTestConfig();
+
+      const failed = await runCommandAllowFailure(config, 'deploy', [
+        '--dir',
+        project,
+        ...target,
+        '--json',
+      ]);
+
+      expect(JSON.parse(failed.stdout).error.message).toMatch(message);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not silently bind an existing slug when first deployment omits --app', async () => {
+    const project = await createProject();
+    const fetchMock = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/api/apps') && init?.method === 'POST') {
+          return errorEnvelope(
+            409,
+            'APPLICATION_SLUG_CONFLICT',
+            'Application slug already exists.',
+          );
+        }
+        throw new Error(`Unexpected request: ${init?.method} ${url}`);
+      },
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const config = await loadAppScriptTestConfig();
+
+    const failed = await runCommandAllowFailure(config, 'deploy', [
+      '--dir',
+      project,
+      '--hub',
+      HUB,
+      '--non-interactive',
+      '--json',
+    ]);
+
+    expect(JSON.parse(failed.stdout).error.message).toContain(
+      'Pass --app sales to bind it explicitly',
+    );
+    expect(JSON.parse(failed.stdout).error.hint).toContain('--app sales');
+    expect(JSON.parse(failed.stdout).error.hint).not.toContain(
+      '--operation-id',
+    );
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes('/api/apps?'),
+      ),
+    ).toBe(false);
   });
 
   it('points an app-script status user at the app-script login command', async () => {
-    const project = await createUnlinkedProject();
-    await mkdir(path.join(project, '.nocobase'));
-    await writeFile(
-      path.join(project, '.nocobase', 'config.json'),
-      `${JSON.stringify({
-        applicationId: 'app-1',
-        hub: HUB,
-        name: 'Sales',
-        repositoryMode: 'snapshot',
-        slug: 'sales',
-        sourceCommit: SOURCE_COMMIT,
-      })}\n`,
-    );
+    const project = await createProject({ linked: true });
     await new CredentialStore().remove(HUB);
     const config = await loadAppScriptTestConfig();
 
@@ -135,19 +231,7 @@ describe('application package-script workflows', () => {
   });
 
   it('keeps explicit Release deployment on the deployment-only workflow', async () => {
-    const project = await createUnlinkedProject();
-    await mkdir(path.join(project, '.nocobase'));
-    await writeFile(
-      path.join(project, '.nocobase', 'config.json'),
-      `${JSON.stringify({
-        applicationId: 'app-1',
-        hub: HUB,
-        name: 'Sales',
-        repositoryMode: 'snapshot',
-        slug: 'sales',
-        sourceCommit: SOURCE_COMMIT,
-      })}\n`,
-    );
+    const project = await createProject({ linked: true });
     const fetchMock = existingReleaseDeployFetch();
     vi.stubGlobal('fetch', fetchMock);
     const config = await loadAppScriptTestConfig();
@@ -176,31 +260,26 @@ describe('application package-script workflows', () => {
     ).toBe(false);
   });
 
-  it.each([
-    [['--app', 'sales'], /--app is only available/u],
-    [['--yes'], /--yes is only available/u],
-  ] as const)(
-    'rejects deployment-only flags in the bare deploy workflow',
-    async (extra, message) => {
-      const project = await createUnlinkedProject();
-      const config = await loadAppScriptTestConfig();
+  it('rejects --yes when no rollback was requested', async () => {
+    const project = await createProject();
+    const config = await loadAppScriptTestConfig();
 
-      const failed = await runCommandAllowFailure(config, 'deploy', [
-        '--dir',
-        project,
-        '--hub',
-        HUB,
-        ...extra,
-      ]);
+    const failed = await runCommandAllowFailure(config, 'deploy', [
+      '--dir',
+      project,
+      '--hub',
+      HUB,
+      '--yes',
+    ]);
 
-      expect((failed.error as Error).message).toMatch(message);
-    },
-  );
+    expect((failed.error as Error).message).toMatch(/--yes is only available/u);
+  });
 });
 
-async function createUnlinkedProject(): Promise<string> {
-  const project = path.join(root, 'sales');
-  await mkdir(path.join(project, 'client'), { recursive: true });
+async function createProject(
+  options: { linked?: boolean } = {},
+): Promise<string> {
+  const project = path.join(root, `sales-${crypto.randomUUID()}`);
   await mkdir(path.join(project, 'dist', 'client'), { recursive: true });
   await mkdir(path.join(project, 'dist', 'server'), { recursive: true });
   await writeFile(
@@ -212,7 +291,6 @@ async function createUnlinkedProject(): Promise<string> {
       scripts: { build: 'noop' },
     })}\n`,
   );
-  await writeFile(path.join(project, 'client', 'index.ts'), 'export {};\n');
   await writeFile(
     path.join(project, 'dist', 'client', 'index.html'),
     '<main>Sales</main>\n',
@@ -221,20 +299,42 @@ async function createUnlinkedProject(): Promise<string> {
     path.join(project, 'dist', 'server', 'embedded.js'),
     'export default {};\n',
   );
+  if (options.linked) {
+    await mkdir(path.join(project, '.nocobase'));
+    await writeFile(
+      path.join(project, '.nocobase', 'config.json'),
+      `${JSON.stringify({
+        applicationId: 'app-1',
+        hub: HUB,
+        name: '@example/sales',
+        slug: 'sales',
+        template: '@nocobase/app-template-default',
+        templateVersion: '0.0.1',
+      })}\n`,
+    );
+  }
   return project;
 }
 
-function firstDeployFetch(): ReturnType<typeof vi.fn> {
+function releaseWorkflowFetch(options: {
+  createApplication: boolean;
+}): ReturnType<typeof vi.fn> {
   let releaseVersion = '';
   return vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
-    if (url.endsWith('/api/apps/sales')) {
-      return errorEnvelope(404, 'APPLICATION_NOT_FOUND', 'Not found.');
+    if (!options.createApplication && url.endsWith('/api/apps/sales')) {
+      return envelope({
+        id: 'app-1',
+        slug: 'sales',
+        name: 'Sales',
+        status: 'active',
+      });
     }
-    if (url.includes('/api/apps?')) {
-      return envelope([], 200, { total: 0, limit: 100, offset: 0 });
-    }
-    if (url.endsWith('/api/apps') && init?.method === 'POST') {
+    if (
+      options.createApplication &&
+      url.endsWith('/api/apps') &&
+      init?.method === 'POST'
+    ) {
       return envelope(
         {
           id: 'app-1',
@@ -245,24 +345,12 @@ function firstDeployFetch(): ReturnType<typeof vi.fn> {
         201,
       );
     }
-    if (url.endsWith('/api/apps/app-1/repository')) {
-      return envelope({
-        applicationId: 'app-1',
-        provider: 'hub',
-        cloneUrl: `${HUB}/git/sales.git`,
-        defaultBranch: 'main',
-        headCommit: SOURCE_COMMIT,
-        status: 'ready',
-        updatedAt: '2026-08-27T00:00:00.000Z',
-      });
-    }
     if (url.includes('/api/apps/app-1/releases?')) {
       return envelope([
         {
           id: 'release-initial',
           applicationId: 'app-1',
           version: '0.0.1',
-          sourceCommit: 'initial-source',
         },
       ]);
     }
@@ -270,10 +358,7 @@ function firstDeployFetch(): ReturnType<typeof vi.fn> {
       url.endsWith('/api/apps/app-1/release-uploads') &&
       init?.method === 'POST'
     ) {
-      const body = JSON.parse(String(init.body)) as {
-        sourceCommit: string;
-        version: string;
-      };
+      const body = JSON.parse(String(init.body)) as { version: string };
       releaseVersion = body.version;
       return envelope(
         {
@@ -281,7 +366,6 @@ function firstDeployFetch(): ReturnType<typeof vi.fn> {
           applicationId: 'app-1',
           status: 'created',
           version: body.version,
-          sourceCommit: body.sourceCommit,
           upload: {
             method: 'PUT',
             url: `${HUB}/api/release-uploads/upload-1/content`,
@@ -304,12 +388,10 @@ function firstDeployFetch(): ReturnType<typeof vi.fn> {
         applicationId: 'app-1',
         status: 'completed',
         version: releaseVersion,
-        sourceCommit: SOURCE_COMMIT,
         release: {
           id: 'release-1',
           applicationId: 'app-1',
           version: releaseVersion,
-          sourceCommit: SOURCE_COMMIT,
         },
       });
     }
@@ -359,7 +441,6 @@ function existingReleaseDeployFetch(): ReturnType<typeof vi.fn> {
           id: 'release-existing',
           applicationId: 'app-1',
           version: '1.0.0',
-          sourceCommit: SOURCE_COMMIT,
         },
       ]);
     }
@@ -403,8 +484,6 @@ async function saveCredential(): Promise<void> {
     scopes: [
       'apps:create',
       'apps:read',
-      'source:read',
-      'source:write',
       'releases:read',
       'releases:publish',
       'deployments:read',
@@ -412,30 +491,6 @@ async function saveCredential(): Promise<void> {
     ],
     applicationScope: { mode: 'all-authorized' },
   });
-}
-
-async function writeFakeGit(target: string): Promise<void> {
-  await writeFile(
-    target,
-    `#!/usr/bin/env node
-const fs = require('node:fs');
-const path = require('node:path');
-const args = process.argv.slice(2);
-if (args.includes('clone')) {
-  fs.mkdirSync(path.join(args.at(-1), '.git'), { recursive: true });
-  process.exit(0);
-}
-if (args[0] === 'rev-parse') {
-  process.stdout.write('${SOURCE_COMMIT}\\n');
-  process.exit(0);
-}
-if (args[0] === 'status') process.exit(0);
-if (['checkout', 'clean', 'add', 'push'].includes(args[0])) process.exit(0);
-process.stderr.write('Unsupported fake git invocation: ' + args.join(' '));
-process.exit(2);
-`,
-    { mode: 0o700 },
-  );
 }
 
 async function writeFakePnpm(target: string): Promise<void> {

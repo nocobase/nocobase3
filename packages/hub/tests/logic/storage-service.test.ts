@@ -21,15 +21,12 @@ describe('HubStorageService', () => {
   it('explains each managed category and never follows runtime symlinks', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'nocobase-hub-storage-'));
     temporaryDirectories.push(root);
-    const sourceRoot = path.join(root, 'sources');
     const releaseRoot = path.join(root, 'releases');
     const logsRoot = path.join(root, 'logs');
-    await mkdir(path.join(sourceRoot, 'app.git'), { recursive: true });
     await mkdir(path.join(releaseRoot, 'app', 'release'), { recursive: true });
     await mkdir(path.join(releaseRoot, '.uploads'), { recursive: true });
     await mkdir(path.join(releaseRoot, '.runtime', 'app'), { recursive: true });
     await mkdir(logsRoot, { recursive: true });
-    await writeFile(path.join(sourceRoot, 'app.git', 'objects'), 'source');
     await writeFile(
       path.join(releaseRoot, 'app', 'release', 'artifact'),
       'artifact',
@@ -46,14 +43,12 @@ describe('HubStorageService', () => {
     );
 
     const service = new HubStorageService({
-      sourceRoot,
       releaseRoot,
       logsRoot,
     });
     const result = await service.measure();
 
     expect(result.categories.map((category) => category.key)).toEqual([
-      'sourceRepositories',
       'releaseArtifacts',
       'temporaryUploads',
       'runtimeData',
@@ -77,7 +72,7 @@ describe('HubStorageService', () => {
       ]),
     );
     expect(result.knownUsageBytes).toBe(
-      Buffer.byteLength('sourceartifactuploaddatabaselogs'),
+      Buffer.byteLength('artifactuploaddatabaselogs'),
     );
     expect(result.filesystem.capacityBytes).toBeGreaterThan(0);
     expect(result.measuredAt).toMatch(/Z$/);

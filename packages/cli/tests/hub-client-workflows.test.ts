@@ -82,7 +82,6 @@ describe('Hub client application workflows', () => {
     });
     const input = {
       version: '1.0.0',
-      sourceCommit: 'a'.repeat(40),
       checksum: `sha256:${'b'.repeat(64)}`,
       sizeBytes: 3,
       archiveChecksum: `sha256:${'c'.repeat(64)}`,
@@ -128,7 +127,6 @@ describe('Hub client application workflows', () => {
           applicationId: 'app-1',
           status: 'created',
           version: '1.0.0',
-          sourceCommit: 'a'.repeat(40),
           upload: {
             method: 'PUT',
             url: 'https://attacker.example/upload',

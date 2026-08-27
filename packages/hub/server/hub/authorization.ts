@@ -8,7 +8,6 @@ import {
 
 export type HubResource =
   | 'hub.app'
-  | 'hub.repository'
   | 'hub.release'
   | 'hub.deployment'
   | 'hub.runtime'
@@ -72,7 +71,6 @@ export const ROLE_CAPABILITIES: Readonly<
       resource: 'hub.app',
       actions: ['create', 'read', 'update', 'archive', 'restore'],
     },
-    { resource: 'hub.repository', actions: ['read', 'update'] },
     { resource: 'hub.release', actions: ['create', 'read', 'update'] },
     {
       resource: 'hub.deployment',
@@ -87,7 +85,6 @@ export const ROLE_CAPABILITIES: Readonly<
   ],
   developer: [
     { resource: 'hub.app', actions: ['read'] },
-    { resource: 'hub.repository', actions: ['read', 'update'] },
     { resource: 'hub.release', actions: ['read', 'create'] },
     { resource: 'hub.deployment', actions: ['read'] },
     { resource: 'hub.runtime', actions: ['read'] },
@@ -108,7 +105,6 @@ export const ROLE_CAPABILITIES: Readonly<
     { resource: 'hub.release', actions: ['read'] },
     { resource: 'hub.deployment', actions: ['read'] },
     { resource: 'hub.runtime', actions: ['read'] },
-    { resource: 'hub.repository', actions: ['read'] },
     { resource: 'hub.auditLog', actions: ['read'] },
   ],
 };

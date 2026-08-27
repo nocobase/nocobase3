@@ -12,11 +12,6 @@ import {
   normalizeHubUrl,
   type ReleaseUpload,
 } from '../../lib/hub-client.ts';
-import {
-  assertGitWorktreeClean,
-  pushHubRepository,
-  readGitHead,
-} from '../../lib/git.ts';
 import { detectPackageManager } from '../../lib/package-manager.ts';
 import {
   cacheOperationArtifact,
@@ -34,19 +29,15 @@ import { resolveReleaseVersion } from '../../lib/release-version.ts';
 import { runCommand } from '../../lib/run-command.ts';
 import { formatShellCommand } from '../../lib/shell.ts';
 import {
-  pushSourceSnapshot,
-  sourceSnapshotMatchesCommit,
-} from '../../lib/source-repository.ts';
-import {
   listAllReleases,
   resolveApplication,
   waitForDeployment,
 } from '../../lib/hub-workflow.ts';
 
 export default class AppPublish extends Command {
-  static override summary = 'Publish the current app source as a Release.';
+  static override summary = 'Build and publish the current app as a Release.';
   static override description =
-    'Pushes a clean source commit, builds a deterministic Hub Release artifact, uploads it, and optionally deploys the verified Release.';
+    'Builds a deterministic Release artifact from the local app, uploads it to the Hub, and optionally deploys the verified Release.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> --version 1.4.0 --non-interactive',
@@ -59,6 +50,10 @@ export default class AppPublish extends Command {
     }),
     hub: Flags.string({
       description: 'Public Hub root URL. Defaults to the app configuration.',
+    }),
+    app: Flags.string({
+      description:
+        'Existing application ID or exact slug to bind. Omit to create a new Hub app on first release.',
     }),
     version: Flags.string({
       description: 'Exact semantic version to publish.',
@@ -77,7 +72,7 @@ export default class AppPublish extends Command {
     }),
     'dry-run': Flags.boolean({
       default: false,
-      description: 'Validate the publish plan without pushing or uploading.',
+      description: 'Validate the publish plan without creating or uploading.',
     }),
     json: Flags.boolean({
       default: false,
@@ -101,18 +96,20 @@ export default class AppPublish extends Command {
     try {
       const project = await requireAppProject(flags.dir);
       projectDirectory = project.directory;
+      assertAssociationFlags(project.config, flags.hub, flags.app);
       const normalizedHub = normalizeHubUrl(hub ?? project.config.hub ?? '');
       hub = normalizedHub;
       const applicationSlug =
         project.config.slug ?? applicationSlugForName(project.config.name);
-      const needsAssociation =
-        isAppScriptSurface(this) && !project.config.applicationId;
+      const needsAssociation = !project.config.applicationId;
+      const createsApplication = needsAssociation && !flags.app;
       const operation = await createOperation({
         kind: 'app-publish',
         operationId,
         hubUrl: normalizedHub,
         idempotencyKey: operationId,
         parameters: {
+          app: flags.app ?? 'none',
           bump: flags.bump ?? 'none',
           deploy: String(flags.deploy),
           dryRun: String(flags['dry-run']),
@@ -122,9 +119,7 @@ export default class AppPublish extends Command {
       });
       const requiredScopes = [
         'apps:read',
-        ...(needsAssociation ? (['apps:create'] as const) : []),
-        'source:read',
-        'source:write',
+        ...(createsApplication ? (['apps:create'] as const) : []),
         'releases:publish',
         ...(flags.bump ? (['releases:read'] as const) : []),
         ...(flags.deploy
@@ -134,18 +129,18 @@ export default class AppPublish extends Command {
       const manager = new HubCredentialManager(normalizedHub);
       const operationCallback = async (
         client: import('../../lib/hub-client.ts').HubClient,
-        credential: import('../../lib/credential-store.ts').StoredCredential,
       ) => {
-        const application = operation.resourceIds?.applicationId
-          ? await client.getApplication(operation.resourceIds.applicationId)
-          : await resolveOrCreateApplication({
-              client,
-              create: needsAssociation && !flags['dry-run'],
-              name: project.config.name,
-              operationId,
-              reference: project.config.applicationId ?? applicationSlug,
-              slug: applicationSlug,
-            });
+        const application = await resolvePublishApplication({
+          applicationReference: flags.app,
+          client,
+          create: createsApplication,
+          dryRun: flags['dry-run'],
+          localApplicationId: project.config.applicationId,
+          name: project.config.name,
+          operationApplicationId: operation.resourceIds?.applicationId,
+          operationId,
+          slug: applicationSlug,
+        });
         if (
           operation.resourceIds?.applicationId &&
           operation.resourceIds.applicationId !== application.id
@@ -154,19 +149,13 @@ export default class AppPublish extends Command {
             `Operation ${operationId} belongs to application ${operation.resourceIds.applicationId}, not ${application.id}. Use a new operation ID.`,
           );
         }
-        const repository = await client.getRepository(application.id);
-        if (isAppScriptSurface(this) && !flags['dry-run']) {
-          const linkedConfig = {
-            ...project.config,
-            applicationId: application.id,
-            hub: normalizedHub,
-            repositoryMode: 'snapshot' as const,
-            slug: application.slug,
-            sourceCommit:
-              project.config.applicationId === application.id
-                ? (project.config.sourceCommit ?? repository.headCommit)
-                : repository.headCommit,
-          };
+        assertResolvedApplicationMatchesProject(project.config, application);
+        if (!flags['dry-run']) {
+          const linkedConfig = linkedAppConfig(
+            project.config,
+            normalizedHub,
+            application,
+          );
           await writeAppConfig(project, linkedConfig);
           project.config = linkedConfig;
           await updateOperation(operationId, (current) => ({
@@ -179,7 +168,10 @@ export default class AppPublish extends Command {
           }));
         }
         const releases =
-          operation.release || flags.version || !flags.bump
+          operation.release ||
+          flags.version ||
+          !flags.bump ||
+          application.status === 'planned'
             ? []
             : await listAllReleases(client, application.id);
         if (
@@ -202,76 +194,8 @@ export default class AppPublish extends Command {
           return {
             application,
             dryRun: true as const,
-            repository,
             version,
           };
-        }
-
-        const recordedCommit =
-          operation.resourceIds?.pushedCommit ??
-          operation.release?.sourceCommit;
-        let sourceCommit: string;
-        if (isAppScriptSurface(this)) {
-          if (recordedCommit) {
-            if (
-              !(await sourceSnapshotMatchesCommit({
-                accessToken: credential.accessToken,
-                hub: normalizedHub,
-                project,
-                repository,
-                sourceCommit: recordedCommit,
-              }))
-            ) {
-              throw new Error(
-                `The local source no longer matches operation ${operationId}'s recorded snapshot ${recordedCommit}. Use a new operation ID.`,
-              );
-            }
-            sourceCommit = recordedCommit;
-          } else {
-            sourceCommit = (
-              await pushSourceSnapshot({
-                accessToken: credential.accessToken,
-                hub: normalizedHub,
-                project,
-                repository,
-              })
-            ).sourceCommit;
-          }
-        } else {
-          const currentCommit = await readGitHead(
-            project.directory,
-            gitCommand(),
-          );
-          if (recordedCommit && currentCommit !== recordedCommit) {
-            throw new Error(
-              `The current HEAD ${currentCommit} does not match operation ${operationId}'s recorded commit ${recordedCommit}. Use a new operation ID for the new commit.`,
-            );
-          }
-          sourceCommit = recordedCommit ?? currentCommit;
-          if (!operation.artifact && !operation.resourceIds?.uploadId) {
-            await assertGitWorktreeClean(project.directory, gitCommand());
-          }
-          if (!recordedCommit) {
-            await pushHubRepository({
-              cloneUrl: repository.cloneUrl,
-              directory: project.directory,
-              accessToken: credential.accessToken,
-              branch: repository.defaultBranch,
-              hub: normalizedHub,
-              gitCommand: gitCommand(),
-            });
-          }
-        }
-        if (!recordedCommit) {
-          await updateOperation(operationId, (current) => ({
-            ...current,
-            resourceIds: {
-              ...(current.resourceIds ?? {}),
-              applicationId: application.id,
-              pushedCommit: sourceCommit,
-            },
-            step: 'pushed',
-          }));
         }
 
         const artifact = await resolvePublishArtifact({
@@ -279,12 +203,10 @@ export default class AppPublish extends Command {
           directory: project.directory,
           operation,
           operationId,
-          sourceCommit,
           version,
         });
         const releaseMetadata = {
           version,
-          sourceCommit,
           checksum: artifact.checksum,
           sizeBytes: artifact.sizeBytes,
           archiveChecksum: artifact.archiveChecksum,
@@ -300,7 +222,7 @@ export default class AppPublish extends Command {
           },
           release: releaseMetadata,
           step:
-            current.step === 'initialized' || current.step === 'pushed'
+            current.step === 'initialized' || current.step === 'associated'
               ? 'built'
               : current.step,
         }));
@@ -472,7 +394,6 @@ export default class AppPublish extends Command {
               release: {
                 id: journal.resourceIds.releaseId,
                 version: journal.release.version,
-                sourceCommit: journal.release.sourceCommit,
               },
             }
           : {}),
@@ -485,7 +406,6 @@ export default class AppPublish extends Command {
 async function prepareArtifact(
   directory: string,
   applicationSlug: string,
-  sourceCommit: string,
   operationId: string,
 ): Promise<BuiltReleaseArtifact> {
   const project = path.resolve(directory);
@@ -518,7 +438,6 @@ async function prepareArtifact(
       applicationSlug,
       buildDirectory: path.join(project, 'dist'),
       outputPath,
-      sourceCommit,
     });
     await cacheOperationArtifact(
       operationId,
@@ -536,7 +455,6 @@ async function resolvePublishArtifact(options: {
   readonly directory: string;
   readonly operation: Awaited<ReturnType<typeof createOperation>>;
   readonly operationId: string;
-  readonly sourceCommit: string;
   readonly version: string;
 }): Promise<BuiltReleaseArtifact> {
   const cached = options.operation.artifact;
@@ -547,12 +465,9 @@ async function resolvePublishArtifact(options: {
         'The publish operation has remote state but no local release metadata. Use a new operation ID after checking the Hub upload.',
       );
     }
-    if (
-      release.version !== options.version ||
-      release.sourceCommit !== options.sourceCommit
-    ) {
+    if (release.version !== options.version) {
       throw new Error(
-        'The resumed publish operation does not match the requested version or source commit. Use a new operation ID.',
+        'The resumed publish operation does not match the requested version. Use a new operation ID.',
       );
     }
     const verified = await verifyCachedOperationArtifact(options.operationId);
@@ -569,7 +484,6 @@ async function resolvePublishArtifact(options: {
   return prepareArtifact(
     options.directory,
     options.applicationSlug,
-    options.sourceCommit,
     options.operationId,
   );
 }
@@ -597,14 +511,12 @@ function restoreReleaseManifest(
 ): ReleaseManifest {
   const client = recordValue(value.client);
   const server = recordValue(value.server);
-  const source = recordValue(value.source);
   if (
     value.schemaVersion !== 1 ||
     typeof value.basePath !== 'string' ||
     client.rootDir !== 'dist/client' ||
     server.entrypoint !== 'dist/server/embedded.js' ||
-    server.healthPath !== '/api/healthz' ||
-    typeof source.commit !== 'string'
+    server.healthPath !== '/api/healthz'
   ) {
     throw new Error(
       'The publish operation contains an invalid Release manifest. Use a new operation ID.',
@@ -618,7 +530,6 @@ function restoreReleaseManifest(
       entrypoint: 'dist/server/embedded.js',
       healthPath: '/api/healthz',
     },
-    source: { commit: source.commit },
   };
 }
 
@@ -671,6 +582,7 @@ function toOperationDeployment(
 function publishFailureHint(options: {
   readonly error: unknown;
   readonly flags: {
+    readonly app?: string;
     readonly bump?: string;
     readonly deploy: boolean;
     readonly dir?: string;
@@ -689,6 +601,12 @@ function publishFailureHint(options: {
       ? ['nb3', 'app', 'publish']
       : ['pnpm', 'run', options.surface];
   const parameters = options.recordedParameters;
+  const app =
+    (options.error instanceof ApplicationBindingRequiredError
+      ? options.error.slug
+      : undefined) ??
+    parameterValue(parameters?.app) ??
+    options.flags.app;
   const recordedVersion = parameterValue(parameters?.version);
   const recordedBump = parameterValue(parameters?.bump);
   const version = recordedVersion ?? options.flags.version;
@@ -701,6 +619,7 @@ function publishFailureHint(options: {
     : options.flags['dry-run'];
   if (options.projectDirectory) parts.push('--dir', options.projectDirectory);
   if (options.hub) parts.push('--hub', options.hub);
+  if (app) parts.push('--app', app);
   if (
     options.surface !== 'deploy' &&
     options.error instanceof HubApiError &&
@@ -715,7 +634,10 @@ function publishFailureHint(options: {
   }
   if (deploy && options.surface !== 'deploy') parts.push('--deploy');
   if (dryRun) parts.push('--dry-run');
-  if (!options.suggestedVersion) {
+  if (
+    !options.suggestedVersion &&
+    !(options.error instanceof ApplicationBindingRequiredError)
+  ) {
     parts.push('--operation-id', options.operationId);
   }
   parts.push('--non-interactive');
@@ -743,29 +665,60 @@ function reportAuthorization(
   }
 }
 
-async function resolveOrCreateApplication(options: {
+async function resolvePublishApplication(options: {
+  readonly applicationReference?: string;
   readonly client: import('../../lib/hub-client.ts').HubClient;
   readonly create: boolean;
+  readonly dryRun: boolean;
+  readonly localApplicationId?: string;
   readonly name: string;
+  readonly operationApplicationId?: string;
   readonly operationId: string;
-  readonly reference: string;
   readonly slug: string;
 }): Promise<import('../../lib/hub-client.ts').ApplicationSummary> {
-  try {
-    return await resolveApplication(options.client, options.reference);
-  } catch (error) {
-    if (
-      !(error instanceof HubApiError) ||
-      error.code !== 'APPLICATION_NOT_FOUND' ||
-      !options.create
-    ) {
-      throw error;
-    }
+  const reference =
+    options.operationApplicationId ??
+    options.localApplicationId ??
+    options.applicationReference;
+  if (reference) return resolveApplication(options.client, reference);
+  if (options.dryRun) {
+    return {
+      id: `dry-run:${options.slug}`,
+      slug: options.slug,
+      name: options.name,
+      status: 'planned',
+    };
   }
-  return options.client.createApplication(
-    { name: options.name, slug: options.slug },
-    options.operationId,
-  );
+  if (!options.create) {
+    throw new Error(
+      'No Hub application is associated with this project. Pass --app <slug> to bind an existing application.',
+    );
+  }
+  try {
+    return await options.client.createApplication(
+      { name: options.name, slug: options.slug },
+      options.operationId,
+    );
+  } catch (error) {
+    if (error instanceof HubApiError && error.status === 409) {
+      throw new ApplicationBindingRequiredError(
+        options.slug,
+        `Application slug "${options.slug}" already exists. Pass --app ${options.slug} to bind it explicitly.`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+}
+
+class ApplicationBindingRequiredError extends Error {
+  public readonly slug: string;
+
+  public constructor(slug: string, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ApplicationBindingRequiredError';
+    this.slug = slug;
+  }
 }
 
 function applicationSlugForName(name: string): string {
@@ -781,10 +734,65 @@ function applicationSlugForName(name: string): string {
   return candidate;
 }
 
-function parameterValue(value: string | undefined): string | undefined {
-  return value && value !== 'none' ? value : undefined;
+function assertAssociationFlags(
+  config: import('../../lib/scaffold.ts').AppConfig,
+  requestedHub: string | undefined,
+  requestedApplication: string | undefined,
+): void {
+  if (
+    config.hub &&
+    requestedHub &&
+    normalizeHubUrl(config.hub) !== normalizeHubUrl(requestedHub)
+  ) {
+    throw new Error(
+      `This project is already associated with Hub ${normalizeHubUrl(config.hub)}. Remove --hub or use the associated Hub.`,
+    );
+  }
+  if (
+    config.applicationId &&
+    requestedApplication &&
+    requestedApplication !== config.applicationId &&
+    requestedApplication !== config.slug
+  ) {
+    throw new Error(
+      `This project is already associated with application ${config.slug ?? config.applicationId}. Remove --app or use the associated application.`,
+    );
+  }
 }
 
-function gitCommand(): string {
-  return 'git';
+function assertResolvedApplicationMatchesProject(
+  config: import('../../lib/scaffold.ts').AppConfig,
+  application: import('../../lib/hub-client.ts').ApplicationSummary,
+): void {
+  if (config.applicationId && config.applicationId !== application.id) {
+    throw new Error(
+      `This project is associated with application ${config.applicationId}, not ${application.id}.`,
+    );
+  }
+  if (config.slug && config.slug !== application.slug) {
+    throw new Error(
+      `This project is associated with application slug ${config.slug}, not ${application.slug}.`,
+    );
+  }
+}
+
+function linkedAppConfig(
+  config: import('../../lib/scaffold.ts').AppConfig,
+  hub: string,
+  application: import('../../lib/hub-client.ts').ApplicationSummary,
+): import('../../lib/scaffold.ts').AppConfig {
+  return {
+    name: config.name,
+    hub,
+    applicationId: application.id,
+    slug: application.slug,
+    ...(config.template ? { template: config.template } : {}),
+    ...(config.templateVersion
+      ? { templateVersion: config.templateVersion }
+      : {}),
+  };
+}
+
+function parameterValue(value: string | undefined): string | undefined {
+  return value && value !== 'none' ? value : undefined;
 }

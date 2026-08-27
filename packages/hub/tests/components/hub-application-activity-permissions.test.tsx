@@ -30,7 +30,6 @@ const release: HubRelease = {
   checksum: 'sha256:release',
   manifest: {},
   sizeBytes: 100,
-  sourceCommit: 'abc123',
   verificationStatus: 'verified',
   createdBy: 'owner',
   createdAt: '2026-08-21T09:00:00.000Z',

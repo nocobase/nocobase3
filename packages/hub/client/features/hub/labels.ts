@@ -30,10 +30,6 @@ const capabilityResourceLabels: Record<string, LabelDefinition> = {
     i18nKey: 'hub.capability.resource.app',
     defaultLabel: 'Applications',
   },
-  'hub.repository': {
-    i18nKey: 'hub.capability.resource.repository',
-    defaultLabel: 'Source repositories',
-  },
   'hub.release': {
     i18nKey: 'hub.capability.resource.release',
     defaultLabel: 'Releases',
@@ -108,10 +104,6 @@ const auditActionLabels: Record<string, LabelDefinition> = {
   'application.restored': {
     i18nKey: 'hub.audit.action.application.restored',
     defaultLabel: 'Application restored',
-  },
-  'repository.pushed': {
-    i18nKey: 'hub.audit.action.repository.pushed',
-    defaultLabel: 'Source pushed',
   },
   'release.published': {
     i18nKey: 'hub.audit.action.release.published',
@@ -201,10 +193,6 @@ const auditResourceLabels: Record<string, LabelDefinition> = {
     i18nKey: 'hub.audit.resource.application',
     defaultLabel: 'Application',
   },
-  repository: {
-    i18nKey: 'hub.audit.resource.repository',
-    defaultLabel: 'Source repository',
-  },
   release: { i18nKey: 'hub.audit.resource.release', defaultLabel: 'Release' },
   deployment: {
     i18nKey: 'hub.audit.resource.deployment',
@@ -225,7 +213,6 @@ const auditResourceLabels: Record<string, LabelDefinition> = {
 const auditSourceLabels: Record<string, LabelDefinition> = {
   web: { i18nKey: 'hub.audit.source.web', defaultLabel: 'Web' },
   agent: { i18nKey: 'hub.audit.source.agent', defaultLabel: 'Coding Agent' },
-  git: { i18nKey: 'hub.audit.source.git', defaultLabel: 'Git' },
   system: { i18nKey: 'hub.audit.source.system', defaultLabel: 'System' },
 };
 

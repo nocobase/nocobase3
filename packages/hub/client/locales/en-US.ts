@@ -312,7 +312,6 @@ export const starter = {
     'Ask your Coding Agent to publish the verified application build to Hub.',
   'hub.releases.columns.version': 'Version',
   'hub.releases.columns.verification': 'Verification',
-  'hub.releases.columns.source': 'Source',
   'hub.releases.columns.size': 'Size',
   'hub.releases.columns.created': 'Created',
   'hub.releases.columns.action': 'Action',
@@ -523,22 +522,17 @@ export const starter = {
   'hub.apps.open': 'Open application',
   'hub.apps.manage': 'Manage',
   'hub.apps.develop': 'Develop',
-  'hub.apps.columns.sourceRevision': 'Source revision',
+  'hub.apps.columns.latestRelease': 'Latest release',
   'hub.apps.columns.health': 'Health',
   'hub.apps.columns.healthChecked': 'Health checked',
   'hub.apps.createDialog.templateTitle': 'Default application template',
   'hub.apps.createDialog.templateDescription':
-    'Hub creates an independent Git repository from the default template and keeps the authoritative source history.',
+    'Hub prepares a deployable initial Release from the default template. Application source remains on the developer machine.',
   'hub.application.open': 'Open application',
   'hub.application.develop': 'Develop',
   'hub.application.tabs.development': 'Development',
   'hub.application.tabs.permissions': 'Permissions',
   'hub.application.tabs.settings': 'Settings',
-  'hub.repository.title': 'Source repository',
-  'hub.repository.loading': 'Loading repository',
-  'hub.repository.cloneUrl': 'Clone URL',
-  'hub.repository.branch': 'Default branch',
-  'hub.repository.head': 'Head commit',
   'hub.development.title': 'Develop with a Coding Agent',
   'hub.development.copy': 'Copy development instruction',
   'hub.development.copied': 'Copied',
@@ -782,38 +776,28 @@ export const starter = {
   'hub.application.redeploy.confirm': 'Confirm redeployment',
   'hub.deployment.details.activeRelease': 'Current active release',
   'hub.development.description':
-    'Copy one instruction to your local Coding Agent. The Agent prepares a local workspace and publishes the finished work back to Hub.',
-  'hub.development.prompt': `Develop the NocoBase Hub application “{{name}}” (slug: {{slug}}) in a local working copy.
+    'Copy one instruction to your local Coding Agent. Source stays on your machine; only build artifacts are published to Hub.',
+  'hub.development.prompt': `Develop the NocoBase Hub application “{{name}}” (slug: {{slug}}) from source kept on my local machine.
 
 Hub URL: {{hubUrl}}
-Expected source repository: {{cloneUrl}}
-Default branch: {{branch}}
-Current Hub head: {{headCommit}}
-
-Use the application-local pnpm scripts and follow these steps. Do not clone the Hub repository with git directly, do not request or expose a password or access token, and do not discard any existing local changes.
+Hub stores only build artifacts, Releases, and Deployments. It does not store or restore application source code.
 
 1. Check the local prerequisites. Node.js 24 or later and pnpm 11 or later are required.
 
 node --version
 pnpm --version
 
-2. Use ~/.nocobase/hub/apps/{{slug}} as the local workspace. If that directory does not exist, pull the latest Hub-managed source and initialize the development environment with:
+2. Ask me for the existing local source directory before changing anything. Preserve every local change in that directory. Do not download, pull, or reconstruct source from Hub.
 
-pnpm create @nocobase/app ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --app {{slug}}
+If I confirm that no source directory exists and this APP should start again from the default template, create a new local project in an empty directory:
 
-This command initializes only an empty destination, writes local database and environment configuration, and installs dependencies. If Device Authorization opens a browser page, ask me to approve it and then let the command continue.
+pnpm create @nocobase/app <directory>
 
-If the workspace already exists, do not overwrite it or run the create command against it. Enter it, confirm that it belongs to this Hub application, preserve every local change, and then pull the latest source snapshot:
+This creates new template source; it does not recover the source used by an existing Release.
 
-cd ~/.nocobase/hub/apps/{{slug}}
-pnpm run status --json
-pnpm run pull --non-interactive
+3. Enter the confirmed application directory and start the development server:
 
-If pull reports that both local and Hub source changed, stop and preserve the local work. Do not force an overwrite; report the conflict so it can be resolved deliberately.
-
-3. Enter the application directory and start the development server:
-
-cd ~/.nocobase/hub/apps/{{slug}}
+cd <directory>
 pnpm run dev
 
 Keep the development server running while making the requested changes. Record the local URL and verify the relevant user flows in a browser.
@@ -824,39 +808,27 @@ pnpm check
 
 Fix any failure instead of skipping or weakening checks.
 
-5. Push the finished source snapshot to Hub. This excludes dependencies, build output, runtime data, secrets, and local Hub state:
-
-pnpm run push --non-interactive --json
-
-If Hub source advanced, the command must reject the push. Pull and resolve the conflict instead of forcing an overwrite.
-
-6. Choose only the result I requested:
+5. Choose only the result I requested. These commands build locally and send only the packaged artifact to Hub.
 
 - To create a verified Release without deploying it, validate and then release:
 
-pnpm run release --bump patch --dry-run --non-interactive --json
-pnpm run release --bump patch --non-interactive --json
+pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --dry-run --non-interactive --json
+pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --non-interactive --json
 
-- To deploy the current source, do not create a separate Release first. Run the complete source-to-runtime workflow:
+- To build, create the next patch Release, and deploy it:
 
-pnpm run deploy --non-interactive --json
+pnpm run deploy --hub {{hubUrl}} --app {{slug}} --non-interactive --json
 
-The deploy script pushes the source, creates the next patch Release, and deploys it. Do not deploy unless I explicitly requested deployment. If Device Authorization is required, ask me to approve the browser page. If a Release or Deployment is interrupted, resume with the --operation-id command printed by the script instead of starting a duplicate operation.
+After the first successful association, the Hub and APP arguments are saved locally and may be omitted. Do not deploy unless I explicitly requested deployment. If Device Authorization is required, ask me to approve the browser page. If a Release or Deployment is interrupted, resume with the --operation-id command printed by the script instead of starting a duplicate operation.
 
-7. Report the synchronized source commit and every requested Release or Deployment ID, version, status, URL, and verification result.`,
-  'hub.repository.description':
-    'Hub stores the authoritative source and commit history. Local workspaces are disposable working copies.',
-  'hub.repository.unavailable': 'Source repository is unavailable',
-  'hub.repository.unavailableDescription':
-    'Hub could not load the authoritative source repository. Retry after repository initialization completes.',
+6. Report every requested Release or Deployment ID, version, status, URL, checksum, and verification result. Never upload source code, dependencies, local databases, secrets, or runtime data to Hub.`,
   'hub.releases.redeploy': 'Redeploy',
   'hub.releases.pin': 'Pin release',
   'hub.releases.unpin': 'Unpin release',
   'hub.releases.retentionError': 'Unable to update release retention',
   'hub.releases.detail.description':
-    'Immutable build metadata, source revision, checksum, and retention state.',
+    'Immutable build metadata, checksum, and retention state.',
   'hub.releases.detail.loading': 'Loading release details',
-  'hub.releases.detail.sourceCommit': 'Source commit',
   'hub.releases.detail.checksum': 'Checksum',
   'hub.releases.detail.createdBy': 'Created by',
   'hub.releases.detail.retention': 'Retention',
@@ -873,7 +845,7 @@ The deploy script pushes the source, creates the next patch Release, and deploys
     'The current permission revision is unavailable. Reload and try again.',
   'hub.permissions.savingRoles': 'Saving…',
   'hub.permissions.rolesDescription':
-    'Roles are read-only capability sets. Deployer controls deployments; Developer publishes source and Releases.',
+    'Roles are read-only capability sets. Deployer controls deployments; Developer publishes build artifacts as Releases.',
   'hub.runtime.loading': 'Loading runtime',
   'hub.runtime.lastChecked': 'Last checked',
   'hub.runtime.startedAt': 'Started',
@@ -890,22 +862,22 @@ The deploy script pushes the source, creates the next patch Release, and deploys
   'hub.runtimeSecret.rotateError': 'Unable to rotate secret',
   'hub.applicationSettings.saving': 'Saving…',
   'hub.applicationSettings.slugImmutable':
-    'The application slug is its stable URL and repository identity and cannot be changed.',
+    'The application slug is its stable URL and deployment identity and cannot be changed.',
   'hub.applicationSettings.lifecycle': 'Application lifecycle',
   'hub.applicationSettings.archiveDescription':
-    'Archiving disables development and deployment while preserving source, Releases, data, and history.',
+    'Archiving disables publishing and deployment while preserving Releases, data, and history.',
   'hub.applicationSettings.restore': 'Restore application',
   'hub.applicationSettings.restoring': 'Restoring…',
   'hub.applicationSettings.archiveConfirm': 'Archive this application?',
   'hub.applicationSettings.archiveTitle': 'Archive application',
   'hub.applicationSettings.archiveConfirmDescription':
-    'Archive {{name}}? Development and deployment will be disabled, but its source, releases, data, and history will be preserved.',
+    'Archive {{name}}? Publishing and deployment will be disabled, but its Releases, data, and history will be preserved.',
   'hub.applicationSettings.archiveAction': 'Confirm archive',
   'hub.applicationSettings.archiving': 'Archiving…',
   'hub.applicationSettings.archiveError': 'Unable to archive application',
   'hub.applicationSettings.restoreTitle': 'Restore application',
   'hub.applicationSettings.restoreConfirmDescription':
-    'Restore {{name}} and allow development and deployment again?',
+    'Restore {{name}} and allow publishing and deployment again?',
   'hub.applicationSettings.restoreAction': 'Confirm restore',
   'hub.applicationSettings.restoreError': 'Unable to restore application',
   'hub.audit.description':
@@ -964,7 +936,7 @@ The deploy script pushes the source, creates the next patch Release, and deploys
   'hub.roles.empty.title': 'No role catalog',
   'hub.roles.empty.description': 'The built-in role catalog is unavailable.',
   'hub.roles.description':
-    'These capability sets are read-only. Deployer controls Runtime and deployments; Developer controls source and Release creation.',
+    'These capability sets are read-only. Deployer controls Runtime and deployments; Developer publishes local build artifacts as Releases.',
   'hub.roles.owner': 'Owner',
   'hub.roles.admin': 'Admin',
   'hub.roles.developer': 'Developer',
@@ -974,7 +946,7 @@ The deploy script pushes the source, creates the next patch Release, and deploys
   'hub.roles.admin.description':
     'Manage applications, members, settings, releases, and deployments.',
   'hub.roles.developer.description':
-    'Develop application source and publish Releases.',
+    'Publish locally built application artifacts as Releases.',
   'hub.roles.deployer.description':
     'Deploy, roll back, and control application Runtime.',
   'hub.roles.viewer.description':
@@ -983,7 +955,6 @@ The deploy script pushes the source, creates the next patch Release, and deploys
   'hub.roleScope.application': 'Application',
   'hub.capability.resource.all': 'All resources',
   'hub.capability.resource.app': 'Applications',
-  'hub.capability.resource.repository': 'Source repositories',
   'hub.capability.resource.release': 'Releases',
   'hub.capability.resource.deployment': 'Deployments',
   'hub.capability.resource.runtime': 'Runtime',
@@ -1008,7 +979,6 @@ The deploy script pushes the source, creates the next patch Release, and deploys
   'hub.audit.action.application.updated': 'Application updated',
   'hub.audit.action.application.archived': 'Application archived',
   'hub.audit.action.application.restored': 'Application restored',
-  'hub.audit.action.repository.pushed': 'Source pushed',
   'hub.audit.action.release.published': 'Release published',
   'hub.audit.action.release.pinned': 'Release pinned',
   'hub.audit.action.release.unpinned': 'Release unpinned',
@@ -1034,7 +1004,6 @@ The deploy script pushes the source, creates the next patch Release, and deploys
   'hub.audit.action.setup.owner.created': 'Hub Owner created',
   'hub.audit.resource.hub': 'Hub',
   'hub.audit.resource.application': 'Application',
-  'hub.audit.resource.repository': 'Source repository',
   'hub.audit.resource.release': 'Release',
   'hub.audit.resource.deployment': 'Deployment',
   'hub.audit.resource.runtime': 'Runtime',
@@ -1043,7 +1012,6 @@ The deploy script pushes the source, creates the next patch Release, and deploys
   'hub.audit.resource.member': 'Member',
   'hub.audit.source.web': 'Web',
   'hub.audit.source.agent': 'Coding Agent',
-  'hub.audit.source.git': 'Git',
   'hub.audit.source.system': 'System',
   'hub.audit.actorType.user': 'User',
   'hub.audit.actorType.agent': 'Coding Agent',
@@ -1072,16 +1040,13 @@ The deploy script pushes the source, creates the next patch Release, and deploys
   'hub.settings.loading': 'Loading settings',
   'hub.storage.loading': 'Measuring storage',
   'hub.storage.description':
-    'Monitor the Hub filesystem so source repositories, Release artifacts, runtime data, and logs do not exhaust the disk.',
+    'Monitor the Hub filesystem so Release artifacts, runtime data, and logs do not exhaust the disk.',
   'hub.storage.measuredAt': 'Measured {{date}}',
   'hub.storage.usedOf': 'used of {{capacity}}',
   'hub.storage.available': '{{available}} available',
   'hub.storage.reclaimable': '{{value}} reclaimable',
   'hub.storage.cleanupPreviewDescription':
     '{{count}} candidates could reclaim {{size}}. This preview never deletes data.',
-  'storage.sourceRepositories': 'Source repositories',
-  'storage.sourceRepositories.description':
-    'Bare Git objects, branches, and commit history; local workspaces and node_modules are not included.',
   'storage.releaseArtifacts': 'Release artifacts',
   'storage.releaseArtifacts.description':
     'Verified immutable build artifacts. Only unreferenced Releases selected by retention can be reclaimed.',

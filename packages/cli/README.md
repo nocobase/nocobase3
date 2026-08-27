@@ -10,8 +10,6 @@ The package exposes both command surfaces:
 Application developers normally use the project-local scripts:
 
 ```bash
-pnpm run pull
-pnpm run push
 pnpm run release --bump patch --non-interactive
 pnpm run deploy
 pnpm run status --json
@@ -23,35 +21,29 @@ pnpm run hub:logout --hub https://hub.example.com/hub
 
 | Script       | Purpose                                                                               |
 | ------------ | ------------------------------------------------------------------------------------- |
-| `pull`       | Pull the latest Hub source snapshot without overwriting divergent local source        |
-| `push`       | Push the current source snapshot without transferring local Git history               |
-| `release`    | Synchronize source, build, and upload an immutable Release without deploying it       |
+| `release`    | Build locally and upload an immutable Release without deploying it                    |
 | `deploy`     | Run the full first-deploy flow, or deploy, roll back, or redeploy an existing Release |
-| `status`     | Show Repository, Release, Deployment, and Runtime status                              |
+| `status`     | Show application, Release, Deployment, and Runtime status                             |
 | `hub:login`  | Authorize this device and save an Agent credential                                    |
 | `hub:logout` | Revoke and remove the saved credential                                                |
 
 Every script accepts `--help`. Agent-facing operations support non-interactive and JSON output where applicable.
 Release and deployment operations also support dry-run validation and operation IDs for safe retries.
 
-To initialize a new working copy from an existing Hub application, run:
+Application source stays on the developer machine. Create a new local source project from the published template:
 
 ```bash
-pnpm create @nocobase/app crm \
-  --hub https://hub.example.com/hub \
-  --app sales
+pnpm create @nocobase/app crm
 ```
 
-The working copy defaults to SQLite when `--db-dialect` is omitted, so the command also works unattended. Pass
-`--db-dialect postgres` or `--db-dialect mysql` when the local environment should use another database.
+Hub does not store, download, or edit source. To continue an existing app, use its real local source directory. A
+generated app stores its Hub association in `.nocobase/config.json`; credentials and operation journals live under
+`~/.nocobase` by default.
 
-Source snapshots deliberately exclude local Git history, dependencies, build output, runtime data, `.env`, `.npmrc`,
-credentials, and local Hub-association state. A generated app stores its association in `.nocobase/config.json`;
-credentials and operation journals live under `~/.nocobase` by default.
-
-Bare `pnpm run deploy` associates or creates the Hub application when necessary, pushes the source snapshot, creates
-the next patch Release, and deploys it. `pnpm run deploy --release`, `--rollback`, and `--redeploy` operate on existing
-Releases instead. `pnpm run release` creates a Release without deploying it.
+Bare `pnpm run deploy` associates or creates the Hub application when necessary, builds locally, uploads the artifact,
+creates the next patch Release, and deploys it. Pass `--hub <url> --app <slug>` on the first release or deploy to bind
+an existing Hub application explicitly. `pnpm run deploy --release`, `--rollback`, and `--redeploy` operate on existing
+Releases instead. `pnpm run release` builds and creates a Release without deploying it.
 
 ## `nb3` command surface
 
@@ -83,7 +75,7 @@ Set `NB3_CLI_USE_DIST=1` to exercise compiled command files from the source chec
 ## Local state
 
 - User credentials and operation journals live outside app source under `~/.nocobase`
-- App-local Hub identity lives in `.nocobase/config.json`
+- App-local Hub identity lives in `.nocobase/config.json` and is written atomically after a successful association
 - `NOCOBASE_CLI_ROOT` overrides the user-state root; `NB3_CLI_ROOT` remains accepted for compatibility
 - Hub workflow exit codes are `2` for local input or artifact errors, `3` for authentication, `4` for authorization,
   `5` for Hub state conflicts, `6` for network or server failures, and `7` for app build failures

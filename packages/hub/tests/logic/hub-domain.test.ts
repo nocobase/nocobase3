@@ -903,7 +903,7 @@ describe('LocalHostAdapter', () => {
 });
 
 describe('HubAuthorization', () => {
-  it('separates source publishing, deployment, runtime control, and governance capabilities', async () => {
+  it('separates artifact publishing, deployment, runtime control, and governance capabilities', async () => {
     const { store } = await createStore();
     const authorization = new HubAuthorization(store);
 
@@ -911,12 +911,6 @@ describe('HubAuthorization', () => {
     await store.assignRole('deployer-1', 'deployer');
     await store.assignRole('admin-1', 'admin');
 
-    await expect(
-      authorization.require('developer-1', {
-        resource: 'hub.repository',
-        action: 'update',
-      }),
-    ).resolves.toBeUndefined();
     await expect(
       authorization.require('developer-1', {
         resource: 'hub.release',

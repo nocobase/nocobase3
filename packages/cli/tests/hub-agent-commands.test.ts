@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,7 +26,9 @@ afterEach(async () => {
 
 describe('Hub agent commands', () => {
   it('logs in with the minimum read scopes by default and persists the token', async () => {
-    const fetchMock = loginFetch('profile apps:read source:read');
+    const fetchMock = loginFetch(
+      'profile apps:read releases:read deployments:read runtime:read',
+    );
     vi.stubGlobal('fetch', fetchMock);
     const config = await loadTestConfig();
     const result = await runCommand(config, 'hub:login', [
@@ -36,7 +38,13 @@ describe('Hub agent commands', () => {
     ]);
 
     const deviceBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(deviceBody.scopes).toEqual(['profile', 'apps:read', 'source:read']);
+    expect(deviceBody.scopes).toEqual([
+      'profile',
+      'apps:read',
+      'releases:read',
+      'deployments:read',
+      'runtime:read',
+    ]);
     expect(JSON.parse(result.stdout)).toMatchObject({
       ok: true,
       hub: HUB,
@@ -50,7 +58,7 @@ describe('Hub agent commands', () => {
   });
 
   it('supports explicit repeated scopes', async () => {
-    const fetchMock = loginFetch('apps:read source:write');
+    const fetchMock = loginFetch('apps:read releases:publish');
     vi.stubGlobal('fetch', fetchMock);
     const config = await loadTestConfig();
 
@@ -60,11 +68,11 @@ describe('Hub agent commands', () => {
       '--scope',
       'apps:read',
       '--scope',
-      'source:write',
+      'releases:publish',
     ]);
 
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(body.scopes).toEqual(['apps:read', 'source:write']);
+    expect(body.scopes).toEqual(['apps:read', 'releases:publish']);
   });
 
   it('lists applications as one JSON result using the persisted credential', async () => {
@@ -120,104 +128,6 @@ describe('Hub agent commands', () => {
     });
     expect(await new CredentialStore().get(HUB)).toBeUndefined();
   });
-
-  it('pulls an exact slug and records its Hub identity in local .nocobase state', async () => {
-    await saveCredential();
-    const destination = path.join(root, 'sales');
-    const invocation = path.join(root, 'git-invocation.json');
-    const bin = path.join(root, 'bin');
-    const fakeGit = path.join(bin, 'git');
-    await mkdir(bin, { recursive: true });
-    await writeFile(
-      fakeGit,
-      `#!/usr/bin/env node
-const fs = require('node:fs');
-const args = process.argv.slice(2);
-const destination = args.at(-1);
-fs.mkdirSync(destination + '/.git/info', { recursive: true });
-fs.writeFileSync(destination + '/.git/config', '[remote "hub"]\\n  url = ' + args.at(-2) + '\\n');
-fs.writeFileSync('${invocation}', JSON.stringify({ args, askpass: Boolean(process.env.GIT_ASKPASS), prompt: process.env.GIT_TERMINAL_PROMPT, tokenSet: Boolean(process.env.NB3_GIT_ACCESS_TOKEN) }));
-`,
-      { mode: 0o700 },
-    );
-    process.env.PATH = `${bin}${path.delimiter}${originalPath ?? ''}`;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) =>
-        url.includes('/api/apps?')
-          ? jsonResponse({
-              data: [
-                {
-                  id: 'app-1',
-                  slug: 'sales',
-                  name: 'Sales',
-                  status: 'active',
-                },
-              ],
-              meta: { total: 1, limit: 100, offset: 0 },
-            })
-          : jsonResponse({
-              data: {
-                applicationId: 'app-1',
-                provider: 'hub',
-                cloneUrl: `${HUB}/git/sales.git`,
-                defaultBranch: 'main',
-                headCommit: 'abc123',
-                status: 'ready',
-                updatedAt: '2026-08-25T00:00:00.000Z',
-              },
-            }),
-      ),
-    );
-    const config = await loadTestConfig();
-    const result = await runCommand(config, 'app:pull', [
-      'sales',
-      destination,
-      '--hub',
-      HUB,
-      '--non-interactive',
-      '--json',
-    ]);
-
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      ok: true,
-      application: { id: 'app-1', slug: 'sales' },
-      directory: destination,
-    });
-    expect(
-      JSON.parse(
-        await readFile(
-          path.join(destination, '.nocobase', 'config.json'),
-          'utf8',
-        ),
-      ),
-    ).toEqual({
-      applicationId: 'app-1',
-      hub: HUB,
-      name: 'Sales',
-      repositoryMode: 'clone',
-      slug: 'sales',
-      sourceCommit: 'abc123',
-    });
-    expect(
-      await readFile(path.join(destination, '.git', 'info', 'exclude'), 'utf8'),
-    ).toContain('/.nocobase/');
-    const gitInvocation = JSON.parse(await readFile(invocation, 'utf8')) as {
-      args: string[];
-      askpass: boolean;
-      prompt: string;
-      tokenSet: boolean;
-    };
-    expect(gitInvocation.args.join(' ')).not.toContain('access');
-    expect(gitInvocation).toMatchObject({
-      askpass: true,
-      prompt: '0',
-      tokenSet: true,
-    });
-    expect(
-      await readFile(path.join(destination, '.git', 'config'), 'utf8'),
-    ).not.toContain('access');
-  });
 });
 
 async function saveCredential(): Promise<void> {
@@ -229,7 +139,7 @@ async function saveCredential(): Promise<void> {
     accessTokenExpiresAt: Date.now() + 600_000,
     refreshToken: 'refresh',
     refreshTokenExpiresAt: Date.now() + 3_600_000,
-    scopes: ['profile', 'apps:read', 'source:read'],
+    scopes: ['profile', 'apps:read', 'releases:read'],
     applicationScope: { mode: 'all-authorized' },
   });
 }

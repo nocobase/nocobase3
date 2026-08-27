@@ -384,7 +384,7 @@ function CreateApplicationDialog({
             <p className='mt-1 text-muted-foreground'>
               {translate(
                 'hub.apps.createDialog.templateDescription',
-                'Hub creates an independent Git repository from the default template and keeps the authoritative source history.',
+                'Hub prepares a deployable initial Release from the default template. Application source remains on the developer machine.',
               )}
             </p>
           </div>
@@ -534,14 +534,12 @@ function ApplicationResults({
                   <div>
                     <dt className='text-xs text-muted-foreground'>
                       {translate(
-                        'hub.apps.columns.sourceRevision',
-                        'Source revision',
+                        'hub.apps.columns.latestRelease',
+                        'Latest release',
                       )}
                     </dt>
-                    <dd className='mt-1 truncate font-mono text-xs'>
-                      {application.latestRelease?.sourceCommit ??
-                        application.repository?.headCommit ??
-                        '—'}
+                    <dd className='mt-1 truncate font-medium'>
+                      {application.latestRelease?.version ?? '—'}
                     </dd>
                   </div>
                   <div>
@@ -700,13 +698,6 @@ function ApplicationQuickActions({
   );
   const canDevelop =
     isActive &&
-    application.repository?.status === 'ready' &&
-    hasHubCapability(
-      capabilities,
-      'hub.repository',
-      'update',
-      application.id,
-    ) &&
     hasHubCapability(capabilities, 'hub.release', 'create', application.id);
   const canControlRuntime =
     isActive &&

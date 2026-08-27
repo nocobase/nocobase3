@@ -1,5 +1,4 @@
 import type { Command } from '@oclif/core';
-import { CommandFailedError } from './run-command.ts';
 import { HubCredentialError } from './hub-auth.ts';
 import {
   HubApiError,
@@ -118,15 +117,6 @@ export function hubCommandErrorDetails(
       code: error.code,
       message: error.message,
       retryable: false,
-      hint: fallbackHint,
-      exitCode: 6,
-    };
-  }
-  if (error instanceof CommandFailedError) {
-    return {
-      code: 'GIT_COMMAND_FAILED',
-      message: error.stderr || error.message,
-      retryable: true,
       hint: fallbackHint,
       exitCode: 6,
     };

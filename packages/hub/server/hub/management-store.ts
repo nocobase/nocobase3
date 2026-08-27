@@ -96,33 +96,6 @@ export interface ApplicationMutationResult {
 
 export type RuntimeStateMutationResult = ApplicationMutationResult;
 
-export interface RepositoryMetadata {
-  readonly id: string;
-  readonly applicationId: string;
-  readonly provider: string;
-  readonly defaultBranch: string;
-  readonly headCommit: string | null;
-  readonly status: string;
-  readonly initialCommit: string | null;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-}
-
-export interface RepositoryMetadataInput {
-  readonly provider: string;
-  readonly defaultBranch: string;
-  readonly headCommit?: string | null;
-  readonly status: string;
-  readonly initialCommit?: string | null;
-}
-
-export interface RepositoryMetadataPatch {
-  readonly defaultBranch?: string;
-  readonly headCommit?: string | null;
-  readonly status?: string;
-  readonly initialCommit?: string | null;
-}
-
 export interface PublicReleaseRetention {
   readonly pinned: boolean;
   readonly pinnedBy: string | null;
@@ -136,7 +109,6 @@ export interface PublicRelease {
   readonly checksum: string;
   readonly manifest: Record<string, unknown>;
   readonly sizeBytes: number | null;
-  readonly sourceCommit: string | null;
   readonly verificationStatus: string;
   readonly createdBy: string;
   readonly createdAt: string;
@@ -145,7 +117,6 @@ export interface PublicRelease {
 
 export interface ReleaseListOptions {
   readonly query?: string;
-  readonly sourceCommit?: string;
   readonly sort?: 'version' | '-version' | 'createdAt' | '-createdAt';
   readonly limit?: number;
   readonly offset?: number;
@@ -238,7 +209,7 @@ export interface AuditClientSummary {
 }
 
 export type AuditResult = 'success' | 'failure' | 'denied';
-export type AuditSource = 'web' | 'agent' | 'git' | 'system';
+export type AuditSource = 'web' | 'agent' | 'system';
 
 export interface AuditLogInput {
   readonly actorId?: string | null;
@@ -364,18 +335,6 @@ interface DbApplicationRow extends Row {
   updatedAt: Date | string;
 }
 
-interface DbRepositoryRow extends Row {
-  id: string;
-  applicationId: string;
-  provider: string;
-  defaultBranch: string;
-  headCommit: string | null;
-  status: string;
-  initialCommit: string | null;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-}
-
 interface DbReleaseRow extends Row {
   id: string;
   applicationId: string;
@@ -384,7 +343,6 @@ interface DbReleaseRow extends Row {
   manifest: string | Record<string, unknown>;
   storageKey: string | null;
   sizeBytes: number | string | null;
-  sourceCommit: string | null;
   verificationStatus: string;
   createdBy: string;
   createdAt: Date | string;
@@ -579,90 +537,6 @@ export class HubManagementStore {
     };
   }
 
-  async createRepository(
-    applicationId: string,
-    input: RepositoryMetadataInput,
-  ): Promise<RepositoryMetadata> {
-    await this.requireApplication(applicationId);
-    const existing = await this.getRepository(applicationId);
-    if (existing)
-      throw conflict('REPOSITORY_ALREADY_EXISTS', 'Repository already exists.');
-    const now = new Date();
-    const row: DbRepositoryRow = {
-      id: crypto.randomUUID(),
-      applicationId,
-      provider: requireText(input.provider, 'provider', 32),
-      defaultBranch: requireText(input.defaultBranch, 'defaultBranch', 255),
-      headCommit: normalizeOptional(input.headCommit),
-      status: requireText(input.status, 'status', 32),
-      initialCommit: normalizeOptional(input.initialCommit),
-      createdAt: now,
-      updatedAt: now,
-    };
-    await this.connection.query
-      .insertInto<DbRepositoryRow>('hubRepositories')
-      .values(row)
-      .execute();
-    return toRepository(row);
-  }
-
-  async getRepository(
-    applicationId: string,
-  ): Promise<RepositoryMetadata | undefined> {
-    const row = await this.connection.query
-      .selectFrom<DbRepositoryRow>('hubRepositories')
-      .selectAll()
-      .where('applicationId', '=', applicationId)
-      .executeTakeFirst<DbRepositoryRow>();
-    return row ? toRepository(row) : undefined;
-  }
-
-  async updateRepository(
-    applicationId: string,
-    patch: RepositoryMetadataPatch,
-  ): Promise<RepositoryMetadata> {
-    await this.requireApplication(applicationId);
-    const current = await this.getRepository(applicationId);
-    if (!current)
-      throw notFound('REPOSITORY_NOT_FOUND', 'Repository was not found.');
-    const row = {
-      defaultBranch:
-        patch.defaultBranch === undefined
-          ? current.defaultBranch
-          : requireText(patch.defaultBranch, 'defaultBranch', 255),
-      headCommit:
-        patch.headCommit === undefined
-          ? current.headCommit
-          : normalizeOptional(patch.headCommit),
-      status:
-        patch.status === undefined
-          ? current.status
-          : requireText(patch.status, 'status', 32),
-      initialCommit:
-        patch.initialCommit === undefined
-          ? current.initialCommit
-          : normalizeOptional(patch.initialCommit),
-      updatedAt: new Date(),
-    };
-    await this.connection.query
-      .updateTable<DbRepositoryRow>('hubRepositories')
-      .set(row)
-      .where('applicationId', '=', applicationId)
-      .execute();
-    const updated = await this.getRepository(applicationId);
-    if (!updated)
-      throw notFound('REPOSITORY_NOT_FOUND', 'Repository was not found.');
-    return updated;
-  }
-
-  async deleteRepository(applicationId: string): Promise<boolean> {
-    const result = await this.connection.query
-      .deleteFrom<DbRepositoryRow>('hubRepositories')
-      .where('applicationId', '=', applicationId)
-      .execute();
-    return result.deletedCount === 1;
-  }
-
   async listReleases(
     applicationId: string,
     options: ReleaseListOptions = {},
@@ -675,8 +549,6 @@ export class HubManagementStore {
       .where('applicationId', '=', applicationId);
     if (options.query)
       query = query.where('version', 'like', `%${escapeLike(options.query)}%`);
-    if (options.sourceCommit)
-      query = query.where('sourceCommit', '=', options.sourceCommit);
     const [rows, total] = await Promise.all([
       query
         .orderBy(...releaseOrder(options.sort))
@@ -1442,7 +1314,6 @@ export class HubManagementStore {
       checksum: row.checksum,
       manifest: parseObject(row.manifest),
       sizeBytes: row.sizeBytes === null ? null : numberValue(row.sizeBytes, 0),
-      sourceCommit: row.sourceCommit,
       verificationStatus: row.verificationStatus,
       createdBy: row.createdBy,
       createdAt: dateString(row.createdAt),
@@ -1792,8 +1663,6 @@ export class HubManagementStore {
       .where('applicationId', '=', applicationId);
     if (options.query)
       query = query.where('version', 'like', `%${escapeLike(options.query)}%`);
-    if (options.sourceCommit)
-      query = query.where('sourceCommit', '=', options.sourceCommit);
     const row = await query.executeTakeFirst<{ total: number | string }>();
     return numberValue(row?.total, 0);
   }
@@ -1813,20 +1682,6 @@ function toApplication(row: DbApplicationRow): ManagedApplication {
     defaultEnvironmentId: row.defaultEnvironmentId,
     activeReleaseId: row.activeReleaseId,
     createdBy: row.createdBy,
-    createdAt: dateString(row.createdAt),
-    updatedAt: dateString(row.updatedAt),
-  };
-}
-
-function toRepository(row: DbRepositoryRow): RepositoryMetadata {
-  return {
-    id: row.id,
-    applicationId: row.applicationId,
-    provider: row.provider,
-    defaultBranch: row.defaultBranch,
-    headCommit: row.headCommit,
-    status: row.status,
-    initialCommit: row.initialCommit,
     createdAt: dateString(row.createdAt),
     updatedAt: dateString(row.updatedAt),
   };
@@ -2007,9 +1862,7 @@ function normalizeAuditResult(value: string): AuditResult {
 }
 
 function normalizeAuditSource(value: string): AuditSource {
-  return value === 'agent' || value === 'git' || value === 'system'
-    ? value
-    : 'web';
+  return value === 'agent' || value === 'system' ? value : 'web';
 }
 
 function parseObject(value: unknown): Record<string, unknown> {

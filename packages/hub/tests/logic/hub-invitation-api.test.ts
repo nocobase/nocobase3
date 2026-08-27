@@ -1,16 +1,13 @@
 // @vitest-environment node
 
-import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createApp, type HubApp } from '../../server/index.ts';
 
-const execFileAsync = promisify(execFile);
 const browserOrigin = 'http://127.0.0.1:13221';
 const authSecret = 'hub-invitation-test-secret-at-least-32-characters';
 
@@ -21,7 +18,6 @@ describe('Hub invitation API', () => {
 
   beforeEach(async () => {
     temporaryRoot = await mkdtemp(path.join(tmpdir(), 'hub-invitation-api-'));
-    const seedPath = await createRepositorySeed(temporaryRoot);
     app = createApp({
       appName: 'hub',
       basePath: '/hub',
@@ -30,8 +26,6 @@ describe('Hub invitation API', () => {
       databasePath: path.join(temporaryRoot, 'hub.sqlite'),
       authSecret,
       authBaseUrl: `${browserOrigin}/hub/api/auth`,
-      sourceRoot: path.join(temporaryRoot, 'sources'),
-      repositorySeedPath: seedPath,
       releaseRoot: path.join(temporaryRoot, 'releases'),
       runtimeSecretEncryptionKey: Buffer.alloc(32, 9).toString('base64'),
     });
@@ -174,14 +168,7 @@ describe('Hub invitation API', () => {
     const device = await publicRequest('/agent-auth/device', {
       clientId: 'nb-cli',
       clientName: 'Invited Developer Agent',
-      scopes: [
-        'profile',
-        'apps:read',
-        'source:read',
-        'source:write',
-        'releases:read',
-        'releases:publish',
-      ],
+      scopes: ['profile', 'apps:read', 'releases:read', 'releases:publish'],
       applicationScope: {
         mode: 'selected',
         applicationIds: [application.id],
@@ -203,14 +190,7 @@ describe('Hub invitation API', () => {
       {
         method: 'POST',
         body: JSON.stringify({
-          scopes: [
-            'profile',
-            'apps:read',
-            'source:read',
-            'source:write',
-            'releases:read',
-            'releases:publish',
-          ],
+          scopes: ['profile', 'apps:read', 'releases:read', 'releases:publish'],
           applicationScope: {
             mode: 'selected',
             applicationIds: [application.id],
@@ -510,29 +490,4 @@ async function setupOwnerAndSignIn(app: HubApp): Promise<string> {
   );
   expect(signIn.status).toBe(200);
   return signIn.headers.get('set-cookie') ?? '';
-}
-
-async function createRepositorySeed(root: string): Promise<string> {
-  const worktree = path.join(root, 'seed-worktree');
-  const bare = path.join(root, 'default-template.git');
-  await mkdir(worktree, { recursive: true });
-  await execFileAsync('git', ['init', '--initial-branch=main'], {
-    cwd: worktree,
-  });
-  await writeFile(path.join(worktree, 'README.md'), '# Default APP\n');
-  await execFileAsync('git', ['add', 'README.md'], { cwd: worktree });
-  await execFileAsync('git', ['commit', '-m', 'Initial template'], {
-    cwd: worktree,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'NocoBase',
-      GIT_AUTHOR_EMAIL: 'support@nocobase.com',
-      GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z',
-      GIT_COMMITTER_NAME: 'NocoBase',
-      GIT_COMMITTER_EMAIL: 'support@nocobase.com',
-      GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z',
-    },
-  });
-  await execFileAsync('git', ['clone', '--bare', '--', worktree, bare]);
-  return bare;
 }

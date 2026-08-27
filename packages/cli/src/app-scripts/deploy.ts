@@ -1,17 +1,15 @@
 import AppDeployRelease from '../commands/app/deploy.ts';
 import AppPublish from '../commands/app/publish.ts';
 
-/**
- * The app-local default is a complete source-to-runtime deployment. Explicit Release, rollback, and redeploy flags
- * retain the narrower deployment-only workflow implemented by the legacy command.
- */
+/** The app-local default builds, publishes, and deploys. Release selectors keep the deployment-only workflow. */
 export default class AppDeploy extends AppDeployRelease {
   static override summary = 'Release and deploy the current app to its Hub.';
   static override description =
-    'With no Release selector, associates the local app when needed, pushes its source snapshot, creates the next patch Release, and deploys it. Use --release, --rollback, or --redeploy to operate on an existing Release.';
+    'With no Release selector, associates the local app when needed, builds and uploads the next patch Release, and deploys it. Use --release, --rollback, or --redeploy to operate on an existing Release.';
 
   static override examples = [
     'pnpm run deploy --hub https://hub.example.com/hub',
+    'pnpm run deploy --hub https://hub.example.com/hub --app sales',
     'pnpm run deploy',
     'pnpm run deploy --release 1.4.0 --non-interactive',
     'pnpm run deploy --release 1.3.0 --rollback --yes --non-interactive',
@@ -25,12 +23,6 @@ export default class AppDeploy extends AppDeployRelease {
       return;
     }
 
-    if (flags.app) {
-      this.error(
-        '--app is only available when deploying an existing Release. Run bare deploy from the application working directory.',
-        { exit: 2 },
-      );
-    }
     if (flags.yes) {
       this.error('--yes is only available with --rollback.', { exit: 2 });
     }
@@ -39,6 +31,7 @@ export default class AppDeploy extends AppDeployRelease {
       [
         ...(flags.dir ? ['--dir', flags.dir] : []),
         ...(flags.hub ? ['--hub', flags.hub] : []),
+        ...(flags.app ? ['--app', flags.app] : []),
         ...(flags['non-interactive'] ? ['--non-interactive'] : []),
         ...(flags['dry-run'] ? ['--dry-run'] : []),
         ...(flags.json ? ['--json'] : []),

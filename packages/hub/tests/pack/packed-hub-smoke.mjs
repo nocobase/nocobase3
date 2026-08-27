@@ -30,6 +30,10 @@ try {
   assertIncluded(listing, 'package/client/index.html');
   assertIncluded(listing, 'package/vendor/');
   assertIncluded(listing, 'package/resources/default-app/metadata.json');
+  assertIncluded(
+    listing,
+    'package/resources/default-app/initial-release.tar.gz',
+  );
   assertExcluded(
     listing,
     /(?:^|\/)(?:\.agent-annotations|\.nocobase|app-dist|tests|e2e)(?:\/|$)/,
@@ -79,7 +83,6 @@ try {
         HUB_ENABLED: 'true',
         AUTH_SECRET: 'packed-hub-smoke-auth-secret-at-least-32-chars',
         HUB_DATABASE_PATH: path.join(root, 'runtime/hub.sqlite'),
-        HUB_SOURCE_ROOT: path.join(root, 'runtime/sources'),
         HUB_RELEASE_ROOT: path.join(root, 'runtime/releases'),
         HUB_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 13).toString('base64url'),
         APP_SERVER_HOST: '127.0.0.1',
@@ -295,11 +298,7 @@ function assertDatabaseState(root, databasePath) {
 async function verifyDefaultResources(root, packageDirectory) {
   const resources = path.join(packageDirectory, 'resources/default-app');
   const resourceEntries = readdirSync(resources).sort();
-  const expectedEntries = [
-    'initial-release.tar.gz',
-    'metadata.json',
-    'source.bundle',
-  ];
+  const expectedEntries = ['initial-release.tar.gz', 'metadata.json'];
   if (JSON.stringify(resourceEntries) !== JSON.stringify(expectedEntries)) {
     throw new Error(
       `Default APP resources contain unexpected files: ${JSON.stringify(resourceEntries)}`,
@@ -309,9 +308,7 @@ async function verifyDefaultResources(root, packageDirectory) {
   const metadata = JSON.parse(
     await readFile(path.join(resources, 'metadata.json'), 'utf8'),
   );
-  const bundlePath = path.join(resources, 'source.bundle');
   const archivePath = path.join(resources, 'initial-release.tar.gz');
-  const bundle = await readFile(bundlePath);
   const archive = await readFile(archivePath);
   const archiveChecksum = sha256(archive);
   if (
@@ -324,11 +321,7 @@ async function verifyDefaultResources(root, packageDirectory) {
   }
   const resourceDigest = sha256(
     Buffer.concat([
-      Buffer.from(
-        `nocobase-default-app-resources-v1\0${metadata.release.sourceCommit}\0`,
-        'utf8',
-      ),
-      createHash('sha256').update(bundle).digest(),
+      Buffer.from('nocobase-default-app-resources-v1\0', 'utf8'),
       createHash('sha256').update(archive).digest(),
     ]),
   );
@@ -338,48 +331,20 @@ async function verifyDefaultResources(root, packageDirectory) {
     );
   }
 
-  const { stdout: bundleHeads } = await execFileAsync('git', [
-    'bundle',
-    'list-heads',
-    bundlePath,
-    'refs/heads/main',
-  ]);
-  if (
-    bundleHeads.trim() !== `${metadata.release.sourceCommit} refs/heads/main`
-  ) {
-    throw new Error('Default APP source bundle HEAD does not match metadata.');
-  }
-  const source = path.join(root, 'default-source');
-  await execFileAsync('git', ['clone', bundlePath, source]);
-  const { stdout: sourceFiles } = await execFileAsync('git', [
-    '-C',
-    source,
-    'ls-files',
-  ]);
-  const { stdout: sourceModes } = await execFileAsync('git', [
-    '-C',
-    source,
-    'ls-files',
-    '--stage',
-  ]);
-  assertExcluded(
-    sourceFiles,
-    /^(?:\.agent-annotations|\.nocobase|\.playwright-cli|app-dist|dist|node_modules|playwright-report|public\/storage|storage)(?:\/|$)/,
-  );
-  assertIncluded(sourceFiles, '.env.example');
-  assertExcluded(sourceFiles, /(?:^|\/)\.env(?:$|\.(?!example$))/m);
-  if (/^120000 /m.test(sourceModes)) {
-    throw new Error('Default APP source bundle contains a symbolic link.');
-  }
-  const sourceManifest = await readFile(
-    path.join(source, 'package.json'),
-    'utf8',
-  );
-  if (/"(?:workspace|catalog):/.test(sourceManifest)) {
-    throw new Error('Default APP source bundle contains workspace protocols.');
-  }
-  if (JSON.parse(sourceManifest).version !== metadata.release.version) {
-    throw new Error('Default APP source and release versions do not match.');
+  const releaseKeys = Object.keys(metadata.release).sort();
+  const expectedReleaseKeys = [
+    'archiveChecksum',
+    'archiveFormat',
+    'archiveSizeBytes',
+    'checksum',
+    'manifest',
+    'sizeBytes',
+    'version',
+  ];
+  if (JSON.stringify(releaseKeys) !== JSON.stringify(expectedReleaseKeys)) {
+    throw new Error(
+      `Default APP metadata contains unexpected release fields: ${JSON.stringify(releaseKeys)}.`,
+    );
   }
 
   const { stdout: archiveEntries } = await execFileAsync(
@@ -424,6 +389,18 @@ async function verifyDefaultResources(root, packageDirectory) {
   );
   if (JSON.stringify(manifest) !== JSON.stringify(metadata.release.manifest)) {
     throw new Error('Default APP release manifest does not match metadata.');
+  }
+  const manifestKeys = Object.keys(manifest).sort();
+  const expectedManifestKeys = [
+    'basePath',
+    'client',
+    'schemaVersion',
+    'server',
+  ];
+  if (JSON.stringify(manifestKeys) !== JSON.stringify(expectedManifestKeys)) {
+    throw new Error(
+      `Default APP release manifest contains unexpected fields: ${JSON.stringify(manifestKeys)}.`,
+    );
   }
 }
 

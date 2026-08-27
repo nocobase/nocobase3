@@ -4,9 +4,8 @@ import {
   Boxes,
   Download,
   ExternalLink,
-  GitBranch,
-  GitCommit,
   KeyRound,
+  PackageCheck,
   Rocket,
   Settings2,
   SquareTerminal,
@@ -71,7 +70,6 @@ import {
   type HubMe,
   type HubMember,
   type HubRelease,
-  type HubRepository,
   type HubRole,
   type HubRuntime,
   type HubRuntimeSecretSummary,
@@ -161,15 +159,12 @@ export function ApplicationDetailPage({
     'update',
     applicationId,
   );
-  const canReadRepository = hasHubCapability(
+  const canDevelop = hasHubCapability(
     capabilities,
-    'hub.repository',
-    'read',
+    'hub.release',
+    'create',
     applicationId,
   );
-  const canDevelop =
-    hasHubCapability(capabilities, 'hub.repository', 'update', applicationId) &&
-    hasHubCapability(capabilities, 'hub.release', 'create', applicationId);
   const canReadRuntime = hasHubCapability(
     capabilities,
     'hub.runtime',
@@ -246,12 +241,6 @@ export function ApplicationDetailPage({
     path: encodedId ? `/apps/${encodedId}/deployments` : null,
     fetcher,
     enabled: canReadDeployments,
-  });
-  const repository = useHubQuery<HubRepository>({
-    path:
-      encodedId && canReadRepository ? `/apps/${encodedId}/repository` : null,
-    fetcher,
-    enabled: canReadRepository,
   });
   const runtimeSnapshot = useHubQuery<HubRuntime>({
     path: encodedId && canReadRuntime ? `/apps/${encodedId}/runtime` : null,
@@ -563,13 +552,7 @@ export function ApplicationDetailPage({
         </TabsContent>
         {canDevelop ? (
           <TabsContent value='development' className='pt-4'>
-            <ApplicationDevelopment
-              application={applicationData}
-              repository={repository.data}
-              loading={repository.loading}
-              error={repository.error}
-              onRetry={repository.reload}
-            />
+            <ApplicationDevelopment application={applicationData} />
           </TabsContent>
         ) : null}
         {canReadReleases ? (
@@ -893,7 +876,7 @@ function ApplicationOverview({
         status={canReadDeployments ? latestDeployment?.status : undefined}
       />
       <OverviewCard
-        icon={<GitCommit aria-hidden='true' />}
+        icon={<PackageCheck aria-hidden='true' />}
         label={translate(
           'hub.application.overview.availableReleases',
           'Available releases',
@@ -1040,9 +1023,6 @@ function ApplicationReleases({
                   )}
                 </TableHead>
                 <TableHead>
-                  {translate('hub.releases.columns.source', 'Source')}
-                </TableHead>
-                <TableHead>
                   {translate('hub.releases.columns.size', 'Size')}
                 </TableHead>
                 <TableHead>
@@ -1092,9 +1072,6 @@ function ApplicationReleases({
                     </TableCell>
                     <TableCell>
                       <HubStatusBadge status={release.verificationStatus} />
-                    </TableCell>
-                    <TableCell className='font-mono text-xs'>
-                      {release.sourceCommit ?? '—'}
                     </TableCell>
                     <TableCell>{formatHubBytes(release.sizeBytes)}</TableCell>
                     <TableCell>{formatHubDate(release.createdAt)}</TableCell>
@@ -1183,7 +1160,7 @@ function ApplicationReleases({
             <DialogDescription>
               {translate(
                 'hub.releases.detail.description',
-                'Immutable build metadata, source revision, checksum, and retention state.',
+                'Immutable build metadata, checksum, and retention state.',
               )}
             </DialogDescription>
           </DialogHeader>
@@ -1283,11 +1260,6 @@ function ReleaseDetails({
         <Detail
           label={translate('hub.common.status', 'Status')}
           value={getStatusLabel(release.verificationStatus, translate)}
-        />
-        <Detail
-          label={translate('hub.releases.detail.sourceCommit', 'Source commit')}
-          value={release.sourceCommit ?? '—'}
-          mono
         />
         <Detail
           label={translate('hub.releases.detail.checksum', 'Checksum')}
@@ -1643,75 +1615,36 @@ function ApplicationDeployments({
 
 function ApplicationDevelopment({
   application,
-  repository,
-  loading,
-  error,
-  onRetry,
 }: {
   application: HubApplication;
-  repository: HubRepository | null;
-  loading: boolean;
-  error: Error | null;
-  onRetry: () => void;
 }) {
   const translate = useTranslate();
   const [copied, setCopied] = useState(false);
-  if (loading)
-    return (
-      <HubLoadingState
-        label={translate('hub.repository.loading', 'Loading repository')}
-      />
-    );
-  if (error) return <HubErrorState error={error} onRetry={onRetry} />;
-  if (!repository) {
-    return (
-      <HubEmptyState
-        title={translate(
-          'hub.repository.unavailable',
-          'Source repository is unavailable',
-        )}
-        description={translate(
-          'hub.repository.unavailableDescription',
-          'Hub could not load the authoritative source repository. Retry after repository initialization completes.',
-        )}
-      />
-    );
-  }
   const hubUrl = resolveHubPublicUrl();
   const prompt = translateWithValues(
     translate,
     'hub.development.prompt',
-    `Develop the NocoBase Hub application “{{name}}” (slug: {{slug}}) in a local working copy.
+    `Develop the NocoBase Hub application “{{name}}” (slug: {{slug}}) from source kept on my local machine.
 
 Hub URL: {{hubUrl}}
-Expected source repository: {{cloneUrl}}
-Default branch: {{branch}}
-Current Hub head: {{headCommit}}
-
-Use the application-local pnpm scripts and follow these steps. Do not clone the Hub repository with git directly, do not request or expose a password or access token, and do not discard any existing local changes.
+Hub stores only build artifacts, Releases, and Deployments. It does not store or restore application source code.
 
 1. Check the local prerequisites. Node.js 24 or later and pnpm 11 or later are required.
 
 node --version
 pnpm --version
 
-2. Use ~/.nocobase/hub/apps/{{slug}} as the local workspace. If that directory does not exist, pull the latest Hub-managed source and initialize the development environment with:
+2. Ask me for the existing local source directory before changing anything. Preserve every local change in that directory. Do not download, pull, or reconstruct source from Hub.
 
-pnpm create @nocobase/app ~/.nocobase/hub/apps/{{slug}} --hub {{hubUrl}} --app {{slug}}
+If I confirm that no source directory exists and this APP should start again from the default template, create a new local project in an empty directory:
 
-This command initializes only an empty destination, writes local database and environment configuration, and installs dependencies. If Device Authorization opens a browser page, ask me to approve it and then let the command continue.
+pnpm create @nocobase/app <directory>
 
-If the workspace already exists, do not overwrite it or run the create command against it. Enter it, confirm that it belongs to this Hub application, preserve every local change, and then pull the latest source snapshot:
+This creates new template source; it does not recover the source used by an existing Release.
 
-cd ~/.nocobase/hub/apps/{{slug}}
-pnpm run status --json
-pnpm run pull --non-interactive
+3. Enter the confirmed application directory and start the development server:
 
-If pull reports that both local and Hub source changed, stop and preserve the local work. Do not force an overwrite; report the conflict so it can be resolved deliberately.
-
-3. Enter the application directory and start the development server:
-
-cd ~/.nocobase/hub/apps/{{slug}}
+cd <directory>
 pnpm run dev
 
 Keep the development server running while making the requested changes. Record the local URL and verify the relevant user flows in a browser.
@@ -1722,37 +1655,28 @@ pnpm check
 
 Fix any failure instead of skipping or weakening checks.
 
-5. Push the finished source snapshot to Hub. This excludes dependencies, build output, runtime data, secrets, and local Hub state:
-
-pnpm run push --non-interactive --json
-
-If Hub source advanced, the command must reject the push. Pull and resolve the conflict instead of forcing an overwrite.
-
-6. Choose only the result I requested:
+5. Choose only the result I requested. These commands build locally and send only the packaged artifact to Hub.
 
 - To create a verified Release without deploying it, validate and then release:
 
-pnpm run release --bump patch --dry-run --non-interactive --json
-pnpm run release --bump patch --non-interactive --json
+pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --dry-run --non-interactive --json
+pnpm run release --hub {{hubUrl}} --app {{slug}} --bump patch --non-interactive --json
 
-- To deploy the current source, do not create a separate Release first. Run the complete source-to-runtime workflow:
+- To build, create the next patch Release, and deploy it:
 
-pnpm run deploy --non-interactive --json
+pnpm run deploy --hub {{hubUrl}} --app {{slug}} --non-interactive --json
 
-The deploy script pushes the source, creates the next patch Release, and deploys it. Do not deploy unless I explicitly requested deployment. If Device Authorization is required, ask me to approve the browser page. If a Release or Deployment is interrupted, resume with the --operation-id command printed by the script instead of starting a duplicate operation.
+After the first successful association, the Hub and APP arguments are saved locally and may be omitted. Do not deploy unless I explicitly requested deployment. If Device Authorization is required, ask me to approve the browser page. If a Release or Deployment is interrupted, resume with the --operation-id command printed by the script instead of starting a duplicate operation.
 
-7. Report the synchronized source commit and every requested Release or Deployment ID, version, status, URL, and verification result.`,
+6. Report every requested Release or Deployment ID, version, status, URL, checksum, and verification result. Never upload source code, dependencies, local databases, secrets, or runtime data to Hub.`,
     {
-      branch: repository.defaultBranch,
-      headCommit: repository.headCommit ?? 'none',
       hubUrl,
       name: application.name,
       slug: application.slug,
-      cloneUrl: repository.cloneUrl,
     },
   );
   return (
-    <div className='grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,1fr)]'>
+    <div className='grid gap-4'>
       <Card>
         <CardHeader>
           <div className='flex items-start justify-between gap-4'>
@@ -1766,7 +1690,7 @@ The deploy script pushes the source, creates the next patch Release, and deploys
               <CardDescription>
                 {translate(
                   'hub.development.description',
-                  'Copy one instruction to your local Coding Agent. The Agent prepares a local workspace and publishes the finished work back to Hub.',
+                  'Copy one instruction to your local Coding Agent. Source stays on your machine; only build artifacts are published to Hub.',
                 )}
               </CardDescription>
             </div>
@@ -1793,46 +1717,6 @@ The deploy script pushes the source, creates the next patch Release, and deploys
           <pre className='max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border bg-muted/35 p-4 font-mono text-xs leading-6'>
             {prompt}
           </pre>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className='flex items-center gap-2'>
-            <GitBranch className='size-4' aria-hidden='true' />
-            {translate('hub.repository.title', 'Source repository')}
-          </CardTitle>
-          <CardDescription>
-            {translate(
-              'hub.repository.description',
-              'Hub stores the authoritative source and commit history. Local workspaces are disposable working copies.',
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <dl className='grid gap-4 text-sm'>
-            <Detail
-              label={translate('hub.repository.cloneUrl', 'Clone URL')}
-              value={repository.cloneUrl}
-              mono
-            />
-            <Detail
-              label={translate('hub.repository.branch', 'Default branch')}
-              value={repository.defaultBranch}
-            />
-            <Detail
-              label={translate('hub.repository.head', 'Head commit')}
-              value={repository.headCommit ?? '—'}
-              mono
-            />
-            <Detail
-              label={translate('hub.common.status', 'Status')}
-              value={getStatusLabel(repository.status, translate)}
-            />
-            <Detail
-              label={translate('hub.common.updated', 'Updated')}
-              value={formatHubDate(repository.updatedAt)}
-            />
-          </dl>
         </CardContent>
       </Card>
     </div>
@@ -2340,7 +2224,7 @@ function ApplicationPermissions({
           <CardDescription>
             {translate(
               'hub.permissions.rolesDescription',
-              'Roles are read-only capability sets. Deployer controls deployments; Developer publishes source and Releases.',
+              'Roles are read-only capability sets. Deployer controls deployments; Developer publishes build artifacts as Releases.',
             )}
           </CardDescription>
         </CardHeader>
@@ -2488,7 +2372,7 @@ function ApplicationSettings({
             <CardDescription>
               {translate(
                 'hub.applicationSettings.slugImmutable',
-                'The application slug is its stable URL and repository identity and cannot be changed.',
+                'The application slug is its stable URL and deployment identity and cannot be changed.',
               )}
             </CardDescription>
           </CardHeader>
@@ -2695,7 +2579,7 @@ function ApplicationSettings({
             <CardDescription>
               {translate(
                 'hub.applicationSettings.archiveDescription',
-                'Archiving disables development and deployment while preserving source, Releases, data, and history.',
+                'Archiving disables publishing and deployment while preserving Releases, data, and history.',
               )}
             </CardDescription>
           </CardHeader>
@@ -2898,7 +2782,7 @@ function getApplicationSettingsActionCopy(
       title: ['hub.applicationSettings.archiveTitle', 'Archive application'],
       description: [
         'hub.applicationSettings.archiveConfirmDescription',
-        'Archive {{name}}? Development and deployment will be disabled, but its source, releases, data, and history will be preserved.',
+        'Archive {{name}}? Publishing and deployment will be disabled, but its Releases, data, and history will be preserved.',
       ],
       confirmLabel: [
         'hub.applicationSettings.archiveAction',
@@ -2914,7 +2798,7 @@ function getApplicationSettingsActionCopy(
       title: ['hub.applicationSettings.restoreTitle', 'Restore application'],
       description: [
         'hub.applicationSettings.restoreConfirmDescription',
-        'Restore {{name}} and allow development and deployment again?',
+        'Restore {{name}} and allow publishing and deployment again?',
       ],
       confirmLabel: [
         'hub.applicationSettings.restoreAction',

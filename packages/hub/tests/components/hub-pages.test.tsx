@@ -33,7 +33,6 @@ const application: HubApplication = {
   activeRelease: {
     id: 'release-2',
     version: '1.2.0',
-    sourceCommit: 'abc123',
     createdAt: '2026-08-21T09:00:00.000Z',
   },
   createdBy: 'owner',
@@ -48,7 +47,6 @@ const release: HubRelease = {
   checksum: 'sha256:abc',
   manifest: { entry: 'index.html' },
   sizeBytes: 1024,
-  sourceCommit: 'abc123',
   verificationStatus: 'verified',
   createdBy: 'owner',
   createdAt: '2026-08-21T09:00:00.000Z',
@@ -58,7 +56,6 @@ const previousRelease: HubRelease = {
   ...release,
   id: 'release-1',
   version: '1.1.0',
-  sourceCommit: 'def456',
   createdAt: '2026-08-20T09:00:00.000Z',
 };
 
@@ -120,7 +117,6 @@ describe('Hub application pages', () => {
       latestRelease: {
         id: 'release-2',
         version: '1.2.0',
-        sourceCommit: 'abc123',
         createdAt: release.createdAt,
       },
       runtime: {
@@ -128,13 +124,6 @@ describe('Hub application pages', () => {
         health: 'healthy',
         releaseId: 'release-2',
         lastCheckedAt: '2026-08-21T09:02:00.000Z',
-      },
-      repository: {
-        provider: 'hub',
-        defaultBranch: 'main',
-        headCommit: 'abc123',
-        status: 'ready',
-        updatedAt: application.updatedAt,
       },
       links: {
         self: '/hub/api/apps/app-1',
@@ -148,13 +137,7 @@ describe('Hub application pages', () => {
         return response({
           user: null,
           roles: ['Viewer'],
-          capabilities: {
-            ...readOnly,
-            global: [
-              ...readOnly.global,
-              { resource: 'hub.repository', actions: ['read'] },
-            ],
-          },
+          capabilities: readOnly,
         });
       }
       throw new Error(`Unexpected request: ${path}`);
@@ -169,7 +152,7 @@ describe('Hub application pages', () => {
     expect(
       await screen.findByRole('button', { name: 'Open Inventory' }),
     ).toHaveAttribute('href', 'https://apps.example.com/inventory/');
-    expect(screen.getByText('1.2.0')).toBeInTheDocument();
+    expect(screen.getAllByText('1.2.0').length).toBeGreaterThan(0);
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /develop inventory/i }),
@@ -186,7 +169,6 @@ describe('Hub application pages', () => {
     const capabilities: HubCapabilities = {
       global: [
         { resource: 'hub.app', actions: ['read'] },
-        { resource: 'hub.repository', actions: ['read', 'update'] },
         { resource: 'hub.release', actions: ['read', 'create'] },
         {
           resource: 'hub.deployment',
@@ -198,13 +180,6 @@ describe('Hub application pages', () => {
     };
     const runningApplication: HubApplication = {
       ...application,
-      repository: {
-        provider: 'hub',
-        defaultBranch: 'main',
-        headCommit: 'abc123',
-        status: 'ready',
-        updatedAt: application.updatedAt,
-      },
       runtime: {
         state: 'running',
         health: 'healthy',
@@ -464,7 +439,6 @@ describe('Hub application pages', () => {
       latestRelease: {
         id: 'release-3',
         version: '1.3.0',
-        sourceCommit: 'def456',
         createdAt: '2026-08-22T09:00:00.000Z',
       },
     };
@@ -484,7 +458,7 @@ describe('Hub application pages', () => {
     );
 
     expect(await screen.findByText('1.2.0')).toBeInTheDocument();
-    expect(screen.queryByText('1.3.0')).not.toBeInTheDocument();
+    expect(screen.getByText('1.3.0')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /list view/i }));
     expect(screen.getByText('1.2.0')).toBeInTheDocument();
@@ -495,7 +469,6 @@ describe('Hub application pages', () => {
     const initialRelease = {
       id: 'release-initial',
       version: '0.0.1',
-      sourceCommit: 'abc123',
       createdAt: '2026-08-22T09:00:00.000Z',
     };
     const undeployedApplication: HubApplication = {
@@ -1096,7 +1069,6 @@ describe('Hub application pages', () => {
     const capabilities: HubCapabilities = {
       global: [
         { resource: 'hub.app', actions: ['read', 'update', 'archive'] },
-        { resource: 'hub.repository', actions: ['read', 'update'] },
         { resource: 'hub.release', actions: ['read', 'create'] },
         { resource: 'hub.deployment', actions: ['read'] },
         { resource: 'hub.runtime', actions: ['read', 'control'] },
@@ -1117,16 +1089,6 @@ describe('Hub application pages', () => {
       if (path.endsWith('/apps/app-1/releases')) return response([release]);
       if (path.endsWith('/apps/app-1/deployments'))
         return response([deployment]);
-      if (path.endsWith('/apps/app-1/repository')) {
-        return response({
-          provider: 'hub',
-          cloneUrl: '/hub/git/inventory.git',
-          defaultBranch: 'main',
-          headCommit: 'abc123',
-          status: 'ready',
-          updatedAt: application.updatedAt,
-        });
-      }
       if (path.endsWith('/apps/app-1/runtime')) {
         return response({
           applicationId: 'app-1',
@@ -1229,11 +1191,10 @@ describe('Hub application pages', () => {
     );
   });
 
-  it('shows an executable APP script workflow in the development instruction', async () => {
+  it('shows an artifact-only workflow for source kept on the developer machine', async () => {
     const capabilities: HubCapabilities = {
       global: [
         { resource: 'hub.app', actions: ['read'] },
-        { resource: 'hub.repository', actions: ['read', 'update'] },
         { resource: 'hub.release', actions: ['read', 'create'] },
       ],
       application: [],
@@ -1242,16 +1203,6 @@ describe('Hub application pages', () => {
       const path = String(input);
       if (path.endsWith('/apps/app-1')) return response(application);
       if (path.endsWith('/apps/app-1/releases')) return response([]);
-      if (path.endsWith('/apps/app-1/repository')) {
-        return response({
-          provider: 'hub',
-          cloneUrl: '/hub/git/inventory.git',
-          defaultBranch: 'main',
-          headCommit: 'abc123',
-          status: 'ready',
-          updatedAt: application.updatedAt,
-        });
-      }
       if (path.endsWith('/me')) {
         return response({ user: null, roles: ['Developer'], capabilities });
       }
@@ -1267,29 +1218,31 @@ describe('Hub application pages', () => {
     const developmentInstruction = await screen.findByText(
       (_, element) =>
         element?.tagName === 'PRE' &&
-        element.textContent?.includes('pnpm create @nocobase/app') === true,
+        element.textContent?.includes('pnpm run release') === true,
     );
     const hubUrl = new URL('/hub', window.location.origin).toString();
     expect(developmentInstruction).toHaveTextContent(
-      `pnpm create @nocobase/app ~/.nocobase/hub/apps/inventory --hub ${hubUrl} --app inventory`,
-    );
-    expect(developmentInstruction).toHaveTextContent('Default branch: main');
-    expect(developmentInstruction).toHaveTextContent(
-      'Current Hub head: abc123',
+      `pnpm run release --hub ${hubUrl} --app inventory`,
     );
     expect(developmentInstruction).toHaveTextContent(
-      'cd ~/.nocobase/hub/apps/inventory',
+      'Ask me for the existing local source directory',
     );
-    expect(developmentInstruction).not.toHaveTextContent('./inventory');
-    expect(developmentInstruction).toHaveTextContent('pnpm run pull');
+    expect(developmentInstruction).toHaveTextContent(
+      'pnpm create @nocobase/app <directory>',
+    );
     expect(developmentInstruction).toHaveTextContent('pnpm run dev');
     expect(developmentInstruction).toHaveTextContent('pnpm check');
-    expect(developmentInstruction).toHaveTextContent('pnpm run push');
-    expect(developmentInstruction).toHaveTextContent(
-      'pnpm run release --bump patch',
-    );
     expect(developmentInstruction).toHaveTextContent('pnpm run deploy');
+    expect(developmentInstruction).not.toHaveTextContent('pnpm run pull');
+    expect(developmentInstruction).not.toHaveTextContent('pnpm run push');
+    expect(developmentInstruction).not.toHaveTextContent('source commit');
+    expect(developmentInstruction).not.toHaveTextContent('Clone URL');
     expect(developmentInstruction).not.toHaveTextContent('nb3 ');
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).endsWith('/apps/app-1/repository'),
+      ),
+    ).toBe(false);
   });
 
   it('does not request or misreport resources outside an app-only scope', async () => {
@@ -1341,12 +1294,9 @@ describe('Hub application pages', () => {
     ).toBe(false);
   });
 
-  it('does not offer development instructions to a repository reader', async () => {
+  it('does not offer development instructions without release creation access', async () => {
     const capabilities: HubCapabilities = {
-      global: [
-        ...readOnly.global,
-        { resource: 'hub.repository', actions: ['read'] },
-      ],
+      global: readOnly.global,
       application: [],
     };
     const fetchMock = vi.fn<typeof fetch>(async (input) => {
@@ -1358,16 +1308,6 @@ describe('Hub application pages', () => {
       if (path.endsWith('/apps/app-1/releases')) return response([release]);
       if (path.endsWith('/apps/app-1/deployments')) {
         return response([deployment]);
-      }
-      if (path.endsWith('/apps/app-1/repository')) {
-        return response({
-          provider: 'hub',
-          cloneUrl: '/hub/git/inventory.git',
-          defaultBranch: 'main',
-          headCommit: 'abc123',
-          status: 'ready',
-          updatedAt: application.updatedAt,
-        });
       }
       throw new Error(`Unexpected request: ${path}`);
     });
@@ -1911,7 +1851,6 @@ describe('Deployment detail page', () => {
           activeRelease: {
             id: 'release-3',
             version: '1.3.0',
-            sourceCommit: 'next',
             createdAt: '2026-08-22T09:00:00.000Z',
           },
         });

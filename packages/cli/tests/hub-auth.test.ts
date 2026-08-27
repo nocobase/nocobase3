@@ -73,7 +73,7 @@ describe('HubCredentialManager', () => {
     });
   });
 
-  it('gives a copyable legacy login command when a scope is missing', async () => {
+  it('gives a copyable login command when a scope is missing', async () => {
     const store = await createStore();
     await store.set({
       hub: HUB,
@@ -88,10 +88,10 @@ describe('HubCredentialManager', () => {
     const manager = new HubCredentialManager(HUB, { store });
 
     await expect(
-      manager.requireCredential(['source:read']),
+      manager.requireCredential(['releases:publish']),
     ).rejects.toMatchObject<Partial<HubCredentialError>>({
       code: 'INSUFFICIENT_SCOPE',
-      hint: `nb3 hub login --hub ${HUB} --scope source:read`,
+      hint: `nb3 hub login --hub ${HUB} --scope releases:publish`,
     });
   });
 
@@ -123,7 +123,7 @@ describe('HubCredentialManager', () => {
               expiresIn: 900,
               refreshToken: 'refresh',
               refreshExpiresIn: 3600,
-              scope: 'apps:read source:read',
+              scope: 'apps:read releases:read',
               applicationScope: { mode: 'all-authorized' },
             },
           }),
@@ -135,7 +135,7 @@ describe('HubCredentialManager', () => {
     const report = vi.fn();
 
     const result = await manager.authorizedWithDeviceLogin(
-      ['apps:read', 'source:read'],
+      ['apps:read', 'releases:read'],
       { clientName: 'NocoBase app scripts test', reportAuthorization: report },
       async (_client, credential) => credential.accessToken,
     );
@@ -146,7 +146,7 @@ describe('HubCredentialManager', () => {
     );
     expect(await store.get(HUB)).toMatchObject({
       accessToken: 'access',
-      scopes: ['apps:read', 'source:read'],
+      scopes: ['apps:read', 'releases:read'],
     });
   });
 });

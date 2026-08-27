@@ -103,7 +103,7 @@ export class HubCredentialManager {
 
   /**
    * Runs an authenticated operation and starts Device Authorization only when no usable credential is available.
-   * Package scripts use this for the first deploy or source sync, while the legacy nb3 surface keeps its explicit
+   * Package scripts use this for the first release or deploy, while the legacy nb3 surface keeps its explicit
    * login command and actionable error.
    */
   public async authorizedWithDeviceLogin<T>(

@@ -107,17 +107,6 @@ describe('Hub application-management schema migration', () => {
 
     const knex = await upgraded.connection.client<Knex>();
     const expectedSchema: Readonly<Record<string, readonly string[]>> = {
-      hubRepositories: [
-        'id',
-        'applicationId',
-        'provider',
-        'defaultBranch',
-        'headCommit',
-        'status',
-        'initialCommit',
-        'createdAt',
-        'updatedAt',
-      ],
       hubReleaseUploads: [
         'id',
         'applicationId',
@@ -127,7 +116,6 @@ describe('Hub application-management schema migration', () => {
         'archiveChecksum',
         'archiveSizeBytes',
         'archiveFormat',
-        'sourceCommit',
         'manifest',
         'status',
         'storageKey',

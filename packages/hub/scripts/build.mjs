@@ -23,7 +23,6 @@ const serverEnvKeys = [
   'AUTH_BASE_URL',
   'HUB_ENABLED',
   'HUB_DATABASE_PATH',
-  'HUB_SOURCE_ROOT',
   'HUB_RELEASE_ROOT',
   'APP_PUBLIC_ORIGIN',
   'HUB_MAX_UPLOAD_BYTES',
@@ -273,8 +272,6 @@ const build = ({
   );
   run('Generate default application resources', 'node', [
     './scripts/build-default-app-resources.mjs',
-    '--template-dir',
-    defaultTemplateDir,
     '--build-dir',
     path.join(defaultTemplateDir, 'dist'),
     '--output-dir',

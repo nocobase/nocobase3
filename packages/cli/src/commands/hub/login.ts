@@ -13,7 +13,9 @@ import {
 const DEFAULT_SCOPES: readonly AgentScope[] = [
   'profile',
   'apps:read',
-  'source:read',
+  'releases:read',
+  'deployments:read',
+  'runtime:read',
 ];
 
 export default class HubLogin extends Command {
@@ -23,7 +25,7 @@ export default class HubLogin extends Command {
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> --hub http://127.0.0.1:13000/hub',
-    '<%= config.bin %> <%= command.id %> --hub https://hub.example.com/hub --scope source:write',
+    '<%= config.bin %> <%= command.id %> --hub https://hub.example.com/hub --scope releases:publish',
     '<%= config.bin %> <%= command.id %> --hub https://hub.example.com/hub --json',
   ];
 
@@ -35,7 +37,7 @@ export default class HubLogin extends Command {
     }),
     scope: Flags.string({
       description:
-        'Agent scope to request. Repeat for multiple scopes. Defaults to profile, apps:read, and source:read.',
+        'Agent scope to request. Repeat for multiple scopes. Defaults to profile plus app, Release, deployment, and runtime read access.',
       multiple: true,
       options: [...AGENT_SCOPES],
     }),

@@ -7,8 +7,6 @@ export type AgentScope =
   | 'profile'
   | 'apps:create'
   | 'apps:read'
-  | 'source:read'
-  | 'source:write'
   | 'releases:read'
   | 'releases:publish'
   | 'deployments:read'
@@ -23,8 +21,6 @@ export const AGENT_SCOPES: readonly AgentScope[] = [
   'profile',
   'apps:create',
   'apps:read',
-  'source:read',
-  'source:write',
   'releases:read',
   'releases:publish',
   'deployments:read',

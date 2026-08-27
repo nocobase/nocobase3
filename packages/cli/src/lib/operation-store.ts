@@ -20,7 +20,7 @@ const SECRET_KEY_PATTERN = /token|secret|password|authorization|credential/i;
 const COMPLETED_OPERATION_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 const ABANDONED_OPERATION_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
-export type OperationKind = 'app-create' | 'app-deploy' | 'app-publish';
+export type OperationKind = 'app-deploy' | 'app-publish';
 
 export interface OperationArtifact {
   readonly path: string;
@@ -29,7 +29,6 @@ export interface OperationArtifact {
 
 export interface OperationRelease {
   readonly version: string;
-  readonly sourceCommit: string;
   readonly checksum: string;
   readonly sizeBytes: number;
   readonly archiveChecksum: string;
@@ -462,11 +461,7 @@ function validateDeployment(value: unknown): OperationDeployment | undefined {
 }
 
 function requireOperationKind(value: unknown): OperationKind {
-  if (
-    value !== 'app-create' &&
-    value !== 'app-deploy' &&
-    value !== 'app-publish'
-  ) {
+  if (value !== 'app-deploy' && value !== 'app-publish') {
     throw invalidJournal();
   }
   return value;
@@ -484,7 +479,6 @@ function validateRelease(value: unknown): OperationRelease | undefined {
   requireChecksum(archiveChecksum);
   return {
     version: requireText(value.version, 'release.version'),
-    sourceCommit: requireText(value.sourceCommit, 'release.sourceCommit'),
     checksum,
     sizeBytes: requireNonNegativeInteger(value.sizeBytes),
     archiveChecksum,

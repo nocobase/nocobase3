@@ -179,8 +179,6 @@
     "deploy": "nocobase-app deploy",
     "hub:login": "nocobase-app hub:login",
     "hub:logout": "nocobase-app hub:logout",
-    "pull": "nocobase-app pull",
-    "push": "nocobase-app push",
     "release": "nocobase-app release",
     "status": "nocobase-app status",
     "server:config": "tsx --tsconfig tsconfig.node.json ./scripts/server-config.ts",
