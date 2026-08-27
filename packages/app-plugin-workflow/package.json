@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

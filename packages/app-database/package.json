@@ -6,8 +6,8 @@
   "engines": {
     "node": ">=24.0.0"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -20,14 +20,14 @@
   "publishConfig": {
     "exports": {
       ".": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.js"
+        "types": "./dist/src/index.d.ts",
+        "import": "./dist/src/index.js"
       }
     },
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:db:up": "docker compose up -d postgres mysql",

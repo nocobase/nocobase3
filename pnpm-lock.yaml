@@ -987,12 +987,21 @@ importers:
       '@boringnode/queue':
         specifier: ^0.7.1
         version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@13.0.3))(kysely@0.29.5)
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../app-client
+      '@nocobase/app-sdk':
+        specifier: workspace:*
+        version: link:../app-sdk
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../dev-config
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
       better-sqlite3:
         specifier: ^13.0.3
         version: 13.0.3
@@ -1005,6 +1014,12 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.1.0
+      react-router:
+        specifier: 'catalog:'
+        version: 7.18.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
