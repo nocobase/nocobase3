@@ -18,6 +18,7 @@ const APP_COMMANDS = [
   'info',
   'list',
   'pull',
+  'skills-sync',
 ];
 const HUB_COMMANDS = [
   'create',

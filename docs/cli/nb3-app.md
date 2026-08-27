@@ -11,6 +11,7 @@ nb3 app create    创建本地 App 源码
 nb3 app dev       本地开发 App
 nb3 app info      查看 App 信息
 nb3 app config    查看或修改 App 配置
+nb3 app skills-sync  同步插件 skills 到 App
 nb3 app destroy   删除本地 App
 nb3 app deploy    部署 App 到 Hub（待实现）
 nb3 app pull      从 Hub 拉取已有 App（待实现）
@@ -100,6 +101,20 @@ nb3 app config hub http://localhost:3000      # 修改
 ```
 
 可修改的键是 `hub` 和 `name`。`template` 和 `templateVersion` 记录 App 的来源，不允许修改。
+
+## 同步插件 skills
+
+插件把自己的 skills 放在 `.agents/skills/nocobase-<包名>/`，这条命令把它们复制到 App 的同名目录下：
+
+```bash
+nb3 app skills-sync
+nb3 app skills-sync --plugin audit-log
+nb3 app skills-sync --dry-run
+```
+
+上游是唯一真相：每个同步过来的目录都会被整体替换，本地改动会丢失。需要自己写 skills 时，用一个不以 `nocobase-` 开头的目录名，同步不会碰它。
+
+升级插件之后如果它的 skills 有变化，重跑一次这条命令。
 
 ## 删除本地 App
 

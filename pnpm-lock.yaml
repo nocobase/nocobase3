@@ -1156,6 +1156,9 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../cli
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../queue
