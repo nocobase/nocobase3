@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
 import { Command, Flags } from '@oclif/core';
+import { CommandProgress } from '../../lib/command-progress.ts';
 import { HubCredentialManager } from '../../lib/hub-auth.ts';
 import { failHubCommand } from '../../lib/hub-command.ts';
 import {
@@ -81,6 +82,7 @@ export default class AppDeploy extends Command {
     const { flags } = await this.parse(AppDeploy);
     const operationId = flags['operation-id'] ?? randomUUID();
     let hub: string | undefined = flags.hub;
+    let progress: CommandProgress | undefined;
     try {
       if (flags.rollback && flags.redeploy) {
         throw new Error('--rollback and --redeploy cannot be used together.');
@@ -203,7 +205,17 @@ export default class AppDeploy extends Command {
           ) {
             throw new Error('Rollback cancelled.');
           }
+          const deploymentProgress = new CommandProgress(
+            `${deploymentAction(type)} ${application.slug}`,
+            2,
+          );
+          progress = deploymentProgress;
           const existingDeploymentId = operation.resourceIds?.deploymentId;
+          deploymentProgress.report(
+            existingDeploymentId
+              ? 'Resuming deployment'
+              : 'Submitting deployment',
+          );
           const deployment = existingDeploymentId
             ? await client.getDeployment(existingDeploymentId)
             : await client.createDeployment(
@@ -222,6 +234,7 @@ export default class AppDeploy extends Command {
             },
             step: 'deployment-created',
           }));
+          deploymentProgress.report('Waiting for deployment');
           const completed = await waitForDeployment(client, deployment);
           await updateOperation(operationId, (current) => ({
             ...current,
@@ -237,8 +250,10 @@ export default class AppDeploy extends Command {
           };
         },
       );
+      progress?.stop();
       this.printResult(result, normalizedHub, operationId, flags.json);
     } catch (error) {
+      progress?.stop('failed');
       const journal = await loadOperation(operationId).catch(() => undefined);
       failHubCommand(
         this,
@@ -435,4 +450,10 @@ function deploymentVerb(type: 'deploy' | 'rollback' | 'redeploy'): string {
   if (type === 'rollback') return 'Rolled back';
   if (type === 'redeploy') return 'Redeployed';
   return 'Deployed';
+}
+
+function deploymentAction(type: DeploymentType): string {
+  if (type === 'rollback') return 'Rolling back';
+  if (type === 'redeploy') return 'Redeploying';
+  return 'Deploying';
 }

@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { ux } from '@oclif/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CredentialStore } from '../src/lib/credential-store.ts';
@@ -29,6 +30,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   restoreEnvironment('NOCOBASE_CLI_ROOT', originalCliRoot);
   restoreEnvironment('PATH', originalPath);
@@ -37,6 +39,15 @@ afterEach(async () => {
 
 describe('application package-script workflows', () => {
   it('creates, binds, releases, and deploys an unlinked app from its build artifact', async () => {
+    const progressStart = vi
+      .spyOn(ux.action, 'start')
+      .mockImplementation(() => undefined);
+    const progressStatus = vi
+      .spyOn(ux.action, 'status', 'set')
+      .mockImplementation(() => undefined);
+    const progressStop = vi
+      .spyOn(ux.action, 'stop')
+      .mockImplementation(() => undefined);
     const project = await createProject();
     const fetchMock = releaseWorkflowFetch({ createApplication: true });
     vi.stubGlobal('fetch', fetchMock);
@@ -60,6 +71,18 @@ describe('application package-script workflows', () => {
       release: { id: 'release-1', version: '0.0.2' },
       deployment: { id: 'deployment-1', status: 'succeeded' },
     });
+    expect(progressStart).toHaveBeenCalledWith(
+      'Deploying sales',
+      '[1/6] Resolving application',
+    );
+    expect(progressStatus.mock.calls.map(([status]) => status)).toEqual([
+      '[2/6] Building application',
+      '[3/6] Packaging Release',
+      '[4/6] Uploading Release',
+      '[5/6] Verifying Release',
+      '[6/6] Deploying Release',
+    ]);
+    expect(progressStop).toHaveBeenCalledWith('done');
     expect(
       JSON.parse(
         await readFile(path.join(project, '.nocobase', 'config.json'), 'utf8'),
@@ -231,6 +254,15 @@ describe('application package-script workflows', () => {
   });
 
   it('keeps explicit Release deployment on the deployment-only workflow', async () => {
+    const progressStart = vi
+      .spyOn(ux.action, 'start')
+      .mockImplementation(() => undefined);
+    const progressStatus = vi
+      .spyOn(ux.action, 'status', 'set')
+      .mockImplementation(() => undefined);
+    const progressStop = vi
+      .spyOn(ux.action, 'stop')
+      .mockImplementation(() => undefined);
     const project = await createProject({ linked: true });
     const fetchMock = existingReleaseDeployFetch();
     vi.stubGlobal('fetch', fetchMock);
@@ -253,6 +285,12 @@ describe('application package-script workflows', () => {
       release: { id: 'release-existing', version: '1.0.0' },
       deployment: { id: 'deployment-existing', status: 'succeeded' },
     });
+    expect(progressStart).toHaveBeenCalledWith(
+      'Deploying sales',
+      '[1/2] Submitting deployment',
+    );
+    expect(progressStatus).toHaveBeenCalledWith('[2/2] Waiting for deployment');
+    expect(progressStop).toHaveBeenCalledWith('done');
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).includes('/release-uploads'),

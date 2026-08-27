@@ -1,6 +1,8 @@
 import type { Config } from '@oclif/core';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   loadAppScriptTestConfig,
@@ -15,6 +17,7 @@ const EXPECTED_SCRIPT_IDS = [
   'release',
   'status',
 ];
+const execFileAsync = promisify(execFile);
 
 let config: Config;
 
@@ -23,6 +26,25 @@ beforeAll(async () => {
 });
 
 describe('generated app package scripts', () => {
+  it('loads deploy from source through the app executable', async () => {
+    const result = await execFileAsync(
+      process.execPath,
+      [path.join(packageRoot, 'bin/app.js'), 'deploy', '--help'],
+      {
+        cwd: packageRoot,
+        env: {
+          ...process.env,
+          NB3_CLI_USE_DIST: '0',
+          NODE_ENV: 'production',
+          NODE_OPTIONS: '',
+        },
+      },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toContain('$ pnpm run deploy');
+  });
+
   it('exposes only the Hub workflows implemented for package scripts', () => {
     expect([...config.commandIDs].sort()).toEqual(EXPECTED_SCRIPT_IDS);
   });

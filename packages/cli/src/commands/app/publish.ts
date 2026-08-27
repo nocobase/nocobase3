@@ -5,6 +5,7 @@ import path from 'node:path';
 import { Command, Flags } from '@oclif/core';
 
 import { requireAppProject, writeAppConfig } from '../../lib/app-project.ts';
+import { CommandProgress } from '../../lib/command-progress.ts';
 import { HubCredentialManager } from '../../lib/hub-auth.ts';
 import { AppBuildError, failHubCommand } from '../../lib/hub-command.ts';
 import {
@@ -92,6 +93,7 @@ export default class AppPublish extends Command {
     const operationId = flags['operation-id'] ?? randomUUID();
     let hub: string | undefined = flags.hub;
     let projectDirectory: string | undefined = flags.dir;
+    let progress: CommandProgress | undefined;
     let suggestedVersion: string | undefined;
     try {
       const project = await requireAppProject(flags.dir);
@@ -101,6 +103,12 @@ export default class AppPublish extends Command {
       hub = normalizedHub;
       const applicationSlug =
         project.config.slug ?? applicationSlugForName(project.config.name);
+      const commandProgress = new CommandProgress(
+        `${flags.deploy ? 'Deploying' : 'Releasing'} ${applicationSlug}`,
+        flags.deploy ? 6 : 5,
+        !flags['dry-run'],
+      );
+      progress = commandProgress;
       const needsAssociation = !project.config.applicationId;
       const createsApplication = needsAssociation && !flags.app;
       const operation = await createOperation({
@@ -130,6 +138,7 @@ export default class AppPublish extends Command {
       const operationCallback = async (
         client: import('../../lib/hub-client.ts').HubClient,
       ) => {
+        commandProgress.report('Resolving application');
         const application = await resolvePublishApplication({
           applicationReference: flags.app,
           client,
@@ -203,6 +212,7 @@ export default class AppPublish extends Command {
           directory: project.directory,
           operation,
           operationId,
+          progress: commandProgress,
           version,
         });
         const releaseMetadata = {
@@ -231,6 +241,7 @@ export default class AppPublish extends Command {
         if (!refreshedOperation) {
           throw new Error(`Operation journal ${operationId} disappeared.`);
         }
+        commandProgress.report('Uploading Release');
         const upload = refreshedOperation.resourceIds?.uploadId
           ? await client.getReleaseUpload(
               refreshedOperation.resourceIds.uploadId,
@@ -261,6 +272,7 @@ export default class AppPublish extends Command {
           }));
         }
         let completed = upload;
+        commandProgress.report('Verifying Release');
         if (completed.status !== 'completed') {
           await client.completeReleaseUpload(upload.id, operationId);
           try {
@@ -298,6 +310,7 @@ export default class AppPublish extends Command {
         let deployment:
           import('../../lib/hub-client.ts').Deployment | undefined;
         if (flags.deploy) {
+          commandProgress.report('Deploying Release');
           const current = await loadOperation(operationId);
           const created = current?.resourceIds?.deploymentId
             ? await client.getDeployment(current.resourceIds.deploymentId)
@@ -344,6 +357,7 @@ export default class AppPublish extends Command {
               operationCallback,
             )
           : await manager.authorized(requiredScopes, operationCallback);
+      commandProgress.stop();
       const output = {
         ok: true,
         operationId,
@@ -377,6 +391,7 @@ export default class AppPublish extends Command {
         this.log(`operation_id: ${operationId}`);
       }
     } catch (error) {
+      progress?.stop('failed');
       const journal = await loadOperation(operationId).catch(() => undefined);
       const failureHint = publishFailureHint({
         error,
@@ -407,6 +422,7 @@ async function prepareArtifact(
   directory: string,
   applicationSlug: string,
   operationId: string,
+  progress: CommandProgress,
 ): Promise<BuiltReleaseArtifact> {
   const project = path.resolve(directory);
   const manifestPath = path.join(project, 'package.json');
@@ -423,6 +439,7 @@ async function prepareArtifact(
     project,
     manifest.packageManager,
   );
+  progress.report('Building application');
   try {
     await runCommand(packageManager, ['run', 'build'], {
       cwd: project,
@@ -431,6 +448,7 @@ async function prepareArtifact(
   } catch (error) {
     throw new AppBuildError('The app build command failed.', { cause: error });
   }
+  progress.report('Packaging Release');
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'nb3-publish-'));
   const outputPath = path.join(temporary, 'release.tar.gz');
   try {
@@ -455,6 +473,7 @@ async function resolvePublishArtifact(options: {
   readonly directory: string;
   readonly operation: Awaited<ReturnType<typeof createOperation>>;
   readonly operationId: string;
+  readonly progress: CommandProgress;
   readonly version: string;
 }): Promise<BuiltReleaseArtifact> {
   const cached = options.operation.artifact;
@@ -470,7 +489,9 @@ async function resolvePublishArtifact(options: {
         'The resumed publish operation does not match the requested version. Use a new operation ID.',
       );
     }
+    options.progress.report('Reusing cached application build');
     const verified = await verifyCachedOperationArtifact(options.operationId);
+    options.progress.report('Loading cached Release package');
     return {
       path: verified.path,
       manifest: restoreReleaseManifest(release.manifest),
@@ -485,6 +506,7 @@ async function resolvePublishArtifact(options: {
     options.directory,
     options.applicationSlug,
     options.operationId,
+    options.progress,
   );
 }
 
