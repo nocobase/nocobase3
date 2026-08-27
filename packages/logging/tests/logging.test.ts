@@ -1,3 +1,7 @@
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -50,6 +54,31 @@ describe('Logging', () => {
       module: 'audit',
       logger: 'audit',
     });
+  });
+
+  it('resolves logger names in rolling file transports', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-logging-'));
+    const logging = createLogging({
+      transport: {
+        target: 'pino-roll',
+        options: {
+          file: path.join(directory, '{logger}.log'),
+          frequency: 'daily',
+          dateFormat: 'yyyy_MM_dd',
+        },
+      },
+    });
+
+    try {
+      logging.getLogger('request').info('request received');
+      await logging.flush();
+
+      expect(readdirSync(directory)).toEqual([
+        expect.stringMatching(/^request\.\d{4}_\d{2}_\d{2}\.1\.log$/),
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('provides a silent fallback and flushes instantiated loggers', async () => {
