@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,12 +9,15 @@ import {
   type DatabaseManager,
 } from '@nocobase/app-database';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
+import { createLogger } from '@nocobase/logging';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202608270001_create_files_demo_tables.js';
 import seed from '../database/seeds/202608270002_seed_files_demo.js';
-import bootstrapFilesPlugin from '../server/bootstrap.js';
+import bootstrapFilesPlugin, {
+  ensureFilesDemoFixtures,
+} from '../server/bootstrap.js';
 import {
   FILES_DEMO_AVATAR,
   FILES_DEMO_PRIVATE_ATTACHMENT,
@@ -23,7 +28,7 @@ import type {
   FilesPluginConfig,
   FilesPluginDeps,
 } from '../server/plugin-runtime.js';
-import { createFilesRoutes } from '../server/routes/index.js';
+import { createFilesDemoRoutes } from '../server/routes/index.js';
 
 interface RawDatabaseClient {
   raw(sql: string): Promise<unknown>;
@@ -70,11 +75,17 @@ describe('files Demo backend', () => {
             location: join(storageRoot, 'configured-local'),
             visibility: 'private',
           },
+          archive: {
+            driver: 'fs',
+            location: join(storageRoot, 'configured-archive'),
+            visibility: 'private',
+          },
         },
       },
       { fakes: { location: storageRoot } },
     );
     driveManager.fake('local');
+    driveManager.fake('archive');
     config = {
       app: { publicBasePath: '' },
       drive: { default: 'local' },
@@ -84,12 +95,14 @@ describe('files Demo backend', () => {
       database,
       driveManager,
       auth: { required: () => authenticatedOnly() },
-      authz: {} as FilesPluginDeps['authz'],
+      authz: createAuthorization(),
+      logging: { getLogger: () => createLogger({ level: 'silent' }) },
     };
   });
 
   afterEach(async () => {
     driveManager.restore('local');
+    driveManager.restore('archive');
     await database.destroy();
     await rm(storageRoot, { recursive: true, force: true });
   });
@@ -107,6 +120,167 @@ describe('files Demo backend', () => {
 
     await runBootstrap(config, deps);
     expect(put).toHaveBeenCalledTimes(3);
+  });
+
+  it('reconciles fixture metadata to a non-local default disk', async () => {
+    await ensureFilesDemoFixtures({
+      database,
+      drive: driveManager,
+      defaultDisk: 'archive',
+    });
+
+    for (const fixture of FILES_DEMO_FIXTURES) {
+      expect(await driveManager.use('archive').exists(fixture.key)).toBe(true);
+      const record = await database
+        .query()
+        .selectFrom(fixture.table)
+        .select(['disk', 'key'])
+        .where('id', '=', fixture.id)
+        .executeTakeFirst();
+      expect(record).toEqual({ disk: 'archive', key: fixture.key });
+    }
+  });
+
+  it('moves deterministic fixtures when the default disk changes', async () => {
+    await ensureFilesDemoFixtures({
+      database,
+      drive: driveManager,
+      defaultDisk: 'local',
+    });
+    const fixture = FILES_DEMO_FIXTURES[0];
+
+    await ensureFilesDemoFixtures({
+      database,
+      drive: driveManager,
+      defaultDisk: 'archive',
+    });
+
+    expect(await driveManager.use('archive').exists(fixture.key)).toBe(true);
+    expect(await driveManager.use('local').exists(fixture.key)).toBe(false);
+    await expect(
+      database
+        .query()
+        .selectFrom(fixture.table)
+        .select(['disk', 'key'])
+        .where('id', '=', fixture.id)
+        .executeTakeFirst(),
+    ).resolves.toEqual({ disk: 'archive', key: fixture.key });
+  });
+
+  it('rejects ordinary users from every management action while preserving content access', async () => {
+    await runBootstrap(config, deps);
+    const app = registerApp(config, deps);
+    const memberHeaders = { 'x-demo-auth': 'allowed' };
+    const upload = uploadBody(99);
+
+    expect(
+      (
+        await app.request('/api/attachments/examples', {
+          headers: memberHeaders,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await app.request('/api/attachments/orders/1/files', {
+          headers: memberHeaders,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await app.request(
+          `/api/attachments/orders/1/files/${FILES_DEMO_PUBLIC_ATTACHMENT.id}`,
+          { headers: memberHeaders },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await app.request('/api/attachments/orders/1/files', {
+          method: 'POST',
+          body: upload.body,
+          headers: { ...upload.headers, ...memberHeaders },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await app.request(
+          `/api/attachments/orders/1/files/${FILES_DEMO_PRIVATE_ATTACHMENT.id}/token`,
+          { method: 'POST', headers: memberHeaders },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await app.request(
+          `/api/attachments/orders/1/files/${FILES_DEMO_PUBLIC_ATTACHMENT.id}`,
+          { method: 'DELETE', headers: memberHeaders },
+        )
+      ).status,
+    ).toBe(403);
+
+    const publicContent = await app.request(
+      `/api/attachments/orders/1/files/${FILES_DEMO_PUBLIC_ATTACHMENT.id}/content`,
+    );
+    expect(publicContent.status).toBe(200);
+    const tokenResponse = await app.request(
+      `/api/attachments/orders/1/files/${FILES_DEMO_PRIVATE_ATTACHMENT.id}/token`,
+      { method: 'POST', headers: adminHeaders() },
+    );
+    const token = (await tokenResponse.json()) as { data: { url: string } };
+    expect((await app.request(token.data.url)).status).toBe(200);
+  });
+
+  it('returns 401 for unauthenticated management and allows administrators to write and delete', async () => {
+    await runBootstrap(config, deps);
+    const app = registerApp(config, deps);
+    const upload = uploadBody(100);
+    const managementRequests = [
+      app.request('/api/attachments/examples'),
+      app.request('/api/attachments/orders/1/files'),
+      app.request('/api/attachments/orders/1/files', {
+        method: 'POST',
+        body: upload.body,
+        headers: upload.headers,
+      }),
+      app.request(
+        `/api/attachments/orders/1/files/${FILES_DEMO_PRIVATE_ATTACHMENT.id}/token`,
+        { method: 'POST' },
+      ),
+      app.request(
+        `/api/attachments/orders/1/files/${FILES_DEMO_PUBLIC_ATTACHMENT.id}`,
+        { method: 'DELETE' },
+      ),
+    ];
+    for (const response of await Promise.all(managementRequests)) {
+      expect(response.status).toBe(401);
+    }
+
+    const created = await app.request('/api/attachments/orders/1/files', {
+      method: 'POST',
+      body: upload.body,
+      headers: { ...upload.headers, ...adminHeaders() },
+    });
+    expect(created.status).toBe(201);
+    const payload = (await created.json()) as { data: { id: string } };
+    expect(
+      (
+        await app.request(
+          `/api/attachments/orders/1/files/${payload.data.id}`,
+          { headers: adminHeaders() },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await app.request(
+          `/api/attachments/orders/1/files/${payload.data.id}`,
+          { method: 'DELETE', headers: adminHeaders() },
+        )
+      ).status,
+    ).toBe(204);
   });
 
   it('serves Public seed content and requires a valid Token for Private content', async () => {
@@ -132,7 +306,7 @@ describe('files Demo backend', () => {
       `/api/attachments/orders/1/files/${FILES_DEMO_PRIVATE_ATTACHMENT.id}/token`,
       {
         method: 'POST',
-        headers: { 'x-demo-auth': 'allowed' },
+        headers: adminHeaders(),
       },
     );
     expect(tokenResponse.status).toBe(200);
@@ -153,13 +327,13 @@ describe('files Demo backend', () => {
     const app = registerApp(config, deps);
 
     const avatarList = await app.request('/api/attachments/profiles/1/avatar', {
-      headers: { 'x-demo-auth': 'allowed' },
+      headers: adminHeaders(),
     });
     const orderList = await app.request('/api/attachments/orders/1/files', {
-      headers: { 'x-demo-auth': 'allowed' },
+      headers: adminHeaders(),
     });
     const otherOrder = await app.request('/api/attachments/orders/2/files', {
-      headers: { 'x-demo-auth': 'allowed' },
+      headers: adminHeaders(),
     });
 
     expect(avatarList.status).toBe(200);
@@ -182,6 +356,48 @@ describe('files Demo backend', () => {
     await expect(otherOrder.json()).resolves.toEqual({ data: [] });
   });
 
+  it('enforces the one-to-many limit under concurrent uploads without object leaks', async () => {
+    await runBootstrap(config, deps);
+    const disk = driveManager.use('local');
+    const put = vi.spyOn(disk, 'putStream');
+    const removeObject = vi.spyOn(disk, 'delete');
+    const app = registerApp(config, deps);
+
+    const responses = await Promise.all(
+      Array.from({ length: 12 }, (_, index) => {
+        const body = uploadBody(index);
+        return app.request('/api/attachments/orders/1/files', {
+          method: 'POST',
+          ...body,
+          headers: {
+            ...body.headers,
+            ...adminHeaders(),
+          },
+        });
+      }),
+    );
+    expect(responses.filter(({ status }) => status === 201)).toHaveLength(8);
+    const rejected = responses.filter(({ status }) => status === 400);
+    expect(rejected).toHaveLength(4);
+    for (const response of rejected) {
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'FILE_LIMIT_REACHED' },
+      });
+    }
+    const records = await database
+      .query()
+      .selectFrom('filesDemoOrderAttachments')
+      .where('orderId', '=', 1)
+      .select('id')
+      .execute();
+    expect(records).toHaveLength(10);
+    expect(put).toHaveBeenCalledTimes(12);
+    expect(removeObject).toHaveBeenCalledTimes(4);
+    const storedKeys = put.mock.calls.map(([key]) => key);
+    const removedKeys = new Set(removeObject.mock.calls.map(([key]) => key));
+    expect(storedKeys.filter((key) => !removedKeys.has(key))).toHaveLength(8);
+  });
+
   it('does not start fixture work when infrastructure is intentionally absent', () => {
     const put = vi.spyOn(driveManager.use('local'), 'put');
     bootstrapFilesPlugin({
@@ -189,6 +405,7 @@ describe('files Demo backend', () => {
       deps: {
         auth: deps.auth,
         authz: deps.authz,
+        logging: deps.logging,
       },
       services: {},
       lifecycle: { registerDisposer: vi.fn() },
@@ -212,7 +429,9 @@ async function runBootstrap(
     async () => {
       for (const fixture of FILES_DEMO_FIXTURES) {
         expect(
-          await deps.driveManager?.use(fixture.disk).exists(fixture.key),
+          await deps.driveManager
+            ?.use(config.drive?.default ?? 'local')
+            .exists(fixture.key),
         ).toBe(true);
       }
     },
@@ -220,9 +439,22 @@ async function runBootstrap(
   );
 }
 
+function uploadBody(index: number): {
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body: string;
+} {
+  const boundary = `files-demo-boundary-${index}`;
+  return {
+    headers: {
+      'content-type': `multipart/form-data; boundary=${boundary}`,
+    },
+    body: `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="concurrent-${index}.txt"\r\nContent-Type: text/plain\r\n\r\ncontent-${index}\r\n--${boundary}--\r\n`,
+  };
+}
+
 function registerApp(config: FilesPluginConfig, deps: FilesPluginDeps): Hono {
   const app = new Hono();
-  app.route('/api/attachments', createFilesRoutes({ config, deps }));
+  app.route('/api/attachments', createFilesDemoRoutes({ config, deps }));
   return app;
 }
 
@@ -233,4 +465,31 @@ function authenticatedOnly(): MiddlewareHandler {
     }
     await next();
   };
+}
+
+function createAuthorization(): FilesPluginDeps['authz'] {
+  return {
+    middleware: () => async (context, next) => {
+      const isAdministrator = context.req.header('x-demo-role') === 'admin';
+      context.set('authz', {
+        identity: {
+          principal: {
+            type: 'user',
+            id: isAdministrator ? 'administrator' : 'member',
+          },
+        },
+      });
+      await next();
+    },
+    permissionSets: {
+      getEffective: async ({ principal }) =>
+        principal.id === 'administrator'
+          ? [{ key: 'system-administrator' }]
+          : [],
+    },
+  };
+}
+
+function adminHeaders(): Readonly<Record<string, string>> {
+  return { 'x-demo-auth': 'allowed', 'x-demo-role': 'admin' };
 }

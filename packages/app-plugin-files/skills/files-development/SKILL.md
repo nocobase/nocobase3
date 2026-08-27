@@ -26,23 +26,26 @@ Skill](../../../authorization/skills/authorization-development/SKILL.md).
   `deps.database`, `deps.driveManager`, `deps.auth`, and `deps.authz` (or the
   application's equivalent existing authentication and authorization APIs).
 - Identify the business Route and its existing authorization resource/action.
-- Create a local service with `createFilesService()`. Do not add
-  `AppServices.files`, a Service Registry, a mutable DI container, or a second
-  database/Drive connection.
+- Pass those existing server dependencies directly to `createFileRoute()`.
+  Do not add `AppServices.files`, a Service Registry, a mutable DI container,
+  or a second database/Drive connection.
 
 ```ts
-const files = createFilesService({
-  database: deps.database,
+const route = createFileRoute({
+  store,
   drive: deps.driveManager,
   publicBasePath: config.app.publicBasePath,
   defaultDisk: config.drive.default,
   tokenSecret: config.session.secret,
+  audience: 'purchase-order-attachments',
+  auth: deps.auth.required(),
 });
 ```
 
-`FilesService` keeps the raw DatabaseManager and Drive manager private. A
-missing dependency must produce a clear unavailable error when the service is
-used; it must not silently create a replacement connection.
+These dependencies stay in server composition code and are never exposed in
+browser bundles or HTTP payloads. A missing dependency must produce a clear
+unavailable error when the Route is used; it must not silently create a
+replacement connection.
 
 ## 2. Choose the relation shape
 
@@ -69,11 +72,11 @@ depend on the current app base path and private URLs expire.
 
 ## 4. Create the Store safely
 
-Create the standard Store from the local service with a hard-coded table name.
+Create the standard Store with `createDatabaseFileStore()` and a hard-coded table name.
 Resolve scope only from a validated server Route parameter:
 
 ```ts
-const orderAttachments = files.createDatabaseStore({
+const orderAttachments = createDatabaseFileStore(deps.database, {
   table: 'purchaseOrderAttachments',
   scope: (context) => {
     const raw = context.req.param('orderId');
@@ -99,8 +102,11 @@ visibility from server code:
 
 ```ts
 const route = createFileRoute({
-  files,
   store: orderAttachments,
+  drive: deps.driveManager,
+  defaultDisk: config.drive.default,
+  publicBasePath: config.app.publicBasePath,
+  tokenSecret: config.session.secret,
   audience: 'purchase-order-attachments',
   auth: deps.auth.required(),
   authorize: authorizePurchaseOrderFile,
@@ -147,7 +153,9 @@ turn Public into an infinite Token and never log Token values.
 The plugin runtime Demo is available without Registry installation. If the
 business UI needs source-level customization, install the `component-ui`
 Registry item. Install `page-ui` only when the application should own the Demo
-page override. Registry source is application-owned UI; it does
+page override. The items are independently installable: `page-ui` uses the
+plugin's stable public client exports rather than importing `component-ui`.
+Registry source is application-owned UI; it does
 not install server code or migrations and must not contain database, Drive,
 Token, or security logic.
 
@@ -181,7 +189,8 @@ business boundary with focused allowed and denied cases, including:
 - Public content works without a Token but still fails after record removal;
 - Private content fails without a Token and succeeds with a valid Token;
 - expired, altered, wrong-audience, and wrong-file Tokens fail;
-- MIME, size, and maximum-file validation happens before storage writes.
+- MIME and size validation happen before storage writes; maximum-file limits
+  are enforced atomically at record creation with object compensation on rejection.
 
 ## Completion checklist
 
@@ -189,7 +198,7 @@ business boundary with focused allowed and denied cases, including:
 - [ ] The relation and database constraints match one-to-one or one-to-many.
 - [ ] All standard fields, `(disk, key)` uniqueness, and owner constraints are present.
 - [ ] Store table and scope are server constants; IDs are validated.
-- [ ] Local `createFilesService()` and `createFileRoute()` use existing host dependencies.
+- [ ] `createDatabaseFileStore()` and `createFileRoute()` use existing host dependencies.
 - [ ] Existing authorization protects every management action.
 - [ ] Visibility, MIME, size, and count policies are server-owned and tested.
 - [ ] Client/UI uses `createFilesClient` and `FileUploadField`; the business form owns relations.

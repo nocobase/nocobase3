@@ -4,6 +4,20 @@ The file Route separates authenticated management operations from content
 access. It always resolves the current scoped database record before reading
 content.
 
+The built-in `/files-demo` management API is intentionally stricter than the
+generic route contract: `/api/attachments/examples` and every Profile Avatar
+or Order Attachment list, upload, metadata, Token, and delete operation require
+the existing `system-administrator` Permission Set. An unauthenticated request
+receives `401`; an authenticated non-administrator receives `403`. Public
+content and valid Private Token content remain content capabilities and do not
+run this management administrator check.
+
+The Files-owned policy identifies the management resource as
+`files.demo/management` and maps the standard route actions directly:
+`list`, `upload`, `read`, `issue-token`, and `delete`. It resolves the current
+authorization identity through `deps.authz.middleware()` and checks the
+effective Permission Sets without changing the authorization plugin.
+
 ## Public content
 
 `public: true` means that `GET /:id/content` does not require a Token. It does
@@ -15,9 +29,21 @@ Public is not an infinite Token. A Route defaults to Private and accepts a
 client visibility flag only when its server configuration explicitly sets
 `visibility.allowClientOverride: true`.
 
+Content responses classify HTML, SVG, XHTML, and XML MIME types and matching
+file extensions as active content. Those responses always use
+`Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, and a
+restrictive sandbox Content Security Policy. Ordinary images, PDF, audio,
+video, and plain-text previews remain inline. Built-in Demo upload allowlists
+also exclude SVG.
+
+Content-Disposition uses a conservative ASCII `filename` fallback together
+with an RFC 5987 `filename*=UTF-8''...` value. Safe Unicode display names
+therefore survive download without allowing quotes, CRLF, NUL, or path
+injection.
+
 ## Private Tokens
 
-`FilesService.issueAccessUrl()` creates a short-lived URL for a Private record.
+`createFileRoute()` creates a short-lived URL for a Private record.
 The Token payload is:
 
 ```ts
@@ -52,8 +78,8 @@ signing secret.
 
 ## Secret handling and threat boundaries
 
-Pass the configured `config.session.secret` to the local
-`createFilesService()` as `tokenSecret`. Keep it server-side, do not put it in
+Pass the configured `config.session.secret` directly to `createFileRoute()` as
+`tokenSecret`. Keep it server-side, do not put it in
 browser bundles, and do not log it or Token values. Same-origin URLs should be
 root-relative and include the current app base path exactly once.
 
@@ -69,12 +95,20 @@ the application's existing authorization system. Do not accept user, role,
 owner, table, scope, disk, key, or audience values from untrusted request data.
 Validate Route IDs before resolving a Store scope.
 
+The browser client accepts relative endpoints and same-origin absolute HTTP(S)
+endpoints for management requests. It rejects cross-origin management
+endpoints before reading authentication headers or calling `fetch`. File
+records may still contain absolute third-party content URLs for preview or
+download because those URLs are never used for authenticated management
+requests.
+
 ## Version 1 non-goals
 
 Version 1 intentionally does not provide soft delete, versions, reference
 counting, folders, recycle bin, virus scanning, content sniffing, browser
 direct upload, or an Office Online preview service. Storage and access remain
-behind `FilesService`; business modules do not call a storage driver directly.
+inside `createFileRoute`; business modules supply the existing Drive manager
+and a scoped `FileStore` rather than calling a storage driver directly.
 
 Do not use discarded upload-intent/complete phases, capability tickets, a
 second ACL system, a generic Service Registry, or legacy `storages:*` actions.

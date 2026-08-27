@@ -3,15 +3,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  createDatabaseFileStore,
   createFileRoute,
-  createFilesService,
   DEFAULT_FILE_ROUTE_VISIBILITY,
   type CreateFileRouteOptions,
-  type CreateFilesServiceOptions,
+  type DatabaseFileStoreOptions,
   type FileRouteAction,
   type FileStore,
-  type FilesService,
 } from '@nocobase/app-plugin-files/server';
+import type { DatabaseManager } from '@nocobase/app-database';
 import * as serverApi from '@nocobase/app-plugin-files/server';
 import {
   createFilesClient,
@@ -32,17 +32,19 @@ type FrozenFileRouteActions = Expect<
 
 describe('files plugin public contracts', () => {
   it('exposes stable server and client entry points', () => {
-    const serverFactory: (options: CreateFilesServiceOptions) => FilesService =
-      createFilesService;
     const routeFactory: (options: CreateFileRouteOptions) => unknown =
       createFileRoute;
+    const storeFactory: (
+      database: DatabaseManager,
+      options: DatabaseFileStoreOptions,
+    ) => FileStore = createDatabaseFileStore;
     const clientFactory: (options: { endpoint: string }) => FilesClient =
       createFilesClient;
     const storeImport: FileStore | undefined = undefined;
     const actionsAreFrozen: FrozenFileRouteActions = true;
 
-    expect(serverFactory).toBeTypeOf('function');
     expect(routeFactory).toBeTypeOf('function');
+    expect(storeFactory).toBeTypeOf('function');
     expect(clientFactory).toBeTypeOf('function');
     expect(storeImport).toBeUndefined();
     expect(actionsAreFrozen).toBe(true);
@@ -61,13 +63,13 @@ describe('files plugin public contracts', () => {
   it('keeps plugin assembly APIs internal', () => {
     expect(Object.keys(serverApi).sort()).toEqual([
       'DEFAULT_FILE_ROUTE_VISIBILITY',
+      'createDatabaseFileStore',
       'createFileRoute',
-      'createFilesService',
     ]);
-    expect(serverApi).not.toHaveProperty('createPluginFilesService');
+    expect(serverApi).not.toHaveProperty('resolveFilesPluginRuntime');
     expect(serverApi).not.toHaveProperty('bootstrapFilesPlugin');
-    expect(serverApi).not.toHaveProperty('registerFilesRoutes');
-    expect(serverApi).not.toHaveProperty('createFilesRoutes');
+    expect(serverApi).not.toHaveProperty('registerRoutes');
+    expect(serverApi).not.toHaveProperty('createFilesDemoRoutes');
 
     const barrel = readFileSync('server/index.ts', 'utf8');
     expect(barrel).not.toMatch(/plugin-runtime|bootstrap|routes\/index/u);

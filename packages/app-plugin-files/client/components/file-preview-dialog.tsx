@@ -11,14 +11,17 @@ function extension(filename: string): string {
 
 function isActiveContent(file: FilePreviewDialogProps['file']): boolean {
   if (!file) return false;
+  const mimeType = file.mimeType.split(';', 1)[0]?.trim().toLowerCase();
   return (
-    [
-      'text/html',
-      'application/xhtml+xml',
-      'image/svg+xml',
-      'application/xml',
-      'text/xml',
-    ].includes(file.mimeType.toLowerCase()) ||
+    (mimeType !== undefined &&
+      ([
+        'text/html',
+        'application/xhtml+xml',
+        'image/svg+xml',
+        'application/xml',
+        'text/xml',
+      ].includes(mimeType) ||
+        mimeType.endsWith('+xml'))) ||
     ['.html', '.htm', '.svg', '.xml', '.xhtml'].includes(
       extension(file.filename),
     )

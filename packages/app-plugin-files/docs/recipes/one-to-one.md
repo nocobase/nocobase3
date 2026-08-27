@@ -42,25 +42,17 @@ repository's migration definition and current collection builder imports.
 
 ## Store and Route
 
-Create the service and scoped Store in the Route registrar. The table is a
+Create the scoped Store and Route in the registrar. The table is a
 server constant and `profileId` is validated before it reaches the query:
 
 ```ts
 import {
+  createDatabaseFileStore,
   createFileRoute,
-  createFilesService,
 } from '@nocobase/app-plugin-files/server';
 import type { MiddlewareHandler } from 'hono';
 
-const files = createFilesService({
-  database: deps.database,
-  drive: deps.driveManager,
-  publicBasePath: config.app.publicBasePath,
-  defaultDisk: config.drive.default,
-  tokenSecret: config.session.secret,
-});
-
-const store = files.createDatabaseStore({
+const store = createDatabaseFileStore(deps.database, {
   table: 'profileAvatars',
   scope: (context) => {
     const raw = context.req.param('profileId');
@@ -82,8 +74,11 @@ const managementAuth: MiddlewareHandler = (context, next) =>
 app.route(
   '/api/profiles/:profileId/avatar',
   createFileRoute({
-    files,
     store,
+    drive: deps.driveManager,
+    defaultDisk: config.drive.default,
+    publicBasePath: config.app.publicBasePath,
+    tokenSecret: config.session.secret,
     audience: 'profile-avatar',
     auth: managementAuth,
     authorize: async (context, action) => {

@@ -1,10 +1,22 @@
 import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 
-export default function registerRoutes({ app }: AppPluginRoutesContext): void {
+export interface RoutesExamplePluginDeps {
+  readonly auth: {
+    required(): MiddlewareHandler;
+  };
+}
+
+type RoutesExamplePluginContext =
+  AppPluginRoutesContext<RoutesExamplePluginDeps>;
+
+export default function registerRoutes({
+  app,
+  deps,
+}: RoutesExamplePluginContext): void {
   const routes = new Hono();
 
-  routes.get('/', (context) =>
+  routes.get('/', deps.auth.required(), (context) =>
     context.json({
       plugin: '@nocobase/app-plugin-routes-example',
       message: 'Hello from the routes example plugin',

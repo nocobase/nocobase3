@@ -1,4 +1,4 @@
-import type { EnsureFileObjectInput } from '../types.js';
+import type { EnsureFileObjectInput } from '../file-storage.js';
 import {
   FILES_DEMO_AVATAR,
   FILES_DEMO_PRIVATE_ATTACHMENT,
@@ -13,20 +13,38 @@ const PRIVATE_ATTACHMENT_CONTENT =
   '{"order":"PO-DEMO-001","visibility":"private","id":1}\n';
 
 export interface FilesDemoFixture extends EnsureFileObjectInput {
-  readonly disk: string;
+  readonly id: string;
+  readonly filename: string;
+  readonly public: boolean;
+  readonly table: string;
+  readonly scope: Readonly<Record<string, number>>;
   readonly size: number;
   readonly content: string;
 }
 
 export const FILES_DEMO_FIXTURES: readonly FilesDemoFixture[] = Object.freeze([
-  createFixture(FILES_DEMO_AVATAR, AVATAR_CONTENT),
-  createFixture(FILES_DEMO_PUBLIC_ATTACHMENT, PUBLIC_ATTACHMENT_CONTENT),
-  createFixture(FILES_DEMO_PRIVATE_ATTACHMENT, PRIVATE_ATTACHMENT_CONTENT),
+  createFixture(FILES_DEMO_AVATAR, AVATAR_CONTENT, 'filesDemoProfileAvatars', {
+    profileId: 1,
+  }),
+  createFixture(
+    FILES_DEMO_PUBLIC_ATTACHMENT,
+    PUBLIC_ATTACHMENT_CONTENT,
+    'filesDemoOrderAttachments',
+    { orderId: 1 },
+  ),
+  createFixture(
+    FILES_DEMO_PRIVATE_ATTACHMENT,
+    PRIVATE_ATTACHMENT_CONTENT,
+    'filesDemoOrderAttachments',
+    { orderId: 1 },
+  ),
 ]);
 
 function createFixture(
   file: Readonly<FilesDemoFile>,
   content: string,
+  table: string,
+  scope: Readonly<Record<string, number>>,
 ): FilesDemoFixture {
   const size = Buffer.byteLength(content);
   if (size !== file.size) {
@@ -35,10 +53,13 @@ function createFixture(
     );
   }
   return Object.freeze({
-    disk: file.disk,
+    id: file.id,
     key: file.key,
     filename: file.filename,
     mimeType: file.mimeType,
+    public: file.public,
+    table,
+    scope,
     size,
     content,
   });

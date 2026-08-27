@@ -5,21 +5,31 @@ import { Hono } from 'hono';
 
 import {
   ExpiredFileTokenError,
+  FileLimitReachedError,
   FileObjectNotFoundError,
   FilesUnavailableError,
   InvalidFileInputError,
   InvalidFileTokenError,
 } from './errors.js';
+import {
+  issueFileAccessUrl,
+  type FileAccessUrl,
+  verifyFileAccessToken,
+} from './file-access.js';
+import {
+  openFileObject,
+  putFileObject,
+  removeFileObject,
+  type StoredFileObject,
+} from './file-storage.js';
 import { normalizeFileName } from './filename.js';
 import {
   DEFAULT_FILE_ROUTE_VISIBILITY,
   type CreateFileRouteOptions,
-  type FileAccessUrl,
   type FileRecord,
   type FileRouteAction,
   type FileRouteVisibilityOptions,
   type NewFileRecord,
-  type StoredFileObject,
 } from './types.js';
 
 interface ClientFileRecord {
@@ -40,6 +50,9 @@ interface FileErrorBody {
   };
 }
 
+const MIN_MULTIPART_OVERHEAD = 64 * 1024;
+const MAX_MULTIPART_OVERHEAD = 1024 * 1024;
+
 class FileRouteError extends Error {
   readonly code: string;
   readonly status: 400 | 403 | 404 | 413;
@@ -55,6 +68,7 @@ class FileRouteError extends Error {
 export function createFileRoute(options: CreateFileRouteOptions): Hono {
   const routes = new Hono();
   const visibility = options.visibility ?? DEFAULT_FILE_ROUTE_VISIBILITY;
+  const fallbackUploads = new Map<string, Promise<void>>();
 
   routes.onError((error, context) => mapKnownError(error, context));
 
@@ -74,37 +88,20 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     const denied = await authorize(options, context, 'upload');
     if (denied) return denied;
 
-    const form = await parseUploadForm(context);
+    const form = await parseUploadForm(context, options.limits?.maxSize);
     const file = resolveUploadFile(form);
     const isPublic = resolveVisibility(form, visibility);
     const mimeType = file.type.trim() || 'application/octet-stream';
     validateUpload(file, mimeType, options);
-    await validateFileLimit(context, options);
-
-    const stored = await options.files.put({
-      filename: file.name,
-      mimeType,
-      size: file.size,
-      content: file,
-      disk: options.disk,
-    });
-    const input: NewFileRecord = {
-      id: randomUUID(),
-      disk: stored.disk,
-      key: stored.key,
-      filename: stored.filename,
-      mimeType: stored.mimeType,
-      size: stored.size,
-      public: isPublic,
+    const upload = async (): Promise<FileRecord> => {
+      await validateFileLimit(context, options);
+      return persistUpload(context, options, file, mimeType, isPublic);
     };
-
-    let record: FileRecord;
-    try {
-      record = await options.store.create(input, context);
-    } catch (error) {
-      await compensateUpload(options, stored, input);
-      throw error;
-    }
+    const useFallbackSerialization =
+      options.limits?.maxFiles !== undefined && !options.store.createWithLimit;
+    const record = useFallbackSerialization
+      ? await runFallbackUpload(context.req.path, upload)
+      : await upload();
 
     return context.json(
       { data: toClientRecord(record, rootContentPath(context, record.id)) },
@@ -132,7 +129,9 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     if (record.public) {
       access = { url: contentPath, expiresAt: null };
     } else {
-      access = await options.files.issueAccessUrl({
+      access = issueFileAccessUrl({
+        tokenSecret: options.tokenSecret,
+        publicBasePath: options.publicBasePath,
         audience: options.audience,
         fileId: record.id,
         contentPath,
@@ -153,22 +152,27 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
           403,
         );
       }
-      await options.files.verifyAccessToken({
+      verifyFileAccessToken({
+        tokenSecret: options.tokenSecret,
         audience: options.audience,
         fileId: record.id,
         token,
       });
     }
 
-    const stream = await options.files.open(record);
+    const stream = await openFileObject(options.drive, record);
+    const activeContent = isActiveContent(record);
     const headers = new Headers({
       'Content-Type': safeContentType(record.mimeType),
       'Content-Disposition': contentDisposition(
         record.filename,
-        context.req.query('download') === '1',
+        activeContent || context.req.query('download') === '1',
       ),
       'X-Content-Type-Options': 'nosniff',
     });
+    if (activeContent) {
+      headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
+    }
     if (token) {
       headers.set('Cache-Control', 'private, no-store, max-age=0');
       headers.set('Pragma', 'no-cache');
@@ -181,13 +185,69 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     const denied = await authorize(options, context, 'delete', record);
     if (denied) return denied;
 
-    await options.files.removeObject(record);
+    await removeFileObject(options.drive, record);
     const removed = await options.store.remove(record.id, context);
     if (!removed) throw fileNotFound();
     return context.body(null, 204);
   });
 
   return routes;
+
+  async function runFallbackUpload<T>(
+    scope: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const previous = fallbackUploads.get(scope) ?? Promise.resolve();
+    let release: () => void = () => undefined;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fallbackUploads.set(scope, current);
+    await previous;
+    try {
+      return await task();
+    } finally {
+      release();
+      if (fallbackUploads.get(scope) === current) fallbackUploads.delete(scope);
+    }
+  }
+}
+
+async function persistUpload(
+  context: Context,
+  options: CreateFileRouteOptions,
+  file: File,
+  mimeType: string,
+  isPublic: boolean,
+): Promise<FileRecord> {
+  const stored = await putFileObject(
+    { drive: options.drive, defaultDisk: options.defaultDisk },
+    {
+      filename: file.name,
+      mimeType,
+      size: file.size,
+      content: file,
+      disk: options.disk,
+    },
+  );
+  const input: NewFileRecord = {
+    id: randomUUID(),
+    disk: stored.disk,
+    key: stored.key,
+    filename: stored.filename,
+    mimeType: stored.mimeType,
+    size: stored.size,
+    public: isPublic,
+  };
+  try {
+    const maxFiles = options.limits?.maxFiles;
+    return maxFiles !== undefined && options.store.createWithLimit
+      ? await options.store.createWithLimit(input, maxFiles, context)
+      : await options.store.create(input, context);
+  } catch (error) {
+    await compensateUpload(options, stored);
+    throw error;
+  }
 }
 
 async function authorize(
@@ -205,7 +265,10 @@ async function authorize(
   }
 }
 
-async function parseUploadForm(context: Context): Promise<FormData> {
+async function parseUploadForm(
+  context: Context,
+  maxFileSize: number | undefined,
+): Promise<FormData> {
   const contentType = context.req.header('content-type') ?? '';
   if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
     throw new FileRouteError(
@@ -215,14 +278,92 @@ async function parseUploadForm(context: Context): Promise<FormData> {
     );
   }
   try {
-    return await context.req.raw.formData();
-  } catch {
+    const request =
+      maxFileSize === undefined
+        ? context.req.raw
+        : await readBoundedMultipartRequest(context.req.raw, maxFileSize);
+    return await request.formData();
+  } catch (error) {
+    if (error instanceof FileRouteError) throw error;
     throw new FileRouteError(
       'FILE_REQUIRED',
       'A valid multipart file field is required.',
       400,
     );
   }
+}
+
+async function readBoundedMultipartRequest(
+  request: Request,
+  maxFileSize: number,
+): Promise<Request> {
+  const bodyLimit = multipartBodyLimit(maxFileSize);
+  const declaredLength = parseContentLength(
+    request.headers.get('content-length'),
+  );
+  if (declaredLength !== undefined && declaredLength > bodyLimit) {
+    throw fileTooLarge();
+  }
+  if (!request.body) return request;
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      total += result.value.byteLength;
+      if (total > bodyLimit) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The size error remains authoritative after the limit is crossed.
+        }
+        throw fileTooLarge();
+      }
+      chunks.push(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const headers = new Headers(request.headers);
+  headers.delete('content-length');
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body,
+  });
+}
+
+function multipartBodyLimit(maxFileSize: number): number {
+  const proportionalOverhead = Math.ceil(maxFileSize / 100);
+  const overhead = Math.min(
+    MAX_MULTIPART_OVERHEAD,
+    Math.max(MIN_MULTIPART_OVERHEAD, proportionalOverhead),
+  );
+  return Math.min(Number.MAX_SAFE_INTEGER, maxFileSize + overhead);
+}
+
+function parseContentLength(value: string | null): number | undefined {
+  if (!value || !/^\d+$/u.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function fileTooLarge(): FileRouteError {
+  return new FileRouteError(
+    'FILE_TOO_LARGE',
+    'The uploaded file exceeds the configured size limit.',
+    413,
+  );
 }
 
 function resolveUploadFile(form: FormData): File {
@@ -278,11 +419,7 @@ function validateUpload(
 ): void {
   const maxSize = options.limits?.maxSize;
   if (maxSize !== undefined && file.size > maxSize) {
-    throw new FileRouteError(
-      'FILE_TOO_LARGE',
-      'The uploaded file exceeds the configured size limit.',
-      413,
-    );
+    throw fileTooLarge();
   }
   const mimeTypes = options.limits?.mimeTypes;
   if (mimeTypes && !mimeTypes.includes(mimeType)) {
@@ -300,6 +437,7 @@ async function validateFileLimit(
 ): Promise<void> {
   const maxFiles = options.limits?.maxFiles;
   if (maxFiles === undefined) return;
+  if (options.store.createWithLimit) return;
   const records = await options.store.list(context);
   if (records.length >= maxFiles) {
     throw new FileRouteError(
@@ -313,16 +451,11 @@ async function validateFileLimit(
 async function compensateUpload(
   options: CreateFileRouteOptions,
   stored: StoredFileObject,
-  input: NewFileRecord,
 ): Promise<void> {
-  const now = new Date().toISOString();
   try {
-    await options.files.removeObject({
-      ...input,
+    await removeFileObject(options.drive, {
       disk: stored.disk,
       key: stored.key,
-      createdAt: now,
-      updatedAt: now,
     });
   } catch {
     console.error(
@@ -435,12 +568,59 @@ function safeContentType(value: string): string {
 }
 
 function contentDisposition(filename: string, download: boolean): string {
-  return `${download ? 'attachment' : 'inline'}; filename="${normalizeFileName(filename)}"`;
+  const normalized = normalizeFileName(filename);
+  const fallback = asciiFileNameFallback(normalized);
+  const encoded = encodeURIComponent(normalized).replace(
+    /[!'()*]/gu,
+    (value) => `%${value.codePointAt(0)?.toString(16).toUpperCase()}`,
+  );
+  return `${download ? 'attachment' : 'inline'}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function asciiFileNameFallback(filename: string): string {
+  const extension = filename.match(/\.[A-Za-z0-9]{1,16}$/u)?.[0] ?? '';
+  const stem = (extension ? filename.slice(0, -extension.length) : filename)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .replace(/[^A-Za-z0-9._-]+/gu, '-')
+    .replace(/-+/gu, '-')
+    .replace(/^[._-]+|[._-]+$/gu, '');
+  return `${stem || 'upload'}${extension || (stem ? '' : '.bin')}`;
+}
+
+const ACTIVE_CONTENT_MIME_TYPES: ReadonlySet<string> = new Set([
+  'application/xhtml+xml',
+  'application/xml',
+  'image/svg+xml',
+  'text/html',
+  'text/xml',
+]);
+
+const ACTIVE_CONTENT_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.htm',
+  '.html',
+  '.svg',
+  '.xhtml',
+  '.xml',
+]);
+
+function isActiveContent(record: FileRecord): boolean {
+  const mimeType = record.mimeType.split(';', 1)[0]?.trim().toLowerCase();
+  if (
+    mimeType &&
+    (ACTIVE_CONTENT_MIME_TYPES.has(mimeType) || mimeType.endsWith('+xml'))
+  )
+    return true;
+  const extension = record.filename.toLowerCase().match(/\.[^.]+$/u)?.[0];
+  return extension ? ACTIVE_CONTENT_EXTENSIONS.has(extension) : false;
 }
 
 function mapKnownError(error: Error, context: Context): Response {
   if (error instanceof FileRouteError) {
     return errorResponse(context, error.code, error.message, error.status);
+  }
+  if (error instanceof FileLimitReachedError) {
+    return errorResponse(context, error.code, error.message, 400);
   }
   if (error instanceof FilesUnavailableError) {
     return errorResponse(context, error.code, error.message, 503);

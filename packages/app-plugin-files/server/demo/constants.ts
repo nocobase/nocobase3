@@ -17,7 +17,6 @@ export interface FilesDemoOrder {
 
 export interface FilesDemoFile {
   readonly id: string;
-  readonly disk: string;
   readonly key: string;
   readonly filename: string;
   readonly mimeType: string;
@@ -45,7 +44,6 @@ export const FILES_DEMO_ORDER: Readonly<FilesDemoOrder> = Object.freeze({
 
 export const FILES_DEMO_AVATAR: Readonly<FilesDemoFile> = Object.freeze({
   id: 'files-demo-avatar',
-  disk: 'local',
   key: 'files-demo/profile/avatar.svg',
   filename: 'avatar.svg',
   mimeType: 'image/svg+xml',
@@ -56,7 +54,6 @@ export const FILES_DEMO_AVATAR: Readonly<FilesDemoFile> = Object.freeze({
 export const FILES_DEMO_PUBLIC_ATTACHMENT: Readonly<FilesDemoFile> =
   Object.freeze({
     id: 'files-demo-public-note',
-    disk: 'local',
     key: 'files-demo/orders/public-note.txt',
     filename: 'public-note.txt',
     mimeType: 'text/plain',
@@ -67,7 +64,6 @@ export const FILES_DEMO_PUBLIC_ATTACHMENT: Readonly<FilesDemoFile> =
 export const FILES_DEMO_PRIVATE_ATTACHMENT: Readonly<FilesDemoFile> =
   Object.freeze({
     id: 'files-demo-private-document',
-    disk: 'local',
     key: 'files-demo/orders/private-document.json',
     filename: 'private-document.json',
     mimeType: 'application/json',

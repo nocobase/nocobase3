@@ -777,7 +777,7 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('loads API routes from enabled app plugins', async () => {
+  it('keeps protected API routes from enabled app plugins private', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
@@ -786,10 +786,7 @@ describe('app server', () => {
       `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-    });
+    expect(response.status).toBe(401);
   });
 
   it('mounts the enabled files plugin API routes', async () => {
@@ -828,7 +825,7 @@ describe('app server', () => {
     );
   });
 
-  it('dispatches jobs from enabled app plugins', async () => {
+  it('keeps queue dispatch routes from enabled app plugins private', async () => {
     vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
@@ -838,13 +835,19 @@ describe('app server', () => {
       `http://localhost${runtime.config.app.publicBasePath}/queue-example`,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      jobId: expect.any(String),
-      job: 'QueueExample',
-      queue: 'default',
-      syncExecutions: 1,
-    });
+    expect(response.status).toBe(401);
+  });
+
+  it('keeps realtime example routes from enabled app plugins private', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(
+      await createStandaloneServer({ viteDevUrl: false }),
+    );
+    const response = await app.request(
+      `http://localhost${runtime.config.app.publicBasePath}/realtime`,
+    );
+
+    expect(response.status).toBe(401);
   });
 
   it('mounts standalone app-local routes behind the public base path', async () => {

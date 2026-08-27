@@ -2,57 +2,71 @@ import { readFile } from 'node:fs/promises';
 
 import type { DatabaseManager } from '@nocobase/app-database';
 import type { NocoBaseDriveManager } from '@nocobase/drive';
+import { createLogger, type Logger } from '@nocobase/logging';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FilesUnavailableError } from '../server/errors.js';
 import type {
   CreateFileRouteOptions,
   DatabaseFileStoreOptions,
   FileStore,
-  FilesService,
 } from '../server/types.js';
-import { FilesUnavailableError } from '../server/errors.js';
 
-const { createFileRouteMock, createFilesServiceMock } = vi.hoisted(() => ({
+const {
+  createFileRouteMock,
+  createDatabaseFileStoreMock,
+  ensureFileObjectMock,
+  removeFileObjectMock,
+} = vi.hoisted(() => ({
   createFileRouteMock: vi.fn(),
-  createFilesServiceMock: vi.fn(),
+  createDatabaseFileStoreMock: vi.fn(),
+  ensureFileObjectMock: vi.fn(),
+  removeFileObjectMock: vi.fn(),
 }));
 
 vi.mock('../server/create-file-route.js', () => ({
   createFileRoute: createFileRouteMock,
 }));
-
-vi.mock('../server/files-service.js', () => ({
-  createFilesService: createFilesServiceMock,
+vi.mock('../server/database-file-store.js', () => ({
+  createDatabaseFileStore: createDatabaseFileStoreMock,
+}));
+vi.mock('../server/file-storage.js', () => ({
+  ensureFileObject: ensureFileObjectMock,
+  removeFileObject: removeFileObjectMock,
 }));
 
+import bootstrapFilesPlugin from '../server/bootstrap.js';
 import {
-  createPluginFilesService,
-  isFilesPluginServiceUnavailable,
+  isFilesPluginRuntimeUnavailable,
+  resolveFilesPluginRuntime,
   type FilesPluginConfig,
   type FilesPluginDeps,
 } from '../server/plugin-runtime.js';
-import bootstrapFilesPlugin from '../server/bootstrap.js';
-import registerFilesRoutes, {
-  createFilesRoutes,
+import registerRoutes, {
+  createFilesDemoRoutes,
 } from '../server/routes/index.js';
 
 describe('files plugin route factory and registrar', () => {
-  let files: FilesService;
   let database: DatabaseManager;
   let driveManager: NocoBaseDriveManager;
   let required: ReturnType<typeof vi.fn<() => MiddlewareHandler>>;
+  let logger: Logger;
   let config: FilesPluginConfig;
   let deps: FilesPluginDeps;
 
   beforeEach(() => {
-    database = {} as DatabaseManager;
+    database = createBootstrapDatabase();
     driveManager = {} as NocoBaseDriveManager;
-    files = createFilesServiceDouble();
-    createFilesServiceMock.mockReset().mockReturnValue(files);
     createFileRouteMock.mockReset().mockImplementation(createDelegatingRoute);
+    createDatabaseFileStoreMock
+      .mockReset()
+      .mockImplementation((_database, options) => createScopedStore(options));
+    ensureFileObjectMock.mockReset().mockResolvedValue(undefined);
+    removeFileObjectMock.mockReset().mockResolvedValue(undefined);
     required = vi.fn(() => authenticatedOnly());
+    logger = createLogger({ level: 'silent' });
     config = {
       app: { publicBasePath: '/base' },
       drive: { default: 'local' },
@@ -62,27 +76,29 @@ describe('files plugin route factory and registrar', () => {
       database,
       driveManager,
       auth: { required },
-      authz: {} as FilesPluginDeps['authz'],
+      authz: createAuthorization('admin'),
+      logging: { getLogger: () => logger },
     };
   });
 
-  it('creates a new local service from the narrow structural context', () => {
-    const first = createPluginFilesService({ config, deps });
-    const second = createPluginFilesService({ config, deps });
+  it('resolves the narrow runtime from existing host dependencies', () => {
+    const runtime = resolveFilesPluginRuntime({ config, deps });
 
-    expect(first).toBe(files);
-    expect(second).toBe(files);
-    expect(createFilesServiceMock).toHaveBeenNthCalledWith(1, {
+    expect(isFilesPluginRuntimeUnavailable(runtime)).toBe(false);
+    expect(runtime).toMatchObject({
       database,
       drive: driveManager,
-      publicBasePath: '/base',
       defaultDisk: 'local',
+      publicBasePath: '/base',
       tokenSecret: 'demo-token-secret',
     });
-    expect(createFilesServiceMock).toHaveBeenCalledTimes(2);
   });
 
-  it('composes the Bootstrap service from deps without global registration', async () => {
+  it('initializes deterministic fixtures and logs failures', async () => {
+    const failure = new Error('fixture write failed');
+    const error = vi.spyOn(logger, 'error');
+    ensureFileObjectMock.mockRejectedValueOnce(failure);
+
     bootstrapFilesPlugin({
       config,
       deps,
@@ -90,25 +106,42 @@ describe('files plugin route factory and registrar', () => {
       lifecycle: { registerDisposer: vi.fn() },
     });
 
-    await vi.waitFor(() => expect(files.ensureObject).toHaveBeenCalledTimes(3));
-    expect(createFilesServiceMock).toHaveBeenCalledWith({
-      database,
-      drive: driveManager,
-      publicBasePath: '/base',
-      defaultDisk: 'local',
-      tokenSecret: 'demo-token-secret',
-    });
+    await vi.waitFor(() =>
+      expect(ensureFileObjectMock).toHaveBeenCalledTimes(3),
+    );
+    await vi.waitFor(() =>
+      expect(error).toHaveBeenCalledWith(
+        {
+          err: expect.objectContaining({
+            name: 'AggregateError',
+            errors: expect.arrayContaining([failure]),
+          }),
+        },
+        'Files Demo fixture initialization failed',
+      ),
+    );
+    expect(ensureFileObjectMock).toHaveBeenCalledWith(
+      { drive: driveManager, defaultDisk: 'local' },
+      expect.objectContaining({ key: expect.any(String) }),
+    );
   });
 
-  it('mounts authenticated stable examples without storage internals', async () => {
+  it('allows only system administrators to query examples', async () => {
     const app = createFactoryApp(config, deps);
     const denied = await app.request('/api/attachments/examples');
+    const member = await createFactoryApp(config, {
+      ...deps,
+      authz: createAuthorization('member'),
+    }).request('/api/attachments/examples', {
+      headers: { 'x-demo-auth': 'allowed' },
+    });
     const response = await app.request('/api/attachments/examples', {
       headers: { 'x-demo-auth': 'allowed' },
     });
     const text = await response.text();
 
     expect(denied.status).toBe(401);
+    expect(member.status).toBe(403);
     expect(response.status).toBe(200);
     expect(JSON.parse(text)).toEqual({
       data: {
@@ -125,11 +158,11 @@ describe('files plugin route factory and registrar', () => {
       },
     });
     expect(text).not.toMatch(/key|secret|token|disk|storage/i);
-    expect(required).toHaveBeenCalledOnce();
+    expect(required).toHaveBeenCalledTimes(2);
   });
 
-  it('configures Avatar and Order routes through createFileRoute', () => {
-    createFilesRoutes({ config, deps });
+  it('configures both Demo resources through the public route factory', () => {
+    createFilesDemoRoutes({ config, deps });
 
     expect(createFileRouteMock).toHaveBeenCalledTimes(2);
     const avatar = createFileRouteMock.mock.calls[0]?.[0] as
@@ -137,24 +170,24 @@ describe('files plugin route factory and registrar', () => {
     const order = createFileRouteMock.mock.calls[1]?.[0] as
       CreateFileRouteOptions | undefined;
 
+    for (const options of [avatar, order]) {
+      expect(options).toMatchObject({
+        drive: driveManager,
+        defaultDisk: 'local',
+        publicBasePath: '/base',
+        tokenSecret: 'demo-token-secret',
+      });
+    }
     expect(avatar).toMatchObject({
-      files,
       audience: 'files-demo-profile-avatar',
       visibility: { default: 'private', allowClientOverride: false },
       limits: {
         maxSize: 5 * 1024 * 1024,
         maxFiles: 1,
-        mimeTypes: [
-          'image/gif',
-          'image/jpeg',
-          'image/png',
-          'image/svg+xml',
-          'image/webp',
-        ],
+        mimeTypes: ['image/gif', 'image/jpeg', 'image/png', 'image/webp'],
       },
     });
     expect(order).toMatchObject({
-      files,
       audience: 'files-demo-order-attachments',
       visibility: { default: 'private', allowClientOverride: true },
       limits: {
@@ -171,11 +204,12 @@ describe('files plugin route factory and registrar', () => {
       },
     });
     expect(avatar?.auth).toBe(order?.auth);
-    expect(files.createDatabaseStore).toHaveBeenNthCalledWith(1, {
+    expect(avatar?.authorize).toBe(order?.authorize);
+    expect(createDatabaseFileStoreMock).toHaveBeenNthCalledWith(1, database, {
       table: 'filesDemoProfileAvatars',
       scope: expect.any(Function),
     });
-    expect(files.createDatabaseStore).toHaveBeenNthCalledWith(2, {
+    expect(createDatabaseFileStoreMock).toHaveBeenNthCalledWith(2, database, {
       table: 'filesDemoOrderAttachments',
       scope: expect.any(Function),
     });
@@ -223,33 +257,29 @@ describe('files plugin route factory and registrar', () => {
     async (_name, depsOverride, configOverride = {}) => {
       const unavailableDeps = { ...deps, ...depsOverride };
       const unavailableConfig = { ...config, ...configOverride };
-      const service = createPluginFilesService({
+      const runtime = resolveFilesPluginRuntime({
         config: unavailableConfig,
         deps: unavailableDeps,
       });
-      expect(isFilesPluginServiceUnavailable(service)).toBe(true);
+      expect(isFilesPluginRuntimeUnavailable(runtime)).toBe(true);
 
       const app = createFactoryApp(unavailableConfig, unavailableDeps);
-      const examples = await app.request('/api/attachments/examples', {
-        headers: { 'x-demo-auth': 'allowed' },
-      });
-      const filesResponse = await app.request(
+      for (const path of [
+        '/api/attachments/examples',
         '/api/attachments/orders/1/files',
-        { headers: { 'x-demo-auth': 'allowed' } },
-      );
-
-      expect(examples.status).toBe(503);
-      await expect(examples.json()).resolves.toMatchObject({
-        error: { code: 'FILES_UNAVAILABLE' },
-      });
-      expect(filesResponse.status).toBe(503);
-      await expect(filesResponse.json()).resolves.toMatchObject({
-        error: { code: 'FILES_UNAVAILABLE' },
-      });
+      ]) {
+        const response = await app.request(path, {
+          headers: { 'x-demo-auth': 'allowed' },
+        });
+        expect(response.status).toBe(503);
+        await expect(response.json()).resolves.toMatchObject({
+          error: { code: 'FILES_UNAVAILABLE' },
+        });
+      }
     },
   );
 
-  it('keeps composition local and independent from default-app private types', async () => {
+  it('keeps Demo composition internal and independent from default-app types', async () => {
     const sources = await Promise.all(
       [
         '../server/plugin-runtime.ts',
@@ -262,14 +292,11 @@ describe('files plugin route factory and registrar', () => {
     expect(source).not.toMatch(/app-template-default/);
     expect(source).not.toMatch(/AppServices\.files/);
     expect(source).not.toMatch(/ServiceRegistry|ServiceContainer/);
-    expect(source).not.toMatch(
-      /^(?:export\s+)?(?:const|let|var)\s+\w*files\w*\s*:\s*FilesService/m,
-    );
   });
 
-  it('mounts the factory Router at the plugin convention path', async () => {
+  it('mounts the Demo Router at the plugin convention path', async () => {
     const app = new Hono();
-    registerFilesRoutes({
+    registerRoutes({
       app,
       config,
       deps,
@@ -280,7 +307,6 @@ describe('files plugin route factory and registrar', () => {
     const response = await app.request('/api/attachments/examples', {
       headers: { 'x-demo-auth': 'allowed' },
     });
-
     expect(response.status).toBe(200);
   });
 });
@@ -290,7 +316,7 @@ function createFactoryApp(
   deps: FilesPluginDeps,
 ): Hono {
   const app = new Hono();
-  app.route('/api/attachments', createFilesRoutes({ config, deps }));
+  app.route('/api/attachments', createFilesDemoRoutes({ config, deps }));
   return app;
 }
 
@@ -303,18 +329,37 @@ function authenticatedOnly(): MiddlewareHandler {
   };
 }
 
-function createFilesServiceDouble(): FilesService {
+function createAuthorization(
+  role: 'admin' | 'member',
+): FilesPluginDeps['authz'] {
   return {
-    createDatabaseStore: vi.fn((options: DatabaseFileStoreOptions) =>
-      createScopedStore(options),
-    ),
-    put: vi.fn(),
-    open: vi.fn(),
-    removeObject: vi.fn(),
-    issueAccessUrl: vi.fn(),
-    verifyAccessToken: vi.fn(),
-    ensureObject: vi.fn(),
+    middleware: () => async (context, next) => {
+      context.set('authz', {
+        identity: { principal: { type: 'user', id: role } },
+      });
+      await next();
+    },
+    permissionSets: {
+      getEffective: async () =>
+        role === 'admin' ? [{ key: 'system-administrator' }] : [],
+    },
   };
+}
+
+function createBootstrapDatabase(): DatabaseManager {
+  const execute = async (): Promise<void> => undefined;
+  const executeTakeFirst = async (): Promise<undefined> => undefined;
+  return {
+    query: () => ({
+      selectFrom: () => ({
+        select: () => ({ where: () => ({ executeTakeFirst }) }),
+      }),
+      insertInto: () => ({ values: () => ({ execute }) }),
+      updateTable: () => ({
+        set: () => ({ where: () => ({ execute }) }),
+      }),
+    }),
+  } as unknown as DatabaseManager;
 }
 
 function createScopedStore(options: DatabaseFileStoreOptions): FileStore {
@@ -340,8 +385,10 @@ function createDelegatingRoute(options: CreateFileRouteOptions): Hono {
     }
     throw error;
   });
-  route.get('/', options.auth, async (context) =>
-    context.json({ data: await options.store.list(context) }),
-  );
+  route.get('/', options.auth, async (context) => {
+    const denied = await options.authorize?.(context, 'list');
+    if (denied instanceof Response) return denied;
+    return context.json({ data: await options.store.list(context) });
+  });
   return route;
 }

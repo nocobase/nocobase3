@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
+
 import type {
+  DatabaseConnection,
   DatabaseManager,
   QueryAdapter,
   Row,
@@ -13,6 +16,7 @@ import type {
   FileRecord,
   FileStore,
 } from './types.js';
+import { FileLimitReachedError } from './errors.js';
 
 interface DatabaseFileRow extends Row {
   id: string;
@@ -58,6 +62,7 @@ export function createDatabaseFileStore(
   const order = options.order ?? DEFAULT_ORDER;
   assertOrder(order);
   const orderDirection = order.direction ?? 'desc';
+  const scopeQueues = new Map<string, Promise<void>>();
 
   return {
     async list(context): Promise<readonly FileRecord[]> {
@@ -79,36 +84,30 @@ export function createDatabaseFileStore(
     },
 
     async create(input, context): Promise<FileRecord> {
-      assertNonEmptyString(input.id, 'file id');
       const scope = resolveScope(options, context);
-      const now = new Date();
-      const size = toSafeSize(input.size);
-      const publicValue = toBoolean(input.public);
-      return database.transaction(async (connection): Promise<FileRecord> => {
-        await connection.query
-          .insertInto(options.table)
-          .values({
-            ...input,
-            size,
-            public: publicValue,
-            ...scope,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .execute();
-        const row = await findRow(
-          connection.query,
-          options.table,
-          input.id,
-          scope,
-        );
-        if (!row) {
-          throw new Error(
-            `Created file record "${input.id}" could not be read.`,
-          );
-        }
-        return toFileRecord(row);
-      });
+      return createRecord(database, options.table, input, scope);
+    },
+
+    async createWithLimit(input, maxFiles, context): Promise<FileRecord> {
+      assertPositiveLimit(maxFiles);
+      const scope = resolveScope(options, context);
+      const key = `${options.table}:${scopeKey(scope)}`;
+      return runSerialized(scopeQueues, key, async () =>
+        withDatabaseScopeLock(database, key, async () =>
+          database.transaction(async (connection): Promise<FileRecord> => {
+            await lockDatabaseTransactionScope(connection, key);
+            let countQuery = connection.query
+              .selectFrom(options.table)
+              .select(({ fn }) => [fn.countAll<number>().as('count')]);
+            countQuery = applyScope(countQuery, scope);
+            const rows = await countQuery.execute<{ count: unknown }>();
+            if (toCount(rows[0]?.count ?? 0) >= maxFiles) {
+              throw new FileLimitReachedError();
+            }
+            return insertRecord(connection.query, options.table, input, scope);
+          }),
+        ),
+      );
     },
 
     async remove(id, context): Promise<FileRecord | null> {
@@ -132,6 +131,157 @@ export function createDatabaseFileStore(
       );
     },
   };
+}
+
+interface RawDatabaseClient {
+  readonly client: {
+    acquireConnection(): Promise<unknown>;
+    releaseConnection(connection: unknown): Promise<void>;
+  };
+  raw(sql: string, bindings?: readonly unknown[]): RawDatabaseQuery;
+}
+
+interface RawDatabaseQuery extends PromiseLike<unknown> {
+  connection(connection: unknown): RawDatabaseQuery;
+}
+
+async function withDatabaseScopeLock<T>(
+  database: DatabaseManager,
+  key: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const connection = database.connection();
+  if (connection.dialect !== 'mysql') return task();
+
+  const client = await connection.client<RawDatabaseClient>();
+  const rawConnection = await client.client.acquireConnection();
+  const digest = createHash('sha256').update(key).digest('hex');
+  const lockName = `nocobase-files:${digest.slice(0, 48)}`;
+  let acquired = false;
+  try {
+    const result = await client
+      .raw('select get_lock(?, 10) as acquired', [lockName])
+      .connection(rawConnection);
+    if (!mysqlLockAcquired(result)) {
+      throw new Error(
+        'Timed out while acquiring the database file limit lock.',
+      );
+    }
+    acquired = true;
+    return await task();
+  } finally {
+    try {
+      if (acquired) {
+        await client
+          .raw('select release_lock(?)', [lockName])
+          .connection(rawConnection);
+      }
+    } finally {
+      await client.client.releaseConnection(rawConnection);
+    }
+  }
+}
+
+async function lockDatabaseTransactionScope(
+  connection: DatabaseConnection,
+  key: string,
+): Promise<void> {
+  if (connection.dialect !== 'postgres') return;
+  const client = await connection.client<RawDatabaseClient>();
+  const digest = createHash('sha256').update(key).digest();
+  await client.raw('select pg_advisory_xact_lock(?, ?)', [
+    digest.readInt32BE(0),
+    digest.readInt32BE(4),
+  ]);
+}
+
+function mysqlLockAcquired(result: unknown): boolean {
+  if (!Array.isArray(result)) return false;
+  const [rows] = result as unknown[];
+  if (!Array.isArray(rows)) return false;
+  const [row] = rows as unknown[];
+  return Boolean(
+    row &&
+    typeof row === 'object' &&
+    (Reflect.get(row, 'acquired') === 1 ||
+      Reflect.get(row, 'acquired') === '1'),
+  );
+}
+
+async function createRecord(
+  database: DatabaseManager,
+  table: string,
+  input: Parameters<NonNullable<FileStore['createWithLimit']>>[0],
+  scope: DatabaseFileScope,
+): Promise<FileRecord> {
+  return database.transaction(async (connection): Promise<FileRecord> =>
+    insertRecord(connection.query, table, input, scope),
+  );
+}
+
+async function insertRecord(
+  query: QueryAdapter,
+  table: string,
+  input: Parameters<NonNullable<FileStore['createWithLimit']>>[0],
+  scope: DatabaseFileScope,
+): Promise<FileRecord> {
+  assertNonEmptyString(input.id, 'file id');
+  const now = new Date();
+  await query
+    .insertInto(table)
+    .values({
+      ...input,
+      size: toSafeSize(input.size),
+      public: toBoolean(input.public),
+      ...scope,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .execute();
+  const row = await findRow(query, table, input.id, scope);
+  if (!row) {
+    throw new Error(`Created file record "${input.id}" could not be read.`);
+  }
+  return toFileRecord(row);
+}
+
+async function runSerialized<T>(
+  queues: Map<string, Promise<void>>,
+  key: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const previous = queues.get(key) ?? Promise.resolve();
+  let release: () => void = () => undefined;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  queues.set(key, current);
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+    if (queues.get(key) === current) queues.delete(key);
+  }
+}
+
+function scopeKey(scope: DatabaseFileScope): string {
+  return JSON.stringify(
+    Object.entries(scope).sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function assertPositiveLimit(value: number): void {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new TypeError('Database file limit must be a positive safe integer.');
+  }
+}
+
+function toCount(value: unknown): number {
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string' && /^\d+$/u.test(value)) return Number(value);
+  if (typeof value === 'number') return value;
+  throw new TypeError('Database file count is not numeric.');
 }
 
 function selectFiles(

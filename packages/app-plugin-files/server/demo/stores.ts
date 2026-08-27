@@ -1,10 +1,12 @@
 import { HTTPException } from 'hono/http-exception';
+import type { DatabaseManager } from '@nocobase/app-database';
 
-import type { FileStore, FilesService } from '../types.js';
+import { createDatabaseFileStore } from '../database-file-store.js';
+import type { FileStore } from '../types.js';
 import { FILES_DEMO_COLLECTIONS } from './constants.js';
 
-export function createProfileAvatarStore(files: FilesService): FileStore {
-  return files.createDatabaseStore({
+export function createProfileAvatarStore(database: DatabaseManager): FileStore {
+  return createDatabaseFileStore(database, {
     table: FILES_DEMO_COLLECTIONS.profileAvatars,
     scope: (context) => ({
       profileId: parsePositiveIntegerPathParameter(
@@ -14,8 +16,10 @@ export function createProfileAvatarStore(files: FilesService): FileStore {
   });
 }
 
-export function createOrderAttachmentStore(files: FilesService): FileStore {
-  return files.createDatabaseStore({
+export function createOrderAttachmentStore(
+  database: DatabaseManager,
+): FileStore {
+  return createDatabaseFileStore(database, {
     table: FILES_DEMO_COLLECTIONS.orderAttachments,
     scope: (context) => ({
       orderId: parsePositiveIntegerPathParameter(context.req.param('orderId')),

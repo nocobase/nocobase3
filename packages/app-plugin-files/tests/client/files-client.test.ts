@@ -35,6 +35,7 @@ describe('createFilesClient', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     nocobaseClient.setToken(null);
     delete window.NOCOBASE_API_URL;
@@ -74,6 +75,62 @@ describe('createFilesClient', () => {
       method: 'GET',
       credentials: 'include',
     });
+  });
+
+  it('rejects cross-origin management endpoints before fetch and keeps content URLs usable', async () => {
+    const getHeaders = vi.spyOn(nocobaseClient, 'getHeaders');
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(() =>
+      createFilesClient({ endpoint: 'https://files.example.test/api/files' }),
+    ).toThrowError(
+      'Files client endpoint must use the current application origin.',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getHeaders).not.toHaveBeenCalled();
+    expect(() =>
+      createFilesClient({ endpoint: '//files.example.test/api/files' }),
+    ).toThrowError(
+      'Files client endpoint must use the current application origin.',
+    );
+
+    const thirdPartyRecord: FileRecord = {
+      ...record,
+      contentUrl: 'https://cdn.example.test/files/file-1.pdf',
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse({ data: thirdPartyRecord }));
+    const client = createFilesClient({ endpoint: '/api/files' });
+    await expect(client.get('file-1')).resolves.toMatchObject({
+      contentUrl: 'https://cdn.example.test/files/file-1.pdf',
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'http://localhost:3000/nocobase/api/files/file-1',
+    );
+  });
+
+  it('accepts same-origin absolute management endpoints and sends only their request headers', async () => {
+    const getHeaders = vi
+      .spyOn(nocobaseClient, 'getHeaders')
+      .mockReturnValue({ Authorization: 'Bearer test-token' });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse({ data: [record] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createFilesClient({
+      endpoint: 'http://localhost:3000/nocobase/api/files',
+    });
+
+    await client.list();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'http://localhost:3000/nocobase/api/files',
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Authorization: 'Bearer test-token' },
+    });
+    expect(getHeaders).toHaveBeenCalledOnce();
   });
 
   it('uploads FormData with the optional Public flag and public client headers', async () => {

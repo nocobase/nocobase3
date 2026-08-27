@@ -202,7 +202,7 @@ describe('files Demo database schema', () => {
       .execute();
   });
 
-  it('seeds deterministic metadata and remains safe when run repeatedly', async () => {
+  it('seeds only Demo business entities and remains safe when run repeatedly', async () => {
     await migrateUp(database);
     const connection = database.connection();
     const context = { query: connection.query, connection };
@@ -252,15 +252,7 @@ describe('files Demo database schema', () => {
           'updatedAt',
         ])
         .execute(),
-    ).resolves.toEqual([
-      {
-        ...FILES_DEMO_AVATAR,
-        profileId: FILES_DEMO_PROFILE.id,
-        public: 0,
-        createdAt: FILES_DEMO_SEEDED_AT,
-        updatedAt: FILES_DEMO_SEEDED_AT,
-      },
-    ]);
+    ).resolves.toEqual([]);
     await expect(
       database
         .query()
@@ -279,17 +271,7 @@ describe('files Demo database schema', () => {
         ])
         .orderBy('id')
         .execute(),
-    ).resolves.toEqual(
-      [FILES_DEMO_PRIVATE_ATTACHMENT, FILES_DEMO_PUBLIC_ATTACHMENT]
-        .map((file) => ({
-          ...file,
-          orderId: FILES_DEMO_ORDER.id,
-          public: file.public ? 1 : 0,
-          createdAt: FILES_DEMO_SEEDED_AT,
-          updatedAt: FILES_DEMO_SEEDED_AT,
-        }))
-        .sort((left, right) => left.id.localeCompare(right.id)),
-    );
+    ).resolves.toEqual([]);
   });
 
   it('drops all Demo collections and metadata', async () => {
@@ -365,5 +347,5 @@ function fileRow(
   }>,
   now: Date,
 ): Row {
-  return { ...file, createdAt: now, updatedAt: now };
+  return { ...file, disk: 'test-disk', createdAt: now, updatedAt: now };
 }

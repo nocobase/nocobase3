@@ -49,20 +49,12 @@ records.
 
 ```ts
 import {
+  createDatabaseFileStore,
   createFileRoute,
-  createFilesService,
 } from '@nocobase/app-plugin-files/server';
 import type { MiddlewareHandler } from 'hono';
 
-const files = createFilesService({
-  database: deps.database,
-  drive: deps.driveManager,
-  publicBasePath: config.app.publicBasePath,
-  defaultDisk: config.drive.default,
-  tokenSecret: config.session.secret,
-});
-
-const store = files.createDatabaseStore({
+const store = createDatabaseFileStore(deps.database, {
   table: 'purchaseOrderAttachments',
   scope: (context) => {
     const raw = context.req.param('orderId');
@@ -91,8 +83,11 @@ const managementAuth: MiddlewareHandler = (context, next) =>
 app.route(
   '/api/purchase-orders/:orderId/attachments',
   createFileRoute({
-    files,
     store,
+    drive: deps.driveManager,
+    defaultDisk: config.drive.default,
+    publicBasePath: config.app.publicBasePath,
+    tokenSecret: config.session.secret,
     audience: 'purchase-order-attachments',
     auth: managementAuth,
     authorize: async (context, action) => {
@@ -189,14 +184,14 @@ it('denies upload to a view-only user', async () => {
   expect(response.status).toBe(403);
 });
 
-it('rejects an eleventh file before storage write', async () => {
+it('rejects an eleventh file and compensates its object write', async () => {
   seedOrderFiles(10);
   const response = await app.request('/api/purchase-orders/1001/attachments', {
     method: 'POST',
     body: multipartFile('extra.pdf', 'application/pdf'),
   });
   expect(response.status).toBe(400);
-  expect(fakeDrive.put).not.toHaveBeenCalled();
+  expect(fakeDrive.delete).toHaveBeenCalledWith(expect.any(String));
 });
 ```
 

@@ -3,27 +3,27 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { DatabaseManager } from '@nocobase/app-database';
 import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const { createDatabaseFileStoreMock } = vi.hoisted(() => ({
-  createDatabaseFileStoreMock: vi.fn(),
-}));
-
-vi.mock('../server/database-file-store.js', () => ({
-  createDatabaseFileStore: createDatabaseFileStoreMock,
-}));
 
 import {
   FileObjectNotFoundError,
   FilesUnavailableError,
   InvalidFileInputError,
 } from '../server/errors.js';
-import { createFilesService } from '../server/files-service.js';
-import type { FileRecord, FileStore } from '../server/types.js';
+import {
+  issueFileAccessUrl,
+  verifyFileAccessToken,
+} from '../server/file-access.js';
+import {
+  ensureFileObject,
+  openFileObject,
+  putFileObject,
+  removeFileObject,
+} from '../server/file-storage.js';
+import type { FileRecord } from '../server/types.js';
 
-describe('createFilesService', () => {
+describe('file storage and access helpers', () => {
   let storageRoot: string;
   let drive: NocoBaseDriveManager;
 
@@ -50,7 +50,6 @@ describe('createFilesService', () => {
     );
     drive.fake('local');
     drive.fake('archive');
-    createDatabaseFileStoreMock.mockReset();
   });
 
   afterEach(async () => {
@@ -60,16 +59,16 @@ describe('createFilesService', () => {
   });
 
   it('selects default and explicit disks and writes safe generated keys', async () => {
-    const files = createService(drive);
+    const storage = createStorage(drive);
     const localDisk = drive.use('local');
     const localPut = vi.spyOn(localDisk, 'put');
 
-    const stored = await files.put({
+    const stored = await putFileObject(storage, {
       filename: '../contracts\\Quarterly Report?.pdf',
       mimeType: 'application/pdf',
       content: 'report',
     });
-    const archived = await files.put({
+    const archived = await putFileObject(storage, {
       filename: 'archive.txt',
       mimeType: 'text/plain',
       content: new Uint8Array([1, 2, 3]),
@@ -83,8 +82,9 @@ describe('createFilesService', () => {
       size: 6,
     });
     expect(stored.key).toMatch(
-      /^files\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}-Quarterly-Report\.pdf$/,
+      /^files\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.pdf$/,
     );
+    expect(stored.key).not.toContain('Quarterly');
     expect(localPut).toHaveBeenCalledWith(
       stored.key,
       'report',
@@ -98,18 +98,30 @@ describe('createFilesService', () => {
     expect(
       new Uint8Array(
         await new Response(
-          await files.open(createRecord(archived)),
+          await openFileObject(drive, createRecord(archived)),
         ).arrayBuffer(),
       ),
     ).toEqual(new Uint8Array([1, 2, 3]));
   });
 
+  it('preserves Unicode display names without exposing them in storage keys', async () => {
+    const stored = await putFileObject(createStorage(drive), {
+      filename: '采购合同📄.pdf',
+      mimeType: 'application/pdf',
+      content: 'contract',
+    });
+
+    expect(stored.filename).toBe('采购合同📄.pdf');
+    expect(stored.key).toMatch(/^files\/[0-9a-f-]+\.pdf$/u);
+    expect(stored.key).not.toContain('采购');
+  });
+
   it('streams Blob input without converting it to an extra byte buffer', async () => {
-    const files = createService(drive);
+    const storage = createStorage(drive);
     const disk = drive.use('local');
     const putStream = vi.spyOn(disk, 'putStream');
 
-    const stored = await files.put({
+    const stored = await putFileObject(storage, {
       filename: 'stream.txt',
       mimeType: 'text/plain',
       content: new NodeBlob(['streamed']),
@@ -121,8 +133,8 @@ describe('createFilesService', () => {
   });
 
   it('opens and removes objects using the disk recorded on the file', async () => {
-    const files = createService(drive);
-    const stored = await files.put({
+    const storage = createStorage(drive);
+    const stored = await putFileObject(storage, {
       filename: 'read.txt',
       mimeType: 'text/plain',
       content: 'read me',
@@ -130,17 +142,18 @@ describe('createFilesService', () => {
     });
     const record = createRecord(stored);
 
-    expect(await new Response(await files.open(record)).text()).toBe('read me');
-    await files.removeObject(record);
+    expect(await new Response(await openFileObject(drive, record)).text()).toBe(
+      'read me',
+    );
+    await removeFileObject(drive, record);
     expect(await drive.use('archive').exists(stored.key)).toBe(false);
-    await expect(files.removeObject(record)).resolves.toBeUndefined();
+    await expect(removeFileObject(drive, record)).resolves.toBeUndefined();
   });
 
   it('reports missing objects through a stable typed error', async () => {
-    const files = createService(drive);
-
     await expect(
-      files.open(
+      openFileObject(
+        drive,
         createRecord({
           disk: 'local',
           key: 'files/missing.txt',
@@ -153,23 +166,31 @@ describe('createFilesService', () => {
   });
 
   it('reports a missing Drive and unavailable disks', async () => {
-    const unavailable = createFilesService({
-      publicBasePath: '/',
-      defaultDisk: 'local',
-      tokenSecret: 'secret',
-    });
-    const files = createService(drive);
-
     await expect(
-      unavailable.put({ filename: 'a.txt', content: 'a' }),
+      putFileObject(createStorage(undefined), {
+        filename: 'a.txt',
+        content: 'a',
+      }),
     ).rejects.toBeInstanceOf(FilesUnavailableError);
     await expect(
-      files.put({ filename: 'a.txt', content: 'a', disk: 'missing' }),
+      putFileObject(createStorage(drive), {
+        filename: 'a.txt',
+        content: 'a',
+        disk: 'missing',
+      }),
+    ).rejects.toBeInstanceOf(FilesUnavailableError);
+  });
+
+  it('reports a missing default disk before writing', async () => {
+    await expect(
+      putFileObject(
+        { drive, defaultDisk: '' },
+        { filename: 'a.txt', content: 'a' },
+      ),
     ).rejects.toBeInstanceOf(FilesUnavailableError);
   });
 
   it('requires a size for streamed inputs', async () => {
-    const files = createService(drive);
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new Uint8Array([1]));
@@ -178,12 +199,14 @@ describe('createFilesService', () => {
     });
 
     await expect(
-      files.put({ filename: 'stream.bin', content: stream }),
+      putFileObject(createStorage(drive), {
+        filename: 'stream.bin',
+        content: stream,
+      }),
     ).rejects.toBeInstanceOf(InvalidFileInputError);
   });
 
   it('streams Web content when an explicit size is provided', async () => {
-    const files = createService(drive);
     const disk = drive.use('local');
     const putStream = vi.spyOn(disk, 'putStream');
     const stream = new ReadableStream<Uint8Array>({
@@ -193,7 +216,7 @@ describe('createFilesService', () => {
       },
     });
 
-    const stored = await files.put({
+    const stored = await putFileObject(createStorage(drive), {
       filename: 'web.txt',
       mimeType: 'text/plain',
       size: 10,
@@ -206,12 +229,12 @@ describe('createFilesService', () => {
   });
 
   it('does not hide real driver deletion failures', async () => {
-    const files = createService(drive);
     const disk = drive.use('local');
     vi.spyOn(disk, 'delete').mockRejectedValueOnce(new Error('driver failed'));
 
     await expect(
-      files.removeObject(
+      removeFileObject(
+        drive,
         createRecord({
           disk: 'local',
           key: 'files/failure.txt',
@@ -234,8 +257,9 @@ describe('createFilesService', () => {
     ] as const;
 
     for (const [publicBasePath, expectedPath] of cases) {
-      const files = createService(drive, publicBasePath);
-      const access = await files.issueAccessUrl({
+      const access = issueFileAccessUrl({
+        tokenSecret: 'secret',
+        publicBasePath,
         audience: 'files',
         fileId: 'file-1',
         contentPath: '/api/files/file-1/content',
@@ -246,8 +270,9 @@ describe('createFilesService', () => {
       expect(access.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     }
 
-    const nested = createService(drive, '/apps/demo');
-    const access = await nested.issueAccessUrl({
+    const access = issueFileAccessUrl({
+      tokenSecret: 'secret',
+      publicBasePath: '/apps/demo',
       audience: 'files',
       fileId: 'file-1',
       contentPath: '/apps/demo/api/files/file-1/content',
@@ -256,8 +281,9 @@ describe('createFilesService', () => {
   });
 
   it('issues and verifies access URLs and rejects unsupported content queries', async () => {
-    const files = createService(drive, '/main');
-    const access = await files.issueAccessUrl({
+    const access = issueFileAccessUrl({
+      tokenSecret: 'secret',
+      publicBasePath: '/main',
       audience: 'files',
       fileId: 'file-1',
       contentPath: '/api/files/file-1/content',
@@ -267,36 +293,47 @@ describe('createFilesService', () => {
       'token',
     );
 
-    await expect(
-      files.verifyAccessToken({
+    expect(() =>
+      verifyFileAccessToken({
+        tokenSecret: 'secret',
         audience: 'files',
         fileId: 'file-1',
         token: token ?? '',
       }),
-    ).resolves.toBeUndefined();
-    await expect(
-      files.issueAccessUrl({
+    ).not.toThrow();
+    expect(() =>
+      issueFileAccessUrl({
+        tokenSecret: 'secret',
+        publicBasePath: '/main',
         audience: 'files',
         fileId: 'file-1',
         contentPath: '/api/files/file-1/content?download=1',
       }),
-    ).rejects.toBeInstanceOf(InvalidFileInputError);
+    ).toThrow(InvalidFileInputError);
+  });
+
+  it('reports missing Token signing infrastructure clearly', () => {
+    expect(() =>
+      issueFileAccessUrl({
+        publicBasePath: '/',
+        audience: 'files',
+        fileId: 'file-1',
+        contentPath: '/api/files/file-1/content',
+      }),
+    ).toThrow(FilesUnavailableError);
   });
 
   it('does not rewrite an existing deterministic fixture object', async () => {
-    const files = createService(drive);
     const disk = drive.use('local');
     const put = vi.spyOn(disk, 'put');
 
-    await files.ensureObject({
+    await ensureFileObject(createStorage(drive), {
       key: 'files/demo.txt',
-      filename: 'demo.txt',
       mimeType: 'text/plain',
       content: 'first',
     });
-    await files.ensureObject({
+    await ensureFileObject(createStorage(drive), {
       key: 'files/demo.txt',
-      filename: 'demo.txt',
       mimeType: 'text/plain',
       content: 'second',
     });
@@ -304,38 +341,13 @@ describe('createFilesService', () => {
     expect(put).toHaveBeenCalledOnce();
     expect(await disk.get('files/demo.txt')).toBe('first');
   });
-
-  it('fails clearly without a database and otherwise delegates Store creation', () => {
-    const withoutDatabase = createService(drive);
-    expect(() =>
-      withoutDatabase.createDatabaseStore({ table: 'files' }),
-    ).toThrow(FilesUnavailableError);
-
-    const store = createStoreStub();
-    const database = {} as DatabaseManager;
-    createDatabaseFileStoreMock.mockReturnValue(store);
-    const files = createFilesService({
-      database,
-      drive,
-      publicBasePath: '/',
-      defaultDisk: 'local',
-      tokenSecret: 'secret',
-    });
-
-    expect(files.createDatabaseStore({ table: 'files' })).toBe(store);
-    expect(createDatabaseFileStoreMock).toHaveBeenCalledWith(database, {
-      table: 'files',
-    });
-  });
 });
 
-function createService(drive: NocoBaseDriveManager, publicBasePath = '/') {
-  return createFilesService({
+function createStorage(drive: NocoBaseDriveManager | undefined) {
+  return {
     drive,
-    publicBasePath,
     defaultDisk: 'local',
-    tokenSecret: 'secret',
-  });
+  };
 }
 
 function createRecord(
@@ -347,14 +359,5 @@ function createRecord(
     public: false,
     createdAt: new Date(0),
     updatedAt: new Date(0),
-  };
-}
-
-function createStoreStub(): FileStore {
-  return {
-    list: vi.fn(),
-    find: vi.fn(),
-    create: vi.fn(),
-    remove: vi.fn(),
   };
 }

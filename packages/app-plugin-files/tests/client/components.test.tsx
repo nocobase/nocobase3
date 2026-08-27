@@ -351,7 +351,7 @@ describe('FileList and FilePreviewDialog', () => {
     const client = mockClient();
     const html = fileRecord({
       filename: 'unsafe.html',
-      mimeType: 'text/html',
+      mimeType: 'text/html; charset=utf-8',
       contentUrl: '/api/files/unsafe/content',
     });
     render(

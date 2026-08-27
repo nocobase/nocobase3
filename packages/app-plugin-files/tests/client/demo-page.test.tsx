@@ -202,6 +202,18 @@ describe('FilesDemoPage', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
   });
 
+  it('renders a permission error for an authenticated non-administrator', async () => {
+    mocks.fetch.mockResolvedValue(
+      jsonResponse({ error: { code: 'FORBIDDEN' } }, 403),
+    );
+
+    render(<FilesDemoPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Files Demo management requires system administrator access.',
+    );
+  });
+
   it('renders the Avatar and Order lists with accessible actions', async () => {
     const avatar = fileRecord({
       id: 'avatar-1',

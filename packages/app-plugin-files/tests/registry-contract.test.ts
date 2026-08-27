@@ -1,8 +1,11 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { once } from 'node:events';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 interface RegistrySource {
@@ -38,6 +41,7 @@ const packageRoot = path.resolve(
   '..',
 );
 const repoRoot = path.resolve(packageRoot, '../..');
+const execFileAsync = promisify(execFile);
 
 function read(relativePath: string): string {
   return fs.readFileSync(path.join(packageRoot, relativePath), 'utf8');
@@ -128,7 +132,7 @@ describe('files plugin Registry contract', () => {
     const page = read('registry/page-ui/pages/files-demo-page.tsx');
     expect(item).toMatchObject({
       type: 'registry:block',
-      registryDependencies: ['component-ui', 'button'],
+      registryDependencies: ['button'],
       source: {
         root: 'registry/page-ui',
         target: 'client/extensions/nocobase-files-page-ui',
@@ -147,7 +151,8 @@ describe('files plugin Registry contract', () => {
     expect(page).toContain("resolvePortalUrl('/api/attachments/examples'");
     expect(page).toContain('nocobaseClient.getHeaders');
     expect(page).toContain('filesEndpoint');
-    expect(page).toContain('@/extensions/nocobase-files-component-ui');
+    expect(page).toContain("'@nocobase/app-plugin-files/client'");
+    expect(page).not.toContain('@/extensions/nocobase-files-component-ui');
     expect(page).not.toMatch(/path\s*:\s*['"]\/files-demo['"]/u);
   });
 
@@ -249,4 +254,74 @@ describe('files plugin Registry contract', () => {
       fs.rmSync(temporaryRoot, { force: true, recursive: true });
     }
   });
+
+  it('resolves both items from a local HTTP Registry without cross-item requests', async () => {
+    const consumerRoot = path.join(repoRoot, 'packages/app-template-default');
+    const requests: string[] = [];
+    const server = createServer((request, response) => {
+      requests.push(request.url ?? '');
+      const name = request.url?.split('/').pop() ?? '';
+      const file = path.join(packageRoot, 'public/r', name);
+      if (!fs.existsSync(file)) {
+        response.statusCode = 404;
+        response.end('not found');
+        return;
+      }
+      response.setHeader('content-type', 'application/json');
+      response.end(fs.readFileSync(file));
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Local Registry server did not bind to a TCP port.');
+    }
+    try {
+      for (const name of ['page-ui', 'component-ui']) {
+        let output: string;
+        try {
+          ({ stdout: output } = await execFileAsync(
+            'pnpm',
+            [
+              '--dir',
+              packageRoot,
+              'exec',
+              'shadcn',
+              'add',
+              `http://127.0.0.1:${address.port}/${name}.json`,
+              '--dry-run',
+              '-y',
+              '--cwd',
+              consumerRoot,
+            ],
+            { cwd: repoRoot, encoding: 'utf8' },
+          ));
+        } catch (error) {
+          const stderr = Reflect.get(error as object, 'stderr');
+          const stdout = Reflect.get(error as object, 'stdout');
+          throw new Error(
+            typeof stderr === 'string' && stderr
+              ? stderr
+              : typeof stdout === 'string' && stdout
+                ? stdout
+                : `Unable to resolve ${name}.`,
+            { cause: error },
+          );
+        }
+        expect(output).not.toContain('Error:');
+        if (name === 'page-ui') {
+          expect(output).not.toContain('component-ui.json');
+          expect(output).not.toContain(
+            'ui.shadcn.com/r/styles/base-nova/component-ui',
+          );
+        }
+      }
+      expect(requests).toEqual(
+        expect.arrayContaining(['/page-ui.json', '/component-ui.json']),
+      );
+    } finally {
+      server.close();
+      await once(server, 'close');
+    }
+  }, 30_000);
 });

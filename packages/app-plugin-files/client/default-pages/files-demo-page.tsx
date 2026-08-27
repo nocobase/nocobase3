@@ -88,6 +88,15 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function managementErrorMessage(error: unknown): string {
+  const status = errorStatus(error);
+  if (status === 401) return 'Sign in to access the Files Demo.';
+  if (status === 403) {
+    return 'Files Demo management requires system administrator access.';
+  }
+  return errorMessage(error, 'Unable to load the files demo.');
+}
+
 function errorStatus(error: unknown): number | undefined {
   if (!error || typeof error !== 'object' || !('status' in error)) {
     return undefined;
@@ -187,7 +196,7 @@ function demoErrorState(error: unknown): DemoState {
   return {
     status: 'error',
     unavailable: errorStatus(error) === 503,
-    message: errorMessage(error, 'Unable to load the files demo.'),
+    message: managementErrorMessage(error),
   };
 }
 

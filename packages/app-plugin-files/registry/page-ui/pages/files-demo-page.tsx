@@ -2,14 +2,14 @@ import { useEffect, useState, type ReactElement } from 'react';
 
 import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
-import { Button } from '@/components/ui/button';
 import {
   FileList,
   FileUploadField,
   createFilesClient,
   type FileRecord,
   type FilesClient,
-} from '@/extensions/nocobase-files-component-ui';
+} from '@nocobase/app-plugin-files/client';
+import { Button } from '@/components/ui/button';
 
 interface DemoEntity {
   readonly id: number;
@@ -99,7 +99,13 @@ export default function FilesDemoPage(): ReactElement {
         const payload = (await response.json()) as ExamplesResponse;
         if (!response.ok) {
           throw Object.assign(
-            new Error(`Unable to load file examples (${response.status}).`),
+            new Error(
+              response.status === 401
+                ? 'Sign in to access the Files Demo.'
+                : response.status === 403
+                  ? 'Files Demo management requires system administrator access.'
+                  : `Unable to load file examples (${response.status}).`,
+            ),
             { status: response.status },
           );
         }

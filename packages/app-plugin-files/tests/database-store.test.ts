@@ -1,11 +1,13 @@
 /* eslint-disable @eslint-react/naming-convention-context-name -- Hono request contexts are not React contexts. */
 import {
   createDatabaseManager,
+  type DatabaseConnection,
   type DatabaseManager,
 } from '@nocobase/app-database';
 import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { vi } from 'vitest';
 
 import migration from '../database/migrations/202608270001_create_files_demo_tables.js';
 import { createDatabaseFileStore } from '../server/database-file-store.js';
@@ -16,8 +18,6 @@ import {
 } from '../server/demo/stores.js';
 import type {
   DatabaseFileScopeResolver,
-  DatabaseFileStoreOptions,
-  FilesService,
   NewFileRecord,
 } from '../server/types.js';
 
@@ -197,9 +197,8 @@ describe('database file store', () => {
 
   it('turns invalid Demo path parameters into client errors without an unscoped fallback', async () => {
     await insertAttachment(database, createFile('protected-file'), 1);
-    const files = createTestFilesService(database);
-    const orderStore = createOrderAttachmentStore(files);
-    const profileStore = createProfileAvatarStore(files);
+    const orderStore = createOrderAttachmentStore(database);
+    const profileStore = createProfileAvatarStore(database);
     const invalidOrderRequest = await createContext(
       '/orders/:orderId',
       '/orders/not-a-number',
@@ -219,6 +218,32 @@ describe('database file store', () => {
         .where('id', '=', 'protected-file')
         .exists(),
     ).resolves.toBe(true);
+  });
+
+  it('uses transaction-scoped PostgreSQL locks for limited creates', async () => {
+    const raw = vi.fn().mockResolvedValue([]);
+    const connection = database.connection();
+    const postgresConnection = {
+      ...connection,
+      dialect: 'postgres',
+      client: async () => ({ raw }),
+    } as DatabaseConnection;
+    const transaction = vi
+      .spyOn(database, 'transaction')
+      .mockImplementation(async (callback) => callback(postgresConnection));
+    const store = createDatabaseFileStore(database, {
+      table: FILES_DEMO_COLLECTIONS.orderAttachments,
+      scope: () => ({ orderId: 1 }),
+    });
+    const request = await createContext('/orders/:orderId', '/orders/1');
+
+    await store.createWithLimit?.(createFile('postgres-limited'), 10, request);
+
+    expect(raw).toHaveBeenCalledWith('select pg_advisory_xact_lock(?, ?)', [
+      expect.any(Number),
+      expect.any(Number),
+    ]);
+    transaction.mockRestore();
   });
 });
 
@@ -278,31 +303,5 @@ function createFile(id: string): NewFileRecord {
     mimeType: 'text/plain',
     size: 42,
     public: false,
-  };
-}
-
-function createTestFilesService(database: DatabaseManager): FilesService {
-  return {
-    createDatabaseStore(options: DatabaseFileStoreOptions) {
-      return createDatabaseFileStore(database, options);
-    },
-    put() {
-      return Promise.reject(new Error('Not used by this test.'));
-    },
-    open() {
-      return Promise.reject(new Error('Not used by this test.'));
-    },
-    removeObject() {
-      return Promise.reject(new Error('Not used by this test.'));
-    },
-    issueAccessUrl() {
-      return Promise.reject(new Error('Not used by this test.'));
-    },
-    verifyAccessToken() {
-      return Promise.reject(new Error('Not used by this test.'));
-    },
-    ensureObject() {
-      return Promise.reject(new Error('Not used by this test.'));
-    },
   };
 }

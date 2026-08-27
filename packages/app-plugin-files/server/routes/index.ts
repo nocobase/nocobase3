@@ -1,5 +1,5 @@
 import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
-import { Hono, type Context } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import { createFileRoute } from '../create-file-route.js';
 import { FILES_DEMO_ORDER, FILES_DEMO_PROFILE } from '../demo/constants.js';
@@ -8,23 +8,47 @@ import {
   createProfileAvatarStore,
 } from '../demo/stores.js';
 import {
-  createPluginFilesService,
-  isFilesPluginServiceUnavailable,
+  isFilesPluginRuntimeUnavailable,
+  resolveFilesPluginRuntime,
   type FilesPluginConfig,
   type FilesPluginDeps,
-  type UnavailableFilesPluginService,
+  type UnavailableFilesPluginRuntime,
 } from '../plugin-runtime.js';
-import type { FileStore, FilesService } from '../types.js';
+import type {
+  CreateFileRouteOptions,
+  FileRouteAction,
+  FileStore,
+} from '../types.js';
 
 const ATTACHMENTS_PATH = '/api/attachments';
 const PROFILE_AVATAR_AUDIENCE = 'files-demo-profile-avatar';
 const ORDER_ATTACHMENTS_AUDIENCE = 'files-demo-order-attachments';
+const SYSTEM_ADMINISTRATOR_PERMISSION_SET = 'system-administrator';
+const FILES_DEMO_MANAGEMENT_RESOURCE = Object.freeze({
+  type: 'files.demo',
+  id: 'management',
+});
+
+interface FilesAuthorizationEnv {
+  Variables: {
+    authz: FilesAuthorizationScope;
+  };
+}
+
+interface FilesAuthorizationScope {
+  readonly identity: {
+    readonly principal: { readonly type: string; readonly id: string };
+    readonly subjects?: readonly {
+      readonly type: string;
+      readonly id: string;
+    }[];
+  };
+}
 
 const AVATAR_MIME_TYPES: readonly string[] = Object.freeze([
   'image/gif',
   'image/jpeg',
   'image/png',
-  'image/svg+xml',
   'image/webp',
 ]);
 const ORDER_ATTACHMENT_MIME_TYPES: readonly string[] = Object.freeze([
@@ -45,59 +69,71 @@ export type FilesPluginRoutesContext = AppPluginRoutesContext<
   FilesPluginConfig
 >;
 
-export interface CreateFilesRoutesOptions {
+export interface CreateFilesDemoRoutesOptions {
   readonly config: FilesPluginConfig;
   readonly deps: FilesPluginDeps;
 }
 
-export function createFilesRoutes({
+export function createFilesDemoRoutes({
   config,
   deps,
-}: CreateFilesRoutesOptions): Hono {
-  const service = createPluginFilesService({ config, deps });
-  let files: FilesService;
-  let unavailable: UnavailableFilesPluginService | undefined;
-  if (isFilesPluginServiceUnavailable(service)) {
-    unavailable = service;
-    files = service.files;
+}: CreateFilesDemoRoutesOptions): Hono<FilesAuthorizationEnv> {
+  const runtime = resolveFilesPluginRuntime({ config, deps });
+  let unavailable: UnavailableFilesPluginRuntime | undefined;
+  let avatarStore: FileStore;
+  let orderStore: FileStore;
+  let drive: FilesPluginDeps['driveManager'];
+  if (isFilesPluginRuntimeUnavailable(runtime)) {
+    unavailable = runtime;
+    avatarStore = createUnavailableStore(runtime);
+    orderStore = createUnavailableStore(runtime);
   } else {
-    files = service;
+    avatarStore = createProfileAvatarStore(runtime.database);
+    orderStore = createOrderAttachmentStore(runtime.database);
+    drive = runtime.drive;
   }
-  const auth = deps.auth.required();
-  const routes = new Hono();
+  const auth = createManagementAuth(deps);
+  const authorize = createManagementAuthorizer(deps);
+  const routes = new Hono<FilesAuthorizationEnv>();
 
-  routes.get('/examples', auth, (context) =>
-    unavailable
-      ? unavailableResponse(context, unavailable)
-      : context.json({
-          data: {
-            profile: {
-              ...FILES_DEMO_PROFILE,
-              filesEndpoint: publicEndpoint(
-                config.app.publicBasePath,
-                `${ATTACHMENTS_PATH}/profiles/${FILES_DEMO_PROFILE.id}/avatar`,
-              ),
+  routes.get(
+    '/examples',
+    auth,
+    requireDemoAdministrator(deps, 'list'),
+    (context) =>
+      unavailable
+        ? unavailableResponse(context, unavailable)
+        : context.json({
+            data: {
+              profile: {
+                ...FILES_DEMO_PROFILE,
+                filesEndpoint: publicEndpoint(
+                  config.app.publicBasePath,
+                  `${ATTACHMENTS_PATH}/profiles/${FILES_DEMO_PROFILE.id}/avatar`,
+                ),
+              },
+              order: {
+                ...FILES_DEMO_ORDER,
+                filesEndpoint: publicEndpoint(
+                  config.app.publicBasePath,
+                  `${ATTACHMENTS_PATH}/orders/${FILES_DEMO_ORDER.id}/files`,
+                ),
+              },
             },
-            order: {
-              ...FILES_DEMO_ORDER,
-              filesEndpoint: publicEndpoint(
-                config.app.publicBasePath,
-                `${ATTACHMENTS_PATH}/orders/${FILES_DEMO_ORDER.id}/files`,
-              ),
-            },
-          },
-        }),
+          }),
   );
 
   routes.route(
     '/profiles/:profileId/avatar',
     createFileRoute({
-      files,
-      store: unavailable
-        ? createUnavailableStore(unavailable)
-        : createProfileAvatarStore(files),
+      store: avatarStore,
+      drive,
+      defaultDisk: config.drive?.default ?? 'local',
+      publicBasePath: config.app.publicBasePath,
+      tokenSecret: config.session?.secret,
       audience: PROFILE_AVATAR_AUDIENCE,
       auth,
+      authorize,
       visibility: {
         default: 'private',
         allowClientOverride: false,
@@ -112,12 +148,14 @@ export function createFilesRoutes({
   routes.route(
     '/orders/:orderId/files',
     createFileRoute({
-      files,
-      store: unavailable
-        ? createUnavailableStore(unavailable)
-        : createOrderAttachmentStore(files),
+      store: orderStore,
+      drive,
+      defaultDisk: config.drive?.default ?? 'local',
+      publicBasePath: config.app.publicBasePath,
+      tokenSecret: config.session?.secret,
       audience: ORDER_ATTACHMENTS_AUDIENCE,
       auth,
+      authorize,
       visibility: {
         default: 'private',
         allowClientOverride: true,
@@ -133,16 +171,78 @@ export function createFilesRoutes({
   return routes;
 }
 
-export default function registerFilesRoutes({
+function createManagementAuth(
+  deps: FilesPluginDeps,
+): MiddlewareHandler<FilesAuthorizationEnv> {
+  const authenticate = deps.auth.required();
+  const authorize = deps.authz.middleware();
+  return (context, next) =>
+    authenticate(context, async () => {
+      await authorize(context, next);
+    });
+}
+
+function requireDemoAdministrator(
+  deps: FilesPluginDeps,
+  action: FileRouteAction,
+): MiddlewareHandler<FilesAuthorizationEnv> {
+  return async (context, next) => {
+    const denied = await requireDemoPermission(deps, context, action);
+    if (denied) return denied;
+    await next();
+  };
+}
+
+function createManagementAuthorizer(
+  deps: FilesPluginDeps,
+): NonNullable<CreateFileRouteOptions['authorize']> {
+  return (context, action) => requireDemoPermission(deps, context, action);
+}
+
+async function requireDemoPermission(
+  deps: FilesPluginDeps,
+  context: Context,
+  action: FileRouteAction,
+): Promise<Response | undefined> {
+  const identity = resolveAuthorizationScope(context).identity;
+  const permissionSets = await deps.authz.permissionSets.getEffective(identity);
+  if (
+    permissionSets.some(
+      (permissionSet) =>
+        permissionSet.key === SYSTEM_ADMINISTRATOR_PERMISSION_SET,
+    )
+  ) {
+    return undefined;
+  }
+  return context.json(
+    {
+      error: {
+        code: 'FORBIDDEN',
+        message: `System administrator access is required for ${FILES_DEMO_MANAGEMENT_RESOURCE.type}:${FILES_DEMO_MANAGEMENT_RESOURCE.id}:${action}.`,
+      },
+    },
+    403,
+  );
+}
+
+function resolveAuthorizationScope(context: Context): FilesAuthorizationScope {
+  const value: unknown = Reflect.get(context.var, 'authz');
+  if (!value || typeof value !== 'object' || !Reflect.get(value, 'identity')) {
+    throw new Error('Files Demo authorization middleware is not configured');
+  }
+  return value as FilesAuthorizationScope;
+}
+
+export default function registerRoutes({
   app,
   config,
   deps,
 }: FilesPluginRoutesContext): void {
-  app.route(ATTACHMENTS_PATH, createFilesRoutes({ config, deps }));
+  app.route(ATTACHMENTS_PATH, createFilesDemoRoutes({ config, deps }));
 }
 
 function createUnavailableStore(
-  unavailable: UnavailableFilesPluginService,
+  unavailable: UnavailableFilesPluginRuntime,
 ): FileStore {
   return {
     list: () => Promise.reject(unavailable.error),
@@ -154,7 +254,7 @@ function createUnavailableStore(
 
 function unavailableResponse(
   context: Context,
-  unavailable: UnavailableFilesPluginService,
+  unavailable: UnavailableFilesPluginRuntime,
 ): Response {
   return context.json(
     {

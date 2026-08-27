@@ -554,6 +554,9 @@ importers:
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../drive
+      '@nocobase/logging':
+        specifier: workspace:^
+        version: link:../logging
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

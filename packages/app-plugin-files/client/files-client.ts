@@ -56,8 +56,42 @@ function normalizeEndpoint(endpoint: string): string {
 }
 
 function resolveEndpoint(endpoint: string): string {
-  if (/^[a-z][a-z\d+.-]*:/i.test(endpoint)) return endpoint;
-  return resolvePortalResourceUrl(endpoint);
+  if (/^(?:https?:)?\/\//i.test(endpoint)) {
+    return resolveSameOriginEndpoint(endpoint);
+  }
+  if (/^[a-z][a-z\d+.-]*:/i.test(endpoint)) {
+    throw new FilesClientError(
+      'Files client endpoint must use a same-origin HTTP(S) URL.',
+    );
+  }
+  return ensureSameOrigin(resolvePortalResourceUrl(endpoint));
+}
+
+function resolveSameOriginEndpoint(endpoint: string): string {
+  if (typeof window === 'undefined') {
+    throw new FilesClientError(
+      'Absolute Files client endpoints require a browser origin.',
+    );
+  }
+  return ensureSameOrigin(new URL(endpoint, window.location.origin).toString());
+}
+
+function ensureSameOrigin(endpoint: string): string {
+  if (typeof window === 'undefined') {
+    if (/^(?:https?:)?\/\//i.test(endpoint)) {
+      throw new FilesClientError(
+        'Absolute Files client endpoints require a browser origin.',
+      );
+    }
+    return endpoint;
+  }
+  const resolved = new URL(endpoint, window.location.origin);
+  if (resolved.origin !== window.location.origin) {
+    throw new FilesClientError(
+      'Files client endpoint must use the current application origin.',
+    );
+  }
+  return resolved.toString();
 }
 
 function resolvePortalResourceUrl(path: string): string {

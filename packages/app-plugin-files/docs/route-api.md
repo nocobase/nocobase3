@@ -5,7 +5,7 @@ Mount it below a business path such as
 `/api/orders/:orderId/attachments`:
 
 This is the stable public route factory for business modules. The plugin's
-internal `createFilesRoutes()` composes its built-in Demo Router, while the
+internal `createFilesDemoRoutes()` composes its built-in Demo Router, while the
 convention registrar only mounts that Router at `/api/attachments`; neither
 Demo assembly API is exported from `@nocobase/app-plugin-files/server`.
 
@@ -27,8 +27,11 @@ decision.
 
 ```ts
 const route = createFileRoute({
-  files,
   store,
+  drive: deps.driveManager,
+  defaultDisk: config.drive.default,
+  publicBasePath: config.app.publicBasePath,
+  tokenSecret: config.session.secret,
   audience: 'order-attachments',
   auth: deps.auth.required(),
   authorize: authorizeOrderFile,
@@ -47,6 +50,12 @@ app.route('/api/orders/:orderId/attachments', route);
 should use it to delegate `list`, `upload`, `read`, `issue-token`, and `delete`
 to the existing authorization system. The callback receives the Hono context,
 the exact `FileRouteAction`, and a record for record-specific actions.
+
+`store`, `defaultDisk`, `publicBasePath`, `audience`, and `auth` are required.
+`drive` and `tokenSecret` are typed as optional so a host can start with
+missing infrastructure and receive stable `FILES_UNAVAILABLE` responses when
+storage or Private Token operations are attempted. Keep Drive credentials and
+the Token secret in server-only configuration; they are never request fields.
 
 The exact callback mapping is:
 
@@ -110,8 +119,33 @@ Before writing to storage, the Route validates:
 
 - a File-compatible `file` field (`FILE_REQUIRED` when absent);
 - `maxSize` (`FILE_TOO_LARGE`, normally `413`);
-- configured exact MIME types (`FILE_TYPE_NOT_ALLOWED`);
-- the scoped record count (`FILE_LIMIT_REACHED`).
+- configured exact MIME types (`FILE_TYPE_NOT_ALLOWED`).
+
+When `maxSize` is configured, the Route also applies a request-body limit
+before `formData()` parses the complete multipart payload. It rejects an
+obviously excessive valid `Content-Length` immediately and independently
+counts bytes read from missing, forged, or chunked lengths. The body allowance
+is `maxSize` plus bounded multipart overhead: 1% of `maxSize`, clamped between
+64 KiB and 1 MiB. The parsed `File.size` remains the authoritative second
+check. This permits a file exactly at `maxSize` with normal boundary and part
+headers while bounding memory and ensuring Drive and Store mutations do not
+start after a request-level overflow.
+
+The database `filename` preserves safe Unicode display text after removing
+path segments, control and formatting characters, header delimiters, dot-only
+names, and abnormal whitespace. The storage key is independent: a server UUID
+plus only a short ASCII extension. It never contains the user basename.
+
+The scoped record count is enforced at record creation
+(`FILE_LIMIT_REACHED`).
+
+`maxFiles` is enforced by the standard database Store's optional
+`createWithLimit` capability. The scoped count check and record insert run in
+one serialized transaction; PostgreSQL additionally uses a transaction-scoped
+advisory lock so separate application processes coordinate on the same scope.
+Custom Stores use a bounded route-local serialization fallback. If storage
+succeeds but the limit or database insert rejects the record, the object is
+removed on a best-effort basis.
 
 An empty browser MIME type must follow one documented consistent policy. Do not
 perform content sniffing or virus scanning in version 1. If a database write
@@ -134,6 +168,10 @@ Set a safe `Content-Type` from the record MIME type, sanitize the filename for
 `Content-Disposition`, and support `?download=1` for attachment disposition.
 Token URLs should receive private/no-cache headers. Public access still checks
 the database record on every request.
+
+HTML, SVG, XHTML, and XML content is always served as an attachment with a
+restrictive sandbox Content Security Policy. PNG, PDF, audio, video, and plain
+text remain eligible for inline preview.
 
 ## Errors and deletion
 

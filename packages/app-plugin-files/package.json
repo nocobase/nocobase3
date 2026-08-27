@@ -149,6 +149,7 @@
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/drive": "workspace:^",
+    "@nocobase/logging": "workspace:^",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "catalog:",

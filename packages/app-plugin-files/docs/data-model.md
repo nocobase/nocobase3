@@ -12,8 +12,8 @@ Every standard file table stores these stable values:
 | ----------- | ----------------------- | ------------------------------------------------ |
 | `id`        | `string(64)`            | Server-generated file record ID                  |
 | `disk`      | `string(64)`            | Configured Drive disk name                       |
-| `key`       | `string(512)`           | Server-generated storage object key              |
-| `filename`  | `string(255)`           | Sanitized user-visible name                      |
+| `key`       | `string(512)`           | UUID-based object key; never the user basename   |
+| `filename`  | `string(255)`           | Sanitized Unicode user-visible name              |
 | `mimeType`  | `string(255)`           | Content type supplied to storage                 |
 | `size`      | `bigInt`                | Byte count; the API converts it to a safe number |
 | `public`    | `boolean`               | Whether content can be read without a Token      |
@@ -50,8 +50,8 @@ await builder.createCollection('profileAvatars', (table) => {
 ```
 
 The unique owner constraint is the durable one-to-one guarantee. The Route
-should also set `maxFiles: 1` so the API rejects a second upload before object
-creation where possible. Relation names (`avatar`, `profile`) are logical
+should also set `maxFiles: 1` so the API rejects a second record atomically and
+compensates any preceding object write. Relation names (`avatar`, `profile`) are logical
 metadata; `profileId` is the explicit physical foreign-key field.
 
 ## One-to-many

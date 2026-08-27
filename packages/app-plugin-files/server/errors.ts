@@ -48,3 +48,14 @@ export class InvalidFileInputError extends Error {
     this.name = new.target.name;
   }
 }
+
+export class FileLimitReachedError extends Error {
+  readonly code = 'FILE_LIMIT_REACHED' as const;
+
+  constructor(
+    message: string = 'The configured file count limit has been reached.',
+  ) {
+    super(message);
+    this.name = new.target.name;
+  }
+}

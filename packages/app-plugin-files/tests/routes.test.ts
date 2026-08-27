@@ -12,17 +12,35 @@ import {
   vi,
 } from 'vitest';
 
+vi.mock('../server/file-storage.js', () => ({
+  openFileObject: vi.fn(),
+  putFileObject: vi.fn(),
+  removeFileObject: vi.fn(),
+}));
+vi.mock('../server/file-access.js', () => ({
+  issueFileAccessUrl: vi.fn(),
+  verifyFileAccessToken: vi.fn(),
+}));
+
 import { createFileRoute } from '../server/create-file-route.js';
 import {
   ExpiredFileTokenError,
   FilesUnavailableError,
   InvalidFileTokenError,
 } from '../server/errors.js';
+import {
+  issueFileAccessUrl,
+  verifyFileAccessToken,
+} from '../server/file-access.js';
+import {
+  openFileObject,
+  putFileObject,
+  removeFileObject,
+} from '../server/file-storage.js';
 import type {
   CreateFileRouteOptions,
   FileRecord,
   FileStore,
-  FilesService,
   NewFileRecord,
 } from '../server/types.js';
 
@@ -34,15 +52,12 @@ afterAll(() => vi.unstubAllGlobals());
 describe('createFileRoute', () => {
   let records: FileRecord[];
   let store: FileStore;
-  let files: FilesService;
   let authCalls: number;
-  let put: ReturnType<typeof vi.fn<FilesService['put']>>;
-  let open: ReturnType<typeof vi.fn<FilesService['open']>>;
-  let removeObject: ReturnType<typeof vi.fn<FilesService['removeObject']>>;
-  let issueAccessUrl: ReturnType<typeof vi.fn<FilesService['issueAccessUrl']>>;
-  let verifyAccessToken: ReturnType<
-    typeof vi.fn<FilesService['verifyAccessToken']>
-  >;
+  const put = vi.mocked(putFileObject);
+  const open = vi.mocked(openFileObject);
+  const removeObject = vi.mocked(removeFileObject);
+  const issueAccessUrl = vi.mocked(issueFileAccessUrl);
+  const verifyAccessToken = vi.mocked(verifyFileAccessToken);
 
   beforeEach(() => {
     records = [fileRecord()];
@@ -63,35 +78,28 @@ describe('createFileRoute', () => {
         return records.splice(index, 1)[0];
       }),
     };
-    put = vi.fn(async (input) => ({
+    put.mockReset().mockImplementation(async (_options, input) => ({
       disk: input.disk ?? 'local',
       key: 'files/server-generated-key',
       filename: input.filename,
       mimeType: input.mimeType ?? 'application/octet-stream',
       size: input.size ?? 0,
     }));
-    open = vi.fn(async () => streamOf('file bytes'));
-    removeObject = vi.fn(async () => undefined);
-    issueAccessUrl = vi.fn(async (input) => ({
+    open.mockReset().mockImplementation(async () => streamOf('file bytes'));
+    removeObject.mockReset().mockImplementation(async () => undefined);
+    issueAccessUrl.mockReset().mockImplementation((input) => ({
       url: `${input.contentPath}?token=signed`,
       expiresAt: '2026-08-27T09:15:00.000Z',
     }));
-    verifyAccessToken = vi.fn(async () => undefined);
-    files = {
-      createDatabaseStore: vi.fn(),
-      put,
-      open,
-      removeObject,
-      issueAccessUrl,
-      verifyAccessToken,
-      ensureObject: vi.fn(),
-    };
+    verifyAccessToken.mockReset().mockImplementation(() => undefined);
   });
 
   it('defines exactly the six fixed endpoints', () => {
     const route = createFileRoute({
-      files,
       store,
+      defaultDisk: 'local',
+      publicBasePath: '/base',
+      tokenSecret: 'secret',
       audience: 'order-files',
       auth: allowingAuth(),
     });
@@ -168,6 +176,7 @@ describe('createFileRoute', () => {
       `${MOUNT_PATH}/${payload.data.id}/content`,
     );
     expect(put).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultDisk: 'local' }),
       expect.objectContaining({
         filename: 'report.pdf',
         mimeType: 'application/pdf',
@@ -233,6 +242,84 @@ describe('createFileRoute', () => {
     expect(put).not.toHaveBeenCalled();
   });
 
+  it('fast-rejects an obviously oversized Content-Length before reading the body', async () => {
+    const body = uploadBody();
+    const response = await createApp({ limits: { maxSize: 5 } }).request(
+      MOUNT_PATH,
+      {
+        method: 'POST',
+        body: body.body,
+        headers: { ...body.headers, 'content-length': '70000' },
+      },
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'FILE_TOO_LARGE' },
+    });
+    expect(put).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['without Content-Length', undefined],
+    ['with a forged smaller Content-Length', '1'],
+  ] as const)('stops an oversized streamed body %s', async (_label, length) => {
+    const boundary = 'stream-limit-boundary';
+    const prefix = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="large.txt"\r\nContent-Type: text/plain\r\n\r\n`;
+    const suffix = `\r\n--${boundary}--\r\n`;
+    const chunks = [
+      new TextEncoder().encode(prefix),
+      new Uint8Array(70_000),
+      new TextEncoder().encode(suffix),
+    ];
+    const headers = new Headers({
+      'content-type': `multipart/form-data; boundary=${boundary}`,
+    });
+    if (length) headers.set('content-length', length);
+    const request = new Request(`http://localhost${MOUNT_PATH}`, {
+      method: 'POST',
+      headers,
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          const chunk = chunks.shift();
+          if (chunk) controller.enqueue(chunk);
+          else controller.close();
+        },
+      }),
+      duplex: 'half',
+    } as RequestInit);
+
+    const response = await createApp({ limits: { maxSize: 5 } }).fetch(request);
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'FILE_TOO_LARGE' },
+    });
+    expect(put).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it('allows a file at maxSize plus bounded multipart overhead', async () => {
+    records = [];
+    const response = await createApp({ limits: { maxSize: 6 } }).request(
+      MOUNT_PATH,
+      { method: 'POST', ...uploadBody() },
+    );
+    expect(response.status).toBe(201);
+  });
+
+  it('keeps existing multipart parsing behavior when maxSize is not configured', async () => {
+    records = [];
+    const response = await createApp().request(MOUNT_PATH, {
+      method: 'POST',
+      ...uploadBody(
+        {},
+        { content: 'x'.repeat(70_000), name: 'large.txt', type: 'text/plain' },
+      ),
+    });
+    expect(response.status).toBe(201);
+  });
+
   it('uses application/octet-stream for an empty browser MIME type', async () => {
     records = [];
     const response = await createApp({
@@ -244,6 +331,7 @@ describe('createFileRoute', () => {
 
     expect(response.status).toBe(201);
     expect(put).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({ mimeType: 'application/octet-stream' }),
     );
   });
@@ -318,6 +406,7 @@ describe('createFileRoute', () => {
     expect(response.status).toBe(500);
     expect(await response.text()).toBe('database failed');
     expect(removeObject).toHaveBeenCalledWith(
+      undefined,
       expect.objectContaining({ key: 'files/server-generated-key' }),
     );
     expect(report).toHaveBeenCalledWith(
@@ -362,6 +451,8 @@ describe('createFileRoute', () => {
 
     expect(response.status).toBe(200);
     expect(issueAccessUrl).toHaveBeenCalledWith({
+      tokenSecret: 'secret',
+      publicBasePath: '/base',
       audience: 'order-files',
       fileId: 'file-1',
       contentPath: `${MOUNT_PATH}/file-1/content`,
@@ -412,6 +503,7 @@ describe('createFileRoute', () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('file bytes');
     expect(verifyAccessToken).toHaveBeenCalledWith({
+      tokenSecret: 'secret',
       audience: 'order-files',
       fileId: 'file-1',
       token: 'valid',
@@ -429,7 +521,9 @@ describe('createFileRoute', () => {
     ['wrong-audience', new InvalidFileTokenError()],
     ['wrong-file', new InvalidFileTokenError()],
   ])('denies %s Private tokens', async (token, error) => {
-    verifyAccessToken.mockRejectedValueOnce(error);
+    verifyAccessToken.mockImplementationOnce(() => {
+      throw error;
+    });
     const response = await createApp().request(
       `${MOUNT_PATH}/file-1/content?token=${token}`,
     );
@@ -457,12 +551,64 @@ describe('createFileRoute', () => {
     );
 
     expect(inline.headers.get('content-disposition')).toBe(
-      'inline; filename="Quarterly-Report.pdf"',
+      `inline; filename="Quarterly-Report.pdf"; filename*=UTF-8''Quarterly-Report.pdf`,
     );
     expect(download.headers.get('content-disposition')).toBe(
-      'attachment; filename="Quarterly-Report.pdf"',
+      `attachment; filename="Quarterly-Report.pdf"; filename*=UTF-8''Quarterly-Report.pdf`,
     );
   });
+
+  it('emits a safe ASCII fallback and RFC 5987 Unicode filename', async () => {
+    records = [fileRecord({ filename: '采购"合同\r\n.pdf', public: true })];
+    const response = await createApp().request(
+      `${MOUNT_PATH}/file-1/content?download=1`,
+    );
+    const disposition = response.headers.get('content-disposition') ?? '';
+
+    expect(disposition).toBe(
+      `attachment; filename="upload.pdf"; filename*=UTF-8''%E9%87%87%E8%B4%AD-%E5%90%88%E5%90%8C.pdf`,
+    );
+    expect(disposition).not.toMatch(/[\r\n]/u);
+  });
+
+  it.each([
+    ['image/svg+xml', 'avatar.svg', "default-src 'none'; sandbox"],
+    ['text/html', 'page.html', "default-src 'none'; sandbox"],
+    ['application/xml', 'document.xml', "default-src 'none'; sandbox"],
+    ['application/rss+xml', 'feed.rss', "default-src 'none'; sandbox"],
+  ] as const)(
+    'forces active content %s to download',
+    async (mimeType, filename, csp) => {
+      records = [fileRecord({ mimeType, filename, public: true })];
+      const response = await createApp().request(
+        `${MOUNT_PATH}/file-1/content`,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-disposition')).toBe(
+        `attachment; filename="${filename}"; filename*=UTF-8''${filename}`,
+      );
+      expect(response.headers.get('content-security-policy')).toBe(csp);
+    },
+  );
+
+  it.each([
+    ['image/png', 'image.png'],
+    ['application/pdf', 'document.pdf'],
+  ] as const)(
+    'keeps safe preview content %s inline',
+    async (mimeType, filename) => {
+      records = [fileRecord({ mimeType, filename, public: true })];
+      const response = await createApp().request(
+        `${MOUNT_PATH}/file-1/content`,
+      );
+
+      expect(response.headers.get('content-disposition')).toBe(
+        `inline; filename="${filename}"; filename*=UTF-8''${filename}`,
+      );
+      expect(response.headers.get('content-security-policy')).toBeNull();
+    },
+  );
 
   it('deletes object then record and returns 204', async () => {
     const calls: string[] = [];
@@ -533,8 +679,10 @@ describe('createFileRoute', () => {
     app.route(
       MOUNT_PATH,
       createFileRoute({
-        files,
         store,
+        defaultDisk: 'local',
+        publicBasePath: '/base',
+        tokenSecret: 'secret',
         audience: 'order-files',
         auth: allowingAuth(),
         ...overrides,

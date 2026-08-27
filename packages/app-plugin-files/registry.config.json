@@ -43,8 +43,8 @@
         "react@^19.0.0",
         "react-dom@^19.0.0"
       ],
-      "registryDependencies": ["component-ui", "button"],
-      "docs": "Requires @nocobase/app-plugin-files and the component-ui Registry item. The page calls GET /api/attachments/examples, then uses the returned endpoints for the Profile Avatar and Order Attachments clients. Its extension overrides the existing files Demo route component and does not declare another /files-demo route. The installed source is application-owned, is not overwritten by plugin upgrades, and should be reviewed with a three-way merge.",
+      "registryDependencies": ["button"],
+      "docs": "Requires @nocobase/app-plugin-files and composes its stable public client API and components. The page calls GET /api/attachments/examples, then uses the returned endpoints for the Profile Avatar and Order Attachments clients. Its extension overrides the existing files Demo route component and does not declare another /files-demo route. The installed source is application-owned, is not overwritten by plugin upgrades, and should be reviewed with a three-way merge.",
       "meta": {
         "ownership": "application",
         "upgradePolicy": "three-way-merge",

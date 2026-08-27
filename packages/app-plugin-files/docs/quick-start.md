@@ -13,12 +13,12 @@ and `deps.authz` dependencies are available. The plugin context must also
 provide `config.app.publicBasePath`, `config.drive.default`, and
 `config.session.secret`.
 
-Create the service locally:
+Import the public Route and database Store factories:
 
 ```ts
 import {
+  createDatabaseFileStore,
   createFileRoute,
-  createFilesService,
 } from '@nocobase/app-plugin-files/server';
 
 export default function registerPurchaseOrderFiles({
@@ -26,13 +26,6 @@ export default function registerPurchaseOrderFiles({
   config,
   deps,
 }: PurchaseOrderPluginRoutesContext): void {
-  const files = createFilesService({
-    database: deps.database,
-    drive: deps.driveManager,
-    publicBasePath: config.app.publicBasePath,
-    defaultDisk: config.drive.default,
-    tokenSecret: config.session.secret,
-  });
   // Continue with the migration, Store, and Route below.
 }
 ```
@@ -84,7 +77,7 @@ Keep the table name in server code and derive the owner from the Route
 parameter. Validate the parameter before returning a scope:
 
 ```ts
-const store = files.createDatabaseStore({
+const store = createDatabaseFileStore(deps.database, {
   table: 'purchaseOrderAttachments',
   scope: (context) => {
     const raw = context.req.param('orderId');
@@ -99,8 +92,11 @@ const store = files.createDatabaseStore({
 app.route(
   '/api/purchase-orders/:orderId/attachments',
   createFileRoute({
-    files,
     store,
+    drive: deps.driveManager,
+    defaultDisk: config.drive.default,
+    publicBasePath: config.app.publicBasePath,
+    tokenSecret: config.session.secret,
     audience: 'purchase-order-attachments',
     auth: deps.auth.required(),
     authorize: authorizePurchaseOrderFile,
@@ -138,7 +134,14 @@ The business form submits the relation and owner ID. The client handles the
 plugin endpoint, same-origin base path, multipart upload, authentication, and
 content URL flow. The runtime Demo works without Registry; install
 `component-ui` only when the application needs editable UI source. Install
-`page-ui` when the application should own and customize the Demo page.
+`page-ui` when the application should own and customize the Demo page. The two
+Registry items are independently installable; `page-ui` composes the plugin's
+stable public client exports.
+
+The built-in Demo management endpoints and page require the existing
+`system-administrator` Permission Set. This Demo policy does not alter the
+generic `createFileRoute()` authorization contract or Public/Private content
+access.
 
 ## 5. Validate
 
