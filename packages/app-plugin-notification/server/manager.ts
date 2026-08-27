@@ -64,11 +64,14 @@ export class NotificationManager<
   }
 
   activate(): void {
-    if (!this.activated) {
-      this.options.queue.registerJob(this.queueJob);
-      this.activated = true;
-      this.startReconciler();
-    }
+    if (
+      this.activated ||
+      !this.options.config.channels.some((config) => config.enabled)
+    )
+      return;
+    this.options.queue.registerJob(this.queueJob);
+    this.activated = true;
+    this.startReconciler();
   }
 
   async start(): Promise<void> {
@@ -94,6 +97,19 @@ export class NotificationManager<
       },
       'Starting Notification Manager.',
     );
+    if (enabledConfigs.length === 0) {
+      this.started = true;
+      this.options.logger.info(
+        {
+          event: 'notification.manager.started',
+          channelCount: 0,
+          providerCount: 0,
+          reconcileIntervalMs: this.options.reconcileIntervalMs ?? 30_000,
+        },
+        'Notification Manager started.',
+      );
+      return;
+    }
     try {
       this.activate();
       await Promise.all(

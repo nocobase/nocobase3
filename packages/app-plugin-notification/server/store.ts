@@ -162,7 +162,7 @@ export class DatabaseNotificationStore implements NotificationStore {
   async create(bundle: NotificationLogBundle): Promise<void> {
     await this.database.transaction(async (connection): Promise<void> => {
       await connection.query
-        .insertInto<NotificationRow>('notifications')
+        .insertInto<NotificationRow>('notificationDispatches')
         .values(toLogRow(bundle.log))
         .execute();
       if (bundle.deliveries.length > 0)
@@ -176,7 +176,7 @@ export class DatabaseNotificationStore implements NotificationStore {
   async getLog(id: string): Promise<NotificationLogRecord | undefined> {
     const row = await this.database
       .query()
-      .selectFrom<NotificationRow>('notifications')
+      .selectFrom<NotificationRow>('notificationDispatches')
       .selectAll()
       .where('id', '=', id)
       .executeTakeFirst<NotificationRow>();
@@ -188,7 +188,7 @@ export class DatabaseNotificationStore implements NotificationStore {
   ): Promise<readonly NotificationLogRecord[]> {
     const rows = await this.database
       .query()
-      .selectFrom<NotificationRow>('notifications')
+      .selectFrom<NotificationRow>('notificationDispatches')
       .selectAll()
       .orderBy('createdAt', 'desc')
       .limit(limit)

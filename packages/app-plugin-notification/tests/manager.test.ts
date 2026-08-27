@@ -1,5 +1,6 @@
 import { createLogger, type DestinationStream } from '@nocobase/logging';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
+import type { DatabaseManager } from '@nocobase/app-database';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createNotificationManager } from '../server/manager.js';
@@ -8,6 +9,25 @@ import { createNotificationTestDatabase } from './helpers/database.js';
 import { FakeNotificationStore } from './helpers/fake-notification-store.js';
 
 describe('NotificationManager registration', () => {
+  it('does not activate persistence or queue resources without enabled Channels', async () => {
+    const queue = createQueueManager(createSyncQueueConfig());
+    const store = new FakeNotificationStore();
+    const listReady = vi.spyOn(store, 'listReady');
+    const manager = createNotificationManager({
+      database: {} as DatabaseManager,
+      queue,
+      logger: createLogger({ level: 'silent' }),
+      config: { channels: [] },
+      store,
+    });
+
+    await manager.start();
+
+    expect(listReady).not.toHaveBeenCalled();
+    await manager.close();
+    await queue.close();
+  });
+
   it('closes Providers when a later Provider fails during startup', async () => {
     const queue = createQueueManager(createSyncQueueConfig());
     const database = await createNotificationTestDatabase();
