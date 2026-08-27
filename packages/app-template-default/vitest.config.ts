@@ -41,8 +41,6 @@ export default createReactVitestConfig({
       'tests/logic/dev-readiness.test.ts',
       'tests/logic/dev-plugin-watches.test.ts',
       'tests/logic/e2e-support.test.ts',
-      'tests/logic/files-composition.test.ts',
-      'tests/logic/files-local-cross-layer.test.ts',
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugins.test.ts',
       'tests/logic/public-request.test.ts',

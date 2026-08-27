@@ -194,7 +194,7 @@ import { Button } from '@/components/ui/button';
 
 但 Registry 被安装到应用后，这个 alias 由应用的 `components.json` 和 TypeScript/Vite 配置解释，最终指向应用自己的 `client/components/ui/button.tsx`。
 
-因此 Registry 一般不复制插件的 `client/components/ui`。它通过 `registryDependencies` 声明 `button`、`input` 等组件，由远程 shadcn add 把这些 primitives 安装到消费应用；仓库 `materialize` 会递归复制同一 Registry 内的命名 item，普通 shadcn primitives 仍由调用方提前准备。
+因此 Registry 一般不复制插件的 `client/components/ui`。它通过 `registryDependencies` 声明 `button`、`input` 等组件，由远程 shadcn add 把这些 primitives 安装到消费应用；使用仓库 `materialize` 时则由调用方提前准备。
 
 所以插件运行时 Button 和应用 Button 是两份源码。这是刻意的所有权隔离：
 
@@ -482,8 +482,7 @@ packages/app-template-default/
 - 直接复制 canonical source；
 - 不读取构建后的 `public/r/*.json`；
 - 不安装 `dependencies`；
-- 递归复制同一 Registry 内声明的命名 item 依赖；
-- 不安装 `button` 等普通 shadcn `registryDependencies`；
+- 不安装 `registryDependencies`；
 - 不注册或启用所需插件；
 - 不检查 `meta.nocobase.requiresPlugins`；
 - 目标目录只要已经存在就拒绝执行；
@@ -495,7 +494,7 @@ packages/app-template-default/
 1. 如果 item 声明了插件依赖，先注册并安装插件；
 2. 确保应用 `package.json` 已有 Registry 声明的 npm 依赖；
 3. 在应用目录按需执行 shadcn add，准备 `button` 等基础组件；
-4. 确认目标 item 及其本地命名依赖的 `client/extensions/<name>` 均不存在；
+4. 确认目标 `client/extensions/<name>` 不存在；
 5. 执行 materialize；
 6. 运行应用 lint、typecheck、test 和 build。
 
@@ -527,7 +526,7 @@ pnpm exec shadcn add \
 pnpm exec shadcn add @nocobase-registry-example/component-ui
 ```
 
-远程 shadcn add 与仓库 `materialize` 的主要区别是，它还会处理 npm `dependencies` 和外部 shadcn `registryDependencies`。两者都会根据每个文件的 `target` 写入应用目录，并递归处理同一 Registry 内的命名 item 依赖。
+远程 shadcn add 与仓库 `materialize` 的主要区别是，它会按照 Registry item 处理 npm `dependencies` 和 `registryDependencies`，并根据每个文件的 `target` 写入应用目录。
 
 当前 Default Template 的 `components.json` 中有一个开发用的 `@nocobase` 地址：
 
@@ -742,7 +741,7 @@ pnpm --filter @nocobase/app-plugin-registry-example registry:build
 
 - 插件 Registry 的统一官方 HTTP/CDN 发布流程；
 - 根据 npm 包自动挂载 `public/r` 的本地 Registry server；
-- `materialize` 自动安装 npm dependencies 和普通 shadcn registryDependencies；
+- `materialize` 自动安装 npm dependencies 和 registryDependencies；
 - `materialize` 自动注册或启用所需插件；
 - `requiresPlugins` 和版本范围强制校验；
 - Registry 安装记录、版本、hash 或 lockfile；
