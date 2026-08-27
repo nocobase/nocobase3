@@ -2,7 +2,8 @@ export const starter = {
   'shell.workspace': 'Application control plane',
   'shell.footer.controlPlane': 'NocoBase Hub',
   'shell.footer.controlPlaneDescription':
-    'Application releases and runtime operations.',
+    'Manage APP versions, deployments, and runtime.',
+  'shell.footer.version': 'Version',
   'shell.settings': 'Settings',
   'shell.footer.freedom': 'AI builds freely.',
   'shell.footer.reliabilitySuffix': 'keeps it reliable.',

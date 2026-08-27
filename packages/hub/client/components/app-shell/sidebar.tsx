@@ -313,11 +313,12 @@ function SidebarFooter() {
             <div className='text-muted-foreground'>
               {translate(
                 'shell.footer.controlPlaneDescription',
-                'Application releases and runtime operations.',
+                'Manage APP versions, deployments, and runtime.',
               )}
             </div>
             <div className='mt-1 font-mono text-[10px] text-muted-foreground/70'>
-              {__PORTAL_TEMPLATE_NAME__} v{__PORTAL_TEMPLATE_VERSION__}
+              {translate('shell.footer.version', 'Version')}{' '}
+              {__PORTAL_TEMPLATE_VERSION__}
             </div>
           </div>
         )}

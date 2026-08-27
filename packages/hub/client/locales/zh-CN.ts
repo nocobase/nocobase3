@@ -1,7 +1,8 @@
 export const starter = {
   'shell.workspace': '应用控制面',
   'shell.footer.controlPlane': 'NocoBase Hub',
-  'shell.footer.controlPlaneDescription': '应用版本与运行时操作。',
+  'shell.footer.controlPlaneDescription': '管理 APP 的版本、部署与运行。',
+  'shell.footer.version': '版本',
   'shell.settings': '设置',
   'shell.footer.freedom': 'AI 自由构建。',
   'shell.footer.reliabilitySuffix': '保障可靠运行。',
