@@ -84,7 +84,6 @@ import {
   DefaultApplicationBootstrap,
   type DefaultApplicationStatus,
 } from './default-application-bootstrap.ts';
-import { InitialReleaseService } from './initial-release-service.ts';
 
 export interface HubApiDeps {
   database: HubDatabaseRuntime;
@@ -244,14 +243,6 @@ export function createHubApi(
         uploadTtlSeconds: deps.uploadTtlSeconds,
       })
     : undefined;
-  const initialReleases =
-    releaseUploads && deps.defaultAppResourcesDirectory
-      ? new InitialReleaseService({
-          resourcesDirectory: deps.defaultAppResourcesDirectory,
-          uploads: releaseUploads,
-          store,
-        })
-      : undefined;
   let runtimeSecrets: RuntimeSecretService | undefined;
   const controlLocks = new ApplicationControlLocks();
   const coordinator = new DeploymentCoordinator(
@@ -870,7 +861,6 @@ export function createHubApi(
             store,
             managementStore,
             runtimeSecrets: requireRuntimeSecretService(),
-            initialReleases,
           });
           return await projectApplication(application.id, actor, true);
         },
@@ -3165,7 +3155,6 @@ interface CreateManagedApplicationDeps {
   readonly store: HubStore;
   readonly managementStore: HubManagementStore;
   readonly runtimeSecrets: RuntimeSecretService;
-  readonly initialReleases?: InitialReleaseService;
 }
 
 async function createManagedApplication(
@@ -3204,19 +3193,6 @@ async function createManagedApplication(
         details: { slug: input.slug },
       });
     });
-    if (deps.initialReleases) {
-      await deps.initialReleases.create({
-        applicationId,
-        slug: input.slug,
-        actor: {
-          userId: deps.actor.user.id,
-          credentialId: null,
-          isAdmin:
-            deps.actor.roles.includes('owner') ||
-            deps.actor.roles.includes('admin'),
-        },
-      });
-    }
   } catch (error) {
     if (applicationCreated) {
       await cleanupIncompleteManagedApplication(deps.store, applicationId);

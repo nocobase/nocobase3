@@ -30,7 +30,7 @@ export interface CreateAppOptions {
   authBaseUrl?: string;
   releaseRoot?: string;
   appPublicOrigin?: string;
-  /** Packaged template resources used to seed an initial Release for new APPs. */
+  /** Packaged template resources used by explicit default APP recovery. */
   defaultAppResourcesDirectory?: string;
   runtimeSecretEncryptionKey?: string;
   runtimeSecretEncryptionKeyFile?: string;

@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +10,6 @@ import { AppRuntimeRegistry } from '@nocobase/app-host';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createApp, type HubApp } from '../../server/app.ts';
-import { computeReleaseArtifactChecksum } from '../../server/hub/artifact-integrity.ts';
 
 const execFileAsync = promisify(execFile);
 const browserOrigin = 'http://127.0.0.1:13230';
@@ -27,7 +26,7 @@ const roots: string[] = [];
 const apps: HubApp[] = [];
 const registries: AppRuntimeRegistry[] = [];
 
-describe('Hub initial application release', () => {
+describe('Hub application creation', () => {
   afterEach(async () => {
     await Promise.all(apps.splice(0).map((app) => app.close?.()));
     await Promise.all(
@@ -40,7 +39,7 @@ describe('Hub initial application release', () => {
     );
   });
 
-  it('creates a deployable initial release from the default template', async () => {
+  it('creates an application without an initial release', async () => {
     const fixture = await createFixture();
     const registry = new AppRuntimeRegistry({
       startEvictionLoop: false,
@@ -78,9 +77,7 @@ describe('Hub initial application release', () => {
     const created = (await create.json()).data;
     expect(created).toMatchObject({
       slug: 'sales',
-      latestRelease: {
-        version: '0.0.1',
-      },
+      latestRelease: null,
       activeRelease: null,
     });
 
@@ -89,67 +86,13 @@ describe('Hub initial application release', () => {
       cookie,
       `/apps/${created.id}/releases`,
     );
-    const release = (await releaseList.json()).data[0];
-    expect(release).toMatchObject({
-      version: '0.0.1',
-      verificationStatus: 'verified',
-      manifest: {
-        basePath: '/sales',
-      },
-    });
-
-    const releaseDirectory = path.join(
-      fixture.releaseRoot,
-      created.id,
-      release.id,
-    );
-    await expect(
-      readFile(path.join(releaseDirectory, 'dist/client/index.html'), 'utf8'),
-    ).resolves.toContain('/sales/assets/app.js');
-    await expect(
-      readFile(path.join(releaseDirectory, 'dist/client/index.html'), 'utf8'),
-    ).resolves.not.toContain('/default/assets/');
-    await expect(
-      readFile(
-        path.join(releaseDirectory, 'dist/client/assets/app.js'),
-        'utf8',
-      ),
-    ).resolves.toContain('/sales/assets/chunk.js');
-    await expect(
-      computeReleaseArtifactChecksum(releaseDirectory),
-    ).resolves.toBe(release.checksum);
-
-    const deploymentsBefore = await request(
-      app,
-      cookie,
-      `/apps/${created.id}/deployments`,
-    );
-    await expect(deploymentsBefore.json()).resolves.toMatchObject({
+    await expect(releaseList.json()).resolves.toMatchObject({
       data: [],
       meta: { total: 0 },
     });
-
-    const deploymentResponse = await request(
-      app,
-      cookie,
-      `/apps/${created.id}/deployments`,
-      {
-        method: 'POST',
-        headers: { 'idempotency-key': 'deploy-sales-initial' },
-        body: JSON.stringify({ targetReleaseId: release.id, type: 'deploy' }),
-      },
-    );
-    expect(deploymentResponse.status).toBe(202);
-    const deployment = (await deploymentResponse.json()).data;
-    await expect(
-      waitForDeployment(app, cookie, deployment.id),
-    ).resolves.toMatchObject({
-      status: 'succeeded',
-      targetReleaseId: release.id,
-    });
   });
 
-  it('compensates application creation when the template artifact is invalid', async () => {
+  it('does not inspect template artifacts when creating an application', async () => {
     const fixture = await createFixture();
     await writeFile(
       path.join(fixture.resources, 'initial-release.tar.gz'),
@@ -176,14 +119,18 @@ describe('Hub initial application release', () => {
       headers: { 'idempotency-key': 'create-mismatched' },
       body: JSON.stringify({ slug: 'mismatched', name: 'Mismatched' }),
     });
-    expect(create.status).toBe(500);
+    expect(create.status).toBe(201);
     await expect(create.json()).resolves.toMatchObject({
-      error: { code: 'DEFAULT_APP_RESOURCES_INVALID' },
+      data: {
+        slug: 'mismatched',
+        latestRelease: null,
+        activeRelease: null,
+      },
     });
     const applications = await request(app, cookie, '/apps?query=mismatched');
     await expect(applications.json()).resolves.toMatchObject({
-      data: [],
-      meta: { total: 0 },
+      data: [{ slug: 'mismatched', latestRelease: null }],
+      meta: { total: 1 },
     });
   });
 });
@@ -274,24 +221,4 @@ async function request(
     ...init,
     headers,
   });
-}
-
-async function waitForDeployment(
-  app: HubApp,
-  cookie: string,
-  deploymentId: string,
-): Promise<Record<string, unknown>> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const response = await request(app, cookie, `/deployments/${deploymentId}`);
-    const value = (await response.json()).data as Record<string, unknown>;
-    if (
-      value.status === 'succeeded' ||
-      value.status === 'failed' ||
-      value.status === 'cancelled'
-    ) {
-      return value;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error('Deployment did not finish.');
 }
