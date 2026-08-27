@@ -45,11 +45,15 @@ export type FilesPluginRoutesContext = AppPluginRoutesContext<
   FilesPluginConfig
 >;
 
-export default function registerFilesRoutes({
-  app,
+export interface CreateFilesRoutesOptions {
+  readonly config: FilesPluginConfig;
+  readonly deps: FilesPluginDeps;
+}
+
+export function createFilesRoutes({
   config,
   deps,
-}: FilesPluginRoutesContext): void {
+}: CreateFilesRoutesOptions): Hono {
   const service = createPluginFilesService({ config, deps });
   let files: FilesService;
   let unavailable: UnavailableFilesPluginService | undefined;
@@ -126,7 +130,15 @@ export default function registerFilesRoutes({
     }),
   );
 
-  app.route(ATTACHMENTS_PATH, routes);
+  return routes;
+}
+
+export default function registerFilesRoutes({
+  app,
+  config,
+  deps,
+}: FilesPluginRoutesContext): void {
+  app.route(ATTACHMENTS_PATH, createFilesRoutes({ config, deps }));
 }
 
 function createUnavailableStore(

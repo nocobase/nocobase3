@@ -32,7 +32,7 @@ vi.mock('../../client/files-client.js', () => ({
   createFilesClient: mocks.createFilesClient,
 }));
 
-import FilesDemoPage from '../../client/pages/files-demo-page.js';
+import FilesDemoPage from '../../client/default-pages/files-demo-page.js';
 
 const examples = {
   profile: {
@@ -426,7 +426,10 @@ describe('FilesDemoPage', () => {
   });
 
   it('contains no remote sample URL or legacy storage action', async () => {
-    const source = await readFile('client/pages/files-demo-page.tsx', 'utf8');
+    const source = await readFile(
+      'client/default-pages/files-demo-page.tsx',
+      'utf8',
+    );
     const legacyPrefix = ['storage', 's:'].join('');
 
     expect(source).not.toMatch(/https?:\/\//);

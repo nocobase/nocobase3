@@ -7,7 +7,7 @@ const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
   {
     name: 'demo',
     path: '/files-demo',
-    componentLoader: () => import('./pages/files-demo-page.js'),
+    componentLoader: () => import('./default-pages/files-demo-page.js'),
   },
 ]);
 

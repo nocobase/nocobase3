@@ -34,9 +34,11 @@ import {
   type FilesPluginDeps,
 } from '../server/plugin-runtime.js';
 import bootstrapFilesPlugin from '../server/bootstrap.js';
-import registerFilesRoutes from '../server/routes/index.js';
+import registerFilesRoutes, {
+  createFilesRoutes,
+} from '../server/routes/index.js';
 
-describe('files plugin route registrar', () => {
+describe('files plugin route factory and registrar', () => {
   let files: FilesService;
   let database: DatabaseManager;
   let driveManager: NocoBaseDriveManager;
@@ -99,7 +101,7 @@ describe('files plugin route registrar', () => {
   });
 
   it('mounts authenticated stable examples without storage internals', async () => {
-    const app = registerApp(config, deps);
+    const app = createFactoryApp(config, deps);
     const denied = await app.request('/api/attachments/examples');
     const response = await app.request('/api/attachments/examples', {
       headers: { 'x-demo-auth': 'allowed' },
@@ -127,7 +129,7 @@ describe('files plugin route registrar', () => {
   });
 
   it('configures Avatar and Order routes through createFileRoute', () => {
-    registerApp(config, deps);
+    createFilesRoutes({ config, deps });
 
     expect(createFileRouteMock).toHaveBeenCalledTimes(2);
     const avatar = createFileRouteMock.mock.calls[0]?.[0] as
@@ -180,7 +182,7 @@ describe('files plugin route registrar', () => {
   });
 
   it('validates Profile and Order IDs inside delegated stores', async () => {
-    const app = registerApp(config, deps);
+    const app = createFactoryApp(config, deps);
 
     expect(
       (
@@ -227,7 +229,7 @@ describe('files plugin route registrar', () => {
       });
       expect(isFilesPluginServiceUnavailable(service)).toBe(true);
 
-      const app = registerApp(unavailableConfig, unavailableDeps);
+      const app = createFactoryApp(unavailableConfig, unavailableDeps);
       const examples = await app.request('/api/attachments/examples', {
         headers: { 'x-demo-auth': 'allowed' },
       });
@@ -264,17 +266,31 @@ describe('files plugin route registrar', () => {
       /^(?:export\s+)?(?:const|let|var)\s+\w*files\w*\s*:\s*FilesService/m,
     );
   });
+
+  it('mounts the factory Router at the plugin convention path', async () => {
+    const app = new Hono();
+    registerFilesRoutes({
+      app,
+      config,
+      deps,
+      services: {},
+      paths: {} as never,
+    });
+
+    const response = await app.request('/api/attachments/examples', {
+      headers: { 'x-demo-auth': 'allowed' },
+    });
+
+    expect(response.status).toBe(200);
+  });
 });
 
-function registerApp(config: FilesPluginConfig, deps: FilesPluginDeps): Hono {
+function createFactoryApp(
+  config: FilesPluginConfig,
+  deps: FilesPluginDeps,
+): Hono {
   const app = new Hono();
-  registerFilesRoutes({
-    app,
-    config,
-    deps,
-    services: {},
-    paths: {} as never,
-  });
+  app.route('/api/attachments', createFilesRoutes({ config, deps }));
   return app;
 }
 

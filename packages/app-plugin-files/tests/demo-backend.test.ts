@@ -23,7 +23,7 @@ import type {
   FilesPluginConfig,
   FilesPluginDeps,
 } from '../server/plugin-runtime.js';
-import registerFilesRoutes from '../server/routes/index.js';
+import { createFilesRoutes } from '../server/routes/index.js';
 
 interface RawDatabaseClient {
   raw(sql: string): Promise<unknown>;
@@ -222,13 +222,7 @@ async function runBootstrap(
 
 function registerApp(config: FilesPluginConfig, deps: FilesPluginDeps): Hono {
   const app = new Hono();
-  registerFilesRoutes({
-    app,
-    config,
-    deps,
-    services: {},
-    paths: {} as never,
-  });
+  app.route('/api/attachments', createFilesRoutes({ config, deps }));
   return app;
 }
 

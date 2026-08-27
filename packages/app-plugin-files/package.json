@@ -123,8 +123,8 @@
     },
     "registry": {
       "items": {
-        "file-field-ui": "./registry/file-field-ui",
-        "demo-page-ui": "./registry/demo-page-ui"
+        "component-ui": "./registry/component-ui",
+        "page-ui": "./registry/page-ui"
       }
     }
   },

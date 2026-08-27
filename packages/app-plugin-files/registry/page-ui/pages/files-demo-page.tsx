@@ -9,7 +9,7 @@ import {
   createFilesClient,
   type FileRecord,
   type FilesClient,
-} from '@/extensions/nocobase-files-file-field-ui';
+} from '@/extensions/nocobase-files-component-ui';
 
 interface DemoEntity {
   readonly id: number;

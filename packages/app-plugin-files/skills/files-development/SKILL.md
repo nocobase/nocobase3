@@ -145,8 +145,9 @@ turn Public into an infinite Token and never log Token values.
 ## 7. Use the UI contracts
 
 The plugin runtime Demo is available without Registry installation. If the
-business UI needs source-level customization, install/copy the
-`file-field-ui` Registry item. Registry source is application-owned UI; it does
+business UI needs source-level customization, install the `component-ui`
+Registry item. Install `page-ui` only when the application should own the Demo
+page override. Registry source is application-owned UI; it does
 not install server code or migrations and must not contain database, Drive,
 Token, or security logic.
 

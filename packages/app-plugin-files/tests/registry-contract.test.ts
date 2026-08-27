@@ -64,8 +64,8 @@ describe('files plugin Registry contract', () => {
 
   it('publishes exactly the two application-owned items with safe mappings', () => {
     expect(config.items.map(({ name }) => name)).toEqual([
-      'file-field-ui',
-      'demo-page-ui',
+      'component-ui',
+      'page-ui',
     ]);
     for (const item of config.items) {
       expect(item.source.root.startsWith('registry/')).toBe(true);
@@ -90,43 +90,48 @@ describe('files plugin Registry contract', () => {
     }
   });
 
-  it('exposes the field item through direct imports without an automatic route', () => {
-    const item = config.items.find(({ name }) => name === 'file-field-ui');
+  it('exposes component UI through a direct import entry without an automatic route', () => {
+    const item = config.items.find(({ name }) => name === 'component-ui');
     expect(item).toMatchObject({
       type: 'registry:component',
       registryDependencies: ['button'],
       source: {
-        root: 'registry/file-field-ui',
-        target: 'client/extensions/nocobase-files-file-field-ui',
+        root: 'registry/component-ui',
+        target: 'client/extensions/nocobase-files-component-ui',
       },
     });
     expect(item?.dependencies).toContain('@nocobase/app-plugin-files@^0.0.1');
     expect(item?.meta.nocobase?.requiresPlugins).toEqual({
       '@nocobase/app-plugin-files': '>=0.0.1 <0.1.0',
     });
-    expect(read('registry/file-field-ui/index.ts')).toContain(
+    expect(read('registry/component-ui/index.ts')).toContain(
       "'./components/file-upload-field'",
     );
-    expect(read('registry/file-field-ui/index.ts')).toContain(
-      "'./files-client'",
+    expect(read('registry/component-ui/index.ts')).toContain(
+      "'@nocobase/app-plugin-files/client'",
     );
     expect(
       fs.existsSync(
-        path.join(packageRoot, 'registry/file-field-ui/extension.ts'),
+        path.join(packageRoot, 'registry/component-ui/files-client.ts'),
+      ),
+    ).toBe(false);
+    expect(
+      fs.existsSync(
+        path.join(packageRoot, 'registry/component-ui/extension.ts'),
       ),
     ).toBe(false);
   });
 
   it('overrides the stable Demo route without declaring another route', () => {
-    const item = config.items.find(({ name }) => name === 'demo-page-ui');
-    const extension = read('registry/demo-page-ui/extension.ts');
-    const page = read('registry/demo-page-ui/pages/files-demo-page.tsx');
+    const item = config.items.find(({ name }) => name === 'page-ui');
+    const extension = read('registry/page-ui/extension.ts');
+    const page = read('registry/page-ui/pages/files-demo-page.tsx');
     expect(item).toMatchObject({
       type: 'registry:block',
-      registryDependencies: ['file-field-ui', 'button'],
+      registryDependencies: ['component-ui', 'button'],
       source: {
-        root: 'registry/demo-page-ui',
-        target: 'client/extensions/nocobase-files-demo-page-ui',
+        root: 'registry/page-ui',
+        target: 'client/extensions/nocobase-files-page-ui',
       },
     });
     expect(item?.dependencies).toContain('@nocobase/app-client@^1.0.0-beta.2');
@@ -142,7 +147,7 @@ describe('files plugin Registry contract', () => {
     expect(page).toContain("resolvePortalUrl('/api/attachments/examples'");
     expect(page).toContain('nocobaseClient.getHeaders');
     expect(page).toContain('filesEndpoint');
-    expect(page).toContain('@/extensions/nocobase-files-file-field-ui');
+    expect(page).toContain('@/extensions/nocobase-files-component-ui');
     expect(page).not.toMatch(/path\s*:\s*['"]\/files-demo['"]/u);
   });
 
@@ -228,7 +233,7 @@ describe('files plugin Registry contract', () => {
         fs.existsSync(
           path.join(
             temporaryRoot,
-            'client/extensions/nocobase-files-file-field-ui/index.ts',
+            'client/extensions/nocobase-files-component-ui/index.ts',
           ),
         ),
       ).toBe(true);
@@ -236,7 +241,7 @@ describe('files plugin Registry contract', () => {
         fs.existsSync(
           path.join(
             temporaryRoot,
-            'client/extensions/nocobase-files-demo-page-ui/extension.ts',
+            'client/extensions/nocobase-files-page-ui/extension.ts',
           ),
         ),
       ).toBe(true);

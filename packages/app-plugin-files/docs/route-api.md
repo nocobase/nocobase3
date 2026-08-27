@@ -4,6 +4,11 @@
 Mount it below a business path such as
 `/api/orders/:orderId/attachments`:
 
+This is the stable public route factory for business modules. The plugin's
+internal `createFilesRoutes()` composes its built-in Demo Router, while the
+convention registrar only mounts that Router at `/api/attachments`; neither
+Demo assembly API is exported from `@nocobase/app-plugin-files/server`.
+
 | Method   | Relative path  | Action                      | Authentication        |
 | -------- | -------------- | --------------------------- | --------------------- |
 | `GET`    | `/`            | List scoped files           | Required              |

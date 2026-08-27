@@ -2,7 +2,10 @@ export { FileList } from './components/file-list';
 export { FilePreviewDialog } from './components/file-preview-dialog';
 export { FileThumbnail } from './components/file-thumbnail';
 export { FileUploadField } from './components/file-upload-field';
-export { createFilesClient, FilesClientError } from './files-client';
+export {
+  createFilesClient,
+  FilesClientError,
+} from '@nocobase/app-plugin-files/client';
 export type {
   CreateFilesClientOptions,
   FileAccessUrl,
@@ -14,4 +17,4 @@ export type {
   FileUiLabels,
   FileUploadFieldProps,
   FileUploadOptions,
-} from '@nocobase/app-plugin-files/client/types';
+} from '@nocobase/app-plugin-files/client';

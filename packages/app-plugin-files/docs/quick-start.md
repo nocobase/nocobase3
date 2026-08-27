@@ -136,8 +136,9 @@ const client = createFilesClient({
 
 The business form submits the relation and owner ID. The client handles the
 plugin endpoint, same-origin base path, multipart upload, authentication, and
-content URL flow. The runtime Demo works without Registry; copy
-`file-field-ui` only when the application needs editable UI source.
+content URL flow. The runtime Demo works without Registry; install
+`component-ui` only when the application needs editable UI source. Install
+`page-ui` when the application should own and customize the Demo page.
 
 ## 5. Validate
 

@@ -137,8 +137,8 @@ const client = createFilesClient({
 ```
 
 The profile form owns the `profileId` relation and submits the business record.
-It does not submit `disk`, `key`, a final URL, or a Token. Install/copy the
-`file-field-ui` Registry item only for application-owned UI customization; the
+It does not submit `disk`, `key`, a final URL, or a Token. Install the
+`component-ui` Registry item only for application-owned UI customization; the
 plugin runtime Demo remains available without Registry.
 
 ## Acceptance tests
