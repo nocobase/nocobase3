@@ -17,6 +17,10 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./client/module": {
+      "types": "./client/module.ts",
+      "import": "./client/module.ts"
+    },
     "./client/bootstrap": {
       "types": "./client/bootstrap.ts",
       "import": "./client/bootstrap.ts"
@@ -45,6 +49,10 @@
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
+      },
+      "./client/module": {
+        "types": "./dist/client/module.d.ts",
+        "import": "./dist/client/module.js"
       },
       "./client/bootstrap": {
         "types": "./dist/client/bootstrap.d.ts",

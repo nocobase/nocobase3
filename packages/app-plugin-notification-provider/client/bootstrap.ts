@@ -1,9 +1,13 @@
-import type { AppClientPluginBootstrap } from '@nocobase/app-client/plugins';
+import type { AppClientBootstrap } from '@nocobase/app-client/plugins';
 
+import type { NotificationProviderClientOptions } from './module.js';
 import { createNotificationProvider } from './notification-provider.js';
 
-const bootstrap: AppClientPluginBootstrap = ({ refine }) => {
-  refine.setNotificationProvider(createNotificationProvider());
+const bootstrap: AppClientBootstrap<NotificationProviderClientOptions> = ({
+  refine,
+  options,
+}) => {
+  refine.setNotificationProvider(createNotificationProvider(options));
 };
 
 export default bootstrap;

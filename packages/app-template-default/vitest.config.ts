@@ -30,7 +30,6 @@ export default createReactVitestConfig({
       'tests/logic/agent-annotations.test.ts',
       'tests/logic/app-server.test.ts',
       'tests/logic/client-auth.test.tsx',
-      'tests/logic/client-plugins.test.ts',
       'tests/logic/client-refine-runtime.test.ts',
       'tests/logic/client-routes.test.ts',
       'tests/logic/client-runtime.test.ts',

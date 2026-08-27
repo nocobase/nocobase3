@@ -19,6 +19,10 @@
       "types": "./client/bootstrap.ts",
       "import": "./client/bootstrap.ts"
     },
+    "./client/module": {
+      "types": "./client/module.ts",
+      "import": "./client/module.ts"
+    },
     "./client/providers": {
       "types": "./client/providers.ts",
       "import": "./client/providers.ts"
@@ -42,6 +46,10 @@
       "./client/bootstrap": {
         "types": "./dist/client/bootstrap.d.ts",
         "import": "./dist/client/bootstrap.js"
+      },
+      "./client/module": {
+        "types": "./dist/client/module.d.ts",
+        "import": "./dist/client/module.js"
       },
       "./client/providers": {
         "types": "./dist/client/providers.d.ts",

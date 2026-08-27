@@ -220,6 +220,11 @@ function toPascalCase(value) {
     .join('');
 }
 
+function toCamelCase(value) {
+  const pascalCase = toPascalCase(value);
+  return pascalCase[0].toLowerCase() + pascalCase.slice(1);
+}
+
 function formatDatePrefix(value) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     throw new Error('The scaffold date must be a valid Date.');
@@ -238,6 +243,7 @@ function createScaffoldFiles({
   datePrefix,
 }) {
   const symbolName = toPascalCase(shortName);
+  const moduleName = toCamelCase(shortName);
   const collectionName = `appPlugin${symbolName}Records`;
   const migrationName = `${datePrefix}0001_${shortName.replaceAll('-', '_')}_create_records`;
   const seedName = `${datePrefix}0002_${shortName.replaceAll('-', '_')}_create_welcome_record`;
@@ -245,13 +251,17 @@ function createScaffoldFiles({
     name: packageName,
     displayName,
     description,
-    version: '0.1.0',
+    version: '0.0.1',
     type: 'module',
     prettier: '@nocobase/dev-config/prettier',
     engines: {
       node: '>=24.0.0',
     },
     exports: {
+      './client/module': {
+        types: './client/module.ts',
+        import: './client/module.ts',
+      },
       './client/bootstrap': {
         types: './client/bootstrap.ts',
         import: './client/bootstrap.ts',
@@ -266,9 +276,14 @@ function createScaffoldFiles({
       },
       './package.json': './package.json',
     },
+    files: ['dist', '.agents'],
     publishConfig: {
       access: 'public',
       exports: {
+        './client/module': {
+          types: './dist/client/module.d.ts',
+          import: './dist/client/module.js',
+        },
         './client/bootstrap': {
           types: './dist/client/bootstrap.d.ts',
           import: './dist/client/bootstrap.js',
@@ -335,7 +350,7 @@ function createScaffoldFiles({
     ['.prettierignore', 'dist/\n'],
     [
       'README.md',
-      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server bootstrap, an HTTP route at \`/${shortName}\`, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
+      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server bootstrap, an HTTP route at \`/${shortName}\`, a \`client/module.ts\` registration entry, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
     ],
     [
       'database/README.md',
@@ -354,6 +369,10 @@ function createScaffoldFiles({
       `import { createClientLibraryConfig } from '@nocobase/dev-config/eslint';\n\nexport default createClientLibraryConfig({\n  tsconfigRootDir: import.meta.dirname,\n});\n`,
     ],
     ['package.json', `${JSON.stringify(packageJson, null, 2)}\n`],
+    [
+      'client/module.ts',
+      `import {\n  defineClientModule,\n  type AppClientModuleFactory,\n} from '@nocobase/app-client/plugins';\n\nexport interface ${symbolName}ClientOptions {\n  readonly placeholder?: never;\n}\n\nconst ${moduleName}: AppClientModuleFactory<${symbolName}ClientOptions> =\n  defineClientModule({\n    packageName: '${packageName}',\n    bootstrap: () => import('./bootstrap.js'),\n    routes: () => import('./routes.js'),\n    providers: () => import('./providers.js'),\n  });\n\nexport default ${moduleName};\n`,
+    ],
     [
       'client/bootstrap.ts',
       `import type { AppClientPluginBootstrap } from '@nocobase/app-client/plugins';\n\nconst bootstrap: AppClientPluginBootstrap = () => {\n  // Register imperative client capabilities here.\n};\n\nexport default bootstrap;\n`,

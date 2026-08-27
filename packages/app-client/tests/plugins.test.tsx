@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyClientRouteComponentOverrides,
   defineClientApplication,
+  defineClientModule,
+  defineClientModules,
   defineClientProviders,
   defineClientRouteComponentOverrides,
   defineClientRoutes,
@@ -405,5 +407,108 @@ describe('client plugin definitions', () => {
         },
       ]),
     ).toThrow('Circular client provider order detected');
+  });
+});
+
+describe('client modules', () => {
+  const loadComponent = async () => ({ default: () => null });
+  const bootstrapLoader = async () => ({ default: () => {} });
+  const routesLoader = async () => ({
+    default: defineClientRoutes([
+      { name: 'index', path: '/example', componentLoader: loadComponent },
+    ]),
+  });
+
+  it('forwards options and exposes the declared entries', () => {
+    const example = defineClientModule<{ readonly label?: string }>({
+      packageName: '@nocobase/app-plugin-example',
+      bootstrap: bootstrapLoader,
+      routes: routesLoader,
+    });
+
+    const registration = example({ label: 'custom' });
+
+    expect(registration.packageName).toBe('@nocobase/app-plugin-example');
+    expect(registration.bootstrap).toBe(bootstrapLoader);
+    expect(registration.routes).toBe(routesLoader);
+    expect(registration.providers).toBeUndefined();
+    expect(registration.options).toEqual({ label: 'custom' });
+    expect(registration.routeComponentOverrides).toEqual([]);
+  });
+
+  it('defaults options to an empty object when called with none', () => {
+    const example = defineClientModule({
+      packageName: '@nocobase/app-plugin-example',
+    });
+
+    expect(example().options).toEqual({});
+  });
+
+  it('derives route component overrides from options', () => {
+    const example = defineClientModule<{
+      readonly loginPage?: typeof loadComponent;
+    }>({
+      packageName: '@nocobase/app-plugin-example',
+      routeComponentOverrides: (options) =>
+        options.loginPage
+          ? [
+              {
+                routeId: '@nocobase/app-plugin-example:login',
+                componentLoader: options.loginPage,
+              },
+            ]
+          : [],
+    });
+
+    expect(example().routeComponentOverrides).toEqual([]);
+    expect(
+      example({ loginPage: loadComponent }).routeComponentOverrides,
+    ).toEqual([
+      expect.objectContaining({
+        routeId: '@nocobase/app-plugin-example:login',
+      }),
+    ]);
+  });
+
+  it('collects plugins in order and merges their route overrides', () => {
+    const first = defineClientModule({
+      packageName: '@nocobase/app-plugin-first',
+      bootstrap: bootstrapLoader,
+      routeComponentOverrides: () => [
+        {
+          routeId: '@nocobase/app-plugin-second:login',
+          componentLoader: loadComponent,
+        },
+      ],
+    });
+    const second = defineClientModule({
+      packageName: '@nocobase/app-plugin-second',
+      routes: routesLoader,
+    });
+
+    const modules = defineClientModules([first(), second()]);
+
+    expect(modules.plugins.map((plugin) => plugin.packageName)).toEqual([
+      '@nocobase/app-plugin-first',
+      '@nocobase/app-plugin-second',
+    ]);
+    expect(modules.plugins[0]?.source).toBe('plugin');
+    expect(modules.routeComponentOverrides).toHaveLength(1);
+  });
+
+  it('rejects the same package registered twice', () => {
+    const example = defineClientModule({
+      packageName: '@nocobase/app-plugin-example',
+    });
+
+    expect(() => defineClientModules([example(), example()])).toThrow(
+      'is registered more than once',
+    );
+  });
+
+  it('rejects an empty package name', () => {
+    expect(() => defineClientModule({ packageName: '  ' })).toThrow(
+      'must define a package name',
+    );
   });
 });

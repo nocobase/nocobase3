@@ -48,8 +48,13 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   const tsconfig = JSON.parse(tsconfigContents);
 
   assert.equal(packageJson.name, '@nocobase/app-plugin-audit-log');
+  assert.equal(packageJson.version, '0.0.1');
   assert.equal(packageJson.prettier, '@nocobase/dev-config/prettier');
   assert.deepEqual(packageJson.exports, {
+    './client/module': {
+      types: './client/module.ts',
+      import: './client/module.ts',
+    },
     './client/bootstrap': {
       types: './client/bootstrap.ts',
       import: './client/bootstrap.ts',
@@ -64,6 +69,34 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     },
     './package.json': './package.json',
   });
+  assert.deepEqual(packageJson.publishConfig.exports, {
+    './client/module': {
+      types: './dist/client/module.d.ts',
+      import: './dist/client/module.js',
+    },
+    './client/bootstrap': {
+      types: './dist/client/bootstrap.d.ts',
+      import: './dist/client/bootstrap.js',
+    },
+    './client/routes': {
+      types: './dist/client/routes.d.ts',
+      import: './dist/client/routes.js',
+    },
+    './client/providers': {
+      types: './dist/client/providers.d.ts',
+      import: './dist/client/providers.js',
+    },
+    './package.json': './package.json',
+  });
+  assert.ok(
+    Array.isArray(packageJson.files),
+    'the generated package must declare files',
+  );
+  assert.ok(packageJson.files.includes('dist'));
+  assert.ok(
+    packageJson.files.includes('.agents'),
+    'plugin skills must ship with the package',
+  );
   assert.deepEqual(packageJson.nocobase.plugin.client, {
     bootstrap: './client/bootstrap',
     routes: './client/routes',
@@ -114,6 +147,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     path.join(result.targetDirectory, 'server/bootstrap.ts'),
     'utf8',
   );
+  const clientModule = await readFile(
+    path.join(result.targetDirectory, 'client/module.ts'),
+    'utf8',
+  );
   const clientBootstrap = await readFile(
     path.join(result.targetDirectory, 'client/bootstrap.ts'),
     'utf8',
@@ -126,6 +163,25 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     path.join(result.targetDirectory, 'client/providers.ts'),
     'utf8',
   );
+  assert.match(clientModule, /defineClientModule\(\{/u);
+  assert.match(
+    clientModule,
+    /packageName: '@nocobase\/app-plugin-audit-log',/u,
+  );
+  assert.match(
+    clientModule,
+    /bootstrap: \(\) => import\('\.\/bootstrap\.js'\),/u,
+  );
+  assert.match(clientModule, /routes: \(\) => import\('\.\/routes\.js'\),/u);
+  assert.match(
+    clientModule,
+    /providers: \(\) => import\('\.\/providers\.js'\),/u,
+  );
+  assert.match(
+    clientModule,
+    /const auditLog: AppClientModuleFactory<AuditLogClientOptions> =/u,
+  );
+  assert.match(clientModule, /export default auditLog;/u);
   assert.match(clientBootstrap, /AppClientPluginBootstrap/u);
   assert.match(clientRoutes, /defineClientRoutes\(\[\]\)/u);
   assert.match(clientProviders, /defineClientProviders\(\s*\[\],\s*\)/u);

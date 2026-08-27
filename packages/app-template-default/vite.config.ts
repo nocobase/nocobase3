@@ -6,7 +6,6 @@ import path from 'path';
 import { loadEnv } from 'vite';
 
 import { isAgentAnnotationsEnabled } from './scripts/agent-annotations.js';
-import { appClientPluginsPlugin } from './scripts/client-plugins.js';
 
 const portalTemplate = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
@@ -90,7 +89,6 @@ export default createPortalViteConfig(
               }),
             ]
           : []),
-        appClientPluginsPlugin({ root: __dirname }),
       ],
       server: {
         watch: { ignored: ['**/.agent-annotations/**'] },

@@ -92,33 +92,45 @@ export type AppClientRefineRegistry = AppClientRefineSetters & {
   ): void;
 };
 
-export interface AppClientBootstrapContext {
+export interface AppClientBootstrapContext<TOptions = unknown> {
   readonly appClient: AppClient;
   readonly packageName: string;
   readonly refine: AppClientRefineRegistry;
   readonly source: AppClientContributionSource;
+  /** Options the application passed to this module. Empty object when none. */
+  readonly options: TOptions;
 }
 
-export type AppClientBootstrap = (
-  context: AppClientBootstrapContext,
+export type AppClientBootstrap<TOptions = unknown> = (
+  context: AppClientBootstrapContext<TOptions>,
 ) => void | Promise<void>;
 
-export type AppClientPluginBootstrapContext = AppClientBootstrapContext;
+export type AppClientPluginBootstrapContext<TOptions = unknown> =
+  AppClientBootstrapContext<TOptions>;
 
-export type AppClientPluginBootstrap = AppClientBootstrap;
+export type AppClientPluginBootstrap<TOptions = unknown> =
+  AppClientBootstrap<TOptions>;
 
 export interface AppClientBootstrapModule {
-  default: AppClientBootstrap;
+  default: AppClientBootstrap<never>;
 }
 
 export type AppClientPluginBootstrapModule = AppClientBootstrapModule;
 
+export type AppClientRoutesModuleDefault =
+  | readonly AppClientRouteDefinition[]
+  | ((options: never) => readonly AppClientRouteDefinition[]);
+
+export type AppClientProvidersModuleDefault =
+  | readonly AppClientProviderDefinition[]
+  | ((options: never) => readonly AppClientProviderDefinition[]);
+
 export interface AppClientRoutesModule {
-  default: readonly AppClientRouteDefinition[];
+  default: AppClientRoutesModuleDefault;
 }
 
 export interface AppClientProvidersModule {
-  default: readonly AppClientProviderDefinition[];
+  default: AppClientProvidersModuleDefault;
 }
 
 export type AppClientBootstrapLoader = () => Promise<AppClientBootstrapModule>;
@@ -131,9 +143,11 @@ export type AppClientProvidersLoader = () => Promise<AppClientProvidersModule>;
 
 export interface AppClientContributionLoader {
   readonly packageName: string;
-  readonly loadBootstrap?: AppClientBootstrapLoader;
-  readonly loadRoutes?: AppClientRoutesLoader;
-  readonly loadProviders?: AppClientProvidersLoader;
+  readonly bootstrap?: AppClientBootstrapLoader;
+  readonly routes?: AppClientRoutesLoader;
+  readonly providers?: AppClientProvidersLoader;
+  /** Options forwarded to the bootstrap context and contribution factories. */
+  readonly options?: unknown;
 }
 
 export interface AppClientApplicationLoader extends AppClientContributionLoader {
@@ -156,6 +170,103 @@ export type AppClientPluginContributions = AppClientContributions;
 export interface ResolvedAppClientContributions {
   readonly routes: readonly AppClientRegisteredRoute[];
   readonly providers: readonly AppClientRegisteredProvider[];
+}
+
+export interface AppClientModuleDefinition<TOptions> {
+  readonly packageName: string;
+  readonly bootstrap?: AppClientBootstrapLoader;
+  readonly routes?: AppClientRoutesLoader;
+  readonly providers?: AppClientProvidersLoader;
+  /** Maps options to route component overrides. Return an empty array for none. */
+  readonly routeComponentOverrides?: (
+    options: TOptions,
+  ) => readonly AppClientRouteComponentOverrideDefinition[];
+}
+
+export interface AppClientModuleRegistration {
+  readonly packageName: string;
+  readonly bootstrap?: AppClientBootstrapLoader;
+  readonly routes?: AppClientRoutesLoader;
+  readonly providers?: AppClientProvidersLoader;
+  readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
+  readonly options: unknown;
+}
+
+export type AppClientModuleFactory<TOptions> = (
+  options?: TOptions,
+) => AppClientModuleRegistration;
+
+export interface AppClientModules {
+  readonly plugins: readonly AppClientPluginLoader[];
+  readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
+}
+
+/**
+ * Wraps a plugin's client entries into a registration factory the application
+ * calls in its `client/modules.ts`.
+ *
+ * The entries stay lazy: this file is imported statically by the application,
+ * so anything it imports at value level enters the entry chunk.
+ */
+export function defineClientModule<TOptions = void>(
+  definition: AppClientModuleDefinition<TOptions>,
+): AppClientModuleFactory<TOptions> {
+  const packageName = normalizePackageName(definition.packageName);
+
+  return (options?: TOptions): AppClientModuleRegistration => {
+    const resolvedOptions = (options ?? {}) as TOptions;
+    const overrides = definition.routeComponentOverrides
+      ? definition.routeComponentOverrides(resolvedOptions)
+      : [];
+
+    return Object.freeze({
+      packageName,
+      bootstrap: definition.bootstrap,
+      routes: definition.routes,
+      providers: definition.providers,
+      routeComponentOverrides: defineClientRouteComponentOverrides(overrides),
+      options: resolvedOptions,
+    });
+  };
+}
+
+/**
+ * Collects the application's registered modules in order. The array order is
+ * the bootstrap order.
+ */
+export function defineClientModules(
+  modules: readonly AppClientModuleRegistration[],
+): AppClientModules {
+  const seen = new Set<string>();
+  const plugins: AppClientPluginLoader[] = [];
+  const routeComponentOverrides: AppClientRouteComponentOverrideDefinition[] =
+    [];
+
+  for (const module of modules) {
+    if (seen.has(module.packageName)) {
+      throw new Error(
+        `Client module "${module.packageName}" is registered more than once.`,
+      );
+    }
+    seen.add(module.packageName);
+
+    plugins.push(
+      Object.freeze({
+        packageName: module.packageName,
+        bootstrap: module.bootstrap,
+        routes: module.routes,
+        providers: module.providers,
+        options: module.options,
+        source: 'plugin',
+      }),
+    );
+    routeComponentOverrides.push(...module.routeComponentOverrides);
+  }
+
+  return Object.freeze({
+    plugins: Object.freeze(plugins),
+    routeComponentOverrides: Object.freeze(routeComponentOverrides),
+  });
 }
 
 export function defineClientApplication(
