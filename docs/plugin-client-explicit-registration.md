@@ -142,17 +142,26 @@ export interface AppClientModuleDefinition<TOptions> {
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
   readonly providers?: AppClientProvidersLoader;
+  /** 供 inspect 等工具显示的入口路径，不参与加载。见 §7.6。 */
+  readonly entries?: AppClientModuleEntries;
   /** options 到路由组件覆盖的映射。返回空数组表示这次调用没有覆盖。 */
   readonly routeComponentOverrides?: (
     options: TOptions,
   ) => readonly AppClientRouteComponentOverrideDefinition[];
 }
 
+export interface AppClientModuleEntries {
+  readonly bootstrap?: string;
+  readonly routes?: string;
+  readonly providers?: string;
+}
+
 export interface AppClientModuleRegistration {
   readonly packageName: string;
-  readonly loadBootstrap?: AppClientBootstrapLoader;
-  readonly loadRoutes?: AppClientRoutesLoader;
-  readonly loadProviders?: AppClientProvidersLoader;
+  readonly bootstrap?: AppClientBootstrapLoader;
+  readonly routes?: AppClientRoutesLoader;
+  readonly providers?: AppClientProvidersLoader;
+  readonly entries?: AppClientModuleEntries;
   readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
   readonly options: unknown;
 }
@@ -166,9 +175,70 @@ export function defineClientModule<TOptions = void>(
 ): AppClientModuleFactory<TOptions>;
 ```
 
-`AppClientModuleRegistration` 复用 `AppClientPluginLoader` 的字段名（`loadBootstrap` / `loadRoutes` / `loadProviders`），因此可直接作为 `AppClientPluginLoader` 传给现有的 `createAppRuntime`，`runtime.ts` 无需改动。
+三个入口字段统一命名为 `bootstrap` / `routes` / `providers`。现有的 `AppClientPluginLoader` 和 `AppClientApplicationLoader` 使用 `loadBootstrap` / `loadRoutes` / `loadProviders`，本期一并重命名，避免同一概念存在两套名称。
 
-### 3.2 装配
+涉及的改动范围：
+
+| 文件                                         | 改动         |
+| -------------------------------------------- | ------------ |
+| `packages/app-client/src/plugins.ts`         | 3 个字段名   |
+| `app-template-default/client/runtime.ts`     | 3 处字段访问 |
+| `app-template-default/client/application.ts` | 3 行         |
+| `tests/logic/client-runtime.test.ts`         | 约 15 处     |
+
+`scripts/client-plugins.ts` 和 `tests/logic/client-plugins.test.ts` 本期删除，其中的 `loadX` 无需迁移。重命名后 `defineClientApplication` 与模块描述符使用同一套字段名。
+
+### 3.2 options 到三类贡献的通路
+
+bootstrap 通过 context 拿到 options（§3.4）。routes 和 providers 的入口 default export 是数组，没有天然的注入点，因此允许入口 default export 一个接受 options 的工厂函数：
+
+```ts
+export type AppClientRoutesModuleDefault =
+  | readonly AppClientRouteDefinition[]
+  | ((options: never) => readonly AppClientRouteDefinition[]);
+
+export type AppClientProvidersModuleDefault =
+  | readonly AppClientProviderDefinition[]
+  | ((options: never) => readonly AppClientProviderDefinition[]);
+```
+
+runtime 加载后判断形态：是函数则传入该模块的 options 调用，是数组则直接使用。不需要 options 的插件保持数组形式，写法不变。
+
+```ts
+// client/routes.ts —— 需要 options 时
+import {
+  defineClientRoutes,
+  type AppClientRouteDefinition,
+} from '@nocobase/app-client/plugins';
+
+import type { AuthorizationClientOptions } from './module.js';
+
+const routes = (
+  options: AuthorizationClientOptions,
+): readonly AppClientRouteDefinition[] =>
+  defineClientRoutes([
+    ...(options.settingsPages === false ? [] : SETTINGS_ROUTES),
+  ]);
+
+export default routes;
+```
+
+```ts
+// App 侧
+authorization({ settingsPages: false }),
+```
+
+这一形态覆盖三类需求：
+
+| 需求                    | 说明                                                                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 按 options 增减路由     | 如 `authorization({ settingsPages: false })` 不注册那五条设置页路由                                                           |
+| 按 options 调整路由路径 | 如统一加前缀，路径仍由插件生成，App 只提供参数                                                                                |
+| 配置 Provider           | `AppClientProviderDefinition.component` 的类型是 `ComponentType<PropsWithChildren>`，不接受额外 props；工厂形态提供了闭包位置 |
+
+`runtime.ts` 的 `isRouteDefinitions` 和 `isProviderDefinitions` 需要相应接受函数形态。§7.6 的 inspect 加载 `modules.ts` 后同样持有 options，做相同判断即可。
+
+### 3.3 装配
 
 ```ts
 export interface AppClientModules {
@@ -181,9 +251,9 @@ export function defineClientModules(
 ): AppClientModules;
 ```
 
-`defineClientModules` 做三件事：按顺序收集 loader、合并所有模块贡献的路由覆盖、校验包名不重复（重复直接 throw，报出包名）。包名重复是今天虚拟模块结构上不可能出现、但手写 `modules.ts` 完全可能出现的错误。
+`defineClientModules` 做三件事：按顺序收集入口、合并所有模块贡献的路由覆盖、校验包名不重复（重复直接 throw，报出包名）。包名重复在当前的虚拟模块结构下不可能出现，手写 `modules.ts` 则可能。
 
-### 3.3 配置怎么到达 bootstrap
+### 3.4 配置怎么到达 bootstrap
 
 `AppClientBootstrapContext` 增加一个 `options` 字段，并泛型化：
 
@@ -205,7 +275,7 @@ export type AppClientBootstrap<TOptions = unknown> = (
 
 `createAppRuntime` 在调用 bootstrap 时把 registration 上的 `options` 透传进 context。
 
-### 3.4 App 侧接线
+### 3.5 App 侧接线
 
 `client/index.tsx` 改动：
 
@@ -226,9 +296,9 @@ export type AppClientBootstrap<TOptions = unknown> = (
  });
 ```
 
-在 `index.tsx` 里合并覆盖列表，`client/runtime.ts` 及其测试 `tests/logic/client-runtime.test.ts` 零改动。备选是给 `CreateAppRuntimeOptions` 加 `modules` 字段，语义更整齐，代价是要改 runtime 和它的测试。
+覆盖列表在 `index.tsx` 合并，`CreateAppRuntimeOptions` 的形状不变。备选是给它加一个 `modules` 字段，语义更整齐，代价是 runtime 需要理解 module 这一层概念。
 
-### 3.5 options 能表达什么
+### 3.6 options 能表达什么
 
 options 分两条通路，取决于配置生效的时机：
 
@@ -320,7 +390,7 @@ const notificationProvider: AppClientModuleFactory<NotificationClientOptions> =
 notificationProvider({ undoLabel: '撤销' }),
 ```
 
-这个例子说明 §3.3 那个 `options` 字段不是为未来预留的抽象——它有现成的用户。
+这说明 §3.4 的 `options` 字段并非为未来预留的抽象，它有现成的使用场景。
 
 #### 例三：权限设置菜单的文案和图标
 
@@ -834,9 +904,12 @@ pnpm plugin:skills:sync [--app <app>] [--dry-run]
 | `tests/logic/client-plugins.test.ts` | **删除**，并从 `vitest.config.ts` 的 include 列表移除          |
 | `tests/logic/` 新增                  | `client/modules.ts` 与 `nocobase.plugins` 的一致性校验（§5.1） |
 | `AGENTS.md`                          | 更新注册方式说明                                               |
-| `client/AGENTS.md`                   | 补充 module.ts 约束和路由覆盖唯一性规则                        |
+| `client/AGENTS.md`                   | 补充 module.ts 推荐写法和路由覆盖唯一性规则                    |
+| `client/runtime.ts`                  | 字段重命名；接受工厂形态的 routes / providers                  |
+| `client/application.ts`              | 字段重命名                                                     |
+| `tests/logic/client-runtime.test.ts` | 字段重命名，约 15 处                                           |
 
-`client/runtime.ts` 和 `tests/logic/client-runtime.test.ts` 按 §3.4 的做法不需要改动。
+路由覆盖列表在 `index.tsx` 合并，`createAppRuntime` 的签名不变。
 
 ### 9.4 根 `scripts/`
 
