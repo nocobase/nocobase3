@@ -850,7 +850,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 两个盲区恰好落在「更新插件」这件事上：`pnpm update <plugin>` 是最常用的更新命令，不触发；monorepo 内插件源码变化不经过版本号，也不触发。挂上 postinstall 只能覆盖「新装 / 换版本」，却会让人以为同步是自动的，反而更容易漏。
 
-替代方案是在 App 里提供一条 `pnpm plugin:update`，把升级插件和同步 skills 合成一步。升级本来就是一个显式动作，同步挂在它上面比挂在 install 的副作用上更可靠。该命令尚未实现。
+替代方案是 App 侧的 `pnpm plugin:update`（即 `nb3 app plugin-update`），把升级插件和同步 skills 合成一步。升级本来就是一个显式动作，同步挂在它上面比挂在 install 的副作用上更可靠。`--plugin` 指定插件并可重复，省略时升级全部已注册插件。
 
 在此之前，升级插件后手动跑一次同步：应用内 `pnpm plugin:skills:sync`（即 `nb3 app skills-sync`），本仓库内 `pnpm plugin:skills:sync`。
 
@@ -968,14 +968,14 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 本文是设计稿，以下几处最终实现与文中描述不同，以实现为准：
 
-| 位置                | 本文                                  | 实现                                                          |
-| ------------------- | ------------------------------------- | ------------------------------------------------------------- |
-| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现      |
-| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名     |
-| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 命令已实现，id 为 `nb3 app skills-sync`；postinstall 改为不做 |
-| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`       |
+| 位置                | 本文                                  | 实现                                                                    |
+| ------------------- | ------------------------------------- | ----------------------------------------------------------------------- |
+| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现                |
+| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名               |
+| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 改为 `nb3 app skills-sync` 与 `nb3 app plugin-update`；不挂 postinstall |
+| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`                 |
 
-postinstall 经实测覆盖不到「更新插件」这条主路径，已决定不挂（§8.4）。后续由 App 侧的 `pnpm plugin:update` 把升级与同步合并成一步，该命令尚未实现；在此之前手动跑一次同步命令。
+postinstall 经实测覆盖不到「更新插件」这条主路径，已决定不挂（§8.4）；改由 `pnpm plugin:update` 把升级与同步合并成一步，该命令已实现。
 
 ## 11. 分阶段落地
 
