@@ -2,7 +2,13 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -15,14 +21,11 @@ import {
 } from '@nocobase/caching';
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type {
-  LoadedAppPluginBootstrap,
-  LoadedAppPluginRoutes,
-} from '../../server/plugins/index.ts';
-import type {
   AppWebSocket,
   AppWebSocketReadyState,
 } from '@nocobase/app-server-kit/websocket';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/app-database';
+import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import {
@@ -50,7 +53,6 @@ import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
-import type { AppDeps } from '../../server/runtime/deps.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
@@ -658,94 +660,85 @@ describe('app server', () => {
     });
   });
 
-  it('does not expose the legacy upload route anonymously', async () => {
+  it('returns a JSON error when upload is requested without file drive', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
     });
+    const body = new FormData();
+    body.set(
+      'file',
+      new File(['Hello world'], 'hello.txt', { type: 'text/plain' }),
+    );
 
-    const getResponse = await app.request('http://localhost/api/upload');
-    const postResponse = await app.request('http://localhost/api/upload', {
+    const response = await app.request('http://localhost/api/upload', {
       method: 'POST',
+      body,
     });
 
-    expect(getResponse.status).toBe(401);
-    expect(postResponse.status).toBe(401);
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'File drive is not configured.',
+    });
   });
 
-  it('requires authentication for plugin API routes by default', async () => {
+  it('requires a file for uploads', async () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-upload-'),
+    );
+    tempDirs.push(root);
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
-      pluginRoutes: [
-        {
-          packageName: '@nocobase/app-plugin-public-file-test',
-          registerRoutes({ app }): void {
-            app.get('/api/public-file-content', (context) =>
-              context.text('public file'),
-            );
-          },
-        },
-      ],
+      drive: createTestDrive(root),
+    });
+    const body = new FormData();
+    body.set('file', 'not-a-file');
+
+    const response = await app.request('http://localhost/api/upload', {
+      method: 'POST',
+      body,
     });
 
-    const response = await app.request(
-      'http://localhost/api/public-file-content',
-    );
-
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'File is required',
+    });
   });
 
-  it('allows plugins to declare a narrow Public API boundary', async () => {
+  it('uploads files with the configured file drive', async () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-template-default-upload-'),
+    );
+    tempDirs.push(root);
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
-      pluginRoutes: [
-        {
-          packageName: '@nocobase/app-plugin-public-file-test',
-          registerRoutes({ publicApp }): void {
-            publicApp.get('/api/public-file-content', (context) =>
-              context.text('public file'),
-            );
-          },
-        },
-      ],
+      drive: createTestDrive(root),
     });
-
-    const response = await app.request(
-      'http://localhost/api/public-file-content',
+    const body = new FormData();
+    body.set(
+      'file',
+      new File(['Hello world'], 'hello world.txt', { type: 'text/plain' }),
     );
+
+    const response = await app.request('http://localhost/api/upload', {
+      method: 'POST',
+      body,
+    });
+    const payload = await response.json();
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('public file');
-  });
-
-  it('passes the runtime database through the shared plugin deps object', async () => {
-    const database = createMockDatabase([]);
-    let bootstrapDatabase: DatabaseManager | undefined;
-    let routesDatabase: DatabaseManager | undefined;
-    createTestApp({
-      database,
-      pluginBootstraps: [
-        {
-          packageName: '@nocobase/app-plugin-test',
-          bootstrap(context): void {
-            bootstrapDatabase = (context.deps as AppDeps).database;
-          },
-        },
-      ],
-      pluginRoutes: [
-        {
-          packageName: '@nocobase/app-plugin-test',
-          registerRoutes(context): void {
-            routesDatabase = (context.deps as AppDeps).database;
-          },
-        },
-      ],
+    expect(payload).toMatchObject({
+      name: 'hello world.txt',
+      size: 11,
+      type: 'text/plain',
     });
-
-    expect(bootstrapDatabase).toBe(database);
-    expect(routesDatabase).toBe(database);
+    expect(payload.key).toMatch(/^uploads\/[0-9a-f-]+-hello-world\.txt$/);
+    expect(payload.url).toBe(`/storage/${payload.key}`);
+    expect(
+      readFileSync(path.join(root, 'storage/app/public', payload.key), 'utf8'),
+    ).toBe('Hello world');
   });
 
   it('strips compressed upstream response headers before returning proxied API responses', async () => {
@@ -800,7 +793,7 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('mounts API routes loaded from enabled app plugins', async () => {
+  it('protects API routes loaded from enabled app plugins', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
@@ -810,18 +803,9 @@ describe('app server', () => {
     );
 
     expect(response.status).toBe(401);
-  });
-
-  it('mounts the enabled file plugin API routes', async () => {
-    const runtime = createStandaloneRuntime();
-    const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
-    );
-    const response = await app.request(
-      `http://localhost${runtime.config.app.publicBasePath}/api/attachments/examples`,
-    );
-
-    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      message: expect.any(String),
+    });
   });
 
   it('redirects HTML navigation to installation in install mode', async () => {
@@ -1255,6 +1239,26 @@ function startHttpStub(
   });
 }
 
+function createTestDrive(root: string): AppDriveConfig {
+  return {
+    default: 'public',
+    disks: {
+      public: {
+        driver: 'fs',
+        location: path.join(root, 'storage/app/public'),
+        visibility: 'public',
+        url: '/storage',
+      },
+    },
+    links: {
+      [path.join(root, 'public/storage')]: path.join(
+        root,
+        'storage/app/public',
+      ),
+    },
+  };
+}
+
 function createTestCaching(): CachingConfig {
   return {
     default: 'memory',
@@ -1298,10 +1302,9 @@ interface CreateTestAppOptions {
   nocoBaseApiUrl?: string | false;
   database?: DatabaseManager | false;
   caching?: CachingConfig;
+  drive?: AppDriveConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
-  pluginBootstraps?: readonly LoadedAppPluginBootstrap[];
-  pluginRoutes?: readonly LoadedAppPluginRoutes[];
   spa?: {
     indexPath?: string;
     runtime?: AppConfig['spa']['runtime'];
@@ -1343,7 +1346,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         autoRun: false,
       },
     },
-    drive: undefined,
+    drive: options.drive,
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
@@ -1374,16 +1377,9 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     dispose: () => Promise.resolve(),
   };
   const lifecycle = createAppDisposerRegistry();
-  const app = Object.assign(
-    createApp(runtime, {
-      lifecycle,
-      pluginBootstraps: options.pluginBootstraps,
-      pluginRoutes: options.pluginRoutes,
-    }),
-    {
-      close: () => lifecycle.disposeAll(),
-    },
-  );
+  const app = Object.assign(createApp(runtime, { lifecycle }), {
+    close: () => lifecycle.disposeAll(),
+  });
 
   return trackCloseable(app);
 }

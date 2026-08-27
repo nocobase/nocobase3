@@ -62,7 +62,7 @@ export function createApp(
     'realtime-service',
     onceAsync(() => realtime.close()),
   );
-  const services = createAppServices(runtime, { realtime });
+  const services = createAppServices(runtime, deps, { realtime });
   const app = new Hono();
   for (const plugin of options.pluginBootstraps ?? []) {
     plugin.bootstrap({
