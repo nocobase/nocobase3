@@ -640,15 +640,19 @@ const routes = applyClientRouteComponentOverrides(
 
 与当前实现的区别：
 
-|                    | 当前（451 行）                              | 改造后（约 100 行）          |
+|                    | 当前（451 行）                              | 改造后（471 行）             |
 | ------------------ | ------------------------------------------- | ---------------------------- |
 | 数据来源           | 扫 `nocobase.plugins`，逐个探测入口文件路径 | 加载 `client/plugins.ts`     |
 | 解析逻辑           | 自行复刻一份                                | 调用 app-client 的运行时函数 |
 | 与浏览器结果的关系 | 一致性依赖三处逻辑同时正确                  | 同一份文件、同一套函数       |
 
-可删除的部分：`loadApplicationDefinitions`、`findApplicationEntry`、`loadApplicationSourceExtensions`、`loadApplicationRouteComponentOverrides`、`loadDefinitions`、`formatPluginClientEntry`。格式化输出部分保留。
+删除的部分：`loadApplicationDefinitions`、`loadDefinitions`、`formatPluginClientEntry`，以及对 `resolveAppPlugins` 的调用。`findApplicationEntry`、`loadApplicationSourceExtensions`、`loadApplicationRouteComponentOverrides` 保留——source extension 和 `route-overrides.ts` 的发现仍然是 App 目录约定，`client/plugins.ts` 不承载它们。
 
-减少的代码全部属于 client 侧的复刻逻辑。这个命令本身只处理 client 贡献：它调用 `resolveAppPlugins` 后立即过滤出有 `manifest.client` 的插件，只使用 `manifest.client`、`clientRoutesEntry`、`clientProvidersEntry` 三个字段，不读取任何 server 相关字段。改造后 inspect 不再调用 `resolveAppPlugins`，但该函数继续服务 server 侧的四个消费者（见 §5），实现不变。server 侧本期不改造，且当前没有对应的 inspect 命令。
+行数没有下降：实测改造后 471 行，与改造前的 451 行基本持平。删掉的复刻逻辑被三部分抵消：按运行时语义加载贡献（含工厂形态的 routes/providers）、`client/plugins.ts` 与 `client/application.ts` 各自的加载和校验、以及 options 与覆盖来源的呈现。
+
+真正的收益不是行数，而是**解析逻辑不再有第二份实现**：路由与 provider 的解析、排序、冲突检测全部来自 `resolveAppClientContributions` 和 `applyClientRouteComponentOverrides`，与浏览器同源。
+
+这个命令只处理 client 贡献。改造前它调用 `resolveAppPlugins` 后立即过滤出有 `manifest.client` 的插件，不读取任何 server 字段；改造后不再调用它，但该函数继续服务 server 侧的四个消费者（见 §5），实现不变。server 侧本期不改造，且当前没有对应的 inspect 命令。
 
 由此，路由冲突、provider 循环依赖、重复覆盖等错误在 inspect 中以与浏览器相同的方式抛出，而不需要单独实现一套检查。
 

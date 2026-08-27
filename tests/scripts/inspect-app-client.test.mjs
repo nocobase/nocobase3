@@ -167,17 +167,17 @@ test('inspects configured client routes and providers', async () => {
   assert.match(output, /Providers \(outer -> inner\)/u);
   assert.match(output, /layer: root/u);
 
+  // `entry` used to duplicate `routeEntry`, and `componentEntry` was emitted as
+  // an explicit undefined. Both are gone: the key is present only when set.
   assert.deepEqual(inspection.routes[0], {
     auth: 'required',
     id: '@nocobase/app-template-default:home',
     name: 'home',
     packageName: '@nocobase/app-template-default',
     path: '/',
-    entry: './client/routes',
     routeSource: 'application',
     routeEntry: './client/routes',
     componentSource: 'application',
-    componentEntry: undefined,
   });
   assert.deepEqual(
     inspection.providers.map(({ id, layer, source }) => ({
@@ -221,7 +221,8 @@ test('inspects configured client routes and providers', async () => {
       './client/extensions/nocobase-auth-ui/pages/reset-password-page',
     ].map((componentEntry) => ({
       componentEntry,
-      componentSource: 'application',
+      // The override source is now named, rather than a flat "application".
+      componentSource: 'application (extension:nocobase-auth-ui)',
       routeSource: 'plugin',
     })),
   );
