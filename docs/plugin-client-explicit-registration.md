@@ -142,18 +142,10 @@ export interface AppClientModuleDefinition<TOptions> {
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
   readonly providers?: AppClientProvidersLoader;
-  /** 供 inspect 等工具显示的入口路径，不参与加载。见 §7.6。 */
-  readonly entries?: AppClientModuleEntries;
   /** options 到路由组件覆盖的映射。返回空数组表示这次调用没有覆盖。 */
   readonly routeComponentOverrides?: (
     options: TOptions,
   ) => readonly AppClientRouteComponentOverrideDefinition[];
-}
-
-export interface AppClientModuleEntries {
-  readonly bootstrap?: string;
-  readonly routes?: string;
-  readonly providers?: string;
 }
 
 export interface AppClientModuleRegistration {
@@ -161,7 +153,6 @@ export interface AppClientModuleRegistration {
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
   readonly providers?: AppClientProvidersLoader;
-  readonly entries?: AppClientModuleEntries;
   readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
   readonly options: unknown;
 }
@@ -661,20 +652,22 @@ const routes = applyClientRouteComponentOverrides(
 
 由此，路由冲突、provider 循环依赖、重复覆盖等错误在 inspect 中以与浏览器相同的方式抛出，而不需要单独实现一套检查。
 
-#### 入口路径的可读性
+#### 入口路径的显示
 
-当前 `route entry` 一类字段的值来自 `manifest.client`。新方式下入口是闭包，无法可靠还原其 specifier——`loader.toString()` 虽然包含原始字符串，但 tsx 会改写函数体，该路径不可依赖。
+当前 `route entry` 一类字段的值来自 `manifest.client`。新方式下入口是闭包，无法从中还原 specifier：`loader.toString()` 虽然包含原始字符串，但 tsx 会改写函数体，该路径不可依赖。
 
-因此 `AppClientModuleDefinition` 需要一个显式的 `entries` 字段供工具读取：
+inspect 按约定推导即可：
 
-```ts
-entries: {
-  bootstrap: '@nocobase/app-plugin-authentication/client/bootstrap',
-  routes: '@nocobase/app-plugin-authentication/client/routes',
-}
+```js
+const entryOf = (packageName, kind) =>
+  packageName === APP_PACKAGE_NAME
+    ? `./client/${kind}`
+    : `${packageName}/client/${kind}`;
 ```
 
-由 `defineClientModule` 原样透传到 registration 上。该字段只用于展示，不参与加载。
+仓库内七个提供 client 贡献的插件共十六个入口，全部是 `./client/<kind>`，没有例外，且 §9.2 会删除 `nocobase.plugin.client` 这一自定义入口路径的唯一途径。让每个插件再手写一份可推导的路径，只会增加一处与实际 loader 不一致的可能。
+
+约定之外的入口不在支持范围内。若将来确有需要，届时再引入显式字段，而不是现在为假设的情况预留。
 
 #### 输出样例
 
@@ -776,7 +769,7 @@ app-template-default/.agents/skills/
 
 同步命令校验这个格式：目录名不匹配 `nocobase-<插件短名>` 或 `nocobase-<插件短名>-<后缀>` 就报错，指出插件包名和违规目录名。这是同步机制正确性的唯一前提，必须强制。
 
-仓库现状与此约定不符：目前唯一的 skills 在 `packages/authorization/skills/authorization-development/`，既不在 `.agents/skills/` 下，也不符合命名格式。`packages/authorization` 是库而非插件，处理方式见 §8.6。
+仓库现状与此约定不符：目前唯一的 skills 在 `packages/authorization/skills/authorization-development/`，既不在 `.agents/skills/` 下，也不符合命名格式。`packages/authorization` 是库而非插件，处理方式见 §8.7。
 
 ### 8.2 同步方式：全量覆盖
 
@@ -811,23 +804,42 @@ Registry 交付的是「拿去改」的源码配方，skills 交付的是「跟�
 
 ### 8.4 触发方式
 
-#### 手动命令（主入口）
+#### 两个执行环境
+
+同步在两个不同的地方发生，命令不同：
+
+| 环境                        | 命令                       | 提供者                              |
+| --------------------------- | -------------------------- | ----------------------------------- |
+| 本仓库（monorepo）          | `pnpm plugin:skills:sync`  | 根 `package.json` 脚本              |
+| `create-app` 生成的独立应用 | `pnpm nb3 app skills:sync` | `@nocobase/nb3-cli`（bin 为 `nb3`） |
+
+两者共用 `scripts/lib/skills-sync.mjs` 的同步逻辑，差别只在插件来源：monorepo 里从 workspace 解析，独立应用里从 `node_modules` 解析。
+
+#### monorepo 命令（主入口）
 
 ```bash
-pnpm plugin:skills:sync [--app <app>] [--dry-run]
+pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 ```
+
+- `--app`：目标应用，默认 `app-template-default`，与 `plugin:register` 一致。
+- `--plugin`：只同步指定插件。省略时同步该应用已注册的全部插件。
+- `--dry-run`：打印将要复制和删除的文件，不落盘。
+
+默认同步全部而非要求指定插件，是因为应用的 skills 目录需要与其插件集合保持一致：少同步一个插件就产生一处不一致，而全量同步是幂等的。`--plugin` 用于只改了某个插件时缩短反馈时间。
 
 无 `--force`：全量覆盖是默认且唯一行为，没有需要强制跨越的检查。
 
-`plugin:register` 成功后自动调用它，`plugin:unregister` 触发前缀清理。
+`plugin:register` 成功后自动调用（带 `--plugin` 指向刚注册的插件），`plugin:unregister` 触发前缀清理。
 
 #### postinstall（补充入口，有明确盲区）
 
-生成的 App 在 `package.json` 里挂：
+`create-app` 在生成的应用里挂上：
 
 ```json
-{ "scripts": { "postinstall": "nocobase skills:sync" } }
+{ "scripts": { "postinstall": "nb3 app skills:sync" } }
 ```
+
+这只作用于独立应用。monorepo 不挂 postinstall——本仓库的插件通过 workspace 链接，源码改动不改变版本号，postinstall 不会触发（见下表），挂了也是无效开销。
 
 实测 pnpm 11 的行为如下，**这决定了 postinstall 不能作为唯一入口**：
 
@@ -842,7 +854,7 @@ pnpm plugin:skills:sync [--app <app>] [--dry-run]
 
 其中两个盲区影响最大：`pnpm update <plugin>` 是更新插件最常用的命令，不触发；monorepo 内插件源码变化不经过版本号，也不触发。
 
-所以定位是：**postinstall 覆盖「新装 / 换版本」这条主路径，手动命令覆盖其余所有情况。** 文档需要写明「更新插件后如果技能没变化，跑一次 `pnpm plugin:skills:sync`」。
+所以定位是：**postinstall 覆盖独立应用的「新装 / 换版本」路径，手动命令覆盖其余所有情况。** 文档需要写明：更新插件后如果技能没有变化，在应用里跑 `pnpm nb3 app skills:sync`，在本仓库里跑 `pnpm plugin:skills:sync`。
 
 同步脚本必须对 postinstall 场景健壮：找不到 `.agents/skills/` 就静默跳过（大部分插件没有技能，不该刷警告），任何失败都不能让 `pnpm install` 整体失败——只输出警告。install 因为文档复制失败而中断是不可接受的。
 
@@ -926,7 +938,17 @@ pnpm plugin:skills:sync [--app <app>] [--dry-run]
 
 根 `package.json`：加 `typescript: catalog:` 到 devDependencies，加 `plugin:skills:sync` 脚本。
 
-### 9.5 测试与文档
+`lib/skills-sync.mjs` 同时被 monorepo 脚本和 `@nocobase/nb3-cli` 使用，插件来源分别是 workspace 和 `node_modules`。
+
+### 9.5 独立应用侧
+
+| 位置                             | 改动                                                                  |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `packages/cli/src/commands/app/` | 新增 `skills-sync.ts`，注册为 `nb3 app skills:sync`                   |
+| `packages/create-app`            | 生成的应用挂 `postinstall`；`.agents/` 纳入生成的 `.gitignore` 白名单 |
+| `packages/app-template-default`  | `files` 加入 `.agents`，使模板自带的技能随包发布                      |
+
+### 9.6 测试与文档
 
 `tests/scripts/` 下 `register-plugin.test.mjs`、`unregister-plugin.test.mjs`、`remove-plugin.test.mjs`、`inspect-app-client.test.mjs` 需要更新，并新增 `client-modules.test.mjs`、`skills-sync.test.mjs`。
 
