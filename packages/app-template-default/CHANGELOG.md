@@ -1,5 +1,11 @@
 # @nocobase/app-template-default
 
+## 0.0.1-beta.6
+
+### Patch Changes
+
+- eb195d0: Roll production log files daily and retain up to seven files by default.
+
 ## 0.0.1-beta.5
 
 ### Patch Changes
