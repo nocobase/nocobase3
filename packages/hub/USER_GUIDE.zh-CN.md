@@ -18,7 +18,7 @@ NocoBase 3 Hub 用来创建和管理 App。你可以在这里预留一个空 App
 Hub 会创建 App 记录，不过不会在开发者电脑上创建源码目录或在线编辑源码。一次完整发布由四个部分协作完成：
 
 ```text
-Hub 创建空 App 并发放部署令牌
+Hub 创建空 App 并生成可直接执行的部署命令
         │
         ▼
 App 项目内置脚本在开发者电脑上构建并上传 App Release
@@ -43,7 +43,7 @@ Hub 目前处于预览阶段。本说明只覆盖当前源码中已经接通的�
 
 | 需求                                            | 当前入口                   | 能力状态                        |
 | ----------------------------------------------- | -------------------------- | ------------------------------- |
-| 创建空 App 并获取部署令牌                       | 「应用中心 / 创建应用」    | 可用                            |
+| 创建空 App 并复制完整部署命令                   | 「应用中心 / 创建应用」    | 可用                            |
 | 使用 `pnpm run deploy --hub ...` 构建并上传 App | 本地 App                   | 可用，会自动提交管理员审批      |
 | 查看所有 App 和运行状态                         | 「应用中心」               | 可用                            |
 | 打开、启动、停止或重启 App                      | 「应用中心」或 App「概览」 | 可用                            |
@@ -316,7 +316,7 @@ App Host 当前固定限制单个压缩包不超过 512 MiB、解压内容不超
 2. 填写「应用名称」和「App ID」
 3. 点击「创建空应用」
 4. 复制本地开发命令和部署命令
-5. 保存页面显示的部署令牌
+5. 在本地 App 根目录执行包含 deploy token 的完整部署命令
 
 「应用名称」用于 Hub 中的展示。「App ID」会用于本地项目身份、Release 身份和访问路径，创建后不可更改。它只能包含字母、数字、下划线和连字符，最长 128 个字符；`hub`、`api`、`assets`、`healthz`、`__apps` 和 `__health` 等保留名称不能使用。
 
@@ -331,11 +331,11 @@ pnpm dev
 
 本地 App 的 `package.json.name` 必须跟 Hub 中预留的 App ID 一致。部署脚本会读取这个字段作为目标 App ID。
 
+部署命令已经包含当前 App 的 deploy token，可以直接复制到本地 App 根目录执行。Hub 页面会在当前浏览器中记住这个 token，再次点击「开发与部署」时仍会显示完整命令。
+
 :::warning 注意
 
-部署令牌只显示一次。关闭创建结果前请复制到密码管理器或 CI Secret，不要提交到源码仓库、写进 App 的 `.env` 或粘贴到工单和日志中。
-
-这里的“一次性”指只展示一次，不是只允许部署一次。令牌会一直有效，直到管理员轮换它；轮换后旧令牌立即失效。每个令牌只绑定一个 App，不能用来部署其他 App。
+如果当前浏览器没有保存目标 App 的 deploy token，打开「开发与部署」时，Hub 会生成一个新 token 并写入命令。生成新 token 后，旧 token 会立即失效。每个 token 只绑定一个 App，不能用来部署其他 App。
 
 :::
 
@@ -383,11 +383,15 @@ pnpm dev
 
 默认推荐使用 App 项目内置的 `deploy` 脚本。它会在 App 源码目录中完成构建、Release 打包、上传和提交审批，不需要手工写入 App Host 的 `app-dist/`。
 
-把下面命令复制到本地 App 根目录中执行。交互终端会提示输入部署令牌，并隐藏输入内容：
+从 Hub 的「开发与部署」弹窗复制完整命令，然后在本地 App 根目录中执行：
 
 ```bash
-pnpm run deploy --hub 'http://127.0.0.1:13001/hub'
+pnpm run deploy \
+  --hub 'http://127.0.0.1:13001/hub' \
+  --token 'nb3_app_...'
 ```
+
+如果手动省略 `--token`，交互终端仍会提示输入 deploy token，并隐藏输入内容。
 
 部署脚本会依次执行：
 
@@ -605,22 +609,23 @@ Release 行中的按钮含义如下：
 
 本地预览默认会写入以下数据。表格中的 `<Hub 目录>` 是 Hub 工程根目录，`<APP_DIST_DIR>` 是 App Host 实际读取的产物目录：
 
-| 数据                       | 默认位置                                            | 可配置项                  |
-| -------------------------- | --------------------------------------------------- | ------------------------- |
-| Hub 用户、账号和会话       | `<Hub 目录>/data/hub.sqlite`                        | `HUB_DATABASE_PATH`       |
-| 发布和回滚记录             | `<Hub 目录>/data/release-management.json`           | `HUB_RELEASE_STORE_PATH`  |
-| Hub 创建的 App 和令牌哈希  | `<Hub 目录>/data/release-management.json.apps`      | 跟随发布记录路径          |
-| 审批与通知工作流           | `<Hub 目录>/data/release-management.json.workflow`  | 跟随发布记录路径          |
-| App 生命周期操作           | `<Hub 目录>/data/release-management.json.lifecycle` | 跟随发布记录路径          |
-| 设置原型与设置审计         | `<Hub 目录>/data/settings.json`                     | `HUB_SETTINGS_STORE_PATH` |
-| App Host 在线 Release 状态 | `<APP_DIST_DIR>/.app-host/active-releases.json`     | 跟随 `APP_DIST_DIR`       |
-| App Host 启停意图          | `<APP_DIST_DIR>/.app-host/app-lifecycle.json`       | 跟随 `APP_DIST_DIR`       |
-| 每个 App 的 Runtime 密钥   | `<APP_DIST_DIR>/.app-host/runtime-secrets.json`     | 跟随 `APP_DIST_DIR`       |
+| 数据                         | 默认位置                                            | 可配置项                  |
+| ---------------------------- | --------------------------------------------------- | ------------------------- |
+| Hub 用户、账号和会话         | `<Hub 目录>/data/hub.sqlite`                        | `HUB_DATABASE_PATH`       |
+| 发布和回滚记录               | `<Hub 目录>/data/release-management.json`           | `HUB_RELEASE_STORE_PATH`  |
+| Hub 创建的 App 和 token 哈希 | `<Hub 目录>/data/release-management.json.apps`      | 跟随发布记录路径          |
+| 页面记住的明文 deploy token  | 当前浏览器的 Local Storage                          | 按 Hub 地址和 App ID 隔离 |
+| 审批与通知工作流             | `<Hub 目录>/data/release-management.json.workflow`  | 跟随发布记录路径          |
+| App 生命周期操作             | `<Hub 目录>/data/release-management.json.lifecycle` | 跟随发布记录路径          |
+| 设置原型与设置审计           | `<Hub 目录>/data/settings.json`                     | `HUB_SETTINGS_STORE_PATH` |
+| App Host 在线 Release 状态   | `<APP_DIST_DIR>/.app-host/active-releases.json`     | 跟随 `APP_DIST_DIR`       |
+| App Host 启停意图            | `<APP_DIST_DIR>/.app-host/app-lifecycle.json`       | 跟随 `APP_DIST_DIR`       |
+| 每个 App 的 Runtime 密钥     | `<APP_DIST_DIR>/.app-host/runtime-secrets.json`     | 跟随 `APP_DIST_DIR`       |
 
 需要注意这些边界：
 
 - Release 目录是不可变产物，不能直接修改已经被识别或上线的 Release
-- Hub 只持久化部署令牌的 SHA-256，不保存可重新显示的明文令牌
+- Hub 服务端只持久化 deploy token 的 SHA-256；Hub 页面会把命令所需的明文 token 保存在当前浏览器中
 - App Host 重启时会重新校验在线 Release 的 SHA-256，产物被替换后会拒绝恢复
 - App Host 自动生成并私密保存每个 App 的 Runtime 认证密钥，不从 Release 读取 `AUTH_SECRET`
 - Hub 会阻止浏览器通过同源网关访问 App Host 的 `/__apps` 等控制接口
@@ -634,7 +639,7 @@ Hub 现在提供按 App 隔离的部署令牌，供 App 项目内置的部署脚
 
 创建 App、轮换部署令牌、批准或拒绝审批、回滚和生命周期控制仍要求有效的 Hub 管理员 Session。页面写操作会执行同源保护，Hub 客户端会发送 `X-Requested-With: NocoBase3`。
 
-部署令牌轮换接口是 `POST /hub/api/apps/:appId/deploy-token`。它要求管理员 Session，当前页面没有单独入口。轮换成功后只返回一次新令牌，并立即让旧令牌失效。
+deploy token 轮换接口是 `POST /hub/api/apps/:appId/deploy-token`。它要求管理员 Session。当前浏览器没有保存目标 App 的 token 时，「开发与部署」弹窗会调用这个接口生成完整命令。轮换成功后，旧 token 会立即失效。
 
 发布申请、回滚申请和 App 生命周期操作还必须提供最长 128 个字符的 `Idempotency-Key`。批准或拒绝审批不要求这个 Header，服务端会按审批 ID 防止冲突决定。
 
@@ -667,7 +672,7 @@ POST /hub/api/release-management/apps/:appId/deployments
 
 ### 部署提示 `APP_DEPLOY_TOKEN_INVALID` 或返回 `401`
 
-部署令牌无效、没有完整传入或已经被轮换。使用 Hub 为目标 App 发放的最新令牌，并确认环境变量中没有多余的引号、空格或换行。不要使用 Hub 登录 token 或 App Host 控制 token 代替部署令牌。
+deploy token 无效、没有完整传入或已经被轮换。回到目标 App 的「开发与部署」弹窗，复制当前浏览器保存的完整命令。如果 token 已在其他浏览器中被轮换，需要清除当前 Hub 页面的 Local Storage，再重新打开弹窗生成命令。不要使用 Hub 登录 token 或 App Host 控制 token 代替 deploy token。
 
 ### 部署提示 `APP_DEPLOY_TOKEN_FORBIDDEN` 或返回 `403`
 
@@ -725,7 +730,7 @@ Hub 挂载在 `/hub` 时，完整 API 前缀是 `/hub/api/release-management`。
 
 - App 构建和针对性测试已经通过
 - Hub 已创建目标 App，本地 `package.json.name` 跟 App ID 一致
-- 部署令牌来自目标 App，并通过 `NB3_HUB_TOKEN`、`--token` 或 CI Secret 安全注入
+- 部署命令来自目标 App 的「开发与部署」弹窗，并包含正确的 `--token`
 - 使用了新的 `releaseId`，或确认默认的版本号 + 产物哈希 ID 符合预期
 - `package.json` 包含版本号和 `build` 脚本，构建结果包含 `dist/server/embedded.js`
 - `pnpm run deploy --hub <hub-url> --dry-run` 已经通过，或已完成等价的本地构建检查

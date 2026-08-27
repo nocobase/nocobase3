@@ -1,5 +1,5 @@
 import { createManagedApp } from '@nocobase/hub-release-management/client';
-import { Check, Copy, LoaderCircle, Terminal } from 'lucide-react';
+import { LoaderCircle, Terminal } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DevelopmentGuideSteps } from './development-guide-dialog';
+import { rememberDeployToken } from './deploy-token';
 
 interface CreatedAppGuide {
   appId: string;
@@ -83,6 +84,7 @@ export function CreateAppDialog({
         name: normalizedName,
       });
       if (generation !== requestGeneration.current) return;
+      rememberDeployToken(normalizedAppId, result.deployToken);
       setCreated({ appId: normalizedAppId, deployToken: result.deployToken });
       void onCreated();
     } catch (error) {
@@ -215,9 +217,6 @@ function CreationGuide({
   deployToken,
   onDone,
 }: CreatedAppGuide & { onDone: () => void }) {
-  const [tokenCopyState, setTokenCopyState] = useState<
-    'idle' | 'copied' | 'error'
-  >('idle');
   return (
     <>
       <DialogHeader>
@@ -236,57 +235,15 @@ function CreationGuide({
         </AlertDescription>
       </Alert>
 
-      <Alert variant='destructive'>
-        <AlertTitle>保存一次性部署令牌</AlertTitle>
-        <AlertDescription>
-          <p>
-            部署令牌只显示这一次，关闭前请复制并保存到密码管理器或 CI Secret。
-          </p>
-          <div className='mt-2 flex flex-col gap-2 sm:flex-row sm:items-start'>
-            <code className='min-w-0 flex-1 break-all rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground'>
-              {deployToken}
-            </code>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              onClick={() => void copyText(deployToken, setTokenCopyState)}
-            >
-              {tokenCopyState === 'copied' ? <Check /> : <Copy />}
-              {tokenCopyState === 'copied' ? '已复制' : '复制部署令牌'}
-            </Button>
-          </div>
-          {tokenCopyState === 'error' ? (
-            <p role='alert' className='mt-2 text-xs'>
-              无法访问剪贴板，请手动选择并复制部署令牌。
-            </p>
-          ) : null}
-        </AlertDescription>
-      </Alert>
-
-      <DevelopmentGuideSteps appId={appId} />
+      <DevelopmentGuideSteps appId={appId} deployToken={deployToken} />
 
       <DialogFooter>
         <Button type='button' onClick={onDone}>
-          我已保存，完成
+          完成
         </Button>
       </DialogFooter>
     </>
   );
-}
-
-async function copyText(
-  value: string,
-  setState: (state: 'idle' | 'copied' | 'error') => void,
-): Promise<void> {
-  try {
-    if (!navigator.clipboard?.writeText)
-      throw new Error('Clipboard unavailable');
-    await navigator.clipboard.writeText(value);
-    setState('copied');
-  } catch {
-    setState('error');
-  }
 }
 
 function validateApp(name: string, appId: string): FormErrors {

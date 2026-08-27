@@ -4,4 +4,4 @@
 '@nocobase/hub': patch
 ---
 
-Move Hub deployment into the generated App's `pnpm run deploy` script and remove the obsolete `nb3 app deploy` command.
+Move Hub deployment into the generated App's `pnpm run deploy` script, include App deployment tokens in copyable Hub commands, and remove the obsolete `nb3 app deploy` command.

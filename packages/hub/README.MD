@@ -57,12 +57,13 @@ atomic traffic switching, restart recovery, and rollback. Hub owns authenticated
 operator workflows and persists every deployment attempt in its own local audit
 store for the preview release.
 
-An administrator first reserves an App ID from `/hub/apps`. Hub displays an
-App-scoped deployment token once. From that App's source directory,
-`pnpm run deploy --hub <hub-url>` runs the build, creates and uploads a deterministic immutable
-Release, and submits it for approval. The token cannot approve the Release or
-operate another App; an administrator must still approve it in Hub before App
-Host performs readiness checks and switches traffic.
+An administrator first reserves an App ID from `/hub/apps`. Hub generates a
+copyable `pnpm run deploy --hub <hub-url> --token <deploy-token>` command and
+remembers the App-scoped token in the current browser. Running that command from
+the App's source directory builds and uploads a deterministic immutable Release,
+then submits it for approval. The token cannot approve the Release or operate
+another App; an administrator must still approve it in Hub before App Host
+performs readiness checks and switches traffic.
 
 Apply the committed audit collection contract to the selected environment. For
 the local demo, run this command twice; both passes resolve the same collection

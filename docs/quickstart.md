@@ -55,13 +55,15 @@ pnpm start
 cd ../crm
 ```
 
-先在 Hub 的「应用中心」创建同名 App，并保存只显示一次的 deploy token。然后部署到本地 Hub：
+先在 Hub 的「应用中心」创建同名 App，再从「开发与部署」弹窗复制包含 deploy token 的完整命令。命令类似于：
 
 ```bash
-pnpm run deploy --hub http://127.0.0.1:13001/hub
+pnpm run deploy \
+  --hub http://127.0.0.1:13001/hub \
+  --token nb3_app_...
 ```
 
-交互终端会隐藏输入 deploy token。CI 中通过 `NB3_HUB_TOKEN` 或 `--token` 提供 token：
+这条命令可以直接执行。CI 中也可以通过 `NB3_HUB_TOKEN` 提供 token：
 
 ```bash
 NB3_HUB_TOKEN="$DEPLOY_TOKEN" \

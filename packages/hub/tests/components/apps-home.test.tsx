@@ -106,6 +106,7 @@ describe('AppsHome', () => {
     state.createManagedApp.mockReset();
     state.refresh.mockReset();
     state.runLifecycle.mockReset();
+    window.localStorage.clear();
     window.NOCOBASE_PORTAL_BASE = '/hub/';
   });
 
@@ -167,8 +168,13 @@ describe('AppsHome', () => {
       await screen.findByRole('heading', { name: '应用创建成功' }),
     ).toBeVisible();
     expect(screen.getByText(/只预留了 App ID/)).toBeVisible();
-    expect(screen.getByText(/部署令牌只显示这一次/)).toBeVisible();
-    expect(screen.getByText('deploy-token-once')).toBeVisible();
+    expect(screen.queryByText(/部署令牌只显示这一次/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '复制部署令牌' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/部署命令已包含部署令牌/),
+    ).not.toBeInTheDocument();
 
     const localCommands = [
       'pnpm config set @nocobase:registry https://npm.nocobase.ai/',
@@ -176,7 +182,7 @@ describe('AppsHome', () => {
       'cd crm',
       'pnpm dev',
     ].join('\n');
-    const deployCommand = `pnpm run deploy --hub ${window.location.origin}/hub`;
+    const deployCommand = `pnpm run deploy --hub ${window.location.origin}/hub --token deploy-token-once`;
     expect(
       screen.getByText(
         (_, element) =>
@@ -190,22 +196,15 @@ describe('AppsHome', () => {
       ),
     ).toBeVisible();
     expect(deployCommand).not.toContain('/crm');
-    expect(deployCommand).not.toContain('deploy-token-once');
-    for (const command of screen.getAllByText((_, element) => {
-      return element?.tagName === 'PRE';
-    })) {
-      expect(command).not.toHaveTextContent('deploy-token-once');
-    }
+    expect(deployCommand).toContain('deploy-token-once');
 
     await user.click(screen.getByRole('button', { name: '复制开发命令' }));
     expect(writeText).toHaveBeenLastCalledWith(localCommands);
-    await user.click(screen.getByRole('button', { name: '复制部署令牌' }));
-    expect(writeText).toHaveBeenLastCalledWith('deploy-token-once');
     await user.click(screen.getByRole('button', { name: '复制部署命令' }));
     expect(writeText).toHaveBeenLastCalledWith(deployCommand);
   });
 
-  it('keeps the one-time token visible until explicit confirmation and clears it before reopening', async () => {
+  it('keeps the deployment command visible until explicit confirmation and clears it before reopening', async () => {
     const user = userEvent.setup();
     state.createManagedApp.mockResolvedValue({
       app: { appId: 'crm', name: '客户管理' },
@@ -228,16 +227,16 @@ describe('AppsHome', () => {
       screen.queryByRole('button', { name: 'Close' }),
     ).not.toBeInTheDocument();
     await user.keyboard('{Escape}');
-    expect(screen.getByText('deploy-token-once')).toBeVisible();
+    expect(screen.getByText(/--token deploy-token-once/)).toBeVisible();
 
     const overlay = document.querySelector<HTMLElement>(
       '[data-slot="dialog-overlay"]',
     );
     expect(overlay).not.toBeNull();
     await user.click(overlay!);
-    expect(screen.getByText('deploy-token-once')).toBeVisible();
+    expect(screen.getByText(/--token deploy-token-once/)).toBeVisible();
 
-    await user.click(screen.getByRole('button', { name: '我已保存，完成' }));
+    await user.click(screen.getByRole('button', { name: '完成' }));
     expect(
       screen.queryByRole('heading', { name: '应用创建成功' }),
     ).not.toBeInTheDocument();
@@ -248,7 +247,7 @@ describe('AppsHome', () => {
     expect(screen.queryByText('deploy-token-once')).not.toBeInTheDocument();
   });
 
-  it('reopens the non-sensitive development guide after the creation dialog closes', async () => {
+  it('reopens a directly runnable deployment command after creation', async () => {
     const user = userEvent.setup();
     state.inventory = 'placeholder';
     state.createManagedApp.mockResolvedValue({
@@ -268,19 +267,21 @@ describe('AppsHome', () => {
       await screen.findByRole('heading', { name: '应用创建成功' }),
     ).toBeVisible();
 
-    await user.click(screen.getByRole('button', { name: '我已保存，完成' }));
+    await user.click(screen.getByRole('button', { name: '完成' }));
     await user.click(screen.getByRole('button', { name: '开发与部署' }));
 
     expect(
       screen.getByRole('heading', { name: '本地开发与部署' }),
     ).toBeVisible();
-    expect(screen.getByText(/部署令牌不会再次显示/)).toBeVisible();
+    expect(
+      screen.queryByText(/部署命令已包含部署令牌/),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText('pnpm create @nocobase/app@latest crm', {
         exact: false,
       }),
     ).toBeVisible();
-    expect(screen.queryByText('deploy-token-once')).not.toBeInTheDocument();
+    expect(screen.getByText(/--token deploy-token-once/)).toBeVisible();
   });
 
   it('shows a duplicate App ID failure inside the dialog', async () => {

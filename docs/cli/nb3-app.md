@@ -112,21 +112,23 @@ nb3 app destroy ./crm
 
 ## 部署 App
 
-先在 Hub 的「应用中心」中点击「创建应用」。创建成功后，Hub 会预留 App ID，并显示一次该 App 专用的 deploy token。这个 token 只能上传该 App 的 Release 和提交审批，不能批准上线或操作其他 App。
+先在 Hub 的「应用中心」中点击「创建应用」。创建成功后，Hub 会预留 App ID，并生成一条包含该 App 专用 deploy token 的部署命令。这个 token 只能上传该 App 的 Release 和提交审批，不能批准上线或操作其他 App。
 
 :::warning 注意
 
-deploy token 只显示一次。关闭创建结果前，请先复制并妥善保管。这里的“一次”只限制展示次数，token 会一直有效，直到管理员轮换它。
+Hub 页面会在当前浏览器中记住 deploy token。再次打开「开发与部署」时，可以继续复制完整命令。如果当前浏览器没有保存 token，Hub 会生成新 token，此前的 token 会立即失效。
 
 :::
 
 本地 App 的 `package.json.name` 必须跟 Hub 中的 App ID 一致。从 App 根目录运行部署命令：
 
 ```bash
-pnpm run deploy --hub http://127.0.0.1:13001/hub
+pnpm run deploy \
+  --hub http://127.0.0.1:13001/hub \
+  --token nb3_app_...
 ```
 
-交互终端会提示输入 deploy token，并隐藏输入内容。CI 中可以通过 `NB3_HUB_TOKEN` 环境变量提供，也可以显式传 `--token`。
+Hub 生成的命令可以直接执行。手动省略 `--token` 时，交互终端会提示输入 deploy token，并隐藏输入内容。CI 中也可以通过 `NB3_HUB_TOKEN` 环境变量提供 token。
 
 `--hub` 接收 Hub 的公开基址，必须包含实际挂载路径，比如 `/hub`。不要填写 App Host 的内部地址，也不要把 App ID 拼在地址后面。
 
@@ -175,7 +177,7 @@ pnpm run deploy \
 
 部署脚本只在 App 根目录工作，不支持 `--dir`，也不会从 `.nb3/config.json` 读取 Hub 地址。每次部署都要显式传 `--hub`。
 
-不建议把 token 写入 `.nb3/config.json`、命令脚本或 Git。通过环境变量提供 token 后，可以从当前 Shell 中清除它：
+如果不使用 Hub 页面生成的命令，也可以通过环境变量提供 token，并在部署后从当前 Shell 中清除它：
 
 ```bash
 unset NB3_HUB_TOKEN
