@@ -1,4 +1,5 @@
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
+import { matchedRoutes } from 'hono/route';
 import { requestLogger } from '@nocobase/logging';
 
 import type { AppServices } from '@/services/index.js';
@@ -9,7 +10,6 @@ import { createCacheRoutes } from './cache.js';
 import { createApiErrorHandler } from './errors.js';
 import { createHealthzHandler } from './healthz.js';
 import { createSessionRoutes } from './session.js';
-import { createUploadRoutes } from './upload.js';
 import { createAuthRoutes } from './auth.js';
 
 export interface ApiRouteOptions {
@@ -47,13 +47,8 @@ export function createApiRoutes({
     '/app-settings',
     createAppSettingsRoutes({ appSettingsStore: services.appSettingsStore }),
   );
-  publicRoutes.route(
-    '/upload',
-    createUploadRoutes({ publicFileStorage: services.publicFileStorage }),
-  );
-
   const protectedRoutes = new Hono();
-  protectedRoutes.use('*', deps.auth.required());
+  protectedRoutes.use('*', authenticateMatchedRoute(deps.auth.required()));
   protectedRoutes.get('/apps', createAppsHandler());
 
   api.onError(
@@ -65,4 +60,11 @@ export function createApiRoutes({
   api.route('/', protectedRoutes);
 
   return api;
+}
+
+function authenticateMatchedRoute(auth: MiddlewareHandler): MiddlewareHandler {
+  return (context, next) =>
+    matchedRoutes(context).some((route) => route.method !== 'ALL')
+      ? auth(context, next)
+      : next();
 }

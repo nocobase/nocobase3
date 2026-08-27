@@ -829,6 +829,9 @@ describe('app plugins', () => {
     const installPlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-install',
     );
+    const filesPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-files',
+    );
     const databaseExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-database-example',
     );
@@ -913,6 +916,26 @@ describe('app plugins', () => {
     expect(installPlugin?.clientRoutesEntry).toMatch(
       /app-plugin-install\/client\/routes\.ts$/,
     );
+    expect(filesPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-files',
+      version: declaredVersion('@nocobase/app-plugin-files'),
+      enabled: true,
+    });
+    expect(filesPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-files\/database\/migrations$/,
+    );
+    expect(filesPlugin?.seedsDirectory).toMatch(
+      /app-plugin-files\/database\/seeds$/,
+    );
+    expect(filesPlugin?.bootstrapEntry).toMatch(
+      /app-plugin-files\/server\/bootstrap\.ts$/,
+    );
+    expect(filesPlugin?.routesEntry).toMatch(
+      /app-plugin-files\/server\/routes\/index\.ts$/,
+    );
+    expect(filesPlugin?.clientRoutesEntry).toMatch(
+      /app-plugin-files\/client\/routes\.ts$/,
+    );
     expect(databaseExamplePlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-database-example',
       version: declaredVersion('@nocobase/app-plugin-database-example'),
@@ -978,6 +1001,9 @@ describe('app plugins', () => {
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
         }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-files',
+        }),
       ]),
     );
     expect(runtime.config.database.seeds?.sources).toEqual(
@@ -990,6 +1016,9 @@ describe('app plugins', () => {
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-files',
         }),
       ]),
     );
@@ -1008,6 +1037,10 @@ describe('app plugins', () => {
           packageName: '@nocobase/app-plugin-database-example',
           name: '202608220001_database_example_create_messages',
         }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-files',
+          name: '202608270001_create_files_demo_tables',
+        }),
       ]),
     );
     await expect(
@@ -1023,6 +1056,10 @@ describe('app plugins', () => {
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-authentication',
           name: '202608220003_authentication_create_default_admin_user',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-files',
+          name: '202608270002_seed_files_demo',
         }),
       ]),
     );
