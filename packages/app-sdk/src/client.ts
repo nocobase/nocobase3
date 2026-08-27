@@ -1,3 +1,5 @@
+import { createRealtimeClient, type RealtimeClient } from './realtime/index.js';
+
 export interface AppClientOptions {
   baseURL?: string;
   fetch?: typeof globalThis.fetch;
@@ -15,6 +17,7 @@ export class AppRequestError extends Error {
 }
 
 export interface AppClient {
+  readonly realtime?: RealtimeClient;
   request<T = unknown>(path: string, init?: RequestInit): Promise<T>;
 }
 
@@ -22,6 +25,9 @@ export function createAppClient(options: AppClientOptions = {}): AppClient {
   const request = options.fetch ?? globalThis.fetch;
   const baseURL = (options.baseURL ?? resolveAppUrl('/api')).replace(/\/$/, '');
   return {
+    realtime: createRealtimeClient({
+      resolveUrl: () => resolveAppUrl('/ws'),
+    }),
     async request<T>(path: string, init: RequestInit = {}): Promise<T> {
       const response = await request(`${baseURL}/${path.replace(/^\/+/, '')}`, {
         ...init,

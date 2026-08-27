@@ -6,7 +6,11 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { useAppClient } from '@nocobase/app-client';
 import { fetchUnreadCount } from './api.js';
+
+export const IN_APP_NOTIFICATION_REALTIME_TOPIC: string =
+  'notifications:in-app';
 
 export interface NotificationInAppRuntimeValue {
   readonly unreadCount: number;
@@ -21,6 +25,7 @@ const NotificationInAppRuntimeContext = createContext<
 export function NotificationInAppProvider({
   children,
 }: React.PropsWithChildren): React.ReactElement {
+  const appClient = useAppClient();
   const [unreadCount, setUnreadCount] = useState(0);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(
@@ -35,6 +40,23 @@ export function NotificationInAppProvider({
       .catch(() => undefined);
     return () => controller.abort();
   }, [revision]);
+
+  useEffect(() => {
+    const refreshInbox = (): void => refresh();
+    const unsubscribeOpen = appClient.realtime?.onOpen(refreshInbox);
+    const unsubscribeTopic = appClient.realtime?.subscribe<{
+      readonly kind?: unknown;
+    }>(IN_APP_NOTIFICATION_REALTIME_TOPIC, (event): void => {
+      if (event.payload.kind === 'inbox.changed') refreshInbox();
+    });
+    window.addEventListener('focus', refreshInbox);
+
+    return () => {
+      window.removeEventListener('focus', refreshInbox);
+      unsubscribeTopic?.();
+      unsubscribeOpen?.();
+    };
+  }, [appClient, refresh]);
 
   const value = useMemo<NotificationInAppRuntimeValue>(
     () => ({ unreadCount, revision, refresh }),
