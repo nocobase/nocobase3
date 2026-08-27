@@ -974,14 +974,14 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 本文是设计稿，以下几处最终实现与文中描述不同，以实现为准：
 
-| 位置                | 本文                                  | 实现                                                                  |
-| ------------------- | ------------------------------------- | --------------------------------------------------------------------- |
-| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现              |
-| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名             |
-| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | **未实现。** 目前只有 monorepo 的 `pnpm plugin:skills:sync`           |
-| §5.1 一致性校验测试 | 提议增加                              | **未实现。** `client/plugins.ts` 与 `nocobase.plugins` 可能静默不一致 |
+| 位置                | 本文                                  | 实现                                                        |
+| ------------------- | ------------------------------------- | ----------------------------------------------------------- |
+| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现    |
+| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名   |
+| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | **未实现。** 目前只有 monorepo 的 `pnpm plugin:skills:sync` |
+| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`     |
 
-后两项是本期遗留，不影响已实现部分的正确性。
+§8.4 的独立应用命令是本期遗留，不影响已实现部分的正确性。
 
 ## 11. 分阶段落地
 
