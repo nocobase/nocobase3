@@ -1,20 +1,15 @@
 import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 import { describe, expect, it } from 'vitest';
 
-import bootstrap from '../client/bootstrap.js';
-import providers from '../client/providers.js';
-import { FILES_ROUTE_IDS } from '../client/route-contracts.js';
-import routes from '../client/routes.js';
+import routes from '../../client/routes.js';
+import { FILES_ROUTE_IDS } from '../../client/route-contracts.js';
 
-describe('files plugin client contributions', () => {
-  it('exports the frozen demo Route and otherwise empty contributions', () => {
-    expect(bootstrap).toBeTypeOf('function');
-    expect(providers).toEqual([]);
+describe('files plugin client route', () => {
+  it('contributes the frozen lazy demo Route', async () => {
     expect(routes).toHaveLength(1);
     expect(routes[0]).toMatchObject({
       name: 'demo',
       path: '/files-demo',
-      componentLoader: expect.any(Function),
     });
     expect(Object.isFrozen(routes)).toBe(true);
     expect(Object.isFrozen(routes[0])).toBe(true);
@@ -25,6 +20,15 @@ describe('files plugin client contributions', () => {
         routes,
       },
     ]).routes;
-    expect(registered?.id).toBe(FILES_ROUTE_IDS.demo);
+
+    expect(registered).toMatchObject({
+      id: FILES_ROUTE_IDS.demo,
+      name: 'demo',
+      path: '/files-demo',
+      source: 'plugin',
+    });
+    await expect(routes[0]?.componentLoader()).resolves.toMatchObject({
+      default: expect.any(Function),
+    });
   });
 });
