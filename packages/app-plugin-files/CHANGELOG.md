@@ -1,4 +1,4 @@
-# Changelog
+# @nocobase/app-plugin-files
 
 ## 0.0.1
 

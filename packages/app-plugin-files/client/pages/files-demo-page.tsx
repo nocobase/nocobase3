@@ -1,4 +1,5 @@
 import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 import {
   CheckCircle2,
   Clock3,
@@ -31,6 +32,10 @@ interface DemoOrderExample {
 interface DemoExamples {
   readonly profile: DemoProfileExample;
   readonly order: DemoOrderExample;
+}
+
+interface DemoExamplesResponse {
+  readonly data: DemoExamples;
 }
 
 interface ReadyDemoState {
@@ -137,11 +142,27 @@ function ErrorNotice({
   ) : null;
 }
 
+async function loadExamples(): Promise<DemoExamples> {
+  const response = await fetch(resolvePortalUrl('/api/attachments/examples'), {
+    method: 'GET',
+    headers: nocobaseClient.getHeaders({ method: 'GET' }),
+    credentials: 'include',
+  });
+  const payload = (await response.json()) as DemoExamplesResponse;
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(`Unable to load file examples (${response.status}).`),
+      { status: response.status },
+    );
+  }
+  if (!payload.data?.profile || !payload.data.order) {
+    throw new Error('File examples response is missing its data envelope.');
+  }
+  return payload.data;
+}
+
 async function loadDemoData(): Promise<ReadyDemoState> {
-  const examples = await nocobaseClient.request<DemoExamples>(
-    'attachments/examples',
-    { method: 'GET' },
-  );
+  const examples = await loadExamples();
   const avatarClient = createFilesClient({
     endpoint: examples.profile.filesEndpoint,
   });

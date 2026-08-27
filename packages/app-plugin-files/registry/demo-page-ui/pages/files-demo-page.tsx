@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
+import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 import { Button } from '@/components/ui/button';
 import {
   FileList,
@@ -88,25 +90,29 @@ export default function FilesDemoPage(): ReactElement {
 
   useEffect(() => {
     let active = true;
-    void fetch('/api/attachments/examples', { credentials: 'include' })
+    void fetch(resolvePortalUrl('/api/attachments/examples'), {
+      method: 'GET',
+      headers: nocobaseClient.getHeaders({ method: 'GET' }),
+      credentials: 'include',
+    })
       .then(async (response): Promise<ExamplesResponse> => {
-        if (response.status === 503) {
-          if (active) setState('unavailable');
-          throw new Error('Files storage is unavailable.');
-        }
+        const payload = (await response.json()) as ExamplesResponse;
         if (!response.ok) {
-          throw new Error(`Unable to load file examples (${response.status}).`);
+          throw Object.assign(
+            new Error(`Unable to load file examples (${response.status}).`),
+            { status: response.status },
+          );
         }
-        return (await response.json()) as ExamplesResponse;
+        return payload;
       })
-      .then(async (result) => {
+      .then(async ({ data: result }) => {
         if (!active) return;
-        setExamples(result.data);
+        setExamples(result);
         const nextAvatarClient = createFilesClient({
-          endpoint: result.data.profile.filesEndpoint,
+          endpoint: result.profile.filesEndpoint,
         });
         const nextOrderClient = createFilesClient({
-          endpoint: result.data.order.filesEndpoint,
+          endpoint: result.order.filesEndpoint,
         });
         setAvatarClient(nextAvatarClient);
         setOrderClient(nextOrderClient);
@@ -122,11 +128,15 @@ export default function FilesDemoPage(): ReactElement {
       })
       .catch((loadError: unknown) => {
         if (!active) return;
+        const status =
+          loadError && typeof loadError === 'object'
+            ? Reflect.get(loadError, 'status')
+            : undefined;
         const message =
           loadError instanceof Error
             ? loadError.message
             : 'Unable to load file examples.';
-        if (message === 'Files storage is unavailable.') {
+        if (status === 503) {
           setState('unavailable');
           return;
         }

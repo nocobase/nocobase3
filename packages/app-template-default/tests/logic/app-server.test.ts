@@ -658,17 +658,43 @@ describe('app server', () => {
     });
   });
 
-  it('does not expose the legacy upload route', async () => {
+  it('does not expose the legacy upload route for GET or POST', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
       nocoBaseApiUrl: false,
     });
 
-    const response = await app.request('http://localhost/api/upload', {
+    const getResponse = await app.request('http://localhost/api/upload');
+    const postResponse = await app.request('http://localhost/api/upload', {
       method: 'POST',
     });
 
-    expect(response.status).toBe(404);
+    expect(getResponse.status).toBe(404);
+    expect(postResponse.status).toBe(404);
+  });
+
+  it('does not apply default API auth to plugin Public content routes', async () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+      pluginRoutes: [
+        {
+          packageName: '@nocobase/app-plugin-public-file-test',
+          registerRoutes({ app }): void {
+            app.get('/api/public-file-content', (context) =>
+              context.text('public file'),
+            );
+          },
+        },
+      ],
+    });
+
+    const response = await app.request(
+      'http://localhost/api/public-file-content',
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('public file');
   });
 
   it('passes the runtime database through the shared plugin deps object', async () => {
@@ -751,7 +777,7 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('protects API routes loaded from enabled app plugins', async () => {
+  it('loads API routes from enabled app plugins', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
@@ -760,9 +786,9 @@ describe('app server', () => {
       `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      message: expect.any(String),
+      plugin: '@nocobase/app-plugin-routes-example',
     });
   });
 

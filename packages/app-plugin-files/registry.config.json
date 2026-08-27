@@ -37,6 +37,7 @@
       "description": "Application-owned Demo page for the plugin's real attachments API.",
       "dependencies": [
         "@nocobase/app-client@^1.0.0-beta.2",
+        "@nocobase/app-portal-sdk@^2.0.0",
         "@nocobase/app-plugin-files@^0.0.1",
         "lucide-react@^0.487.0",
         "react@^19.0.0",

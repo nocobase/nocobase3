@@ -102,7 +102,7 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     try {
       record = await options.store.create(input, context);
     } catch (error) {
-      await bestEffortRemove(options, stored, input);
+      await compensateUpload(options, stored, input);
       throw error;
     }
 
@@ -310,7 +310,7 @@ async function validateFileLimit(
   }
 }
 
-async function bestEffortRemove(
+async function compensateUpload(
   options: CreateFileRouteOptions,
   stored: StoredFileObject,
   input: NewFileRecord,
@@ -325,7 +325,9 @@ async function bestEffortRemove(
       updatedAt: now,
     });
   } catch {
-    // Preserve the database failure that made the uploaded object orphaned.
+    console.error(
+      'File upload compensation failed after the record could not be created.',
+    );
   }
 }
 

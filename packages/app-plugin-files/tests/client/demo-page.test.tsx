@@ -12,14 +12,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileRecord, FilesClient } from '../../client/types.js';
 
 const mocks = vi.hoisted(() => ({
-  request: vi.fn(),
   createFilesClient: vi.fn(),
+  fetch: vi.fn<typeof fetch>(),
+  getHeaders: vi.fn(),
+  resolvePortalUrl: vi.fn(),
 }));
 
 vi.mock('@nocobase/app-portal-sdk/client', () => ({
   nocobaseClient: {
-    request: mocks.request,
+    getHeaders: mocks.getHeaders,
   },
+}));
+
+vi.mock('@nocobase/app-portal-sdk/runtime', () => ({
+  resolvePortalUrl: mocks.resolvePortalUrl,
 }));
 
 vi.mock('../../client/files-client.js', () => ({
@@ -53,6 +59,13 @@ function fileRecord(overrides: Partial<FileRecord> = {}): FileRecord {
     contentUrl: '/api/attachments/orders/1/files/file-1/content',
     ...overrides,
   };
+}
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 function mockClient(overrides: Partial<FilesClient> = {}): FilesClient {
@@ -102,8 +115,19 @@ async function renderReady(): Promise<void> {
 }
 
 beforeEach(() => {
-  mocks.request.mockReset().mockResolvedValue(examples);
   mocks.createFilesClient.mockReset();
+  mocks.fetch
+    .mockReset()
+    .mockImplementation(() =>
+      Promise.resolve(jsonResponse({ data: examples })),
+    );
+  mocks.getHeaders.mockReset().mockReturnValue({
+    Authorization: 'Bearer test-token',
+  });
+  mocks.resolvePortalUrl
+    .mockReset()
+    .mockReturnValue('http://localhost:3000/nocobase/api/attachments/examples');
+  vi.stubGlobal('fetch', mocks.fetch);
   configureClients();
 });
 
@@ -123,9 +147,18 @@ describe('FilesDemoPage', () => {
       await screen.findByRole('heading', { name: 'Files demo' }),
     ).toBeVisible();
 
-    expect(mocks.request).toHaveBeenCalledWith('attachments/examples', {
-      method: 'GET',
-    });
+    expect(mocks.resolvePortalUrl).toHaveBeenCalledWith(
+      '/api/attachments/examples',
+    );
+    expect(mocks.getHeaders).toHaveBeenCalledWith({ method: 'GET' });
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/nocobase/api/attachments/examples',
+      {
+        method: 'GET',
+        headers: { Authorization: 'Bearer test-token' },
+        credentials: 'include',
+      },
+    );
     expect(mocks.createFilesClient).toHaveBeenNthCalledWith(1, {
       endpoint: examples.profile.filesEndpoint,
     });
@@ -145,10 +178,17 @@ describe('FilesDemoPage', () => {
   });
 
   it('renders a clear unavailable state for a 503 response', async () => {
-    const error = Object.assign(new Error('Storage is unavailable.'), {
-      status: 503,
-    });
-    mocks.request.mockRejectedValue(error);
+    mocks.fetch.mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'FILES_UNAVAILABLE',
+            message: 'Storage is unavailable.',
+          },
+        },
+        503,
+      ),
+    );
 
     render(<FilesDemoPage />);
 
@@ -156,7 +196,7 @@ describe('FilesDemoPage', () => {
       await screen.findByRole('heading', { name: 'File demo is unavailable' }),
     ).toBeVisible();
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Storage is unavailable.',
+      'Unable to load file examples (503).',
     );
     expect(screen.getByText(/storage or database service/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
@@ -344,14 +384,13 @@ describe('FilesDemoPage', () => {
     });
     configureClients({ orderFiles: [publicOrder, privateOrder] });
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn<typeof fetch>().mockResolvedValue(
+    mocks.fetch
+      .mockResolvedValueOnce(jsonResponse({ data: examples }))
+      .mockResolvedValueOnce(
         new Response(JSON.stringify({ message: 'Access URL has expired.' }), {
           status: 401,
         }),
-      ),
-    );
+      );
 
     await renderReady();
 
@@ -392,6 +431,6 @@ describe('FilesDemoPage', () => {
 
     expect(source).not.toMatch(/https?:\/\//);
     expect(source).not.toContain(legacyPrefix);
-    expect(source).toContain("'attachments/examples'");
+    expect(source).toContain("'/api/attachments/examples'");
   });
 });

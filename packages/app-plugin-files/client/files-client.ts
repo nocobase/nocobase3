@@ -7,7 +7,7 @@ import type {
 } from './types.js';
 
 import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
-import { resolveNocoBaseServerUrl } from '@nocobase/app-portal-sdk/runtime';
+import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 
 declare global {
   interface ImportMeta {
@@ -57,11 +57,48 @@ function normalizeEndpoint(endpoint: string): string {
 
 function resolveEndpoint(endpoint: string): string {
   if (/^[a-z][a-z\d+.-]*:/i.test(endpoint)) return endpoint;
-  return resolveNocoBaseServerUrl(endpoint);
+  return resolvePortalResourceUrl(endpoint);
+}
+
+function resolvePortalResourceUrl(path: string): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(path)) return path;
+  const resolved = resolvePortalUrl(path);
+  if (typeof window === 'undefined') return resolved;
+
+  const portalRoot = new URL(resolvePortalUrl('/'), window.location.origin);
+  const absolute = new URL(path, window.location.origin);
+  const portalBasePath = portalRoot.pathname.replace(/\/+$/, '');
+  if (
+    path.startsWith('/') &&
+    portalBasePath &&
+    (absolute.pathname === portalBasePath ||
+      absolute.pathname.startsWith(`${portalBasePath}/`))
+  ) {
+    return absolute.toString();
+  }
+  return new URL(resolved, window.location.origin).toString();
+}
+
+function resolveContentUrl(url: string): string {
+  return resolvePortalResourceUrl(url);
+}
+
+function resolveFileRecord(record: FileRecord): FileRecord {
+  return {
+    ...record,
+    contentUrl: resolveContentUrl(record.contentUrl),
+  };
+}
+
+function resolveAccessUrl(access: FileAccessUrl): FileAccessUrl {
+  return {
+    ...access,
+    url: resolveContentUrl(access.url),
+  };
 }
 
 function joinEndpoint(endpoint: string, suffix = ''): string {
-  return suffix ? `${endpoint}/${suffix.replace(/^\/+/, '')}` : `${endpoint}/`;
+  return suffix ? `${endpoint}/${suffix.replace(/^\/+/, '')}` : endpoint;
 }
 
 function encodeId(id: string): string {
@@ -125,6 +162,7 @@ export function createFilesClient(
     requestOptions: {
       method: 'GET' | 'POST' | 'DELETE';
       body?: unknown;
+      allowNoContent?: boolean;
     },
   ): Promise<T> {
     try {
@@ -182,6 +220,9 @@ export function createFilesClient(
           serverMessage,
         });
       }
+      if (requestOptions.allowNoContent && response.status === 204) {
+        return undefined as T;
+      }
       if (!payload || typeof payload !== 'object' || !('data' in payload)) {
         throw new FilesClientError(
           'Files response is missing its data envelope.',
@@ -197,40 +238,57 @@ export function createFilesClient(
   }
 
   return {
-    list(): Promise<readonly FileRecord[]> {
-      return request<readonly FileRecord[]>(joinEndpoint(endpoint), {
-        method: 'GET',
-      });
+    async list(): Promise<readonly FileRecord[]> {
+      const records = await request<readonly FileRecord[]>(
+        joinEndpoint(endpoint),
+        {
+          method: 'GET',
+        },
+      );
+      return records.map(resolveFileRecord);
     },
-    upload(file: File, uploadOptions?: FileUploadOptions): Promise<FileRecord> {
+    async upload(
+      file: File,
+      uploadOptions?: FileUploadOptions,
+    ): Promise<FileRecord> {
       const body = new FormData();
       body.append('file', file, file.name);
       if (uploadOptions?.public !== undefined) {
         body.append('public', String(uploadOptions.public));
       }
-      return request<FileRecord>(joinEndpoint(endpoint), {
+      const record = await request<FileRecord>(joinEndpoint(endpoint), {
         method: 'POST',
         body,
       });
+      return resolveFileRecord(record);
     },
-    get(id: string): Promise<FileRecord> {
-      return request<FileRecord>(joinEndpoint(endpoint, encodeId(id)), {
-        method: 'GET',
-      });
+    async get(id: string): Promise<FileRecord> {
+      const record = await request<FileRecord>(
+        joinEndpoint(endpoint, encodeId(id)),
+        {
+          method: 'GET',
+        },
+      );
+      return resolveFileRecord(record);
     },
-    createAccessUrl(id: string, expiresIn?: number): Promise<FileAccessUrl> {
+    async createAccessUrl(
+      id: string,
+      expiresIn?: number,
+    ): Promise<FileAccessUrl> {
       const body = expiresIn === undefined ? undefined : { expiresIn };
-      return request<FileAccessUrl>(
+      const access = await request<FileAccessUrl>(
         joinEndpoint(endpoint, `${encodeId(id)}/token`),
         {
           method: 'POST',
           body,
         },
       );
+      return resolveAccessUrl(access);
     },
     async remove(id: string): Promise<void> {
-      await request<unknown>(joinEndpoint(endpoint, encodeId(id)), {
+      await request<void>(joinEndpoint(endpoint, encodeId(id)), {
         method: 'DELETE',
+        allowNoContent: true,
       });
     },
   };

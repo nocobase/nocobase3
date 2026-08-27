@@ -309,6 +309,7 @@ describe('createFileRoute', () => {
     records = [];
     vi.mocked(store.create).mockRejectedValueOnce(new Error('database failed'));
     removeObject.mockRejectedValueOnce(new Error('cleanup failed'));
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {});
     const response = await createApp(
       {},
       (error) => new Response(error.message, { status: 500 }),
@@ -318,6 +319,9 @@ describe('createFileRoute', () => {
     expect(await response.text()).toBe('database failed');
     expect(removeObject).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'files/server-generated-key' }),
+    );
+    expect(report).toHaveBeenCalledWith(
+      'File upload compensation failed after the record could not be created.',
     );
   });
 

@@ -130,6 +130,7 @@ describe('files plugin Registry contract', () => {
       },
     });
     expect(item?.dependencies).toContain('@nocobase/app-client@^1.0.0-beta.2');
+    expect(item?.dependencies).toContain('@nocobase/app-portal-sdk@^2.0.0');
     expect(item?.dependencies).toContain('@nocobase/app-plugin-files@^0.0.1');
     expect(item?.meta.nocobase?.requiresPlugins).toEqual({
       '@nocobase/app-plugin-files': '>=0.0.1 <0.1.0',
@@ -138,7 +139,8 @@ describe('files plugin Registry contract', () => {
     expect(extension).toContain('routeComponentOverrides');
     expect(extension).not.toContain('defineClientRoutes');
     expect(extension).not.toMatch(/path\s*:\s*['"]\/files-demo['"]/u);
-    expect(page).toContain("fetch('/api/attachments/examples'");
+    expect(page).toContain("resolvePortalUrl('/api/attachments/examples'");
+    expect(page).toContain('nocobaseClient.getHeaders');
     expect(page).toContain('filesEndpoint');
     expect(page).toContain('@/extensions/nocobase-files-file-field-ui');
     expect(page).not.toMatch(/path\s*:\s*['"]\/files-demo['"]/u);

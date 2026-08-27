@@ -1,5 +1,4 @@
-import { Hono, type MiddlewareHandler } from 'hono';
-import { matchedRoutes } from 'hono/route';
+import { Hono } from 'hono';
 import { requestLogger } from '@nocobase/logging';
 
 import type { AppServices } from '@/services/index.js';
@@ -48,8 +47,7 @@ export function createApiRoutes({
     createAppSettingsRoutes({ appSettingsStore: services.appSettingsStore }),
   );
   const protectedRoutes = new Hono();
-  protectedRoutes.use('*', authenticateMatchedRoute(deps.auth.required()));
-  protectedRoutes.get('/apps', createAppsHandler());
+  protectedRoutes.get('/apps', deps.auth.required(), createAppsHandler());
 
   api.onError(
     createApiErrorHandler({
@@ -60,11 +58,4 @@ export function createApiRoutes({
   api.route('/', protectedRoutes);
 
   return api;
-}
-
-function authenticateMatchedRoute(auth: MiddlewareHandler): MiddlewareHandler {
-  return (context, next) =>
-    matchedRoutes(context).some((route) => route.method !== 'ALL')
-      ? auth(context, next)
-      : next();
 }

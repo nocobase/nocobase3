@@ -30,6 +30,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 describe('createFilesClient', () => {
   beforeEach(() => {
     window.NOCOBASE_API_URL = '/nocobase/api/__app/main';
+    window.NOCOBASE_PORTAL_BASE = '/nocobase/';
     nocobaseClient.setToken('test-token');
   });
 
@@ -37,6 +38,7 @@ describe('createFilesClient', () => {
     vi.unstubAllGlobals();
     nocobaseClient.setToken(null);
     delete window.NOCOBASE_API_URL;
+    delete window.NOCOBASE_PORTAL_BASE;
   });
 
   it('normalizes the server base path and list/get data envelopes', async () => {
@@ -49,11 +51,21 @@ describe('createFilesClient', () => {
       endpoint: '/api/orders/1/attachments///',
     });
 
-    await expect(client.list()).resolves.toEqual([record]);
-    await expect(client.get('file/1')).resolves.toEqual(record);
+    await expect(client.list()).resolves.toEqual([
+      {
+        ...record,
+        contentUrl:
+          'http://localhost:3000/nocobase/api/orders/1/attachments/file-1/content',
+      },
+    ]);
+    await expect(client.get('file/1')).resolves.toEqual({
+      ...record,
+      contentUrl:
+        'http://localhost:3000/nocobase/api/orders/1/attachments/file-1/content',
+    });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      'http://localhost:3000/nocobase/api/orders/1/attachments/',
+      'http://localhost:3000/nocobase/api/orders/1/attachments',
     );
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       'http://localhost:3000/nocobase/api/orders/1/attachments/file%2F1',
@@ -78,6 +90,9 @@ describe('createFilesClient', () => {
 
     await client.upload(file, { public: true });
 
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'http://localhost:3000/nocobase/api/files',
+    );
     const init = fetchMock.mock.calls[0]?.[1];
     expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
     expect(init?.body).toBeInstanceOf(FormData);
@@ -101,7 +116,7 @@ describe('createFilesClient', () => {
     });
   });
 
-  it('sends the Token request body and delete request', async () => {
+  it('normalizes Token URLs and accepts the Route 204 delete response', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -112,12 +127,15 @@ describe('createFilesClient', () => {
           },
         }),
       )
-      .mockResolvedValueOnce(jsonResponse({ data: null }));
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
     const client = createFilesClient({ endpoint: '/api/files/' });
 
-    await client.createAccessUrl('file-1', 300);
-    await client.remove('file-1');
+    await expect(client.createAccessUrl('file-1', 300)).resolves.toEqual({
+      url: 'http://localhost:3000/nocobase/api/files/file-1/content?token=signed',
+      expiresAt: '2026-08-27T00:15:00.000Z',
+    });
+    await expect(client.remove('file-1')).resolves.toBeUndefined();
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       'http://localhost:3000/nocobase/api/files/file-1/token',
@@ -130,6 +148,28 @@ describe('createFilesClient', () => {
       'http://localhost:3000/nocobase/api/files/file-1',
     );
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'DELETE' });
+  });
+
+  it('does not duplicate an already-prefixed app base path', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          data: {
+            ...record,
+            contentUrl: '/nocobase/api/files/file-1/content',
+          },
+        }),
+      ),
+    );
+    const client = createFilesClient({ endpoint: '/nocobase/api/files' });
+
+    await expect(client.get('file-1')).resolves.toMatchObject({
+      contentUrl: 'http://localhost:3000/nocobase/api/files/file-1/content',
+    });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe(
+      'http://localhost:3000/nocobase/api/files/file-1',
+    );
   });
 
   it('throws a typed error with status, code, and server message', async () => {
