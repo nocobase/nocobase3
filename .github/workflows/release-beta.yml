@@ -148,12 +148,8 @@ jobs:
           fi
           echo "$CHANGED"
 
-          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
-          {
-            echo "released<<RELEASED_EOF"
-            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
-            echo "RELEASED_EOF"
-          } >> "$GITHUB_OUTPUT"
+          # 发布清单留给飞书通知的表格用。单行 JSON，不需要 heredoc 定界符。
+          echo "rows=$(node scripts/list-package-versions.mjs --released-rows /tmp/versions-before.json)" >> "$GITHUB_OUTPUT"
 
       - name: Summarize
         run: |
@@ -319,13 +315,12 @@ jobs:
           STATUS: success
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases
+          TABLE_JSON: ${{ steps.changed.outputs.rows }}
           CONTENT: |
             版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm（dist-tag `beta`）。
 
             本次发布的 package：
-            ```
-            ${{ steps.changed.outputs.released }}
-            ```
         run: ./scripts/feishu-notify.sh
 
   # npm 已经发布成功，tag 也推上去了，这里只是把这批发布渲染成 GitHub Release。
