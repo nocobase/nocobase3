@@ -817,7 +817,7 @@ Registry 交付的是「拿去改」的源码配方，skills 交付的是「跟�
 | 本仓库（monorepo）          | `pnpm plugin:skills:sync`  | 根 `package.json` 脚本              |
 | `create-app` 生成的独立应用 | `pnpm nb3 app skills:sync` | `@nocobase/nb3-cli`（bin 为 `nb3`） |
 
-两者共用 `scripts/lib/skills-sync.mjs` 的同步逻辑，差别只在插件来源：monorepo 里从 workspace 解析，独立应用里从 `node_modules` 解析。
+同步逻辑在 `@nocobase/nb3-cli` 的 `src/lib/skills-sync.ts`，两者共用；`scripts/lib/skills-sync.mjs` 只提供 monorepo 的插件解析（从 workspace 找），独立应用则从 `node_modules` 找。
 
 #### monorepo 命令（主入口）
 
@@ -840,7 +840,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 `create-app` 在生成的应用里挂上：
 
 ```json
-{ "scripts": { "postinstall": "nb3 app skills:sync" } }
+{ "scripts": { "postinstall": "nb3 app skills-sync" } }
 ```
 
 这只作用于独立应用。monorepo 不挂 postinstall——本仓库的插件通过 workspace 链接，源码改动不改变版本号，postinstall 不会触发（见下表），挂了也是无效开销。
@@ -932,7 +932,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 | 文件                     | 改动                                     |
 | ------------------------ | ---------------------------------------- |
 | `lib/client-modules.mjs` | 新增，AST 定位 + splice + prettier       |
-| `lib/skills-sync.mjs`    | 新增                                     |
+| `lib/skills-sync.mjs`    | 新增，workspace 解析 + 复用 CLI 同步逻辑 |
 | `register-plugin.mjs`    | 写入 client/plugins.ts；调用 skills sync |
 | `unregister-plugin.mjs`  | 从 client/plugins.ts 移除；清理 skills   |
 | `remove-plugin.mjs`      | 引用扫描扩展到 client/plugins.ts         |
@@ -942,7 +942,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 根 `package.json`：加 `typescript: catalog:` 到 devDependencies，加 `plugin:skills:sync` 脚本。
 
-`lib/skills-sync.mjs` 同时被 monorepo 脚本和 `@nocobase/nb3-cli` 使用，插件来源分别是 workspace 和 `node_modules`。
+`lib/skills-sync.mjs` 从 `@nocobase/nb3-cli` 导入同步逻辑，只保留 workspace 的插件解析。CLI 侧新增 `src/lib/skills-sync.ts` 与 `src/commands/app/skills-sync.ts`。
 
 ### 9.5 独立应用侧
 
@@ -974,14 +974,14 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 本文是设计稿，以下几处最终实现与文中描述不同，以实现为准：
 
-| 位置                | 本文                                  | 实现                                                        |
-| ------------------- | ------------------------------------- | ----------------------------------------------------------- |
-| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现    |
-| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名   |
-| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | **未实现。** 目前只有 monorepo 的 `pnpm plugin:skills:sync` |
-| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`     |
+| 位置                | 本文                                  | 实现                                                      |
+| ------------------- | ------------------------------------- | --------------------------------------------------------- |
+| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现  |
+| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名 |
+| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 命令已实现，id 为 `nb3 app skills-sync`；postinstall 未接 |
+| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`   |
 
-§8.4 的独立应用命令是本期遗留，不影响已实现部分的正确性。
+`create-app` 生成的应用还没有自动挂 postinstall，升级插件后需要手动跑一次 `pnpm plugin:skills:sync`（应用内为 `nb3 app skills-sync`）。
 
 ## 11. 分阶段落地
 
