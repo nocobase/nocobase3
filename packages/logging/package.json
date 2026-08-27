@@ -41,7 +41,8 @@
   "dependencies": {
     "hono": "catalog:",
     "pino": "catalog:",
-    "pino-pretty": "catalog:"
+    "pino-pretty": "catalog:",
+    "pino-roll": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

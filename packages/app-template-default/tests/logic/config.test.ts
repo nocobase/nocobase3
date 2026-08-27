@@ -367,7 +367,7 @@ describe('logging config', () => {
     });
   });
 
-  it('uses structured output by default in production', () => {
+  it('rolls structured output daily in production', () => {
     const config = logging({
       env: createConfigEnv({
         NODE_ENV: 'production',
@@ -377,7 +377,22 @@ describe('logging config', () => {
       }),
     });
 
-    expect(config.transport).toBeUndefined();
+    expect(config.transport).toEqual({
+      target: 'pino-roll',
+      options: {
+        file: path.join(
+          '/tmp/app-template-default/storage',
+          'logs/{logger}.log',
+        ),
+        frequency: 'daily',
+        dateFormat: 'yyyy_MM_dd',
+        mkdir: true,
+        limit: {
+          count: 6,
+          removeOtherLogFiles: true,
+        },
+      },
+    });
   });
 
   it('falls back to info for unsupported logger levels', () => {

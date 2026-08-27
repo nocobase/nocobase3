@@ -27,7 +27,7 @@ const defaultRedactPaths = [
 ];
 
 const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(
-  ({ env }): LoggingConfig => {
+  ({ env, paths }): LoggingConfig => {
     const isProduction = env.string('NODE_ENV') === 'production';
     const transport: LoggerConfig['transport'] = env.boolean(
       'LOG_PRETTY',
@@ -41,7 +41,19 @@ const loggingConfig: ConfigFactory<LoggingConfig> = defineConfig(
             ignore: 'pid,hostname',
           },
         }
-      : undefined;
+      : {
+          target: 'pino-roll',
+          options: {
+            file: paths.storage('logs/{logger}.log'),
+            frequency: 'daily',
+            dateFormat: 'yyyy_MM_dd',
+            mkdir: true,
+            limit: {
+              count: 6,
+              removeOtherLogFiles: true,
+            },
+          },
+        };
 
     return {
       default: env.string('LOG_DEFAULT', 'system'),
