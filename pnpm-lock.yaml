@@ -700,6 +700,9 @@ importers:
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
@@ -734,9 +737,15 @@ importers:
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:^
+        version: link:../app-plugin-authentication
       '@nocobase/app-plugin-notification':
         specifier: workspace:^
         version: link:../app-plugin-notification
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
       '@nocobase/session':
         specifier: workspace:^
         version: link:../session

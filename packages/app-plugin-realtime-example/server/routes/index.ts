@@ -1,21 +1,14 @@
 import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
-import { Hono, type MiddlewareHandler } from 'hono';
+import { Hono } from 'hono';
 
 import { CLOCK_TOPIC } from '../publishers/clock.js';
 
-export interface RealtimeExamplePluginRoutesDeps {
-  readonly auth: {
-    required(): MiddlewareHandler;
-  };
-}
+export type RealtimeExamplePluginRoutesContext = AppPluginRoutesContext;
 
-export type RealtimeExamplePluginRoutesContext =
-  AppPluginRoutesContext<RealtimeExamplePluginRoutesDeps>;
-
-export default ({ app, deps }: RealtimeExamplePluginRoutesContext): void => {
+export default ({ app }: RealtimeExamplePluginRoutesContext): void => {
   const routes = new Hono();
 
-  routes.get('/', deps.auth.required(), (context) =>
+  routes.get('/', (context) =>
     context.html(`<!doctype html>
 <html lang="en">
   <head>

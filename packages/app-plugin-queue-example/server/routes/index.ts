@@ -1,15 +1,12 @@
 import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
-import { Hono, type MiddlewareHandler } from 'hono';
+import { Hono } from 'hono';
 
 import QueueExampleJob, {
   queueExampleExecutions,
 } from '../jobs/queue-example.js';
 
 export interface QueueExamplePluginRoutesDeps {
-  auth: {
-    required(): MiddlewareHandler;
-  };
   queueManager: NocoBaseQueueManager;
 }
 
@@ -21,7 +18,7 @@ export type QueueExamplePluginRoutesContext = AppPluginRoutesContext<
 export default ({ app, deps }: QueueExamplePluginRoutesContext): void => {
   const routes = new Hono();
 
-  routes.get('/', deps.auth.required(), async (context) => {
+  routes.get('/', async (context) => {
     const result = await deps.queueManager.dispatch(QueueExampleJob, {
       message: 'Hello from the Queue example plugin',
       requestedAt: new Date().toISOString(),

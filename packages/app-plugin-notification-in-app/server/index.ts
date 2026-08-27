@@ -1,3 +1,4 @@
+export * from './bootstrap.js';
 export * from './definition.js';
 export * from './router.js';
 export * from './store.js';
