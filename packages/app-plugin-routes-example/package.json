@@ -44,14 +44,6 @@
   "files": [
     "dist"
   ],
-  "nocobase": {
-    "plugin": {
-      "client": {
-        "routes": "./client/routes",
-        "providers": "./client/providers"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json",

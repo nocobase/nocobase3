@@ -97,11 +97,9 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     packageJson.files.includes('.agents'),
     'plugin skills must ship with the package',
   );
-  assert.deepEqual(packageJson.nocobase.plugin.client, {
-    bootstrap: './client/bootstrap',
-    routes: './client/routes',
-    providers: './client/providers',
-  });
+  // The client entries are declared by client/plugin.ts and the ./client/plugin
+  // export, not by a manifest field.
+  assert.equal(packageJson.nocobase.plugin.client, undefined);
   assert.deepEqual(packageJson.nocobase.plugin.database, {
     migrations: './database/migrations',
     seeds: './database/seeds',

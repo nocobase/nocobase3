@@ -301,11 +301,6 @@ function createScaffoldFiles({
     },
     nocobase: {
       plugin: {
-        client: {
-          bootstrap: './client/bootstrap',
-          routes: './client/routes',
-          providers: './client/providers',
-        },
         database: {
           migrations: './database/migrations',
           seeds: './database/seeds',

@@ -67,15 +67,6 @@
     "dist",
     "README.md"
   ],
-  "nocobase": {
-    "plugin": {
-      "client": {
-        "bootstrap": "./client/bootstrap",
-        "providers": "./client/providers",
-        "routes": "./client/routes"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json",

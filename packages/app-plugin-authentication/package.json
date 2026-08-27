@@ -104,10 +104,6 @@
       }
     },
     "plugin": {
-      "client": {
-        "bootstrap": "./client/bootstrap",
-        "routes": "./client/routes"
-      },
       "database": {
         "migrations": "./database/migrations",
         "seeds": "./database/seeds"
