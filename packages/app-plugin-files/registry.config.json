@@ -1,0 +1,47 @@
+{
+  "name": "nocobase-files",
+  "homepage": "https://www.nocobase.com",
+  "items": [
+    {
+      "name": "file-field-ui",
+      "type": "registry:component",
+      "title": "NocoBase Files Field UI",
+      "description": "Placeholder for application-owned file field components.",
+      "dependencies": [],
+      "registryDependencies": [],
+      "docs": "This item is a contract placeholder. Runtime file behavior is supplied by @nocobase/app-plugin-files.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge"
+      },
+      "source": {
+        "root": "registry/file-field-ui",
+        "target": "client/extensions/nocobase-files-file-field-ui",
+        "include": ["."]
+      }
+    },
+    {
+      "name": "demo-page-ui",
+      "type": "registry:block",
+      "title": "NocoBase Files Demo Page UI",
+      "description": "Placeholder for an application-owned files demo page.",
+      "dependencies": [],
+      "registryDependencies": [],
+      "docs": "This item is a contract placeholder. It will override the stable files demo route when implemented.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-files": ">=0.0.1 <0.1.0"
+          }
+        }
+      },
+      "source": {
+        "root": "registry/demo-page-ui",
+        "target": "client/extensions/nocobase-files-demo-page-ui",
+        "include": ["."]
+      }
+    }
+  ]
+}
