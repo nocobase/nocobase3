@@ -53,13 +53,6 @@ Plugin Registry 是插件发布“可复制、可编辑源码配方”的通用�
                                        已安装、由应用拥有的源码
 ```
 
-`@nocobase/app-plugin-files` 是仓库中采用同一所有权边界的实际业务插件：
-插件自身提供 `/files` 默认页和稳定 route ID，`page-ui` 只覆盖该路由的
-component，`component-ui` 交付 `FileUploadField` 与预览组件，`provider-ui`
-交付 App-local client、Context 和 Provider。具体上传生命周期、表单校验、
-cleanup 和 V1 限制见该包的 `README.md`；Files Registry 不复制服务端安全与
-Storage 内核。
-
 ## 2. 完整数据流
 
 ```text
