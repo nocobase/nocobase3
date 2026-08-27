@@ -17,7 +17,6 @@ import {
   type NocoBaseSessionManager,
 } from '@nocobase/session';
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
-import type { DatabaseManager } from '@nocobase/app-database';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import {
   createAppAuthorization,
@@ -33,7 +32,6 @@ export interface AppDeps {
   auth: Auth;
   authz: AppAuthorization;
   caching: Caching;
-  database?: DatabaseManager;
   driveManager?: NocoBaseDriveManager;
   idGenerator: SnowflakeIdGenerator;
   logging: Logging;
@@ -100,7 +98,6 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
   return {
     caching,
     auth,
-    database: runtime.database,
     authz,
     driveManager,
     idGenerator,

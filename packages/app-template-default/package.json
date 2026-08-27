@@ -23,12 +23,6 @@
       "@nocobase/app-plugin-install": {
         "enabled": true
       },
-      "@nocobase/app-plugin-notification": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-notification-in-app": {
-        "enabled": true
-      },
       "@nocobase/app-plugin-notification-provider": {
         "enabled": true
       },
@@ -61,8 +55,6 @@
     "@nocobase/app-plugin-data-provider": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
-    "@nocobase/app-plugin-notification": "workspace:^",
-    "@nocobase/app-plugin-notification-in-app": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",

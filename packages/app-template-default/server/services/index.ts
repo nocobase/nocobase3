@@ -1,6 +1,5 @@
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { AppDriveConfig } from '@nocobase/drive';
-import type { NotificationService } from '@nocobase/app-plugin-notification';
 
 import type { AppConfig } from '../config/index.js';
 import type { RealtimeService } from '../realtime/service.js';
@@ -18,7 +17,6 @@ import {
 
 export interface AppServices {
   appSettingsStore: AppSettings;
-  notification: NotificationService | undefined;
   publicFileStorage: FileUploads;
   realtime: RealtimeService;
 }
@@ -42,7 +40,6 @@ export function createAppServices(
         : new UnavailableFileUploadsService(
             resolveFileUploadsUnavailableMessage(runtime.config.drive),
           ),
-    notification: undefined,
     realtime: options.realtime,
   };
 }
