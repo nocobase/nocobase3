@@ -12,12 +12,12 @@ nb3 app dev       本地开发 App
 nb3 app info      查看 App 信息
 nb3 app config    查看或修改 App 配置
 nb3 app destroy   删除本地 App
-nb3 app deploy    部署 App 到 Hub（待实现）
+nb3 app deploy    构建并部署 App 产物到 Hub
 nb3 app pull      从 Hub 拉取已有 App（待实现）
 nb3 app list      查看 Hub 中的 App（待实现）
 ```
 
-标注「待实现」的三条命令需要 Hub 提供 App 管理 API，目前 Hub 还没有这部分能力，执行会以退出码 3 明确报错。
+标注「待实现」的两条命令执行时会以退出码 3 明确报错。
 
 第一版最常用的是：
 
@@ -30,11 +30,13 @@ nb3 app deploy
 ## 创建 App
 
 ```bash
-nb3 app create crm
+nb3 app create crm --db-dialect=sqlite
 cd crm
 ```
 
-基于 `@nocobase/app-template-default` 生成一个本地 App 源码目录：
+该命令直接复用 `@nocobase/create-app`，和
+`pnpm create @nocobase/app@latest crm --db-dialect=sqlite` 生成完全相同的
+App。它会生成本地环境配置、安装依赖并验证 SQLite 驱动：
 
 ```text
 crm/
@@ -47,20 +49,19 @@ crm/
 
 App 源码可以放在任意位置，不需要放在 Hub 目录里。
 
-创建完成后安装依赖并启动：
+创建完成后直接启动：
 
 ```bash
 cd crm
-pnpm install
-nb3 app dev
+pnpm dev
 ```
 
 模板通过 npm 下载，只会拉取模板这一个包，不会克隆整个仓库。也可以指定其他模板来源：
 
 ```bash
-nb3 app create crm --template @nocobase/app-template-default@3.1.1
+nb3 app create crm --template @nocobase/app-template-default@latest
 nb3 app create crm --template ./packages/app-template-default
-nb3 app create crm --registry https://registry.npmmirror.com
+nb3 app create crm --db-dialect=postgres
 ```
 
 `--template` 传本地目录时会用 pnpm 打包，把 `workspace:` 和 `catalog:` 依赖解析成真实版本号，因此生成的项目在仓库之外也能安装。
@@ -113,18 +114,27 @@ nb3 app destroy ./crm
 
 ## 部署 App
 
-部署需要一个目标 Hub。
+部署需要目标 Hub 和它配置的部署令牌。CLI 默认先运行 App 的 `build`
+脚本；如果项目提供 `release:pack` 则复用它，否则按统一格式打包 `dist`。
+上传包只包含 `dist`、`app-release.json` 和发布用 `package.json`，不包含
+源码、Git 信息或 `.env.local`。
+
+令牌可以通过环境变量提供：
+
+```bash
+export NOCOBASE_HUB_TOKEN=YOUR_HUB_DEPLOY_TOKEN
+```
 
 部署到本地 Hub：
 
 ```bash
-nb3 app deploy --hub http://localhost:3000
+nb3 app deploy --hub http://127.0.0.1:13001/hub
 ```
 
 部署到远端 Hub：
 
 ```bash
-nb3 app deploy --hub https://apps.example.com
+nb3 app deploy --hub https://apps.example.com/hub
 ```
 
 如果当前 App 已经记录了 Hub 地址，后续可以直接执行：
@@ -132,6 +142,17 @@ nb3 app deploy --hub https://apps.example.com
 ```bash
 nb3 app deploy
 ```
+
+也可以显式指定 Release ID、跳过已经完成的构建或输出 JSON：
+
+```bash
+nb3 app deploy --release-id release-2026-08-26
+nb3 app deploy --no-build
+nb3 app deploy --json
+```
+
+`--token` 也能提供部署令牌，但环境变量更不容易进入 shell 历史。Hub 地址
+会保存到 App 的 `.nb3/config.json`，令牌始终不会保存。
 
 ## 拉取已有 App
 
@@ -161,5 +182,5 @@ nb3 hub start
 
 ```bash
 cd ../crm
-nb3 app deploy --hub http://localhost:3000
+nb3 app deploy --hub http://127.0.0.1:13001/hub
 ```

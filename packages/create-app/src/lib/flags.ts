@@ -1,4 +1,4 @@
-import { Args, Flags } from '@oclif/core';
+import { Args, Flags, type Interfaces } from '@oclif/core';
 import { parse } from '@oclif/core/parser';
 import { DATABASE_DIALECTS } from './database.ts';
 import {
@@ -12,7 +12,21 @@ import {
  * `pnpm create @nocobase/app crm --db-dialect=postgres` passes every argument after the package name through verbatim,
  * so this parses the same argv shape a direct `npx @nocobase/create-app` invocation would produce.
  */
-export const CREATE_ARGS = {
+export interface CreateArgumentOutput {
+  directory: string | undefined;
+}
+
+export interface CreateFlagOutput {
+  'db-dialect': string | undefined;
+  install: boolean | undefined;
+  template: string;
+  'template-tag': string;
+  registry: string | undefined;
+  help: boolean | undefined;
+  version: boolean | undefined;
+}
+
+export const CREATE_ARGS: Interfaces.ArgInput<CreateArgumentOutput> = {
   directory: Args.string({
     description:
       'Directory to create the app in, relative to the current directory. Prompted for when omitted.',
@@ -20,7 +34,7 @@ export const CREATE_ARGS = {
   }),
 };
 
-export const CREATE_FLAGS = {
+export const CREATE_FLAGS: Interfaces.FlagInput<CreateFlagOutput> = {
   'db-dialect': Flags.string({
     description: `Database type: ${DATABASE_DIALECTS.join(', ')}. Aliases such as postgresql, pg, and sqlite3 are accepted. Prompted for when omitted.`,
   }),

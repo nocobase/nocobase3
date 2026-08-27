@@ -10,6 +10,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import http from 'node:http';
+import { createRequire } from 'node:module';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +37,7 @@ export interface AppHostSupervisorOptions {
   startTimeoutMs?: number;
   shutdownTimeoutMs?: number;
   healthPath?: string;
+  controlToken?: string;
 }
 
 export interface AppHostSupervisorInfo {
@@ -75,7 +77,28 @@ const APP_HOST_CHILD_DENIED_NODE_OPTIONS = [
   '--preserve-symlinks',
   '--preserve-symlinks-main',
 ];
+const APP_HOST_CHILD_DENIED_ENV_KEYS = new Set([
+  'API_CLIENT_SHARE_TOKEN',
+  'API_CLIENT_STORAGE_PREFIX',
+  'API_CLIENT_STORAGE_TYPE',
+  'APP_BASE_PATH',
+  'APP_BROWSER_BASE_PATH',
+  'APP_CLIENT_INDEX',
+  'APP_NAME',
+  'APP_SERVER_HOST',
+  'APP_SERVER_PORT',
+  'APP_SERVER_START_LOG',
+  'APP_VITE_DEV_HOST',
+  'APP_VITE_DEV_PORT',
+  'APP_VITE_DEV_URL',
+  'AUTH_SECRET',
+  'NOCOBASE_API_PROXY_PATH',
+  'NOCOBASE_API_PROXY_TARGET',
+  'NOCOBASE_API_URL',
+  'NOCOBASE_AUTH_URL',
+]);
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 export class AppHostSupervisor {
   private static instance: AppHostSupervisor | null = null;
@@ -88,6 +111,7 @@ export class AppHostSupervisor {
   private readonly startTimeoutMs: number;
   private readonly shutdownTimeoutMs: number;
   private readonly healthPath: string;
+  private readonly controlToken?: string;
   private status: AppHostSupervisorStatus;
   private managedChild: ManagedChild | null = null;
   private startPromise: Promise<URL> | null = null;
@@ -116,6 +140,8 @@ export class AppHostSupervisor {
       options.healthPath ??
       process.env.APP_HOST_HEALTH_PATH ??
       DEFAULT_HEALTH_PATH;
+    this.controlToken =
+      options.controlToken ?? process.env.APP_HOST_CONTROL_TOKEN;
     this.status =
       !this.enabled || this.driver === 'disabled'
         ? 'disabled'
@@ -307,7 +333,7 @@ export class AppHostSupervisor {
     const exitPromise = waitForChildExit(managed.child, this.shutdownTimeoutMs);
     managed.child.kill('SIGTERM');
 
-    await exitPromise.catch((error: unknown) => {
+    await exitPromise.catch((error) => {
       console.warn(error instanceof Error ? error.message : String(error));
       managed.child.kill('SIGKILL');
     });
@@ -342,12 +368,15 @@ export class AppHostSupervisor {
 
   private baseAppHostEnv(port: number): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
-      ...process.env,
+      ...sanitizeAppHostChildEnvironment(process.env),
       PORT: `${port}`,
       APP_HOST_PORT: `${port}`,
       APP_HOST_BIND: this.host,
       APP_DIST_DIR: this.appDistDir,
     };
+    if (this.controlToken) {
+      env.APP_HOST_CONTROL_TOKEN = this.controlToken;
+    }
     const nodeOptions = sanitizeAppHostChildNodeOptions(env.NODE_OPTIONS);
 
     if (nodeOptions) {
@@ -370,7 +399,12 @@ export class AppHostSupervisor {
 
     return {
       command: process.execPath,
-      args: [entrypoint],
+      // Workspace exports resolve server-kit to TypeScript sources. Load the
+      // source hook only in that development layout; published packages point
+      // to compiled JavaScript and run with plain Node.js.
+      args: requiresWorkspaceTypeScriptLoader()
+        ? ['--import', 'tsx', entrypoint]
+        : [entrypoint],
       env: this.baseAppHostEnv(port),
       entrypoint,
     };
@@ -396,7 +430,7 @@ export class AppHostSupervisor {
     if (tsconfig) {
       args.push('--tsconfig', tsconfig);
     }
-    args.push('-r', 'tsconfig-paths/register', entrypoint);
+    args.push(entrypoint);
 
     return {
       command: process.execPath,
@@ -419,11 +453,19 @@ export class AppHostSupervisor {
   }
 
   private pipeChildLogs(child: ChildProcess): void {
-    child.stdout?.on('data', (chunk: unknown) => {
-      writePrefixedChunk('app-host', chunk, process.stdout);
+    child.stdout?.on('data', (chunk: string | Buffer) => {
+      writePrefixedChunk(
+        'app-host',
+        typeof chunk === 'string' ? Buffer.from(chunk) : chunk,
+        process.stdout,
+      );
     });
-    child.stderr?.on('data', (chunk: unknown) => {
-      writePrefixedChunk('app-host', chunk, process.stderr);
+    child.stderr?.on('data', (chunk: string | Buffer) => {
+      writePrefixedChunk(
+        'app-host',
+        typeof chunk === 'string' ? Buffer.from(chunk) : chunk,
+        process.stderr,
+      );
     });
   }
 
@@ -437,7 +479,10 @@ export class AppHostSupervisor {
       }
 
       try {
-        await requestHealth(new URL(this.healthPath, targetUrl));
+        await requestHealth(
+          new URL(this.healthPath, targetUrl),
+          this.controlToken,
+        );
         return;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -465,15 +510,29 @@ function resolveNodeAppHostEntrypoint(): string | null {
   return null;
 }
 
+function requiresWorkspaceTypeScriptLoader(): boolean {
+  return existsSync(
+    path.resolve(currentDir, '../../app-server-kit/src/support/index.ts'),
+  );
+}
+
 function resolveTsxAppHostEntrypoint(): string | null {
   const explicit = process.env.APP_HOST_ENTRY;
   if (explicit && existsSync(path.resolve(process.cwd(), explicit))) {
     return path.resolve(process.cwd(), explicit);
   }
 
-  const source = path.resolve(currentDir, 'cli.ts');
-  if (existsSync(source)) {
-    return source;
+  const candidates = [
+    // The supervisor itself may be executed from TypeScript source.
+    path.resolve(currentDir, 'cli.ts'),
+    // Package exports resolve to dist/supervisor.js during workspace dev, but
+    // the tsx driver must still execute the source CLI.
+    path.resolve(currentDir, '../src/cli.ts'),
+  ];
+  for (const source of candidates) {
+    if (existsSync(source)) {
+      return source;
+    }
   }
 
   return null;
@@ -486,7 +545,7 @@ function resolveTsxCli(): string | null {
   }
 
   try {
-    return require.resolve('tsx/dist/cli.mjs', { paths: [process.cwd()] });
+    return require.resolve('tsx/cli', { paths: [process.cwd()] });
   } catch {
     const local = path.resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs');
     return existsSync(local) ? local : null;
@@ -502,8 +561,7 @@ function normalizeUrl(value?: string): URL | undefined {
 }
 
 export function sanitizeAppHostChildNodeOptions(value: unknown): string {
-  const source = typeof value === 'string' ? value : '';
-  return source
+  return (typeof value === 'string' ? value : '')
     .trim()
     .split(/\s+/)
     .filter(Boolean)
@@ -515,6 +573,17 @@ export function sanitizeAppHostChildNodeOptions(value: unknown): string {
         ),
     )
     .join(' ');
+}
+
+export function sanitizeAppHostChildEnvironment(
+  source: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(source).filter(
+      ([key]) =>
+        !key.startsWith('HUB_') && !APP_HOST_CHILD_DENIED_ENV_KEYS.has(key),
+    ),
+  );
 }
 
 function numberFromEnv(name: string): number | undefined {
@@ -531,12 +600,15 @@ async function findAvailablePort(
   startPort: number,
   host: string,
 ): Promise<number> {
-  let port = startPort;
-  while (!(await isPortAvailable(port, host))) {
-    port += 1;
+  for (let port = startPort; port <= 65_535; port += 1) {
+    if (await isPortAvailable(port, host)) {
+      return port;
+    }
   }
 
-  return port;
+  throw new Error(
+    `Unable to find an available App Host port from ${startPort} to 65535 on ${host}.`,
+  );
 }
 
 function isPortAvailable(port: number, host: string): Promise<boolean> {
@@ -550,21 +622,31 @@ function isPortAvailable(port: number, host: string): Promise<boolean> {
   });
 }
 
-function requestHealth(url: URL): Promise<void> {
+function requestHealth(url: URL, controlToken?: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const req = http.get(url, (res) => {
-      res.resume();
-      if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-        resolve();
-        return;
-      }
+    const req = http.get(
+      url,
+      {
+        headers: controlToken
+          ? {
+              authorization: `Bearer ${controlToken}`,
+            }
+          : undefined,
+      },
+      (res) => {
+        res.resume();
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          resolve();
+          return;
+        }
 
-      reject(
-        new Error(
-          `health check returned ${res.statusCode ?? 'unknown status'}`,
-        ),
-      );
-    });
+        reject(
+          new Error(
+            `health check returned ${res.statusCode ?? 'unknown status'}`,
+          ),
+        );
+      },
+    );
 
     req.setTimeout(1000, () => {
       req.destroy(new Error('health check timed out'));
@@ -605,13 +687,9 @@ function sleep(ms: number): Promise<void> {
 
 function writePrefixedChunk(
   prefix: string,
-  chunk: unknown,
+  chunk: Buffer,
   writer: NodeJS.WriteStream,
 ): void {
-  if (!Buffer.isBuffer(chunk)) {
-    return;
-  }
-
   const text = chunk.toString();
   const lines = text.split(/\r?\n/);
   const hasTrailingNewline = text.endsWith('\n') || text.endsWith('\r');

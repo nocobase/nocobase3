@@ -41,9 +41,14 @@ afterEach(async () => {
 
 describe('app server', () => {
   it('creates embedded apps from a scope', async () => {
+    const dataDir = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-hub-embedded-data-'),
+    );
+    tempDirs.push(dataDir);
     const app = await createEmbeddedServer({
       id: 'hub',
       basePath: '/embedded-hub',
+      dataDir,
     });
 
     const response = await app.request('http://localhost/api/healthz');
@@ -72,6 +77,7 @@ describe('app server', () => {
       id: 'hub',
       basePath: '/hub',
       clientDir: root,
+      dataDir: root,
     });
 
     const response = await app.request('http://localhost/');
@@ -79,7 +85,7 @@ describe('app server', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/hub/";');
-    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/v2/api";');
+    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/api";');
   });
 
   it('reads embedded runtime config from dist/.env without using process.env', async () => {
@@ -380,7 +386,7 @@ describe('app server', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('window.NOCOBASE_PORTAL_BASE = "/hub/";');
-    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/v2/api";');
+    expect(html).toContain('window.NOCOBASE_API_URL = "/hub/api";');
     expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
       html.indexOf('<script type="module"'),
     );

@@ -1,81 +1,30 @@
-import path from 'node:path';
-import { Args, Command, Flags } from '@oclif/core';
-import {
-  assertTargetIsUsable,
-  removeDirectory,
-  scaffoldApp,
-} from '../../lib/scaffold.ts';
-import {
-  DEFAULT_REGISTRY,
-  DEFAULT_TEMPLATE,
-  downloadTemplate,
-} from '../../lib/template.ts';
+import { createApp } from '@nocobase/create-app';
+import { CREATE_ARGS, CREATE_FLAGS } from '@nocobase/create-app/flags';
+import { Command } from '@oclif/core';
 
 export default class AppCreate extends Command {
-  static override summary = 'Create a local app source directory.';
+  static override summary = 'Create a local App with the official scaffold.';
   static override description =
-    'Downloads the app template and scaffolds a project from it. The directory can live anywhere; it does not have to sit inside a hub.';
+    'Delegates to @nocobase/create-app so pnpm create and nb3 create the same project shape, database configuration, and native-driver setup.';
 
   static override examples = [
-    '<%= config.bin %> <%= command.id %> crm',
-    '<%= config.bin %> <%= command.id %> crm --dir ./apps/crm',
+    '<%= config.bin %> <%= command.id %> crm --db-dialect=sqlite',
+    '<%= config.bin %> <%= command.id %> crm --db-dialect=postgres',
     '<%= config.bin %> <%= command.id %> crm --template ./packages/app-template-default',
   ];
 
-  static override args = {
-    name: Args.string({
-      description: 'App name, also used as the directory name by default.',
-      required: true,
-    }),
-  };
-
-  static override flags = {
-    dir: Flags.string({
-      description: 'Directory to create the app in. Defaults to ./<name>.',
-    }),
-    template: Flags.string({
-      description:
-        'Template to scaffold from: a published package, or a path to a local package directory.',
-      default: DEFAULT_TEMPLATE,
-    }),
-    registry: Flags.string({
-      description: 'npm registry to download the template from.',
-      default: DEFAULT_REGISTRY,
-    }),
-  };
+  static override args = CREATE_ARGS;
+  static override flags = CREATE_FLAGS;
 
   public async run(): Promise<void> {
-    const { args, flags } = await this.parse(AppCreate);
-    const targetDirectory = path.resolve(flags.dir ?? args.name);
-
-    await assertTargetIsUsable(targetDirectory);
-
-    this.log(`Downloading template ${flags.template}...`);
-    const template = await downloadTemplate({
-      registry: flags.registry,
-      source: flags.template,
+    const exitCode = await createApp({
+      argv: this.argv,
+      binary: `${this.config.bin} app create`,
+      version: this.config.version,
     });
 
-    try {
-      await scaffoldApp({
-        name: args.name,
-        targetDirectory,
-        templateDirectory: template.directory,
-        templateName: template.name,
-        templateVersion: template.version,
-      });
-    } finally {
-      await removeDirectory(template.directory);
+    if (exitCode !== 0) {
+      this.exit(exitCode);
     }
-
-    const relativeTarget = path.relative(process.cwd(), targetDirectory) || '.';
-
-    this.log(
-      `\nCreated ${args.name} from ${template.name}@${template.version}.\n`,
-    );
-    this.log('Next steps:');
-    this.log(`  cd ${relativeTarget}`);
-    this.log('  pnpm install');
-    this.log(`  ${this.config.bin} app dev`);
   }
 }

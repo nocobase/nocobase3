@@ -1,6 +1,9 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { requireAppProject, writeAppConfig } from '../../lib/app-project.ts';
-import type { AppConfig as StoredAppConfig } from '../../lib/scaffold.ts';
+import {
+  requireAppProject,
+  writeAppConfig,
+  type AppConfig as StoredAppConfig,
+} from '../../lib/app-project.ts';
 
 /** Keys a user may set. The rest of the config records where the app came from and is not meant to be edited. */
 const WRITABLE_KEYS = new Set(['hub', 'name']);

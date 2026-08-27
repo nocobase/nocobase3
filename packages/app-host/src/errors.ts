@@ -72,6 +72,39 @@ export class AppReloadFailedError extends AppRegistryError {
   }
 }
 
+export class AppReadinessFailedError extends AppRegistryError {
+  constructor(id: string, healthPath: string, reason: string) {
+    super(`App "${id}" failed readiness check at ${healthPath}: ${reason}`, {
+      status: 422,
+      code: 'APP_READINESS_FAILED',
+    });
+  }
+}
+
+export class AppReleaseConflictError extends AppRegistryError {
+  constructor(id: string, releaseId: string) {
+    super(
+      `Release "${releaseId}" for app "${id}" does not match the active immutable release`,
+      {
+        status: 409,
+        code: 'APP_RELEASE_CONFLICT',
+      },
+    );
+  }
+}
+
+export class AppReleaseIntegrityError extends AppRegistryError {
+  constructor(id: string, releaseId: string, reason: string) {
+    super(
+      `Release "${releaseId}" for app "${id}" failed integrity verification: ${reason}`,
+      {
+        status: 409,
+        code: 'APP_RELEASE_INTEGRITY_FAILED',
+      },
+    );
+  }
+}
+
 export class AppCapacityExceededError extends AppRegistryError {
   constructor(maxActiveApps: number) {
     super(
@@ -81,5 +114,32 @@ export class AppCapacityExceededError extends AppRegistryError {
         code: 'APP_CAPACITY_EXCEEDED',
       },
     );
+  }
+}
+
+export class AppStoppedError extends AppRegistryError {
+  constructor(id: string) {
+    super(`App "${id}" is stopped`, {
+      status: 503,
+      code: 'APP_STOPPED',
+    });
+  }
+}
+
+export class AppLifecycleConflictError extends AppRegistryError {
+  constructor(id: string, message: string) {
+    super(`App "${id}" ${message}`, {
+      status: 409,
+      code: 'APP_LIFECYCLE_CONFLICT',
+    });
+  }
+}
+
+export class AppLifecycleTransitionError extends AppRegistryError {
+  constructor(id: string) {
+    super(`App "${id}" is changing runtime state`, {
+      status: 503,
+      code: 'APP_LIFECYCLE_IN_PROGRESS',
+    });
   }
 }

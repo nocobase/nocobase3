@@ -12,7 +12,10 @@ import {
 import { createApp, type AppServer } from '../app.js';
 import type { AppLifecycle } from '../app-options.js';
 import type { AppConfig } from '../config/index.js';
-import { loadPluginBootstraps, loadPluginRoutes } from '../plugins/index.js';
+import {
+  loadPluginBootstraps,
+  loadPluginRoutes,
+} from '@nocobase/app-server-kit/plugins';
 
 export interface CreateAppFromRuntimeOptions {
   lifecycle: AppLifecycle;

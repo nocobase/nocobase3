@@ -9,16 +9,6 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 
-/** Local state for a generated app lives here, mirroring the `.nb3/` a hub keeps. */
-export const APP_STATE_DIR = '.nb3';
-
-export interface AppConfig {
-  name: string;
-  template: string;
-  templateVersion: string;
-  hub?: string;
-}
-
 async function isEmptyDirectory(directory: string): Promise<boolean> {
   try {
     const entries = await readdir(directory);
@@ -107,32 +97,6 @@ export async function scaffoldFromTemplate(
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, contents, 'utf8');
   }
-}
-
-export interface ScaffoldAppOptions {
-  templateDirectory: string;
-  targetDirectory: string;
-  name: string;
-  templateName: string;
-  templateVersion: string;
-}
-
-export async function scaffoldApp(options: ScaffoldAppOptions): Promise<void> {
-  const config: AppConfig = {
-    name: options.name,
-    template: options.templateName,
-    templateVersion: options.templateVersion,
-  };
-
-  await scaffoldFromTemplate({
-    extraFiles: {
-      [path.join(APP_STATE_DIR, 'config.json')]:
-        `${JSON.stringify(config, null, 2)}\n`,
-    },
-    name: options.name,
-    targetDirectory: options.targetDirectory,
-    templateDirectory: options.templateDirectory,
-  });
 }
 
 export async function removeDirectory(directory: string): Promise<void> {

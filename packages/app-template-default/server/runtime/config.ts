@@ -6,18 +6,18 @@ import {
   type ConfigContext,
 } from '@nocobase/app-server-kit/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server-kit/database';
+import {
+  createPluginJobLocations,
+  createPluginMigrationSources,
+  createPluginSeedSources,
+  resolveAppPlugins,
+  type ResolvedAppPlugin,
+} from '@nocobase/app-server-kit/plugins';
 import type { AppQueueConfig } from '@nocobase/queue';
 
 import configFactories, { type AppConfig } from '../config/index.js';
 import databaseConfigFactory from '../config/database.js';
 import type { AppScope, ResolvedAppRuntimeOptions } from './options.js';
-import {
-  createPluginMigrationSources,
-  createPluginJobLocations,
-  createPluginSeedSources,
-  resolveAppPlugins,
-  type ResolvedAppPlugin,
-} from '../plugins/index.js';
 import {
   createRuntimeConfigPaths,
   resolveEmbeddedRuntimeOptions,

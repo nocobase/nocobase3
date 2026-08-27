@@ -3,10 +3,12 @@
 创建 NocoBase 3 应用。
 
 ```bash
-npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app crm
+npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app@latest crm --db-dialect=sqlite
 ```
 
-`pnpm create @nocobase/app` 会解析成 `@nocobase/create-app` 包并执行它，包名之后的所有参数原样透传。
+`pnpm create @nocobase/app@latest` 会解析成最新的 `@nocobase/create-app`
+包并执行它，包名之后的所有参数原样透传。上面的命令固定使用 SQLite，
+脚手架会生成可直接使用的本地配置并安装依赖。
 
 ## 为什么要带 `npm_config_registry`
 
@@ -62,7 +64,7 @@ npm view @nocobase/create-app dist-tags --registry=https://npm.nocobase.ai
 不带参数时会依次询问目录和数据库类型：
 
 ```bash
-npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
+npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app@latest
 ```
 
 只有数据库类型这一项需要选择，其余连接参数走默认值写进 `.env.local`。
@@ -85,13 +87,13 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 `--template` 用具名模板，目前只有一个 `default`，指向 `@nocobase/app-template-default`。以后新增模板会加新的名字，用户不需要知道背后的包名：
 
 ```bash
-pnpm create @nocobase/app crm --template=default   # 默认值，可以不写
+pnpm create @nocobase/app@latest crm --template=default   # 默认值，可以不写
 ```
 
 `--template-tag` 决定具名模板拉哪个渠道，默认 `latest`：
 
 ```bash
-pnpm create @nocobase/app crm --template-tag=beta
+pnpm create @nocobase/app@latest crm --template-tag=beta
 ```
 
 **注意 `beta` 目前拉到的是最旧的版本，不是最新的。** changesets 把 `beta` 这个 dist-tag 留在了包首次发布的那个版本上，之后每次发版只更新 `latest`——它认为「所有版本都是预发布版」的包属于首次发布，于是打 `latest` 保证包能被安装。这个条件在发出第一个稳定版之前一直成立。所以默认是 `latest`，`--template-tag=beta` 只在你确实要那个特定版本时才用。
@@ -99,8 +101,8 @@ pnpm create @nocobase/app crm --template-tag=beta
 名字之外的值原样使用，所以指定具体版本或本地目录照常可用。这种情况下 `--template-tag` 会被忽略——你已经说明了要哪个版本，再追加渠道反而会覆盖掉更精确的请求：
 
 ```bash
-pnpm create @nocobase/app crm --template=@nocobase/app-template-default@0.0.1-beta.3
-pnpm create @nocobase/app crm --template=./packages/app-template-default
+pnpm create @nocobase/app@latest crm --template=@nocobase/app-template-default@0.0.1-beta.3
+pnpm create @nocobase/app@latest crm --template=./packages/app-template-default
 ```
 
 依赖默认会自动安装，`--no-install` 可以跳过。
@@ -108,8 +110,8 @@ pnpm create @nocobase/app crm --template=./packages/app-template-default
 全部用参数指定就不会有任何交互，适合脚本：
 
 ```bash
-pnpm create @nocobase/app crm --db-dialect=postgres
-pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
+pnpm create @nocobase/app@latest crm --db-dialect=postgres
+pnpm create @nocobase/app@latest crm --db-dialect=sqlite --no-install
 ```
 
 ## 生成的内容
@@ -117,6 +119,7 @@ pnpm create @nocobase/app crm --db-dialect=sqlite --no-install
 下载模板（默认 `default`，即 `@nocobase/app-template-default@latest`），并在此基础上：
 
 - 改写 `package.json`：换成应用自己的名字和版本，置为 `private`，去掉 `publishConfig` 和 `repository`，避免误发布
+- 写 `.nb3/config.json`：记录 App 标识和模板来源，供后续 `nb3 app` 命令识别项目
 - 按数据库类型装一个驱动：sqlite 装 `better-sqlite3`，postgres 装 `pg`，mysql 装 `mysql2`。模板本身只依赖 `knex`，三个驱动一个都不带
 - 写 `.env.local`：保留模板 `.env.example` 里与数据库无关的配置，追加数据库连接段和随机生成的 `AUTH_SECRET`
 - 写 `.gitignore`：模板没带的话会生成一份兜底的，防止 `.env.local` 里的 `AUTH_SECRET` 被提交

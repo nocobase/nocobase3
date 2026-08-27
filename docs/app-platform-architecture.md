@@ -10,15 +10,58 @@ description: Hub、App Host 与 App 的职责、运行与激活方式，以及 S
 ### 核心概念
 
 - **Hub**：多应用管理中心。Hub 本身也是一个特殊的 App，负责管理
-  `app-host` 及其托管的多个业务 App。
+  `app-host` 及其托管的多个业务 App。Hub 只接收和管理可部署的
+  构建产物，不托管 App 源码。
 - **App Host**：App 运行宿主，负责发现、注册、激活和运行多个 App，
   并分发 HTTP 与 WebSocket 请求。
 - **App**：具体的业务应用，可以独立运行，也可以构建后由 `app-host`
   托管。
 
+源码由用户在本地或自有开发环境中管理，是否使用 Git 不作要求。本地的
+`nb3 app deploy` 负责构建、打包和传输不可变 Release，Hub 负责鉴权、审计、
+部署和运行管理。
+
+默认本地拓扑由 Hub 通过 `AppHostSupervisor` 启动一个 `app-host` 子进程，
+Hub 和子进程共享同一个 `APP_DIST_DIR`。这不是把源码放进 Hub，而是把
+不可变的构建产物交给 App Host 发现和激活。配置 `APP_HOST_URL` 后切换为
+集群拓扑：Hub 只通过内部控制地址调用独立 App Host，不负责它的进程生命周期。
+
+`nb3 app deploy` 只上传 `dist`、`app-release.json` 和发布用
+`package.json`，不会上传源码、Git 信息或 `.env.local`。Hub 校验独立的
+`HUB_DEPLOY_TOKEN` 后将压缩包流式转发给 App Host；内部使用的
+`APP_HOST_CONTROL_TOKEN` 不会暴露给 CLI。App Host 在 staging 目录检查路径、
+链接、文件数、压缩与解压大小、App/Release 身份及产物 SHA-256，校验通过后
+原子移动到 `APP_DIST_DIR/<appId>/releases/<releaseId>`。随后 Hub 复用既有
+部署流程执行健康检查和原子切流。
+
+这两个 Token 都是运行时凭据，不进入 Release 压缩包；Hub 构建脚本也不会将
+它们复制到 `dist/.env`。
+
+```text
+local Git repository
+  → nb3 app deploy
+  → immutable release archive
+  → Hub authentication and audit
+  → App Host validation and atomic install
+  → health check
+  → atomic traffic switch
+```
+
+相同 Release 内容重复上传返回 `unchanged`，不会重复切流；相同 Release ID
+对应不同内容时返回冲突。上传或校验失败不会登记 App，也不会留下半成品
+Release。当前 P0 使用一个 Hub 级部署令牌；按 App 或环境签发令牌属于后续
+治理能力。
+
+Hub 可以先通过 `/api/apps` 登记一个空 App。该记录只包含 App ID、名称、
+类型、目标路径和创建者，不包含源码或构建产物；首次部署前以“未部署”
+状态出现在应用清单中。创建成功页根据当前访问域名和 App ID 生成本地
+开发快速指南，并复用 `@nocobase/create-app` 官方脚手架创建源码。构建完成后
+可直接使用 `nb3 app deploy --hub <hub-url>` 上传并部署。
+
 ### 默认子进程模式
 
-> 目标架构：`AppHostSupervisor` 已实现，但尚未接入 Hub。
+> 当前实现：独立运行 Hub 时已接入 `AppHostSupervisor`；Hub 作为构建产物
+> 由外层 App Host 托管时，复用外层 App Host，不再递归启动子进程。
 
 Hub 作为主进程运行，并通过 `AppHostSupervisor` 启动一个 `app-host`
 子进程。`app-host` 从 App 目录发现业务 App，并按需激活对应的 runtime。

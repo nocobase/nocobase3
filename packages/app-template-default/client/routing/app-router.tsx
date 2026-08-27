@@ -16,7 +16,12 @@ export function AppRouter({ clientRoutes }: AppRouterProps): ReactElement {
     () => ({
       guest: clientRoutes.filter((route) => route.auth === 'guest'),
       optional: clientRoutes.filter((route) => route.auth === 'optional'),
-      required: clientRoutes.filter((route) => route.auth === 'required'),
+      requiredApplication: clientRoutes.filter(
+        (route) => route.auth === 'required' && route.surface === 'application',
+      ),
+      requiredStandalone: clientRoutes.filter(
+        (route) => route.auth === 'required' && route.surface === 'standalone',
+      ),
     }),
     [clientRoutes],
   );
@@ -34,7 +39,16 @@ export function AppRouter({ clientRoutes }: AppRouterProps): ReactElement {
         }
       >
         <Route element={<AppShell />}>
-          {routeGroups.required.map((route) => (
+          {routeGroups.requiredApplication.map((route) => (
+            <Route
+              key={route.id}
+              path={route.path}
+              element={<ClientRoute route={route} />}
+            />
+          ))}
+        </Route>
+        <Route element={<StandalonePageLayout />}>
+          {routeGroups.requiredStandalone.map((route) => (
             <Route
               key={route.id}
               path={route.path}

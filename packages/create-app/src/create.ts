@@ -1,10 +1,16 @@
 import path from 'node:path';
 import {
+  APP_STATE_DIRECTORY,
+  buildAppProjectConfig,
+  type GeneratedAppProjectConfig,
+} from './lib/app-project.ts';
+import {
   defaultDatabaseConfig,
   driverFor,
   driverNeedsBuild,
   needsConnectionDetails,
   parseDialect,
+  type DatabaseConfig,
   type DatabaseDialect,
 } from './lib/database.ts';
 import { buildEnvFile } from './lib/env-file.ts';
@@ -128,9 +134,15 @@ async function run(input: ParsedInput): Promise<void> {
       name,
       targetDirectory,
       templateDirectory: template.directory,
-      extraFiles: {
-        '.env.local': buildEnvFile({ database, template: envExample }),
-      },
+      extraFiles: buildGeneratedAppFiles({
+        database,
+        envTemplate: envExample,
+        project: {
+          name,
+          template: template.name,
+          templateVersion: template.version,
+        },
+      }),
     });
   } finally {
     await removeDirectory(template.directory);
@@ -170,6 +182,27 @@ async function run(input: ParsedInput): Promise<void> {
   }
 
   finish(name, { installed: true, dialect });
+}
+
+export interface BuildGeneratedAppFilesOptions {
+  database: DatabaseConfig;
+  envTemplate?: string;
+  project: GeneratedAppProjectConfig;
+}
+
+/** Builds the generated files shared by local development and later nb3 App commands. */
+export function buildGeneratedAppFiles(
+  options: BuildGeneratedAppFilesOptions,
+): Record<string, string> {
+  return {
+    '.env.local': buildEnvFile({
+      database: options.database,
+      template: options.envTemplate,
+    }),
+    [path.join(APP_STATE_DIRECTORY, 'config.json')]: buildAppProjectConfig(
+      options.project,
+    ),
+  };
 }
 
 /**

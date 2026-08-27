@@ -22,6 +22,7 @@ import type {
   AppTier,
 } from './app-types.ts';
 import type { AppRuntimeRegistry } from './app-registry.ts';
+import { readAppRelease, type AppCatalogRelease } from './app-release.ts';
 
 export interface DirectoryAppCatalogOptions {
   appsDir?: string;
@@ -29,10 +30,12 @@ export interface DirectoryAppCatalogOptions {
 
 interface AppPackageJson {
   name?: string;
+  displayName?: string;
   version?: string;
   app?: {
     enabled?: boolean;
     appName?: string;
+    displayName?: string;
     backend?: AppBackendKind;
     configVersion?: string;
     isolation?: AppIsolation;
@@ -93,6 +96,50 @@ export class DirectoryAppCatalog {
   ): Promise<AppDefinition[]> {
     const result = await this.syncDiscovered(registry);
     return result.registered;
+  }
+
+  async listReleases(appId?: string): Promise<AppCatalogRelease[]> {
+    if (appId) {
+      return this.listAppReleases(appId);
+    }
+
+    const apps = await readDirectories(this.appsDir);
+    const releases = await Promise.all(
+      apps
+        .filter((entry) => isValidAppSegment(entry.name))
+        .map((entry) => this.listAppReleases(entry.name)),
+    );
+    return releases.flat().sort(compareReleases);
+  }
+
+  async resolveRelease(
+    appId: string,
+    releaseId: string,
+  ): Promise<AppDefinition> {
+    const release = await readAppRelease(this.appsDir, appId, releaseId);
+    const backend =
+      release.manifest.runtime?.backend ??
+      release.manifest.runtime?.isolation ??
+      'in-process';
+    if (backend !== 'in-process') {
+      throw new Error(`Release backend ${backend} is not implemented yet`);
+    }
+
+    const packageJson = await readAppPackage(release.rootDir);
+    const definition = await this.createDefinition({
+      rootDir: release.rootDir,
+      dataDir: path.join(this.appsDir, appId, 'data'),
+      packageJson,
+      appName: appId,
+      release,
+    });
+
+    if (!definition) {
+      throw new Error(
+        `Release ${appId}/${releaseId} does not contain dist/server/embedded.js`,
+      );
+    }
+    return definition;
   }
 
   async syncDiscovered(
@@ -169,10 +216,12 @@ export class DirectoryAppCatalog {
 
   private async createDefinition(options: {
     rootDir: string;
+    dataDir?: string;
     packageJson: AppPackageJson | null;
     appName: string;
+    release?: AppCatalogRelease;
   }): Promise<AppDefinition | null> {
-    const { rootDir, packageJson } = options;
+    const { rootDir, packageJson, release } = options;
     const appName = options.appName;
     const client = await resolveClient(rootDir);
     const server = await resolveServer(rootDir);
@@ -191,36 +240,79 @@ export class DirectoryAppCatalog {
 
     const id = appName;
     const basePath = `/${appName}`;
+    const runtime = release?.manifest.runtime;
     const codeVersion =
-      packageJson?.app?.version ?? packageJson?.version ?? 'local';
+      release?.version ??
+      packageJson?.app?.version ??
+      packageJson?.version ??
+      'local';
+    const backend =
+      runtime?.backend ??
+      packageJson?.app?.backend ??
+      runtime?.isolation ??
+      packageJson?.app?.isolation ??
+      'in-process';
 
     return {
       id,
       appName,
+      displayName: packageJson?.app?.displayName ?? packageJson?.displayName,
       basePath,
       enabled: packageJson?.app?.enabled ?? true,
-      backend:
-        packageJson?.app?.backend ??
-        packageJson?.app?.isolation ??
-        'in-process',
+      backend,
       configVersion: packageJson?.app?.configVersion ?? 'v1',
-      isolation: packageJson?.app?.isolation ?? 'in-process',
-      tier: packageJson?.app?.tier ?? 'warm',
+      isolation: runtime?.isolation ?? backend,
+      tier: runtime?.tier ?? packageJson?.app?.tier ?? 'warm',
       desiredVersion: codeVersion,
       rootDir,
-      dataDir: path.join(rootDir, 'data'),
+      dataDir: options.dataDir ?? path.join(rootDir, 'data'),
       client,
       server,
       code: {
         version: codeVersion,
         rootDir: server.rootDir,
         entrypoint: server.entrypoint,
+        checksum: release?.manifest.artifactSha256,
       },
+      release: release
+        ? {
+            id: release.id,
+            version: release.version,
+            rootDir: server.rootDir,
+            entrypoint: server.entrypoint,
+            releaseDir: release.rootDir,
+            manifestPath: release.manifestPath,
+            checksum: release.manifest.artifactSha256,
+          }
+        : undefined,
       healthPath:
-        server.healthPath ?? packageJson?.app?.healthPath ?? '/healthz',
-      resourcePolicy: packageJson?.app?.resourcePolicy,
+        runtime?.healthPath ??
+        server.healthPath ??
+        packageJson?.app?.healthPath ??
+        '/healthz',
+      resourcePolicy:
+        runtime?.resourcePolicy ?? packageJson?.app?.resourcePolicy,
       config: packageJson?.app?.config,
     };
+  }
+
+  private async listAppReleases(appId: string): Promise<AppCatalogRelease[]> {
+    if (!isValidAppSegment(appId)) {
+      throw new Error(`Invalid app id: ${appId}`);
+    }
+
+    const releasesRoot = path.join(this.appsDir, appId, 'releases');
+    const entries = await readDirectories(releasesRoot);
+    const releases = await Promise.all(
+      entries
+        .filter((entry) => isValidAppSegment(entry.name))
+        .map((entry) =>
+          readAppRelease(this.appsDir, appId, entry.name, {
+            verifyArtifact: false,
+          }),
+        ),
+    );
+    return releases.sort(compareReleases);
   }
 }
 
@@ -397,6 +489,7 @@ function definitionToOptions(
 ): CreateAppDefinitionOptions {
   return {
     appName: definition.appName,
+    displayName: definition.displayName,
     basePath: definition.basePath,
     enabled: definition.enabled,
     configVersion: definition.configVersion,
@@ -432,7 +525,21 @@ function assertInside(rootDir: string, targetPath: string): void {
 }
 
 function isValidAppSegment(segment: string): boolean {
-  return /^[a-zA-Z0-9_-]+$/.test(segment);
+  return (
+    /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(segment) &&
+    segment !== '.' &&
+    segment !== '..'
+  );
+}
+
+function compareReleases(a: AppCatalogRelease, b: AppCatalogRelease): number {
+  const appOrder = a.appId.localeCompare(b.appId);
+  if (appOrder !== 0) {
+    return appOrder;
+  }
+  const aTime = a.createdAt ? Date.parse(a.createdAt) : 0;
+  const bTime = b.createdAt ? Date.parse(b.createdAt) : 0;
+  return bTime - aTime || b.id.localeCompare(a.id);
 }
 
 const importModule: DynamicImport = (specifier) =>

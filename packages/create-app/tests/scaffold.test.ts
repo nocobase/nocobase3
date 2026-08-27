@@ -118,6 +118,8 @@ describe('scaffoldFromTemplate', () => {
     );
 
     expect(manifest.name).toBe('crm');
+    expect(manifest.version).toBe('0.1.0');
+    expect(manifest.private).toBe(true);
     expect(manifest.publishConfig).toBeUndefined();
     expect(manifest.repository).toBeUndefined();
 
@@ -125,8 +127,7 @@ describe('scaffoldFromTemplate', () => {
     expect(manifest.displayName).toBeUndefined();
     expect(manifest.description).toBeUndefined();
 
-    // The version records which template the app came from, so it is kept rather than reset.
-    expect(manifest.version).toBe('0.0.1-beta.2');
+    // Template origin is stored in .nb3/config.json, not overloaded onto the App's own version.
     // Ranges were already resolved when the tarball was packed; rewriting them would undo that.
     expect(manifest.dependencies.knex).toBe('^3.1.0');
   });

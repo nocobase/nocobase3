@@ -1,24 +1,15 @@
 import { Suspense, type PropsWithChildren, type ReactNode } from 'react';
-import {
-  collectAppExtensionContributions,
-  type AppExtension,
-} from '@nocobase/app-portal-sdk/extensions';
+import { collectAppExtensionContributions } from '@nocobase/app-portal-sdk/extensions';
 import {
   buildRouteResources,
   renderAppRoutes,
 } from '@nocobase/app-portal-sdk/routing';
 import { LoadingState } from '@/components/app-shell/loading-state';
 import { appRoutes, registryRoutesEnabled } from '@/routes';
-import { createDevelopmentRoute } from './development';
 import { RouteAccessGuard } from './route-access-guard';
 
-const extensionModules = import.meta.glob<{ default: AppExtension }>(
-  '@/extensions/*/extension.tsx',
-  { eager: true },
-);
-
 const extensionContributions = collectAppExtensionContributions({
-  extensions: Object.values(extensionModules).map((module) => module.default),
+  extensions: [],
   appRoutes,
   registryRoutesEnabled,
 });
@@ -37,9 +28,7 @@ export const configuredRouteElements = renderAppRoutes(
   },
 );
 
-export const extensionStandaloneRouteElements = import.meta.env.DEV
-  ? [createDevelopmentRoute(appExtensions)]
-  : [];
+export const extensionStandaloneRouteElements = [];
 
 export const extensionUserMenuItems = extensionContributions.userMenuItems;
 

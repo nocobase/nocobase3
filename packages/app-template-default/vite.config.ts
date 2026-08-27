@@ -1,12 +1,12 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
 import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
+import { appClientPluginsPlugin } from '@nocobase/app-server-kit/plugins';
 import fs from 'node:fs';
 import path from 'path';
 import { loadEnv } from 'vite';
 
 import { isAgentAnnotationsEnabled } from './scripts/agent-annotations.js';
-import { appClientPluginsPlugin } from './scripts/client-plugins.js';
 
 const portalTemplate = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),

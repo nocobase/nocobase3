@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  createPortalSpaRuntimeGlobals,
   injectSpaRuntimeGlobals,
   registerSpaRoutes,
 } from '../src/spa/index.js';
@@ -19,6 +20,39 @@ afterEach(() => {
 });
 
 describe('SPA runtime globals', () => {
+  it('creates the default Portal browser contract', () => {
+    expect(
+      createPortalSpaRuntimeGlobals({
+        appBasePath: '/main/test///',
+        apiUrl: '/main/test/v2/api',
+      }),
+    ).toEqual({
+      NOCOBASE_PORTAL_BASE: '/main/test/',
+      NOCOBASE_API_URL: '/main/test/v2/api',
+      __nocobase_api_client_storage_prefix__: 'NOCOBASE_',
+      __nocobase_api_client_storage_type__: 'localStorage',
+      __nocobase_api_client_share_token__: false,
+    });
+  });
+
+  it('preserves custom Portal storage settings', () => {
+    expect(
+      createPortalSpaRuntimeGlobals({
+        appBasePath: '',
+        apiUrl: '/v2/api',
+        storagePrefix: ' CRM_ ',
+        storageType: ' sessionStorage ',
+        shareToken: true,
+      }),
+    ).toEqual({
+      NOCOBASE_PORTAL_BASE: '/',
+      NOCOBASE_API_URL: '/v2/api',
+      __nocobase_api_client_storage_prefix__: 'CRM_',
+      __nocobase_api_client_storage_type__: 'sessionStorage',
+      __nocobase_api_client_share_token__: true,
+    });
+  });
+
   it('injects runtime globals before the first module script', () => {
     const html =
       '<main></main><script type="module" src="/assets/index.js"></script>';

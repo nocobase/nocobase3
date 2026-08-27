@@ -3,6 +3,13 @@ export interface AppClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+export interface AppClientServiceRegistry {
+  get<Service>(name: string): Service | undefined;
+  has(name: string): boolean;
+  register<Service>(name: string, service: Service): void;
+  require<Service>(name: string): Service;
+}
+
 export class AppRequestError extends Error {
   constructor(
     message: string,
@@ -16,11 +23,13 @@ export class AppRequestError extends Error {
 
 export interface AppClient {
   request<T = unknown>(path: string, init?: RequestInit): Promise<T>;
+  readonly services: AppClientServiceRegistry;
 }
 
 export function createAppClient(options: AppClientOptions = {}): AppClient {
   const request = options.fetch ?? globalThis.fetch;
   const baseURL = (options.baseURL ?? resolveAppUrl('/api')).replace(/\/$/, '');
+  const services = createAppClientServiceRegistry();
   return {
     async request<T>(path: string, init: RequestInit = {}): Promise<T> {
       const response = await request(`${baseURL}/${path.replace(/^\/+/, '')}`, {
@@ -42,6 +51,41 @@ export function createAppClient(options: AppClientOptions = {}): AppClient {
         );
       }
       return payload as T;
+    },
+    services,
+  };
+}
+
+export function createAppClientServiceRegistry(): AppClientServiceRegistry {
+  const services = new Map<string, unknown>();
+
+  return {
+    get<Service>(name: string): Service | undefined {
+      return services.get(normalizeServiceName(name)) as Service | undefined;
+    },
+    has(name: string): boolean {
+      return services.has(normalizeServiceName(name));
+    },
+    register<Service>(name: string, service: Service): void {
+      const normalizedName = normalizeServiceName(name);
+      if (services.has(normalizedName)) {
+        if (services.get(normalizedName) === service) {
+          return;
+        }
+        throw new Error(
+          `App client service "${normalizedName}" is already registered.`,
+        );
+      }
+      services.set(normalizedName, service);
+    },
+    require<Service>(name: string): Service {
+      const normalizedName = normalizeServiceName(name);
+      if (!services.has(normalizedName)) {
+        throw new Error(
+          `App client service "${normalizedName}" is not registered.`,
+        );
+      }
+      return services.get(normalizedName) as Service;
     },
   };
 }
@@ -85,4 +129,12 @@ function readErrorMessage(payload: unknown): string {
     return String(payload.message);
   }
   return 'NocoBase request failed.';
+}
+
+function normalizeServiceName(name: string): string {
+  const normalized = name.trim();
+  if (!normalized) {
+    throw new Error('An app client service must define a non-empty name.');
+  }
+  return normalized;
 }

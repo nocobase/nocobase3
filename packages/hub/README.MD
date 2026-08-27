@@ -13,8 +13,14 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-The development entry starts at `http://127.0.0.1:13000/hub/` by default.
+The development entry starts at `http://127.0.0.1:13001/hub/` by default, so
+it can run beside a NocoBase V2 development environment on port `13000`.
 Vite runs behind the Hub server at `http://127.0.0.1:5173`.
+
+Hub is also the browser gateway for managed Apps. For example, CRM is opened at
+`http://127.0.0.1:13001/crm/`; Hub forwards that path to the internal App Host.
+Hub and App Host stay independently deployable, while users see one origin and
+never need the App Host port.
 
 ## Configuration
 
@@ -23,23 +29,111 @@ The minimum local configuration is:
 ```env
 APP_NAME=hub
 APP_BASE_PATH=/hub
-NOCOBASE_API_URL=/v2/api
-NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api
+APP_SERVER_PORT=13001
+# AUTH_SECRET=<required in production>
+# HUB_ADMIN_EMAILS=admin@example.com
 ```
 
 - `APP_NAME` is the runtime app name. Hub uses `hub`.
 - `APP_BASE_PATH` is the public mount path for the app server. Hub uses `/hub`.
-- `NOCOBASE_API_URL` is the browser-facing NocoBase REST API root. The app server
-  uses `/v2/api` by default and proxies that path.
-- `NOCOBASE_API_PROXY_TARGET` is the upstream NocoBase REST API root and must
-  include `/api`. This value is read by the app server and is not exposed through
-  Vite.
-- `NOCOBASE_API_TOKEN` can provide a temporary development token. Never commit
-  real tokens.
+- Hub owns its V3 authentication tables, sessions and SQLite database. The first
+  registered user is the bootstrap administrator unless `HUB_ADMIN_EMAILS` is
+  configured.
+- `AUTH_SECRET` is required in production. Development uses an explicit local-only
+  fallback so a fresh checkout can start without a V2 service.
+- `NOCOBASE_AUTH_URL` is also required in production and must point to the public
+  Hub auth endpoint, for example `https://hub.example.com/hub/api/auth`.
+- `NOCOBASE_API_PROXY_TARGET` is optional and only enables explicit V2 compatibility
+  routes under `/v2/api`; V3 login and settings do not use it.
 
-The Portal uses the same authentication storage convention as NocoBase. If the
-server customizes it, keep `API_CLIENT_STORAGE_PREFIX`,
-`API_CLIENT_STORAGE_TYPE`, and `API_CLIENT_SHARE_TOKEN` aligned with the server.
+## Deployment and runtime control plane
+
+Hub's App pages manage build-artifact deployment and App lifecycle operations.
+Application source stays in the user's Git repository; Hub never stores or
+synchronizes it. App Host validates immutable artifacts, runs readiness checks,
+activates the selected artifact, and executes start, stop, and restart.
+
+In the default local topology, Hub starts `@nocobase/app-host` as a child
+process through `AppHostSupervisor`. Both processes use the same `APP_DIST_DIR`,
+which is the hand-off directory for already built App releases. Set
+`APP_HOST_URL` to use an independently deployed App Host instead; this is the
+cluster topology described in `docs/app-platform-architecture.md`, and Hub will
+not start or stop that external process.
+
+`nb3 app deploy` uploads an immutable release archive to Hub. Hub authenticates
+the deployment credential and streams the archive to App Host, which validates
+its identity, paths, size limits, and SHA-256 checksum before atomically
+installing it. No App pre-registration is required: after the first artifact is
+installed successfully, Hub adds the App to its inventory automatically. P0
+then deploys the validated artifact and records the result.
+The existing approval workflow is optional and can be enabled with:
+
+```env
+HUB_RELEASE_APPROVAL_REQUIRED=true
+```
+
+Version promotion, rollback, environment variables, and secrets are later
+governance layers and are not promoted in the default P0 navigation. The
+existing rollback endpoint is disabled unless
+`HUB_RELEASE_ROLLBACK_ENABLED=true` is configured explicitly.
+
+Apply the committed audit collection contract to the selected environment. For
+the local demo, run this command twice; both passes resolve the same collection
+and field keys:
+
+```bash
+nb api data-modeling collections apply \
+  --body-file ./nocobase/release-management/collection.json \
+  --env local \
+  --json-output
+```
+
+Configure these values at runtime. Local development may read `.env.local`;
+production should inject secrets through the process environment or a secret
+manager. The build allowlist deliberately excludes the two tokens below, so
+they are never copied into `dist/.env`:
+
+```env
+APP_HOST_URL=http://127.0.0.1:13200
+APP_HOST_GATEWAY_URL=http://127.0.0.1:13200
+APP_HOST_CONTROL_TOKEN=<same-token-as-app-host>
+HUB_DEPLOY_TOKEN=<dedicated-cli-deployment-token>
+HUB_RELEASE_AUDIT_COLLECTION=hubReleaseDeployments
+HUB_RELEASE_AUDIT_ROLE=r_hub_release_auditor
+HUB_RELEASE_AUDIT_TOKEN=<dedicated-api-key>
+HUB_RELEASE_MANAGER_ROLES=root,admin
+```
+
+Keep `HUB_DEPLOY_TOKEN` separate from `APP_HOST_CONTROL_TOKEN`. The former is
+provided to the CLI through `NOCOBASE_HUB_TOKEN`; the latter is an internal
+Hub-to-App-Host credential and must never be sent to an App developer.
+
+```bash
+export NOCOBASE_HUB_TOKEN=YOUR_HUB_DEPLOY_TOKEN
+nb3 app deploy --hub http://127.0.0.1:13001/hub
+```
+
+`APP_HOST_URL` selects an external App Host for cluster mode. The older
+`APP_HOST_CONTROL_URL` variable remains a compatibility alias for that target.
+When neither is set, Hub starts a local child App Host and uses
+`APP_HOST_PORT` (default `13010`).
+`APP_HOST_GATEWAY_URL` is the internal runtime target and defaults to the same
+address. Hub validates the App path and only proxies `/<app>/*`; App Host control
+routes such as `/__apps` are never exposed by the browser gateway. The Hub UI
+uses the same-origin App path returned by its own API instead of exposing the
+internal App Host address.
+
+The API key role should have only `list`, `create`, and `update` access to
+`hubReleaseDeployments`, with all fields explicitly bound. It does not need
+delete, schema configuration, Portal access, or permissions on CRM business
+collections. Missing credentials, an unavailable NocoBase API, invalid audit
+data, or a failed legacy import returns 503/502 before Hub asks App Host to
+switch a release.
+
+`HUB_RELEASE_STORE_PATH` is migration input only. If a legacy JSON file exists,
+Hub upserts it into NocoBase by deployment ID on startup/first access. Repeated
+imports converge without duplicate audit rows, and the original JSON file is
+retained for recovery.
 
 ## Development
 

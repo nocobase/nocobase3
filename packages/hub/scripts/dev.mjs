@@ -193,12 +193,13 @@ const env = loadEnv();
 const vitePort = await findAvailablePort(viteDevHost, viteDevPreferredPort);
 const nextEnv = {
   ...env,
+  APP_HOST_DRIVER: env.APP_HOST_DRIVER || 'tsx',
   APP_VITE_DEV_HOST: viteDevHost,
   APP_VITE_DEV_PORT: String(vitePort),
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
 };
 const appServerHost = nextEnv.APP_SERVER_HOST || '127.0.0.1';
-const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13000);
+const appServerPort = numberFromEnv(nextEnv.APP_SERVER_PORT, 13001);
 const appServerUrl = `http://${toUrlHost(appServerHost)}:${appServerPort}`;
 const appBasePath = String(
   nextEnv.APP_BASE_PATH || `/${nextEnv.APP_NAME || 'app'}`,
@@ -210,7 +211,7 @@ const appUrl = appBasePath
   : `${appServerUrl}/`;
 const proxyApiPath =
   nextEnv.NOCOBASE_API_URL ||
-  `/${[appBasePath, 'v2/api'].filter(Boolean).join('/')}`;
+  `/${[appBasePath, 'api'].filter(Boolean).join('/')}`;
 
 console.log(`\n  App dev server ready`);
 console.log(`  Local:     ${appUrl}`);

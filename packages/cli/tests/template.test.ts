@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_HUB_TEMPLATE,
   DEFAULT_REGISTRY,
-  DEFAULT_TEMPLATE,
   downloadTemplate,
   isLocalTemplateSource,
 } from '../src/lib/template.ts';
@@ -43,13 +42,12 @@ describe('isLocalTemplateSource', () => {
   });
 });
 
-describe('DEFAULT_TEMPLATE', () => {
+describe('DEFAULT_HUB_TEMPLATE', () => {
   // Pinning an exact version would make `create` reproducible, but there is no stable v3 release to pin to yet. Until
   // one ships the defaults track the `beta` dist-tag, which means two runs a week apart can scaffold different code.
   // The assertion below only guarantees the specifier carries an explicit channel or version — never a bare name that
   // would silently resolve to `latest`.
   it('carries an explicit channel so create never falls back to latest', () => {
-    expect(DEFAULT_TEMPLATE).toMatch(/@(?:\d+\.\d+\.\d+|beta|alpha|next)$/);
     expect(DEFAULT_HUB_TEMPLATE).toMatch(/@(?:\d+\.\d+\.\d+|beta|alpha|next)$/);
   });
 });

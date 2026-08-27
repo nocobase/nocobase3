@@ -92,9 +92,21 @@ describe('command tree', () => {
 
 describe('documented argument contract', () => {
   it.each([
-    ['app:create', ['name'], ['dir', 'template', 'registry']],
+    [
+      'app:create',
+      ['directory'],
+      [
+        'db-dialect',
+        'install',
+        'template',
+        'template-tag',
+        'registry',
+        'help',
+        'version',
+      ],
+    ],
     ['app:pull', ['name', 'dir'], ['hub']],
-    ['app:deploy', [], ['dir', 'hub']],
+    ['app:deploy', [], ['dir', 'hub', 'token', 'release-id', 'build', 'json']],
     ['app:config', ['key', 'value'], ['dir', 'json']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
@@ -116,12 +128,8 @@ describe('documented argument contract', () => {
   });
 
   it('requires a name for the commands that create something', () => {
-    for (const id of ['app:create', 'hub:create']) {
-      const command = config.findCommand(id, { must: true });
-      expect(command.args?.name?.required, `${id} should require name`).toBe(
-        true,
-      );
-    }
+    const command = config.findCommand('hub:create', { must: true });
+    expect(command.args?.name?.required).toBe(true);
   });
 
   it('leaves the app name optional where it defaults to the current directory', () => {
@@ -136,7 +144,6 @@ describe('documented argument contract', () => {
  * so it can be told apart from a runtime error (1) or a bad argument (2).
  */
 describe('unimplemented commands', () => {
-  // `app deploy` and `hub start` resolve their project before reporting, so they need one to reach that point.
   let workspace: string;
 
   beforeAll(async () => {
@@ -165,7 +172,6 @@ describe('unimplemented commands', () => {
   });
 
   it.each([
-    ['app:deploy', ['--dir']],
     ['app:list', []],
     ['app:pull', ['crm']],
   ])('%s fails with exit 3', async (id, argv) => {
@@ -179,7 +185,7 @@ describe('unimplemented commands', () => {
 
 describe('argument errors', () => {
   it('rejects a missing required argument', async () => {
-    await expect(runCommand(config, 'app:create', [])).rejects.toMatchObject({
+    await expect(runCommand(config, 'hub:create', [])).rejects.toMatchObject({
       oclif: { exit: 2 },
     });
   });

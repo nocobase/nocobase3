@@ -100,11 +100,10 @@ export interface ScaffoldOptions {
 /**
  * Copies an extracted template into its final location and rewrites its manifest.
  *
- * Only what identifies the template is touched: the name becomes the app's, and the display name, description, and
- * publish metadata are dropped so a generated app is not labelled "Default Template" or pointed at the template's own
- * release. Everything else is kept as packed, including the version, which leaves a record of the template version the
- * app came from, and the dependency ranges pnpm already resolved from `workspace:` and `catalog:` when it built the
- * tarball.
+ * The generated App receives its own package identity and is made private. Template origin is recorded separately in
+ * `.nb3/config.json`, so retaining the template's version in the App manifest would incorrectly version every new App
+ * as the template release. Dependency ranges stay exactly as packed because pnpm already resolved `workspace:` and
+ * `catalog:` when it built the tarball.
  */
 export async function scaffoldFromTemplate(
   options: ScaffoldOptions,
@@ -122,6 +121,8 @@ export async function scaffoldFromTemplate(
   >;
 
   manifest.name = name;
+  manifest.version = '0.1.0';
+  manifest.private = true;
 
   // Identity and publish metadata describe the template, not what is built from it. Leaving `displayName` behind would
   // label a new app "Default Template", and leaving the publish fields would point it at the template's own release.

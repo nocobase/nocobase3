@@ -22,6 +22,7 @@ export interface AppScope {
   readonly id: string;
   readonly appName?: string;
   readonly version?: number;
+  readonly releaseId?: string | null;
   readonly basePath: string;
   readonly assetsBasePath?: string;
   readonly clientDir?: string;

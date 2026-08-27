@@ -1,28 +1,21 @@
-import { Refine, type ResourceProps } from '@refinedev/core';
-import { BrowserRouter } from 'react-router';
-import routerProvider, {
-  UnsavedChangesNotifier,
-} from '@refinedev/react-router';
+import { AppClientRoot, type AppClientProvider } from '@nocobase/app-client';
 import {
-  accessControlProvider,
-  AclStoreProvider,
-  aclStore,
-} from '@nocobase/app-portal-sdk/acl';
-import { authProvider } from '@nocobase/app-portal-sdk/auth';
-import { dataProvider } from '@nocobase/app-portal-sdk/data';
+  createNotificationProvider,
+  providers as notificationProviders,
+} from '@nocobase/app-plugin-notification-provider/client';
 import { i18nProvider } from '@nocobase/app-portal-sdk/i18n';
 import { getPortalBase } from '@nocobase/app-portal-sdk/runtime';
+import { type ResourceProps } from '@refinedev/core';
+import { UnsavedChangesNotifier } from '@refinedev/react-router';
+
 import { DocumentTitleHandler } from './components/app-shell/document-title-handler';
-import { useNotificationProvider } from './components/notifications/use-notification-provider';
-import { Toaster } from './components/notifications/toaster';
 import { ThemeProvider } from './components/theme/theme-provider';
 import { TooltipProvider } from './components/ui/tooltip';
 import { BrandLogo } from './components/app-shell/brand';
-import { AppAuthRuntimeProviders, configuredResources } from './app/extensions';
+import { configuredResources } from './app/extensions';
 import './App.css';
-import { SystemSettingsProvider } from './providers/system-settings/provider';
 import { AppRoutes } from './app/routes';
-import { PortalRuntimeGate } from './components/app-shell/portal-runtime-gate';
+import { authProvider } from './auth';
 
 const getResourcePriority = (resource: ResourceProps) =>
   typeof resource.meta?.priority === 'number' ? resource.meta.priority : 100;
@@ -32,47 +25,44 @@ const appResources = [...configuredResources].sort(
 );
 
 const basename = getPortalBase().replace(/\/+$/, '');
+const notificationProvider = createNotificationProvider({ undoLabel: '撤销' });
+
+const providers: readonly AppClientProvider[] = [
+  ThemeProvider,
+  TooltipProvider,
+  ...notificationProviders.map((provider) => provider.component),
+];
 
 function App() {
   return (
-    <BrowserRouter basename={basename || undefined}>
-      <ThemeProvider>
-        <TooltipProvider>
-          <PortalRuntimeGate>
-            <AppAuthRuntimeProviders>
-              <SystemSettingsProvider>
-                <AclStoreProvider store={aclStore}>
-                  <Refine
-                    dataProvider={dataProvider}
-                    notificationProvider={useNotificationProvider()}
-                    routerProvider={routerProvider}
-                    authProvider={authProvider}
-                    accessControlProvider={accessControlProvider}
-                    i18nProvider={i18nProvider}
-                    resources={appResources}
-                    options={{
-                      syncWithLocation: true,
-                      warnWhenUnsavedChanges: true,
-                      disableTelemetry: true,
-                      title: {
-                        text: 'NocoBase',
-                        icon: <BrandLogo className='size-14 rounded-2xl' />,
-                      },
-                    }}
-                  >
-                    <AppRoutes />
-
-                    <Toaster />
-                    <UnsavedChangesNotifier />
-                    <DocumentTitleHandler appName='NocoBase' />
-                  </Refine>
-                </AclStoreProvider>
-              </SystemSettingsProvider>
-            </AppAuthRuntimeProviders>
-          </PortalRuntimeGate>
-        </TooltipProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+    <AppClientRoot
+      config={{
+        basename,
+        providers,
+        refine: {
+          notificationProvider,
+          authProvider,
+          i18nProvider,
+          resources: appResources,
+          options: {
+            syncWithLocation: true,
+            warnWhenUnsavedChanges: true,
+            disableTelemetry: true,
+            title: {
+              text: 'NocoBase',
+              icon: <BrandLogo className='size-14 rounded-2xl' />,
+            },
+          },
+        },
+        routes: (
+          <>
+            <AppRoutes />
+            <UnsavedChangesNotifier />
+            <DocumentTitleHandler appName='NocoBase' />
+          </>
+        ),
+      }}
+    />
   );
 }
 

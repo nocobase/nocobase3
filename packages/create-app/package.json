@@ -10,6 +10,16 @@
   "bin": {
     "create-app": "./bin/run.js"
   },
+  "exports": {
+    ".": {
+      "types": "./src/create.ts",
+      "import": "./src/create.ts"
+    },
+    "./flags": {
+      "types": "./src/lib/flags.ts",
+      "import": "./src/lib/flags.ts"
+    }
+  },
   "files": [
     "bin",
     "dist",
@@ -42,7 +52,17 @@
     "vitest": "catalog:"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/create.d.ts",
+        "import": "./dist/create.js"
+      },
+      "./flags": {
+        "types": "./dist/lib/flags.d.ts",
+        "import": "./dist/lib/flags.js"
+      }
+    }
   },
   "repository": {
     "type": "git",

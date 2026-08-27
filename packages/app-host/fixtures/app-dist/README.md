@@ -26,6 +26,38 @@ ws-demo/
   dist/client/index.html
   dist/client/assets/...
   dist/server/embedded.js
+
+orders/
+  releases/
+    release-v1/
+      app-release.json
+      package.json
+      dist/server/embedded.js
+    release-v2/
+      ...
+    release-broken/
+      ...
+
+crm/
+  releases/
+    release-v1/
+      ...
+    release-v2/
+      ...
+    release-v3/
+      ...
+
+service-desk/
+  releases/
+    release-service-desk-native-v1/
+      app-release.json
+      package.json
+      dist/client/...
+      dist/server/...
+    release-v1/
+      ...
+    release-v2/
+      ...
 ```
 
 `dist/server/embedded.js` is required. `dist/client/assets/**` is optional and
@@ -87,3 +119,18 @@ one place.
 `ws-demo/dist/server/embedded.js` exposes `/ws` as the app-local WebSocket
 route. The fixture page derives `ws://<host>/ws-demo/ws` from the current page
 origin and displays the current server time from that socket.
+
+The `orders`, `crm`, and `service-desk` apps form the governed release demo:
+
+- `orders` demonstrates a health-gate rejection and rollback. Deploy V1,
+  promote V2, prove that the unhealthy candidate is blocked while V2 stays
+  online, then roll back to V1.
+- `crm` provides three visually distinct healthy releases so V2 can stay
+  online with V1 as a rollback point and V3 as a promotion candidate.
+- `service-desk` includes a native business release with persistent tickets,
+  customers, SLA management, assignment, replies, and controlled status
+  transitions. Its earlier V1/V2 releases remain as lightweight rollback
+  fixtures.
+
+Use the matching `__apps/<app>` management endpoints or NocoBase Hub to deploy,
+promote, and roll back these releases.

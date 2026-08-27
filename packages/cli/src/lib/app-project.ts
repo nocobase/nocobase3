@@ -1,6 +1,14 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { APP_STATE_DIR, type AppConfig } from './scaffold.ts';
+
+export const APP_STATE_DIR = '.nb3';
+
+export interface AppConfig {
+  name: string;
+  template: string;
+  templateVersion: string;
+  hub?: string;
+}
 
 export interface AppProject {
   /** Root of the app, i.e. the directory holding `.nb3/`. */
@@ -52,7 +60,7 @@ export function formatMissingAppMessage(startDirectory: string): string {
   return [
     `No app found in "${startDirectory}" or any directory above it.`,
     `An app directory contains a ${APP_STATE_DIR}/config.json file.`,
-    'Run this from inside an app, pass --dir, or create one with `nb3 app create <name>`.',
+    'Run this from inside an App, pass --dir, or create one with `pnpm create @nocobase/app@latest <name>`.',
   ].join('\n');
 }
 

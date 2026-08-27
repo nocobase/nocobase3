@@ -56,6 +56,10 @@
     "./restriction-rules/migrations/*": {
       "types": "./src/plugins/restriction-rules/migrations/*.ts",
       "import": "./src/plugins/restriction-rules/migrations/*.ts"
+    },
+    "./storage/collections/*": {
+      "types": "./src/storage/collections/*.ts",
+      "import": "./src/storage/collections/*.ts"
     }
   },
   "publishConfig": {
@@ -107,6 +111,10 @@
       "./restriction-rules/migrations/*": {
         "types": "./dist/plugins/restriction-rules/migrations/*.d.ts",
         "import": "./dist/plugins/restriction-rules/migrations/*.js"
+      },
+      "./storage/collections/*": {
+        "types": "./dist/storage/collections/*.d.ts",
+        "import": "./dist/storage/collections/*.js"
       }
     },
     "access": "public"

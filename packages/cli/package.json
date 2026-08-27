@@ -53,7 +53,9 @@
     "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-nb3-cli.tgz\" && pnpm exec publint ."
   },
   "dependencies": {
-    "@oclif/core": "catalog:"
+    "@nocobase/create-app": "workspace:^",
+    "@oclif/core": "catalog:",
+    "tar": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

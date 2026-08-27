@@ -226,6 +226,34 @@ describe('origin proxy', () => {
       'origin:GET:/main/test/settings?tab=apps',
     );
   });
+
+  it('aligns same-site browser origin headers with the target origin', async () => {
+    const upstreamUrl = await startHttpStub((request, response) => {
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({
+          origin: request.headers.origin,
+          referer: request.headers.referer,
+        }),
+      );
+    });
+    const proxy = createOriginProxyHandler(new URL(upstreamUrl));
+
+    const response = await proxy(
+      new Request('http://localhost/main/test/settings', {
+        headers: {
+          origin: 'http://localhost',
+          referer: 'http://localhost/main/test/',
+        },
+      }),
+    );
+
+    const upstreamOrigin = new URL(upstreamUrl).origin;
+    await expect(response.json()).resolves.toEqual({
+      origin: upstreamOrigin,
+      referer: `${upstreamOrigin}/main/test/`,
+    });
+  });
 });
 
 function startHttpStub(

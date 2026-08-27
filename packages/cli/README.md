@@ -10,11 +10,12 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 
 | 命令              | 说明                                                   |
 | ----------------- | ------------------------------------------------------ |
-| `nb3 app create`  | 从 npm 下载模板包并生成本地 App 项目                   |
+| `nb3 app create`  | 复用 `@nocobase/create-app` 官方脚手架生成本地 App     |
 | `nb3 app dev`     | 用项目自身的包管理器运行其 `dev` 脚本                  |
 | `nb3 app info`    | 显示 App 名称、目录、模板来源、依赖是否已安装          |
 | `nb3 app config`  | 读写 `.nb3/config.json`                                |
 | `nb3 app destroy` | 删除本地 App 目录，带确认和路径防护                    |
+| `nb3 app deploy`  | 构建不可变 Release，仅上传产物并请求 Hub 部署          |
 | `nb3 hub create`  | 下载模板包并生成 Hub 项目                              |
 | `nb3 hub start`   | 后台启动 Hub 并记录进程，`--foreground` 可留在当前终端 |
 | `nb3 hub dev`     | 开发模式启动，停留在当前终端                           |
@@ -24,7 +25,12 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 | `nb3 hub logs`    | 查看日志，支持 `--tail` 和 `--follow`                  |
 | `nb3 hub open`    | 打开 App Console                                       |
 
-`nb3 app deploy`、`nb3 app pull`、`nb3 app list` 需要 Hub 提供 App 管理 API，而 v3 的 Hub 目前只有健康检查和一个 API 代理，因此这三条命令以退出码 3 明确报错，不打印占位输出——脚本里 deploy 返回成功却什么都没做，比直接失败危险得多。
+`nb3 app pull` 和 `nb3 app list` 尚未实现，以退出码 3 明确报错。
+
+`nb3 app deploy` 默认运行构建，优先复用 App 自己的 `release:pack`，否则只将
+`dist`、`app-release.json` 和发布用 `package.json` 打包上传。Hub 地址可以
+记录在 `.nb3/config.json`，部署令牌只从 `NOCOBASE_HUB_TOKEN` 或 `--token`
+读取且不会持久化。
 
 `nb3 hub` 的 8 条命令全部可用。
 
@@ -32,17 +38,15 @@ NocoBase 3 命令行工具，命令名为 `nb3`。
 
 `nb3 hub create` 的默认模板源是 `@nocobase/hub@beta`。
 
-退出码约定：`0` 成功或 stub，`1` 运行错误，`2` 参数错误，`3` 尚未实现。
+退出码约定：`0` 成功，`1` 运行错误，`2` 参数错误，`3` 尚未实现。
 
-默认模板源是 `@nocobase/app-template-default@beta`，从自建 registry `https://npm.nocobase.ai` 下载。
-
-`@beta` 是因为目前只有预览版发布到了这条渠道；第一个稳定版发出后，把 `src/lib/template.ts` 里的 `DEFAULT_TEMPLATE` 和 `DEFAULT_HUB_TEMPLATE` 改成稳定范围即可。
-
-两个默认值都能覆盖：
+`nb3 app create` 和 `pnpm create @nocobase/app@latest` 使用同一份
+`@nocobase/create-app` 实现，不再维护第二套 App 模板下载、数据库配置和依赖安装逻辑。
+例如：
 
 ```bash
-nb3 app create crm --template @nocobase/app-template-default@0.0.1
-nb3 app create crm --registry https://registry.npmjs.org
+nb3 app create crm --db-dialect=sqlite
+nb3 app create crm --db-dialect=postgres
 ```
 
 开发模板本身时直接指向本地目录：

@@ -132,9 +132,9 @@ nb3 hub restart
 本地开发 App 不一定需要 Hub：
 
 ```bash
-nb3 app create crm
+nb3 app create crm --db-dialect=sqlite
 cd crm
-nb3 app dev
+pnpm dev
 ```
 
 需要部署时，再指定目标 Hub：

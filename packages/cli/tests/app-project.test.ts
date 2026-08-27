@@ -7,7 +7,7 @@ import {
   requireAppProject,
   writeAppConfig,
 } from '../src/lib/app-project.ts';
-import { APP_STATE_DIR } from '../src/lib/scaffold.ts';
+import { APP_STATE_DIR } from '../src/lib/app-project.ts';
 
 const created: string[] = [];
 

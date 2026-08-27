@@ -8,12 +8,16 @@
  */
 
 import {
+  AppRegistryError,
   InvalidAppIdError,
   AppCapacityExceededError,
   AppAlreadyExistsError,
   AppCreateFailedError,
   AppNotFoundError,
   AppReloadFailedError,
+  AppReadinessFailedError,
+  AppReleaseConflictError,
+  AppStoppedError,
 } from './errors.ts';
 import { AppEventBus } from './events.ts';
 import { InProcessAppBackend } from './in-process-backend.ts';
@@ -89,6 +93,7 @@ export class AppRuntimeRegistry {
 
   private readonly definitions = new Map<string, AppDefinition>();
   private readonly runtimes = new Map<string, ActiveAppHandle>();
+  private readonly activationBlocked = new Set<string>();
   private readonly operations = new Map<string, Promise<unknown>>();
   private readonly backend: AppActivationBackend;
   private readonly resolveFactory: (
@@ -171,6 +176,14 @@ export class AppRuntimeRegistry {
     });
   }
 
+  async setDefinition(definition: AppDefinition): Promise<AppDefinition> {
+    this.assertAppId(definition.id);
+    return this.withAppLock(definition.id, async () => {
+      this.definitions.set(definition.id, definition);
+      return definition;
+    });
+  }
+
   async unregister(
     id: string,
     options: DestroyAppOptions = {},
@@ -180,6 +193,80 @@ export class AppRuntimeRegistry {
 
   async ensureActive(id: string): Promise<AppSnapshot> {
     return this.withAppLock(id, () => this.ensureActiveUnlocked(id));
+  }
+
+  async start(id: string): Promise<AppSnapshot> {
+    return this.withAppLock(id, async () => {
+      const existing = this.runtimes.get(id);
+      this.activationBlocked.delete(id);
+      if (existing) {
+        return existing.snapshot();
+      }
+      try {
+        const definition = this.requireDefinition(id);
+        await this.evictForCapacity();
+        const runtime = await this.activateReadyDefinition(definition);
+        this.metrics.coldActivations += 1;
+        this.runtimes.set(id, runtime);
+        return runtime.snapshot();
+      } catch (error) {
+        this.activationBlocked.add(id);
+        throw error;
+      }
+    });
+  }
+
+  async stop(
+    id: string,
+    options: string | AppDestroyOptions = {},
+  ): Promise<boolean> {
+    return this.withAppLock(id, async () => {
+      this.requireDefinition(id);
+      this.activationBlocked.add(id);
+      try {
+        return await this.evictUnlocked(id, options, 'manual');
+      } catch (error) {
+        this.activationBlocked.add(id);
+        throw error;
+      }
+    });
+  }
+
+  async restart(
+    id: string,
+    options: ReloadAppOptions = {},
+  ): Promise<AppSnapshot> {
+    return this.withAppLock(id, async () => {
+      const definition = this.requireDefinition(id);
+      this.activationBlocked.add(id);
+      try {
+        await this.evictUnlocked(id, {
+          reason: options.reason ?? 'app restarted',
+          timeoutMs: options.destroyTimeoutMs,
+        });
+        this.activationBlocked.delete(id);
+        await this.evictForCapacity();
+        const runtime = await this.activateReadyDefinition(definition);
+        this.metrics.coldActivations += 1;
+        this.runtimes.set(id, runtime);
+        return runtime.snapshot();
+      } catch (error) {
+        this.activationBlocked.add(id);
+        throw new AppReloadFailedError(definition.id, error);
+      }
+    });
+  }
+
+  blockActivation(id: string): void {
+    this.activationBlocked.add(id);
+  }
+
+  unblockActivation(id: string): void {
+    this.activationBlocked.delete(id);
+  }
+
+  isActivationBlocked(id: string): boolean {
+    return this.activationBlocked.has(id);
   }
 
   async evict(
@@ -217,6 +304,9 @@ export class AppRuntimeRegistry {
     options: ReloadAppOptions = {},
   ): Promise<AppSnapshot> {
     return this.withAppLock(id, async () => {
+      if (this.activationBlocked.has(id)) {
+        throw new AppStoppedError(id);
+      }
       const definition = this.requireDefinition(id);
       const oldRuntime = this.runtimes.get(id);
 
@@ -246,8 +336,6 @@ export class AppRuntimeRegistry {
   ): Promise<AppDeploymentResult> {
     return this.withAppLock(id, async () => {
       const currentDefinition = this.requireDefinition(id);
-      const oldRuntime = this.runtimes.get(id);
-      const oldSnapshot = oldRuntime?.snapshot() ?? null;
       const desiredVersion =
         options.version ?? currentDefinition.desiredVersion;
       let definition = currentDefinition;
@@ -263,43 +351,20 @@ export class AppRuntimeRegistry {
             ? { ...currentDefinition.release, version: desiredVersion }
             : undefined,
         });
-        this.definitions.set(id, definition);
       }
 
-      try {
-        if (!oldRuntime) {
-          await this.evictForCapacity();
-        }
-
-        const newRuntime = await this.activateDefinition(definition);
-        this.runtimes.set(id, newRuntime);
-
-        if (oldRuntime) {
-          await oldRuntime.destroy({
-            reason: options.reason ?? `deployed version ${desiredVersion}`,
-            timeoutMs: options.destroyTimeoutMs,
-          });
-        }
-
-        const app = newRuntime.snapshot();
-        this.metrics.deployments += 1;
-        return {
-          id,
-          strategy: options.strategy ?? 'blue-green',
-          previousVersion: oldSnapshot?.codeVersion ?? null,
-          desiredVersion,
-          activeVersion: app.codeVersion,
-          changed: oldSnapshot?.codeVersion !== app.codeVersion,
-          app,
-        };
-      } catch (error) {
-        if (desiredVersion !== currentDefinition.desiredVersion) {
-          this.definitions.set(id, currentDefinition);
-        }
-
-        throw new AppReloadFailedError(id, error);
-      }
+      return this.deployDefinitionUnlocked(definition, options);
     });
+  }
+
+  async deployDefinition(
+    definition: AppDefinition,
+    options: DeployAppOptions = {},
+  ): Promise<AppDeploymentResult> {
+    this.assertAppId(definition.id);
+    return this.withAppLock(definition.id, () =>
+      this.deployDefinitionUnlocked(definition, options),
+    );
   }
 
   async destroy(
@@ -320,6 +385,7 @@ export class AppRuntimeRegistry {
 
       if (destroyOptions.removeDefinition !== false) {
         this.definitions.delete(id);
+        this.activationBlocked.delete(id);
       }
 
       return Boolean(runtime || hadDefinition);
@@ -334,15 +400,16 @@ export class AppRuntimeRegistry {
     const results = await Promise.allSettled(
       ids.map((id) => this.destroy(id, options)),
     );
-    const failures = results.filter((result) => result.status === 'rejected');
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
 
     if (failures.length > 0) {
-      const failureReasons: unknown[] = [];
-      for (const failure of failures) {
-        failureReasons.push(failure.reason);
-      }
+      const reasons: unknown[] = failures.map(
+        (failure): unknown => failure.reason as unknown,
+      );
       throw new AggregateError(
-        failureReasons,
+        reasons,
         `Failed to destroy ${failures.length} app(s)`,
       );
     }
@@ -453,6 +520,9 @@ export class AppRuntimeRegistry {
 
   async ensureActiveHandle(id: string): Promise<ActiveAppHandle> {
     return this.withAppLock(id, async () => {
+      if (this.activationBlocked.has(id)) {
+        throw new AppStoppedError(id);
+      }
       const existing = this.runtimes.get(id);
       if (existing) {
         return existing;
@@ -468,6 +538,10 @@ export class AppRuntimeRegistry {
   }
 
   private async ensureActiveUnlocked(id: string): Promise<AppSnapshot> {
+    if (this.activationBlocked.has(id)) {
+      throw new AppStoppedError(id);
+    }
+
     const existing = this.runtimes.get(id);
     if (existing) {
       return existing.snapshot();
@@ -532,6 +606,180 @@ export class AppRuntimeRegistry {
         error,
       });
       throw new AppCreateFailedError(definition.id, error);
+    }
+  }
+
+  private async deployDefinitionUnlocked(
+    definition: AppDefinition,
+    options: DeployAppOptions,
+  ): Promise<AppDeploymentResult> {
+    const id = definition.id;
+    if (this.activationBlocked.has(id)) {
+      throw new AppStoppedError(id);
+    }
+    const oldRuntime = this.runtimes.get(id);
+    const oldSnapshot = oldRuntime?.snapshot() ?? null;
+    const requestedReleaseId = definition.release?.id ?? null;
+
+    if (
+      oldRuntime &&
+      requestedReleaseId &&
+      oldSnapshot?.releaseId === requestedReleaseId
+    ) {
+      const currentDefinition = this.definitions.get(id);
+      if (
+        !currentDefinition ||
+        releaseFingerprint(currentDefinition) !== releaseFingerprint(definition)
+      ) {
+        throw new AppReleaseConflictError(id, requestedReleaseId);
+      }
+      await options.onBeforePromote?.();
+      this.definitions.set(id, definition);
+      return {
+        id,
+        strategy: options.strategy ?? 'blue-green',
+        previousVersion: oldSnapshot.codeVersion,
+        previousReleaseId: oldSnapshot.releaseId,
+        desiredVersion: definition.desiredVersion,
+        activeVersion: oldSnapshot.codeVersion,
+        activeReleaseId: oldSnapshot.releaseId,
+        changed: false,
+        app: oldSnapshot,
+      };
+    }
+
+    let candidate: ActiveAppHandle | null = null;
+    let promoted = false;
+    try {
+      if (!oldRuntime) {
+        await this.evictForCapacity();
+      }
+
+      candidate = await this.activateDefinition(definition);
+      if (options.waitForReady !== false) {
+        await this.checkRuntimeReady(candidate, definition);
+      }
+
+      await options.onBeforePromote?.();
+
+      this.definitions.set(id, definition);
+      this.runtimes.set(id, candidate);
+      promoted = true;
+
+      if (oldRuntime) {
+        await oldRuntime
+          .destroy({
+            reason:
+              options.reason ??
+              `deployed release ${requestedReleaseId ?? definition.desiredVersion}`,
+            timeoutMs: options.destroyTimeoutMs,
+          })
+          .catch((error) => {
+            console.warn(`Failed to drain previous runtime for ${id}`, error);
+          });
+      }
+
+      const app = candidate.snapshot();
+      this.metrics.deployments += 1;
+      return {
+        id,
+        strategy: options.strategy ?? 'blue-green',
+        previousVersion: oldSnapshot?.codeVersion ?? null,
+        previousReleaseId: oldSnapshot?.releaseId ?? null,
+        desiredVersion: definition.desiredVersion,
+        activeVersion: app.codeVersion,
+        activeReleaseId: app.releaseId,
+        changed:
+          oldSnapshot?.releaseId !== app.releaseId ||
+          oldSnapshot?.codeVersion !== app.codeVersion,
+        app,
+      };
+    } catch (error) {
+      if (!promoted && candidate && candidate !== oldRuntime) {
+        await candidate
+          .destroy({
+            reason: 'candidate deployment failed',
+            timeoutMs: options.destroyTimeoutMs,
+          })
+          .catch((destroyError) => {
+            console.warn(
+              `Failed to destroy deployment candidate for ${id}`,
+              destroyError,
+            );
+          });
+      }
+      if (error instanceof AppRegistryError) {
+        throw error;
+      }
+      throw new AppReloadFailedError(id, error);
+    }
+  }
+
+  private async checkRuntimeReady(
+    runtime: ActiveAppHandle,
+    definition: AppDefinition,
+  ): Promise<void> {
+    const healthPath = definition.healthPath;
+    if (!healthPath) {
+      return;
+    }
+
+    const timeoutMs = definition.resourcePolicy?.startupTimeoutMs ?? 10_000;
+    const controller = new AbortController();
+    let timeout: NodeJS.Timeout | undefined;
+
+    try {
+      const response = await Promise.race([
+        runtime.dispatch(
+          new Request(new URL(healthPath, 'http://app.local'), {
+            method: 'GET',
+            signal: controller.signal,
+          }),
+          {
+            method: 'GET',
+            path: healthPath,
+          },
+        ),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            const error = new AppReadinessFailedError(
+              definition.id,
+              healthPath,
+              `timed out after ${timeoutMs}ms`,
+            );
+            controller.abort(error);
+            reject(error);
+          }, timeoutMs);
+          timeout.unref?.();
+        }),
+      ]);
+      await response.body?.cancel().catch(() => undefined);
+      if (!response.ok) {
+        throw new AppReadinessFailedError(
+          definition.id,
+          healthPath,
+          `returned ${response.status}`,
+        );
+      }
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    }
+  }
+
+  private async activateReadyDefinition(
+    definition: AppDefinition,
+  ): Promise<ActiveAppHandle> {
+    const runtime = await this.activateDefinition(definition);
+    try {
+      await this.checkRuntimeReady(runtime, definition);
+      return runtime;
+    } catch (error) {
+      await runtime
+        .destroy({ reason: 'app startup readiness check failed' })
+        .catch(() => undefined);
+      throw error;
     }
   }
 
@@ -628,6 +876,7 @@ export class AppRuntimeRegistry {
     return {
       id,
       appName: options.appName,
+      displayName: options.displayName,
       basePath: options.basePath ?? `/${options.appName ?? id}`,
       enabled: options.enabled ?? true,
       backend: options.backend ?? options.isolation ?? 'in-process',
@@ -684,6 +933,21 @@ export class AppRuntimeRegistry {
       throw new InvalidAppIdError(id);
     }
   }
+}
+
+function releaseFingerprint(definition: AppDefinition): string | null {
+  if (!definition.release) {
+    return null;
+  }
+
+  return JSON.stringify({
+    id: definition.release.id,
+    version: definition.release.version,
+    rootDir: definition.release.rootDir,
+    entrypoint: definition.release.entrypoint,
+    releaseDir: definition.release.releaseDir,
+    checksum: definition.release.checksum ?? null,
+  });
 }
 
 function sortByLastAccessed(a: AppSnapshot, b: AppSnapshot): number {

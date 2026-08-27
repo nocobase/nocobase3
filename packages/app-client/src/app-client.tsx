@@ -4,6 +4,7 @@ import { type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter } from 'react-router';
 
 import { normalizeAppClientBasename, type AppClientConfig } from './config.js';
+import { AppClientContext } from './app-client-context.js';
 
 export interface AppClientRootProps {
   config: AppClientConfig;
@@ -32,7 +33,9 @@ export function AppClientRoot({ config }: AppClientRootProps): ReactElement {
 
   return (
     <BrowserRouter basename={normalizeAppClientBasename(config.basename)}>
-      {content}
+      <AppClientContext.Provider value={config.client}>
+        {content}
+      </AppClientContext.Provider>
     </BrowserRouter>
   );
 }

@@ -66,7 +66,9 @@
     "@refinedev/core": "^5.0.0"
   },
   "dependencies": {
-    "@nocobase/app-portal-sdk": "workspace:^"
+    "@nocobase/app-plugin-settings": "workspace:^",
+    "@nocobase/app-portal-sdk": "workspace:^",
+    "lucide-react": "^0.487.0"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
@@ -76,6 +78,10 @@
     "@refinedev/core": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "@types/react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

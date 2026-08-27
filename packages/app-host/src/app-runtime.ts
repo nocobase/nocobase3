@@ -23,6 +23,7 @@ import type {
   AppDestroyOptions,
   FetchApp,
   AppRequestMetadata,
+  AppRuntimeResource,
   AppScope,
   AppSnapshot,
   AppWebSocketAcceptResult,
@@ -43,6 +44,7 @@ interface RegisteredDisposer {
 export class AppRuntime implements AppScope, ActiveAppHandle {
   readonly id: string;
   readonly appName?: string;
+  readonly displayName?: string;
   readonly version: number;
   readonly basePath: string;
   readonly assetsBasePath: string;
@@ -55,6 +57,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   readonly configVersion: string;
   readonly desiredVersion: string;
   readonly codeVersion: string;
+  readonly releaseId: string | null;
   readonly isolation: AppDefinition['isolation'];
   readonly tier: AppDefinition['tier'];
   readonly events: AppEventBus = new AppEventBus();
@@ -63,6 +66,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   private readonly globalEvents: AppEventBus;
   private readonly abortController = new AbortController();
   private readonly disposers: RegisteredDisposer[] = [];
+  private readonly resources = new Map<string, AppRuntimeResource>();
   private readonly beforeDestroyHandlers: AppDisposer[] = [];
   private requestSequence = 0;
   private waitForIdleResolvers: Array<() => void> = [];
@@ -77,6 +81,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
   private constructor(options: Omit<AppRuntimeOptions, 'createApp'>) {
     this.id = options.definition.id;
     this.appName = options.definition.appName;
+    this.displayName = options.definition.displayName;
     this.version = options.version;
     this.basePath = options.definition.basePath;
     this.assetsBasePath = `${this.basePath}/assets`;
@@ -90,6 +95,7 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.desiredVersion = options.definition.desiredVersion;
     this.codeVersion =
       options.definition.code?.version ?? options.definition.desiredVersion;
+    this.releaseId = options.definition.release?.id ?? null;
     this.isolation = options.definition.isolation;
     this.tier = options.definition.tier;
     this.globalEvents = options.globalEvents;
@@ -150,16 +156,29 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
     this.disposers.push({ name, dispose });
   }
 
+  reportRuntimeResource(resource: AppRuntimeResource): void {
+    if (this.state === 'destroying' || this.state === 'destroyed') {
+      throw new Error(
+        `Cannot report runtime resource "${resource.id}" after app ${this.id} has started destroying`,
+      );
+    }
+
+    this.resources.set(resource.id, structuredClone(resource));
+    this.touch();
+  }
+
   snapshot(): AppSnapshot {
     return {
       id: this.id,
       appName: this.appName,
+      displayName: this.displayName,
       version: this.version,
       basePath: this.basePath,
       backend: this.backend,
       configVersion: this.configVersion,
       desiredVersion: this.desiredVersion,
       codeVersion: this.codeVersion,
+      releaseId: this.releaseId,
       isolation: this.isolation,
       tier: this.tier,
       state: this.state,
@@ -172,6 +191,9 @@ export class AppRuntime implements AppScope, ActiveAppHandle {
       lastAccessedAt: this.lastAccessedAt?.toISOString() ?? null,
       lastError: this.lastError,
       disposerCount: this.disposers.length,
+      resources: [...this.resources.values()].map((resource) =>
+        structuredClone(resource),
+      ),
     };
   }
 

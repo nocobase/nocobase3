@@ -9,9 +9,7 @@ import { CommandFailedError, runCommand } from './run-command.ts';
  */
 export const DEFAULT_REGISTRY = 'https://npm.nocobase.ai';
 
-export const DEFAULT_TEMPLATE = '@nocobase/app-template-default@beta';
-
-/** The hub is scaffolded the same way an app is: download a package, extract it, install, run. */
+/** The Hub is downloaded as a template package; App creation is owned by @nocobase/create-app. */
 export const DEFAULT_HUB_TEMPLATE = '@nocobase/hub@beta';
 
 const PACK_TIMEOUT_MS = 5 * 60 * 1000;

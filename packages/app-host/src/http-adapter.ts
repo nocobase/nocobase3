@@ -122,13 +122,21 @@ export function requestPath(req: IncomingMessage): string {
 }
 
 function requestUrl(req: IncomingMessage): URL {
-  const host = req.headers.host ?? 'localhost';
-  const forwardedProto = req.headers['x-forwarded-proto'];
-  const protocol = Array.isArray(forwardedProto)
-    ? (forwardedProto[0] ?? 'http')
-    : (forwardedProto ?? 'http');
+  const host =
+    firstForwardedValue(req.headers['x-forwarded-host']) ??
+    req.headers.host ??
+    'localhost';
+  const protocol =
+    firstForwardedValue(req.headers['x-forwarded-proto']) ?? 'http';
 
   return new URL(req.url ?? '/', `${protocol}://${host}`);
+}
+
+function firstForwardedValue(
+  value: string | string[] | undefined,
+): string | undefined {
+  const first = Array.isArray(value) ? value[0] : value;
+  return first?.split(',')[0]?.trim() || undefined;
 }
 
 function requestAbortSignal(req: IncomingMessage): AbortSignal {

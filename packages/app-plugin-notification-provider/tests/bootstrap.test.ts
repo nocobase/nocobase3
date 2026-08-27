@@ -1,4 +1,7 @@
-import type { AppClient } from '@nocobase/app-sdk';
+import {
+  createAppClientServiceRegistry,
+  type AppClient,
+} from '@nocobase/app-sdk';
 import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +11,7 @@ describe('client bootstrap', () => {
   it('registers the notification provider with the app runtime', async () => {
     const appClient: AppClient = {
       request: vi.fn<AppClient['request']>(),
+      services: createAppClientServiceRegistry(),
     };
     const setNotificationProvider = vi.fn();
     const refine: AppClientRefineRegistry = {
@@ -37,5 +41,8 @@ describe('client bootstrap', () => {
       close: expect.any(Function),
       open: expect.any(Function),
     });
+    expect(
+      appClient.services.has('@nocobase/app-plugin-settings:registry'),
+    ).toBe(true);
   });
 });

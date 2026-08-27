@@ -13,6 +13,7 @@ const rootNodeFiles = [
   '.github/**/*.{js,mjs,cjs}',
   'scripts/**/*.{js,mjs,cjs}',
   'tools/**/*.{js,mjs,cjs}',
+  'knowledge-base/scripts/**/*.{js,mjs,cjs}',
 ];
 const nodeLibraryRoots = [
   'packages/app-server-kit',

@@ -2,7 +2,7 @@ import type { SpaHandler } from '@nocobase/app-server-kit/spa';
 import type {
   LoadedAppPluginBootstrap,
   LoadedAppPluginRoutes,
-} from './plugins/index.js';
+} from '@nocobase/app-server-kit/plugins';
 
 export type AppDisposer = () => void | Promise<void>;
 

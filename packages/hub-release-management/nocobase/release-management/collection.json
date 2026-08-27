@@ -1,0 +1,101 @@
+{
+  "name": "hubReleaseDeployments",
+  "title": "平台发布审计",
+  "description": "记录 Hub 发起的应用发布、回滚、操作人、执行结果与失败原因。",
+  "template": "general",
+  "fields": [
+    {
+      "name": "deploymentId",
+      "title": "部署记录 ID",
+      "interface": "input",
+      "validators": ["required", { "name": "max", "args": { "limit": 64 } }],
+      "settings": { "unique": true }
+    },
+    {
+      "name": "operationKey",
+      "title": "幂等操作键",
+      "interface": "input",
+      "validators": ["required", { "name": "length", "args": { "limit": 64 } }],
+      "settings": { "unique": true }
+    },
+    {
+      "name": "idempotencyKey",
+      "title": "请求幂等键",
+      "interface": "input",
+      "validators": ["required", { "name": "max", "args": { "limit": 128 } }]
+    },
+    {
+      "name": "appId",
+      "title": "应用 ID",
+      "interface": "input",
+      "validators": ["required", { "name": "max", "args": { "limit": 128 } }]
+    },
+    {
+      "name": "releaseId",
+      "title": "发布版本 ID",
+      "interface": "input",
+      "validators": ["required", { "name": "max", "args": { "limit": 128 } }]
+    },
+    {
+      "name": "kind",
+      "title": "操作类型",
+      "interface": "select",
+      "validators": ["required"],
+      "enum": [
+        { "value": "deploy", "label": "发布", "color": "blue" },
+        { "value": "rollback", "label": "回滚", "color": "orange" }
+      ]
+    },
+    {
+      "name": "status",
+      "title": "执行状态",
+      "interface": "select",
+      "validators": ["required"],
+      "enum": [
+        { "value": "pending", "label": "执行中", "color": "gold" },
+        { "value": "succeeded", "label": "成功", "color": "green" },
+        { "value": "unchanged", "label": "无需变更", "color": "blue" },
+        { "value": "failed", "label": "失败", "color": "red" }
+      ]
+    },
+    { "name": "changed", "title": "是否切换版本", "interface": "checkbox" },
+    {
+      "name": "previousReleaseId",
+      "title": "原发布版本 ID",
+      "interface": "input"
+    },
+    {
+      "name": "activeReleaseId",
+      "title": "当前发布版本 ID",
+      "interface": "input"
+    },
+    { "name": "activeVersion", "title": "当前代码版本", "interface": "input" },
+    {
+      "name": "actorId",
+      "title": "操作人 ID",
+      "interface": "input",
+      "validators": ["required"]
+    },
+    {
+      "name": "actorName",
+      "title": "操作人",
+      "interface": "input",
+      "validators": ["required"]
+    },
+    {
+      "name": "actorRole",
+      "title": "操作角色",
+      "interface": "input",
+      "validators": ["required"]
+    },
+    {
+      "name": "requestedAt",
+      "title": "请求时间",
+      "interface": "datetime",
+      "validators": ["required"]
+    },
+    { "name": "completedAt", "title": "完成时间", "interface": "datetime" },
+    { "name": "errorCode", "title": "错误码", "interface": "input" },
+    { "name": "errorMessage", "title": "错误详情", "interface": "textarea" }
+  ]
+}
