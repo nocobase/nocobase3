@@ -279,7 +279,6 @@ export const starter = {
   'hub.application.overview.verifiedAt': '已于 {{date}} 验证',
   'hub.application.overview.noActiveMetadata': '没有当前版本的元数据',
   'hub.application.overview.environment': '环境',
-  'hub.application.overview.mvpTarget': 'MVP 部署目标',
   'hub.application.overview.latestDeployment': '最近部署',
   'hub.application.overview.noDeployments': '暂无部署',
   'hub.application.overview.deploymentRestricted': '未授予部署访问权限',
@@ -305,7 +304,7 @@ export const starter = {
   'hub.applicationDeployments.loading': '正在加载部署记录',
   'hub.applicationDeployments.empty.title': '暂无部署记录',
   'hub.applicationDeployments.empty.description':
-    '将已验证版本部署到默认环境后，部署记录会显示在这里。',
+    '将已验证版本部署到生产环境后，部署记录会显示在这里。',
   'hub.deployments.eyebrow': '运维',
   'hub.deployments.title': '部署',
   'hub.deployments.description':
@@ -921,7 +920,7 @@ export const starter = {
   'hub.audit.actorType.user': '用户',
   'hub.audit.actorType.agent': 'Coding Agent',
   'hub.audit.actorType.system': '系统',
-  'hub.environment.default': '默认环境',
+  'hub.environment.default': '生产环境',
   'hub.deployment.event.queued': '部署已进入队列。',
   'hub.deployment.event.preparing': '正在准备版本。',
   'hub.deployment.event.activating': '正在激活版本。',

@@ -856,10 +856,6 @@ function ApplicationOverview({
             application.defaultEnvironmentId,
             translate,
           )}
-          detail={translate(
-            'hub.application.overview.mvpTarget',
-            'MVP deployment target',
-          )}
         />
         <OverviewCard
           icon={<Activity aria-hidden='true' />}
@@ -932,7 +928,7 @@ function OverviewCard({
   icon: React.ReactNode;
   label: string;
   value: string;
-  detail: string;
+  detail?: string;
   status?: string;
 }) {
   return (
@@ -946,9 +942,11 @@ function OverviewCard({
           {status ? <HubStatusBadge status={status} /> : value}
         </CardTitle>
       </CardHeader>
-      <CardContent className='text-xs text-muted-foreground'>
-        {detail}
-      </CardContent>
+      {detail ? (
+        <CardContent className='text-xs text-muted-foreground'>
+          {detail}
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
@@ -1549,7 +1547,7 @@ function ApplicationDeployments({
         )}
         description={translate(
           'hub.applicationDeployments.empty.description',
-          'A deployment record will appear after a verified release is sent to the default environment.',
+          'A deployment record will appear after a verified release is sent to the production environment.',
         )}
       />
     );

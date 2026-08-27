@@ -217,7 +217,7 @@ const auditSourceLabels: Record<string, LabelDefinition> = {
 };
 
 const environmentLabels: Record<string, LabelDefinition> = {
-  default: { i18nKey: 'hub.environment.default', defaultLabel: 'Default' },
+  default: { i18nKey: 'hub.environment.default', defaultLabel: 'Production' },
 };
 
 type DeploymentFailureDefinition = {

@@ -41,7 +41,7 @@ describe('Hub dynamic labels', () => {
     );
     expect(getHubAuditResourceLabel('deployment', translate)).toBe('部署');
     expect(getHubAuditSourceLabel('web', translate)).toBe('网页');
-    expect(getHubEnvironmentLabel('default', translate)).toBe('默认环境');
+    expect(getHubEnvironmentLabel('default', translate)).toBe('生产环境');
   });
 
   it('replaces server failure messages with a localized explanation', () => {

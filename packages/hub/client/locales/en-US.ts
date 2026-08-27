@@ -298,7 +298,6 @@ export const starter = {
   'hub.application.overview.verifiedAt': 'Verified {{date}}',
   'hub.application.overview.noActiveMetadata': 'No active release metadata',
   'hub.application.overview.environment': 'Environment',
-  'hub.application.overview.mvpTarget': 'MVP deployment target',
   'hub.application.overview.latestDeployment': 'Latest deployment',
   'hub.application.overview.noDeployments': 'No deployments',
   'hub.application.overview.deploymentRestricted':
@@ -326,7 +325,7 @@ export const starter = {
   'hub.applicationDeployments.loading': 'Loading deployments',
   'hub.applicationDeployments.empty.title': 'No deployments',
   'hub.applicationDeployments.empty.description':
-    'A deployment record will appear after a verified release is sent to the default environment.',
+    'A deployment record will appear after a verified release is sent to the production environment.',
   'hub.deployments.eyebrow': 'Operations',
   'hub.deployments.title': 'Deployments',
   'hub.deployments.description':
@@ -980,7 +979,7 @@ export const starter = {
   'hub.audit.actorType.user': 'User',
   'hub.audit.actorType.agent': 'Coding Agent',
   'hub.audit.actorType.system': 'System',
-  'hub.environment.default': 'Default',
+  'hub.environment.default': 'Production',
   'hub.deployment.event.queued': 'Deployment queued.',
   'hub.deployment.event.preparing': 'Preparing release.',
   'hub.deployment.event.activating': 'Activating release.',
