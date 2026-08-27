@@ -637,7 +637,7 @@ describe('Hub management pages', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it('explains storage categories and keeps automatic cleanup disabled', async () => {
+  it('omits local storage while keeping settings and system information', async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const path = String(input);
       if (path.endsWith('/settings')) {
@@ -662,37 +662,6 @@ describe('Hub management pages', () => {
           updatedAt: '2026-08-25T01:00:00.000Z',
         });
       }
-      if (path.endsWith('/storage')) {
-        return response({
-          filesystem: {
-            capacityBytes: 10_000,
-            usedBytes: 4_000,
-            availableBytes: 6_000,
-            usedPercent: 40,
-          },
-          knownUsageBytes: 1_000,
-          categories: [
-            {
-              key: 'releaseArtifacts',
-              labelKey: 'storage.releaseArtifacts',
-              descriptionKey: 'storage.releaseArtifacts.description',
-              bytes: 1_000,
-              reclaimableBytes: 0,
-              scope: 'hub-managed',
-              accuracy: 'exact',
-            },
-          ],
-          measuredAt: '2026-08-25T01:00:00.000Z',
-        });
-      }
-      if (path.endsWith('/storage/cleanup-plan?limit=20&offset=0')) {
-        return response({
-          totalReclaimableBytes: 0,
-          candidates: [],
-          protectedCounts: { activeRelease: 1 },
-          measuredAt: '2026-08-25T01:00:00.000Z',
-        });
-      }
       if (path.endsWith('/system-info')) {
         return response({
           hubVersion: '3.1.1',
@@ -708,100 +677,14 @@ describe('Hub management pages', () => {
 
     render(<HubSettingsPage fetcher={fetcher} />);
 
-    expect(await screen.findByText('Release artifacts')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Verified immutable build artifacts/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Runtime information')).toBeInTheDocument();
     expect(await screen.findByText('Release retention')).toBeInTheDocument();
+    expect(screen.queryByText('Hub local storage')).toBeNull();
+    expect(
+      fetcher.mock.calls.some(([input]) => String(input).includes('/storage')),
+    ).toBe(false);
     expect(
       screen.getByRole('switch', { name: 'Automatic cleanup' }),
     ).toHaveAttribute('aria-disabled', 'true');
-  });
-
-  it('shows cleanup candidates with server-side pagination', async () => {
-    const baseSettings = {
-      releaseRetention: {
-        automaticCleanupEnabled: false,
-        keepPerApplication: 10,
-        minimumAgeDays: 30,
-      },
-      audit: { recordDeniedMutations: true, retentionDays: 365 },
-      confirmation: {
-        rollback: true,
-        archiveApplication: true,
-        rotateRuntimeSecret: true,
-      },
-      readOnly: {
-        releaseStorage: 'local',
-        hostMode: 'in-process',
-        environmentCount: 1,
-      },
-      revision: 1,
-      updatedAt: '2026-08-25T01:00:00.000Z',
-    };
-    const cleanupResponse = (resourceId: string, offset: number) =>
-      Response.json({
-        data: {
-          totalReclaimableBytes: 3_000,
-          candidates: [
-            {
-              kind: 'release',
-              applicationId: 'app-1',
-              resourceId,
-              bytes: offset === 0 ? 2_000 : 1_000,
-              reason: 'outside retention window',
-            },
-          ],
-          protectedCounts: { activeRelease: 1, pinned: 2 },
-          measuredAt: '2026-08-25T01:00:00.000Z',
-        },
-        meta: { total: 21, limit: 20, offset },
-        requestId: 'cleanup-plan',
-      });
-    const fetcher = vi.fn<typeof fetch>(async (input) => {
-      const path = String(input);
-      if (path.endsWith('/settings')) return response(baseSettings);
-      if (path.endsWith('/storage')) {
-        return response({
-          filesystem: {
-            capacityBytes: 10_000,
-            usedBytes: 4_000,
-            availableBytes: 6_000,
-            usedPercent: 40,
-          },
-          knownUsageBytes: 1_000,
-          categories: [],
-          measuredAt: '2026-08-25T01:00:00.000Z',
-        });
-      }
-      if (path.endsWith('/storage/cleanup-plan?limit=20&offset=0')) {
-        return cleanupResponse('release-1', 0);
-      }
-      if (path.endsWith('/storage/cleanup-plan?limit=20&offset=20')) {
-        return cleanupResponse('release-21', 20);
-      }
-      if (path.endsWith('/system-info')) {
-        return response({
-          hubVersion: '3.1.1',
-          nodeVersion: '24.0.0',
-          databaseType: 'sqlite',
-          hostMode: 'in-process',
-          publicBasePath: '/hub',
-          startedAt: '2026-08-25T01:00:00.000Z',
-        });
-      }
-      throw new Error(`Unexpected request: ${path}`);
-    });
-
-    render(<HubSettingsPage fetcher={fetcher} />);
-
-    expect(await screen.findByText('release-1')).toBeInTheDocument();
-    expect(screen.getByText('Active Release: 1')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
-    expect(await screen.findByText('release-21')).toBeInTheDocument();
-    expect(fetcher).toHaveBeenCalledWith(
-      '/hub/api/storage/cleanup-plan?limit=20&offset=20',
-      expect.objectContaining({ method: 'GET' }),
-    );
   });
 });

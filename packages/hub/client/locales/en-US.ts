@@ -701,16 +701,6 @@ export const starter = {
   'hub.settings.eyebrow': 'Hub administration',
   'hub.settings.title': 'Hub settings',
   'hub.settings.save': 'Save settings',
-  'hub.storage.title': 'Hub local storage',
-  'hub.storage.cleanupPreview': 'Cleanup preview',
-  'hub.storage.cleanupLoading': 'Loading cleanup preview',
-  'hub.storage.cleanup.kind': 'Kind',
-  'hub.storage.cleanup.application': 'Application',
-  'hub.storage.cleanup.resource': 'Resource',
-  'hub.storage.cleanup.reason': 'Reason',
-  'hub.storage.cleanup.reclaimable': 'Reclaimable',
-  'hub.storage.cleanup.empty':
-    'No Release artifacts are currently eligible for cleanup.',
   'hub.systemInfo.title': 'Runtime information',
   'hub.settings.retention.title': 'Release retention',
   'hub.settings.safety.title': 'Audit and confirmations',
@@ -999,45 +989,15 @@ export const starter = {
   'hub.deployment.event.succeeded': 'Deployment completed.',
   'hub.deployment.event.failed': 'Deployment failed.',
   'hub.deployment.event.readiness': 'Readiness checks passed.',
-  'hub.storage.cleanup.kind.release': 'Release',
-  'hub.storage.cleanup.reason.outsideRetentionWindow':
-    'Outside retention window',
   'hub.systemInfo.hostMode.inProcess': 'In process',
   'hub.systemInfo.hostMode.unavailable': 'Unavailable',
   'hub.systemInfo.warning.runtimeSecretEncryption':
     'Runtime secret encryption is not configured.',
   'hub.settings.description':
-    'Review local storage usage and configure Release retention, audit retention, and confirmation policies.',
+    'Configure Release retention, audit retention, and confirmation policies.',
   'hub.settings.saving': 'Saving…',
   'hub.settings.saveError': 'Unable to save settings',
   'hub.settings.loading': 'Loading settings',
-  'hub.storage.loading': 'Measuring storage',
-  'hub.storage.description':
-    'Monitor the Hub filesystem so Release artifacts, runtime data, and logs do not exhaust the disk.',
-  'hub.storage.measuredAt': 'Measured {{date}}',
-  'hub.storage.usedOf': 'used of {{capacity}}',
-  'hub.storage.available': '{{available}} available',
-  'hub.storage.reclaimable': '{{value}} reclaimable',
-  'hub.storage.cleanupPreviewDescription':
-    '{{count}} candidates could reclaim {{size}}. This preview never deletes data.',
-  'storage.releaseArtifacts': 'Release artifacts',
-  'storage.releaseArtifacts.description':
-    'Verified immutable build artifacts. Only unreferenced Releases selected by retention can be reclaimed.',
-  'storage.temporaryUploads': 'Temporary uploads',
-  'storage.temporaryUploads.description':
-    'Expired, cancelled, or failed upload sessions after their grace period.',
-  'storage.runtimeData': 'Application data',
-  'storage.runtimeData.description':
-    'Local application databases and attachments; external storage is not counted.',
-  'storage.logs': 'Logs',
-  'storage.logs.description':
-    'Hub, Deployment, and application log files on this filesystem.',
-  'storage.otherFilesystemUsage': 'Other filesystem usage',
-  'storage.otherFilesystemUsage.description':
-    'Filesystem usage not managed by Hub and therefore not reclaimable here.',
-  'hub.storage.protected.activeRelease': 'Active Release',
-  'hub.storage.protected.deploymentReference': 'Deployment reference',
-  'hub.storage.protected.pinned': 'Pinned',
   'hub.systemInfo.loading': 'Loading system information',
   'hub.systemInfo.hubVersion': 'Hub version',
   'hub.systemInfo.nodeVersion': 'Node.js',
