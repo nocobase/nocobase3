@@ -17,6 +17,7 @@ const APP_COMMANDS = [
   'dev',
   'info',
   'list',
+  'plugin-update',
   'pull',
   'skills-sync',
 ];

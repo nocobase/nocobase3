@@ -246,7 +246,7 @@ export async function resolveInstalledPlugins({
       : appRoot;
   const packageNames =
     plugin === undefined
-      ? readRegisteredPluginNames(applicationPackage, packageJsonPath)
+      ? resolveRegisteredPluginNames(applicationPackage, packageJsonPath)
       : [normalizePluginPackageName(plugin)];
 
   const plugins: PluginLocation[] = [];
@@ -303,7 +303,15 @@ function normalizePluginPackageName(name: string): string {
     : `${PACKAGE_SCOPE}app-plugin-${trimmed}`;
 }
 
-function readRegisteredPluginNames(
+/** Reads an application manifest, failing with the path when the JSON is bad. */
+export async function readAppPackage(
+  appRoot: string,
+): Promise<Record<string, unknown>> {
+  return readJson(path.join(appRoot, 'package.json'));
+}
+
+/** The plugin packages an application registers, in a stable order. */
+export function resolveRegisteredPluginNames(
   applicationPackage: Record<string, unknown>,
   packageJsonPath: string,
 ): string[] {

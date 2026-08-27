@@ -11,6 +11,7 @@ nb3 app create    创建本地 App 源码
 nb3 app dev       本地开发 App
 nb3 app info      查看 App 信息
 nb3 app config    查看或修改 App 配置
+nb3 app plugin-update  升级插件并同步其 skills
 nb3 app skills-sync  同步插件 skills 到 App
 nb3 app destroy   删除本地 App
 nb3 app deploy    部署 App 到 Hub（待实现）
@@ -101,6 +102,23 @@ nb3 app config hub http://localhost:3000      # 修改
 ```
 
 可修改的键是 `hub` 和 `name`。`template` 和 `templateVersion` 记录 App 的来源，不允许修改。
+
+## 升级插件
+
+升级插件包，然后把升级后插件带的 skills 同步进来：
+
+```bash
+nb3 app plugin-update                                  # 升级全部已注册插件
+nb3 app plugin-update --plugin audit-log               # 只升级一个
+nb3 app plugin-update --plugin audit-log --plugin workflow
+nb3 app plugin-update --dry-run
+```
+
+插件名可以用短名（`audit-log`）或完整包名（`@nocobase/app-plugin-audit-log`）。没有 `--plugin` 时升级 App 注册的全部插件。
+
+skills 是复制进 App 的，不是运行时从 `node_modules` 读的，所以升级插件之后不同步就会留着旧副本。这条命令把两步合成一步，比手动升级更不容易漏。
+
+升级用的是 App 自己在用的包管理器（按 `packageManager` 字段和 lockfile 判断）。升级失败时不会同步 skills；升级成功但同步失败只警告，因为升级本身已经生效了。
 
 ## 同步插件 skills
 
