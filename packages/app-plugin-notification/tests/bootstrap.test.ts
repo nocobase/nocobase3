@@ -1,22 +1,31 @@
+import type { DatabaseManager } from '@nocobase/app-database';
+import { createLogger } from '@nocobase/logging';
+import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { describe, expect, it, vi } from 'vitest';
 
-import bootstrapNotificationPlugin from '../server/bootstrap.js';
-import type { NotificationService } from '../server/types.js';
+import bootstrapNotificationPlugin, {
+  type NotificationPluginServices,
+} from '../server/bootstrap.js';
 
 describe('@nocobase/app-plugin-notification bootstrap', () => {
-  it('registers the core manager disposer', async () => {
-    const close = vi.fn(async (): Promise<void> => undefined);
+  it('creates the core manager and registers its disposer', async () => {
     const registerDisposer = vi.fn();
+    const services: NotificationPluginServices = {};
 
     bootstrapNotificationPlugin({
-      config: undefined,
-      deps: undefined,
-      services: {
-        notification: { close } as unknown as NotificationService,
+      config: { notification: { channels: [] } },
+      deps: {
+        database: {} as DatabaseManager,
+        logging: {
+          getLogger: () => createLogger({ level: 'silent' }),
+        },
+        queueManager: {} as NocoBaseQueueManager,
       },
+      services,
       lifecycle: { registerDisposer },
     });
 
+    expect(services.notification).toBeDefined();
     expect(registerDisposer).toHaveBeenCalledWith(
       'manager',
       expect.any(Function),
@@ -24,19 +33,26 @@ describe('@nocobase/app-plugin-notification bootstrap', () => {
     const dispose = registerDisposer.mock.calls[0]?.[1] as
       (() => Promise<void>) | undefined;
     await dispose?.();
-    expect(close).toHaveBeenCalledOnce();
   });
 
-  it('does nothing when the app did not create notification services', () => {
+  it('does nothing when the database dependency is unavailable', () => {
     const registerDisposer = vi.fn();
+    const services: NotificationPluginServices = {};
 
     bootstrapNotificationPlugin({
-      config: undefined,
-      deps: undefined,
-      services: { notification: undefined },
+      config: { notification: { channels: [] } },
+      deps: {
+        database: undefined,
+        logging: {
+          getLogger: () => createLogger({ level: 'silent' }),
+        },
+        queueManager: {} as NocoBaseQueueManager,
+      },
+      services,
       lifecycle: { registerDisposer },
     });
 
+    expect(services.notification).toBeUndefined();
     expect(registerDisposer).not.toHaveBeenCalled();
   });
 });

@@ -1,10 +1,6 @@
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { AppDriveConfig } from '@nocobase/drive';
-import {
-  createNotificationManager,
-  type NotificationChannelMap,
-  type NotificationService,
-} from '@nocobase/app-plugin-notification';
+import type { NotificationService } from '@nocobase/app-plugin-notification';
 
 import type { AppConfig } from '../config/index.js';
 import type { RealtimeService } from '../realtime/service.js';
@@ -46,25 +42,9 @@ export function createAppServices(
         : new UnavailableFileUploadsService(
             resolveFileUploadsUnavailableMessage(runtime.config.drive),
           ),
-    notification:
-      runtime.database && notificationPluginEnabled(runtime.config)
-        ? createNotificationManager<NotificationChannelMap>({
-            database: runtime.database,
-            queue: deps.queueManager,
-            logger: deps.logging.getLogger().child({ module: 'notification' }),
-            config: runtime.config.notification,
-          })
-        : undefined,
+    notification: undefined,
     realtime: options.realtime,
   };
-}
-
-function notificationPluginEnabled(config: AppConfig): boolean {
-  return config.plugins.some(
-    (plugin) =>
-      plugin.enabled &&
-      plugin.packageName === '@nocobase/app-plugin-notification',
-  );
 }
 
 function resolveFileUploadsUnavailableMessage(
