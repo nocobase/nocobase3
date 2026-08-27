@@ -66,7 +66,7 @@ router 本身不添加宿主认证。挂载时需要在外层添加认证 middle
 
 ## 可选客户端页面
 
-`packages/app-template-default/registry/nocobase-notification` 中的 `NotificationLogsPage` 可以展示 Delivery 和 Attempt。该 registry 只提供客户端页面，不会自动创建服务端 runtime 或挂载路由。
+`@nocobase/app-plugin-notification` 发布的 `logs-ui` Registry item 提供 `NotificationLogsPage`，用于展示 Delivery 和 Attempt。canonical source 位于 `packages/app-plugin-notification/registry/logs-ui`。该 item 只提供客户端页面，不会自动创建服务端 runtime、挂载服务端路由或注册客户端路由。
 
 ## 相关链接
 
