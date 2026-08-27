@@ -258,9 +258,9 @@ function createScaffoldFiles({
       node: '>=24.0.0',
     },
     exports: {
-      './client/module': {
-        types: './client/module.ts',
-        import: './client/module.ts',
+      './client/plugin': {
+        types: './client/plugin.ts',
+        import: './client/plugin.ts',
       },
       './client/bootstrap': {
         types: './client/bootstrap.ts',
@@ -280,9 +280,9 @@ function createScaffoldFiles({
     publishConfig: {
       access: 'public',
       exports: {
-        './client/module': {
-          types: './dist/client/module.d.ts',
-          import: './dist/client/module.js',
+        './client/plugin': {
+          types: './dist/client/plugin.d.ts',
+          import: './dist/client/plugin.js',
         },
         './client/bootstrap': {
           types: './dist/client/bootstrap.d.ts',
@@ -350,7 +350,7 @@ function createScaffoldFiles({
     ['.prettierignore', 'dist/\n'],
     [
       'README.md',
-      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server bootstrap, an HTTP route at \`/${shortName}\`, a \`client/module.ts\` registration entry, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
+      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server bootstrap, an HTTP route at \`/${shortName}\`, a \`client/plugin.ts\` registration entry, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
     ],
     [
       'database/README.md',
@@ -370,8 +370,8 @@ function createScaffoldFiles({
     ],
     ['package.json', `${JSON.stringify(packageJson, null, 2)}\n`],
     [
-      'client/module.ts',
-      `import {\n  defineClientModule,\n  type AppClientModuleFactory,\n} from '@nocobase/app-client/plugins';\n\nexport interface ${symbolName}ClientOptions {\n  readonly placeholder?: never;\n}\n\nconst ${moduleName}: AppClientModuleFactory<${symbolName}ClientOptions> =\n  defineClientModule({\n    packageName: '${packageName}',\n    bootstrap: () => import('./bootstrap.js'),\n    routes: () => import('./routes.js'),\n    providers: () => import('./providers.js'),\n  });\n\nexport default ${moduleName};\n`,
+      'client/plugin.ts',
+      `import {\n  defineClientPlugin,\n  type AppClientPluginFactory,\n} from '@nocobase/app-client/plugins';\n\nexport interface ${symbolName}ClientOptions {\n  readonly placeholder?: never;\n}\n\nconst ${moduleName}: AppClientPluginFactory<${symbolName}ClientOptions> =\n  defineClientPlugin({\n    packageName: '${packageName}',\n    bootstrap: () => import('./bootstrap.js'),\n    routes: () => import('./routes.js'),\n    providers: () => import('./providers.js'),\n  });\n\nexport default ${moduleName};\n`,
     ],
     [
       'client/bootstrap.ts',

@@ -1,6 +1,6 @@
 import {
-  defineClientModule,
-  type AppClientModuleFactory,
+  defineClientPlugin,
+  type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
 export interface NotificationProviderClientOptions {
@@ -8,8 +8,8 @@ export interface NotificationProviderClientOptions {
   readonly undoLabel?: string;
 }
 
-const notificationProvider: AppClientModuleFactory<NotificationProviderClientOptions> =
-  defineClientModule({
+const notificationProvider: AppClientPluginFactory<NotificationProviderClientOptions> =
+  defineClientPlugin({
     packageName: '@nocobase/app-plugin-notification-provider',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),

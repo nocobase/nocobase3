@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 
 import application from './application';
 import { createApp } from './app';
-import clientModules from './modules';
+import clientPlugins from './plugins';
 import routeComponentOverrides from './route-overrides';
 import { createAppRuntime } from './runtime';
 import sourceExtensions from './source-extensions';
@@ -23,9 +23,9 @@ async function start(): Promise<void> {
   try {
     const runtime = await createAppRuntime({
       application,
-      plugins: clientModules.plugins,
+      plugins: clientPlugins.plugins,
       routeComponentOverrides: [
-        ...clientModules.routeComponentOverrides,
+        ...clientPlugins.routeComponentOverrides,
         ...routeComponentOverrides,
       ],
       sourceExtensions,

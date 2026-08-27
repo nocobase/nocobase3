@@ -97,7 +97,7 @@ export interface AppClientBootstrapContext<TOptions = unknown> {
   readonly packageName: string;
   readonly refine: AppClientRefineRegistry;
   readonly source: AppClientContributionSource;
-  /** Options the application passed to this module. Empty object when none. */
+  /** Options the application passed to this plugin. Empty object when none. */
   readonly options: TOptions;
 }
 
@@ -172,7 +172,7 @@ export interface ResolvedAppClientContributions {
   readonly providers: readonly AppClientRegisteredProvider[];
 }
 
-export interface AppClientModuleDefinition<TOptions> {
+export interface AppClientPluginDefinition<TOptions> {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
@@ -183,7 +183,7 @@ export interface AppClientModuleDefinition<TOptions> {
   ) => readonly AppClientRouteComponentOverrideDefinition[];
 }
 
-export interface AppClientModuleRegistration {
+export interface AppClientPluginRegistration {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
@@ -192,28 +192,28 @@ export interface AppClientModuleRegistration {
   readonly options: unknown;
 }
 
-export type AppClientModuleFactory<TOptions> = (
+export type AppClientPluginFactory<TOptions> = (
   options?: TOptions,
-) => AppClientModuleRegistration;
+) => AppClientPluginRegistration;
 
-export interface AppClientModules {
+export interface AppClientPlugins {
   readonly plugins: readonly AppClientPluginLoader[];
   readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
 }
 
 /**
  * Wraps a plugin's client entries into a registration factory the application
- * calls in its `client/modules.ts`.
+ * calls in its `client/plugins.ts`.
  *
  * The entries stay lazy: this file is imported statically by the application,
  * so anything it imports at value level enters the entry chunk.
  */
-export function defineClientModule<TOptions = void>(
-  definition: AppClientModuleDefinition<TOptions>,
-): AppClientModuleFactory<TOptions> {
+export function defineClientPlugin<TOptions = void>(
+  definition: AppClientPluginDefinition<TOptions>,
+): AppClientPluginFactory<TOptions> {
   const packageName = normalizePackageName(definition.packageName);
 
-  return (options?: TOptions): AppClientModuleRegistration => {
+  return (options?: TOptions): AppClientPluginRegistration => {
     const resolvedOptions = (options ?? {}) as TOptions;
     const overrides = definition.routeComponentOverrides
       ? definition.routeComponentOverrides(resolvedOptions)
@@ -231,36 +231,36 @@ export function defineClientModule<TOptions = void>(
 }
 
 /**
- * Collects the application's registered modules in order. The array order is
+ * Collects the application's registered plugins in order. The array order is
  * the bootstrap order.
  */
-export function defineClientModules(
-  modules: readonly AppClientModuleRegistration[],
-): AppClientModules {
+export function defineClientPlugins(
+  registrations: readonly AppClientPluginRegistration[],
+): AppClientPlugins {
   const seen = new Set<string>();
   const plugins: AppClientPluginLoader[] = [];
   const routeComponentOverrides: AppClientRouteComponentOverrideDefinition[] =
     [];
 
-  for (const module of modules) {
-    if (seen.has(module.packageName)) {
+  for (const plugin of registrations) {
+    if (seen.has(plugin.packageName)) {
       throw new Error(
-        `Client module "${module.packageName}" is registered more than once.`,
+        `Client plugin "${plugin.packageName}" is registered more than once.`,
       );
     }
-    seen.add(module.packageName);
+    seen.add(plugin.packageName);
 
     plugins.push(
       Object.freeze({
-        packageName: module.packageName,
-        bootstrap: module.bootstrap,
-        routes: module.routes,
-        providers: module.providers,
-        options: module.options,
+        packageName: plugin.packageName,
+        bootstrap: plugin.bootstrap,
+        routes: plugin.routes,
+        providers: plugin.providers,
+        options: plugin.options,
         source: 'plugin',
       }),
     );
-    routeComponentOverrides.push(...module.routeComponentOverrides);
+    routeComponentOverrides.push(...plugin.routeComponentOverrides);
   }
 
   return Object.freeze({

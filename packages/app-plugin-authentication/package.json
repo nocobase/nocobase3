@@ -23,9 +23,9 @@
       "types": "./client/index.ts",
       "import": "./client/index.ts"
     },
-    "./client/module": {
-      "types": "./client/module.ts",
-      "import": "./client/module.ts"
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
     },
     "./client/bootstrap": {
       "types": "./client/bootstrap.ts",
@@ -63,9 +63,9 @@
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
       },
-      "./client/module": {
-        "types": "./dist/client/module.d.ts",
-        "import": "./dist/client/module.js"
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
       },
       "./client/bootstrap": {
         "types": "./dist/client/bootstrap.d.ts",

@@ -1,6 +1,6 @@
 import {
-  defineClientModule,
-  type AppClientModuleFactory,
+  defineClientPlugin,
+  type AppClientPluginFactory,
   type AppClientRouteComponentLoader,
 } from '@nocobase/app-client/plugins';
 
@@ -11,8 +11,8 @@ export interface AuthenticationClientOptions {
   readonly registerPage?: AppClientRouteComponentLoader;
 }
 
-const authentication: AppClientModuleFactory<AuthenticationClientOptions> =
-  defineClientModule({
+const authentication: AppClientPluginFactory<AuthenticationClientOptions> =
+  defineClientPlugin({
     packageName: '@nocobase/app-plugin-authentication',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),

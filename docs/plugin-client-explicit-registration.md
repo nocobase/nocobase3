@@ -50,21 +50,21 @@ app-template-default/package.json
 
 ### 2.1 App 侧
 
-新增 `packages/app-template-default/client/modules.ts`：
+新增 `packages/app-template-default/client/plugins.ts`：
 
 ```ts
 import {
-  defineClientModules,
-  type AppClientModules,
+  defineClientPlugins,
+  type AppClientPlugins,
 } from '@nocobase/app-client/plugins';
-import authentication from '@nocobase/app-plugin-authentication/client/module';
-import authorization from '@nocobase/app-plugin-authorization/client/module';
-import dataProvider from '@nocobase/app-plugin-data-provider/client/module';
-import install from '@nocobase/app-plugin-install/client/module';
-import notificationProvider from '@nocobase/app-plugin-notification-provider/client/module';
-import routesExample from '@nocobase/app-plugin-routes-example/client/module';
+import authentication from '@nocobase/app-plugin-authentication/client/plugin';
+import authorization from '@nocobase/app-plugin-authorization/client/plugin';
+import dataProvider from '@nocobase/app-plugin-data-provider/client/plugin';
+import install from '@nocobase/app-plugin-install/client/plugin';
+import notificationProvider from '@nocobase/app-plugin-notification-provider/client/plugin';
+import routesExample from '@nocobase/app-plugin-routes-example/client/plugin';
 
-const clientModules: AppClientModules = defineClientModules([
+const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   authorization(),
   dataProvider(),
@@ -73,19 +73,19 @@ const clientModules: AppClientModules = defineClientModules([
   routesExample(),
 ]);
 
-export default clientModules;
+export default clientPlugins;
 ```
 
 数组顺序就是 bootstrap 的执行顺序。当前 `nocobase.plugins` 的 key 顺序同样决定执行顺序（`register-plugin.mjs` 按包名排序插入），区别在于它是隐式副作用，而数组顺序是作者可见、可调整的。
 
 ### 2.2 插件侧
 
-新增 `client/module.ts`，default export。现有 `client/bootstrap.ts`、`client/routes.ts`、`client/providers.ts` **完全不动**：
+新增 `client/plugin.ts`，default export。现有 `client/bootstrap.ts`、`client/routes.ts`、`client/providers.ts` **完全不动**：
 
 ```ts
 import {
-  defineClientModule,
-  type AppClientModuleFactory,
+  defineClientPlugin,
+  type AppClientPluginFactory,
   type AppClientRouteComponentLoader,
 } from '@nocobase/app-client/plugins';
 
@@ -95,8 +95,8 @@ export interface AuthenticationClientOptions {
   readonly loginPage?: AppClientRouteComponentLoader;
 }
 
-const authentication: AppClientModuleFactory<AuthenticationClientOptions> =
-  defineClientModule({
+const authentication: AppClientPluginFactory<AuthenticationClientOptions> =
+  defineClientPlugin({
     packageName: '@nocobase/app-plugin-authentication',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
@@ -114,30 +114,30 @@ const authentication: AppClientModuleFactory<AuthenticationClientOptions> =
 export default authentication;
 ```
 
-`client/module.ts` 是注册面而非实现。`modules.ts` 静态 import 每个插件的 module，因此 module 静态 import 的东西都会进入应用的入口 chunk。据此有一条推荐：
+`client/plugin.ts` 是注册面而非实现。App 的 `client/plugins.ts` 静态 import 每个插件的 `client/plugin`，因此 plugin 入口静态 import 的东西都会进入应用的入口 chunk。据此有一条推荐：
 
-> **`client/module.ts` 尽量不要静态 import 插件的业务实现。** 三个入口用 `() => import()` 引用，类型用 `import type`。
+> **`client/plugin.ts` 尽量不要静态 import 插件的业务实现。** 三个入口用 `() => import()` 引用，类型用 `import type`。
 
-不合适的是静态 import 组件、provider 工厂、服务类这类会牵出 React 子树或第三方依赖的模块。这类代码应当留在 `bootstrap` / `routes` / `providers` 里，由 module 通过动态 import 引用。
+不合适的是静态 import 组件、provider 工厂、服务类这类会牵出 React 子树或第三方依赖的模块。这类代码应当留在 `bootstrap` / `routes` / `providers` 里，由 plugin 入口通过动态 import 引用。
 
-这条不做强制校验。「业务实现」与「轻量常量」的界线依赖语义判断，机械规则要么禁掉合理写法（禁止一切值 import 会连 `defineClientModule` 和路由 ID 常量一起禁掉），要么就得维护一份白名单。写进 AGENTS.md 和插件模板注释即可；真正的兜底是 code review 和构建产物体积。
+这条不做强制校验。「业务实现」与「轻量常量」的界线依赖语义判断，机械规则要么禁掉合理写法（禁止一切值 import 会连 `defineClientPlugin` 和路由 ID 常量一起禁掉），要么就得维护一份白名单。写进 AGENTS.md 和插件模板注释即可；真正的兜底是 code review 和构建产物体积。
 
 ### 2.3 三层职责
 
 | 层                       | 内容                                                      | 谁写 |
 | ------------------------ | --------------------------------------------------------- | ---- |
-| `client/module.ts`       | 对外注册面：包名、三个入口的 loader、options 到贡献的映射 | 插件 |
+| `client/plugin.ts`       | 对外注册面：包名、三个入口的 loader、options 到贡献的映射 | 插件 |
 | `client/bootstrap.ts` 等 | 实现：实际注册 Refine provider、路由定义、React Provider  | 插件 |
-| `client/modules.ts`      | 装配：注册哪些插件、按什么顺序、传什么配置                | App  |
+| `client/plugins.ts`      | 装配：注册哪些插件、按什么顺序、传什么配置                | App  |
 
 ## 3. API 设计
 
 新增到 `packages/app-client/src/plugins.ts`。该包启用了 `isolatedDeclarations`，所有导出都需要显式类型标注，下面的签名已按此要求给出。
 
-### 3.1 模块描述符
+### 3.1 插件描述符
 
 ```ts
-export interface AppClientModuleDefinition<TOptions> {
+export interface AppClientPluginDefinition<TOptions> {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
@@ -148,7 +148,7 @@ export interface AppClientModuleDefinition<TOptions> {
   ) => readonly AppClientRouteComponentOverrideDefinition[];
 }
 
-export interface AppClientModuleRegistration {
+export interface AppClientPluginRegistration {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
@@ -157,13 +157,13 @@ export interface AppClientModuleRegistration {
   readonly options: unknown;
 }
 
-export type AppClientModuleFactory<TOptions> = (
+export type AppClientPluginFactory<TOptions> = (
   options?: TOptions,
-) => AppClientModuleRegistration;
+) => AppClientPluginRegistration;
 
-export function defineClientModule<TOptions = void>(
-  definition: AppClientModuleDefinition<TOptions>,
-): AppClientModuleFactory<TOptions>;
+export function defineClientPlugin<TOptions = void>(
+  definition: AppClientPluginDefinition<TOptions>,
+): AppClientPluginFactory<TOptions>;
 ```
 
 三个入口字段统一命名为 `bootstrap` / `routes` / `providers`。现有的 `AppClientPluginLoader` 和 `AppClientApplicationLoader` 使用 `loadBootstrap` / `loadRoutes` / `loadProviders`，本期一并重命名，避免同一概念存在两套名称。
@@ -177,7 +177,7 @@ export function defineClientModule<TOptions = void>(
 | `app-template-default/client/application.ts` | 3 行         |
 | `tests/logic/client-runtime.test.ts`         | 约 15 处     |
 
-`scripts/client-plugins.ts` 和 `tests/logic/client-plugins.test.ts` 本期删除，其中的 `loadX` 无需迁移。重命名后 `defineClientApplication` 与模块描述符使用同一套字段名。
+`scripts/client-plugins.ts` 和 `tests/logic/client-plugins.test.ts` 本期删除，其中的 `loadX` 无需迁移。重命名后 `defineClientApplication` 与插件描述符使用同一套字段名。
 
 ### 3.2 options 到三类贡献的通路
 
@@ -202,7 +202,7 @@ import {
   type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
 
-import type { AuthorizationClientOptions } from './module.js';
+import type { AuthorizationClientOptions } from './plugin.js';
 
 const routes = (
   options: AuthorizationClientOptions,
@@ -227,22 +227,22 @@ authorization({ settingsPages: false }),
 | 按 options 调整路由路径 | 如统一加前缀，路径仍由插件生成，App 只提供参数                                                                                |
 | 配置 Provider           | `AppClientProviderDefinition.component` 的类型是 `ComponentType<PropsWithChildren>`，不接受额外 props；工厂形态提供了闭包位置 |
 
-`runtime.ts` 的 `isRouteDefinitions` 和 `isProviderDefinitions` 需要相应接受函数形态。§7.6 的 inspect 加载 `modules.ts` 后同样持有 options，做相同判断即可。
+`runtime.ts` 的 `isRouteDefinitions` 和 `isProviderDefinitions` 需要相应接受函数形态。§7.6 的 inspect 加载 `client/plugins.ts` 后同样持有 options，做相同判断即可。
 
 ### 3.3 装配
 
 ```ts
-export interface AppClientModules {
+export interface AppClientPlugins {
   readonly plugins: readonly AppClientPluginLoader[];
   readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
 }
 
-export function defineClientModules(
-  modules: readonly AppClientModuleRegistration[],
-): AppClientModules;
+export function defineClientPlugins(
+  registrations: readonly AppClientPluginRegistration[],
+): AppClientPlugins;
 ```
 
-`defineClientModules` 做三件事：按顺序收集入口、合并所有模块贡献的路由覆盖、校验包名不重复（重复直接 throw，报出包名）。包名重复在当前的虚拟模块结构下不可能出现，手写 `modules.ts` 则可能。
+`defineClientPlugins` 做三件事：按顺序收集入口、合并所有插件贡献的路由覆盖、校验包名不重复（重复直接 throw，报出包名）。包名重复在当前的虚拟模块结构下不可能出现，手写 `client/plugins.ts` 则可能。
 
 ### 3.4 配置怎么到达 bootstrap
 
@@ -272,22 +272,22 @@ export type AppClientBootstrap<TOptions = unknown> = (
 
 ```ts
 -import { appClientPluginLoaders } from 'virtual:nocobase-app-client-plugins';
-+import clientModules from './modules';
++import clientPlugins from './plugins';
 
  const runtime = await createAppRuntime({
    application,
 -  plugins: appClientPluginLoaders,
 -  routeComponentOverrides,
-+  plugins: clientModules.plugins,
++  plugins: clientPlugins.plugins,
 +  routeComponentOverrides: [
-+    ...clientModules.routeComponentOverrides,
++    ...clientPlugins.routeComponentOverrides,
 +    ...routeComponentOverrides,
 +  ],
    sourceExtensions,
  });
 ```
 
-覆盖列表在 `index.tsx` 合并，`CreateAppRuntimeOptions` 的形状不变。备选是给它加一个 `modules` 字段，语义更整齐，代价是 runtime 需要理解 module 这一层概念。
+覆盖列表在 `index.tsx` 合并，`CreateAppRuntimeOptions` 的形状不变。备选是给它加一个 `plugins` 字段承载注册结果，语义更整齐，代价是 runtime 需要理解注册面这一层概念。
 
 ### 3.6 options 能表达什么
 
@@ -305,14 +305,14 @@ options 分两条通路，取决于配置生效的时机：
 authentication 插件自带四个页面。App 想只换登录页、保留其余三个：
 
 ```ts
-// 插件侧 client/module.ts
+// 插件侧 client/plugin.ts
 export interface AuthenticationClientOptions {
   readonly loginPage?: AppClientRouteComponentLoader;
   readonly registerPage?: AppClientRouteComponentLoader;
 }
 
-const authentication: AppClientModuleFactory<AuthenticationClientOptions> =
-  defineClientModule({
+const authentication: AppClientPluginFactory<AuthenticationClientOptions> =
+  defineClientPlugin({
     packageName: '@nocobase/app-plugin-authentication',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
@@ -338,7 +338,7 @@ const authentication: AppClientModuleFactory<AuthenticationClientOptions> =
 ```
 
 ```ts
-// App 侧 client/modules.ts
+// App 侧 client/plugins.ts
 authentication({
   loginPage: () => import('./pages/branded-login'),
 }),
@@ -353,13 +353,13 @@ authentication({
 `createNotificationProvider(options)` 已经接受 `{ undoLabel }`（见 `client/notification-provider.tsx:11`），默认 `'Undo'`。但 `client/bootstrap.ts` 调用时没有传任何东西，所以这个参数今天**没有任何办法从 App 传进去**。
 
 ```ts
-// 插件侧 client/module.ts
+// 插件侧 client/plugin.ts
 export interface NotificationClientOptions {
   readonly undoLabel?: string;
 }
 
-const notificationProvider: AppClientModuleFactory<NotificationClientOptions> =
-  defineClientModule({
+const notificationProvider: AppClientPluginFactory<NotificationClientOptions> =
+  defineClientPlugin({
     packageName: '@nocobase/app-plugin-notification-provider',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
@@ -377,7 +377,7 @@ const notificationProvider: AppClientModuleFactory<NotificationClientOptions> =
 ```
 
 ```ts
-// App 侧 client/modules.ts
+// App 侧 client/plugins.ts
 notificationProvider({ undoLabel: '撤销' }),
 ```
 
@@ -388,7 +388,7 @@ notificationProvider({ undoLabel: '撤销' }),
 authorization 插件的 bootstrap 里 `addResources` 硬编码了五条菜单项，label 是英文（`'Authorization'`、`'Permission Sets'`……），icon 是固定的 lucide 组件（见 `client/bootstrap.ts:44`）。App 想改文案、换图标，或者干脆不显示这组设置入口，今天都没有位置可写。
 
 ```ts
-// App 侧 client/modules.ts
+// App 侧 client/plugins.ts
 authorization({
   settingsMenu: false,          // 不注册这组 resources
 }),
@@ -403,7 +403,7 @@ authorization({
 #### 汇总：App 侧最终长什么样
 
 ```ts
-const clientModules: AppClientModules = defineClientModules([
+const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication({ loginPage: () => import('./pages/branded-login') }),
   authorization({ labels: { root: '权限' } }),
   dataProvider(),
@@ -432,16 +432,16 @@ const clientModules: AppClientModules = defineClientModules([
 
 模板现在的 `client/extensions/nocobase-auth-ui/extension.ts` 覆盖了 authentication 插件的全部四条路由——login、register、forgot-password、reset-password——每条各一次，因此不冲突。
 
-改造后 `routeComponentOverrides` 的来源从「extension 一处」变为「extension + modules 两处」，但这本身不产生冲突。实测四种情形：
+改造后 `routeComponentOverrides` 的来源从「extension 一处」变为「extension + `client/plugins.ts` 两处」，但这本身不产生冲突。实测四种情形：
 
 | 情形                                          | 结果  |
 | --------------------------------------------- | ----- |
 | 当前状态：只有 extension 覆盖                 | 通过  |
-| 改造后：module 暴露 `loginPage`，App 不传值   | 通过  |
-| 改造后：module 暴露 `loginPage`，App 传了值   | throw |
+| 改造后：插件暴露 `loginPage`，App 不传值      | 通过  |
+| 改造后：插件暴露 `loginPage`，App 传了值      | throw |
 | 传 `loginPage` 且移除 extension 的 login 覆盖 | 通过  |
 
-冲突只在插件 module 暴露了某个页面选项、且 App 实际传值时发生，此时该路由被两个来源各覆盖一次。这是新增能力与既有配置撞车，与注册方式的改造无关。
+冲突只在插件 plugin 入口暴露了某个页面选项、且 App 实际传值时发生，此时该路由被两个来源各覆盖一次。这是新增能力与既有配置撞车，与注册方式的改造无关。
 
 对 authentication 这个插件，三种处理方式：
 
@@ -451,11 +451,11 @@ const clientModules: AppClientModules = defineClientModules([
 | B. 删掉 auth-ui 扩展的覆盖，改由 `authentication({...})` 传入 | 演示效果最好，但涉及 Registry 已安装副本的所有权模型，属于另一个议题。                  |
 | C. 让 options 覆盖优先于 extension 覆盖                       | 需要把 throw 改成优先级规则，会让「谁最终拥有这条路由」重新变得不可读。不建议。         |
 
-建议选 A。throw 是正确行为，错误信息包含 routeId，可诊断。文档需要写明：**一条路由只能被覆盖一次，无论覆盖来自模块 options、`route-overrides.ts` 还是 source extension。**
+建议选 A。throw 是正确行为，错误信息包含 routeId，可诊断。文档需要写明：**一条路由只能被覆盖一次，无论覆盖来自插件 options、`route-overrides.ts` 还是 source extension。**
 
 ### 4.1 确实要覆盖时怎么做
 
-一条路由只能有一个覆盖来源。想用 options 覆盖一条已被 extension 占用的路由，做法是把该条从 extension 移到 `modules.ts`，页面文件保持原位：
+一条路由只能有一个覆盖来源。想用 options 覆盖一条已被 extension 占用的路由，做法是把该条从 extension 移到 `client/plugins.ts`，页面文件保持原位：
 
 ```ts
 // client/extensions/nocobase-auth-ui/extension.ts —— 移除 login 这一项
@@ -471,7 +471,7 @@ defineClientRouteComponentOverrides([
 ```
 
 ```ts
-// client/modules.ts
+// client/plugins.ts
 authentication({
   loginPage: () => import('./extensions/nocobase-auth-ui/pages/login-page'),
 }),
@@ -481,17 +481,17 @@ authentication({
 
 三条覆盖路径的适用范围：
 
-| 场景                          | 使用                                        |
-| ----------------------------- | ------------------------------------------- |
-| 插件 module 暴露了对应 option | options，如 `authentication({ loginPage })` |
-| 插件未暴露 option             | `route-overrides.ts` 或 source extension    |
-| 同一路由想同时用两者          | 不支持，必须二选一                          |
+| 场景                              | 使用                                        |
+| --------------------------------- | ------------------------------------------- |
+| 插件 plugin 入口暴露了对应 option | options，如 `authentication({ loginPage })` |
+| 插件未暴露 option                 | `route-overrides.ts` 或 source extension    |
+| 同一路由想同时用两者              | 不支持，必须二选一                          |
 
 options 不取代 `route-overrides.ts`。插件作者只会为部分页面暴露选项，其余路由仍然依赖通用覆盖机制。
 
 ### 4.2 插件覆盖其他插件的路由
 
-`applyClientRouteComponentOverrides` 只校验 routeId 存在且未被重复覆盖，不限制覆盖来源，因此插件 module 的 `routeComponentOverrides` 可以返回针对其他插件路由的覆盖。合法用例如统一改版多个基础插件页面的 UI 插件。
+`applyClientRouteComponentOverrides` 只校验 routeId 存在且未被重复覆盖，不限制覆盖来源，因此插件 plugin 入口的 `routeComponentOverrides` 可以返回针对其他插件路由的覆盖。合法用例如统一改版多个基础插件页面的 UI 插件。
 
 启用这一能力需要同时修复 inspect 的来源显示。当前实现把任何被覆盖的路由的 `componentSource` 硬编码为 `application`：
 
@@ -517,18 +517,18 @@ componentSource: routeComponentOverrides.some((o) => o.routeId === route.id)
 
 本期只摘掉第一个。删除 `nocobase.plugins` 需要先完成 server 侧的等价改造，该改造有一处额外成本：
 
-**插件的 server 入口现在是纯文件约定解析的**（`resolve.ts:213` 按 `server/bootstrap.ts`、`server/routes/index.ts` 等候选路径探测），`package.json` 的 `exports` 里根本没有 server 子路径——`scripts/create-plugin.mjs:253` 生成的 exports 只有 client 三条。改成显式 import 后，每个插件都要补 `./server/module` 的 `exports` 和 `publishConfig.exports`，并且 `dev-plugin-watches.mjs` 和 `build.mjs` 需要改成从 `server/modules.ts` 解析包名。
+**插件的 server 入口现在是纯文件约定解析的**（`resolve.ts:213` 按 `server/bootstrap.ts`、`server/routes/index.ts` 等候选路径探测），`package.json` 的 `exports` 里根本没有 server 子路径——`scripts/create-plugin.mjs:253` 生成的 exports 只有 client 三条。改成显式 import 后，每个插件都要补 `./server/plugin` 的 `exports` 和 `publishConfig.exports`，并且 `dev-plugin-watches.mjs` 和 `build.mjs` 需要改成从 `server/plugins.ts` 解析包名。
 
 顺序：**client 显式注册（本期）→ server 显式注册 → 删除 `nocobase.plugins`**。
 
 ### 5.1 过渡期的一致性约束
 
-本期结束后同一个插件有两处声明：`nocobase.plugins` 和 `client/modules.ts`。两者可能不一致，例如插件在 `nocobase.plugins` 里 `enabled: false` 但仍在 `modules.ts` 里——结果是 server 不加载而 client 加载。
+本期结束后同一个插件有两处声明：`nocobase.plugins` 和 `client/plugins.ts`。两者可能不一致，例如插件在 `nocobase.plugins` 里 `enabled: false` 但仍在 `client/plugins.ts` 里——结果是 server 不加载而 client 加载。
 
 提议增加一致性校验，放在 `packages/app-template-default/tests/logic/` 下的测试里（这样直接进 CI，无需新增命令）：
 
-- `client/modules.ts` 里的每个包，必须在 `nocobase.plugins` 里存在且 `enabled: true`——不满足则失败。
-- `nocobase.plugins` 里 `enabled: true` 且提供了 client 贡献的包，应当在 `client/modules.ts` 里——不满足则失败。
+- `client/plugins.ts` 里的每个包，必须在 `nocobase.plugins` 里存在且 `enabled: true`——不满足则失败。
+- `nocobase.plugins` 里 `enabled: true` 且提供了 client 贡献的包，应当在 `client/plugins.ts` 里——不满足则失败。
 
 ## 6. 禁用的表达
 
@@ -536,7 +536,7 @@ componentSource: routeComponentOverrides.some((o) => o.routeId === route.id)
 
 本期 `nocobase.plugins` 仍在，所以 `--disabled` 仍有明确语义：
 
-| 命令                           | `devDependencies` | `nocobase.plugins` | `client/modules.ts`  |
+| 命令                           | `devDependencies` | `nocobase.plugins` | `client/plugins.ts`  |
 | ------------------------------ | ----------------- | ------------------ | -------------------- |
 | `plugin:register x`            | 加入              | `enabled: true`    | 追加 import + 数组项 |
 | `plugin:register x --disabled` | 加入              | `enabled: false`   | 不写入               |
@@ -556,16 +556,16 @@ componentSource: routeComponentOverrides.some((o) => o.routeId === route.id)
 | TS AST 全量重打印（`ts.createPrinter`） | 会按 printer 的风格重写整个文件，用户的注释和手写格式全部丢失。 |
 | **AST 定位 + 文本 splice + prettier**   | **建议。** 只在原文的正确位置插入字符串，用户其余内容逐字保留。 |
 
-第三种的具体做法：用 TypeScript 编译器 API 只做两件事——找到最后一条 import 声明的结束位置、找到 `defineClientModules([...])` 数组字面量的元素区间——然后在原始文本上做插入，最后用 App 自己解析出的 prettier 配置跑一遍格式化。
+第三种的具体做法：用 TypeScript 编译器 API 只做两件事——找到最后一条 import 声明的结束位置、找到 `defineClientPlugins([...])` 数组字面量的元素区间——然后在原始文本上做插入，最后用 App 自己解析出的 prettier 配置跑一遍格式化。
 
 ### 7.2 实现要点
 
-提议抽出 `scripts/lib/client-modules.mjs`，供 register / unregister / remove / inspect 共用：
+提议抽出 `scripts/lib/client-plugins.mjs`，供 register / unregister / remove / inspect 共用：
 
 ```
-readClientModules(appRoot)                  → { imports, entries, sourceText, ranges }
-addClientModule(sourceText, {packageName, localName})    → 新的 sourceText
-removeClientModule(sourceText, {packageName})            → 新的 sourceText
+readClientPlugins(appRoot)                              → { imports, entries, sourceText, ranges }
+addClientPlugin(sourceText, {packageName, localName})    → 新的 sourceText
+removeClientPlugin(sourceText, {packageName})            → 新的 sourceText
 ```
 
 几个需要定死的细节：
@@ -574,8 +574,8 @@ removeClientModule(sourceText, {packageName})            → 新的 sourceText
 - **插入位置**：import 插在最后一条 import 之后；数组项追加到数组末尾，不排序。追加比排序更可预测，且不会打乱作者安排的 bootstrap 顺序。
 - **幂等**：包名已存在则不写文件，输出 `already registered`。
 - **`--dry-run`**：打印将要写入的结果，不落盘。
-- **失败回滚**：沿用 `register-plugin.mjs` 现有的快照恢复模式（它已经对 `package.json` 和 `pnpm-lock.yaml` 这么做了），把 `client/modules.ts` 一并纳入快照。
-- **`client/modules.ts` 不存在时**：生成一个只含 `defineClientModules([])` 的骨架文件。
+- **失败回滚**：沿用 `register-plugin.mjs` 现有的快照恢复模式（它已经对 `package.json` 和 `pnpm-lock.yaml` 这么做了），把 `client/plugins.ts` 一并纳入快照。
+- **`client/plugins.ts` 不存在时**：生成一个只含 `defineClientPlugins([])` 的骨架文件。
 
 ### 7.3 前置依赖
 
@@ -584,12 +584,12 @@ removeClientModule(sourceText, {packageName})            → 新的 sourceText
 ### 7.4 需要连带改动的命令
 
 - **`unregister-plugin.mjs`**：反向删除 import 和数组项。
-- **`remove-plugin.mjs`**：现在的引用扫描只看 package.json 的依赖字段和 `nocobase.plugins`（`scripts/remove-plugin.mjs:228`）。必须扩展到扫描各 App 的 `client/modules.ts`，否则会出现「插件已删除但 App 仍 import 它」的破坏性结果。
-- **`inspect-app-client.mjs`**：改为加载 `client/modules.ts`，实现方式见 §7.6。它同时是 codegen 的验证手段：生成的代码能被加载并解析出预期贡献，即证明 codegen 正确。
+- **`remove-plugin.mjs`**：现在的引用扫描只看 package.json 的依赖字段和 `nocobase.plugins`（`scripts/remove-plugin.mjs:228`）。必须扩展到扫描各 App 的 `client/plugins.ts`，否则会出现「插件已删除但 App 仍 import 它」的破坏性结果。
+- **`inspect-app-client.mjs`**：改为加载 `client/plugins.ts`，实现方式见 §7.6。它同时是 codegen 的验证手段：生成的代码能被加载并解析出预期贡献，即证明 codegen 正确。
 
 ### 7.5 组件用 loader 形式还是值形式
 
-`app:client:inspect` 通过 `tsx` 运行，直接动态 import TS 源文件读取 default export。改造后它要 import `client/modules.ts`，因此 `modules.ts` 必须能在 Vite 之外被加载。
+`app:client:inspect` 通过 `tsx` 运行，直接动态 import TS 源文件读取 default export。改造后它要 import `client/plugins.ts`，因此该文件必须能在 Vite 之外被加载。
 
 tsx 下的加载边界：
 
@@ -599,12 +599,12 @@ tsx 下的加载边界：
 | `import './x.css'`                      | 失败：`Unexpected token '{'` |
 | `import logo from './x.png'`            | 失败                         |
 
-CSS 只在 `client/index.tsx` 里 import 一次，页面组件本身不 import CSS，因此组件值不会让 `modules.ts` 变得不可加载。inspect 目前也已经在静态 import React 组件——App 的 `client/providers.ts` 导入 `AppThemeProvider`，后者导入 `next-themes`。
+CSS 只在 `client/index.tsx` 里 import 一次，页面组件本身不 import CSS，因此组件值不会让 `client/plugins.ts` 变得不可加载。inspect 目前也已经在静态 import React 组件——App 的 `client/providers.ts` 导入 `AppThemeProvider`，后者导入 `next-themes`。
 
 **推荐 loader 形式，但不作为硬性约束。** 理由有两条：
 
-1. **懒加载一致性。** `modules.ts` 是首屏入口模块，值形式会把页面组件静态拖进它的模块图，于是该页面进入主 chunk。路由系统其余部分全是懒加载。
-2. **风险边界。** 值形式让 `modules.ts` 的可加载性取决于所传组件的传递依赖。页面组件今天不 import CSS，但没有机制保证将来不会——某个页面引入 `import './styles.css'` 之后，inspect 会在一个看似无关的地方失败。loader 形式消除这个耦合。
+1. **懒加载一致性。** `client/plugins.ts` 是首屏入口模块，值形式会把页面组件静态拖进它的模块图，于是该页面进入主 chunk。路由系统其余部分全是懒加载。
+2. **风险边界。** 值形式让 `client/plugins.ts` 的可加载性取决于所传组件的传递依赖。页面组件今天不 import CSS，但没有机制保证将来不会——某个页面引入 `import './styles.css'` 之后，inspect 会在一个看似无关的地方失败。loader 形式消除这个耦合。
 
 两条都是「更好」而非「必须」，所以类型上允许两种写法（`AppClientRouteComponentLoader | ComponentType`）；文档和插件模板统一用 loader 形式，AGENTS.md 说明理由。
 
@@ -621,10 +621,10 @@ error TS2322: Type 'ComponentType' is not assignable to type
 
 ### 7.6 inspect 的实现方式
 
-改造后的 inspect 不再复刻解析逻辑，而是加载 `client/modules.ts` 并调用 `@nocobase/app-client` 的运行时函数：
+改造后的 inspect 不再复刻解析逻辑，而是加载 `client/plugins.ts` 并调用 `@nocobase/app-client` 的运行时函数：
 
 ```js
-const modules = (await import(path.join(appRoot, 'client/modules.ts'))).default;
+const modules = (await import(path.join(appRoot, 'client/plugins.ts'))).default;
 const contributions = [
   applicationContribution,
   ...(await loadPluginContributions(modules.plugins)),
@@ -636,13 +636,13 @@ const routes = applyClientRouteComponentOverrides(
 );
 ```
 
-可行性已验证：tsx 能通过 package exports 解析到插件的 `.ts` 源文件（`@nocobase/app-plugin-authentication/client/routes` 返回 4 条路由定义），能加载新形态的 `modules.ts`，能执行 options 传入的 override loader，并能直接调用 `resolveAppClientContributions` 和 `applyClientRouteComponentOverrides` 得到与运行时一致的结果。
+可行性已验证：tsx 能通过 package exports 解析到插件的 `.ts` 源文件（`@nocobase/app-plugin-authentication/client/routes` 返回 4 条路由定义），能加载新形态的 `client/plugins.ts`，能执行 options 传入的 override loader，并能直接调用 `resolveAppClientContributions` 和 `applyClientRouteComponentOverrides` 得到与运行时一致的结果。
 
 与当前实现的区别：
 
 |                    | 当前（451 行）                              | 改造后（约 100 行）          |
 | ------------------ | ------------------------------------------- | ---------------------------- |
-| 数据来源           | 扫 `nocobase.plugins`，逐个探测入口文件路径 | 加载 `client/modules.ts`     |
+| 数据来源           | 扫 `nocobase.plugins`，逐个探测入口文件路径 | 加载 `client/plugins.ts`     |
 | 解析逻辑           | 自行复刻一份                                | 调用 app-client 的运行时函数 |
 | 与浏览器结果的关系 | 一致性依赖三处逻辑同时正确                  | 同一份文件、同一套函数       |
 
@@ -876,7 +876,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 ### 8.8 「哪些插件需要同步」
 
-本期是 `client/modules.ts` 与 `nocobase.plugins` 的并集——server-only 插件也可能带技能。server 显式注册完成后改为 `client/modules.ts` ∪ `server/modules.ts`。
+本期是 `client/plugins.ts` 与 `nocobase.plugins` 的并集——server-only 插件也可能带技能。server 显式注册完成后改为 `client/plugins.ts` ∪ `server/plugins.ts`。
 
 ## 9. 改动清单
 
@@ -884,9 +884,9 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 | 文件                     | 改动                                                                                                              |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `src/plugins.ts`         | 新增 `defineClientModule` / `defineClientModules` 及相关类型；`AppClientBootstrapContext` 增加 `options` 并泛型化 |
+| `src/plugins.ts`         | 新增 `defineClientPlugin` / `defineClientPlugins` 及相关类型；`AppClientBootstrapContext` 增加 `options` 并泛型化 |
 | `tests/plugins.test.tsx` | 新增用例：options 传递、路由覆盖合并、重复包名报错                                                                |
-| `README.md`              | 新增模块注册面一节                                                                                                |
+| `README.md`              | 新增插件注册面一节                                                                                                |
 
 ### 9.2 各插件（6 个已注册 + 1 个未注册）
 
@@ -900,7 +900,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 | `app-plugin-routes-example`             | routes, providers            |
 | `app-plugin-registry-example`（未注册） | routes                       |
 
-每个插件：新增 `client/module.ts`；`exports` 和 `publishConfig.exports` 各加一条 `./client/module`。
+每个插件：新增 `client/plugin.ts`；`exports` 和 `publishConfig.exports` 各加一条 `./client/plugin`。
 
 `nocobase.plugin.client` 在本期改造后不再有消费者，建议同步删除该字段并移除 `server/plugins/resolve.ts` 里的 `readClientManifest`、`clientBootstrapEntry` / `clientRoutesEntry` / `clientProvidersEntry` 三个字段。留着一个不被读取的字段会误导后来者。这会连带修改 `tests/logic/config.test.ts` 中约 7 处断言（该文件 860–913 行）。此项可独立于主改造取舍。
 
@@ -908,13 +908,13 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 | 文件                                 | 改动                                                           |
 | ------------------------------------ | -------------------------------------------------------------- |
-| `client/modules.ts`                  | 新增                                                           |
+| `client/plugins.ts`                  | 新增                                                           |
 | `client/index.tsx`                   | 改为 import `./modules`，合并路由覆盖                          |
 | `client/vite-env.d.ts`               | 删除 `virtual:nocobase-app-client-plugins` 的模块声明          |
 | `scripts/client-plugins.ts`          | **删除**（123 行）                                             |
 | `vite.config.ts`                     | 移除 `appClientPluginsPlugin` 的 import 和使用                 |
 | `tests/logic/client-plugins.test.ts` | **删除**，并从 `vitest.config.ts` 的 include 列表移除          |
-| `tests/logic/` 新增                  | `client/modules.ts` 与 `nocobase.plugins` 的一致性校验（§5.1） |
+| `tests/logic/` 新增                  | `client/plugins.ts` 与 `nocobase.plugins` 的一致性校验（§5.1） |
 | `AGENTS.md`                          | 更新注册方式说明                                               |
 | `client/AGENTS.md`                   | 补充 module.ts 推荐写法和路由覆盖唯一性规则                    |
 | `client/runtime.ts`                  | 字段重命名；接受工厂形态的 routes / providers                  |
@@ -929,11 +929,11 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 | ------------------------ | ---------------------------------------- |
 | `lib/client-modules.mjs` | 新增，AST 定位 + splice + prettier       |
 | `lib/skills-sync.mjs`    | 新增                                     |
-| `register-plugin.mjs`    | 写入 modules.ts；调用 skills sync        |
-| `unregister-plugin.mjs`  | 从 modules.ts 移除；清理 skills          |
-| `remove-plugin.mjs`      | 引用扫描扩展到 modules.ts                |
-| `inspect-app-client.mjs` | 改为加载 modules.ts                      |
-| `create-plugin.mjs`      | 生成 `client/module.ts`；补 `files` 字段 |
+| `register-plugin.mjs`    | 写入 client/plugins.ts；调用 skills sync |
+| `unregister-plugin.mjs`  | 从 client/plugins.ts 移除；清理 skills   |
+| `remove-plugin.mjs`      | 引用扫描扩展到 client/plugins.ts         |
+| `inspect-app-client.mjs` | 改为加载 client/plugins.ts               |
+| `create-plugin.mjs`      | 生成 `client/plugin.ts`；补 `files` 字段 |
 | `sync-skills.mjs`        | 新增，`plugin:skills:sync` 入口          |
 
 根 `package.json`：加 `typescript: catalog:` 到 devDependencies，加 `plugin:skills:sync` 脚本。
@@ -966,20 +966,20 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 ## 11. 分阶段落地
 
-| 阶段 | 内容                                                                                            | 验证                                                                                           |
-| ---- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1    | `app-client` 的 API + 6 个插件的 `client/module.ts` + 模板 `modules.ts` 手写接线 + 删除虚拟模块 | `pnpm --filter @nocobase/app-client check`、模板 typecheck / test / build、`pnpm app:dev` 实跑 |
-| 2    | `inspect-app-client.mjs` 改为加载 `modules.ts`（§7.6）+ 一致性校验测试                          | `pnpm app:client:inspect --app app-template-default` 输出与阶段 1 前一致                       |
-| 3    | codegen：register / unregister / remove / create                                                | `pnpm scripts:test`；用 `audit-log` 走一遍 create → register → unregister → remove             |
-| 4    | skills 同步 + `files` 字段修复                                                                  | 新增的 `skills-sync.test.mjs`；`pnpm pack:check`                                               |
-| 5    | 文档：quickstart、两份 AGENTS.md、app-client README                                             | —                                                                                              |
+| 阶段 | 内容                                                                                                   | 验证                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| 1    | `app-client` 的 API + 6 个插件的 `client/plugin.ts` + 模板 `client/plugins.ts` 手写接线 + 删除虚拟模块 | `pnpm --filter @nocobase/app-client check`、模板 typecheck / test / build、`pnpm app:dev` 实跑 |
+| 2    | `inspect-app-client.mjs` 改为加载 `client/plugins.ts`（§7.6）+ 一致性校验测试                          | `pnpm app:client:inspect --app app-template-default` 输出与阶段 1 前一致                       |
+| 3    | codegen：register / unregister / remove / create                                                       | `pnpm scripts:test`；用 `audit-log` 走一遍 create → register → unregister → remove             |
+| 4    | skills 同步 + `files` 字段修复                                                                         | 新增的 `skills-sync.test.mjs`；`pnpm pack:check`                                               |
+| 5    | 文档：quickstart、两份 AGENTS.md、app-client README                                                    | —                                                                                              |
 
-阶段 1 是后续阶段的决策点：`modules.ts` 手写完成后，若可读性相比 `nocobase.plugins` 没有实质提升，后续阶段的工具投入应当重新评估。
+阶段 1 是后续阶段的决策点：`client/plugins.ts` 手写完成后，若可读性相比 `nocobase.plugins` 没有实质提升，后续阶段的工具投入应当重新评估。
 
 ## 12. 变化小结
 
-**得到：** App 的前端插件装配变成一个可读、可类型检查、可 diff 的源文件；插件获得了声明配置项的位置；bootstrap 顺序从隐式副作用变成显式数组顺序；`modules.ts` 是真实源文件，Vite HMR 原生支持，改注册不再需要 dev 重启；少一层字符串拼 JS 的代码生成（-123 行）。
+**得到：** App 的前端插件装配变成一个可读、可类型检查、可 diff 的源文件；插件获得了声明配置项的位置；bootstrap 顺序从隐式副作用变成显式数组顺序；`client/plugins.ts` 是真实源文件，Vite HMR 原生支持，改注册不再需要 dev 重启；少一层字符串拼 JS 的代码生成（-123 行）。
 
-**代价：** 每个插件多一个 `client/module.ts` 和两条 exports；`plugin:register` 从改 JSON 变成改 TS 源码，实现复杂度显著上升；过渡期内 `nocobase.plugins` 与 `client/modules.ts` 并存，需要一致性校验兜底。
+**代价：** 每个插件多一个 `client/plugin.ts` 和两条 exports；`plugin:register` 从改 JSON 变成改 TS 源码，实现复杂度显著上升；过渡期内 `nocobase.plugins` 与 `client/plugins.ts` 并存，需要一致性校验兜底。
 
 **没有解决：** server 侧仍然隐式；`nocobase.plugins` 仍然存在；插件的 server 入口仍是文件约定而非 exports 声明。

@@ -17,9 +17,9 @@
       "types": "./client/providers.ts",
       "import": "./client/providers.ts"
     },
-    "./client/module": {
-      "types": "./client/module.ts",
-      "import": "./client/module.ts"
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
     },
     "./package.json": "./package.json"
   },
@@ -34,9 +34,9 @@
         "types": "./dist/client/providers.d.ts",
         "import": "./dist/client/providers.js"
       },
-      "./client/module": {
-        "types": "./dist/client/module.d.ts",
-        "import": "./dist/client/module.js"
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
       },
       "./package.json": "./package.json"
     }

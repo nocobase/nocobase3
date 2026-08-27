@@ -1,14 +1,14 @@
 import {
-  defineClientModule,
-  type AppClientModuleFactory,
+  defineClientPlugin,
+  type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
 
 export interface AuthorizationClientOptions {
   readonly placeholder?: never;
 }
 
-const authorization: AppClientModuleFactory<AuthorizationClientOptions> =
-  defineClientModule({
+const authorization: AppClientPluginFactory<AuthorizationClientOptions> =
+  defineClientPlugin({
     packageName: '@nocobase/app-plugin-authorization',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),

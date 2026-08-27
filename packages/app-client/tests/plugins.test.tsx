@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyClientRouteComponentOverrides,
   defineClientApplication,
-  defineClientModule,
-  defineClientModules,
+  defineClientPlugin,
+  defineClientPlugins,
   defineClientProviders,
   defineClientRouteComponentOverrides,
   defineClientRoutes,
@@ -420,7 +420,7 @@ describe('client modules', () => {
   });
 
   it('forwards options and exposes the declared entries', () => {
-    const example = defineClientModule<{ readonly label?: string }>({
+    const example = defineClientPlugin<{ readonly label?: string }>({
       packageName: '@nocobase/app-plugin-example',
       bootstrap: bootstrapLoader,
       routes: routesLoader,
@@ -437,7 +437,7 @@ describe('client modules', () => {
   });
 
   it('defaults options to an empty object when called with none', () => {
-    const example = defineClientModule({
+    const example = defineClientPlugin({
       packageName: '@nocobase/app-plugin-example',
     });
 
@@ -445,7 +445,7 @@ describe('client modules', () => {
   });
 
   it('derives route component overrides from options', () => {
-    const example = defineClientModule<{
+    const example = defineClientPlugin<{
       readonly loginPage?: typeof loadComponent;
     }>({
       packageName: '@nocobase/app-plugin-example',
@@ -471,7 +471,7 @@ describe('client modules', () => {
   });
 
   it('collects plugins in order and merges their route overrides', () => {
-    const first = defineClientModule({
+    const first = defineClientPlugin({
       packageName: '@nocobase/app-plugin-first',
       bootstrap: bootstrapLoader,
       routeComponentOverrides: () => [
@@ -481,12 +481,12 @@ describe('client modules', () => {
         },
       ],
     });
-    const second = defineClientModule({
+    const second = defineClientPlugin({
       packageName: '@nocobase/app-plugin-second',
       routes: routesLoader,
     });
 
-    const modules = defineClientModules([first(), second()]);
+    const modules = defineClientPlugins([first(), second()]);
 
     expect(modules.plugins.map((plugin) => plugin.packageName)).toEqual([
       '@nocobase/app-plugin-first',
@@ -497,17 +497,17 @@ describe('client modules', () => {
   });
 
   it('rejects the same package registered twice', () => {
-    const example = defineClientModule({
+    const example = defineClientPlugin({
       packageName: '@nocobase/app-plugin-example',
     });
 
-    expect(() => defineClientModules([example(), example()])).toThrow(
+    expect(() => defineClientPlugins([example(), example()])).toThrow(
       'is registered more than once',
     );
   });
 
   it('rejects an empty package name', () => {
-    expect(() => defineClientModule({ packageName: '  ' })).toThrow(
+    expect(() => defineClientPlugin({ packageName: '  ' })).toThrow(
       'must define a package name',
     );
   });
