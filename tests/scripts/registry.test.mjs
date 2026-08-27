@@ -14,6 +14,7 @@ import {
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 const ownerRoot = path.join(repoRoot, 'packages/app-plugin-authentication');
+const filesOwnerRoot = path.join(repoRoot, 'packages/app-plugin-files');
 const exampleOwnerRoot = path.join(
   repoRoot,
   'packages/app-plugin-registry-example',
@@ -125,6 +126,46 @@ test('materializes the authentication recipe without overwriting it', async (t) 
         repoRoot,
       }),
     /Registry target already exists/u,
+  );
+});
+
+test('materializes local Registry dependencies for a selected item', async (t) => {
+  const applicationRoot = await mkdtemp(
+    path.join(tmpdir(), 'nocobase-files-registry-dependency-'),
+  );
+  t.after(() => rm(applicationRoot, { force: true, recursive: true }));
+
+  const result = materializeRegistry({
+    item: 'component-ui',
+    ownerRoot: filesOwnerRoot,
+    outputRoot: applicationRoot,
+    repoRoot,
+  });
+
+  assert.deepEqual(
+    result.materialized.map(({ target }) => target),
+    [
+      'client/extensions/nocobase-files-provider-ui',
+      'client/extensions/nocobase-files-component-ui',
+    ],
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(
+        applicationRoot,
+        'client/extensions/nocobase-files-provider-ui/index.ts',
+      ),
+    ),
+    true,
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(
+        applicationRoot,
+        'client/extensions/nocobase-files-component-ui/index.ts',
+      ),
+    ),
+    true,
   );
 });
 

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { Hono, type Context } from 'hono';
+import { type Context, type Hono } from 'hono';
 
 import type {
   CreateBusinessFileRequest,
@@ -24,9 +24,9 @@ import {
   readOptionalJson,
   readRequiredString,
   readRouteFileId,
+  mountScopedFileRoutes,
   validateOptions,
   verifyCapability,
-  withFileRouteErrors,
 } from './file-route-support.js';
 import type { FileKernel } from './kernel.js';
 import {
@@ -109,84 +109,29 @@ export function createRelationFileRoute(
     input.state.connection,
     binding,
   );
-  const routes = new Hono();
-
-  routes.get(
-    '/',
-    withFileRouteErrors(
-      (context) => handleList(state, context),
-      schemaValidation,
-    ),
+  return mountScopedFileRoutes(
+    {
+      list: (context) => handleList(state, context),
+      create: (context) => handleCreateUpload(state, context),
+      upload: (context) => handleUpload(state, context),
+      cancel: (context) => handleCancel(state, context),
+      complete: (context) => handleComplete(state, context),
+      content: (context) =>
+        handleContent(state, context, context.req.method === 'HEAD'),
+      remove: (context) => handleDelete(state, context),
+      ...(input.options.publicAccess
+        ? {
+            enablePublicAccess: (context: Context) =>
+              handlePublicAccess(state, context, 'enable'),
+            resetPublicAccess: (context: Context) =>
+              handlePublicAccess(state, context, 'reset'),
+            disablePublicAccess: (context: Context) =>
+              handleDisablePublicAccess(state, context),
+          }
+        : {}),
+    },
+    schemaValidation,
   );
-  routes.post(
-    '/',
-    withFileRouteErrors(
-      (context) => handleCreateUpload(state, context),
-      schemaValidation,
-    ),
-  );
-  routes.put(
-    '/:fileId/upload',
-    withFileRouteErrors(
-      (context) => handleUpload(state, context),
-      schemaValidation,
-    ),
-  );
-  routes.delete(
-    '/:fileId/upload',
-    withFileRouteErrors(
-      (context) => handleCancel(state, context),
-      schemaValidation,
-    ),
-  );
-  routes.post(
-    '/:fileId/complete',
-    withFileRouteErrors(
-      (context) => handleComplete(state, context),
-      schemaValidation,
-    ),
-  );
-  routes.on(
-    ['GET', 'HEAD'],
-    '/:fileId/content',
-    withFileRouteErrors(
-      (context) => handleContent(state, context, context.req.method === 'HEAD'),
-      schemaValidation,
-    ),
-  );
-  routes.delete(
-    '/:fileId',
-    withFileRouteErrors(
-      (context) => handleDelete(state, context),
-      schemaValidation,
-    ),
-  );
-
-  if (input.options.publicAccess) {
-    routes.post(
-      '/:fileId/public-access',
-      withFileRouteErrors(
-        (context) => handlePublicAccess(state, context, 'enable'),
-        schemaValidation,
-      ),
-    );
-    routes.post(
-      '/:fileId/public-access/reset',
-      withFileRouteErrors(
-        (context) => handlePublicAccess(state, context, 'reset'),
-        schemaValidation,
-      ),
-    );
-    routes.delete(
-      '/:fileId/public-access',
-      withFileRouteErrors(
-        (context) => handleDisablePublicAccess(state, context),
-        schemaValidation,
-      ),
-    );
-  }
-
-  return routes;
 }
 
 async function handleList(

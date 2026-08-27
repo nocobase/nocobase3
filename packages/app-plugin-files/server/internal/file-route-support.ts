@@ -1,4 +1,4 @@
-import type { Context } from 'hono';
+import { Hono, type Context } from 'hono';
 
 import type { FileErrorResponse } from '../../protocol.js';
 import type { CreateFileRouteOptions } from '../types.js';
@@ -24,6 +24,54 @@ import {
 } from './scoped-route.js';
 
 export type FileRouteHandler = (context: Context) => Promise<Response>;
+
+export interface ScopedFileRouteHandlers {
+  list: FileRouteHandler;
+  create: FileRouteHandler;
+  upload: FileRouteHandler;
+  cancel: FileRouteHandler;
+  complete: FileRouteHandler;
+  content: FileRouteHandler;
+  remove: FileRouteHandler;
+  enablePublicAccess?: FileRouteHandler;
+  resetPublicAccess?: FileRouteHandler;
+  disablePublicAccess?: FileRouteHandler;
+}
+
+export function mountScopedFileRoutes(
+  handlers: ScopedFileRouteHandlers,
+  schemaValidation?: FileRouteSchemaValidation,
+): Hono {
+  const routes = new Hono();
+  const protect = (handler: FileRouteHandler): FileRouteHandler =>
+    withFileRouteErrors(handler, schemaValidation);
+
+  routes.get('/', protect(handlers.list));
+  routes.post('/', protect(handlers.create));
+  routes.put('/:fileId/upload', protect(handlers.upload));
+  routes.delete('/:fileId/upload', protect(handlers.cancel));
+  routes.post('/:fileId/complete', protect(handlers.complete));
+  routes.on(['GET', 'HEAD'], '/:fileId/content', protect(handlers.content));
+  routes.delete('/:fileId', protect(handlers.remove));
+
+  if (
+    handlers.enablePublicAccess &&
+    handlers.resetPublicAccess &&
+    handlers.disablePublicAccess
+  ) {
+    routes.post('/:fileId/public-access', protect(handlers.enablePublicAccess));
+    routes.post(
+      '/:fileId/public-access/reset',
+      protect(handlers.resetPublicAccess),
+    );
+    routes.delete(
+      '/:fileId/public-access',
+      protect(handlers.disablePublicAccess),
+    );
+  }
+
+  return routes;
+}
 
 export function validateOptions(options: CreateFileRouteOptions): void {
   if (typeof options.authorize !== 'function') {

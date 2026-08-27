@@ -233,7 +233,8 @@ client/extensions/
 Materialization is deliberately limited to copying canonical source:
 
 - it does not install npm dependencies;
-- it does not install `registryDependencies`;
+- it recursively copies named dependencies from the same Registry;
+- it does not install shadcn primitives from `registryDependencies`;
 - it does not register or enable plugins;
 - it does not automatically integrate components or Providers;
 - it refuses to overwrite any existing target directory.

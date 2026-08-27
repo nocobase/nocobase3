@@ -1,11 +1,11 @@
 # @nocobase/app-plugin-files
 
 `FileService` is the public application service for managed Files. Applications
-create one App-scoped `FilesRuntime`, mount the capability-protected Core route,
-and explicitly mount each business-scoped `createFileRoute()` facade where the
-business record's authorization is available.
+create one App-scoped `FilesRuntime`, mount its capability-protected Core route,
+and mount a business-scoped `createFileRoute()` where record authorization is
+available.
 
-The browser lifecycle is the same for Local and S3-compatible storage:
+Local and S3-compatible storage use the same lifecycle:
 
 ```text
 POST scoped route -> PUT upload -> POST complete -> GET/HEAD content
@@ -13,39 +13,20 @@ POST scoped route -> PUT upload -> POST complete -> GET/HEAD content
 ```
 
 The scoped route also lists attached files and detaches them with `DELETE
-/:fileId`. It never exposes a generic `/api/upload`, public `/uploads` directory,
-or separate commit/access protocol.
+/:fileId`. It does not expose a generic `/api/upload`, a public `/uploads`
+directory, or a separate commit/access protocol.
 
-## Server setup
+## Purchase order attachments
 
-A compact relation setup is:
+The relation collection must contain `id`, `purchaseOrderId`, `fileId`, `slot`,
+`reservationExpiresAt`, `createdAt`, and `updatedAt`. Keep unique constraints on
+`(purchaseOrderId, slot)` and `(purchaseOrderId, fileId)`, and foreign keys to
+the business record and `files.id`.
+
+Mount the Core route at the public capability boundary and the relation route
+at the session-protected business boundary:
 
 ```ts
-export default defineMigration({
-  name: 'create_purchase_order_attachments',
-  async up({ builder }) {
-    await builder.createCollection('purchaseOrderAttachments', (collection) => {
-      collection.string('id', { length: 64 }).notNull().primary();
-      collection.string('purchaseOrderId', { length: 64 }).notNull();
-      collection.string('fileId', { length: 64 }).notNull();
-      collection.integer('slot').notNull();
-      collection.datetime('reservationExpiresAt').nullable();
-      collection.datetime('createdAt').notNull();
-      collection.datetime('updatedAt').notNull();
-      collection.unique(['purchaseOrderId', 'slot']);
-      collection.unique(['purchaseOrderId', 'fileId']);
-      collection.foreignKey('purchaseOrderId', {
-        references: { collection: 'purchaseOrders', fields: ['id'] },
-        onDelete: 'cascade',
-      });
-      collection.foreignKey('fileId', {
-        references: { collection: 'files', fields: ['id'] },
-        onDelete: 'restrict',
-      });
-    });
-  },
-});
-
 const filesRuntime = createFilesRuntime({
   database,
   config,
@@ -60,28 +41,83 @@ const fileService = createFileService({
 
 publicRoutes.route('/files', createCoreFilesRoute(filesRuntime));
 protectedRoutes.route(
-  '/orders/:orderId/files',
+  '/purchase-orders/:purchaseOrderId/attachments',
   fileService.createFileRoute({
     binding: {
       type: 'relation',
       collection: 'purchaseOrderAttachments',
-      recordParam: 'orderId',
+      recordParam: 'purchaseOrderId',
       recordField: 'purchaseOrderId',
       maxFiles: 10,
     },
+    constraints: {
+      maxBytes: 50 * 1024 * 1024,
+      allowedExtensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx'],
+    },
     authorize: ({ action, recordId, fileId }) =>
-      authorizeOrderFile({ action, orderId: recordId, fileId }),
+      authorizePurchaseOrderAttachment({
+        action,
+        purchaseOrderId: recordId,
+        fileId,
+      }),
   }),
 );
 ```
 
-Both subroutes are mounted inside the App API composition root, so their local
-mount paths do not include `/api`. Mount the Core route at `/files` on the
-public/capability boundary; its signed capabilities are the authorization
-mechanism. Mount business-scoped routes on the session-protected boundary.
-Create both routes and the `FileService` from the same `filesRuntime`.
-`authorize` must enforce business record existence and read/write/share
-permission. Foreign keys enforce referential integrity.
+Both mount paths are relative to the App API composition root and therefore do
+not contain `/api`. Create the Core route, scoped route, and `FileService` from
+the same runtime. `authorize` must enforce record existence and the relevant
+read, write, or share permission.
+
+Install the editable upload component. Repository materialization follows the
+item's local Registry dependencies, so this one action also installs
+`provider-ui`:
+
+```bash
+pnpm registry materialize \
+  --package @nocobase/app-plugin-files \
+  --item component-ui \
+  --output-root /path/to/app
+```
+
+Use the same scoped route path as the component's App-relative `basePath`:
+
+```tsx
+import { useState } from 'react';
+
+import {
+  FileUploadField,
+  type StoredFile,
+} from '@/extensions/nocobase-files-component-ui';
+
+export function PurchaseOrderAttachments({
+  purchaseOrderId,
+}: {
+  purchaseOrderId: string;
+}): React.ReactElement {
+  const [files, setFiles] = useState<StoredFile[]>([]);
+
+  return (
+    <FileUploadField
+      basePath={`purchase-orders/${purchaseOrderId}/attachments`}
+      value={files}
+      onChange={setFiles}
+      multiple
+      required
+      minimum={1}
+      maxFiles={10}
+      maxBytes={50 * 1024 * 1024}
+      accept={['.pdf', '.doc', '.docx', '.xls', '.xlsx']}
+    />
+  );
+}
+```
+
+`basePath` is relative to the current App API base. It must not contain `/api`,
+an absolute URL, a query string, a hash, or a parent path segment. Preview and
+download are handled inside the component from `basePath` and `StoredFile`
+metadata. Business code must not construct or persist temporary file access
+URLs.
 
 `createFileRoute()` validates static option shapes synchronously and starts an
 asynchronous query check for the configured collection and required fields.
@@ -94,25 +130,24 @@ remain migration responsibilities in Files V1.
 
 Enabling the plugin contributes one lazy authenticated route at `/files`. Its
 stable ID is `FILES_ROUTE_IDS.index` (`@nocobase/app-plugin-files:index`). The
-plugin-owned default page is a small capability/status page built from the
-plugin's own UI primitives, so the plugin remains usable without Registry
-source. It is intentionally not a global file manager.
+plugin-owned fallback is a small capability/status page, not a global file
+manager. Installing `page-ui` replaces only that route component while the
+plugin retains the path, ID, authentication metadata, and fallback.
 
-Applications may replace only this route's component by installing `page-ui`.
-The route path, ID, authentication metadata, and fallback page remain owned by
-the plugin.
+## Registry UI
 
-## Files Registry UI
+The plugin publishes exactly three application-owned Registry items:
 
-The plugin publishes exactly three application-owned Registry items. They are
-separate from the plugin's default `/files` page and use the consuming
-application's `@/components/ui/*` source.
+| Item           | Installed target                                | Integration                                        |
+| -------------- | ----------------------------------------------- | -------------------------------------------------- |
+| `page-ui`      | `client/extensions/nocobase-files-page-ui`      | Overrides only `FILES_ROUTE_IDS.index`             |
+| `component-ui` | `client/extensions/nocobase-files-component-ui` | Upload, preview, download, detach, and form fields |
+| `provider-ui`  | `client/extensions/nocobase-files-provider-ui`  | App client defaults, Context, Provider, and hook   |
 
-| Item           | Installed target                                | Integration                                            |
-| -------------- | ----------------------------------------------- | ------------------------------------------------------ |
-| `page-ui`      | `client/extensions/nocobase-files-page-ui`      | Overrides only `FILES_ROUTE_IDS.index`                 |
-| `component-ui` | `client/extensions/nocobase-files-component-ui` | Direct import of V3 upload and preview components      |
-| `provider-ui`  | `client/extensions/nocobase-files-provider-ui`  | Context, Provider, hook, and App-local client defaults |
+`page-ui` and `component-ui` declare `provider-ui` as a Registry dependency.
+Local materialization and hosted shadcn installation resolve that dependency
+recursively. Application shadcn primitives such as `button` remain normal
+Registry dependencies of the consuming application.
 
 Build all three items or one item at a time:
 
@@ -122,44 +157,6 @@ pnpm registry build \
   --package @nocobase/app-plugin-files \
   --item component-ui
 ```
-
-Repository-local materialization copies canonical source directly. Install the
-Provider with the component or page item because both import its stable
-application target.
-
-```bash
-pnpm registry materialize \
-  --package @nocobase/app-plugin-files \
-  --item provider-ui \
-  --output-root /path/to/app
-pnpm registry materialize \
-  --package @nocobase/app-plugin-files \
-  --item component-ui \
-  --output-root /path/to/app
-pnpm registry materialize \
-  --package @nocobase/app-plugin-files \
-  --item page-ui \
-  --output-root /path/to/app
-```
-
-For remote shadcn installation, configure the Registry host in the consuming
-application's `components.json` before using the namespaced dependencies:
-
-```json
-{
-  "registries": {
-    "@nocobase-files": "https://registry.example.com/files/r/{name}.json"
-  }
-}
-```
-
-`FileUploadField` keeps `StoredFile[]` as its controlled value in single and
-multiple modes. It preserves progress, cancel, retry, replace, preview,
-download, detach, and read-only behavior. When rendered inside a form,
-`required`, `minimum`, active or failed uploads, `maxFiles`, `maxBytes`, and
-`accept` violations block submission and expose an accessible validation
-message. The Scoped Files Route remains authoritative for server-side policy
-and authorization.
 
 Installed source belongs to the application. Upgrade it with a three-way merge
 instead of overwriting application changes.

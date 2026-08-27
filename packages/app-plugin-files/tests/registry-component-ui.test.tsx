@@ -21,6 +21,10 @@ import {
 import { normalizeFileBasePath } from '../registry/component-ui/base-path';
 import { appFileClient } from '../registry/provider-ui/files-ui-client';
 import { FilePreviewField } from '../registry/component-ui/file-preview-field';
+import {
+  classifyFileThumbnail,
+  normalizeFileThumbnailInput,
+} from '../registry/component-ui/file-thumbnail-classifier';
 import { FileUploadField } from '../registry/component-ui/file-upload-field';
 import {
   fetchFileContent,
@@ -89,6 +93,32 @@ afterEach(() => {
 });
 
 describe('V3 file upload Registry', () => {
+  it.each([
+    ['archive.zip', 'application/zip', 'archive'],
+    ['audio.mp3', 'audio/mpeg', 'audio'],
+    ['source.xsl', '', 'code'],
+    ['binary.bin', 'application/octet-stream', 'default'],
+    ['notes.txt', 'text/plain', 'document'],
+    ['photo.png', 'image/png', 'image'],
+    ['data.json', 'application/json', 'json'],
+    ['report.pdf', 'application/pdf', 'pdf'],
+    ['slides.pptx', '', 'presentation'],
+    ['data.xlsx', '', 'spreadsheet'],
+    ['video.mp4', 'video/mp4', 'video'],
+  ])(
+    'classifies raw and stored %s files with %s as %s',
+    (name, contentType, kind) => {
+      const rawFile = new File(['x'], name, { type: contentType });
+      const storedFile = readyFile(name, name, contentType);
+
+      for (const file of [rawFile, storedFile]) {
+        expect(classifyFileThumbnail(normalizeFileThumbnailInput(file))).toBe(
+          kind,
+        );
+      }
+    },
+  );
+
   it('uses the current App base path without a host client package', async () => {
     const request = vi
       .fn<typeof fetch>()

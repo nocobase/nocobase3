@@ -139,7 +139,12 @@ export function materializeRegistry({
   ownerRoot,
   repoRoot = defaultRepoRoot,
 }) {
-  const registry = loadRegistry({ item, ownerRoot, repoRoot });
+  const registry = loadRegistry({
+    item,
+    ownerRoot,
+    repoRoot,
+    includeRegistryDependencies: true,
+  });
   const mappings = new Map();
 
   for (const sourceItem of registry.items) {
@@ -218,7 +223,12 @@ export function findRegistryOwners(repoRoot = defaultRepoRoot) {
     .sort((left, right) => left.localeCompare(right));
 }
 
-function loadRegistry({ item: selectedItemName, ownerRoot, repoRoot }) {
+function loadRegistry({
+  item: selectedItemName,
+  ownerRoot,
+  repoRoot,
+  includeRegistryDependencies = false,
+}) {
   const configPath = path.join(ownerRoot, 'registry.config.json');
   if (!fs.existsSync(configPath)) {
     throw new Error(`Registry config does not exist: ${configPath}`);
@@ -230,12 +240,12 @@ function loadRegistry({ item: selectedItemName, ownerRoot, repoRoot }) {
     );
   }
   const { items: configuredItems, ...metadata } = config;
-  const selectedItems = selectedItemName
-    ? configuredItems.filter(({ name }) => name === selectedItemName)
-    : configuredItems;
-  if (selectedItemName && selectedItems.length === 0) {
-    throw new Error(`Unknown Registry item: ${selectedItemName}`);
-  }
+  const selectedItems = selectRegistryItems({
+    configuredItems,
+    includeRegistryDependencies,
+    localRegistryNamespaces: getLocalRegistryNamespaces(ownerRoot, config.name),
+    selectedItemName,
+  });
 
   const itemNames = new Set();
   const filesByRoot = new Map();
@@ -302,6 +312,76 @@ function loadRegistry({ item: selectedItemName, ownerRoot, repoRoot }) {
   });
 
   return { items, metadata };
+}
+
+function selectRegistryItems({
+  configuredItems,
+  includeRegistryDependencies,
+  localRegistryNamespaces,
+  selectedItemName,
+}) {
+  if (!selectedItemName) {
+    return configuredItems;
+  }
+  const itemsByName = new Map(
+    configuredItems.map((registryItem) => [registryItem.name, registryItem]),
+  );
+  if (!itemsByName.has(selectedItemName)) {
+    throw new Error(`Unknown Registry item: ${selectedItemName}`);
+  }
+  if (!includeRegistryDependencies) {
+    return [itemsByName.get(selectedItemName)];
+  }
+
+  const selectedItems = [];
+  const visited = new Set();
+  const visiting = new Set();
+
+  const visit = (itemName) => {
+    if (visited.has(itemName)) return;
+    if (visiting.has(itemName)) {
+      throw new Error(`Circular Registry dependency: ${itemName}`);
+    }
+    const registryItem = itemsByName.get(itemName);
+    if (!registryItem) {
+      throw new Error(`Unknown Registry item: ${itemName}`);
+    }
+    visiting.add(itemName);
+    for (const dependency of registryItem.registryDependencies ?? []) {
+      if (
+        !localRegistryNamespaces.some((namespace) =>
+          dependency.startsWith(`${namespace}/`),
+        )
+      ) {
+        continue;
+      }
+      const dependencyName = dependency.slice(dependency.lastIndexOf('/') + 1);
+      if (!itemsByName.has(dependencyName)) {
+        throw new Error(`Unknown local Registry dependency: ${dependency}`);
+      }
+      visit(dependencyName);
+    }
+    visiting.delete(itemName);
+    visited.add(itemName);
+    selectedItems.push(registryItem);
+  };
+
+  visit(selectedItemName);
+  return selectedItems;
+}
+
+function getLocalRegistryNamespaces(ownerRoot, registryName) {
+  const namespaces = new Set([`@${registryName}`]);
+  const componentsPath = path.join(ownerRoot, 'components.json');
+  if (fs.existsSync(componentsPath)) {
+    const components = readJson(componentsPath);
+    for (const namespace of Object.keys(components.registries ?? {})) {
+      if (namespace.startsWith('@')) {
+        namespaces.add(namespace);
+      }
+    }
+  }
+  return [...namespaces];
 }
 
 function createRegistryItem({ includedFiles, item, sourceRoot }) {

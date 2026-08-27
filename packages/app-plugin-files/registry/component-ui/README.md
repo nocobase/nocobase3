@@ -5,8 +5,8 @@ Route. The controlled value is always `StoredFile[]`, including single-file
 fields. The item preserves progress, cancel, retry, replace, preview, download,
 detach, and read-only behavior.
 
-Install `provider-ui` with this item, then import from
-`@/extensions/nocobase-files-component-ui`. `FileUploadField` supports
+Installing this item also materializes its `provider-ui` Registry dependency.
+Import from `@/extensions/nocobase-files-component-ui`. `FileUploadField` supports
 `required`, `minimum`, `maxFiles`, `maxBytes`, and `accept`. Invalid values,
 active or failed uploads, and configured file constraint violations block the
 nearest form submission and expose an accessible validation message.
@@ -41,3 +41,5 @@ export function PurchaseOrderAttachments(): React.ReactElement {
 `basePath` is relative to the current App API base and must not contain `/api`,
 an absolute URL, a query string, a hash, or a parent path segment. The Scoped
 Files Route remains the authoritative security and upload policy boundary.
+Preview and download are handled internally; application code does not build
+temporary access URLs.

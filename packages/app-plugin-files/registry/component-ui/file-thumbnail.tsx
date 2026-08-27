@@ -16,30 +16,14 @@ import { useState } from 'react';
 import { useFilesUi } from '@/extensions/nocobase-files-provider-ui';
 import { cn } from '@/lib/utils';
 
-import { getThumbnailUrl } from './file-url';
 import {
-  getFileExtension,
-  getFileMimeType,
-  isActiveContentFile,
-  isAudioFile,
-  isImageFile,
-  isPdfFile,
-  isVideoFile,
-} from './file-preview-types';
+  classifyFileThumbnail,
+  normalizeFileThumbnailInput,
+  type FileThumbnailKind,
+} from './file-thumbnail-classifier';
+import { getThumbnailUrl } from './file-url';
+import { isImageFile } from './file-preview-types';
 import type { StoredFile } from './types';
-
-type FileThumbnailKind =
-  | 'archive'
-  | 'audio'
-  | 'code'
-  | 'default'
-  | 'document'
-  | 'image'
-  | 'json'
-  | 'pdf'
-  | 'presentation'
-  | 'spreadsheet'
-  | 'video';
 
 export type FileThumbnailProps = {
   basePath?: string;
@@ -51,42 +35,6 @@ export type FileThumbnailProps = {
   imageClassName?: string;
   showExtensionBadge?: boolean;
 };
-
-const archiveExtensions = new Set([
-  '.7z',
-  '.bz2',
-  '.gz',
-  '.rar',
-  '.tar',
-  '.tgz',
-  '.zip',
-]);
-
-const documentExtensions = new Set([
-  '.doc',
-  '.docx',
-  '.md',
-  '.odt',
-  '.rtf',
-  '.txt',
-]);
-
-const spreadsheetExtensions = new Set(['.csv', '.ods', '.xls', '.xlsx']);
-const presentationExtensions = new Set(['.odp', '.ppt', '.pptx']);
-const jsonExtensions = new Set(['.json']);
-const codeExtensions = new Set([
-  '.css',
-  '.htm',
-  '.html',
-  '.js',
-  '.jsx',
-  '.svg',
-  '.ts',
-  '.tsx',
-  '.xml',
-  '.yml',
-  '.yaml',
-]);
 
 const thumbnailStyles: Record<
   FileThumbnailKind,
@@ -154,64 +102,10 @@ const thumbnailStyles: Record<
   },
 };
 
-function getNameExtension(value?: string) {
-  if (!value) return '';
-  const dotIndex = value.lastIndexOf('.');
-  return dotIndex >= 0 ? value.slice(dotIndex).toLowerCase() : '';
-}
-
-function getRecordExtension(file?: StoredFile) {
-  if (!file) return '';
-  return getNameExtension(file.name);
-}
-
-function getRawFileExtension(file?: File) {
-  return getNameExtension(file?.name);
-}
-
-function getExtensionLabel(extension: string) {
+function getExtensionLabel(extension: string): string {
   const label = extension.replace(/^\./, '').toUpperCase();
   if (!label) return '';
   return label.length > 5 ? label.slice(0, 5) : label;
-}
-
-function getRawFileKind(file?: File): FileThumbnailKind {
-  const mimetype = file?.type.toLowerCase() ?? '';
-  const extension = getRawFileExtension(file);
-
-  if (codeExtensions.has(extension)) return 'code';
-  if (mimetype.startsWith('image/')) return 'image';
-  if (mimetype === 'application/pdf' || extension === '.pdf') return 'pdf';
-  if (mimetype.startsWith('audio/')) return 'audio';
-  if (mimetype.startsWith('video/')) return 'video';
-  if (mimetype === 'application/json' || jsonExtensions.has(extension))
-    return 'json';
-  if (mimetype.startsWith('text/') || documentExtensions.has(extension))
-    return 'document';
-  if (spreadsheetExtensions.has(extension)) return 'spreadsheet';
-  if (presentationExtensions.has(extension)) return 'presentation';
-  if (archiveExtensions.has(extension)) return 'archive';
-  return 'default';
-}
-
-function getFileThumbnailKind(file: StoredFile): FileThumbnailKind {
-  const extension = getRecordExtension(file) || getFileExtension(file);
-  const mimetype = getFileMimeType(file);
-
-  if (isActiveContentFile(file)) return 'code';
-  if (isImageFile(file)) return 'image';
-  if (isPdfFile(file)) return 'pdf';
-  if (isAudioFile(file)) return 'audio';
-  if (isVideoFile(file)) return 'video';
-  if (mimetype === 'application/json' || jsonExtensions.has(extension))
-    return 'json';
-  if (spreadsheetExtensions.has(extension)) return 'spreadsheet';
-  if (presentationExtensions.has(extension)) return 'presentation';
-  if (archiveExtensions.has(extension)) return 'archive';
-  if (codeExtensions.has(extension)) return 'code';
-  if (mimetype.startsWith('text/') || documentExtensions.has(extension))
-    return 'document';
-  return 'default';
 }
 
 export function FileThumbnail({
@@ -247,11 +141,13 @@ export function FileThumbnail({
     );
   }
 
-  const kind = file ? getFileThumbnailKind(file) : getRawFileKind(rawFile);
-  const extension = file
-    ? getRecordExtension(file)
-    : getRawFileExtension(rawFile);
-  const extensionLabel = getExtensionLabel(extension);
+  const normalizedFile = file
+    ? normalizeFileThumbnailInput(file)
+    : rawFile
+      ? normalizeFileThumbnailInput(rawFile)
+      : { extension: '', mimeType: '' };
+  const kind = classifyFileThumbnail(normalizedFile);
+  const extensionLabel = getExtensionLabel(normalizedFile.extension);
   const style = thumbnailStyles[kind];
   const Icon = style.Icon;
 
