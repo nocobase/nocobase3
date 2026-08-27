@@ -6,13 +6,23 @@
       "name": "file-field-ui",
       "type": "registry:component",
       "title": "NocoBase Files Field UI",
-      "description": "Placeholder for application-owned file field components.",
-      "dependencies": [],
-      "registryDependencies": [],
-      "docs": "This item is a contract placeholder. Runtime file behavior is supplied by @nocobase/app-plugin-files.",
+      "description": "Application-owned upload, list, thumbnail, and preview components for business file endpoints.",
+      "dependencies": [
+        "@nocobase/app-plugin-files@^0.0.1",
+        "lucide-react@^0.487.0",
+        "react@^19.0.0",
+        "react-dom@^19.0.0"
+      ],
+      "registryDependencies": ["button"],
+      "docs": "Install this item when an application needs editable file UI. Pass a FilesClient created for the consuming business endpoint; the installed source owns its layout and behavior. It does not add a route or server-side implementation. Review plugin upgrades with a three-way merge because installed files are application-owned.",
       "meta": {
         "ownership": "application",
-        "upgradePolicy": "three-way-merge"
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-files": ">=0.0.1 <0.1.0"
+          }
+        }
       },
       "source": {
         "root": "registry/file-field-ui",
@@ -24,10 +34,16 @@
       "name": "demo-page-ui",
       "type": "registry:block",
       "title": "NocoBase Files Demo Page UI",
-      "description": "Placeholder for an application-owned files demo page.",
-      "dependencies": [],
-      "registryDependencies": [],
-      "docs": "This item is a contract placeholder. It will override the stable files demo route when implemented.",
+      "description": "Application-owned Demo page for the plugin's real attachments API.",
+      "dependencies": [
+        "@nocobase/app-client@^1.0.0-beta.2",
+        "@nocobase/app-plugin-files@^0.0.1",
+        "lucide-react@^0.487.0",
+        "react@^19.0.0",
+        "react-dom@^19.0.0"
+      ],
+      "registryDependencies": ["file-field-ui", "button"],
+      "docs": "Requires @nocobase/app-plugin-files to be enabled. The page calls GET /api/attachments/examples, then uses the returned endpoints for the Profile Avatar and Order Attachments clients. Its extension overrides the existing files Demo route component and does not declare another /files-demo route. The installed source is application-owned, is not overwritten by plugin upgrades, and should be reviewed with a three-way merge.",
       "meta": {
         "ownership": "application",
         "upgradePolicy": "three-way-merge",
