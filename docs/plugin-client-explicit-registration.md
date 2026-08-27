@@ -114,11 +114,13 @@ const authentication: AppClientModuleFactory<AuthenticationClientOptions> =
 export default authentication;
 ```
 
-`client/module.ts` 是纯粹的注册面，不是实现。它有一条硬约束：
+`client/module.ts` 是注册面而非实现。`modules.ts` 静态 import 每个插件的 module，因此 module 静态 import 的东西都会进入应用的入口 chunk。据此有一条推荐：
 
-> **`client/module.ts` 里只允许 `import type` 和 `() => import()`，不允许值层面的静态 import。**
+> **`client/module.ts` 尽量不要静态 import 插件的业务实现。** 三个入口用 `() => import()` 引用，类型用 `import type`。
 
-否则一个插件的实现代码会在 App 只是「引用了它」的时候就被拖进主 chunk。这条要写进 AGENTS.md，并且由 lint 规则或 `pnpm check` 校验（见 §7.3）。
+不合适的是静态 import 组件、provider 工厂、服务类这类会牵出 React 子树或第三方依赖的模块。这类代码应当留在 `bootstrap` / `routes` / `providers` 里，由 module 通过动态 import 引用。
+
+这条不做强制校验。「业务实现」与「轻量常量」的界线依赖语义判断，机械规则要么禁掉合理写法（禁止一切值 import 会连 `defineClientModule` 和路由 ID 常量一起禁掉），要么就得维护一份白名单。写进 AGENTS.md 和插件模板注释即可；真正的兜底是 code review 和构建产物体积。
 
 ### 2.3 三层职责
 
@@ -517,8 +519,6 @@ removeClientModule(sourceText, {packageName})            → 新的 sourceText
 ### 7.3 前置依赖
 
 根 `package.json` 需要加 `typescript: catalog:` 到 `devDependencies`。现在根上没有直接依赖，`require.resolve('typescript')` 从工作目录解析不到（只是碰巧能从 `.pnpm` 命中）。
-
-§2.2 那条「`client/module.ts` 只允许 `import type` 和 `() => import()`」的约束，可以用同一套 AST 工具实现成一个校验函数，挂到 `pnpm check` 或一个 `plugin:check` 命令上。
 
 ### 7.4 需要连带改动的命令
 
