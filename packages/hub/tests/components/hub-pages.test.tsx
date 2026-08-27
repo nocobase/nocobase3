@@ -154,6 +154,7 @@ describe('Hub application pages', () => {
     ).toHaveAttribute('href', 'https://apps.example.com/inventory/');
     expect(screen.getAllByText('1.2.0').length).toBeGreaterThan(0);
     expect(screen.getByText('Healthy')).toBeInTheDocument();
+    expect(screen.getAllByText('Active')).toHaveLength(1);
     expect(
       screen.queryByRole('button', { name: /develop inventory/i }),
     ).not.toBeInTheDocument();

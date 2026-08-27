@@ -465,26 +465,23 @@ function ApplicationResults({
           return (
             <Card key={application.id} className='overflow-hidden'>
               <CardHeader className='gap-3'>
-                <div className='flex items-start justify-between gap-3'>
-                  <div className='min-w-0'>
-                    <CardTitle className='flex flex-wrap items-center gap-2'>
-                      <Link
-                        className='truncate underline-offset-4 hover:underline'
-                        to={`/apps/${encodeURIComponent(application.id)}`}
-                      >
-                        {application.name}
-                      </Link>
-                      {application.isDefault ? (
-                        <span className='rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground'>
-                          {translate('hub.apps.default', 'Default')}
-                        </span>
-                      ) : null}
-                    </CardTitle>
-                    <CardDescription className='mt-1 font-mono text-xs'>
-                      {application.slug}
-                    </CardDescription>
-                  </div>
-                  <HubStatusBadge status={application.status} />
+                <div className='min-w-0'>
+                  <CardTitle className='flex flex-wrap items-center gap-2'>
+                    <Link
+                      className='truncate underline-offset-4 hover:underline'
+                      to={`/apps/${encodeURIComponent(application.id)}`}
+                    >
+                      {application.name}
+                    </Link>
+                    {application.isDefault ? (
+                      <span className='rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground'>
+                        {translate('hub.apps.default', 'Default')}
+                      </span>
+                    ) : null}
+                  </CardTitle>
+                  <CardDescription className='mt-1 font-mono text-xs'>
+                    {application.slug}
+                  </CardDescription>
                 </div>
                 {application.description ? (
                   <p className='line-clamp-2 text-sm text-muted-foreground'>
