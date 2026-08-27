@@ -1,5 +1,4 @@
 export { AppClientRoot, type AppClientRootProps } from './app-client.js';
-export { useAppClient } from './app-client-context.js';
 export {
   defineAppClient,
   normalizeAppClientBasename,

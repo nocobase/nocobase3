@@ -11,27 +11,17 @@ describe('Email Channel common input', () => {
       { type: 'email', enabled: true, providers: [] },
     );
 
-    const provider = { name: 'primary', type: 'smtp' };
+    expect(channel.resolveRecipient?.({ type: 'user', id: 'user-1' })).toEqual({
+      userId: 'user-1',
+    });
     expect(
-      await channel.resolveRecipient?.({
-        recipient: { type: 'user', id: 'user-1' },
-        provider,
-      }),
-    ).toEqual({ userId: 'user-1' });
-    expect(
-      await channel.resolveRecipient?.({
-        recipient: {
-          type: 'email',
-          address: 'alice@example.com',
-        },
-        provider,
+      channel.resolveRecipient?.({
+        type: 'email',
+        address: 'alice@example.com',
       }),
     ).toEqual({ address: 'alice@example.com' });
     expect(
-      await channel.resolveRecipient?.({
-        recipient: { type: 'phone', number: '123' },
-        provider,
-      }),
+      channel.resolveRecipient?.({ type: 'phone', number: '123' }),
     ).toBeUndefined();
     expect(
       channel.render?.({

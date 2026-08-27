@@ -45,10 +45,6 @@
     "./websocket": {
       "types": "./src/websocket.ts",
       "import": "./src/websocket.ts"
-    },
-    "./realtime": {
-      "types": "./src/realtime/index.ts",
-      "import": "./src/realtime/index.ts"
     }
   },
   "files": [
@@ -91,10 +87,6 @@
       "./websocket": {
         "types": "./dist/websocket.d.ts",
         "import": "./dist/websocket.js"
-      },
-      "./realtime": {
-        "types": "./dist/realtime/index.d.ts",
-        "import": "./dist/realtime/index.js"
       }
     },
     "access": "public"

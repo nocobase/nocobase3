@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 
 import type { AppWebSocketHandler } from '@nocobase/app-server-kit/websocket';
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
-import { createRealtimeServer } from '@nocobase/app-server-kit/realtime';
 import type { CreateAppOptions } from './app-options.js';
 import { onceAsync } from './runtime/disposers.js';
 import {
@@ -15,9 +14,14 @@ import {
   resolveAppName,
 } from '@nocobase/app-server-kit/support';
 import type { AppConfig } from './config/index.js';
+import { createRealtimeService } from './realtime/service.js';
 import { createAppDeps, disposeAppDeps } from './runtime/deps.js';
 import { createAppServices } from './services/index.js';
 import { registerAppRoutes } from './routes/index.js';
+import {
+  createWebSocketHandler,
+  registerWebSocketRoutes,
+} from './routes/websocket.js';
 import { createPortalSpaRuntimeGlobals } from './spa/runtime-globals.js';
 
 export type {
@@ -53,19 +57,12 @@ export function createApp(
     'app-deps',
     onceAsync(() => disposeAppDeps(deps)),
   );
-  const realtime = createRealtimeServer({
-    resolvePrincipal: async (request) => {
-      const session = await deps.auth.getSession(request.headers);
-      return session ? { userId: session.user.id } : undefined;
-    },
-  });
+  const realtime = createRealtimeService();
   options.lifecycle.registerDisposer(
     'realtime-service',
     onceAsync(() => realtime.close()),
   );
-  const services = createAppServices(runtime, deps, {
-    realtime: realtime.service,
-  });
+  const services = createAppServices(runtime, deps, { realtime });
   const app = new Hono();
   for (const plugin of options.pluginBootstraps ?? []) {
     plugin.bootstrap({
@@ -106,7 +103,7 @@ export function createApp(
     nocoBaseApiUrl,
   });
 
-  realtime.registerHttpRoute(app);
+  registerWebSocketRoutes(app);
 
   registerSpaRoutes(app, {
     basePath: internalBasePath,
@@ -122,6 +119,6 @@ export function createApp(
   });
 
   return Object.assign(app, {
-    websocket: realtime.websocket,
+    websocket: createWebSocketHandler({ realtime }),
   });
 }

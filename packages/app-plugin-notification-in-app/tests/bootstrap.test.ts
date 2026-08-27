@@ -1,6 +1,5 @@
 import type { DatabaseManager } from '@nocobase/app-database';
 import type { NotificationService } from '@nocobase/app-plugin-notification';
-import type { RealtimeService } from '@nocobase/app-server-kit/realtime';
 import { describe, expect, it, vi } from 'vitest';
 
 import bootstrapInAppNotificationPlugin, {
@@ -11,14 +10,6 @@ describe('@nocobase/app-plugin-notification-in-app bootstrap', () => {
   it('registers its Channel and Provider with the core manager', () => {
     const registerProvider = vi.fn();
     const registerChannel = vi.fn(() => ({ registerProvider }));
-    const closeTopic = vi.fn();
-    const defineTopic = vi.fn(() => ({
-      audience: 'user',
-      name: 'notifications:in-app',
-      publishFor: vi.fn(),
-      close: closeTopic,
-    }));
-    const registerDisposer = vi.fn();
     const notification = {
       registry: { registerChannel },
     } as unknown as NotificationService;
@@ -26,11 +17,8 @@ describe('@nocobase/app-plugin-notification-in-app bootstrap', () => {
     bootstrapInAppNotificationPlugin({
       config: undefined,
       deps: { database: {} as DatabaseManager },
-      services: {
-        notification,
-        realtime: { defineTopic } as unknown as RealtimeService,
-      },
-      lifecycle: { registerDisposer },
+      services: { notification },
+      lifecycle: { registerDisposer() {} },
     });
 
     expect(registerChannel).toHaveBeenCalledWith(
@@ -41,13 +29,6 @@ describe('@nocobase/app-plugin-notification-in-app bootstrap', () => {
       expect.objectContaining({ type: 'database' }),
     );
     expect(getInAppNotificationStore(notification)).toBeDefined();
-    expect(defineTopic).toHaveBeenCalledWith('notifications:in-app', {
-      audience: 'user',
-    });
-    expect(registerDisposer).toHaveBeenCalledWith(
-      'realtime-topic',
-      expect.any(Function),
-    );
   });
 
   it('does nothing when the core notification service is unavailable', () => {

@@ -11,8 +11,6 @@ import type {
   NotificationChannel,
   NotificationContent,
   NotificationProvider,
-  NotificationProviderErrorCategory,
-  NotificationProviderIdentity,
   NotificationProviderSendError,
   NotificationRecipient,
   ProviderSendResult,
@@ -21,6 +19,11 @@ import type {
 export interface ChannelRuntime {
   readonly channel: NotificationChannel;
   readonly providers: readonly NotificationProvider[];
+}
+
+export interface NotificationProviderIdentity {
+  readonly name: string;
+  readonly type: string;
 }
 
 export interface ChannelManagerOptions {
@@ -55,15 +58,14 @@ export class ChannelManager {
     return this.runtimes.has(type);
   }
 
-  async resolveRecipient(
+  resolveRecipient(
     type: string,
     recipient: NotificationRecipient,
-    provider: NotificationProviderIdentity,
-  ): Promise<object | undefined> {
+  ): object | undefined {
     const channel = this.runtimes.get(type)?.channel;
     if (!channel)
       throw new Error(`Notification Channel "${type}" is not enabled.`);
-    return channel.resolveRecipient?.({ recipient, provider });
+    return channel.resolveRecipient?.(recipient);
   }
 
   render(
@@ -176,10 +178,6 @@ export class ChannelManager {
           notificationId: delivery.notificationId,
           recipient: delivery.recipientSnapshot,
           message: delivery.messageSnapshot,
-          provider: {
-            name: delivery.providerName,
-            type: delivery.providerType,
-          },
           signal: controller.signal,
         }),
         new Promise<never>((_, reject) => {
@@ -432,7 +430,7 @@ function isRunnable(
 
 function normalizeError(
   error: unknown,
-  category: NotificationProviderErrorCategory,
+  category: string,
 ): NotificationProviderSendError {
   return {
     category,

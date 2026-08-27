@@ -7,7 +7,6 @@ import type { AppClientRuntime } from './runtime';
 export function createApp(runtime: AppClientRuntime): AppClientConfig {
   return defineAppClient({
     basename: runtime.basename,
-    client: runtime.appClient,
     providers: runtime.providers.map((provider) => provider.component),
     refine: runtime.refine,
     routes: createElement(AppRouter, {

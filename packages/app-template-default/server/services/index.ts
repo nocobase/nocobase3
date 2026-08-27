@@ -1,5 +1,4 @@
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
-import type { RealtimeService } from '@nocobase/app-server-kit/realtime';
 import type { AppDriveConfig } from '@nocobase/drive';
 import {
   createNotificationManager,
@@ -8,6 +7,7 @@ import {
 } from '@nocobase/app-plugin-notification';
 
 import type { AppConfig } from '../config/index.js';
+import type { RealtimeService } from '../realtime/service.js';
 import type { AppDeps } from '../runtime/deps.js';
 import {
   AppSettingsService,

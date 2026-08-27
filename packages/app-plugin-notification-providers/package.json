@@ -28,10 +28,6 @@
       "types": "./server/email/index.ts",
       "import": "./server/email/index.ts"
     },
-    "./im": {
-      "types": "./server/im/index.ts",
-      "import": "./server/im/index.ts"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -49,10 +45,6 @@
         "types": "./dist/server/email/index.d.ts",
         "import": "./dist/server/email/index.js"
       },
-      "./im": {
-        "types": "./dist/server/im/index.d.ts",
-        "import": "./dist/server/im/index.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -69,8 +61,7 @@
   },
   "dependencies": {
     "@nocobase/app-plugin-notification": "workspace:^",
-    "nodemailer": "^9.0.5",
-    "resend": "^6.22.1"
+    "nodemailer": "^9.0.5"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

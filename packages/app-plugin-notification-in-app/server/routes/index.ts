@@ -1,11 +1,9 @@
 import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
 import type { Auth } from '@nocobase/app-plugin-authentication';
+import type { NotificationPluginServices } from '@nocobase/app-plugin-notification';
 import { Hono } from 'hono';
 
-import {
-  getInAppNotificationStore,
-  type InAppNotificationPluginServices,
-} from '../bootstrap.js';
+import { getInAppNotificationStore } from '../bootstrap.js';
 import { createInAppRouter } from '../router.js';
 
 export interface InAppNotificationPluginRoutesDeps {
@@ -14,7 +12,7 @@ export interface InAppNotificationPluginRoutesDeps {
 
 export type InAppNotificationPluginRoutesContext = AppPluginRoutesContext<
   InAppNotificationPluginRoutesDeps,
-  InAppNotificationPluginServices
+  NotificationPluginServices
 >;
 
 export default function registerInAppNotificationRoutes({

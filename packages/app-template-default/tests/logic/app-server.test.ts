@@ -20,7 +20,10 @@ import {
   type CachingConfig,
 } from '@nocobase/caching';
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
-import type { RealtimeServerMessage } from '@nocobase/app-server-kit/realtime';
+import type {
+  AppWebSocket,
+  AppWebSocketReadyState,
+} from '@nocobase/app-server-kit/websocket';
 import type { DatabaseManager, QueryAdapter } from '@nocobase/app-database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggingConfig } from '@nocobase/logging';
@@ -48,6 +51,8 @@ import {
 } from '../../server/index.ts';
 import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalone.ts';
 import type { AppConfig } from '../../server/config/index.ts';
+import { createRealtimeService } from '../../server/realtime/service.ts';
+import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 import bootstrapNotificationPlugin from '../../../app-plugin-notification/server/bootstrap.ts';
@@ -190,11 +195,6 @@ describe('app server', () => {
     const missingEvents = await app.websocket?.(
       new Request('http://localhost/missing-ws'),
     );
-    const forbiddenOrigin = await app.websocket?.(
-      new Request('http://localhost/ws', {
-        headers: { origin: 'https://untrusted.example' },
-      }),
-    );
 
     expect(response.status).toBe(426);
     expect(response.headers.get('upgrade')).toBe('websocket');
@@ -205,8 +205,59 @@ describe('app server', () => {
       onMessage: expect.any(Function),
     });
     expect(missingEvents).toBeNull();
-    expect(forbiddenOrigin).toBeInstanceOf(Response);
-    expect((forbiddenOrigin as Response).status).toBe(403);
+  });
+
+  it('subscribes, publishes, and unsubscribes realtime messages', () => {
+    const realtime = createRealtimeService();
+    const websocket = createTestWebSocket();
+    const connection = realtime.connect(websocket);
+
+    realtime.handleClientMessage(
+      connection,
+      JSON.stringify({
+        type: 'subscribe',
+        id: 'subscribe-test-topic',
+        topic: TEST_REALTIME_TOPIC,
+      }),
+    );
+    const subscribed = websocket.messages[0];
+
+    expect(subscribed).toMatchObject({
+      type: 'subscribed',
+      id: 'subscribe-test-topic',
+      topic: TEST_REALTIME_TOPIC,
+      subscriptionId: expect.any(String),
+    });
+
+    realtime.publish(TEST_REALTIME_TOPIC, 'tick');
+
+    expect(websocket.messages[1]).toMatchObject({
+      type: 'event',
+      topic: TEST_REALTIME_TOPIC,
+      payload: 'tick',
+      publishedAt: expect.any(String),
+    });
+
+    realtime.handleClientMessage(
+      connection,
+      JSON.stringify({
+        type: 'unsubscribe',
+        id: 'unsubscribe-test-topic',
+        subscriptionId: (subscribed as { subscriptionId: string })
+          .subscriptionId,
+      }),
+    );
+    realtime.publish(TEST_REALTIME_TOPIC, 'after unsubscribe');
+
+    expect(websocket.messages[2]).toMatchObject({
+      type: 'unsubscribed',
+      id: 'unsubscribe-test-topic',
+      subscriptionId: (subscribed as { subscriptionId: string }).subscriptionId,
+      topic: TEST_REALTIME_TOPIC,
+    });
+    expect(websocket.messages).toHaveLength(3);
+
+    realtime.close();
   });
 
   it('registers embedded app resources with the scope', async () => {
@@ -227,7 +278,6 @@ describe('app server', () => {
       'app-deps',
       'realtime-service',
       'plugin:@nocobase/app-plugin-notification:manager',
-      'plugin:@nocobase/app-plugin-notification-in-app:realtime-topic',
       'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
     ]);
 
@@ -1183,6 +1233,30 @@ function waitForWebSocketClose(websocket: WebSocket): Promise<CloseEvent> {
       once: true,
     });
   });
+}
+
+interface TestWebSocket extends AppWebSocket {
+  readonly messages: RealtimeServerMessage[];
+}
+
+function createTestWebSocket(): TestWebSocket {
+  let readyState: AppWebSocketReadyState = 1;
+  const messages: RealtimeServerMessage[] = [];
+
+  return {
+    url: new URL('ws://localhost/ws'),
+    protocol: null,
+    messages,
+    get readyState() {
+      return readyState;
+    },
+    send(data) {
+      messages.push(JSON.parse(String(data)) as RealtimeServerMessage);
+    },
+    close() {
+      readyState = 3;
+    },
+  };
 }
 
 function startHttpStub(

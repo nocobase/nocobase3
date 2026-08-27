@@ -8,7 +8,6 @@ export interface EmailMessage {
   readonly text: string;
   readonly html?: string;
   readonly from?: string;
-  readonly replyTo?: string;
 }
 
 export interface SmtpProviderConfig {
@@ -20,22 +19,12 @@ export interface SmtpProviderConfig {
   readonly secure?: boolean;
   readonly auth?: { readonly user: string; readonly pass: string };
   readonly from?: string;
-  readonly replyTo?: string;
-}
-
-export interface ResendProviderConfig {
-  readonly type: 'resend';
-  readonly name: string;
-  readonly enabled?: boolean;
-  readonly apiKey: string;
-  readonly from: string;
-  readonly replyTo?: string;
 }
 
 export interface EmailChannelConfig {
   readonly type: 'email';
   readonly enabled: boolean;
-  readonly providers: readonly (SmtpProviderConfig | ResendProviderConfig)[];
+  readonly providers: readonly SmtpProviderConfig[];
 }
 
 export interface PreparedEmailMessage {

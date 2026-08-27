@@ -2,6 +2,7 @@ import type {
   NotificationProviderDefinition,
   ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
+import nodemailer from 'nodemailer';
 
 import type { PreparedEmailMessage, SmtpProviderConfig } from '../types.js';
 
@@ -18,7 +19,6 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
   return {
     type: 'smtp',
     async createProvider(_context, config) {
-      const { default: nodemailer } = await import('nodemailer');
       const transporter = nodemailer.createTransport({
         host: config.host,
         port: config.port,
@@ -30,25 +30,20 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
         type: 'smtp',
         async send({ message }): Promise<ProviderSendResult> {
           try {
-            const info = await transporter.sendMail({
+            await transporter.sendMail({
               from: message.content.from ?? config.from,
               to: message.to,
               subject: message.content.subject,
               text: message.content.text,
               html: message.content.html,
-              replyTo: message.content.replyTo ?? config.replyTo,
             });
-            return {
-              status: 'accepted',
-              providerMessageId: info.messageId,
-            };
+            return { status: 'accepted' };
           } catch (error) {
             if (isUnknownSubmission(error)) {
               return {
                 status: 'submission_unknown',
                 error: {
-                  category: 'timeout',
-                  code: smtpErrorCode(error),
+                  category: 'provider',
                   message: error.message,
                 },
               };
@@ -56,8 +51,7 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
             return {
               status: 'failed',
               error: {
-                category: smtpErrorCategory(error),
-                code: smtpErrorCode(error),
+                category: 'provider',
                 message: error instanceof Error ? error.message : String(error),
               },
               disposition: smtpDisposition(error),
@@ -73,7 +67,10 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
 }
 
 function smtpDisposition(error: unknown): 'never' | 'same_provider' {
-  const code = smtpErrorCode(error);
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String(error.code)
+      : undefined;
   if (code === 'EAUTH' || code === 'EENVELOPE' || code === 'EMESSAGE')
     return 'never';
   if (
@@ -84,29 +81,6 @@ function smtpDisposition(error: unknown): 'never' | 'same_provider' {
   )
     return 'same_provider';
   return 'never';
-}
-
-function smtpErrorCategory(
-  error: unknown,
-): 'authentication' | 'content' | 'network' | 'provider' | 'recipient' {
-  const code = smtpErrorCode(error);
-  if (code === 'EAUTH') return 'authentication';
-  if (code === 'EENVELOPE') return 'recipient';
-  if (code === 'EMESSAGE') return 'content';
-  if (
-    code === 'ECONNREFUSED' ||
-    code === 'ENOTFOUND' ||
-    code === 'EAI_AGAIN' ||
-    code === 'ESOCKET'
-  )
-    return 'network';
-  return 'provider';
-}
-
-function smtpErrorCode(error: unknown): string | undefined {
-  return error && typeof error === 'object' && 'code' in error
-    ? String(error.code)
-    : undefined;
 }
 
 function isUnknownSubmission(error: unknown): error is Error {

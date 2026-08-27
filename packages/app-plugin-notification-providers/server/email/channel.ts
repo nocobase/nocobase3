@@ -1,7 +1,6 @@
 import type {
   NotificationChannelDefinition,
   NotificationContent,
-  NotificationProviderIdentity,
   NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
 
@@ -35,11 +34,9 @@ export function createEmailChannelDefinition(
     async createChannel() {
       return {
         type: 'email',
-        resolveRecipient(input: {
-          readonly recipient: NotificationRecipient;
-          readonly provider: NotificationProviderIdentity;
-        }): EmailRecipient | undefined {
-          const { recipient } = input;
+        resolveRecipient(
+          recipient: NotificationRecipient,
+        ): EmailRecipient | undefined {
           if (recipient.type === 'user') return { userId: recipient.id };
           if (recipient.type === 'email') return { address: recipient.address };
           return undefined;

@@ -7,11 +7,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { NavLink } from 'react-router';
-import {
-  useInAppNotifications,
-  type InboxItem,
-  type InboxMutationAction,
-} from '@nocobase/app-plugin-notification-in-app/client';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -23,9 +18,17 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  fetchInbox,
+  markInboxRead,
+  mutateInboxItem,
+  type InboxItem,
+  type InboxMutationAction,
+} from './api.js';
+import { useNotificationInAppRuntime } from './runtime.js';
 
 export function NotificationInAppPage(): React.ReactElement {
-  const inboxRuntime = useInAppNotifications();
+  const inboxRuntime = useNotificationInAppRuntime();
   const { revision, unreadCount } = inboxRuntime;
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [items, setItems] = useState<readonly InboxItem[]>([]);
@@ -38,7 +41,7 @@ export function NotificationInAppPage(): React.ReactElement {
     const controller = new AbortController();
     setLoading(true);
     setError(undefined);
-    inboxRuntime.list({ unreadOnly }, controller.signal)
+    fetchInbox({ unreadOnly }, controller.signal)
       .then((response) => {
         setItems(response.data);
         setNextCursor(response.nextCursor);
@@ -68,7 +71,7 @@ export function NotificationInAppPage(): React.ReactElement {
           ),
     );
     try {
-      await inboxRuntime.update(item.id, action);
+      await mutateInboxItem(item.id, action);
       inboxRuntime.refresh();
     } catch (reason) {
       setError(
@@ -82,7 +85,7 @@ export function NotificationInAppPage(): React.ReactElement {
     if (!nextCursor) return;
     setLoadingMore(true);
     try {
-      const response = await inboxRuntime.list({
+      const response = await fetchInbox({
         unreadOnly,
         cursor: nextCursor,
       });
@@ -107,7 +110,7 @@ export function NotificationInAppPage(): React.ReactElement {
       })),
     );
     try {
-      await inboxRuntime.markAllRead();
+      await markInboxRead();
       inboxRuntime.refresh();
     } catch (reason) {
       setError(
