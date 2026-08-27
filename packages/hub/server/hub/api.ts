@@ -2615,7 +2615,6 @@ export function createHubApi(
         scheduleDeployment: (deployment) => coordinator.schedule(deployment),
         appName: deps.appName,
       });
-      await defaultApplicationBootstrap.ensure();
     }
     if (options.recoverDeployments !== false) {
       await coordinator.reconcileActiveRuntimes();

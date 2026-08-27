@@ -118,9 +118,9 @@ try {
       `http://127.0.0.1:${appServerPort}/hub/api/setup/status`,
     );
     const setupBody = await setupResponse.json();
-    if (!setupResponse.ok || setupBody?.data?.defaultApp?.status !== 'ready') {
+    if (!setupResponse.ok || setupBody?.data?.setupRequired !== true) {
       throw new Error(
-        `Packaged Hub did not bootstrap its default APP: ${JSON.stringify(setupBody)}`,
+        `Packaged Hub setup status is invalid: ${JSON.stringify(setupBody)}`,
       );
     }
     const emptyDefaultApp = await globalThis.fetch(
@@ -239,26 +239,12 @@ function assertDatabaseState(root, databasePath) {
       ]),
     );
     if (
-      counts.hub_applications !== 1 ||
+      counts.hub_applications !== 0 ||
       counts.hub_releases !== 0 ||
       counts.hub_deployments !== 0
     ) {
       throw new Error(
-        `Packaged Hub bootstrap created unexpected records: ${JSON.stringify(counts)}`,
-      );
-    }
-    const application = database
-      .prepare(
-        'select slug, active_release_id as activeReleaseId, desired_runtime_state as desiredRuntimeState from hub_applications where is_default = 1 limit 1',
-      )
-      .get();
-    if (
-      application?.slug !== 'default' ||
-      application?.activeReleaseId !== null ||
-      application?.desiredRuntimeState !== 'stopped'
-    ) {
-      throw new Error(
-        `Packaged Hub default APP is not empty and stopped: ${JSON.stringify(application)}`,
+        `Packaged Hub startup created unexpected records: ${JSON.stringify(counts)}`,
       );
     }
   } finally {

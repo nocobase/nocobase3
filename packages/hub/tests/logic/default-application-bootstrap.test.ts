@@ -39,7 +39,7 @@ afterEach(async () => {
 });
 
 describe('default application bootstrap', () => {
-  it('creates an empty default APP without packaged template resources', async () => {
+  it('starts a fresh Hub without creating a default APP', async () => {
     const fixture = await createFixture({ buildResources: false });
     const registry = createRegistry();
     const app = createFixtureApp(fixture, registry, false);
@@ -50,41 +50,37 @@ describe('default application bootstrap', () => {
       data: {
         setupRequired: true,
         defaultApp: {
-          status: 'ready',
+          status: 'preparing',
           retryable: false,
           errorCode: null,
         },
       },
     });
+    const browserOrigin = 'http://127.0.0.1:13000';
+    const cookie = await createOwnerAndSignIn(app, browserOrigin);
+    const applications = await app.request(`${browserOrigin}/hub/api/apps`, {
+      headers: { cookie },
+    });
+    expect(applications.status).toBe(200);
+    await expect(applications.json()).resolves.toMatchObject({
+      data: [],
+      meta: { total: 0 },
+    });
     expect(registry.snapshot('default')).toBeUndefined();
 
     const state = await readBootstrapState(fixture.databasePath);
-    expect(state).toMatchObject({
-      status: 'ready',
-      step: 'ready',
-      applicationId: 'system-default-application',
-      releaseId: null,
-      deploymentId: null,
-      resourceDigest: null,
-      attempt: 1,
-      errorCode: null,
-      retryable: false,
-    });
+    expect(state).toEqual({});
     await expect(
       readDefaultRecords(fixture.databasePath),
     ).resolves.toMatchObject({
-      application: {
-        slug: 'default',
-        active_release_id: null,
-        desired_runtime_state: 'stopped',
-      },
+      application: undefined,
       releases: 0,
       deployments: 0,
-      runtimeSecrets: 1,
+      runtimeSecrets: 0,
     });
   });
 
-  it('ignores packaged template resources and resumes one empty default APP', async () => {
+  it('keeps the application list empty after restart', async () => {
     const fixture = await createFixture();
     const firstRegistry = createRegistry();
     const first = createFixtureApp(fixture, firstRegistry, true);
@@ -95,7 +91,7 @@ describe('default application bootstrap', () => {
       data: {
         setupRequired: true,
         defaultApp: {
-          status: 'ready',
+          status: 'preparing',
           retryable: false,
           errorCode: null,
         },
@@ -113,30 +109,25 @@ describe('default application bootstrap', () => {
     await second.hubReady;
 
     await expect(setupStatus(second)).resolves.toMatchObject({
-      data: { defaultApp: { status: 'ready' } },
+      data: { defaultApp: { status: 'preparing' } },
     });
     const database = await openSqlite(fixture.databasePath);
     try {
-      const applications = await database('hub_applications')
-        .where({ is_default: 1 })
-        .select('*');
+      const applications = await database('hub_applications').select('*');
       const releases = await database('hub_releases').select('*');
       const deployments = await database('hub_deployments').select('*');
-      expect(applications).toHaveLength(1);
-      expect(applications[0]).toMatchObject({
-        slug: 'default',
-        active_release_id: null,
-        desired_runtime_state: 'stopped',
-      });
+      const runtimeSecrets = await database('hub_runtime_secrets').select('*');
+      expect(applications).toHaveLength(0);
       expect(releases).toHaveLength(0);
       expect(deployments).toHaveLength(0);
+      expect(runtimeSecrets).toHaveLength(0);
       expect(secondRegistry.snapshot('default')).toBeUndefined();
     } finally {
       await database.destroy();
     }
   });
 
-  it('persists a retryable creation failure, then retries it through the approved API', async () => {
+  it('preserves explicit retry for a failed default APP bootstrap', async () => {
     const fixture = await createFixture({ buildResources: false });
     const ensureInitial = RuntimeSecretService.prototype.ensureInitial;
     const ensureSecret = vi
@@ -150,24 +141,16 @@ describe('default application bootstrap', () => {
     await expect(setupStatus(app)).resolves.toMatchObject({
       data: {
         defaultApp: {
-          status: 'failed',
-          retryable: true,
-          errorCode: 'DEFAULT_APP_BOOTSTRAP_FAILED',
+          status: 'preparing',
+          retryable: false,
+          errorCode: null,
         },
       },
     });
-    expect(ensureSecret).toHaveBeenCalledTimes(3);
+    expect(ensureSecret).not.toHaveBeenCalled();
 
     const browserOrigin = 'http://127.0.0.1:13000';
     const cookie = await createOwnerAndSignIn(app, browserOrigin);
-    let continueRetry: (() => void) | undefined;
-    const retryGate = new Promise<void>((resolve) => {
-      continueRetry = resolve;
-    });
-    ensureSecret.mockImplementation(async function (applicationId) {
-      await retryGate;
-      return ensureInitial.call(this, applicationId);
-    });
     const retry = await app.request(
       `${browserOrigin}/hub/api/setup/default-app/retry`,
       {
@@ -187,11 +170,15 @@ describe('default application bootstrap', () => {
       meta: { idempotent: false },
     });
 
-    continueRetry?.();
-    await expect(waitForDefaultStatus(app, 'ready')).resolves.toMatchObject({
-      status: 'ready',
-      retryable: false,
-      errorCode: null,
+    await expect(waitForDefaultStatus(app, 'failed')).resolves.toMatchObject({
+      status: 'failed',
+      retryable: true,
+      errorCode: 'DEFAULT_APP_BOOTSTRAP_FAILED',
+    });
+    expect(ensureSecret).toHaveBeenCalledTimes(1);
+
+    ensureSecret.mockImplementation(async function (applicationId) {
+      return ensureInitial.call(this, applicationId);
     });
     const replay = await app.request(
       `${browserOrigin}/hub/api/setup/default-app/retry`,
@@ -206,10 +193,15 @@ describe('default application bootstrap', () => {
         body: '{}',
       },
     );
-    expect(replay.status).toBe(200);
+    expect(replay.status).toBe(202);
     await expect(replay.json()).resolves.toMatchObject({
-      data: { defaultApp: { status: 'ready' } },
-      meta: { idempotent: true },
+      data: { defaultApp: { status: 'preparing' } },
+      meta: { idempotent: false },
+    });
+    await expect(waitForDefaultStatus(app, 'ready')).resolves.toMatchObject({
+      status: 'ready',
+      retryable: false,
+      errorCode: null,
     });
     await expect(
       readDefaultRecords(fixture.databasePath),
