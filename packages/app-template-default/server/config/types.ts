@@ -10,6 +10,7 @@ import type { ResolvedAppPlugin } from '../plugins/index.js';
 
 export interface AppRoutingConfig {
   name: string;
+  publicOrigin: string | undefined;
   publicBasePath: string;
   internalBasePath: string;
   internalApiProxyPath: string;

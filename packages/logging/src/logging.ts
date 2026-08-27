@@ -133,18 +133,34 @@ function resolveTransportTemplate(
     return transport;
   }
 
-  const destination = transport.options.destination;
-  if (typeof destination !== 'string' || !destination.includes('{logger}')) {
+  const options = replaceLoggerTemplate(transport.options, loggerName);
+  if (options === transport.options) {
     return transport;
   }
 
   return {
     ...transport,
-    options: {
-      ...transport.options,
-      destination: destination.replaceAll('{logger}', loggerName),
-    },
+    options,
   } as LoggerConfig['transport'];
+}
+
+function replaceLoggerTemplate(
+  options: Record<string, unknown>,
+  loggerName: string,
+): Record<string, unknown> {
+  const templatedKeys = ['destination', 'file'] as const;
+  const replacements = Object.fromEntries(
+    templatedKeys.flatMap((key) => {
+      const value = options[key];
+      return typeof value === 'string' && value.includes('{logger}')
+        ? [[key, value.replaceAll('{logger}', loggerName)]]
+        : [];
+    }),
+  );
+
+  return Object.keys(replacements).length
+    ? { ...options, ...replacements }
+    : options;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

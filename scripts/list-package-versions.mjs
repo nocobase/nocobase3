@@ -8,6 +8,8 @@
 //   node scripts/list-package-versions.mjs --candidates 列出可发布包的 name@version
 //   node scripts/list-package-versions.mjs --released <前值JSON文件>  列出本次发布的包，
 //                                          飞书通知用，输出 Markdown 表格
+//   node scripts/list-package-versions.mjs --released-specs <前值JSON文件>  同上，但一行一个
+//                                          name@version，供脚本消费
 //   node scripts/list-package-versions.mjs --filters <前值JSON文件>   本次发布的包及其
 //                                          依赖的 pnpm --filter 参数
 import fs from 'node:fs';
@@ -78,6 +80,23 @@ if (mode === '--table') {
       .concat(released.map((p) => `| \`${p.name}\` | \`${p.version}\` |`))
       .join('\n'),
   );
+} else if (mode === '--released-specs') {
+  // 本次实际发布的包，一行一个 `name@version`。
+  //
+  // `--released` 输出的是给飞书看的 Markdown 表格，解析它既脆弱又容易在格式微调时悄悄失效；
+  // `--candidates` 则包含了本次没发布的包。补打 dist-tag 需要的是「这次真的发出去了什么」，
+  // 所以单独给一个直接可被 shell 逐行读取的格式。
+  const beforeFile = process.argv[3];
+  if (!beforeFile) {
+    console.error('--released-specs 需要指定前值 JSON 文件');
+    process.exit(2);
+  }
+  const before = JSON.parse(fs.readFileSync(beforeFile, 'utf8'));
+  for (const p of packages) {
+    if (p.private) continue;
+    if (before[p.name] === p.version) continue;
+    console.log(`${p.name}@${p.version}`);
+  }
 } else if (mode === '--filters') {
   // 拼成 pnpm 的 filter 参数：`--filter <name>...` 表示这个包连同它依赖的包。
   // 发版只需要构建将要发布的包和它们依赖的东西，其余的构建了也用不上。

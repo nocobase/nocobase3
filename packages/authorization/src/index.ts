@@ -1,20 +1,7 @@
-export * from './authorization.js';
-export * from './database-store.js';
-export type {
-  AuthorizationCatalog,
-  AuthorizationDefinition,
-  AuthorizationDefinitionInput,
-  PolicyDescriptor,
-} from './definition.js';
-export type {
-  AuthorizationDiagnostic,
-  AuthorizationDiagnosticCode,
-  AuthorizationDiagnosticSeverity,
-  AuthorizationValidationResult,
-} from './diagnostics.js';
-export * from './filter.js';
-export type { AuthorizationOperation } from './operations.js';
-export * from './registry.js';
-export * from './standard-policies.js';
-export * from './store.js';
-export * from './types.js';
+export * from './core/index.js';
+export * from './plugins/permission-sets/index.js';
+export * from './plugins/database/index.js';
+export * from './plugins/default-access/index.js';
+export * from './plugins/sharing-rules/index.js';
+export * from './plugins/restriction-rules/index.js';
+export * from './plugins/pages/index.js';

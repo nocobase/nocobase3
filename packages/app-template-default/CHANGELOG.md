@@ -1,5 +1,23 @@
 # @nocobase/app-template-default
 
+## 0.0.1-beta.5
+
+### Patch Changes
+
+- 8fb9319: Declare the pnpm version this package is developed with, so working on it uses the same pnpm as the rest of the monorepo.
+
+## 0.0.1-beta.4
+
+### Patch Changes
+
+- 0465323: Introduce the plugin-based authorization core and permission management UI. Replace the previous authorization API with composable core, database, permission-set, default-access, sharing-rule, restriction-rule, and page plugins; add route access metadata to the application client; publish and enable the authorization app plugin in the default template; and correct the Hub documentation to use the v3 Portal SDK package name.
+
+## 0.0.1-beta.3
+
+### Patch Changes
+
+- 31245b6: Align `nocobase.defaultTemplateVersion` with the package version. Releases now synchronize the two, so an application generated from the template no longer inherits a stale template version.
+
 ## 0.0.1-beta.2
 
 ### Patch Changes

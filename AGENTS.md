@@ -38,7 +38,7 @@ A hybrid Node/DOM package such as `app-host` should use `server-library` and add
 
 ### Package Publishing
 
-Every package in `packages/` is published to npm, so none of them set `private: true`. A new package that declares it is excluded from the release and from `pack:check`, which means nothing catches a broken publish setup until someone tries to release it.
+Every package in `packages/` is published to npm, so none of them set `private: true`. Root `pnpm pack:check` automatically discovers every package in that directory and rejects private packages, incomplete publish metadata, missing or stale changelogs, invalid tarballs, unresolved workspace protocols, and broken export or declaration metadata.
 
 A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
 
@@ -60,6 +60,18 @@ The executable source of `@nocobase/dev-config` is TypeScript, while its npm
 exports resolve to compiled ESM JavaScript and declarations in `dist`. When
 changing `packages/dev-config`, run
 `pnpm --filter @nocobase/dev-config check`; do not hand-edit generated output.
+
+## Native Dependencies in Generated Applications
+
+pnpm 11 does not run a dependency's install script unless the package is listed under `allowBuilds` in `pnpm-workspace.yaml`. That file is the only place the setting is read from: the `pnpm` field in `package.json` was removed in pnpm 11, and `.npmrc` has never carried build settings. A dependency that compiles a native addon and is missing from the list installs without building, `pnpm install` still reports success, and the failure surfaces much later as a runtime error that names nothing actionable — `better-sqlite3` reports `Could not locate the bindings file`.
+
+`@nocobase/create-app` writes this file into each application it generates, listing only the driver that application actually needs. `DRIVERS_NEEDING_BUILD` in `packages/create-app/src/lib/database.ts` is the list of drivers that require an entry; a pure-JavaScript driver such as `pg` or `mysql2` must not be added, because an entry it does not need is noise in every generated project.
+
+Do not put `pnpm-workspace.yaml` in `packages/app-template-default`, and do not generate it there at pack time either. pnpm treats any directory holding that file as a workspace root, so a copy inside the package severs it from the monorepo: `pnpm list` stops resolving `workspace:` dependencies, and `pnpm pack` fails outright with `ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC` because the package's `catalog:` ranges resolve against the nested file rather than the repository root. Copying the root catalog into the generated file does make `pack` succeed, but it duplicates the catalog into a second source of truth that silently goes stale.
+
+When another native dependency needs the same treatment, add it to `DRIVERS_NEEDING_BUILD` and cover it in `packages/create-app/tests/pnpm-workspace.test.ts`. If it belongs to the template rather than to a database choice, add it to the root `pnpm-workspace.yaml` so the monorepo builds it, and extend the generated file in `packages/create-app/src/lib/pnpm-workspace.ts` so applications built from the template get it too.
+
+A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's npm configuration suppresses install scripts globally and outranks `allowBuilds`, so a correct `allowBuilds` still yields an uncompiled addon. `pnpm install` cannot repair this — the package is already in the store, so pnpm skips it and reports success without building. `pnpm rebuild <package>` does, and works without changing the developer's configuration. `create-app` verifies the driver by loading it and runs that rebuild automatically.
 
 ## Language
 
