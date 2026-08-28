@@ -49,7 +49,7 @@ beforeAll(async () => {
     path.join(packedPackage, 'node_modules'),
     'dir',
   );
-});
+}, 60_000);
 
 afterAll(async () => {
   if (temporaryDirectory) {

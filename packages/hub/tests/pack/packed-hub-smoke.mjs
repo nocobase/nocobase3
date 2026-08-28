@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const archive = process.argv[2];
+const [archive, ...workspaceArchives] = process.argv.slice(2);
 const npmCli = path.resolve(
   path.dirname(process.execPath),
   '../lib/node_modules/npm/bin/npm-cli.js',
@@ -20,7 +20,9 @@ const npmCli = path.resolve(
 const runtimePath = `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? ''}`;
 
 if (!archive) {
-  throw new Error('Usage: node tests/pack/packed-hub-smoke.mjs <tarball>');
+  throw new Error(
+    'Usage: node tests/pack/packed-hub-smoke.mjs <hub-tarball> [workspace-tarball ...]',
+  );
 }
 
 const root = await mkdtemp(path.join(tmpdir(), 'nocobase-hub-pack-smoke-'));
@@ -28,7 +30,7 @@ try {
   const { stdout: listing } = await execFileAsync('tar', ['-tzf', archive]);
   assertIncluded(listing, 'package/server/standalone.js');
   assertIncluded(listing, 'package/client/index.html');
-  assertIncluded(listing, 'package/vendor/');
+  assertExcluded(listing, /^package\/vendor(?:\/|$)/);
   assertIncluded(listing, 'package/resources/default-app/metadata.json');
   assertIncluded(
     listing,
@@ -54,6 +56,7 @@ try {
       '--no-audit',
       '--no-fund',
       '--package-lock=false',
+      ...workspaceArchives,
       archive,
     ],
     {

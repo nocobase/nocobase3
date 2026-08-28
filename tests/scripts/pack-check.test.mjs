@@ -9,6 +9,7 @@ import {
   discoverPackages,
   findUnresolvedProtocols,
   hasTypeEntrypoints,
+  resolveWorkspaceDependencyClosure,
   validatePackedManifest,
   validatePackageManifest,
 } from '../../scripts/pack-check.mjs';
@@ -137,6 +138,32 @@ test('detects type entrypoints in top-level and exported declarations', () => {
   assert.equal(
     hasTypeEntrypoints({ exports: { '.': './dist/index.js' } }),
     false,
+  );
+});
+
+test('resolves packed workspace dependencies including peer dependencies', () => {
+  const manifests = new Map([
+    [
+      '@nocobase/auth',
+      {
+        name: '@nocobase/auth',
+        dependencies: { '@nocobase/sdk': '^1.0.0' },
+        peerDependencies: { '@nocobase/client': '^1.0.0' },
+      },
+    ],
+    ['@nocobase/client', { name: '@nocobase/client' }],
+    ['@nocobase/sdk', { name: '@nocobase/sdk' }],
+  ]);
+
+  assert.deepEqual(
+    resolveWorkspaceDependencyClosure(
+      {
+        name: '@nocobase/hub',
+        dependencies: { '@nocobase/auth': '^1.0.0', hono: '^4.0.0' },
+      },
+      manifests,
+    ),
+    ['@nocobase/auth', '@nocobase/client', '@nocobase/sdk'],
   );
 });
 

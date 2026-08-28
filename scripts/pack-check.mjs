@@ -6,7 +6,6 @@ import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
 const execFileAsync = promisify(execFile);
-
 export function archiveNameForPackage(packageName) {
   return `${packageName.replace(/^@/u, '').replaceAll('/', '-')}.tgz`;
 }
@@ -43,6 +42,36 @@ export function hasTypeEntrypoints(manifest) {
   };
 
   return visit(manifest.exports);
+}
+
+export function resolveWorkspaceDependencyClosure(rootManifest, manifests) {
+  const resolved = new Set();
+  const pending = workspaceDependencyNames(rootManifest);
+
+  while (pending.length > 0) {
+    const packageName = pending.shift();
+    if (resolved.has(packageName)) continue;
+
+    const manifest = manifests.get(packageName);
+    if (!manifest) {
+      throw new Error(
+        `Missing packed workspace dependency ${packageName} required by ${rootManifest.name}.`,
+      );
+    }
+
+    resolved.add(packageName);
+    pending.push(...workspaceDependencyNames(manifest));
+  }
+
+  return [...resolved].sort((left, right) => left.localeCompare(right));
+}
+
+function workspaceDependencyNames(manifest) {
+  return Object.keys({
+    ...manifest.dependencies,
+    ...manifest.optionalDependencies,
+    ...manifest.peerDependencies,
+  }).filter((packageName) => packageName.startsWith('@nocobase/'));
 }
 
 export function validatePackageManifest(manifest, directory) {
@@ -221,6 +250,45 @@ async function smokeTestDevConfig(archivePath, packageDirectory) {
   }
 }
 
+async function smokeTestHub(archivePath, packDirectory, repoRoot, env) {
+  const archiveEntries = (await readdir(packDirectory)).filter((entry) =>
+    entry.endsWith('.tgz'),
+  );
+  const packedPackages = await Promise.all(
+    archiveEntries.map(async (entry) => {
+      const packageArchive = path.join(packDirectory, entry);
+      return {
+        archive: packageArchive,
+        manifest: await readPackedManifest(packageArchive),
+      };
+    }),
+  );
+  const packedByName = new Map(
+    packedPackages.map(({ archive, manifest }) => [
+      manifest.name,
+      { archive, manifest },
+    ]),
+  );
+  const hubManifest = await readPackedManifest(archivePath);
+  const dependencyNames = resolveWorkspaceDependencyClosure(
+    hubManifest,
+    new Map([...packedByName].map(([name, value]) => [name, value.manifest])),
+  );
+  const workspaceArchives = dependencyNames.map(
+    (packageName) => packedByName.get(packageName).archive,
+  );
+
+  await run(
+    process.execPath,
+    [
+      path.join(repoRoot, 'packages/hub/tests/pack/packed-hub-smoke.mjs'),
+      archivePath,
+      ...workspaceArchives,
+    ],
+    { cwd: repoRoot, env },
+  );
+}
+
 async function checkPackage({ archivePath, packageInfo, repoRoot, env }) {
   const { directory, manifest } = packageInfo;
 
@@ -282,6 +350,14 @@ export async function packCheck({
         throw new Error(`Pack check failed for ${name}.`, { cause: error });
       }
     }
+
+    const hubArchive = path.join(
+      packDirectory,
+      archiveNameForPackage('@nocobase/hub'),
+    );
+    process.stdout.write('Smoke testing @nocobase/hub ... ');
+    await smokeTestHub(hubArchive, packDirectory, repoRoot, checkEnv);
+    console.log('ok');
 
     console.log(`Pack checks passed for ${packages.length} packages.`);
   } finally {

@@ -4,7 +4,6 @@ import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
   copyFileSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -31,6 +30,14 @@ afterEach(() => {
 });
 
 describe('Hub production build artifacts', () => {
+  it('declares the default template used by its build', () => {
+    const manifest = readJson(path.join(hubRoot, 'package.json'));
+
+    expect(manifest.devDependencies).toMatchObject({
+      '@nocobase/app-template-default': 'workspace:^',
+    });
+  });
+
   it('prebuilds server workspaces and writes only non-sensitive runtime env', () => {
     const fixtureRoot = createFixtureRoot('nocobase-hub-build-');
     const fixtureHubRoot = path.join(fixtureRoot, 'packages/hub');
@@ -192,6 +199,8 @@ describe('Hub production build artifacts', () => {
     expect(commands).toContain('./scripts/build-default-app-resources.mjs');
     expect(commands).toContain('--build-dir');
     expect(commands).toContain('dist/resources/default-app');
+    expect(commands).not.toContain('npm install');
+    expect(commands).not.toContain('./scripts/clean-dist-bin.mjs');
   });
 
   it.each([
@@ -232,7 +241,7 @@ describe('Hub production build artifacts', () => {
     expect(distEnv).not.toContain(`${key}=`);
   });
 
-  it('recursively vendors workspace packages and includes the SQLite runtime', () => {
+  it('uses registry versions for workspace and SQLite runtime dependencies', () => {
     const fixtureRoot = createFixtureRoot('nocobase-hub-dist-package-');
     const packagesRoot = path.join(fixtureRoot, 'packages');
     const fixtureHubRoot = path.join(packagesRoot, 'hub');
@@ -267,13 +276,6 @@ describe('Hub production build artifacts', () => {
       publishConfig: { exports: { '.': './dist/index.js' } },
       dependencies: { '@nocobase/app-database': 'workspace:^' },
     });
-    mkdirSync(path.join(packagesRoot, 'feature/dist/tests'), {
-      recursive: true,
-    });
-    writeFileSync(
-      path.join(packagesRoot, 'feature/dist/tests/feature.test.js'),
-      'throw new Error("must not ship");\n',
-    );
     createWorkspacePackage(packagesRoot, 'app-database', {
       name: '@nocobase/app-database',
       version: '1.0.0',
@@ -295,98 +297,24 @@ describe('Hub production build artifacts', () => {
       path.join(fixtureHubRoot, 'dist/package.json'),
     );
     expect(distPackage.dependencies).toMatchObject({
-      '@nocobase/app-database': 'file:vendor/@nocobase/app-database',
-      '@nocobase/feature': 'file:vendor/@nocobase/feature',
+      '@nocobase/feature': '1.0.0',
       'better-sqlite3': '12.11.1',
       knex: '3.1.0',
     });
+    expect(distPackage.dependencies).not.toHaveProperty(
+      '@nocobase/app-database',
+    );
     expect(distPackage).not.toHaveProperty('private');
     expect(distPackage.files).toEqual([
       'client',
       'server',
-      'vendor',
       'resources/default-app',
     ]);
+    expect(distPackage.publishConfig).toEqual({ access: 'public' });
     expect(
-      existsSync(
-        path.join(
-          fixtureHubRoot,
-          'dist/vendor/@nocobase/feature/dist/index.js',
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      existsSync(
-        path.join(
-          fixtureHubRoot,
-          'dist/vendor/@nocobase/feature/dist/tests/feature.test.js',
-        ),
-      ),
-    ).toBe(false);
-    expect(
-      existsSync(
-        path.join(
-          fixtureHubRoot,
-          'dist/vendor/@nocobase/app-database/dist/index.js',
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      readJson(
-        path.join(fixtureHubRoot, 'dist/vendor/@nocobase/feature/package.json'),
-      ),
-    ).toMatchObject({
-      name: '@nocobase/feature',
-      exports: { '.': './dist/index.js' },
-      dependencies: { '@nocobase/app-database': 'file:../app-database' },
-    });
+      readFileSync(path.join(fixtureHubRoot, 'dist/package.json'), 'utf8'),
+    ).not.toContain('file:vendor');
   });
-
-  it.each([
-    ['accepts', 'file:vendor/@nocobase/feature', 0],
-    ['rejects', 'file:../feature', 1],
-  ])(
-    '%s only package-local vendored publint dependencies',
-    (_label, dependency, status) => {
-      const fixtureRoot = createFixtureRoot('nocobase-hub-publint-');
-      const packageRoot = path.join(fixtureRoot, 'package');
-      const archive = path.join(fixtureRoot, 'hub.tgz');
-      writeJson(path.join(packageRoot, 'package.json'), {
-        name: '@nocobase/hub-fixture',
-        version: '1.0.0',
-        type: 'module',
-        dependencies: { '@nocobase/feature': dependency },
-      });
-      writeJson(
-        path.join(packageRoot, 'vendor/@nocobase/feature/package.json'),
-        { name: '@nocobase/feature', version: '1.0.0' },
-      );
-      const packed = spawnSync(
-        'tar',
-        ['-czf', archive, '-C', fixtureRoot, 'package'],
-        {
-          encoding: 'utf8',
-          env: { ...process.env, COPYFILE_DISABLE: '1' },
-        },
-      );
-      assertCommandSucceeded(packed);
-
-      const result = spawnSync(
-        process.execPath,
-        [path.join(hubRoot, 'scripts/publint-packed-hub.mjs'), archive],
-        { cwd: hubRoot, encoding: 'utf8' },
-      );
-
-      expect(result.status).toBe(status);
-      if (status === 0) {
-        expect(result.stdout).toContain('validated 1 package-local');
-      } else {
-        expect(result.stderr).toContain(
-          'dependency references "file:../feature"',
-        );
-      }
-    },
-  );
 });
 
 function createFixtureRoot(prefix: string): string {

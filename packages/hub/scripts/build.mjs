@@ -291,15 +291,6 @@ const build = ({
   run('Generate server package', 'node', [
     './scripts/build-server-dist-package.mjs',
   ]);
-  run('Install server production dependencies', 'npm', [
-    'install',
-    '--omit=dev',
-    '--package-lock=false',
-    '--prefix',
-    './dist',
-  ]);
-  run('Clean server dependency bins', 'node', ['./scripts/clean-dist-bin.mjs']);
-
   console.log(
     '\nBuild complete: dist/client, dist/server, dist/.env, and dist/package.json',
   );

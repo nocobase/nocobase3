@@ -28,6 +28,7 @@
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-template-default": "workspace:^",
     "@nocobase/authorization": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
@@ -139,7 +140,7 @@
     "start": "node ./scripts/start.mjs",
     "refine": "refine",
     "sdk:check": "pnpm exec portal-sdk check",
-    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-hub.tgz\" && node ./tests/pack/packed-hub-smoke.mjs \"$PACK_DIR/nocobase-hub.tgz\" && node ./scripts/publint-packed-hub.mjs \"$PACK_DIR/nocobase-hub.tgz\""
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-hub.tgz\" && pnpm exec publint run \"$PACK_DIR/nocobase-hub.tgz\""
   },
   "browserslist": {
     "production": [
