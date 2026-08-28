@@ -220,6 +220,11 @@ function toPascalCase(value) {
     .join('');
 }
 
+function toCamelCase(value) {
+  const pascalCase = toPascalCase(value);
+  return pascalCase[0].toLowerCase() + pascalCase.slice(1);
+}
+
 function formatDatePrefix(value) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     throw new Error('The scaffold date must be a valid Date.');
@@ -238,6 +243,7 @@ function createScaffoldFiles({
   datePrefix,
 }) {
   const symbolName = toPascalCase(shortName);
+  const moduleName = toCamelCase(shortName);
   const collectionName = `appPlugin${symbolName}Records`;
   const migrationName = `${datePrefix}0001_${shortName.replaceAll('-', '_')}_create_records`;
   const seedName = `${datePrefix}0002_${shortName.replaceAll('-', '_')}_create_welcome_record`;
@@ -251,7 +257,16 @@ function createScaffoldFiles({
     engines: {
       node: '>=24.0.0',
     },
+    sideEffects: false,
     exports: {
+      './client': {
+        types: './client/index.ts',
+        import: './client/index.ts',
+      },
+      './client/plugin': {
+        types: './client/plugin.ts',
+        import: './client/plugin.ts',
+      },
       './client/bootstrap': {
         types: './client/bootstrap.ts',
         import: './client/bootstrap.ts',
@@ -266,9 +281,18 @@ function createScaffoldFiles({
       },
       './package.json': './package.json',
     },
+    files: ['dist', '.agents'],
     publishConfig: {
       access: 'public',
       exports: {
+        './client': {
+          types: './dist/client/index.d.ts',
+          import: './dist/client/index.js',
+        },
+        './client/plugin': {
+          types: './dist/client/plugin.d.ts',
+          import: './dist/client/plugin.js',
+        },
         './client/bootstrap': {
           types: './dist/client/bootstrap.d.ts',
           import: './dist/client/bootstrap.js',
@@ -286,11 +310,6 @@ function createScaffoldFiles({
     },
     nocobase: {
       plugin: {
-        client: {
-          bootstrap: './client/bootstrap',
-          routes: './client/routes',
-          providers: './client/providers',
-        },
         database: {
           migrations: './database/migrations',
           seeds: './database/seeds',
@@ -336,7 +355,7 @@ function createScaffoldFiles({
     ['.prettierignore', 'dist/\n'],
     [
       'README.md',
-      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server ServiceProvider, an HTTP route at \`/${shortName}\`, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
+      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server ServiceProvider, an HTTP route at \`/${shortName}\`, a \`client/plugin.ts\` registration entry re-exported as the default from \`client/index.ts\`, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
     ],
     [
       'database/README.md',
@@ -355,6 +374,14 @@ function createScaffoldFiles({
       `import { createClientLibraryConfig } from '@nocobase/dev-config/eslint';\n\nexport default createClientLibraryConfig({\n  tsconfigRootDir: import.meta.dirname,\n});\n`,
     ],
     ['package.json', `${JSON.stringify(packageJson, null, 2)}\n`],
+    [
+      'client/index.ts',
+      `// The plugin's public client surface. The default export is the registration factory an application lists in\n// its client/plugins.ts; it keeps every implementation entry behind a dynamic import, so importing this module\n// costs the application only the descriptor.\nexport { default } from './plugin.js';\n`,
+    ],
+    [
+      'client/plugin.ts',
+      `import {\n  defineClientPlugin,\n  type AppClientPluginFactory,\n} from '@nocobase/app-client/plugins';\n\nexport interface ${symbolName}ClientOptions {\n  readonly placeholder?: never;\n}\n\nconst ${moduleName}: AppClientPluginFactory<${symbolName}ClientOptions> =\n  defineClientPlugin({\n    packageName: '${packageName}',\n    bootstrap: () => import('./bootstrap.js'),\n    routes: () => import('./routes.js'),\n    providers: () => import('./providers.js'),\n  });\n\nexport default ${moduleName};\n`,
+    ],
     [
       'client/bootstrap.ts',
       `import type { AppClientPluginBootstrap } from '@nocobase/app-client/plugins';\n\nconst bootstrap: AppClientPluginBootstrap = () => {\n  // Register imperative client capabilities here.\n};\n\nexport default bootstrap;\n`,

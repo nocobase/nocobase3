@@ -4,6 +4,7 @@
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
   "version": "0.0.1",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -25,9 +26,12 @@
       "import": "./dist/server/collections/index.js"
     },
     "./client": {
-      "source": "./client/index.ts",
       "types": "./client/index.ts",
-      "import": "./dist/client/index.js"
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
     },
     "./client/routes": {
       "source": "./client/routes.ts",
@@ -70,6 +74,10 @@
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
       },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
@@ -108,10 +116,6 @@
     },
     "plugin": {
       "server": "./server/provider",
-      "client": {
-        "bootstrap": "./client/bootstrap",
-        "routes": "./client/routes"
-      },
       "database": {
         "migrations": "./database/migrations"
       }

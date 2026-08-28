@@ -4,6 +4,7 @@
   "description": "Minimal file storage, access, route, and UI contracts for NocoBase applications.",
   "version": "0.0.1",
   "type": "module",
+  "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
@@ -20,6 +21,10 @@
     "./client": {
       "types": "./client/index.ts",
       "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
     },
     "./client/types": {
       "types": "./client/types.ts",
@@ -58,6 +63,10 @@
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
       },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./client/types": {
         "types": "./dist/client/types.d.ts",
         "import": "./dist/client/types.js"
@@ -95,9 +104,6 @@
   "nocobase": {
     "plugin": {
       "server": "./server/provider",
-      "client": {
-        "routes": "./client/routes"
-      },
       "database": {
         "migrations": "./database/migrations",
         "seeds": "./database/seeds"

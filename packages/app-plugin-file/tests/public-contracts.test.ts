@@ -84,7 +84,10 @@ describe('file plugin public contracts', () => {
         readonly exports: Readonly<Record<string, unknown>>;
       };
       readonly nocobase: {
-        readonly plugin: { readonly client: Readonly<Record<string, string>> };
+        readonly plugin: {
+          readonly client?: unknown;
+          readonly server?: string;
+        };
       };
     };
     const skillPath = '.agents/skills/nocobase-app-plugin-file/SKILL.md';
@@ -104,9 +107,12 @@ describe('file plugin public contracts', () => {
     expect(packageJson.publishConfig.exports).not.toHaveProperty(
       providersEntry,
     );
-    expect(packageJson.nocobase.plugin.client).toEqual({
-      routes: './client/routes',
-    });
+    expect(packageJson.exports).toHaveProperty('./client');
+    expect(packageJson.exports).toHaveProperty('./client/plugin');
+    expect(packageJson.publishConfig.exports).toHaveProperty('./client');
+    expect(packageJson.publishConfig.exports).toHaveProperty('./client/plugin');
+    expect(packageJson.nocobase.plugin.server).toBe('./server/provider');
+    expect(packageJson.nocobase.plugin.client).toBeUndefined();
     expect(existsSync(skillPath)).toBe(true);
     expect(readFileSync(skillPath, 'utf8')).toContain(
       'name: nocobase-app-plugin-file',

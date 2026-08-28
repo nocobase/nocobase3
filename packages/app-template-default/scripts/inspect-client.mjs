@@ -1,31 +1,28 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { DEFAULT_APP, resolveApplication } from './register-plugin.mjs';
+const help = `Inspect the client bootstrap, routes, and providers this app resolves.
 
-const help = `Inspect resolved client bootstrap, routes, and providers for an application.
+Loads client/plugins.ts and runs the same resolution the browser does, so the
+output reflects what the app will actually render.
 
 Usage:
-  pnpm app:client:inspect [options]
+  pnpm client:inspect [options]
 
 Options:
-  --app <app>        Application directory or package name
-                     (default: app-template-default)
   --type <type>      all, bootstrap, routes, or providers (default: all)
   --json             Print machine-readable JSON
   -h, --help         Show this help
 
 Examples:
-  pnpm app:client:inspect
-  pnpm app:client:inspect --app app-template-default
-  pnpm app:client:inspect --app @nocobase/app-template-default --json
-  pnpm app:client:inspect --type bootstrap
-  pnpm app:client:inspect --type providers`;
+  pnpm client:inspect
+  pnpm client:inspect --json
+  pnpm client:inspect --type bootstrap
+  pnpm client:inspect --type providers`;
 
 export function parseInspectAppClientArgs(args) {
   const options = {
-    app: DEFAULT_APP,
     help: false,
     json: false,
     type: 'all',
@@ -41,21 +38,15 @@ export function parseInspectAppClientArgs(args) {
       options.json = true;
       continue;
     }
-    if (argument === '--app' || argument === '--type') {
+    if (argument === '--type') {
       const value = args[index + 1];
       if (value === undefined || value.startsWith('-')) {
-        throw new Error(`${argument} requires a value.`);
+        throw new Error('--type requires a value.');
       }
-      if (argument === '--app') {
-        options.app = value;
-      } else {
-        if (!['all', 'bootstrap', 'routes', 'providers'].includes(value)) {
-          throw new Error(
-            '--type must be all, bootstrap, routes, or providers.',
-          );
-        }
-        options.type = value;
+      if (!['all', 'bootstrap', 'routes', 'providers'].includes(value)) {
+        throw new Error('--type must be all, bootstrap, routes, or providers.');
       }
+      options.type = value;
       index += 1;
       continue;
     }
@@ -66,123 +57,87 @@ export function parseInspectAppClientArgs(args) {
 }
 
 export async function inspectAppClient({
-  app = DEFAULT_APP,
-  repoRoot = path.resolve(import.meta.dirname, '..'),
+  appRoot = path.resolve(import.meta.dirname, '..'),
 } = {}) {
-  const application = await resolveApplication(repoRoot, app);
-  const appRoot = path.dirname(application.packageJsonPath);
-  const [
-    { resolveAppPlugins },
-    { applyClientRouteComponentOverrides, resolveAppClientContributions },
-  ] = await Promise.all([
-    import('../packages/app-template-default/server/plugins/index.js'),
-    import('../packages/app-client/src/plugins.js'),
-  ]);
-  const resolvedApp = resolveAppPlugins(appRoot);
-  const clientPlugins = resolvedApp.plugins.filter(
-    (plugin) => plugin.enabled && plugin.manifest.client,
-  );
-  const [applicationRoutes, applicationProviders, applicationBootstrapEntry] =
-    await Promise.all([
-      loadApplicationDefinitions(appRoot, 'routes'),
-      loadApplicationDefinitions(appRoot, 'providers'),
-      findApplicationEntry(appRoot, 'bootstrap'),
-    ]);
-  const pluginContributions = await Promise.all(
-    clientPlugins.map(async (plugin) => ({
-      packageName: plugin.packageName,
-      source: 'plugin',
-      routes: await loadDefinitions(plugin, 'routes'),
-      providers: await loadDefinitions(plugin, 'providers'),
-    })),
-  );
+  const packageJsonPath = path.join(appRoot, 'package.json');
+  const appPackageName = JSON.parse(readFileSync(packageJsonPath, 'utf8')).name;
+  const { applyClientRouteComponentOverrides, resolveAppClientContributions } =
+    await import('@nocobase/app-client/plugins');
+
+  const clientPlugins = await loadClientPlugins(appRoot);
+  const applicationLoader = await loadApplicationLoader(appRoot);
   const contributions = [
-    {
-      packageName: resolvedApp.appPackageName,
-      source: 'application',
-      routes: applicationRoutes,
-      providers: applicationProviders,
-    },
-    ...pluginContributions,
+    await loadContribution(applicationLoader, 'application'),
+    ...(await Promise.all(
+      clientPlugins.plugins.map((plugin) => loadContribution(plugin, 'plugin')),
+    )),
   ];
   const resolved = resolveAppClientContributions(contributions);
-  const [declaredRouteComponentOverrides, sourceExtensions] = await Promise.all(
-    [
-      loadApplicationRouteComponentOverrides(appRoot),
-      loadApplicationSourceExtensions(appRoot),
-    ],
-  );
-  const routeComponentOverrides = [
-    ...declaredRouteComponentOverrides,
-    ...sourceExtensions.flatMap(
-      (extension) => extension.routeComponentOverrides ?? [],
+  const sourceExtensions = await loadApplicationSourceExtensions(appRoot);
+  const overrides = [
+    ...clientPlugins.routeComponentOverrides.map((override) => ({
+      ...override,
+      origin: 'plugins-entry',
+    })),
+    ...(await loadApplicationRouteComponentOverrides(appRoot)).map(
+      (override) => ({ ...override, origin: 'route-overrides' }),
+    ),
+    ...sourceExtensions.flatMap((extension) =>
+      (extension.routeComponentOverrides ?? []).map((override) => ({
+        ...override,
+        origin: `extension:${extension.name}`,
+      })),
     ),
   ];
-  const finalRoutes = applyClientRouteComponentOverrides(
-    resolved.routes,
-    routeComponentOverrides,
-  );
-  const entries = new Map(
-    clientPlugins.map((plugin) => [plugin.packageName, plugin.manifest.client]),
-  );
-  const applicationEntries = {
-    bootstrap: applicationBootstrapEntry ? './client/bootstrap' : undefined,
-    providers: applicationProviders ? './client/providers' : undefined,
-    routes: applicationRoutes ? './client/routes' : undefined,
-  };
+  const routes = applyClientRouteComponentOverrides(resolved.routes, overrides);
+  const entryOf = (packageName, contribution) =>
+    packageName === appPackageName
+      ? `./client/${contribution}`
+      : `${packageName}/client/${contribution}`;
 
   return {
-    app: resolvedApp.appPackageName,
+    app: appPackageName,
     bootstraps: [
-      ...(applicationEntries.bootstrap
+      ...(applicationLoader?.bootstrap
         ? [
             {
               order: 1,
-              packageName: resolvedApp.appPackageName,
+              packageName: appPackageName,
               source: 'application',
-              entry: applicationEntries.bootstrap,
+              entry: entryOf(appPackageName, 'bootstrap'),
             },
           ]
         : []),
-      ...clientPlugins
-        .filter((plugin) => plugin.manifest.client?.bootstrap)
+      ...clientPlugins.plugins
+        .filter((plugin) => plugin.bootstrap)
         .map((plugin, index) => ({
-          order: index + (applicationEntries.bootstrap ? 2 : 1),
+          order: index + (applicationLoader?.bootstrap ? 2 : 1),
           packageName: plugin.packageName,
           source: 'plugin',
-          entry: formatPluginClientEntry(
-            plugin.packageName,
-            plugin.manifest.client.bootstrap,
-          ),
+          entry: entryOf(plugin.packageName, 'bootstrap'),
+          ...(hasOptions(plugin.options)
+            ? { options: describeOptions(plugin.options) }
+            : {}),
         })),
     ],
-    routes: finalRoutes.map((route) => ({
-      auth: route.auth,
-      id: route.id,
-      name: route.name,
-      packageName: route.packageName,
-      path: route.path,
-      entry:
-        route.source === 'application'
-          ? applicationEntries.routes
-          : entries.get(route.packageName)?.routes,
-      routeSource: route.source,
-      routeEntry:
-        route.source === 'application'
-          ? applicationEntries.routes
-          : formatPluginClientEntry(
-              route.packageName,
-              entries.get(route.packageName)?.routes,
-            ),
-      componentSource: routeComponentOverrides.some(
-        (override) => override.routeId === route.id,
-      )
-        ? 'application'
-        : route.source,
-      componentEntry: routeComponentOverrides.find(
-        (override) => override.routeId === route.id,
-      )?.componentEntry,
-    })),
+    routes: routes.map((route) => {
+      const override = overrides.find((entry) => entry.routeId === route.id);
+      return {
+        auth: route.auth,
+        id: route.id,
+        name: route.name,
+        packageName: route.packageName,
+        path: route.path,
+        routeSource: route.source,
+        routeEntry: entryOf(route.packageName, 'routes'),
+        componentSource: override
+          ? describeOverrideOrigin(override.origin)
+          : route.source,
+        ...(override?.componentEntry
+          ? { componentEntry: override.componentEntry }
+          : {}),
+      };
+    }),
     providers: resolved.providers.map((provider, index) => ({
       order: index + 1,
       id: provider.id,
@@ -190,21 +145,127 @@ export async function inspectAppClient({
       packageName: provider.packageName,
       source: provider.source,
       layer: provider.layer,
-      entry:
-        provider.source === 'application'
-          ? applicationEntries.providers
-          : formatPluginClientEntry(
-              provider.packageName,
-              entries.get(provider.packageName)?.providers,
-            ),
+      entry: entryOf(provider.packageName, 'providers'),
       before: provider.before ?? [],
       after: provider.after ?? [],
     })),
   };
 }
 
-function formatPluginClientEntry(packageName, entry) {
-  return entry?.startsWith('./') ? `${packageName}/${entry.slice(2)}` : entry;
+function describeOverrideOrigin(origin) {
+  if (origin === 'plugins-entry') {
+    return 'application (plugin options)';
+  }
+  if (origin === 'route-overrides') {
+    return 'application (route-overrides)';
+  }
+  return `application (${origin})`;
+}
+
+function hasOptions(options) {
+  return Boolean(
+    options && typeof options === 'object' && Object.keys(options).length > 0,
+  );
+}
+
+/** Functions carry no useful text once bundled, so they render as a marker. */
+function describeOptions(options) {
+  return JSON.stringify(options, (_key, value) =>
+    typeof value === 'function' ? '[loader]' : value,
+  );
+}
+
+async function loadClientPlugins(appRoot) {
+  const entry = await findApplicationEntry(appRoot, 'plugins');
+  if (!entry) {
+    throw new Error(
+      `Application at ${appRoot} does not declare client/plugins.ts.`,
+    );
+  }
+
+  try {
+    const module = await import(pathToFileURL(entry).href);
+    const declared = module.default;
+    if (!declared || !Array.isArray(declared.plugins)) {
+      throw new Error(
+        'the default export must come from defineClientPlugins()',
+      );
+    }
+    return {
+      plugins: declared.plugins,
+      routeComponentOverrides: declared.routeComponentOverrides ?? [],
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to inspect client/plugins.ts: ${reason}`, {
+      cause: error,
+    });
+  }
+}
+
+async function loadApplicationLoader(appRoot) {
+  const entry = await findApplicationEntry(appRoot, 'application');
+  if (!entry) {
+    return undefined;
+  }
+
+  try {
+    const module = await import(pathToFileURL(entry).href);
+    if (!module.default || typeof module.default !== 'object') {
+      throw new Error('the default export must be a client application loader');
+    }
+    return module.default;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to inspect client/application.ts: ${reason}`, {
+      cause: error,
+    });
+  }
+}
+
+/**
+ * Loads one contribution the same way the browser runtime does, including the
+ * factory form of routes and providers.
+ */
+async function loadContribution(loader, source) {
+  if (!loader) {
+    return { packageName: '', source, routes: undefined, providers: undefined };
+  }
+
+  const [routes, providers] = await Promise.all([
+    loadContributionEntry(loader, 'routes'),
+    loadContributionEntry(loader, 'providers'),
+  ]);
+
+  return { packageName: loader.packageName, source, routes, providers };
+}
+
+async function loadContributionEntry(loader, contribution) {
+  const load = loader[contribution];
+  if (!load) {
+    return undefined;
+  }
+
+  try {
+    const module = await load();
+    const exported = module.default;
+    const definitions =
+      typeof exported === 'function'
+        ? exported(loader.options ?? {})
+        : exported;
+    if (!Array.isArray(definitions)) {
+      throw new Error(
+        `the ${contribution} entry must default-export a definition array, or a function returning one`,
+      );
+    }
+    return definitions;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to inspect client ${contribution} for "${loader.packageName}": ${reason}`,
+      { cause: error },
+    );
+  }
 }
 
 async function loadApplicationRouteComponentOverrides(appRoot) {
@@ -280,57 +341,6 @@ async function findApplicationEntry(appRoot, contribution) {
   );
 }
 
-async function loadApplicationDefinitions(appRoot, contribution) {
-  const entry = await findApplicationEntry(appRoot, contribution);
-  if (!entry) {
-    return undefined;
-  }
-
-  try {
-    const module = await import(pathToFileURL(entry).href);
-    if (!Array.isArray(module.default)) {
-      throw new Error('the default export must be a definition array');
-    }
-    return module.default;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Failed to inspect application client ${contribution}: ${reason}`,
-      { cause: error },
-    );
-  }
-}
-
-async function loadDefinitions(plugin, contribution) {
-  const configuredEntry = plugin.manifest.client?.[contribution];
-  if (!configuredEntry) {
-    return undefined;
-  }
-  const resolvedEntry =
-    contribution === 'routes'
-      ? plugin.clientRoutesEntry
-      : plugin.clientProvidersEntry;
-  if (!resolvedEntry) {
-    throw new Error(
-      `Plugin "${plugin.packageName}" client ${contribution} entry could not be resolved: ${configuredEntry}`,
-    );
-  }
-
-  try {
-    const module = await import(pathToFileURL(resolvedEntry).href);
-    if (!Array.isArray(module.default)) {
-      throw new Error('the default export must be a definition array');
-    }
-    return module.default;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Failed to inspect client ${contribution} for plugin "${plugin.packageName}": ${reason}`,
-      { cause: error },
-    );
-  }
-}
-
 export function formatAppClientInspection(inspection, type = 'all') {
   const sections = [`App: ${inspection.app}`];
   if (type === 'all' || type === 'bootstrap') {
@@ -370,6 +380,7 @@ function formatBootstraps(bootstraps) {
         `  ${bootstrap.order}. ${bootstrap.packageName}`,
         `    source: ${bootstrap.source}`,
         `    entry: ${bootstrap.entry}`,
+        ...(bootstrap.options ? [`    options: ${bootstrap.options}`] : []),
       ].join('\n'),
     )
     .join('\n')}`;
@@ -429,7 +440,7 @@ async function main() {
       return;
     }
 
-    const inspection = await inspectAppClient({ app: options.app });
+    const inspection = await inspectAppClient();
     console.log(
       options.json
         ? JSON.stringify(
@@ -441,7 +452,7 @@ async function main() {
     );
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
-    console.error('Run pnpm app:client:inspect --help for usage.');
+    console.error('Run pnpm client:inspect --help for usage.');
     process.exitCode = 1;
   }
 }

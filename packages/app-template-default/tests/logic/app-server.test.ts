@@ -21,7 +21,10 @@ import {
   createDefaultCachingConfig,
   type CachingConfig,
 } from '@nocobase/caching';
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import {
+  createConfigPaths,
+  readEnvFiles,
+} from '@nocobase/app-server-kit/config';
 import {
   createRealtimeService,
   realtimeServiceToken,
@@ -66,6 +69,7 @@ import {
   createStandaloneScope,
   createStandaloneServer,
   type StandaloneServer,
+  type StandaloneServerOptions,
 } from '../../server/index.ts';
 import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalone.ts';
 import type { AppConfig } from '../../server/config/index.ts';
@@ -939,7 +943,9 @@ describe('app server', () => {
     const viteDevUrl = await startHttpStub(() => {
       viteRequestCount += 1;
     });
-    const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
+    const app = trackCloseable(
+      await createIsolatedStandaloneServer({ viteDevUrl }),
+    );
     const publicBasePath = app.application.publicBasePath;
 
     const response = await requestApp(
@@ -960,7 +966,7 @@ describe('app server', () => {
 
   it('protects API routes loaded from enabled app plugins', async () => {
     const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
     const response = await requestApp(
       app,
@@ -980,7 +986,9 @@ describe('app server', () => {
       response.setHeader('content-type', 'text/html; charset=utf-8');
       response.end('<main>installation page</main>');
     });
-    const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
+    const app = trackCloseable(
+      await createIsolatedStandaloneServer({ viteDevUrl }),
+    );
 
     const redirectResponse = await requestApp(app, 'http://localhost/main/', {
       headers: { Accept: 'text/html' },
@@ -1005,7 +1013,7 @@ describe('app server', () => {
   it('dispatches jobs from enabled app plugins', async () => {
     vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
     const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
     const response = await requestApp(
       app,
@@ -1023,7 +1031,7 @@ describe('app server', () => {
 
   it('exposes services registered by enabled plugin providers', async () => {
     const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
     const response = await requestApp(
       app,
@@ -1040,7 +1048,7 @@ describe('app server', () => {
 
   it('mounts standalone app-local routes behind the public base path', async () => {
     const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
     const publicBasePath = app.application.publicBasePath;
     const expectedHealth = {
@@ -1067,7 +1075,7 @@ describe('app server', () => {
 
   it('mounts standalone WebSocket handlers behind the public base path', async () => {
     const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
     const publicBasePath = app.application.publicBasePath;
 
@@ -1086,7 +1094,7 @@ describe('app server', () => {
 
   it('accepts standalone WebSocket upgrades through the public base path', async () => {
     const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
     const serverUrl = await startStandaloneTestServer(app);
     const websocket = new WebSocket(
@@ -1120,7 +1128,7 @@ describe('app server', () => {
 
   it('closes standalone WebSocket connections when the app closes', async () => {
     const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
     const serverUrl = await startStandaloneTestServer(app);
     const websocket = new WebSocket(
@@ -1140,7 +1148,7 @@ describe('app server', () => {
 
   it('returns a closable standalone app', async () => {
     const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
+      await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
 
     expect(typeof app.close).toBe('function');
@@ -1180,7 +1188,9 @@ describe('app server', () => {
         }),
       );
     });
-    const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
+    const app = trackCloseable(
+      await createIsolatedStandaloneServer({ viteDevUrl }),
+    );
     const publicBasePath = app.application.publicBasePath;
     const requestPath = `${publicBasePath}/settings?tab=apps`;
 
@@ -1638,12 +1648,25 @@ function createEmbeddedTestScope(
 ): AppScope {
   const lifecycle = createAppDisposerRegistry();
   const sourceRoot = path.resolve(import.meta.dirname, '../..');
+  const rootDir = options.paths?.rootDir ?? options.rootDir ?? sourceRoot;
+  const databaseDir = mkdtempSync(
+    path.join(tmpdir(), 'nocobase-app-template-default-database-'),
+  );
+  tempDirs.push(databaseDir);
   apps.push({
     close: () => lifecycle.disposeAll(),
   });
 
   return {
     ...options,
+    env: {
+      ...readEnvFiles([
+        path.join(rootDir, '.env'),
+        path.join(rootDir, '.env.local'),
+      ]),
+      ...options.env,
+      DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
+    },
     paths:
       options.paths ??
       (options.rootDir
@@ -1664,6 +1687,31 @@ function createEmbeddedTestScope(
       lifecycle.registerDisposer(name, dispose);
     },
   };
+}
+
+async function createIsolatedStandaloneServer(
+  options: StandaloneServerOptions = {},
+): Promise<StandaloneServer> {
+  const sourceRoot = path.resolve(import.meta.dirname, '../..');
+  const databaseDir = mkdtempSync(
+    path.join(tmpdir(), 'nocobase-app-template-default-standalone-database-'),
+  );
+  tempDirs.push(databaseDir);
+
+  return createStandaloneServer({
+    ...options,
+    env: {
+      ...options.env,
+      DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
+    },
+    paths: {
+      rootDir: sourceRoot,
+      serverDir: path.join(sourceRoot, 'server'),
+      databaseDir: path.join(sourceRoot, 'database'),
+      clientDir: path.join(sourceRoot, 'dist/client'),
+      storageDir: path.join(sourceRoot, 'storage'),
+    },
+  });
 }
 
 function createEmbeddedPluginFixture(rootDir: string): void {

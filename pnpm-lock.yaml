@@ -218,6 +218,9 @@ importers:
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
 
   packages/app-client:
     devDependencies:
@@ -1432,6 +1435,9 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../cli
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../queue

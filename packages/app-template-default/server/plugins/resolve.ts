@@ -226,18 +226,6 @@ function resolvePlugin(
       'dist/server/routes/index.js',
       'dist/server/routes/index.mjs',
     ]),
-    clientBootstrapEntry: resolveOptionalModuleFile(
-      packageRoot,
-      manifest.client?.bootstrap,
-    ),
-    clientRoutesEntry: resolveOptionalModuleFile(
-      packageRoot,
-      manifest.client?.routes,
-    ),
-    clientProvidersEntry: resolveOptionalModuleFile(
-      packageRoot,
-      manifest.client?.providers,
-    ),
   };
 }
 
@@ -269,11 +257,8 @@ function readPluginManifest(
     );
   }
 
-  const client = readClientManifest(value.client, packageName);
-
   return {
     server: serverEntryValue(value.server, packageName),
-    client,
     database: database
       ? {
           migrations: stringValue(database.migrations),
@@ -303,57 +288,6 @@ function serverEntryValue(
   ) {
     throw new Error(
       `Plugin package "${packageName}" server provider entry must be a safe package subpath beginning with "./".`,
-    );
-  }
-  return value;
-}
-
-function readClientManifest(
-  value: unknown,
-  packageName: string,
-): AppPluginManifest['client'] {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value === 'string') {
-    return {
-      bootstrap: clientEntryValue(value, packageName, 'bootstrap'),
-    };
-  }
-  if (!isRecord(value)) {
-    throw new Error(
-      `Plugin package "${packageName}" must define client as a string or object.`,
-    );
-  }
-
-  return {
-    bootstrap: clientEntryValue(value.bootstrap, packageName, 'bootstrap'),
-    routes: clientEntryValue(value.routes, packageName, 'routes'),
-    providers: clientEntryValue(value.providers, packageName, 'providers'),
-  };
-}
-
-function clientEntryValue(
-  value: unknown,
-  packageName: string,
-  contribution: string,
-): string | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(
-      `Plugin package "${packageName}" client ${contribution} entry must be a non-empty string.`,
-    );
-  }
-  if (
-    !value.startsWith('./') ||
-    value.includes('\\') ||
-    value.split('/').includes('..') ||
-    value === './'
-  ) {
-    throw new Error(
-      `Plugin package "${packageName}" client ${contribution} entry must be a safe package subpath beginning with "./".`,
     );
   }
   return value;

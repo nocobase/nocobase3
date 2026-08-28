@@ -5,10 +5,8 @@ import {
 import type { AppDriveConfig, DriveVisibility } from '@nocobase/drive';
 
 const driveConfig: ConfigFactory<AppDriveConfig> = defineConfig(
-  ({ env, paths }): AppDriveConfig => ({
-    default: env.string('DRIVE_DISK', 'local'),
-
-    disks: {
+  ({ env, paths }): AppDriveConfig => {
+    const disks: AppDriveConfig['disks'] = {
       local: {
         driver: 'fs',
         location: paths.storage('app/private'),
@@ -21,10 +19,13 @@ const driveConfig: ConfigFactory<AppDriveConfig> = defineConfig(
         visibility: 'public',
         url: env.string('DRIVE_PUBLIC_URL', '/storage'),
       },
+    };
 
-      s3: {
+    const s3Bucket = env.string('AWS_BUCKET');
+    if (s3Bucket) {
+      disks.s3 = {
         driver: 's3',
-        bucket: env.string('AWS_BUCKET', ''),
+        bucket: s3Bucket,
         region: env.string('AWS_DEFAULT_REGION', 'us-east-1'),
         endpoint: env.string('AWS_ENDPOINT'),
         cdnUrl: env.string('AWS_URL'),
@@ -36,13 +37,17 @@ const driveConfig: ConfigFactory<AppDriveConfig> = defineConfig(
           secretAccessKey: env.string('AWS_SECRET_ACCESS_KEY'),
         },
         visibility: resolveVisibility(env.string('AWS_VISIBILITY'), 'private'),
-      },
-    },
+      };
+    }
 
-    links: {
-      [paths.root('public/storage')]: paths.storage('app/public'),
-    },
-  }),
+    return {
+      default: env.string('DRIVE_DISK', 'local'),
+      disks,
+      links: {
+        [paths.root('public/storage')]: paths.storage('app/public'),
+      },
+    };
+  },
 );
 
 export default driveConfig;

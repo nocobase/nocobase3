@@ -4,6 +4,7 @@
   "description": "Authorization integration and permission management UI for NocoBase applications.",
   "version": "0.1.1-beta.0",
   "type": "module",
+  "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
@@ -16,6 +17,14 @@
     "./server": {
       "types": "./server/index.ts",
       "import": "./server/index.ts"
+    },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
     },
     "./client/bootstrap": {
       "types": "./client/bootstrap.ts",
@@ -46,6 +55,14 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./client/bootstrap": {
         "types": "./dist/client/bootstrap.d.ts",
         "import": "./dist/client/bootstrap.js"
@@ -64,11 +81,6 @@
   "nocobase": {
     "plugin": {
       "server": "./server/provider",
-      "client": {
-        "bootstrap": "./client/bootstrap",
-        "routes": "./client/routes",
-        "providers": "./client/providers"
-      },
       "database": {
         "migrations": "./database/migrations",
         "seeds": "./database/seeds"

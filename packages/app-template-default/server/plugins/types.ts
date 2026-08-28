@@ -15,15 +15,8 @@ export interface AppPluginDatabaseManifest {
   seeds?: string;
 }
 
-export interface AppPluginClientManifest {
-  bootstrap?: string;
-  routes?: string;
-  providers?: string;
-}
-
 export interface AppPluginManifest {
   server?: string;
-  client?: AppPluginClientManifest;
   database?: AppPluginDatabaseManifest;
 }
 
@@ -38,9 +31,6 @@ export interface ResolvedAppPlugin {
   jobsDirectory?: string;
   providerEntry?: string;
   routesEntry?: string;
-  clientBootstrapEntry?: string;
-  clientRoutesEntry?: string;
-  clientProvidersEntry?: string;
 }
 
 export interface LoadedAppPluginProvider {

@@ -27,6 +27,7 @@ test('parses the application selector and registration options', () => {
       help: false,
       install: false,
       name: '@nocobase/app-plugin-audit-log',
+      skills: true,
     },
   );
 });
@@ -190,6 +191,76 @@ test('restores the application and lockfile when installation fails', async (t) 
   );
 });
 
+test('wires a client plugin into client/plugins.ts', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  await createPluginPackage(repoRoot, 'with-client', { client: true });
+  const appPackagePath = await createApplicationPackage(repoRoot);
+  const appRoot = path.dirname(appPackagePath);
+  await writeClientPluginsFile(appRoot);
+
+  const result = await registerPlugin({
+    install: false,
+    name: 'with-client',
+    repoRoot,
+  });
+  const clientPlugins = await readFile(
+    path.join(appRoot, 'client', 'plugins.ts'),
+    'utf8',
+  );
+
+  assert.equal(result.clientPluginsChanged, true);
+  assert.equal(result.skippedClientEntry, undefined);
+  // The temporary repository declares no Prettier configuration, so Prettier formats with its own defaults and the
+  // quote style here is not the repository's. Assert on the specifier rather than on the quoting.
+  assert.match(
+    clientPlugins,
+    /import withClient from ["']@nocobase\/app-plugin-with-client\/client["'];/,
+  );
+  assert.match(clientPlugins, /withClient\(\)/);
+});
+
+// A server-only plugin has no `./client/plugin` export. Importing one would leave the application unable to resolve
+// the specifier at build time, so registration records the plugin without touching the client entry.
+test('leaves client/plugins.ts alone for a server-only plugin', async (t) => {
+  const repoRoot = await createTestRepo(t);
+  const appPackagePath = await createApplicationPackage(repoRoot);
+  const appRoot = path.dirname(appPackagePath);
+  const original = await writeClientPluginsFile(appRoot);
+
+  const result = await registerPlugin({
+    install: false,
+    name: 'audit-log',
+    repoRoot,
+  });
+  const appPackage = await readJson(appPackagePath);
+
+  assert.equal(result.skippedClientEntry, 'no-client-entry');
+  assert.equal(result.clientPluginsChanged, false);
+  assert.equal(
+    appPackage.nocobase.plugins['@nocobase/app-plugin-audit-log'].enabled,
+    true,
+  );
+  assert.equal(
+    await readFile(path.join(appRoot, 'client', 'plugins.ts'), 'utf8'),
+    original,
+  );
+});
+
+async function writeClientPluginsFile(appRoot) {
+  const contents = `import {
+  defineClientPlugins,
+  type AppClientPlugins,
+} from '@nocobase/app-client/plugins';
+
+const clientPlugins: AppClientPlugins = defineClientPlugins([]);
+
+export default clientPlugins;
+`;
+  await mkdir(path.join(appRoot, 'client'), { recursive: true });
+  await writeFile(path.join(appRoot, 'client', 'plugins.ts'), contents);
+  return contents;
+}
+
 async function createTestRepo(t) {
   const repoRoot = await mkdtemp(
     path.join(tmpdir(), 'nocobase-register-plugin-'),
@@ -200,7 +271,11 @@ async function createTestRepo(t) {
   return repoRoot;
 }
 
-async function createPluginPackage(repoRoot, shortName) {
+async function createPluginPackage(
+  repoRoot,
+  shortName,
+  { client = false } = {},
+) {
   const pluginDirectory = path.join(
     repoRoot,
     'packages',
@@ -209,6 +284,13 @@ async function createPluginPackage(repoRoot, shortName) {
   await mkdir(pluginDirectory);
   await writeJson(path.join(pluginDirectory, 'package.json'), {
     name: `@nocobase/app-plugin-${shortName}`,
+    ...(client
+      ? {
+          exports: {
+            './client': { import: './client/index.ts' },
+          },
+        }
+      : {}),
   });
 }
 
