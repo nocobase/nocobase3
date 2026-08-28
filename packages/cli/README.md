@@ -1,28 +1,32 @@
 # @nocobase/nb3-cli
 
-NocoBase 3 命令行工具，命令名为 `nb3`。
+NocoBase 3 内部开发命令行工具，命令名为 `nb3`。
 
-命令文档见 [docs/cli](../../docs/cli)：[`nb3 app`](../../docs/cli/nb3-app.md) 和 [`nb3 hub`](../../docs/cli/nb3-hub.md)。
+这不是给最终用户全局安装的 CLI。它作为 devDependency 随 App 分发，由 App 的 `package.json` scripts 调用，例如 `pnpm plugin:update` 实际执行 `nb3 app plugin update`。
+
+命令文档见 [docs/cli](../../docs/cli/README.md)。
 
 ## 当前状态
 
 已实现：
 
-| 命令              | 说明                                                   |
-| ----------------- | ------------------------------------------------------ |
-| `nb3 app create`  | 从 npm 下载模板包并生成本地 App 项目                   |
-| `nb3 app dev`     | 用项目自身的包管理器运行其 `dev` 脚本                  |
-| `nb3 app info`    | 显示 App 名称、目录、模板来源、依赖是否已安装          |
-| `nb3 app config`  | 读写 `.nb3/config.json`                                |
-| `nb3 app destroy` | 删除本地 App 目录，带确认和路径防护                    |
-| `nb3 hub create`  | 下载模板包并生成 Hub 项目                              |
-| `nb3 hub start`   | 后台启动 Hub 并记录进程，`--foreground` 可留在当前终端 |
-| `nb3 hub dev`     | 开发模式启动，停留在当前终端                           |
-| `nb3 hub restart` | 停止后重新启动                                         |
-| `nb3 hub status`  | 显示运行状态、进程号、地址、已部署 App 数              |
-| `nb3 hub stop`    | 停止 Hub，先 SIGTERM 再 SIGKILL，并清理陈旧记录        |
-| `nb3 hub logs`    | 查看日志，支持 `--tail` 和 `--follow`                  |
-| `nb3 hub open`    | 打开 App Console                                       |
+| 命令                         | 说明                                                   |
+| ---------------------------- | ------------------------------------------------------ |
+| `nb3 app create`             | 从 npm 下载模板包并生成本地 App 项目                   |
+| `nb3 app dev`                | 用项目自身的包管理器运行其 `dev` 脚本                  |
+| `nb3 app info`               | 显示 App 名称、目录、模板来源、依赖是否已安装          |
+| `nb3 app config`             | 读写 `.nb3/config.json`                                |
+| `nb3 app plugin update`      | 升级插件包并同步其 skills                              |
+| `nb3 app plugin skills sync` | 同步插件 skills，不升级                                |
+| `nb3 app destroy`            | 删除本地 App 目录，带确认和路径防护                    |
+| `nb3 hub create`             | 下载模板包并生成 Hub 项目                              |
+| `nb3 hub start`              | 后台启动 Hub 并记录进程，`--foreground` 可留在当前终端 |
+| `nb3 hub dev`                | 开发模式启动，停留在当前终端                           |
+| `nb3 hub restart`            | 停止后重新启动                                         |
+| `nb3 hub status`             | 显示运行状态、进程号、地址、已部署 App 数              |
+| `nb3 hub stop`               | 停止 Hub，先 SIGTERM 再 SIGKILL，并清理陈旧记录        |
+| `nb3 hub logs`               | 查看日志，支持 `--tail` 和 `--follow`                  |
+| `nb3 hub open`               | 打开 App Console                                       |
 
 `nb3 app deploy`、`nb3 app pull`、`nb3 app list` 需要 Hub 提供 App 管理 API，而 v3 的 Hub 目前只有健康检查和一个 API 代理，因此这三条命令以退出码 3 明确报错，不打印占位输出——脚本里 deploy 返回成功却什么都没做，比直接失败危险得多。
 
