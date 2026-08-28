@@ -15,8 +15,6 @@ describe('@nocobase/app-plugin-workflow database', () => {
     const migrations = await validateMigrations(migrationsDirectory);
     expect(migrations.map((migration) => migration.name)).toEqual([
       '202608200001_create_workflow_collections',
-      '202608210001_add_workflow_node_description',
-      '202608220001_add_workflow_node_run_error',
     ]);
     await expect(validateSeeds(seedsDirectory)).resolves.toEqual([]);
   });

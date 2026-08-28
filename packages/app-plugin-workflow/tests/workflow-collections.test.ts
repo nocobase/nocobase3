@@ -71,6 +71,18 @@ describe('workflow collections', () => {
       db.schema.hasColumn('workflow_runs', 'finished_at'),
     ).resolves.toBe(true);
     await expect(
+      db.schema.hasColumn('workflows', 'parameters_schema'),
+    ).resolves.toBe(true);
+    await expect(
+      db.schema.hasColumn('workflows', 'parameter_values'),
+    ).resolves.toBe(true);
+    await expect(
+      db.schema.hasColumn('workflow_nodes', 'description'),
+    ).resolves.toBe(true);
+    await expect(
+      db.schema.hasColumn('workflow_node_runs', 'error'),
+    ).resolves.toBe(true);
+    await expect(
       db.schema.hasColumn('workflow_node_runs', 'node_id'),
     ).resolves.toBe(true);
     await expect(

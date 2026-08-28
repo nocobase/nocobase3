@@ -1,3 +1,5 @@
+import { resolveAppUrl } from '@nocobase/app-sdk';
+
 import type {
   WorkflowDetailRecord,
   WorkflowListRecord,
@@ -7,7 +9,7 @@ import type {
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(resolveAppUrl(`/api${path}`), {
     ...init,
     headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
   });

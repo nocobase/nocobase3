@@ -9,6 +9,7 @@
       "description": "Read-only workflow definitions and execution traces with operational controls.",
       "dependencies": [
         "@nocobase/app-client@^1.0.0-beta.2",
+        "@nocobase/app-sdk@^0.1.0",
         "@nocobase/app-plugin-workflow@^0.0.1",
         "@xyflow/react@^12.11.0",
         "elkjs@^0.10.0",
@@ -20,6 +21,7 @@
         "card",
         "input",
         "sheet",
+        "switch",
         "table",
         "tabs",
         "textarea"

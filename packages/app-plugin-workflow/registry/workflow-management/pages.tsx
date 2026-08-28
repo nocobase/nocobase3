@@ -6,6 +6,7 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router';
+import { Switch } from '@/components/ui/switch';
 import {
   buildExecutionOverlay,
   projectWorkflowGraph,
@@ -403,11 +404,10 @@ function WorkflowRow({
         <Link to={identifier}>{item.title ?? item.key}</Link>
         <div className='workflow-row-actions'>
           <label className='workflow-switch'>
-            <input
-              type='checkbox'
+            <Switch
+              aria-label={`${item.enabled ? 'Disable' : 'Enable'} ${item.title ?? item.key}`}
               checked={item.enabled}
-              onChange={(event) => {
-                const enabled = event.target.checked;
+              onCheckedChange={(enabled) => {
                 const update = enabled
                   ? workflowApi.enable(identifier)
                   : workflowApi.status(identifier, false);
