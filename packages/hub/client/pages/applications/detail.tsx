@@ -1663,7 +1663,7 @@ pnpm dev`;
   const firstDeploymentCommand = `pnpm run deploy --hub ${hubUrl} --app ${application.slug}`;
 
   return (
-    <article className='mx-auto max-w-3xl px-1 py-2 sm:px-4'>
+    <article className='max-w-3xl px-1 py-2 sm:px-4'>
       <header className='space-y-2 pb-7'>
         <h2 className='text-2xl font-semibold tracking-tight'>
           {translate('hub.development.title', 'Quick setup')}
