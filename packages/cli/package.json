@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/nb3-cli",
-  "version": "0.0.1-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "NocoBase 3 CLI and application package-script commands.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",

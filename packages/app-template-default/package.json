@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "0.0.1-beta.6",
+  "version": "0.1.0-beta.8",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -9,7 +9,7 @@
   },
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
-    "defaultTemplateVersion": "0.0.1-beta.6",
+    "defaultTemplateVersion": "0.1.0-beta.8",
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true
@@ -163,6 +163,7 @@
     "index.html",
     "components.json",
     "registry.config.json",
+    "tailwind.config.mjs",
     "vite.config.ts",
     "vitest.config.ts",
     "eslint.config.js",
