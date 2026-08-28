@@ -239,51 +239,6 @@
       }
     },
     {
-      "name": "file-upload",
-      "type": "registry:block",
-      "title": "NocoBase File Upload",
-      "description": "Controlled shadcn/ui file upload field for NocoBase file collections.",
-      "dependencies": [
-        "@nocobase/app-portal-sdk@^2.0.0",
-        "@tanstack/react-query@^5.81.5",
-        "lucide-react@^0.487.0",
-        "react-markdown@^10.1.0",
-        "remark-gfm@^4.0.1"
-      ],
-      "registryDependencies": [
-        "alert",
-        "button",
-        "card",
-        "dialog",
-        "input",
-        "tooltip"
-      ],
-      "docs": "Requires a compatible Portal SDK client and a field targeting a file-template collection. The extension contributes a development-only file manager at /dev/files; its public-URL preview gallery does not require attachments:list.",
-      "source": {
-        "root": "registry/nocobase-file-upload",
-        "target": "client/extensions/nocobase-file-upload",
-        "include": ["."]
-      }
-    },
-    {
-      "name": "notification",
-      "type": "registry:block",
-      "title": "NocoBase Notification",
-      "description": "Email delivery log and in-app notification components backed by the NocoBase notification API.",
-      "dependencies": [
-        "@nocobase/app-portal-sdk@^2.0.0",
-        "lucide-react@^0.487.0",
-        "react-router@^7.0.2"
-      ],
-      "registryDependencies": ["alert", "badge", "button", "card", "table"],
-      "docs": "Provides the notification extension, email Delivery/Attempt log components, and the current user's in-app message center.",
-      "source": {
-        "root": "registry/nocobase-notification",
-        "target": "client/extensions/nocobase-notification",
-        "include": ["."]
-      }
-    },
-    {
       "name": "mail",
       "type": "registry:block",
       "title": "NocoBase Mail",

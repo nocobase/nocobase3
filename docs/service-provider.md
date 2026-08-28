@@ -140,6 +140,19 @@ interface AuditLogProviderApplication {
 
 Provider 使用 `this.app.container`，不使用 `this.context.serviceContainer`、`this.app.services` 或模块级容器。
 
+### 从 deps/bootstrap 迁移
+
+旧插件如果使用 `server/bootstrap.ts`、`deps` 和可变的 `services` 对象，迁移时按职责拆分：
+
+- `server/bootstrap.ts` 改为默认导出 Provider class 的 `server/provider.ts`；
+- `deps.database` 等宿主能力改为通过所属包导出的 Token 从 `this.app.container` 解析；
+- `services.notification = value` 等赋值改为在 `register()` 中注册插件自己的 `ServiceToken`；
+- 异步初始化、启动和释放分别放入 `boot()`、`start()` 和 `shutdown()`；
+- `server/routes/index.ts` 只接收 Application，通过只读 `app.container` 解析服务，并挂载到 `app.router`；
+- 删除旧的 bootstrap context、`AppDeps`、`AppServices` 和 WeakMap 服务传递层，不为旧协议增加兼容 Token。
+
+迁移后，配置仍由 Provider 从 `this.app.config` 读取；它不是一个额外的 `config` 构造参数对象。
+
 ## 生命周期
 
 Application 按 Provider 添加顺序执行 `register`、`boot`、`start` 和 `ready`，关闭时按相反顺序执行 `shutdown`：

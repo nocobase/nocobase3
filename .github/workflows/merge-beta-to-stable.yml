@@ -86,27 +86,17 @@ jobs:
         run: |
           node scripts/list-package-versions.mjs > /tmp/versions-before.json
 
-      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支会被删除）。
-      - name: Create release branch
+      # 转正分支，不是发版分支：这一步只把版本号脱掉 -beta 后缀并合进 main，
+      # npm 上一个包都没发出去。所以这里既不占用 release/ 命名空间，也不打
+      # 聚合 tag —— 聚合 tag 由 release-stable 在真正 publish 时打，日期才准
+      # （今天转正、明天发版的话，今天打的 tag 日期就是错的）。
+      - name: Create promotion branch
         id: branch
         run: |
-          git fetch --tags --force
-          DAY=$(date -u +%Y-%m-%d)
-          MAX=0
-          for t in $(git tag -l "release/${DAY}.*"); do
-            N="${t##*.}"
-            case "$N" in ''|*[!0-9]*) continue ;; esac
-            [ "$N" -gt "$MAX" ] && MAX="$N"
-          done
-          SEQ=$((MAX + 1))
-          BATCH="${DAY}.${SEQ}"
-          NAME="release/${BATCH}"
+          NAME="chore/promote-$(date -u +%Y-%m-%d)"
           git checkout -b "$NAME"
-          {
-            echo "name=$NAME"
-            echo "batch=$BATCH"
-          } >> "$GITHUB_OUTPUT"
-          echo "Version: $BATCH"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Promotion branch: $NAME"
 
       # pre exit 只改状态，version 才真正脱后缀并删除 pre.json。
       - name: Exit pre mode and version
@@ -126,12 +116,8 @@ jobs:
           fi
           echo "$CHANGED"
 
-          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
-          {
-            echo "released<<RELEASED_EOF"
-            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
-            echo "RELEASED_EOF"
-          } >> "$GITHUB_OUTPUT"
+          # 发布清单留给飞书通知的表格用。单行 JSON，不需要 heredoc 定界符。
+          echo "rows=$(node scripts/list-package-versions.mjs --released-rows /tmp/versions-before.json)" >> "$GITHUB_OUTPUT"
 
       # 转正后不允许残留预发布版本号，也不允许 pre.json 还在——
       # 它会随合并流进 main 污染稳定线。
@@ -168,17 +154,19 @@ jobs:
         if: inputs.dry_run
         run: echo "dry_run=true — stopping here. The release branch was not pushed."
 
-      # 版本 tag 与发版分支同名。同名期间必须用完整 refspec ——
-      # `git push origin <name>` 会报 src refspec matches more than one。
-      - name: Commit, tag and push release branch
+      # 不打 tag —— 见上面 Create promotion branch 的说明。
+      # 分支名不再与任何 tag 同名，可以用简写 refspec。
+      #
+      # 用 --force：同一天跑第二次转正会撞上同名分支。这是 workflow 自己用的
+      # 临时分支，不会有人往里提交，上一次没跑完留下的内容直接覆盖即可；
+      # 不覆盖的话推送会以 non-fast-forward 失败。
+      - name: Commit and push the promotion branch
         if: '!inputs.dry_run'
         run: |
           NAME="${{ steps.branch.outputs.name }}"
           git add -A
-          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
-          git tag "$NAME"
-          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
-          git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
+          git commit -m "chore: promote prerelease versions"
+          git push --force origin "$NAME"
 
       - name: Merge into main
         if: '!inputs.dry_run'
@@ -187,8 +175,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
-            --title "chore: release ${{ steps.branch.outputs.batch }}" \
-            --body "Promoted the prerelease: version numbers no longer carry the \`-beta\` suffix. **Not published to npm yet** — run \`release-stable.yml\` after merging. Per-package versions are in the workflow summary." \
+            --title "chore: promote prerelease versions" \
+            --body "Promoted the prerelease: version numbers no longer carry the \`-beta\` suffix. **Not published to npm yet** — run \`release-stable.yml\` after merging, which is what tags the release and creates its GitHub Release. Per-package versions are in the workflow summary." \
             --base main \
             --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -213,11 +201,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git fetch origin develop
-          SYNC="chore/sync-${{ steps.branch.outputs.batch }}"
+          SYNC="chore/sync-$(date -u +%Y-%m-%d)"
           git checkout -B "$SYNC" origin/develop
 
           set +e
-          git merge --no-ff "origin/${{ steps.branch.outputs.name }}" -m "chore: sync ${{ steps.branch.outputs.batch }} back to develop"
+          git merge --no-ff "origin/${{ steps.branch.outputs.name }}" -m "chore: sync promoted versions back to develop"
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
@@ -229,10 +217,10 @@ jobs:
           pnpm changeset pre enter beta
           git add .changeset
           git commit -m "chore: re-enter pre mode for the next line"
-          git push origin "$SYNC"
+          git push --force origin "$SYNC"
 
           PR_URL=$(gh pr create \
-            --title "chore: sync ${{ steps.branch.outputs.batch }} back to develop" \
+            --title "chore: sync promoted versions back to develop" \
             --body "Sync the promoted versions back to develop and re-enter pre mode." \
             --base develop \
             --head "$SYNC")
@@ -255,16 +243,16 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           REGISTRY_URL: https://npm.nocobase.ai
-          TITLE: NocoBase 3 转正合并失败
+          TITLE: NocoBase 3 develop 合入 main 失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.branch.outputs.batch }}** 的转正提交合进 `main` 时发生冲突：
+            `develop` 合入 `main` 时发生冲突：
             ${{ steps.merge_main.outputs.url }}
 
             npm 尚未发布，没有产生不一致状态。
-            发版分支 `${{ steps.branch.outputs.name }}` 已保留。
+            分支 `${{ steps.branch.outputs.name }}` 已保留。
 
             **注意**：`develop` 仍处于已退出 pre 模式的状态，解决后需要
             合回 develop 并执行 `changeset pre enter beta`。
@@ -277,12 +265,12 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           REGISTRY_URL: https://npm.nocobase.ai
-          TITLE: NocoBase 3 已合进 main，但同步回 develop 失败
+          TITLE: NocoBase 3 已合入 main，但同步回 develop 失败
           STATUS: failure
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.branch.outputs.batch }}** 已合进 `main`，可以发布了。
+            `develop` 已合入 `main`，可以发布了。
 
             但同步回 `develop` 失败，需要人工处理：
             ${{ steps.merge_develop.outputs.url || '（合并阶段就失败了，没有创建 PR）' }}
@@ -302,17 +290,15 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           REGISTRY_URL: https://npm.nocobase.ai
-          TITLE: NocoBase 3 转正合并完成
+          TITLE: NocoBase 3 develop 已合入 main
           STATUS: success
           STATUS_TEXT_SUCCESS: 待发布
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TABLE_JSON: ${{ steps.changed.outputs.rows }}
           CONTENT: |
-            版本 **${{ steps.branch.outputs.batch }}** 已转正并合进 `main`，`develop` 已重新进入 pre 模式。
+            `develop` 已合入 `main`，版本号不再带 `-beta` 后缀，`develop` 已重新进入 pre 模式。
 
             **尚未发布到 npm。** 点 `release-stable.yml` 完成发布（输入保持默认）。
 
             待发布的 package：
-            ```
-            ${{ steps.changed.outputs.released }}
-            ```
         run: ./scripts/feishu-notify.sh

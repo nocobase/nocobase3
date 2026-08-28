@@ -861,6 +861,9 @@ describe('app plugins', () => {
     const dataProviderPlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-data-provider',
     );
+    const filePlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-file',
+    );
     const notificationProviderPlugin = runtime.config.plugins.find(
       (item) =>
         item.packageName === '@nocobase/app-plugin-notification-provider',
@@ -925,6 +928,12 @@ describe('app plugins', () => {
     );
     expect(dataProviderPlugin?.migrationsDirectory).toBeUndefined();
     expect(dataProviderPlugin?.seedsDirectory).toBeUndefined();
+    expect(filePlugin?.providerEntry).toMatch(
+      /app-plugin-file\/server\/provider\.ts$/,
+    );
+    expect(filePlugin?.routesEntry).toMatch(
+      /app-plugin-file\/server\/routes\/index\.ts$/,
+    );
     expect(notificationProviderPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-notification-provider',
       version: declaredVersion('@nocobase/app-plugin-notification-provider'),

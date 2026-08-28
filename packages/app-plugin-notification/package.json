@@ -23,7 +23,13 @@
     "./package.json": "./package.json"
   },
   "nocobase": {
+    "registry": {
+      "items": {
+        "logs-ui": "./registry/logs-ui"
+      }
+    },
     "plugin": {
+      "server": "./server/provider",
       "database": {
         "migrations": "./database/migrations"
       }
@@ -45,23 +51,32 @@
   },
   "files": [
     "dist",
-    "docs"
+    "docs",
+    "registry",
+    "registry.config.json",
+    "public/r"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "registry:build": "node ../../scripts/registry.mjs build --package .",
+    "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
+    "prepack": "pnpm registry:build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {
