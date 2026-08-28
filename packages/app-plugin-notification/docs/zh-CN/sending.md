@@ -90,7 +90,7 @@ Provider 由 Channel 配置统一选择；普通业务代码不需要维护 Prov
 
 ## 选择 Provider
 
-Provider 路由默认使用 `single` 策略。大部分时候不需要传 `routing`——系统会优先选择当前 Channel 中名为 `primary` 的 Provider，否则从已启用的 Provider 中选择第一个可以处理该接收人的 Provider。
+Provider 路由默认使用 `single` 策略。大部分时候不需要传 `routing`——系统会选择当前 Channel 配置中第一个启用的 Provider。
 
 如果一个 Channel 配置了多个 Provider，并且你需要明确选择其中一个，只需要传 Provider 的 `name`：
 
@@ -116,13 +116,13 @@ await notification.send({
 
 Provider 路由支持这些写法：
 
-| 配置                                                                    | 行为                                                         |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 省略 `routing`                                                          | 默认使用 `single`，自动选择一个可以处理该接收人的 Provider。 |
-| `{ providers: { provider: 'primary-smtp' } }`                           | 默认使用 `single`，选择指定名称的 Provider。                 |
-| `{ providers: { strategy: 'single' } }`                                 | 选择默认 Provider。                                          |
-| `{ providers: { strategy: 'all' } }`                                    | 为当前 Channel 的所有已启用 Provider 分别创建 Delivery。     |
-| `{ providers: { strategy: 'all', providers: ['feishu', 'dingtalk'] } }` | 只向列出的 Provider 分别创建 Delivery。                      |
+| 配置                                                                    | 行为                                                     |
+| ----------------------------------------------------------------------- | -------------------------------------------------------- |
+| 省略 `routing`                                                          | 默认使用 `single`，选择配置中的第一个启用 Provider。     |
+| `{ providers: { provider: 'primary-smtp' } }`                           | 默认使用 `single`，选择指定名称的 Provider。             |
+| `{ providers: { strategy: 'single' } }`                                 | 选择默认 Provider。                                      |
+| `{ providers: { strategy: 'all' } }`                                    | 为当前 Channel 的所有已启用 Provider 分别创建 Delivery。 |
+| `{ providers: { strategy: 'all', providers: ['feishu', 'dingtalk'] } }` | 只向列出的 Provider 分别创建 Delivery。                  |
 
 `single` 只表示一次发送为这个 Channel 选择一个 Provider。Provider 投递失败后不会自动切换到另一个 Provider。
 

@@ -212,10 +212,9 @@ await notification.send({
 });
 ```
 
-When `routing` is omitted, the manager uses the Provider named `primary` when
-available, then the first enabled Provider that can resolve the recipient. To
-send to every enabled IM Provider, use `strategy: 'all'`. The manager creates
-one independent Delivery per Provider:
+When `routing` is omitted, the manager uses the first enabled Provider in the
+Channel configuration. To send to every enabled IM Provider, use
+`strategy: 'all'`. The manager creates one independent Delivery per Provider:
 
 ```ts
 await notification.send({

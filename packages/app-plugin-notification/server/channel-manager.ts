@@ -96,8 +96,7 @@ export class ChannelManager {
       }));
     const provider = options.providerName
       ? providers.find((candidate) => candidate.name === options.providerName)
-      : (providers.find((candidate) => candidate.name === 'primary') ??
-        providers[0]);
+      : providers[0];
     return provider ? [{ name: provider.name, type: provider.type }] : [];
   }
 

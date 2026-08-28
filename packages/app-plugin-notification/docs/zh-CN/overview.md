@@ -45,7 +45,7 @@ Delivery 保存接收人、消息以及选中的 Provider。真正调用 Provide
 
 :::warning 注意
 
-Provider 路由默认使用 `single` 策略。普通发送会优先选择名为 `primary` 的 Provider，否则从已启用的 Provider 中选择第一个可以处理该接收人的 Provider。需要明确选择时，在 `routing.<channel>.providers.provider` 中填写 Provider `name`；同一个 Channel 内的 Provider `name` 必须唯一，不需要传 `type`。
+Provider 路由默认使用 `single` 策略。普通发送会选择 Channel 配置中第一个启用的 Provider。需要明确选择时，在 `routing.<channel>.providers.provider` 中填写 Provider `name`；同一个 Channel 内的 Provider `name` 必须唯一，不需要传 `type`。
 
 只有需要同时投递到多个 Provider 时，才需要设置 `strategy: 'all'`。省略 `providers` 表示选择所有已启用的 Provider，也可以通过 `providers: ['feishu', 'dingtalk']` 限定名称。`single` 模式下 Provider 失败不会自动切换到另一个 Provider。
 

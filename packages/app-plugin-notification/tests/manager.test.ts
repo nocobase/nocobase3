@@ -102,7 +102,10 @@ describe('NotificationManager registration', () => {
           {
             type: 'email',
             enabled: true,
-            providers: [{ type: 'fake', name: 'primary' }],
+            providers: [
+              { type: 'fake', name: 'secondary' },
+              { type: 'fake', name: 'primary' },
+            ],
           },
         ],
       },
@@ -149,7 +152,7 @@ describe('NotificationManager registration', () => {
       content: { title: 'private subject', body: 'private body' },
     });
     const details = await manager.logs.get(result.notificationId);
-    expect(resolvedProviders).toEqual([{ name: 'primary', type: 'fake' }]);
+    expect(resolvedProviders).toEqual([{ name: 'secondary', type: 'fake' }]);
     expect(details?.log).not.toHaveProperty('messageSnapshot');
     expect(details?.deliveries[0]?.delivery).not.toHaveProperty(
       'recipientSnapshot',
@@ -165,7 +168,7 @@ describe('NotificationManager registration', () => {
         expect.objectContaining({
           event: 'notification.manager.started',
           channelCount: 1,
-          providerCount: 1,
+          providerCount: 2,
         }),
         expect.objectContaining({
           event: 'notification.queued',
@@ -178,7 +181,7 @@ describe('NotificationManager registration', () => {
           event: 'notification.delivery.accepted',
           notificationId: result.notificationId,
           channel: 'email',
-          provider: 'primary',
+          provider: 'secondary',
         }),
         expect.objectContaining({
           event: 'notification.manager.closed',

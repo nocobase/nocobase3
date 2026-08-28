@@ -9,7 +9,7 @@ import {
 import { FakeNotificationStore } from './helpers/fake-notification-store.js';
 
 describe('ChannelManager', () => {
-  it('resolves primary, explicit, and all Provider selections', async () => {
+  it('resolves first, explicit, and all Provider selections', async () => {
     const manager = new ChannelManager({
       logger: createLogger({ level: 'silent' }),
       store: new FakeNotificationStore(),
@@ -40,7 +40,7 @@ describe('ChannelManager', () => {
     });
 
     expect(manager.providerIdentities('email')).toEqual([
-      { name: 'primary', type: 'fake' },
+      { name: 'secondary', type: 'fake' },
     ]);
     expect(
       manager.providerIdentities('email', { providerName: 'secondary' }),
@@ -50,8 +50,8 @@ describe('ChannelManager', () => {
       { name: 'primary', type: 'fake' },
     ]);
     expect(manager.providerCandidates('email')).toEqual([
-      { name: 'primary', type: 'fake' },
       { name: 'secondary', type: 'fake' },
+      { name: 'primary', type: 'fake' },
     ]);
     await expect(
       manager.resolveRecipient(

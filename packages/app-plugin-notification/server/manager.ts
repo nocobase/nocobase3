@@ -406,7 +406,7 @@ export class NotificationManager<
     channel: string,
     routing: NotificationProviderRouting | undefined,
   ): readonly NotificationProviderIdentity[] {
-    if (!routing) return this.channelManager.providerCandidates(channel);
+    if (!routing) return this.channelManager.providerIdentities(channel);
     if (routing.strategy !== 'all') {
       if (!routing.provider)
         return this.channelManager.providerIdentities(channel);

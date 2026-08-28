@@ -322,7 +322,7 @@ function selectEnabledProvider(
     return enabled.find(
       (provider) => provider.name === name && provider.type === type,
     );
-  return enabled.find((provider) => provider.name === 'primary') ?? enabled[0];
+  return enabled[0];
 }
 
 function providerTarget(provider: object): string {
