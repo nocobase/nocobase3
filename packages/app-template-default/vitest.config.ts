@@ -46,6 +46,7 @@ export default createReactVitestConfig({
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugin-commands.test.ts',
       'tests/logic/plugins.test.ts',
+      'tests/logic/tailwind-sources.test.ts',
       'tests/logic/public-request.test.ts',
       'tests/logic/workflow-management.test.ts',
     ],
