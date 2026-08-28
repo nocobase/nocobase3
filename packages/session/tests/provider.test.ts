@@ -9,14 +9,14 @@ import {
 
 describe('SessionProvider', () => {
   it('registers and disposes the configured session manager', async () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new SessionProvider({
-      runtime: { config: { session: createNullSessionConfig() } },
-      serviceContainer,
+      config: { session: createNullSessionConfig() },
+      container,
     });
 
     provider.register();
-    const sessionManager = serviceContainer.resolve(sessionManagerToken);
+    const sessionManager = container.resolve(sessionManagerToken);
     const dispose = vi.spyOn(sessionManager, 'dispose');
 
     expect(provider.name).toBe('@nocobase/session');
@@ -25,16 +25,14 @@ describe('SessionProvider', () => {
   });
 
   it('uses the null session manager by default', () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new SessionProvider({
-      runtime: { config: {} },
-      serviceContainer,
+      config: {},
+      container,
     });
 
     provider.register();
 
-    expect(serviceContainer.resolve(sessionManagerToken).config.enabled).toBe(
-      false,
-    );
+    expect(container.resolve(sessionManagerToken).config.enabled).toBe(false);
   });
 });

@@ -208,7 +208,7 @@ Application
     ├── config → AppRuntime.config
     ├── paths → AppRuntime.paths
     ├── runtime
-    ├── serviceContainer
+    ├── container
     ├── fetch(request) ──────→ Router（Hono）
     └── websocket(request)?
     │
@@ -278,7 +278,7 @@ Application
 Service Provider 的基础设施由独立的 `@nocobase/service-provider` 包提供，包含
 `ServiceContainer`、`ServiceToken`、`ServiceProvider` 和
 `ServiceProviderRegistry`。该包不依赖 `AppRuntime` 或具体 Server 框架；
-`ServiceProviderContext` 的 `runtime` 类型由使用方传入。
+`ServiceProvider` 的 Application 类型由使用方通过泛型传入。
 
 最完整的生命周期
 
@@ -312,31 +312,30 @@ Application.shutdown（逆序释放）
 Provider 和 Routes 扩展使用统一的运行时来源：
 
 ```text
-ServiceProviderContext
-  ├── runtime
-  └── serviceContainer
+ServiceProvider
+  └── app
+      ├── config
+      ├── paths
+      └── container
 
-AppPluginRoutesContext
+AppPluginRoutesApplication
   ├── appName
   ├── publicBasePath
-  ├── config → runtime.config
-  ├── paths → runtime.paths
+  ├── config
+  ├── paths
   ├── router
-  ├── runtime
-  └── serviceContainer
+  └── container
 ```
 
 Application 通过只读 getter 暴露 `config` 和 `paths`，但两者仍然委托给
-`AppRuntime`，不创建第二份状态。Provider 通过 `context.runtime.config`、
-`context.runtime.paths` 读取运行时信息，
-通过 `context.serviceContainer` 注册和解析服务。Routes 不再单独接收 `config` 和
-`paths`，避免同一份运行时状态出现多个入口。`Application` 通过 getter 统一提供规范化的
+`AppRuntime`，不创建第二份状态。Provider 接收同一个真实的 `Application`，通过
+`this.app.config`、`this.app.paths` 读取运行时信息，通过
+`this.app.container` 注册和解析服务。`Application` 通过 getter 统一提供规范化的
 `appName` 和 `publicBasePath`；Core Routes 和 Plugin Routes 直接接收同一个真实的
-`Application`，但插件在类型层面只看到 `AppPluginRoutesContext` 定义的窄接口。
+`Application`，但插件在类型层面只看到 `AppPluginRoutesApplication` 定义的窄接口。
 
-`Application.addProvider` 接收 Provider class，并在内部注入同一个
-`ServiceProviderContext`。应用组合根只声明启用了哪些 Provider，以及真正属于 Provider
-实例的额外参数：
+`Application.addProvider` 接收 Provider class，并在内部把自身作为 `app` 注入。应用组合根
+只声明启用了哪些 Provider，以及真正属于 Provider 实例的额外参数：
 
 ```ts
 app.addProvider(DriveProvider);
@@ -345,9 +344,9 @@ app.addProvider(plugin.Provider);
 ```
 
 应用配置不通过构造参数从组合根转发。Database、Caching、ID Generator、Drive、Logging、
-Queue、Session 等 Provider 直接从 `context.runtime.config` 读取自己拥有的配置；例如
-`CachingProvider` 读取 `runtime.config.caching`，`IdGeneratorProvider` 读取
-`runtime.config.snowflake`。底层
+Queue、Session 等 Provider 直接从 `this.app.config` 读取自己拥有的配置；例如
+`CachingProvider` 读取 `this.app.config.caching`，`IdGeneratorProvider` 读取
+`this.app.config.snowflake`。底层
 `ServiceProviderRegistry` 仍接收已经实例化的 Provider，负责
 运行生命周期；Provider 的实例化属于 `Application`。
 
@@ -373,7 +372,7 @@ CachingProvider        → cachingToken
 IdGeneratorProvider    → idGeneratorToken
 
 AppServerKit RealtimeProvider → realtimeServiceToken
-                              ├→ Plugin serviceContainer.resolve(token)
+                              ├→ Plugin app.container.resolve(token)
                               └→ WebSocket handler
 ```
 

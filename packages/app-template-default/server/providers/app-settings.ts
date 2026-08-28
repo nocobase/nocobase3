@@ -1,10 +1,10 @@
 import {
   createServiceToken,
   ServiceProvider,
+  type ServiceContainer,
   type ServiceResolver,
   type ServiceToken,
 } from '@nocobase/service-provider';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { databaseManagerToken } from '@nocobase/app-database';
 
 import type { AppConfig } from '../config/index.js';
@@ -19,25 +19,30 @@ export const appSettingsRepositoryToken: ServiceToken<AppSettingsRepository> =
     '@nocobase/app-template-default/app-settings-repository',
   );
 
-export class AppSettingsProvider extends ServiceProvider<
-  AppRuntime<AppConfig>
-> {
+export interface AppSettingsProviderApplication {
+  readonly config: AppConfig;
+  readonly container: ServiceContainer;
+}
+
+export class AppSettingsProvider<
+  TApplication extends AppSettingsProviderApplication =
+    AppSettingsProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = 'app-settings';
 
   public override register(): void {
-    this.context.serviceContainer.singleton(
-      appSettingsRepositoryToken,
-      (services) => this.createAppSettings(services),
+    this.app.container.singleton(appSettingsRepositoryToken, (container) =>
+      this.createAppSettings(container),
     );
   }
 
-  private createAppSettings(services: ServiceResolver): AppSettingsRepository {
-    if (!services.has(databaseManagerToken)) {
+  private createAppSettings(container: ServiceResolver): AppSettingsRepository {
+    if (!container.has(databaseManagerToken)) {
       return new UnavailableAppSettingsRepository();
     }
 
     return new DatabaseAppSettingsRepository(
-      services.resolve(databaseManagerToken),
+      container.resolve(databaseManagerToken),
     );
   }
 }

@@ -1,4 +1,7 @@
-import { ServiceProvider } from '@nocobase/service-provider';
+import {
+  ServiceProvider,
+  type ServiceContainer,
+} from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/app-database';
 import { createAppDatabaseManager } from './manager.js';
 import { createAppMigrator } from './migrator.js';
@@ -6,28 +9,31 @@ import { createAppSeeder } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
 import type { AppDatabaseConfig } from './types.js';
 
-export interface DatabaseProviderRuntimeConfig {
+export interface DatabaseProviderApplicationConfig {
   readonly database: AppDatabaseConfig;
 }
 
-export interface DatabaseProviderRuntime<
-  TConfig extends DatabaseProviderRuntimeConfig = DatabaseProviderRuntimeConfig,
+export interface DatabaseProviderApplication<
+  TConfig extends DatabaseProviderApplicationConfig =
+    DatabaseProviderApplicationConfig,
 > {
   readonly config: TConfig;
+  readonly container: ServiceContainer;
 }
 
 export class DatabaseProvider<
-  TRuntime extends DatabaseProviderRuntime = DatabaseProviderRuntime,
-> extends ServiceProvider<TRuntime> {
+  TApplication extends DatabaseProviderApplication =
+    DatabaseProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-server-kit/database';
 
   public override register(): void {
-    const config = this.context.runtime.config.database;
+    const config = this.app.config.database;
     if (config.default === 'none') {
       return;
     }
 
-    this.context.serviceContainer.singleton(databaseManagerToken, () => {
+    this.app.container.singleton(databaseManagerToken, () => {
       const database = createAppDatabaseManager(config);
       if (!database) {
         throw new Error('Database is not configured.');
@@ -38,14 +44,14 @@ export class DatabaseProvider<
   }
 
   public override async boot(): Promise<void> {
-    const { serviceContainer } = this.context;
-    if (!serviceContainer.has(databaseManagerToken)) {
+    const { container } = this.app;
+    if (!container.has(databaseManagerToken)) {
       return;
     }
 
-    const config = this.context.runtime.config.database;
+    const config = this.app.config.database;
     await prepareAppDatabaseStorage(config);
-    const database = serviceContainer.resolve(databaseManagerToken);
+    const database = container.resolve(databaseManagerToken);
 
     if (config.migrations.autoRun) {
       await createAppMigrator({
@@ -65,8 +71,6 @@ export class DatabaseProvider<
   }
 
   public override async shutdown(): Promise<void> {
-    await this.context.serviceContainer
-      .resolveIfCreated(databaseManagerToken)
-      ?.destroy();
+    await this.app.container.resolveIfCreated(databaseManagerToken)?.destroy();
   }
 }

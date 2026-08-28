@@ -23,7 +23,7 @@ export function registerRealtimeWebSocketRoutes(router: Hono): void {
 }
 
 export function createRealtimeWebSocketHandler(
-  services: ServiceResolver,
+  container: ServiceResolver,
 ): AppWebSocketHandler {
   return (request) => {
     const url = new URL(request.url);
@@ -31,7 +31,7 @@ export function createRealtimeWebSocketHandler(
       return null;
     }
 
-    const realtime = services.resolve(realtimeServiceToken);
+    const realtime = container.resolve(realtimeServiceToken);
     let connection: RealtimeConnection | undefined;
     const disconnect = (): void => {
       if (!connection) {

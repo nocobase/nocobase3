@@ -11,7 +11,6 @@ import { RealtimeProvider } from '../src/realtime/index.js';
 import {
   createServiceToken,
   ServiceProvider,
-  type ServiceProviderContext,
 } from '@nocobase/service-provider';
 
 describe('application', () => {
@@ -20,7 +19,7 @@ describe('application', () => {
     app.addProvider(RouterProvider);
     app.registerProviders();
 
-    const router = app.serviceContainer.resolve(routerToken);
+    const router = app.container.resolve(routerToken);
     router.get('/healthz', (context) => context.json({ ok: true }));
 
     expect(app.router).toBe(router);
@@ -83,15 +82,15 @@ describe('application', () => {
   it('creates one WebSocket handler from the application service container', async () => {
     const realtimeToken = createServiceToken<string>('test-realtime');
     const websocketHandler = vi.fn(() => new Response(null, { status: 204 }));
-    const websocketFactory = vi.fn((services) => {
-      expect(services.resolve(realtimeToken)).toBe('realtime');
+    const websocketFactory = vi.fn((container) => {
+      expect(container.resolve(realtimeToken)).toBe('realtime');
       return websocketHandler;
     });
     const app = new Application({
       runtime: createTestRuntime(),
       websocket: websocketFactory,
     });
-    app.serviceContainer.instance(realtimeToken, 'realtime');
+    app.container.instance(realtimeToken, 'realtime');
 
     expect(app.websocket).toBeDefined();
     const request = new Request('http://localhost/ws');
@@ -100,9 +99,7 @@ describe('application', () => {
 
     expect(firstResult).toBeInstanceOf(Response);
     expect(secondResult).toBeInstanceOf(Response);
-    expect(websocketFactory).toHaveBeenCalledExactlyOnceWith(
-      app.serviceContainer,
-    );
+    expect(websocketFactory).toHaveBeenCalledExactlyOnceWith(app.container);
     expect(websocketHandler).toHaveBeenCalledTimes(2);
   });
 
@@ -137,15 +134,15 @@ describe('application', () => {
 
 type TestApplicationConfig = ApplicationConfig;
 
-class TestProvider extends ServiceProvider<AppRuntime<TestApplicationConfig>> {
+class TestProvider extends ServiceProvider<Application<TestApplicationConfig>> {
   public readonly name: string;
 
   public constructor(
-    context: ServiceProviderContext<AppRuntime<TestApplicationConfig>>,
+    app: Application<TestApplicationConfig>,
     name: string,
     private readonly calls: string[],
   ) {
-    super(context);
+    super(app);
     this.name = name;
   }
 

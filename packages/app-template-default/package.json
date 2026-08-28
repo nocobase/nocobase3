@@ -37,6 +37,9 @@
       },
       "@nocobase/app-plugin-realtime-example": {
         "enabled": true
+      },
+      "@nocobase/app-plugin-service-provider-example": {
+        "enabled": true
       }
     }
   },
@@ -59,6 +62,7 @@
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
+    "@nocobase/app-plugin-service-provider-example": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",

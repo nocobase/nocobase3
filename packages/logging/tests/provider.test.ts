@@ -9,14 +9,14 @@ import {
 
 describe('LoggingProvider', () => {
   it('registers and flushes the configured logging service', async () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new LoggingProvider({
-      runtime: { config: { logging: createSilentLoggingConfig() } },
-      serviceContainer,
+      config: { logging: createSilentLoggingConfig() },
+      container,
     });
 
     provider.register();
-    const logging = serviceContainer.resolve(loggingToken);
+    const logging = container.resolve(loggingToken);
     const flush = vi.spyOn(logging, 'flush');
 
     expect(provider.name).toBe('@nocobase/logging');
@@ -25,15 +25,15 @@ describe('LoggingProvider', () => {
   });
 
   it('does not create logging during shutdown', async () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new LoggingProvider({
-      runtime: { config: {} },
-      serviceContainer,
+      config: {},
+      container,
     });
 
     provider.register();
     await provider.shutdown();
 
-    expect(serviceContainer.resolveIfCreated(loggingToken)).toBeUndefined();
+    expect(container.resolveIfCreated(loggingToken)).toBeUndefined();
   });
 });

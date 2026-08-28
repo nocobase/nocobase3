@@ -1,5 +1,4 @@
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
   createQueueManager,
@@ -31,15 +30,16 @@ describe('queue example plugin routes', () => {
     });
     managers.push(queueManager);
     const router = new Hono();
-    const serviceContainer = new ServiceContainer();
-    serviceContainer.instance(queueManagerToken, queueManager);
+    const container = new ServiceContainer();
+    container.instance(queueManagerToken, queueManager);
 
     registerRoutes({
       appName: 'main',
       publicBasePath: '/main',
+      config: { app: { name: 'main', publicBasePath: '/main' } },
+      paths: createConfigPaths({ rootDir: '/missing' }),
       router,
-      runtime: createTestRuntime(),
-      serviceContainer,
+      container,
     });
 
     const response = await router.request('/queue-example');
@@ -60,10 +60,3 @@ describe('queue example plugin routes', () => {
     ]);
   });
 });
-
-function createTestRuntime(): AppRuntime<undefined> {
-  return {
-    config: undefined,
-    paths: createConfigPaths({ rootDir: '/missing' }),
-  };
-}

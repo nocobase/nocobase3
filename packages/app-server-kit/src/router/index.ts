@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import {
   ServiceProvider,
+  type ServiceContainer,
   createServiceToken,
   type ServiceToken,
 } from '@nocobase/service-provider';
@@ -17,12 +18,16 @@ export const routerToken: ServiceToken<Hono> = createServiceToken<Hono>(
   '@nocobase/app/router',
 );
 
+export interface RouterProviderApplication {
+  readonly container: ServiceContainer;
+}
+
 export class RouterProvider<
-  TRuntime = unknown,
-> extends ServiceProvider<TRuntime> {
+  TApplication extends RouterProviderApplication = RouterProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = 'router';
 
   public override register(): void {
-    this.context.serviceContainer.instance(routerToken, new Hono());
+    this.app.container.instance(routerToken, new Hono());
   }
 }

@@ -48,6 +48,7 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   const tsconfig = JSON.parse(tsconfigContents);
 
   assert.equal(packageJson.name, '@nocobase/app-plugin-audit-log');
+  assert.equal(packageJson.version, '0.0.1');
   assert.equal(packageJson.prettier, '@nocobase/dev-config/prettier');
   assert.deepEqual(packageJson.exports, {
     './client/bootstrap': {
@@ -75,6 +76,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   });
   assert.equal(
     packageJson.dependencies['@nocobase/app-database'],
+    'workspace:^',
+  );
+  assert.equal(
+    packageJson.dependencies['@nocobase/service-provider'],
     'workspace:^',
   );
   assert.equal(packageJson.dependencies.hono, 'catalog:');
@@ -110,10 +115,13 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     readFile(path.join(result.targetDirectory, 'src/index.ts'), 'utf8'),
     { code: 'ENOENT' },
   );
-  await readFile(
+  const provider = await readFile(
     path.join(result.targetDirectory, 'server/provider.ts'),
     'utf8',
   );
+  assert.match(provider, /from '@nocobase\/service-provider'/u);
+  assert.match(provider, /readonly container: ServiceContainer/u);
+  assert.doesNotMatch(provider, /app-server-kit\/service-provider/u);
   const clientBootstrap = await readFile(
     path.join(result.targetDirectory, 'client/bootstrap.ts'),
     'utf8',
@@ -129,9 +137,15 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   assert.match(clientBootstrap, /AppClientPluginBootstrap/u);
   assert.match(clientRoutes, /defineClientRoutes\(\[\]\)/u);
   assert.match(clientProviders, /defineClientProviders\(\s*\[\],\s*\)/u);
-  await readFile(
+  const providerTest = await readFile(
     path.join(result.targetDirectory, 'tests/provider.test.ts'),
     'utf8',
+  );
+  assert.match(providerTest, /from '@nocobase\/service-provider'/u);
+  assert.match(providerTest, /container: new ServiceContainer\(\)/u);
+  assert.doesNotMatch(
+    providerTest,
+    /runtime|runMigrations|runSeeds|dispose|serviceContainer|app-server-kit\/service-provider/u,
   );
   await readFile(
     path.join(result.targetDirectory, 'database/README.md'),
@@ -173,9 +187,15 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     path.join(result.targetDirectory, 'tests/client.test.ts'),
     'utf8',
   );
-  await readFile(
+  const routesTest = await readFile(
     path.join(result.targetDirectory, 'tests/routes.test.ts'),
     'utf8',
+  );
+  assert.match(routesTest, /from '@nocobase\/service-provider'/u);
+  assert.match(routesTest, /container: new ServiceContainer\(\)/u);
+  assert.doesNotMatch(
+    routesTest,
+    /runtime|runMigrations|runSeeds|dispose|serviceContainer|app-server-kit\/service-provider/u,
   );
 });
 

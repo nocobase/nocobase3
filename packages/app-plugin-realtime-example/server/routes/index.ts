@@ -1,11 +1,11 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
 import { Hono } from 'hono';
 
 import { CLOCK_TOPIC } from '../publishers/clock.js';
 
-export type RealtimeExamplePluginRoutesContext = AppPluginRoutesContext;
+export type RealtimeExamplePluginRoutesApplication = AppPluginRoutesApplication;
 
-export default ({ router }: RealtimeExamplePluginRoutesContext): void => {
+export default ({ router }: RealtimeExamplePluginRoutesApplication): void => {
   const routes = new Hono();
 
   routes.get('/', (context) =>

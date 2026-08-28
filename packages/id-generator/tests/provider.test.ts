@@ -6,17 +6,17 @@ import { IdGeneratorProvider, idGeneratorToken } from '../src/index.js';
 
 describe('IdGeneratorProvider', () => {
   it('registers a singleton Snowflake generator with the configured worker ID', () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new IdGeneratorProvider({
-      runtime: { config: { snowflake: { workerId: 7 } } },
-      serviceContainer,
+      config: { snowflake: { workerId: 7 } },
+      container,
     });
 
     provider.register();
-    const generator = serviceContainer.resolve(idGeneratorToken);
+    const generator = container.resolve(idGeneratorToken);
 
     expect(provider.name).toBe('@nocobase/id-generator');
     expect(generator.workerId).toBe(7);
-    expect(serviceContainer.resolve(idGeneratorToken)).toBe(generator);
+    expect(container.resolve(idGeneratorToken)).toBe(generator);
   });
 });

@@ -6,8 +6,7 @@ import { routerToken } from '../router/index.js';
 import { normalizeBasePath, resolveAppName } from '../support/index.js';
 import {
   ServiceContainer,
-  type ServiceProviderConstructor,
-  type ServiceProviderContext,
+  type ServiceProviderLifecycle,
   ServiceProviderRegistry,
   type ServiceResolver,
 } from '@nocobase/service-provider';
@@ -24,7 +23,7 @@ export type ApplicationFetchHandler = (
 ) => Response | Promise<Response>;
 
 export type ApplicationWebSocketFactory = (
-  services: ServiceResolver,
+  container: ServiceResolver,
 ) => AppWebSocketHandler;
 
 export interface ApplicationConfig {
@@ -41,6 +40,14 @@ export interface ApplicationOptions<
   readonly websocket?: ApplicationWebSocketFactory;
 }
 
+export type ApplicationServiceProviderConstructor<
+  TConfig extends ApplicationConfig = ApplicationConfig,
+  TArguments extends readonly unknown[] = [],
+> = new (
+  app: Application<TConfig>,
+  ...args: TArguments
+) => ServiceProviderLifecycle;
+
 /**
  * A composed NocoBase server application.
  *
@@ -52,7 +59,7 @@ export class Application<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
   public readonly runtime: AppRuntime<TConfig>;
-  public readonly serviceContainer: ServiceContainer;
+  public readonly container: ServiceContainer;
   public readonly fetch: ApplicationFetchHandler = (
     request,
     env,
@@ -60,10 +67,8 @@ export class Application<
   ) => this.router.fetch(request, env, executionContext);
   public readonly websocket: AppWebSocketHandler;
 
-  private readonly providerRegistry: ServiceProviderRegistry<
-    AppRuntime<TConfig>
-  > = new ServiceProviderRegistry<AppRuntime<TConfig>>();
-  private readonly providerContext: ServiceProviderContext<AppRuntime<TConfig>>;
+  private readonly providerRegistry: ServiceProviderRegistry =
+    new ServiceProviderRegistry();
   private readonly websocketFactory: ApplicationWebSocketFactory;
   private readonly usesDefaultWebSocket: boolean;
   private startPromise: Promise<void> | undefined;
@@ -71,11 +76,7 @@ export class Application<
 
   public constructor(options: ApplicationOptions<TConfig>) {
     this.runtime = options.runtime;
-    this.serviceContainer = new ServiceContainer();
-    this.providerContext = {
-      runtime: this.runtime,
-      serviceContainer: this.serviceContainer,
-    };
+    this.container = new ServiceContainer();
     this.usesDefaultWebSocket = options.websocket === undefined;
     this.websocketFactory = options.websocket ?? createRealtimeWebSocketHandler;
     this.websocket = (request, env) => this.getWebSocketHandler()(request, env);
@@ -98,19 +99,19 @@ export class Application<
   }
 
   public get router(): Hono {
-    return this.serviceContainer.resolve(routerToken);
+    return this.container.resolve(routerToken);
   }
 
   public addProvider<TArguments extends readonly unknown[]>(
-    Provider: ServiceProviderConstructor<AppRuntime<TConfig>, TArguments>,
+    Provider: ApplicationServiceProviderConstructor<TConfig, TArguments>,
     ...args: TArguments
   ): void {
-    this.providerRegistry.add(new Provider(this.providerContext, ...args));
+    this.providerRegistry.add(new Provider(this, ...args));
   }
 
   public registerProviders(): void {
     this.providerRegistry.registerAll();
-    if (this.usesDefaultWebSocket && this.serviceContainer.has(routerToken)) {
+    if (this.usesDefaultWebSocket && this.container.has(routerToken)) {
       registerRealtimeWebSocketRoutes(this.router);
     }
   }
@@ -125,7 +126,7 @@ export class Application<
   }
 
   private getWebSocketHandler(): AppWebSocketHandler {
-    this.websocketHandler ??= this.websocketFactory(this.serviceContainer);
+    this.websocketHandler ??= this.websocketFactory(this.container);
     return this.websocketHandler;
   }
 

@@ -33,7 +33,7 @@ import {
   runAppMigrations,
   runAppSeeds,
   type AppDatabaseConfig,
-  type DatabaseProviderRuntime,
+  type DatabaseProviderApplication,
 } from '../src/database/index.js';
 
 const tempDirs: string[] = [];
@@ -54,20 +54,18 @@ describe('DatabaseProvider', () => {
   it('registers a lazy database manager created from runtime config', () => {
     const database = createMockDatabase();
     createDatabaseManagerMock.mockReturnValue(database);
-    const { provider, serviceContainer } = createProvider(createConfig());
+    const { provider, container } = createProvider(createConfig());
 
     provider.register();
 
     expect(provider.name).toBe('@nocobase/app-server-kit/database');
-    expect(
-      serviceContainer.resolveIfCreated(databaseManagerToken),
-    ).toBeUndefined();
-    expect(serviceContainer.resolve(databaseManagerToken)).toBe(database);
+    expect(container.resolveIfCreated(databaseManagerToken)).toBeUndefined();
+    expect(container.resolve(databaseManagerToken)).toBe(database);
     expect(createDatabaseManagerMock).toHaveBeenCalledOnce();
   });
 
   it('does not register a database when the default connection is none', () => {
-    const { provider, serviceContainer } = createProvider({
+    const { provider, container } = createProvider({
       ...createConfig(),
       default: 'none',
       connections: {},
@@ -75,7 +73,7 @@ describe('DatabaseProvider', () => {
 
     provider.register();
 
-    expect(serviceContainer.has(databaseManagerToken)).toBe(false);
+    expect(container.has(databaseManagerToken)).toBe(false);
   });
 
   it('prepares storage, runs migrations before seeds, and destroys the database', async () => {
@@ -97,8 +95,8 @@ describe('DatabaseProvider', () => {
       }),
     });
     const config = createConfig(root, true);
-    const { provider, serviceContainer } = createProvider(config);
-    const registry = new ServiceProviderRegistry<DatabaseProviderRuntime>();
+    const { provider, container } = createProvider(config);
+    const registry = new ServiceProviderRegistry();
     registry.add(provider);
     registry.registerAll();
 
@@ -109,9 +107,7 @@ describe('DatabaseProvider', () => {
       true,
     );
     expect(calls).toEqual(['migrate', 'seed', 'destroy']);
-    expect(serviceContainer.resolveIfCreated(databaseManagerToken)).toBe(
-      database,
-    );
+    expect(container.resolveIfCreated(databaseManagerToken)).toBe(database);
   });
 
   it('does not run automatic tasks when autoRun is disabled', async () => {
@@ -139,7 +135,7 @@ describe('DatabaseProvider', () => {
     const { provider } = createProvider(
       createConfig(createTempDirectory(), true),
     );
-    const registry = new ServiceProviderRegistry<DatabaseProviderRuntime>();
+    const registry = new ServiceProviderRegistry();
     registry.add(provider);
     registry.registerAll();
 
@@ -198,14 +194,17 @@ describe('standalone database tasks', () => {
 });
 
 function createProvider(database: AppDatabaseConfig): {
-  readonly provider: DatabaseProvider<DatabaseProviderRuntime>;
-  readonly serviceContainer: ServiceContainer;
+  readonly provider: DatabaseProvider<DatabaseProviderApplication>;
+  readonly container: ServiceContainer;
 } {
-  const serviceContainer = new ServiceContainer();
-  const runtime: DatabaseProviderRuntime = { config: { database } };
+  const container = new ServiceContainer();
+  const app: DatabaseProviderApplication = {
+    config: { database },
+    container,
+  };
   return {
-    provider: new DatabaseProvider({ runtime, serviceContainer }),
-    serviceContainer,
+    provider: new DatabaseProvider(app),
+    container,
   };
 }
 

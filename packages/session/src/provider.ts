@@ -1,6 +1,7 @@
 import {
   createServiceToken,
   ServiceProvider,
+  type ServiceContainer,
   type ServiceToken,
 } from '@nocobase/service-provider';
 
@@ -10,32 +11,32 @@ import type { AppSessionConfig, NocoBaseSessionManager } from './types.js';
 export const sessionManagerToken: ServiceToken<NocoBaseSessionManager> =
   createServiceToken<NocoBaseSessionManager>('@nocobase/session/manager');
 
-export interface SessionProviderRuntimeConfig {
+export interface SessionProviderApplicationConfig {
   readonly session?: AppSessionConfig;
 }
 
-export interface SessionProviderRuntime<
-  TConfig extends SessionProviderRuntimeConfig = SessionProviderRuntimeConfig,
+export interface SessionProviderApplication<
+  TConfig extends SessionProviderApplicationConfig =
+    SessionProviderApplicationConfig,
 > {
   readonly config: TConfig;
+  readonly container: ServiceContainer;
 }
 
 export class SessionProvider<
-  TRuntime extends SessionProviderRuntime = SessionProviderRuntime,
-> extends ServiceProvider<TRuntime> {
+  TApplication extends SessionProviderApplication = SessionProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/session';
 
   public override register(): void {
-    this.context.serviceContainer.singleton(sessionManagerToken, () =>
+    this.app.container.singleton(sessionManagerToken, () =>
       createSessionManager(
-        this.context.runtime.config.session ?? createNullSessionConfig(),
+        this.app.config.session ?? createNullSessionConfig(),
       ),
     );
   }
 
   public override async shutdown(): Promise<void> {
-    await this.context.serviceContainer
-      .resolveIfCreated(sessionManagerToken)
-      ?.dispose();
+    await this.app.container.resolveIfCreated(sessionManagerToken)?.dispose();
   }
 }

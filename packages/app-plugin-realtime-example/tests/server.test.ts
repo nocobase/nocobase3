@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import { realtimeServiceToken } from '@nocobase/app-server-kit/realtime';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 import RealtimeExampleProvider from '../server/provider.js';
@@ -15,12 +13,11 @@ describe('realtime example plugin provider', () => {
       subscriptionCount: vi.fn().mockReturnValue(0),
       onTopicSubscriptionChange: vi.fn().mockReturnValue(disposeSubscription),
     };
-    const serviceContainer = new ServiceContainer();
-    serviceContainer.instance(realtimeServiceToken, realtime);
+    const container = new ServiceContainer();
+    container.instance(realtimeServiceToken, realtime);
 
     const provider = new RealtimeExampleProvider({
-      runtime: createTestRuntime(),
-      serviceContainer,
+      container,
     });
     await provider.start();
 
@@ -32,10 +29,3 @@ describe('realtime example plugin provider', () => {
     expect(disposeSubscription).toHaveBeenCalledOnce();
   });
 });
-
-function createTestRuntime(): AppRuntime<undefined> {
-  return {
-    config: undefined,
-    paths: createConfigPaths({ rootDir: '/missing' }),
-  };
-}

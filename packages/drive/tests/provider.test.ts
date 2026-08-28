@@ -23,7 +23,7 @@ describe('DriveProvider', () => {
   it('registers the configured drive and prepares its storage', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'nocobase-drive-provider-'));
     const location = path.join(root, 'storage');
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const drive: AppDriveConfig = {
       default: 'local',
       disks: {
@@ -37,27 +37,27 @@ describe('DriveProvider', () => {
     };
     tempDirs.push(root);
     const provider = new DriveProvider({
-      runtime: { config: { drive } },
-      serviceContainer,
+      config: { drive },
+      container,
     });
 
     provider.register();
     await provider.boot();
 
     expect(provider.name).toBe('@nocobase/drive');
-    expect(serviceContainer.resolve(driveManagerToken)).toBeDefined();
+    expect(container.resolve(driveManagerToken)).toBeDefined();
   });
 
   it('does not register a manager without drive configuration', async () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new DriveProvider({
-      runtime: { config: {} },
-      serviceContainer,
+      config: {},
+      container,
     });
 
     provider.register();
     await provider.boot();
 
-    expect(serviceContainer.has(driveManagerToken)).toBe(false);
+    expect(container.has(driveManagerToken)).toBe(false);
   });
 });

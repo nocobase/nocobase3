@@ -1,6 +1,7 @@
 import {
   createServiceToken,
   ServiceProvider,
+  type ServiceContainer,
   type ServiceToken,
 } from '@nocobase/service-provider';
 
@@ -10,31 +11,29 @@ import type { CachingConfig } from './types.js';
 export const cachingToken: ServiceToken<Caching> =
   createServiceToken<Caching>('@nocobase/caching');
 
-export interface CachingProviderRuntimeConfig {
+export interface CachingProviderApplicationConfig {
   readonly caching: CachingConfig;
 }
 
-export interface CachingProviderRuntime<
-  TConfig extends CachingProviderRuntimeConfig = CachingProviderRuntimeConfig,
+export interface CachingProviderApplication<
+  TConfig extends CachingProviderApplicationConfig =
+    CachingProviderApplicationConfig,
 > {
   readonly config: TConfig;
+  readonly container: ServiceContainer;
 }
 
 export class CachingProvider<
-  TRuntime extends CachingProviderRuntime = CachingProviderRuntime,
-> extends ServiceProvider<TRuntime> {
+  TApplication extends CachingProviderApplication = CachingProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/caching';
 
   public override register(): void {
-    const config = this.context.runtime.config.caching;
-    this.context.serviceContainer.singleton(cachingToken, () =>
-      createCaching(config),
-    );
+    const config = this.app.config.caching;
+    this.app.container.singleton(cachingToken, () => createCaching(config));
   }
 
   public override async shutdown(): Promise<void> {
-    await this.context.serviceContainer
-      .resolveIfCreated(cachingToken)
-      ?.dispose();
+    await this.app.container.resolveIfCreated(cachingToken)?.dispose();
   }
 }

@@ -4,8 +4,6 @@ import {
   databaseManagerToken,
   type DatabaseManager,
 } from '@nocobase/app-database';
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 const createAppAuthorization = vi.hoisted(() =>
@@ -27,15 +25,14 @@ describe('authorization provider', () => {
     const database = {
       connection: vi.fn(() => connection),
     } as unknown as DatabaseManager;
-    const serviceContainer = new ServiceContainer();
-    serviceContainer.instance(databaseManagerToken, database);
+    const container = new ServiceContainer();
+    container.instance(databaseManagerToken, database);
     const provider = new AuthorizationProvider({
-      runtime: createRuntime(),
-      serviceContainer,
+      container,
     });
 
     provider.register();
-    const authorization = serviceContainer.resolve(authorizationToken);
+    const authorization = container.resolve(authorizationToken);
 
     expect(provider.name).toBe('@nocobase/app-plugin-authorization');
     expect(createAppAuthorization).toHaveBeenCalledExactlyOnceWith({
@@ -44,10 +41,3 @@ describe('authorization provider', () => {
     expect(authorization).toBe(createAppAuthorization.mock.results[0]?.value);
   });
 });
-
-function createRuntime(): AppRuntime<undefined> {
-  return {
-    config: undefined,
-    paths: createConfigPaths({ rootDir: process.cwd() }),
-  };
-}

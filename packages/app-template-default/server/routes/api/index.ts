@@ -20,20 +20,20 @@ import { createAuthRoutes } from './auth.js';
 export interface ApiRouteOptions {
   appName: string;
   publicBasePath: string;
-  serviceContainer: ServiceResolver;
+  container: ServiceResolver;
 }
 
 export function createApiRoutes({
   appName,
   publicBasePath,
-  serviceContainer,
+  container,
 }: ApiRouteOptions): Hono {
   const api = new Hono();
-  const auth = serviceContainer.resolve(authenticationToken);
-  const caching = serviceContainer.resolve(cachingToken);
-  const logging = serviceContainer.resolve(loggingToken);
-  const appSettings = serviceContainer.resolve(appSettingsRepositoryToken);
-  const publicFiles = serviceContainer.resolve(publicFilesRepositoryToken);
+  const auth = container.resolve(authenticationToken);
+  const caching = container.resolve(cachingToken);
+  const logging = container.resolve(loggingToken);
+  const appSettings = container.resolve(appSettingsRepositoryToken);
+  const publicFiles = container.resolve(publicFilesRepositoryToken);
 
   api.use(
     '*',

@@ -880,6 +880,10 @@ describe('app plugins', () => {
     const realtimeExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-realtime-example',
     );
+    const serviceProviderExamplePlugin = runtime.config.plugins.find(
+      (item) =>
+        item.packageName === '@nocobase/app-plugin-service-provider-example',
+    );
 
     expect(authenticationPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-authentication',
@@ -1006,6 +1010,17 @@ describe('app plugins', () => {
     );
     expect(realtimeExamplePlugin?.providerEntry).toMatch(
       /app-plugin-realtime-example\/server\/provider\.ts$/,
+    );
+    expect(serviceProviderExamplePlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-service-provider-example',
+      version: declaredVersion('@nocobase/app-plugin-service-provider-example'),
+      enabled: true,
+    });
+    expect(serviceProviderExamplePlugin?.routesEntry).toMatch(
+      /app-plugin-service-provider-example\/server\/routes\/index\.ts$/,
+    );
+    expect(serviceProviderExamplePlugin?.providerEntry).toMatch(
+      /app-plugin-service-provider-example\/server\/provider\.ts$/,
     );
     expect(runtime.config.queue.jobs?.locations).toEqual([
       expect.stringMatching(/app-template-default\/server\/jobs/),

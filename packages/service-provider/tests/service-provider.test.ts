@@ -173,7 +173,7 @@ class TestProvider extends ServiceProvider {
     private readonly calls: string[],
     private readonly failurePhase?: 'start' | 'shutdown' | 'start-and-shutdown',
   ) {
-    super({ runtime: undefined, serviceContainer: new ServiceContainer() });
+    super({ container: new ServiceContainer() });
     this.name = name;
   }
 

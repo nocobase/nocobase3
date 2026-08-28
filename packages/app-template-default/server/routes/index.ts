@@ -13,15 +13,15 @@ export interface AppRoutesApplication {
   readonly appName: string;
   readonly publicBasePath: string;
   readonly router: Hono;
-  readonly serviceContainer: ServiceResolver;
+  readonly container: ServiceResolver;
 }
 
 export function registerAppRoutes(app: AppRoutesApplication): void {
-  const { appName, publicBasePath, router, serviceContainer } = app;
+  const { appName, publicBasePath, router, container } = app;
 
   router.use(
     '*',
-    createSessionMiddleware(serviceContainer.resolve(sessionManagerToken)),
+    createSessionMiddleware(container.resolve(sessionManagerToken)),
   );
 
   router.get('/hello', createHelloPageHandler());
@@ -31,7 +31,7 @@ export function registerAppRoutes(app: AppRoutesApplication): void {
     createApiRoutes({
       appName,
       publicBasePath,
-      serviceContainer,
+      container,
     }),
   );
 }

@@ -4,8 +4,6 @@ import {
   databaseManagerToken,
   type DatabaseManager,
 } from '@nocobase/app-database';
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { cachingToken, type Caching } from '@nocobase/caching';
 import { idGeneratorToken } from '@nocobase/id-generator';
@@ -49,18 +47,18 @@ describe('authentication provider', () => {
       generate: vi.fn(() => 1),
       generateString: vi.fn(() => 'generated-id'),
     };
-    const serviceContainer = new ServiceContainer();
-    const runtime = createRuntime();
-    serviceContainer.instance(databaseManagerToken, database);
-    serviceContainer.instance(cachingToken, caching);
-    serviceContainer.instance(idGeneratorToken, idGenerator);
+    const container = new ServiceContainer();
+    const config = createConfig();
+    container.instance(databaseManagerToken, database);
+    container.instance(cachingToken, caching);
+    container.instance(idGeneratorToken, idGenerator);
     const provider = new AuthenticationProvider({
-      runtime,
-      serviceContainer,
+      config,
+      container,
     });
 
     provider.register();
-    const auth = serviceContainer.resolve(authenticationToken);
+    const auth = container.resolve(authenticationToken);
 
     expect(provider.name).toBe('@nocobase/app-plugin-authentication');
     expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
@@ -114,16 +112,13 @@ describe('authentication provider', () => {
   });
 });
 
-function createRuntime(): AppRuntime<AuthenticationProviderConfig> {
+function createConfig(): AuthenticationProviderConfig {
   return {
-    config: {
-      app: {
-        name: 'main app',
-        publicOrigin: 'https://example.com',
-        publicBasePath: '/main',
-      },
-      auth: { secret: 'test-auth-secret-at-least-32-characters' },
+    app: {
+      name: 'main app',
+      publicOrigin: 'https://example.com',
+      publicBasePath: '/main',
     },
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    auth: { secret: 'test-auth-secret-at-least-32-characters' },
   };
 }

@@ -1,10 +1,10 @@
 import {
   createServiceToken,
   ServiceProvider,
+  type ServiceContainer,
   type ServiceResolver,
   type ServiceToken,
 } from '@nocobase/service-provider';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { driveManagerToken } from '@nocobase/drive';
 
 import type { AppConfig } from '../config/index.js';
@@ -19,25 +19,28 @@ export const publicFilesRepositoryToken: ServiceToken<PublicFilesRepository> =
     '@nocobase/app-template-default/public-files-repository',
   );
 
-export class PublicFilesProvider extends ServiceProvider<
-  AppRuntime<AppConfig>
-> {
+export interface PublicFilesProviderApplication {
+  readonly config: AppConfig;
+  readonly container: ServiceContainer;
+}
+
+export class PublicFilesProvider<
+  TApplication extends PublicFilesProviderApplication =
+    PublicFilesProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = 'public-files';
 
   public override register(): void {
-    this.context.serviceContainer.singleton(
-      publicFilesRepositoryToken,
-      (services) => this.createPublicFiles(services),
+    this.app.container.singleton(publicFilesRepositoryToken, (container) =>
+      this.createPublicFiles(container),
     );
   }
 
-  private createPublicFiles(services: ServiceResolver): PublicFilesRepository {
-    const drive = services.has(driveManagerToken)
-      ? services.resolve(driveManagerToken)
+  private createPublicFiles(container: ServiceResolver): PublicFilesRepository {
+    const drive = container.has(driveManagerToken)
+      ? container.resolve(driveManagerToken)
       : undefined;
-    const hasPublicDisk = Boolean(
-      this.context.runtime.config.drive?.disks.public,
-    );
+    const hasPublicDisk = Boolean(this.app.config.drive?.disks.public);
 
     if (!drive || !hasPublicDisk) {
       return new UnavailablePublicFilesRepository(
@@ -49,7 +52,7 @@ export class PublicFilesProvider extends ServiceProvider<
   }
 
   private resolveUnavailableMessage(): string {
-    if (!this.context.runtime.config.drive) {
+    if (!this.app.config.drive) {
       return 'File drive is not configured.';
     }
 

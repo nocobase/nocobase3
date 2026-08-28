@@ -140,23 +140,23 @@ describe('app server', () => {
 
     expect(app).toBeInstanceOf(Application);
     expect(app.router).not.toBe(app);
-    expect(app.serviceContainer).toBeDefined();
+    expect(app.container).toBeDefined();
     expect(app.appName).toBe('app-template-default');
     expect(app.publicBasePath).toBe('/app-template-default');
     expect(app.runtime.config.app.publicBasePath).toBe('/app-template-default');
   });
 
-  it('passes the shared runtime and service container to plugin providers', () => {
-    let providerContext: unknown;
+  it('passes the application to plugin providers', () => {
+    let providerApplication: unknown;
     class TestPluginProvider extends ServiceProvider {
       public readonly name: string = '@nocobase/app-plugin-test';
 
       public override register(): void {
-        providerContext = this.context;
+        providerApplication = this.app;
       }
     }
 
-    createTestApp({
+    const app = createTestApp({
       pluginProviders: [
         {
           packageName: '@nocobase/app-plugin-test',
@@ -165,18 +165,9 @@ describe('app server', () => {
       ],
     });
 
-    expect(providerContext).toMatchObject({
-      runtime: expect.objectContaining({
-        config: expect.any(Object),
-        paths: expect.any(Object),
-      }),
-      serviceContainer: expect.any(ServiceContainer),
-    });
-    expect(
-      (
-        providerContext as { serviceContainer: ServiceContainer }
-      ).serviceContainer.resolve(realtimeServiceToken),
-    ).toBeDefined();
+    expect(providerApplication).toBe(app);
+    expect(app.container).toBeInstanceOf(ServiceContainer);
+    expect(app.container.resolve(realtimeServiceToken)).toBeDefined();
   });
 
   it('passes the application surface to plugin routes', () => {
@@ -197,8 +188,7 @@ describe('app server', () => {
     expect(routeApp.appName).toBe(app.appName);
     expect(routeApp.publicBasePath).toBe(app.publicBasePath);
     expect(routeApp.router).toBe(app.router);
-    expect(routeApp.runtime).toBe(app.runtime);
-    expect(routeApp.serviceContainer).toBe(app.serviceContainer);
+    expect(routeApp.container).toBe(app.container);
     expect(routeApp.config).toBe(app.runtime.config);
     expect(routeApp.paths).toBe(app.runtime.paths);
     expect(routesContext).not.toHaveProperty('deps');
@@ -1026,6 +1016,24 @@ describe('app server', () => {
     });
   });
 
+  it('exposes services registered by enabled plugin providers', async () => {
+    const runtime = createStandaloneRuntime();
+    const app = trackCloseable(
+      await createStandaloneServer({ viteDevUrl: false }),
+    );
+    const response = await requestApp(
+      app,
+      `http://localhost${runtime.config.app.publicBasePath}/service-provider-example/status`,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      service: '@nocobase/app-plugin-service-provider-example',
+      status: 'ready',
+      startedAt: expect.any(String),
+    });
+  });
+
   it('mounts standalone app-local routes behind the public base path', async () => {
     const runtime = createStandaloneRuntime();
     const app = trackCloseable(
@@ -1558,12 +1566,12 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     options.database === false
       ? undefined
       : (options.database ?? createMockDatabase([]));
-  class TestDatabaseProvider extends ServiceProvider<AppRuntime<AppConfig>> {
+  class TestDatabaseProvider extends ServiceProvider<Application<AppConfig>> {
     public readonly name: string = 'test-database';
 
     public override register(): void {
       if (database) {
-        this.context.serviceContainer.instance(databaseManagerToken, database);
+        this.app.container.instance(databaseManagerToken, database);
       }
     }
 

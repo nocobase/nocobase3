@@ -1,11 +1,18 @@
-import type { ServiceProviderContext } from './context.js';
+export interface ServiceProviderLifecycle {
+  readonly name: string;
+  register(): void;
+  boot(): Promise<void>;
+  start(): Promise<void>;
+  ready(): Promise<void>;
+  shutdown(): Promise<void>;
+}
 
-export abstract class ServiceProvider<TRuntime = unknown> {
+export abstract class ServiceProvider<
+  TApplication = unknown,
+> implements ServiceProviderLifecycle {
   public abstract readonly name: string;
 
-  public constructor(
-    protected readonly context: ServiceProviderContext<TRuntime>,
-  ) {}
+  public constructor(protected readonly app: TApplication) {}
 
   public register(): void {}
 
@@ -19,9 +26,9 @@ export abstract class ServiceProvider<TRuntime = unknown> {
 }
 
 export type ServiceProviderConstructor<
-  TRuntime = unknown,
+  TApplication = unknown,
   TArguments extends readonly unknown[] = [],
 > = new (
-  context: ServiceProviderContext<TRuntime>,
+  app: TApplication,
   ...args: TArguments
-) => ServiceProvider<TRuntime>;
+) => ServiceProvider<TApplication>;

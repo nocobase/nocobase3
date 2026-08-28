@@ -1,6 +1,7 @@
 import {
   createServiceToken,
   ServiceProvider,
+  type ServiceContainer,
   type ServiceToken,
 } from '@nocobase/service-provider';
 
@@ -11,34 +12,36 @@ import type { AppDriveConfig, NocoBaseDriveManager } from './types.js';
 export const driveManagerToken: ServiceToken<NocoBaseDriveManager> =
   createServiceToken<NocoBaseDriveManager>('@nocobase/drive/manager');
 
-export interface DriveProviderRuntimeConfig {
+export interface DriveProviderApplicationConfig {
   readonly drive?: AppDriveConfig;
 }
 
-export interface DriveProviderRuntime<
-  TConfig extends DriveProviderRuntimeConfig = DriveProviderRuntimeConfig,
+export interface DriveProviderApplication<
+  TConfig extends DriveProviderApplicationConfig =
+    DriveProviderApplicationConfig,
 > {
   readonly config: TConfig;
+  readonly container: ServiceContainer;
 }
 
 export class DriveProvider<
-  TRuntime extends DriveProviderRuntime = DriveProviderRuntime,
-> extends ServiceProvider<TRuntime> {
+  TApplication extends DriveProviderApplication = DriveProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/drive';
 
   public override register(): void {
-    const drive = this.context.runtime.config.drive;
+    const drive = this.app.config.drive;
     if (!drive) {
       return;
     }
 
-    this.context.serviceContainer.singleton(driveManagerToken, () =>
+    this.app.container.singleton(driveManagerToken, () =>
       createDriveManager(drive),
     );
   }
 
   public override async boot(): Promise<void> {
-    const drive = this.context.runtime.config.drive;
+    const drive = this.app.config.drive;
     if (drive) {
       await prepareDriveStorage(drive);
     }

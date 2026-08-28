@@ -1,22 +1,28 @@
-import { ServiceProvider } from '@nocobase/service-provider';
+import {
+  ServiceProvider,
+  type ServiceContainer,
+} from '@nocobase/service-provider';
 import { createRealtimeService } from './service.js';
 import { realtimeServiceToken } from './types.js';
 
+export interface RealtimeProviderApplication {
+  readonly container: ServiceContainer;
+}
+
 export class RealtimeProvider<
-  TRuntime = unknown,
-> extends ServiceProvider<TRuntime> {
+  TApplication extends RealtimeProviderApplication =
+    RealtimeProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = 'realtime';
 
   public override register(): void {
-    this.context.serviceContainer.singleton(realtimeServiceToken, () =>
+    this.app.container.singleton(realtimeServiceToken, () =>
       createRealtimeService(),
     );
   }
 
   public override shutdown(): Promise<void> {
-    this.context.serviceContainer
-      .resolveIfCreated(realtimeServiceToken)
-      ?.close();
+    this.app.container.resolveIfCreated(realtimeServiceToken)?.close();
     return Promise.resolve();
   }
 }

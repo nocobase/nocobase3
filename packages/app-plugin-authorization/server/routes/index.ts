@@ -1,4 +1,4 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
 import {
   AuthorizationDeniedError,
   type AuthorizationEnv,
@@ -11,14 +11,14 @@ import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { AppAuthorization } from '../authorization.js';
 import { authorizationToken } from '../token.js';
 
-export type AuthorizationPluginRoutesContext = AppPluginRoutesContext;
+export type AuthorizationPluginRoutesApplication = AppPluginRoutesApplication;
 
 export default function registerAuthorizationRoutes({
   router,
-  serviceContainer,
-}: AuthorizationPluginRoutesContext): void {
-  const auth = serviceContainer.resolve(authenticationToken);
-  const authorization = serviceContainer.resolve(authorizationToken);
+  container,
+}: AuthorizationPluginRoutesApplication): void {
+  const auth = container.resolve(authenticationToken);
+  const authorization = container.resolve(authorizationToken);
   const routes = new Hono<AuthorizationEnv>();
   routes.onError((error, context) => {
     if (error instanceof AuthorizationDeniedError)

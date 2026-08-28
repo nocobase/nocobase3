@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
   authenticationToken,
@@ -14,8 +13,8 @@ import registerAuthorizationRoutes from '../server/routes/index.js';
 describe('@nocobase/app-plugin-authorization routes', () => {
   it('protects its HTTP routes with authentication', async () => {
     const router = new Hono();
-    const serviceContainer = new ServiceContainer();
-    serviceContainer.instance(authenticationToken, {
+    const container = new ServiceContainer();
+    container.instance(authenticationToken, {
       required: () => (context) =>
         Promise.resolve(
           context.json(
@@ -24,16 +23,17 @@ describe('@nocobase/app-plugin-authorization routes', () => {
           ),
         ),
     } as unknown as Auth);
-    serviceContainer.instance(authorizationToken, {
+    container.instance(authorizationToken, {
       middleware: () => async (_context, next) => next(),
     } as unknown as AppAuthorization);
 
     registerAuthorizationRoutes({
       appName: 'main',
       publicBasePath: '/main',
+      config: { app: { name: 'main', publicBasePath: '/main' } },
+      paths: createConfigPaths({ rootDir: '/missing' }),
       router,
-      runtime: createTestRuntime(),
-      serviceContainer,
+      container,
     });
 
     const response = await router.request('/api/authz/permissions');
@@ -58,13 +58,13 @@ describe('@nocobase/app-plugin-authorization routes', () => {
     'checks $expected when setting default access',
     async ({ existing, expected }) => {
       const router = new Hono();
-      const serviceContainer = new ServiceContainer();
+      const container = new ServiceContainer();
       const require = vi.fn(() => Promise.resolve());
       const set = vi.fn((rule: object) => Promise.resolve(rule));
-      serviceContainer.instance(authenticationToken, {
+      container.instance(authenticationToken, {
         required: () => async (_context, next) => next(),
       } as unknown as Auth);
-      serviceContainer.instance(authorizationToken, {
+      container.instance(authorizationToken, {
         middleware: () => async (context, next) => {
           context.set('authz', { require });
           await next();
@@ -77,9 +77,10 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       registerAuthorizationRoutes({
         appName: 'main',
         publicBasePath: '/main',
+        config: { app: { name: 'main', publicBasePath: '/main' } },
+        paths: createConfigPaths({ rootDir: '/missing' }),
         router,
-        runtime: createTestRuntime(),
-        serviceContainer,
+        container,
       });
 
       const response = await router.request('/api/authz/default-access', {
@@ -100,10 +101,3 @@ describe('@nocobase/app-plugin-authorization routes', () => {
     },
   );
 });
-
-function createTestRuntime(): AppRuntime<undefined> {
-  return {
-    config: undefined,
-    paths: createConfigPaths({ rootDir: '/missing' }),
-  };
-}

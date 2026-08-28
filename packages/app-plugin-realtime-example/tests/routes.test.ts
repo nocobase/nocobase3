@@ -1,5 +1,4 @@
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
@@ -14,9 +13,10 @@ describe('realtime example plugin routes', () => {
     registerRoutes({
       appName: 'main',
       publicBasePath: '/main',
+      config: { app: { name: 'main', publicBasePath: '/main' } },
+      paths: createConfigPaths({ rootDir: '/missing' }),
       router,
-      runtime: createTestRuntime(),
-      serviceContainer: new ServiceContainer(),
+      container: new ServiceContainer(),
     });
 
     const response = await router.request('http://localhost/realtime');
@@ -28,10 +28,3 @@ describe('realtime example plugin routes', () => {
     expect(html).toContain("type: 'subscribe'");
   });
 });
-
-function createTestRuntime(): AppRuntime<undefined> {
-  return {
-    config: undefined,
-    paths: createConfigPaths({ rootDir: '/missing' }),
-  };
-}

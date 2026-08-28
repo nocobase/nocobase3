@@ -1,9 +1,9 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
 import { Hono } from 'hono';
 
 export default function registerRoutes({
   router,
-}: AppPluginRoutesContext): void {
+}: AppPluginRoutesApplication): void {
   const routes = new Hono();
 
   routes.get('/', (context) =>

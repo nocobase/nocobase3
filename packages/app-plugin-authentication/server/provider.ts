@@ -4,9 +4,9 @@ import {
 } from '@nocobase/app-server-kit/support';
 import {
   ServiceProvider,
+  type ServiceContainer,
   type ServiceResolver,
 } from '@nocobase/service-provider';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { databaseManagerToken } from '@nocobase/app-database';
 import { cachingToken } from '@nocobase/caching';
 import { idGeneratorToken } from '@nocobase/id-generator';
@@ -35,23 +35,32 @@ export interface AuthenticationProviderConfig {
   >;
 }
 
+export interface AuthenticationProviderApplication<
+  TConfig extends AuthenticationProviderConfig = AuthenticationProviderConfig,
+> {
+  readonly config: TConfig;
+  readonly container: ServiceContainer;
+}
+
 export default class AuthenticationProvider<
   TConfig extends AuthenticationProviderConfig = AuthenticationProviderConfig,
-> extends ServiceProvider<AppRuntime<TConfig>> {
+  TApplication extends AuthenticationProviderApplication<TConfig> =
+    AuthenticationProviderApplication<TConfig>,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-authentication';
 
   public override register(): void {
-    this.context.serviceContainer.singleton(authenticationToken, (services) =>
-      this.createAuthentication(services),
+    this.app.container.singleton(authenticationToken, (container) =>
+      this.createAuthentication(container),
     );
   }
 
-  private createAuthentication(services: ServiceResolver): Auth {
-    const { config } = this.context.runtime;
-    const caching = services.resolve(cachingToken);
-    const idGenerator = services.resolve(idGeneratorToken);
-    const database = services.has(databaseManagerToken)
-      ? services.resolve(databaseManagerToken)
+  private createAuthentication(container: ServiceResolver): Auth {
+    const { config } = this.app;
+    const caching = container.resolve(cachingToken);
+    const idGenerator = container.resolve(idGeneratorToken);
+    const database = container.has(databaseManagerToken)
+      ? container.resolve(databaseManagerToken)
       : undefined;
     const auth = createAuthentication({
       connection: database?.connection(),

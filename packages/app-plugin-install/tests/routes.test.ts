@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -26,9 +25,10 @@ describe('@nocobase/app-plugin-install routes', () => {
     registerInstallRoutes({
       appName: 'main',
       publicBasePath: '/main',
+      config: createPluginConfig('configured-secret'),
+      paths: createConfigPaths({ rootDir: '/missing' }),
       router,
-      runtime: createTestRuntime(createPluginConfig('configured-secret')),
-      serviceContainer: new ServiceContainer(),
+      container: new ServiceContainer(),
     });
     router.get('*', (context) => context.text('application'));
 
@@ -54,13 +54,12 @@ describe('@nocobase/app-plugin-install routes', () => {
     registerInstallRoutes({
       appName: 'main',
       publicBasePath: '/main',
-      router,
-      runtime: createTestRuntime(
-        createPluginConfig(
-          `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
-        ),
+      config: createPluginConfig(
+        `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
       ),
-      serviceContainer: new ServiceContainer(),
+      paths: createConfigPaths({ rootDir: '/missing' }),
+      router,
+      container: new ServiceContainer(),
     });
     router.get('*', (context) => context.text('application'));
 
@@ -160,18 +159,11 @@ function createTemporaryRoot(): string {
 }
 
 function createPluginConfig(secret: string): {
+  app: { name: string; publicBasePath: string };
   auth: { secret: string };
 } {
   return {
+    app: { name: 'main', publicBasePath: '/main' },
     auth: { secret },
-  };
-}
-
-function createTestRuntime(
-  config: ReturnType<typeof createPluginConfig>,
-): AppRuntime<ReturnType<typeof createPluginConfig>> {
-  return {
-    config,
-    paths: createConfigPaths({ rootDir: '/missing' }),
   };
 }

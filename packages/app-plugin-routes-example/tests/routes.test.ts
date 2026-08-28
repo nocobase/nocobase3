@@ -1,5 +1,4 @@
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
@@ -13,9 +12,10 @@ describe('routes example plugin', () => {
     registerRoutes({
       appName: 'main',
       publicBasePath: '/main',
+      config: { app: { name: 'main', publicBasePath: '/main' } },
+      paths: createConfigPaths({ rootDir: '/missing' }),
       router,
-      runtime: createTestRuntime(),
-      serviceContainer: new ServiceContainer(),
+      container: new ServiceContainer(),
     });
 
     const response = await router.request('/api/routes-example');
@@ -27,10 +27,3 @@ describe('routes example plugin', () => {
     });
   });
 });
-
-function createTestRuntime(): AppRuntime<undefined> {
-  return {
-    config: undefined,
-    paths: createConfigPaths({ rootDir: '/missing' }),
-  };
-}

@@ -10,19 +10,19 @@ import {
 
 describe('CachingProvider', () => {
   it('registers and disposes the configured caching service', async () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const config = createDefaultCachingConfig();
     const provider = new CachingProvider({
-      runtime: { config: { caching: config } },
-      serviceContainer,
+      config: { caching: config },
+      container,
     });
 
     provider.register();
-    const caching = serviceContainer.resolve(cachingToken);
+    const caching = container.resolve(cachingToken);
     const dispose = vi.spyOn(caching, 'dispose');
 
     expect(provider.name).toBe('@nocobase/caching');
-    expect(serviceContainer.resolve(cachingToken)).toBe(caching);
+    expect(container.resolve(cachingToken)).toBe(caching);
 
     await provider.shutdown();
 
@@ -30,15 +30,15 @@ describe('CachingProvider', () => {
   });
 
   it('does not create the caching service during shutdown', async () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new CachingProvider({
-      runtime: { config: { caching: createDefaultCachingConfig() } },
-      serviceContainer,
+      config: { caching: createDefaultCachingConfig() },
+      container,
     });
 
     provider.register();
     await provider.shutdown();
 
-    expect(serviceContainer.resolveIfCreated(cachingToken)).toBeUndefined();
+    expect(container.resolveIfCreated(cachingToken)).toBeUndefined();
   });
 });

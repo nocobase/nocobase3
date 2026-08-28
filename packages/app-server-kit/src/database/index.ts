@@ -1,8 +1,8 @@
 export { createAppDatabaseManager } from './manager.js';
 export {
   DatabaseProvider,
-  type DatabaseProviderRuntime,
-  type DatabaseProviderRuntimeConfig,
+  type DatabaseProviderApplication,
+  type DatabaseProviderApplicationConfig,
 } from './provider.js';
 export {
   createAppMigrator,

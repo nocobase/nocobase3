@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import {
   RealtimeProvider,
   realtimeServiceToken,
@@ -41,8 +39,8 @@ import { DrivePublicFilesRepository } from '../../server/repositories/public-fil
 describe('app service providers', () => {
   it('registers core services and shuts them down in reverse order', async () => {
     const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry<AppRuntime<AppConfig>>();
-    const context = createProviderContext(
+    const registry = new ServiceProviderRegistry();
+    const app = createProviderApplication(
       {
         caching: createDefaultCachingConfig(),
         logging: {
@@ -56,13 +54,13 @@ describe('app service providers', () => {
       } as AppConfig,
       services,
     );
-    registry.add(new LoggingProvider(context));
-    registry.add(new CachingProvider(context));
-    registry.add(new IdGeneratorProvider(context));
-    registry.add(new SessionProvider(context));
-    registry.add(new DriveProvider(context));
-    registry.add(new QueueProvider(context));
-    registry.add(new RealtimeProvider(context));
+    registry.add(new LoggingProvider(app));
+    registry.add(new CachingProvider(app));
+    registry.add(new IdGeneratorProvider(app));
+    registry.add(new SessionProvider(app));
+    registry.add(new DriveProvider(app));
+    registry.add(new QueueProvider(app));
+    registry.add(new RealtimeProvider(app));
 
     registry.registerAll();
     const logging = services.resolve(loggingToken);
@@ -102,10 +100,10 @@ describe('app service providers', () => {
 
   it('registers and prepares drive only when configuration is available', async () => {
     const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry<AppRuntime<AppConfig>>();
+    const registry = new ServiceProviderRegistry();
     registry.add(
       new DriveProvider({
-        runtime: createRuntime({
+        config: {
           drive: {
             default: 'public',
             disks: {
@@ -117,8 +115,8 @@ describe('app service providers', () => {
             },
             links: {},
           },
-        } as AppConfig),
-        serviceContainer: services,
+        } as AppConfig,
+        container: services,
       }),
     );
 
@@ -131,9 +129,9 @@ describe('app service providers', () => {
 
   it('resolves application repositories from database and drive providers', () => {
     const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry<AppRuntime<AppConfig>>();
+    const registry = new ServiceProviderRegistry();
     const database = {} as DatabaseManager;
-    const context = createProviderContext(
+    const app = createProviderApplication(
       {
         database: createDatabaseConfig(),
         drive: {
@@ -151,9 +149,9 @@ describe('app service providers', () => {
       services,
     );
     services.instance(databaseManagerToken, database);
-    registry.add(new AppSettingsProvider(context));
-    registry.add(new DriveProvider(context));
-    registry.add(new PublicFilesProvider(context));
+    registry.add(new AppSettingsProvider(app));
+    registry.add(new DriveProvider(app));
+    registry.add(new PublicFilesProvider(app));
 
     registry.registerAll();
 
@@ -166,10 +164,10 @@ describe('app service providers', () => {
 
   it('preserves unavailable application repositories without infrastructure', async () => {
     const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry<AppRuntime<AppConfig>>();
-    const context = createProviderContext({} as AppConfig, services);
-    registry.add(new AppSettingsProvider(context));
-    registry.add(new PublicFilesProvider(context));
+    const registry = new ServiceProviderRegistry();
+    const app = createProviderApplication({} as AppConfig, services);
+    registry.add(new AppSettingsProvider(app));
+    registry.add(new PublicFilesProvider(app));
 
     registry.registerAll();
 
@@ -183,8 +181,8 @@ describe('app service providers', () => {
 
   it('reports a missing public upload disk', async () => {
     const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry<AppRuntime<AppConfig>>();
-    const context = createProviderContext(
+    const registry = new ServiceProviderRegistry();
+    const app = createProviderApplication(
       {
         drive: {
           default: 'private',
@@ -200,8 +198,8 @@ describe('app service providers', () => {
       } as AppConfig,
       services,
     );
-    registry.add(new DriveProvider(context));
-    registry.add(new PublicFilesProvider(context));
+    registry.add(new DriveProvider(app));
+    registry.add(new PublicFilesProvider(app));
 
     registry.registerAll();
 
@@ -212,7 +210,7 @@ describe('app service providers', () => {
 
   it('resolves authentication, authorization, and queue provider dependencies', async () => {
     const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry<AppRuntime<AppConfig>>();
+    const registry = new ServiceProviderRegistry();
     const connection = { kind: 'connection' };
     const database = {
       connection: vi.fn(() => connection),
@@ -224,7 +222,7 @@ describe('app service providers', () => {
         test: { driver: 'fake' as const },
       },
     };
-    const context = createProviderContext(
+    const app = createProviderApplication(
       {
         database: createDatabaseConfig(),
         app: {
@@ -248,10 +246,10 @@ describe('app service providers', () => {
       services,
     );
     services.instance(databaseManagerToken, database);
-    registry.add(new LoggingProvider(context));
-    registry.add(new CachingProvider(context));
-    registry.add(new IdGeneratorProvider(context));
-    registry.add(new QueueProvider(context));
+    registry.add(new LoggingProvider(app));
+    registry.add(new CachingProvider(app));
+    registry.add(new IdGeneratorProvider(app));
+    registry.add(new QueueProvider(app));
 
     registry.registerAll();
     services.resolve(queueManagerToken);
@@ -261,28 +259,16 @@ describe('app service providers', () => {
   });
 });
 
-function createProviderContext(
+function createProviderApplication(
   config: AppConfig,
-  serviceContainer: ServiceContainer,
+  container: ServiceContainer,
 ): {
-  runtime: AppRuntime<AppConfig>;
-  serviceContainer: ServiceContainer;
+  config: AppConfig;
+  container: ServiceContainer;
 } {
   return {
-    runtime: createRuntime(config),
-    serviceContainer,
-  };
-}
-
-function createRuntime(
-  config: AppConfig = {
-    database: {},
-    drive: {},
-  } as AppConfig,
-): AppRuntime<AppConfig> {
-  return {
     config,
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    container,
   };
 }
 

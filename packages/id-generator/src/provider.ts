@@ -1,6 +1,7 @@
 import {
   createServiceToken,
   ServiceProvider,
+  type ServiceContainer,
   type ServiceToken,
 } from '@nocobase/service-provider';
 
@@ -13,25 +14,27 @@ import {
 export const idGeneratorToken: ServiceToken<IdGeneratorService> =
   createServiceToken<IdGeneratorService>('@nocobase/id-generator');
 
-export interface IdGeneratorProviderRuntimeConfig {
+export interface IdGeneratorProviderApplicationConfig {
   readonly snowflake: SnowflakeIdGeneratorConfig;
 }
 
-export interface IdGeneratorProviderRuntime<
-  TConfig extends IdGeneratorProviderRuntimeConfig =
-    IdGeneratorProviderRuntimeConfig,
+export interface IdGeneratorProviderApplication<
+  TConfig extends IdGeneratorProviderApplicationConfig =
+    IdGeneratorProviderApplicationConfig,
 > {
   readonly config: TConfig;
+  readonly container: ServiceContainer;
 }
 
 export class IdGeneratorProvider<
-  TRuntime extends IdGeneratorProviderRuntime = IdGeneratorProviderRuntime,
-> extends ServiceProvider<TRuntime> {
+  TApplication extends IdGeneratorProviderApplication =
+    IdGeneratorProviderApplication,
+> extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/id-generator';
 
   public override register(): void {
-    const config = this.context.runtime.config.snowflake;
-    this.context.serviceContainer.singleton(
+    const config = this.app.config.snowflake;
+    this.app.container.singleton(
       idGeneratorToken,
       () => new SnowflakeIdGenerator(config),
     );

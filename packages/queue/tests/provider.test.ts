@@ -14,18 +14,18 @@ import {
 
 describe('QueueProvider', () => {
   it('registers and closes the configured queue manager', async () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new QueueProvider({
-      runtime: { config: { queue: createSyncQueueConfig() } },
-      serviceContainer,
+      config: { queue: createSyncQueueConfig() },
+      container,
     });
-    serviceContainer.instance(
+    container.instance(
       loggingToken,
       createLogging(createSilentLoggingConfig()),
     );
 
     provider.register();
-    const queueManager = serviceContainer.resolve(queueManagerToken);
+    const queueManager = container.resolve(queueManagerToken);
     const close = vi.spyOn(queueManager, 'close');
 
     expect(provider.name).toBe('@nocobase/queue');
@@ -34,17 +34,15 @@ describe('QueueProvider', () => {
   });
 
   it('does not create the queue manager during shutdown', async () => {
-    const serviceContainer = new ServiceContainer();
+    const container = new ServiceContainer();
     const provider = new QueueProvider({
-      runtime: { config: {} },
-      serviceContainer,
+      config: {},
+      container,
     });
 
     provider.register();
     await provider.shutdown();
 
-    expect(
-      serviceContainer.resolveIfCreated(queueManagerToken),
-    ).toBeUndefined();
+    expect(container.resolveIfCreated(queueManagerToken)).toBeUndefined();
   });
 });

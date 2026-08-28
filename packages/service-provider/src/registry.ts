@@ -1,4 +1,4 @@
-import type { ServiceProvider } from './provider.js';
+import type { ServiceProviderLifecycle } from './provider.js';
 
 type ProviderState =
   | 'new'
@@ -14,17 +14,17 @@ type ProviderState =
   | 'shutting-down'
   | 'shutdown';
 
-interface RegisteredProvider<TRuntime> {
-  provider: ServiceProvider<TRuntime>;
+interface RegisteredProvider {
+  provider: ServiceProviderLifecycle;
   state: ProviderState;
 }
 
-export class ServiceProviderRegistry<TRuntime = unknown> {
-  private readonly providers: RegisteredProvider<TRuntime>[] = [];
+export class ServiceProviderRegistry {
+  private readonly providers: RegisteredProvider[] = [];
   private phase: ProviderState = 'new';
   private shutdownPromise: Promise<void> | undefined;
 
-  public add(provider: ServiceProvider<TRuntime>): void {
+  public add(provider: ServiceProviderLifecycle): void {
     if (this.phase !== 'new') {
       throw new Error('Providers can only be added before registration.');
     }
@@ -84,7 +84,7 @@ export class ServiceProviderRegistry<TRuntime = unknown> {
   private async runPhase(
     runningState: ProviderState,
     completedState: ProviderState,
-    run: (provider: ServiceProvider<TRuntime>) => Promise<void>,
+    run: (provider: ServiceProviderLifecycle) => Promise<void>,
   ): Promise<void> {
     for (const entry of this.providers) {
       if (entry.state === 'shutdown') {

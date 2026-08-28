@@ -245,7 +245,7 @@ function createScaffoldFiles({
     name: packageName,
     displayName,
     description,
-    version: '0.1.0',
+    version: '0.0.1',
     type: 'module',
     prettier: '@nocobase/dev-config/prettier',
     engines: {
@@ -312,6 +312,7 @@ function createScaffoldFiles({
     dependencies: {
       '@nocobase/app-server-kit': 'workspace:^',
       '@nocobase/app-database': 'workspace:^',
+      '@nocobase/service-provider': 'workspace:^',
       hono: 'catalog:',
     },
     peerDependencies: {
@@ -368,15 +369,15 @@ function createScaffoldFiles({
     ],
     [
       'server/provider.ts',
-      `import { ServiceProvider } from '@nocobase/app-server-kit/service-provider';\n\nexport default class ${symbolName}Provider extends ServiceProvider {\n  public readonly name: string = '${packageName}';\n}\n`,
+      `import {\n  ServiceProvider,\n  type ServiceContainer,\n} from '@nocobase/service-provider';\n\nexport interface ${symbolName}ProviderApplication {\n  readonly container: ServiceContainer;\n}\n\nexport default class ${symbolName}Provider extends ServiceProvider<${symbolName}ProviderApplication> {\n  public readonly name: string = '${packageName}';\n}\n`,
     ],
     [
       'server/routes/index.ts',
-      `import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';\nimport { Hono } from 'hono';\n\nexport default function register${symbolName}Routes({\n  router,\n}: AppPluginRoutesContext): void {\n  const routes = new Hono();\n\n  routes.get('/', (context) =>\n    context.json({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    }),\n  );\n\n  router.route('/${shortName}', routes);\n}\n`,
+      `import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';\nimport { Hono } from 'hono';\n\nexport default function register${symbolName}Routes({\n  router,\n}: AppPluginRoutesApplication): void {\n  const routes = new Hono();\n\n  routes.get('/', (context) =>\n    context.json({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    }),\n  );\n\n  router.route('/${shortName}', routes);\n}\n`,
     ],
     [
       'tests/provider.test.ts',
-      `import { createConfigPaths } from '@nocobase/app-server-kit/config';\nimport type { AppRuntime } from '@nocobase/app-server-kit/runtime';\nimport { ServiceContainer } from '@nocobase/app-server-kit/service-provider';\nimport { describe, expect, it } from 'vitest';\n\nimport ${symbolName}Provider from '../server/provider.js';\n\ndescribe('${packageName} provider', () => {\n  it('uses the plugin package name', () => {\n    const provider = new ${symbolName}Provider({\n      runtime: createTestRuntime(),\n      serviceContainer: new ServiceContainer(),\n    });\n\n    expect(provider.name).toBe('${packageName}');\n  });\n});\n\nfunction createTestRuntime(): AppRuntime<undefined> {\n  return {\n    config: undefined,\n    paths: createConfigPaths({ rootDir: '/missing' }),\n    runMigrations: () => Promise.resolve(undefined),\n    runSeeds: () => Promise.resolve(undefined),\n    dispose: () => Promise.resolve(),\n  };\n}\n`,
+      `import { ServiceContainer } from '@nocobase/service-provider';\nimport { describe, expect, it } from 'vitest';\n\nimport ${symbolName}Provider from '../server/provider.js';\n\ndescribe('${packageName} provider', () => {\n  it('uses the plugin package name', () => {\n    const provider = new ${symbolName}Provider({\n      container: new ServiceContainer(),\n    });\n\n    expect(provider.name).toBe('${packageName}');\n  });\n});\n`,
     ],
     [
       'tests/database.test.ts',
@@ -388,7 +389,7 @@ function createScaffoldFiles({
     ],
     [
       'tests/routes.test.ts',
-      `import { createConfigPaths } from '@nocobase/app-server-kit/config';\nimport type { AppRuntime } from '@nocobase/app-server-kit/runtime';\nimport { ServiceContainer } from '@nocobase/app-server-kit/service-provider';\nimport { Hono } from 'hono';\nimport { describe, expect, it } from 'vitest';\n\nimport register${symbolName}Routes from '../server/routes/index.js';\n\ndescribe('${packageName} routes', () => {\n  it('registers its HTTP route', async () => {\n    const router = new Hono();\n\n    register${symbolName}Routes({\n      router,\n      runtime: createTestRuntime(),\n      serviceContainer: new ServiceContainer(),\n    });\n\n    const response = await router.request('/${shortName}');\n\n    expect(response.status).toBe(200);\n    await expect(response.json()).resolves.toEqual({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    });\n  });\n});\n\nfunction createTestRuntime(): AppRuntime<undefined> {\n  return {\n    config: undefined,\n    paths: createConfigPaths({ rootDir: '/missing' }),\n    runMigrations: () => Promise.resolve(undefined),\n    runSeeds: () => Promise.resolve(undefined),\n    dispose: () => Promise.resolve(),\n  };\n}\n`,
+      `import { createConfigPaths } from '@nocobase/app-server-kit/config';\nimport { ServiceContainer } from '@nocobase/service-provider';\nimport { Hono } from 'hono';\nimport { describe, expect, it } from 'vitest';\n\nimport register${symbolName}Routes from '../server/routes/index.js';\n\ndescribe('${packageName} routes', () => {\n  it('registers its HTTP route', async () => {\n    const router = new Hono();\n\n    register${symbolName}Routes({\n      appName: 'main',\n      publicBasePath: '',\n      config: { app: { name: 'main', publicBasePath: '' } },\n      paths: createConfigPaths({ rootDir: '/missing' }),\n      router,\n      container: new ServiceContainer(),\n    });\n\n    const response = await router.request('/${shortName}');\n\n    expect(response.status).toBe(200);\n    await expect(response.json()).resolves.toEqual({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    });\n  });\n});\n`,
     ],
     [
       'tsconfig.json',

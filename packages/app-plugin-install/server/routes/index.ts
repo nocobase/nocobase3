@@ -1,4 +1,4 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
 import type { ConfigPaths } from '@nocobase/app-server-kit/config';
 import { Hono } from 'hono';
 
@@ -9,13 +9,17 @@ import {
 import { isInstallModeAuthSecret } from '../install-mode.js';
 
 export interface InstallPluginConfig {
+  readonly app: {
+    readonly name: string | undefined;
+    readonly publicBasePath: string;
+  };
   readonly auth: {
     readonly secret: string | undefined;
   };
 }
 
-export type InstallPluginRoutesContext =
-  AppPluginRoutesContext<InstallPluginConfig>;
+export type InstallPluginRoutesApplication =
+  AppPluginRoutesApplication<InstallPluginConfig>;
 
 export interface CreateInstallRoutesOptions {
   readonly paths: ConfigPaths;
@@ -55,9 +59,9 @@ export function createInstallRoutes(options: CreateInstallRoutesOptions): Hono {
 
 export default function registerInstallRoutes({
   router,
-  runtime,
-}: InstallPluginRoutesContext): void {
-  const { config, paths } = runtime;
+  config,
+  paths,
+}: InstallPluginRoutesApplication): void {
   const installMode = isInstallModeAuthSecret(config.auth.secret);
 
   router.get('/install/status', (context) => {
