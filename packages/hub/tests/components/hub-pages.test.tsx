@@ -160,7 +160,10 @@ describe('Hub application pages', () => {
     ).toHaveAttribute('href', 'https://apps.example.com/inventory/');
     expect(screen.getAllByText('1.2.0').length).toBeGreaterThan(0);
     expect(screen.getByText('Healthy')).toBeInTheDocument();
-    expect(screen.getAllByText('Active')).toHaveLength(1);
+    expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole('option', { name: 'Active' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /develop inventory/i }),
     ).not.toBeInTheDocument();
@@ -552,10 +555,23 @@ describe('Hub application pages', () => {
     );
   });
 
-  it('only offers application statuses supported by the list API', async () => {
+  it('filters applications by the runtime status shown in the list', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (input) => {
       const path = String(input);
       if (path.endsWith('/apps')) return response([application]);
+      if (path.endsWith('/apps?runtimeState=stopped')) {
+        return response([
+          {
+            ...application,
+            runtime: {
+              state: 'stopped',
+              health: 'unknown',
+              releaseId: application.activeRelease?.id ?? null,
+              lastCheckedAt: null,
+            },
+          },
+        ]);
+      }
       if (path.endsWith('/me')) {
         return response({ user: null, roles: [], capabilities: readOnly });
       }
@@ -569,14 +585,28 @@ describe('Hub application pages', () => {
     );
 
     const statusFilter = await screen.findByRole('combobox', {
-      name: 'Filter by status',
+      name: 'Filter by application status',
     });
-    expect(statusFilter).not.toContainElement(
-      screen.queryByRole('option', { name: 'Disabled' }),
-    );
+    expect(screen.getByRole('option', { name: 'Running' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Idle' })).toBeInTheDocument();
     expect(
-      screen.getByRole('option', { name: 'Archived' }),
+      screen.getByRole('option', { name: 'Starting' }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'Stopping' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Stopped' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'Archived' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(statusFilter, { target: { value: 'stopped' } });
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/hub/api/apps?runtimeState=stopped',
+        expect.objectContaining({ credentials: 'include' }),
+      ),
+    );
   });
 
   it('guides an authorized user to create the first application without CLI publish instructions', async () => {

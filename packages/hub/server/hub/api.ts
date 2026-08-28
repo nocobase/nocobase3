@@ -66,6 +66,8 @@ import {
 import {
   DEPLOYMENT_STATUSES,
   DEPLOYMENT_TYPES,
+  APPLICATION_RUNTIME_STATES,
+  type ApplicationRuntimeState,
   type HubApplication,
   type HubDeployment,
   type HubRelease,
@@ -796,10 +798,22 @@ export function createHubApi(
     const actor = await authenticateActor(context);
     if (managementEnabled) {
       const applicationIds = visibleApplicationIds(actor, 'hub.app', 'read');
-      const result = await managementStore.listApplications({
-        ...readApplicationListOptions(context),
-        applicationIds,
-      });
+      const options = readApplicationListOptions(context);
+      const result = options.runtimeState
+        ? await listApplicationsByRuntimeState({
+            host,
+            managementStore,
+            options,
+            applicationIds: intersectApplicationIds(
+              applicationIds,
+              visibleRuntimeApplicationIds(actor),
+            ),
+            runtimeState: options.runtimeState,
+          })
+        : await managementStore.listApplications({
+            ...options,
+            applicationIds,
+          });
       const items = await Promise.all(
         result.items.map((item) => projectApplication(item.id, actor, false)),
       );
@@ -3506,7 +3520,7 @@ function projectRuntime(
       applicationId: application.id,
       environmentId: application.defaultEnvironmentId,
       runtimeId: null,
-      state: application.desiredRuntimeState === 'running' ? 'idle' : 'stopped',
+      state: applicationRuntimeState(application, snapshot),
       health: 'unknown',
       releaseId: application.activeReleaseId,
       url: openUrl,
@@ -3521,12 +3535,7 @@ function projectRuntime(
     applicationId: application.id,
     environmentId: application.defaultEnvironmentId,
     runtimeId: `${snapshot.id}:${snapshot.version}`,
-    state:
-      snapshot.state === 'active'
-        ? 'running'
-        : snapshot.state === 'creating'
-          ? 'starting'
-          : snapshot.state,
+    state: applicationRuntimeState(application, snapshot),
     health: snapshot.state === 'active' ? 'healthy' : 'unknown',
     releaseId: snapshot.releaseId,
     url: openUrl,
@@ -3537,6 +3546,80 @@ function projectRuntime(
     failure: snapshot.lastError
       ? { code: 'RUNTIME_ERROR', message: snapshot.lastError }
       : null,
+  };
+}
+
+function applicationRuntimeState(
+  application: ManagedApplication,
+  snapshot: AppSnapshot | undefined,
+): string {
+  if (!snapshot) {
+    return application.desiredRuntimeState === 'running' ? 'idle' : 'stopped';
+  }
+  switch (snapshot.state) {
+    case 'active':
+      return 'running';
+    case 'creating':
+      return 'starting';
+    case 'draining':
+    case 'destroying':
+      return 'stopping';
+    case 'destroyed':
+      return 'stopped';
+    default:
+      return snapshot.state;
+  }
+}
+
+async function listApplicationsByRuntimeState(options: {
+  host: Pick<LocalHostAdapter, 'getRuntime'>;
+  managementStore: HubManagementStore;
+  options: ApplicationListQueryOptions;
+  applicationIds: readonly string[] | undefined;
+  runtimeState: ApplicationRuntimeState;
+}): Promise<{
+  items: ManagedApplication[];
+  total: number;
+  limit: number;
+  offset: number;
+}> {
+  const { runtimeState, options: queryOptions } = options;
+  const { runtimeState: _ignoredRuntimeState, ...listOptions } = queryOptions;
+  const allApplications: ManagedApplication[] = [];
+  const sourceLimit = 100;
+  let sourceOffset = 0;
+
+  while (true) {
+    const page = await options.managementStore.listApplications({
+      ...listOptions,
+      applicationIds: options.applicationIds,
+      limit: sourceLimit,
+      offset: sourceOffset,
+    });
+    allApplications.push(...page.items);
+    if (
+      page.items.length === 0 ||
+      sourceOffset + page.items.length >= page.total
+    ) {
+      break;
+    }
+    sourceOffset += page.items.length;
+  }
+
+  const matchingApplications = allApplications.filter(
+    (application) =>
+      applicationRuntimeState(
+        application,
+        options.host.getRuntime(toHubApplication(application)),
+      ) === runtimeState,
+  );
+  const limit = queryOptions.limit ?? 20;
+  const offset = queryOptions.offset ?? 0;
+  return {
+    items: matchingApplications.slice(offset, offset + limit),
+    total: matchingApplications.length,
+    limit,
+    offset,
   };
 }
 
@@ -3634,9 +3717,13 @@ async function getDefaultApplicationStatus(
   return { status: 'preparing', retryable: false, errorCode: null };
 }
 
+interface ApplicationListQueryOptions extends ApplicationListOptions {
+  readonly runtimeState?: ApplicationRuntimeState;
+}
+
 function readApplicationListOptions(
   context: HubContext,
-): ApplicationListOptions {
+): ApplicationListQueryOptions {
   const pagination = readPagination(context);
   const statuses = allowedRepeatedQuery(
     context.req.queries('status') ?? [],
@@ -3658,6 +3745,11 @@ function readApplicationListOptions(
     ...pagination,
     query: context.req.query('query')?.trim() || undefined,
     statuses: statuses.length ? statuses : undefined,
+    runtimeState: optionalAllowedQuery(
+      context.req.query('runtimeState'),
+      APPLICATION_RUNTIME_STATES,
+      'runtimeState',
+    ),
     sort: optionalAllowedQuery(sort, allowedSort, 'sort'),
   };
 }
@@ -4626,6 +4718,23 @@ function visibleApplicationIds(
   return roleApplicationIds === undefined
     ? [...selected]
     : roleApplicationIds.filter((applicationId) => selected.has(applicationId));
+}
+
+function visibleRuntimeApplicationIds(
+  actor: AuthenticatedHubActor,
+): readonly string[] | undefined {
+  if (actor.agent && !actor.agent.scopes.includes('runtime:read')) return [];
+  return visibleApplicationIds(actor, 'hub.runtime', 'read');
+}
+
+function intersectApplicationIds(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (left === undefined) return right;
+  if (right === undefined) return left;
+  const allowed = new Set(right);
+  return left.filter((applicationId) => allowed.has(applicationId));
 }
 
 function agentScopeAllows(

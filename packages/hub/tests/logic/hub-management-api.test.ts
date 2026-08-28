@@ -140,6 +140,47 @@ describe('Hub management API', () => {
     }
   });
 
+  it('filters application runtime states before pagination', async () => {
+    for (const [slug, name] of [
+      ['inventory', 'Inventory'],
+      ['sales', 'Sales CRM'],
+    ]) {
+      const create = await request('/apps', {
+        method: 'POST',
+        headers: { 'idempotency-key': `create-${slug}` },
+        body: JSON.stringify({ slug, name }),
+      });
+      expect(create.status).toBe(201);
+    }
+
+    const stopped = await request(
+      '/apps?runtimeState=stopped&sort=name&limit=1&offset=1',
+    );
+    expect(stopped.status).toBe(200);
+    await expect(stopped.json()).resolves.toMatchObject({
+      data: [
+        {
+          name: 'Sales CRM',
+          runtime: { state: 'stopped' },
+        },
+      ],
+      meta: { total: 2, limit: 1, offset: 1 },
+    });
+
+    const running = await request('/apps?runtimeState=running');
+    expect(running.status).toBe(200);
+    await expect(running.json()).resolves.toMatchObject({
+      data: [],
+      meta: { total: 0 },
+    });
+
+    const invalid = await request('/apps?runtimeState=unknown');
+    expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toMatchObject({
+      error: { code: 'INVALID_QUERY' },
+    });
+  });
+
   it('uses ETags for update, archive and restore', async () => {
     const create = await request('/apps', {
       method: 'POST',

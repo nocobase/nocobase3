@@ -83,6 +83,14 @@ describe('Hub Runtime control API', () => {
         .where('id', '=', fixture.applicationId)
         .executeTakeFirstOrThrow(),
     ).resolves.toMatchObject({ desiredRuntimeState: 'running' });
+    const runningApplications = await requestAbsolute(
+      fixture,
+      '/apps?runtimeState=running',
+    );
+    await expect(runningApplications.json()).resolves.toMatchObject({
+      data: [{ id: fixture.applicationId, runtime: { state: 'running' } }],
+      meta: { total: 1 },
+    });
 
     const repeatedStart = await request(fixture, '/runtime/start', {
       method: 'POST',
@@ -101,6 +109,14 @@ describe('Hub Runtime control API', () => {
         releaseId: fixture.releaseId,
         url: expect.any(String),
       },
+    });
+    const idleApplications = await requestAbsolute(
+      fixture,
+      '/apps?runtimeState=idle',
+    );
+    await expect(idleApplications.json()).resolves.toMatchObject({
+      data: [{ id: fixture.applicationId, runtime: { state: 'idle' } }],
+      meta: { total: 1 },
     });
     await fixture.registry.ensureActive(fixture.applicationSlug);
     const coldStarted = await request(fixture, '/runtime', { method: 'GET' });
@@ -127,6 +143,14 @@ describe('Hub Runtime control API', () => {
         .where('id', '=', fixture.applicationId)
         .executeTakeFirstOrThrow(),
     ).resolves.toMatchObject({ desiredRuntimeState: 'stopped' });
+    const stoppedApplications = await requestAbsolute(
+      fixture,
+      '/apps?runtimeState=stopped',
+    );
+    await expect(stoppedApplications.json()).resolves.toMatchObject({
+      data: [{ id: fixture.applicationId, runtime: { state: 'stopped' } }],
+      meta: { total: 1 },
+    });
     expect(fixture.registry.definition(fixture.applicationSlug)).toMatchObject({
       enabled: false,
     });

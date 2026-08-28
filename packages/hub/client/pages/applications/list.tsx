@@ -94,7 +94,7 @@ export function ApplicationsPage({
   const translate = useTranslate();
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
-  const [status, setStatus] = useState('all');
+  const [runtimeState, setRuntimeState] = useState('all');
   const [view, setView] = useState<'cards' | 'list'>('cards');
   const [createOpen, setCreateOpen] = useState(false);
   const applications = useHubPaginatedQuery<HubApplication>({
@@ -102,10 +102,10 @@ export function ApplicationsPage({
       const params = new URLSearchParams();
       const query = deferredSearch.trim();
       if (query) params.set('query', query);
-      if (status !== 'all') params.set('status', status);
+      if (runtimeState !== 'all') params.set('runtimeState', runtimeState);
       const encoded = params.toString();
       return encoded ? `/apps?${encoded}` : '/apps';
-    }, [deferredSearch, status]),
+    }, [deferredSearch, runtimeState]),
     fetcher,
   });
   const runtime = useOptionalHubRuntime();
@@ -121,7 +121,7 @@ export function ApplicationsPage({
   );
   const capabilities = runtime?.me.capabilities ?? me.data?.capabilities;
   const visibleApplications = applications.data ?? [];
-  const hasActiveFilters = search.trim().length > 0 || status !== 'all';
+  const hasActiveFilters = search.trim().length > 0 || runtimeState !== 'all';
   const openCreateApplication = () => {
     if (onCreateApplication) {
       onCreateApplication();
@@ -205,21 +205,33 @@ export function ApplicationsPage({
             <label className='flex items-center gap-2 text-sm text-muted-foreground'>
               <span>{translate('hub.common.status', 'Status')}</span>
               <NativeSelect
-                value={status}
-                onChange={(event) => setStatus(event.target.value)}
+                value={runtimeState}
+                onChange={(event) => setRuntimeState(event.target.value)}
                 aria-label={translate(
                   'hub.apps.filter.statusAria',
-                  'Filter by status',
+                  'Filter by application status',
                 )}
               >
                 <NativeSelectOption value='all'>
-                  {translate('hub.apps.filter.allStatuses', 'All statuses')}
+                  {translate(
+                    'hub.apps.filter.allRuntimeStates',
+                    'All statuses',
+                  )}
                 </NativeSelectOption>
-                <NativeSelectOption value='active'>
-                  {translate('hub.status.active', 'Active')}
+                <NativeSelectOption value='running'>
+                  {translate('hub.status.running', 'Running')}
                 </NativeSelectOption>
-                <NativeSelectOption value='archived'>
-                  {translate('hub.status.archived', 'Archived')}
+                <NativeSelectOption value='idle'>
+                  {translate('hub.status.idle', 'Idle')}
+                </NativeSelectOption>
+                <NativeSelectOption value='starting'>
+                  {translate('hub.status.starting', 'Starting')}
+                </NativeSelectOption>
+                <NativeSelectOption value='stopping'>
+                  {translate('hub.status.stopping', 'Stopping')}
+                </NativeSelectOption>
+                <NativeSelectOption value='stopped'>
+                  {translate('hub.status.stopped', 'Stopped')}
                 </NativeSelectOption>
               </NativeSelect>
             </label>

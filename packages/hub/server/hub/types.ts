@@ -4,6 +4,16 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 export const DESIRED_RUNTIME_STATES = ['running', 'stopped'] as const;
 export type DesiredRuntimeState = (typeof DESIRED_RUNTIME_STATES)[number];
 
+export const APPLICATION_RUNTIME_STATES = [
+  'running',
+  'idle',
+  'starting',
+  'stopping',
+  'stopped',
+] as const;
+export type ApplicationRuntimeState =
+  (typeof APPLICATION_RUNTIME_STATES)[number];
+
 export const RELEASE_STATUSES = ['pending', 'verified', 'rejected'] as const;
 export type ReleaseVerificationStatus = (typeof RELEASE_STATUSES)[number];
 

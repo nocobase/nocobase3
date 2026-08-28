@@ -243,8 +243,8 @@ export const starter = {
   'hub.apps.search.label': 'Search applications',
   'hub.apps.search.placeholder': 'Search by name or slug',
   'hub.apps.filter.status': 'Status',
-  'hub.apps.filter.statusAria': 'Filter by status',
-  'hub.apps.filter.allStatuses': 'All statuses',
+  'hub.apps.filter.statusAria': 'Filter by application status',
+  'hub.apps.filter.allRuntimeStates': 'All statuses',
   'hub.apps.noMatches.title': 'No matching applications',
   'hub.apps.noMatches.description':
     'Change the search text or status filter to see other applications.',
