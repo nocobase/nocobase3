@@ -152,6 +152,18 @@ describe('file plugin Registry contract', () => {
     expect(page).toContain('nocobaseClient.getHeaders');
     expect(page).toContain('filesEndpoint');
     expect(page).toContain("'@nocobase/app-plugin-file/client'");
+    expect(page).toContain("'image/gif'");
+    expect(page).toContain("'audio/mpeg'");
+    expect(page).toContain("'audio/ogg'");
+    expect(page).toContain("'audio/wav'");
+    expect(page).toContain("'text/plain'");
+    expect(page).toContain("'video/mp4'");
+    expect(page).toContain("'video/webm'");
+    expect(page).not.toContain("'image/*'");
+    expect(page).not.toContain("'text/*'");
+    expect(page).not.toContain("'audio/*'");
+    expect(page).not.toContain("'video/*'");
+    expect(page).not.toContain("'text/markdown'");
     expect(page).not.toContain('@/extensions/nocobase-file-component-ui');
     expect(page).not.toMatch(/path\s*:\s*['"]\/file-demo['"]/u);
   });

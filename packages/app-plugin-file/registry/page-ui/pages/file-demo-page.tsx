@@ -11,6 +11,25 @@ import {
 } from '@nocobase/app-plugin-file/client';
 import { Button } from '@/components/ui/button';
 
+const AVATAR_TYPES = [
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+
+const ORDER_TYPES = [
+  ...AVATAR_TYPES,
+  'application/json',
+  'application/pdf',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'text/plain',
+  'video/mp4',
+  'video/webm',
+] as const;
+
 interface DemoEntity {
   readonly id: number;
   readonly name?: string;
@@ -209,7 +228,7 @@ export default function FileDemoPage(): ReactElement {
         </div>
       </div>
       <FileGroup
-        accept={['image/*']}
+        accept={AVATAR_TYPES}
         title='Profile Avatar'
         description='A controlled one-file field backed by the Demo profile endpoint.'
         client={avatarClient}
@@ -233,14 +252,7 @@ export default function FileDemoPage(): ReactElement {
           Upload as Public
         </label>
         <FileGroup
-          accept={[
-            'image/*',
-            'application/pdf',
-            'text/*',
-            'application/json',
-            'audio/*',
-            'video/*',
-          ]}
+          accept={ORDER_TYPES}
           title='Order Attachments'
           description='Public and Private records share the same endpoint.'
           client={orderClient}

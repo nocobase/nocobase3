@@ -16,7 +16,7 @@ of another Registry item. The runtime fallback remains inside the plugin under
 `client/default-pages` when neither item is installed.
 
 Start with the [quick start](docs/quick-start.md), then use the
-[data-model](docs/data-model.md), [Route API](docs/route-api.md), and
-[security](docs/security.md) guides for focused integration details. Coding
+[data-model](docs/data-model.md) and [Route API](docs/route-api.md) guides for
+focused integration details. Coding
 Agents can use the published `nocobase-app-plugin-file` Skill under
 `.agents/skills/`.

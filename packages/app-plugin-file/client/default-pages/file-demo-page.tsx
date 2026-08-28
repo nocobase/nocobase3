@@ -65,23 +65,22 @@ interface AccessState extends FileAccessUrl {
 type FileSection = 'avatar' | 'order';
 
 const AVATAR_TYPES = [
+  'image/gif',
   'image/jpeg',
   'image/png',
-  'image/gif',
   'image/webp',
 ] as const;
 
 const ORDER_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
+  ...AVATAR_TYPES,
   'application/json',
-  'audio/*',
-  'video/*',
+  'application/pdf',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'text/plain',
+  'video/mp4',
+  'video/webm',
 ] as const;
 
 function errorMessage(error: unknown, fallback: string): string {

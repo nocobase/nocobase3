@@ -1,9 +1,9 @@
 # Quick start
 
 This is the shortest end-to-end path for adding attachments to a business
-module. The [data model guide](data-model.md) explains the table contract, the
-[Route API guide](route-api.md) lists the fixed HTTP surface, and the
-[security guide](security.md) covers Public and Private access.
+module. The [data model guide](data-model.md) explains the table contract, and
+the [Route API guide](route-api.md) lists the fixed HTTP surface and access
+rules.
 
 ## 1. Confirm the host context
 

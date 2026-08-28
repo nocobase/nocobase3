@@ -231,6 +231,14 @@ describe('FileDemoPage', () => {
 
     expect(screen.getByLabelText('Upload profile avatar')).toBeVisible();
     expect(screen.getByLabelText('Upload order attachments')).toBeVisible();
+    expect(screen.getByLabelText('Upload profile avatar')).toHaveAttribute(
+      'accept',
+      'image/gif,image/jpeg,image/png,image/webp',
+    );
+    expect(screen.getByLabelText('Upload order attachments')).toHaveAttribute(
+      'accept',
+      'image/gif,image/jpeg,image/png,image/webp,application/json,application/pdf,audio/mpeg,audio/ogg,audio/wav,text/plain,video/mp4,video/webm',
+    );
     expect(
       screen.getByRole('button', { name: 'Preview: avatar.png' }),
     ).toBeVisible();

@@ -282,14 +282,10 @@ function resolveAuthorizationScope(context: Context): FileAuthorizationScope {
 
 export default function registerRoutes({
   app,
-  publicApp,
   config,
   deps,
 }: FilePluginRoutesContext): void {
-  (publicApp ?? app).route(
-    ATTACHMENTS_PATH,
-    createFileDemoRoutes({ config, deps }),
-  );
+  app.route(ATTACHMENTS_PATH, createFileDemoRoutes({ config, deps }));
 }
 
 function createUnavailableStore(

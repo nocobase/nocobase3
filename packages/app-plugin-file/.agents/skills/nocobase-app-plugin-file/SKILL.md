@@ -14,8 +14,8 @@ access, Route, client, and UI contracts.
 
 Read the focused guides as needed: [quick start](../../../docs/quick-start.md),
 [data model](../../../docs/data-model.md), [Route API](../../../docs/route-api.md),
-[security](../../../docs/security.md), [one-to-one recipe](../../../docs/recipes/one-to-one.md),
-and [one-to-many recipe](../../../docs/recipes/one-to-many.md). For business
+[one-to-one recipe](../../../docs/recipes/one-to-one.md), and [one-to-many
+recipe](../../../docs/recipes/one-to-many.md). For business
 authorization, also read the [authorization development
 Skill](../../../../authorization/skills/authorization-development/SKILL.md).
 

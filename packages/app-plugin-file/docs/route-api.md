@@ -191,5 +191,5 @@ after the record is gone returns `204`; an object deletion failure may leave an
 unreferenced object for storage cleanup. Version 1 has no soft delete,
 reference counting, cleanup queue, or recycle bin.
 
-See [security.md](security.md) for Token semantics and the complete recipes for
-[one-to-one](recipes/one-to-one.md) and [one-to-many](recipes/one-to-many.md).
+See the complete [one-to-one](recipes/one-to-one.md) and
+[one-to-many](recipes/one-to-many.md) recipes for integration examples.

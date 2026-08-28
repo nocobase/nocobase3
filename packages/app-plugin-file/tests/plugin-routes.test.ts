@@ -332,7 +332,6 @@ describe('file plugin route factory and registrar', () => {
     const app = new Hono();
     registerRoutes({
       app,
-      publicApp: app,
       config,
       deps,
       services: {},
