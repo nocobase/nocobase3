@@ -112,7 +112,7 @@ export default example;
 Declare such options as `AppClientRouteComponentLoader` rather than
 `ComponentType`. A loader keeps the page out of the application entry chunk and
 keeps `client/plugins.ts` loadable outside Vite, which is how
-`pnpm app:client:inspect` reads it.
+`pnpm client:inspect` reads it.
 
 ## Assembling an application's plugins
 

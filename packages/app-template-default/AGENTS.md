@@ -78,8 +78,8 @@ canonical copy under this package's `registry/` directory.
 Run the inspector before changing client ownership or contribution wiring:
 
 ```bash
-pnpm app:client:inspect --app app-template-default
-pnpm app:client:inspect --app app-template-default --json
+pnpm client:inspect
+pnpm client:inspect --json
 ```
 
 The output distinguishes the plugin-owned route entry from the final component

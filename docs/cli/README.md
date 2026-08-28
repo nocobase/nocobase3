@@ -62,7 +62,6 @@ pnpm plugin:skills:sync --dry-run
 | `pnpm plugin:unregister <name>` | 上述四项的逆操作                                                 |
 | `pnpm plugin:remove <name>`     | 删除插件源码；仍被引用时会拒绝并提示先 unregister                |
 | `pnpm plugin:skills:sync`       | 只同步 skills（从 `packages/` 解析插件）                         |
-| `pnpm app:client:inspect`       | 打印 App 最终解析出的 bootstrap、routes 和 providers             |
 
 完整参数用 `--help` 查看。插件开发流程见 [plugin-development-quickstart.md](../plugin-development-quickstart.md)。
 

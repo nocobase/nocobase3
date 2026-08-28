@@ -237,7 +237,7 @@ pnpm --filter @nocobase/app-plugin-audit-log check
 它会依次执行 lint、格式检查、类型检查、测试和构建。插件涉及客户端时，还可以检查 App 最终加载的 bootstrap、routes 和 providers：
 
 ```bash
-pnpm app:client:inspect --app app-template-default
+pnpm --filter @nocobase/app-template-default client:inspect
 ```
 
 插件注册或 App 集成发生变化后，再检查目标 App：

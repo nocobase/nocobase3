@@ -34,7 +34,7 @@ app-template-default/package.json
 
 ### 1.2 问题
 
-**`enabled: true` 不携带任何信息。** 它不说明这个插件有没有前端，也不说明它注册了什么。仓库里 13 个 `app-plugin-*` 中只有 7 个有 client 贡献，但从注册表上看不出区别。要知道答案只能跑 `pnpm app:client:inspect`，即由一个工具把注册表翻译成可读结果。
+**`enabled: true` 不携带任何信息。** 它不说明这个插件有没有前端，也不说明它注册了什么。仓库里 13 个 `app-plugin-*` 中只有 7 个有 client 贡献，但从注册表上看不出区别。要知道答案只能跑 inspect，即由一个工具把注册表翻译成可读结果。
 
 **没有配置的位置。** 插件想让 App 定制一个页面，现在只能走 `client/extensions/*/extension.ts` 或 `client/route-overrides.ts` 的路由覆盖机制，App 作者需要知道插件的 route ID 常量。插件无法声明「我接受一个 `loginPage` 参数」。
 
@@ -585,11 +585,11 @@ removeClientPlugin(sourceText, {packageName})            → 新的 sourceText
 
 - **`unregister-plugin.mjs`**：反向删除 import 和数组项。
 - **`remove-plugin.mjs`**：现在的引用扫描只看 package.json 的依赖字段和 `nocobase.plugins`（`scripts/remove-plugin.mjs:228`）。必须扩展到扫描各 App 的 `client/plugins.ts`，否则会出现「插件已删除但 App 仍 import 它」的破坏性结果。
-- **`inspect-app-client.mjs`**：改为加载 `client/plugins.ts`，实现方式见 §7.6。它同时是 codegen 的验证手段：生成的代码能被加载并解析出预期贡献，即证明 codegen 正确。
+- **inspect**：改为加载 `client/plugins.ts`，实现方式见 §7.6。脚本已移入模板包，成为 `pnpm client:inspect`。它同时是 codegen 的验证手段：生成的代码能被加载并解析出预期贡献，即证明 codegen 正确。
 
 ### 7.5 组件用 loader 形式还是值形式
 
-`app:client:inspect` 通过 `tsx` 运行，直接动态 import TS 源文件读取 default export。改造后它要 import `client/plugins.ts`，因此该文件必须能在 Vite 之外被加载。
+inspect 通过 `tsx` 运行，直接动态 import TS 源文件读取 default export。改造后它要 import `client/plugins.ts`，因此该文件必须能在 Vite 之外被加载。
 
 tsx 下的加载边界：
 
@@ -930,7 +930,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 | `register-plugin.mjs`    | 写入 client/plugins.ts；调用 skills sync |
 | `unregister-plugin.mjs`  | 从 client/plugins.ts 移除；清理 skills   |
 | `remove-plugin.mjs`      | 引用扫描扩展到 client/plugins.ts         |
-| `inspect-app-client.mjs` | 改为加载 client/plugins.ts               |
+| inspect（已移入模板包）  | 改为加载 client/plugins.ts               |
 | `create-plugin.mjs`      | 生成 `client/plugin.ts`；补 `files` 字段 |
 | `sync-skills.mjs`        | 新增，`plugin:skills:sync` 入口          |
 
@@ -948,7 +948,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 ### 9.6 测试与文档
 
-`tests/scripts/` 下 `register-plugin.test.mjs`、`unregister-plugin.test.mjs`、`remove-plugin.test.mjs`、`inspect-app-client.test.mjs` 需要更新，并新增 `client-modules.test.mjs`、`skills-sync.test.mjs`。
+`tests/scripts/` 下 `register-plugin.test.mjs`、`unregister-plugin.test.mjs`、`remove-plugin.test.mjs`、inspect 的测试随脚本移入模板包，并新增 `client-plugins.test.mjs`、`skills-sync.test.mjs`。
 
 `docs/plugin-development-quickstart.md` 的第 2 节和第 3 节 Client 部分需要重写。
 
@@ -982,7 +982,7 @@ postinstall 经实测覆盖不到「更新插件」这条主路径，已决定�
 | 阶段 | 内容                                                                                                   | 验证                                                                                           |
 | ---- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | 1    | `app-client` 的 API + 6 个插件的 `client/plugin.ts` + 模板 `client/plugins.ts` 手写接线 + 删除虚拟模块 | `pnpm --filter @nocobase/app-client check`、模板 typecheck / test / build、`pnpm app:dev` 实跑 |
-| 2    | `inspect-app-client.mjs` 改为加载 `client/plugins.ts`（§7.6）+ 一致性校验测试                          | `pnpm app:client:inspect --app app-template-default` 输出与阶段 1 前一致                       |
+| 2    | inspect 改为加载 `client/plugins.ts`（§7.6）+ 一致性校验测试                                           | `pnpm client:inspect` 输出与阶段 1 前一致                                                      |
 | 3    | codegen：register / unregister / remove / create                                                       | `pnpm scripts:test`；用 `audit-log` 走一遍 create → register → unregister → remove             |
 | 4    | skills 同步 + `files` 字段修复                                                                         | 新增的 `skills-sync.test.mjs`；`pnpm pack:check`                                               |
 | 5    | 文档：quickstart、两份 AGENTS.md、app-client README                                                    | —                                                                                              |

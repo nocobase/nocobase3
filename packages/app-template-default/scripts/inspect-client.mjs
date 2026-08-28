@@ -1,31 +1,28 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { DEFAULT_APP, resolveApplication } from './register-plugin.mjs';
+const help = `Inspect the client bootstrap, routes, and providers this app resolves.
 
-const help = `Inspect resolved client bootstrap, routes, and providers for an application.
+Loads client/plugins.ts and runs the same resolution the browser does, so the
+output reflects what the app will actually render.
 
 Usage:
-  pnpm app:client:inspect [options]
+  pnpm client:inspect [options]
 
 Options:
-  --app <app>        Application directory or package name
-                     (default: app-template-default)
   --type <type>      all, bootstrap, routes, or providers (default: all)
   --json             Print machine-readable JSON
   -h, --help         Show this help
 
 Examples:
-  pnpm app:client:inspect
-  pnpm app:client:inspect --app app-template-default
-  pnpm app:client:inspect --app @nocobase/app-template-default --json
-  pnpm app:client:inspect --type bootstrap
-  pnpm app:client:inspect --type providers`;
+  pnpm client:inspect
+  pnpm client:inspect --json
+  pnpm client:inspect --type bootstrap
+  pnpm client:inspect --type providers`;
 
 export function parseInspectAppClientArgs(args) {
   const options = {
-    app: DEFAULT_APP,
     help: false,
     json: false,
     type: 'all',
@@ -41,21 +38,15 @@ export function parseInspectAppClientArgs(args) {
       options.json = true;
       continue;
     }
-    if (argument === '--app' || argument === '--type') {
+    if (argument === '--type') {
       const value = args[index + 1];
       if (value === undefined || value.startsWith('-')) {
-        throw new Error(`${argument} requires a value.`);
+        throw new Error('--type requires a value.');
       }
-      if (argument === '--app') {
-        options.app = value;
-      } else {
-        if (!['all', 'bootstrap', 'routes', 'providers'].includes(value)) {
-          throw new Error(
-            '--type must be all, bootstrap, routes, or providers.',
-          );
-        }
-        options.type = value;
+      if (!['all', 'bootstrap', 'routes', 'providers'].includes(value)) {
+        throw new Error('--type must be all, bootstrap, routes, or providers.');
       }
+      options.type = value;
       index += 1;
       continue;
     }
@@ -66,14 +57,12 @@ export function parseInspectAppClientArgs(args) {
 }
 
 export async function inspectAppClient({
-  app = DEFAULT_APP,
-  repoRoot = path.resolve(import.meta.dirname, '..'),
+  appRoot = path.resolve(import.meta.dirname, '..'),
 } = {}) {
-  const application = await resolveApplication(repoRoot, app);
-  const appRoot = path.dirname(application.packageJsonPath);
-  const appPackageName = application.packageName;
+  const packageJsonPath = path.join(appRoot, 'package.json');
+  const appPackageName = JSON.parse(readFileSync(packageJsonPath, 'utf8')).name;
   const { applyClientRouteComponentOverrides, resolveAppClientContributions } =
-    await import('../packages/app-client/src/plugins.js');
+    await import('@nocobase/app-client/plugins');
 
   const clientPlugins = await loadClientPlugins(appRoot);
   const applicationLoader = await loadApplicationLoader(appRoot);
@@ -451,7 +440,7 @@ async function main() {
       return;
     }
 
-    const inspection = await inspectAppClient({ app: options.app });
+    const inspection = await inspectAppClient();
     console.log(
       options.json
         ? JSON.stringify(
@@ -463,7 +452,7 @@ async function main() {
     );
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
-    console.error('Run pnpm app:client:inspect --help for usage.');
+    console.error('Run pnpm client:inspect --help for usage.');
     process.exitCode = 1;
   }
 }

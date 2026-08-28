@@ -43,4 +43,4 @@ This directory is the active Default App browser client.
   layer. Use `before` and `after` only inside one layer.
 
 Before finishing client changes, run the Default App lint, typecheck, tests,
-build, and `pnpm app:client:inspect --app app-template-default`.
+build, and `pnpm client:inspect`.

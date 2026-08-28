@@ -28,7 +28,6 @@
     "plugin:remove": "node ./scripts/remove-plugin.mjs",
     "plugin:skills:sync": "node ./scripts/sync-skills.mjs",
     "registry": "node ./scripts/registry.mjs",
-    "app:client:inspect": "tsx ./scripts/inspect-app-client.mjs",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm pack:check",
     "fix": "pnpm lint:fix && pnpm format",
     "typecheck": "pnpm -r --if-present typecheck",
