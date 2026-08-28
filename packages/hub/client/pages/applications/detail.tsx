@@ -428,6 +428,8 @@ export function ApplicationDetailPage({
   }
   if (!application.data) return <HubNotFoundState kind={applicationKind} />;
   const applicationData = application.data;
+  const applicationRuntimeStatus =
+    runtimeSnapshot.data?.state ?? applicationData.runtime?.state ?? 'unknown';
 
   return (
     <div className='hub-page'>
@@ -449,17 +451,7 @@ export function ApplicationDetailPage({
               <h1 className='min-w-0 font-heading text-2xl font-semibold tracking-tight sm:text-[1.75rem]'>
                 {applicationData.name}
               </h1>
-              {applicationData.isDefault === true &&
-              applicationData.latestRelease === null ? (
-                <Badge variant='outline'>
-                  {translate(
-                    'hub.application.overview.notDeployed',
-                    'Not deployed',
-                  )}
-                </Badge>
-              ) : (
-                <HubStatusBadge status={applicationData.status} />
-              )}
+              <HubStatusBadge status={applicationRuntimeStatus} />
             </div>
             <p className='font-mono text-xs text-muted-foreground'>
               {applicationData.slug}

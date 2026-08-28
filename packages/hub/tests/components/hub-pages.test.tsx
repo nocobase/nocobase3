@@ -1140,19 +1140,21 @@ describe('Hub application pages', () => {
   it.each([
     {
       state: 'stopped',
+      statusLabel: 'Stopped',
       open: null,
       visibleAction: 'Start',
       hiddenActions: ['Restart', 'Stop application'],
     },
     {
       state: 'idle',
+      statusLabel: 'Idle',
       open: '/inventory/',
       visibleAction: 'Stop application',
       hiddenActions: ['Start', 'Restart'],
     },
   ])(
     'projects $state runtime controls and application access consistently',
-    async ({ state, open, visibleAction, hiddenActions }) => {
+    async ({ state, statusLabel, open, visibleAction, hiddenActions }) => {
       const capabilities: HubCapabilities = {
         global: [
           { resource: 'hub.app', actions: ['read'] },
@@ -1200,6 +1202,11 @@ describe('Hub application pages', () => {
       await screen.findByRole('tab', { name: 'Settings' });
       fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
       expect(await screen.findByText('Runtime and health')).toBeInTheDocument();
+      const heading = screen.getByRole('heading', { name: 'Inventory' });
+      const headingRow = heading.parentElement;
+      expect(headingRow).not.toBeNull();
+      expect(within(headingRow!).getByText(statusLabel)).toBeInTheDocument();
+      expect(within(headingRow!).queryByText('Active')).toBeNull();
       expect(
         screen.getByRole('button', { name: visibleAction }),
       ).toBeInTheDocument();
