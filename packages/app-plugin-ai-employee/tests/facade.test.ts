@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
@@ -14,6 +17,7 @@ import {
 } from '../server/runtime.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
 import { createAICurrentUserMiddleware } from '../server/routes/utils.js';
+import { CollectionRepositoryFactory } from '../server/repository/database/factory.js';
 describe('AI employee facade', () => {
   it('attaches a fresh request Context over one shared runtime', async () => {
     const deps = createTestAppDeps();
@@ -114,6 +118,97 @@ describe('AI employee facade', () => {
       expect(createCollection).not.toHaveBeenCalled();
     } finally {
       await deps.database.disconnect();
+    }
+  });
+
+  it('loads storage/ai/models.json after the application manifest', async () => {
+    const deps = createTestAppDeps();
+    const storageDir = await mkdtemp(
+      path.join(tmpdir(), 'ai-runtime-storage-'),
+    );
+    const storageAIDir = path.join(storageDir, 'ai');
+    await mkdir(storageAIDir, { recursive: true });
+    await writeFile(
+      path.join(storageAIDir, 'models.json'),
+      JSON.stringify([
+        {
+          name: 'deepseek',
+          title: 'Runtime DeepSeek',
+          provider: 'deepseek',
+          options: { apiKey: 'runtime-key' },
+          enabledModels: ['runtime-model'],
+          enabled: false,
+        },
+      ]),
+    );
+    await deps.database.connect();
+    const migrator = createMigrator({
+      database: deps.database,
+      packageName: '@nocobase/app-plugin-ai-employee',
+      directory: fileURLToPath(
+        new URL('../database/migrations', import.meta.url),
+      ),
+    });
+    await migrator.latest();
+    const repositories = new CollectionRepositoryFactory(
+      deps.database.connection(),
+    );
+    await repositories.llmServices.create({
+      values: {
+        name: 'deepseek',
+        title: 'Database DeepSeek',
+        provider: 'deepseek',
+        options: { apiKey: 'database-key' },
+        enabledModels: {
+          mode: 'custom',
+          models: [{ label: 'Kept model', value: 'kept-model' }],
+        },
+        modelOptions: {},
+        enabled: true,
+        sort: 0,
+      },
+    });
+    await repositories.llmServices.create({
+      values: {
+        name: 'obsolete',
+        title: 'Obsolete',
+        provider: 'openai',
+        options: {},
+        enabledModels: [],
+        modelOptions: {},
+        enabled: true,
+        sort: 1,
+      },
+    });
+
+    try {
+      initializePluginRuntimeResources({
+        ...deps,
+        paths: createConfigPaths({
+          rootDir: fileURLToPath(
+            new URL('../../app-template-default', import.meta.url),
+          ),
+          storageDir,
+        }),
+      });
+      await expect(waitForPluginReady()).resolves.toBeUndefined();
+      await expect(
+        deps.ai.llmServiceManager.getLLMService('deepseek'),
+      ).resolves.toMatchObject({
+        title: 'Runtime DeepSeek',
+        options: { apiKey: 'runtime-key' },
+        enabled: 1,
+        enabledModels: {
+          mode: 'custom',
+          models: [{ label: 'Kept model', value: 'kept-model' }],
+        },
+      });
+      await expect(
+        deps.ai.llmServiceManager.getLLMService('obsolete'),
+      ).resolves.toBeUndefined();
+    } finally {
+      await deps.database.disconnect();
+      await rm(storageDir, { recursive: true, force: true });
     }
   });
 });

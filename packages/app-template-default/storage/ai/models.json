@@ -1,0 +1,22 @@
+[
+  {
+    "name": "deepseek",
+    "title": "DeepSeek",
+    "provider": "deepseek",
+    "options": {
+      "apiKey": "${DEEPSEEK_API_KEY}"
+    },
+    "enabledModels": ["deepseek-v4-flash"],
+    "enabled": true
+  },
+  {
+    "name": "dashscope",
+    "title": "Dashscope",
+    "provider": "dashscope",
+    "options": {
+      "apiKey": "${DASHSCOPE_API_KEY}"
+    },
+    "enabledModels": ["qwen-plus-3.6-plus"],
+    "enabled": true
+  }
+]

@@ -3,7 +3,10 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import type { Logger } from '@nocobase/logging';
 import { AIManager } from '../manager/index.js';
-import type { LLMServiceOptions } from '../manager/llm-service/types.js';
+import {
+  normalizeEnabledModelsConfig,
+  type LLMServiceOptions,
+} from '../manager/llm-service/types.js';
 import { LoadAndRegister } from './types.js';
 
 const LLM_MODELS_FILE = 'models.json';
@@ -11,11 +14,14 @@ const LLM_MODELS_FILE = 'models.json';
 export type LLMServiceLoaderOptions = {
   directory: string;
   logger?: Logger;
+  preserveUserState?: boolean;
+  replaceExisting?: boolean;
 };
 
 /** Loads the fixed `ai/models.json` service manifest into LLMServiceManager. */
 export class LLMServiceLoader extends LoadAndRegister<LLMServiceLoaderOptions> {
   protected services: LLMServiceOptions[] = [];
+  protected manifestLoaded = false;
 
   constructor(
     protected readonly ai: AIManager,
@@ -30,6 +36,7 @@ export class LLMServiceLoader extends LoadAndRegister<LLMServiceLoaderOptions> {
 
   protected async import(): Promise<void> {
     this.services = [];
+    this.manifestLoaded = false;
     const file = path.join(this.options.directory, LLM_MODELS_FILE);
     if (!existsSync(file)) return;
 
@@ -44,7 +51,7 @@ export class LLMServiceLoader extends LoadAndRegister<LLMServiceLoaderOptions> {
         );
         return;
       }
-
+      this.manifestLoaded = true;
       definitions.forEach((definition, index) => {
         if (!isLLMServiceOptions(definition)) {
           this.options.logger?.warn?.(
@@ -53,7 +60,12 @@ export class LLMServiceLoader extends LoadAndRegister<LLMServiceLoaderOptions> {
           );
           return;
         }
-        this.services.push(definition);
+        this.services.push({
+          ...definition,
+          enabledModels: normalizeResourceEnabledModels(
+            definition.enabledModels,
+          ),
+        });
       });
     } catch (error) {
       this.options.logger?.error?.(
@@ -64,13 +76,32 @@ export class LLMServiceLoader extends LoadAndRegister<LLMServiceLoaderOptions> {
   }
 
   protected async register(): Promise<void> {
+    if (this.options.replaceExisting && this.manifestLoaded) {
+      const serviceNames = new Set(
+        this.services.map((service) => service.name),
+      );
+      const existingServices =
+        await this.ai.llmServiceManager.listLLMServices();
+      for (const service of existingServices) {
+        if (!serviceNames.has(service.name)) {
+          await this.ai.llmServiceManager.deleteLLMService(service.name);
+        }
+      }
+    }
     for (const service of this.services) {
-      await this.ai.llmServiceManager.registerLLMService(service);
+      await this.ai.llmServiceManager.registerLLMService(service, {
+        preserveUserState: this.options.preserveUserState ?? true,
+      });
       this.options.logger?.info?.(`LLM service [${service.name}] registered`);
     }
   }
 }
 
+export function normalizeResourceEnabledModels(
+  value: LLMServiceOptions['enabledModels'],
+): LLMServiceOptions['enabledModels'] {
+  return normalizeEnabledModelsConfig(value);
+}
 function isLLMServiceOptions(value: unknown): value is LLMServiceOptions {
   return (
     Boolean(value) &&

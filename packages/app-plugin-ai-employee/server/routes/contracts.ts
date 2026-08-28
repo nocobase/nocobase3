@@ -14,7 +14,29 @@ export type AIUserPromptUpdateInput = {
 export type AIEmployeeResourceInput = Record<string, unknown>;
 export type AIToolResourceInput = Record<string, unknown>;
 export type AISkillResourceInput = Record<string, unknown>;
-export type LLMServiceResourceInput = Record<string, unknown>;
+export type EnabledModelDto = { label: string; value: string };
+export type EnabledModelsConfigDto = {
+  mode: 'recommended' | 'provider' | 'custom';
+  models: EnabledModelDto[];
+};
+export type LLMServiceDto = {
+  name: string;
+  title: string;
+  provider: string;
+  options: Record<string, unknown>;
+  enabledModels: EnabledModelsConfigDto | string[] | null;
+  enabled: boolean;
+  modelOptions?: Record<string, unknown>;
+  sort: number;
+};
+export type LLMServiceResourceInput = Partial<LLMServiceDto> & {
+  name?: string;
+};
+export type ProviderModelListRequest = {
+  llmService: string;
+  search?: string;
+};
+export type ProviderModelDto = { id: string };
 export type AIMCPServerResourceInput = Record<string, unknown>;
 
 export type AIEmployeeDefinition = {

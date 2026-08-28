@@ -242,9 +242,13 @@ export function initializePluginRuntimeResources(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'ai'),
   );
   const appAIDirectory = resolveAIDirectory(paths.root('ai'));
+  const storageAIDirectory = paths.storage('ai');
   pluginReady = (async () => {
     await ai.employeeManager.switchRepository(repositories.aiEmployees);
-    if (options.loadResources === false) return;
+    if (options.loadResources === false) {
+      await ai.llmServiceManager.switchRepository(repositories.llmServices);
+      return;
+    }
     await loadResources({
       ai,
       logger,
@@ -258,6 +262,13 @@ export function initializePluginRuntimeResources(
       modelsDirectory: resolveModelsDirectory(appAIDirectory, appAIDirectory),
       overrideTools: true,
     });
+    await new LLMServiceLoader(ai, {
+      directory: storageAIDirectory,
+      logger,
+      preserveUserState: false,
+      replaceExisting: true,
+    }).load();
+    await ai.llmServiceManager.switchRepository(repositories.llmServices);
     logger.info?.(
       { aiDirectory: appAIDirectory, summary },
       'AI employee runtime initialized',
