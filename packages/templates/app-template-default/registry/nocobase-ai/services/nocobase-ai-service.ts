@@ -1,6 +1,8 @@
 import {
   nocobaseClient,
+  resolveNocoBaseAIUrl,
   type NocoBaseClient,
+  type NocoBaseRequestOptions,
 } from '@nocobase/app-portal-sdk/client';
 import type {
   AIChatMessage,
@@ -204,10 +206,31 @@ const toHistoryMessage = (
 export class NocoBaseAIService implements AIService {
   constructor(private readonly client: NocoBaseClient = nocobaseClient) {}
 
+  private aiAction<T>(
+    resource: string,
+    action: string,
+    options: Omit<NocoBaseRequestOptions, 'accept'> = {},
+  ): Promise<T> {
+    return this.client.action<T>(resource, action, {
+      ...options,
+      apiUrl: resolveNocoBaseAIUrl(this.client.getApiUrl()),
+    });
+  }
+
+  private aiStream(
+    endpoint: string,
+    options: Omit<NocoBaseRequestOptions, 'accept' | 'unwrap'> = {},
+  ): Promise<ReadableStream<Uint8Array>> {
+    return this.client.stream(endpoint, {
+      ...options,
+      apiUrl: resolveNocoBaseAIUrl(this.client.getApiUrl()),
+    });
+  }
   async listEmployees() {
-    const employees = await this.client.action<AIEmployee[]>(
+    const employees = await this.aiAction<AIEmployee[]>(
       'aiEmployees',
       'listByUser',
+      { method: 'GET' },
     );
     return employees
       .filter((employee) => employee?.username)
@@ -219,7 +242,7 @@ export class NocoBaseAIService implements AIService {
   }
 
   async listModels() {
-    const services = await this.client.action<
+    const services = await this.aiAction<
       Array<{
         llmService: string;
         llmServiceTitle: string;
@@ -227,7 +250,7 @@ export class NocoBaseAIService implements AIService {
         supportWebSearch?: boolean;
         isToolConflict?: boolean;
       }>
-    >('ai', 'listAllEnabledModels');
+>('ai', 'listAllEnabledModels', { method: 'GET' });
     return services.flatMap((service) =>
       (service.enabledModels ?? []).map<AIModel>((model) => ({
         value: model.value,
@@ -241,24 +264,20 @@ export class NocoBaseAIService implements AIService {
   }
 
   async updateEmployeeUserPrompt(username: string, prompt: string) {
-    await this.client.action('aiEmployees', 'updateUserPrompt', {
+    await this.aiAction('aiEmployees', 'updateUserPrompt', {
+      method: 'POST',
       body: { aiEmployee: username, prompt },
     });
   }
 
   async listConversations(keyword = '') {
     const normalizedKeyword = keyword.trim();
-    const response = await this.client.action<
+    const response = await this.aiAction<
       { data?: unknown[]; rows?: unknown[] } | unknown[]
     >('aiConversations', 'list', {
+      method: 'GET',
       query: {
-        sort: '-createdAt',
-        appends: 'aiEmployee',
-        page: 1,
-        pageSize: 50,
-        filter: normalizedKeyword
-          ? JSON.stringify({ title: { $includes: normalizedKeyword } })
-          : undefined,
+        keyword: normalizedKeyword || undefined,
       },
     });
     const rows = Array.isArray(response)
@@ -307,15 +326,15 @@ export class NocoBaseAIService implements AIService {
     sessionId: string,
     options: { updateRead?: boolean } = {},
   ) {
-    const response = await this.client.action<
+    const response = await this.aiAction<
       { data?: unknown[]; rows?: unknown[] } | unknown[]
     >('aiConversations', 'getMessages', {
+      method: 'GET',
       query: {
         sessionId,
         paginate: false,
         updateRead: options.updateRead === true,
       },
-      body: {},
     });
     const rows = Array.isArray(response)
       ? response
@@ -332,10 +351,11 @@ export class NocoBaseAIService implements AIService {
   }
 
   async getConversationActiveState(sessionId: string) {
-    const response = await this.client.action<{
+    const response = await this.aiAction<{
       llmActiveState?: unknown;
     }>('aiConversations', 'get', {
-      query: { filter: JSON.stringify({ sessionId }) },
+      method: 'GET',
+      query: { sessionId },
     });
     const state = response?.llmActiveState;
     return state === 'idle' || state === 'streaming' || state === 'invoking'
@@ -344,24 +364,24 @@ export class NocoBaseAIService implements AIService {
   }
 
   async updateConversationTitle(sessionId: string, title: string) {
-    await this.client.action('aiConversations', 'update', {
+    await this.aiAction('aiConversations', 'update', {
       method: 'PUT',
-      query: { filterByTk: sessionId },
+      query: { sessionId },
       body: { title },
     });
   }
 
   async destroyConversation(sessionId: string) {
-    await this.client.action('aiConversations', 'destroy', {
+    await this.aiAction('aiConversations', 'destroy', {
       method: 'DELETE',
-      query: { filterByTk: sessionId },
+      query: { sessionId },
     });
   }
 
   async uploadFile(file: File, signal?: AbortSignal) {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await this.client.action<Record<string, unknown>>(
+    const response = await this.aiAction<Record<string, unknown>>(
       'aiFiles',
       'create',
       {
@@ -382,10 +402,11 @@ export class NocoBaseAIService implements AIService {
   }
 
   async createConversation(options: CreateAIConversationOptions) {
-    const response = await this.client.action<{ sessionId: string }>(
+    const response = await this.aiAction<{ sessionId: string }>(
       'aiConversations',
       'create',
       {
+        method: 'POST',
         body: {
           aiEmployee: options.employee,
           systemMessage: options.systemMessage,
@@ -401,21 +422,21 @@ export class NocoBaseAIService implements AIService {
   }
 
   sendMessagesStream(body: unknown, signal?: AbortSignal) {
-    return this.client.stream('aiConversations:sendMessages', {
+    return this.aiStream('aiConversations:sendMessages', {
       body,
       signal,
     });
   }
 
   resendMessagesStream(body: unknown, signal?: AbortSignal) {
-    return this.client.stream('aiConversations:resendMessages', {
+    return this.aiStream('aiConversations:resendMessages', {
       body,
       signal,
     });
   }
 
   async updateToolCallDecision(options: UpdateToolCallDecisionOptions) {
-    const result = await this.client.action<{
+    const result = await this.aiAction<{
       updated: number;
       toolCalls: Array<{
         id: string;
@@ -428,6 +449,7 @@ export class NocoBaseAIService implements AIService {
         args?: unknown;
       }>;
     }>('aiConversations', 'updateUserDecision', {
+      method: 'POST',
       body: options,
     });
     return {
@@ -440,14 +462,14 @@ export class NocoBaseAIService implements AIService {
   }
 
   resumeToolCallStream(body: unknown, signal?: AbortSignal) {
-    return this.client.stream('aiConversations:resumeToolCall', {
+    return this.aiStream('aiConversations:resumeToolCall', {
       body,
       signal,
     });
   }
 
   resumeConversationStream(sessionId: string, signal?: AbortSignal) {
-    return this.client.stream('aiConversations:resumeStream', {
+    return this.aiStream('aiConversations:resumeStream', {
       body: { sessionId },
       signal,
     });
