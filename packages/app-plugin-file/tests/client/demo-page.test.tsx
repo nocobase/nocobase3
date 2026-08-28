@@ -279,6 +279,7 @@ describe('FileDemoPage', () => {
     await waitFor(() =>
       expect(avatarClient.upload).toHaveBeenCalledWith(avatarFile, {
         public: undefined,
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(await screen.findAllByText('new-avatar.png')).not.toHaveLength(0);
@@ -293,6 +294,7 @@ describe('FileDemoPage', () => {
     await waitFor(() =>
       expect(orderClient.upload).toHaveBeenCalledWith(orderFile, {
         public: true,
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(await screen.findAllByText('invoice.pdf')).not.toHaveLength(0);

@@ -142,7 +142,7 @@ describe('File Demo database schema', () => {
         .values({
           ...avatar,
           id: 'second-avatar',
-          key: 'file-demo/profile/second-avatar.svg',
+          key: 'file-demo/profile/second-avatar.png',
           profileId: FILE_DEMO_PROFILE.id,
         })
         .execute(),

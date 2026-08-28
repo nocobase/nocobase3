@@ -9,6 +9,7 @@ import {
 import type { ReactElement } from 'react';
 
 import type { FileThumbnailProps } from '@nocobase/app-plugin-file/client/types';
+import { resolveSafeFileUrl } from '../lib/file-url';
 
 function extension(filename: string): string {
   const dot = filename.lastIndexOf('.');
@@ -49,8 +50,9 @@ export function FileThumbnail({
   url,
   alt = file.filename,
 }: FileThumbnailProps): ReactElement {
-  const imageUrl =
-    url ?? (file.public && isSafeImage(file) ? file.contentUrl : undefined);
+  const imageUrl = resolveSafeFileUrl(
+    url ?? (file.public && isSafeImage(file) ? file.contentUrl : ''),
+  );
   return imageUrl ? (
     <img
       data-slot='file-thumbnail'

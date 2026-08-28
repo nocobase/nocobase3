@@ -44,10 +44,10 @@ export const FILE_DEMO_ORDER: Readonly<FileDemoOrder> = Object.freeze({
 
 export const FILE_DEMO_AVATAR: Readonly<FileDemoFile> = Object.freeze({
   id: 'file-demo-avatar',
-  key: 'file-demo/profile/avatar.svg',
-  filename: 'avatar.svg',
-  mimeType: 'image/svg+xml',
-  size: 238,
+  key: 'file-demo/profile/avatar.png',
+  filename: 'avatar.png',
+  mimeType: 'image/png',
+  size: 68,
   public: false,
 });
 

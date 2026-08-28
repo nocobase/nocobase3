@@ -6,6 +6,7 @@ import type {
   FileRecord,
 } from '@nocobase/app-plugin-file/client/types';
 import { Button } from '@/components/ui/button';
+import { publicDownloadUrl, resolveSafeFileUrl } from '../lib/file-url';
 import { FilePreviewDialog } from './file-preview-dialog';
 import { FileThumbnail } from './file-thumbnail';
 
@@ -26,7 +27,8 @@ export function FileList({
   labels,
   emptyState,
 }: FileListProps): ReactElement {
-  const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const previewLabel = labels?.preview ?? 'Preview';
   const downloadLabel = labels?.download ?? 'Download';
   const removeLabel = labels?.remove ?? 'Remove';
@@ -42,17 +44,18 @@ export function FileList({
       return;
     }
     void (async () => {
-      const url = file.public
-        ? file.contentUrl
+      const raw = file.public
+        ? publicDownloadUrl(file.contentUrl)
         : (await client.createAccessUrl(file.id)).url;
-      triggerDownload(url, file.filename);
+      const url = raw ? resolveSafeFileUrl(raw) : undefined;
+      if (url) triggerDownload(url, file.filename);
     })();
   };
 
   return (
     <>
       <ul data-slot='file-list' className='grid gap-3 sm:grid-cols-2'>
-        {files.map((file) => (
+        {files.map((file, index) => (
           <li
             key={file.id}
             className='flex min-w-0 items-center gap-3 rounded-md border p-3'
@@ -77,7 +80,8 @@ export function FileList({
                 title={previewLabel}
                 onClick={() => {
                   onPreview?.(file);
-                  setPreviewFile(file);
+                  setPreviewIndex(index);
+                  setPreviewOpen(true);
                 }}
               >
                 <Eye aria-hidden='true' />
@@ -110,11 +114,10 @@ export function FileList({
       </ul>
       <FilePreviewDialog
         client={client}
-        file={previewFile}
-        open={Boolean(previewFile)}
-        onOpenChange={(open) => {
-          if (!open) setPreviewFile(null);
-        }}
+        files={files}
+        initialIndex={previewIndex}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
         labels={labels}
       />
     </>

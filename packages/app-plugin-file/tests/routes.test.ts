@@ -320,6 +320,24 @@ describe('createFileRoute', () => {
     expect(response.status).toBe(201);
   });
 
+  it('applies the 50 MiB request limit when maxSize is not configured', async () => {
+    const body = uploadBody();
+    const response = await createApp().request(MOUNT_PATH, {
+      method: 'POST',
+      body: body.body,
+      headers: {
+        ...body.headers,
+        'content-length': String(50 * 1024 * 1024 + 1024 * 1024 + 1),
+      },
+    });
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'FILE_TOO_LARGE' },
+    });
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it('uses application/octet-stream for an empty browser MIME type', async () => {
     records = [];
     const response = await createApp({
@@ -361,6 +379,25 @@ describe('createFileRoute', () => {
     });
     expect(put).not.toHaveBeenCalled();
     expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it('serializes concurrent uploads for the same owner when maxFiles is configured', async () => {
+    records = [];
+    const app = createApp({ limits: { maxFiles: 1 } });
+    const [first, second] = await Promise.all([
+      app.request(MOUNT_PATH, { method: 'POST', ...uploadBody() }),
+      app.request(MOUNT_PATH, {
+        method: 'POST',
+        ...uploadBody({}, { name: 'second.txt', type: 'text/plain' }),
+      }),
+    ]);
+
+    expect([first.status, second.status].sort()).toEqual([201, 400]);
+    const rejected = first.status === 400 ? first : second;
+    await expect(rejected.json()).resolves.toMatchObject({
+      error: { code: 'FILE_LIMIT_REACHED' },
+    });
+    expect(store.create).toHaveBeenCalledTimes(1);
   });
 
   it('rejects forbidden visibility overrides and supports Public defaults', async () => {
@@ -526,6 +563,7 @@ describe('createFileRoute', () => {
     expect(response.headers.get('cache-control')).toBe(
       'private, no-store, max-age=0',
     );
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
   });
 
   it.each([
@@ -669,17 +707,19 @@ describe('createFileRoute', () => {
     expect(removeObject).not.toHaveBeenCalled();
   });
 
-  it('returns a stable error after record deletion when object deletion fails', async () => {
+  it('logs object cleanup failure and still returns 204 after record deletion', async () => {
     removeObject.mockRejectedValueOnce(new FileUnavailableError());
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {});
     const response = await createApp().request(`${MOUNT_PATH}/file-1`, {
       method: 'DELETE',
     });
 
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: 'FILE_UNAVAILABLE' },
-    });
+    expect(response.status).toBe(204);
     expect(store.remove).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(
+      'File object cleanup failed after its database record was deleted.',
+      expect.any(FileUnavailableError),
+    );
   });
 
   it('preserves a delete authorizer Response without mutations', async () => {

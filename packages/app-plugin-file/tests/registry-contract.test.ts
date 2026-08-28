@@ -98,7 +98,7 @@ describe('file plugin Registry contract', () => {
     const item = config.items.find(({ name }) => name === 'component-ui');
     expect(item).toMatchObject({
       type: 'registry:component',
-      registryDependencies: ['button'],
+      registryDependencies: ['button', 'dialog'],
       source: {
         root: 'registry/component-ui',
         target: 'client/extensions/nocobase-file-component-ui',
@@ -112,6 +112,9 @@ describe('file plugin Registry contract', () => {
       "'./components/file-upload-field'",
     );
     expect(read('registry/component-ui/index.ts')).toContain(
+      "'./components/file-preview-field'",
+    );
+    expect(read('registry/component-ui/index.ts')).toContain(
       "'@nocobase/app-plugin-file/client'",
     );
     expect(
@@ -119,6 +122,25 @@ describe('file plugin Registry contract', () => {
         path.join(packageRoot, 'registry/component-ui/files-client.ts'),
       ),
     ).toBe(false);
+    const upload = read(
+      'registry/component-ui/components/file-upload-field.tsx',
+    );
+    const preview = read(
+      'registry/component-ui/components/file-preview-dialog.tsx',
+    );
+    const urls = read('registry/component-ui/lib/file-url.ts');
+    expect(upload).toContain('onStatusChange');
+    expect(upload).toContain('AbortController');
+    expect(upload).toContain('File removal failed.');
+    expect(upload).toContain('onError?.');
+    expect(upload).toMatch(/value\.map\(\(record\)/u);
+    expect(upload).toContain("value === '*' || value === '*/*'");
+    expect(preview).toContain("'@/components/ui/dialog'");
+    expect(preview).toMatch(/files[\s\S]+initialIndex/u);
+    expect(preview).toContain('signal: controller.signal');
+    expect(preview).toContain('fileUrlCredentials(url)');
+    expect(urls).toContain("resolved.protocol === 'http:'");
+    expect(urls).toContain("resolved.protocol === 'https:'");
     expect(
       fs.existsSync(
         path.join(packageRoot, 'registry/component-ui/extension.ts'),

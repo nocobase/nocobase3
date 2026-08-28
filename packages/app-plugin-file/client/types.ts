@@ -18,7 +18,10 @@ export interface FileAccessUrl {
 
 export interface FileUploadOptions {
   readonly public?: boolean;
+  readonly signal?: AbortSignal;
 }
+
+export type FileUploadStatus = 'idle' | 'uploading' | 'error';
 
 export interface FilesClient {
   list(): Promise<readonly FileRecord[]>;
@@ -46,6 +49,7 @@ export interface FileUploadFieldProps {
   readonly value: readonly FileRecord[];
   readonly onChange: (value: readonly FileRecord[]) => void;
   readonly onError?: (error: Error) => void;
+  readonly onStatusChange?: (status: FileUploadStatus) => void;
   readonly multiple?: boolean;
   readonly accept?: readonly string[];
   readonly maxSize?: number;
@@ -68,11 +72,19 @@ export interface FileListProps {
 
 export interface FilePreviewDialogProps {
   readonly client: FilesClient;
-  readonly file: FileRecord | null;
+  readonly files: readonly FileRecord[];
+  readonly initialIndex?: number;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly download?: boolean;
   readonly labels?: FileUiLabels;
+}
+
+export interface FilePreviewFieldProps {
+  readonly client: FilesClient;
+  readonly files: readonly FileRecord[];
+  readonly labels?: FileUiLabels;
+  readonly emptyState?: ReactNode;
 }
 
 export interface FileThumbnailProps {

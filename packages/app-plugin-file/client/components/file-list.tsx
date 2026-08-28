@@ -2,6 +2,7 @@ import { Download, Eye, Trash2 } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
 import type { FileListProps } from '../types.js';
+import { publicDownloadUrl, resolveSafeFileUrl } from '../lib/file-url.js';
 import { FilePreviewDialog } from './file-preview-dialog.js';
 import { FileThumbnail } from './file-thumbnail.js';
 
@@ -19,17 +20,6 @@ function triggerDownload(url: string, filename: string): void {
   link.click();
 }
 
-function publicDownloadUrl(url: string): string {
-  try {
-    const parsed = new URL(url, window.location.href);
-    if (parsed.origin !== window.location.origin) return url;
-    parsed.searchParams.set('download', '1');
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
 function extension(filename: string): string {
   const dot = filename.lastIndexOf('.');
   return dot < 0 ? 'No extension' : filename.slice(dot + 1).toUpperCase();
@@ -44,9 +34,7 @@ export function FileList({
   labels,
   emptyState,
 }: FileListProps): ReactElement {
-  const [previewFile, setPreviewFile] = useState<
-    FileListProps['files'][number] | null
-  >(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const choose = labels?.preview ?? 'Preview';
   const download = labels?.download ?? 'Download';
@@ -58,10 +46,11 @@ export function FileList({
       return;
     }
     void (async () => {
-      const url = file.public
+      const raw = file.public
         ? publicDownloadUrl(file.contentUrl)
         : (await client.createAccessUrl(file.id)).url;
-      triggerDownload(url, file.filename);
+      const url = raw ? resolveSafeFileUrl(raw) : undefined;
+      if (url) triggerDownload(url, file.filename);
     })();
   };
 
@@ -74,7 +63,7 @@ export function FileList({
   return (
     <>
       <ul data-slot='file-list' className='grid gap-3 sm:grid-cols-2'>
-        {files.map((file) => (
+        {files.map((file, index) => (
           <li
             key={file.id}
             className='flex min-w-0 items-center gap-3 rounded-md border p-3'
@@ -99,7 +88,7 @@ export function FileList({
                 title={choose}
                 onClick={() => {
                   onPreview?.(file);
-                  setPreviewFile(file);
+                  setPreviewIndex(index);
                   setPreviewOpen(true);
                 }}
               >
@@ -130,7 +119,8 @@ export function FileList({
       {previewOpen ? (
         <FilePreviewDialog
           client={client}
-          file={previewFile}
+          files={files}
+          initialIndex={previewIndex}
           open
           onOpenChange={setPreviewOpen}
           labels={labels}

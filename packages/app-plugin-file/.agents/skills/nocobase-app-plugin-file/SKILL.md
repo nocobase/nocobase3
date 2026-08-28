@@ -26,6 +26,11 @@ mounting, form submission, and authorization.
   configured visibility contract.
 - Keep Registry source limited to application-owned UI. It must not contain
   database, Drive, token, or authorization logic.
+- Prefer the one-call `database + table + scope` Route configuration. The
+  database Store factory is internal; `FileStore` remains the advanced public
+  extension point.
+- File components accept relative and HTTP(S) content/access URLs only. Use
+  upload status to block form submission and preserve cancellation on unmount.
 
 ## References
 

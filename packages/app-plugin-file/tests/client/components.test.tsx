@@ -5,12 +5,14 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useState, type ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   FileList,
   FilePreviewDialog,
+  FilePreviewField,
   FileUploadField,
 } from '../../client/components/index.js';
 import type { FileRecord, FilesClient } from '../../client/types.js';
@@ -51,6 +53,7 @@ function UploadHarness({
   maxFiles,
   initialValue = [],
   onError,
+  onStatusChange,
   removeOnDelete,
 }: {
   client: FilesClient;
@@ -60,6 +63,7 @@ function UploadHarness({
   maxFiles?: number;
   initialValue?: readonly FileRecord[];
   onError?: (error: Error) => void;
+  onStatusChange?: (status: 'idle' | 'uploading' | 'error') => void;
   removeOnDelete?: boolean;
 }): ReactElement {
   const [value, setValue] = useState<readonly FileRecord[]>(initialValue);
@@ -74,6 +78,7 @@ function UploadHarness({
         maxSize={maxSize}
         maxFiles={maxFiles}
         onError={onError}
+        onStatusChange={onStatusChange}
         removeOnDelete={removeOnDelete}
       />
       <output data-testid='value'>
@@ -104,7 +109,10 @@ describe('FileUploadField', () => {
     await waitFor(() =>
       expect(screen.getByTestId('value')).toHaveTextContent('one.txt'),
     );
-    expect(client.upload).toHaveBeenCalledWith(file, { public: undefined });
+    expect(client.upload).toHaveBeenCalledWith(file, {
+      public: undefined,
+      signal: expect.any(AbortSignal),
+    });
     expect(
       screen.getByRole('button', { name: 'Remove: one.txt' }),
     ).toBeVisible();
@@ -229,6 +237,152 @@ describe('FileUploadField', () => {
     );
     expect(client.remove).toHaveBeenCalledWith('file-1');
   });
+
+  it('reports removal failure and keeps the controlled record', async () => {
+    const onError = vi.fn();
+    const client = mockClient({
+      remove: vi.fn().mockRejectedValue(new Error('Delete failed.')),
+    });
+    render(
+      <UploadHarness
+        client={client}
+        initialValue={[fileRecord()]}
+        removeOnDelete
+        onError={onError}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove: image.png' }));
+    await waitFor(() =>
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Delete failed.' }),
+      ),
+    );
+    expect(screen.getByTestId('value')).toHaveTextContent('image.png');
+    expect(screen.getByRole('img', { name: 'image.png' })).toBeVisible();
+  });
+
+  it('does not restore a completed record after the controlled value is cleared', async () => {
+    const uploaded = fileRecord({ filename: 'replacement.png' });
+    const client = mockClient({ upload: vi.fn().mockResolvedValue(uploaded) });
+    const { rerender } = render(
+      <FileUploadField client={client} value={[]} onChange={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: { files: [new File(['x'], 'replacement.png')] },
+    });
+    await waitFor(() => expect(client.upload).toHaveBeenCalledOnce());
+    rerender(<FileUploadField client={client} value={[]} onChange={vi.fn()} />);
+    expect(screen.queryByText('replacement.png')).not.toBeInTheDocument();
+  });
+
+  it('replaces a controlled single file without retaining the old record', async () => {
+    const client = mockClient({
+      upload: vi
+        .fn()
+        .mockResolvedValue(fileRecord({ id: 'new-file', filename: 'new.png' })),
+    });
+    render(
+      <UploadHarness
+        client={client}
+        initialValue={[fileRecord({ filename: 'old.png' })]}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: {
+        files: [new File(['new'], 'new.png', { type: 'image/png' })],
+      },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('value')).toHaveTextContent('new.png'),
+    );
+    expect(screen.getByTestId('value')).not.toHaveTextContent('old.png');
+    expect(screen.queryByText('old.png')).not.toBeInTheDocument();
+  });
+
+  it.each(['*', '*/*'])(
+    'accepts any file for the %s wildcard',
+    async (rule) => {
+      const client = mockClient();
+      render(<UploadHarness client={client} accept={[rule]} />);
+      fireEvent.change(screen.getByLabelText('Choose file'), {
+        target: { files: [new File(['x'], 'file.bin', { type: '' })] },
+      });
+      await waitFor(() => expect(client.upload).toHaveBeenCalledOnce());
+    },
+  );
+
+  it('reports upload status and cancels without an error notification', async () => {
+    const onError = vi.fn();
+    const onStatusChange = vi.fn();
+    const upload = vi.fn<FilesClient['upload']>(
+      (_file, options) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        }),
+    );
+    render(
+      <UploadHarness
+        client={mockClient({ upload })}
+        onError={onError}
+        onStatusChange={onStatusChange}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: { files: [new File(['x'], 'cancel.txt')] },
+    });
+    await waitFor(() =>
+      expect(onStatusChange).toHaveBeenCalledWith('uploading'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel: cancel.txt' }));
+    await waitFor(() =>
+      expect(onStatusChange).toHaveBeenLastCalledWith('idle'),
+    );
+    expect(onError).not.toHaveBeenCalled();
+    expect(upload.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  });
+
+  it('aborts an unfinished upload when the field unmounts', async () => {
+    const upload = vi.fn<FilesClient['upload']>(() => new Promise(() => {}));
+    const { unmount } = render(
+      <UploadHarness client={mockClient({ upload })} />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: { files: [new File(['x'], 'pending.txt')] },
+    });
+    await waitFor(() => expect(upload).toHaveBeenCalledOnce());
+
+    unmount();
+    expect(upload.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  });
+
+  it('ignores a late upload result from a custom client after unmount', async () => {
+    let resolveUpload: ((record: FileRecord) => void) | undefined;
+    const upload = vi.fn<FilesClient['upload']>(
+      () =>
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+        }),
+    );
+    const onChange = vi.fn();
+    const { unmount } = render(
+      <FileUploadField
+        client={mockClient({ upload })}
+        value={[]}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose file'), {
+      target: { files: [new File(['x'], 'late.txt')] },
+    });
+    await waitFor(() => expect(upload).toHaveBeenCalledOnce());
+    unmount();
+    resolveUpload?.(fileRecord({ filename: 'late.txt' }));
+    await Promise.resolve();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('FileList and FilePreviewDialog', () => {
@@ -281,7 +435,7 @@ describe('FileList and FilePreviewDialog', () => {
     const { rerender } = render(
       <FilePreviewDialog
         client={client}
-        file={privateFile}
+        files={[privateFile]}
         open
         onOpenChange={vi.fn()}
       />,
@@ -293,7 +447,7 @@ describe('FileList and FilePreviewDialog', () => {
     rerender(
       <FilePreviewDialog
         client={client}
-        file={privateFile}
+        files={[privateFile]}
         open={false}
         onOpenChange={vi.fn()}
       />,
@@ -301,7 +455,7 @@ describe('FileList and FilePreviewDialog', () => {
     rerender(
       <FilePreviewDialog
         client={client}
-        file={privateFile}
+        files={[privateFile]}
         open
         onOpenChange={vi.fn()}
       />,
@@ -357,7 +511,7 @@ describe('FileList and FilePreviewDialog', () => {
     render(
       <FilePreviewDialog
         client={client}
-        file={html}
+        files={[html]}
         open
         onOpenChange={vi.fn()}
       />,
@@ -384,7 +538,7 @@ describe('FileList and FilePreviewDialog', () => {
     render(
       <FilePreviewDialog
         client={mockClient()}
-        file={svg}
+        files={[svg]}
         open
         onOpenChange={vi.fn()}
       />,
@@ -415,7 +569,7 @@ describe('FileList and FilePreviewDialog', () => {
     render(
       <FilePreviewDialog
         client={mockClient()}
-        file={json}
+        files={[json]}
         open
         onOpenChange={vi.fn()}
       />,
@@ -425,5 +579,98 @@ describe('FileList and FilePreviewDialog', () => {
       await screen.findByText('<script>window.executed = true</script>'),
     ).toBeVisible();
     expect(document.querySelector('script')).toBeNull();
+  });
+
+  it('omits credentials for cross-origin text preview requests', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('external text', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const text = fileRecord({
+      filename: 'external.txt',
+      mimeType: 'text/plain',
+      contentUrl: 'https://cdn.example.com/external.txt',
+    });
+    render(
+      <FilePreviewDialog
+        client={mockClient()}
+        files={[text]}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('external text')).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://cdn.example.com/external.txt',
+      expect.objectContaining({ credentials: 'omit' }),
+    );
+  });
+
+  it('rejects dangerous content URLs and navigates between files', () => {
+    const first = fileRecord({ contentUrl: 'javascript:alert(1)' });
+    const second = fileRecord({ id: 'file-2', filename: 'second.png' });
+    render(
+      <FilePreviewDialog
+        client={mockClient()}
+        files={[first, second]}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'File URL is not allowed.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Next file' }));
+    expect(screen.getByRole('img', { name: 'second.png' })).toBeVisible();
+  });
+
+  it('closes on Escape and restores focus to the opener', async () => {
+    const client = mockClient();
+    render(<FileList client={client} files={[fileRecord()]} />);
+    const opener = screen.getByRole('button', { name: 'Preview: image.png' });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(screen.getByRole('dialog')).toBeVisible();
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(opener).toHaveFocus();
+  });
+
+  it('keeps Tab focus inside the preview dialog', async () => {
+    const user = userEvent.setup();
+    render(<FileList client={mockClient()} files={[fileRecord()]} />);
+    await user.click(
+      screen.getByRole('button', { name: 'Preview: image.png' }),
+    );
+    const dialog = screen.getByRole('dialog');
+
+    expect(
+      document.querySelectorAll('[data-base-ui-focus-guard]').length,
+    ).toBeGreaterThan(0);
+    await user.tab();
+    const active = document.activeElement as HTMLElement;
+    expect(
+      dialog.contains(active) ||
+        active.hasAttribute('data-base-ui-focus-guard') ||
+        active === document.body,
+    ).toBe(true);
+  });
+
+  it('opens the compact preview field at the selected file', () => {
+    const files = [
+      fileRecord({ filename: 'first.png' }),
+      fileRecord({ id: 'file-2', filename: 'second.png' }),
+    ];
+    render(<FilePreviewField client={mockClient()} files={files} />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Preview: second.png' }),
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent('second.png');
   });
 });

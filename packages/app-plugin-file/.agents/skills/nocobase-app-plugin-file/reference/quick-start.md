@@ -100,9 +100,11 @@ app.route(
 );
 ```
 
-`maxFiles` is a best-effort business check performed before the object write.
-Concurrent requests on multiple application nodes can exceed it. Use a
-database UNIQUE owner constraint when the relation must be one-to-one.
+`maxFiles` serializes checks for the same owner within one Route instance and
+process. Concurrent requests on multiple application nodes can still exceed
+it without a database constraint or distributed mechanism. Use a database
+UNIQUE owner constraint when the relation must be one-to-one. When `maxSize`
+is omitted, the Route defaults to 50 MiB per file.
 
 `authorizePurchaseOrderFile` must call the existing authorization system for
 the purchase order and action. It must not introduce a second file ACL. The
@@ -125,12 +127,19 @@ const client = createFilesClient({
   multiple
   accept={['application/pdf']}
   maxFiles={10}
+  onStatusChange={setAttachmentUploadStatus}
 />;
 ```
 
 The business form submits the relation and owner ID. The client handles the
 plugin endpoint, same-origin base path, multipart upload, authentication, and
-content URL flow. The runtime Demo works without Registry; install
+content URL flow. Each upload can be cancelled and pending requests are
+aborted when the field unmounts. Treat `uploading` and `error` status as form
+submission blockers. File UI accepts only relative or HTTP(S) content and
+access URLs; unsafe schemes such as `javascript:` and external `data:` are not
+rendered or fetched. Use `FilePreviewField` for compact read-only thumbnails,
+and `FilePreviewDialog` with `files` plus `initialIndex` for multi-file preview
+and keyboard navigation. The runtime Demo works without Registry; install
 `component-ui` only when the application needs editable UI source. Install
 `page-ui` when the application should own and customize the Demo page. The two
 Registry items are independently installable; `page-ui` composes the plugin's

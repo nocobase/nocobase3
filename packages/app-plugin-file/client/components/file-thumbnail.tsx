@@ -9,6 +9,7 @@ import {
 import type { ReactElement } from 'react';
 
 import type { FileThumbnailProps } from '../types.js';
+import { resolveSafeFileUrl } from '../lib/file-url.js';
 
 function extension(filename: string): string {
   const value = filename.toLowerCase();
@@ -51,8 +52,9 @@ export function FileThumbnail({
   url,
   alt = file.filename,
 }: FileThumbnailProps): ReactElement {
-  const imageUrl =
-    url ?? (file.public && isSafeImage(file) ? file.contentUrl : undefined);
+  const imageUrl = resolveSafeFileUrl(
+    url ?? (file.public && isSafeImage(file) ? file.contentUrl : ''),
+  );
   if (imageUrl) {
     return (
       <img

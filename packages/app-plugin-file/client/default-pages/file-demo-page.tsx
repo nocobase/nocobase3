@@ -15,6 +15,11 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 
 import { FileList, FileUploadField } from '../components/index.js';
 import { createFilesClient } from '../files-client.js';
+import {
+  fileUrlCredentials,
+  publicDownloadUrl,
+  resolveSafeFileUrl,
+} from '../lib/file-url.js';
 import type { FileAccessUrl, FileRecord, FilesClient } from '../types.js';
 
 interface DemoProfileExample {
@@ -110,17 +115,6 @@ function triggerDownload(url: string, filename: string): void {
   link.download = filename;
   link.rel = 'noopener';
   link.click();
-}
-
-function publicDownloadUrl(url: string): string {
-  try {
-    const parsed = new URL(url, window.location.href);
-    if (parsed.origin !== window.location.origin) return url;
-    parsed.searchParams.set('download', '1');
-    return parsed.toString();
-  } catch {
-    return url;
-  }
 }
 
 function formatExpiration(value: string | null): string {
@@ -287,9 +281,11 @@ export default function FileDemoPage(): ReactElement {
     const setError = section === 'avatar' ? setAvatarError : setOrderError;
     setError(undefined);
     try {
-      const url = file.public
+      const raw = file.public
         ? publicDownloadUrl(file.contentUrl)
         : (await client.createAccessUrl(file.id)).url;
+      const url = raw ? resolveSafeFileUrl(raw) : undefined;
+      if (!url) throw new Error('File URL is not allowed.');
       triggerDownload(url, file.filename);
     } catch (error) {
       setError(errorMessage(error, 'Unable to download the file.'));
@@ -318,7 +314,11 @@ export default function FileDemoPage(): ReactElement {
     setAccessError(undefined);
     setAccess({ ...access, status: 'checking', message: undefined });
     try {
-      const response = await fetch(access.url, { credentials: 'include' });
+      const url = resolveSafeFileUrl(access.url);
+      if (!url) throw new Error('File URL is not allowed.');
+      const response = await fetch(url, {
+        credentials: fileUrlCredentials(url),
+      });
       if (!response.ok) {
         const text = await response.text();
         let detail = text;
@@ -565,13 +565,11 @@ export default function FileDemoPage(): ReactElement {
                     key={file.id}
                     type='button'
                     className={actionClass()}
-                    onClick={() =>
-                      window.open(
-                        file.contentUrl,
-                        '_blank',
-                        'noopener,noreferrer',
-                      )
-                    }
+                    onClick={() => {
+                      const url = resolveSafeFileUrl(file.contentUrl);
+                      if (url)
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
                   >
                     <ExternalLink aria-hidden='true' />
                     Open Public file: {file.filename}
