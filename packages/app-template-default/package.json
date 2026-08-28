@@ -163,6 +163,7 @@
     "index.html",
     "components.json",
     "registry.config.json",
+    "tailwind.config.mjs",
     "vite.config.ts",
     "vitest.config.ts",
     "eslint.config.js",
