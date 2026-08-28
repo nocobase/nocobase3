@@ -13,6 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { normalizePluginName } from './create-plugin.mjs';
+import { listClientPlugins, readClientPlugins } from './lib/client-plugins.mjs';
 
 const packagePrefix = '@nocobase/app-plugin-';
 const directoryPrefix = 'app-plugin-';
@@ -229,6 +230,14 @@ async function findWorkspaceReferences({
     if (hasOwn(packageJson.nocobase?.plugins, packageName)) {
       locations.push('nocobase.plugins');
     }
+    // An application may import the plugin from client/plugins.ts without
+    // declaring it anywhere in package.json; removing the package while that
+    // import stands would leave the application unbuildable.
+    if (
+      await referencesClientPlugin(path.dirname(packageJsonPath), packageName)
+    ) {
+      locations.push('client/plugins.ts');
+    }
 
     if (locations.length > 0) {
       references.push({
@@ -242,6 +251,22 @@ async function findWorkspaceReferences({
   }
 
   return references;
+}
+
+async function referencesClientPlugin(appRoot, packageName) {
+  const { exists, sourceText } = await readClientPlugins(appRoot);
+  if (!exists) {
+    return false;
+  }
+  try {
+    return listClientPlugins(sourceText).some(
+      (entry) => entry.packageName === packageName,
+    );
+  } catch {
+    // An unparsable file is the application author's to fix; treat it as no
+    // reference rather than blocking an unrelated removal.
+    return false;
+  }
 }
 
 async function findPackageJsonFiles(directory, targetDirectory) {
@@ -282,7 +307,8 @@ function formatReferenceError(packageName, references) {
       references.flatMap(({ locations, packageJsonPath }) => {
         if (
           !locations.includes('devDependencies') &&
-          !locations.includes('nocobase.plugins')
+          !locations.includes('nocobase.plugins') &&
+          !locations.includes('client/plugins.ts')
         ) {
           return [];
         }

@@ -47,11 +47,6 @@
         "page-ui": "./registry/page-ui",
         "provider-ui": "./registry/provider-ui"
       }
-    },
-    "plugin": {
-      "client": {
-        "routes": "./client/routes"
-      }
     }
   },
   "scripts": {

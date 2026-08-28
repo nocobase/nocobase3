@@ -107,6 +107,8 @@ describe('generated app package scripts', () => {
     });
     expect(manifest.oclif?.topics).toEqual({
       app: expect.any(Object),
+      'app:plugin': expect.any(Object),
+      'app:plugin:skills': expect.any(Object),
       hub: expect.any(Object),
     });
   });

@@ -8,10 +8,13 @@ export {
 } from './config.js';
 export {
   applyClientRouteComponentOverrides,
+  clientSettingPath,
+  isAppClientSettingGroup,
   defineClientApplication,
   defineClientProviders,
   defineClientRouteComponentOverrides,
   defineClientRoutes,
+  defineClientSettings,
   resolveAppClientContributions,
 } from './plugins.js';
 export type {
@@ -38,6 +41,8 @@ export type {
   AppClientRefineSetters,
   AppClientRegisteredProvider,
   AppClientRegisteredRoute,
+  AppClientRegisteredSetting,
+  AppClientRegisteredSettingGroup,
   AppClientRouteAuth,
   AppClientRouteComponentLoader,
   AppClientRouteComponentModule,
@@ -45,5 +50,12 @@ export type {
   AppClientRouteDefinition,
   AppClientRoutesLoader,
   AppClientRoutesModule,
+  AppClientSettingDefinition,
+  AppClientSettingGroupDefinition,
+  AppClientSettingIcon,
+  AppClientSettingPageDefinition,
+  AppClientSettingsLoader,
+  AppClientSettingsModule,
+  AppClientSettingsModuleDefault,
   ResolvedAppClientContributions,
 } from './plugins.js';

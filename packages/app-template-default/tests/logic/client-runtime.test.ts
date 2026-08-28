@@ -38,18 +38,18 @@ describe('app client runtime', () => {
     const plugins: AppClientPluginLoader[] = [
       {
         packageName: '@nocobase/app-plugin-first',
-        loadBootstrap: async () => {
+        bootstrap: async () => {
           calls.push('load:first');
           return firstModule;
         },
-        loadRoutes: async () => {
+        routes: async () => {
           calls.push('load:routes');
           return { default: [] };
         },
       },
       {
         packageName: '@nocobase/app-plugin-authentication',
-        loadBootstrap: async () => {
+        bootstrap: async () => {
           calls.push('load:authentication');
           resolveFirst?.({
             default: () => {
@@ -63,7 +63,7 @@ describe('app client runtime', () => {
             },
           };
         },
-        loadRoutes: async () => ({
+        routes: async () => ({
           default: [createRoute('login', '/login', undefined, 'guest')],
         }),
       },
@@ -137,7 +137,7 @@ describe('app client runtime', () => {
   it('requires an authentication plugin to contribute the guest login route', async () => {
     const plugin: AppClientPluginLoader = {
       packageName: '@nocobase/app-plugin-authentication',
-      loadBootstrap: async () => ({
+      bootstrap: async () => ({
         default: ({ refine }) => {
           refine.setAuthProvider(authProvider);
         },
@@ -270,7 +270,7 @@ describe('app client runtime', () => {
   it('rejects invalid routes module exports', async () => {
     const plugin: AppClientPluginLoader = {
       packageName: '@nocobase/app-plugin-routes',
-      loadRoutes: async () => ({ default: undefined }) as never,
+      routes: async () => ({ default: undefined }) as never,
     };
 
     await expect(
@@ -288,7 +288,7 @@ describe('app client runtime', () => {
   it('rejects duplicate route names from the same plugin', async () => {
     const plugin: AppClientPluginLoader = {
       packageName: '@nocobase/app-plugin-routes',
-      loadRoutes: async () => ({
+      routes: async () => ({
         default: [
           createRoute('list', '/first'),
           createRoute('list', '/second'),
@@ -424,7 +424,7 @@ function createAppRuntime(
 function createDataProviderPlugin(): AppClientPluginLoader {
   return {
     packageName: '@nocobase/app-plugin-data-provider',
-    loadBootstrap: async () => ({ default: dataProviderBootstrap }),
+    bootstrap: async () => ({ default: dataProviderBootstrap }),
   };
 }
 
@@ -434,12 +434,12 @@ function createAuthPlugin(
 ): AppClientPluginLoader {
   return {
     packageName,
-    loadBootstrap: async () => ({
+    bootstrap: async () => ({
       default: ({ refine }) => {
         refine.setAuthProvider(authProvider);
       },
     }),
-    loadRoutes: async () => ({
+    routes: async () => ({
       default: [
         createRoute('login', '/login', { default: LoginPage }, 'guest'),
       ],
@@ -455,7 +455,7 @@ function createRoutePlugin(
 ): AppClientPluginLoader {
   return {
     packageName,
-    loadRoutes: async () => ({
+    routes: async () => ({
       default: [createRoute(name, path, module)],
     }),
   };
@@ -485,7 +485,7 @@ function createProviderPlugin(
 ): AppClientPluginLoader {
   return {
     packageName,
-    loadProviders: async () => ({ default: providers }),
+    providers: async () => ({ default: providers }),
   };
 }
 

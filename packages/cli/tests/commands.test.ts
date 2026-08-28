@@ -10,8 +10,8 @@ import {
 } from './helpers.ts';
 
 /**
- * The commands documented in docs/cli. Until the behaviour behind them is built, this list is the deliverable, so the
- * tests assert that the CLI exposes exactly it — no missing commands and no extras that never made it into the docs.
+ * The command surface this package is expected to expose. The tests assert it exactly, so adding or renaming a command
+ * is a deliberate edit here rather than something that drifts in unnoticed.
  */
 const APP_COMMANDS = [
   'config',
@@ -21,6 +21,10 @@ const APP_COMMANDS = [
   'dev',
   'info',
   'list',
+  'plugin:register',
+  'plugin:skills:sync',
+  'plugin:unregister',
+  'plugin:update',
   'publish',
   'status',
 ];
@@ -135,7 +139,6 @@ describe('documented argument contract', () => {
     ],
     ['app:status', [], ['dir', 'app', 'hub', 'json']],
     ['app:config', ['key', 'value'], ['dir', 'json']],
-    ['app:destroy', ['dir'], ['hub', 'yes']],
     ['app:destroy', ['dir'], ['hub', 'yes']],
     ['hub:create', ['name'], ['dir', 'template', 'registry', 'port', 'host']],
     ['hub:dev', [], ['hub-dir', 'port', 'host', 'portals-dir']],

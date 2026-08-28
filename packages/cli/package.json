@@ -35,6 +35,12 @@
       "app": {
         "description": "Create, develop, and deploy business apps."
       },
+      "app:plugin": {
+        "description": "Manage the plugins an app uses."
+      },
+      "app:plugin:skills": {
+        "description": "Synchronize the agent skills plugins ship."
+      },
       "hub": {
         "description": "Manage a local hub that hosts deployed apps."
       }

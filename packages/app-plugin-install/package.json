@@ -4,6 +4,7 @@
   "description": "Redirects unconfigured applications to the installation page.",
   "version": "0.0.1-beta.0",
   "type": "module",
+  "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
@@ -16,6 +17,14 @@
     "./client/providers": {
       "types": "./client/providers.ts",
       "import": "./client/providers.ts"
+    },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
     },
     "./package.json": "./package.json"
   },
@@ -30,6 +39,14 @@
         "types": "./dist/client/providers.d.ts",
         "import": "./dist/client/providers.js"
       },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -37,14 +54,6 @@
     "dist",
     "README.md"
   ],
-  "nocobase": {
-    "plugin": {
-      "client": {
-        "routes": "./client/routes",
-        "providers": "./client/providers"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json",

@@ -631,7 +631,7 @@ pnpm --filter @nocobase/app-template-default lint
 pnpm --filter @nocobase/app-template-default typecheck
 pnpm --filter @nocobase/app-template-default test
 pnpm --filter @nocobase/app-template-default build
-pnpm app:client:inspect --app app-template-default
+pnpm --filter @nocobase/app-template-default client:inspect
 ```
 
 示例插件的 ESLint 和 declaration build 会忽略 `registry/**`，因为 Registry source 使用消费应用的 `@/` alias，不能作为插件 declaration build 的一部分编译。仓库脚本测试会把三个 item 物化到临时应用目录并验证文件、target 和关键 import；对于正式 Registry，还应在真实消费应用中执行 typecheck 和 build。仅执行插件自身 typecheck 不能证明安装后的 Registry source 可用。

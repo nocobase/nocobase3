@@ -1,23 +1,17 @@
 # @nocobase/nb3-cli
 
-NocoBase 3 command-line tools and the internal runner for application-management scripts included in generated apps.
+NocoBase 3 internal command-line tools. This package is distributed as a development dependency of generated apps; it
+is not intended for global installation.
 
-The package exposes both command surfaces:
+It exposes two executable surfaces:
 
-- `nb3` remains available with the existing app and Hub command tree
-- `nocobase-app` backs the package scripts in generated apps
+- `nb3` provides the internal app, plugin, and Hub command tree.
+- `nocobase-app` backs the application-management scripts in generated apps.
 
-Application developers normally use the project-local scripts:
+Application developers normally use the project-local `pnpm` scripts described below instead of invoking either
+executable directly.
 
-```bash
-pnpm run release --bump patch --non-interactive
-pnpm run deploy
-pnpm run status --json
-pnpm run hub:login --hub https://hub.example.com/hub
-pnpm run hub:logout --hub https://hub.example.com/hub
-```
-
-## Application scripts
+## Application-management scripts
 
 | Script       | Purpose                                                                               |
 | ------------ | ------------------------------------------------------------------------------------- |
@@ -27,32 +21,48 @@ pnpm run hub:logout --hub https://hub.example.com/hub
 | `hub:login`  | Authorize this device and save an Agent credential                                    |
 | `hub:logout` | Revoke and remove the saved credential                                                |
 
+```bash
+pnpm run release --bump patch --non-interactive
+pnpm run deploy --hub https://hub.example.com/hub
+pnpm run status --json
+pnpm run hub:login --hub https://hub.example.com/hub
+pnpm run hub:logout --hub https://hub.example.com/hub
+```
+
 Every script accepts `--help`. Agent-facing operations support non-interactive and JSON output where applicable.
 Release and deployment operations also support dry-run validation and operation IDs for safe retries.
 
-Application source stays on the developer machine. Create a new local source project from the published template:
+Application source stays on the developer machine. Hub stores build artifacts and manages Releases, Deployments, and
+Runtime state; it does not store, download, or edit source. A generated app stores its Hub association in
+`.nocobase/config.json`, while credentials and operation journals live under `~/.nocobase` by default.
+
+A new Hub starts with an empty application list. On the first deployment, omit `--app` to create an application from
+the local project name, or pass `--app <slug>` to bind an application that was created in Hub explicitly:
 
 ```bash
-pnpm create @nocobase/app crm
+pnpm run deploy --hub https://hub.example.com/hub
+pnpm run deploy --hub https://hub.example.com/hub --app sales
 ```
 
-Hub does not store, download, or edit source. To continue an existing app, use its real local source directory. A
-generated app stores its Hub association in `.nocobase/config.json`; credentials and operation journals live under
-`~/.nocobase` by default.
+After a successful association, `pnpm run deploy` reuses the saved Hub and application identity. Use
+`pnpm run deploy --release`, `--rollback`, or `--redeploy` to operate on existing Releases. Use `pnpm run release` to
+create a Release without deploying it.
 
-Bare `pnpm run deploy` associates or creates the Hub application when necessary, builds locally, uploads the artifact,
-creates the next patch Release, and deploys it. Pass `--hub <url> --app <slug>` on the first release or deploy to bind
-an existing Hub application explicitly. `pnpm run deploy --release`, `--rollback`, and `--redeploy` operate on existing
-Releases instead. `pnpm run release` builds and creates a Release without deploying it.
+## Plugin scripts
 
-Hub starts with a pre-created empty application named `default`. It has no Release or Deployment. To build local source
-and create its first Release and Deployment, bind it explicitly:
+Generated apps also expose project-local scripts for plugin registration and skill synchronization:
 
-```bash
-pnpm run deploy --hub https://hub.example.com/hub --app default
-```
+| Script                    | Internal command             | Purpose                                                        |
+| ------------------------- | ---------------------------- | -------------------------------------------------------------- |
+| `pnpm plugin:register`    | `nb3 app plugin register`    | Install and register a plugin                                  |
+| `pnpm plugin:unregister`  | `nb3 app plugin unregister`  | Remove the plugin registration and package                     |
+| `pnpm plugin:update`      | `nb3 app plugin update`      | Upgrade registered plugins and synchronize their Agent skills  |
+| `pnpm plugin:skills:sync` | `nb3 app plugin skills sync` | Synchronize Agent skills without upgrading plugin packages     |
+| `pnpm client:inspect`     | App-local inspector          | Inspect the final client plugin, route, and settings ownership |
 
-Omitting `--app` during first association creates another Hub application instead of selecting `default`.
+Plugin registration updates the package dependency, `nocobase.plugins`, and, for plugins with a client export,
+`client/plugins.ts`. The same implementation is shared with the repository-level plugin scripts. Full usage and flags
+are documented in [docs/cli](../../docs/cli/README.md).
 
 ## `nb3` command surface
 
@@ -61,14 +71,15 @@ The existing executable remains part of the published package:
 ```bash
 nb3 --help
 nb3 app --help
+nb3 app plugin --help
 nb3 hub --help
 ```
 
-## Implementation
+The command source lives under `src/commands/`; the directory structure is the command structure. The generated-app
+surface lives under `src/app-scripts/` and reuses the same focused implementations from `src/commands/` and `src/lib/`.
+`bin/run.js` loads the `nb3` surface, while `bin/app.js` loads the application-script surface.
 
-The app-facing command tree lives under `src/app-scripts/`. Each entry reuses focused implementations from
-`src/commands/` and `src/lib/` so the package scripts and the `nb3` surface do not duplicate lifecycle logic.
-`bin/app.js` loads the app-script surface, while `bin/run.js` loads the existing `nb3` surface.
+## Development
 
 ```bash
 node ./bin/app.js release --help
@@ -83,8 +94,8 @@ Set `NB3_CLI_USE_DIST=1` to exercise compiled command files from the source chec
 
 ## Local state
 
-- User credentials and operation journals live outside app source under `~/.nocobase`
-- App-local Hub identity lives in `.nocobase/config.json` and is written atomically after a successful association
-- `NOCOBASE_CLI_ROOT` overrides the user-state root; `NB3_CLI_ROOT` remains accepted for compatibility
+- User credentials and operation journals live outside app source under `~/.nocobase`.
+- App-local Hub identity lives in `.nocobase/config.json` and is written atomically after a successful association.
+- `NOCOBASE_CLI_ROOT` overrides the user-state root; `NB3_CLI_ROOT` remains accepted for compatibility.
 - Hub workflow exit codes are `2` for local input or artifact errors, `3` for authentication, `4` for authorization,
-  `5` for Hub state conflicts, `6` for network or server failures, and `7` for app build failures
+  `5` for Hub state conflicts, `6` for network or server failures, and `7` for app build failures.
