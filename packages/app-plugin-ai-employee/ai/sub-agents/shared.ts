@@ -1,21 +1,39 @@
-import type { Context } from '../../server/context.js';
-import type { AIEmployeeEntity } from '@nocobase/ai-employee';
-/**
- * This file is part of the NocoBase (R) project.
- * Copyright (c) 2020-2024 NocoBase Co., Ltd.
- * Authors: NocoBase Team.
- *
- * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
- * For more information, please visit: https://www.nocobase.com/agreement.
- */
+import type {
+  AgentContext,
+  AIEmployee as AIEmployeeType,
+  AIEmployeeEntity,
+  AIEmployeeRepository,
+  SubAgentConversationMetadata,
+} from '@nocobase/ai-employee';
+import type {
+  AIConversationRepository,
+  AIMessageRepository,
+  AIToolMessageRepository,
+} from '../../server/repository/index.js';
+import type { AgentBuiltInService } from '../../server/agent/contracts.js';
 
-import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
-import type { SubAgentConversationMetadata } from '@nocobase/ai-employee';
+type EmployeeLookupContext = AgentContext<
+  { aiEmployees: AIEmployeeRepository },
+  { builtIn: AgentBuiltInService }
+>;
+
+type SkillSettingsContext = AgentContext<
+  { aiConversations: AIConversationRepository },
+  {}
+>;
+
+type MessageMetadataContext = AgentContext<
+  {
+    aiToolMessages: AIToolMessageRepository;
+    aiMessages: AIMessageRepository;
+  },
+  {}
+>;
 
 export async function listAccessibleAIEmployees(
-  ctx: Context,
+  ctx: EmployeeLookupContext,
 ): Promise<AIEmployeeEntity[]> {
-  const filter = await buildAccessibleEmployeeFilter(ctx);
+  const filter = buildAccessibleEmployeeFilter(ctx);
   return ctx.repositories.aiEmployees.find({
     filter,
     sort: ['sort', 'username'],
@@ -23,27 +41,24 @@ export async function listAccessibleAIEmployees(
 }
 
 export async function getAccessibleAIEmployee(
-  ctx: Context,
+  ctx: EmployeeLookupContext,
   username: string,
 ): Promise<AIEmployeeEntity | null> {
-  const filter = await buildAccessibleEmployeeFilter(ctx);
+  const filter = buildAccessibleEmployeeFilter(ctx);
   return ctx.repositories.aiEmployees.findOne({
-    filter: {
-      ...filter,
-      username,
-    },
+    filter: { ...filter, username },
   });
 }
 
-function localizeBuiltInInfo(ctx: Context, employee: AIEmployeeEntity): void {
-  ctx.builtInManager.setupBuiltInInfo(
-    ctx,
-    employee as unknown as AIEmployeeType,
-  );
+function localizeBuiltInInfo(
+  ctx: EmployeeLookupContext,
+  employee: AIEmployeeEntity,
+): void {
+  ctx.services.builtIn.localize(employee as unknown as AIEmployeeType);
 }
 
 export function serializeEmployeeSummary(
-  ctx: Context,
+  ctx: EmployeeLookupContext,
   employee: AIEmployeeEntity,
 ): Record<string, unknown> {
   localizeBuiltInInfo(ctx, employee);
@@ -58,108 +73,67 @@ export function serializeEmployeeSummary(
 }
 
 export function serializeEmployeeDetail(
-  ctx: Context,
+  ctx: EmployeeLookupContext,
   employee: AIEmployeeEntity,
 ): Record<string, unknown> {
   localizeBuiltInInfo(ctx, employee);
   const about = employee.about || employee.defaultPrompt || '';
-  return {
-    ...serializeEmployeeSummary(ctx, employee),
-    about,
-  };
+  return { ...serializeEmployeeSummary(ctx, employee), about };
 }
 
-async function buildAccessibleEmployeeFilter(
-  ctx: Context,
-): Promise<Record<string, any>> {
-  const filter: Record<string, any> = {
+function buildAccessibleEmployeeFilter(
+  ctx: Pick<EmployeeLookupContext, 'actor'>,
+): Record<string, unknown> {
+  const filter: Record<string, unknown> = {
     enabled: true,
     category: 'business',
     deprecated: false,
   };
-
-  if (ctx.state.currentRoles?.includes('root')) {
-    return filter;
-  }
-
+  if (ctx.actor.isRoot || ctx.actor.roles.includes('root')) return filter;
   return filter;
 }
 
 export const getSkillSettingsFromMain = async (
-  ctx: Context,
-  sessionId: string,
+  ctx: SkillSettingsContext,
+  sessionId?: string,
 ): Promise<unknown> => {
-  if (!sessionId) {
-    return null;
-  }
+  if (!sessionId) return null;
   const aiConversation = await ctx.repositories.aiConversations.findOne({
-    filter: {
-      sessionId,
-      userId: ctx.auth?.user?.id,
-    },
+    filter: { sessionId, userId: ctx.actor.id },
   });
   return aiConversation?.options?.skillSettings;
 };
 
 export const updateMessageMetadata = async (
-  ctx: Context,
+  ctx: MessageMetadataContext,
   toolCallId: string,
   subSessionId: string,
   status: 'pending' | 'completed',
-  sessionId: string,
+  sessionId?: string,
 ): Promise<void> => {
-  if (!sessionId) {
-    return;
-  }
+  if (!sessionId) return;
   const aiToolMessage = await ctx.repositories.aiToolMessages.findOne({
-    filter: {
-      sessionId,
-      toolCallId,
-    },
+    filter: { sessionId, toolCallId },
   });
-  if (!aiToolMessage) {
-    return;
-  }
+  if (!aiToolMessage) return;
   const aiMessage = await ctx.repositories.aiMessages.findOne({
-    filter: {
-      sessionId,
-      messageId: String(aiToolMessage.messageId),
-    },
+    filter: { sessionId, messageId: String(aiToolMessage.messageId) },
   });
-  if (!aiMessage) {
-    return;
-  }
+  if (!aiMessage) return;
   const metadata = aiMessage.metadata ?? {};
-  if (!metadata.subAgentConversations) {
-    metadata.subAgentConversations = [];
-  }
-
-  const subAgentConversations =
-    metadata.subAgentConversations as SubAgentConversationMetadata[];
+  const subAgentConversations = (metadata.subAgentConversations ??
+    []) as SubAgentConversationMetadata[];
   const existingConversation = subAgentConversations.find(
     (item) => item.sessionId === subSessionId,
   );
-
   if (existingConversation) {
     existingConversation.toolCallId = toolCallId;
     existingConversation.status = status;
   } else {
-    subAgentConversations.push({
-      sessionId: subSessionId,
-      toolCallId,
-      status,
-    });
+    subAgentConversations.push({ sessionId: subSessionId, toolCallId, status });
   }
-
-  metadata.subAgentConversations = subAgentConversations;
-
   await ctx.repositories.aiMessages.update({
-    values: {
-      metadata,
-    },
-    filter: {
-      sessionId,
-      messageId: aiMessage.messageId,
-    },
+    values: { metadata: { ...metadata, subAgentConversations } },
+    filter: { sessionId, messageId: aiMessage.messageId },
   });
 };

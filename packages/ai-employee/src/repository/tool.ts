@@ -11,6 +11,7 @@ export type ToolsEntity<TContext = unknown> = {
   scope: ToolsScope;
   from?: ToolsFrom;
   execution?: 'frontend' | 'backend';
+  requiresContext?: boolean;
   defaultPermission?: ToolsPermission;
   silence?: boolean;
   introduction?: { title: string; about?: string };

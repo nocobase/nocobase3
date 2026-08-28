@@ -12,6 +12,7 @@ import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import { ModelRef } from '../ai-employee.js';
 import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
+import { createAgentContext } from '../../agent/context.js';
 import type {
   SubAgentConversationMetadata,
   UserDecision,
@@ -19,7 +20,6 @@ import type {
 } from '@nocobase/ai-employee';
 
 export type SubAgentTask = {
-  ctx: Context;
   sessionId: string;
   employee: AIEmployeeEntity;
   model: ModelRef;
@@ -31,8 +31,7 @@ export type SubAgentTask = {
 };
 
 export class SubAgentsDispatcher {
-  constructor() {}
-
+  constructor(private readonly ctx: Context) {}
   private extractTextContent(content: unknown): string {
     if (typeof content === 'string') {
       return content;
@@ -134,7 +133,6 @@ export class SubAgentsDispatcher {
 
   async run(task: SubAgentTask): Promise<string> {
     const {
-      ctx,
       sessionId,
       employee,
       model,
@@ -144,6 +142,7 @@ export class SubAgentsDispatcher {
       messages,
       writer,
     } = task;
+    const ctx = this.ctx;
     const userId = ctx.auth?.user?.id;
     if (!userId) {
       throw new Error('User not authenticated');
@@ -180,22 +179,33 @@ export class SubAgentsDispatcher {
       };
     }
 
-    const result = await agent.service.invoke({
-      userDecisions: decisions,
-      userMessages: decisions
-        ? undefined
-        : [
-            {
-              role: 'user',
-              content: {
-                type: 'text',
-                content: question,
-              },
-            },
-          ],
-      writer,
-      context,
+    const agentContext = createAgentContext(ctx, {
+      state: {
+        sessionId,
+        model: resolvedModel,
+        webSearch,
+        messages,
+      },
     });
+    const result = await agent.service.invoke(
+      {
+        userDecisions: decisions,
+        userMessages: decisions
+          ? undefined
+          : [
+              {
+                role: 'user',
+                content: {
+                  type: 'text',
+                  content: question,
+                },
+              },
+            ],
+        writer,
+        context,
+      },
+      agentContext,
+    );
 
     writer?.({
       action: 'afterSubAgentInvoke',

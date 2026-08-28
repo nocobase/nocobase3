@@ -9,13 +9,17 @@ export function buildTool<TContext = unknown>(
 ): ReturnType<typeof tool> {
   const {
     invoke,
+    requiresContext = true,
     definition: { name, description, schema },
   } = toolsEntry;
   return tool(
     (input, config) => {
       const { context, toolCall } = config;
       const writer = (config['writer'] as (chunk: any) => void) ?? noWriter;
-      return invoke(context.ctx as TContext, input, {
+      if (requiresContext && !context?.agentContext) {
+        throw new Error(`Agent context is required to execute tool "${name}"`);
+      }
+      return invoke(context?.agentContext as TContext, input, {
         toolCallId: toolCall.id,
         writer,
       });

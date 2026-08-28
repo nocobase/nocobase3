@@ -7,11 +7,10 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../server/context.js';
-import { defineTools } from '@nocobase/ai-employee';
+import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
 
-export default defineTools<Context>({
+export default defineTools<AgentContext<{}, {}>>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
@@ -31,10 +30,17 @@ export default defineTools<Context>({
         ),
     }),
   },
-  invoke: async (ctx: Context, args: { query: string[] }, id) => {
-    const { model } = ctx.requestExecution ?? {};
+  invoke: async (ctx, args: { query: string[] }) => {
+    const { model } = ctx.state;
+    if (
+      typeof model?.llmService !== 'string' ||
+      typeof model.model !== 'string'
+    ) {
+      throw new Error('Web search model is not configured');
+    }
     const { provider } = await ctx.ai.llmProviderManager.getLLMService({
-      ...model,
+      llmService: model.llmService,
+      model: model.model,
       webSearch: true,
       reasoning: { mode: 'off' },
     });

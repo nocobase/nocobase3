@@ -20,6 +20,16 @@ import {
 const src = path.resolve(import.meta.dirname, '../server');
 const read = (relative: string) =>
   fs.readFileSync(path.join(src, relative), 'utf8');
+const aiSrc = path.resolve(import.meta.dirname, '../ai');
+const readAISources = (): string =>
+  fs
+    .readdirSync(aiSrc, { recursive: true })
+    .filter(
+      (file): file is string =>
+        typeof file === 'string' && file.endsWith('.ts'),
+    )
+    .map((file) => fs.readFileSync(path.join(aiSrc, file), 'utf8'))
+    .join('\n');
 
 const llmProvider = {
   createModel: vi.fn(),
@@ -74,6 +84,20 @@ describe('fixed AgentService contracts', () => {
     expect(agentSource).not.toContain('dataSourceSettings');
     expect(agentSource).not.toContain('dataSourceManager');
     expect(agentSource).not.toContain('getCollection(');
+  });
+  it('keeps broad application Context out of AI tools and runtime tool context', () => {
+    const aiToolSources = readAISources();
+    expect(aiToolSources).not.toMatch(/import type \{\s*Context\s*\}/);
+    expect(aiToolSources).not.toMatch(/defineTools<Context>/);
+    expect(aiToolSources).not.toMatch(/ctx\.requestExecution/);
+    expect(aiToolSources).not.toMatch(/ctx\.auth/);
+    expect(aiToolSources).not.toMatch(/ctx\.aiConversationsManager/);
+    expect(aiToolSources).not.toMatch(/ctx\.subAgentsDispatcher/);
+    const service = read('agent/agent-service.ts');
+    const providers = read('agent/ai-employee/providers.ts');
+    expect(service).toContain('agentContext');
+    expect(service).not.toContain('context.ctx');
+    expect(providers).not.toContain('ctx: options.ctx');
   });
 
   it('merges partial conversation overrides without replacing defaults', async () => {

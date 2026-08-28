@@ -2,6 +2,7 @@ import { concat } from '@langchain/core/utils/stream';
 import { Command } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
 import { buildTool } from '@nocobase/ai-employee';
+import type { AgentContext } from '@nocobase/ai-employee';
 import type {
   AgentInterruptAction,
   AgentLLMIdentity,
@@ -79,23 +80,41 @@ export class AgentService {
       this.activeController?.abort(reason);
   }
 
-  stream(request: AgentRequest = {}): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('stream', request);
+  stream(
+    request: AgentRequest = {},
+    agentContext?: AgentContext,
+  ): AsyncGenerator<AgentStreamEvent> {
+    return this.executeStream('stream', request, agentContext);
   }
-  resumeStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('resume', request);
+  resumeStream(
+    request: AgentRequest,
+    agentContext?: AgentContext,
+  ): AsyncGenerator<AgentStreamEvent> {
+    return this.executeStream('resume', request, agentContext);
   }
-  forkStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('fork', request);
+  forkStream(
+    request: AgentRequest,
+    agentContext?: AgentContext,
+  ): AsyncGenerator<AgentStreamEvent> {
+    return this.executeStream('fork', request, agentContext);
   }
-  invoke(request: AgentRequest = {}): Promise<unknown> {
-    return this.executeInvoke('invoke', request);
+  invoke(
+    request: AgentRequest = {},
+    agentContext?: AgentContext,
+  ): Promise<unknown> {
+    return this.executeInvoke('invoke', request, agentContext);
   }
-  resumeInvoke(request: AgentRequest): Promise<unknown> {
-    return this.executeInvoke('resume', request);
+  resumeInvoke(
+    request: AgentRequest,
+    agentContext?: AgentContext,
+  ): Promise<unknown> {
+    return this.executeInvoke('resume', request, agentContext);
   }
-  forkInvoke(request: AgentRequest): Promise<unknown> {
-    return this.executeInvoke('fork', request);
+  forkInvoke(
+    request: AgentRequest,
+    agentContext?: AgentContext,
+  ): Promise<unknown> {
+    return this.executeInvoke('fork', request, agentContext);
   }
 
   private async resolveLLM(_request: AgentRequest): Promise<{
@@ -111,6 +130,7 @@ export class AgentService {
     operation: AgentOperation,
     request: AgentRequest,
     llmContext: AgentMessageConversionContext,
+    agentContext?: AgentContext,
   ): Promise<PreparedAgentContext> {
     const {
       conversation,
@@ -176,6 +196,7 @@ export class AgentService {
     const config = {
       context: {
         ...context,
+        agentContext,
         agentRequest: request,
         decisions: request.userDecisions,
       },
@@ -243,6 +264,7 @@ export class AgentService {
   private async executeInvoke(
     operation: AgentOperation,
     request: AgentRequest,
+    agentContext?: AgentContext,
   ): Promise<unknown> {
     const { conversation } = this.providers;
     const { controller, signal, token } = this.begin(request);
@@ -253,6 +275,7 @@ export class AgentService {
         operation,
         { ...request, signal },
         { ...llm.identity, provider: llm.provider },
+        agentContext,
       );
       const result = await this.create(prepared).invoke(
         prepared.input as any,
@@ -278,6 +301,7 @@ export class AgentService {
   private async *executeStream(
     operation: AgentOperation,
     request: AgentRequest,
+    agentContext?: AgentContext,
   ): AsyncGenerator<AgentStreamEvent> {
     const { conversation } = this.providers;
     const identity = conversation.identity;
@@ -304,6 +328,7 @@ export class AgentService {
         operation,
         { ...request, signal },
         { ...llm.identity, provider: llm.provider },
+        agentContext,
       );
       const stream = await this.create(prepared).stream(
         prepared.input as any,

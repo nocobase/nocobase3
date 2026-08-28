@@ -7,14 +7,14 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../server/context.js';
-import { defineTools } from '@nocobase/ai-employee';
+import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
 // @ts-ignore
 import pkg from '../package.json';
 
-export default defineTools<Context>({
+export default defineTools<AgentContext<{}, {}>>({
   scope: 'GENERAL',
+  requiresContext: false,
   defaultPermission: 'ALLOW',
   introduction: {
     title: `{{t("Chart generator", { ns: "${pkg.name}" })}}`,

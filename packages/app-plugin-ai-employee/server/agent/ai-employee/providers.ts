@@ -314,7 +314,6 @@ export function createAIEmployeeChatContextProvider(
       runtime.formatMessages({ messages, provider: model.provider }),
     getSystemPrompt: (messages) => runtime.getSystemPrompt(messages),
     getExecutionContext: async (request) => ({
-      ctx: options.ctx,
       ...(request.context ?? {}),
     }),
     getExecutionConfig: async () => ({

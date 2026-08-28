@@ -1,15 +1,21 @@
-/**
- * This file is part of the NocoBase (R) project.
- * Copyright (c) 2020-2024 NocoBase Co., Ltd.
- * Authors: NocoBase Team.
- *
- * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
- * For more information, please refer to: https://www.nocobase.com/agreement.
- */
-
-import type { Context } from '../../../server/context.js';
-import { defineTools } from '@nocobase/ai-employee';
+import {
+  defineTools,
+  type AgentContext,
+  type AIEmployeeRepository,
+} from '@nocobase/ai-employee';
 import { z } from 'zod';
+import type {
+  AIConversationRepository,
+  AIMessageRepository,
+  AIToolMessageRepository,
+} from '../../../server/repository/index.js';
+import type { ModelRef } from '../../../server/ai-employees/ai-employee.js';
+import type {
+  AgentBuiltInService,
+  AgentConversationService,
+  AgentEmployeeService,
+  AgentSubAgentService,
+} from '../../../server/agent/contracts.js';
 import {
   getAccessibleAIEmployee,
   getSkillSettingsFromMain,
@@ -18,7 +24,28 @@ import {
 // @ts-ignore
 import pkg from '../../package.json';
 
-export default defineTools<Context>({
+type DispatchContext = AgentContext<
+  {
+    aiEmployees: AIEmployeeRepository;
+    aiConversations: AIConversationRepository;
+    aiMessages: AIMessageRepository;
+    aiToolMessages: AIToolMessageRepository;
+  },
+  {
+    aiEmployees: AgentEmployeeService;
+    aiConversations: AgentConversationService;
+    builtIn: AgentBuiltInService;
+    subAgents: AgentSubAgentService;
+  }
+>;
+
+const isModelRef = (value: unknown): value is ModelRef =>
+  !!value &&
+  typeof value === 'object' &&
+  typeof (value as Record<string, unknown>).llmService === 'string' &&
+  typeof (value as Record<string, unknown>).model === 'string';
+
+export default defineTools<DispatchContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
@@ -39,40 +66,28 @@ export default defineTools<Context>({
     }),
   },
   async invoke(ctx, { username, question }, { toolCallId, writer }) {
-    const sessionId = ctx.requestExecution?.sessionId;
-    const userId = ctx.auth?.user?.id;
-    if (!userId) {
-      throw new Error('User not authenticated');
-    }
+    const sessionId = ctx.state.sessionId;
     const employee = await getAccessibleAIEmployee(ctx, username);
-    if (!employee) {
-      throw new Error(`AI employee "${username}" not found`);
-    }
-
-    let subSessionId: string;
+    if (!employee) throw new Error(`AI employee "${username}" not found`);
     const skillSettings = await getSkillSettingsFromMain(ctx, sessionId);
     const existedConversation =
-      await ctx.aiConversationsManager.resolveSubAgentConversation(
+      await ctx.services.aiConversations.resolveSubAgentConversation(
         sessionId,
         toolCallId,
       );
-    if (existedConversation) {
-      subSessionId = existedConversation.sessionId;
-    } else {
-      const newConversation = await ctx.aiConversationsManager.create({
-        userId,
-        aiEmployee: {
-          username: employee.username,
-        },
+    let subSessionId = existedConversation?.sessionId;
+    if (!subSessionId) {
+      const newConversation = await ctx.services.aiConversations.create({
+        userId: ctx.actor.id,
+        aiEmployee: { username: employee.username },
         title: question.slice(0, 30),
         from: 'sub-agent',
-        options: {
-          skillSettings,
-        },
+        options: { skillSettings },
       });
       subSessionId = newConversation.sessionId;
     }
-
+    if (!subSessionId)
+      throw new Error('Sub-agent conversation did not return a session id');
     await updateMessageMetadata(
       ctx,
       toolCallId,
@@ -80,15 +95,19 @@ export default defineTools<Context>({
       'pending',
       sessionId,
     );
-    const answer = await ctx.subAgentsDispatcher.run({
-      ctx,
+    const model = await ctx.services.aiEmployees.resolveModel(
+      employee,
+      isModelRef(ctx.state.model) ? ctx.state.model : undefined,
+    );
+    const answer = await ctx.services.subAgents.run({
       sessionId: subSessionId,
       employee,
-      model: ctx.requestExecution?.model ?? employee.modelSettings,
-      webSearch: ctx.requestExecution?.webSearch,
-      messages: ctx.requestExecution?.messages,
+      model,
+      webSearch: ctx.state.webSearch,
+      messages: ctx.state.messages,
       question,
-      skillSettings,
+      skillSettings: (skillSettings ?? undefined) as
+        Record<string, unknown> | undefined,
       writer,
     });
     await updateMessageMetadata(
@@ -98,10 +117,6 @@ export default defineTools<Context>({
       'completed',
       sessionId,
     );
-
-    return {
-      sessionId: subSessionId,
-      answer,
-    };
+    return { sessionId: subSessionId, answer };
   },
 });

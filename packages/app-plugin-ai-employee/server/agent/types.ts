@@ -52,14 +52,14 @@ export interface AgentMessageIndex {
   lastMessageIndex: number;
 }
 
-export interface AgentState {
+export interface AgentGraphState {
   messageId?: string;
   lastMessageIndex: AgentMessageIndex;
   [key: string]: unknown;
 }
 
 export type PreparedAgentInput =
-  Command | ({ messages: unknown[] } & Partial<AgentState>) | null;
+  Command | ({ messages: unknown[] } & Partial<AgentGraphState>) | null;
 
 export interface AgentMessageConversionContext {
   providerName: string;
@@ -79,7 +79,7 @@ export interface PreparedAgentContext extends AgentMessageConversionContext {
   sourceTools: ToolsEntity[];
   baseToolNames: Set<string>;
   config: Record<string, any>;
-  state?: AgentState;
+  state?: AgentGraphState;
   thread?: AgentThread;
   checkpointer?: BaseCheckpointSaver | boolean;
   metadata: {
@@ -315,7 +315,7 @@ export interface ConversationThreadStore {
   fork(provider: LLMProvider): Promise<AgentThread | undefined>;
   shouldFork(operation: AgentOperation, request: AgentRequest): boolean;
   update(thread: AgentThread): Promise<void>;
-  buildInitialState(messages: AIMessage[]): AgentState;
+  buildInitialState(messages: AIMessage[]): AgentGraphState;
   useCheckpointer(): boolean;
 }
 

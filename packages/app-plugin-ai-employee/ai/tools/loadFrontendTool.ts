@@ -1,28 +1,20 @@
-/**
- * This file is part of the NocoBase (R) project.
- * Copyright (c) 2020-2024 NocoBase Co., Ltd.
- * Authors: NocoBase Team.
- *
- * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
- * For more information, please refer to: https://www.nocobase.com/agreement.
- */
-
-import type { Context } from '../../server/context.js';
-import { defineTools } from '@nocobase/ai-employee';
+import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
 import {
   LOAD_FRONTEND_TOOL_NAME,
   isFrontendToolManifest,
   isFrontendToolInvokeResult,
 } from '../../server/ai-employees/common/frontend-tools.js';
-import {
-  findCurrentFrontendTool,
-  readFrontendToolResult,
-} from '../../server/ai-employees/frontend-tools.js';
+import type { AgentFrontendToolService } from '../../server/agent/contracts.js';
 // @ts-ignore
 import pkg from '../package.json';
 
-export default defineTools<Context>({
+type FrontendToolContext = AgentContext<
+  {},
+  { frontendTools: AgentFrontendToolService }
+>;
+
+export default defineTools<FrontendToolContext>({
   scope: 'GENERAL',
   execution: 'frontend',
   defaultPermission: 'ALLOW',
@@ -41,26 +33,21 @@ export default defineTools<Context>({
     }),
   },
   invoke: async (ctx, args, runtime) => {
-    const execution = ctx.requestExecution ?? {};
-    const tool = await findCurrentFrontendTool(ctx, args.toolId, execution);
-    if (!tool) {
+    const tool = await ctx.services.frontendTools.find(args.toolId);
+    if (!tool)
       return {
         status: 'error',
         content: {
           message: 'Frontend tool is unavailable in the current conversation.',
         },
       };
-    }
-    const result = readFrontendToolResult(execution, runtime.toolCallId);
-    if (!result?.provided) {
+    const result = ctx.services.frontendTools.readResult(runtime.toolCallId);
+    if (!result?.provided)
       return {
         status: 'error',
         content: 'Frontend tool manifest was not returned.',
       };
-    }
-    if (isFrontendToolInvokeResult(result.value)) {
-      return result.value;
-    }
+    if (isFrontendToolInvokeResult(result.value)) return result.value;
     if (
       !isFrontendToolManifest(result.value) ||
       result.value.id !== args.toolId

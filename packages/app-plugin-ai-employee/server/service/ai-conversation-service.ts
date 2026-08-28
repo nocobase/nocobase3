@@ -20,6 +20,7 @@ import type {
 import { AIEmployee } from '../ai-employees/ai-employee.js';
 import { AgentSSEAdapter } from '../agent/sse.js';
 import { createAIEmployeeAgentService } from '../agent/ai-employee/index.js';
+import { createAgentContext } from '../agent/context.js';
 import { EXECUTE_FRONTEND_TOOL_NAME } from '../ai-employees/common/frontend-tools.js';
 import { findCurrentFrontendTool } from '../ai-employees/frontend-tools.js';
 
@@ -540,20 +541,22 @@ export class AIConversationService {
           (chunk) =>
             ctx.llmStreamCachedManager.getCached(sessionId).append(chunk),
         );
+        const agentContext = createAgentContext(ctx);
         await adapter.consume(
           request?.messageId
-            ? agent.service.forkStream(request)
-            : agent.service.stream(request),
+            ? agent.service.forkStream(request, agentContext)
+            : agent.service.stream(request, agentContext),
         );
         streamTarget(execution).end();
         return true;
       };
-      const runInvoke = (request: any) =>
-        aiEmployee
-          ? aiEmployee.invoke(request)
-          : request?.messageId
-            ? agent.service.forkInvoke(request)
-            : agent.service.invoke(request);
+      const runInvoke = (request: any) => {
+        if (aiEmployee) return aiEmployee.invoke(request);
+        const agentContext = createAgentContext(ctx);
+        return request?.messageId
+          ? agent.service.forkInvoke(request, agentContext)
+          : agent.service.invoke(request, agentContext);
+      };
       const cancelToolCall = () =>
         aiEmployee
           ? aiEmployee.cancelToolCall()
@@ -816,30 +819,39 @@ export class AIConversationService {
           });
         } else {
           const { service } = await createAIEmployeeAgentService(agentOptions);
+          const agentContext = createAgentContext(ctx);
           await new AgentSSEAdapter(
             (chunk) => streamTarget(execution).write(chunk),
             (chunk) =>
               ctx.llmStreamCachedManager.getCached(sessionId).append(chunk),
           ).consume(
-            service.forkStream({
-              messageId,
-              userMessages: resendMessages.length ? resendMessages : undefined,
-            }),
+            service.forkStream(
+              {
+                messageId,
+                userMessages: resendMessages.length
+                  ? resendMessages
+                  : undefined,
+              },
+              agentContext,
+            ),
           );
           streamTarget(execution).end();
         }
       } else {
-        return useLegacyWorkflow
-          ? await new AIEmployee(agentOptions).invoke({
-              messageId,
-              userMessages: resendMessages.length ? resendMessages : undefined,
-            })
-          : await (
-              await createAIEmployeeAgentService(agentOptions)
-            ).service.forkInvoke({
-              messageId,
-              userMessages: resendMessages.length ? resendMessages : undefined,
-            });
+        if (useLegacyWorkflow) {
+          return await new AIEmployee(agentOptions).invoke({
+            messageId,
+            userMessages: resendMessages.length ? resendMessages : undefined,
+          });
+        }
+        const { service } = await createAIEmployeeAgentService(agentOptions);
+        return service.forkInvoke(
+          {
+            messageId,
+            userMessages: resendMessages.length ? resendMessages : undefined,
+          },
+          createAgentContext(ctx),
+        );
       }
       return undefined;
     } catch (err: any) {
@@ -1056,7 +1068,9 @@ export class AIConversationService {
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
             ctx.llmStreamCachedManager.getCached(sessionId).append(chunk),
-        ).consume(service.resumeStream({ userDecisions }));
+        ).consume(
+          service.resumeStream({ userDecisions }, createAgentContext(ctx)),
+        );
         streamTarget(execution).end();
       }
     } catch (err: any) {

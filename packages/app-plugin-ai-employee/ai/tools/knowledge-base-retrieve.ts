@@ -7,13 +7,25 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../server/context.js';
-import { defineTools } from '@nocobase/ai-employee';
+import { defineTools, type AgentContext } from '@nocobase/ai-employee';
+import type {
+  AIConversationRepository,
+  AIToolMessageRepository,
+} from '../../server/repository/index.js';
+import type { AgentKnowledgeBaseService } from '../../server/agent/contracts.js';
 import { z } from 'zod';
 // @ts-ignore
 import pkg from '../package.json';
 
-export default defineTools<Context>({
+type KnowledgeBaseContext = AgentContext<
+  {
+    aiToolMessages: AIToolMessageRepository;
+    aiConversations: AIConversationRepository;
+  },
+  { knowledgeBase: AgentKnowledgeBaseService }
+>;
+
+export default defineTools<KnowledgeBaseContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
@@ -61,7 +73,7 @@ export default defineTools<Context>({
       );
     }
 
-    const content = await ctx.knowledgeBaseManager.retrievePrompt({
+    const content = await ctx.services.knowledgeBase.retrievePrompt({
       username,
       query,
     });

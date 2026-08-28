@@ -1,19 +1,12 @@
-/**
- * This file is part of the NocoBase (R) project.
- * Copyright (c) 2020-2024 NocoBase Co., Ltd.
- * Authors: NocoBase Team.
- *
- * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
- * For more information, please refer to: https://www.nocobase.com/agreement.
- */
-
-import type { Context } from '../../server/context.js';
-import { defineTools } from '@nocobase/ai-employee';
+import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
+import type { AIMessageRepository } from '../../server/repository/index.js';
 // @ts-ignore
 import pkg from '../package.json';
 
-export default defineTools<Context>({
+type SuggestionsContext = AgentContext<{ aiMessages: AIMessageRepository }, {}>;
+
+export default defineTools<SuggestionsContext>({
   scope: 'GENERAL',
   introduction: {
     title: `{{t("Suggestions", { ns: "${pkg.name}" })}}`,
@@ -31,18 +24,15 @@ export default defineTools<Context>({
       options: z
         .array(z.string())
         .describe(
-          'A list of suggested prompts that can be presented to the user as selectable options.' +
-            'Each option represents a possible next user message.',
+          'A list of suggested prompts that can be presented to the user as selectable options. Each option represents a possible next user message.',
         ),
     }),
   },
-  invoke: async (ctx: Context, args, runtime) => {
-    const { messageId } = ctx.requestExecution ?? {};
+  invoke: async (ctx, args, runtime) => {
+    const { messageId } = ctx.state;
     if (messageId) {
       const messageRepo = ctx.repositories.aiMessages;
-      const message = await messageRepo.findOne({
-        filter: { id: messageId },
-      });
+      const message = await messageRepo.findOne({ filter: { id: messageId } });
       const toolCalls = message?.toolCalls || [];
       const index = toolCalls.findIndex(
         (toolCall: { id: string }) => toolCall.id === runtime.toolCallId,
@@ -54,16 +44,10 @@ export default defineTools<Context>({
         };
         await messageRepo.update({
           filter: { messageId },
-          values: {
-            toolCalls,
-          },
+          values: { toolCalls },
         });
       }
     }
-
-    return {
-      status: 'success',
-      content: args?.option,
-    };
+    return { status: 'success', content: args?.option };
   },
 });

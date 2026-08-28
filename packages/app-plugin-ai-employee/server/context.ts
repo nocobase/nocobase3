@@ -5,7 +5,10 @@ import type {
   DocumentLoaders,
   FileManager,
 } from '@nocobase/ai-employee';
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type {
+  DatabaseConnection,
+  DatabaseManager,
+} from '@nocobase/app-database';
 import type { Caching } from '@nocobase/caching';
 import type { SnowflakeIdGenerator } from '@nocobase/id-generator';
 import type { WorkContextHandler } from './agent/ai-employee/work-context/index.js';
@@ -48,6 +51,7 @@ export interface ConversationRequestExecution {
 export interface Context<TRepositories = any> {
   ai: AIManager;
   database: DatabaseConnection;
+  databaseManager: DatabaseManager;
   repositories: TRepositories;
   logger: any;
   caching: Caching;

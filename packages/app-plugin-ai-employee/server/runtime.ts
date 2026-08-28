@@ -182,7 +182,8 @@ export function createPluginRuntime(
   options: Pick<CreatePluginRuntimeOptions, 'deps'>,
 ): Context {
   const logger = options.deps.logging.getLogger('ai-employee');
-  const database = options.deps.database.connection();
+  const databaseManager = options.deps.database;
+  const database = databaseManager.connection();
   if (!pluginRepositories) {
     throw new Error(
       'Plugin repositories are not initialized. Call initializePluginRuntimeResources() before createPluginRuntime().',
@@ -198,6 +199,7 @@ export function createPluginRuntime(
     ai,
     repositories,
     database,
+    databaseManager,
     logger,
     caching: options.deps.caching,
     snowflake,
@@ -280,7 +282,7 @@ export function createSupportingManagers(ctx: Context) {
     aiConversationsManager: new AIConversationsManager(ctx),
     llmStreamCachedManager: new LLMStreamCachedManager(ctx),
     builtInManager: new BuiltInManager(ctx.i18nNamespace),
-    subAgentsDispatcher: new SubAgentsDispatcher(),
+    subAgentsDispatcher: new SubAgentsDispatcher(ctx),
     knowledgeBaseManager: new KnowledgeBaseManager(ctx),
     workContextHandler: createWorkContextHandler(),
     documentLoaders: new DocumentLoaders(ctx),

@@ -7,8 +7,12 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { Context } from '../../../server/context.js';
-import { defineTools } from '@nocobase/ai-employee';
+import {
+  defineTools,
+  type AgentContext,
+  type AIEmployeeRepository,
+} from '@nocobase/ai-employee';
+import type { AgentBuiltInService } from '../../../server/agent/contracts.js';
 import { z } from 'zod';
 import {
   getAccessibleAIEmployee,
@@ -17,7 +21,12 @@ import {
 // @ts-ignore
 import pkg from '../../package.json';
 
-export default defineTools<Context>({
+type AIEmployeeContext = AgentContext<
+  { aiEmployees: AIEmployeeRepository },
+  { builtIn: AgentBuiltInService }
+>;
+
+export default defineTools<AIEmployeeContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
