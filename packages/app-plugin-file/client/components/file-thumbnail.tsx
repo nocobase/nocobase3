@@ -9,6 +9,7 @@ import {
 import type { ReactElement } from 'react';
 
 import type { FileThumbnailProps } from '../types.js';
+import { isSafeImagePreview } from '../lib/file-preview.js';
 import { resolveSafeFileUrl } from '../lib/file-url.js';
 
 function extension(filename: string): string {
@@ -17,14 +18,8 @@ function extension(filename: string): string {
   return dot < 0 ? '' : value.slice(dot);
 }
 
-function isSafeImage(file: FileThumbnailProps['file']): boolean {
-  return (
-    file.mimeType.startsWith('image/') && file.mimeType !== 'image/svg+xml'
-  );
-}
-
 function thumbnailIcon(file: FileThumbnailProps['file']): ReactElement {
-  if (isSafeImage(file)) return <FileImage aria-hidden='true' />;
+  if (isSafeImagePreview(file)) return <FileImage aria-hidden='true' />;
   if (file.mimeType.startsWith('audio/'))
     return <FileAudio aria-hidden='true' />;
   if (file.mimeType.startsWith('video/'))
@@ -53,7 +48,7 @@ export function FileThumbnail({
   alt = file.filename,
 }: FileThumbnailProps): ReactElement {
   const imageUrl = resolveSafeFileUrl(
-    url ?? (file.public && isSafeImage(file) ? file.contentUrl : ''),
+    url ?? (file.public && isSafeImagePreview(file) ? file.contentUrl : ''),
   );
   if (imageUrl) {
     return (

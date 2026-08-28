@@ -31,6 +31,7 @@ export function FileList({
   onPreview,
   onDownload,
   onRemove,
+  onError,
   labels,
   emptyState,
 }: FileListProps): ReactElement {
@@ -50,8 +51,13 @@ export function FileList({
         ? publicDownloadUrl(file.contentUrl)
         : (await client.createAccessUrl(file.id)).url;
       const url = raw ? resolveSafeFileUrl(raw) : undefined;
-      if (url) triggerDownload(url, file.filename);
-    })();
+      if (!url) throw new Error('File URL is not allowed.');
+      triggerDownload(url, file.filename);
+    })().catch((error: unknown) => {
+      onError?.(
+        error instanceof Error ? error : new Error('File download failed.'),
+      );
+    });
   };
 
   if (!files.length) {
@@ -124,6 +130,7 @@ export function FileList({
           open
           onOpenChange={setPreviewOpen}
           labels={labels}
+          onError={onError}
         />
       ) : null}
     </>

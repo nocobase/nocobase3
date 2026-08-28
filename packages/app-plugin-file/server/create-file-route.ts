@@ -106,7 +106,11 @@ export function createFileRoute(options: CreateFileRouteOptions): Hono {
     const record =
       options.limits?.maxFiles === undefined
         ? await persist()
-        : await runSerialized(uploadQueue, uploadQueueKey(context), persist);
+        : await runSerialized(
+            uploadQueue,
+            uploadQueueKey(context, options),
+            persist,
+          );
 
     return context.json(
       { data: toClientRecord(record, rootContentPath(context, record.id)) },
@@ -283,8 +287,28 @@ async function runSerialized<Result>(
   }
 }
 
-function uploadQueueKey(context: Context): string {
-  return context.req.path.replace(/\/+$/u, '') || '/';
+function uploadQueueKey(
+  context: Context,
+  options: CreateFileRouteOptions,
+): string {
+  if (!options.store) {
+    const scope = options.scope?.(context) ?? {};
+    return JSON.stringify(
+      Object.entries(scope).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    );
+  }
+  const path = context.req.path
+    .replace(/\/+$/u, '')
+    .split('/')
+    .map((segment) => {
+      if (!/^\d+$/u.test(segment)) return segment;
+      const value = Number(segment);
+      return Number.isSafeInteger(value) ? String(value) : segment;
+    })
+    .join('/');
+  return path || '/';
 }
 
 async function enforceFileLimit(

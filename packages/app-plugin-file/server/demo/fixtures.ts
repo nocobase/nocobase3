@@ -14,7 +14,7 @@ const AVATAR_CONTENT = new Uint8Array(
 );
 const PUBLIC_ATTACHMENT_CONTENT = 'Public demo attachment for PO-DEMO-001.';
 const PRIVATE_ATTACHMENT_CONTENT =
-  '{"order":"PO-DEMO-001","visibility":"private","id":1}\n';
+  '# Private order note\n\n- Order: `PO-DEMO-001`\n- Visibility: **Private**\n\n| Item | Status |\n| --- | --- |\n| Demo attachment | Ready |\n';
 
 export interface FileDemoFixture extends EnsureFileObjectInput {
   readonly id: string;

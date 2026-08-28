@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 
+import { isSafeImagePreview } from '@nocobase/app-plugin-file/client';
 import type { FileThumbnailProps } from '@nocobase/app-plugin-file/client/types';
 import { resolveSafeFileUrl } from '../lib/file-url';
 
@@ -16,14 +17,8 @@ function extension(filename: string): string {
   return dot < 0 ? '' : filename.slice(dot).toLowerCase();
 }
 
-function isSafeImage(file: FileThumbnailProps['file']): boolean {
-  return (
-    file.mimeType.startsWith('image/') && file.mimeType !== 'image/svg+xml'
-  );
-}
-
 function icon(file: FileThumbnailProps['file']): ReactElement {
-  if (isSafeImage(file)) return <FileImage aria-hidden='true' />;
+  if (isSafeImagePreview(file)) return <FileImage aria-hidden='true' />;
   if (file.mimeType.startsWith('audio/'))
     return <FileAudio aria-hidden='true' />;
   if (file.mimeType.startsWith('video/'))
@@ -51,7 +46,7 @@ export function FileThumbnail({
   alt = file.filename,
 }: FileThumbnailProps): ReactElement {
   const imageUrl = resolveSafeFileUrl(
-    url ?? (file.public && isSafeImage(file) ? file.contentUrl : ''),
+    url ?? (file.public && isSafeImagePreview(file) ? file.contentUrl : ''),
   );
   return imageUrl ? (
     <img

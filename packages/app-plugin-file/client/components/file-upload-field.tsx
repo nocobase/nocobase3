@@ -61,6 +61,11 @@ export function FileUploadField({
   const [items, setItems] = useState<UploadItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const controlledValueRef = useRef(value);
+  const completedRecordsRef = useRef<FileUploadFieldProps['value'][number][]>(
+    [],
+  );
+  const commitScheduledRef = useRef(false);
+  const statusChangeRef = useRef(onStatusChange);
   const controllersRef = useRef(new Map<string, AbortController>());
   const mountedRef = useRef(true);
   const [dragging, setDragging] = useState(false);
@@ -73,6 +78,9 @@ export function FileUploadField({
   useEffect(() => {
     controlledValueRef.current = value;
   }, [value]);
+  useEffect(() => {
+    statusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   useEffect(() => {
     onStatusChange?.(
@@ -95,11 +103,30 @@ export function FileUploadField({
       for (const controller of controllers.values()) {
         controller.abort();
       }
+      statusChangeRef.current?.('idle');
     };
   }, []);
 
   const report = (message: string): void => {
     onError?.(new Error(message));
+  };
+
+  const commitCompletedRecord = (
+    record: FileUploadFieldProps['value'][number],
+  ): void => {
+    completedRecordsRef.current.push(record);
+    if (commitScheduledRef.current) return;
+    commitScheduledRef.current = true;
+    queueMicrotask(() => {
+      commitScheduledRef.current = false;
+      const completed = completedRecordsRef.current.splice(0);
+      if (!mountedRef.current || !completed.length) return;
+      onChange(
+        multiple
+          ? [...controlledValueRef.current, ...completed]
+          : [completed.at(-1) as FileUploadFieldProps['value'][number]],
+      );
+    });
   };
 
   const uploadItem = async (item: UploadItem): Promise<void> => {
@@ -122,11 +149,7 @@ export function FileUploadField({
       setItems((current) =>
         current.filter((candidate) => candidate.key !== item.key),
       );
-      const next = multiple
-        ? [...controlledValueRef.current, record]
-        : [record];
-      controlledValueRef.current = next;
-      onChange(next);
+      commitCompletedRecord(record);
     } catch (error) {
       controllersRef.current.delete(item.key);
       if (controller.signal.aborted || isAbortError(error)) {
@@ -198,7 +221,6 @@ export function FileUploadField({
     const next = controlledValueRef.current.filter(
       (candidate) => candidate.id !== record.id,
     );
-    controlledValueRef.current = next;
     onChange(next);
   };
 

@@ -31,6 +31,16 @@ mounting, form submission, and authorization.
   extension point.
 - File components accept relative and HTTP(S) content/access URLs only. Use
   upload status to block form submission and preserve cancellation on unmount.
+  Lists and dialogs expose `onError` for failed Private download URL requests;
+  set `download={false}` when download actions must be hidden, including
+  unsupported-preview fallbacks.
+- Use `FilePreviewField` for compact read-only thumbnail sets; enable
+  `showFilenames` when labels are needed. `FilePreviewDialog` accepts `files`
+  plus `initialIndex` and provides previous/next navigation.
+- Markdown previews support GFM without raw HTML execution. Office and
+  OpenDocument previews use Office Online only for internet-accessible absolute
+  HTTP(S) Public URLs or freshly issued Private access URLs; relative,
+  localhost, blob, and failed embeds fall back to download.
 
 ## References
 

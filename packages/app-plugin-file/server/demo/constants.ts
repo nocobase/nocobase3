@@ -64,10 +64,10 @@ export const FILE_DEMO_PUBLIC_ATTACHMENT: Readonly<FileDemoFile> =
 export const FILE_DEMO_PRIVATE_ATTACHMENT: Readonly<FileDemoFile> =
   Object.freeze({
     id: 'file-demo-private-document',
-    key: 'file-demo/orders/private-document.json',
-    filename: 'private-document.json',
-    mimeType: 'application/json',
-    size: 54,
+    key: 'file-demo/orders/private-order-note.md',
+    filename: 'private-order-note.md',
+    mimeType: 'text/markdown',
+    size: 132,
     public: false,
   });
 

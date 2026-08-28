@@ -56,15 +56,23 @@ export function FileUploadField({
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const valueRef = useRef(value);
+  const completedRecordsRef = useRef<FileRecord[]>([]);
+  const commitScheduledRef = useRef(false);
+  const statusChangeRef = useRef(onStatusChange);
   const controllersRef = useRef(new Map<string, AbortController>());
   const mountedRef = useRef(true);
   const maximum = multiple ? (maxFiles ?? Infinity) : 1;
   const chooseLabel =
     labels?.choose ?? (multiple ? 'Choose files' : 'Choose file');
+  const removeLabel = labels?.remove ?? 'Remove';
+  const retryLabel = labels?.retry ?? 'Retry';
 
   useEffect(() => {
     valueRef.current = value;
   }, [value]);
+  useEffect(() => {
+    statusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
   useEffect(() => {
     onStatusChange?.(
       items.some((item) => item.status === 'error')
@@ -80,8 +88,25 @@ export function FileUploadField({
     return () => {
       mountedRef.current = false;
       for (const controller of controllers.values()) controller.abort();
+      statusChangeRef.current?.('idle');
     };
   }, []);
+
+  const commitCompletedRecord = (record: FileRecord): void => {
+    completedRecordsRef.current.push(record);
+    if (commitScheduledRef.current) return;
+    commitScheduledRef.current = true;
+    queueMicrotask(() => {
+      commitScheduledRef.current = false;
+      const completed = completedRecordsRef.current.splice(0);
+      if (!mountedRef.current || !completed.length) return;
+      onChange(
+        multiple
+          ? [...valueRef.current, ...completed]
+          : [completed.at(-1) as FileRecord],
+      );
+    });
+  };
 
   const upload = async (item: UploadItem): Promise<void> => {
     const controller = new AbortController();
@@ -103,9 +128,7 @@ export function FileUploadField({
       setItems((current) =>
         current.filter((candidate) => candidate.key !== item.key),
       );
-      const next = multiple ? [...valueRef.current, record] : [record];
-      valueRef.current = next;
-      onChange(next);
+      commitCompletedRecord(record);
     } catch (error) {
       controllersRef.current.delete(item.key);
       if (
@@ -173,7 +196,6 @@ export function FileUploadField({
     const next = valueRef.current.filter(
       (candidate) => candidate.id !== record.id,
     );
-    valueRef.current = next;
     onChange(next);
   };
   const cancel = (item: UploadItem): void => {
@@ -221,7 +243,7 @@ export function FileUploadField({
               type='button'
               size='icon'
               variant='ghost'
-              aria-label={`Remove ${record.filename}`}
+              aria-label={`${removeLabel}: ${record.filename}`}
               onClick={() => void removeRecord(record)}
               disabled={disabled}
             >
@@ -254,8 +276,9 @@ export function FileUploadField({
                   type='button'
                   size='icon'
                   variant='ghost'
-                  aria-label={`Retry ${item.file.name}`}
+                  aria-label={`${retryLabel}: ${item.file.name}`}
                   onClick={() => void upload(item)}
+                  disabled={disabled}
                 >
                   <RotateCcw aria-hidden='true' />
                 </Button>

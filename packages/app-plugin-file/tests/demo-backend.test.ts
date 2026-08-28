@@ -124,6 +124,16 @@ describe('File Demo backend', () => {
         expect(bytes).toEqual(fixture.content);
       }
     }
+    const markdown = FILE_DEMO_FIXTURES.find(
+      (fixture) => fixture.id === FILE_DEMO_PRIVATE_ATTACHMENT.id,
+    );
+    expect(markdown).toMatchObject({
+      filename: 'private-order-note.md',
+      mimeType: 'text/markdown',
+      public: false,
+      size: 132,
+    });
+    expect(markdown?.content).toContain('| Item | Status |');
     expect(put).toHaveBeenCalledTimes(3);
 
     await runBootstrap(config, deps);
@@ -351,6 +361,7 @@ describe('File Demo backend', () => {
     };
     const privateContent = await app.request(tokenPayload.data.url);
     expect(privateContent.status).toBe(200);
+    expect(privateContent.headers.get('content-type')).toBe('text/markdown');
     expect(await privateContent.text()).toBe(
       FILE_DEMO_FIXTURES.find(
         (fixture) => fixture.key === FILE_DEMO_PRIVATE_ATTACHMENT.key,
@@ -393,6 +404,8 @@ describe('File Demo backend', () => {
         }),
         expect.objectContaining({
           id: FILE_DEMO_PRIVATE_ATTACHMENT.id,
+          filename: 'private-order-note.md',
+          mimeType: 'text/markdown',
           public: false,
         }),
       ]),

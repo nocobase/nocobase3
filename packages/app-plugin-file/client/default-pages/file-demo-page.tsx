@@ -13,8 +13,16 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 
-import { FileList, FileUploadField } from '../components/index.js';
+import {
+  FileList,
+  FilePreviewField,
+  FileUploadField,
+} from '../components/index.js';
 import { createFilesClient } from '../files-client.js';
+import {
+  FILE_DEMO_AVATAR_MIME_TYPES,
+  FILE_DEMO_ORDER_MIME_TYPES,
+} from '../../shared/file-demo.js';
 import {
   fileUrlCredentials,
   publicDownloadUrl,
@@ -68,25 +76,6 @@ interface AccessState extends FileAccessUrl {
 }
 
 type FileSection = 'avatar' | 'order';
-
-const AVATAR_TYPES = [
-  'image/gif',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-] as const;
-
-const ORDER_TYPES = [
-  ...AVATAR_TYPES,
-  'application/json',
-  'application/pdf',
-  'audio/mpeg',
-  'audio/ogg',
-  'audio/wav',
-  'text/plain',
-  'video/mp4',
-  'video/webm',
-] as const;
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -466,7 +455,7 @@ export default function FileDemoPage(): ReactElement {
               setFiles('avatar', files);
             }}
             onError={(error) => setAvatarError(error.message)}
-            accept={AVATAR_TYPES}
+            accept={FILE_DEMO_AVATAR_MIME_TYPES}
             maxFiles={1}
             removeOnDelete
             labels={{ choose: 'Upload profile avatar' }}
@@ -479,6 +468,16 @@ export default function FileDemoPage(): ReactElement {
           onDownload={(file) => void downloadFile('avatar', file)}
           onRemove={(file) => removeFile('avatar', file)}
         />
+        <div className='space-y-2 border-t pt-4'>
+          <h3 className='text-sm font-semibold'>Read-only preview field</h3>
+          <FilePreviewField
+            client={demo.avatarClient}
+            files={demo.avatarFiles}
+            emptyState='No Profile Avatar is available for preview.'
+            showFilenames
+            onError={(error) => setAvatarError(error.message)}
+          />
+        </div>
       </section>
 
       <section
@@ -493,6 +492,11 @@ export default function FileDemoPage(): ReactElement {
             <p className='text-sm text-muted-foreground'>
               {demo.orderFiles.length} of 10 files used for order{' '}
               {demo.examples.order.number}.
+            </p>
+            <p className='text-sm text-muted-foreground'>
+              Markdown uses GFM; Office and OpenDocument use Office Online only
+              for internet-accessible HTTP(S) URLs, while local URLs fall back
+              to download.
             </p>
           </div>
           <fieldset className='flex flex-wrap items-center gap-3'>
@@ -528,7 +532,7 @@ export default function FileDemoPage(): ReactElement {
             }}
             onError={(error) => setOrderError(error.message)}
             multiple
-            accept={ORDER_TYPES}
+            accept={FILE_DEMO_ORDER_MIME_TYPES}
             maxFiles={10}
             public={orderPublic}
             removeOnDelete
@@ -542,6 +546,16 @@ export default function FileDemoPage(): ReactElement {
           onDownload={(file) => void downloadFile('order', file)}
           onRemove={(file) => removeFile('order', file)}
         />
+        <div className='space-y-2 border-t pt-4'>
+          <h3 className='text-sm font-semibold'>Read-only preview field</h3>
+          <FilePreviewField
+            client={demo.orderClient}
+            files={demo.orderFiles}
+            emptyState='No Order Attachments are available for preview.'
+            showFilenames
+            onError={(error) => setOrderError(error.message)}
+          />
+        </div>
       </section>
 
       <section aria-labelledby='access-heading' className='space-y-5 pb-6'>

@@ -66,6 +66,7 @@ export interface FileListProps {
   readonly onPreview?: (file: FileRecord) => void;
   readonly onDownload?: (file: FileRecord) => void;
   readonly onRemove?: (file: FileRecord) => void | Promise<void>;
+  readonly onError?: (error: Error) => void;
   readonly labels?: FileUiLabels;
   readonly emptyState?: ReactNode;
 }
@@ -76,6 +77,7 @@ export interface FilePreviewDialogProps {
   readonly initialIndex?: number;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  readonly onError?: (error: Error) => void;
   readonly download?: boolean;
   readonly labels?: FileUiLabels;
 }
@@ -85,6 +87,8 @@ export interface FilePreviewFieldProps {
   readonly files: readonly FileRecord[];
   readonly labels?: FileUiLabels;
   readonly emptyState?: ReactNode;
+  readonly showFilenames?: boolean;
+  readonly onError?: (error: Error) => void;
 }
 
 export interface FileThumbnailProps {

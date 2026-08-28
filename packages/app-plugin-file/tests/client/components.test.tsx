@@ -13,6 +13,7 @@ import {
   FileList,
   FilePreviewDialog,
   FilePreviewField,
+  FileThumbnail,
   FileUploadField,
 } from '../../client/components/index.js';
 import type { FileRecord, FilesClient } from '../../client/types.js';
@@ -138,6 +139,45 @@ describe('FileUploadField', () => {
       expect(screen.getByTestId('value')).toHaveTextContent('a.txt,b.txt');
     });
     expect(client.upload).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not carry a rejected controlled change into a later upload', async () => {
+    const resolvers = new Map<string, (record: FileRecord) => void>();
+    const upload = vi.fn<FilesClient['upload']>(
+      (file) =>
+        new Promise((resolve) => {
+          resolvers.set(file.name, resolve);
+        }),
+    );
+    const onChange = vi.fn();
+    render(
+      <FileUploadField
+        client={mockClient({ upload })}
+        value={[]}
+        onChange={onChange}
+        multiple
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose files'), {
+      target: {
+        files: [new File(['a'], 'a.txt'), new File(['b'], 'b.txt')],
+      },
+    });
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+
+    resolvers.get('a.txt')?.(fileRecord({ id: 'a', filename: 'a.txt' }));
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({ filename: 'a.txt' }),
+      ]),
+    );
+
+    resolvers.get('b.txt')?.(fileRecord({ id: 'b', filename: 'b.txt' }));
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({ filename: 'b.txt' }),
+      ]),
+    );
   });
 
   it('rejects oversized and disallowed files before calling the client', () => {
@@ -346,16 +386,24 @@ describe('FileUploadField', () => {
 
   it('aborts an unfinished upload when the field unmounts', async () => {
     const upload = vi.fn<FilesClient['upload']>(() => new Promise(() => {}));
+    const onStatusChange = vi.fn();
     const { unmount } = render(
-      <UploadHarness client={mockClient({ upload })} />,
+      <UploadHarness
+        client={mockClient({ upload })}
+        onStatusChange={onStatusChange}
+      />,
     );
     fireEvent.change(screen.getByLabelText('Choose file'), {
       target: { files: [new File(['x'], 'pending.txt')] },
     });
     await waitFor(() => expect(upload).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(onStatusChange).toHaveBeenLastCalledWith('uploading'),
+    );
 
     unmount();
     expect(upload.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    expect(onStatusChange).toHaveBeenLastCalledWith('idle');
   });
 
   it('ignores a late upload result from a custom client after unmount', async () => {
@@ -386,6 +434,20 @@ describe('FileUploadField', () => {
 });
 
 describe('FileList and FilePreviewDialog', () => {
+  it.each([
+    ['image/svg+xml; charset=utf-8', 'unsafe.png'],
+    ['image/png', 'unsafe.svg'],
+  ])(
+    'does not render active image content for %s and %s',
+    (mimeType, filename) => {
+      render(<FileThumbnail file={fileRecord({ mimeType, filename })} />);
+      expect(
+        screen.queryByRole('img', { name: filename }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByLabelText(filename)).toBeVisible();
+    },
+  );
+
   it('renders an empty state and invokes the optional remove callback', () => {
     const client = mockClient();
     const { rerender } = render(<FileList client={client} files={[]} />);
@@ -501,6 +563,30 @@ describe('FileList and FilePreviewDialog', () => {
     );
   });
 
+  it('reports a Private download URL failure without an unhandled rejection', async () => {
+    const onError = vi.fn();
+    const client = mockClient({
+      createAccessUrl: vi.fn().mockRejectedValue(new Error('Token failed.')),
+    });
+    render(
+      <FileList
+        client={client}
+        files={[fileRecord({ public: false })]}
+        onError={onError}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download: image.png' }),
+    );
+
+    await waitFor(() =>
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Token failed.' }),
+      ),
+    );
+  });
+
   it('falls back to download for unsupported and active content', () => {
     const client = mockClient();
     const html = fileRecord({
@@ -527,6 +613,27 @@ describe('FileList and FilePreviewDialog', () => {
     expect(
       screen.getAllByRole('button', { name: /Download/ }),
     ).not.toHaveLength(0);
+  });
+
+  it('hides fallback download actions when download is disabled', () => {
+    const html = fileRecord({
+      filename: 'unsafe.html',
+      mimeType: 'text/html',
+    });
+    render(
+      <FilePreviewDialog
+        client={mockClient()}
+        files={[html]}
+        open
+        download={false}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('Preview is unavailable for this file type.'),
+    ).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Download/ })).toBeNull();
   });
 
   it('does not render SVG active content as an image', () => {
@@ -579,6 +686,178 @@ describe('FileList and FilePreviewDialog', () => {
       await screen.findByText('<script>window.executed = true</script>'),
     ).toBeVisible();
     expect(document.querySelector('script')).toBeNull();
+  });
+
+  it('renders Markdown with GFM and safe external links', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          new Response(
+            [
+              '# Notes',
+              '',
+              '~~obsolete~~',
+              '',
+              '[Documentation](https://example.com/docs)',
+              '',
+              '<script>window.executed = true</script>',
+            ].join('\n'),
+            { status: 200 },
+          ),
+        ),
+    );
+    const markdown = fileRecord({
+      filename: 'notes.md',
+      mimeType: 'text/markdown',
+      contentUrl: '/api/files/notes/content',
+    });
+
+    render(
+      <FilePreviewDialog
+        client={mockClient()}
+        files={[markdown]}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Notes' })).toBeVisible();
+    expect(screen.getByText('obsolete').closest('del')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Documentation' })).toHaveAttribute(
+      'target',
+      '_blank',
+    );
+    expect(screen.getByRole('link', { name: 'Documentation' })).toHaveAttribute(
+      'rel',
+      'noreferrer',
+    );
+    expect(document.querySelector('script')).toBeNull();
+  });
+
+  it('previews a Public Office file through Office Online', () => {
+    const office = fileRecord({
+      filename: 'report.docx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      contentUrl: 'https://cdn.example.com/report.docx?version=1',
+    });
+
+    render(
+      <FilePreviewDialog
+        client={mockClient()}
+        files={[office]}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    const iframe = screen.getByTitle('report.docx');
+    const embedUrl = new URL(iframe.getAttribute('src') ?? '');
+    expect(embedUrl.origin).toBe('https://view.officeapps.live.com');
+    expect(embedUrl.pathname).toBe('/op/embed.aspx');
+    expect(embedUrl.searchParams.get('src')).toBe(
+      'https://cdn.example.com/report.docx?version=1',
+    );
+  });
+
+  it('uses a fresh Private access URL for Office Online', async () => {
+    const office = fileRecord({
+      filename: 'budget.xlsx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      public: false,
+    });
+    let resolveAccess:
+      | ((value: Awaited<ReturnType<FilesClient['createAccessUrl']>>) => void)
+      | undefined;
+    const createAccessUrl = vi.fn<FilesClient['createAccessUrl']>(
+      () =>
+        new Promise((resolve) => {
+          resolveAccess = resolve;
+        }),
+    );
+    const client = mockClient({ createAccessUrl });
+
+    render(
+      <FilePreviewDialog
+        client={client}
+        files={[office]}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading preview...');
+    resolveAccess?.({
+      url: 'https://files.example.com/budget.xlsx?token=signed',
+      expiresAt: '2026-08-27T00:15:00.000Z',
+    });
+
+    await waitFor(() =>
+      expect(client.createAccessUrl).toHaveBeenCalledWith('file-1'),
+    );
+    const iframe = await screen.findByTitle('budget.xlsx');
+    const embedUrl = new URL(iframe.getAttribute('src') ?? '');
+    expect(embedUrl.searchParams.get('src')).toBe(
+      'https://files.example.com/budget.xlsx?token=signed',
+    );
+  });
+
+  it.each([
+    '/api/files/report/content',
+    'http://localhost:3000/report.docx',
+    'blob:http://localhost:3000/temporary',
+  ])('uses a download fallback for non-public Office URL %s', (contentUrl) => {
+    const office = fileRecord({
+      filename: 'report.docx',
+      mimeType: 'application/msword',
+      contentUrl,
+    });
+
+    render(
+      <FilePreviewDialog
+        client={mockClient()}
+        files={[office]}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTitle('report.docx')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        contentUrl.startsWith('blob:')
+          ? 'File URL is not allowed.'
+          : 'Office Online requires an internet-accessible absolute file URL.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Download file' })).toBeVisible();
+  });
+
+  it('shows a download fallback when the Office Online iframe fails', async () => {
+    const office = fileRecord({
+      filename: 'slides.pptx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      contentUrl: 'https://cdn.example.com/slides.pptx',
+    });
+    render(
+      <FilePreviewDialog
+        client={mockClient()}
+        files={[office]}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.error(screen.getByTitle('slides.pptx'));
+
+    expect(
+      await screen.findByText('Office Online could not load this file.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Download file' })).toBeVisible();
   });
 
   it('omits credentials for cross-origin text preview requests', async () => {
@@ -653,12 +932,14 @@ describe('FileList and FilePreviewDialog', () => {
       document.querySelectorAll('[data-base-ui-focus-guard]').length,
     ).toBeGreaterThan(0);
     await user.tab();
-    const active = document.activeElement as HTMLElement;
-    expect(
-      dialog.contains(active) ||
-        active.hasAttribute('data-base-ui-focus-guard') ||
-        active === document.body,
-    ).toBe(true);
+    await waitFor(() => {
+      const active = document.activeElement as HTMLElement;
+      expect(
+        dialog.contains(active) ||
+          active.hasAttribute('data-base-ui-focus-guard') ||
+          active === document.body,
+      ).toBe(true);
+    });
   });
 
   it('opens the compact preview field at the selected file', () => {
@@ -672,5 +953,20 @@ describe('FileList and FilePreviewDialog', () => {
       screen.getByRole('button', { name: 'Preview: second.png' }),
     );
     expect(screen.getByRole('dialog')).toHaveTextContent('second.png');
+  });
+
+  it('optionally shows filenames in the compact preview field', () => {
+    const files = [fileRecord({ filename: 'quarterly-report.png' })];
+    const { rerender } = render(
+      <FilePreviewField client={mockClient()} files={files} />,
+    );
+    expect(screen.queryByTitle('quarterly-report.png')).not.toBeInTheDocument();
+
+    rerender(
+      <FilePreviewField client={mockClient()} files={files} showFilenames />,
+    );
+    expect(screen.getByTitle('quarterly-report.png')).toHaveTextContent(
+      'quarterly-report.png',
+    );
   });
 });

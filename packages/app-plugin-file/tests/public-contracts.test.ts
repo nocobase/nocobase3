@@ -13,7 +13,12 @@ import * as serverApi from '@nocobase/app-plugin-file/server';
 import {
   createFilesClient,
   FilePreviewField,
+  FILE_DEMO_AVATAR_MIME_TYPES,
+  FILE_DEMO_ORDER_MIME_TYPES,
   FILE_ROUTE_IDS,
+  isSafeImagePreview,
+  resolveFilePreviewKind,
+  resolveOfficeEmbedUrl,
   type FilesClient,
 } from '@nocobase/app-plugin-file/client';
 
@@ -41,6 +46,25 @@ describe('file plugin public contracts', () => {
     expect(routeFactory).toBeTypeOf('function');
     expect(clientFactory).toBeTypeOf('function');
     expect(previewField).toBeTypeOf('function');
+    expect(FILE_DEMO_ORDER_MIME_TYPES).toEqual(
+      expect.arrayContaining([
+        ...FILE_DEMO_AVATAR_MIME_TYPES,
+        'text/markdown',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.oasis.opendocument.text',
+        'application/vnd.oasis.opendocument.spreadsheet',
+        'application/vnd.oasis.opendocument.presentation',
+        'application/vnd.oasis.opendocument.text-template',
+      ]),
+    );
+    expect(isSafeImagePreview).toBeTypeOf('function');
+    expect(resolveFilePreviewKind).toBeTypeOf('function');
+    expect(resolveOfficeEmbedUrl).toBeTypeOf('function');
     expect(storeImport).toBeUndefined();
     expect(actionsAreFrozen).toBe(true);
     expect(DEFAULT_FILE_ROUTE_VISIBILITY).toEqual({

@@ -4,31 +4,15 @@ import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 import {
   FileList,
+  FilePreviewField,
   FileUploadField,
+  FILE_DEMO_AVATAR_MIME_TYPES,
+  FILE_DEMO_ORDER_MIME_TYPES,
   createFilesClient,
   type FileRecord,
   type FilesClient,
 } from '@nocobase/app-plugin-file/client';
 import { Button } from '@/components/ui/button';
-
-const AVATAR_TYPES = [
-  'image/gif',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-] as const;
-
-const ORDER_TYPES = [
-  ...AVATAR_TYPES,
-  'application/json',
-  'application/pdf',
-  'audio/mpeg',
-  'audio/ogg',
-  'audio/wav',
-  'text/plain',
-  'video/mp4',
-  'video/webm',
-] as const;
 
 interface DemoEntity {
   readonly id: number;
@@ -55,6 +39,7 @@ interface FileGroupProps {
   readonly multiple: boolean;
   readonly publicUpload?: boolean;
   readonly onChange: (files: readonly FileRecord[]) => void;
+  readonly onError: (error: Error) => void;
 }
 
 function FileGroup({
@@ -66,6 +51,7 @@ function FileGroup({
   multiple,
   publicUpload,
   onChange,
+  onError,
 }: FileGroupProps): ReactElement {
   return (
     <section className='space-y-4 border-t pt-6'>
@@ -81,6 +67,7 @@ function FileGroup({
         maxFiles={multiple ? 10 : 1}
         accept={accept}
         public={publicUpload}
+        onError={onError}
       />
       <FileList
         client={client}
@@ -89,7 +76,17 @@ function FileGroup({
           await client.remove(file.id);
           onChange(files.filter((candidate) => candidate.id !== file.id));
         }}
+        onError={onError}
       />
+      <div className='space-y-2 border-t pt-4'>
+        <h3 className='text-sm font-semibold'>Read-only preview field</h3>
+        <FilePreviewField
+          client={client}
+          files={files}
+          showFilenames
+          onError={onError}
+        />
+      </div>
     </section>
   );
 }
@@ -214,6 +211,11 @@ export default function FileDemoPage(): ReactElement {
           files can be read directly; Private files use short-lived access URLs.
         </p>
       </header>
+      {error ? (
+        <div role='alert' className='text-sm text-destructive'>
+          {error}
+        </div>
+      ) : null}
       <div className='rounded-md border p-4 text-sm'>
         <div>
           Profile {examples.profile.id}:{' '}
@@ -228,19 +230,22 @@ export default function FileDemoPage(): ReactElement {
         </div>
       </div>
       <FileGroup
-        accept={AVATAR_TYPES}
+        accept={FILE_DEMO_AVATAR_MIME_TYPES}
         title='Profile Avatar'
         description='A controlled one-file field backed by the Demo profile endpoint.'
         client={avatarClient}
         files={avatarFiles}
         multiple={false}
         onChange={setAvatarFiles}
+        onError={(fileError) => setError(fileError.message)}
       />
       <section className='space-y-4 border-t pt-6'>
         <div>
           <h2 className='text-lg font-semibold'>Order Attachments</h2>
           <p className='text-sm text-muted-foreground'>
-            Up to ten files. Choose whether each upload is Public or Private.
+            Markdown uses GFM; Office and OpenDocument use Office Online only
+            for internet-accessible HTTP(S) URLs, while local URLs fall back to
+            download.
           </p>
         </div>
         <label className='flex items-center gap-2 text-sm'>
@@ -252,7 +257,7 @@ export default function FileDemoPage(): ReactElement {
           Upload as Public
         </label>
         <FileGroup
-          accept={ORDER_TYPES}
+          accept={FILE_DEMO_ORDER_MIME_TYPES}
           title='Order Attachments'
           description='Public and Private records share the same endpoint.'
           client={orderClient}
@@ -260,6 +265,7 @@ export default function FileDemoPage(): ReactElement {
           multiple
           publicUpload={publicUpload}
           onChange={setOrderFiles}
+          onError={(fileError) => setError(fileError.message)}
         />
       </section>
       <section className='space-y-3 border-t pt-6'>

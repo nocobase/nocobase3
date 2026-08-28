@@ -138,8 +138,12 @@ aborted when the field unmounts. Treat `uploading` and `error` status as form
 submission blockers. File UI accepts only relative or HTTP(S) content and
 access URLs; unsafe schemes such as `javascript:` and external `data:` are not
 rendered or fetched. Use `FilePreviewField` for compact read-only thumbnails,
-and `FilePreviewDialog` with `files` plus `initialIndex` for multi-file preview
-and keyboard navigation. The runtime Demo works without Registry; install
+optionally with `showFilenames`, and `FilePreviewDialog` with `files` plus
+`initialIndex` for multi-file preview and keyboard navigation. Markdown uses
+safe GFM rendering without raw HTML. Office and OpenDocument files use Office
+Online only for internet-accessible absolute HTTP(S) Public URLs or freshly
+issued Private access URLs; relative, localhost, blob, and failed embeds fall
+back to download. The runtime Demo works without Registry; install
 `component-ui` only when the application needs editable UI source. Install
 `page-ui` when the application should own and customize the Demo page. The two
 Registry items are independently installable; `page-ui` composes the plugin's

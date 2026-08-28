@@ -400,6 +400,89 @@ describe('createFileRoute', () => {
     expect(store.create).toHaveBeenCalledTimes(1);
   });
 
+  it('serializes equivalent numeric owner paths and keeps different owners parallel', async () => {
+    records = [];
+    let releasePut: () => void = () => undefined;
+    const putGate = new Promise<void>((resolve) => {
+      releasePut = resolve;
+    });
+    put.mockImplementation(async (_options, input) => {
+      await putGate;
+      return {
+        disk: 'local',
+        key: `files/${input.filename}`,
+        filename: input.filename,
+        mimeType: input.mimeType ?? 'application/octet-stream',
+        size: input.size ?? 0,
+      };
+    });
+    const route = createFileRoute({
+      store,
+      defaultDisk: 'local',
+      publicBasePath: '/base',
+      tokenSecret: 'secret',
+      audience: 'owner-files',
+      auth: allowingAuth(),
+      limits: { maxFiles: 1 },
+    });
+    const app = new Hono().route('/base/api/orders/:owner/files', route);
+
+    const first = app.request('/base/api/orders/1/files', {
+      method: 'POST',
+      ...uploadBody(
+        {},
+        { name: 'first.txt', type: 'text/plain', content: 'a' },
+      ),
+    });
+    const equivalent = app.request('/base/api/orders/01/files', {
+      method: 'POST',
+      ...uploadBody(
+        {},
+        { name: 'equivalent.txt', type: 'text/plain', content: 'b' },
+      ),
+    });
+    await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    releasePut();
+    const sameOwnerResponses = await Promise.all([first, equivalent]);
+    expect(sameOwnerResponses.map(({ status }) => status).sort()).toEqual([
+      201, 400,
+    ]);
+
+    records = [];
+    put.mockClear();
+    let releaseParallel: () => void = () => undefined;
+    const parallelGate = new Promise<void>((resolve) => {
+      releaseParallel = resolve;
+    });
+    put.mockImplementation(async (_options, input) => {
+      await parallelGate;
+      return {
+        disk: 'local',
+        key: `files/${input.filename}`,
+        filename: input.filename,
+        mimeType: input.mimeType ?? 'application/octet-stream',
+        size: input.size ?? 0,
+      };
+    });
+    const ownerTwo = app.request('/base/api/orders/2/files', {
+      method: 'POST',
+      ...uploadBody({}, { name: 'two.txt', type: 'text/plain', content: '2' }),
+    });
+    const ownerThree = app.request('/base/api/orders/3/files', {
+      method: 'POST',
+      ...uploadBody(
+        {},
+        { name: 'three.txt', type: 'text/plain', content: '3' },
+      ),
+    });
+    await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+    releaseParallel();
+    const differentOwnerResponses = await Promise.all([ownerTwo, ownerThree]);
+    expect(differentOwnerResponses.map(({ status }) => status)).toEqual([
+      201, 201,
+    ]);
+  });
+
   it('rejects forbidden visibility overrides and supports Public defaults', async () => {
     records = [];
     const forbidden = await createApp().request(MOUNT_PATH, {
