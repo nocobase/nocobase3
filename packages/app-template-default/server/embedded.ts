@@ -6,7 +6,7 @@ import {
   createAppFromRuntime,
   createRuntimeConfigPaths,
   loadAppConfig,
-  resolveEmbeddedRuntimeOptions,
+  resolveAppRuntimeOptions,
   type AppScope,
 } from './runtime/index.js';
 
@@ -14,17 +14,14 @@ export type { AppDisposer, AppScope } from './runtime/index.js';
 
 export type EmbeddedServer = Application<AppConfig>;
 
-export async function createServer(
-  scope: AppScope,
-  moduleUrl: string = import.meta.url,
-): Promise<EmbeddedServer> {
-  const options = resolveEmbeddedRuntimeOptions(scope, moduleUrl);
+export async function createServer(scope: AppScope): Promise<EmbeddedServer> {
+  const options = resolveAppRuntimeOptions(scope);
   const runtime = createAppRuntime(loadAppConfig(options), {
     paths: createRuntimeConfigPaths(options.paths),
   });
 
   return await createAppFromRuntime(runtime, {
-    viteDevUrl: false,
+    viteDevUrl: scope.mode === 'standalone' ? undefined : false,
     lifecycle: scope,
   });
 }

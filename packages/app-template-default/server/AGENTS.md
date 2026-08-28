@@ -11,9 +11,11 @@ verify them at the route, service, and configuration boundary that changed.
   `routerToken`; do not treat or name a Hono instance as the Application.
 - `runtime/*` is the shared runtime layer. Keep config loading and app
   creation there when both standalone and embedded need the behavior.
-- `standalone.ts` is an adapter. It starts the app as its own HTTP server,
-  reads `.env`, `.env.local`, and `process.env`, then strips the public base
-  path before dispatching to the app-local server.
+- `standalone.ts` is an adapter. It creates a `StandaloneScope`, calls the same
+  `createServer(scope)` entry used by app-host, starts the app as its own HTTP
+  server, then strips the public base path before dispatching to the app-local
+  server. `StandaloneScope` owns standalone paths, environment, cancellation,
+  and disposer execution.
 - `embedded.ts` creates a server for an app-host scope. It reads `.env` and
   `.env.local` from the resolved app root, then applies scope-provided config.
   App-host has already stripped the public base path before requests reach the
@@ -31,6 +33,12 @@ Standalone and embedded may differ only in their adapter layer. After adapter
 normalization, app routes, SPA runtime globals, API proxy behavior, database
 setup, migrations, and services must use the shared Application and Provider
 path.
+
+Both modes enter the application through `createServer(scope)`. Do not add
+module-location parameters to that factory. App-host supplies its runtime
+scope; the standalone adapter supplies `StandaloneScope`. Direct ESM startup
+uses `import.meta.main`; entrypoint detection must not be coupled to path
+resolution.
 
 | Mode       | Public base path | App-local incoming path            | Internal base path    | Public API URL            | Internal proxy route |
 | ---------- | ---------------- | ---------------------------------- | --------------------- | ------------------------- | -------------------- |

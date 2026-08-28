@@ -9,13 +9,14 @@ import {
 } from './runtime/config.js';
 import {
   createRuntimeConfigPaths,
-  resolveStandaloneRuntimeOptions,
+  resolveAppRuntimeOptions,
 } from './runtime/options.js';
+import { createStandaloneScope } from './runtime/standalone-scope.js';
 
 export type DatabaseTaskRuntime = AppRuntime<DatabaseTaskConfig>;
 
 export function createStandaloneDatabaseTaskRuntime(): DatabaseTaskRuntime {
-  const options = resolveStandaloneRuntimeOptions(import.meta.url);
+  const options = resolveAppRuntimeOptions(createStandaloneScope());
   return createAppRuntime(loadDatabaseTaskConfig(options), {
     paths: createRuntimeConfigPaths(options.paths),
   });

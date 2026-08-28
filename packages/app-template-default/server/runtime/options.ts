@@ -1,5 +1,4 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import {
   createConfigPaths,
@@ -11,7 +10,6 @@ import {
   joinBasePath,
   normalizeBasePath,
   resolveAppName,
-  resolveAppNameFromBasePath,
 } from '@nocobase/app-server-kit/support';
 
 import type { AppDisposer } from '../app-options.js';
@@ -19,6 +17,7 @@ import type { AppDisposer } from '../app-options.js';
 export type { AppDisposer } from '../app-options.js';
 
 export interface AppScope {
+  readonly mode?: 'embedded' | 'standalone';
   readonly id: string;
   readonly appName?: string;
   readonly version?: number;
@@ -32,6 +31,17 @@ export interface AppScope {
   readonly rootDir?: string;
   readonly dataDir?: string;
   readonly config?: unknown;
+  /**
+   * Optional fully resolved environment supplied by a host-owned scope. When
+   * absent, createServer reads the app's env files. Explicit scope config
+   * overrides either source.
+   */
+  readonly env?: EnvMap;
+  /**
+   * Optional fully resolved paths. Standalone scopes use this to preserve
+   * source-vs-dist layouts without exposing a module URL to createServer().
+   */
+  readonly runtimePaths?: AppRuntimePathOptions;
   readonly signal?: AbortSignal;
   registerDisposer(name: string, dispose: AppDisposer): void;
   onBeforeDestroy?(handler: AppDisposer): () => void;
@@ -60,41 +70,18 @@ export interface ResolvedAppRuntimeOptions {
   routing: AppRoutingOptions;
 }
 
-export function resolveStandaloneRuntimeOptions(
-  moduleUrl: string,
-): ResolvedAppRuntimeOptions {
-  const serverDir = getModuleDir(moduleUrl);
-  const rootDir = path.resolve(serverDir, '..');
-  const paths: AppRuntimePathOptions = {
-    rootDir,
-    serverDir,
-    databaseDir: path.join(rootDir, 'database'),
-  };
-  const env = loadStandaloneEnv(createRuntimeConfigPaths(paths));
-  const publicBasePath = stringFromEnv(env, 'APP_BASE_PATH') ?? '/main';
-  return {
-    mode: 'standalone',
-    env,
-    paths,
-    routing: createAppRouting({
-      name: resolveAppNameFromBasePath(publicBasePath, 'main'),
-      publicBasePath,
-    }),
-  };
-}
-
-export function resolveEmbeddedRuntimeOptions(
+export function resolveAppRuntimeOptions(
   scope: AppScope,
-  moduleUrl: string,
 ): ResolvedAppRuntimeOptions {
-  const paths = resolveEmbeddedPaths(scope, moduleUrl);
+  const paths = resolveAppPaths(scope);
   const configPaths = createRuntimeConfigPaths(paths);
   const env = {
-    ...readEnvFiles([configPaths.root('.env'), configPaths.root('.env.local')]),
+    ...(scope.env ??
+      readEnvFiles([configPaths.root('.env'), configPaths.root('.env.local')])),
     ...createScopeEnv(scope),
   };
   return {
-    mode: 'embedded',
+    mode: scope.mode ?? 'embedded',
     env,
     paths: {
       rootDir: paths.rootDir,
@@ -137,18 +124,11 @@ export function createAppRouting(options: {
   };
 }
 
-function loadStandaloneEnv(paths: ConfigPaths): EnvMap {
-  const envFiles = [paths.root('.env'), paths.root('.env.local')];
-  return {
-    ...readEnvFiles(envFiles, process.env),
-    ...process.env,
-  };
-}
+function resolveAppPaths(scope: AppScope): AppRuntimePathOptions {
+  if (scope.runtimePaths) {
+    return scope.runtimePaths;
+  }
 
-function resolveEmbeddedPaths(
-  scope: AppScope,
-  moduleUrl: string,
-): AppRuntimePathOptions {
   if (scope.rootDir) {
     const rootDir = path.resolve(scope.rootDir);
     const distRoot = path.join(rootDir, 'dist');
@@ -162,24 +142,9 @@ function resolveEmbeddedPaths(
     };
   }
 
-  const serverDir = getModuleDir(moduleUrl);
-  const moduleRoot = path.resolve(serverDir, '..');
-  const distRoot =
-    path.basename(moduleRoot) === 'dist'
-      ? moduleRoot
-      : path.join(moduleRoot, 'dist');
-  const databaseDir =
-    path.basename(moduleRoot) === 'dist'
-      ? path.join(distRoot, 'database')
-      : path.join(moduleRoot, 'database');
-
-  return {
-    rootDir: moduleRoot,
-    serverDir,
-    databaseDir,
-    clientDir: scope.clientDir ?? path.join(distRoot, 'client'),
-    storageDir: scope.dataDir,
-  };
+  throw new Error(
+    'Application scopes require scope.rootDir or scope.runtimePaths.',
+  );
 }
 
 function createScopeEnv(scope: AppScope): EnvMap {
@@ -233,13 +198,4 @@ function getScopeConfigBoolean(
 
   const value = (config as Record<string, unknown>)[key];
   return typeof value === 'boolean' ? value : undefined;
-}
-
-function stringFromEnv(env: EnvMap, key: string): string | undefined {
-  const value = env[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getModuleDir(moduleUrl: string): string {
-  return path.dirname(fileURLToPath(moduleUrl));
 }

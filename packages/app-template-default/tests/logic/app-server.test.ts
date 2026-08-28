@@ -65,6 +65,7 @@ import {
   type AppScope,
   createServer as createEmbeddedServer,
   createStandaloneRuntime,
+  createStandaloneScope,
   createStandaloneServer,
   type StandaloneServer,
 } from '../../server/index.ts';
@@ -1157,6 +1158,26 @@ describe('app server', () => {
     await expect(app.close()).resolves.toBeUndefined();
   });
 
+  it('owns standalone cancellation and disposal through its scope', async () => {
+    const scope = createStandaloneScope({ viteDevUrl: false });
+    const events: string[] = [];
+    scope.onBeforeDestroy(() => {
+      events.push('before-destroy');
+    });
+    scope.registerDisposer('test-resource', () => {
+      events.push('dispose');
+    });
+
+    expect(scope.mode).toBe('standalone');
+    expect(scope.signal.aborted).toBe(false);
+
+    await scope.destroy();
+    await scope.destroy();
+
+    expect(scope.signal.aborted).toBe(true);
+    expect(events).toEqual(['before-destroy', 'dispose']);
+  });
+
   it('proxies standalone SPA routes to Vite dev server with the public base path restored', async () => {
     const viteDevUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'application/json; charset=utf-8');
@@ -1633,12 +1654,25 @@ function createEmbeddedTestScope(
   registeredDisposers: RegisteredTestDisposer[] = [],
 ): AppScope {
   const lifecycle = createAppDisposerRegistry();
+  const sourceRoot = path.resolve(import.meta.dirname, '../..');
   apps.push({
     close: () => lifecycle.disposeAll(),
   });
 
   return {
     ...options,
+    runtimePaths:
+      options.runtimePaths ??
+      (options.rootDir
+        ? undefined
+        : {
+            rootDir: sourceRoot,
+            serverDir: path.join(sourceRoot, 'server'),
+            databaseDir: path.join(sourceRoot, 'database'),
+            clientDir:
+              options.clientDir ?? path.join(sourceRoot, 'dist/client'),
+            storageDir: options.dataDir ?? path.join(sourceRoot, 'storage'),
+          }),
     config: options.config ?? {
       authSecret: 'test-auth-secret-at-least-32-characters',
     },

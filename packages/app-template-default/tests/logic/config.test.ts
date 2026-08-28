@@ -200,21 +200,19 @@ describe('app config', () => {
     const clientDir = path.join(root, 'dist/client');
     tempDirs.push(root);
 
-    const config = loadEmbeddedAppConfig(
-      {
-        id: 'main',
-        appName: 'main-app',
-        basePath: '/main',
-        rootDir: root,
-        clientDir,
-        dataDir,
-        config: {
-          authSecret: 'test-auth-secret-at-least-32-characters',
-          publicOrigin: 'https://apps.example.com',
-        },
+    const config = loadEmbeddedAppConfig({
+      id: 'main',
+      appName: 'main-app',
+      basePath: '/main',
+      rootDir: root,
+      clientDir,
+      dataDir,
+      config: {
+        authSecret: 'test-auth-secret-at-least-32-characters',
+        publicOrigin: 'https://apps.example.com',
       },
-      new URL('../../server/embedded.ts', import.meta.url).href,
-    );
+      registerDisposer() {},
+    });
 
     expect(config.app).toMatchObject({
       name: 'main-app',
@@ -250,6 +248,16 @@ describe('app config', () => {
     expect(config.queue.jobs?.locations).toEqual([
       path.join(root, 'dist/server/jobs/**/*.{ts,js}'),
     ]);
+  });
+
+  it('requires application scopes to provide resolved path ownership', () => {
+    expect(() =>
+      loadEmbeddedAppConfig({
+        id: 'missing-paths',
+        basePath: '/missing-paths',
+        registerDisposer() {},
+      }),
+    ).toThrow(/scope\.rootDir or scope\.runtimePaths/);
   });
 });
 

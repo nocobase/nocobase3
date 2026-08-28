@@ -25,7 +25,6 @@ export {
   createStandaloneRuntime,
   createStandaloneServer,
   startServer,
-  startServerIfEntrypoint,
   type StandaloneServer,
   type StandaloneServerListenOptions,
   type StandaloneServerOptions,
@@ -35,6 +34,11 @@ export {
   createPublicBasePathAdapter,
   stripPublicBasePathFromRequest,
 } from './runtime/app.js';
+export {
+  createStandaloneScope,
+  StandaloneScope,
+  type StandaloneScopeOptions,
+} from './runtime/standalone-scope.js';
 export {
   loadAppConfig,
   loadEmbeddedAppConfig,

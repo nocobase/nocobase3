@@ -1,8 +1,6 @@
 import { serve } from '@hono/node-server';
 import type { IncomingMessage } from 'node:http';
-import path from 'node:path';
 import type { Duplex } from 'node:stream';
-import { fileURLToPath } from 'node:url';
 
 import {
   createAppRuntime,
@@ -17,14 +15,14 @@ import {
 
 import type { AppServer } from './app.js';
 import type { AppConfig } from './config/index.js';
+import { createServer } from './embedded.js';
 import {
-  createAppDisposerRegistry,
-  createAppFromRuntime,
   createPublicBasePathAdapter,
   createRuntimeConfigPaths,
   loadAppConfig,
-  resolveStandaloneRuntimeOptions,
-  type AppDisposerRegistry,
+  createStandaloneScope,
+  resolveAppRuntimeOptions,
+  type StandaloneScopeOptions,
 } from './runtime/index.js';
 
 const HTTP_DRAIN_TIMEOUT_MS = 30_000;
@@ -35,10 +33,7 @@ interface NodeHttpConnectionControls {
   closeIdleConnections?(): void;
 }
 
-export interface StandaloneServerOptions {
-  viteDevUrl?: string | false;
-  moduleUrl?: string;
-}
+export type StandaloneServerOptions = StandaloneScopeOptions;
 
 export interface StandaloneServerListenOptions {
   readonly hostname: string;
@@ -55,25 +50,23 @@ export interface StandaloneServer extends AppServer {
 export async function createStandaloneServer(
   options: StandaloneServerOptions = {},
 ): Promise<StandaloneServer> {
-  const lifecycle = createAppDisposerRegistry();
+  const scope = createStandaloneScope(options);
 
   try {
-    const runtime = createStandaloneRuntime(options.moduleUrl);
-    const websocketAbortController = new AbortController();
+    const app = await createServer(scope);
+    const mounted = createPublicBasePathAdapter(app, app.publicBasePath);
 
-    const app = await createStandaloneAppFromRuntime(
-      runtime,
-      lifecycle,
-      websocketAbortController.signal,
-      options,
-    );
-    lifecycle.registerDisposer('websocket-connections', () => {
-      websocketAbortController.abort(new Error('app server closed'));
+    return Object.assign(mounted, {
+      listenOptions: {
+        hostname: app.config.server.host,
+        port: app.config.server.port,
+        startLog: app.config.server.startLog,
+      },
+      signal: scope.signal,
+      close: (): Promise<void> => scope.destroy(),
     });
-
-    return app;
   } catch (error) {
-    return disposeAfterStartupFailure(() => lifecycle.disposeAll(), error);
+    return disposeAfterStartupFailure(() => scope.destroy(), error);
   }
 }
 
@@ -114,37 +107,11 @@ async function startServerAsync(
 }
 
 export function createStandaloneRuntime(
-  moduleUrl: string = import.meta.url,
+  options: StandaloneScopeOptions = {},
 ): AppRuntime<AppConfig> {
-  const options = resolveStandaloneRuntimeOptions(moduleUrl);
-  return createAppRuntime(loadAppConfig(options), {
-    paths: createRuntimeConfigPaths(options.paths),
-  });
-}
-
-async function createStandaloneAppFromRuntime(
-  runtime: AppRuntime<AppConfig>,
-  lifecycle: AppDisposerRegistry,
-  signal: AbortSignal,
-  options: StandaloneServerOptions = {},
-): Promise<StandaloneServer> {
-  const app = await createAppFromRuntime(runtime, {
-    ...options,
-    lifecycle,
-  });
-  const mounted = createPublicBasePathAdapter(
-    app,
-    runtime.config.app.publicBasePath,
-  );
-
-  return Object.assign(mounted, {
-    listenOptions: {
-      hostname: runtime.config.server.host,
-      port: runtime.config.server.port,
-      startLog: runtime.config.server.startLog,
-    },
-    signal,
-    close: () => lifecycle.disposeAll(),
+  const resolved = resolveAppRuntimeOptions(createStandaloneScope(options));
+  return createAppRuntime(loadAppConfig(resolved), {
+    paths: createRuntimeConfigPaths(resolved.paths),
   });
 }
 
@@ -340,22 +307,4 @@ async function disposeAfterStartupFailure(
   throw startupError;
 }
 
-export function startServerIfEntrypoint(
-  moduleUrl: string,
-  options: StandaloneServerOptions = {},
-): void {
-  const modulePath = fileURLToPath(moduleUrl);
-  const entry = process.argv[1];
-  const pm2Entry = process.env.pm_exec_path;
-
-  const isEntrypoint = Boolean(
-    (entry && path.resolve(entry) === modulePath) ||
-    (pm2Entry && path.resolve(pm2Entry) === modulePath),
-  );
-
-  if (isEntrypoint) {
-    startServer({ ...options, moduleUrl });
-  }
-}
-
-startServerIfEntrypoint(import.meta.url);
+if (import.meta.main) startServer();

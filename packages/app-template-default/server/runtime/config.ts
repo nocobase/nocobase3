@@ -12,6 +12,10 @@ import configFactories, { type AppConfig } from '../config/index.js';
 import databaseConfigFactory from '../config/database.js';
 import type { AppScope, ResolvedAppRuntimeOptions } from './options.js';
 import {
+  createStandaloneScope,
+  type StandaloneScopeOptions,
+} from './standalone-scope.js';
+import {
   createPluginMigrationSources,
   createPluginJobLocations,
   createPluginSeedSources,
@@ -20,12 +24,15 @@ import {
 } from '../plugins/index.js';
 import {
   createRuntimeConfigPaths,
-  resolveEmbeddedRuntimeOptions,
-  resolveStandaloneRuntimeOptions,
+  resolveAppRuntimeOptions,
 } from './options.js';
 
-export function loadStandaloneAppConfig(moduleUrl: string): AppConfig {
-  return loadAppConfig(resolveStandaloneRuntimeOptions(moduleUrl));
+export function loadStandaloneAppConfig(
+  options: StandaloneScopeOptions = {},
+): AppConfig {
+  return loadAppConfig(
+    resolveAppRuntimeOptions(createStandaloneScope(options)),
+  );
 }
 
 export interface DatabaseTaskConfig {
@@ -34,16 +41,15 @@ export interface DatabaseTaskConfig {
 }
 
 export function loadStandaloneDatabaseTaskConfig(
-  moduleUrl: string,
+  options: StandaloneScopeOptions = {},
 ): DatabaseTaskConfig {
-  return loadDatabaseTaskConfig(resolveStandaloneRuntimeOptions(moduleUrl));
+  return loadDatabaseTaskConfig(
+    resolveAppRuntimeOptions(createStandaloneScope(options)),
+  );
 }
 
-export function loadEmbeddedAppConfig(
-  scope: AppScope,
-  moduleUrl: string,
-): AppConfig {
-  return loadAppConfig(resolveEmbeddedRuntimeOptions(scope, moduleUrl));
+export function loadEmbeddedAppConfig(scope: AppScope): AppConfig {
+  return loadAppConfig(resolveAppRuntimeOptions(scope));
 }
 
 export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {

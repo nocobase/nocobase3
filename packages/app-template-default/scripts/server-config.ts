@@ -14,10 +14,7 @@ const rootDir = path.resolve(
   '..',
 );
 const envFiles = [path.join(rootDir, '.env'), path.join(rootDir, '.env.local')];
-const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url)
-  .href;
-
-const config = loadStandaloneAppConfig(standaloneModuleUrl);
+const config = loadStandaloneAppConfig();
 
 const activeLoggerName = config.logging.default;
 const configuredLogger = activeLoggerName
