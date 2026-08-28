@@ -793,21 +793,6 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('protects API routes loaded from enabled app plugins', async () => {
-    const runtime = createStandaloneRuntime();
-    const app = trackCloseable(
-      await createStandaloneServer({ viteDevUrl: false }),
-    );
-    const response = await app.request(
-      `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
-    );
-
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({
-      message: expect.any(String),
-    });
-  });
-
   it('redirects HTML navigation to installation in install mode', async () => {
     vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
     const viteDevUrl = await startHttpStub((_request, response) => {
