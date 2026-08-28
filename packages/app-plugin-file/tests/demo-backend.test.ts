@@ -17,6 +17,7 @@ import migration from '../database/migrations/202608270001_create_file_demo_tabl
 import seed from '../database/seeds/202608270002_seed_file_demo.js';
 import bootstrapFilePlugin, {
   ensureFileDemoFixtures,
+  prepareFileDemoFixtures,
 } from '../server/bootstrap.js';
 import {
   FILE_DEMO_AVATAR,
@@ -114,8 +115,25 @@ describe('File Demo backend', () => {
     await runBootstrap(config, deps);
     for (const fixture of FILE_DEMO_FIXTURES) {
       expect(await disk.exists(fixture.key)).toBe(true);
-      expect(await disk.get(fixture.key)).toBe(fixture.content);
+      if (typeof fixture.content === 'string') {
+        expect(await disk.get(fixture.key)).toBe(fixture.content);
+      } else {
+        const bytes = new Uint8Array(
+          await new Response(await disk.getStream(fixture.key)).arrayBuffer(),
+        );
+        expect(bytes).toEqual(fixture.content);
+      }
     }
+    const markdown = FILE_DEMO_FIXTURES.find(
+      (fixture) => fixture.id === FILE_DEMO_PRIVATE_ATTACHMENT.id,
+    );
+    expect(markdown).toMatchObject({
+      filename: 'private-order-note.md',
+      mimeType: 'text/markdown',
+      public: false,
+      size: 132,
+    });
+    expect(markdown?.content).toContain('| Item | Status |');
     expect(put).toHaveBeenCalledTimes(3);
 
     await runBootstrap(config, deps);
@@ -141,7 +159,7 @@ describe('File Demo backend', () => {
     }
   });
 
-  it('moves deterministic fixtures when the default disk changes', async () => {
+  it('keeps old disk objects untouched when the default disk changes', async () => {
     await ensureFileDemoFixtures({
       database,
       drive: driveManager,
@@ -156,7 +174,7 @@ describe('File Demo backend', () => {
     });
 
     expect(await driveManager.use('archive').exists(fixture.key)).toBe(true);
-    expect(await driveManager.use('local').exists(fixture.key)).toBe(false);
+    expect(await driveManager.use('local').exists(fixture.key)).toBe(true);
     await expect(
       database
         .query()
@@ -167,36 +185,25 @@ describe('File Demo backend', () => {
     ).resolves.toEqual({ disk: 'archive', key: fixture.key });
   });
 
-  it('retries stale deterministic object cleanup after a disk switch', async () => {
+  it('removes failed fixture readiness from the cache so initialization can retry', async () => {
     const runtime = {
       database,
       drive: driveManager,
       defaultDisk: 'local',
-      diskNames: ['local', 'archive'],
     } as const;
-    await ensureFileDemoFixtures(runtime);
-    const fixture = FILE_DEMO_FIXTURES[0];
     const local = driveManager.use('local');
-    const remove = vi
-      .spyOn(local, 'delete')
-      .mockRejectedValue(new Error('delete failed'));
+    const exists = vi
+      .spyOn(local, 'exists')
+      .mockRejectedValueOnce(new Error('storage unavailable'));
 
-    await expect(
-      ensureFileDemoFixtures({ ...runtime, defaultDisk: 'archive' }),
-    ).rejects.toThrow('File Demo fixture initialization failed');
-    await expect(
-      database
-        .query()
-        .selectFrom(fixture.table)
-        .select(['disk', 'key'])
-        .where('id', '=', fixture.id)
-        .executeTakeFirst(),
-    ).resolves.toEqual({ disk: 'archive', key: fixture.key });
-    expect(await local.exists(fixture.key)).toBe(true);
-
-    remove.mockRestore();
-    await ensureFileDemoFixtures({ ...runtime, defaultDisk: 'archive' });
-    expect(await local.exists(fixture.key)).toBe(false);
+    await expect(prepareFileDemoFixtures(runtime)).rejects.toThrow(
+      'File Demo fixture initialization failed',
+    );
+    await expect(prepareFileDemoFixtures(runtime)).resolves.toBeUndefined();
+    expect(exists).toHaveBeenCalled();
+    for (const fixture of FILE_DEMO_FIXTURES) {
+      expect(await local.exists(fixture.key)).toBe(true);
+    }
   });
 
   it('rejects ordinary users from every management action while preserving content access', async () => {
@@ -354,6 +361,7 @@ describe('File Demo backend', () => {
     };
     const privateContent = await app.request(tokenPayload.data.url);
     expect(privateContent.status).toBe(200);
+    expect(privateContent.headers.get('content-type')).toBe('text/markdown');
     expect(await privateContent.text()).toBe(
       FILE_DEMO_FIXTURES.find(
         (fixture) => fixture.key === FILE_DEMO_PRIVATE_ATTACHMENT.key,
@@ -377,7 +385,15 @@ describe('File Demo backend', () => {
 
     expect(avatarList.status).toBe(200);
     await expect(avatarList.json()).resolves.toMatchObject({
-      data: [{ id: FILE_DEMO_AVATAR.id, public: false }],
+      data: [
+        {
+          id: FILE_DEMO_AVATAR.id,
+          filename: 'avatar.png',
+          mimeType: 'image/png',
+          size: 68,
+          public: false,
+        },
+      ],
     });
     expect(orderList.status).toBe(200);
     await expect(orderList.json()).resolves.toMatchObject({
@@ -388,11 +404,29 @@ describe('File Demo backend', () => {
         }),
         expect.objectContaining({
           id: FILE_DEMO_PRIVATE_ATTACHMENT.id,
+          filename: 'private-order-note.md',
+          mimeType: 'text/markdown',
           public: false,
         }),
       ]),
     });
     await expect(otherOrder.json()).resolves.toEqual({ data: [] });
+
+    const tokenResponse = await app.request(
+      `/api/attachments/profiles/1/avatar/${FILE_DEMO_AVATAR.id}/token`,
+      { method: 'POST', headers: adminHeaders() },
+    );
+    const token = (await tokenResponse.json()) as { data: { url: string } };
+    const avatarContent = await app.request(token.data.url);
+    expect(avatarContent.status).toBe(200);
+    expect(avatarContent.headers.get('content-type')).toBe('image/png');
+    expect(avatarContent.headers.get('content-disposition')).toContain(
+      'inline',
+    );
+    expect(avatarContent.headers.get('referrer-policy')).toBe('no-referrer');
+    expect((await avatarContent.arrayBuffer()).byteLength).toBe(
+      FILE_DEMO_AVATAR.size,
+    );
   });
 
   it('does not start fixture work when infrastructure is intentionally absent', () => {

@@ -6,11 +6,15 @@ import {
   type FileDemoFile,
 } from './constants.js';
 
-const AVATAR_CONTENT =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" fill="#176b87"/><circle cx="48" cy="36" r="18" fill="white"/><path d="M18 88c4-20 16-30 30-30s26 10 30 30" fill="white"/></svg>\n<!-- demo-profile -->';
+const AVATAR_CONTENT = new Uint8Array(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  ),
+);
 const PUBLIC_ATTACHMENT_CONTENT = 'Public demo attachment for PO-DEMO-001.';
 const PRIVATE_ATTACHMENT_CONTENT =
-  '{"order":"PO-DEMO-001","visibility":"private","id":1}\n';
+  '# Private order note\n\n- Order: `PO-DEMO-001`\n- Visibility: **Private**\n\n| Item | Status |\n| --- | --- |\n| Demo attachment | Ready |\n';
 
 export interface FileDemoFixture extends EnsureFileObjectInput {
   readonly id: string;
@@ -19,7 +23,7 @@ export interface FileDemoFixture extends EnsureFileObjectInput {
   readonly table: string;
   readonly scope: Readonly<Record<string, number>>;
   readonly size: number;
-  readonly content: string;
+  readonly content: string | Uint8Array;
 }
 
 export const FILE_DEMO_FIXTURES: readonly FileDemoFixture[] = Object.freeze([
@@ -42,11 +46,14 @@ export const FILE_DEMO_FIXTURES: readonly FileDemoFixture[] = Object.freeze([
 
 function createFixture(
   file: Readonly<FileDemoFile>,
-  content: string,
+  content: string | Uint8Array,
   table: string,
   scope: Readonly<Record<string, number>>,
 ): FileDemoFixture {
-  const size = Buffer.byteLength(content);
+  const size =
+    typeof content === 'string'
+      ? Buffer.byteLength(content)
+      : content.byteLength;
   if (size !== file.size) {
     throw new Error(
       `Demo fixture "${file.filename}" must contain ${file.size} bytes.`,

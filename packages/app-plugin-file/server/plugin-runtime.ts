@@ -66,7 +66,6 @@ export interface FilePluginRuntime {
   readonly database: DatabaseManager;
   readonly drive: NocoBaseDriveManager;
   readonly defaultDisk: string;
-  readonly diskNames: readonly string[];
   readonly publicBasePath: string;
   readonly tokenSecret: string;
 }
@@ -90,7 +89,6 @@ export function resolveFilePluginRuntime({
     database,
     drive,
     defaultDisk: config.drive?.default ?? 'local',
-    diskNames: Object.keys(config.drive?.disks ?? {}),
     publicBasePath: config.app.publicBasePath,
     tokenSecret,
   });

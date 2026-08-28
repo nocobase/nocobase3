@@ -56,9 +56,9 @@ the exact `FileRouteAction`, and a record for record-specific actions.
 Choose either `database` plus `table`/optional `scope`/`order`, or a custom
 `store`; the two forms are mutually exclusive. `defaultDisk`,
 `publicBasePath`, `audience`, and `auth` are also required.
-`createDatabaseFileStore()` remains public for advanced adapters that need to
-reuse the standard database behavior directly, but it is not part of the
-recommended two-step setup.
+The database Store factory is internal. Use the one-call
+`database + table + scope` path for standard file tables, and implement the
+high-level public `FileStore` contract only for a nonstandard schema.
 `drive` and `tokenSecret` are typed as optional so a host can start with
 missing infrastructure and receive stable `FILE_UNAVAILABLE` responses when
 storage or Private Token operations are attempted. Keep Drive credentials and
@@ -129,8 +129,9 @@ Before writing to storage, the Route validates:
 - `maxSize` (`FILE_TOO_LARGE`, normally `413`);
 - configured exact MIME types (`FILE_TYPE_NOT_ALLOWED`).
 
-When `maxSize` is configured, the Route also applies a request-body limit
-before `formData()` parses the complete multipart payload. It rejects an
+The Route uses a 50 MiB single-file limit when `maxSize` is omitted. It applies
+the effective limit before `formData()` parses the complete multipart payload
+and again to the parsed `File.size`. It rejects an
 obviously excessive valid `Content-Length` immediately and independently
 counts bytes read from missing, forged, or chunked lengths. The body allowance
 is `maxSize` plus bounded multipart overhead: 1% of `maxSize`, clamped between
@@ -144,11 +145,14 @@ path segments, control and formatting characters, header delimiters, dot-only
 names, and abnormal whitespace. The storage key is independent: a server UUID
 plus only a short ASCII extension. It never contains the user basename.
 
-When `maxFiles` is configured, the Route checks `store.list(context).length`
-before writing the object and returns `FILE_LIMIT_REACHED` at the limit. This
-is a normal best-effort business check, not an atomic concurrency guarantee;
-simultaneous uploads on multiple application nodes can exceed it. Enforce
-one-to-one relations with a database UNIQUE constraint on the owner field.
+When `maxFiles` is configured, one Route instance serializes upload limit
+checks and writes by the current request path, which represents the actual
+owner scope for the normal business route shape. Concurrent uploads for the
+same owner in one process therefore cannot both pass the list check. Different
+owners remain independent. Multiple application processes or nodes can still
+exceed the limit without a database constraint or distributed mechanism.
+Enforce one-to-one relations with a database UNIQUE constraint on the owner
+field.
 
 An empty browser MIME type must follow one documented consistent policy. Do not
 perform content sniffing or virus scanning in version 1. If a database write
@@ -170,7 +174,9 @@ without buffering the full file.
 Set a safe `Content-Type` from the record MIME type, sanitize the filename for
 `Content-Disposition`, and support `?download=1` for attachment disposition.
 Token URLs should receive private/no-cache headers. Public access still checks
-the database record on every request.
+the database record on every request. Token content also sends
+`Referrer-Policy: no-referrer` so capability URLs are not exposed through a
+browser referrer.
 
 HTML, SVG, XHTML, and XML content is always served as an attachment with a
 restrictive sandbox Content Security Policy. PNG, PDF, audio, video, and plain
@@ -186,9 +192,10 @@ responses from the existing middleware or authorizer. Missing Database or
 Drive maps to `503`; unexpected errors must not become false success.
 
 Deletion removes the database record before the storage object so a database
-failure cannot leave metadata pointing at a missing object. Repeating a delete
-after the record is gone returns `204`; an object deletion failure may leave an
-unreferenced object for storage cleanup. Version 1 has no soft delete,
+failure cannot leave metadata pointing at a missing object. Object deletion is
+best-effort after the record is gone: failures are logged and the Route still
+returns `204`. Repeating a delete after the record is gone also returns `204`.
+Version 1 has no soft delete,
 reference counting, cleanup queue, or recycle bin.
 
 See the complete [one-to-one](recipes/one-to-one.md) and

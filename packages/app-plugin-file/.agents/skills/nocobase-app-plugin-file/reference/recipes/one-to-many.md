@@ -109,8 +109,9 @@ app.route(
 );
 ```
 
-`maxFiles: 10` is a best-effort business check. Simultaneous uploads on
-multiple application nodes can exceed it.
+`maxFiles: 10` serializes uploads for the same owner within one process and
+Route instance. Simultaneous uploads on multiple application nodes can still
+exceed it without a database constraint or distributed mechanism.
 
 The composed middleware resolves the existing authorization identity for
 management operations only; it does not make Public or valid-Token content
