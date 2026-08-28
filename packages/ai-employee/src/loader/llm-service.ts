@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import path from 'path';
-import type { RuntimeLogger } from '../runtime/logger.js';
+import type { Logger } from '@nocobase/logging';
 import { AIManager } from '../manager/index.js';
 import type { LLMServiceOptions } from '../manager/llm-service/types.js';
 import { LoadAndRegister } from './types.js';
@@ -10,7 +10,7 @@ const LLM_MODELS_FILE = 'models.json';
 
 export type LLMServiceLoaderOptions = {
   directory: string;
-  logger?: RuntimeLogger;
+  logger?: Logger;
 };
 
 /** Loads the fixed `ai/models.json` service manifest into LLMServiceManager. */

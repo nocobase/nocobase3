@@ -1,22 +1,50 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- The plugin request context intentionally models dynamic framework fields and manager extensions. */
 import type {
   AIManager,
-  CurrentUser,
+  AIMessageInput,
   DocumentLoaders,
   FileManager,
-  RuntimeActor,
-  RuntimeIdGenerator,
 } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/app-database';
 import type { Caching } from '@nocobase/caching';
-import type { WorkContextHandler } from './work-context/index.js';
+import type { SnowflakeIdGenerator } from '@nocobase/id-generator';
+import type { WorkContextHandler } from './agent/ai-employee/work-context/index.js';
 import type { KnowledgeBaseManager } from './agent/ai-employee/ai-knowledge-base.js';
 
-export interface ActionParams {
-  values?: any;
-  [key: string]: any;
+export type CurrentUser = {
+  id: string | number;
+  roles: string[];
+  isRoot: boolean;
+  locale?: string;
+  scope?: string;
+};
+
+export interface StreamTarget {
+  write(chunk: unknown): void;
+  end(chunk?: unknown): void;
+  headersSent?: boolean;
+  readonly destroyed?: boolean;
+  readonly writableEnded?: boolean;
 }
 
+export interface FrontendToolResultInput {
+  id: string;
+  result: any;
+}
+
+export interface ConversationRequestExecution {
+  sessionId?: string;
+  messageId?: string;
+  messages?: AIMessageInput[];
+  model?: any;
+  webSearch?: boolean;
+  important?: string;
+  frontendTools?: unknown[];
+  toolCallResults?: FrontendToolResultInput[];
+  streamTarget?: StreamTarget;
+  abortSignal?: AbortSignal;
+  timezone?: string;
+}
 export interface Context<TRepositories = any> {
   ai: AIManager;
   database: DatabaseConnection;
@@ -24,9 +52,8 @@ export interface Context<TRepositories = any> {
   logger: any;
   caching: Caching;
   fileManager: FileManager;
-  snowflake: RuntimeIdGenerator;
+  snowflake: SnowflakeIdGenerator;
   currentUser: CurrentUser;
-  accessPolicy: any;
   employeeService: any;
   modelService: any;
   fileService: any;
@@ -34,6 +61,7 @@ export interface Context<TRepositories = any> {
   skillService: any;
   llmService: any;
   mcpServerService: any;
+  aiConversationService: any;
   aiEmployeesManager: any;
   aiConversationsManager: any;
   builtInManager: any;
@@ -43,13 +71,8 @@ export interface Context<TRepositories = any> {
   workContextHandler: WorkContextHandler;
   documentLoaders: DocumentLoaders;
   i18nNamespace?: string;
-  ready?: Promise<void>;
   sendSyncMessage?: (message: any) => void;
-  res: {
-    write(chunk: any): void;
-    end(chunk?: any): void;
-    headersSent?: boolean;
-  };
+  requestExecution?: ConversationRequestExecution;
   get(name: string): string | undefined;
   set(...args: any[]): void;
   status?: number;
@@ -62,24 +85,7 @@ export interface Context<TRepositories = any> {
     currentRoles?: string[];
     [key: string]: any;
   };
-  action?: {
-    params?: ActionParams;
-    resourceName?: string;
-    actionName?: string;
-    [key: string]: any;
-  };
-  request?: {
-    get?(name: string): string | undefined;
-    header?: Record<string, any>;
-    headers?: Record<string, any>;
-    [key: string]: any;
-  };
-  req?: {
-    headers?: Record<string, any>;
-    [key: string]: any;
-  };
   getCurrentLocale?(): string | undefined;
-  actor?: RuntimeActor;
   initialized?: boolean;
   [key: string]: any;
 }

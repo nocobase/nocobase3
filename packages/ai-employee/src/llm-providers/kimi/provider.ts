@@ -20,10 +20,10 @@ import {
   LLMProviderMeta,
   SupportedModel,
 } from '../../manager/llm-provider/types.js';
-import { CachedDocumentLoader } from '../../manager/ai-employee/document-loader/plugin/index.js';
+import { CachedDocumentLoader } from '../../manager/document-loader/plugin/index.js';
 import { KimiDocumentLoader } from './document-loader.js';
 import { ReasoningChatOpenAI } from '../common/reasoning.js';
-import { AIFileAttachment } from '../../runtime/types/ai-file-attachment.js';
+import { AIFileAttachment } from '../../types/ai-file-attachment.js';
 
 const KIMI_THINKING_SWITCH_MODELS = new Set(['kimi-k2.5', 'kimi-k2.6']);
 

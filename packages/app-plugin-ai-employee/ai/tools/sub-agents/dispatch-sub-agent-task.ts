@@ -39,7 +39,7 @@ export default defineTools<Context>({
     }),
   },
   async invoke(ctx, { username, question }, { toolCallId, writer }) {
-    const sessionId = ctx.action?.params?.values?.sessionId;
+    const sessionId = ctx.requestExecution?.sessionId;
     const userId = ctx.auth?.user?.id;
     if (!userId) {
       throw new Error('User not authenticated');
@@ -50,7 +50,7 @@ export default defineTools<Context>({
     }
 
     let subSessionId: string;
-    const skillSettings = await getSkillSettingsFromMain(ctx);
+    const skillSettings = await getSkillSettingsFromMain(ctx, sessionId);
     const existedConversation =
       await ctx.aiConversationsManager.resolveSubAgentConversation(
         sessionId,
@@ -73,17 +73,31 @@ export default defineTools<Context>({
       subSessionId = newConversation.sessionId;
     }
 
-    await updateMessageMetadata(ctx, toolCallId, subSessionId, 'pending');
+    await updateMessageMetadata(
+      ctx,
+      toolCallId,
+      subSessionId,
+      'pending',
+      sessionId,
+    );
     const answer = await ctx.subAgentsDispatcher.run({
       ctx,
       sessionId: subSessionId,
       employee,
-      model: ctx.action?.params?.values?.model ?? employee.modelSettings,
+      model: ctx.requestExecution?.model ?? employee.modelSettings,
+      webSearch: ctx.requestExecution?.webSearch,
+      messages: ctx.requestExecution?.messages,
       question,
       skillSettings,
       writer,
     });
-    await updateMessageMetadata(ctx, toolCallId, subSessionId, 'completed');
+    await updateMessageMetadata(
+      ctx,
+      toolCallId,
+      subSessionId,
+      'completed',
+      sessionId,
+    );
 
     return {
       sessionId: subSessionId,

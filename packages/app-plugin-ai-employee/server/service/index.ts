@@ -5,4 +5,4 @@ export * from './ai-tool-service.js';
 export * from './ai-skill-service.js';
 export * from './llm-service.js';
 export * from './ai-mcp-server-service.js';
-export * from './conversation-actions.js';
+export * from './ai-conversation-service.js';

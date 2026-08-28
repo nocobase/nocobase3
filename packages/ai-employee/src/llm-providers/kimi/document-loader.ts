@@ -15,8 +15,8 @@ import { pipeline } from 'node:stream/promises';
 import { Document } from '@langchain/core/documents';
 import { OpenAIClient } from '@langchain/openai';
 import type { FileManager } from '../../manager/file/index.js';
-import { ParseableFile } from '../../manager/ai-employee/document-loader/plugin/types.js';
-import { resolveExtname } from '../../manager/ai-employee/document-loader/plugin/utils.js';
+import { ParseableFile } from '../../manager/document-loader/plugin/types.js';
+import { resolveExtname } from '../../manager/document-loader/plugin/utils.js';
 
 export class KimiDocumentLoader {
   private readonly client: OpenAIClient;

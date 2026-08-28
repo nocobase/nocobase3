@@ -1,4 +1,4 @@
-import type { AIMessage } from './types/ai-message.type.js';
+import type { AIMessage } from '../types/ai-message.type.js';
 
 export function stripToolCallTags(content: string): string | null {
   if (typeof content !== 'string') return content;

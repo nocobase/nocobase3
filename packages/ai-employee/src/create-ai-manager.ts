@@ -15,7 +15,7 @@ import { shengsuanyunProviderOptions } from './llm-providers/shengsuanyun.js';
 import { xaiProviderOptions } from './llm-providers/xai.js';
 import { AIManager } from './manager/index.js';
 import { MemoryRepositoryFactory } from './repository/memory/factory.js';
-import type { RuntimeLogger } from './runtime/logger.js';
+import type { Logger } from '@nocobase/logging';
 
 export function registerLLMProviders(ai: AIManager): void {
   ai.llmProviderManager.registerLLMProvider(
@@ -58,7 +58,7 @@ export function registerLLMProviders(ai: AIManager): void {
 }
 
 /** Creates the framework-neutral manager aggregate with in-memory resource repositories. */
-export function createAIManager(logger?: RuntimeLogger): AIManager {
+export function createAIManager(logger?: Logger): AIManager {
   const ai = new AIManager({
     repositories: new MemoryRepositoryFactory(),
     mcpRuntime: { logger },
@@ -70,7 +70,7 @@ export function createAIManager(logger?: RuntimeLogger): AIManager {
 /** Creates an AI manager with an injected repository factory for application adapters. */
 export function createAIManagerWithRepositories(
   repositories: ConstructorParameters<typeof AIManager>[0]['repositories'],
-  logger?: RuntimeLogger,
+  logger?: Logger,
 ): AIManager {
   const ai = new AIManager({ repositories, mcpRuntime: { logger } });
   registerLLMProviders(ai);

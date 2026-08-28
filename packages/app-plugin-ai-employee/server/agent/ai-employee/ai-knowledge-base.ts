@@ -121,7 +121,7 @@ export type KnowledgeBaseEmployee = {
   knowledgeBase?: {
     knowledgeBaseKeys?: string[];
     topK?: number;
-    score?: string;
+    score?: number;
     retrievalStrategy?: KnowledgeBaseRetrievalStrategy;
   };
 };
@@ -182,7 +182,7 @@ export class KnowledgeBaseManager {
       knowledgeBaseKeys,
       query,
       topK,
-      score,
+      score: score === undefined ? undefined : String(score),
       roleNames,
     });
     if (!docs?.length) return 'No document match in knowledge base';

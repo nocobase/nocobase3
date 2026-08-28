@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIMessageInput } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../server/repository/index.js';
-import {
-  normalizeIncomingMessageAttachments,
-  prependCancelledToolContinuation,
-} from '../../server/service/conversation-actions.js';
+import { AIConversationService } from '../../server/service/ai-conversation-service.js';
 
-describe('conversation action tool continuation', () => {
+const service = new AIConversationService();
+
+describe('AIConversationService tool continuation', () => {
   it('prepends the matching assistant tool call before cancelled tool outputs', async () => {
     const assistantMessage = {
       messageId: '100',
@@ -50,7 +49,7 @@ describe('conversation action tool continuation', () => {
       } as AIMessageEntity,
     ];
 
-    await prependCancelledToolContinuation(
+    await service.prependCancelledToolContinuation(
       ctx,
       'session-1',
       messages,
@@ -70,7 +69,7 @@ describe('conversation action tool continuation', () => {
   });
 });
 
-describe('conversation action attachments', () => {
+describe('AIConversationService attachments', () => {
   it('treats locally uploaded files without source metadata as aiFiles', () => {
     const messages = [
       {
@@ -81,7 +80,7 @@ describe('conversation action attachments', () => {
       } as AIMessageInput,
     ];
 
-    normalizeIncomingMessageAttachments(
+    service.normalizeIncomingMessageAttachments(
       { t: (message: string) => message } as any,
       messages,
     );
@@ -110,7 +109,7 @@ describe('conversation action attachments', () => {
       } as AIMessageInput,
     ];
 
-    normalizeIncomingMessageAttachments(
+    service.normalizeIncomingMessageAttachments(
       { t: (message: string) => message } as any,
       messages,
     );

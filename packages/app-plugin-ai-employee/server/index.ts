@@ -1,17 +1,15 @@
 export { default as bootstrap } from './bootstrap.js';
 export { default as registerRoutes } from './routes/index.js';
 export {
-  createAIEmployeeContextMiddleware,
-  createAIEmployeeRuntime,
-  initializeAIEmployee,
+  createPluginContextMiddleware,
+  createPluginRuntime,
   loadResources,
-  registerAIEmployeeAppRoutes,
 } from './runtime.js';
-export type { Context } from './context.js';
+export type { Context, CurrentUser } from './context.js';
 export type {
-  AIEmployeeEnv,
+  PluginEnv,
   AppDeps,
-  InstallAIEmployeeOptions,
+  CreatePluginRuntimeOptions,
   ResourceLoadOptions,
   ResourceLoadSummary,
 } from './runtime.js';

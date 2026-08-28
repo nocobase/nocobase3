@@ -13,9 +13,9 @@ import {
   type AttachmentParseRuntime,
 } from './provider.js';
 import { ChatAnthropic } from '@langchain/anthropic';
-import type { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
+import type { AIFileAttachment } from '../types/ai-file-attachment.js';
 import { serverRequest } from '../utils/server-request.js';
-import { stripToolCallTags } from '../runtime/messages.js';
+import { stripToolCallTags } from '../utils/messages.js';
 import {
   LLMProviderMeta,
   SupportedModel,

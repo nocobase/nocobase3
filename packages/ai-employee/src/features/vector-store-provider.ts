@@ -7,10 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import {
-  DocumentSegmentedWithScore,
-  VectorStoreProp,
-} from '../runtime/types/index.js';
+import { DocumentSegmentedWithScore, VectorStoreProp } from '../types/index.js';
 
 export interface VectorStoreProviderFeature {
   register(vsp: VectorStoreProvider): void;

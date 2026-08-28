@@ -276,7 +276,7 @@ export class AIEmployeeCapabilities {
       webSearch: this.webSearch,
     });
 
-    const { important } = this.ctx.action?.params?.values || {};
+    const { important } = this.ctx.requestExecution ?? {};
     if (important === 'GraphRecursionError') {
       const importantPrompt = `<Important>You have already called tools multiple times and gathered sufficient information.
 First, provide a summary based on the existing information. Do not call additional tools.
@@ -302,7 +302,10 @@ If information is missing, clearly state it in the summary.</Important>`;
     const currentFrontendTools = toolCalls.some(
       (toolCall) => toolCall.name === EXECUTE_FRONTEND_TOOL_NAME,
     )
-      ? await listCurrentFrontendTools(this.ctx, this.sessionId)
+      ? await listCurrentFrontendTools(this.ctx, {
+          ...this.ctx.requestExecution,
+          sessionId: this.sessionId,
+        })
       : [];
     return (await this.aiToolMessagesRepo.create({
       values: toolCalls.map((toolCall) => {
@@ -798,10 +801,10 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!this.areToolsEnabled()) {
       return [];
     }
-    const currentFrontendTools = await listCurrentFrontendTools(
-      this.ctx,
-      this.sessionId,
-    );
+    const currentFrontendTools = await listCurrentFrontendTools(this.ctx, {
+      ...this.ctx.requestExecution,
+      sessionId: this.sessionId,
+    });
     const tools: ToolsEntity[] = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
       ctx: this.ctx,
@@ -1062,10 +1065,8 @@ If information is missing, clearly state it in the summary.</Important>`;
 
 function getCurrentTimezone(ctx: Context): string | undefined {
   const value =
+    ctx.requestExecution?.timezone ||
     ctx.get?.('x-timezone') ||
-    ctx.request?.get?.('x-timezone') ||
-    ctx.request?.header?.['x-timezone'] ||
-    ctx.req?.headers?.['x-timezone'] ||
     Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   if (Array.isArray(value)) {

@@ -26,7 +26,7 @@ export default defineTools<Context>({
     schema: z.object({}),
   },
   invoke: async (ctx, _args, runtime) => {
-    const { toolCallResults } = ctx.action.params.values || {};
+    const { toolCallResults } = ctx.requestExecution ?? {};
     const { result } =
       toolCallResults?.find(
         (item: { id: string }) => item.id === runtime.toolCallId,

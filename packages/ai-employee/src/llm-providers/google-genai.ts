@@ -18,13 +18,13 @@ import {
   ParsedAttachmentResult,
 } from './provider.js';
 import { serverRequest } from '../utils/server-request.js';
-import type { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
+import type { AIFileAttachment } from '../types/ai-file-attachment.js';
 import {
   LLMProviderMeta,
   SupportedModel,
 } from '../manager/llm-provider/types.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
-import { AIChatContext } from '../runtime/types/ai-chat-conversation.type.js';
+import { AIChatContext } from '../types/ai-chat-conversation.type.js';
 import { ChatGenerationChunk, LLMResult } from '@langchain/core/outputs';
 
 const GOOGLE_GEN_AI_URL = 'https://generativelanguage.googleapis.com';

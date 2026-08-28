@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { FileManager } from '../../../file/index.js';
+import type { FileManager } from '../../file/index.js';
 import { Document } from '@langchain/core/documents';
 import { SUPPORTED_DOCUMENT_EXTNAMES } from './constants.js';
 import { ParseableFile } from './types.js';

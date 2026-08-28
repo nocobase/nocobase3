@@ -16,7 +16,7 @@ import {
 import { convertMessagesToResponsesInput } from '@langchain/openai';
 import type OpenAI from 'openai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AIMessageInput } from '../../runtime/types/index.js';
+import type { AIMessageInput } from '../../types/index.js';
 import { patchRequestMessagesReasoning } from '../common/reasoning.js';
 import { LLMProviderManager } from '../../manager/llm-provider/index.js';
 import {

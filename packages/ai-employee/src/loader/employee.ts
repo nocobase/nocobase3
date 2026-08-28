@@ -18,13 +18,13 @@ import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { AIManager } from '../manager/index.js';
 import { LoadAndRegister } from './types.js';
-import type { RuntimeLogger } from '../runtime/logger.js';
+import type { Logger } from '@nocobase/logging';
 import path from 'path';
 import type { AIEmployeeOptions } from '../manager/ai-employee/types.js';
 
 export type AIEmployeeLoaderOptions = {
   scan: DirectoryScannerOptions;
-  logger?: RuntimeLogger;
+  logger?: Logger;
 };
 
 export class AIEmployeeLoader extends LoadAndRegister<AIEmployeeLoaderOptions> {
@@ -32,7 +32,7 @@ export class AIEmployeeLoader extends LoadAndRegister<AIEmployeeLoaderOptions> {
 
   protected files: FileDescriptor[] = [];
   protected employeeDescriptors: AIEmployeeDescriptor[] = [];
-  protected logger: RuntimeLogger;
+  protected logger: Logger;
 
   constructor(
     protected readonly ai: AIManager,

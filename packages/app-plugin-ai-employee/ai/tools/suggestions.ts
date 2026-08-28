@@ -37,7 +37,7 @@ export default defineTools<Context>({
     }),
   },
   invoke: async (ctx: Context, args, runtime) => {
-    const { messageId } = ctx.action?.params?.values || {};
+    const { messageId } = ctx.requestExecution ?? {};
     if (messageId) {
       const messageRepo = ctx.repositories.aiMessages;
       const message = await messageRepo.findOne({

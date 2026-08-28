@@ -1,19 +1,4 @@
-import type { RuntimeActor } from '@nocobase/ai-employee';
-import type { AIEmployeeAccessPolicy } from '../auth/access-policy.js';
-
 export type ResourceInput = Record<string, any>;
-
-export function assertCanManage(
-  accessPolicy: AIEmployeeAccessPolicy,
-  actor: RuntimeActor,
-): void {
-  accessPolicy.assertCanManage(actor);
-}
-
-export function unwrapRecord(value: unknown): ResourceInput | undefined {
-  const outer = asRecord(value);
-  return asRecord(outer?.values ?? outer?.body ?? value);
-}
 
 export function asRecord(value: unknown): ResourceInput | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)

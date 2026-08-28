@@ -87,8 +87,8 @@ async function buildAccessibleEmployeeFilter(
 
 export const getSkillSettingsFromMain = async (
   ctx: Context,
+  sessionId: string,
 ): Promise<unknown> => {
-  const sessionId = ctx.action?.params?.values?.sessionId;
   if (!sessionId) {
     return null;
   }
@@ -106,8 +106,8 @@ export const updateMessageMetadata = async (
   toolCallId: string,
   subSessionId: string,
   status: 'pending' | 'completed',
+  sessionId: string,
 ): Promise<void> => {
-  const sessionId = ctx.action?.params?.values?.sessionId;
   if (!sessionId) {
     return;
   }

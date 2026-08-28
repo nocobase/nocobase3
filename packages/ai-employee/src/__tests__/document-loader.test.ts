@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { loadByWorker } from '../manager/ai-employee/document-loader/index.js';
+import { loadByWorker } from '../manager/document-loader/index.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

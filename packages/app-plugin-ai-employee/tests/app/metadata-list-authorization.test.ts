@@ -1,12 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { RuntimeActor } from '@nocobase/ai-employee';
 
-import { AIEmployeeAccessPolicy } from '../../server/auth/access-policy.js';
 import type { Context } from '../../server/context.js';
 import { AISkillService } from '../../server/service/ai-skill-service.js';
 import { AIToolService } from '../../server/service/ai-tool-service.js';
-
-const member: RuntimeActor = { id: '1', roles: ['member'] };
 
 function createContext(): Context {
   return {
@@ -45,32 +41,30 @@ function createContext(): Context {
 describe('AI employee read-only metadata lists', () => {
   it('allows authenticated members to read sanitized skill and tool metadata', async () => {
     const serviceContext = createContext();
-    const policy = new AIEmployeeAccessPolicy();
-    const skills = new AISkillService(policy);
-    const tools = new AIToolService(policy);
+    const skills = new AISkillService();
+    const tools = new AIToolService();
 
-    await expect(skills.list(serviceContext, member)).resolves.toEqual([
+    await expect(skills.list(serviceContext)).resolves.toEqual([
       { name: 'analysis', description: 'Analyze records' },
     ]);
-    await expect(tools.list(serviceContext, member)).resolves.toEqual([
+    await expect(tools.list(serviceContext)).resolves.toEqual([
       expect.objectContaining({
         definition: expect.objectContaining({ name: 'search' }),
         defaultPermission: 'ASK',
       }),
     ]);
-    const serializedTools = await tools.list(serviceContext, member);
+    const serializedTools = await tools.list(serviceContext);
     expect(serializedTools[0]).not.toHaveProperty('invoke');
   });
 
-  it('allows members to read managed metadata while permissions are not integrated', async () => {
+  it('allows members to read managed metadata without an additional service-level policy', async () => {
     const serviceContext = createContext();
-    const policy = new AIEmployeeAccessPolicy();
 
     await expect(
-      new AISkillService(policy).get(serviceContext, member, 'analysis'),
+      new AISkillService().get(serviceContext, 'analysis'),
     ).resolves.toEqual({ name: 'analysis' });
     await expect(
-      new AIToolService(policy).get(serviceContext, member, 'search'),
+      new AIToolService().get(serviceContext, 'search'),
     ).resolves.toEqual(
       expect.objectContaining({
         definition: { name: 'search' },

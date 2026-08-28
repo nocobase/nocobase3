@@ -11,10 +11,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Document } from '@langchain/core/documents';
-import type {
-  RuntimeCache,
-  RuntimeCaching,
-} from '../../../../runtime/caching.js';
+import type { Cache, Caching } from '@nocobase/caching';
 import { DOCUMENT_PARSE_META_KEY } from './constants.js';
 import {
   DocumentLoaderLike,
@@ -46,9 +43,9 @@ export function getDocumentCacheKey(sourceFile: ParseableFile): string | null {
 }
 
 export class CachedDocumentLoader {
-  protected _cache: RuntimeCache | null = null;
+  protected _cache: Cache | null = null;
   constructor(
-    private readonly caching: RuntimeCaching | undefined,
+    private readonly caching: Caching | undefined,
     private readonly options: CachedDocumentLoaderOptions,
   ) {}
 
@@ -182,7 +179,7 @@ export class CachedDocumentLoader {
     return file as T;
   }
 
-  private async getCache(): Promise<RuntimeCache> {
+  private async getCache(): Promise<Cache> {
     if (!this.caching) {
       throw new Error('Document caching is not configured');
     }

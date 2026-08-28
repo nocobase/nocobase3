@@ -93,7 +93,7 @@ export class AIFileService {
   }
 
   private createPreviewUrl(id: string | number): string {
-    return `${this.apiBasePath}/aiFiles:preview?filterByTk=${id}`;
+    return `${this.apiBasePath}/aiFiles:preview?id=${id}`;
   }
 
   async preview(ctx: Context, id: string): Promise<Response> {

@@ -58,6 +58,8 @@ export class AIManager {
 
 export * from './ai-employee/index.js';
 export * from './document/index.js';
+export * from './document-loader/index.js';
+export * from './document-loader/plugin/index.js';
 export * from './file/index.js';
 export * from './features/index.js';
 export * from './llm-provider/index.js';

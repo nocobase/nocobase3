@@ -83,8 +83,10 @@ async function buildAccessibleEmployeeFilter(ctx: Context) {
   return filter;
 }
 
-export const getSkillSettingsFromMain = async (ctx: Context) => {
-  const sessionId = ctx.action?.params?.values?.sessionId;
+export const getSkillSettingsFromMain = async (
+  ctx: Context,
+  sessionId: string,
+): Promise<Record<string, any> | null | undefined> => {
   if (!sessionId) {
     return null;
   }
@@ -99,11 +101,11 @@ export const getSkillSettingsFromMain = async (ctx: Context) => {
 
 export const updateMessageMetadata = async (
   ctx: Context,
+  sessionId: string,
   toolCallId: string,
   subSessionId: string,
   status: 'pending' | 'completed',
-) => {
-  const sessionId = ctx.action?.params?.values?.sessionId;
+): Promise<void> => {
   if (!sessionId) {
     return;
   }

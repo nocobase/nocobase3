@@ -6,7 +6,6 @@ export default createClientLibraryConfig({
     'dist/**',
     'tests/**',
     'server/agent/**',
-    'server/auth/**',
     'server/ai-employees/**',
     'ai/**',
     'server/repository/**',

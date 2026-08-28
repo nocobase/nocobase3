@@ -17,7 +17,7 @@ import {
   ResolvedReasoningOptions,
 } from '../provider.js';
 import { injectMistralReasoningEffort, MistralProvider } from '../mistral.js';
-import type { AIMessageInput } from '../../runtime/types/index.js';
+import type { AIMessageInput } from '../../types/index.js';
 import { Readable } from 'node:stream';
 import type { AIFileAttachment } from '@nocobase/ai-employee';
 import { KimiProvider } from '../kimi/provider.js';

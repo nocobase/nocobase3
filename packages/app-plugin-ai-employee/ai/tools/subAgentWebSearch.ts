@@ -32,7 +32,7 @@ export default defineTools<Context>({
     }),
   },
   invoke: async (ctx: Context, args: { query: string[] }, id) => {
-    const { model } = ctx.action?.params?.values ?? {};
+    const { model } = ctx.requestExecution ?? {};
     const { provider } = await ctx.ai.llmProviderManager.getLLMService({
       ...model,
       webSearch: true,

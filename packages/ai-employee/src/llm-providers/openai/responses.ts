@@ -13,7 +13,7 @@ import {
   ReasoningOptions,
   ResolvedReasoningOptions,
 } from '../provider.js';
-import { stripToolCallTags } from '../../runtime/messages.js';
+import { stripToolCallTags } from '../../utils/messages.js';
 import { AIMessageChunk } from '@langchain/core/messages';
 import { LLMResult } from '@langchain/core/outputs';
 

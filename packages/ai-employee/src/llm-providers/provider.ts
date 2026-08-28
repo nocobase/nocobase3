@@ -8,7 +8,7 @@
  */
 
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import type { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
+import type { AIFileAttachment } from '../types/ai-file-attachment.js';
 import {
   checkUrlAgainstWhitelist,
   serverRequest,
@@ -16,21 +16,18 @@ import {
 import {
   AIChatContext,
   AIMessageInput,
-} from '../runtime/types/ai-chat-conversation.type.js';
-import { buildTool } from '../runtime/tools.js';
-import { encodeReadableStream } from '../runtime/streams.js';
-import {
-  parseResponseMessage,
-  stripToolCallTags,
-} from '../runtime/messages.js';
+} from '../types/ai-chat-conversation.type.js';
+import { buildTool } from '../utils/tools.js';
+import { encodeReadableStream } from '../utils/streams.js';
+import { parseResponseMessage, stripToolCallTags } from '../utils/messages.js';
 import { EmbeddingsInterface } from '@langchain/core/embeddings';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 import type { FileManager } from '../manager/file/index.js';
-import type { RuntimeCaching } from '../runtime/caching.js';
+import type { Caching } from '@nocobase/caching';
 import '@langchain/core/utils/stream';
 import { LLMResult } from '@langchain/core/outputs';
 import { ContentBlock } from '@langchain/core/messages';
-import { SUPPORTED_DOCUMENT_EXTNAMES } from '../manager/ai-employee/document-loader/plugin/index.js';
+import { SUPPORTED_DOCUMENT_EXTNAMES } from '../manager/document-loader/plugin/index.js';
 import path from 'node:path';
 import { MODEL_KWARGS_KEY } from './common/reasoning.js';
 
@@ -82,7 +79,7 @@ export interface AttachmentDocumentLoader {
 export interface AttachmentParseRuntime {
   fileManager: FileManager;
   documentLoader: AttachmentDocumentLoader;
-  caching?: RuntimeCaching;
+  caching?: Caching;
   getHeader?(name: string): string | undefined;
 }
 

@@ -15,6 +15,7 @@ import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
 import type {
   SubAgentConversationMetadata,
   UserDecision,
+  AIMessageInput,
 } from '@nocobase/ai-employee';
 
 export type SubAgentTask = {
@@ -24,6 +25,8 @@ export type SubAgentTask = {
   model: ModelRef;
   question: string;
   skillSettings?: Record<string, any>;
+  webSearch?: boolean;
+  messages?: AIMessageInput[];
   writer?: (chunk: any) => void;
 };
 
@@ -72,8 +75,10 @@ export class SubAgentsDispatcher {
     return this.extractTextContent(messages.at(-1)?.content);
   }
 
-  private async resolveSubAgentSessionId(ctx: Context): Promise<string | null> {
-    const sessionId = ctx.action?.params?.values?.sessionId;
+  private async resolveSubAgentSessionId(
+    ctx: Context,
+    sessionId: string,
+  ): Promise<string | null> {
     if (!sessionId) {
       return null;
     }
@@ -112,8 +117,9 @@ export class SubAgentsDispatcher {
 
   private async resolveLastMessage(
     ctx: Context,
+    sessionId: string,
   ): Promise<AIMessageEntity | null> {
-    const subSessionId = await this.resolveSubAgentSessionId(ctx);
+    const subSessionId = await this.resolveSubAgentSessionId(ctx, sessionId);
     if (!subSessionId) {
       return null;
     }
@@ -127,9 +133,17 @@ export class SubAgentsDispatcher {
   }
 
   async run(task: SubAgentTask): Promise<string> {
-    const { ctx, sessionId, employee, model, question, skillSettings, writer } =
-      task;
-    const { webSearch } = ctx.action?.params?.values ?? {};
+    const {
+      ctx,
+      sessionId,
+      employee,
+      model,
+      question,
+      skillSettings,
+      webSearch,
+      messages,
+      writer,
+    } = task;
     const userId = ctx.auth?.user?.id;
     if (!userId) {
       throw new Error('User not authenticated');
@@ -160,7 +174,6 @@ export class SubAgentsDispatcher {
       : null;
 
     let context;
-    const { messages } = ctx.action?.params?.values ?? {};
     if (messages && decisions?.decisions?.some((it) => it.type === 'reject')) {
       context = {
         appendMessage: await agent.facade.getFormatMessages(messages),
@@ -197,8 +210,7 @@ export class SubAgentsDispatcher {
     return this.extractLastMessageText(result);
   }
 
-  async isInterrupted(ctx: Context) {
-    const sessionId = ctx.action?.params?.values?.sessionId;
+  async isInterrupted(sessionId: string, ctx: Context): Promise<boolean> {
     if (!sessionId) {
       return false;
     }
@@ -212,11 +224,10 @@ export class SubAgentsDispatcher {
       sort: ['-id'],
     });
 
-    return aiToolMessage ? true : false;
+    return Boolean(aiToolMessage);
   }
 
-  async reject(ctx: Context) {
-    const { sessionId } = ctx.action?.params?.values ?? {};
+  async reject(sessionId: string, ctx: Context) {
     const conversation = await ctx.repositories.aiConversations.findOne({
       filter: {
         sessionId,
@@ -226,7 +237,7 @@ export class SubAgentsDispatcher {
     if (!conversation) {
       return;
     }
-    const lastMessage = await this.resolveLastMessage(ctx);
+    const lastMessage = await this.resolveLastMessage(ctx, sessionId);
     if (!sessionId || !lastMessage) {
       return;
     }
@@ -246,8 +257,7 @@ export class SubAgentsDispatcher {
       return await ctx.aiConversationsManager.getUserDecisions(
         lastMessage.messageId,
       );
-    } else {
-      return null;
     }
+    return null;
   }
 }

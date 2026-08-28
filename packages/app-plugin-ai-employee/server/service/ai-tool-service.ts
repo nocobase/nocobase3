@@ -1,51 +1,34 @@
 import type { Context } from '../context.js';
-import type {
-  RuntimeActor,
-  ToolsEntity,
-  ToolsOptions,
-} from '@nocobase/ai-employee';
-import type { AIEmployeeAccessPolicy } from '../auth/access-policy.js';
+import type { ToolsEntity, ToolsOptions } from '@nocobase/ai-employee';
 import {
   asRecord,
-  assertCanManage,
   badRequest,
   isSerializableObject,
   normalizeScope,
   notFound,
   optionalString,
   requiredString,
-  unwrapRecord,
-} from './resource-management-utils.js';
+} from './utils.js';
 
 export class AIToolService {
-  constructor(private readonly accessPolicy: AIEmployeeAccessPolicy) {}
-
-  async list(ctx: Context, actor: RuntimeActor): Promise<unknown[]> {
+  async list(ctx: Context): Promise<unknown[]> {
     // The employee editor consumes this serialized list as read-only display
     // metadata. Management authorization remains required for get and mutations.
-    void actor;
     return (await ctx.ai.toolsManager.listTools({})).map(serializeTool);
   }
 
-  async get(ctx: Context, actor: RuntimeActor, name: string): Promise<unknown> {
-    assertCanManage(this.accessPolicy, actor);
+  async get(ctx: Context, name: string): Promise<unknown> {
     const tool = await ctx.ai.toolsManager.getTools(name);
     if (!tool) throw notFound('aiTools', name);
     return serializeTool(tool);
   }
 
-  async upsert(
-    ctx: Context,
-    actor: RuntimeActor,
-    input: unknown,
-    keyHint?: string,
-  ): Promise<unknown> {
-    assertCanManage(this.accessPolicy, actor);
-    const record = unwrapRecord(input);
+  async upsert(ctx: Context, input: unknown): Promise<unknown> {
+    const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
     const definition = asRecord(record.definition) ?? record;
     const name = requiredString(
-      definition.name ?? record.name ?? keyHint,
+      definition.name ?? record.name,
       'definition.name',
     );
     const normalizedInput =
@@ -58,11 +41,10 @@ export class AIToolService {
     await ctx.ai.toolsManager.registerTools(
       normalizeTool(normalizedInput, current),
     );
-    return this.get(ctx, actor, name);
+    return this.get(ctx, name);
   }
 
-  async delete(ctx: Context, actor: RuntimeActor, name: string): Promise<void> {
-    assertCanManage(this.accessPolicy, actor);
+  async delete(ctx: Context, name: string): Promise<void> {
     await ctx.ai.toolsManager.unregisterTools(name);
   }
 }

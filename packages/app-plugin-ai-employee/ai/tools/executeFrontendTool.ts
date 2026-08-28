@@ -44,14 +44,15 @@ export default defineTools<Context>({
     }),
   },
   invoke: async (ctx, args, runtime) => {
-    const tool = await findCurrentFrontendTool(ctx, args.toolId);
+    const execution = ctx.requestExecution ?? {};
+    const tool = await findCurrentFrontendTool(ctx, args.toolId, execution);
     if (!tool) {
       return {
         status: 'error',
         content: 'Frontend tool is unavailable in the current conversation.',
       };
     }
-    const result = await readFrontendToolResult(ctx, runtime.toolCallId);
+    const result = readFrontendToolResult(execution, runtime.toolCallId);
     if (!result?.provided) {
       return {
         status: 'error',

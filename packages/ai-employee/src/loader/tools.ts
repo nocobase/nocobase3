@@ -19,20 +19,20 @@ import _ from 'lodash';
 import { existsSync } from 'fs';
 import { AIManager } from '../manager/index.js';
 import { LoadAndRegister } from './types.js';
-import type { RuntimeLogger } from '../runtime/logger.js';
+import type { Logger } from '@nocobase/logging';
 
 export type ToolsLoaderOptions = {
   /** Allow a later resource layer to replace an already-registered tool. */
   overrideExisting?: boolean;
   scan: DirectoryScannerOptions;
-  logger?: RuntimeLogger;
+  logger?: Logger;
 };
 export class ToolsLoader extends LoadAndRegister<ToolsLoaderOptions> {
   protected readonly scanner: DirectoryScanner;
 
   protected files: FileDescriptor[] = [];
   protected toolsDescriptors: ToolsDescriptor[] = [];
-  protected logger: RuntimeLogger;
+  protected logger: Logger;
 
   constructor(
     protected readonly ai: AIManager,

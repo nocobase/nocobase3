@@ -1,4 +1,7 @@
-import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
+import {
+  NOCOBASE_AI_API_URL,
+  nocobaseClient,
+} from '@nocobase/app-portal-sdk/client';
 
 export interface AIEmployeeModelRef {
   llmService: string;
@@ -162,6 +165,7 @@ export async function listAIEmployees(
   signal?: AbortSignal,
 ): Promise<AIEmployeeRecord[]> {
   const response = await nocobaseClient.action<unknown>('aiEmployees', 'list', {
+    apiUrl: NOCOBASE_AI_API_URL,
     method: 'GET',
     signal,
   });
@@ -175,8 +179,9 @@ export async function getAIEmployee(
   signal?: AbortSignal,
 ): Promise<AIEmployeeRecord> {
   const response = await nocobaseClient.action<unknown>('aiEmployees', 'get', {
+    apiUrl: NOCOBASE_AI_API_URL,
     method: 'GET',
-    query: { filterByTk: username },
+    query: { key: username },
     signal,
   });
   const data = unwrapResponseData(response);
@@ -192,8 +197,9 @@ export async function updateAIEmployee(
     'aiEmployees',
     'update',
     {
-      method: 'POST',
-      query: { filterByTk: employee.username },
+      apiUrl: NOCOBASE_AI_API_URL,
+      method: 'PUT',
+      query: { key: employee.username },
       body: buildAIEmployeeUpdatePayload(employee, editable),
     },
   );
@@ -210,7 +216,7 @@ export async function listEnabledModels(
   const response = await nocobaseClient.action<unknown>(
     'ai',
     'listAllEnabledModels',
-    { method: 'GET', signal },
+    { apiUrl: NOCOBASE_AI_API_URL, method: 'GET', signal },
   );
   return normalizeArrayResponse<UnknownRecord>(response).flatMap((service) => {
     const llmService = String(service.llmService ?? service.name ?? '');
@@ -266,6 +272,7 @@ async function listMetadata(
 ): Promise<AIMetadataItem[]> {
   try {
     const response = await nocobaseClient.action<unknown>(resource, 'list', {
+      apiUrl: NOCOBASE_AI_API_URL,
       method: 'GET',
       signal,
     });

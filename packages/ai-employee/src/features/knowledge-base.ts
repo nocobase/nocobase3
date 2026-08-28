@@ -12,7 +12,7 @@ import {
   KnowledgeBase,
   KnowledgeBaseGroup,
   SearchOptions,
-} from '../runtime/types/index.js';
+} from '../types/index.js';
 
 export type KnowledgeBaseAccessOptions = Pick<
   SearchOptions,

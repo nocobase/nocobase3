@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EEFeatures } from '@nocobase/ai-employee';
-import type { AIEmployeeEntity, RuntimeActor } from '@nocobase/ai-employee';
+import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 
-import { AIEmployeeAccessPolicy } from '../../server/auth/access-policy.js';
 import type { Context } from '../../server/context.js';
 import { AIEmployeeService } from '../../server/service/ai-employee-service.js';
-
-const rootActor: RuntimeActor = { id: 'root', roles: ['root'] };
 
 function createContext(initial: AIEmployeeEntity[] = []): Context {
   const rows = new Map(
@@ -70,9 +67,9 @@ function createContext(initial: AIEmployeeEntity[] = []): Context {
 describe('AI employee management service compatibility', () => {
   it('preserves omitted fields and persists explicit false and empty values', async () => {
     const context = createContext();
-    const service = new AIEmployeeService(new AIEmployeeAccessPolicy());
+    const service = new AIEmployeeService();
 
-    await service.upsert(context, rootActor, {
+    await service.upsert(context, {
       username: 'support',
       nickname: 'Support',
       about: 'Original about',
@@ -80,14 +77,12 @@ describe('AI employee management service compatibility', () => {
       knowledgeBasePrompt: 'Original prompt',
       knowledgeBase: { knowledgeBaseKeys: ['handbook'], topK: 5, score: 0.7 },
     });
-    await service.upsert(context, rootActor, {
+    await service.upsert(context, {
       username: 'support',
       profile: { nickname: 'Specialist' },
     });
 
-    await expect(
-      service.get(context, rootActor, 'support'),
-    ).resolves.toMatchObject({
+    await expect(service.get(context, 'support')).resolves.toMatchObject({
       nickname: 'Specialist',
       about: 'Original about',
       enableKnowledgeBase: true,
@@ -95,7 +90,7 @@ describe('AI employee management service compatibility', () => {
       knowledgeBase: { knowledgeBaseKeys: ['handbook'], topK: 5, score: 0.7 },
     });
 
-    await service.upsert(context, rootActor, {
+    await service.upsert(context, {
       username: 'support',
       about: '',
       enableKnowledgeBase: false,
@@ -103,9 +98,7 @@ describe('AI employee management service compatibility', () => {
       knowledgeBase: { knowledgeBaseKeys: [], topK: 3, score: 0 },
     });
 
-    await expect(
-      service.get(context, rootActor, 'support'),
-    ).resolves.toMatchObject({
+    await expect(service.get(context, 'support')).resolves.toMatchObject({
       about: '',
       enableKnowledgeBase: false,
       knowledgeBasePrompt: '',
@@ -132,9 +125,9 @@ describe('AI employee management service compatibility', () => {
         },
       } as AIEmployeeEntity,
     ]);
-    const service = new AIEmployeeService(new AIEmployeeAccessPolicy());
+    const service = new AIEmployeeService();
 
-    await expect(service.list(context, rootActor)).resolves.toEqual([
+    await expect(service.list(context)).resolves.toEqual([
       expect.objectContaining({
         nickname: 'localized:Built-in nickname',
         position: 'localized:Position',

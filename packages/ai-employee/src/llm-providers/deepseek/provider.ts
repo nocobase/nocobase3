@@ -48,8 +48,8 @@ import {
   normalizeDeepSeekResponsesRequest,
   resolveDeepSeekReasoningConfig,
 } from './reasoning.js';
-import { stripToolCallTags } from '../../runtime/messages.js';
-import type { AIMessageInput } from '../../runtime/types/index.js';
+import { stripToolCallTags } from '../../utils/messages.js';
+import type { AIMessageInput } from '../../types/index.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

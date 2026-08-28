@@ -18,7 +18,7 @@ import type {
 
 const DEFAULT_KNOWLEDGE_BASE = {
   topK: 3,
-  score: '0.6',
+  score: 0.6,
   knowledgeBaseKeys: [],
   retrievalStrategy: 'onDemand' as const,
 };

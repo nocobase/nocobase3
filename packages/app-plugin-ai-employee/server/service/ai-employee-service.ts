@@ -1,18 +1,14 @@
 import type { Context } from '../context.js';
 import { EEFeatures } from '@nocobase/ai-employee';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
-import type { RuntimeActor } from '@nocobase/ai-employee';
 import type { AIEmployeeDto } from '../routes/contracts.js';
-import type { AIEmployeeAccessPolicy } from '../auth/access-policy.js';
 import {
   asRecord,
-  assertCanManage,
   badRequest,
   notFound,
   optionalString,
   requiredString,
-  unwrapRecord,
-} from './resource-management-utils.js';
+} from './utils.js';
 
 type AIEmployeeRecord = Omit<
   AIEmployeeEntity,
@@ -173,10 +169,7 @@ async function enrichMissingKnowledgeBaseKeys(
  * (`listByUser`, `updateUserPrompt`) operating on plain repository entities.
  */
 export class AIEmployeeService {
-  constructor(
-    private readonly accessPolicy: AIEmployeeAccessPolicy,
-    private readonly options?: { knownRoles?: string[] },
-  ) {}
+  constructor(private readonly options?: { knownRoles?: string[] }) {}
 
   get knownRoles(): string[] {
     if (this.options?.knownRoles?.length) return this.options.knownRoles;
@@ -282,8 +275,7 @@ export class AIEmployeeService {
     return [];
   }
 
-  async list(ctx: Context, actor: RuntimeActor): Promise<unknown[]> {
-    assertCanManage(this.accessPolicy, actor);
+  async list(ctx: Context): Promise<unknown[]> {
     const employees = (await ctx.repositories.aiEmployees.find({})).map(
       (employee) => serializeEmployee(ctx, employee),
     );
@@ -291,12 +283,7 @@ export class AIEmployeeService {
     return employees;
   }
 
-  async get(
-    ctx: Context,
-    actor: RuntimeActor,
-    username: string,
-  ): Promise<unknown> {
-    assertCanManage(this.accessPolicy, actor);
+  async get(ctx: Context, username: string): Promise<unknown> {
     const employee = await ctx.repositories.aiEmployees.findOne({
       filter: { username },
     });
@@ -306,16 +293,10 @@ export class AIEmployeeService {
     return serialized;
   }
 
-  async upsert(
-    ctx: Context,
-    actor: RuntimeActor,
-    input: unknown,
-    keyHint?: string,
-  ): Promise<unknown> {
-    assertCanManage(this.accessPolicy, actor);
-    const record = unwrapRecord(input);
+  async upsert(ctx: Context, input: unknown): Promise<unknown> {
+    const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
-    const username = requiredString(record.username ?? keyHint, 'username');
+    const username = requiredString(record.username, 'username');
     const current = await ctx.repositories.aiEmployees.findOne({
       filter: { username },
     });
@@ -384,15 +365,10 @@ export class AIEmployeeService {
         await ctx.repositories.aiEmployees.create({ values }, { connection });
       }
     });
-    return this.get(ctx, actor, username);
+    return this.get(ctx, username);
   }
 
-  async delete(
-    ctx: Context,
-    actor: RuntimeActor,
-    username: string,
-  ): Promise<void> {
-    assertCanManage(this.accessPolicy, actor);
+  async delete(ctx: Context, username: string): Promise<void> {
     await ctx.database.transaction(async (connection) => {
       await ctx.repositories.aiEmployees.destroy(
         { filter: { username } },

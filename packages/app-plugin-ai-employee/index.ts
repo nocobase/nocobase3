@@ -1,8 +1,9 @@
-export { createAIEmployeeRuntime, loadResources } from './server/runtime.js';
+export { createPluginRuntime, loadResources } from './server/runtime.js';
+export type { Context, CurrentUser } from './server/context.js';
 export type {
-  AIEmployeeEnv,
+  PluginEnv,
   AppDeps,
-  InstallAIEmployeeOptions,
+  CreatePluginRuntimeOptions,
   ResourceLoadOptions,
   ResourceLoadSummary,
 } from './server/runtime.js';

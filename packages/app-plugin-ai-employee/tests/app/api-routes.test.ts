@@ -1,8 +1,31 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import { registerAIEmployeeRoutes } from '../../server/routes/router.js';
+import { registerAIEmployeeRoutes } from '../../server/routes/index.js';
+import { createAICurrentUserMiddleware } from '../../server/routes/utils.js';
+import type { Context } from '../../server/context.js';
 import { createTestAIEmployeeRuntime } from './test-context.js';
+import { createTestAppDeps } from './test-app-deps.js';
+
+const methods: Record<string, string> = {
+  'ai:testFlight': 'POST',
+  'aiEmployees:updateUserPrompt': 'POST',
+  'aiEmployees:create': 'POST',
+  'aiEmployees:update': 'PUT',
+  'aiEmployees:destroy': 'DELETE',
+  'aiConversations:create': 'POST',
+  'aiConversations:update': 'PUT',
+  'aiConversations:updateOptions': 'PUT',
+  'aiConversations:destroy': 'DELETE',
+  'aiConversations:sendMessages': 'POST',
+  'aiConversations:resendMessages': 'POST',
+  'aiConversations:updateUserDecision': 'POST',
+  'aiConversations:resumeToolCall': 'POST',
+  'aiConversations:resumeStream': 'POST',
+  'aiConversations:abort': 'POST',
+  'aiConversations:updateToolArgs': 'POST',
+  'aiFiles:create': 'POST',
+};
 
 const expectedActions = [
   'ai:listAllEnabledModels',
@@ -43,23 +66,35 @@ const expectedActions = [
   ...managedActions('aiMcpServers'),
 ];
 
+for (const resource of ['aiTools', 'aiSkills', 'llmServices', 'aiMcpServers']) {
+  methods[`${resource}:create`] = 'POST';
+  methods[`${resource}:update`] = 'PUT';
+  methods[`${resource}:destroy`] = 'DELETE';
+}
+
 describe('AI action routers', () => {
-  it('registers each supported local action at one exact path', () => {
+  it('registers each supported local action once under /api/ai with a precise method', () => {
     const app = new Hono();
-    const runtime = createTestAIEmployeeRuntime();
+    const routes = new Hono();
+    registerAIEmployeeRoutes(
+      routes,
+      createAICurrentUserMiddleware(createTestAppDeps().auth),
+      async (_context, next) => {
+        await next();
+      },
+    );
+    app.route('/api/ai', routes);
 
-    registerAIEmployeeRoutes(app, '/v2/api');
-
-    const localRoutes = app.routes.filter((route) =>
-      route.path.startsWith('/v2/api/'),
+    const localRoutes = app.routes.filter(
+      (route) => route.path.startsWith('/api/ai/') && route.method !== 'ALL',
     );
     expect(localRoutes).toHaveLength(expectedActions.length);
     expect(localRoutes).toEqual(
       expect.arrayContaining(
         expectedActions.map((action) =>
           expect.objectContaining({
-            method: 'ALL',
-            path: `/v2/api/${action}`,
+            method: methods[action] ?? 'GET',
+            path: `/api/ai/${action}`,
           }),
         ),
       ),
@@ -67,18 +102,69 @@ describe('AI action routers', () => {
     expect(new Set(localRoutes.map((route) => route.path)).size).toBe(
       expectedActions.length,
     );
-    expect(localRoutes.some((route) => route.path.endsWith('/*'))).toBe(false);
+    expect(
+      app.routes.some(
+        (route) => route.method === 'ALL' && route.path === '/api/ai/*',
+      ),
+    ).toBe(true);
+    expect(app.routes.some((route) => route.path.startsWith('/v2/api/'))).toBe(
+      false,
+    );
+  });
+
+  it('returns direct JSON with the local marker and rejects legacy methods', async () => {
+    const app = new Hono();
+    const runtime = createTestAIEmployeeRuntime();
+    runtime.employeeService.list = async () => [];
+    runtime.aiConversationService.unreadCounts = async () => ({
+      conversationUnreadCount: 3,
+      workflowTaskUnreadCount: 0,
+    });
+    const routes = new Hono();
+    registerAIEmployeeRoutes(
+      routes,
+      createAICurrentUserMiddleware(createTestAppDeps().auth),
+      async (context, next) => {
+        context.set('ctx', runtime);
+        await next();
+      },
+    );
+    app.route('/api/ai', routes);
+
+    const response = await app.request(
+      'http://localhost/api/ai/aiEmployees:list',
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-local-ai')).toBe('1');
+    expect(await response.json()).toEqual(expect.any(Array));
+
+    const unreadResponse = await app.request(
+      'http://localhost/api/ai/aiConversations:unreadCounts',
+    );
+    expect(unreadResponse.status).toBe(200);
+    expect(await unreadResponse.json()).toEqual({
+      conversationUnreadCount: 3,
+      workflowTaskUnreadCount: 0,
+    });
+
+    const legacyMethod = await app.request(
+      'http://localhost/api/ai/aiEmployees:list',
+      { method: 'POST', body: JSON.stringify({ values: {} }) },
+    );
+    expect(legacyMethod.status).toBe(404);
   });
 
   it('wires each managed resource to a dedicated service instance', () => {
     const runtime = createTestAIEmployeeRuntime();
-
     expect(runtime.employeeService.constructor.name).toBe('AIEmployeeService');
     expect(runtime.toolService.constructor.name).toBe('AIToolService');
     expect(runtime.skillService.constructor.name).toBe('AISkillService');
     expect(runtime.llmService.constructor.name).toBe('LLMService');
     expect(runtime.mcpServerService.constructor.name).toBe(
       'AIMCPServerService',
+    );
+    expect(runtime.aiConversationService.constructor.name).toBe(
+      'AIConversationService',
     );
     expect(
       new Set([
@@ -87,8 +173,9 @@ describe('AI action routers', () => {
         runtime.skillService,
         runtime.llmService,
         runtime.mcpServerService,
+        runtime.aiConversationService,
       ]).size,
-    ).toBe(5);
+    ).toBe(6);
   });
 });
 

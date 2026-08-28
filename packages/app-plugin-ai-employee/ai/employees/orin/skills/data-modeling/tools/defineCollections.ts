@@ -132,10 +132,7 @@ export default defineTools<Context>({
     }),
   },
   invoke: async (ctx: Context, args: any) => {
-    const toolCallArgs = ctx.action?.params?.values?.args?.intent
-      ? ctx.action?.params?.values?.args
-      : args;
-    const { intent, collections: originalCollections } = toolCallArgs ?? {};
+    const { intent, collections: originalCollections } = args ?? {};
     if (!intent || !['create', 'edit'].includes(intent)) {
       return {
         status: 'error',

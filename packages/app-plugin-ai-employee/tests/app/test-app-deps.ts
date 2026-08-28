@@ -1,3 +1,4 @@
+import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import { createAuthentication } from '@nocobase/app-plugin-authentication';
 import { SnowflakeIdGenerator } from '@nocobase/id-generator';
 import { createLogging } from '@nocobase/logging';
@@ -14,7 +15,8 @@ export function createTestAppDeps(): AppDeps {
   });
   return {
     ai: createAIManager(),
-    database: database.connection(),
+    paths: createConfigPaths({ rootDir: process.cwd() }),
+    database,
     auth: createAuthentication({
       connection: database.connection(),
       secret: 'ai-employee-test-auth-secret-at-least-32-characters',

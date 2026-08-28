@@ -1,5 +1,22 @@
 import type { ModelRef } from '../ai-employees/ai-employee.js';
 
+export const AI_API_BASE_PATH: '/api/ai' = '/api/ai';
+
+export type ManagedResourceKeyQuery = {
+  key: string;
+};
+
+export type AIUserPromptUpdateInput = {
+  aiEmployee: string;
+  prompt?: string;
+};
+
+export type AIEmployeeResourceInput = Record<string, unknown>;
+export type AIToolResourceInput = Record<string, unknown>;
+export type AISkillResourceInput = Record<string, unknown>;
+export type LLMServiceResourceInput = Record<string, unknown>;
+export type AIMCPServerResourceInput = Record<string, unknown>;
+
 export type AIEmployeeDefinition = {
   username: string;
   nickname?: string;

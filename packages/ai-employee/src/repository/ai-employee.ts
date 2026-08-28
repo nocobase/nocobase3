@@ -7,7 +7,7 @@ export type AIEmployeeToolSetting = {
 
 export type AIEmployeeKnowledgeBase = {
   topK?: number;
-  score?: string;
+  score?: number;
   knowledgeBaseKeys?: string[];
   retrievalStrategy?: 'always' | 'onDemand';
 };
@@ -38,8 +38,9 @@ export type AIEmployeeEntity = {
   deprecated?: boolean;
   enableKnowledgeBase?: boolean;
   knowledgeBase?: AIEmployeeKnowledgeBase;
-  knowledgeBasePrompt?: string;
+  knowledgeBasePrompt?: string | null;
   modelSettings?: Record<string, unknown>;
+  dataSourceSettings?: Record<string, unknown>;
   roles?: Array<{ name: string }>;
   sort?: number;
 };

@@ -22,6 +22,7 @@ type QueryValue =
   | Array<string | number | boolean>;
 
 export type NocoBaseRequestOptions = {
+  apiUrl?: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   query?: Record<string, QueryValue>;
   body?: unknown;
@@ -38,6 +39,8 @@ export type NocoBaseRequestOptions = {
 
 const getBrowserLocale = () =>
   typeof navigator === 'undefined' ? undefined : navigator.language;
+
+let runtimeLocale: string | undefined;
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -87,7 +90,6 @@ const unwrapPayload = (
 
 export class NocoBaseClient {
   private readonly apiOrigin?: string;
-  private runtimeLocale?: string;
 
   constructor(
     private readonly apiUrl: string = API_URL,
@@ -150,7 +152,7 @@ export class NocoBaseClient {
   }
 
   getLocale(): string | undefined {
-    return this.getStoredLocale() ?? this.runtimeLocale ?? getBrowserLocale();
+    return this.getStoredLocale() ?? runtimeLocale ?? getBrowserLocale();
   }
 
   setLocale(locale?: string | null): void {
@@ -162,14 +164,15 @@ export class NocoBaseClient {
   }
 
   setRuntimeLocale(locale?: string | null): void {
-    this.runtimeLocale = locale || undefined;
+    runtimeLocale = locale || undefined;
   }
 
-  buildUrl(endpoint: string, query?: Record<string, QueryValue>): URL {
-    const base = `${this.apiUrl.replace(/\/$/, '')}/${endpoint.replace(
-      /^\//,
-      '',
-    )}`;
+  buildUrl(
+    endpoint: string,
+    query?: Record<string, QueryValue>,
+    apiUrl: string = this.apiUrl,
+  ): URL {
+    const base = `${apiUrl.replace(/\/$/, '')}/${endpoint.replace(/^\//, '')}`;
     const url = /^https?:\/\//.test(base)
       ? new URL(base)
       : new URL(base, window.location.origin);
@@ -254,18 +257,21 @@ export class NocoBaseClient {
     const method =
       options.method ?? (options.body === undefined ? 'GET' : 'POST');
     const headers = this.getHeaders({ ...options, method, body: options.body });
-    const response = await fetch(this.buildUrl(endpoint, options.query), {
-      method,
-      headers,
-      credentials: 'include',
-      body:
-        options.body === undefined
-          ? undefined
-          : options.body instanceof FormData
-            ? options.body
-            : JSON.stringify(options.body),
-      signal: options.signal,
-    });
+    const response = await fetch(
+      this.buildUrl(endpoint, options.query, options.apiUrl),
+      {
+        method,
+        headers,
+        credentials: 'include',
+        body:
+          options.body === undefined
+            ? undefined
+            : options.body instanceof FormData
+              ? options.body
+              : JSON.stringify(options.body),
+        signal: options.signal,
+      },
+    );
     this.captureRenewedToken(response);
     const payload = await readResponsePayload(response);
     if (!response.ok) {
@@ -301,14 +307,17 @@ export class NocoBaseClient {
       accept: 'stream',
       body: options.body,
     });
-    const response = await fetch(this.buildUrl(endpoint, options.query), {
-      method,
-      headers,
-      credentials: 'include',
-      body:
-        options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
-    });
+    const response = await fetch(
+      this.buildUrl(endpoint, options.query, options.apiUrl),
+      {
+        method,
+        headers,
+        credentials: 'include',
+        body:
+          options.body === undefined ? undefined : JSON.stringify(options.body),
+        signal: options.signal,
+      },
+    );
     this.captureRenewedToken(response);
     if (!response.ok || !response.body) {
       const payload = await readResponsePayload(response);
@@ -343,6 +352,19 @@ const getUrlOrigin = (value: string) => {
     return undefined;
   }
 };
+
+export function resolveNocoBaseAIUrl(apiUrl: string = API_URL): string {
+  const normalizedApiUrl = apiUrl.replace(/\/+$/, '');
+  if (normalizedApiUrl.endsWith('/v2/api')) {
+    return `${normalizedApiUrl.slice(0, -'/v2/api'.length)}/api/ai`;
+  }
+  if (normalizedApiUrl.endsWith('/api')) {
+    return `${normalizedApiUrl}/ai`;
+  }
+  return `${normalizedApiUrl}/api/ai`;
+}
+
+export const NOCOBASE_AI_API_URL: string = resolveNocoBaseAIUrl();
 
 export const nocobaseClient: NocoBaseClient = new NocoBaseClient();
 

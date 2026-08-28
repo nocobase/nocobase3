@@ -9,7 +9,7 @@ describe('AIFileService', () => {
     const service = new AIFileService(
       fileManager,
       { generate: () => '42' } as any,
-      '/runtime/v2/api',
+      '/runtime/api/ai',
     );
     const repository = {
       find: async () => [],
@@ -39,13 +39,13 @@ describe('AIFileService', () => {
     });
     expect(persistedValues).not.toHaveProperty('url');
     expect(persistedValues).not.toHaveProperty('preview');
-    expect(JSON.stringify(persistedValues)).not.toContain('/runtime/v2/api');
+    expect(JSON.stringify(persistedValues)).not.toContain('/runtime/api/ai');
     expect(result).toMatchObject({
-      url: '/runtime/v2/api/aiFiles:preview?filterByTk=42',
-      preview: '/runtime/v2/api/aiFiles:preview?filterByTk=42',
+      url: '/runtime/api/ai/aiFiles:preview?id=42',
+      preview: '/runtime/api/ai/aiFiles:preview?id=42',
       data: {
-        url: '/runtime/v2/api/aiFiles:preview?filterByTk=42',
-        preview: '/runtime/v2/api/aiFiles:preview?filterByTk=42',
+        url: '/runtime/api/ai/aiFiles:preview?id=42',
+        preview: '/runtime/api/ai/aiFiles:preview?id=42',
       },
     });
   });

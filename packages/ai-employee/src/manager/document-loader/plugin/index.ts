@@ -6,8 +6,8 @@
  * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
-import type { RuntimeCaching } from '../../../../runtime/caching.js';
-import type { FileManager } from '../../../file/index.js';
+import type { Caching } from '@nocobase/caching';
+import type { FileManager } from '../../file/index.js';
 import { DocumentLoader } from './loader.js';
 import { SUPPORTED_DOCUMENT_EXTNAMES } from './constants.js';
 import { CachedDocumentLoader } from './cached.js';
@@ -19,7 +19,7 @@ export class DocumentLoaders {
 
   constructor(
     private readonly ctx: {
-      caching?: RuntimeCaching;
+      caching?: Caching;
       fileManager: FileManager;
     },
   ) {

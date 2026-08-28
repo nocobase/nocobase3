@@ -1,10 +1,10 @@
 import type { MultiServerMCPClient } from '@langchain/mcp-adapters';
-import type { RuntimeLogger } from '../../runtime/logger.js';
+import type { Logger } from '@nocobase/logging';
 import type { DynamicToolsProvider, Permission } from '../tools/types.js';
 import type { MCPEntity } from '../../repository/index.js';
 
 export type MCPRuntime = {
-  logger?: Pick<RuntimeLogger, 'error' | 'warn'>;
+  logger?: Pick<Logger, 'error' | 'warn'>;
 };
 
 export interface MCPServerManager extends MCPRegistration {

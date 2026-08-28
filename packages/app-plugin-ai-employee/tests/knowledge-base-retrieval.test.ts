@@ -19,7 +19,7 @@ const employee = {
   knowledgeBase: {
     knowledgeBaseKeys: ['handbook'],
     topK: 3,
-    score: '0.6',
+    score: 0.6,
     retrievalStrategy: 'always' as const,
   },
 };

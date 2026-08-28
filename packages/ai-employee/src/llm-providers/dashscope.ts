@@ -20,7 +20,7 @@ import { SupportedModel } from '../manager/llm-provider/types.js';
 import _ from 'lodash';
 import path from 'node:path';
 import { ReasoningChatOpenAI } from './common/reasoning.js';
-import { AIFileAttachment } from '../runtime/types/ai-file-attachment.js';
+import { AIFileAttachment } from '../types/ai-file-attachment.js';
 
 const DASHSCOPE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 

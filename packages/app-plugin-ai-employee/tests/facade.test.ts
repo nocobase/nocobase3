@@ -1,32 +1,36 @@
 import { fileURLToPath } from 'node:url';
 
+import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import { createMigrator } from '@nocobase/app-database';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  createAIEmployeeContextMiddleware,
-  createAIEmployeeRuntime,
-  initializeAIEmployee,
-  type AIEmployeeEnv,
+  createPluginContextMiddleware,
+  createPluginRuntime,
+  initializePluginRuntimeResources,
+  waitForPluginReady,
+  type PluginEnv,
 } from '../server/runtime.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
+import { createAICurrentUserMiddleware } from '../server/routes/utils.js';
 describe('AI employee facade', () => {
   it('attaches a fresh request Context over one shared runtime', async () => {
     const deps = createTestAppDeps();
-    const runtime = createAIEmployeeRuntime({ apiBasePath: '/v2/api', deps });
-    const app = new Hono<AIEmployeeEnv>();
+    initializePluginRuntimeResources(deps, { loadResources: false });
+    const runtime = createPluginRuntime({ deps });
+    const app = new Hono<PluginEnv>();
     const requestContexts: unknown[] = [];
-    app.use(
-      '*',
-      createAIEmployeeContextMiddleware(
-        runtime,
-        {
-          resolve: () => ({ id: 'fixture-user', roles: ['member'] }),
-        },
-        deps.auth,
-      ),
-    );
+    vi.spyOn(deps.auth, 'getSession').mockResolvedValue({
+      session: {} as never,
+      user: {
+        id: 'fixture-user',
+        roles: ['member'],
+        isRoot: false,
+      } as never,
+    });
+    app.use('*', createAICurrentUserMiddleware(deps.auth));
+    app.use('*', createPluginContextMiddleware(runtime));
     app.get('/manager', (context) => {
       requestContexts.push(context.var.ctx);
       return context.json({
@@ -52,18 +56,17 @@ describe('AI employee facade', () => {
     expect(requestContexts[0]).not.toBe(requestContexts[1]);
   });
 
-  it('uses the authenticated database user id as the request actor id', async () => {
+  it('uses the authenticated database user as the current user', async () => {
     const deps = createTestAppDeps();
     vi.spyOn(deps.auth, 'getSession').mockResolvedValue({
       session: {} as never,
       user: { id: 'database-user-id', username: 'nocobase' } as never,
     });
-    const runtime = createAIEmployeeRuntime({ apiBasePath: '/v2/api', deps });
-    const app = new Hono<AIEmployeeEnv>();
-    app.use(
-      '*',
-      createAIEmployeeContextMiddleware(runtime, undefined, deps.auth),
-    );
+    initializePluginRuntimeResources(deps, { loadResources: false });
+    const runtime = createPluginRuntime({ deps });
+    const app = new Hono<PluginEnv>();
+    app.use('*', createAICurrentUserMiddleware(deps.auth));
+    app.use('*', createPluginContextMiddleware(runtime));
     app.get('/actor', (context) =>
       context.json({ currentUser: context.var.ctx.currentUser }),
     );
@@ -83,7 +86,7 @@ describe('AI employee facade', () => {
     const deps = createTestAppDeps();
     await deps.database.connect();
     const migrator = createMigrator({
-      database: { connection: () => deps.database },
+      database: deps.database,
       packageName: '@nocobase/app-plugin-ai-employee',
       directory: fileURLToPath(
         new URL('../database/migrations', import.meta.url),
@@ -91,17 +94,23 @@ describe('AI employee facade', () => {
     });
     await migrator.latest();
     const createCollection = vi.spyOn(
-      deps.database.builder,
+      deps.database.builder(),
       'createCollection',
     );
 
     try {
-      const runtime = initializeAIEmployee({
-        apiBasePath: '/v2/api',
-        deps,
+      initializePluginRuntimeResources({
+        ...deps,
+        paths: createConfigPaths({
+          rootDir: fileURLToPath(
+            new URL('./resource/application', import.meta.url),
+          ),
+        }),
       });
-
-      await expect(runtime.ready).resolves.toBeUndefined();
+      await expect(waitForPluginReady()).resolves.toBeUndefined();
+      await expect(
+        deps.ai.employeeManager.getEmployee('atlas'),
+      ).resolves.toMatchObject({ username: 'atlas' });
       expect(createCollection).not.toHaveBeenCalled();
     } finally {
       await deps.database.disconnect();

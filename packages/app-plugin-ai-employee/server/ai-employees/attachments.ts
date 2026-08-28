@@ -59,7 +59,7 @@ export function getAttachmentId(attachment: unknown): AttachmentId | null {
   if (!isRecord(attachment)) {
     return null;
   }
-  const id = attachment.id ?? attachment.filterByTk;
+  const id = attachment.id;
   if (typeof id === 'string' || typeof id === 'number') {
     return id;
   }

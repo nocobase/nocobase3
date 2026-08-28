@@ -1,9 +1,6 @@
 import type { Context } from '../context.js';
-import type { RuntimeActor } from '@nocobase/ai-employee';
-import type { AIEmployeeAccessPolicy } from '../auth/access-policy.js';
 import {
   asRecord,
-  assertCanManage,
   badRequest,
   notFound,
   optionalString,
@@ -11,34 +8,23 @@ import {
   requiredString,
   stringArray,
   stringRecord,
-  unwrapRecord,
-} from './resource-management-utils.js';
+} from './utils.js';
 
 export class AIMCPServerService {
-  constructor(private readonly accessPolicy: AIEmployeeAccessPolicy) {}
-
-  async list(ctx: Context, actor: RuntimeActor): Promise<unknown[]> {
-    assertCanManage(this.accessPolicy, actor);
+  async list(ctx: Context): Promise<unknown[]> {
     return (await ctx.ai.mcpServerManager.listMCP({})).map(serializeMCPServer);
   }
 
-  async get(ctx: Context, actor: RuntimeActor, name: string): Promise<unknown> {
-    assertCanManage(this.accessPolicy, actor);
+  async get(ctx: Context, name: string): Promise<unknown> {
     const server = await ctx.ai.mcpServerManager.getMCP(name);
     if (!server) throw notFound('aiMcpServers', name);
     return serializeMCPServer(server);
   }
 
-  async upsert(
-    ctx: Context,
-    actor: RuntimeActor,
-    input: unknown,
-    keyHint?: string,
-  ): Promise<unknown> {
-    assertCanManage(this.accessPolicy, actor);
-    const record = unwrapRecord(input);
+  async upsert(ctx: Context, input: unknown): Promise<unknown> {
+    const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
-    const name = requiredString(record.name ?? keyHint, 'name');
+    const name = requiredString(record.name, 'name');
     const current = await ctx.ai.mcpServerManager.getMCP(name);
     const currentRecord = asRecord(current) ?? {};
     const transport = record.transport ?? current?.transport;
@@ -64,11 +50,10 @@ export class AIMCPServerService {
     };
     await ctx.ai.mcpServerManager.registerMCP({ [name]: values as any });
     await ctx.ai.mcpServerManager.rebuildClient();
-    return this.get(ctx, actor, name);
+    return this.get(ctx, name);
   }
 
-  async delete(ctx: Context, actor: RuntimeActor, name: string): Promise<void> {
-    assertCanManage(this.accessPolicy, actor);
+  async delete(ctx: Context, name: string): Promise<void> {
     await ctx.ai.mcpServerManager.deleteMCP(name);
     await ctx.ai.mcpServerManager.rebuildClient();
   }

@@ -32,7 +32,7 @@ export default defineTools<Context>({
     }),
   },
   invoke: async (ctx, _args, runtime) => {
-    const { toolCallResults } = ctx.action.params.values || {};
+    const { toolCallResults } = ctx.requestExecution ?? {};
     const { result } =
       toolCallResults?.find(
         (item: { id: string }) => item.id === runtime.toolCallId,

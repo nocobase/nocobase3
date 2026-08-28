@@ -14,7 +14,7 @@ import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/app-database';
 import { LLMProvider } from '@nocobase/ai-employee';
 import { buildTool } from '@nocobase/ai-employee';
-import { sendSSEError } from '../utils/runtime.js';
+import { sendSSEError } from '../routes/utils.js';
 import { getSystemPrompt } from './prompts.js';
 import _ from 'lodash';
 import {
@@ -904,7 +904,7 @@ export class AIEmployee {
       }
     } finally {
       if (this.from === 'main-agent') {
-        this.ctx.res.end();
+        this.ctx.requestExecution?.streamTarget?.end();
       }
     }
   }
@@ -1045,7 +1045,7 @@ export class AIEmployee {
       webSearch: this.webSearch,
     });
 
-    const { important } = this.ctx.action?.params?.values || {};
+    const { important } = this.ctx.requestExecution ?? {};
     if (important === 'GraphRecursionError') {
       const importantPrompt = `<Important>You have already called tools multiple times and gathered sufficient information.
 First, provide a summary based on the existing information. Do not call additional tools.
@@ -1071,7 +1071,10 @@ If information is missing, clearly state it in the summary.</Important>`;
     const currentFrontendTools = toolCalls.some(
       (toolCall) => toolCall.name === EXECUTE_FRONTEND_TOOL_NAME,
     )
-      ? await listCurrentFrontendTools(this.ctx, this.sessionId)
+      ? await listCurrentFrontendTools(this.ctx, {
+          ...this.ctx.requestExecution,
+          sessionId: this.sessionId,
+        })
       : [];
     return (await this.aiToolMessagesRepo.create(
       {
@@ -1342,11 +1345,17 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   sendErrorResponse(errorMessage: string) {
-    sendSSEError(this.ctx, errorMessage);
+    sendSSEError(this.requireStreamTarget(), errorMessage);
+  }
+
+  private requireStreamTarget() {
+    const target = this.ctx.requestExecution?.streamTarget;
+    if (!target) throw new Error('SSE target is required');
+    return target;
   }
 
   sendSpecificError({ name, message }: { name: string; message: string }) {
-    sendSSEError(this.ctx, message, name);
+    sendSSEError(this.requireStreamTarget(), message, name);
   }
 
   // === Conversation/thread helpers ===
@@ -1619,10 +1628,10 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!this.areToolsEnabled()) {
       return [];
     }
-    const currentFrontendTools = await listCurrentFrontendTools(
-      this.ctx,
-      this.sessionId,
-    );
+    const currentFrontendTools = await listCurrentFrontendTools(this.ctx, {
+      ...this.ctx.requestExecution,
+      sessionId: this.sessionId,
+    });
     const tools: ToolsEntity[] = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
       ctx: this.ctx,
@@ -1964,10 +1973,8 @@ If information is missing, clearly state it in the summary.</Important>`;
 
 function getCurrentTimezone(ctx: Context): string | undefined {
   const value =
+    ctx.requestExecution?.timezone ||
     ctx.get?.('x-timezone') ||
-    ctx.request?.get?.('x-timezone') ||
-    ctx.request?.header?.['x-timezone'] ||
-    ctx.req?.headers?.['x-timezone'] ||
     Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   if (Array.isArray(value)) {
@@ -2045,7 +2052,9 @@ export class ChatStreamProtocol {
   ) {}
 
   static fromContext(ctx: Context, onWrite?: (chunk: string) => Promise<void>) {
-    return new ChatStreamProtocol(ctx.res, onWrite);
+    const target = ctx.requestExecution?.streamTarget;
+    if (!target) throw new Error('SSE target is required');
+    return new ChatStreamProtocol(target, onWrite);
   }
 
   with(conversation: { sessionId: string; from: string; username: string }) {

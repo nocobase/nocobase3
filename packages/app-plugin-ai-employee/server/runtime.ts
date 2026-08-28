@@ -8,17 +8,18 @@
  */
 
 import type { Context } from './context.js';
-import { createWorkContextHandler } from './work-context/index.js';
+import { createWorkContextHandler } from './agent/ai-employee/work-context/index.js';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import type { ConfigPaths } from '@nocobase/app-server-kit/config';
 import type { NocoBaseDriveManager } from '@nocobase/drive';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { Caching } from '@nocobase/caching';
-import type { DatabaseConnection } from '@nocobase/app-database';
+import type { DatabaseManager } from '@nocobase/app-database';
 import type { SnowflakeIdGenerator } from '@nocobase/id-generator';
-import type { Env, Hono, MiddlewareHandler } from 'hono';
-import type { CurrentUser, RuntimeActor } from '@nocobase/ai-employee';
+import type { Env, MiddlewareHandler } from 'hono';
+import type { CurrentUser } from './context.js';
 import {
   AIManager,
   type FileManager,
@@ -26,8 +27,6 @@ import {
   MemoryFileManager,
 } from '@nocobase/ai-employee';
 import { CollectionRepositoryFactory } from './repository/database/factory.js';
-import { AIEmployeeAccessPolicy } from './auth/access-policy.js';
-import type { CurrentActorResolver } from './auth/current-actor.js';
 import { AIEmployeeService } from './service/ai-employee-service.js';
 import { ModelService } from './service/model-service.js';
 import { AIFileService } from './service/file-service.js';
@@ -35,7 +34,7 @@ import { AIToolService } from './service/ai-tool-service.js';
 import { AISkillService } from './service/ai-skill-service.js';
 import { LLMService } from './service/llm-service.js';
 import { AIMCPServerService } from './service/ai-mcp-server-service.js';
-import { registerAIEmployeeRoutes } from './routes/router.js';
+import { AIConversationService } from './service/ai-conversation-service.js';
 import {
   AIEmployeeLoader,
   LLMServiceLoader,
@@ -50,22 +49,24 @@ import { BuiltInManager } from './ai-employees/built-in-manager.js';
 import { LLMStreamCachedManager } from './ai-employees/llm-stream-manager.js';
 import { SubAgentsDispatcher } from './ai-employees/sub-agents/dispatcher.js';
 import { DocumentLoaders } from '@nocobase/ai-employee';
-import type { Logging } from '@nocobase/logging';
-
+import type { Logger, Logging } from '@nocobase/logging';
+import { AI_API_BASE_PATH } from './routes/contracts.js';
 const I18N_NAMESPACE = '@nocobase/app-template-default';
-const installations = new WeakSet<object>();
-const runtimes = new WeakMap<object, Context>();
+let pluginRepositories: CollectionRepositoryFactory | undefined;
+let pluginReady: Promise<void> = Promise.resolve();
 
 declare module 'hono' {
   interface ContextVariableMap {
     ai: AIManager;
     ctx: Context;
+    currentUser: CurrentUser;
   }
 }
 
 export interface AppDeps {
   ai: AIManager;
-  database: DatabaseConnection;
+  paths: ConfigPaths;
+  database: DatabaseManager;
   auth: Auth;
   caching: Caching;
   driveManager?: NocoBaseDriveManager;
@@ -73,13 +74,13 @@ export interface AppDeps {
   logging: Logging;
 }
 
-export type AIEmployeeEnv = Env;
-export type InstallAIEmployeeOptions = {
-  apiBasePath: string;
-  aiDirectory?: string;
-  enabled?: boolean;
+export type PluginEnv = Env;
+export type CreatePluginRuntimeOptions = {
   deps: AppDeps;
-  currentActorResolver?: CurrentActorResolver;
+};
+
+export type InitializePluginRuntimeResourcesOptions = {
+  loadResources?: boolean;
 };
 
 export type ResourceLoadSummary = {
@@ -91,7 +92,8 @@ export type ResourceLoadSummary = {
 };
 
 export type ResourceLoadOptions = {
-  ctx: Context;
+  ai: AIManager;
+  logger: Logger;
   aiDirectory: string;
   modelsDirectory?: string;
   loadLLMServices?: boolean;
@@ -102,13 +104,13 @@ export async function loadResources(
   options: ResourceLoadOptions,
 ): Promise<ResourceLoadSummary> {
   const {
-    ctx,
+    ai,
+    logger,
     aiDirectory,
     modelsDirectory = aiDirectory,
     loadLLMServices = true,
     overrideTools = false,
   } = options;
-  const { ai, logger } = ctx;
   const scan = (sub: string, pattern: string[]) => ({
     basePath: path.join(aiDirectory, sub),
     pattern,
@@ -162,18 +164,13 @@ export async function loadResources(
   return summary;
 }
 
-export function createAIEmployeeContextMiddleware(
+export function createPluginContextMiddleware(
   runtime: Context,
-  currentActorResolver: CurrentActorResolver | undefined,
-  auth: AppDeps['auth'],
 ): MiddlewareHandler<Env, string, {}, Response> {
   return async (honoContext, next) => {
-    const actor = currentActorResolver
-      ? currentActorResolver.resolve(honoContext.req.raw)
-      : await resolveAuthenticatedActor(auth, honoContext.req.raw);
     const ctx = {
       ...runtime,
-      ...createRequestFields(actor, honoContext.req.raw),
+      ...createRequestFields(honoContext.var.currentUser, honoContext.req.raw),
     };
     honoContext.set('ai', ctx.ai);
     honoContext.set('ctx', ctx);
@@ -181,39 +178,40 @@ export function createAIEmployeeContextMiddleware(
   };
 }
 
-export function createAIEmployeeRuntime(
-  options: Pick<InstallAIEmployeeOptions, 'apiBasePath' | 'deps'>,
+export function createPluginRuntime(
+  options: Pick<CreatePluginRuntimeOptions, 'deps'>,
 ): Context {
   const logger = options.deps.logging.getLogger('ai-employee');
-  const repositories = new CollectionRepositoryFactory(
-    options.deps.database,
-    () => String(options.deps.idGenerator.generate()),
-  );
+  const database = options.deps.database.connection();
+  if (!pluginRepositories) {
+    throw new Error(
+      'Plugin repositories are not initialized. Call initializePluginRuntimeResources() before createPluginRuntime().',
+    );
+  }
+  const repositories = pluginRepositories;
   const snowflake = options.deps.idGenerator;
   const fileManager: FileManager = options.deps.driveManager
     ? new DriveFileManager(options.deps.driveManager)
     : new MemoryFileManager();
   const ai = options.deps.ai;
-  const accessPolicy = new AIEmployeeAccessPolicy();
   const ctx = {
     ai,
     repositories,
-    database: options.deps.database,
+    database,
     logger,
     caching: options.deps.caching,
     snowflake,
     fileManager,
     i18nNamespace: I18N_NAMESPACE,
-    ...createRequestFields({ id: 'system', roles: ['root'] }),
-    ready: Promise.resolve(),
-    accessPolicy,
-    employeeService: new AIEmployeeService(accessPolicy),
+    ...createRequestFields({ id: 'system', roles: ['root'], isRoot: true }),
+    employeeService: new AIEmployeeService(),
     modelService: new ModelService(),
-    fileService: new AIFileService(fileManager, snowflake, options.apiBasePath),
-    toolService: new AIToolService(accessPolicy),
-    skillService: new AISkillService(accessPolicy),
-    llmService: new LLMService(accessPolicy),
-    mcpServerService: new AIMCPServerService(accessPolicy),
+    fileService: new AIFileService(fileManager, snowflake, AI_API_BASE_PATH),
+    toolService: new AIToolService(),
+    skillService: new AISkillService(),
+    llmService: new LLMService(),
+    mcpServerService: new AIMCPServerService(),
+    aiConversationService: new AIConversationService(),
     aiEmployeesManager: null!,
     aiConversationsManager: null!,
     builtInManager: null!,
@@ -227,77 +225,49 @@ export function createAIEmployeeRuntime(
   return ctx;
 }
 
-/** Initializes the database-backed runtime and starts resource loading. */
-export function initializeAIEmployee(
-  options: InstallAIEmployeeOptions,
-): Context {
-  const existing = runtimes.get(options.deps.ai);
-  if (existing) return existing;
-  const ctx = createAIEmployeeRuntime(options);
-  runtimes.set(options.deps.ai, ctx);
-  const { logger } = ctx;
-  const packageAIDirectory = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '..',
-    'ai',
+export function initializePluginRuntimeResources(
+  deps: Pick<AppDeps, 'ai' | 'database' | 'idGenerator' | 'logging' | 'paths'>,
+  options: InitializePluginRuntimeResourcesOptions = {},
+): void {
+  const { ai, database, idGenerator, paths } = deps;
+  const logger = deps.logging.getLogger('ai-employee');
+  const repositories = new CollectionRepositoryFactory(
+    database.connection(),
+    () => String(idGenerator.generate()),
   );
-  const aiDirectory = resolveAIDirectory(options.aiDirectory);
-  ctx.ready = (async () => {
-    await ctx.ai.employeeManager.switchRepository(ctx.repositories.aiEmployees);
+  pluginRepositories = repositories;
+  const packageAIDirectory = resolveAIDirectory(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'ai'),
+  );
+  const appAIDirectory = resolveAIDirectory(paths.root('ai'));
+  pluginReady = (async () => {
+    await ai.employeeManager.switchRepository(repositories.aiEmployees);
+    if (options.loadResources === false) return;
     await loadResources({
-      ctx,
+      ai,
+      logger,
       aiDirectory: packageAIDirectory,
       loadLLMServices: false,
     });
     const summary = await loadResources({
-      ctx,
-      aiDirectory,
-      modelsDirectory: resolveModelsDirectory(options.aiDirectory, aiDirectory),
+      ai,
+      logger,
+      aiDirectory: appAIDirectory,
+      modelsDirectory: resolveModelsDirectory(appAIDirectory, appAIDirectory),
       overrideTools: true,
     });
-    logger.info?.({ aiDirectory, summary }, 'AI employee runtime initialized');
+    logger.info?.(
+      { aiDirectory: appAIDirectory, summary },
+      'AI employee runtime initialized',
+    );
   })();
-  void ctx.ready.catch((error) => {
+  void pluginReady.catch((error) => {
     logger.error({ error }, 'AI employee runtime initialization failed');
   });
-  return ctx;
 }
 
-/** Registers request context middleware and action routes on one Hono app. */
-export function registerAIEmployeeAppRoutes(
-  app: Hono,
-  options: Pick<
-    InstallAIEmployeeOptions,
-    'apiBasePath' | 'deps' | 'currentActorResolver'
-  >,
-): void {
-  if (installations.has(app)) return;
-  const ctx = runtimes.get(options.deps.ai);
-  if (!ctx) {
-    throw new Error(
-      'AI employee runtime is not initialized. Call initializeAIEmployee() before registering routes.',
-    );
-  }
-  installations.add(app);
-  app.use(
-    '*',
-    createAIEmployeeContextMiddleware(
-      ctx,
-      options.currentActorResolver,
-      options.deps.auth,
-    ),
-  );
-  registerAIEmployeeRoutes(app, options.apiBasePath);
-}
-
-/** Compatibility helper for embedding the plugin without plugin discovery. */
-export function installAIEmployee(
-  app: Hono,
-  options: InstallAIEmployeeOptions,
-): void {
-  if (options.enabled === false || installations.has(app)) return;
-  initializeAIEmployee(options);
-  registerAIEmployeeAppRoutes(app, options);
+export function waitForPluginReady(): Promise<void> {
+  return pluginReady;
 }
 
 export function createSupportingManagers(ctx: Context) {
@@ -317,36 +287,14 @@ export function createSupportingManagers(ctx: Context) {
   };
 }
 
-async function resolveAuthenticatedActor(
-  auth: AppDeps['auth'],
-  request: Request,
-): Promise<RuntimeActor> {
-  const session = await auth.getSession(request.headers);
-  const user = session?.user;
-  if (!user?.id) return { id: 'anonymous', roles: ['member'] };
-  const profile = user as typeof user & Record<string, unknown>;
-  const rawRoles = Array.isArray(profile.roles)
-    ? profile.roles.filter((role): role is string => typeof role === 'string')
-    : [];
-  return {
-    id: String(user.id),
-    roles: rawRoles.length ? rawRoles : ['member'],
-    locale: typeof profile.locale === 'string' ? profile.locale : undefined,
-  };
-}
-
 function createRequestFields(
-  actor: RuntimeActor,
+  currentUser: CurrentUser,
   request?: Request,
 ): Pick<
   Context,
   | 'currentUser'
-  | 'res'
   | 'auth'
   | 'state'
-  | 'action'
-  | 'request'
-  | 'req'
   | 'getCurrentLocale'
   | 'get'
   | 'set'
@@ -354,7 +302,6 @@ function createRequestFields(
   | 't'
   | 'throw'
 > {
-  const currentUser = toCurrentUser(actor);
   const userId = currentUser.id;
   const currentRole = currentUser.isRoot
     ? 'root'
@@ -362,29 +309,14 @@ function createRequestFields(
   const noop = () => {};
   return {
     currentUser,
-    res: { write: noop, end: noop, headersSent: false },
-    auth: { user: { id: userId, username: actor.id } },
+    auth: { user: { id: userId, username: String(currentUser.id) } },
     state: {
-      currentUser: { id: userId, username: actor.id },
+      currentUser: { id: userId, username: String(currentUser.id) },
       currentRole,
       currentRoles: currentUser.roles,
     },
-    action: { params: { values: {} } },
-    request: request
-      ? {
-          get: (name: string) => request.headers.get(name) ?? undefined,
-          headers: Object.fromEntries(request.headers.entries()),
-        }
-      : undefined,
-    req: request
-      ? {
-          headers: Object.fromEntries(request.headers.entries()),
-          once: noop,
-          off: noop,
-        }
-      : undefined,
     getCurrentLocale: () =>
-      actor.locale ?? request?.headers.get('x-locale') ?? currentUser.locale,
+      currentUser.locale ?? request?.headers.get('x-locale') ?? undefined,
     get: (name: string) => request?.headers.get(name) ?? undefined,
     set: noop,
     status: undefined,
@@ -396,19 +328,6 @@ function createRequestFields(
       error.status = status;
       throw error;
     },
-  };
-}
-
-function toCurrentUser(actor: RuntimeActor): CurrentUser {
-  const numericId = Number(actor.id);
-  const id = Number.isFinite(numericId) ? numericId : actor.id;
-  const roles = [...new Set(actor.roles.length ? actor.roles : ['member'])];
-  return {
-    id,
-    roles,
-    isRoot: roles.includes('root'),
-    ...(actor.locale ? { locale: actor.locale } : {}),
-    ...(actor.scope ? { scope: actor.scope } : {}),
   };
 }
 
