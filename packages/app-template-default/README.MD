@@ -211,6 +211,28 @@ Use an external recipient with `{ namespace: 'im', id: 'feishu' }` or
 configuration and integration guide lives in
 [`@nocobase/app-plugin-notification` documentation](../app-plugin-notification/docs/zh-CN/configuration.md).
 
+## Workflow Management UI
+
+`@nocobase/app-plugin-workflow` owns the Workflow runtime, management API,
+stable client route identities, and fallback pages. It also publishes the
+canonical `workflow-management` Registry recipe. The Default Template commits
+the materialized snapshot under
+`client/extensions/nocobase-workflow-management`; that application-owned copy
+overrides only the plugin route components.
+
+Build or materialize the canonical recipe with:
+
+```bash
+pnpm registry build --package @nocobase/app-plugin-workflow
+pnpm registry materialize \
+  --package @nocobase/app-plugin-workflow \
+  --item workflow-management \
+  --output-root /path/to/new-template
+```
+
+As with the authentication UI, updates to an installed Workflow Management
+snapshot require an explicit three-way merge.
+
 ## Theme
 
 `client/theme` wraps application and plugin pages. The top-right selector

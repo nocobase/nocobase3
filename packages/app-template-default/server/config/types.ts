@@ -8,6 +8,14 @@ import type { AppAuthConfig } from './auth.js';
 import type { ResolvedAppPlugin } from '../plugins/index.js';
 import type { AppNotificationConfig } from './notification.js';
 
+export interface AppWorkflowConfig {
+  sourceRoot: string;
+  distRoot: string;
+  artifactDisk: string;
+  sourceResolverDiagnostic: boolean;
+  production: boolean;
+}
+
 export interface AppRoutingConfig {
   name: string;
   publicOrigin: string | undefined;
@@ -45,6 +53,7 @@ export interface AppConfig {
   notification: AppNotificationConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
+  workflow: AppWorkflowConfig;
   server: AppServerConfig;
   spa: AppSpaConfig;
 }

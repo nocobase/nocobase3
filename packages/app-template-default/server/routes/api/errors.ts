@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 
 import type { Logger } from '@nocobase/logging';
 
-import { AppServiceError } from '@/services/errors.js';
+import { AppServiceError } from '../../services/errors.js';
 
 export interface ApiErrorHandlerOptions {
   logger: Logger;

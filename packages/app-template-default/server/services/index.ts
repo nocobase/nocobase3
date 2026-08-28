@@ -20,6 +20,7 @@ export interface AppServices extends NotificationPluginServices {
   appSettingsStore: AppSettings;
   publicFileStorage: FileUploads;
   realtime: RealtimeService;
+  plugins: Record<string, unknown>;
 }
 
 export interface CreateAppServicesOptions {
@@ -42,6 +43,7 @@ export function createAppServices(
             resolveFileUploadsUnavailableMessage(runtime.config.drive),
           ),
     realtime: options.realtime,
+    plugins: {},
   };
 }
 

@@ -1,4 +1,5 @@
 import { createCaching, type Caching } from '@nocobase/caching';
+import type { DatabaseManager } from '@nocobase/app-database';
 import {
   createAuthStorage,
   createAuthentication,
@@ -32,11 +33,13 @@ export interface AppDeps {
   auth: Auth;
   authz: AppAuthorization;
   caching: Caching;
+  database?: DatabaseManager;
   driveManager?: NocoBaseDriveManager;
   idGenerator: SnowflakeIdGenerator;
   logging: Logging;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
+  runtime: AppRuntime<AppConfig>;
 }
 
 export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
@@ -94,16 +97,17 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       }),
     },
   );
-
   return {
     caching,
     auth,
     authz,
+    database: runtime.database,
     driveManager,
     idGenerator,
     logging,
     queueManager,
     sessionManager,
+    runtime,
   };
 }
 

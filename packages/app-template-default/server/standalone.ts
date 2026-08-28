@@ -21,10 +21,10 @@ import {
   createAppDisposerRegistry,
   createAppFromRuntime,
   createPublicBasePathAdapter,
+  createRuntimeConfigPaths,
   loadAppConfig,
   onceAsync,
   prepareAppRuntime,
-  createRuntimeConfigPaths,
   resolveStandaloneRuntimeOptions,
   type AppDisposerRegistry,
 } from './runtime/index.js';
@@ -39,6 +39,7 @@ interface NodeHttpConnectionControls {
 
 export interface StandaloneServerOptions {
   viteDevUrl?: string | false;
+  moduleUrl?: string;
 }
 
 export interface StandaloneServerListenOptions {
@@ -59,7 +60,7 @@ export async function createStandaloneServer(
   const lifecycle = createAppDisposerRegistry();
 
   try {
-    const runtime = createStandaloneRuntime();
+    const runtime = createStandaloneRuntime(options.moduleUrl);
     const websocketAbortController = new AbortController();
 
     lifecycle.registerDisposer(
@@ -84,16 +85,18 @@ export async function createStandaloneServer(
   }
 }
 
-export function startServer(): void {
-  const startPromise = startServerAsync();
+export function startServer(options: StandaloneServerOptions = {}): void {
+  const startPromise = startServerAsync(options);
   startPromise.catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });
 }
 
-async function startServerAsync(): Promise<void> {
-  const app = await createStandaloneServer();
+async function startServerAsync(
+  options: StandaloneServerOptions,
+): Promise<void> {
+  const app = await createStandaloneServer(options);
 
   try {
     const server = serve(
@@ -118,8 +121,10 @@ async function startServerAsync(): Promise<void> {
   }
 }
 
-export function createStandaloneRuntime(): AppRuntime<AppConfig> {
-  const options = resolveStandaloneRuntimeOptions(import.meta.url);
+export function createStandaloneRuntime(
+  moduleUrl: string = import.meta.url,
+): AppRuntime<AppConfig> {
+  const options = resolveStandaloneRuntimeOptions(moduleUrl);
   return createAppRuntime(loadAppConfig(options), {
     paths: createRuntimeConfigPaths(options.paths),
   });
@@ -343,17 +348,22 @@ async function disposeAfterStartupFailure(
   throw startupError;
 }
 
-if (isEntrypoint()) {
-  startServer();
-}
-
-function isEntrypoint(): boolean {
-  const modulePath = fileURLToPath(import.meta.url);
+export function startServerIfEntrypoint(
+  moduleUrl: string,
+  options: StandaloneServerOptions = {},
+): void {
+  const modulePath = fileURLToPath(moduleUrl);
   const entry = process.argv[1];
   const pm2Entry = process.env.pm_exec_path;
 
-  return Boolean(
+  const isEntrypoint = Boolean(
     (entry && path.resolve(entry) === modulePath) ||
     (pm2Entry && path.resolve(pm2Entry) === modulePath),
   );
+
+  if (isEntrypoint) {
+    startServer({ ...options, moduleUrl });
+  }
 }
+
+startServerIfEntrypoint(import.meta.url);
