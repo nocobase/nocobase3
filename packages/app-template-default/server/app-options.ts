@@ -11,7 +11,6 @@ export interface AppLifecycle {
 }
 
 export interface CreateAppOptions {
-  lifecycle: AppLifecycle;
   pluginProviders: readonly LoadedAppPluginProvider[];
   pluginRoutes?: readonly LoadedAppPluginRoutes[];
   spa?: CreateAppSpaOptions;

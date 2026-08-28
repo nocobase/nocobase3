@@ -8,10 +8,10 @@ import {
 
 import type { AppDisposer } from '../app-options.js';
 import { onceAsync } from './disposers.js';
-import type { AppRuntimePathOptions, AppScope } from './options.js';
+import type { AppPathOptions, AppScope } from './options.js';
 
 export interface StandaloneScopeOptions {
-  readonly runtimePaths?: AppRuntimePathOptions;
+  readonly paths?: AppPathOptions;
   readonly appName?: string;
   readonly basePath?: string;
   readonly config?: unknown;
@@ -29,7 +29,7 @@ export class StandaloneScope implements AppScope {
   public readonly clientDir: string;
   public readonly config: unknown;
   public readonly env: EnvMap;
-  public readonly runtimePaths: AppRuntimePathOptions;
+  public readonly paths: AppPathOptions;
   public readonly signal: AbortSignal;
 
   private readonly abortController: AbortController = new AbortController();
@@ -41,13 +41,11 @@ export class StandaloneScope implements AppScope {
   private readonly destroyOnce: () => Promise<void>;
 
   public constructor(options: StandaloneScopeOptions = {}) {
-    this.runtimePaths = options.runtimePaths ?? resolveStandalonePaths();
-    this.env = loadStandaloneEnv(this.runtimePaths, options);
-    this.rootDir = this.runtimePaths.rootDir;
-    this.dataDir =
-      this.runtimePaths.storageDir ?? path.join(this.rootDir, 'storage');
-    this.clientDir =
-      this.runtimePaths.clientDir ?? path.join(this.rootDir, 'client');
+    this.paths = options.paths ?? resolveStandalonePaths();
+    this.env = loadStandaloneEnv(this.paths, options);
+    this.rootDir = this.paths.rootDir;
+    this.dataDir = this.paths.storageDir ?? path.join(this.rootDir, 'storage');
+    this.clientDir = this.paths.clientDir ?? path.join(this.rootDir, 'client');
     this.config = options.config;
     this.basePath = normalizeBasePath(
       options.basePath ?? this.env.APP_BASE_PATH ?? '/main',
@@ -114,7 +112,7 @@ export function createStandaloneScope(
   return new StandaloneScope(options);
 }
 
-function resolveStandalonePaths(): AppRuntimePathOptions {
+function resolveStandalonePaths(): AppPathOptions {
   const serverDir = path.resolve(import.meta.dirname, '..');
   const rootDir = path.resolve(serverDir, '..');
   const built = path.basename(rootDir) === 'dist';
@@ -129,7 +127,7 @@ function resolveStandalonePaths(): AppRuntimePathOptions {
 }
 
 function loadStandaloneEnv(
-  paths: AppRuntimePathOptions,
+  paths: AppPathOptions,
   options: StandaloneScopeOptions,
 ): EnvMap {
   const env = {

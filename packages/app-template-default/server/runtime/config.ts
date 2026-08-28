@@ -10,7 +10,7 @@ import type { AppQueueConfig } from '@nocobase/queue';
 
 import configFactories, { type AppConfig } from '../config/index.js';
 import databaseConfigFactory from '../config/database.js';
-import type { AppScope, ResolvedAppRuntimeOptions } from './options.js';
+import type { AppScope, ResolvedAppOptions } from './options.js';
 import {
   createStandaloneScope,
   type StandaloneScopeOptions,
@@ -22,17 +22,12 @@ import {
   resolveAppPlugins,
   type ResolvedAppPlugin,
 } from '../plugins/index.js';
-import {
-  createRuntimeConfigPaths,
-  resolveAppRuntimeOptions,
-} from './options.js';
+import { createAppConfigPaths, resolveAppOptions } from './options.js';
 
 export function loadStandaloneAppConfig(
   options: StandaloneScopeOptions = {},
 ): AppConfig {
-  return loadAppConfig(
-    resolveAppRuntimeOptions(createStandaloneScope(options)),
-  );
+  return loadAppConfig(resolveAppOptions(createStandaloneScope(options)));
 }
 
 export interface DatabaseTaskConfig {
@@ -44,15 +39,15 @@ export function loadStandaloneDatabaseTaskConfig(
   options: StandaloneScopeOptions = {},
 ): DatabaseTaskConfig {
   return loadDatabaseTaskConfig(
-    resolveAppRuntimeOptions(createStandaloneScope(options)),
+    resolveAppOptions(createStandaloneScope(options)),
   );
 }
 
 export function loadEmbeddedAppConfig(scope: AppScope): AppConfig {
-  return loadAppConfig(resolveAppRuntimeOptions(scope));
+  return loadAppConfig(resolveAppOptions(scope));
 }
 
-export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
+export function loadAppConfig(options: ResolvedAppOptions): AppConfig {
   const config = loadConfig(configFactories, createConfigContext(options));
   const databaseTaskConfig = resolveDatabaseTaskConfig(
     config.database,
@@ -100,7 +95,7 @@ function withPluginJobLocations(
 }
 
 export function loadDatabaseTaskConfig(
-  options: ResolvedAppRuntimeOptions,
+  options: ResolvedAppOptions,
 ): DatabaseTaskConfig {
   return resolveDatabaseTaskConfig(
     databaseConfigFactory(createConfigContext(options)),
@@ -108,12 +103,10 @@ export function loadDatabaseTaskConfig(
   );
 }
 
-function createConfigContext(
-  options: ResolvedAppRuntimeOptions,
-): ConfigContext {
+function createConfigContext(options: ResolvedAppOptions): ConfigContext {
   return {
     env: createConfigEnv(options.env),
-    paths: createRuntimeConfigPaths(options.paths),
+    paths: createAppConfigPaths(options.paths),
   };
 }
 
@@ -159,7 +152,7 @@ function resolveDatabaseTaskConfig(
   };
 }
 
-function resolveWorkflowDistRoot(options: ResolvedAppRuntimeOptions): string {
+function resolveWorkflowDistRoot(options: ResolvedAppOptions): string {
   const serverParent = path.basename(path.dirname(options.paths.serverDir));
   return serverParent === 'dist'
     ? path.join(options.paths.serverDir, 'workflows')

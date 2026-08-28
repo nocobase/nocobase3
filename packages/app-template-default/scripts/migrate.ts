@@ -1,12 +1,12 @@
 import { runAppMigrations } from '@nocobase/app-server-kit/database';
 
-import { createStandaloneDatabaseTaskRuntime } from '../server/database-task.js';
+import { loadStandaloneDatabaseTaskConfig } from '../server/runtime/config.js';
 
 await migrate();
 
 async function migrate(): Promise<void> {
-  const runtime = createStandaloneDatabaseTaskRuntime();
-  const result = await runAppMigrations(runtime.config.database);
+  const config = loadStandaloneDatabaseTaskConfig();
+  const result = await runAppMigrations(config.database);
 
   if (!result) {
     console.log('No database migrator is configured.');

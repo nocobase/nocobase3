@@ -28,12 +28,10 @@ import server from '../../server/config/server.ts';
 import snowflake from '../../server/config/snowflake.ts';
 import spa from '../../server/config/spa.ts';
 import {
-  createStandaloneDatabaseTaskRuntime,
-  createStandaloneRuntime,
-} from '../../server/index.ts';
-import {
   loadDatabaseTaskConfig,
   loadEmbeddedAppConfig,
+  loadStandaloneAppConfig,
+  loadStandaloneDatabaseTaskConfig,
 } from '../../server/runtime/config.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
@@ -257,7 +255,7 @@ describe('app config', () => {
         basePath: '/missing-paths',
         registerDisposer() {},
       }),
-    ).toThrow(/scope\.rootDir or scope\.runtimePaths/);
+    ).toThrow(/scope\.rootDir or scope\.paths/);
   });
 });
 
@@ -862,40 +860,40 @@ describe('database migrations', () => {
 
 describe('app plugins', () => {
   it('resolves enabled plugins and their database sources', async () => {
-    const runtime = createStandaloneRuntime();
-    const authenticationPlugin = runtime.config.plugins.find(
+    const config = loadStandaloneAppConfig();
+    const authenticationPlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-authentication',
     );
-    const dataProviderPlugin = runtime.config.plugins.find(
+    const dataProviderPlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-data-provider',
     );
-    const filePlugin = runtime.config.plugins.find(
+    const filePlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-file',
     );
-    const notificationProviderPlugin = runtime.config.plugins.find(
+    const notificationProviderPlugin = config.plugins.find(
       (item) =>
         item.packageName === '@nocobase/app-plugin-notification-provider',
     );
-    const installPlugin = runtime.config.plugins.find(
+    const installPlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-install',
     );
-    const databaseExamplePlugin = runtime.config.plugins.find(
+    const databaseExamplePlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-database-example',
     );
-    const routesExamplePlugin = runtime.config.plugins.find(
+    const routesExamplePlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-routes-example',
     );
-    const queueExamplePlugin = runtime.config.plugins.find(
+    const queueExamplePlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-queue-example',
     );
-    const realtimeExamplePlugin = runtime.config.plugins.find(
+    const realtimeExamplePlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-realtime-example',
     );
-    const serviceProviderExamplePlugin = runtime.config.plugins.find(
+    const serviceProviderExamplePlugin = config.plugins.find(
       (item) =>
         item.packageName === '@nocobase/app-plugin-service-provider-example',
     );
-    const workflowPlugin = runtime.config.plugins.find(
+    const workflowPlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-workflow',
     );
 
@@ -920,7 +918,7 @@ describe('app plugins', () => {
     expect(authenticationPlugin?.providerEntry).toMatch(
       /app-plugin-authentication\/server\/provider\.ts$/,
     );
-    const authorizationPlugin = runtime.config.plugins.find(
+    const authorizationPlugin = config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-authorization',
     );
     expect(authorizationPlugin?.providerEntry).toMatch(
@@ -1066,13 +1064,13 @@ describe('app plugins', () => {
     expect(workflowPlugin?.providerEntry).toMatch(
       /app-plugin-workflow\/server\/provider\.ts$/,
     );
-    expect(runtime.config.queue.jobs?.locations).toEqual([
+    expect(config.queue.jobs?.locations).toEqual([
       expect.stringMatching(/app-template-default\/server\/jobs/),
       expect.stringMatching(
         /app-plugin-queue-example\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
       ),
     ]);
-    expect(runtime.config.database.migrations.sources).toEqual(
+    expect(config.database.migrations.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           packageName: '@nocobase/app-template-default',
@@ -1088,7 +1086,7 @@ describe('app plugins', () => {
         }),
       ]),
     );
-    expect(runtime.config.database.seeds?.sources).toEqual(
+    expect(config.database.seeds?.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           packageName: '@nocobase/app-template-default',
@@ -1104,7 +1102,7 @@ describe('app plugins', () => {
 
     await expect(
       validateMigrations({
-        sources: runtime.config.database.migrations.sources ?? [],
+        sources: config.database.migrations.sources ?? [],
       }),
     ).resolves.toEqual(
       expect.arrayContaining([
@@ -1124,7 +1122,7 @@ describe('app plugins', () => {
     );
     await expect(
       validateSeeds({
-        sources: runtime.config.database.seeds?.sources ?? [],
+        sources: config.database.seeds?.sources ?? [],
       }),
     ).resolves.toEqual(
       expect.arrayContaining([
@@ -1178,11 +1176,11 @@ describe('standalone runtime database config', () => {
     );
   });
 
-  it('creates a database task runtime with plugin sources', () => {
-    const runtime = createStandaloneDatabaseTaskRuntime();
+  it('loads standalone database task config with plugin sources', () => {
+    const config = loadStandaloneDatabaseTaskConfig();
 
-    expect(runtime.config).not.toHaveProperty('auth');
-    expect(runtime.config.plugins).toEqual(
+    expect(config).not.toHaveProperty('auth');
+    expect(config.plugins).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-authentication',
@@ -1218,18 +1216,16 @@ describe('standalone runtime database config', () => {
         }),
       ]),
     );
-    expect(runtime).not.toHaveProperty('database');
-    expect(runtime).not.toHaveProperty('dispose');
+    expect(config).toHaveProperty('database');
+    expect(config).not.toHaveProperty('dispose');
   });
 
   it('uses the active database directory for migrations and seeds', () => {
-    const runtime = createStandaloneRuntime();
+    const config = loadStandaloneAppConfig();
 
-    expect(runtime.config.database.migrations.directory).toMatch(
+    expect(config.database.migrations.directory).toMatch(
       /database\/migrations$/,
     );
-    expect(runtime.config.database.seeds?.directory).toMatch(
-      /database\/seeds$/,
-    );
+    expect(config.database.seeds?.directory).toMatch(/database\/seeds$/);
   });
 });

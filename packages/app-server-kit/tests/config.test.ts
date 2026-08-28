@@ -23,7 +23,6 @@ vi.mock('@nocobase/app-database', async (importOriginal) => {
 import {
   createAppDatabaseManager,
   createAppMigrator,
-  createAppRuntime,
   createAppSeeder,
   createConfigEnv,
   createConfigPaths,
@@ -150,18 +149,6 @@ describe('app database storage', () => {
     });
 
     expect(existsSync(path.dirname(filename))).toBe(true);
-  });
-});
-
-describe('app runtime context', () => {
-  it('contains resolved configuration and paths without creating services', () => {
-    const paths = createConfigPaths({ rootDir: '/tmp/app' });
-    const config = { app: { name: 'main' } };
-    const runtime = createAppRuntime(config, { paths });
-
-    expect(runtime).toEqual({ config, paths });
-    expect(runtime).not.toHaveProperty('database');
-    expect(runtime).not.toHaveProperty('dispose');
   });
 });
 

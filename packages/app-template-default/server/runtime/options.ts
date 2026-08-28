@@ -41,7 +41,7 @@ export interface AppScope {
    * Optional fully resolved paths. Standalone scopes use this to preserve
    * source-vs-dist layouts without exposing a module URL to createServer().
    */
-  readonly runtimePaths?: AppRuntimePathOptions;
+  readonly paths?: AppPathOptions;
   readonly signal?: AbortSignal;
   registerDisposer(name: string, dispose: AppDisposer): void;
   onBeforeDestroy?(handler: AppDisposer): () => void;
@@ -55,7 +55,7 @@ export interface AppRoutingOptions {
   publicApiUrl: string;
 }
 
-export interface AppRuntimePathOptions {
+export interface AppPathOptions {
   rootDir: string;
   serverDir: string;
   databaseDir?: string;
@@ -63,18 +63,16 @@ export interface AppRuntimePathOptions {
   storageDir?: string;
 }
 
-export interface ResolvedAppRuntimeOptions {
+export interface ResolvedAppOptions {
   mode: 'standalone' | 'embedded';
   env: EnvMap;
-  paths: AppRuntimePathOptions;
+  paths: AppPathOptions;
   routing: AppRoutingOptions;
 }
 
-export function resolveAppRuntimeOptions(
-  scope: AppScope,
-): ResolvedAppRuntimeOptions {
+export function resolveAppOptions(scope: AppScope): ResolvedAppOptions {
   const paths = resolveAppPaths(scope);
-  const configPaths = createRuntimeConfigPaths(paths);
+  const configPaths = createAppConfigPaths(paths);
   const env = {
     ...(scope.env ??
       readEnvFiles([configPaths.root('.env'), configPaths.root('.env.local')])),
@@ -97,9 +95,7 @@ export function resolveAppRuntimeOptions(
   };
 }
 
-export function createRuntimeConfigPaths(
-  paths: AppRuntimePathOptions,
-): ConfigPaths {
+export function createAppConfigPaths(paths: AppPathOptions): ConfigPaths {
   return createConfigPaths({
     rootDir: paths.rootDir,
     serverDir: paths.serverDir,
@@ -124,9 +120,9 @@ export function createAppRouting(options: {
   };
 }
 
-function resolveAppPaths(scope: AppScope): AppRuntimePathOptions {
-  if (scope.runtimePaths) {
-    return scope.runtimePaths;
+function resolveAppPaths(scope: AppScope): AppPathOptions {
+  if (scope.paths) {
+    return scope.paths;
   }
 
   if (scope.rootDir) {
@@ -142,9 +138,7 @@ function resolveAppPaths(scope: AppScope): AppRuntimePathOptions {
     };
   }
 
-  throw new Error(
-    'Application scopes require scope.rootDir or scope.runtimePaths.',
-  );
+  throw new Error('Application scopes require scope.rootDir or scope.paths.');
 }
 
 function createScopeEnv(scope: AppScope): EnvMap {

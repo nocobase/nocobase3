@@ -3,7 +3,7 @@ import {
   type ApplicationFetchHandler,
 } from '@nocobase/app-server-kit/application';
 import type { AppWebSocketHandler } from '@nocobase/app-server-kit/websocket';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import type { ConfigPaths } from '@nocobase/app-server-kit/config';
 import { DatabaseProvider } from '@nocobase/app-server-kit/database';
 import { RealtimeProvider } from '@nocobase/app-server-kit/realtime';
 import { RouterProvider } from '@nocobase/app-server-kit/router';
@@ -14,7 +14,6 @@ import { LoggingProvider } from '@nocobase/logging';
 import { QueueProvider } from '@nocobase/queue';
 import { SessionProvider } from '@nocobase/session';
 import type { CreateAppOptions } from './app-options.js';
-import { onceAsync } from './runtime/disposers.js';
 import {
   registerNocoBaseApiProxyRoutes,
   resolveNocoBaseApiUrl,
@@ -43,24 +42,25 @@ export interface AppServer {
 }
 
 export function createApp(
-  runtime: AppRuntime<AppConfig>,
+  config: AppConfig,
+  paths: ConfigPaths,
   options: CreateAppOptions,
 ): Application<AppConfig> {
-  return createApplication(runtime, options);
+  return createApplication(config, paths, options);
 }
 
 export function createApplication(
-  runtime: AppRuntime<AppConfig>,
+  config: AppConfig,
+  paths: ConfigPaths,
   options: CreateAppOptions,
 ): Application<AppConfig> {
-  const { config } = runtime;
   const internalBasePath = normalizeBasePath(config.app.internalBasePath);
   const internalApiProxyPath = normalizeBasePath(
     config.app.internalApiProxyPath,
   );
   const publicApiUrl = config.app.publicApiUrl;
   const nocoBaseApiUrl = resolveNocoBaseApiUrl(config.app.nocoBaseApiUrl);
-  const app = new Application({ runtime });
+  const app = new Application({ config, paths });
   app.addProvider(RouterProvider);
   app.addProvider(DatabaseProvider);
   app.addProvider(AppSettingsProvider);
@@ -75,10 +75,6 @@ export function createApplication(
   for (const plugin of options.pluginProviders) {
     app.addProvider(plugin.Provider);
   }
-  options.lifecycle.registerDisposer(
-    'service-providers',
-    onceAsync(() => app.shutdown()),
-  );
   app.registerProviders();
   const router = app.router;
 

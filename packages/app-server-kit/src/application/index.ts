@@ -1,6 +1,5 @@
 import type { ExecutionContext, Hono } from 'hono';
 
-import type { AppRuntime } from '../runtime/index.js';
 import type { ConfigPaths } from '../config/index.js';
 import { routerToken } from '../router/index.js';
 import { normalizeBasePath, resolveAppName } from '../support/index.js';
@@ -36,7 +35,8 @@ export interface ApplicationConfig {
 export interface ApplicationOptions<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
-  readonly runtime: AppRuntime<TConfig>;
+  readonly config: TConfig;
+  readonly paths: ConfigPaths;
   readonly websocket?: ApplicationWebSocketFactory;
 }
 
@@ -52,13 +52,14 @@ export type ApplicationServiceProviderConstructor<
  * A composed NocoBase server application.
  *
  * The HTTP router is an application service, not the application itself.
- * Application owns the runtime, service container and provider lifecycle,
+ * Application owns its resolved config, paths, service container and provider lifecycle,
  * while fetch and websocket form its framework-neutral host boundary.
  */
 export class Application<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
-  public readonly runtime: AppRuntime<TConfig>;
+  public readonly config: TConfig;
+  public readonly paths: ConfigPaths;
   public readonly container: ServiceContainer;
   public readonly fetch: ApplicationFetchHandler = (
     request,
@@ -75,19 +76,12 @@ export class Application<
   private websocketHandler: AppWebSocketHandler | undefined;
 
   public constructor(options: ApplicationOptions<TConfig>) {
-    this.runtime = options.runtime;
+    this.config = options.config;
+    this.paths = options.paths;
     this.container = new ServiceContainer();
     this.usesDefaultWebSocket = options.websocket === undefined;
     this.websocketFactory = options.websocket ?? createRealtimeWebSocketHandler;
     this.websocket = (request, env) => this.getWebSocketHandler()(request, env);
-  }
-
-  public get config(): TConfig {
-    return this.runtime.config;
-  }
-
-  public get paths(): ConfigPaths {
-    return this.runtime.paths;
   }
 
   public get appName(): string {

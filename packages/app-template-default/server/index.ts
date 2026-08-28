@@ -22,7 +22,6 @@ export {
   type EmbeddedServer,
 } from './embedded.js';
 export {
-  createStandaloneRuntime,
   createStandaloneServer,
   startServer,
   type StandaloneServer,
@@ -30,7 +29,7 @@ export {
   type StandaloneServerOptions,
 } from './standalone.js';
 export {
-  createAppFromRuntime,
+  createConfiguredApplication,
   createPublicBasePathAdapter,
   stripPublicBasePathFromRequest,
 } from './runtime/app.js';
@@ -44,7 +43,3 @@ export {
   loadEmbeddedAppConfig,
   loadStandaloneAppConfig,
 } from './runtime/config.js';
-export {
-  createStandaloneDatabaseTaskRuntime,
-  type DatabaseTaskRuntime,
-} from './database-task.js';

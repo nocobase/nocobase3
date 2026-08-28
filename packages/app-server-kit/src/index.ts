@@ -3,7 +3,6 @@ export * from './config/index.js';
 export * from './database/index.js';
 export * from './plugins/index.js';
 export * from './proxy/index.js';
-export * from './runtime/index.js';
 export * from './realtime/index.js';
 export * from './router/index.js';
 export * from './spa/index.js';

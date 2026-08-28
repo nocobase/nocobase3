@@ -1,12 +1,12 @@
-import { createAppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { Application } from '@nocobase/app-server-kit/application';
 
 import type { AppConfig } from './config/index.js';
 import {
-  createAppFromRuntime,
-  createRuntimeConfigPaths,
+  createConfiguredApplication,
+  createAppConfigPaths,
   loadAppConfig,
-  resolveAppRuntimeOptions,
+  onceAsync,
+  resolveAppOptions,
   type AppScope,
 } from './runtime/index.js';
 
@@ -15,15 +15,21 @@ export type { AppDisposer, AppScope } from './runtime/index.js';
 export type EmbeddedServer = Application<AppConfig>;
 
 export async function createServer(scope: AppScope): Promise<EmbeddedServer> {
-  const options = resolveAppRuntimeOptions(scope);
-  const runtime = createAppRuntime(loadAppConfig(options), {
-    paths: createRuntimeConfigPaths(options.paths),
+  const options = resolveAppOptions(scope);
+  const config = loadAppConfig(options);
+  const paths = createAppConfigPaths(options.paths);
+
+  const app = await createConfiguredApplication(config, paths, {
+    viteDevUrl: options.mode === 'standalone' ? undefined : false,
   });
 
-  return await createAppFromRuntime(runtime, {
-    viteDevUrl: scope.mode === 'standalone' ? undefined : false,
-    lifecycle: scope,
-  });
+  scope.registerDisposer(
+    'application',
+    onceAsync(() => app.shutdown()),
+  );
+  await app.start();
+
+  return app;
 }
 
 export default createServer;

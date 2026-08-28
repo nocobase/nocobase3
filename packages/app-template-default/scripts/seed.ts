@@ -1,12 +1,12 @@
 import { runAppSeeds } from '@nocobase/app-server-kit/database';
 
-import { createStandaloneDatabaseTaskRuntime } from '../server/database-task.js';
+import { loadStandaloneDatabaseTaskConfig } from '../server/runtime/config.js';
 
 await seed();
 
 async function seed(): Promise<void> {
-  const runtime = createStandaloneDatabaseTaskRuntime();
-  const result = await runAppSeeds(runtime.config.database);
+  const config = loadStandaloneDatabaseTaskConfig();
+  const result = await runAppSeeds(config.database);
 
   if (!result) {
     console.log('No database seeder is configured.');

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 
+import type { ConfigPaths } from '@nocobase/app-server-kit/config';
 import { createOriginProxyHandler } from '@nocobase/app-server-kit/proxy';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { SpaHandler } from '@nocobase/app-server-kit/spa';
 import {
   addBasePathToRedirectResponse,
@@ -11,12 +11,10 @@ import {
 
 import type { Application } from '@nocobase/app-server-kit/application';
 import { createApplication, type AppServer } from '../app.js';
-import type { AppLifecycle } from '../app-options.js';
 import type { AppConfig } from '../config/index.js';
 import { loadPluginProviders, loadPluginRoutes } from '../plugins/index.js';
 
-export interface CreateAppFromRuntimeOptions {
-  lifecycle: AppLifecycle;
+export interface CreateConfiguredApplicationOptions {
   viteDevUrl?: string | URL | false;
 }
 
@@ -24,11 +22,11 @@ interface RequestInitWithDuplex extends RequestInit {
   duplex?: 'half';
 }
 
-export async function createAppFromRuntime(
-  runtime: AppRuntime<AppConfig>,
-  options: CreateAppFromRuntimeOptions,
+export async function createConfiguredApplication(
+  config: AppConfig,
+  paths: ConfigPaths,
+  options: CreateConfiguredApplicationOptions,
 ): Promise<Application<AppConfig>> {
-  const { config } = runtime;
   const viteDevUrl = resolveViteDevUrlOption(
     options.viteDevUrl,
     config.server.viteDevUrl,
@@ -39,8 +37,7 @@ export async function createAppFromRuntime(
     loadPluginRoutes(config.plugins),
   ]);
 
-  const app = createApplication(runtime, {
-    lifecycle: options.lifecycle,
+  const app = createApplication(config, paths, {
     pluginProviders,
     pluginRoutes,
     spa: {
@@ -53,7 +50,6 @@ export async function createAppFromRuntime(
     },
   });
 
-  await app.start();
   return app;
 }
 

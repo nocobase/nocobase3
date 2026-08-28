@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AppRuntime } from '../src/runtime/index.js';
 import {
   Application,
+  type ApplicationOptions,
   type ApplicationConfig,
 } from '../src/application/index.js';
 import { createConfigPaths } from '../src/config/index.js';
@@ -15,7 +15,7 @@ import {
 
 describe('application', () => {
   it('owns its router service and delegates fetch requests to it', async () => {
-    const app = new Application({ runtime: createTestRuntime() });
+    const app = new Application(createTestApplicationOptions());
     app.addProvider(RouterProvider);
     app.registerProviders();
 
@@ -37,19 +37,18 @@ describe('application', () => {
     await app.shutdown();
   });
 
-  it('exposes runtime config and paths without duplicating them', () => {
-    const runtime = createTestRuntime();
-    const app = new Application({ runtime });
+  it('owns its resolved config and paths directly', () => {
+    const options = createTestApplicationOptions();
+    const app = new Application(options);
 
-    expect(app.config).toBe(runtime.config);
-    expect(app.paths).toBe(runtime.paths);
-    expect(app.config).toBe(app.runtime.config);
-    expect(app.paths).toBe(app.runtime.paths);
+    expect(app.config).toBe(options.config);
+    expect(app.paths).toBe(options.paths);
+    expect(app).not.toHaveProperty('runtime');
   });
 
   it('runs provider lifecycle phases once and shuts providers down in reverse order', async () => {
     const calls: string[] = [];
-    const app = new Application({ runtime: createTestRuntime() });
+    const app = new Application(createTestApplicationOptions());
 
     app.addProvider(TestProvider, 'first', calls);
     app.addProvider(TestProvider, 'second', calls);
@@ -87,7 +86,7 @@ describe('application', () => {
       return websocketHandler;
     });
     const app = new Application({
-      runtime: createTestRuntime(),
+      ...createTestApplicationOptions(),
       websocket: websocketFactory,
     });
     app.container.instance(realtimeToken, 'realtime');
@@ -104,7 +103,7 @@ describe('application', () => {
   });
 
   it('provides the realtime WebSocket endpoint by default', async () => {
-    const app = new Application({ runtime: createTestRuntime() });
+    const app = new Application(createTestApplicationOptions());
     app.addProvider(RouterProvider);
     app.addProvider(RealtimeProvider);
     app.registerProviders();
@@ -167,7 +166,7 @@ class TestProvider extends ServiceProvider<Application<TestApplicationConfig>> {
   }
 }
 
-function createTestRuntime(): AppRuntime<TestApplicationConfig> {
+function createTestApplicationOptions(): ApplicationOptions<TestApplicationConfig> {
   return {
     config: {
       app: {
@@ -183,6 +182,6 @@ function createTestRuntime(): AppRuntime<TestApplicationConfig> {
         },
       },
     },
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createConfigPaths({ rootDir: '/test/app' }),
   };
 }

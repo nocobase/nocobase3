@@ -38,7 +38,9 @@ Both modes enter the application through `createServer(scope)`. Do not add
 module-location parameters to that factory. App-host supplies its runtime
 scope; the standalone adapter supplies `StandaloneScope`. Direct ESM startup
 uses `import.meta.main`; entrypoint detection must not be coupled to path
-resolution.
+resolution. `createConfiguredApplication()` only assembles the Application;
+`createServer(scope)` binds its shutdown to the Scope, starts its providers,
+and returns it only after it is ready.
 
 | Mode       | Public base path | App-local incoming path            | Internal base path    | Public API URL            | Internal proxy route |
 | ---------- | ---------------- | ---------------------------------- | --------------------- | ------------------------- | -------------------- |
@@ -57,8 +59,8 @@ comes from `scope.appName ?? scope.id`.
 When adding shared composition behavior, put it under `runtime/*` or the
 Provider that owns the capability. Do not duplicate database preparation,
 migration execution, SPA runtime injection, or app service creation in
-`standalone.ts` and `embedded.ts`. AppRuntime only carries resolved config and
-paths; service creation and cleanup belong to ServiceProviders.
+`standalone.ts` and `embedded.ts`. Application directly owns its resolved
+config and paths; service creation and cleanup belong to ServiceProviders.
 
 Run `pnpm server:config` to inspect the resolved standalone values before
 debugging path, proxy, database, or SPA index issues.

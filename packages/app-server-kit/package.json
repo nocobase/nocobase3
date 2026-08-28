@@ -30,10 +30,6 @@
       "types": "./src/plugins/index.ts",
       "import": "./src/plugins/index.ts"
     },
-    "./runtime": {
-      "types": "./src/runtime/index.ts",
-      "import": "./src/runtime/index.ts"
-    },
     "./realtime": {
       "types": "./src/realtime/index.ts",
       "import": "./src/realtime/index.ts"
@@ -84,10 +80,6 @@
         "types": "./dist/plugins/index.d.ts",
         "import": "./dist/plugins/index.js"
       },
-      "./runtime": {
-        "types": "./dist/runtime/index.d.ts",
-        "import": "./dist/runtime/index.js"
-      },
       "./realtime": {
         "types": "./dist/realtime/index.d.ts",
         "import": "./dist/realtime/index.js"
@@ -116,7 +108,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",

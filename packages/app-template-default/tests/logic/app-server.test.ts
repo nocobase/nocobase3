@@ -21,7 +21,6 @@ import {
   createDefaultCachingConfig,
   type CachingConfig,
 } from '@nocobase/caching';
-import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import {
   createRealtimeService,
@@ -64,7 +63,6 @@ import {
   type AppDisposer,
   type AppScope,
   createServer as createEmbeddedServer,
-  createStandaloneRuntime,
   createStandaloneScope,
   createStandaloneServer,
   type StandaloneServer,
@@ -144,7 +142,7 @@ describe('app server', () => {
     expect(app.container).toBeDefined();
     expect(app.appName).toBe('app-template-default');
     expect(app.publicBasePath).toBe('/app-template-default');
-    expect(app.runtime.config.app.publicBasePath).toBe('/app-template-default');
+    expect(app.config.app.publicBasePath).toBe('/app-template-default');
   });
 
   it('passes the application to plugin providers', () => {
@@ -190,8 +188,8 @@ describe('app server', () => {
     expect(routeApp.publicBasePath).toBe(app.publicBasePath);
     expect(routeApp.router).toBe(app.router);
     expect(routeApp.container).toBe(app.container);
-    expect(routeApp.config).toBe(app.runtime.config);
-    expect(routeApp.paths).toBe(app.runtime.paths);
+    expect(routeApp.config).toBe(app.config);
+    expect(routeApp.paths).toBe(app.paths);
     expect(routesContext).not.toHaveProperty('deps');
     expect(routesContext).not.toHaveProperty('repositories');
   });
@@ -415,7 +413,7 @@ describe('app server', () => {
 
     expect(typeof (app as { close?: unknown }).close).toBe('undefined');
     expect(registeredDisposers.map((disposer) => disposer.name)).toEqual([
-      'service-providers',
+      'application',
     ]);
 
     for (const disposer of [...registeredDisposers].reverse()) {
@@ -941,9 +939,8 @@ describe('app server', () => {
     const viteDevUrl = await startHttpStub(() => {
       viteRequestCount += 1;
     });
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
-    const publicBasePath = runtime.config.app.publicBasePath;
+    const publicBasePath = app.application.publicBasePath;
 
     const response = await requestApp(
       app,
@@ -953,22 +950,21 @@ describe('app server', () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       app: {
-        name: runtime.config.app.name,
-        basePath: runtime.config.app.publicBasePath,
+        name: app.application.appName,
+        basePath: app.application.publicBasePath,
       },
-      basePath: runtime.config.app.publicBasePath,
+      basePath: app.application.publicBasePath,
     });
     expect(viteRequestCount).toBe(0);
   });
 
   it('protects API routes loaded from enabled app plugins', async () => {
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
     const response = await requestApp(
       app,
-      `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
+      `http://localhost${app.application.publicBasePath}/api/routes-example`,
     );
 
     expect(response.status).toBe(401);
@@ -1008,13 +1004,12 @@ describe('app server', () => {
 
   it('dispatches jobs from enabled app plugins', async () => {
     vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
     const response = await requestApp(
       app,
-      `http://localhost${runtime.config.app.publicBasePath}/queue-example`,
+      `http://localhost${app.application.publicBasePath}/queue-example`,
     );
 
     expect(response.status).toBe(200);
@@ -1027,13 +1022,12 @@ describe('app server', () => {
   });
 
   it('exposes services registered by enabled plugin providers', async () => {
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
     const response = await requestApp(
       app,
-      `http://localhost${runtime.config.app.publicBasePath}/service-provider-example/status`,
+      `http://localhost${app.application.publicBasePath}/service-provider-example/status`,
     );
 
     expect(response.status).toBe(200);
@@ -1045,15 +1039,14 @@ describe('app server', () => {
   });
 
   it('mounts standalone app-local routes behind the public base path', async () => {
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
-    const publicBasePath = runtime.config.app.publicBasePath;
+    const publicBasePath = app.application.publicBasePath;
     const expectedHealth = {
       ok: true,
       app: {
-        name: runtime.config.app.name,
+        name: app.application.appName,
         basePath: publicBasePath,
       },
       basePath: publicBasePath,
@@ -1073,11 +1066,10 @@ describe('app server', () => {
   });
 
   it('mounts standalone WebSocket handlers behind the public base path', async () => {
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
-    const publicBasePath = runtime.config.app.publicBasePath;
+    const publicBasePath = app.application.publicBasePath;
 
     const bareResult = await app.websocket?.(
       new Request('http://localhost/ws'),
@@ -1093,13 +1085,12 @@ describe('app server', () => {
   });
 
   it('accepts standalone WebSocket upgrades through the public base path', async () => {
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
     const serverUrl = await startStandaloneTestServer(app);
     const websocket = new WebSocket(
-      `${serverUrl}${runtime.config.app.publicBasePath}/ws`,
+      `${serverUrl}${app.application.publicBasePath}/ws`,
     );
 
     await waitForWebSocketOpen(websocket);
@@ -1128,13 +1119,12 @@ describe('app server', () => {
   });
 
   it('closes standalone WebSocket connections when the app closes', async () => {
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
     const serverUrl = await startStandaloneTestServer(app);
     const websocket = new WebSocket(
-      `${serverUrl}${runtime.config.app.publicBasePath}/ws`,
+      `${serverUrl}${app.application.publicBasePath}/ws`,
     );
 
     await waitForWebSocketOpen(websocket);
@@ -1190,9 +1180,8 @@ describe('app server', () => {
         }),
       );
     });
-    const runtime = createStandaloneRuntime();
     const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
-    const publicBasePath = runtime.config.app.publicBasePath;
+    const publicBasePath = app.application.publicBasePath;
     const requestPath = `${publicBasePath}/settings?tab=apps`;
 
     const response = await requestApp(app, `http://localhost${requestPath}`, {
@@ -1595,10 +1584,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       },
     },
   } as AppConfig;
-  const runtime: AppRuntime<AppConfig> = {
-    config,
-    paths: createConfigPaths({ rootDir: process.cwd() }),
-  };
+  const paths = createConfigPaths({ rootDir: '/test/app-template-default' });
   const database =
     options.database === false
       ? undefined
@@ -1616,37 +1602,34 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       await database?.destroy();
     }
   }
-  const lifecycle = createAppDisposerRegistry();
-  const app = Object.assign(
-    createApp(runtime, {
-      lifecycle,
-      pluginProviders: [
-        ...(database
-          ? [
-              {
-                packageName: '@nocobase/app-plugin-test-database',
-                Provider: TestDatabaseProvider,
-              },
-            ]
-          : []),
-        {
-          packageName: '@nocobase/app-plugin-authentication',
-          Provider: AuthenticationProvider,
-        },
-        {
-          packageName: '@nocobase/app-plugin-authorization',
-          Provider: AuthorizationProvider,
-        },
-        ...(options.pluginProviders ?? []),
-      ],
-      pluginRoutes: options.pluginRoutes,
-    }),
-    {
-      close: () => lifecycle.disposeAll(),
-    },
-  );
+  const app = createApp(config, paths, {
+    pluginProviders: [
+      ...(database
+        ? [
+            {
+              packageName: '@nocobase/app-plugin-test-database',
+              Provider: TestDatabaseProvider,
+            },
+          ]
+        : []),
+      {
+        packageName: '@nocobase/app-plugin-authentication',
+        Provider: AuthenticationProvider,
+      },
+      {
+        packageName: '@nocobase/app-plugin-authorization',
+        Provider: AuthorizationProvider,
+      },
+      ...(options.pluginProviders ?? []),
+    ],
+    pluginRoutes: options.pluginRoutes,
+  });
 
-  return trackCloseable(app);
+  return trackCloseable(
+    Object.assign(app, {
+      close: (): Promise<void> => app.shutdown(),
+    }),
+  );
 }
 
 function createEmbeddedTestScope(
@@ -1661,8 +1644,8 @@ function createEmbeddedTestScope(
 
   return {
     ...options,
-    runtimePaths:
-      options.runtimePaths ??
+    paths:
+      options.paths ??
       (options.rootDir
         ? undefined
         : {

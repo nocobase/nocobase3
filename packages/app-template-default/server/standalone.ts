@@ -3,10 +3,6 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 
 import {
-  createAppRuntime,
-  type AppRuntime,
-} from '@nocobase/app-server-kit/runtime';
-import {
   acceptWebSocketUpgrade,
   createWebSocketUpgradeRequest,
   isWebSocketUpgrade,
@@ -16,12 +12,10 @@ import {
 import type { AppServer } from './app.js';
 import type { AppConfig } from './config/index.js';
 import { createServer } from './embedded.js';
+import type { Application } from '@nocobase/app-server-kit/application';
 import {
   createPublicBasePathAdapter,
-  createRuntimeConfigPaths,
-  loadAppConfig,
   createStandaloneScope,
-  resolveAppRuntimeOptions,
   type StandaloneScopeOptions,
 } from './runtime/index.js';
 
@@ -42,6 +36,7 @@ export interface StandaloneServerListenOptions {
 }
 
 export interface StandaloneServer extends AppServer {
+  readonly application: Application<AppConfig>;
   readonly listenOptions: StandaloneServerListenOptions;
   readonly signal: AbortSignal;
   close(): Promise<void>;
@@ -57,6 +52,7 @@ export async function createStandaloneServer(
     const mounted = createPublicBasePathAdapter(app, app.publicBasePath);
 
     return Object.assign(mounted, {
+      application: app,
       listenOptions: {
         hostname: app.config.server.host,
         port: app.config.server.port,
@@ -104,15 +100,6 @@ async function startServerAsync(
   } catch (error) {
     await disposeAfterStartupFailure(() => app.close(), error);
   }
-}
-
-export function createStandaloneRuntime(
-  options: StandaloneScopeOptions = {},
-): AppRuntime<AppConfig> {
-  const resolved = resolveAppRuntimeOptions(createStandaloneScope(options));
-  return createAppRuntime(loadAppConfig(resolved), {
-    paths: createRuntimeConfigPaths(resolved.paths),
-  });
 }
 
 export function registerStandaloneWebSocketUpgradeHandler(
