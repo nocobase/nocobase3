@@ -217,7 +217,9 @@ describe('stopProcess with a child of its own', () => {
     const script = [
       "const { spawn } = require('node:child_process');",
       "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });",
-      'console.log(child.pid);',
+      // String(), not the number: console.log inspects a number and wraps it in ANSI colour when FORCE_COLOR is set,
+      // which parses back as NaN and fails the liveness check before this test reaches what it means to exercise.
+      'console.log(String(child.pid));',
       'setInterval(() => {}, 1000);',
     ].join('\n');
 
