@@ -16,14 +16,8 @@
   },
   "exports": {
     ".": {
-      "source": "./index.ts",
       "types": "./index.ts",
-      "import": "./dist/index.js"
-    },
-    "./collections": {
-      "source": "./server/collections/index.ts",
-      "types": "./server/collections/index.ts",
-      "import": "./dist/server/collections/index.js"
+      "import": "./index.ts"
     },
     "./client": {
       "types": "./client/index.ts",
@@ -34,28 +28,24 @@
       "import": "./client/plugin.ts"
     },
     "./client/routes": {
-      "source": "./client/routes.ts",
       "types": "./client/routes.ts",
-      "import": "./dist/client/routes.js"
+      "import": "./client/routes.ts"
     },
     "./client/bootstrap": {
-      "source": "./client/bootstrap.ts",
       "types": "./client/bootstrap.ts",
-      "import": "./dist/client/bootstrap.js"
+      "import": "./client/bootstrap.ts"
     },
     "./client/route-contracts": {
       "types": "./client/route-contracts.ts",
       "import": "./client/route-contracts.ts"
     },
     "./build": {
-      "source": "./build/index.ts",
       "types": "./build/index.ts",
-      "import": "./dist/build/index.js"
+      "import": "./build/index.ts"
     },
     "./server": {
-      "source": "./server/index.ts",
       "types": "./server/index.ts",
-      "import": "./dist/server/index.js"
+      "import": "./server/index.ts"
     },
     "./server/plugin": {
       "source": "./server/plugin.ts",
@@ -74,10 +64,6 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
-      },
-      "./collections": {
-        "types": "./dist/server/collections/index.d.ts",
-        "import": "./dist/server/collections/index.js"
       },
       "./client": {
         "types": "./dist/client/index.d.ts",

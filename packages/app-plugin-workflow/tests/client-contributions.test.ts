@@ -18,6 +18,13 @@ describe('workflow client contributions', () => {
     expect(packageJson.publishConfig.exports).toHaveProperty('./client/plugin');
   });
 
+  it('keeps collection definitions internal to the plugin', () => {
+    expect(packageJson.exports).not.toHaveProperty('./collections');
+    expect(packageJson.publishConfig.exports).not.toHaveProperty(
+      './collections',
+    );
+  });
+
   it('owns stable workflow management routes', () => {
     expect(routes.parent).toBe('app');
     expect(routes.routes.map(({ name, path }) => ({ name, path }))).toEqual([
