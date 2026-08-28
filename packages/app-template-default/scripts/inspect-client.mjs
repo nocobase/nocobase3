@@ -11,7 +11,8 @@ Usage:
   pnpm client:inspect [options]
 
 Options:
-  --type <type>      all, bootstrap, routes, or providers (default: all)
+  --type <type>      all, bootstrap, routes, settings, or providers
+                     (default: all)
   --json             Print machine-readable JSON
   -h, --help         Show this help
 
@@ -19,6 +20,7 @@ Examples:
   pnpm client:inspect
   pnpm client:inspect --json
   pnpm client:inspect --type bootstrap
+  pnpm client:inspect --type settings
   pnpm client:inspect --type providers`;
 
 export function parseInspectAppClientArgs(args) {
@@ -43,8 +45,12 @@ export function parseInspectAppClientArgs(args) {
       if (value === undefined || value.startsWith('-')) {
         throw new Error('--type requires a value.');
       }
-      if (!['all', 'bootstrap', 'routes', 'providers'].includes(value)) {
-        throw new Error('--type must be all, bootstrap, routes, or providers.');
+      if (
+        !['all', 'bootstrap', 'routes', 'settings', 'providers'].includes(value)
+      ) {
+        throw new Error(
+          '--type must be all, bootstrap, routes, settings, or providers.',
+        );
       }
       options.type = value;
       index += 1;
@@ -138,6 +144,16 @@ export async function inspectAppClient({
           : {}),
       };
     }),
+    settings: resolved.settings.map((setting) => ({
+      id: setting.id,
+      title: setting.title,
+      packageName: setting.packageName,
+      path: setting.path,
+      source: setting.source,
+      entry: entryOf(setting.packageName, 'settings'),
+      ...(setting.groupId ? { groupId: setting.groupId } : {}),
+      ...(setting.access ? { access: setting.access } : {}),
+    })),
     providers: resolved.providers.map((provider, index) => ({
       order: index + 1,
       id: provider.id,
@@ -229,15 +245,28 @@ async function loadApplicationLoader(appRoot) {
  */
 async function loadContribution(loader, source) {
   if (!loader) {
-    return { packageName: '', source, routes: undefined, providers: undefined };
+    return {
+      packageName: '',
+      source,
+      routes: undefined,
+      settings: undefined,
+      providers: undefined,
+    };
   }
 
-  const [routes, providers] = await Promise.all([
+  const [routes, settings, providers] = await Promise.all([
     loadContributionEntry(loader, 'routes'),
+    loadContributionEntry(loader, 'settings'),
     loadContributionEntry(loader, 'providers'),
   ]);
 
-  return { packageName: loader.packageName, source, routes, providers };
+  return {
+    packageName: loader.packageName,
+    source,
+    routes,
+    settings,
+    providers,
+  };
 }
 
 async function loadContributionEntry(loader, contribution) {
@@ -349,6 +378,9 @@ export function formatAppClientInspection(inspection, type = 'all') {
   if (type === 'all' || type === 'routes') {
     sections.push(formatRoutes(inspection.routes));
   }
+  if (type === 'all' || type === 'settings') {
+    sections.push(formatSettings(inspection.settings));
+  }
   if (type === 'all' || type === 'providers') {
     sections.push(formatProviders(inspection.providers));
   }
@@ -363,6 +395,9 @@ export function selectAppClientInspection(inspection, type = 'all') {
       : {}),
     ...(type === 'all' || type === 'routes'
       ? { routes: inspection.routes }
+      : {}),
+    ...(type === 'all' || type === 'settings'
+      ? { settings: inspection.settings }
       : {}),
     ...(type === 'all' || type === 'providers'
       ? { providers: inspection.providers }
@@ -401,6 +436,29 @@ function formatRoutes(routes) {
         `    component source: ${route.componentSource}`,
         ...(route.componentEntry
           ? [`    component entry: ${route.componentEntry}`]
+          : []),
+      ].join('\n'),
+    )
+    .join('\n')}`;
+}
+
+function formatSettings(settings) {
+  if (settings.length === 0) {
+    return 'Settings\n  (none)';
+  }
+  return `Settings\n${settings
+    .map((setting) =>
+      [
+        `  ${setting.path}`,
+        `    id: ${setting.id}`,
+        `    title: ${setting.title}`,
+        ...(setting.groupId ? [`    group: ${setting.groupId}`] : []),
+        `    source: ${setting.source}`,
+        `    entry: ${setting.entry}`,
+        ...(setting.access
+          ? [
+              `    access: ${setting.access.resource} / ${setting.access.action}`,
+            ]
           : []),
       ].join('\n'),
     )
