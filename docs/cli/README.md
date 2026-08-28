@@ -33,7 +33,20 @@ pnpm plugin:register audit-log --dry-run
 
 改完用 App 自己的 Prettier 和配置格式化。模板通过 `package.json` 的 `"prettier": "@nocobase/dev-config/prettier"` 继承配置；如果 App 把这个字段删了又没有别的 Prettier 配置，Prettier 会按自己的默认值（双引号）重排整个文件——这是 Prettier 的行为，不是命令改坏了。App 完全没装 Prettier 时不格式化，注册照常完成。
 
-TypeScript 是必需的，因为要解析这个文件；模板自带，手工搭的 App 缺了会明确报错并且不写任何东西。
+App 没装 TypeScript 时不会整条命令失败——装包、写 `package.json`、复制 skills 都不需要编译器，照常完成；只有 `client/plugins.ts` 这一步降级，把该加的两行原样打出来：
+
+```
+  client/plugins.ts: not edited, TypeScript is not installed in this app
+
+Everything else is done. Add these two lines to client/plugins.ts by hand:
+  1. after the existing imports:  import auditLog from '@nocobase/app-plugin-audit-log/client/plugin';
+  2. inside defineClientPlugins([...]):  auditLog(),
+
+Or install TypeScript and re-run this command to have it written for you:
+  pnpm add -D typescript
+```
+
+退出码是 0,因为注册确实成功了。装上 TypeScript 后重跑同一条命令,它只补上缺的那两行,不会重复已经做完的部分。这样人和 AI agent 拿到输出都知道下一步该干什么。
 
 ### 卸载插件
 
@@ -43,7 +56,16 @@ pnpm plugin:unregister audit-log --no-install   # 只解除注册，不卸包
 pnpm plugin:unregister audit-log --dry-run
 ```
 
-`register` 的逆操作，外加删掉这个插件装进来的 skills 目录——`skills sync` 只会写已注册插件的前缀，不会替你清理已经卸掉的插件。
+`register` 的逆操作，做四件事，顺序是固定的：
+
+1. 删掉这个插件装进来的 skills 目录（要在卸包之前，skills 是从装好的包里复制出来的）
+2. `pnpm remove` 卸包（要在改 `package.json` 之前——依赖先被删掉的话 pnpm 会找不到要卸的包而直接报错）
+3. 从 `package.json` 移除依赖和 `nocobase.plugins` 登记
+4. 从 `client/plugins.ts` 删掉 import 和数组项
+
+`skills sync` 只会写已注册插件的前缀，不会替你清理已经卸掉的插件，所以第 1 步必须由这条命令做。
+
+同样地，App 没装 TypeScript 时前三步照常完成，只有第 4 步降级成打印要删的两行。
 
 ### 升级插件
 

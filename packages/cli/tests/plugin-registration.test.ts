@@ -45,6 +45,7 @@ function moduleDirectory(packageName: string): string {
  */
 async function createApp(
   manifest: Record<string, unknown> = {},
+  { typescript = true }: { typescript?: boolean } = {},
 ): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'nb3-register-'));
   created.push(appRoot);
@@ -53,7 +54,7 @@ async function createApp(
     `${JSON.stringify({ name: 'demo-app', ...manifest }, null, 2)}\n`,
   );
   await mkdir(path.join(appRoot, 'node_modules'), { recursive: true });
-  for (const dependency of ['typescript', 'prettier']) {
+  for (const dependency of typescript ? ['typescript', 'prettier'] : []) {
     await symlink(
       moduleDirectory(dependency),
       path.join(appRoot, 'node_modules', dependency),

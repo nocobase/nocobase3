@@ -65,30 +65,47 @@ export default class AppPluginUnregister extends Command {
       return;
     }
 
-    await applyPluginRegistration(appRoot, plan);
+    // Skills are copied out of the installed package, so they have to go before the package does. The package manager
+    // runs before the manifest is rewritten, because removing the dependency first leaves it nothing to remove and
+    // `pnpm remove` fails outright on a package it cannot find.
     const removedSkills = await removePluginSkills(appRoot, packageName);
-    this.log(`Unregistered ${packageName} (${plan.removedFrom.join(', ')})`);
+
+    if (!flags['no-install']) {
+      const { args: commandArgs, packageManager } = removeDependencyCommand(
+        await appPackageManager(appRoot),
+        packageName,
+      );
+      this.log(`${packageManager} ${commandArgs.join(' ')}`);
+      const exitCode = await runAttached(packageManager, [...commandArgs], {
+        cwd: appRoot,
+      });
+      if (exitCode !== 0) {
+        this.warn(
+          `${packageManager} exited with code ${exitCode}; the package may still be installed. Continuing to unregister it.`,
+        );
+      }
+    }
+
+    // The package manager rewrites package.json itself, so the plan is recomputed against what it left behind rather
+    // than overwriting that file with a manifest read before the removal.
+    const finalPlan = await planPluginUnregistration({ appRoot, packageName });
+    await applyPluginRegistration(appRoot, finalPlan);
+
+    const removedFrom =
+      finalPlan.removedFrom.length > 0
+        ? finalPlan.removedFrom
+        : plan.removedFrom;
+    this.log(`Unregistered ${packageName} (${removedFrom.join(', ')})`);
     for (const skill of removedSkills) {
       this.log(`  removed skill ${skill}`);
     }
-
-    if (flags['no-install']) {
-      return;
-    }
-
-    const { args: commandArgs, packageManager } = removeDependencyCommand(
-      await appPackageManager(appRoot),
-      packageName,
-    );
-    this.log(`${packageManager} ${commandArgs.join(' ')}`);
-    const exitCode = await runAttached(packageManager, [...commandArgs], {
-      cwd: appRoot,
-    });
-    if (exitCode !== 0) {
-      // The registration is already gone, so this is a leftover package rather than a failed unregistration.
-      this.warn(
-        `${packageName} was unregistered, but ${packageManager} exited with code ${exitCode}; the package is still installed.`,
+    if (finalPlan.manualClientEdit) {
+      this.log(
+        `\n${path.relative(appRoot, finalPlan.manualClientEdit.filePath)} still imports this plugin and could not be edited: TypeScript is not installed in this app.`,
       );
+      this.log('Remove these two lines by hand:');
+      this.log(`  1. ${finalPlan.manualClientEdit.importStatement}`);
+      this.log(`  2. ${finalPlan.manualClientEdit.entry}`);
     }
   }
 }

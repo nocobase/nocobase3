@@ -8,6 +8,7 @@ import {
   installedPluginDirectory,
   installedPluginVersion,
 } from '../../../lib/plugin-install.ts';
+import type { ManualClientPluginEdit } from '../../../lib/client-plugins.ts';
 import {
   applyPluginRegistration,
   planPluginRegistration,
@@ -234,6 +235,36 @@ export default class AppPluginRegister extends Command {
     if (plan.skippedClientEntry === 'disabled') {
       lines.push('  client/plugins.ts: skipped, the plugin is disabled');
     }
+    if (plan.manualClientEdit) {
+      lines.push(
+        ...manualEditInstructions(plan.manualClientEdit, appRoot, dryRun),
+      );
+    }
     return lines.join('\n');
   }
+}
+
+/**
+ * Spells out the edit that could not be applied. The wording is deliberately literal — file, both lines, and where
+ * each one goes — because the reader may be an agent with no view of the file, and "add the plugin to your client
+ * entry" is not something it can act on.
+ */
+function manualEditInstructions(
+  edit: ManualClientPluginEdit,
+  appRoot: string,
+  dryRun: boolean,
+): string[] {
+  const relativePath = path.relative(appRoot, edit.filePath);
+  return [
+    `  ${relativePath}: not edited, TypeScript is not installed in this app`,
+    '',
+    dryRun
+      ? `Everything else would be done. ${relativePath} would need two lines added by hand:`
+      : `Everything else is done. Add these two lines to ${relativePath} by hand:`,
+    `  1. after the existing imports:  ${edit.importStatement}`,
+    `  2. inside defineClientPlugins([...]):  ${edit.entry}`,
+    '',
+    'Or install TypeScript and re-run this command to have it written for you:',
+    '  pnpm add -D typescript',
+  ];
 }

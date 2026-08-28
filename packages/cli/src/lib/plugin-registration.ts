@@ -11,12 +11,15 @@ import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
+  MissingTypeScriptError,
   clientPluginsPath,
   createClientPluginsEditor,
+  describeClientPluginEdit,
   formatClientPlugins,
   readClientPlugins,
   writeClientPlugins,
 } from './client-plugins.ts';
+import type { ManualClientPluginEdit } from './client-plugins.ts';
 import {
   SKILLS_DIRECTORY,
   isOwnedSkillName,
@@ -39,9 +42,15 @@ export interface PluginRegistrationPlan {
   readonly manifestPath: string;
   /** The updated `package.json`, absent when the manifest needs no change. */
   readonly manifestText?: string;
+  /**
+   * Set when the client entry could not be written automatically because the application has no TypeScript. The
+   * registration still stands; these are the lines left for a person or an agent to add.
+   */
+  readonly manualClientEdit?: ManualClientPluginEdit;
   readonly packageName: string;
   /** Why the client entry was skipped, for commands that report it. */
-  readonly skippedClientEntry?: 'disabled' | 'no-client-entry';
+  readonly skippedClientEntry?:
+    'disabled' | 'no-client-entry' | 'no-typescript';
 }
 
 export interface PluginUnregistrationPlan {
@@ -52,6 +61,8 @@ export interface PluginUnregistrationPlan {
   readonly manifestChanged: boolean;
   readonly manifestPath: string;
   readonly manifestText?: string;
+  /** Set when client/plugins.ts still holds the entry because the app has no TypeScript to edit it with. */
+  readonly manualClientEdit?: ManualClientPluginEdit;
   readonly packageName: string;
   /** Which parts of the application the plugin was removed from, for reporting. */
   readonly removedFrom: readonly string[];
@@ -164,6 +175,13 @@ export async function planPluginRegistration({
       ? await planClientAddition(appRoot, packageName)
       : { changed: false, filePath: clientPluginsPath(appRoot) };
 
+  // Losing the whole registration because the app cannot format one file would throw away a working install and a
+  // correct manifest. The dependency, the registration and the skills need no compiler, so only this one edit
+  // degrades, and it degrades into instructions precise enough to apply by hand.
+  const resolvedSkip = client.missingTypeScript
+    ? 'no-typescript'
+    : skippedClientEntry;
+
   return {
     changed: manifestChanged || client.changed,
     clientPluginsChanged: client.changed,
@@ -172,13 +190,16 @@ export async function planPluginRegistration({
       ? {}
       : { clientPluginsText: client.sourceText }),
     enabled,
+    ...(client.missingTypeScript
+      ? { manualClientEdit: describeClientPluginEdit(appRoot, packageName) }
+      : {}),
     manifestChanged,
     manifestPath,
     ...(manifestChanged
       ? { manifestText: `${JSON.stringify(manifest, null, 2)}\n` }
       : {}),
     packageName,
-    ...(skippedClientEntry === undefined ? {} : { skippedClientEntry }),
+    ...(resolvedSkip === undefined ? {} : { skippedClientEntry: resolvedSkip }),
   };
 }
 
@@ -211,6 +232,9 @@ export async function planPluginUnregistration({
     manifestPath,
     ...(removedFrom.some((entry) => entry !== 'client/plugins.ts')
       ? { manifestText: `${JSON.stringify(manifest, null, 2)}\n` }
+      : {}),
+    ...(client.missingTypeScript
+      ? { manualClientEdit: describeClientPluginEdit(appRoot, packageName) }
       : {}),
     packageName,
     removedFrom,
@@ -264,12 +288,27 @@ export async function removePluginSkills(
   return removed.sort();
 }
 
+interface ClientEditPlan {
+  readonly changed: boolean;
+  readonly filePath: string;
+  readonly missingTypeScript?: boolean;
+  readonly sourceText?: string;
+}
+
 async function planClientAddition(
   appRoot: string,
   packageName: string,
-): Promise<{ changed: boolean; filePath: string; sourceText?: string }> {
+): Promise<ClientEditPlan> {
   const { filePath, sourceText } = await readClientPlugins(appRoot);
-  const editor = await createClientPluginsEditor(appRoot);
+  let editor;
+  try {
+    editor = await createClientPluginsEditor(appRoot);
+  } catch (error) {
+    if (error instanceof MissingTypeScriptError) {
+      return { changed: false, filePath, missingTypeScript: true };
+    }
+    throw error;
+  }
   const added = editor.add(sourceText, packageName);
   if (!added.changed) {
     return { changed: false, filePath };
@@ -284,12 +323,20 @@ async function planClientAddition(
 async function planClientRemoval(
   appRoot: string,
   packageName: string,
-): Promise<{ changed: boolean; filePath: string; sourceText?: string }> {
+): Promise<ClientEditPlan> {
   const { exists, filePath, sourceText } = await readClientPlugins(appRoot);
   if (!exists) {
     return { changed: false, filePath };
   }
-  const editor = await createClientPluginsEditor(appRoot);
+  let editor;
+  try {
+    editor = await createClientPluginsEditor(appRoot);
+  } catch (error) {
+    if (error instanceof MissingTypeScriptError) {
+      return { changed: false, filePath, missingTypeScript: true };
+    }
+    throw error;
+  }
   const removed = editor.remove(sourceText, packageName);
   if (!removed.changed) {
     return { changed: false, filePath };

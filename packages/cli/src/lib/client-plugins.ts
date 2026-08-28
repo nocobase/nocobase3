@@ -101,12 +101,49 @@ async function loadTypeScript(appRoot: string): Promise<typeof ts> {
   try {
     loaded = await import(require.resolve('typescript'));
   } catch (error) {
-    throw new Error(
-      `TypeScript is required to edit client/plugins.ts but is not installed in ${appRoot}. Install it as a devDependency.`,
+    throw new MissingTypeScriptError(
+      `TypeScript is not installed in ${appRoot}, so client/plugins.ts cannot be edited automatically.`,
       { cause: error },
     );
   }
   return interopDefault<typeof ts>(loaded, 'createSourceFile');
+}
+
+/**
+ * Raised when the application has no TypeScript to parse `client/plugins.ts` with. It is a distinct type because
+ * callers treat it as a reason to degrade to printed instructions rather than as a failure: everything else about a
+ * registration works without a compiler, and losing the install over a formatting tool would be a poor trade.
+ */
+export class MissingTypeScriptError extends Error {
+  public constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'MissingTypeScriptError';
+  }
+}
+
+/** The exact lines a person or agent has to write when the automatic edit is unavailable. */
+export interface ManualClientPluginEdit {
+  readonly entry: string;
+  readonly filePath: string;
+  readonly importStatement: string;
+  readonly localName: string;
+}
+
+/**
+ * Describes the edit without parsing anything, so the instructions survive the absence of the compiler that would
+ * normally apply them.
+ */
+export function describeClientPluginEdit(
+  appRoot: string,
+  packageName: string,
+): ManualClientPluginEdit {
+  const localName = localNameFor(packageName);
+  return {
+    entry: `${localName}(),`,
+    filePath: clientPluginsPath(appRoot),
+    importStatement: `import ${localName} from '${clientPluginEntrySpecifier(packageName)}';`,
+    localName,
+  };
 }
 
 /**
