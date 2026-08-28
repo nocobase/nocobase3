@@ -90,6 +90,31 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-routes-example:index',
         path: '/routes-example',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file:demo',
+        path: '/file-demo',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-workflow:workflow-list',
+        path: '/workflow/workflows',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-workflow:workflow-detail',
+        path: '/workflow/workflows/:workflowId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-workflow:workflow-run-list',
+        path: '/workflow/runs',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-workflow:workflow-run-detail',
+        path: '/workflow/runs/:runId',
+      },
     ]);
     expect(
       inspection.providers.map(({ id, order }) => ({ id, order })),
@@ -137,6 +162,11 @@ describe('client inspection', () => {
       {
         order: 5,
         packageName: '@nocobase/app-plugin-notification-provider',
+        source: 'plugin',
+      },
+      {
+        order: 6,
+        packageName: '@nocobase/app-plugin-workflow',
         source: 'plugin',
       },
     ]);
@@ -209,6 +239,25 @@ describe('client inspection', () => {
         componentEntry,
         // The override source is now named, rather than a flat "application".
         componentSource: 'application (extension:nocobase-auth-ui)',
+        routeSource: 'plugin',
+      })),
+    );
+
+    expect(
+      inspection.routes
+        .filter(({ packageName }) =>
+          packageName.endsWith('app-plugin-workflow'),
+        )
+        .map(({ componentEntry, componentSource, routeSource }) => ({
+          componentEntry,
+          componentSource,
+          routeSource,
+        })),
+    ).toEqual(
+      Array.from({ length: 4 }, () => ({
+        componentEntry:
+          './client/extensions/nocobase-workflow-management/pages',
+        componentSource: 'application (extension:nocobase-workflow-management)',
         routeSource: 'plugin',
       })),
     );

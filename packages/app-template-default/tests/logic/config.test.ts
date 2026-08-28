@@ -841,6 +841,9 @@ describe('app plugins', () => {
     const realtimeExamplePlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-realtime-example',
     );
+    const workflowPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-workflow',
+    );
 
     expect(authenticationPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-authentication',
@@ -922,6 +925,17 @@ describe('app plugins', () => {
     expect(realtimeExamplePlugin?.bootstrapEntry).toMatch(
       /app-plugin-realtime-example\/server\/bootstrap\.ts$/,
     );
+    expect(workflowPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-workflow',
+      version: declaredVersion('@nocobase/app-plugin-workflow'),
+      enabled: true,
+    });
+    expect(workflowPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-workflow\/database\/migrations$/,
+    );
+    expect(workflowPlugin?.routesEntry).toMatch(
+      /app-plugin-workflow\/server\/routes\/index\.ts$/,
+    );
     expect(runtime.config.queue.jobs?.locations).toEqual([
       expect.stringMatching(/app-template-default\/server\/jobs/),
       expect.stringMatching(
@@ -938,6 +952,9 @@ describe('app plugins', () => {
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-workflow',
         }),
       ]),
     );
@@ -968,6 +985,10 @@ describe('app plugins', () => {
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
           name: '202608220001_database_example_create_messages',
+        }),
+        expect.objectContaining({
+          packageName: '@nocobase/app-plugin-workflow',
+          name: '202608200001_create_workflow_collections',
         }),
       ]),
     );

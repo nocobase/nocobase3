@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "0.0.1-beta.5",
+  "version": "0.0.1-beta.6",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -9,7 +9,7 @@
   },
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
-    "defaultTemplateVersion": "0.0.1-beta.5",
+    "defaultTemplateVersion": "0.0.1-beta.6",
     "plugins": {
       "@nocobase/app-plugin-authentication": {
         "enabled": true
@@ -18,6 +18,9 @@
         "enabled": true
       },
       "@nocobase/app-plugin-data-provider": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-file": {
         "enabled": true
       },
       "@nocobase/app-plugin-install": {
@@ -37,6 +40,9 @@
       },
       "@nocobase/app-plugin-realtime-example": {
         "enabled": true
+      },
+      "@nocobase/app-plugin-workflow": {
+        "enabled": true
       }
     }
   },
@@ -50,27 +56,28 @@
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
-    "@nocobase/app-database": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-data-provider": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-file": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
-    "@nocobase/app-portal-sdk": "workspace:^",
-    "@nocobase/app-sdk": "workspace:^",
+    "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-sdk": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/dev-config": "workspace:*",
+    "@nocobase/app-database": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/id-generator": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "@nocobase/nb3-cli": "workspace:^",
+    "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
+    "@nocobase/dev-config": "workspace:*",
     "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
@@ -100,6 +107,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "@xyflow/react": "^12.11.3",
     "ai": "5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -110,6 +118,7 @@
     "dingtalk-jsapi": "3.1.1",
     "echarts": "^5.5.0",
     "echarts-for-react": "3.0.2",
+    "elkjs": "^0.10.2",
     "embla-carousel-react": "^8.6.0",
     "eslint": "catalog:",
     "eventsource-parser": "3.1.0",
@@ -186,11 +195,6 @@
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
-    "plugin:register": "nb3 app plugin register",
-    "plugin:unregister": "nb3 app plugin unregister",
-    "plugin:update": "nb3 app plugin update",
-    "plugin:skills:sync": "nb3 app plugin skills sync",
-    "client:inspect": "tsx ./scripts/inspect-client.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

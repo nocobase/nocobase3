@@ -11,7 +11,6 @@ const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const viteDevHost = '127.0.0.1';
 const viteDevPreferredPort = 5173;
 
 const parseEnv = (content) => {
@@ -176,6 +175,7 @@ process.once('SIGINT', () => shutdown(0));
 process.once('SIGTERM', () => shutdown(0));
 
 const env = loadEnv();
+const viteDevHost = env.APP_VITE_DEV_HOST || '0.0.0.0';
 const vitePort = await findAvailablePort({
   host: viteDevHost,
   label: 'Vite dev',
@@ -183,9 +183,18 @@ const vitePort = await findAvailablePort({
 });
 const initialEnv = {
   ...env,
+  APP_SERVER_HOST: env.APP_SERVER_HOST || '0.0.0.0',
   APP_VITE_DEV_HOST: viteDevHost,
   APP_VITE_DEV_PORT: String(vitePort),
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
+  NOCOBASE_API_URL:
+    env.NOCOBASE_API_URL ||
+    `/${[
+      String(env.APP_BASE_PATH || '/main').replace(/^\/+|\/+$/g, ''),
+      'v2/api',
+    ]
+      .filter(Boolean)
+      .join('/')}`,
 };
 const appServerHost = initialEnv.APP_SERVER_HOST || '127.0.0.1';
 const configuredAppServerPort = numberFromEnv(
@@ -214,6 +223,13 @@ const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
   .filter(Boolean)
   .join('/')}`;
 const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
+const workflowBuild = spawn.sync(
+  'tsx',
+  ['--tsconfig', 'tsconfig.node.json', 'scripts/build-workflows.ts'],
+  { cwd: rootDir, env: nextEnv, stdio: 'inherit' },
+);
+if (workflowBuild.error) throw workflowBuild.error;
+if (workflowBuild.status !== 0) process.exit(workflowBuild.status ?? 1);
 const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);
 
 console.log(`\n  Starting app dev server...`);
