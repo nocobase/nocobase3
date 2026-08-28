@@ -32,6 +32,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import { Label } from '@/components/ui/label';
 import {
   NativeSelect,
@@ -1466,18 +1471,23 @@ function InviteMemberDialog({
             </div>
             <div className='space-y-2'>
               <Label htmlFor='invite-expiry'>
-                {translate('hub.invitation.expiry', 'Expires in days')}
+                {translate('hub.invitation.expiry', 'Invitation link validity')}
               </Label>
-              <Input
-                id='invite-expiry'
-                type='number'
-                min={1}
-                max={30}
-                value={expiresInDays}
-                onChange={(event) =>
-                  setExpiresInDays(Number(event.target.value))
-                }
-              />
+              <InputGroup>
+                <InputGroupInput
+                  id='invite-expiry'
+                  type='number'
+                  min={1}
+                  max={30}
+                  value={expiresInDays}
+                  onChange={(event) =>
+                    setExpiresInDays(Number(event.target.value))
+                  }
+                />
+                <InputGroupAddon align='inline-end'>
+                  {translate('hub.invitation.expiryUnit', 'days')}
+                </InputGroupAddon>
+              </InputGroup>
             </div>
           </div>
         )}
