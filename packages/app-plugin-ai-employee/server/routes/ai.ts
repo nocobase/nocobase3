@@ -31,9 +31,12 @@ export function createAIRouter(app: Hono): void {
     );
     return context.json(result as never);
   });
-
-  app.get('/ai:listProviderModels', async (context) => {
-    const result = unsupportedAIAction('ai:listProviderModels');
+  app.post('/ai:listProviderModels', async (context) => {
+    const ctx = context.var.ctx;
+    const result = await ctx.modelService.listProviderModels(
+      ctx,
+      await context.req.json(),
+    );
     return context.json(result as never);
   });
 

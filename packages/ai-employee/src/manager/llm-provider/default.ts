@@ -8,8 +8,7 @@ import type { LLMServiceEntity } from '../../repository/index.js';
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { LLMServiceRepository } from '../../repository/index.js';
-
+import type { LLMServiceManager } from '../llm-service/types.js';
 import { getRecommendedModels } from './recommended-models.js';
 import type {
   EnabledLLMModel,
@@ -26,13 +25,20 @@ import { SupportedModel } from './types.js';
 export class LLMProviderManager {
   llmProviders = new Map<string, LLMProviderMeta>();
 
-  constructor(private readonly llmServiceRepository: LLMServiceRepository) {}
+  constructor(private readonly llmServiceManager: LLMServiceManager) {}
 
   registerLLMProvider(name: string, meta: LLMProviderMeta): void {
     this.llmProviders.set(name, meta);
   }
 
-  listLLMProviders() {
+  listLLMProviders(): Array<{
+    name: string;
+    title: string;
+    supportedModel: SupportedModel[];
+    supportWebSearch: boolean;
+    webSearchModels?: string[];
+    recommendedModels: EnabledLLMModel[];
+  }> {
     return Array.from(this.llmProviders.entries()).map(
       ([
         name,
@@ -43,6 +49,7 @@ export class LLMProviderManager {
         supportedModel: supportedModel ?? [SupportedModel.LLM],
         supportWebSearch: supportWebSearch ?? false,
         webSearchModels,
+        recommendedModels: getRecommendedModels(name),
       }),
     );
   }
@@ -57,9 +64,7 @@ export class LLMProviderManager {
   }
 
   async listAllEnabledModels(): Promise<EnabledLLMService[]> {
-    const services = await this.llmServiceRepository.find({
-      sort: ['sort', 'name'],
-    });
+    const services = await this.llmServiceManager.listLLMServices();
     return services
       .filter((service) => service.enabled !== false)
       .map((service) => this.toEnabledLLMService(service))
@@ -102,28 +107,36 @@ export class LLMProviderManager {
   }
 
   private getEnabledModels(service: LLMServiceEntity): EnabledLLMModel[] {
-    const provider = service.provider;
     const raw = service.enabledModels;
-    if (
-      raw &&
-      typeof raw === 'object' &&
-      !Array.isArray(raw) &&
-      (raw as any).mode
-    ) {
-      if ((raw as any).mode === 'recommended')
-        return getRecommendedModels(provider);
-      return ((raw as any).models || [])
-        .filter((model: { value: string }) => model.value)
-        .map((model: { label?: string; value: string }) => ({
-          label: model.label || model.value,
-          value: model.value,
-        }));
-    }
     if (Array.isArray(raw)) {
-      if (!raw.length) return getRecommendedModels(provider);
-      return raw.map((id: string) => ({ label: id, value: id }));
+      if (!raw.length) return getRecommendedModels(service.provider);
+      return raw
+        .filter(
+          (id): id is string => typeof id === 'string' && Boolean(id.trim()),
+        )
+        .map((id) => ({ label: id.trim(), value: id.trim() }));
     }
-    return getRecommendedModels(provider);
+    if (!raw || typeof raw !== 'object') {
+      return getRecommendedModels(service.provider);
+    }
+    if (raw.mode === 'recommended') {
+      return getRecommendedModels(service.provider);
+    }
+    if (raw.mode !== 'provider' && raw.mode !== 'custom') {
+      return getRecommendedModels(service.provider);
+    }
+    const seen = new Set<string>();
+    return raw.models.flatMap((model) => {
+      if (!model || typeof model.value !== 'string') return [];
+      const value = model.value.trim();
+      if (!value || seen.has(value)) return [];
+      seen.add(value);
+      const label =
+        typeof model.label === 'string' && model.label.trim()
+          ? model.label.trim()
+          : value;
+      return [{ label, value }];
+    });
   }
 
   async createEmbedding(
@@ -132,9 +145,7 @@ export class LLMProviderManager {
     const { llmService, model } = options;
     if (!llmService || !model)
       throw new Error('Embedding service and model are required');
-    const service = await this.llmServiceRepository.findOne({
-      filter: { name: llmService },
-    });
+    const service = await this.llmServiceManager.getLLMService(llmService);
     if (!service) throw new Error(`LLM service "${llmService}" not found`);
     const providerOptions = this.llmProviders.get(service.provider);
     if (!providerOptions)
@@ -158,9 +169,7 @@ export class LLMProviderManager {
     if (webSearch === true) modelOptions.builtIn = { webSearch: true };
     if (reasoning) modelOptions._reasoning = reasoning;
 
-    const service = await this.llmServiceRepository.findOne({
-      filter: { name: llmService },
-    });
+    const service = await this.llmServiceManager.getLLMService(llmService);
     if (!service) throw new Error('LLM service not found');
 
     const providerOptions = this.llmProviders.get(service.provider);

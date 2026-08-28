@@ -64,7 +64,6 @@
     "axios": "^1.7.0",
     "d3-dsv": "2",
     "fast-glob": "^3.3.2",
-    "flexsearch": "^0.8.2",
     "gray-matter": "^4.0.3",
     "ipaddr.js": "^2.2.0",
     "jsonrepair": "^3.15.0",

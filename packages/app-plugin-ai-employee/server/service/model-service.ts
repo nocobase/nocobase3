@@ -1,7 +1,12 @@
 import { SupportedModel } from '@nocobase/ai-employee';
 import type { Context } from '../context.js';
 import { randomUUID } from 'node:crypto';
-import type { EnabledLLMServiceDto } from '../routes/contracts.js';
+import type {
+  EnabledLLMServiceDto,
+  ProviderModelDto,
+  ProviderModelListRequest,
+} from '../routes/contracts.js';
+import { badRequest, notFound, requiredString } from './utils.js';
 
 /**
  * LLM service / model service — uses the provider manager and shared in-memory `llmServices` store.
@@ -21,7 +26,9 @@ export class ModelService {
     }));
   }
 
-  async listLLMProviders(ctx: Context): Promise<unknown[]> {
+  listLLMProviders(
+    ctx: Context,
+  ): ReturnType<Context['ai']['llmProviderManager']['listLLMProviders']> {
     return ctx.ai.llmProviderManager.listLLMProviders();
   }
 
@@ -65,6 +72,53 @@ export class ModelService {
       return (provider.models?.[type] ?? []).map((id) => ({ id }));
     }
     return [];
+  }
+  async listProviderModels(
+    ctx: Context,
+    input: ProviderModelListRequest,
+  ): Promise<ProviderModelDto[]> {
+    const llmService = requiredString(input.llmService, 'llmService');
+    const service = await ctx.ai.llmServiceManager.getLLMService(llmService);
+    if (!service) throw notFound('llmServices', llmService);
+    const providerMeta = ctx.ai.llmProviderManager.llmProviders.get(
+      service.provider,
+    );
+    if (!providerMeta) {
+      throw badRequest(`LLM provider not found: ${service.provider}`);
+    }
+    const Provider = providerMeta.provider;
+    const provider = new Provider({ serviceOptions: service.options });
+    let result: Awaited<ReturnType<typeof provider.listModels>>;
+    try {
+      result = await provider.listModels();
+    } catch (error) {
+      throw new Error(
+        `Failed to load models for LLM service "${llmService}": ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    if (result.errMsg) {
+      const error: Error & { status?: number } = new Error(
+        `Failed to load models for LLM service "${llmService}": ${result.errMsg}`,
+      );
+      error.status = result.code || 500;
+      throw error;
+    }
+    const search = input.search?.trim().toLowerCase();
+    const seen = new Set<string>();
+    return (result.models ?? []).flatMap((model) => {
+      const id = typeof model?.id === 'string' ? model.id.trim() : '';
+      if (
+        !id ||
+        seen.has(id) ||
+        (search && !id.toLowerCase().includes(search))
+      ) {
+        return [];
+      }
+      seen.add(id);
+      return [{ id }];
+    });
   }
 
   async getSupportedProvider(ctx: Context, model: string): Promise<string[]> {

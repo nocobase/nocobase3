@@ -350,7 +350,7 @@ describe('DeepSeek final client routing', () => {
 
   it('rejects web search for legacy DeepSeek models before provider invocation', async () => {
     const manager = new LLMProviderManager({
-      findOne: vi.fn().mockResolvedValue({
+      getLLMService: vi.fn().mockResolvedValue({
         name: 'deepseek-service',
         title: 'DeepSeek',
         provider: 'deepseek',

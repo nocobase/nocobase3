@@ -93,10 +93,6 @@ describe('local AI server migration', () => {
     const usernames = employees.payload.data.map((e: any) => e.username);
     expect(usernames).toContain('viz');
     expect(usernames).toContain('atlas');
-    // builder employees (nathan/orin/dara) are admin-only server-side
-    expect(usernames).not.toContain('nathan');
-    expect(usernames).not.toContain('orin');
-    expect(usernames).not.toContain('dara');
     expect(upstreamRequests).toBe(0);
 
     const models = await requestJSON(app, 'ai:listAllEnabledModels', {

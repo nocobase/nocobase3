@@ -1,9 +1,5 @@
 export * from './ai-employee-service.js';
 export * from './avatar.js';
 export * from './route-paths.js';
-export {
-  AISettingsShell,
-  aiSettingsTabs,
-  getActiveAISettingsPath,
-  withAISettingsShell,
-} from '@nocobase/app-plugin-ai-knowledge-base/client';
+export * from './ai-settings-shell.js';
+export * from './llm-service-service.js';

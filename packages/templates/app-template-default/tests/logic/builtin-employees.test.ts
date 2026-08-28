@@ -13,13 +13,10 @@ const DIST_EMPLOYEES_DIR = path.resolve(
 );
 const BUILTIN_EMPLOYEES = [
   'atlas',
-  'dara',
   'dex',
   'ellis',
   'form_assistant',
   'lexi',
-  'lina',
-  'nathan',
   'vera',
   'viz',
 ];
@@ -42,21 +39,17 @@ describe('built-in and application AI employees', () => {
       nocoBaseApiUrl: false,
     });
     const response = await app.request(
-      'http://localhost/app-template-default/v2/api/aiEmployees:listByUser',
+      'http://localhost/app-template-default/api/ai/aiEmployees:listByUser',
       {
-        method: 'POST',
+        method: 'GET',
         headers: {
           'content-type': 'application/json',
           'x-user-id': 'root-user',
           'x-roles': 'root',
         },
-        body: '{}',
       },
     );
-    const payload = (await response.json()) as {
-      data: Array<Record<string, any>>;
-    };
-    const employees = payload.data;
+    const employees = (await response.json()) as Array<Record<string, any>>;
     const found = new Set(employees.map((employee) => employee.username));
 
     for (const username of BUILTIN_EMPLOYEES) {
@@ -64,6 +57,12 @@ describe('built-in and application AI employees', () => {
         found.has(username),
         `built-in employee ${username} must register`,
       ).toBe(true);
+    }
+    for (const username of ['dara', 'lina', 'nathan', 'orin']) {
+      expect(
+        found.has(username),
+        `removed built-in employee ${username} must not register`,
+      ).toBe(false);
     }
     expect(found.has('application-validation')).toBe(true);
     expect(

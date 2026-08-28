@@ -1,7 +1,6 @@
 import type { RepositoryFactory } from '../repository/factory.js';
 import { DefaultAIEmployeeManager } from './ai-employee/index.js';
 import type { AIEmployeeManager } from './ai-employee/types.js';
-import { DocumentManager } from './document/index.js';
 import { DefaultAIFeatureManager } from './features/index.js';
 import type { AIFeatureManager } from './features/types.js';
 import { LLMProviderManager } from './llm-provider/index.js';
@@ -21,7 +20,6 @@ export type AIManagerOptions = {
 };
 
 export class AIManager {
-  documentManager: DocumentManager;
   toolsManager: ToolsManager;
   skillsManager: SkillsManager;
   employeeManager: AIEmployeeManager;
@@ -33,7 +31,6 @@ export class AIManager {
 
   constructor(options: AIManagerOptions) {
     const { repositories } = options;
-    this.documentManager = new DocumentManager();
     this.toolsManager = new DefaultToolsManager(repositories.toolsRepository);
     this.skillsManager = new DefaultSkillsManager(
       repositories.skillsRepository,
@@ -48,16 +45,13 @@ export class AIManager {
     this.llmServiceManager = new DefaultLLMServiceManager(
       repositories.llmServiceRepository,
     );
-    this.llmProviderManager = new LLMProviderManager(
-      repositories.llmServiceRepository,
-    );
+    this.llmProviderManager = new LLMProviderManager(this.llmServiceManager);
     this.mcpToolsManager = new McpToolsManager();
     this.features = new DefaultAIFeatureManager();
   }
 }
 
 export * from './ai-employee/index.js';
-export * from './document/index.js';
 export * from './document-loader/index.js';
 export * from './document-loader/plugin/index.js';
 export * from './file/index.js';

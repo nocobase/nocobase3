@@ -109,7 +109,6 @@
     "lodash": "^4.17.21",
     "zod": "^3",
     "langchain": "1.2.39",
-    "@nocobase/app-plugin-ai-knowledge-base": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "lucide-react": "^0.487.0"
   },

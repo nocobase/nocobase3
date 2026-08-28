@@ -11,13 +11,10 @@ import { createMockServer } from './mock-server.js';
 
 const GOLDEN_EMPLOYEES = [
   'atlas',
-  'dara',
   'dex',
   'ellis',
   'form_assistant',
   'lexi',
-  'lina',
-  'nathan',
   'vera',
   'viz',
 ];
@@ -64,15 +61,11 @@ describe('package AI resources', () => {
       builtIn: true,
       defaultPrompt: expect.stringContaining('orchestration lead'),
     });
-    expect(
-      await fixture.aiManager.employeeManager.getEmployee('nathan'),
-    ).toMatchObject({
-      category: 'developer',
-      skillSettings: { skills: ['frontend-developer'] },
-    });
-    expect(
-      await fixture.aiManager.employeeManager.getEmployee('orin'),
-    ).toBeUndefined();
+    for (const username of ['dara', 'lina', 'nathan', 'orin']) {
+      expect(
+        await fixture.aiManager.employeeManager.getEmployee(username),
+      ).toBeUndefined();
+    }
 
     expect(
       await fixture.aiManager.toolsManager.getTools('application-validation'),

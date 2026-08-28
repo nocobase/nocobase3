@@ -8,6 +8,7 @@ import { createTestAIEmployeeRuntime } from './test-context.js';
 import { createTestAppDeps } from './test-app-deps.js';
 
 const methods: Record<string, string> = {
+  'ai:listProviderModels': 'POST',
   'ai:testFlight': 'POST',
   'aiEmployees:updateUserPrompt': 'POST',
   'aiEmployees:create': 'POST',

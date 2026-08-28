@@ -60,19 +60,18 @@ test.describe('local AI application server', () => {
       'content-type': 'application/json',
       'x-user-id': 'e2e-user',
     };
-    const employees = await client.post('v2/api/aiEmployees:listByUser', {
+    const employees = await client.get('api/ai/aiEmployees:listByUser', {
       headers,
-      data: {},
     });
     expect(employees.ok()).toBeTruthy();
-    const employeeList = (await employees.json()).data as Array<{
+    const employeeList = (await employees.json()) as Array<{
       username: string;
     }>;
     expect(
       employeeList.some((employee) => employee.username === employeeName),
     ).toBeTruthy();
 
-    const created = await client.post('v2/api/aiConversations:create', {
+    const created = await client.post('api/ai/aiConversations:create', {
       headers,
       data: {
         aiEmployee: { username: employeeName },
@@ -80,7 +79,7 @@ test.describe('local AI application server', () => {
       },
     });
     expect(created.ok()).toBeTruthy();
-    const sessionId = (await created.json()).data.sessionId;
+    const sessionId = (await created.json()).sessionId;
     expect(typeof sessionId).toBe('string');
 
     const stream = await client.post('v2/api/aiConversations:sendMessages', {

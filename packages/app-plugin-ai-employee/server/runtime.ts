@@ -245,10 +245,7 @@ export function initializePluginRuntimeResources(
   const storageAIDirectory = paths.storage('ai');
   pluginReady = (async () => {
     await ai.employeeManager.switchRepository(repositories.aiEmployees);
-    if (options.loadResources === false) {
-      await ai.llmServiceManager.switchRepository(repositories.llmServices);
-      return;
-    }
+    if (options.loadResources === false) return;
     await loadResources({
       ai,
       logger,

@@ -2,11 +2,12 @@ import {
   defineClientRoutes,
   type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
+import { withAISettingsShell } from './ai-settings-shell.js';
 import {
-  withAISettingsShell,
   aiEmployeePath,
   aiSettingsPath,
-} from '@nocobase/app-plugin-ai-knowledge-base/client';
+  llmServicePath,
+} from './route-paths.js';
 
 const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
   {
@@ -21,6 +22,15 @@ const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
     auth: 'required',
     componentLoader: async () => {
       const module = await import('./pages/ai-employee-page.js');
+      return { default: withAISettingsShell(module.default) };
+    },
+  },
+  {
+    name: 'ai-llm-service-management',
+    path: llmServicePath,
+    auth: 'required',
+    componentLoader: async () => {
+      const module = await import('./pages/llm-service-page.js');
       return { default: withAISettingsShell(module.default) };
     },
   },
