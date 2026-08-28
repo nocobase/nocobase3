@@ -14,6 +14,8 @@ This directory is the active Default App browser client.
   by hand only to reorder entries or to pass a plugin its options.
 - Keep plugin capability setup in plugin `client/bootstrap` entries.
 - Keep plugin route path and auth metadata in plugin `client/routes` entries.
+- A plugin is imported as `<package>/client`, whose default export comes from
+  the plugin's `client/plugin.ts`.
 - A plugin's own `client/plugin.ts` should not statically import its business
   implementation, because `plugins.ts` imports it statically and pulls whatever
   it references into the entry chunk. Reference the entries with

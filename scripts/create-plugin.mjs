@@ -257,7 +257,12 @@ function createScaffoldFiles({
     engines: {
       node: '>=24.0.0',
     },
+    sideEffects: false,
     exports: {
+      './client': {
+        types: './client/index.ts',
+        import: './client/index.ts',
+      },
       './client/plugin': {
         types: './client/plugin.ts',
         import: './client/plugin.ts',
@@ -280,6 +285,10 @@ function createScaffoldFiles({
     publishConfig: {
       access: 'public',
       exports: {
+        './client': {
+          types: './dist/client/index.d.ts',
+          import: './dist/client/index.js',
+        },
         './client/plugin': {
           types: './dist/client/plugin.d.ts',
           import: './dist/client/plugin.js',
@@ -345,7 +354,7 @@ function createScaffoldFiles({
     ['.prettierignore', 'dist/\n'],
     [
       'README.md',
-      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server bootstrap, an HTTP route at \`/${shortName}\`, a \`client/plugin.ts\` registration entry, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
+      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server bootstrap, an HTTP route at \`/${shortName}\`, a \`client/plugin.ts\` registration entry re-exported as the default from \`client/index.ts\`, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
     ],
     [
       'database/README.md',
@@ -364,6 +373,10 @@ function createScaffoldFiles({
       `import { createClientLibraryConfig } from '@nocobase/dev-config/eslint';\n\nexport default createClientLibraryConfig({\n  tsconfigRootDir: import.meta.dirname,\n});\n`,
     ],
     ['package.json', `${JSON.stringify(packageJson, null, 2)}\n`],
+    [
+      'client/index.ts',
+      `// The plugin's public client surface. The default export is the registration factory an application lists in\n// its client/plugins.ts; it keeps every implementation entry behind a dynamic import, so importing this module\n// costs the application only the descriptor.\nexport { default } from './plugin.js';\n`,
+    ],
     [
       'client/plugin.ts',
       `import {\n  defineClientPlugin,\n  type AppClientPluginFactory,\n} from '@nocobase/app-client/plugins';\n\nexport interface ${symbolName}ClientOptions {\n  readonly placeholder?: never;\n}\n\nconst ${moduleName}: AppClientPluginFactory<${symbolName}ClientOptions> =\n  defineClientPlugin({\n    packageName: '${packageName}',\n    bootstrap: () => import('./bootstrap.js'),\n    routes: () => import('./routes.js'),\n    providers: () => import('./providers.js'),\n  });\n\nexport default ${moduleName};\n`,

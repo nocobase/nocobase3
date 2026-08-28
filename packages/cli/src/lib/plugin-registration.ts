@@ -107,9 +107,14 @@ export function pluginShortName(packageName: string): string {
 }
 
 /**
- * Whether a plugin actually contributes to the client. A server-only plugin has no `./client/plugin` export, and
- * writing an import for one produces an application that fails to resolve at build time, so the client entry is
- * skipped rather than written blind.
+ * Whether a plugin actually contributes to the client. A server-only plugin has neither client export, and writing an
+ * import for one produces an application that fails to resolve at build time, so the client entry is skipped rather
+ * than written blind.
+ *
+ * The registered import is `<package>/client`, so that is what must exist. `./client/plugin` alone is not enough: a
+ * plugin published before the barrel gained its default export has the descriptor but no `./client` to import it
+ * from. Requiring the entry that actually gets written keeps such a plugin out of client/plugins.ts instead of
+ * wiring an import the app cannot resolve.
  */
 export async function hasClientPluginEntry(
   pluginDirectory: string,
@@ -126,7 +131,7 @@ export async function hasClientPluginEntry(
   if (!isRecord(exports)) {
     return false;
   }
-  return exports['./client/plugin'] !== undefined;
+  return exports['./client'] !== undefined;
 }
 
 /**

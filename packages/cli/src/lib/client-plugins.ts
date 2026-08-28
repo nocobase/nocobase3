@@ -64,7 +64,7 @@ export function localNameFor(packageName: string): string {
 }
 
 export function clientPluginEntrySpecifier(packageName: string): string {
-  return `${packageName}/client/plugin`;
+  return `${packageName}/client`;
 }
 
 export async function readClientPlugins(
@@ -242,7 +242,10 @@ export function listClientPlugins(
     }
     entries.push({
       localName: callee.text,
-      packageName: specifier.replace(/\/client\/plugin$/, ''),
+      // `/client` is what registration writes today; `/client/plugin` is what it wrote before the barrel gained its
+      // default export. Both must be recognised, or an app wired the old way looks unregistered and gets a second,
+      // conflicting import.
+      packageName: specifier.replace(/\/client(\/plugin)?$/, ''),
     });
   }
   return entries;

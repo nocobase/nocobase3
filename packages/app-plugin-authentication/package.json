@@ -4,6 +4,7 @@
   "description": "Authentication plugin for NocoBase applications.",
   "version": "0.0.1-beta.1",
   "type": "module",
+  "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
