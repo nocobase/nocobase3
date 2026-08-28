@@ -14,8 +14,8 @@ const SOURCE_DIRECTORIES = ['client', 'dist/client', 'src', 'dist/src'];
 const SCANNED_FILES = '**/*.{js,jsx,ts,tsx}';
 
 /** Every scannable directory a workspace or installed `@nocobase` package exposes. */
-function scannedDirectories() {
-  const scope = path.resolve(import.meta.dirname, 'node_modules/@nocobase');
+function scannedDirectories(appRoot) {
+  const scope = path.resolve(appRoot, 'node_modules/@nocobase');
   if (!existsSync(scope)) {
     return [];
   }
@@ -39,9 +39,10 @@ function scannedDirectories() {
   return directories;
 }
 
-function contentFiles() {
+/** Exported so a test can drive the resolution over a fixture laid out the way pnpm lays out an installed package. */
+export function contentFilesIn(appRoot) {
   const files = [];
-  for (const directory of scannedDirectories()) {
+  for (const directory of scannedDirectories(appRoot)) {
     for (const file of globSync(SCANNED_FILES, { cwd: directory })) {
       files.push(path.join(directory, file));
     }
@@ -49,4 +50,4 @@ function contentFiles() {
   return files;
 }
 
-export default { content: contentFiles() };
+export default { content: contentFilesIn(import.meta.dirname) };
