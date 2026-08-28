@@ -974,8 +974,32 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 | §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名                      |
 | §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 改为 `nb3 app plugin update` 与 `nb3 app plugin skills sync`；不挂 postinstall |
 | §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`                        |
+| §7.2 codegen 位置   | `scripts/lib/client-plugins.mjs`      | 实现移到 `@nocobase/nb3-cli`，`scripts/` 只留一层薄封装（见下）                |
 
 postinstall 经实测覆盖不到「更新插件」这条主路径，已决定不挂（§8.4）；改由 `pnpm plugin:update` 把升级与同步合并成一步，该命令已实现。
+
+### 10.2 注册逻辑在仓库与独立 App 之间共用
+
+本文默认注册只发生在本仓库内（`pnpm plugin:register --app <app>`）。但模板发布到 npm 之后，用户拉下来的独立 App 同样要装插件，而那里没有 workspace、没有 `packages/`、也没有根 `scripts/`。
+
+最终实现把三处编辑的逻辑全部放进 `@nocobase/nb3-cli`：
+
+| 逻辑                         | 位置                             |
+| ---------------------------- | -------------------------------- |
+| 改 `client/plugins.ts`       | `src/lib/client-plugins.ts`      |
+| 改 `nocobase.plugins` 与依赖 | `src/lib/plugin-registration.ts` |
+| 复制 skills                  | `src/lib/skills-sync.ts`         |
+
+两边真正的差异只有两处，因此以参数而非分支表达：插件从哪里解析（工作区 `packages/` 对 App 的 `node_modules`），以及依赖记什么范围（`workspace:^` 对 registry 上的实际版本）。`scripts/*-plugin.mjs` 因此只保留仓库特有的部分：解析 `--app`、跑 `pnpm install`、失败时回滚 `pnpm-lock.yaml`。
+
+`client-plugins.ts` 把 TypeScript 和 Prettier 都从目标 App 解析，而不是从 CLI 自己的依赖树，这样 App 用自己的版本和配置格式化自己的源码；Prettier 缺失时跳过格式化而不失败，TypeScript 缺失则明确报错且不写入任何文件。
+
+对应新增命令 `nb3 app plugin register` / `unregister`，在 App 侧由 `pnpm plugin:register` / `pnpm plugin:unregister` 调用。
+
+**顺带修掉的两个缺陷：**
+
+- 原实现对任何插件都会往 `client/plugins.ts` 写 import，包括纯服务端插件，生成的 App 会在构建时报模块解析失败。现在两侧都按插件的 `exports["./client/plugin"]` 判断，没有该导出就跳过并明确告知。
+- 移除数组里最后一个插件时会留下它带的逗号，生成 `defineClientPlugins([,])`。这是数组空位而不是空数组，长度为 1，运行时会迭代出一个 `undefined` 并在启动时崩溃。触发条件是把 App 的最后一个前端插件 unregister 掉。
 
 ## 11. 分阶段落地
 
@@ -996,3 +1020,5 @@ postinstall 经实测覆盖不到「更新插件」这条主路径，已决定�
 **代价：** 每个插件多一个 `client/plugin.ts` 和两条 exports；`plugin:register` 从改 JSON 变成改 TS 源码，实现复杂度显著上升；过渡期内 `nocobase.plugins` 与 `client/plugins.ts` 并存，需要一致性校验兜底。
 
 **没有解决：** server 侧仍然隐式；`nocobase.plugins` 仍然存在；插件的 server 入口仍是文件约定而非 exports 声明。
+
+**范围外的收获：** 注册逻辑做成了仓库与独立 App 共用的一份实现（§10.2），独立 App 因此也有了 `pnpm plugin:register` / `plugin:unregister`；同时修掉了两个缺陷——给纯服务端插件写客户端 import，以及移除最后一个插件留下数组空位。

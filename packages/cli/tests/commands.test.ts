@@ -20,7 +20,9 @@ const APP_COMMANDS = [
   'dev',
   'info',
   'list',
+  'plugin:register',
   'plugin:skills:sync',
+  'plugin:unregister',
   'plugin:update',
   'pull',
 ];

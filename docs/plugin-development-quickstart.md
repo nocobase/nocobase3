@@ -111,6 +111,22 @@ pnpm plugin:create audit-log --no-install
 pnpm plugin:register audit-log --app app-template-default
 ```
 
+### 在独立 App 里注册
+
+上面这些是仓库内的命令，靠 workspace 找插件。用户从 npm 拉下模板生成自己的 App 之后，用的是同名的 App 侧命令，插件从 registry 装：
+
+```bash
+cd my-crm
+pnpm plugin:register audit-log
+pnpm plugin:unregister audit-log
+```
+
+改动的三处地方完全一样，因为实现是同一份（在 `@nocobase/nb3-cli` 里）。差别只有两点：插件从 `node_modules` 而不是 `packages/` 解析，依赖记的是 registry 上的实际版本而不是 `workspace:^`。没有 `--app` 参数——命令就在这个 App 目录里跑。
+
+参数和完整说明见 [docs/cli](./cli/README.md)。
+
+**纯服务端插件不会写进 `client/plugins.ts`。** 两边都按插件的 `exports["./client/plugin"]` 判断：没有这个导出就跳过客户端注册，因为写进去的 import 在构建时解析不到。
+
 ## 3. 开发插件
 
 根据插件需要，依次处理 Database、Server 和 Client；不需要的部分可以跳过。

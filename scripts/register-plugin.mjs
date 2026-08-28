@@ -19,6 +19,7 @@ import {
   readClientPlugins,
   writeClientPlugins,
 } from './lib/client-plugins.mjs';
+import { hasClientPluginEntry } from '../packages/cli/src/lib/plugin-registration.ts';
 import { trySyncSkills } from './lib/skills-sync.mjs';
 
 const packagePrefix = '@nocobase/app-plugin-';
@@ -157,11 +158,19 @@ export async function registerPlugin({
     application.packageJsonPath,
   );
   const appRoot = path.dirname(application.packageJsonPath);
-  // A disabled registration installs the dependency without wiring the client
-  // entry, so client/plugins.ts stays untouched in that case.
-  const clientPlugins = enabled
-    ? await prepareClientPluginEntry(appRoot, packageName)
-    : undefined;
+  // A disabled registration installs the dependency without wiring the client entry, and a server-only plugin has no
+  // client entry to wire; writing an import for one produces an application that fails to resolve at build time. Both
+  // cases leave client/plugins.ts untouched.
+  const shipsClientEntry = await hasClientPluginEntry(pluginDirectory);
+  const skippedClientEntry = !enabled
+    ? 'disabled'
+    : shipsClientEntry
+      ? undefined
+      : 'no-client-entry';
+  const clientPlugins =
+    skippedClientEntry === undefined
+      ? await prepareClientPluginEntry(appRoot, packageName)
+      : undefined;
   const result = {
     appPackageName: application.packageName,
     appPackagePath: application.packageJsonPath,
@@ -172,6 +181,7 @@ export async function registerPlugin({
     packageName,
     pluginDirectory,
     shortName,
+    skippedClientEntry,
   };
 
   if (dryRun || !result.changed) {
@@ -565,6 +575,11 @@ async function main() {
     console.log(
       `Registered ${result.packageName} in ${result.appPackageName} as ${state}`,
     );
+    if (result.skippedClientEntry === 'no-client-entry') {
+      console.log(
+        'Skipped client/plugins.ts: this plugin ships no ./client/plugin export.',
+      );
+    }
     if (!options.install) {
       console.log(
         'Skipped dependency installation. Run CI=true pnpm install --no-frozen-lockfile before committing.',

@@ -186,6 +186,8 @@
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
+    "plugin:register": "nb3 app plugin register",
+    "plugin:unregister": "nb3 app plugin unregister",
     "plugin:update": "nb3 app plugin update",
     "plugin:skills:sync": "nb3 app plugin skills sync",
     "client:inspect": "tsx ./scripts/inspect-client.mjs",
