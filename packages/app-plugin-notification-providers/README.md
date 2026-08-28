@@ -129,6 +129,7 @@ const im = defineImChannelConfig({
   providers: [
     defineFeishuWebhookProviderConfig({
       name: 'feishu',
+      target: 'ops-alerts',
       webhookUrl:
         'https://open.feishu.cn/open-apis/bot/v2/hook/replace-this-value',
       secret: secretStore.feishuWebhookSecret,
@@ -156,6 +157,7 @@ const im = defineImChannelConfig({
   providers: [
     defineDingTalkWebhookProviderConfig({
       name: 'dingtalk',
+      target: 'ops-alerts',
       webhookUrl:
         'https://oapi.dingtalk.com/robot/send?access_token=replace-this-value',
       secret: secretStore.dingTalkWebhookSecret,
@@ -179,15 +181,43 @@ await notification.send({
 });
 ```
 
-IM accepts an explicit Provider recipient:
+IM uses a logical target recipient. The default template maps the `default`
+target to each configured Webhook Provider:
 
 ```ts
 await notification.send({
-  to: {
-    type: 'provider',
-    provider: { name: 'feishu', type: 'feishu-webhook' },
-  },
+  to: { type: 'target', id: 'ops-alerts' },
   channels: ['im'],
+  content: { title: 'Deployment complete', body: 'Production is ready.' },
+});
+```
+
+To select one Provider, use channel-scoped routing:
+
+```ts
+await notification.send({
+  to: { type: 'target', id: 'ops-alerts' },
+  channels: ['im'],
+  routing: {
+    im: {
+      providers: {
+        strategy: 'single',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
+      },
+    },
+  },
+  content: { title: 'Deployment complete', body: 'Production is ready.' },
+});
+```
+
+To send to every enabled IM Provider, use `strategy: 'all'`. The manager
+creates one independent Delivery per Provider:
+
+```ts
+await notification.send({
+  to: { type: 'target', id: 'ops-alerts' },
+  channels: ['im'],
+  routing: { im: { providers: { strategy: 'all' } } },
   content: { title: 'Deployment complete', body: 'Production is ready.' },
 });
 ```

@@ -90,14 +90,11 @@ Provider 由 Channel 配置统一选择；普通业务代码不需要维护 Prov
 
 ## 发送飞书或钉钉消息
 
-IM Channel 使用显式的 Provider 接收人。`provider.name` 和 `provider.type` 必须与配置中的 Provider 一致：
+Webhook Provider 的目标使用逻辑目标 ID 表示。默认模板将飞书和钉钉 Webhook 都映射到 `default` 目标：
 
 ```ts
 await notification.send({
-  to: {
-    type: 'provider',
-    provider: { name: 'feishu', type: 'feishu-webhook' },
-  },
+  to: { type: 'target', id: 'default' },
   channels: ['im'],
   content: {
     title: '部署完成',
@@ -107,7 +104,39 @@ await notification.send({
 });
 ```
 
-切换到钉钉时，把 Provider 改为 `{ name: 'dingtalk', type: 'dingtalk-webhook' }`。如果你通过 `createImChannelDefinition()` 提供了用户 ID 到 IM 目标的 resolver，也可以传 `{ type: 'user', id: 'user-1' }`。
+如果只发送到飞书，可以通过路由指定 Provider。`provider.name` 和 `provider.type` 必须与配置中的 Provider 一致：
+
+```ts
+await notification.send({
+  to: { type: 'target', id: 'default' },
+  channels: ['im'],
+  routing: {
+    im: {
+      providers: {
+        strategy: 'single',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
+      },
+    },
+  },
+  content: { title: '部署完成', body: '生产环境已经完成部署。' },
+});
+```
+
+如果你通过 `createImChannelDefinition()` 提供了用户 ID 到 IM 目标的 resolver，也可以传 `{ type: 'user', id: 'user-1' }`。
+
+如果要同时发送到所有已启用的 IM Provider，使用 `strategy: 'all'`。每个 Provider 会创建一条独立 Delivery：
+
+```ts
+await notification.send({
+  to: { type: 'target', id: 'default' },
+  channels: ['im'],
+  routing: { im: { providers: { strategy: 'all' } } },
+  content: {
+    title: '部署完成',
+    body: '生产环境已经完成部署。',
+  },
+});
+```
 
 ## 读取返回结果
 
@@ -119,6 +148,7 @@ const result = await notification.send(input);
 result.notificationId;
 result.status;
 result.deliveries[0]?.id;
+result.deliveries[0]?.provider;
 ```
 
 新建 Notification 和 Delivery 的初始状态是 `pending`，只表示通知已经保存并交给队列，不表示 Provider 已接受消息。需要最终结果时，通过日志查询：

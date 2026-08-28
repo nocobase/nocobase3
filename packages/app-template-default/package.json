@@ -203,7 +203,6 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
-    "notification:test": "tsx --tsconfig tsconfig.node.json ./scripts/notification-test.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "plugin:register": "nb3 app plugin register",
     "plugin:unregister": "nb3 app plugin unregister",

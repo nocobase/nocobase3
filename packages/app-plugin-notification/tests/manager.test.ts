@@ -192,7 +192,7 @@ describe('NotificationManager registration', () => {
     await database.destroy();
   });
 
-  it('selects a non-primary Provider named by a Provider recipient', async () => {
+  it('selects a non-primary Provider through Channel routing', async () => {
     const queue = createQueueManager(createSyncQueueConfig());
     const database = await createNotificationTestDatabase();
     const store = new FakeNotificationStore();
@@ -221,9 +221,7 @@ describe('NotificationManager registration', () => {
           return {
             type: 'im',
             resolveRecipient({ recipient, provider }): object | undefined {
-              return recipient.type === 'provider' &&
-                recipient.provider.name === provider.name &&
-                recipient.provider.type === provider.type
+              return recipient.type === 'target'
                 ? { providerName: provider.name }
                 : undefined;
             },
@@ -250,11 +248,16 @@ describe('NotificationManager registration', () => {
       });
 
     const result = await manager.send({
-      to: {
-        type: 'provider',
-        provider: { name: 'secondary', type: 'fake' },
-      },
+      to: { type: 'target', id: 'ops-alerts' },
       channels: ['im'],
+      routing: {
+        im: {
+          providers: {
+            strategy: 'single',
+            provider: { name: 'secondary', type: 'fake' },
+          },
+        },
+      },
       content: { body: 'Review it.' },
     });
     await expect(store.listDeliveries(result.notificationId)).resolves.toEqual([
@@ -264,6 +267,167 @@ describe('NotificationManager registration', () => {
         recipientSnapshot: { providerName: 'secondary' },
       }),
     ]);
+
+    await manager.close();
+    await queue.close();
+    await database.destroy();
+  });
+
+  it('routes to all enabled Providers as independent Deliveries', async () => {
+    const queue = createQueueManager(createSyncQueueConfig());
+    const database = await createNotificationTestDatabase();
+    const store = new FakeNotificationStore();
+    const send = vi.fn(async () => ({ status: 'accepted' }) as const);
+    const manager = createNotificationManager({
+      database,
+      queue,
+      logger: createLogger({ level: 'silent' }),
+      config: {
+        channels: [
+          {
+            type: 'im',
+            enabled: true,
+            providers: [
+              { type: 'feishu-webhook', name: 'feishu' },
+              { type: 'dingtalk-webhook', name: 'dingtalk' },
+            ],
+          },
+        ],
+      },
+      store,
+    });
+    manager.registry.registerChannel({
+      type: 'im',
+      async createChannel() {
+        return {
+          type: 'im',
+          resolveRecipient({ recipient, provider }): object | undefined {
+            return recipient.type === 'target' ? { provider } : undefined;
+          },
+          render({ content }): object {
+            return { text: content.body };
+          },
+          async prepare(input): Promise<object> {
+            return input.message;
+          },
+        };
+      },
+    });
+    for (const providerType of ['feishu-webhook', 'dingtalk-webhook']) {
+      manager.registry.registerProvider('im', {
+        type: providerType,
+        async createProvider(_context, config) {
+          return { name: config.name, type: config.type, send };
+        },
+      });
+    }
+
+    const result = await manager.send({
+      to: { type: 'target', id: 'ops-alerts' },
+      channels: ['im'],
+      routing: { im: { providers: { strategy: 'all' } } },
+      content: { body: 'Send it everywhere.' },
+    });
+    const deliveries = await store.listDeliveries(result.notificationId);
+
+    expect(deliveries).toEqual([
+      expect.objectContaining({
+        providerName: 'feishu',
+        providerType: 'feishu-webhook',
+        recipientSnapshot: {
+          provider: { name: 'feishu', type: 'feishu-webhook' },
+        },
+        status: 'accepted',
+      }),
+      expect.objectContaining({
+        providerName: 'dingtalk',
+        providerType: 'dingtalk-webhook',
+        recipientSnapshot: {
+          provider: { name: 'dingtalk', type: 'dingtalk-webhook' },
+        },
+        status: 'accepted',
+      }),
+    ]);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(result.deliveries).toEqual([
+      expect.objectContaining({
+        channel: 'im',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
+      }),
+      expect.objectContaining({
+        channel: 'im',
+        provider: { name: 'dingtalk', type: 'dingtalk-webhook' },
+      }),
+    ]);
+
+    await manager.close();
+    await queue.close();
+    await database.destroy();
+  });
+
+  it('rejects an explicitly routed Provider that is not enabled', async () => {
+    const queue = createQueueManager(createSyncQueueConfig());
+    const database = await createNotificationTestDatabase();
+    const manager = createNotificationManager({
+      database,
+      queue,
+      logger: createLogger({ level: 'silent' }),
+      config: {
+        channels: [
+          {
+            type: 'im',
+            enabled: true,
+            providers: [{ type: 'fake', name: 'primary' }],
+          },
+        ],
+      },
+      store: new FakeNotificationStore(),
+    });
+    manager.registry
+      .registerChannel({
+        type: 'im',
+        async createChannel() {
+          return {
+            type: 'im',
+            render({ content }): object {
+              return { text: content.body };
+            },
+            async prepare(input): Promise<object> {
+              return input.message;
+            },
+          };
+        },
+      })
+      .registerProvider('im', {
+        type: 'fake',
+        async createProvider(_context, config) {
+          return {
+            name: config.name,
+            type: config.type,
+            async send() {
+              return { status: 'accepted' } as const;
+            },
+          };
+        },
+      });
+
+    await expect(
+      manager.send({
+        to: { type: 'target', id: 'ops-alerts' },
+        routing: {
+          im: {
+            providers: {
+              strategy: 'single',
+              provider: { name: 'missing', type: 'fake' },
+            },
+          },
+        },
+        channels: ['im'],
+        content: { body: 'Do not fall back.' },
+      }),
+    ).rejects.toThrow(
+      'Notification Provider "missing" (fake) is not enabled for Channel "im".',
+    );
 
     await manager.close();
     await queue.close();

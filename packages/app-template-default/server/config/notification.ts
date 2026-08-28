@@ -48,15 +48,15 @@ export function createNotificationConfig(
 ): AppNotificationConfig {
   const channels: AppNotificationChannelConfig[] = [];
   const emailProvider = createEmailProvider(env);
-  const imProvider = createImProvider(env);
+  const imProviders = createImProviders(env);
 
   if (emailProvider) {
     channels.push(
       defineEmailChannelConfig({ enabled: true, providers: [emailProvider] }),
     );
   }
-  if (imProvider) {
-    channels.push({ type: 'im', enabled: true, providers: [imProvider] });
+  if (imProviders.length > 0) {
+    channels.push({ type: 'im', enabled: true, providers: imProviders });
   }
 
   return {
@@ -114,31 +114,33 @@ function createEmailProvider(
   );
 }
 
-function createImProvider(
+function createImProviders(
   env: ConfigEnv,
-): FeishuWebhookProviderConfig | DingTalkWebhookProviderConfig | undefined {
-  const selected = env.string('NOTIFICATION_IM_PROVIDER')?.toLowerCase();
-  if (!selected) return undefined;
-
-  if (selected === 'feishu') {
-    return defineFeishuWebhookProviderConfig({
-      name: 'feishu',
-      webhookUrl: required(env, 'FEISHU_WEBHOOK_URL', selected),
-      secret: env.string('FEISHU_WEBHOOK_SECRET'),
-    });
+): readonly (FeishuWebhookProviderConfig | DingTalkWebhookProviderConfig)[] {
+  const providers: (
+    FeishuWebhookProviderConfig | DingTalkWebhookProviderConfig
+  )[] = [];
+  const feishuWebhookUrl = env.string('FEISHU_WEBHOOK_URL');
+  if (feishuWebhookUrl) {
+    providers.push(
+      defineFeishuWebhookProviderConfig({
+        name: 'feishu',
+        webhookUrl: feishuWebhookUrl,
+        secret: env.string('FEISHU_WEBHOOK_SECRET'),
+      }),
+    );
   }
-
-  if (selected === 'dingtalk') {
-    return defineDingTalkWebhookProviderConfig({
-      name: 'dingtalk',
-      webhookUrl: required(env, 'DINGTALK_WEBHOOK_URL', selected),
-      secret: env.string('DINGTALK_WEBHOOK_SECRET'),
-    });
+  const dingTalkWebhookUrl = env.string('DINGTALK_WEBHOOK_URL');
+  if (dingTalkWebhookUrl) {
+    providers.push(
+      defineDingTalkWebhookProviderConfig({
+        name: 'dingtalk',
+        webhookUrl: dingTalkWebhookUrl,
+        secret: env.string('DINGTALK_WEBHOOK_SECRET'),
+      }),
+    );
   }
-
-  throw new Error(
-    'NOTIFICATION_IM_PROVIDER must be either "feishu" or "dingtalk".',
-  );
+  return providers;
 }
 
 function required(env: ConfigEnv, key: string, provider: string): string {

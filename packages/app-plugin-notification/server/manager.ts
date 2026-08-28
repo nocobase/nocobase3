@@ -21,6 +21,7 @@ import {
 import type {
   NotificationManagerOptions,
   NotificationProviderIdentity,
+  NotificationProviderRouting,
   NotificationRecipient,
   NotificationSendInput,
   NotificationSendResult,
@@ -191,7 +192,9 @@ export class NotificationManager<
     for (const recipient of recipients) {
       const targets: ExpandedRecipientTarget[] = [];
       for (const channel of channels) {
-        const providers = this.channelManager.providerCandidates(channel);
+        const providerRouting = input.routing?.[channel]?.providers;
+        const fanout = providerRouting?.strategy === 'all';
+        const providers = this.providersForRouting(channel, providerRouting);
         const [fallbackProvider] = providers;
         if (!fallbackProvider)
           throw new Error(
@@ -205,21 +208,23 @@ export class NotificationManager<
             provider,
           );
           if (resolved) {
-            resolvedTarget = { channel, provider, recipient: resolved };
-            break;
+            const target = { channel, provider, recipient: resolved };
+            if (fanout) {
+              targets.push(target);
+            } else {
+              resolvedTarget = target;
+              break;
+            }
+          } else if (fanout) {
+            targets.push(
+              unsupportedRecipientTarget(channel, provider, recipient),
+            );
           }
         }
+        if (fanout) continue;
         targets.push(
-          resolvedTarget ?? {
-            channel,
-            provider: fallbackProvider,
-            recipient,
-            error: {
-              code: 'RECIPIENT_UNSUPPORTED',
-              category: 'recipient',
-              message: `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
-            },
-          },
+          resolvedTarget ??
+            unsupportedRecipientTarget(channel, fallbackProvider, recipient),
         );
       }
       expandedRecipients.push({ channels: targets });
@@ -305,6 +310,10 @@ export class NotificationManager<
       deliveries: deliveries.map((delivery) => ({
         id: delivery.id,
         channel: delivery.channel,
+        provider: {
+          name: delivery.providerName,
+          type: delivery.providerType,
+        },
         status: delivery.status,
       })),
     };
@@ -393,6 +402,42 @@ export class NotificationManager<
     return operation;
   }
 
+  private providersForRouting(
+    channel: string,
+    routing: NotificationProviderRouting | undefined,
+  ): readonly NotificationProviderIdentity[] {
+    if (!routing) return this.channelManager.providerCandidates(channel);
+    if (routing.strategy !== 'all') {
+      if (!routing.provider)
+        return this.channelManager.providerIdentities(channel);
+      return [this.enabledProvider(channel, routing.provider)];
+    }
+    if (!routing.providers)
+      return this.channelManager.providerIdentities(channel, { all: true });
+
+    const providers = new Map<string, NotificationProviderIdentity>();
+    for (const identity of routing.providers) {
+      const provider = this.enabledProvider(channel, identity);
+      providers.set(`${provider.name}\0${provider.type}`, provider);
+    }
+    return [...providers.values()];
+  }
+
+  private enabledProvider(
+    channel: string,
+    identity: NotificationProviderIdentity,
+  ): NotificationProviderIdentity {
+    const providers = this.channelManager.providerIdentities(channel, {
+      providerName: identity.name,
+    });
+    const [provider] = providers;
+    if (!provider || provider.type !== identity.type)
+      throw new Error(
+        `Notification Provider "${identity.name}" (${identity.type}) is not enabled for Channel "${channel}".`,
+      );
+    return provider;
+  }
+
   private async createRuntime(type: string): Promise<void> {
     const config = this.options.config.channels.find(
       (candidate) => candidate.type === type,
@@ -471,6 +516,23 @@ export class NotificationManager<
       throw error;
     }
   }
+}
+
+function unsupportedRecipientTarget(
+  channel: string,
+  provider: NotificationProviderIdentity,
+  recipient: NotificationRecipient,
+): ExpandedRecipientTarget {
+  return {
+    channel,
+    provider,
+    recipient,
+    error: {
+      code: 'RECIPIENT_UNSUPPORTED',
+      category: 'recipient',
+      message: `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
+    },
+  };
 }
 
 function initialNotificationStatus(

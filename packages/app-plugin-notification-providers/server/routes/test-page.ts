@@ -39,15 +39,15 @@ export const TEST_PAGE_HTML: string = `<!doctype html>
         for (const item of result.data) {
           const button = document.createElement('button');
           button.textContent = 'Send via ' + label(item);
-          button.addEventListener('click', () => send(item.channel, button));
+          button.addEventListener('click', () => send(item, button));
           providers.append(button);
         }
         if (!result.data.length) providers.textContent = 'No enabled Providers are configured.';
       }
-      async function send(channel, button) {
+      async function send(item, button) {
         button.disabled = true; status.textContent = 'Submitting…';
         try {
-          const response = await fetch(base + '/send', { method: 'POST', headers: { 'content-type': 'application/json', 'x-nocobase-provider-test': '1' }, body: JSON.stringify({ channel }) });
+          const response = await fetch(base + '/send', { method: 'POST', headers: { 'content-type': 'application/json', 'x-nocobase-provider-test': '1' }, body: JSON.stringify({ channel: item.channel, providerName: item.provider.name, providerType: item.provider.type }) });
           const result = await response.json();
           if (!response.ok) throw new Error(result.error || 'Provider test failed.');
           status.textContent = 'Accepted as ' + result.data.notificationId + '. Checking delivery status…';

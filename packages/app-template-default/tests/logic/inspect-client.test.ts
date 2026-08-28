@@ -115,6 +115,11 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/workflow/runs/:runId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-notification:notification-logs',
+        path: '/settings/notifications/logs',
+      },
     ]);
     expect(
       inspection.providers.map(({ id, order }) => ({ id, order })),
@@ -167,6 +172,11 @@ describe('client inspection', () => {
       {
         order: 6,
         packageName: '@nocobase/app-plugin-workflow',
+        source: 'plugin',
+      },
+      {
+        order: 7,
+        packageName: '@nocobase/app-plugin-notification',
         source: 'plugin',
       },
     ]);

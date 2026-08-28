@@ -1,2 +1,2 @@
 export * from './channel.js';
-export * from './providers.js';
+export * from './providers/index.js';

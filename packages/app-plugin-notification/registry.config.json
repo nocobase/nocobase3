@@ -12,7 +12,7 @@
         "lucide-react@^0.487.0"
       ],
       "registryDependencies": ["alert", "badge", "button", "card", "table"],
-      "docs": "Requires @nocobase/app-plugin-notification and its authenticated /api/notifications/logs route. The installed source is application-owned and must be wired into an application route until the plugin exposes a stable client route contract.",
+      "docs": "Requires @nocobase/app-plugin-notification and its access-controlled /api/notifications/logs route. The plugin now provides /settings/notifications/logs by default; install this application-owned source only when the application needs to maintain a custom log page.",
       "meta": {
         "ownership": "application",
         "upgradePolicy": "three-way-merge",

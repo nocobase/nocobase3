@@ -95,7 +95,7 @@ describe('config registry', () => {
 });
 
 describe('notification config', () => {
-  it('keeps external notifications disabled without a Provider selector', () => {
+  it('keeps email disabled without a Provider selector', () => {
     const config = notification({
       env: createConfigEnv({
         SMTP_HOST: 'smtp.example.com',
@@ -178,7 +178,6 @@ describe('notification config', () => {
         NOTIFICATION_EMAIL_PROVIDER: 'resend',
         RESEND_API_KEY: 're_test',
         RESEND_FROM: 'NocoBase <notifications@example.com>',
-        NOTIFICATION_IM_PROVIDER: 'feishu',
         FEISHU_WEBHOOK_URL:
           'https://open.feishu.cn/open-apis/bot/v2/hook/example',
         FEISHU_WEBHOOK_SECRET: 'secret',
@@ -209,6 +208,42 @@ describe('notification config', () => {
             name: 'feishu',
             webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/example',
             secret: 'secret',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('configures Feishu and DingTalk together from their Webhook URLs', () => {
+    const config = notification({
+      env: createConfigEnv({
+        FEISHU_WEBHOOK_URL:
+          'https://open.feishu.cn/open-apis/bot/v2/hook/example',
+        FEISHU_WEBHOOK_SECRET: 'feishu-secret',
+        DINGTALK_WEBHOOK_URL:
+          'https://oapi.dingtalk.com/robot/send?access_token=example',
+        DINGTALK_WEBHOOK_SECRET: 'SEC-dingtalk-secret',
+      }),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config.channels).toEqual([
+      {
+        type: 'im',
+        enabled: true,
+        providers: [
+          {
+            type: 'feishu-webhook',
+            name: 'feishu',
+            webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/example',
+            secret: 'feishu-secret',
+          },
+          {
+            type: 'dingtalk-webhook',
+            name: 'dingtalk',
+            webhookUrl:
+              'https://oapi.dingtalk.com/robot/send?access_token=example',
+            secret: 'SEC-dingtalk-secret',
           },
         ],
       },

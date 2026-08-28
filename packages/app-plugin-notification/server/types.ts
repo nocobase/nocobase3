@@ -29,10 +29,21 @@ export type NotificationRecipient =
   | { readonly type: 'user'; readonly id: string }
   | { readonly type: 'email'; readonly address: string }
   | { readonly type: 'phone'; readonly number: string }
+  | { readonly type: 'target'; readonly id: string };
+
+export type NotificationProviderRouting =
   | {
-      readonly type: 'provider';
-      readonly provider: NotificationProviderIdentity;
+      readonly strategy?: 'single';
+      readonly provider?: NotificationProviderIdentity;
+    }
+  | {
+      readonly strategy: 'all';
+      readonly providers?: readonly NotificationProviderIdentity[];
     };
+
+export interface NotificationChannelRouting {
+  readonly providers?: NotificationProviderRouting;
+}
 
 export interface NotificationSendInput<
   TChannels extends NotificationChannelMap,
@@ -43,6 +54,9 @@ export interface NotificationSendInput<
   };
   readonly to: NotificationRecipient | readonly NotificationRecipient[];
   readonly channels: readonly (keyof TChannels & string)[];
+  readonly routing?: Partial<{
+    readonly [TType in keyof TChannels & string]: NotificationChannelRouting;
+  }>;
   readonly content: NotificationContent;
   readonly channelOverrides?: Partial<{
     readonly [TType in keyof TChannels & string]: Partial<
@@ -58,6 +72,7 @@ export interface NotificationSendResult {
   readonly deliveries: readonly {
     readonly id: string;
     readonly channel: string;
+    readonly provider: NotificationProviderIdentity;
     readonly status:
       | 'pending'
       | 'preparing'

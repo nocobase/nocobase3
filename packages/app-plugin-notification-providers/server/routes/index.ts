@@ -23,6 +23,8 @@ export type NotificationProvidersPluginRoutesContext = AppPluginRoutesContext<
 
 interface TestRequest {
   readonly channel?: unknown;
+  readonly providerName?: unknown;
+  readonly providerType?: unknown;
   readonly title?: unknown;
   readonly body?: unknown;
 }
@@ -78,12 +80,23 @@ export default function registerNotificationProviderRoutes({
       config.notification.channels,
       channel,
     );
+    const providerName = stringValue(input.providerName);
+    const providerType = stringValue(input.providerType);
     const provider = channelConfig
-      ? selectEnabledProvider(channelConfig.providers)
+      ? selectEnabledProvider(
+          channelConfig.providers,
+          providerName,
+          providerType,
+        )
       : undefined;
     if (!channelConfig || !provider) {
       return context.json(
-        { error: `No enabled ${channel} Provider is configured.` },
+        {
+          error:
+            providerName && providerType
+              ? `Provider "${providerName}" (${providerType}) is not enabled for Channel "${channel}".`
+              : `No enabled ${channel} Provider is configured.`,
+        },
         409,
       );
     }
@@ -115,15 +128,23 @@ export default function registerNotificationProviderRoutes({
     const recipient: NotificationRecipient =
       channel === 'email' && emailRecipient
         ? { type: 'email', address: emailRecipient }
-        : {
-            type: 'provider',
-            provider: { name: provider.name, type: provider.type },
-          };
+        : { type: 'target', id: providerTarget(provider) };
 
     try {
       const result = await notification.send({
         to: recipient,
         channels: [channel],
+        routing:
+          channel === 'im'
+            ? {
+                im: {
+                  providers: {
+                    strategy: 'single',
+                    provider: { name: provider.name, type: provider.type },
+                  },
+                },
+              }
+            : undefined,
         content: { title, body },
         source: {
           type: 'notification-provider-test',
@@ -180,15 +201,12 @@ function describeChannels(
   return channels.flatMap((channel) => {
     if (!channel.enabled || (channel.type !== 'email' && channel.type !== 'im'))
       return [];
-    const provider = selectEnabledProvider(channel.providers);
-    return provider
-      ? [
-          {
-            channel: channel.type,
-            provider: { name: provider.name, type: provider.type },
-          },
-        ]
-      : [];
+    return channel.providers
+      .filter((provider) => provider.enabled !== false)
+      .map((provider) => ({
+        channel: channel.type,
+        provider: { name: provider.name, type: provider.type },
+      }));
   });
 }
 
@@ -203,11 +221,25 @@ function findEnabledChannel(
 
 function selectEnabledProvider(
   providers: NotificationProvidersPluginConfig['notification']['channels'][number]['providers'],
+  name?: string,
+  type?: string,
 ):
   | NotificationProvidersPluginConfig['notification']['channels'][number]['providers'][number]
   | undefined {
   const enabled = providers.filter((provider) => provider.enabled !== false);
+  if (name || type)
+    return enabled.find(
+      (provider) => provider.name === name && provider.type === type,
+    );
   return enabled.find((provider) => provider.name === 'primary') ?? enabled[0];
+}
+
+function providerTarget(provider: object): string {
+  if ('target' in provider && typeof provider.target === 'string') {
+    const target = provider.target.trim();
+    if (target) return target;
+  }
+  return 'default';
 }
 
 async function readRequest(context: Context): Promise<TestRequest | undefined> {

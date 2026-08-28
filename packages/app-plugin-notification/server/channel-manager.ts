@@ -85,11 +85,11 @@ export class ChannelManager {
     type: string,
     options: {
       readonly providerName?: string;
-      readonly providerMode?: 'single' | 'broadcast';
+      readonly all?: boolean;
     } = {},
   ): readonly NotificationProviderIdentity[] {
     const providers = this.runtimes.get(type)?.providers ?? [];
-    if (options.providerMode === 'broadcast')
+    if (options.all)
       return providers.map(({ name, type: providerType }) => ({
         name,
         type: providerType,
@@ -103,7 +103,7 @@ export class ChannelManager {
 
   providerCandidates(type: string): readonly NotificationProviderIdentity[] {
     const preferred = this.providerIdentities(type);
-    const all = this.providerIdentities(type, { providerMode: 'broadcast' });
+    const all = this.providerIdentities(type, { all: true });
     if (preferred.length === 0) return all;
     const [first] = preferred;
     return [

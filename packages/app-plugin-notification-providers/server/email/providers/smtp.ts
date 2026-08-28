@@ -44,13 +44,18 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
               providerMessageId: info.messageId,
             };
           } catch (error) {
-            if (isUnknownSubmission(error)) {
+            const transportFailure = classifySmtpTransportFailure(error);
+            if (transportFailure === 'submission_unknown') {
               return {
                 status: 'submission_unknown',
                 error: {
-                  category: 'timeout',
+                  category:
+                    providerErrorCode(error) === 'ETIMEDOUT'
+                      ? 'timeout'
+                      : 'network',
                   code: providerErrorCode(error),
-                  message: error.message,
+                  message:
+                    error instanceof Error ? error.message : String(error),
                 },
               };
             }
@@ -61,7 +66,7 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
                 code: providerErrorCode(error),
                 message: error instanceof Error ? error.message : String(error),
               },
-              disposition: smtpDisposition(error),
+              disposition: smtpDisposition(error, transportFailure),
             };
           }
         },
@@ -73,7 +78,10 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
   };
 }
 
-function smtpDisposition(error: unknown): 'never' | 'same_provider' {
+function smtpDisposition(
+  error: unknown,
+  transportFailure: SmtpTransportFailure | undefined,
+): 'never' | 'same_provider' {
   const responseCode = smtpResponseCode(error);
   if (responseCode !== undefined) {
     if (responseCode >= 400 && responseCode < 500) return 'same_provider';
@@ -82,16 +90,7 @@ function smtpDisposition(error: unknown): 'never' | 'same_provider' {
   const code = providerErrorCode(error);
   if (code === 'EAUTH' || code === 'EENVELOPE' || code === 'EMESSAGE')
     return 'never';
-  if (
-    code === 'ETIMEDOUT' ||
-    code === 'ECONNRESET' ||
-    code === 'EPIPE' ||
-    code === 'ECONNREFUSED' ||
-    code === 'ENOTFOUND' ||
-    code === 'EAI_AGAIN' ||
-    code === 'ESOCKET'
-  )
-    return 'same_provider';
+  if (transportFailure === 'pre_submission') return 'same_provider';
   return 'never';
 }
 
@@ -109,7 +108,8 @@ function smtpErrorCategory(
     code === 'ECONNREFUSED' ||
     code === 'ENOTFOUND' ||
     code === 'EAI_AGAIN' ||
-    code === 'ESOCKET'
+    code === 'ESOCKET' ||
+    code === 'ECONNECTION'
   )
     return 'network';
   return 'provider';
@@ -123,15 +123,32 @@ function smtpResponseCode(error: unknown): number | undefined {
     : undefined;
 }
 
-function isUnknownSubmission(error: unknown): error is Error {
-  if (!(error instanceof Error)) return false;
-  const code =
-    'code' in error && typeof error.code === 'string' ? error.code : undefined;
-  if (code !== 'ETIMEDOUT' && code !== 'ECONNRESET' && code !== 'EPIPE')
-    return false;
-  const command =
-    'command' in error && typeof error.command === 'string'
-      ? error.command
-      : undefined;
-  return command !== 'CONN';
+type SmtpTransportFailure = 'pre_submission' | 'submission_unknown';
+
+const SMTP_TRANSPORT_ERROR_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'EPIPE',
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ESOCKET',
+  'ECONNECTION',
+]);
+
+const SMTP_SAFE_RETRY_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+]);
+
+function classifySmtpTransportFailure(
+  error: unknown,
+): SmtpTransportFailure | undefined {
+  if (smtpResponseCode(error) !== undefined) return undefined;
+  const code = providerErrorCode(error);
+  if (!code || !SMTP_TRANSPORT_ERROR_CODES.has(code)) return undefined;
+  return SMTP_SAFE_RETRY_CODES.has(code)
+    ? 'pre_submission'
+    : 'submission_unknown';
 }

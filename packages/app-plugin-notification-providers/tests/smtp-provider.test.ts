@@ -89,7 +89,7 @@ describe('SMTP Provider', () => {
     },
   );
 
-  it('retries a connection timeout before SMTP submission', async () => {
+  it('keeps a connection timeout unknown because CONN is not a reliable phase marker', async () => {
     smtpMock.sendMail.mockRejectedValue(
       Object.assign(new Error('Connection timeout'), {
         code: 'ETIMEDOUT',
@@ -99,11 +99,10 @@ describe('SMTP Provider', () => {
     const provider = await createProvider();
 
     await expect(provider.send(sendInput())).resolves.toEqual({
-      status: 'failed',
-      disposition: 'same_provider',
+      status: 'submission_unknown',
       error: {
         code: 'ETIMEDOUT',
-        category: 'network',
+        category: 'timeout',
         message: 'Connection timeout',
       },
     });
@@ -127,6 +126,76 @@ describe('SMTP Provider', () => {
       },
     });
   });
+
+  it.each(['ESOCKET', 'ECONNECTION'] as const)(
+    'keeps ambiguous %s failures unknown even when Nodemailer reports CONN',
+    async (code) => {
+      smtpMock.sendMail.mockRejectedValue(
+        Object.assign(new Error('Connection failed'), {
+          code,
+          command: 'CONN',
+        }),
+      );
+      const provider = await createProvider();
+
+      await expect(provider.send(sendInput())).resolves.toMatchObject({
+        status: 'submission_unknown',
+        error: { code, category: 'network' },
+      });
+    },
+  );
+
+  it.each(['ESOCKET', 'ECONNECTION'] as const)(
+    'marks %s after SMTP submission as unknown',
+    async (code) => {
+      smtpMock.sendMail.mockRejectedValue(
+        Object.assign(new Error('Connection lost'), { code, command: 'DATA' }),
+      );
+      const provider = await createProvider();
+
+      await expect(provider.send(sendInput())).resolves.toMatchObject({
+        status: 'submission_unknown',
+        error: { code, category: 'network' },
+      });
+    },
+  );
+
+  it.each([
+    ['CONN', 'submission_unknown'],
+    ['DATA', 'submission_unknown'],
+  ] as const)(
+    'uses a nested transport error code during %s',
+    async (command, status) => {
+      smtpMock.sendMail.mockRejectedValue(
+        Object.assign(new Error('Wrapped connection lost'), {
+          command,
+          cause: Object.assign(new Error('Socket failed'), { code: 'ESOCKET' }),
+        }),
+      );
+      const provider = await createProvider();
+
+      await expect(provider.send(sendInput())).resolves.toMatchObject({
+        status,
+        error: { code: 'ESOCKET', category: 'network' },
+      });
+    },
+  );
+
+  it.each(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'] as const)(
+    'retries %s because it proves submission did not start',
+    async (code) => {
+      smtpMock.sendMail.mockRejectedValue(
+        Object.assign(new Error('Connection not established'), { code }),
+      );
+      const provider = await createProvider();
+
+      await expect(provider.send(sendInput())).resolves.toMatchObject({
+        status: 'failed',
+        disposition: 'same_provider',
+        error: { code, category: 'network' },
+      });
+    },
+  );
 });
 
 async function createProvider(): Promise<

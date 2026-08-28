@@ -64,9 +64,19 @@ router 本身不添加宿主认证。挂载时需要在外层添加认证 middle
 
 日志响应不会返回消息正文、接收人快照、`leaseToken` 或 `leaseExpiresAt`。Provider 名称、状态、时间和错误信息会保留，用于排查投递问题。
 
-## 可选客户端页面
+## Hub 设置页
 
-`@nocobase/app-plugin-notification` 发布的 `logs-ui` Registry item 提供 `NotificationLogsPage`，用于展示 Delivery 和 Attempt。canonical source 位于 `packages/app-plugin-notification/registry/logs-ui`。该 item 只提供客户端页面，不会自动创建服务端 runtime、挂载服务端路由或注册客户端路由。
+启用插件的客户端贡献后，通知日志会自动注册到 Hub 设置导航：
+
+- 页面路径：`/hub/settings/notifications/logs`
+- 权限资源：`page:notification.logs`
+- 权限动作：`access`
+
+客户端路由与 `GET /api/notifications/logs` 使用同一个权限资源。仅隐藏菜单并不构成权限保护；服务端同样会拒绝没有访问权限的请求。
+
+## 可选的应用自有页面
+
+`@nocobase/app-plugin-notification` 发布的 `logs-ui` Registry item 仍提供可复制的 `NotificationLogsPage`，用于应用需要完全自行维护页面样式的场景。canonical source 位于 `packages/app-plugin-notification/registry/logs-ui`。默认 Hub 日志页由插件客户端路由直接提供，不需要安装该 Registry item。
 
 ## 相关链接
 

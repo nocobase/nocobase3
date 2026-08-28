@@ -16,13 +16,14 @@ NocoBase 通知用于向用户发送站内信、邮件或 IM Webhook 消息，�
 
 ## 一条通知是怎样发送的
 
-一次 `send()` 调用会创建一条 Notification。每个收件人使用的每个 Channel，都会生成一条独立的 Delivery。
+一次 `send()` 调用会创建一条 Notification。每个收件人使用的每个 Channel 和 Provider 组合，都会生成一条独立的 Delivery。
 
 ```text
 Notification
 ├── Delivery：user-1 / in-app
-├── Delivery：user-1 / email
-└── Delivery：user-2 / in-app
+├── Delivery：user-1 / email / smtp
+├── Delivery：user-1 / im / feishu
+└── Delivery：user-1 / im / dingtalk
 ```
 
 Delivery 保存接收人、消息以及选中的 Provider。真正调用 Provider 时，系统会为每次提交记录一条 Attempt。这样既能看到整条通知的结果，也能检查某一次 Provider 调用为什么失败。
@@ -38,13 +39,13 @@ Delivery 保存接收人、消息以及选中的 Provider。真正调用 Provide
 
 ## Provider 选择
 
-每个 Channel 应配置一个启用的 Provider。创建 Delivery 时，系统会保存 Provider 的 `name` 和 `type`；后续执行和重试必须匹配同一个 Provider。
+每个 Channel 可以配置多个启用的 Provider。创建 Delivery 时，系统会保存 Provider 的 `name` 和 `type`；后续执行和重试必须匹配同一个 Provider。
 
 如果重启后找不到匹配的 Provider，或者相同 `name` 被改成了另一种 `type`，该 Delivery 会失败，不会改用其他 Provider。
 
 :::warning 注意
 
-当前版本不支持投递失败后的 Provider fallback。手动配置多个 Provider 时，普通发送会选择名为 `primary` 的 Provider，否则选择第一个。通常来说，每个 Channel 配置一个 Provider 就够了。默认模板也通过 `NOTIFICATION_EMAIL_PROVIDER` 和 `NOTIFICATION_IM_PROVIDER` 分别选择一个 Provider。
+普通发送会选择名为 `primary` 的 Provider，否则选择第一个。需要改变 Provider 路由时，在 `routing.<channel>.providers` 中使用 `strategy: 'single'` 或 `strategy: 'all'`；`all` 会为所有启用的 Provider 创建独立 Delivery。Provider 失败不会自动切换到另一个 Provider。
 
 :::
 

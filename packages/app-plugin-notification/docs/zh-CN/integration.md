@@ -100,6 +100,7 @@ import {
   createNotificationManager,
   createNotificationRegistry,
   type NotificationManager,
+  type NotificationProviderIdentity,
 } from '@nocobase/app-plugin-notification';
 import {
   createDatabaseProviderDefinition,
@@ -152,7 +153,10 @@ export function createAppNotificationRuntime(options: {
   readonly database: DatabaseManager;
   readonly queue: NocoBaseQueueManager;
   readonly logger: Logger;
-  readonly resolveUserEmail?: (userId: string) => Promise<string | undefined>;
+  readonly resolveUserEmail?: (
+    userId: string,
+    provider: NotificationProviderIdentity,
+  ) => Promise<string | undefined>;
 }): AppNotificationRuntime {
   const registry = createNotificationRegistry();
   const inAppStore = createInAppStore(options.database);

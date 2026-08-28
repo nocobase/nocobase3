@@ -21,8 +21,64 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
           channel: 'email',
           provider: { name: 'smtp', type: 'smtp' },
         },
+        {
+          channel: 'im',
+          provider: { name: 'feishu', type: 'feishu-webhook' },
+        },
+        {
+          channel: 'im',
+          provider: { name: 'dingtalk', type: 'dingtalk-webhook' },
+        },
       ],
     });
+  });
+
+  it('tests the explicitly requested IM Provider', async () => {
+    const send = vi.fn(async () => ({
+      notificationId: 'notification-1',
+      status: 'pending' as const,
+      deliveries: [],
+    }));
+    const { app } = createApp({ send });
+
+    const response = await app.request(
+      '/api/notification-providers/test/send',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-nocobase-provider-test': '1',
+        },
+        body: JSON.stringify({
+          channel: 'im',
+          providerName: 'dingtalk',
+          providerType: 'dingtalk-webhook',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: {
+          type: 'target',
+          id: 'default',
+        },
+        channels: ['im'],
+        routing: {
+          im: {
+            providers: {
+              strategy: 'single',
+              provider: { name: 'dingtalk', type: 'dingtalk-webhook' },
+            },
+          },
+        },
+        source: {
+          type: 'notification-provider-test',
+          referenceId: 'dingtalk',
+        },
+      }),
+    );
   });
 
   it('sends through the Notification Manager to the fixed test recipient', async () => {
@@ -149,6 +205,14 @@ function createConfig(
           type: 'email',
           enabled: true,
           providers: [{ type: 'smtp', name: 'smtp' }],
+        },
+        {
+          type: 'im',
+          enabled: true,
+          providers: [
+            { type: 'feishu-webhook', name: 'feishu' },
+            { type: 'dingtalk-webhook', name: 'dingtalk' },
+          ],
         },
       ],
       test: { enabled, emailRecipient },

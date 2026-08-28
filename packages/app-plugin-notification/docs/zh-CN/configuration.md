@@ -10,14 +10,13 @@ keywords: 'NocoBase,通知配置,SMTP,Resend,飞书,钉钉,Webhook,Provider'
 
 ## 默认模板的最小配置
 
-先在 `packages/app-template-default/.env.local` 中选择每个 Channel 使用的 Provider：
+先在 `packages/app-template-default/.env.local` 中配置需要启用的 Provider：
 
 ```dotenv
 NOTIFICATION_EMAIL_PROVIDER=smtp
-NOTIFICATION_IM_PROVIDER=feishu
 ```
 
-两个选择器都是可选的。留空时，对应 Channel 不会启用。每个 Channel 一次只选择一个 Provider；如果要切换供应商，先处理完队列中尚未结束的 Delivery，再修改选择器并重启应用。
+Email 通过 `NOTIFICATION_EMAIL_PROVIDER` 选择一个 Provider。IM 不需要选择器：配置 `FEISHU_WEBHOOK_URL` 和/或 `DINGTALK_WEBHOOK_URL` 后，对应 Provider 会自动启用。未配置任何 Webhook 时，IM Channel 不会启用。
 
 可以先检查解析后的配置。输出只包含 Provider 名称、类型、启用状态以及测试收件人是否已配置，不会显示密码、API Key、Webhook 或收件地址：
 
@@ -52,7 +51,7 @@ TEST_EMAIL_RECIPIENT=recipient@example.com
 | `SMTP_PASSWORD`        | 否         | SMTP 密码或应用专用密码                                               |
 | `SMTP_FROM`            | 是         | 默认发件人，需要符合邮件供应商的发件人规则                            |
 | `SMTP_REPLY_TO`        | 否         | 回复地址                                                              |
-| `TEST_EMAIL_RECIPIENT` | 仅测试必填 | 测试页面和 `notification:test` 的固定收件地址                         |
+| `TEST_EMAIL_RECIPIENT` | 仅测试必填 | 测试页面的固定收件地址                                                |
 
 ### Gmail
 
@@ -86,14 +85,13 @@ TEST_EMAIL_RECIPIENT=recipient@example.com
 | `RESEND_API_KEY`       | 是         | Resend 控制台创建的 API Key                                        |
 | `RESEND_FROM`          | 是         | 已验证域名下的发件人；测试阶段可以按 Resend 控制台提示使用测试地址 |
 | `RESEND_REPLY_TO`      | 否         | 回复地址                                                           |
-| `TEST_EMAIL_RECIPIENT` | 仅测试必填 | 测试页面和 `notification:test` 的固定收件地址                      |
+| `TEST_EMAIL_RECIPIENT` | 仅测试必填 | 测试页面的固定收件地址                                             |
 
 ## 配置飞书群机器人
 
 在目标飞书群中打开「设置」→「群机器人」→「添加机器人」→「自定义机器人」。创建后复制 Webhook 地址。如果启用了「签名校验」，再复制签名密钥：
 
 ```dotenv
-NOTIFICATION_IM_PROVIDER=feishu
 FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx
 FEISHU_WEBHOOK_SECRET=xxxxxxxx
 ```
@@ -105,7 +103,6 @@ FEISHU_WEBHOOK_SECRET=xxxxxxxx
 在目标钉钉群中打开「群设置」→「机器人」→「添加机器人」→「自定义」。安全设置选择「加签」，完成后复制 Webhook 地址和以 `SEC` 开头的密钥：
 
 ```dotenv
-NOTIFICATION_IM_PROVIDER=dingtalk
 DINGTALK_WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxx
 DINGTALK_WEBHOOK_SECRET=SECxxxxxxxx
 ```
@@ -135,19 +132,6 @@ NOTIFICATION_PROVIDER_TEST_ENABLED=true
 ```
 
 只应在受控的生产环境中临时启用，验证完成后及时关闭。
-
-## 使用命令发送烟测消息
-
-默认模板还提供独立的 Provider 烟测命令。它直接调用所选传输，不创建 Notification、Delivery 或 Attempt，适合在应用尚未启动时确认第三方凭据是否可用：
-
-```bash
-pnpm --filter @nocobase/app-template-default notification:test smtp
-pnpm --filter @nocobase/app-template-default notification:test resend
-pnpm --filter @nocobase/app-template-default notification:test feishu
-pnpm --filter @nocobase/app-template-default notification:test dingtalk
-```
-
-Email 烟测会把邮件发到 `TEST_EMAIL_RECIPIENT`。飞书和钉钉烟测会直接向 Webhook 所属群发送一条文本消息。命令返回 `accepted` 表示供应商接受了请求，不过不等于最终用户已经阅读。
 
 ## 手动构造配置
 
@@ -191,11 +175,13 @@ export const notificationConfig: NotificationConfig = {
       providers: [
         defineFeishuWebhookProviderConfig({
           name: 'feishu',
+          target: 'ops-alerts',
           webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx',
           secret: 'xxxxxxxx',
         }),
         defineDingTalkWebhookProviderConfig({
           name: 'dingtalk',
+          target: 'ops-alerts',
           webhookUrl:
             'https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxx',
           secret: 'SECxxxxxxxx',
@@ -206,7 +192,7 @@ export const notificationConfig: NotificationConfig = {
 };
 ```
 
-Provider 的 `name` 和 `type` 会写入 Delivery。配置发布和应用重启后应保持两者稳定。完整的 definitions 注册和生命周期接入见[手动接入通知](./integration.md)。
+同一个逻辑接收目标的 Provider 使用相同的 `target`，例如上面的 `ops-alerts`。省略 `target` 时默认为 `default`。Provider 的 `name` 和 `type` 会写入 Delivery。配置发布和应用重启后应保持两者稳定。完整的 definitions 注册和生命周期接入见[手动接入通知](./integration.md)。
 
 ## 相关链接
 

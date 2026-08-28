@@ -10,7 +10,7 @@ import {
   createFeishuWebhookProviderDefinition,
   defineDingTalkWebhookProviderConfig,
   defineFeishuWebhookProviderConfig,
-} from '../server/im/providers.js';
+} from '../server/im/providers/index.js';
 
 describe('IM webhook Providers', () => {
   afterEach(() => {

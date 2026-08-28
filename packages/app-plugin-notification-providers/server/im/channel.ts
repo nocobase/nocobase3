@@ -29,6 +29,7 @@ export interface ImProviderConfig {
   readonly type: string;
   readonly name: string;
   readonly enabled?: boolean;
+  readonly target?: string;
 }
 
 export interface ImChannelConfig {
@@ -60,7 +61,13 @@ export function createImChannelDefinition(
 > {
   return {
     type: 'im',
-    async createChannel() {
+    async createChannel(_context, config) {
+      const providerTargets = new Map(
+        config.providers.map((provider) => [
+          providerKey(provider),
+          normalizeTarget(provider.target),
+        ]),
+      );
       return {
         type: 'im',
         async resolveRecipient(input: {
@@ -77,10 +84,11 @@ export function createImChannelDefinition(
               : undefined;
           }
           if (
-            input.recipient.type === 'provider' &&
-            sameProvider(input.recipient.provider, input.provider)
+            input.recipient.type === 'target' &&
+            providerTargets.get(providerKey(input.provider)) ===
+              input.recipient.id
           )
-            return { provider: input.recipient.provider };
+            return { provider: input.provider };
           return undefined;
         },
         render(input: {
@@ -123,4 +131,12 @@ function sameProvider(
   right: NotificationProviderIdentity,
 ): boolean {
   return left?.name === right.name && left.type === right.type;
+}
+
+function providerKey(provider: NotificationProviderIdentity): string {
+  return `${provider.name}\0${provider.type}`;
+}
+
+function normalizeTarget(target: string | undefined): string {
+  return target?.trim() || 'default';
 }

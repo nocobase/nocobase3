@@ -9,6 +9,20 @@ export interface NotificationPluginRoutesDeps {
   readonly auth: {
     required(): MiddlewareHandler;
   };
+  readonly authz: {
+    middleware(): MiddlewareHandler<NotificationAuthorizationEnv>;
+  };
+}
+
+interface NotificationAuthorizationEnv {
+  Variables: {
+    authz: {
+      can(input: {
+        resource: { type: string; id: string };
+        action: string;
+      }): Promise<boolean>;
+    };
+  };
 }
 
 export type NotificationPluginRoutesContext = AppPluginRoutesContext<
@@ -23,9 +37,22 @@ export default function registerNotificationRoutes({
 }: NotificationPluginRoutesContext): void {
   if (!services.notification) return;
 
-  const routes = new Hono();
+  const routes = new Hono<NotificationAuthorizationEnv>();
   const authRequired = deps.auth.required();
-  routes.use('/logs/:id?', authRequired);
+  routes.use('/logs/:id?', authRequired, deps.authz.middleware());
+  routes.use('/logs/:id?', async (context, next) => {
+    const allowed = await context.get('authz').can({
+      resource: { type: 'page', id: 'notification.logs' },
+      action: 'access',
+    });
+    if (!allowed) {
+      return context.json(
+        { error: 'Notification logs access is required.' },
+        403,
+      );
+    }
+    await next();
+  });
   routes.route('/', services.notification.router);
   app.route('/api/notifications', routes);
 }
