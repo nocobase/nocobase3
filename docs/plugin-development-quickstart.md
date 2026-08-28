@@ -19,7 +19,7 @@ packages/app-plugin-audit-log/
 │   ├── migrations/
 │   └── seeds/
 ├── server/
-│   ├── bootstrap.ts
+│   ├── provider.ts
 │   └── routes/index.ts
 ├── client/
 │   ├── bootstrap.ts
@@ -100,7 +100,7 @@ pnpm --filter @nocobase/app-template-default seed
 
 ### Server
 
-- `server/bootstrap.ts`：注册服务端能力和生命周期清理逻辑；
+- `server/provider.ts`：以 `ServiceProvider` 的形式注册服务端能力并管理生命周期；
 - `server/routes/index.ts`：注册 HTTP API。
 
 脚手架默认提供：

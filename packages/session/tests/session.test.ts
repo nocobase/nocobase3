@@ -20,13 +20,13 @@ type TestSessionData = SessionData & {
 
 describe('createSessionManager', () => {
   it('persists session data across Hono requests', async () => {
-    const app = createTestApp();
+    const router = createTestRouter();
 
-    const login = await app.request('http://localhost/login');
+    const login = await router.request('http://localhost/login');
     const cookie = firstCookie(login);
     expect(cookie).toContain('nocobase_session=');
 
-    const me = await app.request('http://localhost/me', {
+    const me = await router.request('http://localhost/me', {
       headers: {
         cookie,
       },
@@ -39,18 +39,18 @@ describe('createSessionManager', () => {
   });
 
   it('updates and destroys an existing session', async () => {
-    const app = createTestApp();
-    const login = await app.request('http://localhost/login');
+    const router = createTestRouter();
+    const login = await router.request('http://localhost/login');
     const cookie = firstCookie(login);
 
-    const bump = await app.request('http://localhost/bump', {
+    const bump = await router.request('http://localhost/bump', {
       headers: {
         cookie,
       },
     });
     const updatedCookie = firstCookie(bump);
 
-    const me = await app.request('http://localhost/me', {
+    const me = await router.request('http://localhost/me', {
       headers: {
         cookie: updatedCookie,
       },
@@ -60,7 +60,7 @@ describe('createSessionManager', () => {
       count: 2,
     });
 
-    const logout = await app.request('http://localhost/logout', {
+    const logout = await router.request('http://localhost/logout', {
       headers: {
         cookie: updatedCookie,
       },
@@ -68,7 +68,7 @@ describe('createSessionManager', () => {
 
     expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
 
-    const afterLogout = await app.request('http://localhost/me', {
+    const afterLogout = await router.request('http://localhost/me', {
       headers: {
         cookie: updatedCookie,
       },
@@ -130,7 +130,7 @@ describe('createSessionManager', () => {
   });
 
   it('expires idle sessions on read', async () => {
-    const app = createTestApp({
+    const router = createTestRouter({
       lifetime: {
         absolute: '1h',
         inactivity: '20ms',
@@ -138,11 +138,11 @@ describe('createSessionManager', () => {
       },
     });
 
-    const login = await app.request('http://localhost/login');
+    const login = await router.request('http://localhost/login');
     const cookie = firstCookie(login);
     await sleep(40);
 
-    const me = await app.request('http://localhost/me', {
+    const me = await router.request('http://localhost/me', {
       headers: {
         cookie,
       },
@@ -153,18 +153,18 @@ describe('createSessionManager', () => {
   });
 });
 
-function createTestApp(
+function createTestRouter(
   config: Partial<AppSessionConfig> = {},
 ): Hono<SessionEnv<TestSessionData>> {
   const manager = createSessionManager<TestSessionData>({
     ...createConfig(),
     ...config,
   });
-  const app = new Hono<SessionEnv<TestSessionData>>();
+  const router = new Hono<SessionEnv<TestSessionData>>();
 
-  app.use('*', createSessionMiddleware(manager));
+  router.use('*', createSessionMiddleware(manager));
 
-  app.get('/login', async (context) => {
+  router.get('/login', async (context) => {
     await context.var.session.update({
       userId: 1,
       count: 1,
@@ -176,7 +176,7 @@ function createTestApp(
     });
   });
 
-  app.get('/bump', async (context) => {
+  router.get('/bump', async (context) => {
     await context.var.session.update((previous) => ({
       userId: previous?.userId,
       count: Number(previous?.count ?? 0) + 1,
@@ -185,18 +185,18 @@ function createTestApp(
     return context.json(await context.var.session.get());
   });
 
-  app.get('/me', async (context) => {
+  router.get('/me', async (context) => {
     return context.json(await context.var.session.get());
   });
 
-  app.get('/logout', async (context) => {
+  router.get('/logout', async (context) => {
     await context.var.session.destroy();
     return context.json({
       ok: true,
     });
   });
 
-  return app;
+  return router;
 }
 
 function createConfig(): AppSessionConfig {

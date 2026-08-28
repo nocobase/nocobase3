@@ -24,14 +24,18 @@ unless the route declares an explicit authorization resource. Removing the
 corresponding page grant therefore blocks direct navigation as well as hiding
 the navigation entry.
 
-Applications create the shared instance once and expose it through their
-server dependencies:
+The plugin provider resolves the shared database capability and registers the
+authorization instance in the service container:
 
 ```ts
-const authz = createAppAuthorization({
-  connection: runtime.database?.connection(),
-});
+const database = services.resolve(databaseManagerToken);
+
+services.singleton(authorizationToken, () =>
+  createAppAuthorization({
+    connection: database.connection(),
+  }),
+);
 ```
 
-Business plugins keep their own routes and services and use `deps.authz` before
-performing protected operations.
+Business plugins keep their own routes and resolve `authorizationToken` from
+the shared service container before performing protected operations.

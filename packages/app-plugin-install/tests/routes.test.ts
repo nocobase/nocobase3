@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -20,23 +22,23 @@ afterEach(() => {
 
 describe('@nocobase/app-plugin-install routes', () => {
   it('only registers the status route after installation', async () => {
-    const app = new Hono();
+    const router = new Hono();
     registerInstallRoutes({
-      app,
-      config: createPluginConfig('configured-secret'),
-      deps: undefined,
-      services: undefined,
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      appName: 'main',
+      publicBasePath: '/main',
+      router,
+      runtime: createTestRuntime(createPluginConfig('configured-secret')),
+      serviceContainer: new ServiceContainer(),
     });
-    app.get('*', (context) => context.text('application'));
+    router.get('*', (context) => context.text('application'));
 
-    const loginResponse = await app.request('/login', {
+    const loginResponse = await router.request('/login', {
       headers: { Accept: 'text/html' },
     });
-    const installResponse = await app.request('/install', {
+    const installResponse = await router.request('/install', {
       headers: { Accept: 'text/html' },
     });
-    const statusResponse = await app.request('/install/status');
+    const statusResponse = await router.request('/install/status');
 
     expect(loginResponse.status).toBe(200);
     await expect(loginResponse.text()).resolves.toBe('application');
@@ -48,26 +50,28 @@ describe('@nocobase/app-plugin-install routes', () => {
   });
 
   it('registers the redirect middleware and install routes in install mode', async () => {
-    const app = new Hono();
+    const router = new Hono();
     registerInstallRoutes({
-      app,
-      config: createPluginConfig(
-        `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
+      appName: 'main',
+      publicBasePath: '/main',
+      router,
+      runtime: createTestRuntime(
+        createPluginConfig(
+          `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
+        ),
       ),
-      deps: undefined,
-      services: undefined,
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      serviceContainer: new ServiceContainer(),
     });
-    app.get('*', (context) => context.text('application'));
+    router.get('*', (context) => context.text('application'));
 
-    const pageResponse = await app.request('/login', {
+    const pageResponse = await router.request('/login', {
       headers: { Accept: 'text/html' },
     });
-    const installResponse = await app.request('/install', {
+    const installResponse = await router.request('/install', {
       headers: { Accept: 'text/html' },
     });
-    const apiResponse = await app.request('/api/health');
-    const statusResponse = await app.request('/install/status');
+    const apiResponse = await router.request('/api/health');
+    const statusResponse = await router.request('/install/status');
 
     expect(pageResponse.status).toBe(302);
     expect(pageResponse.headers.get('Location')).toBe('/install');
@@ -85,8 +89,8 @@ describe('@nocobase/app-plugin-install routes', () => {
       path.join(rootDir, '.env.example'),
       'APP_BASE_PATH=/main\nDB_MIGRATIONS_AUTO_RUN=true\n',
     );
-    const app = new Hono();
-    app.route(
+    const router = new Hono();
+    router.route(
       '/install',
       createInstallRoutes({
         paths: createConfigPaths({ rootDir }),
@@ -94,7 +98,7 @@ describe('@nocobase/app-plugin-install routes', () => {
       }),
     );
 
-    const response = await app.request('/install/configure', {
+    const response = await router.request('/install/configure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dialect: 'sqlite', database: 'database.sqlite' }),
@@ -109,7 +113,7 @@ describe('@nocobase/app-plugin-install routes', () => {
     });
     expect(body).not.toContain('private-secret');
 
-    const repeatedResponse = await app.request('/install/configure', {
+    const repeatedResponse = await router.request('/install/configure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dialect: 'sqlite', database: 'other.sqlite' }),
@@ -120,15 +124,15 @@ describe('@nocobase/app-plugin-install routes', () => {
   it('rejects malformed configuration requests', async () => {
     const rootDir = createTemporaryRoot();
     writeFileSync(path.join(rootDir, '.env.example'), 'APP_BASE_PATH=/main\n');
-    const app = new Hono();
-    app.route(
+    const router = new Hono();
+    router.route(
       '/install',
       createInstallRoutes({
         paths: createConfigPaths({ rootDir }),
       }),
     );
 
-    const malformedResponse = await app.request('/install/configure', {
+    const malformedResponse = await router.request('/install/configure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{',
@@ -138,7 +142,7 @@ describe('@nocobase/app-plugin-install routes', () => {
       message: 'The request body must contain valid JSON.',
     });
 
-    const invalidResponse = await app.request('/install/configure', {
+    const invalidResponse = await router.request('/install/configure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dialect: 'sqlite', database: '' }),
@@ -160,5 +164,14 @@ function createPluginConfig(secret: string): {
 } {
   return {
     auth: { secret },
+  };
+}
+
+function createTestRuntime(
+  config: ReturnType<typeof createPluginConfig>,
+): AppRuntime<ReturnType<typeof createPluginConfig>> {
+  return {
+    config,
+    paths: createConfigPaths({ rootDir: '/missing' }),
   };
 }

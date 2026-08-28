@@ -2,7 +2,7 @@ export {
   createPluginMigrationSources,
   createPluginJobLocations,
   createPluginSeedSources,
-  loadPluginBootstraps,
+  loadPluginProviders,
   loadPluginRoutes,
   resolveAppPlugins,
   type ResolvedAppPlugins,
@@ -13,7 +13,7 @@ export type {
   AppPluginManifest,
   AppPluginRegistration,
   AppPluginRegistry,
-  LoadedAppPluginBootstrap,
+  LoadedAppPluginProvider,
   LoadedAppPluginRoutes,
   ResolvedAppPlugin,
 } from './types.js';

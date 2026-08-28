@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 
-import type { AppSettings } from '@/services/index.js';
+import type { AppSettingsRepository } from '../../repositories/app-settings.js';
 
 export interface AppSettingsRoutesOptions {
-  appSettingsStore: AppSettings;
+  appSettings: AppSettingsRepository;
 }
 
 export function createAppSettingsRoutes(
@@ -13,7 +13,7 @@ export function createAppSettingsRoutes(
 
   routes.get('/', async (c) => {
     return c.json({
-      settings: await options.appSettingsStore.all(),
+      settings: await options.appSettings.all(),
     });
   });
 

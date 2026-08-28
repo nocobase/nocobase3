@@ -30,8 +30,6 @@ import {
   defineConfig,
   loadConfig,
   prepareAppDatabaseStorage,
-  runConfiguredAppMigrations,
-  runConfiguredAppSeeds,
   type AppDatabaseConfig,
 } from '../src/index.js';
 
@@ -156,115 +154,14 @@ describe('app database storage', () => {
 });
 
 describe('app runtime context', () => {
-  it('creates database, migrator, and seeder services from config', () => {
-    const runtime = createAppRuntime({
-      database: {
-        default: 'sqlite',
-        connections: {
-          sqlite: {
-            dialect: 'sqlite',
-            filename: '/tmp/app/storage/database.sqlite',
-          },
-        },
-        migrations: {
-          directory: '/tmp/app/database/migrations',
-          autoRun: false,
-        },
-        seeds: {
-          directory: '/tmp/app/database/seeds',
-          packageName: '@nocobase/app',
-          autoRun: false,
-        },
-      },
-    });
+  it('contains resolved configuration and paths without creating services', () => {
+    const paths = createConfigPaths({ rootDir: '/tmp/app' });
+    const config = { app: { name: 'main' } };
+    const runtime = createAppRuntime(config, { paths });
 
-    expect(runtime.database).toBeDefined();
-    expect(runtime.migrator).toBeDefined();
-    expect(runtime.seeder).toBeDefined();
-  });
-
-  it('supports database configs without seeds', async () => {
-    const runtime = createAppRuntime({
-      database: {
-        default: 'none',
-        connections: {},
-        migrations: {
-          directory: '/tmp/app/database/migrations',
-          autoRun: false,
-        },
-      },
-    });
-
-    expect(runtime.seeder).toBeUndefined();
-    await expect(runtime.runSeeds()).resolves.toBeUndefined();
-  });
-
-  it('skips configured migrations unless autoRun is enabled', async () => {
-    const runtime = createAppRuntime({
-      database: {
-        default: 'none',
-        connections: {},
-        migrations: {
-          directory: '/tmp/app/database/migrations',
-          autoRun: false,
-        },
-      },
-    });
-
-    await expect(runConfiguredAppMigrations(runtime)).resolves.toBeUndefined();
-  });
-
-  it('skips configured seeds unless autoRun is enabled', async () => {
-    const runtime = createAppRuntime({
-      database: {
-        default: 'none',
-        connections: {},
-        migrations: {
-          directory: '/tmp/app/database/migrations',
-          autoRun: false,
-        },
-        seeds: {
-          directory: '/tmp/app/database/seeds',
-          autoRun: false,
-        },
-      },
-    });
-
-    await expect(runConfiguredAppSeeds(runtime)).resolves.toBeUndefined();
-  });
-
-  it('runs configured seeds when autoRun is enabled', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'nocobase-app-auto-seeds-'));
-    tempDirs.push(root);
-    const run = vi.fn().mockResolvedValue({ executed: [], skipped: [] });
-    createDatabaseSeederMock.mockReturnValue({ run });
-    const runtime = createAppRuntime({
-      database: {
-        default: 'sqlite',
-        connections: {
-          sqlite: {
-            dialect: 'sqlite',
-            filename: path.join(root, 'storage', 'database.sqlite'),
-          },
-        },
-        migrations: {
-          directory: path.join(root, 'migrations'),
-          autoRun: false,
-        },
-        seeds: {
-          directory: root,
-          autoRun: true,
-        },
-      },
-    });
-
-    await expect(runConfiguredAppSeeds(runtime)).resolves.toEqual({
-      status: 'completed',
-      executed: [],
-      skipped: [],
-    });
-    expect(run).toHaveBeenCalledTimes(1);
-    expect(existsSync(path.join(root, 'storage'))).toBe(true);
+    expect(runtime).toEqual({ config, paths });
+    expect(runtime).not.toHaveProperty('database');
+    expect(runtime).not.toHaveProperty('dispose');
   });
 });
 

@@ -1,8 +1,13 @@
 import { Hono } from 'hono';
-import { requestLogger } from '@nocobase/logging';
+import { cachingToken } from '@nocobase/caching';
+import { loggingToken, requestLogger } from '@nocobase/logging';
+import { authenticationToken } from '@nocobase/app-plugin-authentication';
+import type { ServiceResolver } from '@nocobase/service-provider';
 
-import type { AppServices } from '@/services/index.js';
-import type { AppDeps } from '../../runtime/deps.js';
+import {
+  appSettingsRepositoryToken,
+  publicFilesRepositoryToken,
+} from '../../providers/index.js';
 import { createAppSettingsRoutes } from './app-settings.js';
 import { createAppsHandler } from './apps.js';
 import { createCacheRoutes } from './cache.js';
@@ -15,50 +20,47 @@ import { createAuthRoutes } from './auth.js';
 export interface ApiRouteOptions {
   appName: string;
   publicBasePath: string;
-  deps: AppDeps;
-  services: AppServices;
+  serviceContainer: ServiceResolver;
 }
 
 export function createApiRoutes({
   appName,
   publicBasePath,
-  deps,
-  services,
+  serviceContainer,
 }: ApiRouteOptions): Hono {
   const api = new Hono();
+  const auth = serviceContainer.resolve(authenticationToken);
+  const caching = serviceContainer.resolve(cachingToken);
+  const logging = serviceContainer.resolve(loggingToken);
+  const appSettings = serviceContainer.resolve(appSettingsRepositoryToken);
+  const publicFiles = serviceContainer.resolve(publicFilesRepositoryToken);
 
   api.use(
     '*',
     requestLogger({
-      logger: deps.logging.getLogger('request'),
+      logger: logging.getLogger('request'),
       app: appName,
       skip: (context) => context.req.path.endsWith('/api/healthz'),
     }),
   );
   const publicRoutes = new Hono();
-  publicRoutes.route('/auth', createAuthRoutes(deps.auth));
+  publicRoutes.route('/auth', createAuthRoutes(auth));
   publicRoutes.get(
     '/healthz',
     createHealthzHandler({ appName, publicBasePath }),
   );
-  publicRoutes.route('/cache', createCacheRoutes({ caching: deps.caching }));
+  publicRoutes.route('/cache', createCacheRoutes({ caching }));
   publicRoutes.route('/session', createSessionRoutes());
-  publicRoutes.route(
-    '/app-settings',
-    createAppSettingsRoutes({ appSettingsStore: services.appSettingsStore }),
-  );
-  publicRoutes.route(
-    '/upload',
-    createUploadRoutes({ publicFileStorage: services.publicFileStorage }),
-  );
+  publicRoutes.route('/app-settings', createAppSettingsRoutes({ appSettings }));
+  publicRoutes.route('/upload', createUploadRoutes({ publicFiles }));
 
   const protectedRoutes = new Hono();
-  protectedRoutes.use('*', deps.auth.required());
+  protectedRoutes.use('*', auth.required());
   protectedRoutes.get('/apps', createAppsHandler());
 
   api.onError(
     createApiErrorHandler({
-      logger: deps.logging.getLogger().child({ module: 'api' }),
+      logger: logging.getLogger().child({ module: 'api' }),
     }),
   );
   api.route('/', publicRoutes);

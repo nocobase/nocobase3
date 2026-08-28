@@ -42,8 +42,8 @@ describe('SPA runtime globals', () => {
 describe('SPA routes', () => {
   it('serves assets before the SPA fallback', async () => {
     const root = createSpaFixture();
-    const app = new Hono();
-    registerSpaRoutes(app, {
+    const router = new Hono();
+    registerSpaRoutes(router, {
       basePath: '/main/test',
       indexPath: path.join(root, 'index.html'),
       runtimeGlobals: {
@@ -51,7 +51,7 @@ describe('SPA routes', () => {
       },
     });
 
-    const response = await app.request(
+    const response = await router.request(
       'http://localhost/main/test/assets/index.js',
     );
 
@@ -67,8 +67,8 @@ describe('SPA routes', () => {
 
   it('returns the runtime-injected index for SPA routes', async () => {
     const root = createSpaFixture();
-    const app = new Hono();
-    registerSpaRoutes(app, {
+    const router = new Hono();
+    registerSpaRoutes(router, {
       basePath: '/main/test',
       indexPath: path.join(root, 'index.html'),
       runtimeGlobals: {
@@ -76,7 +76,9 @@ describe('SPA routes', () => {
       },
     });
 
-    const response = await app.request('http://localhost/main/test/settings');
+    const response = await router.request(
+      'http://localhost/main/test/settings',
+    );
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -88,13 +90,13 @@ describe('SPA routes', () => {
 
   it('does not return the SPA index for missing assets', async () => {
     const root = createSpaFixture();
-    const app = new Hono();
-    registerSpaRoutes(app, {
+    const router = new Hono();
+    registerSpaRoutes(router, {
       basePath: '/main/test',
       indexPath: path.join(root, 'index.html'),
     });
 
-    const response = await app.request(
+    const response = await router.request(
       'http://localhost/main/test/assets/missing.js',
     );
 

@@ -111,7 +111,7 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     { code: 'ENOENT' },
   );
   await readFile(
-    path.join(result.targetDirectory, 'server/bootstrap.ts'),
+    path.join(result.targetDirectory, 'server/provider.ts'),
     'utf8',
   );
   const clientBootstrap = await readFile(
@@ -130,7 +130,7 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   assert.match(clientRoutes, /defineClientRoutes\(\[\]\)/u);
   assert.match(clientProviders, /defineClientProviders\(\s*\[\],\s*\)/u);
   await readFile(
-    path.join(result.targetDirectory, 'tests/bootstrap.test.ts'),
+    path.join(result.targetDirectory, 'tests/provider.test.ts'),
     'utf8',
   );
   await readFile(

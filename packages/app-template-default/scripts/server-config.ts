@@ -86,6 +86,10 @@ const report = {
     default: activeCachingProviderName || '(none)',
     active: summarizeCachingProvider(activeCachingProvider),
   },
+  snowflake: {
+    workerId: config.snowflake.workerId,
+    epoch: config.snowflake.epoch,
+  },
   database: {
     default: activeDatabaseName || '(none)',
     active: summarizeDatabaseConnection(activeDatabase),
@@ -450,6 +454,10 @@ function printReport(value: typeof report): void {
   printSection('Caching');
   printPair('Default provider', value.caching.default);
   printJson('Active provider', value.caching.active);
+
+  printSection('Snowflake ID generator');
+  printPair('Worker ID', String(value.snowflake.workerId));
+  printPair('Epoch', String(value.snowflake.epoch));
 
   printSection('Database');
   printPair('Default connection', value.database.default);

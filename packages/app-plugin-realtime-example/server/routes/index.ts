@@ -5,7 +5,7 @@ import { CLOCK_TOPIC } from '../publishers/clock.js';
 
 export type RealtimeExamplePluginRoutesContext = AppPluginRoutesContext;
 
-export default ({ app }: RealtimeExamplePluginRoutesContext): void => {
+export default ({ router }: RealtimeExamplePluginRoutesContext): void => {
   const routes = new Hono();
 
   routes.get('/', (context) =>
@@ -99,5 +99,5 @@ export default ({ app }: RealtimeExamplePluginRoutesContext): void => {
 </html>`),
   );
 
-  app.route('/realtime', routes);
+  router.route('/realtime', routes);
 };

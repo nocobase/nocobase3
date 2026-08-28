@@ -159,7 +159,7 @@ Browser request
       │
       ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│ createAppServer() -> AppServer.fetch(request)                      │
+│ Application.fetch(request) -> Router Service                       │
 │                                                                    │
 │  /api/*          -> API routes       -> JSON response              │
 │  /<custom-route> -> Server route     -> Response                   │
@@ -180,7 +180,7 @@ Server Routes 按顺序匹配，`/*` 作为最后的 SPA fallback。首次直接
 `/<custom-page>` 时，Server 先返回 `index.html` 并注入
 `window.nb_config`；Client 启动后，再由 Refine App 中的前端路由渲染页面。
 
-### Server 组装（createAppServer）
+### Server 组装（createApplication）
 
 ```text
 appScope
@@ -192,21 +192,35 @@ createServer(appScope)                 App Host 适配
 loadAppConfig() → AppServerConfig      加载并规范化配置
     │
     ▼
-createAppServer({ config, lifecycle }) App Server 组装
+createApplication(runtime, options)    NocoBase Application 组装
     │
-    ├── Runtime + Services
-    ├── bootstrap
+    ├── AppRuntime
+    ├── ServiceContainer
+    │   └── Router（Hono）
+    ├── Core + Plugin ServiceProviders
     └── Routes + WebSocket + SPA
     │
     ▼
-AppServer（Hono App）
+Application
     │
-    ├── fetch(request)
+    ├── appName
+    ├── publicBasePath
+    ├── config → AppRuntime.config
+    ├── paths → AppRuntime.paths
+    ├── runtime
+    ├── serviceContainer
+    ├── fetch(request) ──────→ Router（Hono）
     └── websocket(request)?
+    │
+    ▼
+AppServer Host Port（fetch + websocket）
 ```
 
-`config` 描述 App 如何运行，`services` 提供可复用能力，
-`bootstrap` 负责启动扩展，`routes` 将请求连接到这些能力。
+`Application` 才表示完整的 NocoBase 服务端 App。Hono 只是通过
+`routerToken` 注册到 `ServiceContainer` 的 HTTP Router Service，不再作为 App
+本身。`AppRuntime` 只保存已经解析好的配置与路径，不创建或持有 Database、Migrator、
+Seeder 等服务。Services 提供可复用能力，Plugin
+Provider 负责注册和管理服务端扩展的生命周期，Routes 将请求连接到这些能力。
 
 ### Client 组装（createAppClient）
 
@@ -244,23 +258,27 @@ Refine App（React App）
 Server 的核心就是 Services，Config 为 Service 的配置，Database，Router、Logger、Cache 等都是具体的 Service。
 
 ```bash
-Config
-  ↓
-Services
-  ├── Database
-  ├── Router（Hono）
-  ├── Logger
-  ├── Cache
-  └── Other Services
-  ↓
-Database
-  ↓
-Routes
-  ↓
-fetch / websocket
+Application
+  ├── AppRuntime
+  ├── ServiceContainer
+  │   ├── Router（Hono）
+  │   ├── Database
+  │   ├── Logger
+  │   ├── Cache
+  │   ├── Queue
+  │   ├── Realtime
+  │   └── Other Services
+  ├── ServiceProvider lifecycle
+  ├── fetch → Router
+  └── websocket
 ```
 
 ### Service Provider
+
+Service Provider 的基础设施由独立的 `@nocobase/service-provider` 包提供，包含
+`ServiceContainer`、`ServiceToken`、`ServiceProvider` 和
+`ServiceProviderRegistry`。该包不依赖 `AppRuntime` 或具体 Server 框架；
+`ServiceProviderContext` 的 `runtime` 类型由使用方传入。
 
 最完整的生命周期
 
@@ -272,6 +290,111 @@ ServiceProvider
   ├── ready
   └── shutdown
 ```
+
+各阶段的运行边界：
+
+```text
+createApplication（同步组装）
+  ├── register：注册全部服务
+  ├── RouterProvider：注册 Hono Router Service
+  ├── 注册 Core 和 Plugin Providers
+  └── 注册 Routes、WebSocket 和 SPA
+
+Application.start（异步启动）
+  ├── boot：全部 Provider 注册和应用组装完成
+  ├── start：启动应用服务
+  └── ready：应用内部服务已可用
+
+Application.shutdown（逆序释放）
+  └── shutdown：停止并释放已经进入生命周期的 Provider
+```
+
+Provider 和 Routes 扩展使用统一的运行时来源：
+
+```text
+ServiceProviderContext
+  ├── runtime
+  └── serviceContainer
+
+AppPluginRoutesContext
+  ├── appName
+  ├── publicBasePath
+  ├── config → runtime.config
+  ├── paths → runtime.paths
+  ├── router
+  ├── runtime
+  └── serviceContainer
+```
+
+Application 通过只读 getter 暴露 `config` 和 `paths`，但两者仍然委托给
+`AppRuntime`，不创建第二份状态。Provider 通过 `context.runtime.config`、
+`context.runtime.paths` 读取运行时信息，
+通过 `context.serviceContainer` 注册和解析服务。Routes 不再单独接收 `config` 和
+`paths`，避免同一份运行时状态出现多个入口。`Application` 通过 getter 统一提供规范化的
+`appName` 和 `publicBasePath`；Core Routes 和 Plugin Routes 直接接收同一个真实的
+`Application`，但插件在类型层面只看到 `AppPluginRoutesContext` 定义的窄接口。
+
+`Application.addProvider` 接收 Provider class，并在内部注入同一个
+`ServiceProviderContext`。应用组合根只声明启用了哪些 Provider，以及真正属于 Provider
+实例的额外参数：
+
+```ts
+app.addProvider(DriveProvider);
+app.addProvider(IdGeneratorProvider);
+app.addProvider(plugin.Provider);
+```
+
+应用配置不通过构造参数从组合根转发。Database、Caching、ID Generator、Drive、Logging、
+Queue、Session 等 Provider 直接从 `context.runtime.config` 读取自己拥有的配置；例如
+`CachingProvider` 读取 `runtime.config.caching`，`IdGeneratorProvider` 读取
+`runtime.config.snowflake`。底层
+`ServiceProviderRegistry` 仍接收已经实例化的 Provider，负责
+运行生命周期；Provider 的实例化属于 `Application`。
+
+数据库由 `DatabaseProvider` 完整拥有：`register` 根据
+`runtime.config.database` 注册惰性的 `databaseManagerToken`，`boot` 准备数据库存储并按配置
+依次执行自动 Migration 和 Seed，`shutdown` 销毁已经创建的 DatabaseManager。Drive 的存储
+准备同样位于 `DriveProvider.boot`。因此 standalone 和 embedded 都直接启动
+`Application`，不再维护独立的 Runtime prepare/dispose 阶段。手动 migrate/seed 命令使用
+短生命周期的数据库任务函数，并在任务结束或失败时独立销毁连接，不需要创建 HTTP
+Application。
+
+Repository 与 Service 都以明确的 Token 注册，并保持各自的职责：
+
+```text
+AppSettingsProvider → appSettingsRepositoryToken
+DatabaseProvider → databaseManagerToken
+PublicFilesProvider → publicFilesRepositoryToken
+
+Authentication plugin/provider → authenticationToken
+Authorization plugin/provider  → authorizationToken
+QueueProvider          → queueManagerToken
+CachingProvider        → cachingToken
+IdGeneratorProvider    → idGeneratorToken
+
+AppServerKit RealtimeProvider → realtimeServiceToken
+                              ├→ Plugin serviceContainer.resolve(token)
+                              └→ WebSocket handler
+```
+
+Routes 和 Plugins 直接从 `ServiceContainer` 解析需要的 Token，不再创建 `AppDeps`
+或 `AppRepositories` 聚合门面。跨包服务的 Token 由能力拥有者公开，例如
+Database、Authentication、Authorization、Queue、Caching、ID Generator、Drive、Logging 和
+Session；应用私有 Repository 的 Token 则由应用自己的 Provider 定义。Caching、ID Generator、
+Drive、Logging、Queue 和 Session 的 Provider 都位于各自能力包中，默认应用只负责声明启用
+哪些 Provider。Authentication 直接解析
+`cachingToken` 和 `idGeneratorToken`，不再通过应用侧依赖桥转发。Realtime 由 Plugin
+和 WebSocket 使用同一个公开 Token 从容器解析。
+
+`ready` 表示 App 内部服务已经就绪，不表示某个具体 HTTP Server 已经监听端口。
+这样 standalone、embedded 以及后续的 Koa、Fastify 等 Host Adapter 可以共享相同的
+Provider 生命周期，而不需要让 Provider 感知承载它的网络框架。
+
+`Application` 默认提供基于 `RealtimeService` 的 WebSocket 实现，并注册 App-local
+`/ws` 端点；应用组合时不需要传入 WebSocket factory。默认实现位于
+`@nocobase/app-server-kit/realtime`，通过 `realtimeServiceToken` 连接由
+`RealtimeProvider` 注册的服务。`ApplicationOptions.websocket` 只保留为需要替换整个
+WebSocket 接入实现时的高级覆盖入口。
 
 ## Client 的核心
 

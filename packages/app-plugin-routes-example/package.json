@@ -68,6 +68,7 @@
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",

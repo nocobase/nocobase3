@@ -5,11 +5,12 @@ verify them at the route, service, and configuration boundary that changed.
 
 ## Mental Model
 
-- `app.ts` is the app-local composition root. It wires Hono routes, the
-  NocoBase API proxy, local app APIs, and the SPA asset/index handlers.
-- `runtime/*` is the shared runtime layer. Keep config loading, runtime
-  preparation, and app creation there when both standalone and embedded need
-  the behavior.
+- `app.ts` is the app-local composition root. It creates the NocoBase
+  `Application` and wires routes, the NocoBase API proxy, local app APIs, and
+  the SPA asset/index handlers. Hono is the Router service resolved through
+  `routerToken`; do not treat or name a Hono instance as the Application.
+- `runtime/*` is the shared runtime layer. Keep config loading and app
+  creation there when both standalone and embedded need the behavior.
 - `standalone.ts` is an adapter. It starts the app as its own HTTP server,
   reads `.env`, `.env.local`, and `process.env`, then strips the public base
   path before dispatching to the app-local server.
@@ -18,8 +19,9 @@ verify them at the route, service, and configuration boundary that changed.
   App-host has already stripped the public base path before requests reach the
   app-local server.
 - `config/*` owns environment parsing and defaults. Prefer adding config there
-  instead of reading `process.env` in routes or services.
-- `routes/*` owns HTTP shape. Keep business logic in `services/*`.
+  instead of reading `process.env` in routes, repositories, or providers.
+- `routes/*` owns HTTP shape. Keep persistence boundaries in `repositories/*`
+  and register runtime capabilities through `providers/*`.
 - `../database/migrations/*` owns database shape. Add or update a focused migration when a
   service needs durable storage.
 
@@ -27,7 +29,8 @@ verify them at the route, service, and configuration boundary that changed.
 
 Standalone and embedded may differ only in their adapter layer. After adapter
 normalization, app routes, SPA runtime globals, API proxy behavior, database
-setup, migrations, and services must use the shared runtime path.
+setup, migrations, and services must use the shared Application and Provider
+path.
 
 | Mode       | Public base path | App-local incoming path            | Internal base path    | Public API URL            | Internal proxy route |
 | ---------- | ---------------- | ---------------------------------- | --------------------- | ------------------------- | -------------------- |
@@ -43,9 +46,11 @@ must include the upstream `/api` suffix when proxying real NocoBase requests.
 Standalone app identity is derived from `APP_BASE_PATH`. Embedded app identity
 comes from `scope.appName ?? scope.id`.
 
-When adding runtime behavior, put it under `runtime/*` when both modes need it.
-Do not duplicate database preparation, migration execution, SPA runtime
-injection, or app service creation in `standalone.ts` and `embedded.ts`.
+When adding shared composition behavior, put it under `runtime/*` or the
+Provider that owns the capability. Do not duplicate database preparation,
+migration execution, SPA runtime injection, or app service creation in
+`standalone.ts` and `embedded.ts`. AppRuntime only carries resolved config and
+paths; service creation and cleanup belong to ServiceProviders.
 
 Run `pnpm server:config` to inspect the resolved standalone values before
 debugging path, proxy, database, or SPA index issues.
@@ -54,8 +59,9 @@ debugging path, proxy, database, or SPA index issues.
 
 1. Add request and response logic under `server/routes`. Keep the public JSON
    shape stable and simple.
-2. Put database or integration logic in `server/services/<feature>.ts`.
-3. Register the service from `server/services/index.ts`.
+2. Put database persistence boundaries in `server/repositories/<feature>.ts`.
+3. Register the repository or runtime capability through a focused
+   `ServiceProvider` in `server/providers/<feature>.ts`.
 4. Wire the route from `server/routes/api.ts`, or create a focused route module
    when the file would become hard to scan.
 5. Add a node test under `tests/logic`. Prefer `createApp()` with a small fake
@@ -79,9 +85,9 @@ debugging path, proxy, database, or SPA index issues.
 
 1. Create a migration under `database/migrations` with a timestamped name.
 2. Keep `up` and `down` focused on one schema change.
-3. Add a service that uses the configured `DatabaseManager`; do not open an
-   extra database connection inside the service.
-4. Add or update tests that validate the migration loader and service query
+3. Add a repository that uses the configured `DatabaseManager`; do not open an
+   extra database connection inside the repository.
+4. Add or update tests that validate the migration loader and repository query
    behavior.
 
 ## Proxy And SPA Runtime Rules

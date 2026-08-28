@@ -1,34 +1,37 @@
 import type { Hono } from 'hono';
 
-import { createSessionMiddleware } from '@nocobase/session';
+import type { ServiceResolver } from '@nocobase/service-provider';
+import {
+  createSessionMiddleware,
+  sessionManagerToken,
+} from '@nocobase/session';
 
-import type { AppDeps } from '../runtime/deps.js';
-import type { AppServices } from '../services/index.js';
 import { createApiRoutes } from './api/index.js';
 import { createHelloPageHandler } from './hello.js';
 
-export interface RegisterAppRoutesOptions {
-  appName: string;
-  publicBasePath: string;
-  deps: AppDeps;
-  services: AppServices;
+export interface AppRoutesApplication {
+  readonly appName: string;
+  readonly publicBasePath: string;
+  readonly router: Hono;
+  readonly serviceContainer: ServiceResolver;
 }
 
-export function registerAppRoutes(
-  app: Hono,
-  options: RegisterAppRoutesOptions,
-): void {
-  app.use('*', createSessionMiddleware(options.deps.sessionManager));
+export function registerAppRoutes(app: AppRoutesApplication): void {
+  const { appName, publicBasePath, router, serviceContainer } = app;
 
-  app.get('/hello', createHelloPageHandler());
+  router.use(
+    '*',
+    createSessionMiddleware(serviceContainer.resolve(sessionManagerToken)),
+  );
 
-  app.route(
+  router.get('/hello', createHelloPageHandler());
+
+  router.route(
     '/api',
     createApiRoutes({
-      appName: options.appName,
-      publicBasePath: options.publicBasePath,
-      deps: options.deps,
-      services: options.services,
+      appName,
+      publicBasePath,
+      serviceContainer,
     }),
   );
 }

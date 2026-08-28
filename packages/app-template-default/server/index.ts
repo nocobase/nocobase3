@@ -1,10 +1,17 @@
 export {
   createApp,
+  createApplication,
   type AppLifecycle,
   type AppServer,
   type CreateAppOptions,
   type SpaHandler,
 } from './app.js';
+export {
+  Application,
+  type ApplicationFetchHandler,
+  type ApplicationOptions,
+  type ApplicationWebSocketFactory,
+} from '@nocobase/app-server-kit/application';
 export {
   createServer,
   default,

@@ -1,6 +1,6 @@
 import type { SpaHandler } from '@nocobase/app-server-kit/spa';
 import type {
-  LoadedAppPluginBootstrap,
+  LoadedAppPluginProvider,
   LoadedAppPluginRoutes,
 } from './plugins/index.js';
 
@@ -12,7 +12,7 @@ export interface AppLifecycle {
 
 export interface CreateAppOptions {
   lifecycle: AppLifecycle;
-  pluginBootstraps?: readonly LoadedAppPluginBootstrap[];
+  pluginProviders: readonly LoadedAppPluginProvider[];
   pluginRoutes?: readonly LoadedAppPluginRoutes[];
   spa?: CreateAppSpaOptions;
 }

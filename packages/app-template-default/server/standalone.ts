@@ -22,8 +22,6 @@ import {
   createAppFromRuntime,
   createPublicBasePathAdapter,
   loadAppConfig,
-  onceAsync,
-  prepareAppRuntime,
   createRuntimeConfigPaths,
   resolveStandaloneRuntimeOptions,
   type AppDisposerRegistry,
@@ -61,12 +59,6 @@ export async function createStandaloneServer(
   try {
     const runtime = createStandaloneRuntime();
     const websocketAbortController = new AbortController();
-
-    lifecycle.registerDisposer(
-      'runtime',
-      onceAsync(() => runtime.dispose()),
-    );
-    await prepareAppRuntime(runtime);
 
     const app = await createStandaloneAppFromRuntime(
       runtime,

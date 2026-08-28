@@ -7,6 +7,7 @@ import logging from './logging.js';
 import queue from './queue.js';
 import session from './session.js';
 import server from './server.js';
+import snowflake from './snowflake.js';
 import spa from './spa.js';
 import type { AppConfig } from './types.js';
 
@@ -20,6 +21,7 @@ const config: {
   queue: typeof queue;
   session: typeof session;
   server: typeof server;
+  snowflake: typeof snowflake;
   spa: typeof spa;
 } = {
   app: app,
@@ -31,6 +33,7 @@ const config: {
   queue: queue,
   session: session,
   server: server,
+  snowflake: snowflake,
   spa: spa,
 };
 

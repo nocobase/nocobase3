@@ -75,6 +75,7 @@
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",

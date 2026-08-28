@@ -4,9 +4,7 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "paths": {
       "@/jobs/*.js": ["./server/jobs/*.ts"],
-      "@/jobs/*": ["./server/jobs/*"],
-      "@/services/*.js": ["./server/services/*.ts"],
-      "@/services/*": ["./server/services/*"]
+      "@/jobs/*": ["./server/jobs/*"]
     }
   },
   "include": ["vite.config.ts", "scripts/*.ts"]

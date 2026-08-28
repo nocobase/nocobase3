@@ -63,6 +63,7 @@
   },
   "nocobase": {
     "plugin": {
+      "server": "./server/provider",
       "client": {
         "bootstrap": "./client/bootstrap",
         "routes": "./client/routes",
@@ -88,10 +89,12 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
     "@nocobase/authorization": "workspace:^",
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
     "lucide-react": "^0.487.0"
   },

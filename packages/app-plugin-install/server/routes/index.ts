@@ -14,11 +14,8 @@ export interface InstallPluginConfig {
   };
 }
 
-export type InstallPluginRoutesContext = AppPluginRoutesContext<
-  unknown,
-  unknown,
-  InstallPluginConfig
->;
+export type InstallPluginRoutesContext =
+  AppPluginRoutesContext<InstallPluginConfig>;
 
 export interface CreateInstallRoutesOptions {
   readonly paths: ConfigPaths;
@@ -57,13 +54,13 @@ export function createInstallRoutes(options: CreateInstallRoutesOptions): Hono {
 }
 
 export default function registerInstallRoutes({
-  app,
-  config,
-  paths,
+  router,
+  runtime,
 }: InstallPluginRoutesContext): void {
+  const { config, paths } = runtime;
   const installMode = isInstallModeAuthSecret(config.auth.secret);
 
-  app.get('/install/status', (context) => {
+  router.get('/install/status', (context) => {
     context.header('Cache-Control', 'no-store');
     return context.json<InstallStatusResponse>({ installed: !installMode });
   });
@@ -72,7 +69,7 @@ export default function registerInstallRoutes({
     return;
   }
 
-  app.use('*', async (context, next) => {
+  router.use('*', async (context, next) => {
     const isInstallRequest =
       context.req.path === '/install' ||
       context.req.path.startsWith('/install/');
@@ -86,5 +83,5 @@ export default function registerInstallRoutes({
 
     return context.redirect('/install');
   });
-  app.route('/install', createInstallRoutes({ paths }));
+  router.route('/install', createInstallRoutes({ paths }));
 }

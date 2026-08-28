@@ -38,6 +38,7 @@
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",

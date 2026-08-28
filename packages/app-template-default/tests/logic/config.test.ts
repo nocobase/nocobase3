@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { validateMigrations, validateSeeds } from '@nocobase/app-database';
+import { SNOWFLAKE_EPOCH_SECONDS } from '@nocobase/id-generator';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -24,6 +25,7 @@ import drive from '../../server/config/drive.ts';
 import logging from '../../server/config/logging.ts';
 import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
+import snowflake from '../../server/config/snowflake.ts';
 import spa from '../../server/config/spa.ts';
 import {
   createStandaloneDatabaseTaskRuntime,
@@ -82,9 +84,46 @@ describe('config registry', () => {
     expect(config.logging.default).toBe('system');
     expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
+    expect(config.snowflake).toEqual({
+      workerId: 0,
+      epoch: SNOWFLAKE_EPOCH_SECONDS,
+    });
     expect(config.spa.indexPath).toBe(
       '/tmp/app-template-default/dist/client/index.html',
     );
+  });
+});
+
+describe('snowflake config', () => {
+  it('declares the default worker ID and epoch', () => {
+    const config = snowflake({
+      env: createConfigEnv({}),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config).toEqual({
+      workerId: 0,
+      epoch: SNOWFLAKE_EPOCH_SECONDS,
+    });
+  });
+
+  it('maps Snowflake environment values', () => {
+    const config = snowflake({
+      env: createConfigEnv({
+        SNOWFLAKE_WORKER_ID: '7',
+        SNOWFLAKE_EPOCH: '1700000000',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config).toEqual({
+      workerId: 7,
+      epoch: 1_700_000_000,
+    });
   });
 });
 
@@ -860,6 +899,15 @@ describe('app plugins', () => {
     expect(authenticationPlugin?.clientRoutesEntry).toMatch(
       /app-plugin-authentication\/client\/routes\.ts$/,
     );
+    expect(authenticationPlugin?.providerEntry).toMatch(
+      /app-plugin-authentication\/server\/provider\.ts$/,
+    );
+    const authorizationPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-authorization',
+    );
+    expect(authorizationPlugin?.providerEntry).toMatch(
+      /app-plugin-authorization\/server\/provider\.ts$/,
+    );
     expect(dataProviderPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-data-provider',
       version: declaredVersion('@nocobase/app-plugin-data-provider'),
@@ -903,9 +951,7 @@ describe('app plugins', () => {
       routes: './client/routes',
       providers: './client/providers',
     });
-    expect(installPlugin?.bootstrapEntry).toMatch(
-      /app-plugin-install\/server\/bootstrap\.ts$/,
-    );
+    expect(installPlugin?.providerEntry).toBeUndefined();
     expect(installPlugin?.routesEntry).toMatch(
       /app-plugin-install\/server\/routes\/index\.ts$/,
     );
@@ -958,8 +1004,8 @@ describe('app plugins', () => {
     expect(realtimeExamplePlugin?.routesEntry).toMatch(
       /app-plugin-realtime-example\/server\/routes\/index\.ts$/,
     );
-    expect(realtimeExamplePlugin?.bootstrapEntry).toMatch(
-      /app-plugin-realtime-example\/server\/bootstrap\.ts$/,
+    expect(realtimeExamplePlugin?.providerEntry).toMatch(
+      /app-plugin-realtime-example\/server\/provider\.ts$/,
     );
     expect(runtime.config.queue.jobs?.locations).toEqual([
       expect.stringMatching(/app-template-default\/server\/jobs/),
@@ -1066,7 +1112,7 @@ describe('standalone runtime database config', () => {
     );
   });
 
-  it('creates a database task runtime with plugin sources', async () => {
+  it('creates a database task runtime with plugin sources', () => {
     const runtime = createStandaloneDatabaseTaskRuntime();
 
     expect(runtime.config).not.toHaveProperty('auth');
@@ -1106,10 +1152,8 @@ describe('standalone runtime database config', () => {
         }),
       ]),
     );
-    expect(runtime.migrator).toBeDefined();
-    expect(runtime.seeder).toBeDefined();
-
-    await runtime.dispose();
+    expect(runtime).not.toHaveProperty('database');
+    expect(runtime).not.toHaveProperty('dispose');
   });
 
   it('uses the active database directory for migrations and seeds', () => {

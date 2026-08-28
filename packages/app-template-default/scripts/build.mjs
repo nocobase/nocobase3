@@ -65,6 +65,8 @@ run('Build server workspace dependencies', 'pnpm', [
   '--filter',
   '@nocobase/queue',
   '--filter',
+  '@nocobase/service-provider',
+  '--filter',
   '@nocobase/session',
   ...workspacePluginNames.flatMap((packageName) => ['--filter', packageName]),
   'build',

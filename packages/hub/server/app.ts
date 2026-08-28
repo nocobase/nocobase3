@@ -35,9 +35,9 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   const clientIndexPath =
     options.clientIndexPath ?? path.resolve(process.cwd(), 'index.html');
   const clientRootDir = path.dirname(clientIndexPath);
-  const app = new Hono();
+  const router = new Hono();
 
-  app.get('/healthz', (context) => {
+  router.get('/healthz', (context) => {
     return context.json({
       ok: true,
       app: {
@@ -48,10 +48,10 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   });
 
   if (apiProxyPath) {
-    app.all(apiProxyPath, (context) =>
+    router.all(apiProxyPath, (context) =>
       proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl),
     );
-    app.all(`${apiProxyPath}/*`, (context) =>
+    router.all(`${apiProxyPath}/*`, (context) =>
       proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl),
     );
   }
@@ -75,18 +75,18 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     });
   });
 
-  app.route(`${basePath}/api`, api);
+  router.route(`${basePath}/api`, api);
   if (clientHandler) {
-    app.all(basePath || '/', (context) => clientHandler(context.req.raw));
-    app.all(`${basePath}/*`, (context) => clientHandler(context.req.raw));
+    router.all(basePath || '/', (context) => clientHandler(context.req.raw));
+    router.all(`${basePath}/*`, (context) => clientHandler(context.req.raw));
   } else {
-    app.all(`${basePath}/assets`, (context) =>
+    router.all(`${basePath}/assets`, (context) =>
       serveClientAsset(context.req.raw, clientRootDir, basePath),
     );
-    app.all(`${basePath}/assets/*`, (context) =>
+    router.all(`${basePath}/assets/*`, (context) =>
       serveClientAsset(context.req.raw, clientRootDir, basePath),
     );
-    app.get(basePath || '/', () =>
+    router.get(basePath || '/', () =>
       serveClient(clientIndexPath, {
         appBasePath: browserBasePath,
         apiUrl: browserApiUrl,
@@ -95,7 +95,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
         shareToken: options.apiClientShareToken,
       }),
     );
-    app.get(`${basePath}/*`, () =>
+    router.get(`${basePath}/*`, () =>
       serveClient(clientIndexPath, {
         appBasePath: browserBasePath,
         apiUrl: browserApiUrl,
@@ -106,7 +106,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     );
   }
 
-  return app;
+  return router;
 }
 
 function resolveAppName(value: string | undefined): string {

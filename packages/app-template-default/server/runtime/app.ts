@@ -9,10 +9,11 @@ import {
   normalizeBasePath,
 } from '@nocobase/app-server-kit/support';
 
-import { createApp, type AppServer } from '../app.js';
+import type { Application } from '@nocobase/app-server-kit/application';
+import { createApplication, type AppServer } from '../app.js';
 import type { AppLifecycle } from '../app-options.js';
 import type { AppConfig } from '../config/index.js';
-import { loadPluginBootstraps, loadPluginRoutes } from '../plugins/index.js';
+import { loadPluginProviders, loadPluginRoutes } from '../plugins/index.js';
 
 export interface CreateAppFromRuntimeOptions {
   lifecycle: AppLifecycle;
@@ -26,21 +27,21 @@ interface RequestInitWithDuplex extends RequestInit {
 export async function createAppFromRuntime(
   runtime: AppRuntime<AppConfig>,
   options: CreateAppFromRuntimeOptions,
-): Promise<AppServer> {
+): Promise<Application<AppConfig>> {
   const { config } = runtime;
   const viteDevUrl = resolveViteDevUrlOption(
     options.viteDevUrl,
     config.server.viteDevUrl,
   );
 
-  const [pluginBootstraps, pluginRoutes] = await Promise.all([
-    loadPluginBootstraps(config.plugins),
+  const [pluginProviders, pluginRoutes] = await Promise.all([
+    loadPluginProviders(config.plugins),
     loadPluginRoutes(config.plugins),
   ]);
 
-  return createApp(runtime, {
+  const app = createApplication(runtime, {
     lifecycle: options.lifecycle,
-    pluginBootstraps,
+    pluginProviders,
     pluginRoutes,
     spa: {
       handler: viteDevUrl
@@ -51,6 +52,9 @@ export async function createAppFromRuntime(
         : undefined,
     },
   });
+
+  await app.start();
+  return app;
 }
 
 export function createPublicBasePathAdapter(
@@ -62,24 +66,26 @@ export function createPublicBasePathAdapter(
     return app;
   }
 
-  const mounted = new Hono() as AppServer;
+  const router = new Hono();
 
-  mounted.all(basePath, (context) =>
+  router.all(basePath, (context) =>
     dispatchMountedApp(app, context.req.raw, basePath),
   );
-  mounted.all(`${basePath}/*`, (context) =>
+  router.all(`${basePath}/*`, (context) =>
     dispatchMountedApp(app, context.req.raw, basePath),
   );
 
-  const websocket = app.websocket;
-  if (websocket) {
+  const mounted: AppServer = {
+    fetch: router.fetch,
+  };
+  if (app.websocket) {
     mounted.websocket = (request, env) => {
       const strippedRequest = stripPublicBasePathFromRequest(request, basePath);
       if (!strippedRequest) {
         return null;
       }
 
-      return websocket(strippedRequest, env);
+      return app.websocket?.(strippedRequest, env) ?? null;
     };
   }
 

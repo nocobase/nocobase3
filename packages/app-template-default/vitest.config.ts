@@ -12,12 +12,6 @@ export default createReactVitestConfig({
         replacement: fileURLToPath(new URL('./server/jobs', import.meta.url)),
       },
       {
-        find: '@/services',
-        replacement: fileURLToPath(
-          new URL('./server/services', import.meta.url),
-        ),
-      },
-      {
         find: '@',
         replacement: fileURLToPath(new URL('./client', import.meta.url)),
       },
@@ -43,7 +37,6 @@ export default createReactVitestConfig({
       'tests/logic/e2e-support.test.ts',
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugins.test.ts',
-      'tests/logic/public-request.test.ts',
     ],
     coverage: {
       provider: 'v8',

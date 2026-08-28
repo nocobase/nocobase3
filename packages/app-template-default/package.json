@@ -68,6 +68,7 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@playwright/test": "catalog:",

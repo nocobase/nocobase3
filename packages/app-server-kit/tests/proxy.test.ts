@@ -89,13 +89,13 @@ describe('NocoBase API proxy', () => {
         }),
       );
     });
-    const app = new Hono();
-    registerNocoBaseApiProxyRoutes(app, {
+    const router = new Hono();
+    registerNocoBaseApiProxyRoutes(router, {
       apiProxyPath: '/main/test/v2/api',
       nocoBaseApiUrl: new URL(`${upstreamUrl}/nocobase/api/`),
     });
 
-    const response = await app.request(
+    const response = await router.request(
       'http://localhost/main/test/v2/api/systemSettings:get?locale=zh-CN',
       {
         headers: {
@@ -120,13 +120,13 @@ describe('NocoBase API proxy', () => {
   });
 
   it('returns a JSON error when the NocoBase API target is not configured', async () => {
-    const app = new Hono();
-    registerNocoBaseApiProxyRoutes(app, {
+    const router = new Hono();
+    registerNocoBaseApiProxyRoutes(router, {
       apiProxyPath: '/main/test/v2/api',
       nocoBaseApiUrl: undefined,
     });
 
-    const response = await app.request(
+    const response = await router.request(
       'http://localhost/main/test/v2/api/systemSettings:get',
     );
 

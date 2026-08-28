@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 
-import type { FileUploads } from '@/services/index.js';
+import type { PublicFilesRepository } from '../../repositories/public-files.js';
 
 export interface UploadRoutesOptions {
-  publicFileStorage: FileUploads;
+  publicFiles: PublicFilesRepository;
 }
 
 export function createUploadRoutes(options: UploadRoutesOptions): Hono {
@@ -12,7 +12,7 @@ export function createUploadRoutes(options: UploadRoutesOptions): Hono {
   routes.post('/', async (c) => {
     const body = await c.req.parseBody();
 
-    return c.json(await options.publicFileStorage.upload(body.file));
+    return c.json(await options.publicFiles.upload(body.file));
   });
 
   return routes;

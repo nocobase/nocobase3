@@ -39,6 +39,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
     "ioredis": "catalog:",
     "jose": "^6.2.9",

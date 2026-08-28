@@ -24,7 +24,7 @@ export function resolveNocoBaseApiUrl(
 }
 
 export function registerNocoBaseApiProxyRoutes(
-  app: Hono,
+  router: Hono,
   options: NocoBaseApiProxyOptions,
 ): void {
   const apiProxyPath = normalizeBasePath(options.apiProxyPath);
@@ -37,10 +37,10 @@ export function registerNocoBaseApiProxyRoutes(
     apiProxyPath,
   };
 
-  app.all(apiProxyPath, (context) =>
+  router.all(apiProxyPath, (context) =>
     proxyToNocoBaseApi(context.req.raw, proxyOptions),
   );
-  app.all(`${apiProxyPath}/*`, (context) =>
+  router.all(`${apiProxyPath}/*`, (context) =>
     proxyToNocoBaseApi(context.req.raw, proxyOptions),
   );
 }

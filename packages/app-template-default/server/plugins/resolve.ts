@@ -5,17 +5,18 @@ import { pathToFileURL } from 'node:url';
 
 import type { MigrationSource, SeedSource } from '@nocobase/app-database';
 import type {
-  AppPluginBootstrap,
+  AppPluginProviderConstructor,
   AppPluginRoutesRegistrar,
 } from '@nocobase/app-server-kit/plugins';
 
 import type {
   AppPluginManifest,
   AppPluginRegistry,
-  LoadedAppPluginBootstrap,
+  LoadedAppPluginProvider,
   LoadedAppPluginRoutes,
   ResolvedAppPlugin,
 } from './types.js';
+import type { AppConfig } from '../config/index.js';
 
 const require = createRequire(import.meta.url);
 const APP_PLUGIN_PACKAGE_PATTERN = /^@nocobase\/app-plugin-[a-z0-9][a-z0-9-]*$/;
@@ -84,31 +85,32 @@ export function createPluginJobLocations(
   );
 }
 
-export async function loadPluginBootstraps(
+export async function loadPluginProviders(
   plugins: readonly ResolvedAppPlugin[],
-): Promise<LoadedAppPluginBootstrap[]> {
+): Promise<LoadedAppPluginProvider[]> {
   const enabled = plugins.flatMap((plugin) =>
-    plugin.enabled && plugin.bootstrapEntry
-      ? [{ plugin, bootstrapEntry: plugin.bootstrapEntry }]
+    plugin.enabled && plugin.providerEntry
+      ? [{ plugin, providerEntry: plugin.providerEntry }]
       : [],
   );
 
   return Promise.all(
-    enabled.map(async ({ plugin, bootstrapEntry }) => {
-      const bootstrapModule = (await import(
-        pathToFileURL(bootstrapEntry).href
+    enabled.map(async ({ plugin, providerEntry }) => {
+      const providerModule = (await import(
+        pathToFileURL(providerEntry).href
       )) as {
         default?: unknown;
       };
-      if (typeof bootstrapModule.default !== 'function') {
+      if (typeof providerModule.default !== 'function') {
         throw new Error(
-          `Plugin "${plugin.packageName}" bootstrap entry must default-export a function.`,
+          `Plugin "${plugin.packageName}" provider entry must default-export a ServiceProvider class.`,
         );
       }
 
       return {
         packageName: plugin.packageName,
-        bootstrap: bootstrapModule.default as AppPluginBootstrap,
+        Provider:
+          providerModule.default as AppPluginProviderConstructor<AppConfig>,
       };
     }),
   );
@@ -210,12 +212,14 @@ function resolvePlugin(
       'server/jobs',
       'dist/server/jobs',
     ]),
-    bootstrapEntry: resolveConventionFile(packageRoot, [
-      'server/bootstrap.ts',
-      'server/bootstrap.js',
-      'dist/server/bootstrap.js',
-      'dist/server/bootstrap.mjs',
-    ]),
+    providerEntry:
+      resolveOptionalModuleFile(packageRoot, manifest.server) ??
+      resolveConventionFile(packageRoot, [
+        'server/provider.ts',
+        'server/provider.js',
+        'dist/server/provider.js',
+        'dist/server/provider.mjs',
+      ]),
     routesEntry: resolveConventionFile(packageRoot, [
       'server/routes/index.ts',
       'server/routes/index.js',
@@ -268,7 +272,7 @@ function readPluginManifest(
   const client = readClientManifest(value.client, packageName);
 
   return {
-    server: stringValue(value.server),
+    server: serverEntryValue(value.server, packageName),
     client,
     database: database
       ? {
@@ -277,6 +281,31 @@ function readPluginManifest(
         }
       : undefined,
   };
+}
+
+function serverEntryValue(
+  value: unknown,
+  packageName: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(
+      `Plugin package "${packageName}" server provider entry must be a non-empty string.`,
+    );
+  }
+  if (
+    !value.startsWith('./') ||
+    value.includes('\\') ||
+    value.split('/').includes('..') ||
+    value === './'
+  ) {
+    throw new Error(
+      `Plugin package "${packageName}" server provider entry must be a safe package subpath beginning with "./".`,
+    );
+  }
+  return value;
 }
 
 function readClientManifest(

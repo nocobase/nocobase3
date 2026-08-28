@@ -7,9 +7,11 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createServer as createHttpServer, type Server } from 'node:http';
+import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -20,11 +22,26 @@ import {
   type CachingConfig,
 } from '@nocobase/caching';
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import { createConfigPaths } from '@nocobase/app-server-kit/config';
+import {
+  createRealtimeService,
+  realtimeServiceToken,
+  type RealtimeServerMessage,
+} from '@nocobase/app-server-kit/realtime';
+import {
+  ServiceContainer,
+  ServiceProvider,
+  ServiceProviderRegistry,
+} from '@nocobase/service-provider';
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
 } from '@nocobase/app-server-kit/websocket';
-import type { DatabaseManager, QueryAdapter } from '@nocobase/app-database';
+import {
+  databaseManagerToken,
+  type DatabaseManager,
+  type QueryAdapter,
+} from '@nocobase/app-database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import { createSilentLoggingConfig } from '@nocobase/logging';
 import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
@@ -37,9 +54,13 @@ import {
   normalizeBasePath,
   resolveAppNameFromBasePath,
 } from '@nocobase/app-server-kit/support';
+import { AuthenticationProvider } from '@nocobase/app-plugin-authentication';
+import { AuthorizationProvider } from '@nocobase/app-plugin-authorization';
 
 import {
+  Application,
   createApp,
+  type CreateAppOptions,
   type AppDisposer,
   type AppScope,
   createServer as createEmbeddedServer,
@@ -49,8 +70,6 @@ import {
 } from '../../server/index.ts';
 import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalone.ts';
 import type { AppConfig } from '../../server/config/index.ts';
-import { createRealtimeService } from '../../server/realtime/service.ts';
-import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 
@@ -58,6 +77,10 @@ process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
 interface CloseableResource {
   close(): Promise<void>;
+}
+
+interface FetchableResource {
+  readonly fetch: (request: Request) => Response | Promise<Response>;
 }
 
 type TestApp = ReturnType<typeof createApp> & CloseableResource;
@@ -71,6 +94,17 @@ const apps: CloseableResource[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
 const TEST_REALTIME_TOPIC = 'test:realtime';
+const require = createRequire(import.meta.url);
+
+function requestApp(
+  app: FetchableResource,
+  input: Request | string | URL,
+  requestInit?: RequestInit,
+): Response | Promise<Response> {
+  const request =
+    input instanceof Request ? input : new Request(input, requestInit);
+  return app.fetch(request);
+}
 
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -98,6 +132,117 @@ afterEach(async () => {
 });
 
 describe('app server', () => {
+  it('represents the NocoBase application separately from its Hono router', () => {
+    const app = createTestApp({
+      publicBasePath: '/app-template-default',
+      nocoBaseApiUrl: false,
+    });
+
+    expect(app).toBeInstanceOf(Application);
+    expect(app.router).not.toBe(app);
+    expect(app.serviceContainer).toBeDefined();
+    expect(app.appName).toBe('app-template-default');
+    expect(app.publicBasePath).toBe('/app-template-default');
+    expect(app.runtime.config.app.publicBasePath).toBe('/app-template-default');
+  });
+
+  it('passes the shared runtime and service container to plugin providers', () => {
+    let providerContext: unknown;
+    class TestPluginProvider extends ServiceProvider {
+      public readonly name: string = '@nocobase/app-plugin-test';
+
+      public override register(): void {
+        providerContext = this.context;
+      }
+    }
+
+    createTestApp({
+      pluginProviders: [
+        {
+          packageName: '@nocobase/app-plugin-test',
+          Provider: TestPluginProvider,
+        },
+      ],
+    });
+
+    expect(providerContext).toMatchObject({
+      runtime: expect.objectContaining({
+        config: expect.any(Object),
+        paths: expect.any(Object),
+      }),
+      serviceContainer: expect.any(ServiceContainer),
+    });
+    expect(
+      (
+        providerContext as { serviceContainer: ServiceContainer }
+      ).serviceContainer.resolve(realtimeServiceToken),
+    ).toBeDefined();
+  });
+
+  it('passes the application surface to plugin routes', () => {
+    let routesContext: unknown;
+    const app = createTestApp({
+      pluginRoutes: [
+        {
+          packageName: '@nocobase/app-plugin-test',
+          registerRoutes(context): void {
+            routesContext = context;
+          },
+        },
+      ],
+    });
+
+    expect(routesContext).toBe(app);
+    const routeApp = routesContext as typeof app;
+    expect(routeApp.appName).toBe(app.appName);
+    expect(routeApp.publicBasePath).toBe(app.publicBasePath);
+    expect(routeApp.router).toBe(app.router);
+    expect(routeApp.runtime).toBe(app.runtime);
+    expect(routeApp.serviceContainer).toBe(app.serviceContainer);
+    expect(routeApp.config).toBe(app.runtime.config);
+    expect(routeApp.paths).toBe(app.runtime.paths);
+    expect(routesContext).not.toHaveProperty('deps');
+    expect(routesContext).not.toHaveProperty('repositories');
+  });
+
+  it('starts service providers only through the asynchronous runtime path', async () => {
+    const boot = vi.spyOn(ServiceProviderRegistry.prototype, 'bootAll');
+    const start = vi.spyOn(ServiceProviderRegistry.prototype, 'startAll');
+    const ready = vi.spyOn(ServiceProviderRegistry.prototype, 'readyAll');
+
+    try {
+      createTestApp({
+        publicBasePath: '/low-level-app',
+        nocoBaseApiUrl: false,
+      });
+
+      expect(boot).not.toHaveBeenCalled();
+      expect(start).not.toHaveBeenCalled();
+      expect(ready).not.toHaveBeenCalled();
+
+      await createEmbeddedServer(
+        createEmbeddedTestScope({
+          id: 'provider-lifecycle-app',
+          basePath: '/provider-lifecycle-app',
+        }),
+      );
+
+      expect(boot).toHaveBeenCalledOnce();
+      expect(start).toHaveBeenCalledOnce();
+      expect(ready).toHaveBeenCalledOnce();
+      expect(boot.mock.invocationCallOrder[0]).toBeLessThan(
+        start.mock.invocationCallOrder[0],
+      );
+      expect(start.mock.invocationCallOrder[0]).toBeLessThan(
+        ready.mock.invocationCallOrder[0],
+      );
+    } finally {
+      boot.mockRestore();
+      start.mockRestore();
+      ready.mockRestore();
+    }
+  });
+
   it('creates embedded apps from a scope', async () => {
     const app = await createEmbeddedServer(
       createEmbeddedTestScope({
@@ -106,7 +251,7 @@ describe('app server', () => {
       }),
     );
 
-    const response = await app.request('http://localhost/api/healthz');
+    const response = await requestApp(app, 'http://localhost/api/healthz');
     const websocketEvents = await app.websocket?.(
       new Request('http://localhost/ws'),
     );
@@ -130,7 +275,7 @@ describe('app server', () => {
       nocoBaseApiUrl: false,
     });
 
-    const response = await app.request('http://localhost/hello');
+    const response = await requestApp(app, 'http://localhost/hello');
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -142,11 +287,11 @@ describe('app server', () => {
   });
 
   it('adds the public base path to app-local redirects', async () => {
-    const app = new Hono();
-    app.get('/login', (context) => context.redirect('/install'));
+    const router = new Hono();
+    router.get('/login', (context) => context.redirect('/install'));
 
-    const mounted = createPublicBasePathAdapter(app, '/main');
-    const response = await mounted.request('http://localhost/main/login');
+    const mounted = createPublicBasePathAdapter(router, '/main');
+    const response = await requestApp(mounted, 'http://localhost/main/login');
 
     expect(response.status).toBe(302);
     expect(response.headers.get('Location')).toBe('/main/install');
@@ -159,7 +304,8 @@ describe('app server', () => {
     });
     const mounted = createPublicBasePathAdapter(app, '/main');
 
-    const response = await mounted.request(
+    const response = await requestApp(
+      mounted,
       'http://localhost/main/api/auth/sign-in/username',
       {
         method: 'POST',
@@ -184,7 +330,7 @@ describe('app server', () => {
       nocoBaseApiUrl: false,
     });
 
-    const response = await app.request('http://localhost/ws');
+    const response = await requestApp(app, 'http://localhost/ws');
     const websocketEvents = await app.websocket?.(
       new Request('http://localhost/ws'),
     );
@@ -270,10 +416,7 @@ describe('app server', () => {
 
     expect(typeof (app as { close?: unknown }).close).toBe('undefined');
     expect(registeredDisposers.map((disposer) => disposer.name)).toEqual([
-      'runtime',
-      'app-deps',
-      'realtime-service',
-      'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
+      'service-providers',
     ]);
 
     for (const disposer of [...registeredDisposers].reverse()) {
@@ -301,7 +444,7 @@ describe('app server', () => {
       }),
     );
 
-    const response = await app.request('http://localhost/');
+    const response = await requestApp(app, 'http://localhost/');
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -329,6 +472,7 @@ describe('app server', () => {
     tempDirs.push(appRoot);
     const clientDir = path.join(appRoot, 'dist', 'client');
     mkdirSync(clientDir, { recursive: true });
+    createEmbeddedPluginFixture(appRoot);
     writeFileSync(
       path.join(appRoot, '.env'),
       [
@@ -353,7 +497,8 @@ describe('app server', () => {
       }),
     );
 
-    const api = await app.request(
+    const api = await requestApp(
+      app,
       'http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F',
     );
     await expect(api.json()).resolves.toEqual({
@@ -361,7 +506,7 @@ describe('app server', () => {
       forwardedPrefix: '/v2/api',
     });
 
-    const page = await app.request('http://localhost/');
+    const page = await requestApp(app, 'http://localhost/');
     const html = await page.text();
     expect(html).toContain(
       'window.__nocobase_api_client_storage_prefix__ = "EMBEDDED_";',
@@ -395,7 +540,8 @@ describe('app server', () => {
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request(
+    const response = await requestApp(
+      app,
       'http://localhost/v2/api/systemSettings:get?locale=zh-CN',
       {
         headers: {
@@ -453,16 +599,20 @@ describe('app server', () => {
 
     // A TLS-terminating proxy in front of this process: the site is https, but this hop is cleartext
     // and its x-forwarded-* headers carry the browser's real context.
-    const response = await app.request('http://localhost/v2/api/auth:signIn', {
-      method: 'POST',
-      headers: {
-        host: 'apps.example.com',
-        origin: 'https://apps.example.com',
-        referer: 'https://apps.example.com/app-template-default/login',
-        'x-forwarded-host': 'apps.example.com',
-        'x-forwarded-proto': 'https',
+    const response = await requestApp(
+      app,
+      'http://localhost/v2/api/auth:signIn',
+      {
+        method: 'POST',
+        headers: {
+          host: 'apps.example.com',
+          origin: 'https://apps.example.com',
+          referer: 'https://apps.example.com/app-template-default/login',
+          'x-forwarded-host': 'apps.example.com',
+          'x-forwarded-proto': 'https',
+        },
       },
-    });
+    );
 
     expect(response.status).toBe(200);
     const forwarded = (await response.json()) as Record<string, string>;
@@ -498,7 +648,8 @@ describe('app server', () => {
       },
     });
 
-    const response = await app.request(
+    const response = await requestApp(
+      app,
       'http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F',
     );
 
@@ -530,7 +681,7 @@ describe('app server', () => {
       database: createMockDatabase(rows),
     });
 
-    const response = await app.request('http://localhost/api/app-settings');
+    const response = await requestApp(app, 'http://localhost/api/app-settings');
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -545,9 +696,15 @@ describe('app server', () => {
       caching: createTestCaching(),
     });
 
-    const firstResponse = await app.request('http://localhost/api/cache/demo');
+    const firstResponse = await requestApp(
+      app,
+      'http://localhost/api/cache/demo',
+    );
     const firstPayload = await firstResponse.json();
-    const secondResponse = await app.request('http://localhost/api/cache/demo');
+    const secondResponse = await requestApp(
+      app,
+      'http://localhost/api/cache/demo',
+    );
     const secondPayload = await secondResponse.json();
 
     expect(firstResponse.status).toBe(200);
@@ -566,7 +723,8 @@ describe('app server', () => {
       cached: true,
     });
 
-    const deleteResponse = await app.request(
+    const deleteResponse = await requestApp(
+      app,
       'http://localhost/api/cache/demo',
       {
         method: 'DELETE',
@@ -579,7 +737,10 @@ describe('app server', () => {
       deleted: true,
     });
 
-    const thirdResponse = await app.request('http://localhost/api/cache/demo');
+    const thirdResponse = await requestApp(
+      app,
+      'http://localhost/api/cache/demo',
+    );
     const thirdPayload = await thirdResponse.json();
 
     expect(thirdResponse.status).toBe(200);
@@ -594,14 +755,15 @@ describe('app server', () => {
       session: createTestSession(),
     });
 
-    const emptyResponse = await app.request('http://localhost/api/session');
+    const emptyResponse = await requestApp(app, 'http://localhost/api/session');
     await expect(emptyResponse.json()).resolves.toEqual({
       enabled: true,
       id: null,
       data: null,
     });
 
-    const touchResponse = await app.request(
+    const touchResponse = await requestApp(
+      app,
       'http://localhost/api/session/touch',
       {
         method: 'POST',
@@ -621,7 +783,8 @@ describe('app server', () => {
       },
     });
 
-    const secondTouchResponse = await app.request(
+    const secondTouchResponse = await requestApp(
+      app,
       'http://localhost/api/session/touch',
       {
         method: 'POST',
@@ -631,7 +794,7 @@ describe('app server', () => {
       },
     );
     const updatedCookie = firstCookie(secondTouchResponse);
-    const infoResponse = await app.request('http://localhost/api/session', {
+    const infoResponse = await requestApp(app, 'http://localhost/api/session', {
       headers: {
         cookie: updatedCookie,
       },
@@ -646,12 +809,16 @@ describe('app server', () => {
       },
     });
 
-    const deleteResponse = await app.request('http://localhost/api/session', {
-      method: 'DELETE',
-      headers: {
-        cookie: updatedCookie,
+    const deleteResponse = await requestApp(
+      app,
+      'http://localhost/api/session',
+      {
+        method: 'DELETE',
+        headers: {
+          cookie: updatedCookie,
+        },
       },
-    });
+    );
 
     expect(deleteResponse.status).toBe(200);
     expect(deleteResponse.headers.get('set-cookie')).toContain('Max-Age=0');
@@ -671,7 +838,7 @@ describe('app server', () => {
       new File(['Hello world'], 'hello.txt', { type: 'text/plain' }),
     );
 
-    const response = await app.request('http://localhost/api/upload', {
+    const response = await requestApp(app, 'http://localhost/api/upload', {
       method: 'POST',
       body,
     });
@@ -695,7 +862,7 @@ describe('app server', () => {
     const body = new FormData();
     body.set('file', 'not-a-file');
 
-    const response = await app.request('http://localhost/api/upload', {
+    const response = await requestApp(app, 'http://localhost/api/upload', {
       method: 'POST',
       body,
     });
@@ -722,7 +889,7 @@ describe('app server', () => {
       new File(['Hello world'], 'hello world.txt', { type: 'text/plain' }),
     );
 
-    const response = await app.request('http://localhost/api/upload', {
+    const response = await requestApp(app, 'http://localhost/api/upload', {
       method: 'POST',
       body,
     });
@@ -759,7 +926,8 @@ describe('app server', () => {
       nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
     });
 
-    const response = await app.request(
+    const response = await requestApp(
+      app,
       'http://localhost/v2/api/systemSettings:get',
     );
 
@@ -778,7 +946,8 @@ describe('app server', () => {
     const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
     const publicBasePath = runtime.config.app.publicBasePath;
 
-    const response = await app.request(
+    const response = await requestApp(
+      app,
       `http://localhost${publicBasePath}/api/healthz`,
     );
 
@@ -798,7 +967,8 @@ describe('app server', () => {
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
-    const response = await app.request(
+    const response = await requestApp(
+      app,
       `http://localhost${runtime.config.app.publicBasePath}/api/routes-example`,
     );
 
@@ -816,15 +986,19 @@ describe('app server', () => {
     });
     const app = trackCloseable(await createStandaloneServer({ viteDevUrl }));
 
-    const redirectResponse = await app.request('http://localhost/main/', {
+    const redirectResponse = await requestApp(app, 'http://localhost/main/', {
       headers: { Accept: 'text/html' },
     });
     expect(redirectResponse.status).toBe(302);
     expect(redirectResponse.headers.get('Location')).toBe('/main/install');
 
-    const installResponse = await app.request('http://localhost/main/install', {
-      headers: { Accept: 'text/html' },
-    });
+    const installResponse = await requestApp(
+      app,
+      'http://localhost/main/install',
+      {
+        headers: { Accept: 'text/html' },
+      },
+    );
     expect(installResponse.status).toBe(200);
     expect(installResponse.headers.get('Location')).toBeNull();
     await expect(installResponse.text()).resolves.toContain(
@@ -838,7 +1012,8 @@ describe('app server', () => {
     const app = trackCloseable(
       await createStandaloneServer({ viteDevUrl: false }),
     );
-    const response = await app.request(
+    const response = await requestApp(
+      app,
       `http://localhost${runtime.config.app.publicBasePath}/queue-example`,
     );
 
@@ -866,11 +1041,12 @@ describe('app server', () => {
       basePath: publicBasePath,
     };
 
-    const rootHealth = await app.request('http://localhost/healthz');
-    const appHealth = await app.request(
+    const rootHealth = await requestApp(app, 'http://localhost/healthz');
+    const appHealth = await requestApp(
+      app,
       `http://localhost${publicBasePath}/api/healthz`,
     );
-    const bareLocalApi = await app.request('http://localhost/api/healthz');
+    const bareLocalApi = await requestApp(app, 'http://localhost/api/healthz');
 
     await expect(appHealth.json()).resolves.toEqual(expectedHealth);
     expect(rootHealth.status).toBe(404);
@@ -981,7 +1157,7 @@ describe('app server', () => {
     const publicBasePath = runtime.config.app.publicBasePath;
     const requestPath = `${publicBasePath}/settings?tab=apps`;
 
-    const response = await app.request(`http://localhost${requestPath}`, {
+    const response = await requestApp(app, `http://localhost${requestPath}`, {
       headers: {
         origin: 'http://localhost',
         referer: `http://localhost${publicBasePath}/`,
@@ -1026,7 +1202,7 @@ describe('app server', () => {
       },
     });
 
-    const response = await app.request('http://localhost/settings');
+    const response = await requestApp(app, 'http://localhost/settings');
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -1064,7 +1240,7 @@ describe('app server', () => {
       },
     });
 
-    const response = await app.request('http://localhost/assets/index.js');
+    const response = await requestApp(app, 'http://localhost/assets/index.js');
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe(
@@ -1097,7 +1273,10 @@ describe('app server', () => {
       },
     });
 
-    const response = await app.request('http://localhost/assets/missing.js');
+    const response = await requestApp(
+      app,
+      'http://localhost/assets/missing.js',
+    );
 
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
@@ -1305,6 +1484,8 @@ interface CreateTestAppOptions {
   drive?: AppDriveConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
+  pluginProviders?: CreateAppOptions['pluginProviders'];
+  pluginRoutes?: CreateAppOptions['pluginRoutes'];
   spa?: {
     indexPath?: string;
     runtime?: AppConfig['spa']['runtime'];
@@ -1335,7 +1516,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
     caching: options.caching ?? createDefaultCachingConfig(),
     database: {
-      default: 'main',
+      default: 'none',
       connections: {},
       migrations: {
         directory: '',
@@ -1350,6 +1531,9 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
+    snowflake: {
+      workerId: 0,
+    },
     server: {
       host: '127.0.0.1',
       port: 0,
@@ -1368,18 +1552,54 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   } as AppConfig;
   const runtime: AppRuntime<AppConfig> = {
     config,
-    database:
-      options.database === false
-        ? undefined
-        : (options.database ?? createMockDatabase([])),
-    runMigrations: () => Promise.resolve(undefined),
-    runSeeds: () => Promise.resolve(undefined),
-    dispose: () => Promise.resolve(),
+    paths: createConfigPaths({ rootDir: process.cwd() }),
   };
+  const database =
+    options.database === false
+      ? undefined
+      : (options.database ?? createMockDatabase([]));
+  class TestDatabaseProvider extends ServiceProvider<AppRuntime<AppConfig>> {
+    public readonly name: string = 'test-database';
+
+    public override register(): void {
+      if (database) {
+        this.context.serviceContainer.instance(databaseManagerToken, database);
+      }
+    }
+
+    public override async shutdown(): Promise<void> {
+      await database?.destroy();
+    }
+  }
   const lifecycle = createAppDisposerRegistry();
-  const app = Object.assign(createApp(runtime, { lifecycle }), {
-    close: () => lifecycle.disposeAll(),
-  });
+  const app = Object.assign(
+    createApp(runtime, {
+      lifecycle,
+      pluginProviders: [
+        ...(database
+          ? [
+              {
+                packageName: '@nocobase/app-plugin-test-database',
+                Provider: TestDatabaseProvider,
+              },
+            ]
+          : []),
+        {
+          packageName: '@nocobase/app-plugin-authentication',
+          Provider: AuthenticationProvider,
+        },
+        {
+          packageName: '@nocobase/app-plugin-authorization',
+          Provider: AuthorizationProvider,
+        },
+        ...(options.pluginProviders ?? []),
+      ],
+      pluginRoutes: options.pluginRoutes,
+    }),
+    {
+      close: () => lifecycle.disposeAll(),
+    },
+  );
 
   return trackCloseable(app);
 }
@@ -1403,6 +1623,37 @@ function createEmbeddedTestScope(
       lifecycle.registerDisposer(name, dispose);
     },
   };
+}
+
+function createEmbeddedPluginFixture(rootDir: string): void {
+  const pluginPackages = [
+    '@nocobase/app-plugin-authentication',
+    '@nocobase/app-plugin-authorization',
+  ];
+  writeFileSync(
+    path.join(rootDir, 'package.json'),
+    JSON.stringify({
+      name: '@nocobase/app-template-test',
+      nocobase: {
+        plugins: Object.fromEntries(
+          pluginPackages.map((packageName) => [packageName, { enabled: true }]),
+        ),
+      },
+    }),
+  );
+
+  for (const packageName of pluginPackages) {
+    const packageRoot = path.dirname(
+      require.resolve(`${packageName}/package.json`),
+    );
+    const target = path.join(
+      rootDir,
+      'node_modules',
+      ...packageName.split('/'),
+    );
+    mkdirSync(path.dirname(target), { recursive: true });
+    symlinkSync(packageRoot, target, 'dir');
+  }
 }
 
 function trackCloseable<T extends CloseableResource>(resource: T): T {

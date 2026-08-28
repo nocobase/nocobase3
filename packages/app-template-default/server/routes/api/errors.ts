@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 
 import type { Logger } from '@nocobase/logging';
 
-import { AppServiceError } from '@/services/errors.js';
+import { AppError } from '../../errors.js';
 
 export interface ApiErrorHandlerOptions {
   logger: Logger;
@@ -10,7 +10,7 @@ export interface ApiErrorHandlerOptions {
 
 export function createApiErrorHandler(options: ApiErrorHandlerOptions) {
   return (error: Error, c: Context): Response => {
-    if (error instanceof AppServiceError) {
+    if (error instanceof AppError) {
       return c.json(
         {
           error: error.message,

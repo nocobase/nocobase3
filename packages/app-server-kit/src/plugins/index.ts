@@ -1,43 +1,24 @@
 import type { Hono } from 'hono';
-import type { ConfigPaths } from '../config/types.js';
+import type {
+  ServiceProviderConstructor,
+  ServiceResolver,
+} from '@nocobase/service-provider';
+import type { AppRuntime } from '../runtime/index.js';
+import type { ConfigPaths } from '../config/index.js';
 
-export interface AppPluginRoutesContext<
-  TDeps = unknown,
-  TServices = unknown,
-  TConfig = unknown,
-> {
-  readonly app: Hono;
+export type AppPluginProviderConstructor<TConfig = unknown> =
+  ServiceProviderConstructor<AppRuntime<TConfig>>;
+
+export interface AppPluginRoutesContext<TConfig = unknown> {
+  readonly appName: string;
+  readonly publicBasePath: string;
   readonly config: TConfig;
-  readonly deps: TDeps;
-  readonly services: TServices;
   readonly paths: ConfigPaths;
+  readonly router: Hono;
+  readonly runtime: AppRuntime<TConfig>;
+  readonly serviceContainer: ServiceResolver;
 }
 
-export type AppPluginDisposer = () => void | Promise<void>;
-
-export interface AppPluginLifecycle {
-  registerDisposer(name: string, dispose: AppPluginDisposer): void;
-}
-
-export interface AppPluginServerContext<
-  TDeps = unknown,
-  TServices = unknown,
-  TConfig = unknown,
-> {
-  readonly config: TConfig;
-  readonly deps: TDeps;
-  readonly services: TServices;
-  readonly lifecycle: AppPluginLifecycle;
-}
-
-export type AppPluginBootstrap<
-  TDeps = unknown,
-  TServices = unknown,
-  TConfig = unknown,
-> = (context: AppPluginServerContext<TDeps, TServices, TConfig>) => void;
-
-export type AppPluginRoutesRegistrar<
-  TDeps = unknown,
-  TServices = unknown,
-  TConfig = unknown,
-> = (context: AppPluginRoutesContext<TDeps, TServices, TConfig>) => void;
+export type AppPluginRoutesRegistrar<TConfig = unknown> = (
+  context: AppPluginRoutesContext<TConfig>,
+) => void;

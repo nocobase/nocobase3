@@ -21,7 +21,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint . --max-warnings 0",
@@ -33,6 +34,7 @@
   },
   "dependencies": {
     "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {

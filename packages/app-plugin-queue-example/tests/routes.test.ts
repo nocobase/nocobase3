@@ -1,5 +1,11 @@
 import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
+import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
+import { ServiceContainer } from '@nocobase/service-provider';
+import {
+  createQueueManager,
+  createSyncQueueConfig,
+  queueManagerToken,
+} from '@nocobase/queue';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -24,17 +30,19 @@ describe('queue example plugin routes', () => {
         }),
     });
     managers.push(queueManager);
-    const app = new Hono();
+    const router = new Hono();
+    const serviceContainer = new ServiceContainer();
+    serviceContainer.instance(queueManagerToken, queueManager);
 
     registerRoutes({
-      app,
-      config: undefined,
-      deps: { queueManager },
-      paths: createConfigPaths({ rootDir: '/missing' }),
-      services: undefined,
+      appName: 'main',
+      publicBasePath: '/main',
+      router,
+      runtime: createTestRuntime(),
+      serviceContainer,
     });
 
-    const response = await app.request('/queue-example');
+    const response = await router.request('/queue-example');
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -52,3 +60,10 @@ describe('queue example plugin routes', () => {
     ]);
   });
 });
+
+function createTestRuntime(): AppRuntime<undefined> {
+  return {
+    config: undefined,
+    paths: createConfigPaths({ rootDir: '/missing' }),
+  };
+}
