@@ -13,7 +13,8 @@
     "database/**/*.ts",
     "server/**/*.ts",
     "client/**/*.ts",
-    "client/**/*.tsx"
+    "client/**/*.tsx",
+    "../app-portal-sdk/src/env.d.ts"
   ],
   "exclude": ["tests", "registry"]
 }

@@ -10,20 +10,6 @@ import { nocobaseClient } from '@nocobase/app-portal-sdk/client';
 import { resolvePortalUrl } from '@nocobase/app-portal-sdk/runtime';
 
 declare global {
-  interface ImportMeta {
-    readonly env?: {
-      readonly BASE_URL?: string;
-      readonly API_CLIENT_SHARE_TOKEN?: string;
-      readonly API_CLIENT_STORAGE_PREFIX?: string;
-      readonly API_CLIENT_STORAGE_TYPE?: string;
-      readonly NOCOBASE_API_TOKEN?: string;
-      readonly NOCOBASE_API_URL?: string;
-      readonly NOCOBASE_AUTHENTICATOR?: string;
-      readonly NOCOBASE_WS_PATH?: string;
-      readonly NOCOBASE_WS_URL?: string;
-    };
-  }
-
   interface Window {
     NOCOBASE_API_URL?: string;
     NOCOBASE_PORTAL_BASE?: string;

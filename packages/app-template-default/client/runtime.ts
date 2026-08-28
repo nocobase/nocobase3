@@ -41,9 +41,10 @@ export interface CreateAppRuntimeOptions {
 interface LoadedClientContribution {
   readonly packageName: string;
   readonly source: AppClientContributionSource;
-  readonly bootstrap?: AppClientBootstrap;
+  readonly bootstrap?: AppClientBootstrap<unknown>;
   readonly providers?: readonly AppClientProviderDefinition[];
   readonly routes?: readonly AppClientRouteDefinition[];
+  readonly options: unknown;
 }
 
 export async function createAppRuntime(
@@ -68,6 +69,7 @@ export async function createAppRuntime(
         packageName: contribution.packageName,
         refine: refineCollector.forContribution(contribution.packageName),
         source: contribution.source,
+        options: contribution.options,
       });
     } catch (error) {
       throw new Error(
@@ -158,6 +160,7 @@ async function loadClientContribution(
     bootstrap,
     routes,
     providers,
+    options: contribution.options ?? {},
   });
 }
 
@@ -165,16 +168,16 @@ async function loadBootstrap(
   contribution:
     | AppClientApplicationLoader
     | (AppClientPluginLoader & { readonly source: 'plugin' }),
-): Promise<AppClientBootstrap | undefined> {
-  if (!contribution.loadBootstrap) {
+): Promise<AppClientBootstrap<unknown> | undefined> {
+  if (!contribution.bootstrap) {
     return undefined;
   }
   try {
-    const module = await contribution.loadBootstrap();
+    const module = await contribution.bootstrap();
     if (typeof module.default !== 'function') {
       throw new Error('The bootstrap entry must default-export a function.');
     }
-    return module.default;
+    return module.default as AppClientBootstrap<unknown>;
   } catch (error) {
     throw new Error(
       `Failed to load client bootstrap for ${contribution.source} "${contribution.packageName}".`,
@@ -188,15 +191,23 @@ async function loadRoutes(
     | AppClientApplicationLoader
     | (AppClientPluginLoader & { readonly source: 'plugin' }),
 ): Promise<readonly AppClientRouteDefinition[] | undefined> {
-  if (!contribution.loadRoutes) {
+  if (!contribution.routes) {
     return undefined;
   }
   try {
-    const module = await contribution.loadRoutes();
-    const definitions: unknown = module.default;
+    const module = await contribution.routes();
+    const exported: unknown = module.default;
+    const definitions: unknown =
+      typeof exported === 'function'
+        ? (
+            exported as (
+              options: unknown,
+            ) => readonly AppClientRouteDefinition[]
+          )(contribution.options ?? {})
+        : exported;
     if (!isRouteDefinitions(definitions)) {
       throw new Error(
-        'The client routes entry must default-export a route definition array.',
+        'The client routes entry must default-export a route definition array, or a function returning one.',
       );
     }
     return definitions;
@@ -213,15 +224,23 @@ async function loadProviders(
     | AppClientApplicationLoader
     | (AppClientPluginLoader & { readonly source: 'plugin' }),
 ): Promise<readonly AppClientProviderDefinition[] | undefined> {
-  if (!contribution.loadProviders) {
+  if (!contribution.providers) {
     return undefined;
   }
   try {
-    const module = await contribution.loadProviders();
-    const definitions: unknown = module.default;
+    const module = await contribution.providers();
+    const exported: unknown = module.default;
+    const definitions: unknown =
+      typeof exported === 'function'
+        ? (
+            exported as (
+              options: unknown,
+            ) => readonly AppClientProviderDefinition[]
+          )(contribution.options ?? {})
+        : exported;
     if (!isProviderDefinitions(definitions)) {
       throw new Error(
-        'The client providers entry must default-export a provider definition array.',
+        'The client providers entry must default-export a provider definition array, or a function returning one.',
       );
     }
     return definitions;

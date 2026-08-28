@@ -225,7 +225,12 @@ const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
 const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
 const workflowBuild = spawn.sync(
   'tsx',
-  ['--tsconfig', 'tsconfig.node.json', 'scripts/build-workflows.ts'],
+  [
+    '--conditions=source',
+    '--tsconfig',
+    'tsconfig.node.json',
+    'scripts/build-workflows.ts',
+  ],
   { cwd: rootDir, env: nextEnv, stdio: 'inherit' },
 );
 if (workflowBuild.error) throw workflowBuild.error;
