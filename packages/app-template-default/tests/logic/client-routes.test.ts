@@ -33,6 +33,26 @@ describe('app client routes', () => {
           './client/extensions/nocobase-auth-ui/pages/reset-password-page',
         routeId: '@nocobase/app-plugin-authentication:reset-password',
       },
+      {
+        componentEntry:
+          './client/extensions/nocobase-workflow-management/pages',
+        routeId: '@nocobase/app-plugin-workflow:workflow-list',
+      },
+      {
+        componentEntry:
+          './client/extensions/nocobase-workflow-management/pages',
+        routeId: '@nocobase/app-plugin-workflow:workflow-detail',
+      },
+      {
+        componentEntry:
+          './client/extensions/nocobase-workflow-management/pages',
+        routeId: '@nocobase/app-plugin-workflow:workflow-run-list',
+      },
+      {
+        componentEntry:
+          './client/extensions/nocobase-workflow-management/pages',
+        routeId: '@nocobase/app-plugin-workflow:workflow-run-detail',
+      },
     ]);
     expect(routeComponentOverrides).toEqual([]);
   });

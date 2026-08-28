@@ -37,6 +37,9 @@ jobs:
     name: Publish beta
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.branch.outputs.name }}
+      merged: ${{ steps.merge.outputs.merged }}
     steps:
       - name: Check out develop
         uses: actions/checkout@v4
@@ -145,12 +148,8 @@ jobs:
           fi
           echo "$CHANGED"
 
-          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
-          {
-            echo "released<<RELEASED_EOF"
-            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
-            echo "RELEASED_EOF"
-          } >> "$GITHUB_OUTPUT"
+          # 发布清单留给飞书通知的表格用。单行 JSON，不需要 heredoc 定界符。
+          echo "rows=$(node scripts/list-package-versions.mjs --released-rows /tmp/versions-before.json)" >> "$GITHUB_OUTPUT"
 
       - name: Summarize
         run: |
@@ -316,11 +315,27 @@ jobs:
           STATUS: success
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases
+          TABLE_JSON: ${{ steps.changed.outputs.rows }}
           CONTENT: |
             版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm（dist-tag `beta`）。
 
             本次发布的 package：
-            ```
-            ${{ steps.changed.outputs.released }}
-            ```
         run: ./scripts/feishu-notify.sh
+
+  # npm 已经发布成功，tag 也推上去了，这里只是把这批发布渲染成 GitHub Release。
+  # 独立 job：它失败不该影响已经完成的发布，重跑或手动 dispatch 都能补上。
+  github-release:
+    name: Publish the GitHub Release
+    needs: release
+    # 合回 develop 失败时 release job 会被判定为失败，但 npm 已经发出去了、
+    # tag 也推上去了，这批发布该有的 Release 还是要建。
+    if: >-
+      !cancelled() && !inputs.dry_run
+      && needs.release.outputs.tag != ''
+      && (needs.release.result == 'success' || needs.release.outputs.merged == 'false')
+    uses: ./.github/workflows/github-release.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    permissions:
+      contents: write

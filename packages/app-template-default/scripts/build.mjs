@@ -26,6 +26,7 @@ const workspacePluginNames = configuredPluginNames.filter((packageName) => {
   return packageJson.name === packageName;
 });
 const serverEnvKeys = new Set([
+  'NODE_ENV',
   'APP_BASE_PATH',
   'APP_SERVER_HOST',
   'APP_SERVER_PORT',
@@ -68,6 +69,8 @@ const serverEnvKeys = new Set([
   'REDIS_PASSWORD',
   'REDIS_DB',
   'REDIS_TLS',
+  'WORKFLOW_ARTIFACT_DISK',
+  'WORKFLOW_SOURCE_RESOLVER_DIAGNOSTIC',
 ]);
 
 const run = (label, command, args) => {
@@ -123,6 +126,13 @@ run('Build database tasks', 'pnpm', [
   'tsc',
   '-p',
   'tsconfig.migrations.json',
+]);
+run('Build workflow artifacts', 'pnpm', [
+  'exec',
+  'tsx',
+  '--tsconfig',
+  'tsconfig.node.json',
+  './scripts/build-workflows.ts',
 ]);
 run('Rewrite database task path aliases', 'pnpm', [
   'exec',
