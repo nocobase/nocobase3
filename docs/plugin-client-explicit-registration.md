@@ -850,9 +850,9 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 两个盲区恰好落在「更新插件」这件事上：`pnpm update <plugin>` 是最常用的更新命令，不触发；monorepo 内插件源码变化不经过版本号，也不触发。挂上 postinstall 只能覆盖「新装 / 换版本」，却会让人以为同步是自动的，反而更容易漏。
 
-替代方案是 App 侧的 `pnpm plugin:update`（即 `nb3 app plugin-update`），把升级插件和同步 skills 合成一步。升级本来就是一个显式动作，同步挂在它上面比挂在 install 的副作用上更可靠。`--plugin` 指定插件并可重复，省略时升级全部已注册插件。
+替代方案是 App 侧的 `pnpm plugin:update`（即 `nb3 app plugin update`），把升级插件和同步 skills 合成一步。升级本来就是一个显式动作，同步挂在它上面比挂在 install 的副作用上更可靠。`--plugin` 指定插件并可重复，省略时升级全部已注册插件。
 
-在此之前，升级插件后手动跑一次同步：应用内 `pnpm plugin:skills:sync`（即 `nb3 app skills-sync`），本仓库内 `pnpm plugin:skills:sync`。
+只需要同步而不升级时，应用内跑 `pnpm plugin:skills:sync`（即 `nb3 app plugin skills sync`），本仓库内跑 `pnpm plugin:skills:sync`。
 
 同步实现本身仍需保持健壮：找不到 `.agents/skills/` 就静默跳过（大部分插件没有技能，不该刷警告），失败只输出警告而不中断调用方。
 
@@ -936,13 +936,13 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 根 `package.json`：加 `typescript: catalog:` 到 devDependencies，加 `plugin:skills:sync` 脚本。
 
-`lib/skills-sync.mjs` 从 `@nocobase/nb3-cli` 导入同步逻辑，只保留 workspace 的插件解析。CLI 侧新增 `src/lib/skills-sync.ts` 与 `src/commands/app/skills-sync.ts`。
+`lib/skills-sync.mjs` 从 `@nocobase/nb3-cli` 导入同步逻辑，只保留 workspace 的插件解析。CLI 侧新增 `src/lib/skills-sync.ts`、`src/lib/plugin-update.ts`，以及 `src/commands/app/plugin/` 下的 `update.ts` 与 `skills/sync.ts`。
 
 ### 9.5 独立应用侧
 
 | 位置                             | 改动                                                                   |
 | -------------------------------- | ---------------------------------------------------------------------- |
-| `packages/cli/src/commands/app/` | 新增 `skills-sync.ts`，注册为 `nb3 app skills:sync`                    |
+| `packages/cli/src/commands/app/` | 新增 `plugin/update.ts` 与 `plugin/skills/sync.ts`                     |
 | `packages/create-app`            | `.agents/` 纳入生成的 `.gitignore` 白名单（不挂 postinstall，见 §8.4） |
 | `packages/app-template-default`  | `files` 加入 `.agents`，使模板自带的技能随包发布                       |
 
@@ -968,12 +968,12 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 本文是设计稿，以下几处最终实现与文中描述不同，以实现为准：
 
-| 位置                | 本文                                  | 实现                                                                    |
-| ------------------- | ------------------------------------- | ----------------------------------------------------------------------- |
-| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现                |
-| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名               |
-| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 改为 `nb3 app skills-sync` 与 `nb3 app plugin-update`；不挂 postinstall |
-| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`                 |
+| 位置                | 本文                                  | 实现                                                                           |
+| ------------------- | ------------------------------------- | ------------------------------------------------------------------------------ |
+| §7.6 inspect 行数   | 约 100 行                             | 471 行，与改造前基本持平；收益是解析逻辑不再有第二份实现                       |
+| §7.6 覆盖来源标签   | `application (module options)`        | `application (plugin options)`，随 module → plugin 重命名                      |
+| §8.4 独立应用命令   | `nb3 app skills:sync` + `postinstall` | 改为 `nb3 app plugin update` 与 `nb3 app plugin skills sync`；不挂 postinstall |
+| §5.1 一致性校验测试 | 提议增加                              | 已实现，见 `tests/logic/client-plugin-registry.test.ts`                        |
 
 postinstall 经实测覆盖不到「更新插件」这条主路径，已决定不挂（§8.4）；改由 `pnpm plugin:update` 把升级与同步合并成一步，该命令已实现。
 

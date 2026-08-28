@@ -11,8 +11,8 @@ nb3 app create    创建本地 App 源码
 nb3 app dev       本地开发 App
 nb3 app info      查看 App 信息
 nb3 app config    查看或修改 App 配置
-nb3 app plugin-update  升级插件并同步其 skills
-nb3 app skills-sync  同步插件 skills 到 App
+nb3 app plugin update       升级插件并同步其 skills
+nb3 app plugin skills sync  同步插件 skills 到 App
 nb3 app destroy   删除本地 App
 nb3 app deploy    部署 App 到 Hub（待实现）
 nb3 app pull      从 Hub 拉取已有 App（待实现）
@@ -108,10 +108,10 @@ nb3 app config hub http://localhost:3000      # 修改
 升级插件包，然后把升级后插件带的 skills 同步进来：
 
 ```bash
-nb3 app plugin-update                                  # 升级全部已注册插件
-nb3 app plugin-update --plugin audit-log               # 只升级一个
-nb3 app plugin-update --plugin audit-log --plugin workflow
-nb3 app plugin-update --dry-run
+nb3 app plugin update                                  # 升级全部已注册插件
+nb3 app plugin update --plugin audit-log               # 只升级一个
+nb3 app plugin update --plugin audit-log --plugin workflow
+nb3 app plugin update --dry-run
 ```
 
 插件名可以用短名（`audit-log`）或完整包名（`@nocobase/app-plugin-audit-log`）。没有 `--plugin` 时升级 App 注册的全部插件。
@@ -125,9 +125,9 @@ skills 是复制进 App 的，不是运行时从 `node_modules` 读的，所以�
 插件把自己的 skills 放在 `.agents/skills/nocobase-<包名>/`，这条命令把它们复制到 App 的同名目录下：
 
 ```bash
-nb3 app skills-sync
-nb3 app skills-sync --plugin audit-log
-nb3 app skills-sync --dry-run
+nb3 app plugin skills sync
+nb3 app plugin skills sync --plugin audit-log
+nb3 app plugin skills sync --dry-run
 ```
 
 上游是唯一真相：每个同步过来的目录都会被整体替换，本地改动会丢失。需要自己写 skills 时，用一个不以 `nocobase-` 开头的目录名，同步不会碰它。

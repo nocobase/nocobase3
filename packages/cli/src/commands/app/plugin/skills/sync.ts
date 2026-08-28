@@ -6,7 +6,7 @@ import {
   formatSkillsSyncSummary,
   planSkillsSync,
   resolveInstalledPlugins,
-} from '../../lib/skills-sync.ts';
+} from '../../../../lib/skills-sync.ts';
 
 export default class AppSkillsSync extends Command {
   static override summary = "Copy plugin skills into the app's .agents/skills.";

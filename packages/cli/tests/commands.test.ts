@@ -17,9 +17,9 @@ const APP_COMMANDS = [
   'dev',
   'info',
   'list',
-  'plugin-update',
+  'plugin:skills:sync',
+  'plugin:update',
   'pull',
-  'skills-sync',
 ];
 const HUB_COMMANDS = [
   'create',

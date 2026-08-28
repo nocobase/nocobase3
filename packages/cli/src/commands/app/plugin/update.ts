@@ -1,14 +1,14 @@
 import { Command, Flags } from '@oclif/core';
 import path from 'node:path';
 
-import { planPluginUpdate } from '../../lib/plugin-update.ts';
-import { runAttached } from '../../lib/run-command.ts';
+import { planPluginUpdate } from '../../../lib/plugin-update.ts';
+import { runAttached } from '../../../lib/run-command.ts';
 import {
   applySkillsSync,
   formatSkillsSyncSummary,
   planSkillsSync,
   resolveInstalledPlugins,
-} from '../../lib/skills-sync.ts';
+} from '../../../lib/skills-sync.ts';
 
 export default class AppPluginUpdate extends Command {
   static override summary = 'Upgrade plugins and re-synchronize their skills.';
