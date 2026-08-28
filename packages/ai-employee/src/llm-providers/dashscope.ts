@@ -162,7 +162,7 @@ export class DashscopeEmbeddingProvider extends EmbeddingProvider {
 }
 
 export const dashscopeProviderOptions = {
-  title: '{{t("Dashscope", {ns: "ai"})}}',
+  title: 'Dashscope',
   supportedModel: [SupportedModel.LLM, SupportedModel.EMBEDDING],
   supportWebSearch: true,
   models: {
