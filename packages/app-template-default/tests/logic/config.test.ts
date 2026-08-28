@@ -708,7 +708,7 @@ describe('database config', () => {
 });
 
 describe('drive config', () => {
-  it('declares Laravel-style local, public, and S3 disks for Flydrive adapters', () => {
+  it('declares local and public disks without an unconfigured S3 disk', () => {
     const config = drive({
       env: createConfigEnv({}),
       paths: createConfigPaths({
@@ -728,18 +728,7 @@ describe('drive config', () => {
       visibility: 'public',
       url: '/storage',
     });
-    expect(config.disks.s3).toMatchObject({
-      driver: 's3',
-      bucket: '',
-      region: 'us-east-1',
-      forcePathStyle: false,
-      supportsACL: true,
-      credentials: {
-        accessKeyId: undefined,
-        secretAccessKey: undefined,
-      },
-      visibility: 'private',
-    });
+    expect(config.disks.s3).toBeUndefined();
     expect(config.links).toEqual({
       '/tmp/app-template-default/public/storage':
         '/tmp/app-template-default/storage/app/public',
@@ -787,6 +776,7 @@ describe('drive config', () => {
   it('falls back to private visibility for unsupported S3 visibility values', () => {
     const config = drive({
       env: createConfigEnv({
+        AWS_BUCKET: 'portal-assets',
         AWS_VISIBILITY: 'team',
       }),
       paths: createConfigPaths({
