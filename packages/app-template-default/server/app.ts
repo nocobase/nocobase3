@@ -97,10 +97,6 @@ export function createApp(
     });
   }
 
-  app.all('/api/*', () =>
-    Response.json({ error: 'Not found' }, { status: 404 }),
-  );
-
   registerNocoBaseApiProxyRoutes(app, {
     apiProxyPath: internalApiProxyPath,
     nocoBaseApiUrl,

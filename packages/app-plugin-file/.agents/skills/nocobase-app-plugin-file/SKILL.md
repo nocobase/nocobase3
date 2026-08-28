@@ -1,224 +1,44 @@
 ---
 name: nocobase-app-plugin-file
-description: Add file fields and attachment APIs to NocoBase 3 business modules using @nocobase/app-plugin-file, including standard schemas, one-to-one or one-to-many relations, createFileRoute, public files, expiring tokens, and copyable Registry UI.
+description: Add one-to-one or one-to-many file attachments to NocoBase 3 business modules with @nocobase/app-plugin-file. Use for file tables, scoped routes, access control, tokens, and reusable file UI.
 metadata:
-  short-description: Add file fields and attachment APIs to NocoBase 3 modules
+  short-description: Add file attachments to NocoBase 3 modules
 ---
 
-# File development
+# File attachments
 
-Use this Skill when a business module needs one-to-one or one-to-many file
-attachments. The module owns its tables, business Route, relation/form
-submission, and authorization. The file plugin supplies the stable storage,
-access, Route, client, and UI contracts.
+Use the plugin for storage, file access, scoped routes, client APIs, and reusable
+UI. The business module remains responsible for its tables, relations, route
+mounting, form submission, and authorization.
 
-Read the focused guides as needed: [quick start](../../../docs/quick-start.md),
-[data model](../../../docs/data-model.md), [Route API](../../../docs/route-api.md),
-[one-to-one recipe](../../../docs/recipes/one-to-one.md), and [one-to-many
-recipe](../../../docs/recipes/one-to-many.md). For business
-authorization, also read the [authorization development
-Skill](../../../../authorization/skills/authorization-development/SKILL.md).
+## Core rules
 
-## 1. Confirm prerequisites
+- Reuse the host's existing database, Drive manager, authentication,
+  authorization, base path, and token secret. Do not create a second connection
+  or a file-specific service registry.
+- Store stable metadata only. Never persist final URLs or access tokens.
+- Keep table names and scope fields in server code. Derive scope from validated
+  route parameters, and apply it to every list, read, create, and delete query.
+- Use a unique owner key for one-to-one relations and an indexed owner key for
+  one-to-many relations. Keep `UNIQUE (disk, key)` on every file table.
+- Protect management operations with the application's existing authorization
+  model. Public content and short-lived private token URLs follow the route's
+  configured visibility contract.
+- Keep Registry source limited to application-owned UI. It must not contain
+  database, Drive, token, or authorization logic.
 
-- Confirm `@nocobase/app-plugin-file` is installed and enabled.
-- In the server plugin context, confirm the existing dependencies expose
-  `deps.database`, `deps.driveManager`, `deps.auth`, and `deps.authz` (or the
-  application's equivalent existing authentication and authorization APIs).
-- Identify the business Route and its existing authorization resource/action.
-- Pass those existing server dependencies directly to `createFileRoute()`.
-  Do not add `AppServices.files`, a Service Registry, a mutable DI container,
-  or a second database/Drive connection.
+## References
 
-```ts
-const route = createFileRoute({
-  database: deps.database,
-  table: 'purchaseOrderAttachments',
-  scope: (context) => ({ orderId: context.req.param('orderId') }),
-  drive: deps.driveManager,
-  publicBasePath: config.app.publicBasePath,
-  defaultDisk: config.drive.default,
-  tokenSecret: config.session.secret,
-  audience: 'purchase-order-attachments',
-  auth: deps.auth.required(),
-});
-```
+Read only the guide needed for the current task:
 
-These dependencies stay in server composition code and are never exposed in
-browser bundles or HTTP payloads. A missing dependency must produce a clear
-unavailable error when the Route is used; it must not silently create a
-replacement connection.
+- Start an integration: [quick start](reference/quick-start.md)
+- Design tables and relations: [data model](reference/data-model.md)
+- Configure or review HTTP behavior: [Route API](reference/route-api.md)
+- Implement a single file relation: [one-to-one recipe](reference/recipes/one-to-one.md)
+- Implement multiple attachments: [one-to-many recipe](reference/recipes/one-to-many.md)
 
-## 2. Choose the relation shape
+For business authorization rules, also read the
+[authorization development Skill](../../../../authorization/skills/authorization-development/SKILL.md).
 
-- **One-to-one:** use a separate standard file table with one owner foreign
-  key, a unique constraint on that owner key, and a Route limit of `maxFiles: 1`.
-- **One-to-many:** use a separate standard file table with an indexed owner
-  foreign key and a Route limit that matches the business rule.
-- A global `files` table is optional. It is not required for either shape.
-
-Use logical relation names such as `avatar` and `attachments`; keep storage
-metadata in the file table and business ownership in the relation key.
-
-## 3. Use the standard file fields
-
-Every standard file table contains `id`, `disk`, `key`, `filename`, `mimeType`,
-`size`, `public`, `createdAt`, and `updatedAt`. Add `PRIMARY KEY (id)` and
-`UNIQUE (disk, key)`. Use an explicit `belongsTo` relation with a physical
-foreign-key field and `constraints(true)`; use `hasOne` or `hasMany` for the
-inverse logical relation. Add an owner index, and a unique owner constraint
-for one-to-one.
-
-Store stable metadata only. Never persist a final URL or access Token: URLs
-depend on the current app base path and private URLs expire.
-
-## 4. Create the Store safely
-
-The standard Route creates its database Store from a hard-coded table name and
-scope resolver. Resolve scope only from a validated server Route parameter:
-
-```ts
-const route = createFileRoute({
-  database: deps.database,
-  table: 'purchaseOrderAttachments',
-  scope: (context) => {
-    const raw = context.req.param('orderId');
-    const orderId = Number(raw);
-    if (!raw || !Number.isSafeInteger(orderId) || orderId < 1) {
-      throw new TypeError('A valid orderId is required.');
-    }
-    return { orderId };
-  },
-  order: { field: 'createdAt', direction: 'desc' },
-  // Continue with drive, auth, visibility, and limits below.
-});
-```
-
-The table and scope field names are server-owned constants. Never accept a
-table, scope name, disk, key, or ID from client body/query data. Use a custom
-`FileStore` only when the business schema is intentionally different from the
-standard shape; keep that adapter narrow and scoped.
-
-## 5. Register the file Route
-
-Mount `createFileRoute()` below the business API path and configure limits and
-visibility from server code:
-
-```ts
-const route = createFileRoute({
-  database: deps.database,
-  table: 'purchaseOrderAttachments',
-  scope: (context) => ({ orderId: context.req.param('orderId') }),
-  drive: deps.driveManager,
-  defaultDisk: config.drive.default,
-  publicBasePath: config.app.publicBasePath,
-  tokenSecret: config.session.secret,
-  audience: 'purchase-order-attachments',
-  auth: deps.auth.required(),
-  authorize: authorizePurchaseOrderFile,
-  visibility: { default: 'private', allowClientOverride: false },
-  limits: {
-    maxSize: 50 * 1024 * 1024,
-    maxFiles: 10,
-    mimeTypes: [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    ],
-  },
-});
-
-app.route('/api/purchase-orders/:orderId/attachments', route);
-```
-
-When this code runs from an app plugin route registrar, use the registrar's
-public app for the mount if Public content or Private Token URLs must work
-without the host's default API authentication. The normal plugin app is
-authenticated by the host; `createFileRoute()` still protects management
-operations with its configured `auth` middleware.
-
-`FileRouteAction` values mean: `list` lists the scoped records, `upload`
-creates an object and record, `read` returns metadata, `issue-token` creates a
-short-lived private content URL, and `delete` removes the record and object.
-The content GET is intentionally not a `FileRouteAction`: Public access or a
-valid Token authorizes it after the record is looked up.
-
-The `auth` middleware protects list, upload, metadata, Token issuance, and
-delete. The optional `authorize` callback is the business permission hook;
-reuse the application's existing authorization resource, action, identity, and
-record conditions. Do not create a file-specific ACL model.
-
-## 6. Public and Private access
-
-Route visibility defaults to Private. A client may submit `public=true|false`
-only when the Route explicitly sets `allowClientOverride: true`; otherwise
-visibility is server-owned. Public content still looks up the database record
-on every request, so deletion or changing `public` revokes the old URL.
-
-Private content requires the Token URL returned by `issue-token`. Tokens are
-short-lived, audience-bound, file-bound, and valid only for content GET. They
-do not authorize listing, uploading, deleting, or issuing another Token. Never
-turn Public into an infinite Token and never log Token values.
-
-## 7. Use the UI contracts
-
-The plugin runtime Demo is available without Registry installation. If the
-business UI needs source-level customization, install the `component-ui`
-Registry item. Install `page-ui` only when the application should own the Demo
-page override. The items are independently installable: `page-ui` uses the
-plugin's stable public client exports rather than importing `component-ui`.
-Registry source is application-owned UI; it does
-not install server code or migrations and must not contain database, Drive,
-Token, or security logic.
-
-```ts
-const client = createFilesClient({
-  endpoint: `/api/purchase-orders/${orderId}/attachments`,
-});
-
-<FileUploadField
-  client={client}
-  value={attachments}
-  onChange={setAttachments}
-  multiple
-  accept={['application/pdf']}
-  maxFiles={10}
-/>
-```
-
-The business form owns relation submission and persistence of the owner ID.
-Use the plugin client and components; do not call legacy storage action names
-or let UI code manage Tokens or storage paths.
-
-## 8. Delete and validate
-
-Version 1 deletes the database record and storage object. It does not assume
-soft delete, versions, reference counting, folders, or a recycle bin. Test the
-business boundary with focused allowed and denied cases, including:
-
-- upload and delete allowed for the intended role;
-- list, metadata, and content denied outside the owner scope;
-- Public content works without a Token but still fails after record removal;
-- Private content fails without a Token and succeeds with a valid Token;
-- expired, altered, wrong-audience, and wrong-file Tokens fail;
-- MIME, size, and maximum-file validation happen before storage writes. The
-  `maxFiles` check is best-effort under multi-node concurrency; one-to-one
-  relations require a database UNIQUE owner constraint. If a database create
-  fails after an object write, the object is compensated on a best-effort basis.
-
-## Completion checklist
-
-- [ ] Plugin is enabled and the existing server dependencies are available.
-- [ ] The relation and database constraints match one-to-one or one-to-many.
-- [ ] All standard fields, `(disk, key)` uniqueness, and owner constraints are present.
-- [ ] Store table and scope are server constants; IDs are validated.
-- [ ] `createFileRoute()` uses the existing host database and Drive dependencies.
-- [ ] Existing authorization protects every management action.
-- [ ] Visibility, MIME, size, and count policies are server-owned and tested.
-- [ ] Client/UI uses `createFilesClient` and `FileUploadField`; the business form owns relations.
-- [ ] Public/Private, Token, deletion, and denial tests pass.
-
-Do not add the discarded upload-intent/complete architecture, a generic
-service registry, direct storage-driver calls from business modules, or the
-legacy `storages:*` protocol. Do not edit `app-server-kit` to make a business
-module fit; use the existing `AppDeps.database` host capability.
+Do not use the legacy `storages:*` protocol, direct storage-driver calls from
+business modules, or an upload-intent/complete flow.

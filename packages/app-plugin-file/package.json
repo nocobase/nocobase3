@@ -87,7 +87,6 @@
     "CHANGELOG.md",
     "components.json",
     "database",
-    "docs",
     ".agents",
     "registry",
     "registry.config.json",

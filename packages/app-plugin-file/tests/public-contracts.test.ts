@@ -111,6 +111,13 @@ describe('file plugin public contracts', () => {
     expect(readFileSync(skillPath, 'utf8')).toContain(
       'name: nocobase-app-plugin-file',
     );
+    expect(packageJson.files).not.toContain('docs');
+    expect(existsSync('docs')).toBe(false);
+    expect(
+      existsSync(
+        '.agents/skills/nocobase-app-plugin-file/reference/quick-start.md',
+      ),
+    ).toBe(true);
     expect(existsSync('skills')).toBe(false);
   });
 });

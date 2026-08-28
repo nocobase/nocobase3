@@ -53,7 +53,8 @@ export function createApiRoutes({
   );
 
   const protectedRoutes = new Hono();
-  protectedRoutes.get('/apps', deps.auth.required(), createAppsHandler());
+  protectedRoutes.use('*', deps.auth.required());
+  protectedRoutes.get('/apps', createAppsHandler());
 
   api.onError(
     createApiErrorHandler({
