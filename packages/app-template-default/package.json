@@ -23,6 +23,12 @@
       "@nocobase/app-plugin-install": {
         "enabled": true
       },
+      "@nocobase/app-plugin-notification": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-notification-providers": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-notification-provider": {
         "enabled": true
       },
@@ -55,7 +61,9 @@
     "@nocobase/app-plugin-data-provider": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
+    "@nocobase/app-plugin-notification-providers": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
@@ -184,6 +192,7 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
     "migrate": "tsx --tsconfig tsconfig.server.json ./scripts/migrate.ts",
+    "notification:test": "tsx --tsconfig tsconfig.node.json ./scripts/notification-test.ts",
     "seed": "tsx --tsconfig tsconfig.server.json ./scripts/seed.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",

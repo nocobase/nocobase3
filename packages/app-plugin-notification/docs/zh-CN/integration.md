@@ -1,12 +1,12 @@
 ---
 title: '手动接入通知'
-description: '在 NocoBase 应用中手动接入 NotificationManager、站内信 Channel、SMTP Provider、路由和生命周期。'
-keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP'
+description: '在 NocoBase 应用中手动接入 NotificationManager、站内信、Email 与 IM Provider、路由和生命周期。'
+keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP,Resend,飞书,钉钉'
 ---
 
 # 手动接入通知
 
-通知包不会修改应用宿主，也不会在安装后自动创建 `NotificationManager`。你需要在自己的应用代码中完成 migrations、配置、Channel 与 Provider 注册、路由挂载和生命周期管理。
+如果宿主没有使用 NocoBase 的插件 bootstrap 约定，你需要在自己的应用代码中完成 migrations、配置、Channel 与 Provider 注册、路由挂载和生命周期管理。默认模板已经通过插件 bootstrap 创建 `NotificationManager`，通常只需要参考[配置通知 Provider](./configuration.md)填写环境变量。
 
 这套方式会让宿主明确决定启用哪些通知能力。只需要邮件时，不必创建站内信 store 和 router。
 
@@ -31,6 +31,9 @@ pnpm add @nocobase/app-plugin-notification \
       },
       "@nocobase/app-plugin-notification-in-app": {
         "enabled": true
+      },
+      "@nocobase/app-plugin-notification-providers": {
+        "enabled": true
       }
     }
   }
@@ -43,11 +46,11 @@ pnpm add @nocobase/app-plugin-notification \
 pnpm migrate
 ```
 
-这里的插件声明只用于发现 notification 和 in-app migrations，不会自动创建运行时。
+使用默认模板时，插件声明还会加载包内的 `server/bootstrap.ts` 和 `server/routes/index.ts`。Provider 插件会自动注册内置 definitions，并提供受登录保护的测试页面。如果你的宿主只读取 database manifest，那么继续按下面的步骤手动创建运行时和挂载路由。
 
 ## 第二步：创建配置
 
-配置由宿主读取并传给 `NotificationManager`。下面同时启用站内信和 SMTP 邮件：
+配置由宿主读取并传给 `NotificationManager`。下面同时启用站内信和 SMTP 邮件。Resend、飞书与钉钉的字段和环境变量见[配置通知 Provider](./configuration.md)：
 
 ```ts
 import {
@@ -108,10 +111,18 @@ import {
 } from '@nocobase/app-plugin-notification-in-app';
 import {
   createEmailChannelDefinition,
+  createResendProviderDefinition,
   createSmtpProviderDefinition,
   type EmailMessage,
   type EmailRecipient,
 } from '@nocobase/app-plugin-notification-providers';
+import {
+  createDingTalkWebhookProviderDefinition,
+  createFeishuWebhookProviderDefinition,
+  createImChannelDefinition,
+  type ImMessage,
+  type ImRecipient,
+} from '@nocobase/app-plugin-notification-providers/im';
 import type { Logger } from '@nocobase/logging';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 
@@ -125,6 +136,10 @@ interface AppNotificationChannels {
   readonly email: {
     readonly recipient: EmailRecipient;
     readonly message: EmailMessage;
+  };
+  readonly im: {
+    readonly recipient: ImRecipient;
+    readonly message: ImMessage;
   };
 }
 
@@ -153,7 +168,11 @@ export function createAppNotificationRuntime(options: {
         resolveUserEmail: options.resolveUserEmail,
       }),
     )
-    .registerProvider('email', createSmtpProviderDefinition());
+    .registerProvider('email', createSmtpProviderDefinition())
+    .registerProvider('email', createResendProviderDefinition())
+    .registerChannel(createImChannelDefinition())
+    .registerProvider('im', createFeishuWebhookProviderDefinition())
+    .registerProvider('im', createDingTalkWebhookProviderDefinition());
 
   const manager = createNotificationManager<AppNotificationChannels>({
     database: options.database,
@@ -167,7 +186,7 @@ export function createAppNotificationRuntime(options: {
 }
 ```
 
-如果不需要站内信，可以删除 `inAppStore`、`in-app` Channel 和 database Provider。邮件也可以用同样方式按需移除。
+如果不需要站内信，可以删除 `inAppStore`、`in-app` Channel 和 database Provider。Email 与 IM definitions 也可以按需移除。只注册 definitions 不会发送消息；只有配置中启用相应 Provider，并调用 `send()` 后才会发生外部请求。
 
 ## 第四步：挂载路由
 
@@ -249,6 +268,6 @@ pnpm registry materialize \
 ## 相关链接
 
 - [通知概览](./overview.md)——了解 Notification、Delivery 和 Attempt
-- [配置通知](./configuration.md)——调整 Channel 和 Provider 配置
+- [配置通知](./configuration.md)——配置 SMTP、Resend、飞书和钉钉
 - [发送通知](./sending.md)——使用 `NotificationManager.send()`
 - [通知日志](./logs.md)——查询 Delivery 和 Attempt

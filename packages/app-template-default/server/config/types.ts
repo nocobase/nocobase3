@@ -6,6 +6,7 @@ import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 import type { AppAuthConfig } from './auth.js';
 import type { ResolvedAppPlugin } from '../plugins/index.js';
+import type { AppNotificationConfig } from './notification.js';
 
 export interface AppRoutingConfig {
   name: string;
@@ -41,6 +42,7 @@ export interface AppConfig {
   database: AppDatabaseConfig;
   drive: AppDriveConfig;
   logging: LoggingConfig;
+  notification: AppNotificationConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
   server: AppServerConfig;

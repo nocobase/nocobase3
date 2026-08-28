@@ -4,6 +4,7 @@ import caching from './caching.js';
 import database from './database.js';
 import drive from './drive.js';
 import logging from './logging.js';
+import notification from './notification.js';
 import queue from './queue.js';
 import session from './session.js';
 import server from './server.js';
@@ -17,6 +18,7 @@ const config: {
   database: typeof database;
   drive: typeof drive;
   logging: typeof logging;
+  notification: typeof notification;
   queue: typeof queue;
   session: typeof session;
   server: typeof server;
@@ -28,6 +30,7 @@ const config: {
   database: database,
   drive: drive,
   logging: logging,
+  notification: notification,
   queue: queue,
   session: session,
   server: server,

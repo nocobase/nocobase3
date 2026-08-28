@@ -1348,6 +1348,10 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
     drive: options.drive,
     logging: createSilentLoggingConfig(),
+    notification: {
+      channels: [],
+      test: { enabled: true, emailRecipient: undefined },
+    },
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
     server: {
