@@ -1,4 +1,5 @@
 export * from './channel-manager.js';
+export * from './bootstrap.js';
 export * from './logs.js';
 export * from './manager.js';
 export * from './registry.js';

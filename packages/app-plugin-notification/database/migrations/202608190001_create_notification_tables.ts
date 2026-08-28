@@ -6,7 +6,7 @@ import {
 const migration: MigrationDefinition = defineMigration({
   name: '202608190001_create_notification_tables',
   async up({ builder }) {
-    await builder.createCollection('notifications', (table) => {
+    await builder.createCollection('notificationDispatches', (table) => {
       table.string('id', { length: 36 }).primary();
       table.string('sourceType', { length: 100 }).notNull();
       table.string('sourceReferenceId', { length: 191 }).nullable();
@@ -60,7 +60,7 @@ const migration: MigrationDefinition = defineMigration({
   async down({ builder }) {
     await builder.dropCollection('notificationDeliveryAttempts');
     await builder.dropCollection('notificationDeliveries');
-    await builder.dropCollection('notifications');
+    await builder.dropCollection('notificationDispatches');
   },
 });
 

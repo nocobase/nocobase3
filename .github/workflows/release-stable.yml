@@ -49,6 +49,11 @@ jobs:
     name: Publish from main
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      # 场景 A 的 tag 是转正时打的，场景 B 是这次新建的。
+      tag: ${{ steps.batch.outputs.name }}
+      merged: ${{ steps.merge.outputs.merged }}
+      needs_version: ${{ steps.mode.outputs.needs_version }}
     steps:
       - name: Check out the release branch
         uses: actions/checkout@v4
@@ -149,10 +154,12 @@ jobs:
         run: |
           node scripts/list-package-versions.mjs > /tmp/versions-before.json
 
-      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导（分支合并后会被删除）。
-      - name: Create release branch
-        if: steps.mode.outputs.needs_version == 'true'
-        id: branch
+      # 批次号两种场景都要算 —— 聚合 tag 只在这里打，转正阶段不再打。
+      #
+      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导而不是从分支：分支合并后
+      # 会被删除，只看分支会让序号回退并与已发布的版本重复。tag 是长期记录。
+      - name: Allocate the release batch
+        id: batch
         run: |
           git fetch --tags --force
           DAY=$(date -u +%Y-%m-%d)
@@ -164,13 +171,20 @@ jobs:
           done
           SEQ=$((MAX + 1))
           BATCH="${DAY}.${SEQ}"
-          NAME="release/${BATCH}"
-          git checkout -b "$NAME"
           {
-            echo "name=$NAME"
-            echo "batch=$BATCH"
+            echo "name=release/${BATCH}"
+            echo "value=$BATCH"
           } >> "$GITHUB_OUTPUT"
           echo "Version: $BATCH"
+
+      # 场景 B 独有：版本号要在临时发版分支上算，再 PR 合回。
+      # 场景 A 的版本号已经在 main 上了，没有需要合回的东西。
+      - name: Create release branch
+        if: steps.mode.outputs.needs_version == 'true'
+        id: branch
+        run: |
+          git checkout -b "${{ steps.batch.outputs.name }}"
+          echo "name=${{ steps.batch.outputs.name }}" >> "$GITHUB_OUTPUT"
 
       - name: Version
         if: steps.mode.outputs.needs_version == 'true'
@@ -194,12 +208,8 @@ jobs:
           fi
           echo "$CHANGED"
 
-          # 发布清单留给飞书通知用。多行值要走 heredoc 定界符。
-          {
-            echo "released<<RELEASED_EOF"
-            node scripts/list-package-versions.mjs --released /tmp/versions-before.json
-            echo "RELEASED_EOF"
-          } >> "$GITHUB_OUTPUT"
+          # 发布清单留给飞书通知的表格用。单行 JSON，不需要 heredoc 定界符。
+          echo "rows=$(node scripts/list-package-versions.mjs --released-rows /tmp/versions-before.json)" >> "$GITHUB_OUTPUT"
 
       # main 上不应产生预发布版本号。出现了说明 changeset 写错了。
       - name: Verify no prerelease versions
@@ -230,15 +240,28 @@ jobs:
         run: echo "dry_run=true — stopping here."
 
       # ── 场景 B 独有：提交版本号变更并推发版分支 ────────────────────
-      - name: Commit, tag and push release branch
+      - name: Commit and push release branch
         if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
         run: |
-          NAME="${{ steps.branch.outputs.name }}"
           git add -A
-          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
+          git commit -m "chore: release ${{ steps.batch.outputs.value }}"
+          git push origin "refs/heads/${{ steps.branch.outputs.name }}:refs/heads/${{ steps.branch.outputs.name }}"
+
+      # 两种场景共用：聚合 tag 打在即将 publish 的这个 commit 上。
+      #
+      # 必须在 publish 之前打：publish 会为每个实际发出去的 package 在 HEAD 上
+      # 打 name@version tag，聚合 tag 和它们落在同一个 commit，之后就能用
+      # `git tag --points-at` 读回「这批发了哪些包」。GitHub Release 靠的就是这个。
+      #
+      # 场景 B 里 tag 与发版分支同名，同名期间必须用完整 refspec ——
+      # `git push origin <name>` 会报 src refspec matches more than one。
+      - name: Tag the release
+        if: '!inputs.dry_run'
+        run: |
+          NAME="${{ steps.batch.outputs.name }}"
           git tag "$NAME"
-          git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
           git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
+          echo "Tagged $(git rev-parse --short HEAD) as $NAME"
 
       # ── 两种场景共用：发布 ────────────────────────────────────────
       - name: Publish to npm
@@ -265,8 +288,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
-            --title "chore: release ${{ steps.branch.outputs.batch }}" \
-            --body "Stable release \`${{ steps.branch.outputs.batch }}\` published to npm under the \`latest\` dist-tag. Per-package versions are in the workflow summary." \
+            --title "chore: release ${{ steps.batch.outputs.value }}" \
+            --body "Stable release \`${{ steps.batch.outputs.value }}\` published to npm under the \`latest\` dist-tag. Per-package versions are in the GitHub Release." \
             --base "${{ inputs.branch }}" \
             --head "${{ steps.branch.outputs.name }}")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -296,7 +319,7 @@ jobs:
           git checkout -B develop origin/develop
 
           set +e
-          git merge --no-ff origin/main -m "chore: sync ${{ steps.branch.outputs.batch }} into develop"
+          git merge --no-ff origin/main -m "chore: sync ${{ steps.batch.outputs.value }} into develop"
           MERGE_RC=$?
           set -e
 
@@ -327,7 +350,7 @@ jobs:
               echo "synced=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            git commit -m "chore: sync ${{ steps.branch.outputs.batch }} into develop"
+            git commit -m "chore: sync ${{ steps.batch.outputs.value }} into develop"
           fi
 
           # 合并不该带走 develop 的 pre 状态。带走了说明合进来的内容有问题，
@@ -353,7 +376,7 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.branch.outputs.batch }}** 已成功发布到 npm（dist-tag `latest`）。
+            版本 **${{ steps.batch.outputs.value }}** 已成功发布到 npm（dist-tag `latest`）。
 
             但版本提交合回 `main` 时发生冲突，需要人工解决：
             ${{ steps.merge.outputs.url }}
@@ -374,7 +397,7 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.branch.outputs.batch }}** 已发布到 npm 并合进 `main`。
+            版本 **${{ steps.batch.outputs.value }}** 已发布到 npm 并合进 `main`。
 
             但同步到 `develop` 时有无法自动解决的冲突（源码冲突）。
             远端 `develop` 未被修改，在本地执行：
@@ -402,13 +425,29 @@ jobs:
           STATUS: success
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases
+          TABLE_JSON: ${{ steps.changed.outputs.rows }}
           CONTENT: |
             已发布到 npm（dist-tag `latest`）。
 
-            本次发布的 package：
-            ```
-            ${{ steps.changed.outputs.released || '版本号由 merge-beta-to-stable 写好，清单见 workflow summary' }}
-            ```
+            ${{ steps.changed.outputs.rows && '本次发布的 package：' || '本次发布的 package 见 GitHub Release。' }}
 
             ${{ steps.sync.outputs.synced == 'true' && '补丁已同步到 develop。' || '' }}
         run: ./scripts/feishu-notify.sh
+
+  # 与 release-beta 一样：把这批发布渲染成 GitHub Release。
+  # 场景 A 用转正时打的聚合 tag，场景 B 用这次新建的。
+  github-release:
+    name: Publish the GitHub Release
+    needs: release
+    # 合回 main 失败时 release job 是失败的，但 npm 已经发出去了，
+    # Release 还是要建。
+    if: >-
+      !cancelled() && !inputs.dry_run
+      && needs.release.outputs.tag != ''
+      && (needs.release.result == 'success' || needs.release.outputs.merged == 'false')
+    uses: ./.github/workflows/github-release.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    permissions:
+      contents: write
