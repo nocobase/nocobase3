@@ -31,7 +31,7 @@ packages/app-plugin-audit-log/
 └── tsconfig.json
 ```
 
-脚手架不生成 `src/`。`client/plugin.ts` 是 App 注册这个插件时的入口，另外三个入口默认都是空贡献，注册插件后不会自动增加页面或 Provider。可以在创建时指定展示名称和描述：
+脚手架不生成 `src/`。`client/plugin.ts` 定义注册面，并由 `client/index.ts` 作为 default 重新导出——App 注册这个插件时 import 的是 `<包名>/client`。另外三个入口默认都是空贡献，注册插件后不会自动增加页面或 Provider。可以在创建时指定展示名称和描述：
 
 ```bash
 pnpm plugin:create audit-log \
@@ -71,7 +71,7 @@ pnpm plugin:register audit-log --app app-template-default
 第二处是 `client/plugins.ts`，命令会插入一条 import 和一个数组项：
 
 ```ts
-import auditLog from '@nocobase/app-plugin-audit-log/client/plugin';
+import auditLog from '@nocobase/app-plugin-audit-log/client';
 
 const clientPlugins: AppClientPlugins = defineClientPlugins([
   // ……已有的插件
@@ -125,7 +125,7 @@ pnpm plugin:unregister audit-log
 
 参数和完整说明见 [docs/cli](./cli/README.md)。
 
-**纯服务端插件不会写进 `client/plugins.ts`。** 两边都按插件的 `exports["./client/plugin"]` 判断：没有这个导出就跳过客户端注册，因为写进去的 import 在构建时解析不到。
+**纯服务端插件不会写进 `client/plugins.ts`。** 两边都按插件的 `exports["./client"]` 判断：没有这个导出就跳过客户端注册，因为写进去的 import 在构建时解析不到。
 
 ## 3. 开发插件
 
@@ -164,9 +164,9 @@ GET /audit-log
 
 ### Client
 
-客户端分成注册面和实现两层。`client/plugin.ts` 是注册面，App 从这里 import 插件；另外三个入口是实现：
+客户端分成注册面和实现两层。`client/plugin.ts` 是注册面，`client/index.ts` 把它作为 default 导出，App 从 `<包名>/client` import 插件；另外三个入口是实现：
 
-- `client/plugin.ts`：声明包名、三个入口的 loader，以及插件接受哪些配置项；
+- `client/plugin.ts`：声明包名、三个入口的 loader，以及插件接受哪些配置项；`client/index.ts` 把它作为 default 导出；
 - `client/bootstrap.ts`：注册 Refine 等命令式客户端能力；
 - `client/routes.ts`：声明按需加载的页面路由；
 - `client/providers.ts`：声明同步 React Provider。
@@ -238,9 +238,11 @@ const authentication: AppClientPluginFactory<AuthenticationClientOptions> =
 
 `client/routes.ts` 和 `client/providers.ts` 的 default export 除了数组，也可以是一个接受 options 的函数，运行时会带着 App 传的配置调用它，用来按配置增减路由或给 Provider 传参。不需要配置时保持数组写法，什么都不用改。
 
-`client/plugin.ts` 会被 App 的 `client/plugins.ts` 静态 import，所以它静态 import 的东西都会进入应用的入口 chunk。建议这个文件只 import `defineClientPlugin`、路由 ID 常量这类轻量内容，组件、Provider 工厂、服务类都留在三个实现入口里由 `() => import()` 引用。这是建议而非强制校验。
+`client/plugin.ts` 会经由 `client/index.ts` 被 App 的 `client/plugins.ts` 静态 import，所以它静态 import 的东西都会进入应用的入口 chunk。建议这个文件只 import `defineClientPlugin`、路由 ID 常量这类轻量内容，组件、Provider 工厂、服务类都留在三个实现入口里由 `() => import()` 引用。这是建议而非强制校验。
 
-脚手架已经在 `package.json` 的 `exports` 和 `publishConfig.exports` 里各开了 `./client/plugin` 一条，以及另外三个入口。完整协议参见 [app-client README](../packages/app-client/README.md)，可运行的前后端示例参见 [routes example](../packages/app-plugin-routes-example/README.md)。
+barrel 里的其他导出（类型、工具函数、组件）不会因此进入入口 chunk：脚手架给每个插件声明了 `sideEffects: false`，打包器据此把 App 没用到的导出摇掉。实测 8 个插件走 `<包名>/client` 与走 `<包名>/client/plugin` 的入口体积逐字节相同。反过来说，如果插件里真的存在模块级副作用（例如 `import './x.css'`），就不能保留这条声明。
+
+脚手架已经在 `package.json` 的 `exports` 和 `publishConfig.exports` 里各开了 `./client` 和 `./client/plugin` 两条，以及另外三个入口。完整协议参见 [app-client README](../packages/app-client/README.md)，可运行的前后端示例参见 [routes example](../packages/app-plugin-routes-example/README.md)。
 
 ## 4. 检查和启动
 

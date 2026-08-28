@@ -1022,3 +1022,29 @@ postinstall 经实测覆盖不到「更新插件」这条主路径，已决定�
 **没有解决：** server 侧仍然隐式；`nocobase.plugins` 仍然存在；插件的 server 入口仍是文件约定而非 exports 声明。
 
 **范围外的收获：** 注册逻辑做成了仓库与独立 App 共用的一份实现（§10.2），独立 App 因此也有了 `pnpm plugin:register` / `plugin:unregister`；同时修掉了两个缺陷——给纯服务端插件写客户端 import，以及移除最后一个插件留下数组空位。
+
+## 13. 后续修订：注册入口改为 `<包名>/client`
+
+本方案落地后做了一次调整，正文保留原样作为方案记录，实际行为以本节为准。
+
+App 注册插件时 import 的是 `<包名>/client` 而不是 `<包名>/client/plugin`。`client/plugin.ts` 仍然存在、仍然是注册面，只是由 `client/index.ts` 作为 default 重新导出：
+
+```ts
+// 插件侧 client/index.ts
+export { default } from './plugin.js';
+```
+
+```ts
+// App 侧 client/plugins.ts
+import authentication from '@nocobase/app-plugin-authentication/client';
+```
+
+**为什么可以这样做而不牺牲入口体积。** §2.2 警告过 plugin 入口静态 import 的东西都会进入 App 的入口 chunk，而 barrel 通常还会导出类型、工具函数和组件。解法是给每个插件声明 `sideEffects: false`，让打包器摇掉 App 没用到的导出。实测 8 个插件走两种 import 路径的入口体积逐字节相同；不加这条声明时 `authentication` 会多出 696 字节、`file` 多出 88 字节。
+
+这条声明的前提是插件确实没有模块级副作用。改动前用 AST 逐个检查过 8 个插件的 client 模块：顶层语句全部是纯声明（`defineClientRoutes`、`Object.freeze`、`cva`、`createContext`），没有全局赋值，也没有 `import './x.css'` 这类裸副作用导入。`workflow` 的 registry 目录里确实有 CSS import，但那部分由 `registry materialize` 以源码方式复制，不经 `exports` 打包。**新增插件如果引入了模块级副作用，必须同时去掉这条声明。**
+
+**判据同步改了。** `hasClientPluginEntry` 现在看 `exports["./client"]` 而不是 `exports["./client/plugin"]`——写进 `client/plugins.ts` 的就是 `/client`，判据必须和实际写入的入口一致。只有 `./client/plugin` 的插件（本次改动之前发布的版本）会被跳过，否则写进去的 import 在 App 里解析不到。
+
+**读取侧兼容两种写法。** `listClientPlugins` 同时识别 `/client` 和 `/client/plugin` 结尾的 specifier，否则按旧写法接线的 App 会被判定成未注册，`register` 会给它再加一条重复的 import。
+
+**`workflow` 的 `./client` 从 `dist` 改指源码。** 它原先是 8 个插件里唯一指向 `./dist/client/index.js` 的，换成 barrel 之后会读到过期产物并直接构建失败。现在与其他插件一致指向 `./client/index.ts`。
