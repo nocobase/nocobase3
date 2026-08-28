@@ -557,10 +557,7 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.workflow-row-menu {
-  position: relative;
-}
-.workflow-row-menu summary {
+.workflow-row-menu-trigger {
   display: grid;
   width: 34px;
   height: 34px;
@@ -572,31 +569,12 @@
   cursor: pointer;
   list-style: none;
 }
-.workflow-row-menu summary:hover {
+.workflow-row-menu-trigger:hover,
+.workflow-row-menu-trigger[data-popup-open] {
   background: var(--muted);
 }
-.workflow-row-menu > div {
-  position: absolute;
-  z-index: 30;
-  top: 38px;
-  right: 0;
-  display: grid;
+.workflow-row-menu-content {
   min-width: 140px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
-}
-.workflow-row-menu > div button {
-  border: 0;
-  padding: 9px 12px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.workflow-row-menu > div button:hover {
-  background: var(--muted);
 }
 @keyframes workflow-dialog-backdrop-out {
   to {

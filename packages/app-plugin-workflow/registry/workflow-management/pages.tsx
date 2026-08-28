@@ -8,6 +8,12 @@ import {
 } from 'react-router';
 import { Switch } from '@/components/ui/switch';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   buildExecutionOverlay,
   projectWorkflowGraph,
   restoreFromFlatIr,
@@ -425,28 +431,39 @@ function WorkflowRow({
           >
             Executed {item.executed} times
           </button>
-          <details className='workflow-row-menu'>
-            <summary aria-label='More actions'>···</summary>
-            <div>
-              <button
-                type='button'
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type='button'
+                  className='workflow-row-menu-trigger'
+                  aria-label='More actions'
+                >
+                  ···
+                </button>
+              }
+            />
+            <DropdownMenuContent
+              align='end'
+              className='workflow-row-menu-content'
+            >
+              <DropdownMenuItem
                 disabled={!item.hasParameters}
                 onClick={() =>
                   void workflowApi.workflow(identifier).then(setSettings)
                 }
               >
                 Parameter settings
-              </button>
-              <button
-                type='button'
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 onClick={() =>
                   void workflowApi.execute(identifier, {}, crypto.randomUUID())
                 }
               >
                 Run
-              </button>
-            </div>
-          </details>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </li>
       {runs ? (
@@ -601,12 +618,12 @@ export function WorkflowDetailPage(): React.ReactElement {
           </div>
           <div className='canvas-header-actions'>
             <label className='workflow-switch'>
-              <input
-                type='checkbox'
+              <Switch
+                aria-label={`${enabled ? 'Disable' : 'Enable'} ${workflow.title ?? workflow.key}`}
                 checked={enabled}
-                onChange={(event) =>
+                onCheckedChange={(checked) =>
                   void (
-                    event.target.checked
+                    checked
                       ? workflowApi.enable(identifier)
                       : workflowApi.status(identifier, false)
                   ).then((next) =>

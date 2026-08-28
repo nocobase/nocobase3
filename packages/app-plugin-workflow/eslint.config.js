@@ -70,7 +70,7 @@ export default createClientLibraryConfig({
       files: [
         'server/engine/invocation.ts',
         'server/instructions/{condition/instruction,condition/json-logic/validator,run/instruction}.ts',
-        'tests/workflow-source.test.ts',
+        'tests/source.test.ts',
       ],
       rules: {
         // Explicit literal annotations are required for isolated declarations.

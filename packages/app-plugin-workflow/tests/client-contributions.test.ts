@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppClientRefineRegistry } from '@nocobase/app-client/plugins';
 import type { AppClient } from '@nocobase/app-sdk';
 
+import packageJson from '../package.json' with { type: 'json' };
 import bootstrap from '../client/bootstrap.js';
 import { WORKFLOW_ROUTE_IDS } from '../client/route-contracts.js';
 import routes from '../client/routes.js';
@@ -9,6 +10,14 @@ import routes from '../client/routes.js';
 const NS = '@nocobase/app-plugin-workflow';
 
 describe('workflow client contributions', () => {
+  it('uses the explicit client plugin registration surface', () => {
+    expect(packageJson.nocobase.plugin).not.toHaveProperty('client');
+    expect(packageJson.exports).toHaveProperty('./client');
+    expect(packageJson.exports).toHaveProperty('./client/plugin');
+    expect(packageJson.publishConfig.exports).toHaveProperty('./client');
+    expect(packageJson.publishConfig.exports).toHaveProperty('./client/plugin');
+  });
+
   it('owns stable workflow management routes', () => {
     expect(routes.parent).toBe('app');
     expect(routes.routes.map(({ name, path }) => ({ name, path }))).toEqual([
