@@ -75,6 +75,8 @@ const heartbeat = app.container.resolve(heartbeatServiceToken);
 
 会直接得到 `HeartbeatService`，不需要类型断言。
 
+`ServiceToken<T>` 不要求服务必须由 class 实现。函数、普通对象、普通值以及同一类型的不同业务角色也可以注册为服务，参见 [ServiceToken 简易示例](./service-token-examples.md)。
+
 ### ServiceContainer
 
 `ServiceContainer` 提供两种注册方式：
