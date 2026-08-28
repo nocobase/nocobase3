@@ -100,12 +100,9 @@ describe('config registry', () => {
 });
 
 describe('notification config', () => {
-  it('keeps email disabled without a Provider selector', () => {
+  it('keeps email disabled without SMTP or Resend configuration', () => {
     const config = notification({
-      env: createConfigEnv({
-        SMTP_HOST: 'smtp.example.com',
-        SMTP_FROM: 'notifications@example.com',
-      }),
+      env: createConfigEnv({}),
       paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
     });
 
@@ -143,7 +140,6 @@ describe('notification config', () => {
   it('configures SMTP with optional authentication', () => {
     const config = notification({
       env: createConfigEnv({
-        NOTIFICATION_EMAIL_PROVIDER: 'smtp',
         SMTP_HOST: 'smtp.example.com',
         SMTP_PORT: '465',
         SMTP_SECURE: 'true',
@@ -181,7 +177,6 @@ describe('notification config', () => {
   it('configures Resend and Feishu independently', () => {
     const config = notification({
       env: createConfigEnv({
-        NOTIFICATION_EMAIL_PROVIDER: 'resend',
         RESEND_API_KEY: 're_test',
         RESEND_FROM: 'NocoBase <notifications@example.com>',
         FEISHU_WEBHOOK_URL:
@@ -215,6 +210,45 @@ describe('notification config', () => {
             name: 'feishu',
             webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/example',
             secret: 'secret',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('configures SMTP and Resend together', () => {
+    const config = notification({
+      env: createConfigEnv({
+        SMTP_HOST: 'smtp.example.com',
+        SMTP_FROM: 'NocoBase <smtp@example.com>',
+        RESEND_API_KEY: 're_test',
+        RESEND_FROM: 'NocoBase <resend@example.com>',
+      }),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config.channels).toEqual([
+      inAppChannel,
+      {
+        type: 'email',
+        enabled: true,
+        providers: [
+          {
+            type: 'smtp',
+            name: 'smtp',
+            host: 'smtp.example.com',
+            port: 587,
+            secure: false,
+            auth: undefined,
+            from: 'NocoBase <smtp@example.com>',
+            replyTo: undefined,
+          },
+          {
+            type: 'resend',
+            name: 'resend',
+            apiKey: 're_test',
+            from: 'NocoBase <resend@example.com>',
+            replyTo: undefined,
           },
         ],
       },
@@ -258,13 +292,22 @@ describe('notification config', () => {
     ]);
   });
 
-  it('rejects incomplete selected Provider configuration', () => {
+  it('rejects incomplete SMTP configuration', () => {
     expect(() =>
       notification({
-        env: createConfigEnv({ NOTIFICATION_EMAIL_PROVIDER: 'smtp' }),
+        env: createConfigEnv({ SMTP_HOST: 'smtp.example.com' }),
         paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
       }),
-    ).toThrow('SMTP_HOST is required');
+    ).toThrow('SMTP_FROM is required');
+  });
+
+  it('rejects incomplete Resend configuration', () => {
+    expect(() =>
+      notification({
+        env: createConfigEnv({ RESEND_FROM: 'notifications@example.com' }),
+        paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+      }),
+    ).toThrow('RESEND_API_KEY is required');
   });
 });
 

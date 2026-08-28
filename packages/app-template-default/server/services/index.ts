@@ -1,6 +1,5 @@
 import type { AppRuntime } from '@nocobase/app-server-kit/runtime';
 import type { AppDriveConfig } from '@nocobase/drive';
-import type { NotificationPluginServices } from '@nocobase/app-plugin-notification';
 
 import type { AppConfig } from '../config/index.js';
 import type { RealtimeService } from '../realtime/service.js';
@@ -16,7 +15,7 @@ import {
   type FileUploads,
 } from './public-file-storage.js';
 
-export interface AppServices extends NotificationPluginServices {
+export interface AppServices {
   appSettingsStore: AppSettings;
   publicFileStorage: FileUploads;
   realtime: RealtimeService;

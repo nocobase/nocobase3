@@ -88,6 +88,44 @@ await notification.send({
 
 Provider 由 Channel 配置统一选择；普通业务代码不需要维护 Provider 名称或底层 Delivery 字段。
 
+## 选择 Provider
+
+Provider 路由默认使用 `single` 策略。大部分时候不需要传 `routing`——系统会优先选择当前 Channel 中名为 `primary` 的 Provider，否则从已启用的 Provider 中选择第一个可以处理该接收人的 Provider。
+
+如果一个 Channel 配置了多个 Provider，并且你需要明确选择其中一个，只需要传 Provider 的 `name`：
+
+```ts
+await notification.send({
+  to: { type: 'email', address: 'alice@example.com' },
+  channels: ['email'],
+  routing: {
+    email: {
+      providers: {
+        provider: 'primary-smtp',
+      },
+    },
+  },
+  content: {
+    title: '审批待处理',
+    body: '你有一条新的审批任务。',
+  },
+});
+```
+
+同一个 Channel 内的 Provider `name` 必须唯一，所以发送时不需要再传 Provider `type`。省略 `strategy` 就是 `single`，上面的写法等同于显式传入 `strategy: 'single'`。
+
+Provider 路由支持这些写法：
+
+| 配置                                                                    | 行为                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 省略 `routing`                                                          | 默认使用 `single`，自动选择一个可以处理该接收人的 Provider。 |
+| `{ providers: { provider: 'primary-smtp' } }`                           | 默认使用 `single`，选择指定名称的 Provider。                 |
+| `{ providers: { strategy: 'single' } }`                                 | 选择默认 Provider。                                          |
+| `{ providers: { strategy: 'all' } }`                                    | 为当前 Channel 的所有已启用 Provider 分别创建 Delivery。     |
+| `{ providers: { strategy: 'all', providers: ['feishu', 'dingtalk'] } }` | 只向列出的 Provider 分别创建 Delivery。                      |
+
+`single` 只表示一次发送为这个 Channel 选择一个 Provider。Provider 投递失败后不会自动切换到另一个 Provider。
+
 ## 发送飞书或钉钉消息
 
 Webhook Provider 的目标使用逻辑目标 ID 表示。默认模板将飞书和钉钉 Webhook 都映射到 `default` 目标：
@@ -104,7 +142,7 @@ await notification.send({
 });
 ```
 
-如果只发送到飞书，可以通过路由指定 Provider。`provider.name` 和 `provider.type` 必须与配置中的 Provider 一致：
+如果只发送到飞书，可以通过路由指定 Provider。`provider` 的值必须与配置中的 Provider `name` 一致：
 
 ```ts
 await notification.send({
@@ -113,8 +151,7 @@ await notification.send({
   routing: {
     im: {
       providers: {
-        strategy: 'single',
-        provider: { name: 'feishu', type: 'feishu-webhook' },
+        provider: 'feishu',
       },
     },
   },
@@ -173,6 +210,6 @@ Channel 不支持某种接收人时，对应组合会创建一条失败的 Deliv
 ## 相关链接
 
 - [通知概览](./overview.md)——了解一次发送如何拆分为 Delivery
-- [配置通知](./configuration.md)——启用站内信、Email 和 IM Provider
+- [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——启用 Email 和 IM Provider
 - [手动接入通知](./integration.md)——创建 manager 并注册 Channel / Provider
 - [通知日志](./logs.md)——查询最终投递结果

@@ -8,24 +8,56 @@ import bootstrapNotificationPlugin, {
 } from '../server/bootstrap.js';
 
 describe('@nocobase/app-plugin-notification bootstrap', () => {
-  it('creates the core manager and registers its disposer', async () => {
+  it('creates and activates the core manager and registers its disposer', async () => {
     const registerDisposer = vi.fn();
+    const registerJob = vi.fn();
     const services: NotificationPluginServices = {};
 
     bootstrapNotificationPlugin({
-      config: { notification: { channels: [] } },
+      config: {
+        notification: {
+          channels: [{ type: 'email', enabled: true, providers: [] }],
+        },
+      },
       deps: {
         database: {} as DatabaseManager,
         logging: {
           getLogger: () => createLogger({ level: 'silent' }),
         },
-        queueManager: {} as NocoBaseQueueManager,
+        queueManager: { registerJob } as unknown as NocoBaseQueueManager,
       },
       services,
       lifecycle: { registerDisposer },
     });
 
     expect(services.notification).toBeDefined();
+    expect(registerJob).toHaveBeenCalledOnce();
+    expect(() =>
+      services.notification?.registry
+        .registerChannel({
+          type: 'email',
+          async createChannel() {
+            return {
+              type: 'email',
+              async prepare(input): Promise<object> {
+                return input.message;
+              },
+            };
+          },
+        })
+        .registerProvider('email', {
+          type: 'smtp',
+          async createProvider(_context, config) {
+            return {
+              name: config.name,
+              type: config.type,
+              async send() {
+                return { status: 'accepted' } as const;
+              },
+            };
+          },
+        }),
+    ).not.toThrow();
     expect(registerDisposer).toHaveBeenCalledWith(
       'manager',
       expect.any(Function),

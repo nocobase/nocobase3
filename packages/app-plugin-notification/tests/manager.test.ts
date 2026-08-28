@@ -192,7 +192,7 @@ describe('NotificationManager registration', () => {
     await database.destroy();
   });
 
-  it('selects a non-primary Provider through Channel routing', async () => {
+  it('selects a non-primary Provider by name with the default single strategy', async () => {
     const queue = createQueueManager(createSyncQueueConfig());
     const database = await createNotificationTestDatabase();
     const store = new FakeNotificationStore();
@@ -253,8 +253,7 @@ describe('NotificationManager registration', () => {
       routing: {
         im: {
           providers: {
-            strategy: 'single',
-            provider: { name: 'secondary', type: 'fake' },
+            provider: 'secondary',
           },
         },
       },
@@ -360,6 +359,30 @@ describe('NotificationManager registration', () => {
       }),
     ]);
 
+    const selectedResult = await manager.send({
+      to: { type: 'target', id: 'ops-alerts' },
+      channels: ['im'],
+      routing: {
+        im: {
+          providers: {
+            strategy: 'all',
+            providers: ['dingtalk'],
+          },
+        },
+      },
+      content: { body: 'Send it to the selected Provider.' },
+    });
+    await expect(
+      store.listDeliveries(selectedResult.notificationId),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerName: 'dingtalk',
+        providerType: 'dingtalk-webhook',
+        status: 'accepted',
+      }),
+    ]);
+    expect(send).toHaveBeenCalledTimes(3);
+
     await manager.close();
     await queue.close();
     await database.destroy();
@@ -418,7 +441,7 @@ describe('NotificationManager registration', () => {
           im: {
             providers: {
               strategy: 'single',
-              provider: { name: 'missing', type: 'fake' },
+              provider: 'missing',
             },
           },
         },
@@ -426,7 +449,7 @@ describe('NotificationManager registration', () => {
         content: { body: 'Do not fall back.' },
       }),
     ).rejects.toThrow(
-      'Notification Provider "missing" (fake) is not enabled for Channel "im".',
+      'Notification Provider "missing" is not enabled for Channel "im".',
     );
 
     await manager.close();

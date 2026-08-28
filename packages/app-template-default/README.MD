@@ -159,8 +159,13 @@ The server registers the built-in Email and IM definitions from
 until its credentials are configured in `.env.local`:
 
 ```env
-NOTIFICATION_EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.example.com
+SMTP_FROM=NocoBase <notifications@example.com>
+# RESEND_API_KEY=re_xxxxxxxxx
+# RESEND_FROM=NocoBase <notifications@example.com>
 ```
+
+SMTP and Resend are enabled independently and can be configured together.
 
 Configure `FEISHU_WEBHOOK_URL` and/or `DINGTALK_WEBHOOK_URL` to enable one or
 both IM Providers. No IM selector variable is required. The matching variables
@@ -194,11 +199,12 @@ await services.notification?.send({
 });
 ```
 
-Use `{ type: 'target', id: 'default' }` as the logical IM target. Select one
-Provider or all configured Providers with `routing.im.providers.strategy` set
-to `single` or `all`. The full
+Use `{ type: 'target', id: 'default' }` as the logical IM target. Provider
+routing defaults to `single`; select one configured Provider with
+`routing.im.providers.provider: 'feishu'`. Use `strategy: 'all'` only when the
+message should fan out to every enabled Provider. The full
 configuration and integration guide lives in
-[`@nocobase/app-plugin-notification` documentation](../app-plugin-notification/docs/zh-CN/configuration.md).
+[`@nocobase/app-plugin-notification-providers` documentation](../app-plugin-notification-providers/docs/zh-CN/configuration.md).
 
 ## Workflow Management UI
 

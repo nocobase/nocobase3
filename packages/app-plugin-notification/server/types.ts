@@ -34,11 +34,11 @@ export type NotificationRecipient =
 export type NotificationProviderRouting =
   | {
       readonly strategy?: 'single';
-      readonly provider?: NotificationProviderIdentity;
+      readonly provider?: string;
     }
   | {
       readonly strategy: 'all';
-      readonly providers?: readonly NotificationProviderIdentity[];
+      readonly providers?: readonly string[];
     };
 
 export interface NotificationChannelRouting {

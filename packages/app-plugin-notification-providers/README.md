@@ -193,7 +193,8 @@ await notification.send({
 });
 ```
 
-To select one Provider, use channel-scoped routing:
+Provider routing uses the `single` strategy by default. To select one Provider,
+set its channel-unique name; `strategy: 'single'` can be omitted:
 
 ```ts
 await notification.send({
@@ -202,8 +203,7 @@ await notification.send({
   routing: {
     im: {
       providers: {
-        strategy: 'single',
-        provider: { name: 'feishu', type: 'feishu-webhook' },
+        provider: 'feishu',
       },
     },
   },
@@ -211,8 +211,10 @@ await notification.send({
 });
 ```
 
-To send to every enabled IM Provider, use `strategy: 'all'`. The manager
-creates one independent Delivery per Provider:
+When `routing` is omitted, the manager uses the Provider named `primary` when
+available, then the first enabled Provider that can resolve the recipient. To
+send to every enabled IM Provider, use `strategy: 'all'`. The manager creates
+one independent Delivery per Provider:
 
 ```ts
 await notification.send({
@@ -222,6 +224,11 @@ await notification.send({
   content: { title: 'Deployment complete', body: 'Production is ready.' },
 });
 ```
+
+Set `providers: ['feishu', 'dingtalk']` together with `strategy: 'all'` to
+limit fan-out to those Provider names. Provider names are unique within a
+Channel, so send routing does not accept or require Provider types. A failed
+single delivery does not automatically switch to another Provider.
 
 Keep Provider names and types stable while deliveries are pending. Webhook URLs,
 signing secrets, SMTP passwords, and API keys are credentials and must never be

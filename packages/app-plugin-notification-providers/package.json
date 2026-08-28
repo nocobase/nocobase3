@@ -11,6 +11,7 @@
   "sideEffects": false,
   "files": [
     "dist",
+    "docs",
     "README.md"
   ],
   "main": "./dist/server/index.js",

@@ -86,5 +86,5 @@ Settings Contribution 与 `GET /api/notifications/logs` 使用同一个权限资
 
 - [通知概览](./overview.md)——了解 Notification、Delivery 和 Attempt
 - [手动接入通知](./integration.md)——挂载受认证的日志 API
-- [配置通知](./configuration.md)——配置 Channel 和 Provider
+- [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——配置 Email 和 IM Channel 的 Provider
 - [发送通知](./sending.md)——从服务端业务代码发送消息

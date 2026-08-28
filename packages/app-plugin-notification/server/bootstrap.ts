@@ -47,4 +47,5 @@ export default function bootstrapNotificationPlugin({
   services.notification = notification;
 
   lifecycle.registerDisposer('manager', () => notification.close());
+  notification.activate();
 }

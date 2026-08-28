@@ -416,8 +416,8 @@ export class NotificationManager<
       return this.channelManager.providerIdentities(channel, { all: true });
 
     const providers = new Map<string, NotificationProviderIdentity>();
-    for (const identity of routing.providers) {
-      const provider = this.enabledProvider(channel, identity);
+    for (const name of routing.providers) {
+      const provider = this.enabledProvider(channel, name);
       providers.set(`${provider.name}\0${provider.type}`, provider);
     }
     return [...providers.values()];
@@ -425,15 +425,15 @@ export class NotificationManager<
 
   private enabledProvider(
     channel: string,
-    identity: NotificationProviderIdentity,
+    name: string,
   ): NotificationProviderIdentity {
     const providers = this.channelManager.providerIdentities(channel, {
-      providerName: identity.name,
+      providerName: name,
     });
     const [provider] = providers;
-    if (!provider || provider.type !== identity.type)
+    if (!provider)
       throw new Error(
-        `Notification Provider "${identity.name}" (${identity.type}) is not enabled for Channel "${channel}".`,
+        `Notification Provider "${name}" is not enabled for Channel "${channel}".`,
       );
     return provider;
   }

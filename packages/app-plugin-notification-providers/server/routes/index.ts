@@ -176,8 +176,7 @@ export default function registerNotificationProviderRoutes({
         routing: {
           [channel]: {
             providers: {
-              strategy: 'single',
-              provider: { name: provider.name, type: provider.type },
+              provider: provider.name,
             },
           },
         },

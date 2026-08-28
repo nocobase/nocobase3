@@ -6,7 +6,7 @@ keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP,Resend,飞�
 
 # 手动接入通知
 
-如果宿主没有使用 NocoBase 的插件 bootstrap 约定，你需要在自己的应用代码中完成 migrations、配置、Channel 与 Provider 注册、路由挂载和生命周期管理。默认模板已经通过插件 bootstrap 创建 `NotificationManager`，通常只需要参考[配置通知 Provider](./configuration.md)填写环境变量。
+如果宿主没有使用 NocoBase 的插件 bootstrap 约定，你需要在自己的应用代码中完成 migrations、配置、Channel 与 Provider 注册、路由挂载和生命周期管理。默认模板已经通过插件 bootstrap 创建 `NotificationManager`，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量。
 
 这套方式会让宿主明确决定启用哪些通知能力。只需要邮件时，不必创建站内信 store 和 router。
 
@@ -50,7 +50,7 @@ pnpm migrate
 
 ## 第二步：创建配置
 
-配置由宿主读取并传给 `NotificationManager`。下面同时启用站内信和 SMTP 邮件。Resend、飞书与钉钉的字段和环境变量见[配置通知 Provider](./configuration.md)：
+配置由宿主读取并传给 `NotificationManager`。下面同时启用站内信和 SMTP 邮件。Resend、飞书与钉钉的字段和环境变量见[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)：
 
 ```ts
 import {
@@ -272,6 +272,6 @@ pnpm registry materialize \
 ## 相关链接
 
 - [通知概览](./overview.md)——了解 Notification、Delivery 和 Attempt
-- [配置通知](./configuration.md)——配置 SMTP、Resend、飞书和钉钉
+- [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——配置 SMTP、Resend、飞书和钉钉
 - [发送通知](./sending.md)——使用 `NotificationManager.send()`
 - [通知日志](./logs.md)——查询 Delivery 和 Attempt

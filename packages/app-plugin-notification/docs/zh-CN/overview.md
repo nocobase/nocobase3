@@ -45,20 +45,22 @@ Delivery 保存接收人、消息以及选中的 Provider。真正调用 Provide
 
 :::warning 注意
 
-普通发送会选择名为 `primary` 的 Provider，否则选择第一个。需要改变 Provider 路由时，在 `routing.<channel>.providers` 中使用 `strategy: 'single'` 或 `strategy: 'all'`；`all` 会为所有启用的 Provider 创建独立 Delivery。Provider 失败不会自动切换到另一个 Provider。
+Provider 路由默认使用 `single` 策略。普通发送会优先选择名为 `primary` 的 Provider，否则从已启用的 Provider 中选择第一个可以处理该接收人的 Provider。需要明确选择时，在 `routing.<channel>.providers.provider` 中填写 Provider `name`；同一个 Channel 内的 Provider `name` 必须唯一，不需要传 `type`。
+
+只有需要同时投递到多个 Provider 时，才需要设置 `strategy: 'all'`。省略 `providers` 表示选择所有已启用的 Provider，也可以通过 `providers: ['feishu', 'dingtalk']` 限定名称。`single` 模式下 Provider 失败不会自动切换到另一个 Provider。
 
 :::
 
 ## 文档地图
 
 - [手动接入通知](./integration.md)——接入 migrations、运行时、路由和生命周期
-- [配置通知](./configuration.md)——配置站内信和 SMTP 邮件
+- [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——配置 SMTP、Resend、飞书和钉钉
 - [发送通知](./sending.md)——从服务端业务代码发送消息
 - [通知日志](./logs.md)——查看 Delivery 和 Attempt
 
 ## 相关链接
 
 - [手动接入通知](./integration.md)——创建并挂载通知运行时
-- [配置通知](./configuration.md)——构造 Channel 和 Provider 配置
+- [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——构造 Email 和 IM Channel 的 Provider 配置
 - [发送通知](./sending.md)——使用 `NotificationManager.send()`
 - [通知日志](./logs.md)——查看 Delivery 和 Attempt

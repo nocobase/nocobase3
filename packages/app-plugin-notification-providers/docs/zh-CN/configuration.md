@@ -1,22 +1,16 @@
 ---
 title: '配置通知 Provider'
-description: '配置 NocoBase 站内信、SMTP、Resend、飞书和钉钉通知 Provider，并验证连接参数。'
+description: '配置 NocoBase SMTP、Resend、飞书和钉钉通知 Provider，并验证连接参数。'
 keywords: 'NocoBase,通知配置,SMTP,Resend,飞书,钉钉,Webhook,Provider'
 ---
 
 # 配置通知 Provider
 
-通知包不会直接读取固定的环境变量。应用需要从环境变量、配置文件或其他配置源构造 `NotificationConfig`，再交给 `NotificationManager`。默认模板已经提供一套最小环境变量配置，可以直接用于 SMTP、Resend、飞书和钉钉。
+在 NocoBase 中，`@nocobase/app-plugin-notification-providers` 不会直接读取固定的环境变量。应用需要从环境变量、配置文件或其他配置源构造 `NotificationConfig`，再交给 `NotificationManager`。默认模板已经提供一套最小环境变量配置，可以直接用于 SMTP、Resend、飞书和钉钉。
 
 ## 默认模板的最小配置
 
-先在 `packages/app-template-default/.env.local` 中配置需要启用的 Provider：
-
-```dotenv
-NOTIFICATION_EMAIL_PROVIDER=smtp
-```
-
-Email 通过 `NOTIFICATION_EMAIL_PROVIDER` 选择一个 Provider。IM 不需要选择器：配置 `FEISHU_WEBHOOK_URL` 和/或 `DINGTALK_WEBHOOK_URL` 后，对应 Provider 会自动启用。未配置任何 Webhook 时，IM Channel 不会启用。
+在 `packages/app-template-default/.env.local` 中直接配置需要启用的 Provider。SMTP、Resend、飞书和钉钉分别根据各自的配置独立启用；同时配置 SMTP 和 Resend 时，两者都会加入 Email Channel。未配置任何 Provider 时，对应 Channel 不会启用。
 
 可以先检查解析后的配置。输出只包含 Provider 名称、类型、启用状态以及测试收件人是否已配置，不会显示密码、API Key、Webhook 或收件地址：
 
@@ -29,7 +23,6 @@ pnpm --filter @nocobase/app-template-default server:config
 SMTP 适合 Gmail、企业邮箱或自建邮件服务器。默认模板使用以下变量：
 
 ```dotenv
-NOTIFICATION_EMAIL_PROVIDER=smtp
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_SECURE=false
@@ -73,7 +66,6 @@ SMTP_FROM=your-account@gmail.com
 先在 Resend 控制台创建 API Key。生产环境还需要验证自己的发件域名，并让 `RESEND_FROM` 使用该域名下的地址：
 
 ```dotenv
-NOTIFICATION_EMAIL_PROVIDER=resend
 RESEND_API_KEY=re_xxxxxxxxx
 RESEND_FROM=NocoBase <notifications@example.com>
 RESEND_REPLY_TO=reply@example.com
@@ -192,13 +184,13 @@ export const notificationConfig: NotificationConfig = {
 };
 ```
 
-同一个逻辑接收目标的 Provider 使用相同的 `target`，例如上面的 `ops-alerts`。省略 `target` 时默认为 `default`。Provider 的 `name` 和 `type` 会写入 Delivery。配置发布和应用重启后应保持两者稳定。完整的 definitions 注册和生命周期接入见[手动接入通知](./integration.md)。
+同一个逻辑接收目标的 Provider 使用相同的 `target`，比如上面的 `ops-alerts`。省略 `target` 时默认为 `default`。同一个 Channel 内的 Provider `name` 必须唯一，发送时通过这个名称选择 Provider，不需要再传 `type`。Provider 的 `name` 和 `type` 都会写入 Delivery，配置发布和应用重启后应保持两者稳定。完整的路由写法见[发送通知](../../../app-plugin-notification/docs/zh-CN/sending.md)，definitions 注册和生命周期接入见[手动接入通知](../../../app-plugin-notification/docs/zh-CN/integration.md)。
 
 ## 相关链接
 
-- [通知概览](./overview.md) — 了解 Notification、Delivery 和 Attempt
-- [手动接入通知](./integration.md) — 注册 Channel 与 Provider definitions
-- [发送通知](./sending.md) — 从业务代码发送 Email 和 IM 消息
-- [通知日志](./logs.md) — 查询 Delivery 和 Attempt
+- [通知概览](../../../app-plugin-notification/docs/zh-CN/overview.md) — 了解 Notification、Delivery 和 Attempt
+- [手动接入通知](../../../app-plugin-notification/docs/zh-CN/integration.md) — 注册 Channel 与 Provider definitions
+- [发送通知](../../../app-plugin-notification/docs/zh-CN/sending.md) — 从业务代码发送 Email 和 IM 消息
+- [通知日志](../../../app-plugin-notification/docs/zh-CN/logs.md) — 查询 Delivery 和 Attempt
 - [Google 应用专用密码](https://support.google.com/accounts/answer/185833) — 创建和管理 Gmail SMTP 使用的应用专用密码
 - [Resend Domains](https://resend.com/docs/dashboard/domains/introduction) — 配置发件域名

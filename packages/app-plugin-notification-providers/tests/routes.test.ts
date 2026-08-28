@@ -72,8 +72,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
         routing: {
           im: {
             providers: {
-              strategy: 'single',
-              provider: { name: 'dingtalk', type: 'dingtalk-webhook' },
+              provider: 'dingtalk',
             },
           },
         },
@@ -117,8 +116,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
         routing: {
           'in-app': {
             providers: {
-              strategy: 'single',
-              provider: { name: 'primary', type: 'database' },
+              provider: 'primary',
             },
           },
         },
@@ -154,8 +152,7 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
         routing: {
           email: {
             providers: {
-              strategy: 'single',
-              provider: { name: 'smtp', type: 'smtp' },
+              provider: 'smtp',
             },
           },
         },
