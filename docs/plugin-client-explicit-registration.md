@@ -1067,18 +1067,29 @@ defineClientPlugin({
 // client/settings.ts
 export default defineClientSettings([
   {
-    id: 'audit-log/general',
-    title: 'General',
-    group: 'Audit Log',
-    access: { resource: 'audit-log.settings.general', action: 'read' },
-    pageLoader: () => import('./pages/general-page.js'),
+    id: 'audit-log',
+    title: 'Audit Log',
+    icon: ScrollText,
+    children: [
+      {
+        id: 'general',
+        title: 'General',
+        icon: FileClock,
+        access: { resource: 'audit-log.settings.general', action: 'read' },
+        pageLoader: () => import('./pages/general-page.js'),
+      },
+    ],
   },
 ]);
 ```
 
-`id` 既是标识也是 URL 段，页面挂在 `/settings/<id>`。id 允许斜杠分段做插件命名空间；不允许首尾斜杠和空段。`group` 是设置中心左侧导航的分组标题，分组之间和分组内部都按注册顺序排列。`access` 可选，不填表示能进设置中心就能看。
+**为什么是树而不是 group 字符串。** 第一版用的是每个页面写一个 `group: 'Audit Log'` 字符串。问题出在图标上：分组本身也要图标，而 group 只是个字符串，没有可以挂图标的地方；若改成每个子项都写一遍分组图标，则是把同一份信息重复 N 遍。树状结构把分组变成一个真正的对象，图标和标题在组这一层写一次即可。
 
-**为什么 id 允许斜杠。** 权限设置的四个页面在本次改动前就已经是 `/settings/authorization/*`。id 若限制成单段，这四条 URL 全部失效；允许斜杠则原地保留，同时天然带上插件命名空间，跨插件撞 id 的概率降到很低。
+id 因此也回到单段：层级由树给出，不再需要用斜杠表达。`authorization` 组下的 `permission-sets` 拼出来仍然是 `/settings/authorization/permission-sets`，四条 URL 逐条不变。
+
+只有一个页面的插件不套分组，直接写 `{ id, title, pageLoader }`，挂在 `/settings/<id>`，导航里平铺一行。分组只支持一层。
+
+`resolveAppClientContributions` 同时返回两份结果：`settings` 是拍平的页面列表，给路由挂载用；`settingGroups` 是树，给导航渲染用。两者都保持声明顺序。
 
 **App 侧。** 设置中心的布局和左侧导航属于应用而不是库，和 `AppShell` 同级放在 `client/settings/`；`app-client` 只负责类型、加载、解析和冲突检测，不含任何 UI。理由与 `AppShell` 一致：template 是用户拿到手会直接改的源码，设置中心长什么样应该由应用自己决定。
 
@@ -1093,5 +1104,11 @@ export default defineClientSettings([
 **齿轮入口改为应用内路由。** `client/shell/app-header.tsx` 原先用 `resolveNocoBaseSettingsUrl()` 在新标签页打开 v2 服务端的 `/main/v2/settings`，现在是指向 `/settings` 的应用内 `Link`。
 
 **authorization 的四个页面已迁移。** 它们从 `client/routes.ts` 移到 `client/settings.ts`，URL 逐条不变；`client/bootstrap.ts` 里对应的 `addResources` 一并删除，否则主侧边栏会留下一份重复入口。该文件的 `accessControlProvider` 保留——它是整个应用（包括设置中心自身）权限检查的来源。
+
+**左侧导航按分组折叠。** 用的是主侧边栏那套 `<details>` / `<summary>`，默认展开当前页面所在的组、其余收起，分组标题的字号字重与主侧边栏的分组行一致。分组和页面都可以带图标。
+
+**权限过滤后重建树。** 过滤发生在页面这一层，之后按幸存的页面重建导航树：一个分组下的页面全被挡掉时，分组本身也不再渲染，不会留下一个空的折叠抽屉。
+
+**设置中心复用应用外壳的框架。** 左上角 brand、侧边栏折叠按钮、右上角控件（主题、用户菜单）都与应用一致，只去掉指向自身的齿轮；应用外壳里「AI application workspace」的位置，在设置中心是 `Back to app` 返回按钮。
 
 **`client:inspect` 增加 `--type settings`。** 输出 id、title、group、source、entry 和 access，与 routes、providers 一致。

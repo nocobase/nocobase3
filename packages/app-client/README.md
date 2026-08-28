@@ -189,41 +189,59 @@ export default routes;
 
 Settings pages go in their own entry. They are lazily loaded the same way
 routes are, but the application mounts them inside its settings centre and
-builds the navigation from them, so a plugin declares only the page:
+builds the navigation from them, so a plugin declares only the page. An entry
+is either a page on its own or a group of pages, and a group carries the icon
+and title once for the whole section rather than repeating them per child:
 
 ```ts
 import {
   defineClientSettings,
   type AppClientSettingDefinition,
 } from '@nocobase/app-client/plugins';
+import { KeyRound, ShieldCheck } from 'lucide-react';
 
 const settings: readonly AppClientSettingDefinition[] = defineClientSettings([
   {
-    id: 'example/general',
-    title: 'General',
-    group: 'Example',
-    access: { resource: 'example.settings.general', action: 'read' },
-    pageLoader: () => import('./pages/general'),
+    id: 'example',
+    title: 'Example',
+    icon: ShieldCheck,
+    children: [
+      {
+        id: 'general',
+        title: 'General',
+        icon: KeyRound,
+        access: { resource: 'example.settings.general', action: 'read' },
+        pageLoader: () => import('./pages/general'),
+      },
+    ],
   },
 ]);
 
 export default settings;
 ```
 
-`id` is both the identity and the URL: a setting is served at `/settings/<id>`,
-so the entry above lands at `/settings/example/general`. Slashes namespace a
-plugin's pages, which is what keeps ids from colliding between plugins; an id
-may not begin or end with one, and no segment may be empty. `group` is the
-heading the application groups the page under, and both groups and their
-members keep registration order.
+Ids are single URL segments and nesting comes from the tree, so the page above
+is served at `/settings/example/general`. A plugin contributing a single page
+declares it without a group — `{ id, title, pageLoader }` — and it is served at
+`/settings/<id>` and rendered as one flat row rather than a disclosure. Groups
+nest one level: a group's children are pages, not further groups.
 
-`access` is optional. When present the application checks it before loading the
-page: a setting the check denies is left out of the navigation and cannot be
-reached by its URL either. A setting without it is visible to anyone who can
-open the settings centre.
+`icon` is optional on both groups and pages. It is a component taking a
+`className`, which a lucide-react icon satisfies directly; the application
+supplies the size so entries line up across plugins.
 
-Routes and settings share one path space. A setting with id `general` and a
-route at `/settings/general` are a conflict, and resolution fails with both
+`access` is optional and belongs to a page. When present the application checks
+it before loading: a page the check denies is left out of the navigation and
+cannot be reached by its URL either, and a group whose pages are all denied
+disappears with them. A page without it is visible to anyone who can open the
+settings centre.
+
+Groups and pages keep declaration order, and `resolveAppClientContributions`
+returns both a flat `settings` list — what the router mounts — and a
+`settingGroups` tree, which is what the navigation renders.
+
+Routes and settings share one path space. A page at `/settings/general` and a
+route at the same path are a conflict, and resolution fails with both
 identities named rather than mounting two pages at one address.
 
 Global providers are synchronous components declared separately:

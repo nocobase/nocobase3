@@ -9,6 +9,7 @@ import {
   type AppClientRegisteredProvider,
   type AppClientRegisteredRoute,
   type AppClientRegisteredSetting,
+  type AppClientRegisteredSettingGroup,
   type AppClientRouteDefinition,
   type AppClientSettingDefinition,
   type AppClientRouteComponentOverrideDefinition,
@@ -32,6 +33,7 @@ export interface AppClientRuntime {
   readonly providers: readonly AppClientRegisteredProvider[];
   readonly routes: readonly AppClientRegisteredRoute[];
   readonly settings: readonly AppClientRegisteredSetting[];
+  readonly settingGroups: readonly AppClientRegisteredSettingGroup[];
 }
 
 export interface CreateAppRuntimeOptions {
@@ -124,6 +126,7 @@ export async function createAppRuntime(
     providers: contributions.providers,
     routes,
     settings: contributions.settings,
+    settingGroups: contributions.settingGroups,
   });
 }
 

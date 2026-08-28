@@ -1,24 +1,38 @@
-import type { AppClientRegisteredSetting } from '@nocobase/app-client/plugins';
+import type {
+  AppClientRegisteredSetting,
+  AppClientRegisteredSettingGroup,
+} from '@nocobase/app-client/plugins';
 import { useCanWithoutCache } from '@refinedev/core';
 import { useEffect, useMemo, useState } from 'react';
 
 const EMPTY_DENIALS: ReadonlySet<string> = new Set();
 
 export interface SettingsAccess {
-  /** The settings the current user may open, in registration order. */
+  /** The pages the current user may open, flattened, in registration order. */
   readonly settings: readonly AppClientRegisteredSetting[];
+  /** The same pages as a tree. A group whose children are all denied is dropped entirely. */
+  readonly groups: readonly SettingsNavEntry[];
   readonly loading: boolean;
 }
 
 /**
- * Resolves access for every registered setting at once.
+ * One row of the settings navigation: either a group to disclose, or a page to link to directly. An application that
+ * contributes a single page without a group gets the flat form and renders as one row.
+ */
+export type SettingsNavEntry =
+  | { readonly kind: 'group'; readonly group: AppClientRegisteredSettingGroup }
+  | { readonly kind: 'page'; readonly setting: AppClientRegisteredSetting };
+
+/**
+ * Resolves access for every registered page at once.
  *
  * `useCan` is a hook and cannot be called per setting from a list whose length varies, so this asks the access control
- * provider directly. A setting that declares no `access` rule is always visible, and so is every setting when no
- * plugin registered a provider at all — the settings centre itself is already behind authentication.
+ * provider directly. A page that declares no `access` rule is always visible, and so is every page when no plugin
+ * registered a provider at all — the settings centre itself is already behind authentication.
  */
 export function useSettingsAccess(
   settings: readonly AppClientRegisteredSetting[],
+  groups: readonly AppClientRegisteredSettingGroup[],
 ): SettingsAccess {
   const { can } = useCanWithoutCache();
   const guarded = useMemo(
@@ -45,15 +59,17 @@ export function useSettingsAccess(
             resource: setting.access?.resource,
             action: setting.access?.action ?? 'read',
           });
-          return result.can ? undefined : setting.id;
+          return result.can ? undefined : setting.path;
         } catch {
           // A provider that throws is treated as a denial rather than as an open door.
-          return setting.id;
+          return setting.path;
         }
       }),
     ).then((denied) => {
       if (active) {
-        setResolvedDeniedIds(new Set(denied.filter((id) => id !== undefined)));
+        setResolvedDeniedIds(
+          new Set(denied.filter((path) => path !== undefined)),
+        );
       }
     });
 
@@ -62,35 +78,57 @@ export function useSettingsAccess(
     };
   }, [can, guarded, settled]);
 
-  return useMemo(
-    () => ({
-      loading: deniedIds === undefined,
-      settings:
-        deniedIds === undefined
-          ? []
-          : settings.filter((setting) => !deniedIds.has(setting.id)),
-    }),
-    [deniedIds, settings],
-  );
-}
-
-export interface SettingsGroup {
-  readonly name: string;
-  readonly settings: readonly AppClientRegisteredSetting[];
-}
-
-/** Groups settings by their `group`, keeping both groups and their members in registration order. */
-export function groupSettings(
-  settings: readonly AppClientRegisteredSetting[],
-): readonly SettingsGroup[] {
-  const groups = new Map<string, AppClientRegisteredSetting[]>();
-  for (const setting of settings) {
-    const existing = groups.get(setting.group);
-    if (existing) {
-      existing.push(setting);
-    } else {
-      groups.set(setting.group, [setting]);
+  return useMemo(() => {
+    if (deniedIds === undefined) {
+      return { loading: true, settings: [], groups: [] };
     }
+    const visible = settings.filter((setting) => !deniedIds.has(setting.path));
+    return {
+      loading: false,
+      settings: visible,
+      groups: buildNavEntries(visible, groups),
+    };
+  }, [deniedIds, groups, settings]);
+}
+
+/**
+ * Rebuilds the navigation tree from the pages that survived the access check, preserving declaration order. A group
+ * with nothing left in it disappears rather than rendering as an empty disclosure.
+ */
+export function buildNavEntries(
+  visible: readonly AppClientRegisteredSetting[],
+  groups: readonly AppClientRegisteredSettingGroup[],
+): readonly SettingsNavEntry[] {
+  const visiblePaths = new Set(visible.map((setting) => setting.path));
+  const groupsById = new Map(groups.map((group) => [group.id, group]));
+  const entries: SettingsNavEntry[] = [];
+  const seenGroups = new Set<string>();
+
+  for (const setting of visible) {
+    if (setting.groupId === undefined) {
+      entries.push({ kind: 'page', setting });
+      continue;
+    }
+    if (seenGroups.has(setting.groupId)) {
+      continue;
+    }
+    const group = groupsById.get(setting.groupId);
+    if (!group) {
+      // A page naming a group nobody registered still has to be reachable, so it renders flat rather than vanishing.
+      entries.push({ kind: 'page', setting });
+      continue;
+    }
+    seenGroups.add(group.id);
+    entries.push({
+      kind: 'group',
+      group: {
+        ...group,
+        settings: group.settings.filter((child) =>
+          visiblePaths.has(child.path),
+        ),
+      },
+    });
   }
-  return [...groups].map(([name, grouped]) => ({ name, settings: grouped }));
+
+  return entries;
 }

@@ -399,7 +399,7 @@ function createScaffoldFiles({
     ],
     [
       'client/settings.ts',
-      `import {\n  defineClientSettings,\n  type AppClientSettingDefinition,\n} from '@nocobase/app-client/plugins';\n\n// Each entry becomes a page in the application's settings centre at \`/settings/<id>\`.\nconst settings: readonly AppClientSettingDefinition[] = defineClientSettings(\n  [],\n);\n\nexport default settings;\n`,
+      `import {\n  defineClientSettings,\n  type AppClientSettingDefinition,\n} from '@nocobase/app-client/plugins';\n\n// An entry is either a page, reached at \`/settings/<id>\`, or a group of pages reached at\n// \`/settings/<group id>/<id>\`. A group carries the icon and title for the whole section.\nconst settings: readonly AppClientSettingDefinition[] = defineClientSettings(\n  [],\n);\n\nexport default settings;\n`,
     ],
     [
       'client/providers.ts',

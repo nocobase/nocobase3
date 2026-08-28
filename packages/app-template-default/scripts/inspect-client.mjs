@@ -147,11 +147,11 @@ export async function inspectAppClient({
     settings: resolved.settings.map((setting) => ({
       id: setting.id,
       title: setting.title,
-      group: setting.group,
       packageName: setting.packageName,
       path: setting.path,
       source: setting.source,
       entry: entryOf(setting.packageName, 'settings'),
+      ...(setting.groupId ? { groupId: setting.groupId } : {}),
       ...(setting.access ? { access: setting.access } : {}),
     })),
     providers: resolved.providers.map((provider, index) => ({
@@ -452,7 +452,7 @@ function formatSettings(settings) {
         `  ${setting.path}`,
         `    id: ${setting.id}`,
         `    title: ${setting.title}`,
-        `    group: ${setting.group}`,
+        ...(setting.groupId ? [`    group: ${setting.groupId}`] : []),
         `    source: ${setting.source}`,
         `    entry: ${setting.entry}`,
         ...(setting.access

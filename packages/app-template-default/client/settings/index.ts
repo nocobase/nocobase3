@@ -1,7 +1,7 @@
 export { SettingsLayout, type SettingsLayoutProps } from './settings-layout.js';
 export {
-  groupSettings,
+  buildNavEntries,
   useSettingsAccess,
   type SettingsAccess,
-  type SettingsGroup,
+  type SettingsNavEntry,
 } from './use-settings-access.js';

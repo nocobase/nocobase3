@@ -16,8 +16,8 @@ function settingFor(id: string, title: string) {
       resource: `authorization.settings.${id}`,
     },
     entry: '@nocobase/app-plugin-authorization/client/settings',
-    group: 'Authorization',
-    id: `authorization/${id}`,
+    groupId: 'authorization',
+    id,
     packageName: '@nocobase/app-plugin-authorization',
     path: `/settings/authorization/${id}`,
     source: 'plugin',
@@ -188,7 +188,7 @@ describe('client inspection', () => {
     const output = formatAppClientInspection(inspection);
     expect(output).toMatch(/Bootstrap order/u);
     expect(output).toMatch(/Settings/u);
-    expect(output).toMatch(/group: Authorization/u);
+    expect(output).toMatch(/group: authorization/u);
     expect(formatAppClientInspection(inspection, 'settings')).not.toMatch(
       /Routes/u,
     );

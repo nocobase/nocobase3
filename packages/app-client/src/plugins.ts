@@ -4,9 +4,8 @@ import type { ComponentType } from 'react';
 import type { AppClientProvider, AppClientRefineConfig } from './config.js';
 
 const CONTRIBUTION_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
-// A setting id doubles as its URL, so it allows the same characters a route segment does plus `/` to namespace a
-// plugin's pages. It may not start or end with a slash, and no segment may be empty.
-const SETTING_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/i;
+// A setting id is one URL segment. Nesting comes from the tree, not from slashes inside an id.
+const SETTING_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
 const SETTINGS_PATH_PREFIX = '/settings';
 const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
   '/login',
@@ -48,14 +47,21 @@ export interface AppClientRegisteredRoute extends AppClientRouteDefinition {
 }
 
 /**
- * A page a plugin contributes to the application's settings centre. `id` is both the identity and the URL segment, so
- * a setting lands at `/settings/<id>`; a slash inside it namespaces the page under its plugin and keeps ids from
- * colliding across plugins.
+ * An icon component for a settings entry. It takes a `className` so the application controls sizing rather than the
+ * plugin, which is what keeps icons consistent across plugins. A lucide-react icon satisfies this directly.
  */
-export interface AppClientSettingDefinition {
+export type AppClientSettingIcon = ComponentType<{
+  readonly className?: string;
+}>;
+
+/**
+ * A page a plugin contributes to the application's settings centre. `id` is one URL segment; a page nested under a
+ * group is reached at `/settings/<group id>/<page id>`.
+ */
+export interface AppClientSettingPageDefinition {
   readonly id: string;
   readonly title: string;
-  readonly group: string;
+  readonly icon?: AppClientSettingIcon;
   /** Authorization checked before the page is loaded. */
   readonly access?: {
     readonly resource: string;
@@ -64,11 +70,44 @@ export interface AppClientSettingDefinition {
   readonly pageLoader: AppClientRouteComponentLoader;
 }
 
-export interface AppClientRegisteredSetting extends AppClientSettingDefinition {
-  /** The application path this setting is reachable at: `/settings/<id>`. */
+/**
+ * A group of settings pages. It carries the icon and title once for the whole section, so its children do not repeat
+ * them. Groups nest one level: a group's children are pages, not further groups.
+ */
+export interface AppClientSettingGroupDefinition {
+  readonly id: string;
+  readonly title: string;
+  readonly icon?: AppClientSettingIcon;
+  readonly children: readonly AppClientSettingPageDefinition[];
+}
+
+/** An entry a plugin contributes: either a page on its own, or a group of them. */
+export type AppClientSettingDefinition =
+  AppClientSettingPageDefinition | AppClientSettingGroupDefinition;
+
+export function isAppClientSettingGroup(
+  setting: AppClientSettingDefinition,
+): setting is AppClientSettingGroupDefinition {
+  return Array.isArray((setting as AppClientSettingGroupDefinition).children);
+}
+
+/** A resolved page, flattened out of the tree with its full path and the group it belongs to. */
+export interface AppClientRegisteredSetting extends AppClientSettingPageDefinition {
+  /** The application path this setting is reachable at: `/settings/<id>` or `/settings/<group>/<id>`. */
   readonly path: string;
+  readonly groupId?: string;
   readonly packageName: string;
   readonly source: AppClientContributionSource;
+}
+
+/** A resolved group, holding the pages the current contribution put under it. */
+export interface AppClientRegisteredSettingGroup {
+  readonly id: string;
+  readonly title: string;
+  readonly icon?: AppClientSettingIcon;
+  readonly packageName: string;
+  readonly source: AppClientContributionSource;
+  readonly settings: readonly AppClientRegisteredSetting[];
 }
 
 export interface AppClientRouteComponentOverrideDefinition {
@@ -209,7 +248,10 @@ export type AppClientPluginContributions = AppClientContributions;
 
 export interface ResolvedAppClientContributions {
   readonly routes: readonly AppClientRegisteredRoute[];
+  /** Every page, flattened, in declaration order — what the router mounts. */
   readonly settings: readonly AppClientRegisteredSetting[];
+  /** The same pages as a tree, in declaration order — what the navigation renders. */
+  readonly settingGroups: readonly AppClientRegisteredSettingGroup[];
   readonly providers: readonly AppClientRegisteredProvider[];
 }
 
@@ -330,7 +372,18 @@ export function defineClientSettings(
   settings: readonly AppClientSettingDefinition[],
 ): readonly AppClientSettingDefinition[] {
   return Object.freeze(
-    settings.map((setting) => Object.freeze({ ...setting })),
+    settings.map((setting) =>
+      Object.freeze(
+        isAppClientSettingGroup(setting)
+          ? {
+              ...setting,
+              children: Object.freeze(
+                setting.children.map((child) => Object.freeze({ ...child })),
+              ),
+            }
+          : { ...setting },
+      ),
+    ),
   );
 }
 
@@ -400,7 +453,9 @@ export function resolveAppClientContributions(
   // declare too. Both register here so the collision is reported whichever one the resolver reaches first.
   const claimedPaths = new Map<string, ClaimedPath>();
   const settings: AppClientRegisteredSetting[] = [];
-  const settingIds = new Map<string, AppClientRegisteredSetting>();
+  const settingGroups: AppClientRegisteredSettingGroup[] = [];
+  const settingPaths = new Map<string, AppClientRegisteredSetting>();
+  const settingGroupIds = new Map<string, AppClientRegisteredSettingGroup>();
   const providers: AppClientRegisteredProvider[] = [];
   const providerIds = new Set<string>();
 
@@ -434,32 +489,39 @@ export function resolveAppClientContributions(
     }
 
     for (const setting of contribution.settings ?? []) {
+      if (isAppClientSettingGroup(setting)) {
+        const group = createRegisteredSettingGroup(
+          packageName,
+          source,
+          setting,
+        );
+        const duplicateGroup = settingGroupIds.get(group.id);
+        if (duplicateGroup) {
+          throw new Error(
+            `Client setting group "${group.id}" from plugin "${packageName}" is already registered by "${duplicateGroup.packageName}".`,
+          );
+        }
+        settingGroupIds.set(group.id, group);
+        settingGroups.push(group);
+
+        for (const child of group.settings) {
+          claimSettingPath(child, packageName, settingPaths, claimedPaths);
+          settings.push(child);
+        }
+        continue;
+      }
+
       const registeredSetting = createRegisteredSetting(
         packageName,
         source,
         setting,
       );
-      const duplicate = settingIds.get(registeredSetting.id);
-      if (duplicate) {
-        throw new Error(
-          `Client setting id "${registeredSetting.id}" from plugin "${packageName}" is already registered by "${duplicate.packageName}".`,
-        );
-      }
-
-      const pathSignature = createRoutePathSignature(registeredSetting.path);
-      const claimed = claimedPaths.get(pathSignature);
-      if (claimed) {
-        throw new Error(
-          `Client setting "${registeredSetting.id}" from plugin "${packageName}" conflicts with ${claimed.kind} "${claimed.id}" at "${claimed.path}".`,
-        );
-      }
-
-      settingIds.set(registeredSetting.id, registeredSetting);
-      claimedPaths.set(pathSignature, {
-        kind: 'setting',
-        id: registeredSetting.id,
-        path: registeredSetting.path,
-      });
+      claimSettingPath(
+        registeredSetting,
+        packageName,
+        settingPaths,
+        claimedPaths,
+      );
       settings.push(registeredSetting);
     }
 
@@ -483,6 +545,7 @@ export function resolveAppClientContributions(
   return Object.freeze({
     routes: Object.freeze(routes),
     settings: Object.freeze(settings),
+    settingGroups: Object.freeze(settingGroups),
     providers: sortProviders(providers),
   });
 }
@@ -577,53 +640,147 @@ interface ClaimedPath {
   readonly path: string;
 }
 
-/** Builds the `/settings/<id>` path a setting is served at. */
-export function clientSettingPath(id: string): string {
-  return `${SETTINGS_PATH_PREFIX}/${id}`;
+/** Builds the path a setting is served at: `/settings/<id>`, or `/settings/<group>/<id>` inside a group. */
+export function clientSettingPath(id: string, groupId?: string): string {
+  return groupId === undefined
+    ? `${SETTINGS_PATH_PREFIX}/${id}`
+    : `${SETTINGS_PATH_PREFIX}/${groupId}/${id}`;
+}
+
+/**
+ * Records a page's path in both the settings map and the shared route/setting path map, so a duplicate is reported
+ * whichever kind claimed the address first.
+ */
+function claimSettingPath(
+  setting: AppClientRegisteredSetting,
+  packageName: string,
+  settingPaths: Map<string, AppClientRegisteredSetting>,
+  claimedPaths: Map<string, ClaimedPath>,
+): void {
+  const duplicate = settingPaths.get(setting.path);
+  if (duplicate) {
+    throw new Error(
+      `Client setting "${setting.path}" from plugin "${packageName}" is already registered by "${duplicate.packageName}".`,
+    );
+  }
+
+  const pathSignature = createRoutePathSignature(setting.path);
+  const claimed = claimedPaths.get(pathSignature);
+  if (claimed) {
+    throw new Error(
+      `Client setting "${setting.id}" from plugin "${packageName}" conflicts with ${claimed.kind} "${claimed.id}" at "${claimed.path}".`,
+    );
+  }
+
+  settingPaths.set(setting.path, setting);
+  claimedPaths.set(pathSignature, {
+    kind: 'setting',
+    id: setting.id,
+    path: setting.path,
+  });
+}
+
+function normalizeSettingId(
+  id: string,
+  packageName: string,
+  kind: 'setting' | 'setting group',
+): string {
+  const normalized = id.trim();
+  if (!normalized) {
+    throw new Error(
+      `Client ${kind} from plugin "${packageName}" must define a non-empty id.`,
+    );
+  }
+  if (!SETTING_ID_PATTERN.test(normalized)) {
+    throw new Error(
+      `Client ${kind} id "${id}" from plugin "${packageName}" must be a single segment of letters, digits, dot, underscore, or dash.`,
+    );
+  }
+  return normalized;
+}
+
+function normalizeSettingTitle(
+  title: string,
+  id: string,
+  packageName: string,
+  kind: 'setting' | 'setting group',
+): string {
+  const normalized = title.trim();
+  if (!normalized) {
+    throw new Error(
+      `Client ${kind} "${id}" from plugin "${packageName}" must define a non-empty title.`,
+    );
+  }
+  return normalized;
+}
+
+function createRegisteredSettingGroup(
+  packageName: string,
+  source: AppClientContributionSource,
+  group: AppClientSettingGroupDefinition,
+): AppClientRegisteredSettingGroup {
+  const id = normalizeSettingId(group.id, packageName, 'setting group');
+  const title = normalizeSettingTitle(
+    group.title,
+    id,
+    packageName,
+    'setting group',
+  );
+  if (group.children.length === 0) {
+    throw new Error(
+      `Client setting group "${id}" from plugin "${packageName}" must define at least one child.`,
+    );
+  }
+
+  const childIds = new Set<string>();
+  const children = group.children.map((child) => {
+    const registered = createRegisteredSetting(packageName, source, child, id);
+    if (childIds.has(registered.id)) {
+      throw new Error(
+        `Client setting group "${id}" from plugin "${packageName}" defines duplicate child id "${registered.id}".`,
+      );
+    }
+    childIds.add(registered.id);
+    return registered;
+  });
+
+  return Object.freeze({
+    ...(group.icon === undefined ? {} : { icon: group.icon }),
+    id,
+    packageName,
+    settings: Object.freeze(children),
+    source,
+    title,
+  });
 }
 
 function createRegisteredSetting(
   packageName: string,
   source: AppClientContributionSource,
-  setting: AppClientSettingDefinition,
+  setting: AppClientSettingPageDefinition,
+  groupId?: string,
 ): AppClientRegisteredSetting {
-  const id = setting.id.trim();
-  if (!id) {
-    throw new Error(
-      `Client setting from plugin "${packageName}" must define a non-empty id.`,
-    );
-  }
-  if (!SETTING_ID_PATTERN.test(id)) {
-    throw new Error(
-      `Client setting id "${setting.id}" from plugin "${packageName}" must be slash-separated segments of letters, digits, dot, underscore, or dash.`,
-    );
-  }
-  const title = setting.title.trim();
-  if (!title) {
-    throw new Error(
-      `Client setting "${id}" from plugin "${packageName}" must define a non-empty title.`,
-    );
-  }
-  const group = setting.group.trim();
-  if (!group) {
-    throw new Error(
-      `Client setting "${id}" from plugin "${packageName}" must define a non-empty group.`,
-    );
-  }
+  const id = normalizeSettingId(setting.id, packageName, 'setting');
+  const title = normalizeSettingTitle(
+    setting.title,
+    id,
+    packageName,
+    'setting',
+  );
   if (typeof setting.pageLoader !== 'function') {
     throw new Error(
       `Client setting "${id}" from plugin "${packageName}" must define a pageLoader function.`,
     );
   }
 
-  const path = clientSettingPath(id);
   return Object.freeze({
     ...(setting.access === undefined ? {} : { access: setting.access }),
-    group,
+    ...(setting.icon === undefined ? {} : { icon: setting.icon }),
+    ...(groupId === undefined ? {} : { groupId }),
     id,
     packageName,
     pageLoader: wrapRouteComponentLoader(setting.pageLoader, id, 'setting'),
-    path,
+    path: clientSettingPath(id, groupId),
     source,
     title,
   });

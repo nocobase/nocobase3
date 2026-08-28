@@ -242,32 +242,44 @@ const authentication: AppClientPluginFactory<AuthenticationClientOptions> =
 
 #### 设置中心
 
-`client/settings.ts` 里的每一项会成为 App 设置中心（右上角齿轮，`/settings`）里的一个页面，插件不需要自己管布局和左侧导航：
+`client/settings.ts` 里的每一项会成为 App 设置中心（右上角齿轮，`/settings`）里的内容，插件不需要自己管布局和左侧导航。一项要么是一个页面，要么是一组页面；分组把图标和标题在组这一层写一次，子项不用重复：
 
 ```ts
 import {
   defineClientSettings,
   type AppClientSettingDefinition,
 } from '@nocobase/app-client/plugins';
+import { FileClock, ScrollText } from 'lucide-react';
 
 const settings: readonly AppClientSettingDefinition[] = defineClientSettings([
   {
-    id: 'audit-log/general',
-    title: 'General',
-    group: 'Audit Log',
-    access: { resource: 'audit-log.settings.general', action: 'read' },
-    pageLoader: () => import('./pages/general-page.js'),
+    id: 'audit-log',
+    title: 'Audit Log',
+    icon: ScrollText,
+    children: [
+      {
+        id: 'general',
+        title: 'General',
+        icon: FileClock,
+        access: { resource: 'audit-log.settings.general', action: 'read' },
+        pageLoader: () => import('./pages/general-page.js'),
+      },
+    ],
   },
 ]);
 
 export default settings;
 ```
 
-`id` 既是唯一标识也是 URL 段，页面挂在 `/settings/<id>`，上面这条就是 `/settings/audit-log/general`。id 允许用斜杠分段，建议以插件名起头做命名空间，既避免和别的插件撞 id，也让 URL 能看出归属。`group` 是左侧导航的分组标题，同一个 group 的页面会归到一起，分组之间和分组内部都按注册顺序排列。
+id 是单个 URL 段，层级由树结构决定，所以上面这个页面挂在 `/settings/audit-log/general`。只有一个页面的插件不用套分组，直接写 `{ id, title, pageLoader }`，挂在 `/settings/<id>`，导航里就是平铺的一行。分组只支持一层，也就是分组的子项都是页面，不能再套分组。
 
-`access` 可选，填了就在加载页面前做一次权限检查，没通过的页面既不出现在导航里，直接访问 URL 也会被挡掉；不填表示只要能进设置中心就能看。
+`icon` 在分组和页面上都可选，是一个接受 `className` 的组件，lucide-react 的图标直接满足；尺寸由 App 统一给，这样不同插件的条目能对齐。
 
-设置和路由共用同一个路径空间：一个插件注册 `id: 'general'`，另一个插件又声明 `path: '/settings/general'` 的路由，启动时会直接报冲突，而不是让两个页面抢同一个地址。
+`access` 属于页面，可选。填了就在加载页面前做一次权限检查，没通过的页面既不出现在导航里，直接访问 URL 也会被挡掉；一个分组下的页面全被挡掉时，分组本身也不显示。不填表示只要能进设置中心就能看。
+
+设置中心的左侧导航按分组折叠，行为和主侧边栏一致：默认展开当前页面所在的组，其余收起。
+
+设置和路由共用同一个路径空间：一个页面挂在 `/settings/general`，另一个插件又声明 `path: '/settings/general'` 的路由，启动时会直接报冲突，而不是让两个页面抢同一个地址。
 
 `client/plugin.ts` 会经由 `client/index.ts` 被 App 的 `client/plugins.ts` 静态 import，所以它静态 import 的东西都会进入应用的入口 chunk。建议这个文件只 import `defineClientPlugin`、路由 ID 常量这类轻量内容，组件、Provider 工厂、服务类都留在三个实现入口里由 `() => import()` 引用。这是建议而非强制校验。
 

@@ -2,6 +2,7 @@ import { Authenticated } from '@refinedev/core';
 import type {
   AppClientRegisteredRoute,
   AppClientRegisteredSetting,
+  AppClientRegisteredSettingGroup,
 } from '@nocobase/app-client/plugins';
 import { lazy, Suspense, useMemo, type ReactElement } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
@@ -21,11 +22,13 @@ const SettingsLayout = lazy(async () => ({
 export interface AppRouterProps {
   readonly clientRoutes: readonly AppClientRegisteredRoute[];
   readonly clientSettings: readonly AppClientRegisteredSetting[];
+  readonly clientSettingGroups: readonly AppClientRegisteredSettingGroup[];
 }
 
 export function AppRouter({
   clientRoutes,
   clientSettings,
+  clientSettingGroups,
 }: AppRouterProps): ReactElement {
   const routeGroups = useMemo(
     () => ({
@@ -65,7 +68,10 @@ export function AppRouter({
                 <Loading className='min-h-svh' label='Loading settings' />
               }
             >
-              <SettingsLayout settings={clientSettings} />
+              <SettingsLayout
+                groups={clientSettingGroups}
+                settings={clientSettings}
+              />
             </Suspense>
           }
         />
