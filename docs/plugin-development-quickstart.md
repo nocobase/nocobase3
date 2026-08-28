@@ -103,6 +103,10 @@ pnpm --filter @nocobase/app-template-default seed
 - `server/provider.ts`：以 `ServiceProvider` 的形式注册服务端能力并管理生命周期；
 - `server/routes/index.ts`：注册 HTTP API。
 
+插件通常只需要一个 `server/provider.ts` 入口。这个 Provider 可以注册多个服务；服务使用类型化 `ServiceToken` 暴露，由 Route 或其他 Provider 通过 `app.container` 解析。不要在 Route 中重复创建服务实例。
+
+Service Provider 的概念、五阶段生命周期、Token/Container 用法和完整插件示例参见 [Service Provider](./service-provider.md)。仓库内可运行的实现位于 [`@nocobase/app-plugin-service-provider-example`](../packages/app-plugin-service-provider-example/README.md)。
+
 脚手架默认提供：
 
 ```text

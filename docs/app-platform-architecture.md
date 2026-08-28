@@ -280,6 +280,9 @@ Service Provider 的基础设施由独立的 `@nocobase/service-provider` 包提
 `ServiceProviderRegistry`。该包不依赖 `AppRuntime` 或具体 Server 框架；
 `ServiceProvider` 的 Application 类型由使用方通过泛型传入。
 
+概念说明、生命周期约定和插件完整示例参见
+[Service Provider](./service-provider.md)。
+
 最完整的生命周期
 
 ```bash
