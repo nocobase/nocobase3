@@ -73,8 +73,7 @@ const HEADER = `import {
 function sourceWith(...shortNames: string[]): string {
   const imports = shortNames
     .map(
-      (name) =>
-        `import ${name} from '@nocobase/app-plugin-${name}/client/plugin';\n`,
+      (name) => `import ${name} from '@nocobase/app-plugin-${name}/client';\n`,
     )
     .join('');
   // An empty registration stays on one line, the way the template writes it, so the empty case is the shape the editor
@@ -111,7 +110,7 @@ describe('localNameFor', () => {
 describe('clientPluginEntrySpecifier', () => {
   it('points at the plugin’s client entry subpath', () => {
     expect(clientPluginEntrySpecifier('@nocobase/app-plugin-audit-log')).toBe(
-      '@nocobase/app-plugin-audit-log/client/plugin',
+      '@nocobase/app-plugin-audit-log/client',
     );
   });
 });
@@ -147,6 +146,33 @@ describe('listClientPlugins', () => {
     ]);
   });
 
+  it('recognises an app still wired to the pre-barrel entry', async () => {
+    // Apps registered before the barrel gained its default export import `<package>/client/plugin`. Reading those as
+    // unregistered would make `register` add a second, conflicting import for a plugin that is already wired.
+    const editor = await createEditor();
+    const legacy = sourceWith('alpha').replace(
+      "'@nocobase/app-plugin-alpha/client'",
+      "'@nocobase/app-plugin-alpha/client/plugin'",
+    );
+
+    expect(editor.list(legacy)).toEqual([
+      { localName: 'alpha', packageName: '@nocobase/app-plugin-alpha' },
+    ]);
+  });
+
+  it('leaves a pre-barrel registration alone rather than duplicating it', async () => {
+    const editor = await createEditor();
+    const legacy = sourceWith('alpha').replace(
+      "'@nocobase/app-plugin-alpha/client'",
+      "'@nocobase/app-plugin-alpha/client/plugin'",
+    );
+
+    const added = editor.add(legacy, '@nocobase/app-plugin-alpha');
+
+    expect(added.changed).toBe(false);
+    expect(added.sourceText).toBe(legacy);
+  });
+
   it('rejects a file that never calls defineClientPlugins', async () => {
     const editor = await createEditor();
 
@@ -168,7 +194,7 @@ describe('addClientPlugin', () => {
     expect(added.changed).toBe(true);
     expect(added.localName).toBe('auditLog');
     expect(added.sourceText).toContain(
-      "import auditLog from '@nocobase/app-plugin-audit-log/client/plugin';",
+      "import auditLog from '@nocobase/app-plugin-audit-log/client';",
     );
     expect(editor.list(added.sourceText).map((e) => e.packageName)).toEqual([
       '@nocobase/app-plugin-alpha',

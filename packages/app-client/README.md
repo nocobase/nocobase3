@@ -63,13 +63,27 @@ const example: AppClientPluginFactory<ExampleClientOptions> =
 export default example;
 ```
 
-Every entry is optional; declare only the ones the plugin actually has. Publish
-the file as a `./client/plugin` subpath in both `exports` and
-`publishConfig.exports` so applications can import it.
+Every entry is optional; declare only the ones the plugin actually has.
 
-The application imports that factory statically, so anything `client/plugin.ts`
-imports at value level lands in the application entry chunk. Reference the
-three entries with `() => import()` and import plugin types with `import type`.
+Re-export that factory as the default from `client/index.ts`, so an application
+imports the plugin as `<package>/client`:
+
+```ts
+export { default } from './plugin.js';
+```
+
+Publish both subpaths in `exports` and `publishConfig.exports`. `./client` is
+what applications import; `./client/plugin` stays available for anything that
+wants the descriptor alone.
+
+The application imports that factory statically, so anything reachable from
+`client/index.ts` at value level can land in the application entry chunk.
+Reference the three entries with `() => import()`, import plugin types with
+`import type`, and declare `"sideEffects": false` so a bundler can drop the
+barrel exports the application does not use. Declaring it is only correct when
+the package really has no module-level side effects — a bare `import './x.css'`
+is one, and would be dropped along with everything else.
+
 Keep components, provider factories, and service classes inside `bootstrap`,
 `routes`, and `providers` rather than importing them here. This is a
 recommendation rather than an enforced rule; nothing validates it.
@@ -124,8 +138,8 @@ import {
   defineClientPlugins,
   type AppClientPlugins,
 } from '@nocobase/app-client/plugins';
-import authentication from '@nocobase/app-plugin-authentication/client/plugin';
-import example from '@nocobase/app-plugin-example/client/plugin';
+import authentication from '@nocobase/app-plugin-authentication/client';
+import example from '@nocobase/app-plugin-example/client';
 
 const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
