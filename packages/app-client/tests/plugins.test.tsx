@@ -9,8 +9,11 @@ import {
   defineClientProviders,
   defineClientRouteComponentOverrides,
   defineClientRoutes,
+  defineClientSettings,
   defineClientSourceExtension,
   resolveAppClientContributions,
+  type AppClientSettingDefinition,
+  type AppClientSettingPageDefinition,
 } from '../src/plugins.js';
 
 function FirstProvider({ children }: PropsWithChildren): ReactElement {
@@ -509,6 +512,318 @@ describe('client modules', () => {
   it('rejects an empty package name', () => {
     expect(() => defineClientPlugin({ packageName: '  ' })).toThrow(
       'must define a package name',
+    );
+  });
+});
+
+describe('client settings', () => {
+  const page = async () => ({ default: () => null });
+  const resolveSetting = (setting: Partial<AppClientSettingPageDefinition>) =>
+    resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-example',
+        settings: [setting as AppClientSettingPageDefinition],
+      },
+    ]);
+
+  it("registers a group's pages under its id and keeps the declaration order", () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-authorization',
+        settings: defineClientSettings([
+          {
+            id: 'authorization',
+            title: 'Authorization',
+            children: [
+              {
+                id: 'permission-sets',
+                title: 'Permission Sets',
+                access: {
+                  resource: 'authorization.settings.permission-sets',
+                  action: 'read',
+                },
+                pageLoader: page,
+              },
+              {
+                id: 'default-access',
+                title: 'Default Access',
+                pageLoader: page,
+              },
+            ],
+          },
+        ]),
+      },
+    ]);
+
+    // The flat list is what the router mounts; the tree is what the navigation renders.
+    expect(resolved.settings).toMatchObject([
+      {
+        groupId: 'authorization',
+        id: 'permission-sets',
+        path: '/settings/authorization/permission-sets',
+        source: 'plugin',
+        title: 'Permission Sets',
+      },
+      {
+        groupId: 'authorization',
+        id: 'default-access',
+        path: '/settings/authorization/default-access',
+      },
+    ]);
+    expect(resolved.settings[1]).not.toHaveProperty('access');
+    expect(resolved.settingGroups).toMatchObject([
+      {
+        id: 'authorization',
+        packageName: '@nocobase/app-plugin-authorization',
+        title: 'Authorization',
+      },
+    ]);
+    expect(
+      resolved.settingGroups[0].settings.map((setting) => setting.path),
+    ).toEqual([
+      '/settings/authorization/permission-sets',
+      '/settings/authorization/default-access',
+    ]);
+    expect(Object.isFrozen(resolved.settings)).toBe(true);
+    expect(Object.isFrozen(resolved.settingGroups[0])).toBe(true);
+  });
+
+  it('registers an ungrouped page at the top level', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-example',
+        settings: defineClientSettings([
+          { id: 'general', title: 'General', pageLoader: page },
+        ]),
+      },
+    ]);
+
+    expect(resolved.settings).toMatchObject([
+      { id: 'general', path: '/settings/general' },
+    ]);
+    expect(resolved.settings[0]).not.toHaveProperty('groupId');
+    expect(resolved.settingGroups).toEqual([]);
+  });
+
+  it('carries the icon a group and a page declare', () => {
+    const Icon = () => null;
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-example',
+        settings: defineClientSettings([
+          {
+            id: 'group',
+            title: 'Group',
+            icon: Icon,
+            children: [
+              { id: 'child', title: 'Child', icon: Icon, pageLoader: page },
+              { id: 'plain', title: 'Plain', pageLoader: page },
+            ],
+          },
+        ]),
+      },
+    ]);
+
+    expect(resolved.settingGroups[0].icon).toBe(Icon);
+    expect(resolved.settings[0].icon).toBe(Icon);
+    expect(resolved.settings[1]).not.toHaveProperty('icon');
+  });
+
+  it('accepts a settings module that is a function of the plugin options', () => {
+    const settingsFor = (options: {
+      readonly advanced: boolean;
+    }): readonly AppClientSettingDefinition[] =>
+      defineClientSettings([
+        { id: 'general', title: 'General', pageLoader: page },
+        ...(options.advanced
+          ? [{ id: 'advanced', title: 'Advanced', pageLoader: page }]
+          : []),
+      ]);
+
+    expect(
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-example',
+          settings: settingsFor({ advanced: false }),
+        },
+      ]).settings.map((setting) => setting.id),
+    ).toEqual(['general']);
+    expect(
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-example',
+          settings: settingsFor({ advanced: true }),
+        },
+      ]).settings.map((setting) => setting.id),
+    ).toEqual(['general', 'advanced']);
+  });
+
+  it('rejects a path two plugins both claim', () => {
+    expect(() =>
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-first',
+          settings: defineClientSettings([
+            { id: 'general', title: 'General', pageLoader: page },
+          ]),
+        },
+        {
+          packageName: '@nocobase/app-plugin-second',
+          settings: defineClientSettings([
+            { id: 'general', title: 'Général', pageLoader: page },
+          ]),
+        },
+      ]),
+    ).toThrow(
+      'Client setting "/settings/general" from plugin "@nocobase/app-plugin-second" is already registered by "@nocobase/app-plugin-first".',
+    );
+  });
+
+  it('rejects a group id two plugins both claim', () => {
+    const group = (packageName: string) => ({
+      packageName,
+      settings: defineClientSettings([
+        {
+          id: 'shared',
+          title: 'Shared',
+          children: [
+            {
+              id: packageName.slice(-5),
+              title: 'Child',
+              pageLoader: page,
+            },
+          ],
+        },
+      ]),
+    });
+
+    expect(() =>
+      resolveAppClientContributions([
+        group('@nocobase/app-plugin-first'),
+        group('@nocobase/app-plugin-second'),
+      ]),
+    ).toThrow(
+      'Client setting group "shared" from plugin "@nocobase/app-plugin-second" is already registered by "@nocobase/app-plugin-first".',
+    );
+  });
+
+  it('rejects duplicate child ids inside one group', () => {
+    expect(() =>
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-example',
+          settings: defineClientSettings([
+            {
+              id: 'group',
+              title: 'Group',
+              children: [
+                { id: 'child', title: 'First', pageLoader: page },
+                { id: 'child', title: 'Second', pageLoader: page },
+              ],
+            },
+          ]),
+        },
+      ]),
+    ).toThrow('defines duplicate child id "child"');
+  });
+
+  it('rejects an empty group', () => {
+    expect(() =>
+      resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-example',
+          settings: [{ id: 'group', title: 'Group', children: [] }],
+        },
+      ]),
+    ).toThrow('must define at least one child');
+  });
+
+  it('rejects a route that collides with a registered setting, and the reverse', () => {
+    const settings = {
+      packageName: '@nocobase/app-plugin-first',
+      settings: defineClientSettings([
+        { id: 'general', title: 'General', pageLoader: page },
+      ]),
+    };
+    const route = {
+      packageName: '@nocobase/app-plugin-second',
+      routes: defineClientRoutes([
+        { name: 'general', path: '/settings/general', componentLoader: page },
+      ]),
+    };
+
+    expect(() => resolveAppClientContributions([settings, route])).toThrow(
+      'conflicts with setting "general" at "/settings/general"',
+    );
+    expect(() => resolveAppClientContributions([route, settings])).toThrow(
+      'conflicts with route "@nocobase/app-plugin-second:general" at "/settings/general"',
+    );
+  });
+
+  it.each([
+    { id: '', reason: 'must define a non-empty id' },
+    { id: '  ', reason: 'must define a non-empty id' },
+    // Nesting comes from the tree now, so a slash inside an id is no longer a namespace but a malformed segment.
+    { id: 'a/b', reason: 'must be a single segment' },
+    { id: '/leading', reason: 'must be a single segment' },
+    { id: 'has space', reason: 'must be a single segment' },
+    { id: '..', reason: 'must be a single segment' },
+    { id: 'query?x=1', reason: 'must be a single segment' },
+  ])(
+    'rejects setting id "$id", which would not survive as a URL',
+    ({ id, reason }) => {
+      expect(() =>
+        resolveSetting({ id, title: 'Title', pageLoader: page }),
+      ).toThrow(reason);
+    },
+  );
+
+  it.each([
+    { patch: { title: ' ' }, reason: 'must define a non-empty title' },
+    {
+      patch: { pageLoader: undefined },
+      reason: 'must define a pageLoader function',
+    },
+  ])('requires $reason', ({ patch, reason }) => {
+    expect(() =>
+      resolveSetting({
+        id: 'general',
+        title: 'General',
+        pageLoader: page,
+        ...patch,
+      }),
+    ).toThrow(reason);
+  });
+
+  it('reports the setting a failing page loader belongs to', async () => {
+    const [setting] = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-example',
+        settings: defineClientSettings([
+          {
+            id: 'general',
+            title: 'General',
+            pageLoader: async () => ({ default: undefined as never }),
+          },
+        ]),
+      },
+    ]).settings;
+
+    await expect(setting.pageLoader()).rejects.toThrow(
+      'Failed to load client setting "general".',
+    );
+  });
+
+  it('carries the settings loader from the plugin definition into the registration', () => {
+    const settingsLoader = async () => ({ default: [] });
+    const plugin = defineClientPlugin({
+      packageName: '@nocobase/app-plugin-example',
+      settings: settingsLoader,
+    });
+
+    expect(plugin().settings).toBe(settingsLoader);
+    expect(defineClientPlugins([plugin()]).plugins[0].settings).toBe(
+      settingsLoader,
     );
   });
 });

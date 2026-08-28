@@ -34,6 +34,7 @@ export default createReactVitestConfig({
       'tests/logic/client-refine-runtime.test.ts',
       'tests/logic/client-routes.test.ts',
       'tests/logic/client-runtime.test.ts',
+      'tests/logic/client-settings.test.tsx',
       'tests/logic/client-shell.test.tsx',
       'tests/logic/client-theme.test.tsx',
       'tests/logic/config.test.ts',

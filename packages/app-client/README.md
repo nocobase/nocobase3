@@ -40,7 +40,7 @@ in registration order. The application may own `/`; plugins may not.
 A plugin exposes its client contributions through `client/plugin.ts`, which
 default-exports the factory returned by `defineClientPlugin`. This file is the
 plugin's outward-facing registration surface: it names the package, points at
-the three optional entries, and declares the options an application may pass:
+the four optional entries, and declares the options an application may pass:
 
 ```ts
 import {
@@ -57,6 +57,7 @@ const example: AppClientPluginFactory<ExampleClientOptions> =
     packageName: '@nocobase/app-plugin-example',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
+    settings: () => import('./settings.js'),
     providers: () => import('./providers.js'),
   });
 
@@ -78,14 +79,14 @@ wants the descriptor alone.
 
 The application imports that factory statically, so anything reachable from
 `client/index.ts` at value level can land in the application entry chunk.
-Reference the three entries with `() => import()`, import plugin types with
+Reference the four entries with `() => import()`, import plugin types with
 `import type`, and declare `"sideEffects": false` so a bundler can drop the
 barrel exports the application does not use. Declaring it is only correct when
 the package really has no module-level side effects — a bare `import './x.css'`
 is one, and would be dropped along with everything else.
 
 Keep components, provider factories, and service classes inside `bootstrap`,
-`routes`, and `providers` rather than importing them here. This is a
+`routes`, `settings`, and `providers` rather than importing them here. This is a
 recommendation rather than an enforced rule; nothing validates it.
 
 A plugin that wants to let an application replace one of its route components
@@ -163,7 +164,7 @@ This mechanism covers client contributions only. Server plugin loading still
 reads `nocobase.plugins` from the application `package.json`; there is no
 server-side equivalent of `client/plugins.ts` yet.
 
-## Routes and providers
+## Routes, settings, and providers
 
 Client plugins declare authenticated routes in a dedicated entry. Route pages
 use a second dynamic import so their code is only loaded when the URL is
@@ -185,6 +186,63 @@ const routes: readonly AppClientRouteDefinition[] = defineClientRoutes([
 
 export default routes;
 ```
+
+Settings pages go in their own entry. They are lazily loaded the same way
+routes are, but the application mounts them inside its settings centre and
+builds the navigation from them, so a plugin declares only the page. An entry
+is either a page on its own or a group of pages, and a group carries the icon
+and title once for the whole section rather than repeating them per child:
+
+```ts
+import {
+  defineClientSettings,
+  type AppClientSettingDefinition,
+} from '@nocobase/app-client/plugins';
+import { KeyRound, ShieldCheck } from 'lucide-react';
+
+const settings: readonly AppClientSettingDefinition[] = defineClientSettings([
+  {
+    id: 'example',
+    title: 'Example',
+    icon: ShieldCheck,
+    children: [
+      {
+        id: 'general',
+        title: 'General',
+        icon: KeyRound,
+        access: { resource: 'example.settings.general', action: 'read' },
+        pageLoader: () => import('./pages/general'),
+      },
+    ],
+  },
+]);
+
+export default settings;
+```
+
+Ids are single URL segments and nesting comes from the tree, so the page above
+is served at `/settings/example/general`. A plugin contributing a single page
+declares it without a group — `{ id, title, pageLoader }` — and it is served at
+`/settings/<id>` and rendered as one flat row rather than a disclosure. Groups
+nest one level: a group's children are pages, not further groups.
+
+`icon` is optional on both groups and pages. It is a component taking a
+`className`, which a lucide-react icon satisfies directly; the application
+supplies the size so entries line up across plugins.
+
+`access` is optional and belongs to a page. When present the application checks
+it before loading: a page the check denies is left out of the navigation and
+cannot be reached by its URL either, and a group whose pages are all denied
+disappears with them. A page without it is visible to anyone who can open the
+settings centre.
+
+Groups and pages keep declaration order, and `resolveAppClientContributions`
+returns both a flat `settings` list — what the router mounts — and a
+`settingGroups` tree, which is what the navigation renders.
+
+Routes and settings share one path space. A page at `/settings/general` and a
+route at the same path are a conflict, and resolution fails with both
+identities named rather than mounting two pages at one address.
 
 Global providers are synchronous components declared separately:
 
@@ -208,8 +266,8 @@ const providers: readonly AppClientProviderDefinition[] = defineClientProviders(
 export default providers;
 ```
 
-A routes or providers entry may default-export a function of the plugin's
-options instead of an array. The runtime calls it with the options the
+A routes, settings, or providers entry may default-export a function of the
+plugin's options instead of an array. The runtime calls it with the options the
 application passed, so a plugin can add or drop contributions per application
 without a second entry:
 
@@ -246,9 +304,10 @@ only reference another provider in the same layer. Missing references,
 cross-layer constraints, duplicate IDs, and cycles fail before the first React
 render.
 
-The application owns route placement, authentication, loading, error UI, and
-the final provider tree. `bootstrap` remains the imperative initialization
-entry; routes and providers remain inspectable declarations.
+The application owns route placement, authentication, loading, error UI, the
+settings centre chrome, and the final provider tree. `bootstrap` remains the
+imperative initialization entry; routes, settings, and providers remain
+inspectable declarations.
 
 ## Route component overrides
 
