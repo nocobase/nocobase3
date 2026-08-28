@@ -10,10 +10,12 @@
       "dependencies": [
         "@nocobase/app-plugin-file@^0.0.1",
         "lucide-react@^0.487.0",
+        "react-markdown@^10.1.0",
+        "remark-gfm@^4.0.1",
         "react@^19.0.0",
         "react-dom@^19.0.0"
       ],
-      "registryDependencies": ["button"],
+      "registryDependencies": ["button", "dialog"],
       "docs": "Install component-ui when an application needs editable file UI. Import its index.ts, create or pass a FilesClient for the consuming business endpoint, and keep route composition in the application. The item adds no route or server implementation. Review plugin upgrades with a three-way merge because installed files are application-owned.",
       "meta": {
         "ownership": "application",

@@ -44,10 +44,10 @@ export const FILE_DEMO_ORDER: Readonly<FileDemoOrder> = Object.freeze({
 
 export const FILE_DEMO_AVATAR: Readonly<FileDemoFile> = Object.freeze({
   id: 'file-demo-avatar',
-  key: 'file-demo/profile/avatar.svg',
-  filename: 'avatar.svg',
-  mimeType: 'image/svg+xml',
-  size: 238,
+  key: 'file-demo/profile/avatar.png',
+  filename: 'avatar.png',
+  mimeType: 'image/png',
+  size: 68,
   public: false,
 });
 
@@ -64,10 +64,10 @@ export const FILE_DEMO_PUBLIC_ATTACHMENT: Readonly<FileDemoFile> =
 export const FILE_DEMO_PRIVATE_ATTACHMENT: Readonly<FileDemoFile> =
   Object.freeze({
     id: 'file-demo-private-document',
-    key: 'file-demo/orders/private-document.json',
-    filename: 'private-document.json',
-    mimeType: 'application/json',
-    size: 54,
+    key: 'file-demo/orders/private-order-note.md',
+    filename: 'private-order-note.md',
+    mimeType: 'text/markdown',
+    size: 132,
     public: false,
   });
 

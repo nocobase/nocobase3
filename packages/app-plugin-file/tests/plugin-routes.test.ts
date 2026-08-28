@@ -30,6 +30,10 @@ import type {
   DatabaseFileStoreOptions,
   FileStore,
 } from '../server/types.js';
+import {
+  FILE_DEMO_AVATAR_MIME_TYPES,
+  FILE_DEMO_ORDER_MIME_TYPES,
+} from '../shared/file-demo.js';
 
 const { createFileRouteMock, ensureFileObjectMock, removeFileObjectMock } =
   vi.hoisted(() => ({
@@ -200,22 +204,28 @@ describe('file plugin route factory and registrar', () => {
     await expect(responsePromise).resolves.toMatchObject({ status: 200 });
   });
 
-  it('returns the same observable error after fixture initialization fails', async () => {
-    ensureFileObjectMock.mockRejectedValue(new Error('fixture write failed'));
+  it('retries fixture initialization on the next request after a failure', async () => {
+    ensureFileObjectMock.mockRejectedValueOnce(
+      new Error('fixture write failed'),
+    );
     const app = createFactoryApp(config, deps);
 
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await app.request('/api/attachments/examples', {
-        headers: { 'x-demo-auth': 'allowed' },
-      });
-      expect(response.status).toBe(503);
-      await expect(response.json()).resolves.toMatchObject({
-        error: {
-          code: 'FILE_UNAVAILABLE',
-          message: 'File Demo fixture initialization failed.',
-        },
-      });
-    }
+    const failed = await app.request('/api/attachments/examples', {
+      headers: { 'x-demo-auth': 'allowed' },
+    });
+    expect(failed.status).toBe(503);
+    await expect(failed.json()).resolves.toMatchObject({
+      error: {
+        code: 'FILE_UNAVAILABLE',
+        message: 'File Demo fixture initialization failed.',
+      },
+    });
+
+    const recovered = await app.request('/api/attachments/examples', {
+      headers: { 'x-demo-auth': 'allowed' },
+    });
+    expect(recovered.status).toBe(200);
+    expect(ensureFileObjectMock).toHaveBeenCalledTimes(6);
   });
 
   it('configures both Demo resources through the public route factory', () => {
@@ -247,7 +257,7 @@ describe('file plugin route factory and registrar', () => {
       limits: {
         maxSize: 5 * 1024 * 1024,
         maxFiles: 1,
-        mimeTypes: ['image/gif', 'image/jpeg', 'image/png', 'image/webp'],
+        mimeTypes: FILE_DEMO_AVATAR_MIME_TYPES,
       },
     });
     expect(order).toMatchObject({
@@ -259,14 +269,7 @@ describe('file plugin route factory and registrar', () => {
       limits: {
         maxSize: 50 * 1024 * 1024,
         maxFiles: 10,
-        mimeTypes: expect.arrayContaining([
-          'application/json',
-          'application/pdf',
-          'audio/mpeg',
-          'image/png',
-          'text/plain',
-          'video/mp4',
-        ]),
+        mimeTypes: FILE_DEMO_ORDER_MIME_TYPES,
       },
     });
     expect(avatar?.auth).toBe(order?.auth);

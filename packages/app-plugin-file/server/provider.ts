@@ -12,13 +12,12 @@ import {
   type FilePluginRuntime,
 } from './plugin-runtime.js';
 import { filePluginRuntimeToken } from './runtime-token.js';
-import { ensureFileObject, removeFileObject } from './file-storage.js';
+import { ensureFileObject } from './file-storage.js';
 
 type FileDemoRuntime = {
   readonly database: FilePluginRuntime['database'];
   readonly drive: FilePluginRuntime['drive'];
   readonly defaultDisk: string;
-  readonly diskNames?: readonly string[];
 };
 
 const readinessByDatabase = new WeakMap<
@@ -63,6 +62,9 @@ export function prepareFileDemoFixtures(
   if (existing) return existing;
 
   const readiness = ensureFileDemoFixtures(runtime).catch((cause: unknown) => {
+    if (readinessByDisk.get(runtime.defaultDisk) === readiness) {
+      readinessByDisk.delete(runtime.defaultDisk);
+    }
     throw new FileUnavailableError('File Demo fixture initialization failed.', {
       cause,
     });
@@ -97,7 +99,7 @@ async function reconcileFixture(
   const query = runtime.database.query();
   const existing = await query
     .selectFrom(fixture.table)
-    .select(['id', 'disk', 'key'])
+    .select('id')
     .where('id', '=', fixture.id)
     .executeTakeFirst();
   await ensureFileObject(
@@ -127,47 +129,5 @@ async function reconcileFixture(
       .insertInto(fixture.table)
       .values({ ...row, createdAt: now })
       .execute();
-  }
-  await removeStaleFixtureObjects(
-    runtime,
-    fixture,
-    existing
-      ? {
-          disk: Reflect.get(existing, 'disk'),
-          key: Reflect.get(existing, 'key'),
-        }
-      : undefined,
-  );
-}
-
-async function removeStaleFixtureObjects(
-  runtime: FileDemoRuntime,
-  fixture: (typeof FILE_DEMO_FIXTURES)[number],
-  existing: { readonly disk: unknown; readonly key: unknown } | undefined,
-): Promise<void> {
-  const locations = new Map<string, { disk: string; key: string }>();
-  if (existing) {
-    const disk = String(existing.disk);
-    const key = String(existing.key);
-    locations.set(`${disk}\0${key}`, { disk, key });
-  }
-  for (const disk of runtime.diskNames ?? []) {
-    locations.set(`${disk}\0${fixture.key}`, { disk, key: fixture.key });
-  }
-  locations.delete(`${runtime.defaultDisk}\0${fixture.key}`);
-
-  const results = await Promise.allSettled(
-    [...locations.values()].map((location) =>
-      removeFileObject(runtime.drive, location),
-    ),
-  );
-  const errors = results.flatMap((result) =>
-    result.status === 'rejected' ? [result.reason as unknown] : [],
-  );
-  if (errors.length > 0) {
-    throw new AggregateError(
-      errors,
-      'Stale File Demo objects could not be removed.',
-    );
   }
 }

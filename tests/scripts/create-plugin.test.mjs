@@ -67,6 +67,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
       types: './client/routes.ts',
       import: './client/routes.ts',
     },
+    './client/settings': {
+      types: './client/settings.ts',
+      import: './client/settings.ts',
+    },
     './client/providers': {
       types: './client/providers.ts',
       import: './client/providers.ts',
@@ -89,6 +93,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     './client/routes': {
       types: './dist/client/routes.d.ts',
       import: './dist/client/routes.js',
+    },
+    './client/settings': {
+      types: './dist/client/settings.d.ts',
+      import: './dist/client/settings.js',
     },
     './client/providers': {
       types: './dist/client/providers.d.ts',
@@ -179,6 +187,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     path.join(result.targetDirectory, 'client/routes.ts'),
     'utf8',
   );
+  const clientSettings = await readFile(
+    path.join(result.targetDirectory, 'client/settings.ts'),
+    'utf8',
+  );
   const clientProviders = await readFile(
     path.join(result.targetDirectory, 'client/providers.ts'),
     'utf8',
@@ -196,6 +208,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   assert.match(clientModule, /routes: \(\) => import\('\.\/routes\.js'\),/u);
   assert.match(
     clientModule,
+    /settings: \(\) => import\('\.\/settings\.js'\),/u,
+  );
+  assert.match(
+    clientModule,
     /providers: \(\) => import\('\.\/providers\.js'\),/u,
   );
   assert.match(
@@ -205,6 +221,7 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   assert.match(clientModule, /export default auditLog;/u);
   assert.match(clientBootstrap, /AppClientPluginBootstrap/u);
   assert.match(clientRoutes, /defineClientRoutes\(\[\]\)/u);
+  assert.match(clientSettings, /defineClientSettings\(\s*\[\],?\s*\)/u);
   assert.match(clientProviders, /defineClientProviders\(\s*\[\],\s*\)/u);
   const providerTest = await readFile(
     path.join(result.targetDirectory, 'tests/provider.test.ts'),

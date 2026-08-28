@@ -29,12 +29,16 @@ describe('workflow package scanner', () => {
       expect(() => assertPackageRelativePath(candidate)).toThrow();
     },
   );
-  it('rejects case collisions', async () => {
+  it('rejects case collisions', async ({ skip }) => {
     const root = await fixture();
     await fs.writeFile(path.join(root, 'A.ts'), 'a');
     await fs.writeFile(path.join(root, 'a.ts'), 'b');
-    const names = await fs.readdir(root);
-    if (!names.includes('A.ts') || !names.includes('a.ts')) return;
+    const caseVariants = (await fs.readdir(root)).filter(
+      (name) => name.toLowerCase() === 'a.ts',
+    );
+    if (caseVariants.length < 2) {
+      skip('The filesystem does not support case-conflicting file names');
+    }
     await expect(scanWorkflowPackage(root)).rejects.toThrow(/case-conflicting/);
   });
   it('rejects a symlink escaping the package root', async () => {

@@ -275,6 +275,10 @@ function createScaffoldFiles({
         types: './client/routes.ts',
         import: './client/routes.ts',
       },
+      './client/settings': {
+        types: './client/settings.ts',
+        import: './client/settings.ts',
+      },
       './client/providers': {
         types: './client/providers.ts',
         import: './client/providers.ts',
@@ -300,6 +304,10 @@ function createScaffoldFiles({
         './client/routes': {
           types: './dist/client/routes.d.ts',
           import: './dist/client/routes.js',
+        },
+        './client/settings': {
+          types: './dist/client/settings.d.ts',
+          import: './dist/client/settings.js',
         },
         './client/providers': {
           types: './dist/client/providers.d.ts',
@@ -355,7 +363,7 @@ function createScaffoldFiles({
     ['.prettierignore', 'dist/\n'],
     [
       'README.md',
-      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server ServiceProvider, an HTTP route at \`/${shortName}\`, a \`client/plugin.ts\` registration entry re-exported as the default from \`client/index.ts\`, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
+      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server ServiceProvider, an HTTP route at \`/${shortName}\`, a \`client/plugin.ts\` registration entry re-exported as the default from \`client/index.ts\`, and empty client bootstrap, routes, settings, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
     ],
     [
       'database/README.md',
@@ -380,7 +388,7 @@ function createScaffoldFiles({
     ],
     [
       'client/plugin.ts',
-      `import {\n  defineClientPlugin,\n  type AppClientPluginFactory,\n} from '@nocobase/app-client/plugins';\n\nexport interface ${symbolName}ClientOptions {\n  readonly placeholder?: never;\n}\n\nconst ${moduleName}: AppClientPluginFactory<${symbolName}ClientOptions> =\n  defineClientPlugin({\n    packageName: '${packageName}',\n    bootstrap: () => import('./bootstrap.js'),\n    routes: () => import('./routes.js'),\n    providers: () => import('./providers.js'),\n  });\n\nexport default ${moduleName};\n`,
+      `import {\n  defineClientPlugin,\n  type AppClientPluginFactory,\n} from '@nocobase/app-client/plugins';\n\nexport interface ${symbolName}ClientOptions {\n  readonly placeholder?: never;\n}\n\nconst ${moduleName}: AppClientPluginFactory<${symbolName}ClientOptions> =\n  defineClientPlugin({\n    packageName: '${packageName}',\n    bootstrap: () => import('./bootstrap.js'),\n    routes: () => import('./routes.js'),\n    settings: () => import('./settings.js'),\n    providers: () => import('./providers.js'),\n  });\n\nexport default ${moduleName};\n`,
     ],
     [
       'client/bootstrap.ts',
@@ -389,6 +397,10 @@ function createScaffoldFiles({
     [
       'client/routes.ts',
       `import {\n  defineClientRoutes,\n  type AppClientRouteDefinition,\n} from '@nocobase/app-client/plugins';\n\nconst routes: readonly AppClientRouteDefinition[] = defineClientRoutes([]);\n\nexport default routes;\n`,
+    ],
+    [
+      'client/settings.ts',
+      `import {\n  defineClientSettings,\n  type AppClientSettingDefinition,\n} from '@nocobase/app-client/plugins';\n\n// An entry is either a page, reached at \`/settings/<id>\`, or a group of pages reached at\n// \`/settings/<group id>/<id>\`. A group carries the icon and title for the whole section.\nconst settings: readonly AppClientSettingDefinition[] = defineClientSettings(\n  [],\n);\n\nexport default settings;\n`,
     ],
     [
       'client/providers.ts',
@@ -412,7 +424,7 @@ function createScaffoldFiles({
     ],
     [
       'tests/client.test.ts',
-      `import { describe, expect, it } from 'vitest';\n\nimport bootstrap from '../client/bootstrap.js';\nimport providers from '../client/providers.js';\nimport routes from '../client/routes.js';\n\ndescribe('${packageName} client', () => {\n  it('starts with empty client contributions', () => {\n    expect(bootstrap).toBeTypeOf('function');\n    expect(routes).toEqual([]);\n    expect(providers).toEqual([]);\n  });\n});\n`,
+      `import { describe, expect, it } from 'vitest';\n\nimport bootstrap from '../client/bootstrap.js';\nimport providers from '../client/providers.js';\nimport routes from '../client/routes.js';\nimport settings from '../client/settings.js';\n\ndescribe('${packageName} client', () => {\n  it('starts with empty client contributions', () => {\n    expect(bootstrap).toBeTypeOf('function');\n    expect(routes).toEqual([]);\n    expect(settings).toEqual([]);\n    expect(providers).toEqual([]);\n  });\n});\n`,
     ],
     [
       'tests/routes.test.ts',

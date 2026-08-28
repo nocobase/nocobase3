@@ -28,6 +28,7 @@ export default createReactVitestConfig({
       'tests/logic/client-refine-runtime.test.ts',
       'tests/logic/client-routes.test.ts',
       'tests/logic/client-runtime.test.ts',
+      'tests/logic/client-settings.test.tsx',
       'tests/logic/client-shell.test.tsx',
       'tests/logic/client-theme.test.tsx',
       'tests/logic/config.test.ts',
@@ -38,6 +39,7 @@ export default createReactVitestConfig({
       'tests/logic/e2e-support.test.ts',
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugin-commands.test.ts',
+      'tests/logic/tailwind-sources.test.ts',
       'tests/logic/workflow-management.test.ts',
     ],
     coverage: {

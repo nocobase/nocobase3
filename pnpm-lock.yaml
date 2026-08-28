@@ -165,9 +165,15 @@ catalogs:
     react-dom:
       specifier: ^19.1.0
       version: 19.1.0
+    react-markdown:
+      specifier: ^10.1.0
+      version: 10.1.0
     react-router:
       specifier: ^7.0.2
       version: 7.18.2
+    remark-gfm:
+      specifier: ^4.0.1
+      version: 4.0.1
     tailwindcss:
       specifier: ^4.1.4
       version: 4.3.3
@@ -608,6 +614,12 @@ importers:
       lucide-react:
         specifier: ^0.487.0
         version: 0.487.0(react@19.1.0)
+      react-markdown:
+        specifier: 'catalog:'
+        version: 10.1.0(@types/react@19.2.18)(react@19.1.0)
+      remark-gfm:
+        specifier: 'catalog:'
+        version: 4.0.1
       tailwind-merge:
         specifier: ^3.2.0
         version: 3.6.0

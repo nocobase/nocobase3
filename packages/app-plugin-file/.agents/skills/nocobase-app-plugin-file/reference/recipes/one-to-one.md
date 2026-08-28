@@ -1,8 +1,9 @@
 # Recipe: one-to-one avatar
 
 This recipe attaches one avatar to each profile. The unique owner constraint
-protects the one-to-one shape; `maxFiles: 1` adds an earlier best-effort
-business rejection. For a collection of files, use
+protects the one-to-one shape; `maxFiles: 1` adds an earlier rejection and
+serializes uploads for the same owner within one Route instance. For a
+collection of files, use
 the [one-to-many recipe](one-to-many.md).
 
 ## Migration fragment
@@ -99,7 +100,7 @@ app.route(
 ```
 
 The UNIQUE `profileId` constraint remains authoritative under concurrency;
-`maxFiles: 1` is only a best-effort pre-upload check.
+`maxFiles: 1` cannot coordinate separate application instances.
 
 `managementAuth` runs only on the five management operations because it is
 passed through the Route's `auth` option; Public or valid-Token content GET

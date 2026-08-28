@@ -32,6 +32,10 @@ import type {
   DatabaseFileRouteSource,
   FileStore,
 } from '../types.js';
+import {
+  FILE_DEMO_AVATAR_MIME_TYPES,
+  FILE_DEMO_ORDER_MIME_TYPES,
+} from '../../shared/file-demo.js';
 
 const ATTACHMENTS_PATH = '/api/attachments';
 const PROFILE_AVATAR_AUDIENCE = 'file-demo-profile-avatar';
@@ -48,23 +52,7 @@ interface FileAuthorizationEnv {
 
 type FileAuthorizationScope = AuthorizationEnv['Variables']['authz'];
 
-const AVATAR_MIME_TYPES: readonly string[] = Object.freeze([
-  'image/gif',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-]);
-const ORDER_ATTACHMENT_MIME_TYPES: readonly string[] = Object.freeze([
-  ...AVATAR_MIME_TYPES,
-  'application/json',
-  'application/pdf',
-  'audio/mpeg',
-  'audio/ogg',
-  'audio/wav',
-  'text/plain',
-  'video/mp4',
-  'video/webm',
-]);
+type ReadinessProvider = () => Promise<void> | undefined;
 
 export interface CreateFileDemoRoutesOptions {
   readonly config: FilePluginConfig;
@@ -78,12 +66,12 @@ export function createFileDemoRoutes({
   const runtime = container.resolve(filePluginRuntimeToken);
   let unavailable: UnavailableFilePluginRuntime | undefined;
   let drive: FilePluginRuntime['drive'] | undefined;
-  let readiness: Promise<void> | undefined;
+  let readiness: ReadinessProvider = () => undefined;
   if (isFilePluginRuntimeUnavailable(runtime)) {
     unavailable = runtime;
   } else {
     drive = runtime.drive;
-    readiness = prepareFileDemoFixtures(runtime);
+    readiness = () => prepareFileDemoFixtures(runtime);
   }
   const auth = createManagementAuth(
     container.resolve(authenticationToken),
@@ -160,7 +148,7 @@ export function createFileDemoRoutes({
       limits: {
         maxSize: 5 * 1024 * 1024,
         maxFiles: 1,
-        mimeTypes: AVATAR_MIME_TYPES,
+        mimeTypes: FILE_DEMO_AVATAR_MIME_TYPES,
       },
     }),
   );
@@ -181,7 +169,7 @@ export function createFileDemoRoutes({
       limits: {
         maxSize: 50 * 1024 * 1024,
         maxFiles: 10,
-        mimeTypes: ORDER_ATTACHMENT_MIME_TYPES,
+        mimeTypes: FILE_DEMO_ORDER_MIME_TYPES,
       },
     }),
   );
@@ -192,7 +180,7 @@ export function createFileDemoRoutes({
 function createManagementAuth(
   auth: Pick<Auth, 'required'>,
   authz: Pick<AppAuthorization, 'middleware' | 'permissionSets'>,
-  readiness: Promise<void> | undefined,
+  readiness: ReadinessProvider,
 ): MiddlewareHandler<FileAuthorizationEnv> {
   const authenticate =
     auth.required() as unknown as MiddlewareHandler<FileAuthorizationEnv>;
@@ -242,7 +230,7 @@ async function requireDemoAdministrator(
 }
 
 function createReadinessMiddleware(
-  readiness: Promise<void> | undefined,
+  readiness: ReadinessProvider,
 ): MiddlewareHandler<FileAuthorizationEnv> {
   return async (context, next) => {
     const unavailable = await waitForReadiness(context, readiness);
@@ -253,10 +241,10 @@ function createReadinessMiddleware(
 
 async function waitForReadiness(
   context: Context,
-  readiness: Promise<void> | undefined,
+  readiness: ReadinessProvider,
 ): Promise<Response | undefined> {
   try {
-    await readiness;
+    await readiness();
     return undefined;
   } catch (error) {
     return context.json(

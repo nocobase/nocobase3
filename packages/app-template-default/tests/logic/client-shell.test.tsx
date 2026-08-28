@@ -124,7 +124,11 @@ function renderApplication(
           }}
           options={{ disableTelemetry: true }}
         >
-          <AppRouter clientRoutes={clientRoutes} />
+          <AppRouter
+            clientRoutes={clientRoutes}
+            clientSettingGroups={[]}
+            clientSettings={[]}
+          />
         </Refine>
       </AppThemeProvider>
     </MemoryRouter>,

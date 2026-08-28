@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-file",
   "displayName": "File App Plugin",
   "description": "Minimal file storage, access, route, and UI contracts for NocoBase applications.",
-  "version": "0.0.1",
+  "version": "0.1.0-beta.0",
   "type": "module",
   "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
@@ -146,6 +146,8 @@
     "clsx": "^2.1.1",
     "hono": "catalog:",
     "lucide-react": "^0.487.0",
+    "react-markdown": "catalog:",
+    "remark-gfm": "catalog:",
     "tailwind-merge": "^3.2.0"
   },
   "peerDependencies": {

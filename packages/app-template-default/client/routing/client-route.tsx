@@ -9,13 +9,22 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { Loading } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 
+import { describeRoutePage, type ClientPageDescriptor } from './client-page.js';
+
 export interface ClientRouteProps {
   readonly route: AppClientRegisteredRoute;
 }
 
 export function ClientRoute({ route }: ClientRouteProps): ReactElement {
-  const access = route.access ?? { resource: route.name, action: 'access' };
-  const checkAccess = route.auth === 'required';
+  return <ClientPage page={describeRoutePage(route)} />;
+}
+
+export interface ClientPageProps {
+  readonly page: ClientPageDescriptor;
+}
+
+export function ClientPage({ page }: ClientPageProps): ReactElement {
+  const { access, checkAccess, componentLoader } = page;
   const { data: accessResult, isLoading: accessLoading } = useCan({
     resource: access.resource,
     action: access.action,
@@ -33,7 +42,7 @@ export function ClientRoute({ route }: ClientRouteProps): ReactElement {
     if (checkAccess && accessResult?.can !== true) return;
     let active = true;
 
-    route.componentLoader().then(
+    componentLoader().then(
       (module) => {
         if (active) {
           setComponentModule(module);
@@ -49,53 +58,54 @@ export function ClientRoute({ route }: ClientRouteProps): ReactElement {
     return () => {
       active = false;
     };
-  }, [accessResult?.can, checkAccess, route]);
+  }, [accessResult?.can, checkAccess, componentLoader]);
 
   if (loadError) {
-    return <ClientRouteError route={route} />;
+    return <ClientPageError page={page} />;
   }
 
-  if (checkAccess && accessLoading) return <ClientRouteLoading />;
+  if (checkAccess && accessLoading) return <ClientPageLoading />;
   if (checkAccess && accessResult?.can === false)
-    return <ClientRouteDenied route={route} />;
+    return <ClientPageDenied page={page} />;
 
   if (!componentModule) {
-    return <ClientRouteLoading />;
+    return <ClientPageLoading />;
   }
 
   const Component = componentModule.default;
 
   return (
-    <ErrorBoundary fallback={<ClientRouteError route={route} />}>
+    <ErrorBoundary fallback={<ClientPageError page={page} />}>
       <Component />
     </ErrorBoundary>
   );
 }
 
-function ClientRouteDenied({ route }: ClientRouteProps): ReactElement {
+function ClientPageDenied({ page }: ClientPageProps): ReactElement {
   return (
     <section className='grid min-h-[calc(100svh-4rem)] place-items-center px-6'>
       <section className='w-full max-w-lg space-y-3 text-center'>
         <h1 className='text-xl font-semibold'>Access denied</h1>
         <p className='text-sm text-muted-foreground'>
-          You do not have permission to access {route.name}.
+          You do not have permission to access {page.label}.
         </p>
       </section>
     </section>
   );
 }
 
-function ClientRouteLoading(): ReactElement {
+function ClientPageLoading(): ReactElement {
   return <Loading className='min-h-[calc(100svh-4rem)]' label='Loading page' />;
 }
 
-function ClientRouteError({ route }: ClientRouteProps): ReactElement {
+function ClientPageError({ page }: ClientPageProps): ReactElement {
   return (
     <section className='grid min-h-[calc(100svh-4rem)] place-items-center px-6'>
       <section className='w-full max-w-lg space-y-4 text-center'>
         <h1 className='text-xl font-semibold'>Unable to load page</h1>
         <p className='text-sm text-muted-foreground'>
-          Route {route.name} from {route.packageName} could not be loaded.
+          {page.kind === 'setting' ? 'Setting' : 'Route'} {page.label} from{' '}
+          {page.packageName} could not be loaded.
         </p>
         <Button onClick={() => window.location.reload()}>Retry</Button>
       </section>
