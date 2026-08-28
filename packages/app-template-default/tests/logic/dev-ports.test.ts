@@ -4,7 +4,7 @@ import net from 'node:net';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { findAvailablePort } from '../../scripts/dev-ports.mjs';
+import { canListen, findAvailablePort } from '../../scripts/dev-ports.mjs';
 
 const servers: net.Server[] = [];
 const host = '127.0.0.1';
@@ -62,6 +62,30 @@ describe('development ports', () => {
         preferredPort,
       }),
     ).toBeGreaterThan(preferredPort);
+  });
+
+  it('rejects a wildcard port whose loopback address is already taken', async () => {
+    const preferredPort = await listenOnAvailablePort();
+
+    expect(await canListen('0.0.0.0', preferredPort)).toBe(false);
+  });
+
+  it('skips a wildcard port that another process reaches over loopback', async () => {
+    const preferredPort = await listenOnAvailablePort();
+
+    expect(
+      await findAvailablePort({
+        host: '0.0.0.0',
+        label: 'test',
+        preferredPort,
+      }),
+    ).toBeGreaterThan(preferredPort);
+  });
+
+  it('accepts a wildcard port that no loopback listener holds', async () => {
+    const preferredPort = await reserveAvailablePort();
+
+    expect(await canListen('0.0.0.0', preferredPort)).toBe(true);
   });
 });
 
