@@ -349,8 +349,11 @@ Hub 初始化完成后，系统默认 APP 是一个空 APP。具备读取权限�
 
 - `query`
 - 可重复的 `status=active|archived`
+- `runtimeState=running|idle|starting|stopping|stopped`
 - `sort=name|-name|slug|-slug|createdAt|-createdAt|updatedAt|-updatedAt`
 - `limit` 和 `offset`
+
+`status` 表示 APP 管理状态，`runtimeState` 表示管理界面中展示的 APP 运行状态。按运行状态筛选时，Hub 会先完成筛选，再计算 `total` 并应用分页。
 
 创建请求只接受：
 
