@@ -7,6 +7,7 @@ export * from './errors.js';
 export * from './factory.js';
 export * from './lifecycle-operation-store.js';
 export * from './nocobase-deployment-store.js';
+export * from './plugin.js';
 export * from './routes.js';
 export * from './service.js';
 export * from './types.js';

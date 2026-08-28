@@ -1,6 +1,6 @@
 # @nocobase/hub-release-management
 
-Internal deployment-management module for NocoBase Hub. It owns trusted
+Deployment-management plugin for NocoBase Hub. It owns trusted
 artifact activation, application lifecycle actions, authorization adapters,
 artifact-driven App registration, audit persistence, HTTP routes, and the
 headless client API used by Hub pages.
@@ -31,7 +31,9 @@ rollback endpoint is disabled by default and can be enabled explicitly with
 ## Package boundaries
 
 - `@nocobase/hub-release-management/server` exposes the trusted service,
-  stores, authorizers, and Hono routes.
+  stores, authorizers, and a `createReleaseManagementApiPlugin()` composition
+  entry. The plugin owns the `/apps` and `/release-management` API routes;
+  Hub's generic server shell does not import its services or stores.
 - `@nocobase/hub-release-management/client` exposes the browser API, state
   hook, presentation logic, and shared contracts.
 - `@nocobase/hub-release-management/types` exposes transport contracts without

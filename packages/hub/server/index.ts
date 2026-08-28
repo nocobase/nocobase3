@@ -1,4 +1,5 @@
 export { createApp, type ClientHandler, type CreateAppOptions } from './app.js';
+export { registerHubApiPlugins, type HubApiPlugin } from './api-plugin.js';
 export {
   createServer,
   default,

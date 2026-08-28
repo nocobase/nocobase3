@@ -17,6 +17,11 @@ description: Hub、App Host 与 App 的职责、运行与激活方式，以及 S
 - **App**：具体的业务应用，可以独立运行，也可以构建后由 `app-host`
   托管。
 
+Hub 采用“应用化 + 能力插件化”的边界：Hub 是一个独立 App，发布、版本、
+回滚和生命周期编排由 `@nocobase/hub-release-management` 插件提供。Hub 的
+Server Shell 只提供通用 API 插件挂载点，不依赖发布 Service、Store 或具体
+路由；`app-host` 继续只负责通用的产物校验、安装、激活和运行。
+
 源码由用户在本地或自有开发环境中管理，是否使用 Git 不作要求。本地的
 `nb3 app deploy` 负责构建、打包和传输不可变 Release，Hub 负责鉴权、审计、
 部署和运行管理。

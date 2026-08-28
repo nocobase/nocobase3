@@ -16,7 +16,7 @@ import {
 } from '@nocobase/app-server-kit/support';
 
 import { createApp, type CreateAppOptions } from './app.js';
-import { createReleaseManagement } from '@nocobase/hub-release-management/server';
+import { createReleaseManagementApiPlugin } from '@nocobase/hub-release-management/server';
 import { createSettingsManagement } from './settings/index.js';
 import { createNativeAuthRuntime } from './native-auth/index.js';
 import {
@@ -69,7 +69,7 @@ export function createStandaloneServer(
     publicBasePath: browserBasePath,
   });
   const adminEmails = parseList(getEnvString(env, 'HUB_ADMIN_EMAILS'));
-  const releaseManagement = createReleaseManagement({
+  const releaseManagementPlugin = createReleaseManagementApiPlugin({
     appHostUrl,
     appHostControlToken: getEnvString(env, 'APP_HOST_CONTROL_TOKEN'),
     appHostUploadTimeoutMs: numberFromEnv(
@@ -126,7 +126,7 @@ export function createStandaloneServer(
     apiClientStorageType: getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
     apiClientShareToken: getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
     nativeAuth,
-    releaseManagement,
+    apiPlugins: [releaseManagementPlugin],
     settings: { ...settingsManagement, defaultAppId: appName },
     appRuntimeGateway: {
       targetUrl: getEnvString(env, 'APP_HOST_GATEWAY_URL') ?? appHostUrl,

@@ -8,7 +8,7 @@ import {
   getEnvString,
   readEnvFiles,
 } from '@nocobase/app-server-kit/config';
-import { createReleaseManagement } from '@nocobase/hub-release-management/server';
+import { createReleaseManagementApiPlugin } from '@nocobase/hub-release-management/server';
 import { createSettingsManagement } from './settings/index.js';
 import { createNativeAuthRuntime } from './native-auth/index.js';
 
@@ -56,7 +56,7 @@ export async function createServer(scope: AppScope): Promise<Hono> {
   await nativeAuth.ready();
   scope.registerDisposer?.('hub-native-auth', () => nativeAuth.close());
   const adminEmails = parseList(getEnvString(releaseEnv, 'HUB_ADMIN_EMAILS'));
-  const releaseManagement = createReleaseManagement({
+  const releaseManagementPlugin = createReleaseManagementApiPlugin({
     appHostUrl: resolveAppHostUrl(releaseEnv),
     appHostControlToken: getEnvString(releaseEnv, 'APP_HOST_CONTROL_TOKEN'),
     appHostUploadTimeoutMs: positiveIntegerFromEnv(
@@ -121,7 +121,7 @@ export async function createServer(scope: AppScope): Promise<Hono> {
       getScopeConfigBoolean(scope.config, 'apiClientShareToken') ??
       getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
     nativeAuth,
-    releaseManagement,
+    apiPlugins: [releaseManagementPlugin],
     settings: { ...settingsManagement, defaultAppId: scope.id },
   });
 }

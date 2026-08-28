@@ -44,13 +44,13 @@ export function AppDeploymentGuide(props: AppDeploymentGuideProps) {
   };
 
   const guide = (
-    <div className={cn('w-full', !props.embedded && 'max-w-2xl')}>
+    <div className={cn('min-w-0 w-full', !props.embedded && 'max-w-2xl')}>
       {isExample ? (
         <p className='mb-4 text-center text-xs leading-5 text-muted-foreground'>
           以下为示例命令，可复制后按实际 App 名称、ID 和本地路径修改。
         </p>
       ) : null}
-      <Tabs defaultValue='create'>
+      <Tabs defaultValue='create' className='min-w-0'>
         <TabsList className='mx-auto grid h-auto w-full max-w-md grid-cols-2'>
           <TabsTrigger value='create' className='py-1.5'>
             还没有本地 App
@@ -59,7 +59,7 @@ export function AppDeploymentGuide(props: AppDeploymentGuideProps) {
             已有本地 App
           </TabsTrigger>
         </TabsList>
-        <TabsContent value='create' className='mt-4 space-y-3'>
+        <TabsContent value='create' className='mt-4 min-w-0 space-y-3'>
           <CommandBlock
             commands={createCommands}
             copied={copied === 'create'}
@@ -70,7 +70,7 @@ export function AppDeploymentGuide(props: AppDeploymentGuideProps) {
             用于本地验证；确认无误后可在另一个终端执行最后一行部署。
           </p>
         </TabsContent>
-        <TabsContent value='existing' className='mt-4 space-y-3'>
+        <TabsContent value='existing' className='mt-4 min-w-0 space-y-3'>
           <CommandBlock
             commands={existingCommands}
             copied={copied === 'existing'}
@@ -127,8 +127,8 @@ function CommandBlock({
   onCopy: () => void;
 }) {
   return (
-    <div className='relative'>
-      <pre className='overflow-x-auto rounded-lg bg-muted/70 p-4 pr-28 font-mono text-xs leading-6'>
+    <div className='relative min-w-0 max-w-full'>
+      <pre className='w-full max-w-full overflow-x-auto rounded-lg bg-muted/70 p-4 pr-28 font-mono text-xs leading-6'>
         <code>{commands}</code>
       </pre>
       <Button

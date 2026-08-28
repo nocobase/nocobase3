@@ -89,8 +89,7 @@ fs.rmSync(distDir, { recursive: true, force: true });
 
 run('Typecheck client', 'pnpm', ['exec', 'tsc']);
 run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
-run('Build client', 'pnpm', ['exec', 'refine', 'build']);
-run('Build server workspace dependencies', 'pnpm', [
+run('Build workspace dependencies', 'pnpm', [
   '--filter',
   '@nocobase/app-portal-sdk',
   '--filter',
@@ -114,6 +113,7 @@ run('Build server workspace dependencies', 'pnpm', [
   ...workspacePluginNames.flatMap((packageName) => ['--filter', packageName]),
   'build',
 ]);
+run('Build client', 'pnpm', ['exec', 'refine', 'build']);
 run('Build server', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.server.json']);
 run('Rewrite server path aliases', 'pnpm', [
   'exec',

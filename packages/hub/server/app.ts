@@ -18,11 +18,6 @@ import {
 } from '@nocobase/app-server-kit/support';
 
 import {
-  createReleaseManagementRoutes,
-  createAppManagementRoutes,
-  type ReleaseManagementRoutesOptions,
-} from '@nocobase/hub-release-management/server';
-import {
   createSettingsRoutes,
   type SettingsRoutesOptions,
 } from './settings/index.js';
@@ -34,6 +29,7 @@ import {
   registerAppRuntimeGatewayRoutes,
   type AppRuntimeGatewayOptions,
 } from './app-runtime-gateway.js';
+import { registerHubApiPlugins, type HubApiPlugin } from './api-plugin.js';
 
 export interface CreateAppOptions {
   appName?: string;
@@ -48,7 +44,7 @@ export interface CreateAppOptions {
   apiClientStorageType?: string;
   apiClientShareToken?: boolean;
   nativeAuth?: NativeAuthRuntime;
-  releaseManagement?: ReleaseManagementRoutesOptions;
+  apiPlugins?: readonly HubApiPlugin[];
   settings?: SettingsRoutesOptions;
   appRuntimeGateway?: AppRuntimeGatewayOptions;
 }
@@ -102,13 +98,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     api.route('/auth', createNativeAuthRoutes(options.nativeAuth));
   }
 
-  if (options.releaseManagement) {
-    api.route('/apps', createAppManagementRoutes(options.releaseManagement));
-    api.route(
-      '/release-management',
-      createReleaseManagementRoutes(options.releaseManagement),
-    );
-  }
+  registerHubApiPlugins(api, options.apiPlugins ?? []);
 
   if (options.settings) {
     api.route('/settings', createSettingsRoutes(options.settings));
