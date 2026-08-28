@@ -55,7 +55,7 @@ async function createApp(): Promise<string> {
   await writeFile(
     path.join(pluginDirectory, 'package.json'),
     JSON.stringify({
-      exports: { './client/plugin': './client/plugin.js' },
+      exports: { './client': './client/index.js' },
       name: '@nocobase/app-plugin-audit-log',
       version: '1.0.0',
     }),
@@ -105,7 +105,7 @@ describe('registering without TypeScript', () => {
       entry: 'auditLog(),',
       filePath: path.join(appRoot, 'client', 'plugins.ts'),
       importStatement:
-        "import auditLog from '@nocobase/app-plugin-audit-log/client/plugin';",
+        "import auditLog from '@nocobase/app-plugin-audit-log/client';",
       localName: 'auditLog',
     });
   });

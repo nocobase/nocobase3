@@ -2,8 +2,9 @@
   "name": "@nocobase/app-plugin-authorization",
   "displayName": "Authorization App Plugin",
   "description": "Authorization integration and permission management UI for NocoBase applications.",
-  "version": "0.1.1-beta.0",
+  "version": "0.2.0-beta.1",
   "type": "module",
+  "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
@@ -17,6 +18,10 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
     "./client/plugin": {
       "types": "./client/plugin.ts",
       "import": "./client/plugin.ts"
@@ -25,9 +30,9 @@
       "types": "./client/bootstrap.ts",
       "import": "./client/bootstrap.ts"
     },
-    "./client/routes": {
-      "types": "./client/routes.ts",
-      "import": "./client/routes.ts"
+    "./client/settings": {
+      "types": "./client/settings.ts",
+      "import": "./client/settings.ts"
     },
     "./client/providers": {
       "types": "./client/providers.ts",
@@ -50,6 +55,10 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
       "./client/plugin": {
         "types": "./dist/client/plugin.d.ts",
         "import": "./dist/client/plugin.js"
@@ -58,9 +67,9 @@
         "types": "./dist/client/bootstrap.d.ts",
         "import": "./dist/client/bootstrap.js"
       },
-      "./client/routes": {
-        "types": "./dist/client/routes.d.ts",
-        "import": "./dist/client/routes.js"
+      "./client/settings": {
+        "types": "./dist/client/settings.d.ts",
+        "import": "./dist/client/settings.js"
       },
       "./client/providers": {
         "types": "./dist/client/providers.d.ts",

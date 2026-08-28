@@ -27,7 +27,9 @@ pnpm plugin:register audit-log --dry-run
 
 一条命令做五件事：装包、写 `package.json` 的依赖、写 `nocobase.plugins`、往 `client/plugins.ts` 里加 import 和注册项，最后把插件带的 skills 复制进 `.agents/skills/`。
 
-**只有前端插件才会写 `client/plugins.ts`。** 判据是插件的 `package.json` 有没有 `exports["./client/plugin"]`——纯服务端插件没有，给它写一行 import 会让 App 构建时报模块找不到。命令会跳过并明确告诉你跳过了。
+**只有前端插件才会写 `client/plugins.ts`。** 判据是插件的 `package.json` 有没有 `exports["./client"]`——纯服务端插件没有，给它写一行 import 会让 App 构建时报模块找不到。命令会跳过并明确告诉你跳过了。
+
+判据看的是 `./client` 而不是 `./client/plugin`，因为写进去的 import 就是 `<包名>/client`。只有 `./client/plugin` 的插件（barrel 加 default 导出之前发布的版本）同样会被跳过，否则写进去的那行在 App 里解析不到。
 
 `client/plugins.ts` 是用 TypeScript 解析定位、再做文本拼接改的，不是整份 AST 重新打印，所以你写的注释、顺序、格式都会原样保留，diff 里只会多出一行 import 和一行注册项。
 
@@ -39,7 +41,7 @@ App 没装 TypeScript 时不会整条命令失败——装包、写 `package.jso
   client/plugins.ts: not edited, TypeScript is not installed in this app
 
 Everything else is done. Add these two lines to client/plugins.ts by hand:
-  1. after the existing imports:  import auditLog from '@nocobase/app-plugin-audit-log/client/plugin';
+  1. after the existing imports:  import auditLog from '@nocobase/app-plugin-audit-log/client';
   2. inside defineClientPlugins([...]):  auditLog(),
 
 Or install TypeScript and re-run this command to have it written for you:

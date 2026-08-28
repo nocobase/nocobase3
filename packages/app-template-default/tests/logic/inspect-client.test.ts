@@ -9,6 +9,22 @@ import {
   selectAppClientInspection,
 } from '../../scripts/inspect-client.mjs';
 
+function settingFor(id: string, title: string) {
+  return {
+    access: {
+      action: 'read',
+      resource: `authorization.settings.${id}`,
+    },
+    entry: '@nocobase/app-plugin-authorization/client/settings',
+    groupId: 'authorization',
+    id,
+    packageName: '@nocobase/app-plugin-authorization',
+    path: `/settings/authorization/${id}`,
+    source: 'plugin',
+    title,
+  };
+}
+
 describe('client inspection', () => {
   it('parses app client inspection options', () => {
     expect(
@@ -20,6 +36,12 @@ describe('client inspection', () => {
     });
     expect(parseInspectAppClientArgs(['--type', 'bootstrap']).type).toBe(
       'bootstrap',
+    );
+    expect(parseInspectAppClientArgs(['--type', 'settings']).type).toBe(
+      'settings',
+    );
+    expect(() => parseInspectAppClientArgs(['--type', 'setting'])).toThrow(
+      '--type must be all, bootstrap, routes, settings, or providers.',
     );
   });
 
@@ -54,26 +76,6 @@ describe('client inspection', () => {
         auth: 'guest',
         id: '@nocobase/app-plugin-authentication:reset-password',
         path: '/reset-password',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-authorization:permission-sets',
-        path: '/settings/authorization/permission-sets',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-authorization:default-access',
-        path: '/settings/authorization/default-access',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-authorization:sharing-rules',
-        path: '/settings/authorization/sharing-rules',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-authorization:restriction-rules',
-        path: '/settings/authorization/restriction-rules',
       },
       {
         auth: 'guest',
@@ -171,8 +173,28 @@ describe('client inspection', () => {
       },
     ]);
 
+    // Authorization's administration pages are settings rather than routes, and keep the paths they were published
+    // at before the settings centre existed.
+    expect(inspection.settings).toEqual([
+      settingFor('permission-sets', 'Permission Sets'),
+      settingFor('default-access', 'Default Access'),
+      settingFor('sharing-rules', 'Sharing Rules'),
+      settingFor('restriction-rules', 'Restriction Rules'),
+    ]);
+    expect(
+      inspection.routes.some((route) => route.path.startsWith('/settings/')),
+    ).toBe(false);
+
     const output = formatAppClientInspection(inspection);
     expect(output).toMatch(/Bootstrap order/u);
+    expect(output).toMatch(/Settings/u);
+    expect(output).toMatch(/group: authorization/u);
+    expect(formatAppClientInspection(inspection, 'settings')).not.toMatch(
+      /Routes/u,
+    );
+    expect(
+      Object.keys(selectAppClientInspection(inspection, 'settings')),
+    ).toEqual(['app', 'settings']);
     expect(output).toMatch(/Routes/u);
     expect(output).toMatch(/auth: guest/u);
     expect(output).toMatch(/route source: plugin/u);

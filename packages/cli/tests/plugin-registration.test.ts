@@ -64,7 +64,7 @@ async function createApp(
   return appRoot;
 }
 
-/** Writes a plugin package on disk, with or without the `./client/plugin` export that decides the client entry. */
+/** Writes a plugin package on disk, with or without the `./client` export that decides the client entry. */
 async function createPlugin(
   appRoot: string,
   packageName: string,
@@ -81,9 +81,7 @@ async function createPlugin(
     JSON.stringify({
       name: packageName,
       version: '1.0.0',
-      ...(client
-        ? { exports: { './client/plugin': './client/plugin.js' } }
-        : {}),
+      ...(client ? { exports: { './client': './client/index.js' } } : {}),
     }),
   );
   return pluginDirectory;
@@ -185,6 +183,23 @@ describe('hasClientPluginEntry', () => {
     ).toBe(false);
   });
 
+  it('is false for a plugin that predates the client barrel', async () => {
+    // Such a package has the descriptor but no `./client` to import it from, so registering it would write an import
+    // the application cannot resolve. Skipping it is the safe read.
+    const appRoot = await createApp();
+    const pluginDirectory = path.join(appRoot, 'legacy');
+    await mkdir(pluginDirectory, { recursive: true });
+    await writeFile(
+      path.join(pluginDirectory, 'package.json'),
+      JSON.stringify({
+        name: '@nocobase/app-plugin-legacy',
+        exports: { './client/plugin': './client/plugin.js' },
+      }),
+    );
+
+    expect(await hasClientPluginEntry(pluginDirectory)).toBe(false);
+  });
+
   it('is false when the manifest is missing', async () => {
     const appRoot = await createApp();
 
@@ -244,7 +259,7 @@ describe('planPluginRegistration', () => {
       '@nocobase/app-plugin-audit-log': { enabled: true },
     });
     expect(plan.clientPluginsText).toContain(
-      '@nocobase/app-plugin-audit-log/client/plugin',
+      '@nocobase/app-plugin-audit-log/client',
     );
   });
 
@@ -570,7 +585,7 @@ describe('planPluginUnregistration', () => {
     ]);
     const clientPlugins = await readFile(clientPluginsPath(appRoot), 'utf8');
     expect(clientPlugins).not.toContain('audit-log');
-    expect(clientPlugins).toContain('@nocobase/app-plugin-keep/client/plugin');
+    expect(clientPlugins).toContain('@nocobase/app-plugin-keep/client');
   });
 
   it('removes a plugin recorded under dependencies too', async () => {

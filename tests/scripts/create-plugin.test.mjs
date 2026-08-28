@@ -51,6 +51,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   assert.equal(packageJson.version, '0.0.1');
   assert.equal(packageJson.prettier, '@nocobase/dev-config/prettier');
   assert.deepEqual(packageJson.exports, {
+    './client': {
+      types: './client/index.ts',
+      import: './client/index.ts',
+    },
     './client/plugin': {
       types: './client/plugin.ts',
       import: './client/plugin.ts',
@@ -63,6 +67,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
       types: './client/routes.ts',
       import: './client/routes.ts',
     },
+    './client/settings': {
+      types: './client/settings.ts',
+      import: './client/settings.ts',
+    },
     './client/providers': {
       types: './client/providers.ts',
       import: './client/providers.ts',
@@ -70,6 +78,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     './package.json': './package.json',
   });
   assert.deepEqual(packageJson.publishConfig.exports, {
+    './client': {
+      types: './dist/client/index.d.ts',
+      import: './dist/client/index.js',
+    },
     './client/plugin': {
       types: './dist/client/plugin.d.ts',
       import: './dist/client/plugin.js',
@@ -81,6 +93,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     './client/routes': {
       types: './dist/client/routes.d.ts',
       import: './dist/client/routes.js',
+    },
+    './client/settings': {
+      types: './dist/client/settings.d.ts',
+      import: './dist/client/settings.js',
     },
     './client/providers': {
       types: './dist/client/providers.d.ts',
@@ -97,9 +113,12 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     packageJson.files.includes('.agents'),
     'plugin skills must ship with the package',
   );
-  // The client entries are declared by client/plugin.ts and the ./client/plugin
-  // export, not by a manifest field.
+  // The client entries are declared by client/plugin.ts and the client exports,
+  // not by a manifest field.
   assert.equal(packageJson.nocobase.plugin.client, undefined);
+  // An application imports the plugin as <package>/client, which pulls the whole barrel. Without this declaration a
+  // bundler must assume every barrel export matters and keeps them all in the application entry chunk.
+  assert.equal(packageJson.sideEffects, false);
   assert.deepEqual(packageJson.nocobase.plugin.database, {
     migrations: './database/migrations',
     seeds: './database/seeds',
@@ -145,6 +164,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     path.join(result.targetDirectory, 'server/bootstrap.ts'),
     'utf8',
   );
+  const clientBarrel = await readFile(
+    path.join(result.targetDirectory, 'client/index.ts'),
+    'utf8',
+  );
   const clientModule = await readFile(
     path.join(result.targetDirectory, 'client/plugin.ts'),
     'utf8',
@@ -157,10 +180,15 @@ test('creates a complete dev-config based plugin without src', async (t) => {
     path.join(result.targetDirectory, 'client/routes.ts'),
     'utf8',
   );
+  const clientSettings = await readFile(
+    path.join(result.targetDirectory, 'client/settings.ts'),
+    'utf8',
+  );
   const clientProviders = await readFile(
     path.join(result.targetDirectory, 'client/providers.ts'),
     'utf8',
   );
+  assert.match(clientBarrel, /export \{ default \} from '\.\/plugin\.js';/u);
   assert.match(clientModule, /defineClientPlugin\(\{/u);
   assert.match(
     clientModule,
@@ -173,6 +201,10 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   assert.match(clientModule, /routes: \(\) => import\('\.\/routes\.js'\),/u);
   assert.match(
     clientModule,
+    /settings: \(\) => import\('\.\/settings\.js'\),/u,
+  );
+  assert.match(
+    clientModule,
     /providers: \(\) => import\('\.\/providers\.js'\),/u,
   );
   assert.match(
@@ -182,6 +214,7 @@ test('creates a complete dev-config based plugin without src', async (t) => {
   assert.match(clientModule, /export default auditLog;/u);
   assert.match(clientBootstrap, /AppClientPluginBootstrap/u);
   assert.match(clientRoutes, /defineClientRoutes\(\[\]\)/u);
+  assert.match(clientSettings, /defineClientSettings\(\s*\[\],?\s*\)/u);
   assert.match(clientProviders, /defineClientProviders\(\s*\[\],\s*\)/u);
   await readFile(
     path.join(result.targetDirectory, 'tests/bootstrap.test.ts'),

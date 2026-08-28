@@ -11,7 +11,7 @@ const authorization: AppClientPluginFactory<AuthorizationClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-authorization',
     bootstrap: () => import('./bootstrap.js'),
-    routes: () => import('./routes.js'),
+    settings: () => import('./settings.js'),
     providers: () => import('./providers.js'),
   });
 

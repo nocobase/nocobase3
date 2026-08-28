@@ -214,7 +214,7 @@ test('wires a client plugin into client/plugins.ts', async (t) => {
   // quote style here is not the repository's. Assert on the specifier rather than on the quoting.
   assert.match(
     clientPlugins,
-    /import withClient from ["']@nocobase\/app-plugin-with-client\/client\/plugin["'];/,
+    /import withClient from ["']@nocobase\/app-plugin-with-client\/client["'];/,
   );
   assert.match(clientPlugins, /withClient\(\)/);
 });
@@ -287,7 +287,7 @@ async function createPluginPackage(
     ...(client
       ? {
           exports: {
-            './client/plugin': { import: './client/plugin.ts' },
+            './client': { import: './client/index.ts' },
           },
         }
       : {}),

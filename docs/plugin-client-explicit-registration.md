@@ -1022,3 +1022,93 @@ postinstall 经实测覆盖不到「更新插件」这条主路径，已决定�
 **没有解决：** server 侧仍然隐式；`nocobase.plugins` 仍然存在；插件的 server 入口仍是文件约定而非 exports 声明。
 
 **范围外的收获：** 注册逻辑做成了仓库与独立 App 共用的一份实现（§10.2），独立 App 因此也有了 `pnpm plugin:register` / `plugin:unregister`；同时修掉了两个缺陷——给纯服务端插件写客户端 import，以及移除最后一个插件留下数组空位。
+
+## 13. 后续修订：注册入口改为 `<包名>/client`
+
+本方案落地后做了一次调整，正文保留原样作为方案记录，实际行为以本节为准。
+
+App 注册插件时 import 的是 `<包名>/client` 而不是 `<包名>/client/plugin`。`client/plugin.ts` 仍然存在、仍然是注册面，只是由 `client/index.ts` 作为 default 重新导出：
+
+```ts
+// 插件侧 client/index.ts
+export { default } from './plugin.js';
+```
+
+```ts
+// App 侧 client/plugins.ts
+import authentication from '@nocobase/app-plugin-authentication/client';
+```
+
+**为什么可以这样做而不牺牲入口体积。** §2.2 警告过 plugin 入口静态 import 的东西都会进入 App 的入口 chunk，而 barrel 通常还会导出类型、工具函数和组件。解法是给每个插件声明 `sideEffects: false`，让打包器摇掉 App 没用到的导出。实测 8 个插件走两种 import 路径的入口体积逐字节相同；不加这条声明时 `authentication` 会多出 696 字节、`file` 多出 88 字节。
+
+这条声明的前提是插件确实没有模块级副作用。改动前用 AST 逐个检查过 8 个插件的 client 模块：顶层语句全部是纯声明（`defineClientRoutes`、`Object.freeze`、`cva`、`createContext`），没有全局赋值，也没有 `import './x.css'` 这类裸副作用导入。`workflow` 的 registry 目录里确实有 CSS import，但那部分由 `registry materialize` 以源码方式复制，不经 `exports` 打包。**新增插件如果引入了模块级副作用，必须同时去掉这条声明。**
+
+**判据同步改了。** `hasClientPluginEntry` 现在看 `exports["./client"]` 而不是 `exports["./client/plugin"]`——写进 `client/plugins.ts` 的就是 `/client`，判据必须和实际写入的入口一致。只有 `./client/plugin` 的插件（本次改动之前发布的版本）会被跳过，否则写进去的 import 在 App 里解析不到。
+
+**读取侧兼容两种写法。** `listClientPlugins` 同时识别 `/client` 和 `/client/plugin` 结尾的 specifier，否则按旧写法接线的 App 会被判定成未注册，`register` 会给它再加一条重复的 import。
+
+**`workflow` 的 `./client` 从 `dist` 改指源码。** 它原先是 8 个插件里唯一指向 `./dist/client/index.js` 的，换成 barrel 之后会读到过期产物并直接构建失败。现在与其他插件一致指向 `./client/index.ts`。
+
+## 14. 后续修订：新增 `settings` 贡献类型与设置中心
+
+第二次调整。正文写的是 bootstrap / routes / providers 三类贡献，现在是四类，多出来的 `settings` 与 routes 完全同构。
+
+**插件侧。** `defineClientPlugin` 多一个和 `routes` 平级的 `settings` 属性，指向一个 default 导出数组、或导出 `(options) => 数组` 的模块：
+
+```ts
+defineClientPlugin({
+  packageName: '@nocobase/app-plugin-audit-log',
+  routes: () => import('./routes.js'),
+  settings: () => import('./settings.js'),
+});
+```
+
+```ts
+// client/settings.ts
+export default defineClientSettings([
+  {
+    id: 'audit-log',
+    title: 'Audit Log',
+    icon: ScrollText,
+    children: [
+      {
+        id: 'general',
+        title: 'General',
+        icon: FileClock,
+        access: { resource: 'audit-log.settings.general', action: 'read' },
+        pageLoader: () => import('./pages/general-page.js'),
+      },
+    ],
+  },
+]);
+```
+
+**为什么是树而不是 group 字符串。** 第一版用的是每个页面写一个 `group: 'Audit Log'` 字符串。问题出在图标上：分组本身也要图标，而 group 只是个字符串，没有可以挂图标的地方；若改成每个子项都写一遍分组图标，则是把同一份信息重复 N 遍。树状结构把分组变成一个真正的对象，图标和标题在组这一层写一次即可。
+
+id 因此也回到单段：层级由树给出，不再需要用斜杠表达。`authorization` 组下的 `permission-sets` 拼出来仍然是 `/settings/authorization/permission-sets`，四条 URL 逐条不变。
+
+只有一个页面的插件不套分组，直接写 `{ id, title, pageLoader }`，挂在 `/settings/<id>`，导航里平铺一行。分组只支持一层。
+
+`resolveAppClientContributions` 同时返回两份结果：`settings` 是拍平的页面列表，给路由挂载用；`settingGroups` 是树，给导航渲染用。两者都保持声明顺序。
+
+**App 侧。** 设置中心的布局和左侧导航属于应用而不是库，和 `AppShell` 同级放在 `client/settings/`；`app-client` 只负责类型、加载、解析和冲突检测，不含任何 UI。理由与 `AppShell` 一致：template 是用户拿到手会直接改的源码，设置中心长什么样应该由应用自己决定。
+
+`/settings/*` 挂在与 required 路由相同的鉴权外壳内，但在 `AppShell` 之外——设置中心自带 chrome，是一个进入和离开的地方，而不是产品导航的又一个分支。`/settings` 本身、未知路径、以及无权访问的路径，都会重定向到第一个当前用户可打开的设置项，因此右侧永远不会空着；一个都没有时显示说明页。
+
+**路径空间是共用的。** 一个插件注册 `id: 'general'`，另一个插件声明 `path: '/settings/general'` 的路由，二者构成冲突，解析阶段直接报错并同时给出两个标识，而不是让两个页面抢同一个地址。两种顺序都会被捕获。
+
+**权限检查在导航和页面两处生效。** 被拒绝的设置项既不出现在左侧导航，直接访问 URL 也会被挡掉——只做前者会让 URL 成为绕过手段。access provider 抛异常按拒绝处理，不按放行。
+
+**权限数据不受影响。** 资源 id 形如 `authorization.settings.permission-sets`，与 URL 无关，seed 和 migration 都按资源 id 存储，本次改动没有触及。
+
+**齿轮入口改为应用内路由。** `client/shell/app-header.tsx` 原先用 `resolveNocoBaseSettingsUrl()` 在新标签页打开 v2 服务端的 `/main/v2/settings`，现在是指向 `/settings` 的应用内 `Link`。
+
+**authorization 的四个页面已迁移。** 它们从 `client/routes.ts` 移到 `client/settings.ts`，URL 逐条不变；`client/bootstrap.ts` 里对应的 `addResources` 一并删除，否则主侧边栏会留下一份重复入口。该文件的 `accessControlProvider` 保留——它是整个应用（包括设置中心自身）权限检查的来源。
+
+**左侧导航按分组折叠。** 用的是主侧边栏那套 `<details>` / `<summary>`，默认展开当前页面所在的组、其余收起，分组标题的字号字重与主侧边栏的分组行一致。分组和页面都可以带图标。
+
+**权限过滤后重建树。** 过滤发生在页面这一层，之后按幸存的页面重建导航树：一个分组下的页面全被挡掉时，分组本身也不再渲染，不会留下一个空的折叠抽屉。
+
+**设置中心复用应用外壳的框架。** 左上角 brand、侧边栏折叠按钮、右上角控件（主题、用户菜单）都与应用一致，只去掉指向自身的齿轮；应用外壳里「AI application workspace」的位置，在设置中心是 `Back to app` 返回按钮。
+
+**`client:inspect` 增加 `--type settings`。** 输出 id、title、group、source、entry 和 access，与 routes、providers 一致。
