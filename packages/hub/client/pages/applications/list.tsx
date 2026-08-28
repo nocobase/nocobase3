@@ -121,6 +121,7 @@ export function ApplicationsPage({
   );
   const capabilities = runtime?.me.capabilities ?? me.data?.capabilities;
   const visibleApplications = applications.data ?? [];
+  const hasActiveFilters = search.trim().length > 0 || status !== 'all';
   const openCreateApplication = () => {
     if (onCreateApplication) {
       onCreateApplication();
@@ -157,14 +158,14 @@ export function ApplicationsPage({
         ) : null}
       </header>
 
-      {applications.error ? (
+      {applications.error && !hasActiveFilters ? (
         <HubErrorState
           error={applications.error}
           onRetry={applications.reload}
         />
-      ) : applications.loading ? (
+      ) : applications.loading && !hasActiveFilters ? (
         <HubListSkeleton rows={5} />
-      ) : (applications.data?.length ?? 0) === 0 ? (
+      ) : visibleApplications.length === 0 && !hasActiveFilters ? (
         <HubEmptyState
           title={translate('hub.apps.empty.title', 'No applications yet')}
           description={translate(
@@ -249,7 +250,14 @@ export function ApplicationsPage({
             </div>
           </div>
 
-          {visibleApplications.length === 0 ? (
+          {applications.error ? (
+            <HubErrorState
+              error={applications.error}
+              onRetry={applications.reload}
+            />
+          ) : applications.loading ? (
+            <HubListSkeleton rows={5} />
+          ) : visibleApplications.length === 0 ? (
             <HubEmptyState
               title={translate(
                 'hub.apps.noMatches.title',
@@ -270,22 +278,28 @@ export function ApplicationsPage({
             />
           )}
 
-          <p className='border-t border-border/60 pt-4 text-xs text-muted-foreground'>
-            {translate(
-              'hub.apps.summary',
-              {
-                visible: visibleApplications.length,
-                total:
-                  applications.meta?.total ?? applications.data?.length ?? 0,
-              },
-              'Showing {{visible}} of {{total}} applications',
-            )}
-          </p>
-          <HubLoadMore
-            hasMore={applications.hasMore}
-            loading={applications.loadingMore}
-            onLoadMore={applications.loadMore}
-          />
+          {!applications.loading && !applications.error ? (
+            <>
+              <p className='border-t border-border/60 pt-4 text-xs text-muted-foreground'>
+                {translate(
+                  'hub.apps.summary',
+                  {
+                    visible: visibleApplications.length,
+                    total:
+                      applications.meta?.total ??
+                      applications.data?.length ??
+                      0,
+                  },
+                  'Showing {{visible}} of {{total}} applications',
+                )}
+              </p>
+              <HubLoadMore
+                hasMore={applications.hasMore}
+                loading={applications.loadingMore}
+                onLoadMore={applications.loadMore}
+              />
+            </>
+          ) : null}
         </>
       )}
       <CreateApplicationDialog

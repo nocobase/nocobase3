@@ -182,6 +182,47 @@ describe('Hub application pages', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps application filters visible when a search has no matches', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input);
+      if (path.endsWith('/apps')) return response([application]);
+      if (path.endsWith('/apps?query=missing')) {
+        return response<HubApplication[]>([], {
+          total: 0,
+          limit: 20,
+          offset: 0,
+        });
+      }
+      if (path.endsWith('/me')) {
+        return response({
+          user: null,
+          roles: ['Viewer'],
+          capabilities: readOnly,
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ApplicationsPage fetcher={fetchMock} />
+      </MemoryRouter>,
+    );
+
+    const search = await screen.findByRole('textbox', {
+      name: 'Search applications',
+    });
+    fireEvent.change(search, { target: { value: 'missing' } });
+
+    expect(
+      await screen.findByText('No matching applications'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Search applications' }),
+    ).toHaveValue('missing');
+    expect(screen.queryByText('No applications yet')).not.toBeInTheDocument();
+  });
+
   it('only offers development before the first release is uploaded', async () => {
     const capabilities: HubCapabilities = {
       global: [
