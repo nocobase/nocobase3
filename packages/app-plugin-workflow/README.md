@@ -3,7 +3,7 @@
 Provides the complete optional Workflow capability. Browser-safe graph helpers
 live in `client/`; server code is organized by responsibility under
 `server/collections`, `server/engine`, `server/instructions`, `server/loader`,
-`server/runtime`, `server/services`, and `server/routes`.
+`server/runtime`, `server/repositories`, and `server/routes`.
 
 The package root is the workflow authoring entry (`defineWorkflow`, `condition`,
 and `run`). Application integration uses the deliberately small `./server`
@@ -31,7 +31,7 @@ Application-owned workflow source remains in the application package. This
 package publishes the canonical `workflow-management` Registry recipe. Once
 materialized, its editable UI snapshot belongs to the consuming application
 and calls only this plugin's stable public exports. The default application
-only loads the Workflow runtime, migrations, services, and routes when this
+only loads the Workflow runtime, migrations, Provider, and routes when this
 plugin is enabled.
 
 Build the Registry payload with:

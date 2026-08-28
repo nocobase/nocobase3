@@ -1,4 +1,3 @@
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
@@ -7,17 +6,11 @@ import registerRoutes from '../server/routes/index.js';
 
 describe('realtime example plugin routes', () => {
   it('registers the realtime page', async () => {
-    const app = new Hono();
+    const router = new Hono();
 
-    registerRoutes({
-      app,
-      config: undefined,
-      deps: undefined,
-      paths: createConfigPaths({ rootDir: '/missing' }),
-      services: undefined,
-    });
+    registerRoutes(router);
 
-    const response = await app.request('http://localhost/realtime');
+    const response = await router.request('http://localhost/realtime');
     const html = await response.text();
 
     expect(response.status).toBe(200);

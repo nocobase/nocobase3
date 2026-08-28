@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { validateMigrations, validateSeeds } from '@nocobase/app-database';
+import { SNOWFLAKE_EPOCH_SECONDS } from '@nocobase/id-generator';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -14,6 +15,17 @@ import {
   createConfigPaths,
   loadConfig,
 } from '@nocobase/app-server-kit/config';
+import {
+  resolveStandaloneAppRuntime,
+  resolveStandaloneAppRuntimeConfigSection,
+  type CreateStandaloneRuntimeScopeOptions,
+} from '@nocobase/app-server-kit/node';
+import {
+  resolveAppRuntime,
+  resolveAppRuntimeConfigSection,
+  type AppScope,
+  type ResolvedAppScopeRuntime,
+} from '@nocobase/app-server-kit/runtime';
 
 import app, { resolvePublicOrigin } from '../../server/config/app.ts';
 import auth, { resolveAuthSecret } from '../../server/config/auth.ts';
@@ -24,19 +36,15 @@ import drive from '../../server/config/drive.ts';
 import logging from '../../server/config/logging.ts';
 import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
+import snowflake from '../../server/config/snowflake.ts';
 import spa from '../../server/config/spa.ts';
-import {
-  createStandaloneDatabaseTaskRuntime,
-  createStandaloneRuntime,
-} from '../../server/index.ts';
-import {
-  loadDatabaseTaskConfig,
-  loadEmbeddedAppConfig,
-} from '../../server/runtime/config.ts';
+import type { DefaultAppScopeConfig } from '../../server/config/types.ts';
+import appRuntime from '../../server/runtime.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
 const requirePackage = createRequire(import.meta.url);
+const templateRootDir = fileURLToPath(new URL('../..', import.meta.url));
 
 /**
  * Reads a plugin's declared version rather than repeating it as a literal.
@@ -50,6 +58,47 @@ const declaredVersion = (packageName: string): string =>
     .version;
 
 const tempDirs: string[] = [];
+
+const resolveStandaloneConfig = (
+  options: CreateStandaloneRuntimeScopeOptions<DefaultAppScopeConfig>,
+) => resolveStandaloneAppRuntime(appRuntime, options).config;
+
+const resolveEmbeddedConfig = (scope: AppScope<DefaultAppScopeConfig>) =>
+  resolveAppRuntime(appRuntime, scope).config;
+
+const resolveDatabaseTask = (options: ResolvedAppScopeRuntime) => {
+  const resolved = resolveAppRuntimeConfigSection(
+    appRuntime,
+    {
+      mode: options.mode,
+      id: options.routing.name,
+      appName: options.routing.name,
+      basePath: options.routing.publicBasePath,
+      paths: options.paths,
+      env: options.env,
+      registerDisposer(): void {},
+    },
+    'database',
+  );
+  return {
+    database: resolved.config,
+    plugins: resolved.plugins.plugins.map((plugin) => plugin.metadata),
+  };
+};
+
+const resolveStandaloneDatabaseTask = (
+  options: CreateStandaloneRuntimeScopeOptions<DefaultAppScopeConfig>,
+) => {
+  const resolved = resolveStandaloneAppRuntimeConfigSection(
+    appRuntime,
+    options,
+    'database',
+  );
+  return {
+    database: resolved.config,
+    plugins: resolved.plugins.plugins.map((plugin) => plugin.metadata),
+  };
+};
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -82,9 +131,46 @@ describe('config registry', () => {
     expect(config.logging.default).toBe('system');
     expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
+    expect(config.snowflake).toEqual({
+      workerId: 0,
+      epoch: SNOWFLAKE_EPOCH_SECONDS,
+    });
     expect(config.spa.indexPath).toBe(
       '/tmp/app-template-default/dist/client/index.html',
     );
+  });
+});
+
+describe('snowflake config', () => {
+  it('declares the default worker ID and epoch', () => {
+    const config = snowflake({
+      env: createConfigEnv({}),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config).toEqual({
+      workerId: 0,
+      epoch: SNOWFLAKE_EPOCH_SECONDS,
+    });
+  });
+
+  it('maps Snowflake environment values', () => {
+    const config = snowflake({
+      env: createConfigEnv({
+        SNOWFLAKE_WORKER_ID: '7',
+        SNOWFLAKE_EPOCH: '1700000000',
+      }),
+      paths: createConfigPaths({
+        rootDir: '/tmp/app-template-default',
+      }),
+    });
+
+    expect(config).toEqual({
+      workerId: 7,
+      epoch: 1_700_000_000,
+    });
   });
 });
 
@@ -104,8 +190,7 @@ describe('app config', () => {
       publicOrigin: undefined,
       publicBasePath: '/main',
       internalBasePath: '',
-      internalApiProxyPath: '/v2/api',
-      publicApiUrl: '/main/v2/api',
+      publicApiUrl: '/main/api',
     });
   });
 
@@ -148,8 +233,7 @@ describe('app config', () => {
       name: 'test',
       publicBasePath: '/main/test',
       internalBasePath: '',
-      internalApiProxyPath: '/v2/api',
-      publicApiUrl: '/main/test/v2/api',
+      publicApiUrl: '/main/test/api',
     });
   });
 
@@ -161,31 +245,40 @@ describe('app config', () => {
     const clientDir = path.join(root, 'dist/client');
     tempDirs.push(root);
 
-    const config = loadEmbeddedAppConfig(
-      {
-        id: 'main',
-        appName: 'main-app',
-        basePath: '/main',
-        rootDir: root,
-        clientDir,
-        dataDir,
-        config: {
-          authSecret: 'test-auth-secret-at-least-32-characters',
-          publicOrigin: 'https://apps.example.com',
-        },
+    const config = resolveEmbeddedConfig({
+      id: 'main',
+      appName: 'main-app',
+      basePath: '/main',
+      rootDir: root,
+      clientDir,
+      dataDir,
+      config: {
+        authSecret: 'test-auth-secret-at-least-32-characters',
+        publicOrigin: 'https://apps.example.com',
       },
-      new URL('../../server/embedded.ts', import.meta.url).href,
-    );
+      env: {
+        APP_VITE_DEV_URL: 'http://127.0.0.1:5174',
+      },
+      registerDisposer() {},
+    });
 
     expect(config.app).toMatchObject({
       name: 'main-app',
       publicOrigin: 'https://apps.example.com',
       publicBasePath: '/main',
       internalBasePath: '',
-      internalApiProxyPath: '/v2/api',
-      publicApiUrl: '/main/v2/api',
+      publicApiUrl: '/main/api',
     });
     expect(config.spa.indexPath).toBe(path.join(clientDir, 'index.html'));
+    expect(config.server.viteDevUrl?.toString()).toBe('http://127.0.0.1:5174/');
+    expect(config.spa.handler).toBeUndefined();
+    expect(config.spa.runtimeGlobals).toEqual({
+      NOCOBASE_PORTAL_BASE: '/main/',
+      NOCOBASE_API_URL: '/main/api',
+      __nocobase_api_client_storage_prefix__: 'NOCOBASE_',
+      __nocobase_api_client_storage_type__: 'localStorage',
+      __nocobase_api_client_share_token__: false,
+    });
     expect(config.caching.providers.memory).toMatchObject({
       driver: 'memory',
     });
@@ -208,9 +301,41 @@ describe('app config', () => {
       default: 'system',
       name: 'app-template-default',
     });
-    expect(config.queue.jobs?.locations).toEqual([
-      path.join(root, 'dist/server/jobs/**/*.{ts,js}'),
-    ]);
+    expect(config.queue.jobs?.locations).toEqual(
+      expect.arrayContaining([
+        path.join(root, 'dist/server/jobs/**/*.{ts,js}'),
+        expect.stringMatching(
+          /app-plugin-queue-example\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+        ),
+      ]),
+    );
+  });
+
+  it('resolves standalone SPA runtime behavior while loading config', () => {
+    const config = resolveStandaloneConfig({
+      rootDir: templateRootDir,
+      basePath: '/main/test',
+      env: { APP_VITE_DEV_URL: 'http://127.0.0.1:5174' },
+    });
+
+    expect(config.spa.handler).toEqual(expect.any(Function));
+    expect(config.spa.runtimeGlobals).toEqual({
+      NOCOBASE_PORTAL_BASE: '/main/test/',
+      NOCOBASE_API_URL: '/main/test/api',
+      __nocobase_api_client_storage_prefix__: 'NOCOBASE_',
+      __nocobase_api_client_storage_type__: 'localStorage',
+      __nocobase_api_client_share_token__: false,
+    });
+  });
+
+  it('requires application scopes to provide resolved path ownership', () => {
+    expect(() =>
+      resolveEmbeddedConfig({
+        id: 'missing-paths',
+        basePath: '/missing-paths',
+        registerDisposer() {},
+      }),
+    ).toThrow(/scope\.rootDir or scope\.paths/);
   });
 });
 
@@ -509,6 +634,14 @@ describe('spa config', () => {
 
     expect(config).toEqual({
       indexPath: '/tmp/app-template-default/dist/client/index.html',
+      handler: undefined,
+      runtimeGlobals: {
+        NOCOBASE_PORTAL_BASE: '/main/',
+        NOCOBASE_API_URL: '/main/api',
+        __nocobase_api_client_storage_prefix__: 'NOCOBASE_',
+        __nocobase_api_client_storage_type__: 'localStorage',
+        __nocobase_api_client_share_token__: false,
+      },
       runtime: {
         storagePrefix: 'NOCOBASE_',
         storageType: 'localStorage',
@@ -788,151 +921,54 @@ describe('drive config', () => {
   });
 });
 
-describe('database migrations', () => {
-  it('loads template migration files with the current definition format', async () => {
-    const directory = fileURLToPath(
-      new URL('../../database/migrations', import.meta.url),
-    );
-
-    await expect(validateMigrations(directory)).resolves.toEqual([
-      expect.objectContaining({
-        name: '202608180001_create_app_settings_table',
-        fileName: '202608180001_create_app_settings_table.ts',
-      }),
-    ]);
-  });
-});
-
 describe('app plugins', () => {
   it('resolves enabled plugins and their database sources', async () => {
-    const runtime = createStandaloneRuntime();
-    const authenticationPlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-authentication',
-    );
-    const dataProviderPlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-data-provider',
-    );
-    const notificationProviderPlugin = runtime.config.plugins.find(
-      (item) =>
-        item.packageName === '@nocobase/app-plugin-notification-provider',
-    );
-    const installPlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-install',
-    );
-    const databaseExamplePlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-database-example',
-    );
-    const routesExamplePlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-routes-example',
-    );
-    const queueExamplePlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-queue-example',
-    );
-    const realtimeExamplePlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-realtime-example',
-    );
-    const workflowPlugin = runtime.config.plugins.find(
-      (item) => item.packageName === '@nocobase/app-plugin-workflow',
-    );
+    const config = resolveStandaloneConfig({ rootDir: templateRootDir });
+    const plugin = (packageName: string) =>
+      config.plugins.find((item) => item.packageName === packageName);
 
-    expect(authenticationPlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-authentication',
+    expect(config.plugins.map((item) => item.packageName)).toEqual([
+      '@nocobase/app-plugin-authentication',
+      '@nocobase/app-plugin-authorization',
+      '@nocobase/app-plugin-database-example',
+      '@nocobase/app-plugin-file',
+      '@nocobase/app-plugin-install',
+      '@nocobase/app-plugin-queue-example',
+      '@nocobase/app-plugin-realtime-example',
+      '@nocobase/app-plugin-routes-example',
+      '@nocobase/app-plugin-service-provider-example',
+      '@nocobase/app-plugin-workflow',
+    ]);
+    expect(plugin('@nocobase/app-plugin-authentication')).toMatchObject({
       version: declaredVersion('@nocobase/app-plugin-authentication'),
-      enabled: true,
     });
-    expect(authenticationPlugin?.migrationsDirectory).toMatch(
-      /app-plugin-authentication\/database\/migrations$/,
-    );
-    expect(authenticationPlugin?.seedsDirectory).toMatch(
-      /app-plugin-authentication\/database\/seeds$/,
-    );
-    expect(dataProviderPlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-data-provider',
-      version: declaredVersion('@nocobase/app-plugin-data-provider'),
-      enabled: true,
-    });
-    expect(dataProviderPlugin?.migrationsDirectory).toBeUndefined();
-    expect(dataProviderPlugin?.seedsDirectory).toBeUndefined();
-    expect(notificationProviderPlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-notification-provider',
-      version: declaredVersion('@nocobase/app-plugin-notification-provider'),
-      enabled: true,
-    });
-    expect(notificationProviderPlugin?.migrationsDirectory).toBeUndefined();
-    expect(notificationProviderPlugin?.seedsDirectory).toBeUndefined();
-    expect(installPlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-install',
-      version: declaredVersion('@nocobase/app-plugin-install'),
-      enabled: true,
-    });
-    expect(installPlugin?.bootstrapEntry).toMatch(
-      /app-plugin-install\/server\/bootstrap\.ts$/,
-    );
-    expect(installPlugin?.routesEntry).toMatch(
-      /app-plugin-install\/server\/routes\/index\.ts$/,
-    );
-    expect(databaseExamplePlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-database-example',
-      version: declaredVersion('@nocobase/app-plugin-database-example'),
-      enabled: true,
-    });
-    expect(databaseExamplePlugin?.migrationsDirectory).toMatch(
-      /app-plugin-database-example\/database\/migrations$/,
-    );
-    expect(databaseExamplePlugin?.seedsDirectory).toMatch(
-      /app-plugin-database-example\/database\/seeds$/,
-    );
-    expect(databaseExamplePlugin?.routesEntry).toBeUndefined();
-    expect(routesExamplePlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-routes-example',
-      version: declaredVersion('@nocobase/app-plugin-routes-example'),
-      enabled: true,
-    });
-    expect(routesExamplePlugin?.migrationsDirectory).toBeUndefined();
-    expect(routesExamplePlugin?.seedsDirectory).toBeUndefined();
-    expect(routesExamplePlugin?.routesEntry).toMatch(
-      /app-plugin-routes-example\/server\/routes\/index\.ts$/,
-    );
-    expect(queueExamplePlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-queue-example',
-      version: declaredVersion('@nocobase/app-plugin-queue-example'),
-      enabled: true,
-    });
-    expect(queueExamplePlugin?.jobsDirectory).toMatch(
-      /app-plugin-queue-example\/server\/jobs$/,
-    );
-    expect(queueExamplePlugin?.routesEntry).toMatch(
-      /app-plugin-queue-example\/server\/routes\/index\.ts$/,
-    );
-    expect(realtimeExamplePlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-realtime-example',
-      version: declaredVersion('@nocobase/app-plugin-realtime-example'),
-      enabled: true,
-    });
-    expect(realtimeExamplePlugin?.routesEntry).toMatch(
-      /app-plugin-realtime-example\/server\/routes\/index\.ts$/,
-    );
-    expect(realtimeExamplePlugin?.bootstrapEntry).toMatch(
-      /app-plugin-realtime-example\/server\/bootstrap\.ts$/,
-    );
-    expect(workflowPlugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-workflow',
-      version: declaredVersion('@nocobase/app-plugin-workflow'),
-      enabled: true,
-    });
-    expect(workflowPlugin?.migrationsDirectory).toMatch(
-      /app-plugin-workflow\/database\/migrations$/,
-    );
-    expect(workflowPlugin?.routesEntry).toMatch(
-      /app-plugin-workflow\/server\/routes\/index\.ts$/,
-    );
-    expect(runtime.config.queue.jobs?.locations).toEqual([
+    expect(
+      plugin('@nocobase/app-plugin-authentication')?.migrationsDirectory,
+    ).toMatch(/app-plugin-authentication\/database\/migrations$/);
+    expect(
+      plugin('@nocobase/app-plugin-authentication')?.seedsDirectory,
+    ).toMatch(/app-plugin-authentication\/database\/seeds$/);
+    expect(
+      plugin('@nocobase/app-plugin-database-example')?.migrationsDirectory,
+    ).toMatch(/app-plugin-database-example\/database\/migrations$/);
+    expect(
+      plugin('@nocobase/app-plugin-database-example')?.seedsDirectory,
+    ).toMatch(/app-plugin-database-example\/database\/seeds$/);
+    expect(
+      plugin('@nocobase/app-plugin-workflow')?.migrationsDirectory,
+    ).toMatch(/app-plugin-workflow\/database\/migrations$/);
+    expect(plugin('@nocobase/app-plugin-queue-example')?.jobLocations).toEqual([
+      expect.stringMatching(
+        /app-plugin-queue-example\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+      ),
+    ]);
+    expect(config.queue.jobs?.locations).toEqual([
       expect.stringMatching(/app-template-default\/server\/jobs/),
       expect.stringMatching(
         /app-plugin-queue-example\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
       ),
     ]);
-    expect(runtime.config.database.migrations.sources).toEqual(
+    expect(config.database.migrations.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           packageName: '@nocobase/app-template-default',
@@ -948,7 +984,7 @@ describe('app plugins', () => {
         }),
       ]),
     );
-    expect(runtime.config.database.seeds?.sources).toEqual(
+    expect(config.database.seeds?.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           packageName: '@nocobase/app-template-default',
@@ -964,7 +1000,7 @@ describe('app plugins', () => {
 
     await expect(
       validateMigrations({
-        sources: runtime.config.database.migrations.sources ?? [],
+        sources: config.database.migrations.sources ?? [],
       }),
     ).resolves.toEqual(
       expect.arrayContaining([
@@ -984,7 +1020,7 @@ describe('app plugins', () => {
     );
     await expect(
       validateSeeds({
-        sources: runtime.config.database.seeds?.sources ?? [],
+        sources: config.database.seeds?.sources ?? [],
       }),
     ).resolves.toEqual(
       expect.arrayContaining([
@@ -1004,7 +1040,7 @@ describe('app plugins', () => {
 describe('standalone runtime database config', () => {
   it('loads database tasks without application-only configuration', () => {
     const rootDir = fileURLToPath(new URL('../..', import.meta.url));
-    const config = loadDatabaseTaskConfig({
+    const config = resolveDatabaseTask({
       mode: 'standalone',
       env: {},
       paths: {
@@ -1016,8 +1052,6 @@ describe('standalone runtime database config', () => {
         name: 'app-template-default',
         publicBasePath: '/app-template-default',
         internalBasePath: '',
-        internalApiProxyPath: '/v2/api',
-        publicApiUrl: '/app-template-default/v2/api',
       },
     });
 
@@ -1038,60 +1072,44 @@ describe('standalone runtime database config', () => {
     );
   });
 
-  it('creates a database task runtime with plugin sources', async () => {
-    const runtime = createStandaloneDatabaseTaskRuntime();
+  it('loads standalone database task config with plugin sources', () => {
+    const config = resolveStandaloneDatabaseTask({
+      rootDir: templateRootDir,
+    });
 
-    expect(runtime.config).not.toHaveProperty('auth');
-    expect(runtime.config.plugins).toEqual(
+    expect(config).not.toHaveProperty('auth');
+    expect(config.plugins).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-authentication',
-          enabled: true,
-        }),
-        expect.objectContaining({
-          packageName: '@nocobase/app-plugin-data-provider',
-          enabled: true,
-        }),
-        expect.objectContaining({
-          packageName: '@nocobase/app-plugin-notification-provider',
-          enabled: true,
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-install',
-          enabled: true,
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-database-example',
-          enabled: true,
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-routes-example',
-          enabled: true,
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-queue-example',
-          enabled: true,
         }),
         expect.objectContaining({
           packageName: '@nocobase/app-plugin-realtime-example',
-          enabled: true,
         }),
       ]),
     );
-    expect(runtime.migrator).toBeDefined();
-    expect(runtime.seeder).toBeDefined();
-
-    await runtime.dispose();
+    expect(config).toHaveProperty('database');
+    expect(config).not.toHaveProperty('dispose');
   });
 
   it('uses the active database directory for migrations and seeds', () => {
-    const runtime = createStandaloneRuntime();
+    const config = resolveStandaloneConfig({ rootDir: templateRootDir });
 
-    expect(runtime.config.database.migrations.directory).toMatch(
+    expect(config.database.migrations.directory).toMatch(
       /database\/migrations$/,
     );
-    expect(runtime.config.database.seeds?.directory).toMatch(
-      /database\/seeds$/,
-    );
+    expect(config.database.seeds?.directory).toMatch(/database\/seeds$/);
   });
 });

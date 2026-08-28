@@ -27,15 +27,15 @@ decision.
 
 ```ts
 const route = createFileRoute({
-  database: deps.database,
+  database: app.container.resolve(databaseManagerToken),
   table: 'orderAttachments',
   scope: (context) => ({ orderId: context.req.param('orderId') }),
-  drive: deps.driveManager,
+  drive: app.container.resolve(driveManagerToken),
   defaultDisk: config.drive.default,
   publicBasePath: config.app.publicBasePath,
   tokenSecret: config.session.secret,
   audience: 'order-attachments',
-  auth: deps.auth.required(),
+  auth: app.container.resolve(authenticationToken).required(),
   authorize: authorizeOrderFile,
   visibility: { default: 'private', allowClientOverride: false },
   limits: {

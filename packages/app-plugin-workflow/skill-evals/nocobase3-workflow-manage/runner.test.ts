@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { WorkflowRunRepository } from '../../server/services/workflow-run-repository.js';
+import { WorkflowRunRepository } from '../../server/repositories/workflow-run-repository.js';
 
 import { loadPromptCases } from './runner/load-cases.js';
 import { prepareCaseWorkspace } from './runner/workspace.js';

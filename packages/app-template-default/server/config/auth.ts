@@ -2,20 +2,30 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import {
-  defineConfig,
-  type ConfigFactory,
-} from '@nocobase/app-server-kit/config';
+import { defineConfig } from '@nocobase/app-server-kit/config';
+import type { AppRuntimeConfigFactory } from '@nocobase/app-server-kit/runtime';
 import type { AuthOptions } from '@nocobase/app-plugin-authentication';
+import type {
+  AppConfig,
+  DefaultAppConfigContext,
+  DefaultAppScopeConfig,
+} from './types.js';
 
 export type AppAuthConfig = Omit<
   AuthOptions,
   'basePath' | 'baseURL' | 'connection'
 >;
 
-const authConfig: ConfigFactory<AppAuthConfig> = defineConfig(
-  ({ env, paths }): AppAuthConfig => {
-    const secret = resolveAuthSecret(env.string('AUTH_SECRET'), paths.root());
+const authConfig: AppRuntimeConfigFactory<
+  AppAuthConfig,
+  AppConfig,
+  DefaultAppScopeConfig
+> = defineConfig<AppAuthConfig, DefaultAppConfigContext>(
+  ({ env, paths, scopeConfig }): AppAuthConfig => {
+    const secret = resolveAuthSecret(
+      scopeConfig?.authSecret ?? env.string('AUTH_SECRET'),
+      paths.root(),
+    );
 
     return {
       secret,

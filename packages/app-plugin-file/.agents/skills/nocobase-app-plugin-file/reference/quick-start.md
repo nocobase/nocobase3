@@ -7,22 +7,19 @@ rules.
 
 ## 1. Confirm the host context
 
-Enable `@nocobase/app-plugin-file` in the application. In the server plugin
-context, confirm the existing `deps.database`, `deps.driveManager`, `deps.auth`,
-and `deps.authz` dependencies are available. The plugin context must also
-provide `config.app.publicBasePath`, `config.drive.default`, and
-`config.session.secret`.
+Enable `@nocobase/app-plugin-file` in the application. Its ServiceProvider
+resolves the existing database, Drive, authentication, and authorization
+services from the Application's shared container. The Application config must
+provide `app.publicBasePath`, `drive.default`, and `session.secret`.
 
 Import the public Route factory:
 
 ```ts
 import { createFileRoute } from '@nocobase/app-plugin-file/server';
 
-export default function registerPurchaseOrderFiles({
-  app,
-  config,
-  deps,
-}: PurchaseOrderPluginRoutesContext): void {
+export default function registerPurchaseOrderFiles(
+  app: PurchaseOrderApplication,
+): void {
   // Continue with the migration and Route below.
 }
 ```
@@ -30,8 +27,8 @@ export default function registerPurchaseOrderFiles({
 `PurchaseOrderPluginRoutesContext` is the business module's existing typed
 plugin context. Do not widen it or expose DatabaseManager to browser code.
 
-Do not add `AppServices.files`, another dependency injection mechanism, or a
-second DatabaseManager/Drive manager. Registry installation does not install
+Do not add another file service, dependency injection mechanism, or a second
+DatabaseManager/Drive manager. Registry installation does not install
 this server code or a migration.
 
 ## 2. Create the migration
@@ -77,7 +74,7 @@ parameter. Validate the parameter before returning a scope:
 app.route(
   '/api/purchase-orders/:orderId/attachments',
   createFileRoute({
-    database: deps.database,
+    database: app.container.resolve(databaseManagerToken),
     table: 'purchaseOrderAttachments',
     scope: (context) => {
       const raw = context.req.param('orderId');
@@ -87,12 +84,12 @@ app.route(
       }
       return { orderId };
     },
-    drive: deps.driveManager,
+    drive: app.container.resolve(driveManagerToken),
     defaultDisk: config.drive.default,
     publicBasePath: config.app.publicBasePath,
     tokenSecret: config.session.secret,
     audience: 'purchase-order-attachments',
-    auth: deps.auth.required(),
+    auth: app.container.resolve(authenticationToken).required(),
     authorize: authorizePurchaseOrderFile,
     visibility: { default: 'private', allowClientOverride: false },
     limits: { maxSize: 50 * 1024 * 1024, maxFiles: 10 },

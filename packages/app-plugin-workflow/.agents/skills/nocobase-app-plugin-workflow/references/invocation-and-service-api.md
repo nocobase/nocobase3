@@ -52,19 +52,20 @@ the final trigger identifier is always the selected DSL directory key.
 
 ## Internal service access
 
-The public server entry exports `getRuntimeWorkflow(appRuntime)`. It retrieves
-the workflow runtime bound to that exact application runtime instance during
-Workflow plugin bootstrap. The binding does not add a `workflow` property or a
-`trigger` method to `AppRuntime`, and there is no
-`services.plugins.workflow` service yet.
+The public server entry exports `workflowServiceToken`. The Workflow
+ServiceProvider registers the service in the application's container, so
+business modules resolve the same typed service that routes use. Do not bind
+services to `AppRuntime` or add a mutable plugin-services object.
 
 Business invocation:
 
 ```ts
-import { getRuntimeWorkflow } from '@nocobase/app-plugin-workflow/server';
+import { workflowServiceToken } from '@nocobase/app-plugin-workflow/server';
 
-const workflowRuntime = getRuntimeWorkflow(appRuntime);
-if (!workflowRuntime) throw new Error('Workflow runtime is not configured.');
+if (!app.container.has(workflowServiceToken)) {
+  throw new Error('Workflow service is not configured.');
+}
+const workflowRuntime = app.container.resolve(workflowServiceToken);
 const receipt = await workflowRuntime.trigger(
   'quotation-decision',
   { quotationId: 'Q-100', amount: 150000 },
@@ -170,14 +171,14 @@ curl --fail-with-body \
   https://app.example/api/workflow-runs/<run-id>
 ```
 
-An unsynchronized Artifact is addressed by its hash; after enable, use the persisted definition id returned/read back by the API. These are management routes only; business modules obtain the bound runtime through `getRuntimeWorkflow(appRuntime)`, call its `trigger()` method, and handle the `accepted`/`skipped` receipt.
+An unsynchronized Artifact is addressed by its hash; after enable, use the persisted definition id returned/read back by the API. These are management routes only; business modules resolve `workflowServiceToken` from the Application container, call its `trigger()` method, and handle the `accepted`/`skipped` receipt.
 
 ## Invocation verification
 
 1. Enumerate the configured Workflow DSL source root. Use an explicit key when supplied; otherwise match the business requirement against each `workflow.ts` title and description, inspect nodes to resolve close candidates, and ask when ambiguity remains. Use the selected directory name as the key; do not query the API or database for discovery.
 2. Validate the exact input locally against the declared schema, including extra fields and byte size.
 3. Choose/reuse a stable event key for the same source event.
-4. Call `getRuntimeWorkflow(appRuntime)`, fail explicitly if no runtime is bound, then call `workflowRuntime.trigger(key, input, options)` for business logic. Use the authenticated management routes only for explicit inspection or manual management.
+4. Resolve `workflowServiceToken` from `app.container`, fail explicitly if the token is not registered, then call `workflowRuntime.trigger(key, input, options)` for business logic. Use the authenticated management routes only for explicit inspection or manual management.
 5. Discriminate the receipt. For `skipped`, record the reason and stop; there is no event key or run. For `accepted`, record its event key and allow for queue delay before looking up a run.
 6. Once persisted, verify its workflow id/key, version, hash, input, event key, status, and timestamps.
 7. Verify side-effecting run scripts by their business idempotency evidence, not merely a resolved workflow status.

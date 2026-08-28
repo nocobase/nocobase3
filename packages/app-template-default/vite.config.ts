@@ -55,7 +55,7 @@ export default createPortalViteConfig(
       command === 'serve'
         ? mode === 'e2e' && env.NOCOBASE_E2E_API_URL?.trim()
           ? env.NOCOBASE_E2E_API_URL.trim().replace(/\/$/, '')
-          : joinBase(appBase, '/v2/api')
+          : joinBase(appBase, '/api')
         : undefined;
     const viteHmrHost = env.APP_VITE_HMR_HOST;
     const viteDevPort = numberFromEnv(env.APP_VITE_DEV_PORT) ?? 5173;

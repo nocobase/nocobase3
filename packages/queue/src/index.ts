@@ -21,4 +21,6 @@ export type {
 export * from './config.js';
 export * from './drivers.js';
 export * from './manager.js';
+export * from './provider.js';
+export * from './token.js';
 export * from './types.js';

@@ -15,8 +15,8 @@
 server/config/auth.ts
   认证配置和环境变量
 
-server/runtime/deps.ts
-  创建 Auth，并接入数据库和缓存
+@nocobase/app-plugin-authentication/server/provider
+  注册 Auth，并接入应用 Runtime、数据库和缓存
 
 server/routes/api/auth.ts
   把 /api/auth/* 交给 Better Auth
@@ -114,12 +114,13 @@ secret 只保留在服务端配置里，不通过 Vite 环境变量传给浏览�
 
 ### 2. 注册 provider 或 plugin
 
-默认模板在 `server/runtime/deps.ts` 中调用 `createAuthentication()`。可以把新的
-provider 或 plugin 配置传进去：
+Authentication 插件在 `server/provider.ts` 的 `AuthenticationProvider` 中调用
+`createAuthentication()`，配置来自应用的 `runtime.config.auth`。可以把新的 provider
+或 plugin 配置传进去：
 
 ```ts
 const auth = createAuthentication({
-  connection: runtime.database?.connection(),
+  connection: services.resolve(databaseManagerToken).connection(),
   secret: config.auth.secret,
   plugins: [myAuthPlugin(config.auth.myProvider)],
 });

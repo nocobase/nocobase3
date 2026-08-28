@@ -41,7 +41,7 @@ export default createClientLibraryConfig({
         'server/engine/{inspector,utils,value-resolver}.ts',
         'server/instructions/run/instruction.ts',
         'server/loader/{source-materializer,source-validator,synchronizer}.ts',
-        'server/services/{mappers,workflow-repository,workflow-run-repository}.ts',
+        'server/repositories/{mappers,workflow-repository,workflow-run-repository}.ts',
       ],
       rules: {
         // These adapters receive unknown-valued database/configuration records

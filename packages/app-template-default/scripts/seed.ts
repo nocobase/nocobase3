@@ -1,32 +1,33 @@
-import { prepareAppDatabaseStorage } from '@nocobase/app-server-kit/database';
+import path from 'node:path';
 
-import { createStandaloneDatabaseTaskRuntime } from '../server/database-task.js';
+import { runAppSeeds } from '@nocobase/app-server-kit/database';
+import { resolveStandaloneAppRuntimeConfigSection } from '@nocobase/app-server-kit/node';
+
+import appRuntime from '../server/runtime.js';
 
 await seed();
 
 async function seed(): Promise<void> {
-  const runtime = createStandaloneDatabaseTaskRuntime();
+  const { config: database } = resolveStandaloneAppRuntimeConfigSection(
+    appRuntime,
+    { rootDir: path.resolve(import.meta.dirname, '..') },
+    'database',
+  );
+  const result = await runAppSeeds(database);
 
-  try {
-    await prepareAppDatabaseStorage(runtime.config.database);
-    const result = await runtime.runSeeds();
-
-    if (!result) {
-      console.log('No database seeder is configured.');
-      return;
-    }
-
-    if (result.status === 'skipped') {
-      console.log(`Database seeds skipped: ${result.reason}.`);
-      return;
-    }
-
-    console.log('Database seeds completed.');
-    logSeedNames('Executed', result.executed ?? []);
-    logSeedNames('Skipped', result.skipped ?? []);
-  } finally {
-    await runtime.dispose();
+  if (!result) {
+    console.log('No database seeder is configured.');
+    return;
   }
+
+  if (result.status === 'skipped') {
+    console.log(`Database seeds skipped: ${result.reason}.`);
+    return;
+  }
+
+  console.log('Database seeds completed.');
+  logSeedNames('Executed', result.executed ?? []);
+  logSeedNames('Skipped', result.skipped ?? []);
 }
 
 function logSeedNames(label: string, names: readonly string[]): void {

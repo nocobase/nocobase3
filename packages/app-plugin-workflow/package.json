@@ -57,6 +57,15 @@
       "types": "./server/index.ts",
       "import": "./dist/server/index.js"
     },
+    "./server/plugin": {
+      "source": "./server/plugin.ts",
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
+    "./server/config": {
+      "types": "./server/config.ts",
+      "import": "./server/config.ts"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -98,6 +107,14 @@
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
       },
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
+      "./server/config": {
+        "types": "./dist/server/config.d.ts",
+        "import": "./dist/server/config.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -112,16 +129,6 @@
     "registry": {
       "items": {
         "workflow-management": "./registry/workflow-management"
-      }
-    },
-    "plugin": {
-      "client": {
-        "bootstrap": "./client/bootstrap",
-        "routes": "./client/routes"
-      },
-      "database": {
-        "migrations": "./database/migrations",
-        "seeds": "./database/seeds"
       }
     }
   },
@@ -144,9 +151,12 @@
   },
   "dependencies": {
     "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/drive": "workspace:^",
+    "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "esbuild": "^0.25.12",
     "hono": "catalog:"
   },

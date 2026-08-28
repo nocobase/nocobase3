@@ -105,7 +105,7 @@ reads only a validated server Route parameter:
 
 ```ts
 const route = createFileRoute({
-  database: deps.database,
+  database: app.container.resolve(databaseManagerToken),
   table: 'orderAttachments',
   scope: (context) => {
     const raw = context.req.param('orderId');

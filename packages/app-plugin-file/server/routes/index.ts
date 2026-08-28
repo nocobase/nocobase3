@@ -1,8 +1,19 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import {
+  authenticationToken,
+  type Auth,
+  type AuthEnv,
+} from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AppAuthorization,
+  type AuthorizationEnv,
+} from '@nocobase/app-plugin-authorization';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import type { ServiceResolver } from '@nocobase/service-provider';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
-import { prepareFileDemoFixtures } from '../bootstrap.js';
+import { prepareFileDemoFixtures } from '../provider.js';
 import { createFileRoute } from '../create-file-route.js';
 import {
   FILE_DEMO_COLLECTIONS,
@@ -11,11 +22,11 @@ import {
 } from '../demo/constants.js';
 import {
   isFilePluginRuntimeUnavailable,
-  resolveFilePluginRuntime,
   type FilePluginConfig,
-  type FilePluginDeps,
+  type FilePluginRuntime,
   type UnavailableFilePluginRuntime,
 } from '../plugin-runtime.js';
+import { filePluginRuntimeToken } from '../runtime-token.js';
 import type {
   CustomFileRouteSource,
   DatabaseFileRouteSource,
@@ -36,41 +47,25 @@ const FILE_DEMO_MANAGEMENT_RESOURCE = Object.freeze({
 });
 
 interface FileAuthorizationEnv {
-  Variables: {
-    authz: FileAuthorizationScope;
-  };
+  Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];
 }
 
-interface FileAuthorizationScope {
-  readonly identity: {
-    readonly principal: { readonly type: string; readonly id: string };
-    readonly subjects?: readonly {
-      readonly type: string;
-      readonly id: string;
-    }[];
-  };
-}
+type FileAuthorizationScope = AuthorizationEnv['Variables']['authz'];
 
 type ReadinessProvider = () => Promise<void> | undefined;
 
-export type FilePluginRoutesContext = AppPluginRoutesContext<
-  FilePluginDeps,
-  unknown,
-  FilePluginConfig
->;
-
 export interface CreateFileDemoRoutesOptions {
   readonly config: FilePluginConfig;
-  readonly deps: FilePluginDeps;
+  readonly container: ServiceResolver;
 }
 
 export function createFileDemoRoutes({
   config,
-  deps,
+  container,
 }: CreateFileDemoRoutesOptions): Hono<FileAuthorizationEnv> {
-  const runtime = resolveFilePluginRuntime({ config, deps });
+  const runtime = container.resolve(filePluginRuntimeToken);
   let unavailable: UnavailableFilePluginRuntime | undefined;
-  let drive: FilePluginDeps['driveManager'];
+  let drive: FilePluginRuntime['drive'] | undefined;
   let readiness: ReadinessProvider = () => undefined;
   if (isFilePluginRuntimeUnavailable(runtime)) {
     unavailable = runtime;
@@ -78,7 +73,11 @@ export function createFileDemoRoutes({
     drive = runtime.drive;
     readiness = () => prepareFileDemoFixtures(runtime);
   }
-  const auth = createManagementAuth(deps, readiness);
+  const auth = createManagementAuth(
+    container.resolve(authenticationToken),
+    container.resolve(authorizationToken),
+    readiness,
+  );
   const routes = new Hono<FileAuthorizationEnv>();
   const waitForContent = createReadinessMiddleware(readiness);
   const avatarSource: DatabaseFileRouteSource | CustomFileRouteSource =
@@ -179,15 +178,18 @@ export function createFileDemoRoutes({
 }
 
 function createManagementAuth(
-  deps: FilePluginDeps,
+  auth: Pick<Auth, 'required'>,
+  authz: Pick<AppAuthorization, 'middleware' | 'permissionSets'>,
   readiness: ReadinessProvider,
 ): MiddlewareHandler<FileAuthorizationEnv> {
-  const authenticate = deps.auth.required();
-  const authorize = deps.authz.middleware();
+  const authenticate =
+    auth.required() as unknown as MiddlewareHandler<FileAuthorizationEnv>;
+  const authorize =
+    authz.middleware() as unknown as MiddlewareHandler<FileAuthorizationEnv>;
   return (context, next) =>
     authenticate(context, async () => {
       await authorize(context, async () => {
-        const denied = await requireDemoAdministrator(deps, context);
+        const denied = await requireDemoAdministrator(authz, context);
         if (denied) {
           context.res = denied;
           return;
@@ -203,11 +205,11 @@ function createManagementAuth(
 }
 
 async function requireDemoAdministrator(
-  deps: FilePluginDeps,
+  authz: Pick<AppAuthorization, 'permissionSets'>,
   context: Context,
 ): Promise<Response | undefined> {
   const identity = resolveAuthorizationScope(context).identity;
-  const permissionSets = await deps.authz.permissionSets.getEffective(identity);
+  const permissionSets = await authz.permissionSets.getEffective(identity);
   if (
     permissionSets.some(
       (permissionSet) =>
@@ -268,12 +270,14 @@ function resolveAuthorizationScope(context: Context): FileAuthorizationScope {
   return value as FileAuthorizationScope;
 }
 
-export default function registerRoutes({
-  app,
-  config,
-  deps,
-}: FilePluginRoutesContext): void {
-  app.route(ATTACHMENTS_PATH, createFileDemoRoutes({ config, deps }));
+export default function registerRoutes(
+  app: AppPluginApplication,
+  router: Hono,
+): void {
+  router.route(
+    '/attachments',
+    createFileDemoRoutes({ config: app.config, container: app.container }),
+  );
 }
 
 function createUnavailableStore(

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 
-import type { WorkflowRunRepository } from '../services/workflow-run-repository.js';
+import type { WorkflowRunRepository } from '../repositories/workflow-run-repository.js';
 
 export function createNodeRunRoutes(
   workflowRuns: Pick<WorkflowRunRepository, 'nodeRuns' | 'nodeRunPayload'>,

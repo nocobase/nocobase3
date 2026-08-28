@@ -11,6 +11,10 @@ import type {
   AppWebSocketAcceptResult,
   AppWebSocketHandler,
 } from '@nocobase/app-server-kit/websocket';
+import type {
+  AppDisposer as ServerAppDisposer,
+  AppScope as ServerAppScope,
+} from '@nocobase/app-server-kit/runtime';
 
 import type { AppState } from './events.ts';
 
@@ -28,7 +32,7 @@ export type {
   AppWebSocketSendOptions,
 } from '@nocobase/app-server-kit/websocket';
 
-export type AppDisposer = () => void | Promise<void>;
+export type AppDisposer = ServerAppDisposer;
 
 export interface FetchApp {
   fetch(
@@ -39,23 +43,15 @@ export interface FetchApp {
   websocket?: AppWebSocketHandler;
 }
 
-export interface AppScope {
-  readonly id: string;
-  readonly appName?: string;
+export interface AppScope extends ServerAppScope {
   readonly version: number;
-  readonly basePath: string;
   readonly assetsBasePath: string;
-  readonly clientDir?: string;
   /**
    * Deprecated. App servers should define their own API routes under the
    * app-local path they receive, for example `/api/*`.
    */
   readonly apiBasePath: string;
-  readonly rootDir?: string;
-  readonly dataDir?: string;
-  readonly config?: unknown;
   readonly signal: AbortSignal;
-  registerDisposer(name: string, dispose: AppDisposer): void;
   onBeforeDestroy(handler: () => void | Promise<void>): () => void;
 }
 

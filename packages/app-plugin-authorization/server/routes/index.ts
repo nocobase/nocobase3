@@ -1,4 +1,3 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
 import {
   AuthorizationDeniedError,
   type AuthorizationEnv,
@@ -6,26 +5,21 @@ import {
 import type { SharingRule } from '@nocobase/authorization/sharing-rules';
 import type { RestrictionRule } from '@nocobase/authorization/restriction-rules';
 import type { PermissionGrant } from '@nocobase/authorization/permissions';
-import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { AppAuthorization } from '../authorization.js';
+import { authorizationToken } from '../token.js';
 
-export interface AuthorizationPluginAuth {
-  required(): MiddlewareHandler;
+export interface AuthorizationPluginRoutesApplication {
+  readonly container: import('@nocobase/service-provider').ServiceContainer;
 }
-export interface AuthorizationPluginDeps {
-  auth: AuthorizationPluginAuth;
-  authz: AppAuthorization;
-}
-export type AuthorizationPluginRoutesContext = AppPluginRoutesContext<
-  AuthorizationPluginDeps,
-  unknown
->;
 
-export default function registerAuthorizationRoutes({
-  app,
-  deps,
-}: AuthorizationPluginRoutesContext): void {
+export default function registerAuthorizationRoutes(
+  { container }: AuthorizationPluginRoutesApplication,
+  router: Hono,
+): void {
+  const auth = container.resolve(authenticationToken);
+  const authorization = container.resolve(authorizationToken);
   const routes = new Hono<AuthorizationEnv>();
   routes.onError((error, context) => {
     if (error instanceof AuthorizationDeniedError)
@@ -37,27 +31,29 @@ export default function registerAuthorizationRoutes({
       );
     throw error;
   });
-  routes.use('*', deps.auth.required());
-  routes.use('*', deps.authz.middleware());
+  routes.use('*', auth.required());
+  routes.use('*', authorization.middleware());
   routes.get('/permissions', (context) =>
-    deps.authz.permissions.handler({
+    authorization.permissions.handler({
       request: context.req.raw,
       authorization: context.get('authz'),
     }),
   );
   routes.get('/permission-sets/options', async (context) => {
     await admin(context, 'permission-sets', 'read');
-    return context.json({ data: permissionSetOptions(deps.authz) });
+    return context.json({ data: permissionSetOptions(authorization) });
   });
   routes.get('/permission-sets/users', async (context) => {
     await admin(context, 'permission-sets', 'read');
-    return context.json({ data: await deps.authz.administration.listUsers() });
+    return context.json({
+      data: await authorization.administration.listUsers(),
+    });
   });
   routes.put('/permission-sets/system-administrator', async (context) => {
     await admin(context, 'permission-sets', 'update');
     const input = parsePermissionSet(await context.req.json());
     return context.json({
-      data: await deps.authz.permissionSets.update('system-administrator', {
+      data: await authorization.permissionSets.update('system-administrator', {
         ...input,
         key: 'system-administrator',
         grants: mergeRequiredAdministratorGrants(input.grants),
@@ -68,9 +64,9 @@ export default function registerAuthorizationRoutes({
     protectedSystemAdministrator(context),
   );
   routes.delete('/permission-sets/assignments/:id', async (context, next) => {
-    const assignment = (await deps.authz.permissionSets.listAssignments()).find(
-      (item) => item.id === context.req.param('id'),
-    );
+    const assignment = (
+      await authorization.permissionSets.listAssignments()
+    ).find((item) => item.id === context.req.param('id'));
     if (assignment?.permissionSet === 'system-administrator') {
       return protectedSystemAdministrator(context);
     }
@@ -80,7 +76,7 @@ export default function registerAuthorizationRoutes({
     ['GET', 'POST', 'PUT', 'DELETE'],
     ['/permission-sets', '/permission-sets/*'],
     (context) =>
-      deps.authz.permissionSets.handler({
+      authorization.permissionSets.handler({
         request: context.req.raw,
         authorization: context.get('authz'),
         basePath: '/api/authz',
@@ -89,22 +85,22 @@ export default function registerAuthorizationRoutes({
 
   routes.get('/default-access', async (context) => {
     await admin(context, 'default-access', 'read');
-    return context.json({ data: await deps.authz.defaultAccess.list() });
+    return context.json({ data: await authorization.defaultAccess.list() });
   });
   routes.put('/default-access', async (context) => {
     const rule = parseDefault(await context.req.json());
-    const existing = await deps.authz.defaultAccess.get(
+    const existing = await authorization.defaultAccess.get(
       rule.resource.type,
       rule.resource.id,
     );
     await admin(context, 'default-access', existing ? 'update' : 'create');
     return context.json({
-      data: await deps.authz.defaultAccess.set(rule),
+      data: await authorization.defaultAccess.set(rule),
     });
   });
   routes.delete('/default-access/:type/:id', async (context) => {
     await admin(context, 'default-access', 'delete');
-    await deps.authz.defaultAccess.delete(
+    await authorization.defaultAccess.delete(
       context.req.param('type'),
       context.req.param('id'),
     );
@@ -112,13 +108,13 @@ export default function registerAuthorizationRoutes({
   });
   routes.get('/sharing-rules', async (context) => {
     await admin(context, 'sharing-rules', 'read');
-    return context.json({ data: await deps.authz.sharingRules.list() });
+    return context.json({ data: await authorization.sharingRules.list() });
   });
   routes.post('/sharing-rules', async (context) => {
     await admin(context, 'sharing-rules', 'create');
     return context.json(
       {
-        data: await deps.authz.sharingRules.create(
+        data: await authorization.sharingRules.create(
           parseRule(await context.req.json(), 'sharing'),
         ),
       },
@@ -128,7 +124,7 @@ export default function registerAuthorizationRoutes({
   routes.put('/sharing-rules/:key', async (context) => {
     await admin(context, 'sharing-rules', 'update');
     return context.json({
-      data: await deps.authz.sharingRules.update(
+      data: await authorization.sharingRules.update(
         context.req.param('key'),
         parseRule(await context.req.json(), 'sharing'),
       ),
@@ -136,18 +132,18 @@ export default function registerAuthorizationRoutes({
   });
   routes.delete('/sharing-rules/:key', async (context) => {
     await admin(context, 'sharing-rules', 'delete');
-    await deps.authz.sharingRules.delete(context.req.param('key'));
+    await authorization.sharingRules.delete(context.req.param('key'));
     return context.body(null, 204);
   });
   routes.get('/restriction-rules', async (context) => {
     await admin(context, 'restriction-rules', 'read');
-    return context.json({ data: await deps.authz.restrictionRules.list() });
+    return context.json({ data: await authorization.restrictionRules.list() });
   });
   routes.post('/restriction-rules', async (context) => {
     await admin(context, 'restriction-rules', 'create');
     return context.json(
       {
-        data: await deps.authz.restrictionRules.create(
+        data: await authorization.restrictionRules.create(
           parseRule(await context.req.json(), 'restriction'),
         ),
       },
@@ -157,7 +153,7 @@ export default function registerAuthorizationRoutes({
   routes.put('/restriction-rules/:key', async (context) => {
     await admin(context, 'restriction-rules', 'update');
     return context.json({
-      data: await deps.authz.restrictionRules.update(
+      data: await authorization.restrictionRules.update(
         context.req.param('key'),
         parseRule(await context.req.json(), 'restriction'),
       ),
@@ -165,54 +161,58 @@ export default function registerAuthorizationRoutes({
   });
   routes.delete('/restriction-rules/:key', async (context) => {
     await admin(context, 'restriction-rules', 'delete');
-    await deps.authz.restrictionRules.delete(context.req.param('key'));
+    await authorization.restrictionRules.delete(context.req.param('key'));
     return context.body(null, 204);
   });
   routes.get('/default-access/options', async (context) => {
     await admin(context, 'default-access', 'read');
-    return context.json({ data: databaseScopeRuleOptions(deps.authz) });
+    return context.json({ data: databaseScopeRuleOptions(authorization) });
   });
   routes.get('/default-access/records/:collection', async (context) => {
     await admin(context, 'default-access', 'read');
     return context.json({
-      data: await deps.authz.administration.listRecords(
+      data: await authorization.administration.listRecords(
         decodeURIComponent(context.req.param('collection')),
       ),
     });
   });
   routes.get('/sharing-rules/options', async (context) => {
     await admin(context, 'sharing-rules', 'read');
-    return context.json({ data: databaseScopeRuleOptions(deps.authz) });
+    return context.json({ data: databaseScopeRuleOptions(authorization) });
   });
   routes.get('/sharing-rules/users', async (context) => {
     await admin(context, 'sharing-rules', 'read');
-    return context.json({ data: await deps.authz.administration.listUsers() });
+    return context.json({
+      data: await authorization.administration.listUsers(),
+    });
   });
   routes.get('/sharing-rules/records/:collection', async (context) => {
     await admin(context, 'sharing-rules', 'read');
     return context.json({
-      data: await deps.authz.administration.listRecords(
+      data: await authorization.administration.listRecords(
         decodeURIComponent(context.req.param('collection')),
       ),
     });
   });
   routes.get('/restriction-rules/options', async (context) => {
     await admin(context, 'restriction-rules', 'read');
-    return context.json({ data: databaseScopeRuleOptions(deps.authz) });
+    return context.json({ data: databaseScopeRuleOptions(authorization) });
   });
   routes.get('/restriction-rules/users', async (context) => {
     await admin(context, 'restriction-rules', 'read');
-    return context.json({ data: await deps.authz.administration.listUsers() });
+    return context.json({
+      data: await authorization.administration.listUsers(),
+    });
   });
   routes.get('/restriction-rules/records/:collection', async (context) => {
     await admin(context, 'restriction-rules', 'read');
     return context.json({
-      data: await deps.authz.administration.listRecords(
+      data: await authorization.administration.listRecords(
         decodeURIComponent(context.req.param('collection')),
       ),
     });
   });
-  app.route('/api/authz', routes);
+  router.route('/authz', routes);
 }
 
 function protectedSystemAdministrator(context: {

@@ -51,8 +51,10 @@ server constant and `profileId` is validated before it reaches the query:
 import { createFileRoute } from '@nocobase/app-plugin-file/server';
 import type { MiddlewareHandler } from 'hono';
 
-const requireAuth = deps.auth.required();
-const resolveAuthorization = deps.authz.middleware();
+const requireAuth = app.container.resolve(authenticationToken).required();
+const resolveAuthorization = app.container
+  .resolve(authorizationToken)
+  .middleware();
 const managementAuth: MiddlewareHandler = (context, next) =>
   requireAuth(context, async () => {
     await resolveAuthorization(context, next);
@@ -61,7 +63,7 @@ const managementAuth: MiddlewareHandler = (context, next) =>
 app.route(
   '/api/profiles/:profileId/avatar',
   createFileRoute({
-    database: deps.database,
+    database: app.container.resolve(databaseManagerToken),
     table: 'profileAvatars',
     scope: (context) => {
       const raw = context.req.param('profileId');
@@ -71,7 +73,7 @@ app.route(
       }
       return { profileId };
     },
-    drive: deps.driveManager,
+    drive: app.container.resolve(driveManagerToken),
     defaultDisk: config.drive.default,
     publicBasePath: config.app.publicBasePath,
     tokenSecret: config.session.secret,

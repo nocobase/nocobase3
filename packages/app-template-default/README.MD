@@ -23,15 +23,13 @@ The key settings are:
 ```env
 APP_BASE_PATH=/main
 # APP_PUBLIC_ORIGIN=https://apps.example.com
-NOCOBASE_API_PROXY_TARGET=
 ```
 
 `APP_BASE_PATH` is the public application mount path.
 `APP_PUBLIC_ORIGIN` is the optional external HTTP origin used for callbacks
 and redirects. It must not include `APP_BASE_PATH`; the runtime combines them.
-`NOCOBASE_API_PROXY_TARGET`, when configured, is the upstream NocoBase API
-origin used by the server-side proxy; it is not exposed as a Vite client
-variable.
+The browser API base URL is derived as `<APP_BASE_PATH>/api` and is served by
+the application's local API router.
 
 ## App plugins
 

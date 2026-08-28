@@ -57,8 +57,10 @@ const allowedMimeTypes = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ] as const;
 
-const requireAuth = deps.auth.required();
-const resolveAuthorization = deps.authz.middleware();
+const requireAuth = app.container.resolve(authenticationToken).required();
+const resolveAuthorization = app.container
+  .resolve(authorizationToken)
+  .middleware();
 const managementAuth: MiddlewareHandler = (context, next) =>
   requireAuth(context, async () => {
     await resolveAuthorization(context, next);
@@ -67,7 +69,7 @@ const managementAuth: MiddlewareHandler = (context, next) =>
 app.route(
   '/api/purchase-orders/:orderId/attachments',
   createFileRoute({
-    database: deps.database,
+    database: app.container.resolve(databaseManagerToken),
     table: 'purchaseOrderAttachments',
     scope: (context) => {
       const raw = context.req.param('orderId');
@@ -78,7 +80,7 @@ app.route(
       return { orderId };
     },
     order: { field: 'createdAt', direction: 'desc' },
-    drive: deps.driveManager,
+    drive: app.container.resolve(driveManagerToken),
     defaultDisk: config.drive.default,
     publicBasePath: config.app.publicBasePath,
     tokenSecret: config.session.secret,

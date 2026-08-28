@@ -9,10 +9,8 @@ export interface CreateAppOptions {
   basePath?: string;
   browserBasePath?: string;
   browserApiUrl?: string;
-  apiProxyPath?: string;
   clientHandler?: ClientHandler;
   clientIndexPath?: string;
-  nocoBaseApiUrl?: string | false;
   apiClientStoragePrefix?: string;
   apiClientStorageType?: string;
   apiClientShareToken?: boolean;
@@ -27,17 +25,15 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     options.browserBasePath,
     basePath,
   );
-  const apiProxyPath = resolveApiProxyPath(options.apiProxyPath, basePath);
   const browserApiUrl =
-    options.browserApiUrl ?? joinBasePath(browserBasePath, '/v2/api');
-  const nocoBaseApiUrl = resolveNocoBaseApiUrl(options.nocoBaseApiUrl);
+    options.browserApiUrl ?? joinBasePath(browserBasePath, '/api');
   const clientHandler = options.clientHandler;
   const clientIndexPath =
     options.clientIndexPath ?? path.resolve(process.cwd(), 'index.html');
   const clientRootDir = path.dirname(clientIndexPath);
-  const app = new Hono();
+  const router = new Hono();
 
-  app.get('/healthz', (context) => {
+  router.get('/healthz', (context) => {
     return context.json({
       ok: true,
       app: {
@@ -46,15 +42,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       },
     });
   });
-
-  if (apiProxyPath) {
-    app.all(apiProxyPath, (context) =>
-      proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl),
-    );
-    app.all(`${apiProxyPath}/*`, (context) =>
-      proxyToNocoBaseApi(context.req.raw, apiProxyPath, nocoBaseApiUrl),
-    );
-  }
 
   const api = new Hono();
 
@@ -75,18 +62,18 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     });
   });
 
-  app.route(`${basePath}/api`, api);
+  router.route(`${basePath}/api`, api);
   if (clientHandler) {
-    app.all(basePath || '/', (context) => clientHandler(context.req.raw));
-    app.all(`${basePath}/*`, (context) => clientHandler(context.req.raw));
+    router.all(basePath || '/', (context) => clientHandler(context.req.raw));
+    router.all(`${basePath}/*`, (context) => clientHandler(context.req.raw));
   } else {
-    app.all(`${basePath}/assets`, (context) =>
+    router.all(`${basePath}/assets`, (context) =>
       serveClientAsset(context.req.raw, clientRootDir, basePath),
     );
-    app.all(`${basePath}/assets/*`, (context) =>
+    router.all(`${basePath}/assets/*`, (context) =>
       serveClientAsset(context.req.raw, clientRootDir, basePath),
     );
-    app.get(basePath || '/', () =>
+    router.get(basePath || '/', () =>
       serveClient(clientIndexPath, {
         appBasePath: browserBasePath,
         apiUrl: browserApiUrl,
@@ -95,7 +82,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
         shareToken: options.apiClientShareToken,
       }),
     );
-    app.get(`${basePath}/*`, () =>
+    router.get(`${basePath}/*`, () =>
       serveClient(clientIndexPath, {
         appBasePath: browserBasePath,
         apiUrl: browserApiUrl,
@@ -106,7 +93,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     );
   }
 
-  return app;
+  return router;
 }
 
 function resolveAppName(value: string | undefined): string {
@@ -125,22 +112,6 @@ function resolveBrowserBasePath(
   return normalizeBasePath(value ?? basePath);
 }
 
-function resolveApiProxyPath(
-  value: string | undefined,
-  basePath: string,
-): string {
-  if (!value) {
-    return joinBasePath(basePath, '/v2/api');
-  }
-
-  try {
-    const url = new URL(value);
-    return normalizeBasePath(url.pathname);
-  } catch {
-    return normalizeBasePath(value);
-  }
-}
-
 export function normalizeBasePath(value: string): string {
   const normalized = value.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `/${normalized}` : '';
@@ -150,254 +121,6 @@ export function joinBasePath(basePath: string, pathInsideBase: string): string {
   const normalizedBasePath = normalizeBasePath(basePath);
   const normalizedPath = normalizeBasePath(pathInsideBase);
   return `${normalizedBasePath}${normalizedPath}` || '/';
-}
-
-function resolveNocoBaseApiUrl(
-  value: string | false | undefined,
-): URL | undefined {
-  if (value === false) {
-    return undefined;
-  }
-
-  const raw = value;
-  const normalized = raw?.trim();
-  if (!normalized || normalized === 'false' || normalized === '0') {
-    return undefined;
-  }
-
-  return new URL(normalized);
-}
-
-async function proxyToNocoBaseApi(
-  request: Request,
-  apiProxyPath: string,
-  nocoBaseApiUrl: URL | undefined,
-): Promise<Response> {
-  if (!nocoBaseApiUrl) {
-    return Response.json(
-      {
-        error: 'NocoBase API proxy target is not configured.',
-      },
-      {
-        status: 503,
-      },
-    );
-  }
-
-  const targetUrl = createApiTargetUrl(request, apiProxyPath, nocoBaseApiUrl);
-
-  return proxyRequest(request, targetUrl, {
-    headers: createNocoBaseApiProxyHeaders(
-      request,
-      apiProxyPath,
-      nocoBaseApiUrl,
-    ),
-    unavailableMessage: 'NocoBase API server is unavailable.',
-  });
-}
-
-function createApiTargetUrl(
-  request: Request,
-  apiProxyPath: string,
-  nocoBaseApiUrl: URL,
-): URL {
-  const requestUrl = new URL(request.url);
-  const normalizedProxyPath = apiProxyPath.replace(/\/$/, '');
-  const apiBasePath = nocoBaseApiUrl.pathname.replace(/\/$/, '');
-  const suffix = requestUrl.pathname
-    .slice(normalizedProxyPath.length)
-    .replace(/^\/+/, '');
-  const pathname = suffix ? `${apiBasePath}/${suffix}` : apiBasePath || '/';
-  const targetUrl = new URL(nocoBaseApiUrl);
-  targetUrl.pathname = pathname;
-  targetUrl.search = requestUrl.search;
-  return targetUrl;
-}
-
-async function proxyRequest(
-  request: Request,
-  targetUrl: URL,
-  {
-    headers = new Headers(request.headers),
-    unavailableMessage,
-  }: {
-    headers?: Headers;
-    unavailableMessage: string;
-  },
-): Promise<Response> {
-  headers.set('host', targetUrl.host);
-  headers.set('accept-encoding', 'identity');
-  removeHopByHopHeaders(headers);
-
-  try {
-    const response = await fetch(targetUrl, {
-      method: request.method,
-      headers,
-      body:
-        request.method === 'GET' || request.method === 'HEAD'
-          ? undefined
-          : request.body,
-      redirect: 'manual',
-      duplex: 'half',
-    } as RequestInit & { duplex: 'half' });
-
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: createProxyResponseHeaders(response.headers),
-    });
-  } catch (error) {
-    return Response.json(
-      {
-        error: unavailableMessage,
-        target: targetUrl.origin,
-        message: error instanceof Error ? error.message : String(error),
-      },
-      {
-        status: 502,
-      },
-    );
-  }
-}
-
-function createProxyResponseHeaders(headers: Headers): Headers {
-  const nextHeaders = new Headers(headers);
-  removeHopByHopHeaders(nextHeaders);
-  nextHeaders.delete('content-encoding');
-  nextHeaders.delete('content-length');
-  return nextHeaders;
-}
-
-function removeHopByHopHeaders(headers: Headers): void {
-  for (const header of [
-    'connection',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'te',
-    'trailer',
-    'transfer-encoding',
-    'upgrade',
-  ]) {
-    headers.delete(header);
-  }
-}
-
-/**
- * Build the headers forwarded to the upstream NocoBase API.
- *
- * The guiding rule: **relay the browser's hop faithfully; do not replace it with this process's own
- * hop to the upstream.** That distinction is what separates a reverse proxy from a client. The
- * upstream reconstructs "which address is the user actually looking at" from these headers, and that
- * address is the site's public origin -- not 127.0.0.1:13000.
- *
- * Sign-in is where this bites. `auth:signIn` validates the request's origin
- * (`assertTrustedSignInOrigin` in core/auth): the `origin` header must equal, verbatim, the
- * requestOrigin the upstream derives as `x-forwarded-proto || protocol` + `x-forwarded-host || host`
- * (core/utils' cors.ts). So all three of the following must point at the site itself; getting any one
- * of them wrong yields `403 Invalid sign-in origin`:
- *
- *   - `origin`            -- forwarded untouched
- *   - `x-forwarded-host`  -- the host the browser addressed
- *   - `x-forwarded-proto` -- the protocol the browser used
- *
- * **A deployment that proxies straight to the upstream cannot be validated by hand against a remote
- * target.** When the proxy target is a public site, the request traverses that site's own reverse
- * proxy on the way out, which overwrites whatever `x-forwarded-*` this function produced. That masks
- * mistakes in the loopback case -- which is why this behaviour is pinned by tests rather than by
- * manual checks.
- *
- * That same overwriting is why the two topologies below need different handling: relaying faithfully
- * is correct only when nothing sits between this process and the upstream.
- */
-// Exported for tests only: the cross-site branch requires a non-loopback upstream, and a stub HTTP
-// server can only bind loopback -- so that branch cannot be exercised through `createApp`.
-export function createNocoBaseApiProxyHeaders(
-  request: Request,
-  apiProxyPath: string,
-  nocoBaseApiUrl: URL,
-): Headers {
-  const headers = new Headers(request.headers);
-  const sourceUrl = new URL(request.url);
-
-  // Cross-site upstream (typically local development, where the proxy target is a shared remote
-  // NocoBase). Relaying faithfully is guaranteed to fail here: the browser's origin is
-  // `http://127.0.0.1:3000`, but the remote site's own reverse proxy rewrites `x-forwarded-host` to
-  // its own hostname, so the upstream derives `https://remote-site` and the two no longer match.
-  //
-  // Align all three at the upstream site instead. They have to agree with each other; which site
-  // they agree on is the only question, and the upstream can only ever see itself.
-  if (isCrossSiteUpstream(nocoBaseApiUrl)) {
-    headers.set('x-forwarded-host', nocoBaseApiUrl.host);
-    headers.set('x-forwarded-proto', nocoBaseApiUrl.protocol.replace(/:$/, ''));
-
-    // Only rewrite what the browser actually sent. A request without `origin` (curl, server-side
-    // calls) does not trigger the origin check at all; inventing one would turn "no origin declared"
-    // into "claims to come from the site itself", a strictly stronger assertion that a proxy has no
-    // business making on the caller's behalf.
-    if (headers.has('origin')) {
-      headers.set('origin', nocoBaseApiUrl.origin);
-    }
-
-    if (headers.has('referer')) {
-      headers.set('referer', `${nocoBaseApiUrl.origin}/`);
-    }
-
-    headers.set('x-forwarded-prefix', apiProxyPath);
-
-    return headers;
-  }
-
-  // Same-site upstream (production: this process and the upstream are the same site, reached over
-  // loopback). Relay the browser's hop as-is.
-  //
-  // This process may itself sit behind a reverse proxy that terminates TLS and connects onward in
-  // cleartext. In that case these two headers already carry the browser's real hop and must be left
-  // alone -- overwriting them with this connection's details reports an https site as http, which
-  // fails the sign-in origin check. Only fill them in when nothing upstream has.
-  //
-  // Note the protocol cannot come from `request.url`: the scheme there is derived from whether this
-  // socket is encrypted, and behind a TLS-terminating proxy that is always plain http.
-  if (!headers.has('x-forwarded-host')) {
-    headers.set('x-forwarded-host', headers.get('host') ?? sourceUrl.host);
-  }
-
-  if (!headers.has('x-forwarded-proto')) {
-    headers.set('x-forwarded-proto', sourceUrl.protocol.replace(/:$/, ''));
-  }
-
-  headers.set('x-forwarded-prefix', apiProxyPath);
-
-  // `origin` and `referer` are forwarded as-is, deliberately.
-
-  return headers;
-}
-
-/**
- * Is the upstream a *different site*, rather than a NocoBase process on this same host?
- *
- * This decides how the forwarded headers are built, and getting it wrong shows up only as
- * `403 Invalid sign-in origin` at sign-in -- several layers removed from the cause.
- *
- * **Production**: `NOCOBASE_API_PROXY_TARGET` is a loopback address. This process and the upstream
- * are the same site with nothing in between, so the browser's hop relays through unchanged.
- *
- * **Local development**: the target is a shared remote NocoBase. The request has to traverse that
- * site's reverse proxy, which rewrites `x-forwarded-*` to its own hostname -- so relaying the
- * browser's `http://127.0.0.1:3000` verbatim can never match what the upstream derives.
- *
- * The test is "is the upstream on loopback", not `NODE_ENV`, because the real question is whether
- * the upstream is the same site as this process -- not whether we happen to be in dev mode. Keying
- * off `NODE_ENV` would leave any production deployment that proxies to a remote upstream broken in
- * exactly the same way.
- *
- * `new URL` normalises the exotic loopback spellings (`0177.0.0.1`, `2130706433`, `127.1`) to
- * `127.0.0.1`, so matching the literal forms below is sufficient.
- */
-function isCrossSiteUpstream(nocoBaseApiUrl: URL): boolean {
-  return !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(
-    nocoBaseApiUrl.hostname,
-  );
 }
 
 interface ClientRuntimeConfig {

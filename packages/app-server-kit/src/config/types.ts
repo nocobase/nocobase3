@@ -1,4 +1,5 @@
 import type { AppDatabaseConfig } from '../database/types.js';
+import type { EnvMap } from './env.js';
 
 export interface ConfigEnv {
   string(key: string): string | undefined;
@@ -24,10 +25,21 @@ export interface ConfigContext {
   paths: ConfigPaths;
 }
 
-export type ConfigFactory<TConfig> = (context: ConfigContext) => TConfig;
+export interface CreateConfigContextOptions {
+  readonly env: EnvMap;
+  readonly paths: ConfigPaths;
+}
 
-export type ConfigFactories<TConfigMap extends Record<string, unknown>> = {
-  [TKey in keyof TConfigMap]: ConfigFactory<TConfigMap[TKey]>;
+export type ConfigFactory<
+  TConfig,
+  TContext extends ConfigContext = ConfigContext,
+> = (context: TContext) => TConfig;
+
+export type ConfigFactories<
+  TConfigMap extends object,
+  TContext extends ConfigContext = ConfigContext,
+> = {
+  [TKey in keyof TConfigMap]: ConfigFactory<TConfigMap[TKey], TContext>;
 };
 
 export type DatabaseConfigFactory<

@@ -450,7 +450,7 @@ function resolveUploadFile(form: FormData): File {
   return file;
 }
 
-function isFileCompatible(value: FormDataEntryValue): value is File {
+function isFileCompatible(value: string | File): value is File {
   return (
     typeof value !== 'string' &&
     typeof value.name === 'string' &&

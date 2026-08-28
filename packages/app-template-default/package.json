@@ -41,6 +41,9 @@
       "@nocobase/app-plugin-realtime-example": {
         "enabled": true
       },
+      "@nocobase/app-plugin-service-provider-example": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-workflow": {
         "enabled": true
       }
@@ -52,7 +55,6 @@
     "@dicebear/core": "^9.4.3",
     "@fontsource-variable/geist": "^5.3.0",
     "@gchust/agent-annotations": "0.1.5",
-    "@hono/node-server": "catalog:",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
@@ -67,6 +69,7 @@
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
+    "@nocobase/app-plugin-service-provider-example": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-sdk": "workspace:^",
@@ -78,6 +81,7 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/queue": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
@@ -170,7 +174,6 @@
     "tsconfig.json",
     "tsconfig.node.json",
     "tsconfig.server.json",
-    "tsconfig.migrations.json",
     "Dockerfile",
     "ecosystem.config.js",
     ".env.example",
@@ -202,7 +205,7 @@
     "plugin:update": "nb3 app plugin update",
     "plugin:skills:sync": "nb3 app plugin skills sync",
     "client:inspect": "tsx ./scripts/inspect-client.mjs",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

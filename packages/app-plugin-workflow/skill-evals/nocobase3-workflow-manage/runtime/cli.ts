@@ -1,7 +1,7 @@
 import process from 'node:process';
 
-import { WorkflowRepository } from '../../../server/services/workflow-repository.js';
-import { WorkflowRunRepository } from '../../../server/services/workflow-run-repository.js';
+import { WorkflowRepository } from '../../../server/repositories/workflow-repository.js';
+import { WorkflowRunRepository } from '../../../server/repositories/workflow-run-repository.js';
 
 import {
   closeRuntimeFixture,

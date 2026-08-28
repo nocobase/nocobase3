@@ -13,9 +13,9 @@ mounting, form submission, and authorization.
 
 ## Core rules
 
-- Reuse the host's existing database, Drive manager, authentication,
-  authorization, base path, and token secret. Do not create a second connection
-  or a file-specific service registry.
+- Resolve the host's existing database, Drive manager, authentication,
+  authorization, base path, and token secret from the Application's shared
+  ServiceContainer. Do not create a second connection or container.
 - Store stable metadata only. Never persist final URLs or access tokens.
 - Keep table names and scope fields in server code. Derive scope from validated
   route parameters, and apply it to every list, read, create, and delete query.

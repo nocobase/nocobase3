@@ -189,10 +189,7 @@ const initialEnv = {
   APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
   NOCOBASE_API_URL:
     env.NOCOBASE_API_URL ||
-    `/${[
-      String(env.APP_BASE_PATH || '/main').replace(/^\/+|\/+$/g, ''),
-      'v2/api',
-    ]
+    `/${[String(env.APP_BASE_PATH || '/main').replace(/^\/+|\/+$/g, ''), 'api']
       .filter(Boolean)
       .join('/')}`,
 };

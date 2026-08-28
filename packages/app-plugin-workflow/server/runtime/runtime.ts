@@ -27,6 +27,7 @@ import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
 export interface WorkflowServiceOptions {
   database: DatabaseManager;
   queue: NocoBaseQueueManager;
+  queueName?: string;
   app?: unknown;
   sourceRoot?: string;
   distRoot: string;
@@ -35,18 +36,6 @@ export interface WorkflowServiceOptions {
   sourceResolverDiagnostic: boolean;
   instructions?: Map<string, WorkflowInstructionClass>;
   warn?: (message: string) => void;
-}
-
-const runtimeWorkflowServices: WeakMap<object, WorkflowService> = new WeakMap();
-
-export function bindWorkflowService(
-  owner: object,
-  service: WorkflowService | undefined,
-): void {
-  if (service) runtimeWorkflowServices.set(owner, service);
-}
-export function getWorkflowService(owner: object): WorkflowService | undefined {
-  return runtimeWorkflowServices.get(owner);
 }
 
 export class WorkflowService {
@@ -78,6 +67,9 @@ export class WorkflowService {
     this.engine = new WorkflowEngine({
       database: options.database,
       queue: options.queue,
+      ...(options.queueName === undefined
+        ? {}
+        : { queueName: options.queueName }),
       instructions: options.instructions ?? appWorkflowInstructions,
       app: options.app,
       artifactStore: this.store,

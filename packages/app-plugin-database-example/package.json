@@ -9,25 +9,25 @@
     "node": ">=24.0.0"
   },
   "exports": {
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
     "exports": {
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
       "./package.json": "./package.json"
     }
   },
   "files": [
     "dist"
   ],
-  "nocobase": {
-    "plugin": {
-      "database": {
-        "migrations": "./database/migrations",
-        "seeds": "./database/seeds"
-      }
-    }
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -40,7 +40,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-database": "workspace:^"
+    "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

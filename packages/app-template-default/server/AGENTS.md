@@ -1,134 +1,93 @@
 # Server Development Guide
 
-Use this guide when changing the app server. Keep server changes small and
-verify them at the route, service, and configuration boundary that changed.
+Use this guide when changing the default app server. The template is an
+explicit composition root; reusable runtime and HTTP mechanics belong in
+`@nocobase/app-server-kit`, while domain behavior belongs in its owning package
+or app plugin.
 
 ## Mental Model
 
-- `app.ts` is the app-local composition root. It wires Hono routes, the
-  NocoBase API proxy, local app APIs, and the SPA asset/index handlers.
-- `runtime/*` is the shared runtime layer. Keep config loading, runtime
-  preparation, and app creation there when both standalone and embedded need
-  the behavior.
-- `standalone.ts` is an adapter. It starts the app as its own HTTP server,
-  reads `.env`, `.env.local`, and `process.env`, then strips the public base
-  path before dispatching to the app-local server.
-- `embedded.ts` creates a server for an app-host scope. It reads `.env` and
-  `.env.local` from the resolved app root, then applies scope-provided config.
-  App-host has already stripped the public base path before requests reach the
-  app-local server.
-- `config/*` owns environment parsing and defaults. Prefer adding config there
-  instead of reading `process.env` in routes or services.
-- `routes/*` owns HTTP shape. Keep business logic in `services/*`.
-- `../database/migrations/*` owns database shape. Add or update a focused migration when a
-  service needs durable storage.
+- `app.ts` creates the NocoBase `Application` and declares its providers in
+  dependency order. Hono is only the Router service exposed as `app.router`.
+- `runtime.ts` declares config factories, explicit server plugins, providers,
+  and routes through `defineAppRuntime()`. The application package name comes
+  from `rootDir/package.json`, and generic standalone mount defaults belong in
+  `@nocobase/app-server-kit/node`.
+- `config/*` owns application-specific defaults, environment mapping, and the
+  final composition of package-owned config sections. Generic Scope, path,
+  plugin, and config resolution belongs in `@nocobase/app-server-kit`.
+- `embedded.ts` is the app-host entry. It resolves config, creates the
+  application, binds shutdown to the host scope, starts providers, and returns
+  the ready application.
+- `standalone.ts` adapts the same embedded entry to Node HTTP. Generic Node
+  standalone scopes, environment-file loading, serving, WebSocket upgrades,
+  process signals, draining, and forced shutdown live in
+  `@nocobase/app-server-kit/node`.
+- Shared scope paths, routing, cancellation, mount adapters, and application
+  lifecycle helpers live in `@nocobase/app-server-kit/runtime`.
+- Plugin server behavior is explicitly registered through `server/plugins.ts`.
+  Each package exports one `server/plugin.ts` definition. Providers own service
+  lifecycle; API and root routes are separate contributions.
+
+The template must not grow demo APIs, generic repositories, or compatibility
+layers for the removed `deps`, `services`, `bootstrap.ts`, and separately
+loaded route protocols. Put new domain APIs in a plugin package.
+
+Standalone entrypoints convert their own `import.meta.dirname` to `rootDir`
+and pass it into scope/config creation. Scope factories must not infer paths
+from the location of their implementation module. Explicit `paths` override
+the template layout derived from `rootDir`.
 
 ## Runtime Contract
 
-Standalone and embedded may differ only in their adapter layer. After adapter
-normalization, app routes, SPA runtime globals, API proxy behavior, database
-setup, migrations, and services must use the shared runtime path.
+Standalone and embedded modes both enter through `createServer(scope)`.
+`resolveAppRuntime(appRuntime, scope)` resolves routing, paths, plugins, and the
+runtime-ready application config before `createApp()` assembles the application;
+`startApplicationInScope()` binds cleanup and starts its Provider lifecycle.
 
-| Mode       | Public base path | App-local incoming path            | Internal base path    | Public API URL            | Internal proxy route |
-| ---------- | ---------------- | ---------------------------------- | --------------------- | ------------------------- | -------------------- |
-| standalone | `APP_BASE_PATH`  | `/settings` from `/<app>/settings` | app-local root (`''`) | `<APP_BASE_PATH>/v2/api`  | `/v2/api`            |
-| embedded   | `scope.basePath` | `/settings` from `/<app>/settings` | app-local root (`''`) | `<scope.basePath>/v2/api` | `/v2/api`            |
+Node-only server entrypoints use `defineStandaloneServer()` from
+`@nocobase/app-server-kit/node` to bind their root directory, Runtime
+Definition, and shared `createServer(scope)` factory. The resulting create and
+start operations own standalone Scope creation, Vite overrides, public-path
+mounting, Node listen configuration, and lifecycle cleanup. Config-only
+entrypoints use `resolveStandaloneAppRuntime()`, while database tasks use
+`resolveStandaloneAppRuntimeConfigSection()` so they do not evaluate unrelated
+config factories. Use `createStandaloneRuntimeScope()` only when direct Scope
+lifecycle access is required. Do not add template-local Scope or config-loading
+facades around these APIs.
 
-`APP_BASE_PATH` and `scope.basePath` are public mount paths. Do not use them as
-app-local route prefixes. App-local routes should be written as `/api/*`,
-`/v2/api/*`, `/assets/*`, and `/*`.
+| Mode       | Public base path | App-local incoming path            | Public API URL         |
+| ---------- | ---------------- | ---------------------------------- | ---------------------- |
+| standalone | `APP_BASE_PATH`  | `/settings` from `/<app>/settings` | `<base-path>/api`      |
+| embedded   | `scope.basePath` | `/settings` after host stripping   | `<scope.basePath>/api` |
 
-`NOCOBASE_API_PROXY_TARGET` is always the upstream NocoBase REST API root and
-must include the upstream `/api` suffix when proxying real NocoBase requests.
-Standalone app identity is derived from `APP_BASE_PATH`. Embedded app identity
-comes from `scope.appName ?? scope.id`.
+Do not prefix app-local routes with the public mount path. The mount adapter is
+responsible for stripping and restoring that path.
 
-When adding runtime behavior, put it under `runtime/*` when both modes need it.
-Do not duplicate database preparation, migration execution, SPA runtime
-injection, or app service creation in `standalone.ts` and `embedded.ts`.
+## Adding Server Behavior
 
-Run `pnpm server:config` to inspect the resolved standalone values before
-debugging path, proxy, database, or SPA index issues.
+1. Prefer a focused app plugin with one `server/plugin.ts` entry.
+2. Register typed services in Provider `register()` and HTTP routes through
+   explicit `apiRoutes` or `rootRoutes`.
+3. Resolve cross-package dependencies through exported ServiceTokens.
+4. Keep long-lived start/stop behavior in `start()` and `shutdown()`.
+5. Add tests under the package root `tests/` directory.
 
-## Adding A Local API
+Application config stays explicit under `config/*`. Package-owned config
+normalizers and composition helpers should be reused rather than copied into
+the template. Do not read `process.env` in providers or routes.
 
-1. Add request and response logic under `server/routes`. Keep the public JSON
-   shape stable and simple.
-2. Put database or integration logic in `server/services/<feature>.ts`.
-3. Register the service from `server/services/index.ts`.
-4. Wire the route from `server/routes/api.ts`, or create a focused route module
-   when the file would become hard to scan.
-5. Add a node test under `tests/logic`. Prefer `createApp()` with a small fake
-   service or fake `DatabaseManager` for local API behavior.
-6. Run `pnpm test -- tests/logic/app-server.test.ts` for route/proxy/SPA
-   behavior, and add `tests/logic/config.test.ts` when config or
-   migrations changed.
+## Validation
 
-## Workflow Or Backend Code
-
-Put synchronous business logic in `server/services/<feature>.ts` and expose it
-through `server/routes/*`. Do not add another application layer for ordinary
-backend code. Routes own HTTP request and response shapes; services own the
-calculation, validation, database access, or integration call.
-
-Use a Workflow when at least one of these is true:
-
-- execution must wait for a person, an external event, or a scheduled time;
-- execution must persist intermediate state and continue after a process restart;
-- a business user or auditor must inspect the current step, chosen branch, or
-  reason for the execution path;
-- the operation has several durable steps whose progress, retry, or recovery
-  must be managed independently.
-
-Use a Service + Route when all work completes in one call and no durable
-intermediate state is required. Typical examples are pure calculations, data
-conversion, field validation, one database transaction, and one outbound API
-call. Business logic may raise a custom Workflow event through
-`workflowService.trigger(workflowKey, context)` when it needs to start a longer
-asynchronous process. Manual execution is a separate operational capability
-available to every Workflow; it is not a trigger type.
-
-If the deciding question is “where is this operation now, why did it take this
-branch, and what must happen next?”, choose Workflow. If the answer is simply
-the function's return value, choose Service + Route.
-
-## Adding Server Config
-
-- Add app-facing values to `server/config/app.ts`.
-- Add HTTP listener and development proxy values to `server/config/server.ts`.
-- Add browser-injected SPA runtime values to `server/config/spa.ts`.
-- Add database connection or migration values to `server/config/database.ts`.
-- Do not read `process.env` outside the config loading boundary unless the
-  value truly belongs to the process runtime itself.
-- Update `scripts/server-config.ts` when a new value should appear in the
-  diagnostic output.
-
-## Adding Storage
-
-1. Create a migration under `database/migrations` with a timestamped name.
-2. Keep `up` and `down` focused on one schema change.
-3. Add a service that uses the configured `DatabaseManager`; do not open an
-   extra database connection inside the service.
-4. Add or update tests that validate the migration loader and service query
-   behavior.
-
-## Proxy And SPA Runtime Rules
-
-- Keep NocoBase upstream proxy behavior and generic fetch proxy behavior in
-  `@nocobase/app-server-kit/proxy`.
-- Preserve forwarded headers, referer/origin rewriting, and hop-by-hop header
-  removal when changing proxy code.
-- SPA runtime globals are created in `server/spa/runtime-globals.ts` and
-  injected by `@nocobase/app-server-kit/spa`.
-  They are part of the browser SDK contract, not ordinary HTML decoration.
-- Static SPA assets must be served before the SPA fallback and missing assets
-  must return JSON `404`, not the SPA index.
-
-## Useful Commands
+Run at least:
 
 ```bash
-pnpm server:config
-pnpm server:config -- --json
-pnpm test -- tests/logic/app-server.test.ts tests/logic/config.test.ts
+pnpm lint
+pnpm format:check
 pnpm typecheck
+pnpm test
+pnpm build
 ```
+
+Use `pnpm server:config` to inspect resolved standalone values when debugging
+paths, proxy targets, database sources, or SPA behavior.

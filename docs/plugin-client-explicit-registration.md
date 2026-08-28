@@ -14,7 +14,7 @@
 | `client/routes.ts`    | 路由的 ID、path、auth 模式和懒加载的页面组件                                             |
 | `client/providers.ts` | 包裹 React 组件树的同步 Provider 组件                                                    |
 
-这三个入口的子路径在插件 `package.json` 的 `nocobase.plugin.client` 里声明一遍，在 `exports` 和 `publishConfig.exports` 里再各自开一条。
+改造前，这三个入口的子路径需要在插件 `package.json` 的 `nocobase.plugin.client` 里声明一遍，并在 `exports` 和 `publishConfig.exports` 里再各自开一条；改造后已删除 `nocobase.plugin.client`，由 App 的 `client/plugins.ts` 显式注册插件入口。
 
 App 侧则是一条完全隐式的链路：
 
@@ -22,7 +22,7 @@ App 侧则是一条完全隐式的链路：
 app-template-default/package.json
   nocobase.plugins: { "@nocobase/app-plugin-x": { "enabled": true } }
         │
-        ↓  server/plugins/resolve.ts:28  resolveAppPlugins()
+        ↓  @nocobase/app-server-kit/plugins: resolveAppPlugins()
    解析出每个插件的 client 三个入口的绝对路径
         │
         ↓  scripts/client-plugins.ts  Vite 插件
@@ -507,17 +507,17 @@ componentSource: routeComponentOverrides.some((o) => o.routeId === route.id)
 
 `nocobase.plugins` 目前同时喂着五个消费者，client 只是其中之一：
 
-| 消费者                     | 位置                                             |
-| -------------------------- | ------------------------------------------------ |
-| client loaders             | `scripts/client-plugins.ts`                      |
-| server bootstrap / routes  | `server/plugins/resolve.ts` → `server/app.ts:66` |
-| migrations / seeds / jobs  | `server/runtime/config.ts:111`                   |
-| dev 热重启 watch 范围      | `scripts/dev-plugin-watches.mjs`                 |
-| build 时 `--filter` 哪些包 | `scripts/build.mjs:16`                           |
+| 消费者                     | 位置                                                 |
+| -------------------------- | ---------------------------------------------------- |
+| client loaders             | `scripts/client-plugins.ts`                          |
+| server providers           | `@nocobase/app-server-kit/plugins` → `server/app.ts` |
+| migrations / seeds / jobs  | `app-server-kit` Runtime Config section resolver     |
+| dev 热重启 watch 范围      | `scripts/dev-plugin-watches.mjs`                     |
+| build 时 `--filter` 哪些包 | `scripts/build.mjs:16`                               |
 
 本期只摘掉第一个。删除 `nocobase.plugins` 需要先完成 server 侧的等价改造，该改造有一处额外成本：
 
-**插件的 server 入口现在是纯文件约定解析的**（`resolve.ts:213` 按 `server/bootstrap.ts`、`server/routes/index.ts` 等候选路径探测），`package.json` 的 `exports` 里根本没有 server 子路径——`scripts/create-plugin.mjs:253` 生成的 exports 只有 client 三条。改成显式 import 后，每个插件都要补 `./server/plugin` 的 `exports` 和 `publishConfig.exports`，并且 `dev-plugin-watches.mjs` 和 `build.mjs` 需要改成从 `server/plugins.ts` 解析包名。
+**插件的 server 入口目前由 manifest 与 Provider 文件约定共同解析**：`@nocobase/app-server-kit/plugins` 优先读取 `nocobase.plugin.server`，未声明时只探测 `server/provider.ts` 或构建后的等价文件。Route 文件是 Provider 的内部实现，不是第二个插件入口。改成 App 源码显式 import 后，每个插件仍需要提供稳定的 server 注册 export，并且 `dev-plugin-watches.mjs` 和 `build.mjs` 需要改成从 `server/plugins.ts` 解析包名。
 
 顺序：**client 显式注册（本期）→ server 显式注册 → 删除 `nocobase.plugins`**。
 
@@ -900,7 +900,7 @@ pnpm plugin:skills:sync [--app <app>] [--plugin <name>] [--dry-run]
 
 每个插件：新增 `client/plugin.ts`；`exports` 和 `publishConfig.exports` 各加一条 `./client/plugin`。
 
-`nocobase.plugin.client` 在本期改造后不再有消费者，建议同步删除该字段并移除 `server/plugins/resolve.ts` 里的 `readClientManifest`、`clientBootstrapEntry` / `clientRoutesEntry` / `clientProvidersEntry` 三个字段。留着一个不被读取的字段会误导后来者。这会连带修改 `tests/logic/config.test.ts` 中约 7 处断言（该文件 860–913 行）。此项可独立于主改造取舍。
+`nocobase.plugin.client` 在本期改造后不再有消费者，建议同步删除该字段并移除 resolver 里的 `readClientManifest`、`clientBootstrapEntry` / `clientRoutesEntry` / `clientProvidersEntry` 三个字段。当前 resolver 位于 `@nocobase/app-server-kit/plugins`。留着一个不被读取的字段会误导后来者。这会连带修改 `tests/logic/config.test.ts` 中约 7 处断言（该文件 860–913 行）。此项可独立于主改造取舍。
 
 ### 9.3 `packages/app-template-default`
 

@@ -5,30 +5,45 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  databaseManagerToken,
   createDatabaseManager,
   type DatabaseManager,
 } from '@nocobase/app-database';
-import { createDriveManager, type NocoBaseDriveManager } from '@nocobase/drive';
-import { createLogger } from '@nocobase/logging';
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
+import {
+  createDriveManager,
+  driveManagerToken,
+  type NocoBaseDriveManager,
+} from '@nocobase/drive';
+import { createLogger, loggingToken, type Logging } from '@nocobase/logging';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202608270001_create_file_demo_tables.js';
 import seed from '../database/seeds/202608270002_seed_file_demo.js';
-import bootstrapFilePlugin, {
+import FileProvider, {
   ensureFileDemoFixtures,
   prepareFileDemoFixtures,
-} from '../server/bootstrap.js';
+} from '../server/provider.js';
 import {
   FILE_DEMO_AVATAR,
   FILE_DEMO_PRIVATE_ATTACHMENT,
   FILE_DEMO_PUBLIC_ATTACHMENT,
 } from '../server/demo/constants.js';
 import { FILE_DEMO_FIXTURES } from '../server/demo/fixtures.js';
-import type {
-  FilePluginConfig,
-  FilePluginDeps,
+import {
+  resolveFilePluginRuntime,
+  type FilePluginConfig,
 } from '../server/plugin-runtime.js';
+import { filePluginRuntimeToken } from '../server/runtime-token.js';
 import { createFileDemoRoutes } from '../server/routes/index.js';
 
 interface RawDatabaseClient {
@@ -40,7 +55,7 @@ describe('File Demo backend', () => {
   let database: DatabaseManager;
   let driveManager: NocoBaseDriveManager;
   let config: FilePluginConfig;
-  let deps: FilePluginDeps;
+  let deps: HostServices;
 
   beforeEach(async () => {
     storageRoot = await mkdtemp(join(tmpdir(), 'nocobase-file-demo-'));
@@ -431,16 +446,19 @@ describe('File Demo backend', () => {
 
   it('does not start fixture work when infrastructure is intentionally absent', () => {
     const put = vi.spyOn(driveManager.use('local'), 'put');
-    bootstrapFilePlugin({
-      config: { app: { publicBasePath: '' } },
-      deps: {
-        auth: deps.auth,
-        authz: deps.authz,
-        logging: deps.logging,
-      },
-      services: {},
-      lifecycle: { registerDisposer: vi.fn() },
+    const unavailableConfig = { app: { publicBasePath: '' } };
+    const container = createContainer(unavailableConfig, {
+      auth: deps.auth,
+      authz: deps.authz,
+      logging: deps.logging,
     });
+    const provider = new FileProvider({
+      config: unavailableConfig,
+      container,
+      router: new Hono(),
+    });
+    provider.register();
+    void provider.boot();
 
     expect(put).not.toHaveBeenCalled();
   });
@@ -448,14 +466,12 @@ describe('File Demo backend', () => {
 
 async function runBootstrap(
   config: FilePluginConfig,
-  deps: FilePluginDeps,
+  deps: HostServices,
 ): Promise<void> {
-  bootstrapFilePlugin({
-    config,
-    deps,
-    services: {},
-    lifecycle: { registerDisposer: vi.fn() },
-  });
+  const container = createContainer(config, deps);
+  const provider = new FileProvider({ config, container, router: new Hono() });
+  provider.register();
+  await provider.boot();
   await vi.waitFor(
     async () => {
       for (const fixture of FILE_DEMO_FIXTURES) {
@@ -483,9 +499,13 @@ function uploadBody(index: number): {
   };
 }
 
-function registerApp(config: FilePluginConfig, deps: FilePluginDeps): Hono {
+function registerApp(config: FilePluginConfig, deps: HostServices): Hono {
   const app = new Hono();
-  app.route('/api/attachments', createFileDemoRoutes({ config, deps }));
+  const container = createContainer(config, deps);
+  container.singleton(filePluginRuntimeToken, (resolver) =>
+    resolveFilePluginRuntime(resolver, config),
+  );
+  app.route('/api/attachments', createFileDemoRoutes({ config, container }));
   return app;
 }
 
@@ -498,7 +518,7 @@ function authenticatedOnly(): MiddlewareHandler {
   };
 }
 
-function createAuthorization(): FilePluginDeps['authz'] {
+function createAuthorization(): HostAuthorization {
   return {
     middleware: () => async (context, next) => {
       const isAdministrator = context.req.header('x-demo-role') === 'admin';
@@ -519,6 +539,36 @@ function createAuthorization(): FilePluginDeps['authz'] {
           : [],
     },
   };
+}
+
+type HostAuthorization = Pick<
+  AppAuthorization,
+  'middleware' | 'permissionSets'
+>;
+
+interface HostServices {
+  readonly database?: DatabaseManager;
+  readonly driveManager?: NocoBaseDriveManager;
+  readonly auth: Pick<Auth, 'required'>;
+  readonly authz: HostAuthorization;
+  readonly logging: Pick<Logging, 'getLogger'>;
+}
+
+function createContainer(
+  _config: FilePluginConfig,
+  services: HostServices,
+): ServiceContainer {
+  const container = new ServiceContainer();
+  if (services.database) {
+    container.instance(databaseManagerToken, services.database);
+  }
+  if (services.driveManager) {
+    container.instance(driveManagerToken, services.driveManager);
+  }
+  container.instance(authenticationToken, services.auth as Auth);
+  container.instance(authorizationToken, services.authz as AppAuthorization);
+  container.instance(loggingToken, services.logging as Logging);
+  return container;
 }
 
 function adminHeaders(): Readonly<Record<string, string>> {

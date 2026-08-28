@@ -9,6 +9,10 @@ pnpm --filter @nocobase/app-host build
 APP_DIST_DIR="$PWD/packages/app-host/fixtures/app-dist" pnpm --filter @nocobase/app-host start
 ```
 
+The workspace start scripts use `tsx` because internal package exports resolve
+to TypeScript source during monorepo development. Published package exports
+resolve to compiled JavaScript instead.
+
 By default the host listens on `127.0.0.1:3000` and discovers apps from
 `./app-dist` in the current working directory.
 
@@ -25,6 +29,11 @@ packages/app-host/fixtures/app-dist/
   service/
     package.json
     dist/server/embedded.js
+
+  koa/
+    package.json
+    dist/server/embedded.js
+    dist/server/koa-fetch-adapter.js
 
   lifecycle/
     package.json
@@ -46,6 +55,9 @@ http://127.0.0.1:3000/demo/
 http://127.0.0.1:3000/demo/assets/demo.js
 http://127.0.0.1:3000/demo/api/info
 http://127.0.0.1:3000/service/healthz
+http://127.0.0.1:3000/koa/api/info
+http://127.0.0.1:3000/koa/redirect
+http://127.0.0.1:3000/koa/stream
 http://127.0.0.1:3000/lifecycle/
 http://127.0.0.1:3000/lifecycle/api/lifecycle
 http://127.0.0.1:3000/ws-demo/
@@ -88,3 +100,8 @@ cleanup function, and implements the actual `dispose()` logic.
 The `ws-demo` fixture exposes a WebSocket clock stream. Its client derives the
 public URL from the current page origin, so `ws://<host>/ws-demo/ws` maps to
 `/ws` inside the embedded app.
+
+The `koa` fixture adapts a real `koa.callback()` to the host's Fetch contract
+through an ephemeral loopback HTTP server. It demonstrates Koa middleware,
+request bodies, redirects, cookies, streaming responses, and lifecycle cleanup.
+See `fixtures/app-dist/README.md` for the adapter's HTTP-only boundary.
