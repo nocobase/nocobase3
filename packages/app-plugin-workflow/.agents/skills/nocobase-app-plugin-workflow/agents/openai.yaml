@@ -1,0 +1,7 @@
+interface:
+  display_name: 'NocoBase App Plugin Workflow'
+  short_description: 'Author, invoke, inspect, and diagnose NocoBase workflows'
+  default_prompt: 'Use $nocobase-app-plugin-workflow to define, validate, invoke, inspect, or diagnose a NocoBase 3 workflow using the current app-plugin-workflow contracts.'
+
+policy:
+  allow_implicit_invocation: true

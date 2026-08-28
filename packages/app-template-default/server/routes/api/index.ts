@@ -55,7 +55,6 @@ export function createApiRoutes({
   const protectedRoutes = new Hono();
   protectedRoutes.use('*', deps.auth.required());
   protectedRoutes.get('/apps', createAppsHandler());
-
   api.onError(
     createApiErrorHandler({
       logger: deps.logging.getLogger().child({ module: 'api' }),

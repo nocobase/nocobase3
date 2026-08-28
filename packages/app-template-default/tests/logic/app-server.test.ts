@@ -51,6 +51,7 @@ import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalo
 import type { AppConfig } from '../../server/config/index.ts';
 import { createRealtimeService } from '../../server/realtime/service.ts';
 import type { RealtimeServerMessage } from '../../server/realtime/protocol.ts';
+import type { LoadedAppPluginBootstrap } from '../../server/plugins/index.ts';
 import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
 import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 
@@ -98,6 +99,14 @@ afterEach(async () => {
 });
 
 describe('app server', () => {
+  it('starts without optional plugins or workflow routes', async () => {
+    const app = createTestApp();
+
+    expect(app.routes.some((route) => route.path.includes('/workflows'))).toBe(
+      false,
+    );
+  });
+
   it('creates embedded apps from a scope', async () => {
     const app = await createEmbeddedServer(
       createEmbeddedTestScope({
@@ -274,6 +283,7 @@ describe('app server', () => {
       'app-deps',
       'realtime-service',
       'plugin:@nocobase/app-plugin-realtime-example:clock-publisher',
+      'plugin:@nocobase/app-plugin-workflow:runtime',
     ]);
 
     for (const disposer of [...registeredDisposers].reverse()) {
@@ -794,6 +804,7 @@ describe('app server', () => {
   });
 
   it('redirects HTML navigation to installation in install mode', async () => {
+    vi.stubEnv('APP_BASE_PATH', '/main');
     vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
     const viteDevUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'text/html; charset=utf-8');
@@ -1290,6 +1301,7 @@ interface CreateTestAppOptions {
   drive?: AppDriveConfig;
   queue?: AppQueueConfig;
   session?: AppSessionConfig;
+  pluginBootstraps?: readonly LoadedAppPluginBootstrap[];
   spa?: {
     indexPath?: string;
     runtime?: AppConfig['spa']['runtime'];
@@ -1362,9 +1374,15 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     dispose: () => Promise.resolve(),
   };
   const lifecycle = createAppDisposerRegistry();
-  const app = Object.assign(createApp(runtime, { lifecycle }), {
-    close: () => lifecycle.disposeAll(),
-  });
+  const app = Object.assign(
+    createApp(runtime, {
+      lifecycle,
+      pluginBootstraps: options.pluginBootstraps,
+    }),
+    {
+      close: () => lifecycle.disposeAll(),
+    },
+  );
 
   return trackCloseable(app);
 }

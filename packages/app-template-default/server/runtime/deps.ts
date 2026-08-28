@@ -39,6 +39,7 @@ export interface AppDeps {
   logging: Logging;
   queueManager: NocoBaseQueueManager;
   sessionManager: NocoBaseSessionManager;
+  runtime: AppRuntime<AppConfig>;
 }
 
 export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
@@ -96,7 +97,6 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
       }),
     },
   );
-
   return {
     caching,
     auth,
@@ -107,6 +107,7 @@ export function createAppDeps(runtime: AppRuntime<AppConfig>): AppDeps {
     logging,
     queueManager,
     sessionManager,
+    runtime,
   };
 }
 
