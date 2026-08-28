@@ -1,34 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
+import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 
 import bootstrap from '../client/bootstrap.js';
 import { NotificationClient } from '../client/notification-client.js';
-import routes from '../client/routes.js';
+import notificationPlugin from '../client/plugin.js';
+import settings from '../client/settings.js';
 
 describe('@nocobase/app-plugin-notification client', () => {
-  it('registers the notification settings resource and route', () => {
-    const addResources = vi.fn();
+  it('contributes notification logs through the settings centre', () => {
+    const registration = notificationPlugin();
 
     bootstrap({
       appClient: { request: vi.fn() },
       packageName: '@nocobase/app-plugin-notification',
-      refine: { addResources } as never,
+      refine: {} as never,
       source: 'plugin',
       options: {},
     });
 
-    expect(addResources).toHaveBeenCalledWith([
-      expect.objectContaining({ name: 'notification' }),
-      expect.objectContaining({
-        name: 'notification.logs',
-        list: '/settings/notifications/logs',
-        meta: expect.objectContaining({ parent: 'notification' }),
-      }),
+    expect(registration.routes).toBeUndefined();
+    expect(registration.settings).toBeTypeOf('function');
+    const resolved = resolveAppClientContributions([
+      { packageName: registration.packageName, settings },
     ]);
-    expect(routes).toMatchObject([
+    expect(resolved.settingGroups).toMatchObject([
+      { id: 'notifications', title: 'Notifications' },
+    ]);
+    expect(resolved.settings).toMatchObject([
       {
-        name: 'notification-logs',
         path: '/settings/notifications/logs',
-        auth: 'required',
         access: { resource: 'notification.logs', action: 'access' },
       },
     ]);
@@ -42,5 +42,46 @@ describe('@nocobase/app-plugin-notification client', () => {
       new NotificationClient({ request }).listLogs(),
     ).resolves.toEqual(details);
     expect(request).toHaveBeenCalledWith('notifications/logs');
+  });
+
+  it('loads configured test Providers and sends through the test route', async () => {
+    const provider = {
+      channel: 'im',
+      provider: { name: 'feishu', type: 'feishu-webhook' },
+    };
+    const result = {
+      notificationId: 'notification-1',
+      status: 'pending',
+      provider: provider.provider,
+    };
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [provider] })
+      .mockResolvedValueOnce({ data: result });
+    const client = new NotificationClient({ request });
+
+    await expect(client.listTestProviders()).resolves.toEqual([provider]);
+    await expect(
+      client.sendTest({ ...provider, title: 'Test', body: 'Hello' }),
+    ).resolves.toEqual(result);
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      'notification-providers/test/config',
+    );
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      'notification-providers/test/send',
+      {
+        method: 'POST',
+        headers: { 'x-nocobase-provider-test': '1' },
+        body: JSON.stringify({
+          channel: 'im',
+          providerName: 'feishu',
+          providerType: 'feishu-webhook',
+          title: 'Test',
+          body: 'Hello',
+        }),
+      },
+    );
   });
 });

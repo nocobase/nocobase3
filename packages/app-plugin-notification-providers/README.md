@@ -23,9 +23,10 @@ authenticated user and is available only when `notification.test.enabled` is
 `true`. It sends through the regular Notification Manager, so each test creates
 Notification, Delivery, and Attempt records.
 
-Email tests use `notification.test.emailRecipient`; the page never accepts an
-arbitrary recipient. IM tests send to the group owned by the selected Provider
-Webhook. The default application template maps these settings from
+In-app tests send to the current authenticated user. Email tests use
+`notification.test.emailRecipient`; the page never accepts an arbitrary
+recipient. IM tests send to the group owned by the selected Provider Webhook.
+The default application template maps these settings from
 `NOTIFICATION_PROVIDER_TEST_ENABLED` and `TEST_EMAIL_RECIPIENT`, enables the
 page outside production, and disables it by default in production.
 

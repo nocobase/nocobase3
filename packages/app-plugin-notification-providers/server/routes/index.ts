@@ -12,6 +12,23 @@ import { TEST_PAGE_HTML } from './test-page.js';
 export interface NotificationProvidersPluginRoutesDeps {
   readonly auth: {
     required(): MiddlewareHandler;
+    getSession(headers: Headers): Promise<{
+      readonly user: { readonly id: string };
+    } | null>;
+  };
+  readonly authz: {
+    middleware(): MiddlewareHandler<NotificationProviderAuthorizationEnv>;
+  };
+}
+
+interface NotificationProviderAuthorizationEnv {
+  Variables: {
+    authz: {
+      can(input: {
+        resource: { type: string; id: string };
+        action: string;
+      }): Promise<boolean>;
+    };
   };
 }
 
@@ -35,8 +52,21 @@ export default function registerNotificationProviderRoutes({
   deps,
   services,
 }: NotificationProvidersPluginRoutesContext): void {
-  const routes = new Hono();
-  routes.use('*', deps.auth.required());
+  const routes = new Hono<NotificationProviderAuthorizationEnv>();
+  routes.use('*', deps.auth.required(), deps.authz.middleware());
+  routes.use('*', async (context, next) => {
+    const allowed = await context.get('authz').can({
+      resource: { type: 'page', id: 'notification.logs' },
+      action: 'access',
+    });
+    if (!allowed) {
+      return context.json(
+        { error: 'Notification logs access is required.' },
+        403,
+      );
+    }
+    await next();
+  });
 
   routes.get('/test', (context) => {
     if (!isTestPageEnabled(config)) return context.text('Not found.', 404);
@@ -69,12 +99,12 @@ export default function registerNotificationProviderRoutes({
     if (!input)
       return context.json({ error: 'Request body must be valid JSON.' }, 400);
 
-    const channel =
-      input.channel === 'email' || input.channel === 'im'
-        ? input.channel
-        : undefined;
+    const channel = channelValue(input.channel);
     if (!channel)
-      return context.json({ error: 'channel must be "email" or "im".' }, 400);
+      return context.json(
+        { error: 'channel must be "email", "im", or "in-app".' },
+        400,
+      );
 
     const channelConfig = findEnabledChannel(
       config.notification.channels,
@@ -125,26 +155,32 @@ export default function registerNotificationProviderRoutes({
         409,
       );
     }
-    const recipient: NotificationRecipient =
-      channel === 'email' && emailRecipient
-        ? { type: 'email', address: emailRecipient }
-        : { type: 'target', id: providerTarget(provider) };
+    const recipient = await testRecipient({
+      channel,
+      emailRecipient,
+      provider,
+      context,
+      deps,
+    });
+    if (!recipient) {
+      return context.json(
+        { error: 'Authentication is required for in-app notification tests.' },
+        401,
+      );
+    }
 
     try {
       const result = await notification.send({
         to: recipient,
         channels: [channel],
-        routing:
-          channel === 'im'
-            ? {
-                im: {
-                  providers: {
-                    strategy: 'single',
-                    provider: { name: provider.name, type: provider.type },
-                  },
-                },
-              }
-            : undefined,
+        routing: {
+          [channel]: {
+            providers: {
+              strategy: 'single',
+              provider: { name: provider.name, type: provider.type },
+            },
+          },
+        },
         content: { title, body },
         source: {
           type: 'notification-provider-test',
@@ -199,8 +235,7 @@ function describeChannels(
   channels: NotificationProvidersPluginConfig['notification']['channels'],
 ): readonly { channel: string; provider: { name: string; type: string } }[] {
   return channels.flatMap((channel) => {
-    if (!channel.enabled || (channel.type !== 'email' && channel.type !== 'im'))
-      return [];
+    if (!channel.enabled || !channelValue(channel.type)) return [];
     return channel.providers
       .filter((provider) => provider.enabled !== false)
       .map((provider) => ({
@@ -212,11 +247,38 @@ function describeChannels(
 
 function findEnabledChannel(
   channels: NotificationProvidersPluginConfig['notification']['channels'],
-  type: 'email' | 'im',
+  type: TestChannel,
 ):
   | NotificationProvidersPluginConfig['notification']['channels'][number]
   | undefined {
   return channels.find((channel) => channel.type === type && channel.enabled);
+}
+
+type TestChannel = 'email' | 'im' | 'in-app';
+
+function channelValue(value: unknown): TestChannel | undefined {
+  return value === 'email' || value === 'im' || value === 'in-app'
+    ? value
+    : undefined;
+}
+
+async function testRecipient(input: {
+  readonly channel: TestChannel;
+  readonly emailRecipient?: string;
+  readonly provider: NotificationProvidersPluginConfig['notification']['channels'][number]['providers'][number];
+  readonly context: Context;
+  readonly deps: NotificationProvidersPluginRoutesDeps;
+}): Promise<NotificationRecipient | undefined> {
+  if (input.channel === 'email' && input.emailRecipient) {
+    return { type: 'email', address: input.emailRecipient };
+  }
+  if (input.channel === 'in-app') {
+    const session = await input.deps.auth.getSession(
+      input.context.req.raw.headers,
+    );
+    return session ? { type: 'user', id: session.user.id } : undefined;
+  }
+  return { type: 'target', id: providerTarget(input.provider) };
 }
 
 function selectEnabledProvider(

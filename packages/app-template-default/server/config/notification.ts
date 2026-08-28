@@ -5,6 +5,10 @@ import {
 } from '@nocobase/app-server-kit/config';
 import type { NotificationConfig } from '@nocobase/app-plugin-notification';
 import {
+  defineInAppChannelConfig,
+  type InAppChannelConfig,
+} from '@nocobase/app-plugin-notification-in-app';
+import {
   defineEmailChannelConfig,
   defineResendProviderConfig,
   defineSmtpProviderConfig,
@@ -21,7 +25,7 @@ import {
 } from '@nocobase/app-plugin-notification-providers/im';
 
 export type AppNotificationChannelConfig =
-  EmailChannelConfig | AppImChannelConfig;
+  InAppChannelConfig | EmailChannelConfig | AppImChannelConfig;
 
 export interface AppImChannelConfig extends ImChannelConfig {
   readonly providers: readonly (
@@ -49,6 +53,12 @@ export function createNotificationConfig(
   const channels: AppNotificationChannelConfig[] = [];
   const emailProvider = createEmailProvider(env);
   const imProviders = createImProviders(env);
+  channels.push(
+    defineInAppChannelConfig({
+      enabled: true,
+      providers: [{ type: 'database', name: 'primary' }],
+    }),
+  );
 
   if (emailProvider) {
     channels.push(

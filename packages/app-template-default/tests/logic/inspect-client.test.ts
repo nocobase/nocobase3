@@ -25,6 +25,22 @@ function settingFor(id: string, title: string) {
   };
 }
 
+function notificationLogSetting() {
+  return {
+    access: {
+      action: 'access',
+      resource: 'notification.logs',
+    },
+    entry: '@nocobase/app-plugin-notification/client/settings',
+    groupId: 'notifications',
+    id: 'logs',
+    packageName: '@nocobase/app-plugin-notification',
+    path: '/settings/notifications/logs',
+    source: 'plugin',
+    title: 'Notification logs',
+  };
+}
+
 describe('client inspection', () => {
   it('parses app client inspection options', () => {
     expect(
@@ -117,11 +133,6 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/workflow/runs/:runId',
       },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-notification:notification-logs',
-        path: '/settings/notifications/logs',
-      },
     ]);
     expect(
       inspection.providers.map(({ id, order }) => ({ id, order })),
@@ -183,13 +194,14 @@ describe('client inspection', () => {
       },
     ]);
 
-    // Authorization's administration pages are settings rather than routes, and keep the paths they were published
-    // at before the settings centre existed.
+    // Administration pages are settings rather than routes, and keep the paths they were published at before the
+    // settings centre existed.
     expect(inspection.settings).toEqual([
       settingFor('permission-sets', 'Permission Sets'),
       settingFor('default-access', 'Default Access'),
       settingFor('sharing-rules', 'Sharing Rules'),
       settingFor('restriction-rules', 'Restriction Rules'),
+      notificationLogSetting(),
     ]);
     expect(
       inspection.routes.some((route) => route.path.startsWith('/settings/')),

@@ -51,6 +51,28 @@ export interface NotificationLogDetails {
   readonly deliveries: readonly NotificationDeliveryDetails[];
 }
 
+export interface NotificationTestProvider {
+  readonly channel: string;
+  readonly provider: {
+    readonly name: string;
+    readonly type: string;
+  };
+}
+
+export interface NotificationTestInput extends NotificationTestProvider {
+  readonly title?: string;
+  readonly body?: string;
+}
+
+export interface NotificationTestResult {
+  readonly notificationId: string;
+  readonly status: NotificationStatus;
+  readonly provider: {
+    readonly name: string;
+    readonly type: string;
+  };
+}
+
 interface DataResponse<T> {
   readonly data: T;
 }
@@ -65,4 +87,54 @@ export class NotificationClient {
       )
       .then((response) => response.data);
   }
+
+  listTestProviders(): Promise<readonly NotificationTestProvider[]> {
+    return this.client
+      .request<DataResponse<readonly NotificationTestProvider[]>>(
+        'notification-providers/test/config',
+      )
+      .then((response) => response.data)
+      .catch(rethrowProviderTestError);
+  }
+
+  sendTest(input: NotificationTestInput): Promise<NotificationTestResult> {
+    return this.client
+      .request<DataResponse<NotificationTestResult>>(
+        'notification-providers/test/send',
+        {
+          method: 'POST',
+          headers: { 'x-nocobase-provider-test': '1' },
+          body: JSON.stringify({
+            channel: input.channel,
+            providerName: input.provider.name,
+            providerType: input.provider.type,
+            title: input.title,
+            body: input.body,
+          }),
+        },
+      )
+      .then((response) => response.data)
+      .catch(rethrowProviderTestError);
+  }
+}
+
+function rethrowProviderTestError(cause: unknown): never {
+  if (cause instanceof Error && 'status' in cause && cause.status === 404) {
+    throw new Error('Provider testing is not enabled for this application.', {
+      cause,
+    });
+  }
+  if (
+    cause instanceof Error &&
+    'payload' in cause &&
+    isRecord(cause.payload) &&
+    typeof cause.payload.error === 'string'
+  ) {
+    throw new Error(cause.payload.error, { cause });
+  }
+  throw cause;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

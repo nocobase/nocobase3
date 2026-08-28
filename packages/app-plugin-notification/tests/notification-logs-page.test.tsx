@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const notification = vi.hoisted(() => ({
   listLogs: vi.fn(),
+  listTestProviders: vi.fn(),
+  sendTest: vi.fn(),
 }));
 
 vi.mock('../client/runtime.js', () => ({
@@ -14,6 +16,8 @@ import NotificationLogsPage from '../client/pages/notification-logs-page.js';
 describe('NotificationLogsPage', () => {
   beforeEach(() => {
     notification.listLogs.mockReset();
+    notification.listTestProviders.mockReset();
+    notification.sendTest.mockReset();
   });
 
   it('shows the empty notification delivery state', async () => {
@@ -75,5 +79,51 @@ describe('NotificationLogsPage', () => {
     expect(
       screen.getByText('Need attention').previousSibling,
     ).toHaveTextContent('1');
+  });
+
+  it('sends a test notification through a selected Provider and refreshes logs', async () => {
+    notification.listLogs.mockResolvedValue([]);
+    notification.listTestProviders.mockResolvedValue([
+      {
+        channel: 'in-app',
+        provider: { name: 'primary', type: 'database' },
+      },
+      {
+        channel: 'email',
+        provider: { name: 'smtp', type: 'smtp' },
+      },
+    ]);
+    notification.sendTest.mockResolvedValue({
+      notificationId: 'notification-test-1',
+      status: 'pending',
+      provider: { name: 'smtp', type: 'smtp' },
+    });
+
+    render(<NotificationLogsPage />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Send test notification' }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Select in-app / primary' }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Select email / smtp' }),
+    );
+    expect(notification.sendTest).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Send' }));
+
+    expect(notification.sendTest).toHaveBeenCalledWith({
+      channel: 'email',
+      provider: { name: 'smtp', type: 'smtp' },
+      title: 'NocoBase notification test',
+      body: 'This is a test notification from Hub.',
+    });
+    expect(
+      await screen.findByText(
+        'Test notification notification-test-1 accepted.',
+      ),
+    ).toBeInTheDocument();
+    expect(notification.listLogs).toHaveBeenCalledTimes(2);
   });
 });

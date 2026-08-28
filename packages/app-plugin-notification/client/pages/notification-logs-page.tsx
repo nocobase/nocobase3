@@ -5,6 +5,7 @@ import type {
   NotificationDeliveryDetails,
   NotificationLogDetails,
   NotificationStatus,
+  NotificationTestProvider,
 } from '../notification-client.js';
 import { getNotificationClient } from '../runtime.js';
 
@@ -15,6 +16,7 @@ export default function NotificationLogsPage(): ReactElement {
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [testOpen, setTestOpen] = useState(false);
 
   const refresh = (): void => {
     setLoading(true);
@@ -68,14 +70,23 @@ export default function NotificationLogsPage(): ReactElement {
               bodies, recipients, and lease tokens are redacted.
             </p>
           </div>
-          <button
-            className='inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
-            disabled={loading}
-            onClick={refresh}
-            type='button'
-          >
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
+          <div className='flex flex-wrap gap-2'>
+            <button
+              className='inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+              disabled={loading}
+              onClick={refresh}
+              type='button'
+            >
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </button>
+            <button
+              className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90'
+              onClick={() => setTestOpen(true)}
+              type='button'
+            >
+              Send test notification
+            </button>
+          </div>
         </div>
       </header>
 
@@ -112,8 +123,208 @@ export default function NotificationLogsPage(): ReactElement {
           )}
         </section>
       </div>
+      {testOpen ? (
+        <TestNotificationDialog
+          onClose={() => setTestOpen(false)}
+          onSent={refresh}
+        />
+      ) : null}
     </main>
   );
+}
+
+function TestNotificationDialog({
+  onClose,
+  onSent,
+}: {
+  readonly onClose: () => void;
+  readonly onSent: () => void;
+}): ReactElement {
+  const [providers, setProviders] = useState<
+    readonly NotificationTestProvider[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<NotificationTestProvider>();
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string>();
+  const [success, setSuccess] = useState<string>();
+  const [title, setTitle] = useState('NocoBase notification test');
+  const [body, setBody] = useState('This is a test notification from Hub.');
+
+  useEffect(() => {
+    let active = true;
+    void notification
+      .listTestProviders()
+      .then(
+        (items) => {
+          if (active) setProviders(items);
+        },
+        (cause: unknown) => {
+          if (active) setError(errorMessage(cause));
+        },
+      )
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const send = (): void => {
+    if (!selected) return;
+    setSending(true);
+    setError(undefined);
+    setSuccess(undefined);
+    void notification
+      .sendTest({
+        ...selected,
+        title: title.trim(),
+        body: body.trim(),
+      })
+      .then(
+        (result) => {
+          setSuccess(`Test notification ${result.notificationId} accepted.`);
+          onSent();
+        },
+        (cause: unknown) => setError(errorMessage(cause)),
+      )
+      .finally(() => setSending(false));
+  };
+
+  return (
+    <div
+      className='fixed inset-0 z-50 grid place-items-center bg-black/45 p-4'
+      role='presentation'
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !sending) onClose();
+      }}
+    >
+      <section
+        aria-labelledby='notification-test-title'
+        aria-modal='true'
+        className='max-h-[calc(100svh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border bg-background shadow-xl'
+        role='dialog'
+      >
+        <div className='flex items-start justify-between gap-4 border-b px-5 py-4'>
+          <div>
+            <h2 id='notification-test-title' className='font-semibold'>
+              Send test notification
+            </h2>
+            <p className='mt-1 text-sm text-muted-foreground'>
+              Select a Channel and Provider, then click Send. The message is
+              sent to the configured test recipient and recorded below.
+            </p>
+          </div>
+          <button
+            aria-label='Close test notification dialog'
+            className='grid size-8 shrink-0 place-items-center rounded-md text-lg hover:bg-muted disabled:opacity-50'
+            disabled={sending}
+            onClick={onClose}
+            type='button'
+          >
+            ×
+          </button>
+        </div>
+
+        <div className='space-y-4 px-5 py-5'>
+          <label className='grid gap-1.5 text-sm font-medium'>
+            Title
+            <input
+              className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
+              disabled={sending}
+              maxLength={200}
+              onChange={(event) => setTitle(event.target.value)}
+              value={title}
+            />
+          </label>
+          <label className='grid gap-1.5 text-sm font-medium'>
+            Message
+            <textarea
+              className='min-h-24 resize-y rounded-md border bg-background px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
+              disabled={sending}
+              maxLength={2000}
+              onChange={(event) => setBody(event.target.value)}
+              value={body}
+            />
+          </label>
+
+          <div>
+            <p className='text-sm font-medium'>Channel and Provider</p>
+            {loading ? (
+              <p className='mt-2 text-sm text-muted-foreground'>
+                Loading configured Providers…
+              </p>
+            ) : providers.length === 0 && !error ? (
+              <p className='mt-2 rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground'>
+                No enabled Providers are configured.
+              </p>
+            ) : (
+              <div className='mt-2 grid gap-2 sm:grid-cols-2'>
+                {providers.map((item) => {
+                  const key = providerKey(item);
+                  return (
+                    <button
+                      aria-label={`Select ${item.channel} / ${item.provider.name}`}
+                      aria-pressed={selected === item}
+                      className={`rounded-lg border p-3 text-left text-sm hover:border-primary hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-50 ${selected === item ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'bg-background'}`}
+                      disabled={sending}
+                      key={key}
+                      onClick={() => setSelected(item)}
+                      type='button'
+                    >
+                      <span className='block font-medium capitalize'>
+                        {item.channel}
+                      </span>
+                      <span className='text-xs text-muted-foreground'>
+                        {item.provider.name} · {item.provider.type}
+                      </span>
+                      <span className='mt-2 block text-xs font-medium text-primary'>
+                        {selected === item ? 'Selected' : 'Select'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {error ? (
+            <div className='rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+              {error}
+            </div>
+          ) : null}
+          {success ? (
+            <div className='rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400'>
+              {success}
+            </div>
+          ) : null}
+        </div>
+        <div className='flex justify-end gap-2 border-t px-5 py-4'>
+          <button
+            className='inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+            disabled={sending}
+            onClick={onClose}
+            type='button'
+          >
+            Cancel
+          </button>
+          <button
+            className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50'
+            disabled={sending || !selected || !title.trim() || !body.trim()}
+            onClick={send}
+            type='button'
+          >
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function providerKey(item: NotificationTestProvider): string {
+  return `${item.channel}:${item.provider.name}:${item.provider.type}`;
 }
 
 function Metric({

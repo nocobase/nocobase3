@@ -19,7 +19,7 @@ export const TEST_PAGE_HTML: string = `<!doctype html>
   <body>
     <main>
       <h1>Notification Provider test</h1>
-      <p>Send one real test message through the configured Notification Manager. The email target is <code>TEST_EMAIL_RECIPIENT</code>; IM messages go to the configured bot group.</p>
+      <p>Send one real test message through the configured Notification Manager. In-app messages go to the current user, the email target is <code>TEST_EMAIL_RECIPIENT</code>, and IM messages go to the configured bot group.</p>
       <div class="warning">This page is for development and verification. It is disabled by default in production.</div>
       <div id="providers" class="providers">Loading configured Providers…</div>
       <div id="status" role="status"></div>

@@ -66,17 +66,21 @@ router 本身不添加宿主认证。挂载时需要在外层添加认证 middle
 
 ## Hub 设置页
 
-启用插件的客户端贡献后，通知日志会自动注册到 Hub 设置导航：
+启用插件的客户端贡献后，通知日志通过 `client/settings.ts` 自动注册到 Hub Settings Center：
 
 - 页面路径：`/hub/settings/notifications/logs`
 - 权限资源：`page:notification.logs`
 - 权限动作：`access`
 
-客户端路由与 `GET /api/notifications/logs` 使用同一个权限资源。仅隐藏菜单并不构成权限保护；服务端同样会拒绝没有访问权限的请求。
+Settings Contribution 与 `GET /api/notifications/logs` 使用同一个权限资源。Settings Center 会在页面加载前检查权限，服务端也会拒绝没有访问权限的请求。
+
+页面右上角的 **Send test notification** 会列出当前启用的 Channel 和 Provider。先选择一项，再点击弹窗底部的 **Send**，页面调用 Notification Provider 插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。站内信发送给当前登录用户；Email 测试只会发送到服务端配置的 `notification.test.emailRecipient`；IM 测试发送到所选 Webhook 所属群聊。页面不能临时输入任意接收人。
+
+测试能力受服务端 `notification.test.enabled` 控制。默认应用模板通过 `NOTIFICATION_PROVIDER_TEST_ENABLED` 配置该开关，并通过 `TEST_EMAIL_RECIPIENT` 配置 Email 测试接收人；生产环境默认关闭。未启用时，测试弹窗会提示该应用没有开启 Provider 测试。
 
 ## 可选的应用自有页面
 
-`@nocobase/app-plugin-notification` 发布的 `logs-ui` Registry item 仍提供可复制的 `NotificationLogsPage`，用于应用需要完全自行维护页面样式的场景。canonical source 位于 `packages/app-plugin-notification/registry/logs-ui`。默认 Hub 日志页由插件客户端路由直接提供，不需要安装该 Registry item。
+`@nocobase/app-plugin-notification` 发布的 `logs-ui` Registry item 仍提供可复制的 `NotificationLogsPage`，用于应用需要完全自行维护页面样式的场景。canonical source 位于 `packages/app-plugin-notification/registry/logs-ui`。默认 Hub 日志页由插件的 Settings Contribution 直接提供，不需要安装该 Registry item。
 
 ## 相关链接
 

@@ -18,6 +18,10 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     await expect(config.json()).resolves.toEqual({
       data: [
         {
+          channel: 'in-app',
+          provider: { name: 'primary', type: 'database' },
+        },
+        {
           channel: 'email',
           provider: { name: 'smtp', type: 'smtp' },
         },
@@ -81,6 +85,47 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     );
   });
 
+  it('sends in-app tests to the authenticated user', async () => {
+    const send = vi.fn(async () => ({
+      notificationId: 'notification-1',
+      status: 'pending' as const,
+      deliveries: [],
+    }));
+    const { app } = createApp({ send });
+
+    const response = await app.request(
+      '/api/notification-providers/test/send',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-nocobase-provider-test': '1',
+        },
+        body: JSON.stringify({
+          channel: 'in-app',
+          providerName: 'primary',
+          providerType: 'database',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: { type: 'user', id: 'user-1' },
+        channels: ['in-app'],
+        routing: {
+          'in-app': {
+            providers: {
+              strategy: 'single',
+              provider: { name: 'primary', type: 'database' },
+            },
+          },
+        },
+      }),
+    );
+  });
+
   it('sends through the Notification Manager to the fixed test recipient', async () => {
     const send = vi.fn(async () => ({
       notificationId: 'notification-1',
@@ -106,6 +151,14 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
       expect.objectContaining({
         to: { type: 'email', address: 'recipient@example.com' },
         channels: ['email'],
+        routing: {
+          email: {
+            providers: {
+              strategy: 'single',
+              provider: { name: 'smtp', type: 'smtp' },
+            },
+          },
+        },
         source: {
           type: 'notification-provider-test',
           referenceId: 'smtp',
@@ -158,20 +211,44 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
 
     expect(response.status).toBe(404);
   });
+
+  it('requires notification logs access for Provider tests', async () => {
+    const { app, can } = createApp({ allowed: false });
+
+    const response = await app.request('/api/notification-providers/test');
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Notification logs access is required.',
+    });
+    expect(can).toHaveBeenCalledWith({
+      resource: { type: 'page', id: 'notification.logs' },
+      action: 'access',
+    });
+  });
 });
 
 interface CreateAppOptions {
+  readonly allowed?: boolean;
   readonly config?: NotificationProvidersPluginConfig;
   readonly send?: NotificationService['send'];
 }
 
 function createApp(options: CreateAppOptions = {}): {
   readonly app: Hono;
+  readonly can: ReturnType<typeof vi.fn>;
   readonly required: ReturnType<typeof vi.fn>;
 } {
   const app = new Hono();
-  const middleware = vi.fn(async (_context, next) => next());
-  const required = vi.fn(() => middleware);
+  const authMiddleware = vi.fn(async (_context, next) => next());
+  const required = vi.fn(() => authMiddleware);
+  const getSession = vi.fn(async () => ({ user: { id: 'user-1' } }));
+  const can = vi.fn(async () => options.allowed ?? true);
+  const authzHandler = vi.fn(async (context, next) => {
+    context.set('authz', { can });
+    await next();
+  });
+  const authzMiddleware = vi.fn(() => authzHandler);
   const notification = {
     send:
       options.send ??
@@ -186,12 +263,15 @@ function createApp(options: CreateAppOptions = {}): {
   registerNotificationProviderRoutes({
     app,
     config: options.config ?? createConfig('recipient@example.com'),
-    deps: { auth: { required } },
+    deps: {
+      auth: { required, getSession },
+      authz: { middleware: authzMiddleware },
+    },
     services: { notification },
     paths: {} as never,
   });
 
-  return { app, required };
+  return { app, can, required };
 }
 
 function createConfig(
@@ -201,6 +281,11 @@ function createConfig(
   return {
     notification: {
       channels: [
+        {
+          type: 'in-app',
+          enabled: true,
+          providers: [{ type: 'database', name: 'primary' }],
+        },
         {
           type: 'email',
           enabled: true,
