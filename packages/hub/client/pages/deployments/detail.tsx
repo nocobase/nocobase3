@@ -225,8 +225,8 @@ export function DeploymentDetailPage({
     : null;
 
   return (
-    <div className='space-y-6'>
-      <header className='space-y-4'>
+    <div className='hub-page'>
+      <header className='space-y-5 border-b border-border/70 pb-5'>
         <Button
           variant='ghost'
           size='sm'
@@ -237,9 +237,9 @@ export function DeploymentDetailPage({
           {backTarget.label}
         </Button>
         <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-          <div className='space-y-1'>
+          <div className='min-w-0 space-y-1.5'>
             <div className='flex flex-wrap items-center gap-2'>
-              <h1 className='font-heading text-2xl font-semibold tracking-tight'>
+              <h1 className='min-w-0 break-all font-heading text-2xl font-semibold tracking-tight sm:text-[1.75rem]'>
                 {translateWithValues(
                   translate,
                   'hub.deployment.title',
@@ -270,6 +270,7 @@ export function DeploymentDetailPage({
             <Button
               type='button'
               variant='outline'
+              className='w-full sm:w-auto'
               onClick={() => {
                 if (onRedeploy) {
                   onRedeploy(deploymentData);
@@ -349,16 +350,18 @@ export function DeploymentDetailPage({
                 )}
               />
             ) : (events.data?.length ?? 0) === 0 ? (
-              <HubEmptyState
-                title={translate(
-                  'hub.deployment.events.empty.title',
-                  'Waiting for events',
-                )}
-                description={translate(
-                  'hub.deployment.events.empty.description',
-                  'The orchestrator has not persisted an execution event yet.',
-                )}
-              />
+              <div className='[&_[data-slot=empty]]:min-h-40 [&_[data-slot=empty]]:border-0 [&_[data-slot=empty]]:bg-transparent [&_[data-slot=empty]]:shadow-none'>
+                <HubEmptyState
+                  title={translate(
+                    'hub.deployment.events.empty.title',
+                    'Waiting for events',
+                  )}
+                  description={translate(
+                    'hub.deployment.events.empty.description',
+                    'The orchestrator has not persisted an execution event yet.',
+                  )}
+                />
+              </div>
             ) : (
               <DeploymentTimeline events={events.data ?? []} />
             )}

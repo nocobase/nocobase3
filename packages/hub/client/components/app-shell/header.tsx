@@ -42,6 +42,7 @@ function DesktopHeader() {
         'border-border/70',
         'bg-background/80',
         'px-4',
+        'lg:px-8',
         'justify-between',
         'backdrop-blur-xl',
         'z-40',
@@ -71,7 +72,8 @@ function MobileHeader() {
       className={cn(
         'sticky',
         'top-0',
-        'flex',
+        'grid',
+        'grid-cols-[1fr_auto_1fr]',
         'h-16',
         'shrink-0',
         'items-center',
@@ -80,19 +82,18 @@ function MobileHeader() {
         'border-border/70',
         'bg-background/85',
         'px-3',
-        'justify-between',
         'backdrop-blur-xl',
         'z-40',
       )}
     >
       <SidebarTrigger
         className={cn(
-          'size-9 rounded-xl text-muted-foreground',
+          'size-9 justify-self-start rounded-xl text-muted-foreground',
           !isMobile && 'hidden',
         )}
       />
-      <Brand logoClassName='h-6' />
-      <div className='flex shrink-0 items-center gap-1'>
+      <Brand className='justify-self-center' logoClassName='h-6' />
+      <div className='flex shrink-0 items-center justify-self-end gap-1'>
         <LanguageSwitcher className='size-9' />
         <ThemeToggle className='size-9' />
         <UserDropdown />

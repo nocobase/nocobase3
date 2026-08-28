@@ -163,7 +163,7 @@ export function HubEmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <Empty className='min-h-56 border'>
+    <Empty className='min-h-52 border bg-card/70 shadow-sm'>
       <EmptyHeader>
         <EmptyMedia variant='icon'>
           <Inbox aria-hidden='true' />
@@ -181,7 +181,7 @@ export function HubNotFoundState({ kind }: { kind: string }) {
   const kindKey = kind.toLowerCase();
   const translatedKind = translate(`hub.${kindKey}.notFoundKind`, kind);
   return (
-    <Empty className='min-h-64 border'>
+    <Empty className='min-h-56 border bg-card/70 shadow-sm'>
       <EmptyHeader>
         <EmptyMedia variant='icon'>
           <CircleHelp aria-hidden='true' />
@@ -209,7 +209,7 @@ export function HubListSkeleton({ rows = 4 }: { rows?: number }) {
   const translate = useTranslate();
   return (
     <div
-      className='space-y-2'
+      className='space-y-3 rounded-xl border bg-card p-4 shadow-sm'
       aria-label={translate('hub.loading.list', 'Loading list')}
       role='status'
     >

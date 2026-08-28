@@ -17,17 +17,17 @@ export function Layout({ children }: PropsWithChildren) {
           className={cn(
             '@container/main',
             'mx-auto',
-            'max-w-[1600px]',
+            'max-w-[1440px]',
             'relative',
             'w-full',
             'flex',
             'flex-col',
             'flex-1',
             'px-4',
-            'py-5',
-            'md:p-6',
+            'py-6',
+            'md:p-7',
             'lg:px-8',
-            'lg:py-7',
+            'lg:py-8',
           )}
         >
           <PageErrorBoundary>{children}</PageErrorBoundary>

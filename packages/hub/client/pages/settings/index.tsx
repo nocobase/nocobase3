@@ -81,7 +81,7 @@ export function HubSettingsPage({ fetcher }: HubSettingsPageProps) {
   };
 
   return (
-    <div className='space-y-6'>
+    <div className='hub-page'>
       <HubPageHeader
         eyebrow={
           <>
@@ -115,7 +115,7 @@ export function HubSettingsPage({ fetcher }: HubSettingsPageProps) {
           </AlertDescription>
         </Alert>
       ) : null}
-      <div className='max-w-2xl'>
+      <div className='max-w-2xl xl:max-w-none'>
         <SystemInfoCard query={systemInfo} />
       </div>
       {settings.error ? (
@@ -186,14 +186,16 @@ function SystemInfoCard({
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <dl className='space-y-3'>
+        <dl className='grid gap-x-8 gap-y-3 md:grid-cols-2 xl:grid-cols-3'>
           {items.map(([label, value]) => (
             <div
               key={label}
-              className='flex items-start justify-between gap-4 border-b pb-3 last:border-b-0 last:pb-0'
+              className='flex min-w-0 items-start justify-between gap-4 border-b pb-3'
             >
               <dt className='text-sm text-muted-foreground'>{label}</dt>
-              <dd className='text-right text-sm font-medium'>{value ?? '—'}</dd>
+              <dd className='min-w-0 break-all text-right text-sm font-medium'>
+                {value ?? '—'}
+              </dd>
             </div>
           ))}
         </dl>
@@ -230,8 +232,8 @@ function SettingsEditor({
 }) {
   const translate = useTranslate();
   return (
-    <div className='grid gap-4 xl:grid-cols-2'>
-      <Card>
+    <div className='grid items-start gap-4 xl:grid-cols-2'>
+      <Card className='h-full'>
         <CardHeader>
           <CardTitle>
             {translate('hub.settings.retention.title', 'Release retention')}
@@ -304,7 +306,7 @@ function SettingsEditor({
           />
         </CardContent>
       </Card>
-      <Card>
+      <Card className='h-full'>
         <CardHeader>
           <CardTitle>
             {translate('hub.settings.safety.title', 'Audit and confirmations')}
@@ -423,15 +425,15 @@ function NumberSetting({
   onChange: (value: number) => void;
 }) {
   return (
-    <div className='flex items-start justify-between gap-4'>
-      <div>
+    <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+      <div className='min-w-0'>
         <Label htmlFor={id}>{label}</Label>
         <p className='mt-1 text-xs text-muted-foreground'>{description}</p>
       </div>
       <Input
         id={id}
         type='number'
-        className='w-28'
+        className='w-full shrink-0 sm:w-28'
         value={value}
         min={min}
         max={max}
@@ -455,13 +457,14 @@ function BooleanSetting({
 }) {
   return (
     <div className='flex items-start justify-between gap-4'>
-      <div>
+      <div className='min-w-0'>
         <p className='text-sm font-medium'>{label}</p>
         {description ? (
           <p className='mt-1 text-xs text-muted-foreground'>{description}</p>
         ) : null}
       </div>
       <Switch
+        className='shrink-0'
         checked={checked}
         disabled={disabled}
         onCheckedChange={onChange}

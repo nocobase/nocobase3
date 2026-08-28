@@ -118,7 +118,7 @@
   --sidebar: oklch(0.155 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.94 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.16 0 0);
   --sidebar-accent: oklch(0.24 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
@@ -142,8 +142,28 @@
 }
 
 @layer components {
+  .hub-page {
+    @apply w-full min-w-0 space-y-6;
+  }
+
+  .hub-filter-panel {
+    @apply rounded-xl border bg-card p-3 shadow-sm;
+  }
+
+  .hub-table-card {
+    @apply overflow-hidden bg-card shadow-sm;
+  }
+
+  .hub-table-scroll {
+    @apply min-w-0;
+  }
+
+  .hub-section-heading {
+    @apply flex flex-col gap-1.5;
+  }
+
   .resource-form {
-    @apply max-w-3xl space-y-6 rounded-xl border bg-card p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-8;
+    @apply max-w-3xl space-y-6 rounded-xl border bg-card p-6 shadow-sm sm:p-8;
   }
 
   .resource-form [data-slot='input'],
@@ -156,7 +176,7 @@
   }
 
   .resource-detail-card {
-    @apply shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+    @apply shadow-sm;
   }
 
   .ai-chat-window {

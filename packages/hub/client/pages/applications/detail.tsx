@@ -430,8 +430,8 @@ export function ApplicationDetailPage({
   const applicationData = application.data;
 
   return (
-    <div className='space-y-6'>
-      <header className='space-y-4'>
+    <div className='hub-page'>
+      <header className='space-y-5 border-b border-border/70 pb-5'>
         <Button
           variant='ghost'
           size='sm'
@@ -443,10 +443,10 @@ export function ApplicationDetailPage({
             ? translate('hub.common.applications', 'Applications')
             : translate('hub.common.home', 'Home')}
         </Button>
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-          <div className='space-y-1'>
+        <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
+          <div className='min-w-0 space-y-1.5'>
             <div className='flex flex-wrap items-center gap-2'>
-              <h1 className='font-heading text-2xl font-semibold tracking-tight'>
+              <h1 className='min-w-0 font-heading text-2xl font-semibold tracking-tight sm:text-[1.75rem]'>
                 {applicationData.name}
               </h1>
               {applicationData.isDefault === true &&
@@ -470,7 +470,7 @@ export function ApplicationDetailPage({
               </p>
             ) : null}
           </div>
-          <div className='flex flex-wrap gap-2'>
+          <div className='flex w-full shrink-0 flex-wrap gap-2 sm:w-auto sm:justify-end'>
             {applicationData.links?.open ? (
               <Button
                 variant='outline'
@@ -509,37 +509,37 @@ export function ApplicationDetailPage({
       >
         <TabsList
           variant='line'
-          className='max-w-full justify-start overflow-x-auto'
+          className='w-full max-w-full justify-start overflow-x-auto border-b border-border/70 p-0'
           aria-label={translate(
             'hub.application.sectionsAria',
             'Application sections',
           )}
         >
-          <TabsTrigger value='overview'>
+          <TabsTrigger value='overview' className='h-9 flex-none px-3'>
             {translate('hub.application.tabs.overview', 'Overview')}
           </TabsTrigger>
           {canDevelop ? (
-            <TabsTrigger value='development'>
+            <TabsTrigger value='development' className='h-9 flex-none px-3'>
               {translate('hub.application.tabs.development', 'Development')}
             </TabsTrigger>
           ) : null}
           {canReadReleases ? (
-            <TabsTrigger value='releases'>
+            <TabsTrigger value='releases' className='h-9 flex-none px-3'>
               {translate('hub.application.tabs.releases', 'Releases')}
             </TabsTrigger>
           ) : null}
           {canReadDeployments ? (
-            <TabsTrigger value='deployments'>
+            <TabsTrigger value='deployments' className='h-9 flex-none px-3'>
               {translate('hub.application.tabs.deployments', 'Deployments')}
             </TabsTrigger>
           ) : null}
           {canReadActivity ? (
-            <TabsTrigger value='activity'>
+            <TabsTrigger value='activity' className='h-9 flex-none px-3'>
               {translate('hub.application.tabs.activity', 'Activity')}
             </TabsTrigger>
           ) : null}
           {canReadPermissions ? (
-            <TabsTrigger value='permissions'>
+            <TabsTrigger value='permissions' className='h-9 flex-none px-3'>
               {translate('hub.application.tabs.permissions', 'Permissions')}
             </TabsTrigger>
           ) : null}
@@ -547,12 +547,12 @@ export function ApplicationDetailPage({
           canRestoreApplication ||
           canReadRuntime ||
           canReadRuntimeSecret ? (
-            <TabsTrigger value='settings'>
+            <TabsTrigger value='settings' className='h-9 flex-none px-3'>
               {translate('hub.application.tabs.settings', 'Settings')}
             </TabsTrigger>
           ) : null}
         </TabsList>
-        <TabsContent value='overview' className='pt-4'>
+        <TabsContent value='overview' className='pt-6'>
           <ApplicationOverview
             application={applicationData}
             releases={releases.data ?? []}
@@ -563,12 +563,12 @@ export function ApplicationDetailPage({
           />
         </TabsContent>
         {canDevelop ? (
-          <TabsContent value='development' className='pt-4'>
+          <TabsContent value='development' className='pt-6'>
             <ApplicationDevelopment application={applicationData} />
           </TabsContent>
         ) : null}
         {canReadReleases ? (
-          <TabsContent value='releases' className='pt-4'>
+          <TabsContent value='releases' className='pt-6'>
             <ApplicationReleases
               application={applicationData}
               releases={releases.data ?? []}
@@ -593,7 +593,7 @@ export function ApplicationDetailPage({
           </TabsContent>
         ) : null}
         {canReadDeployments ? (
-          <TabsContent value='deployments' className='pt-4'>
+          <TabsContent value='deployments' className='pt-6'>
             <ApplicationDeployments
               deployments={deployments.data ?? []}
               releases={releases.data ?? []}
@@ -615,7 +615,7 @@ export function ApplicationDetailPage({
           </TabsContent>
         ) : null}
         {canReadActivity ? (
-          <TabsContent value='activity' className='pt-4'>
+          <TabsContent value='activity' className='pt-6'>
             <ApplicationActivity
               applicationId={applicationData.id}
               logs={activity.data}
@@ -633,7 +633,7 @@ export function ApplicationDetailPage({
           </TabsContent>
         ) : null}
         {canReadPermissions ? (
-          <TabsContent value='permissions' className='pt-4'>
+          <TabsContent value='permissions' className='pt-6'>
             <ApplicationPermissions
               applicationId={applicationData.id}
               access={access.data ?? []}
@@ -658,7 +658,7 @@ export function ApplicationDetailPage({
         canRestoreApplication ||
         canReadRuntime ||
         canReadRuntimeSecret ? (
-          <TabsContent value='settings' className='pt-4'>
+          <TabsContent value='settings' className='pt-6'>
             <ApplicationSettings
               application={applicationData}
               runtime={runtimeSnapshot.data}
@@ -821,7 +821,7 @@ function ApplicationOverview({
 
   return (
     <div className='space-y-4'>
-      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
+      <div className='grid items-stretch gap-4 sm:grid-cols-2 2xl:grid-cols-4'>
         <OverviewCard
           icon={<Rocket aria-hidden='true' />}
           label={translate(
@@ -932,13 +932,13 @@ function OverviewCard({
   status?: string;
 }) {
   return (
-    <Card size='sm'>
+    <Card size='sm' className='h-full min-h-28'>
       <CardHeader>
-        <div className='flex items-center gap-2 text-muted-foreground [&_svg]:size-4'>
+        <div className='flex w-fit items-center gap-2 rounded-md bg-muted/60 px-2 py-1.5 text-muted-foreground [&_svg]:size-4'>
           {icon}
           <CardDescription>{label}</CardDescription>
         </div>
-        <CardTitle className='flex items-center gap-2 pt-1'>
+        <CardTitle className='flex min-w-0 items-center gap-2 pt-1 break-words'>
           {status ? <HubStatusBadge status={status} /> : value}
         </CardTitle>
       </CardHeader>
@@ -1049,9 +1049,9 @@ function ApplicationReleases({
 
   return (
     <div className='space-y-4'>
-      <Card className='py-0'>
+      <Card className='hub-table-card py-0'>
         <CardContent className='px-0'>
-          <Table>
+          <Table className='min-w-[720px]'>
             <TableHeader>
               <TableRow>
                 <TableHead className='pl-4'>
@@ -1386,7 +1386,7 @@ function ApplicationActivity({
   }
 
   return (
-    <Card className='py-0'>
+    <Card className='hub-table-card py-0'>
       <CardHeader className='border-b py-4'>
         <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
           <div className='space-y-1'>
@@ -1429,8 +1429,8 @@ function ApplicationActivity({
           />
         </CardContent>
       ) : (
-        <CardContent className='overflow-x-auto px-0'>
-          <Table>
+        <CardContent className='px-0'>
+          <Table className='min-w-[760px]'>
             <TableHeader>
               <TableRow>
                 <TableHead className='pl-4'>
@@ -1558,9 +1558,9 @@ function ApplicationDeployments({
 
   return (
     <div className='space-y-4'>
-      <Card className='py-0'>
+      <Card className='hub-table-card py-0'>
         <CardContent className='px-0'>
-          <Table>
+          <Table className='min-w-[880px]'>
             <TableHeader>
               <TableRow>
                 <TableHead className='pl-4'>
@@ -1671,8 +1671,8 @@ pnpm dev`;
   const firstDeploymentCommand = `pnpm run deploy --hub ${hubUrl} --app ${application.slug}`;
 
   return (
-    <article className='max-w-4xl px-1 py-2 sm:px-4'>
-      <header className='space-y-2 border-b pb-6'>
+    <article className='mx-auto max-w-3xl px-1 py-2 sm:px-4'>
+      <header className='space-y-2 pb-7'>
         <h2 className='text-2xl font-semibold tracking-tight'>
           {translate('hub.development.title', 'Quick setup')}
         </h2>
@@ -1684,7 +1684,7 @@ pnpm dev`;
         </p>
       </header>
 
-      <section className='space-y-6 py-8'>
+      <section className='space-y-7 border-t border-border/70 py-8'>
         <h3 className='text-xl font-semibold tracking-tight'>
           {translate('hub.development.local.title', 'Development')}
         </h3>
@@ -1731,7 +1731,7 @@ pnpm dev`;
         </div>
       </section>
 
-      <section className='space-y-4 border-t pt-8'>
+      <section className='space-y-4 border-t border-border/70 pt-8'>
         <h3 className='text-xl font-semibold tracking-tight'>
           {translate('hub.development.deploy.title', 'Deploy to this Hub')}
         </h3>
@@ -1774,7 +1774,7 @@ function DevelopmentCommandBlock({
   const [copied, setCopied] = useState(false);
 
   return (
-    <div className='relative rounded-lg border bg-muted/35'>
+    <div className='relative rounded-lg border bg-muted/45 shadow-sm'>
       <pre className='overflow-x-auto p-4 pr-12 font-mono text-xs leading-6'>
         {commands}
       </pre>
@@ -1971,7 +1971,7 @@ function ApplicationPermissions({
     );
   if (error) return <HubErrorState error={error} onRetry={onRetry} />;
   return (
-    <div className='space-y-4'>
+    <div className='space-y-5'>
       <Card>
         <CardHeader>
           <CardTitle>
@@ -2029,7 +2029,7 @@ function ApplicationPermissions({
               )}
             />
           ) : (
-            <Table>
+            <Table className='min-w-[720px]'>
               <TableHeader>
                 <TableRow>
                   <TableHead className='pl-6'>
@@ -2305,11 +2305,11 @@ function ApplicationPermissions({
             )}
           </CardDescription>
         </CardHeader>
-        <CardContent className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
+        <CardContent className='grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3'>
           {roles.map((role) => {
             const roleKey = role.key ?? role.id ?? role.name ?? 'role';
             return (
-              <div key={roleKey} className='rounded-lg border p-4'>
+              <div key={roleKey} className='rounded-lg border bg-muted/15 p-4'>
                 <div className='flex items-center justify-between gap-2'>
                   <p className='font-medium capitalize'>
                     {getHubRoleLabel(role.name ?? roleKey, translate)}
@@ -2431,7 +2431,7 @@ function ApplicationSettings({
     : null;
 
   return (
-    <div className='grid gap-4 xl:grid-cols-2'>
+    <div className='grid items-start gap-4 xl:grid-cols-2'>
       {error && !pendingAction ? (
         <div className='xl:col-span-2'>
           <HubErrorState error={error} />
@@ -2645,7 +2645,7 @@ function ApplicationSettings({
         </Card>
       ) : null}
       {canArchive || canRestore ? (
-        <Card className='border-destructive/40'>
+        <Card className='border-destructive/40 xl:col-span-2'>
           <CardHeader>
             <CardTitle>
               {translate(

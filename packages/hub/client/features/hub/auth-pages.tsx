@@ -47,22 +47,28 @@ export function HubLoginPage({ fetcher }: { fetcher?: HubFetcher }) {
   });
   if (setup.loading) {
     return (
-      <HubLoadingState
-        label={translate('hub.auth.setup.checking', 'Checking Hub setup')}
-      />
+      <div className='grid min-h-svh place-items-center bg-background px-6'>
+        <div className='w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm'>
+          <HubLoadingState
+            label={translate('hub.auth.setup.checking', 'Checking Hub setup')}
+          />
+        </div>
+      </div>
     );
   }
   if (setup.error) {
     return (
-      <div className='mx-auto flex min-h-svh max-w-xl items-center px-6'>
-        <HubErrorState
-          error={setup.error}
-          onRetry={setup.reload}
-          title={translate(
-            'hub.auth.setup.checkError',
-            'Unable to check Hub setup',
-          )}
-        />
+      <div className='grid min-h-svh place-items-center bg-background px-6'>
+        <div className='w-full max-w-lg'>
+          <HubErrorState
+            error={setup.error}
+            onRetry={setup.reload}
+            title={translate(
+              'hub.auth.setup.checkError',
+              'Unable to check Hub setup',
+            )}
+          />
+        </div>
       </div>
     );
   }
@@ -182,15 +188,21 @@ export function HubSetupPage({ fetcher }: { fetcher?: HubFetcher }) {
 
   if (setup.loading) {
     return (
-      <HubLoadingState
-        label={translate('hub.auth.setup.checking', 'Checking Hub setup')}
-      />
+      <div className='grid min-h-svh place-items-center bg-background px-6'>
+        <div className='w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm'>
+          <HubLoadingState
+            label={translate('hub.auth.setup.checking', 'Checking Hub setup')}
+          />
+        </div>
+      </div>
     );
   }
   if (setup.error) {
     return (
-      <div className='mx-auto flex min-h-svh max-w-xl items-center px-6'>
-        <HubErrorState error={setup.error} onRetry={setup.reload} />
+      <div className='grid min-h-svh place-items-center bg-background px-6'>
+        <div className='w-full max-w-lg'>
+          <HubErrorState error={setup.error} onRetry={setup.reload} />
+        </div>
       </div>
     );
   }

@@ -195,7 +195,7 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
   );
 
   return (
-    <div className='space-y-6'>
+    <div className='hub-page'>
       <HubPageHeader
         eyebrow={
           <>
@@ -236,178 +236,184 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
         />
       ) : (
         <>
-          <div className='flex flex-col gap-3 xl:flex-row xl:items-center'>
-            <label className='relative min-w-0 flex-1 lg:max-w-sm'>
-              <span className='sr-only'>
-                {translate(
-                  'hub.deployments.search.label',
-                  'Search deployments',
-                )}
-              </span>
-              <Search
-                className='pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground'
-                aria-hidden='true'
-              />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={translate(
-                  'hub.deployments.search.placeholder',
-                  'Search deployment or release',
-                )}
-                className='pl-8'
-              />
-            </label>
-            <div className='flex flex-wrap gap-3'>
-              <NativeSelect
-                value={applicationId}
-                onChange={(event) => setApplicationId(event.target.value)}
-                aria-label={translate(
-                  'hub.deployments.filter.applicationAria',
-                  'Filter by application',
-                )}
-              >
-                <NativeSelectOption value='all'>
+          <div className='hub-filter-panel space-y-3'>
+            <div className='flex flex-col gap-3 xl:flex-row xl:items-center'>
+              <label className='relative min-w-0 flex-1 lg:min-w-64 lg:max-w-md'>
+                <span className='sr-only'>
                   {translate(
-                    'hub.deployments.filter.allApplications',
-                    'All applications',
+                    'hub.deployments.search.label',
+                    'Search deployments',
                   )}
-                </NativeSelectOption>
-                {(applications.data ?? []).map((application) => (
-                  <NativeSelectOption
-                    key={application.id}
-                    value={application.id}
-                  >
-                    {application.name}
+                </span>
+                <Search
+                  className='pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground'
+                  aria-hidden='true'
+                />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={translate(
+                    'hub.deployments.search.placeholder',
+                    'Search deployment or release',
+                  )}
+                  className='pl-8'
+                />
+              </label>
+              <div className='grid gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap'>
+                <NativeSelect
+                  className='w-full xl:w-fit'
+                  value={applicationId}
+                  onChange={(event) => setApplicationId(event.target.value)}
+                  aria-label={translate(
+                    'hub.deployments.filter.applicationAria',
+                    'Filter by application',
+                  )}
+                >
+                  <NativeSelectOption value='all'>
+                    {translate(
+                      'hub.deployments.filter.allApplications',
+                      'All applications',
+                    )}
                   </NativeSelectOption>
-                ))}
-              </NativeSelect>
-              <NativeSelect
-                value={status}
-                onChange={(event) => setStatus(event.target.value)}
-                aria-label={translate(
-                  'hub.deployments.filter.statusAria',
-                  'Filter by deployment status',
-                )}
-              >
-                <NativeSelectOption value='all'>
-                  {translate(
-                    'hub.deployments.filter.allStatuses',
-                    'All statuses',
+                  {(applications.data ?? []).map((application) => (
+                    <NativeSelectOption
+                      key={application.id}
+                      value={application.id}
+                    >
+                      {application.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                <NativeSelect
+                  className='w-full xl:w-fit'
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                  aria-label={translate(
+                    'hub.deployments.filter.statusAria',
+                    'Filter by deployment status',
                   )}
-                </NativeSelectOption>
-                <NativeSelectOption value='queued'>
-                  {translate('hub.status.queued', 'Queued')}
-                </NativeSelectOption>
-                <NativeSelectOption value='preparing'>
-                  {translate('hub.status.preparing', 'Preparing')}
-                </NativeSelectOption>
-                <NativeSelectOption value='checking'>
-                  {translate('hub.status.checking', 'Checking')}
-                </NativeSelectOption>
-                <NativeSelectOption value='switching'>
-                  {translate('hub.status.switching', 'Switching')}
-                </NativeSelectOption>
-                <NativeSelectOption value='draining'>
-                  {translate('hub.status.draining', 'Draining')}
-                </NativeSelectOption>
-                <NativeSelectOption value='succeeded'>
-                  {translate('hub.status.succeeded', 'Succeeded')}
-                </NativeSelectOption>
-                <NativeSelectOption value='failed'>
-                  {translate('hub.status.failed', 'Failed')}
-                </NativeSelectOption>
-                <NativeSelectOption value='cancelled'>
-                  {translate('hub.status.cancelled', 'Cancelled')}
-                </NativeSelectOption>
-              </NativeSelect>
-              <NativeSelect
-                value={type}
-                onChange={(event) => setType(event.target.value)}
-                aria-label={translate(
-                  'hub.deployments.filter.typeAria',
-                  'Filter by deployment type',
-                )}
-              >
-                <NativeSelectOption value='all'>
-                  {translate('hub.deployments.filter.allTypes', 'All types')}
-                </NativeSelectOption>
-                {['deploy', 'rollback', 'redeploy'].map((value) => (
-                  <NativeSelectOption key={value} value={value}>
-                    {getDeploymentTypeLabel(value, translate)}
+                >
+                  <NativeSelectOption value='all'>
+                    {translate(
+                      'hub.deployments.filter.allStatuses',
+                      'All statuses',
+                    )}
                   </NativeSelectOption>
-                ))}
-              </NativeSelect>
-              <NativeSelect
-                value={sort}
-                onChange={(event) => setSort(event.target.value)}
-                aria-label={translate(
-                  'hub.deployments.filter.sortAria',
-                  'Sort deployments',
-                )}
-              >
-                <NativeSelectOption value='-createdAt'>
-                  {translate(
-                    'hub.deployments.filter.sort.createdNewest',
-                    'Created: newest first',
+                  <NativeSelectOption value='queued'>
+                    {translate('hub.status.queued', 'Queued')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='preparing'>
+                    {translate('hub.status.preparing', 'Preparing')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='checking'>
+                    {translate('hub.status.checking', 'Checking')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='switching'>
+                    {translate('hub.status.switching', 'Switching')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='draining'>
+                    {translate('hub.status.draining', 'Draining')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='succeeded'>
+                    {translate('hub.status.succeeded', 'Succeeded')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='failed'>
+                    {translate('hub.status.failed', 'Failed')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='cancelled'>
+                    {translate('hub.status.cancelled', 'Cancelled')}
+                  </NativeSelectOption>
+                </NativeSelect>
+                <NativeSelect
+                  className='w-full xl:w-fit'
+                  value={type}
+                  onChange={(event) => setType(event.target.value)}
+                  aria-label={translate(
+                    'hub.deployments.filter.typeAria',
+                    'Filter by deployment type',
                   )}
-                </NativeSelectOption>
-                <NativeSelectOption value='createdAt'>
-                  {translate(
-                    'hub.deployments.filter.sort.createdOldest',
-                    'Created: oldest first',
+                >
+                  <NativeSelectOption value='all'>
+                    {translate('hub.deployments.filter.allTypes', 'All types')}
+                  </NativeSelectOption>
+                  {['deploy', 'rollback', 'redeploy'].map((value) => (
+                    <NativeSelectOption key={value} value={value}>
+                      {getDeploymentTypeLabel(value, translate)}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                <NativeSelect
+                  className='w-full xl:w-fit'
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value)}
+                  aria-label={translate(
+                    'hub.deployments.filter.sortAria',
+                    'Sort deployments',
                   )}
-                </NativeSelectOption>
-                <NativeSelectOption value='-startedAt'>
-                  {translate(
-                    'hub.deployments.filter.sort.startedNewest',
-                    'Started: newest first',
-                  )}
-                </NativeSelectOption>
-                <NativeSelectOption value='startedAt'>
-                  {translate(
-                    'hub.deployments.filter.sort.startedOldest',
-                    'Started: oldest first',
-                  )}
-                </NativeSelectOption>
-                <NativeSelectOption value='-finishedAt'>
-                  {translate(
-                    'hub.deployments.filter.sort.finishedNewest',
-                    'Finished: newest first',
-                  )}
-                </NativeSelectOption>
-                <NativeSelectOption value='finishedAt'>
-                  {translate(
-                    'hub.deployments.filter.sort.finishedOldest',
-                    'Finished: oldest first',
-                  )}
-                </NativeSelectOption>
-              </NativeSelect>
+                >
+                  <NativeSelectOption value='-createdAt'>
+                    {translate(
+                      'hub.deployments.filter.sort.createdNewest',
+                      'Created: newest first',
+                    )}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='createdAt'>
+                    {translate(
+                      'hub.deployments.filter.sort.createdOldest',
+                      'Created: oldest first',
+                    )}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='-startedAt'>
+                    {translate(
+                      'hub.deployments.filter.sort.startedNewest',
+                      'Started: newest first',
+                    )}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='startedAt'>
+                    {translate(
+                      'hub.deployments.filter.sort.startedOldest',
+                      'Started: oldest first',
+                    )}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='-finishedAt'>
+                    {translate(
+                      'hub.deployments.filter.sort.finishedNewest',
+                      'Finished: newest first',
+                    )}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='finishedAt'>
+                    {translate(
+                      'hub.deployments.filter.sort.finishedOldest',
+                      'Finished: oldest first',
+                    )}
+                  </NativeSelectOption>
+                </NativeSelect>
+              </div>
             </div>
-          </div>
 
-          <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
-            <DeploymentTextFilter
-              id='hub-deployment-requested-by'
-              label={translate(
-                'hub.deployments.filter.requestedBy',
-                'Requested by',
-              )}
-              value={requestedBy}
-              onChange={setRequestedBy}
-            />
-            <DeploymentDateFilter
-              id='hub-deployment-from'
-              label={translate('hub.deployments.filter.from', 'From')}
-              value={from}
-              onChange={setFrom}
-            />
-            <DeploymentDateFilter
-              id='hub-deployment-to'
-              label={translate('hub.deployments.filter.to', 'To')}
-              value={to}
-              onChange={setTo}
-            />
+            <div className='grid gap-3 border-t border-border/60 pt-3 sm:grid-cols-2 lg:grid-cols-3'>
+              <DeploymentTextFilter
+                id='hub-deployment-requested-by'
+                label={translate(
+                  'hub.deployments.filter.requestedBy',
+                  'Requested by',
+                )}
+                value={requestedBy}
+                onChange={setRequestedBy}
+              />
+              <DeploymentDateFilter
+                id='hub-deployment-from'
+                label={translate('hub.deployments.filter.from', 'From')}
+                value={from}
+                onChange={setFrom}
+              />
+              <DeploymentDateFilter
+                id='hub-deployment-to'
+                label={translate('hub.deployments.filter.to', 'To')}
+                value={to}
+                onChange={setTo}
+              />
+            </div>
           </div>
 
           {visibleDeployments.length === 0 ? (
@@ -429,7 +435,7 @@ export function DeploymentsPage({ fetcher }: DeploymentsPageProps) {
               memberNames={references.memberNames}
             />
           )}
-          <p className='text-xs text-muted-foreground'>
+          <p className='border-t border-border/60 pt-4 text-xs text-muted-foreground'>
             {translate(
               'hub.deployments.summary',
               {
@@ -520,9 +526,9 @@ function DeploymentResults({
   const translate = useTranslate();
   return (
     <>
-      <Card className='hidden py-0 md:block'>
+      <Card className='hub-table-card hidden py-0 md:block'>
         <CardContent className='px-0'>
-          <Table>
+          <Table className='min-w-[980px]'>
             <TableHeader>
               <TableRow>
                 <TableHead className='pl-4'>
@@ -617,7 +623,7 @@ function DeploymentResults({
 
       <div className='grid gap-3 md:hidden'>
         {deployments.map((deployment) => (
-          <Card key={deployment.id} size='sm'>
+          <Card key={deployment.id} size='sm' className='bg-card'>
             <CardContent className='space-y-3'>
               <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>

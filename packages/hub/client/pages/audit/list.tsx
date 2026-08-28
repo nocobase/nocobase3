@@ -137,7 +137,7 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
   );
 
   return (
-    <div className='space-y-6'>
+    <div className='hub-page'>
       <HubPageHeader
         eyebrow={
           <>
@@ -164,113 +164,115 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
         }
       />
 
-      <div className='flex flex-col gap-3 xl:flex-row xl:items-center'>
-        <HubSearchInput
-          value={search}
-          onChange={setSearch}
-          label={translate('hub.audit.search.label', 'Search audit log')}
-          placeholder={translate(
-            'hub.audit.search.placeholder',
-            'Search actor, application, action, or resource',
-          )}
-        />
-        <div className='flex flex-wrap gap-2'>
-          <FilterSelect
-            label={translate(
-              'hub.audit.filter.application',
-              'Filter by application',
+      <div className='hub-filter-panel space-y-3'>
+        <div className='flex flex-col gap-3 xl:flex-row xl:items-center'>
+          <HubSearchInput
+            value={search}
+            onChange={setSearch}
+            label={translate('hub.audit.search.label', 'Search audit log')}
+            placeholder={translate(
+              'hub.audit.search.placeholder',
+              'Search actor, application, action, or resource',
             )}
-            value={applicationId}
-            onChange={setApplicationId}
-          >
-            <NativeSelectOption value='all'>
-              {translate(
-                'hub.audit.filter.allApplications',
-                'All applications',
+          />
+          <div className='grid gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap'>
+            <FilterSelect
+              label={translate(
+                'hub.audit.filter.application',
+                'Filter by application',
               )}
-            </NativeSelectOption>
-            {(applications.data ?? []).map((application) => (
-              <NativeSelectOption key={application.id} value={application.id}>
-                {application.name}
+              value={applicationId}
+              onChange={setApplicationId}
+            >
+              <NativeSelectOption value='all'>
+                {translate(
+                  'hub.audit.filter.allApplications',
+                  'All applications',
+                )}
               </NativeSelectOption>
-            ))}
-          </FilterSelect>
-          <FilterSelect
-            label={translate('hub.audit.filter.action', 'Filter by action')}
-            value={action}
-            onChange={setAction}
-          >
-            <NativeSelectOption value='all'>
-              {translate('hub.audit.filter.allActions', 'All actions')}
-            </NativeSelectOption>
-            {AUDIT_ACTIONS.map((value) => (
-              <NativeSelectOption key={value} value={value}>
-                {getHubAuditActionLabel(value, translate)}
+              {(applications.data ?? []).map((application) => (
+                <NativeSelectOption key={application.id} value={application.id}>
+                  {application.name}
+                </NativeSelectOption>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              label={translate('hub.audit.filter.action', 'Filter by action')}
+              value={action}
+              onChange={setAction}
+            >
+              <NativeSelectOption value='all'>
+                {translate('hub.audit.filter.allActions', 'All actions')}
               </NativeSelectOption>
-            ))}
-          </FilterSelect>
-          <FilterSelect
-            label={translate('hub.audit.filter.result', 'Filter by result')}
-            value={result}
-            onChange={setResult}
-          >
-            <NativeSelectOption value='all'>
-              {translate('hub.audit.filter.allResults', 'All results')}
-            </NativeSelectOption>
-            {['success', 'failure', 'denied'].map((value) => (
-              <NativeSelectOption key={value} value={value}>
-                {getStatusLabel(value, translate)}
+              {AUDIT_ACTIONS.map((value) => (
+                <NativeSelectOption key={value} value={value}>
+                  {getHubAuditActionLabel(value, translate)}
+                </NativeSelectOption>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              label={translate('hub.audit.filter.result', 'Filter by result')}
+              value={result}
+              onChange={setResult}
+            >
+              <NativeSelectOption value='all'>
+                {translate('hub.audit.filter.allResults', 'All results')}
               </NativeSelectOption>
-            ))}
-          </FilterSelect>
-          <FilterSelect
-            label={translate('hub.audit.filter.source', 'Filter by source')}
-            value={source}
-            onChange={setSource}
-          >
-            <NativeSelectOption value='all'>
-              {translate('hub.audit.filter.allSources', 'All sources')}
-            </NativeSelectOption>
-            {['web', 'agent', 'system'].map((value) => (
-              <NativeSelectOption key={value} value={value}>
-                {getHubAuditSourceLabel(value, translate)}
+              {['success', 'failure', 'denied'].map((value) => (
+                <NativeSelectOption key={value} value={value}>
+                  {getStatusLabel(value, translate)}
+                </NativeSelectOption>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              label={translate('hub.audit.filter.source', 'Filter by source')}
+              value={source}
+              onChange={setSource}
+            >
+              <NativeSelectOption value='all'>
+                {translate('hub.audit.filter.allSources', 'All sources')}
               </NativeSelectOption>
-            ))}
-          </FilterSelect>
+              {['web', 'agent', 'system'].map((value) => (
+                <NativeSelectOption key={value} value={value}>
+                  {getHubAuditSourceLabel(value, translate)}
+                </NativeSelectOption>
+              ))}
+            </FilterSelect>
+          </div>
         </div>
-      </div>
 
-      <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-        <AuditTextFilter
-          id='hub-audit-actor-id'
-          label={translate('hub.audit.filter.actorId', 'Actor ID')}
-          value={actorId}
-          onChange={setActorId}
-        />
-        <AuditTextFilter
-          id='hub-audit-resource'
-          label={translate('hub.audit.filter.resource', 'Resource type')}
-          value={resource}
-          onChange={setResource}
-        />
-        <AuditTextFilter
-          id='hub-audit-resource-id'
-          label={translate('hub.audit.filter.resourceId', 'Resource ID')}
-          value={resourceId}
-          onChange={setResourceId}
-        />
-        <AuditDateFilter
-          id='hub-audit-from'
-          label={translate('hub.audit.filter.from', 'From')}
-          value={from}
-          onChange={setFrom}
-        />
-        <AuditDateFilter
-          id='hub-audit-to'
-          label={translate('hub.audit.filter.to', 'To')}
-          value={to}
-          onChange={setTo}
-        />
+        <div className='grid gap-3 border-t border-border/60 pt-3 sm:grid-cols-2 xl:grid-cols-5'>
+          <AuditTextFilter
+            id='hub-audit-actor-id'
+            label={translate('hub.audit.filter.actorId', 'Actor ID')}
+            value={actorId}
+            onChange={setActorId}
+          />
+          <AuditTextFilter
+            id='hub-audit-resource'
+            label={translate('hub.audit.filter.resource', 'Resource type')}
+            value={resource}
+            onChange={setResource}
+          />
+          <AuditTextFilter
+            id='hub-audit-resource-id'
+            label={translate('hub.audit.filter.resourceId', 'Resource ID')}
+            value={resourceId}
+            onChange={setResourceId}
+          />
+          <AuditDateFilter
+            id='hub-audit-from'
+            label={translate('hub.audit.filter.from', 'From')}
+            value={from}
+            onChange={setFrom}
+          />
+          <AuditDateFilter
+            id='hub-audit-to'
+            label={translate('hub.audit.filter.to', 'To')}
+            value={to}
+            onChange={setTo}
+          />
+        </div>
       </div>
 
       {logs.error ? (
@@ -286,9 +288,9 @@ export function AuditLogPage({ fetcher }: AuditLogPageProps) {
           )}
         />
       ) : (
-        <Card className='overflow-hidden py-0'>
-          <CardContent className='overflow-x-auto px-0'>
-            <Table>
+        <Card className='hub-table-card py-0'>
+          <CardContent className='px-0'>
+            <Table className='min-w-[980px]'>
               <TableHeader>
                 <TableRow>
                   <TableHead className='pl-4'>
@@ -465,7 +467,7 @@ function AuditLogDetailDialog({
   const translate = useTranslate();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[min(48rem,calc(100vh-2rem))] overflow-y-auto sm:max-w-2xl'>
+      <DialogContent className='max-h-[min(48rem,calc(100svh-2rem))] overflow-y-auto sm:max-w-2xl'>
         <DialogHeader>
           <DialogTitle>
             {translate('hub.audit.details.title', 'Audit event details')}
@@ -637,6 +639,7 @@ function FilterSelect({
 }) {
   return (
     <NativeSelect
+      className='w-full xl:w-fit'
       aria-label={label}
       value={value}
       onChange={(event) => onChange(event.target.value)}

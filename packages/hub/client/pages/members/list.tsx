@@ -116,7 +116,7 @@ export function MembersPage({ fetcher }: MembersPageProps) {
   const [invitationRevision, setInvitationRevision] = useState(0);
 
   return (
-    <div className='space-y-6'>
+    <div className='hub-page'>
       <HubPageHeader
         eyebrow={
           <>
@@ -143,25 +143,25 @@ export function MembersPage({ fetcher }: MembersPageProps) {
         }
       />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value='members'>
+        <TabsList className='w-full justify-start overflow-x-auto'>
+          <TabsTrigger value='members' className='flex-none px-3'>
             {translate('hub.members.tabs.members', 'Members')}
           </TabsTrigger>
-          <TabsTrigger value='invitations'>
+          <TabsTrigger value='invitations' className='flex-none px-3'>
             {translate('hub.members.tabs.invitations', 'Invitations')}
           </TabsTrigger>
-          <TabsTrigger value='agent-credentials'>
+          <TabsTrigger value='agent-credentials' className='flex-none px-3'>
             {translate(
               'hub.members.tabs.agentCredentials',
               'Agent credentials',
             )}
           </TabsTrigger>
-          <TabsTrigger value='roles'>
+          <TabsTrigger value='roles' className='flex-none px-3'>
             {translate('hub.members.tabs.roles', 'Built-in roles')}
           </TabsTrigger>
         </TabsList>
         <TabsContent value='members' className='space-y-4 pt-4'>
-          <div className='flex flex-col gap-3 lg:flex-row lg:items-center'>
+          <div className='hub-filter-panel flex flex-col gap-3 lg:flex-row lg:items-center'>
             <HubSearchInput
               value={search}
               onChange={setSearch}
@@ -171,7 +171,7 @@ export function MembersPage({ fetcher }: MembersPageProps) {
                 'Search name, email, or username',
               )}
             />
-            <div className='flex flex-wrap gap-2'>
+            <div className='grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap'>
               <NativeSelect
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
@@ -225,9 +225,9 @@ export function MembersPage({ fetcher }: MembersPageProps) {
               )}
             />
           ) : (
-            <Card className='overflow-hidden py-0'>
-              <CardContent className='overflow-x-auto px-0'>
-                <Table>
+            <Card className='hub-table-card py-0'>
+              <CardContent className='px-0'>
+                <Table className='min-w-[900px]'>
                   <TableHeader>
                     <TableRow>
                       <TableHead className='pl-4'>
@@ -513,7 +513,7 @@ function MemberAccessDialog({
         if (!next) setError(null);
       }}
     >
-      <DialogContent className='max-h-[min(48rem,calc(100vh-2rem))] overflow-y-auto sm:max-w-2xl'>
+      <DialogContent className='max-h-[min(48rem,calc(100svh-2rem))] overflow-y-auto sm:max-w-2xl'>
         <DialogHeader>
           <DialogTitle>
             {translate(
@@ -716,7 +716,7 @@ function InvitationList({ fetcher }: { fetcher?: HubFetcher }) {
 
   return (
     <div className='space-y-4'>
-      <div className='flex flex-col gap-3 lg:flex-row lg:items-center'>
+      <div className='hub-filter-panel flex flex-col gap-3 lg:flex-row lg:items-center'>
         <HubSearchInput
           value={search}
           onChange={setSearch}
@@ -730,6 +730,7 @@ function InvitationList({ fetcher }: { fetcher?: HubFetcher }) {
           )}
         />
         <NativeSelect
+          className='w-full sm:w-fit'
           value={status}
           onChange={(event) => setStatus(event.target.value)}
           aria-label={translate(
@@ -773,9 +774,9 @@ function InvitationList({ fetcher }: { fetcher?: HubFetcher }) {
           )}
         />
       ) : (
-        <Card className='overflow-hidden py-0'>
-          <CardContent className='overflow-x-auto px-0'>
-            <Table>
+        <Card className='hub-table-card py-0'>
+          <CardContent className='px-0'>
+            <Table className='min-w-[820px]'>
               <TableHeader>
                 <TableRow>
                   <TableHead className='pl-4'>
@@ -910,7 +911,7 @@ function AgentCredentialList({ fetcher }: { fetcher?: HubFetcher }) {
 
   return (
     <div className='space-y-4'>
-      <div className='flex flex-col gap-3 lg:flex-row lg:items-center'>
+      <div className='hub-filter-panel flex flex-col gap-3 lg:flex-row lg:items-center'>
         <HubSearchInput
           value={search}
           onChange={setSearch}
@@ -924,6 +925,7 @@ function AgentCredentialList({ fetcher }: { fetcher?: HubFetcher }) {
           )}
         />
         <NativeSelect
+          className='w-full sm:w-fit'
           value={status}
           onChange={(event) => setStatus(event.target.value)}
           aria-label={translate(
@@ -973,9 +975,9 @@ function AgentCredentialList({ fetcher }: { fetcher?: HubFetcher }) {
           )}
         />
       ) : (
-        <Card className='overflow-hidden py-0'>
-          <CardContent className='overflow-x-auto px-0'>
-            <Table>
+        <Card className='hub-table-card py-0'>
+          <CardContent className='px-0'>
+            <Table className='min-w-[900px]'>
               <TableHeader>
                 <TableRow>
                   <TableHead className='pl-4'>
@@ -1271,11 +1273,11 @@ function RoleCatalog({
           )}
         </CardDescription>
       </CardHeader>
-      <CardContent className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
+      <CardContent className='grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3'>
         {roles.map((role) => {
           const key = role.key ?? role.id ?? role.name ?? 'role';
           return (
-            <div key={key} className='rounded-lg border p-4'>
+            <div key={key} className='rounded-lg border bg-muted/15 p-4'>
               <div className='flex items-center justify-between gap-2'>
                 <p className='font-semibold capitalize'>
                   {getHubRoleLabel(role.name ?? key, translate)}

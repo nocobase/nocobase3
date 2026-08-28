@@ -130,19 +130,19 @@ export function ApplicationsPage({
   };
 
   return (
-    <div className='space-y-6'>
-      <header className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
-        <div className='space-y-1'>
+    <div className='hub-page'>
+      <header className='flex flex-col gap-5 border-b border-border/70 pb-5 sm:flex-row sm:items-start sm:justify-between'>
+        <div className='min-w-0 space-y-1.5'>
           <div className='flex items-center gap-2 text-muted-foreground'>
             <Boxes className='size-4' aria-hidden='true' />
             <span className='text-sm font-medium'>
               {translate('hub.apps.eyebrow', 'Control plane')}
             </span>
           </div>
-          <h1 className='font-heading text-2xl font-semibold tracking-tight'>
+          <h1 className='font-heading text-2xl font-semibold tracking-tight sm:text-[1.75rem]'>
             {translate('hub.apps.title', 'Applications')}
           </h1>
-          <p className='max-w-2xl text-sm text-muted-foreground'>
+          <p className='max-w-2xl text-sm leading-6 text-muted-foreground'>
             {translate(
               'hub.apps.description',
               'Inspect deployed applications, active releases, environments, and runtime state from one place.',
@@ -182,8 +182,8 @@ export function ApplicationsPage({
         />
       ) : (
         <>
-          <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
-            <label className='relative min-w-0 flex-1 sm:max-w-sm'>
+          <div className='hub-filter-panel flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center'>
+            <label className='relative min-w-0 flex-1 sm:min-w-64 sm:max-w-md'>
               <span className='sr-only'>
                 {translate('hub.apps.search.label', 'Search applications')}
               </span>
@@ -223,7 +223,7 @@ export function ApplicationsPage({
               </NativeSelect>
             </label>
             <div
-              className='ml-auto flex items-center rounded-lg border bg-background p-0.5'
+              className='flex w-fit items-center rounded-lg border bg-background p-0.5 sm:ml-auto'
               aria-label={translate('hub.apps.view.label', 'Application view')}
             >
               <Button
@@ -270,7 +270,7 @@ export function ApplicationsPage({
             />
           )}
 
-          <p className='text-xs text-muted-foreground'>
+          <p className='border-t border-border/60 pt-4 text-xs text-muted-foreground'>
             {translate(
               'hub.apps.summary',
               {
@@ -331,7 +331,7 @@ function CreateApplicationDialog({
         onOpenChange(nextOpen);
       }}
     >
-      <DialogContent>
+      <DialogContent className='sm:max-w-lg'>
         <form
           className='space-y-4'
           onSubmit={(event) => {
@@ -460,11 +460,14 @@ function ApplicationResults({
   const translate = useTranslate();
   if (view === 'cards') {
     return (
-      <div className='grid gap-4 md:grid-cols-2 2xl:grid-cols-3'>
+      <div className='grid items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3'>
         {applications.map((application) => {
           return (
-            <Card key={application.id} className='overflow-hidden'>
-              <CardHeader className='gap-3'>
+            <Card
+              key={application.id}
+              className='h-full overflow-hidden transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md'
+            >
+              <CardHeader className='min-h-28 gap-3'>
                 <div className='min-w-0'>
                   <CardTitle className='flex flex-wrap items-center gap-2'>
                     <Link
@@ -489,7 +492,7 @@ function ApplicationResults({
                   </p>
                 ) : null}
               </CardHeader>
-              <CardContent className='space-y-4'>
+              <CardContent className='flex-1 space-y-4'>
                 <div className='flex flex-wrap gap-2'>
                   {application.runtime ? (
                     <>
@@ -500,7 +503,7 @@ function ApplicationResults({
                     <HubStatusBadge status='unknown' />
                   )}
                 </div>
-                <dl className='grid grid-cols-2 gap-4 text-sm'>
+                <dl className='grid grid-cols-2 gap-x-6 gap-y-4 text-sm'>
                   <div>
                     <dt className='text-xs text-muted-foreground'>
                       {translate(
@@ -550,7 +553,7 @@ function ApplicationResults({
                   </div>
                 </dl>
               </CardContent>
-              <CardFooter className='border-t bg-muted/15'>
+              <CardFooter className='mt-auto border-t bg-muted/20'>
                 <ApplicationQuickActions
                   application={application}
                   capabilities={capabilities}
@@ -565,9 +568,9 @@ function ApplicationResults({
     );
   }
   return (
-    <Card className='py-0'>
+    <Card className='hub-table-card py-0'>
       <CardContent className='px-0'>
-        <Table>
+        <Table className='min-w-[820px]'>
           <TableHeader>
             <TableRow>
               <TableHead className='pl-4'>

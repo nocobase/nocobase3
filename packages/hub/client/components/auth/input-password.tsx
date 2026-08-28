@@ -15,7 +15,7 @@ export const InputPassword = ({ className, ...props }: InputPasswordProps) => {
     <div className={cn('relative')}>
       <Input
         type={showPassword ? 'text' : 'password'}
-        className={cn(className)}
+        className={cn('pr-11', className)}
         {...props}
       />
       <button
@@ -27,16 +27,11 @@ export const InputPassword = ({ className, ...props }: InputPasswordProps) => {
         }
         aria-pressed={showPassword}
         className={cn(
-          'appearance-none',
-          'absolute right-3 top-1/2 -translate-y-1/2',
+          'absolute inset-y-0 right-0 flex w-10 appearance-none items-center justify-center rounded-r-lg text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
         )}
         onClick={() => setShowPassword(!showPassword)}
       >
-        {showPassword ? (
-          <EyeOff size={18} className={cn('text-gray-500')} />
-        ) : (
-          <Eye size={18} className={cn('text-gray-500')} />
-        )}
+        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
       </button>
     </div>
   );

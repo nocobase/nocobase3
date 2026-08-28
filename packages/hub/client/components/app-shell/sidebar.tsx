@@ -387,7 +387,7 @@ function ItemIcon({ icon, isSelected }: IconProps) {
     <div
       className={cn('w-4', {
         'text-muted-foreground': !isSelected,
-        'text-primary': isSelected,
+        'text-sidebar-accent-foreground': isSelected,
       })}
     >
       {icon ?? <ListIcon />}
@@ -419,7 +419,7 @@ function SidebarButton({
     <>
       <ItemIcon icon={item.meta?.icon ?? item.icon} isSelected={isSelected} />
       <span
-        className={cn('tracking-[-0.00875rem] text-foreground', {
+        className={cn('tracking-[-0.00875rem]', {
           'flex-1': rightIcon,
           'text-left': rightIcon,
           'line-clamp-1': !rightIcon,
@@ -450,7 +450,8 @@ function SidebarButton({
       className={cn(
         'flex h-10 w-full items-center justify-start gap-3 rounded-lg px-3 text-sm transition-colors',
         {
-          'bg-primary/10 text-primary hover:!bg-primary/15': isSelected,
+          'bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent':
+            isSelected,
           'hover:bg-sidebar-accent/80': !isSelected,
         },
         className,

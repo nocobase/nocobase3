@@ -20,19 +20,25 @@ export function HubPageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
-      <div className='space-y-1'>
+    <header className='flex flex-col gap-5 border-b border-border/70 pb-5 sm:flex-row sm:items-start sm:justify-between'>
+      <div className='min-w-0 space-y-1.5'>
         {eyebrow ? (
           <div className='flex items-center gap-2 text-sm font-medium text-muted-foreground [&_svg]:size-4'>
             {eyebrow}
           </div>
         ) : null}
-        <h1 className='font-heading text-2xl font-semibold tracking-tight'>
+        <h1 className='font-heading text-2xl font-semibold tracking-tight sm:text-[1.75rem]'>
           {title}
         </h1>
-        <p className='max-w-3xl text-sm text-muted-foreground'>{description}</p>
+        <p className='max-w-3xl text-sm leading-6 text-muted-foreground'>
+          {description}
+        </p>
       </div>
-      {actions ? <div className='flex flex-wrap gap-2'>{actions}</div> : null}
+      {actions ? (
+        <div className='flex w-full shrink-0 flex-wrap gap-2 sm:w-auto sm:justify-end'>
+          {actions}
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -49,7 +55,7 @@ export function HubSearchInput({
   placeholder: string;
 }) {
   return (
-    <label className='relative block min-w-0 flex-1 sm:max-w-sm'>
+    <label className='relative block min-w-0 flex-1 sm:min-w-64 sm:max-w-md'>
       <span className='sr-only'>{label}</span>
       <Search
         className='pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground'
@@ -82,11 +88,11 @@ export function HubTablePagination({
 }) {
   const translate = useTranslate();
   return (
-    <div className='flex flex-col gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between'>
+    <div className='flex flex-col gap-3 border-t bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between'>
       <span>
         {translate('hub.pagination.summary', { total }, '{{total}} records')}
       </span>
-      <div className='flex items-center gap-2'>
+      <div className='flex flex-wrap items-center gap-2'>
         <NativeSelect
           value={String(pageSize)}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
