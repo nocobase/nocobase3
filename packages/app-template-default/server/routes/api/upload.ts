@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 
-import type { FileUploads } from '@/services/index.js';
+import type { FileUploads } from '../../services/index.js';
 
 export interface UploadRoutesOptions {
   publicFileStorage: FileUploads;

@@ -56,6 +56,13 @@ export function loadAppConfig(options: ResolvedAppRuntimeOptions): AppConfig {
   return {
     ...config,
     ...databaseTaskConfig,
+    workflow: {
+      ...config.workflow,
+      distRoot: resolveWorkflowDistRoot(options),
+      production:
+        config.workflow.production ||
+        path.basename(path.dirname(options.paths.serverDir)) === 'dist',
+    },
     queue: withPluginJobLocations(config.queue, databaseTaskConfig.plugins),
     app: {
       ...config.app,
@@ -148,4 +155,11 @@ function resolveDatabaseTaskConfig(
         : undefined,
     },
   };
+}
+
+function resolveWorkflowDistRoot(options: ResolvedAppRuntimeOptions): string {
+  const serverParent = path.basename(path.dirname(options.paths.serverDir));
+  return serverParent === 'dist'
+    ? path.join(options.paths.serverDir, 'workflows')
+    : path.join(options.paths.rootDir, 'dist', 'server', 'workflows');
 }

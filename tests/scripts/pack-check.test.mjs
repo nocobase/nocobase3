@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -12,6 +12,22 @@ import {
   validatePackedManifest,
   validatePackageManifest,
 } from '../../scripts/pack-check.mjs';
+
+const repoRoot = path.resolve(import.meta.dirname, '../..');
+
+test('publishes the default template as source instead of a runtime library', async () => {
+  const manifest = JSON.parse(
+    await readFile(
+      path.join(repoRoot, 'packages/app-template-default/package.json'),
+      'utf8',
+    ),
+  );
+
+  assert.equal(manifest.exports, undefined);
+  assert.ok(manifest.files.includes('server'));
+  assert.ok(manifest.files.includes('database'));
+  assert.ok(!manifest.files.includes('dist'));
+});
 
 test('derives stable archive names from scoped package names', () => {
   assert.equal(
