@@ -11,6 +11,8 @@ export const TEST_PAGE_HTML: string = `<!doctype html>
       h1 { margin: 0 0 8px; font-size: 24px; } p { color: #667085; line-height: 1.5; }
       .warning { padding: 12px; border-radius: 8px; background: #fff4e5; color: #8a4b08; }
       .providers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 20px 0; }
+      label { display: block; margin-top: 20px; font-weight: 600; }
+      input { box-sizing: border-box; width: 100%; margin-top: 8px; padding: 10px 12px; border: 1px solid #b8c2d1; border-radius: 8px; background: transparent; color: inherit; }
       button { width: 100%; padding: 12px 14px; border: 0; border-radius: 8px; background: #155eef; color: white; font-weight: 600; cursor: pointer; }
       button:disabled { cursor: wait; opacity: .55; } #status { min-height: 24px; white-space: pre-wrap; }
       @media (prefers-color-scheme: dark) { body { background: #111827; color: #f9fafb; } main { background: #1f2937; border-color: #374151; } p { color: #b6c2d2; } .warning { background: #422006; color: #fed7aa; } }
@@ -19,8 +21,10 @@ export const TEST_PAGE_HTML: string = `<!doctype html>
   <body>
     <main>
       <h1>Notification Provider test</h1>
-      <p>Send one real test message through the configured Notification Manager. In-app messages go to the current user, the email target is <code>TEST_EMAIL_RECIPIENT</code>, and IM messages go to the configured bot group.</p>
+      <p>Send one real test message through the configured Notification Manager. In-app and Email tests require a recipient; IM messages go to the configured bot group.</p>
       <div class="warning">This page is for development and verification. It is disabled by default in production.</div>
+      <label for="recipient">Recipient (user ID for in-app, email address for Email)</label>
+      <input id="recipient" type="text" autocomplete="off" placeholder="Optional for IM tests">
       <div id="providers" class="providers">Loading configured Providers…</div>
       <div id="status" role="status"></div>
     </main>
@@ -30,6 +34,7 @@ export const TEST_PAGE_HTML: string = `<!doctype html>
         : location.pathname;
       const providers = document.getElementById('providers');
       const status = document.getElementById('status');
+      const recipient = document.getElementById('recipient');
       const label = (item) => item.channel + ' / ' + item.provider.name + ' (' + item.provider.type + ')';
       async function load() {
         const response = await fetch(base + '/config');
@@ -45,9 +50,15 @@ export const TEST_PAGE_HTML: string = `<!doctype html>
         if (!result.data.length) providers.textContent = 'No enabled Providers are configured.';
       }
       async function send(item, button) {
+        const value = recipient.value.trim();
+        if (item.channel !== 'im' && !value) {
+          status.textContent = 'Enter a recipient for ' + item.channel + ' tests.';
+          recipient.focus();
+          return;
+        }
         button.disabled = true; status.textContent = 'Submitting…';
         try {
-          const response = await fetch(base + '/send', { method: 'POST', headers: { 'content-type': 'application/json', 'x-nocobase-provider-test': '1' }, body: JSON.stringify({ channel: item.channel, providerName: item.provider.name, providerType: item.provider.type }) });
+          const response = await fetch(base + '/send', { method: 'POST', headers: { 'content-type': 'application/json', 'x-nocobase-provider-test': '1' }, body: JSON.stringify({ channel: item.channel, providerName: item.provider.name, providerType: item.provider.type, recipient: value || undefined }) });
           const result = await response.json();
           if (!response.ok) throw new Error(result.error || 'Provider test failed.');
           status.textContent = 'Accepted as ' + result.data.notificationId + '. Checking delivery status…';

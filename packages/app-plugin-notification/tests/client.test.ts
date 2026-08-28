@@ -62,7 +62,12 @@ describe('@nocobase/app-plugin-notification client', () => {
 
     await expect(client.listTestProviders()).resolves.toEqual([provider]);
     await expect(
-      client.sendTest({ ...provider, title: 'Test', body: 'Hello' }),
+      client.sendTest({
+        ...provider,
+        recipient: 'user-2',
+        title: 'Test',
+        body: 'Hello',
+      }),
     ).resolves.toEqual(result);
     expect(request).toHaveBeenNthCalledWith(
       1,
@@ -78,6 +83,7 @@ describe('@nocobase/app-plugin-notification client', () => {
           channel: 'im',
           providerName: 'feishu',
           providerType: 'feishu-webhook',
+          recipient: 'user-2',
           title: 'Test',
           body: 'Hello',
         }),

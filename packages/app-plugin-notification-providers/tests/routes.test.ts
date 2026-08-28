@@ -124,6 +124,38 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     );
   });
 
+  it('sends in-app tests to an explicitly requested user', async () => {
+    const send = vi.fn(async () => ({
+      notificationId: 'notification-1',
+      status: 'pending' as const,
+      deliveries: [],
+    }));
+    const { app } = createApp({ send });
+
+    const response = await app.request(
+      '/api/notification-providers/test/send',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-nocobase-provider-test': '1',
+        },
+        body: JSON.stringify({
+          channel: 'in-app',
+          recipient: 'user-2',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: { type: 'user', id: 'user-2' },
+        channels: ['in-app'],
+      }),
+    );
+  });
+
   it('sends through the Notification Manager to the fixed test recipient', async () => {
     const send = vi.fn(async () => ({
       notificationId: 'notification-1',
@@ -164,6 +196,41 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     );
   });
 
+  it('sends email tests to an explicitly requested address', async () => {
+    const send = vi.fn(async () => ({
+      notificationId: 'notification-1',
+      status: 'pending' as const,
+      deliveries: [],
+    }));
+    const { app } = createApp({
+      send,
+      config: createConfig(undefined),
+    });
+
+    const response = await app.request(
+      '/api/notification-providers/test/send',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-nocobase-provider-test': '1',
+        },
+        body: JSON.stringify({
+          channel: 'email',
+          recipient: 'other@example.com',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: { type: 'email', address: 'other@example.com' },
+        channels: ['email'],
+      }),
+    );
+  });
+
   it('rejects cross-site compatible posts and missing email recipients', async () => {
     const send = vi.fn();
     const { app } = createApp({ send });
@@ -195,7 +262,8 @@ describe('@nocobase/app-plugin-notification-providers routes', () => {
     );
     expect(missingRecipient.status).toBe(409);
     await expect(missingRecipient.json()).resolves.toEqual({
-      error: 'TEST_EMAIL_RECIPIENT is required for email provider tests.',
+      error:
+        'recipient is required when TEST_EMAIL_RECIPIENT is not configured.',
     });
     expect(send).not.toHaveBeenCalled();
   });

@@ -42,6 +42,7 @@ interface TestRequest {
   readonly channel?: unknown;
   readonly providerName?: unknown;
   readonly providerType?: unknown;
+  readonly recipient?: unknown;
   readonly title?: unknown;
   readonly body?: unknown;
 }
@@ -146,11 +147,37 @@ export default function registerNotificationProviderRoutes({
       );
     }
 
-    const emailRecipient = config.notification.test?.emailRecipient?.trim();
+    const requestedRecipient = stringValue(input.recipient);
+    if (
+      channel === 'email' &&
+      requestedRecipient &&
+      !isEmail(requestedRecipient)
+    ) {
+      return context.json(
+        { error: 'recipient must be a valid email address.' },
+        400,
+      );
+    }
+    if (
+      channel === 'in-app' &&
+      requestedRecipient &&
+      requestedRecipient.length > 255
+    ) {
+      return context.json(
+        { error: 'recipient must be at most 255 characters.' },
+        400,
+      );
+    }
+
+    const emailRecipient =
+      channel === 'email'
+        ? requestedRecipient || config.notification.test?.emailRecipient?.trim()
+        : undefined;
     if (channel === 'email' && !emailRecipient) {
       return context.json(
         {
-          error: 'TEST_EMAIL_RECIPIENT is required for email provider tests.',
+          error:
+            'recipient is required when TEST_EMAIL_RECIPIENT is not configured.',
         },
         409,
       );
@@ -158,6 +185,7 @@ export default function registerNotificationProviderRoutes({
     const recipient = await testRecipient({
       channel,
       emailRecipient,
+      userId: channel === 'in-app' ? requestedRecipient : undefined,
       provider,
       context,
       deps,
@@ -264,6 +292,7 @@ function channelValue(value: unknown): TestChannel | undefined {
 async function testRecipient(input: {
   readonly channel: TestChannel;
   readonly emailRecipient?: string;
+  readonly userId?: string;
   readonly provider: NotificationProvidersPluginConfig['notification']['channels'][number]['providers'][number];
   readonly context: Context;
   readonly deps: NotificationProvidersPluginRoutesDeps;
@@ -272,6 +301,7 @@ async function testRecipient(input: {
     return { type: 'email', address: input.emailRecipient };
   }
   if (input.channel === 'in-app') {
+    if (input.userId) return { type: 'user', id: input.userId };
     const session = await input.deps.auth.getSession(
       input.context.req.raw.headers,
     );
@@ -318,4 +348,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' ? value.trim() : undefined;
+}
+
+function isEmail(value: string): boolean {
+  return value.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(value);
 }

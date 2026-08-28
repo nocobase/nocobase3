@@ -74,9 +74,9 @@ router 本身不添加宿主认证。挂载时需要在外层添加认证 middle
 
 Settings Contribution 与 `GET /api/notifications/logs` 使用同一个权限资源。Settings Center 会在页面加载前检查权限，服务端也会拒绝没有访问权限的请求。
 
-页面右上角的 **Send test notification** 会列出当前启用的 Channel 和 Provider。先选择一项，再点击弹窗底部的 **Send**，页面调用 Notification Provider 插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。站内信发送给当前登录用户；Email 测试只会发送到服务端配置的 `notification.test.emailRecipient`；IM 测试发送到所选 Webhook 所属群聊。页面不能临时输入任意接收人。
+页面右上角的 **Send test notification** 会列出当前启用的 Channel 和 Provider。选择站内信时需要填写接收用户 ID，选择 Email 时需要填写接收邮箱；IM 测试发送到所选 Webhook 所属群聊，不需要另填接收人。点击弹窗底部的 **Send** 后，页面调用 Notification Provider 插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。
 
-测试能力受服务端 `notification.test.enabled` 控制。默认应用模板通过 `NOTIFICATION_PROVIDER_TEST_ENABLED` 配置该开关，并通过 `TEST_EMAIL_RECIPIENT` 配置 Email 测试接收人；生产环境默认关闭。未启用时，测试弹窗会提示该应用没有开启 Provider 测试。
+测试能力受服务端 `notification.test.enabled` 控制。默认应用模板通过 `NOTIFICATION_PROVIDER_TEST_ENABLED` 配置该开关；`TEST_EMAIL_RECIPIENT` 仍可作为未显式传入接收邮箱时的兼容兜底。生产环境默认关闭。未启用时，测试弹窗会提示该应用没有开启 Provider 测试。
 
 ## 可选的应用自有页面
 

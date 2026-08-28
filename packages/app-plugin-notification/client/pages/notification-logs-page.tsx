@@ -148,6 +148,7 @@ function TestNotificationDialog({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
+  const [recipient, setRecipient] = useState('');
   const [title, setTitle] = useState('NocoBase notification test');
   const [body, setBody] = useState('This is a test notification from Hub.');
 
@@ -179,6 +180,7 @@ function TestNotificationDialog({
     void notification
       .sendTest({
         ...selected,
+        recipient: recipient.trim() || undefined,
         title: title.trim(),
         body: body.trim(),
       })
@@ -213,7 +215,7 @@ function TestNotificationDialog({
             </h2>
             <p className='mt-1 text-sm text-muted-foreground'>
               Select a Channel and Provider, then click Send. The message is
-              sent to the configured test recipient and recorded below.
+              sent to the recipient you provide and recorded below.
             </p>
           </div>
           <button
@@ -270,7 +272,10 @@ function TestNotificationDialog({
                       className={`rounded-lg border p-3 text-left text-sm hover:border-primary hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-50 ${selected === item ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'bg-background'}`}
                       disabled={sending}
                       key={key}
-                      onClick={() => setSelected(item)}
+                      onClick={() => {
+                        setSelected(item);
+                        setRecipient('');
+                      }}
                       type='button'
                     >
                       <span className='block font-medium capitalize'>
@@ -288,6 +293,29 @@ function TestNotificationDialog({
               </div>
             )}
           </div>
+
+          {selected && selected.channel !== 'im' ? (
+            <label className='grid gap-1.5 text-sm font-medium'>
+              Recipient
+              <input
+                aria-label='Recipient'
+                className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
+                disabled={sending}
+                onChange={(event) => setRecipient(event.target.value)}
+                placeholder={
+                  selected.channel === 'email' ? 'name@example.com' : 'User ID'
+                }
+                required
+                type={selected.channel === 'email' ? 'email' : 'text'}
+                value={recipient}
+              />
+              <span className='text-xs font-normal text-muted-foreground'>
+                {selected.channel === 'email'
+                  ? 'The email address that should receive this test.'
+                  : 'The user ID that should receive this in-app message.'}
+              </span>
+            </label>
+          ) : null}
 
           {error ? (
             <div className='rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
@@ -311,7 +339,13 @@ function TestNotificationDialog({
           </button>
           <button
             className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50'
-            disabled={sending || !selected || !title.trim() || !body.trim()}
+            disabled={
+              sending ||
+              !selected ||
+              !title.trim() ||
+              !body.trim() ||
+              !testRecipientIsValid(selected.channel, recipient)
+            }
             onClick={send}
             type='button'
           >
@@ -325,6 +359,15 @@ function TestNotificationDialog({
 
 function providerKey(item: NotificationTestProvider): string {
   return `${item.channel}:${item.provider.name}:${item.provider.type}`;
+}
+
+function testRecipientIsValid(channel: string, recipient: string): boolean {
+  if (channel === 'im') return true;
+  const value = recipient.trim();
+  if (channel === 'email') {
+    return value.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(value);
+  }
+  return value.length > 0 && value.length <= 255;
 }
 
 function Metric({

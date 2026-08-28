@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const notification = vi.hoisted(() => ({
@@ -110,12 +110,17 @@ describe('NotificationLogsPage', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Select email / smtp' }),
     );
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recipient' }), {
+      target: { value: 'recipient@example.com' },
+    });
     expect(notification.sendTest).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Send' }));
 
     expect(notification.sendTest).toHaveBeenCalledWith({
       channel: 'email',
       provider: { name: 'smtp', type: 'smtp' },
+      recipient: 'recipient@example.com',
       title: 'NocoBase notification test',
       body: 'This is a test notification from Hub.',
     });
@@ -124,6 +129,6 @@ describe('NotificationLogsPage', () => {
         'Test notification notification-test-1 accepted.',
       ),
     ).toBeInTheDocument();
-    expect(notification.listLogs).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(notification.listLogs).toHaveBeenCalledTimes(2));
   });
 });

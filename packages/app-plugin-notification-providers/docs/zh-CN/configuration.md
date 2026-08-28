@@ -35,16 +35,16 @@ TEST_EMAIL_RECIPIENT=recipient@example.com
 
 其中：
 
-| 配置项                 | 必填       | 说明                                                                  |
-| ---------------------- | ---------- | --------------------------------------------------------------------- |
-| `SMTP_HOST`            | 是         | SMTP 服务器主机名                                                     |
-| `SMTP_PORT`            | 否         | 默认值为 `587`                                                        |
-| `SMTP_SECURE`          | 否         | 端口 `465` 通常为 `true`；端口 `587` 通常为 `false`，连接后再升级 TLS |
-| `SMTP_USER`            | 否         | SMTP 认证用户名；与 `SMTP_PASSWORD` 同时填写或同时省略                |
-| `SMTP_PASSWORD`        | 否         | SMTP 密码或应用专用密码                                               |
-| `SMTP_FROM`            | 是         | 默认发件人，需要符合邮件供应商的发件人规则                            |
-| `SMTP_REPLY_TO`        | 否         | 回复地址                                                              |
-| `TEST_EMAIL_RECIPIENT` | 仅测试必填 | 测试页面的固定收件地址                                                |
+| 配置项                 | 必填 | 说明                                                                  |
+| ---------------------- | ---- | --------------------------------------------------------------------- |
+| `SMTP_HOST`            | 是   | SMTP 服务器主机名                                                     |
+| `SMTP_PORT`            | 否   | 默认值为 `587`                                                        |
+| `SMTP_SECURE`          | 否   | 端口 `465` 通常为 `true`；端口 `587` 通常为 `false`，连接后再升级 TLS |
+| `SMTP_USER`            | 否   | SMTP 认证用户名；与 `SMTP_PASSWORD` 同时填写或同时省略                |
+| `SMTP_PASSWORD`        | 否   | SMTP 密码或应用专用密码                                               |
+| `SMTP_FROM`            | 是   | 默认发件人，需要符合邮件供应商的发件人规则                            |
+| `SMTP_REPLY_TO`        | 否   | 回复地址                                                              |
+| `TEST_EMAIL_RECIPIENT` | 否   | 未在测试请求中填写邮箱时使用的兼容兜底地址                            |
 
 ### Gmail
 
@@ -72,12 +72,12 @@ RESEND_REPLY_TO=reply@example.com
 TEST_EMAIL_RECIPIENT=recipient@example.com
 ```
 
-| 配置项                 | 必填       | 说明                                                               |
-| ---------------------- | ---------- | ------------------------------------------------------------------ |
-| `RESEND_API_KEY`       | 是         | Resend 控制台创建的 API Key                                        |
-| `RESEND_FROM`          | 是         | 已验证域名下的发件人；测试阶段可以按 Resend 控制台提示使用测试地址 |
-| `RESEND_REPLY_TO`      | 否         | 回复地址                                                           |
-| `TEST_EMAIL_RECIPIENT` | 仅测试必填 | 测试页面的固定收件地址                                             |
+| 配置项                 | 必填 | 说明                                                               |
+| ---------------------- | ---- | ------------------------------------------------------------------ |
+| `RESEND_API_KEY`       | 是   | Resend 控制台创建的 API Key                                        |
+| `RESEND_FROM`          | 是   | 已验证域名下的发件人；测试阶段可以按 Resend 控制台提示使用测试地址 |
+| `RESEND_REPLY_TO`      | 否   | 回复地址                                                           |
+| `TEST_EMAIL_RECIPIENT` | 否   | 未在测试请求中填写邮箱时使用的兼容兜底地址                         |
 
 ## 配置飞书群机器人
 
@@ -117,7 +117,7 @@ http://localhost:13000/main/api/notification-providers/test
 
 如果修改了 `APP_BASE_PATH`，请把 `/main` 替换成实际路径。页面会列出当前启用的 Email 和 IM Provider，点击按钮后通过正式的 `NotificationManager` 发送消息，并展示 Notification 和 Delivery 状态。因此测试过程会创建 Notification、Delivery 和 Attempt 日志。
 
-Email 测试只会发到 `TEST_EMAIL_RECIPIENT`，页面不允许临时输入其他收件人；IM 测试会发送到所配置 Webhook 对应的群。页面要求用户已登录。非生产环境默认启用；`NODE_ENV=production` 时默认关闭，也可以显式控制：
+测试站内信时填写接收用户 ID，测试 Email 时填写接收邮箱；IM 测试会发送到所配置 Webhook 对应的群，不需要另填接收人。为兼容旧调用，Email 请求未传接收人时仍会使用 `TEST_EMAIL_RECIPIENT`，站内信请求未传接收人时仍会发送给当前登录用户。页面要求用户已登录。非生产环境默认启用；`NODE_ENV=production` 时默认关闭，也可以显式控制：
 
 ```dotenv
 NOTIFICATION_PROVIDER_TEST_ENABLED=true

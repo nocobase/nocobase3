@@ -60,6 +60,7 @@ export interface NotificationTestProvider {
 }
 
 export interface NotificationTestInput extends NotificationTestProvider {
+  readonly recipient?: string;
   readonly title?: string;
   readonly body?: string;
 }
@@ -108,6 +109,7 @@ export class NotificationClient {
             channel: input.channel,
             providerName: input.provider.name,
             providerType: input.provider.type,
+            recipient: input.recipient,
             title: input.title,
             body: input.body,
           }),
