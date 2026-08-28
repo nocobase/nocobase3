@@ -1,9 +1,7 @@
 import { databaseManagerToken } from '@nocobase/app-database';
 import { notificationServiceToken } from '@nocobase/app-plugin-notification';
-import {
-  ServiceProvider,
-  type ServiceContainer,
-} from '@nocobase/service-provider';
+import { ServiceProvider } from '@nocobase/service-provider';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 
 import {
   createDatabaseProviderDefinition,
@@ -12,9 +10,7 @@ import {
 import { createInAppStore } from './store.js';
 import { inAppNotificationStoreToken } from './token.js';
 
-export interface InAppNotificationProviderApplication {
-  readonly container: ServiceContainer;
-}
+export type InAppNotificationProviderApplication = AppPluginApplication;
 
 export default class InAppNotificationProvider<
   TApplication extends InAppNotificationProviderApplication =

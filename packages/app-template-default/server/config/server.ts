@@ -1,11 +1,17 @@
-import {
-  defineConfig,
-  type ConfigEnv,
-  type ConfigFactory,
-} from '@nocobase/app-server-kit/config';
-import type { AppServerConfig } from './types.js';
+import { defineConfig, type ConfigEnv } from '@nocobase/app-server-kit/config';
+import type { AppRuntimeConfigFactory } from '@nocobase/app-server-kit/runtime';
+import type {
+  AppConfig,
+  AppServerConfig,
+  DefaultAppConfigContext,
+  DefaultAppScopeConfig,
+} from './types.js';
 
-const serverConfig: ConfigFactory<AppServerConfig> = defineConfig(
+const serverConfig: AppRuntimeConfigFactory<
+  AppServerConfig,
+  AppConfig,
+  DefaultAppScopeConfig
+> = defineConfig<AppServerConfig, DefaultAppConfigContext>(
   ({ env }): AppServerConfig => ({
     host: env.string('APP_SERVER_HOST', '127.0.0.1'),
     port: env.number('APP_SERVER_PORT', 13000),
@@ -16,7 +22,7 @@ const serverConfig: ConfigFactory<AppServerConfig> = defineConfig(
 
 export default serverConfig;
 
-function resolveViteDevUrl(env: ConfigEnv): URL | undefined {
+export function resolveViteDevUrl(env: ConfigEnv): URL | undefined {
   if (env.string('NODE_ENV') === 'production') {
     return undefined;
   }

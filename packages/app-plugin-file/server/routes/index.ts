@@ -8,7 +8,7 @@ import {
   type AppAuthorization,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
@@ -282,9 +282,12 @@ function resolveAuthorizationScope(context: Context): FileAuthorizationScope {
   return value as FileAuthorizationScope;
 }
 
-export default function registerRoutes(app: AppPluginRoutesApplication): void {
-  app.router.route(
-    ATTACHMENTS_PATH,
+export default function registerRoutes(
+  app: AppPluginApplication,
+  router: Hono,
+): void {
+  router.route(
+    '/attachments',
     createFileDemoRoutes({ config: app.config, container: app.container }),
   );
 }

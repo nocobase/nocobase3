@@ -16,14 +16,18 @@ describe('@nocobase/app-plugin-service-provider-example routes', () => {
     heartbeat.ready();
     container.instance(heartbeatServiceToken, heartbeat);
 
-    registerServiceProviderExampleRoutes({
-      appName: 'main',
-      publicBasePath: '',
-      config: { app: { name: 'main', publicBasePath: '' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
+    registerServiceProviderExampleRoutes(
+      {
+        appName: 'main',
+        publicBasePath: '',
+        config: { app: { name: 'main', publicBasePath: '' } },
+        paths: createConfigPaths({ rootDir: '/missing' }),
+        router,
+        apiRouter: router,
+        container,
+      },
       router,
-      container,
-    });
+    );
 
     const response = await router.request('/service-provider-example/status');
 

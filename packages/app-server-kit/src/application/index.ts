@@ -1,7 +1,14 @@
 import type { ExecutionContext, Hono } from 'hono';
 
 import type { ConfigPaths } from '../config/index.js';
-import { routerToken } from '../router/index.js';
+import {
+  apiRouterToken,
+  type AppApiRoutes,
+  type AppHttpMiddleware,
+  type AppRootRoutes,
+  RouterProvider,
+  routerToken,
+} from '../router/index.js';
 import { normalizeBasePath, resolveAppName } from '../support/index.js';
 import {
   ServiceContainer,
@@ -14,6 +21,8 @@ import {
   createRealtimeWebSocketHandler,
   registerRealtimeWebSocketRoutes,
 } from '../realtime/websocket.js';
+import { RealtimeProvider } from '../realtime/provider.js';
+import type { ResolvedAppServerPlugins } from '../plugins/index.js';
 
 export type ApplicationFetchHandler = (
   request: Request,
@@ -27,7 +36,7 @@ export type ApplicationWebSocketFactory = (
 
 export interface ApplicationConfig {
   readonly app: {
-    readonly name: string | undefined;
+    readonly name?: string;
     readonly publicBasePath: string;
   };
 }
@@ -48,6 +57,15 @@ export type ApplicationServiceProviderConstructor<
   ...args: TArguments
 ) => ServiceProviderLifecycle;
 
+export interface ApplicationRuntimeContributions<
+  TConfig extends ApplicationConfig = ApplicationConfig,
+> {
+  readonly plugins: ResolvedAppServerPlugins<TConfig>;
+  readonly providers: readonly ApplicationServiceProviderConstructor<TConfig>[];
+  readonly apiRoutes: readonly AppApiRoutes<Application<TConfig>>[];
+  readonly rootRoutes: readonly AppRootRoutes<Application<TConfig>>[];
+}
+
 /**
  * A composed NocoBase server application.
  *
@@ -61,17 +79,26 @@ export class Application<
   public readonly config: TConfig;
   public readonly paths: ConfigPaths;
   public readonly container: ServiceContainer;
-  public readonly fetch: ApplicationFetchHandler = (
+  public readonly fetch: ApplicationFetchHandler = async (
     request,
     env,
     executionContext,
-  ) => this.router.fetch(request, env, executionContext);
+  ) => {
+    await this.start();
+    return this.router.fetch(request, env, executionContext);
+  };
   public readonly websocket: AppWebSocketHandler;
 
   private readonly providerRegistry: ServiceProviderRegistry =
     new ServiceProviderRegistry();
   private readonly websocketFactory: ApplicationWebSocketFactory;
   private readonly usesDefaultWebSocket: boolean;
+  private providersRegistered = false;
+  private routesRegistered = false;
+  private readonly apiRoutes: AppApiRoutes<Application<TConfig>>[] = [];
+  private readonly httpMiddleware: AppHttpMiddleware<Application<TConfig>>[] =
+    [];
+  private readonly rootRoutes: AppRootRoutes<Application<TConfig>>[] = [];
   private startPromise: Promise<void> | undefined;
   private websocketHandler: AppWebSocketHandler | undefined;
 
@@ -81,7 +108,14 @@ export class Application<
     this.container = new ServiceContainer();
     this.usesDefaultWebSocket = options.websocket === undefined;
     this.websocketFactory = options.websocket ?? createRealtimeWebSocketHandler;
-    this.websocket = (request, env) => this.getWebSocketHandler()(request, env);
+    this.websocket = async (request, env) => {
+      await this.start();
+      return this.getWebSocketHandler()(request, env);
+    };
+    this.addProvider(RouterProvider);
+    if (this.usesDefaultWebSocket) {
+      this.addProvider(RealtimeProvider);
+    }
   }
 
   public get appName(): string {
@@ -96,6 +130,10 @@ export class Application<
     return this.container.resolve(routerToken);
   }
 
+  public get apiRouter(): Hono {
+    return this.container.resolve(apiRouterToken);
+  }
+
   public addProvider<TArguments extends readonly unknown[]>(
     Provider: ApplicationServiceProviderConstructor<TConfig, TArguments>,
     ...args: TArguments
@@ -103,8 +141,66 @@ export class Application<
     this.providerRegistry.add(new Provider(this, ...args));
   }
 
+  public addProviders(
+    Providers: readonly ApplicationServiceProviderConstructor<TConfig>[],
+  ): void {
+    for (const Provider of Providers) {
+      this.addProvider(Provider);
+    }
+  }
+
+  public addServerPlugins(
+    serverPlugins: ResolvedAppServerPlugins<TConfig>,
+  ): void {
+    for (const plugin of serverPlugins.plugins) {
+      for (const Provider of plugin.definition.providers) {
+        this.addProvider(Provider);
+      }
+      for (const routes of plugin.definition.apiRoutes) {
+        this.addApiRoutes(routes);
+      }
+      for (const routes of plugin.definition.rootRoutes) {
+        this.addRootRoutes(routes);
+      }
+    }
+  }
+
+  public addRuntimeContributions(
+    runtime: ApplicationRuntimeContributions<TConfig>,
+  ): void {
+    this.addServerPlugins(runtime.plugins);
+    this.addProviders(runtime.providers);
+    for (const routes of runtime.apiRoutes) {
+      this.addApiRoutes(routes);
+    }
+    for (const routes of runtime.rootRoutes) {
+      this.addRootRoutes(routes);
+    }
+  }
+
+  public addApiRoutes(routes: AppApiRoutes<Application<TConfig>>): void {
+    this.assertRoutesMutable();
+    this.apiRoutes.push(routes);
+  }
+
+  public addHttpMiddleware(
+    middleware: AppHttpMiddleware<Application<TConfig>>,
+  ): void {
+    this.assertRoutesMutable();
+    this.httpMiddleware.push(middleware);
+  }
+
+  public addRootRoutes(routes: AppRootRoutes<Application<TConfig>>): void {
+    this.assertRoutesMutable();
+    this.rootRoutes.push(routes);
+  }
+
   public registerProviders(): void {
+    if (this.providersRegistered) {
+      return;
+    }
     this.providerRegistry.registerAll();
+    this.providersRegistered = true;
     if (this.usesDefaultWebSocket && this.container.has(routerToken)) {
       registerRealtimeWebSocketRoutes(this.router);
     }
@@ -125,8 +221,34 @@ export class Application<
   }
 
   private async startProviders(): Promise<void> {
+    this.registerProviders();
     await this.providerRegistry.bootAll();
+    await this.registerRoutes();
     await this.providerRegistry.startAll();
     await this.providerRegistry.readyAll();
+  }
+
+  private async registerRoutes(): Promise<void> {
+    if (this.routesRegistered) {
+      return;
+    }
+
+    for (const middleware of this.httpMiddleware) {
+      await middleware.register(this.router, this);
+    }
+    for (const routes of this.apiRoutes) {
+      await routes.register(this.apiRouter, this);
+    }
+    this.router.route('/api', this.apiRouter);
+    for (const routes of this.rootRoutes) {
+      await routes.register(this.router, this);
+    }
+    this.routesRegistered = true;
+  }
+
+  private assertRoutesMutable(): void {
+    if (this.startPromise || this.routesRegistered) {
+      throw new Error('Routes cannot be added after the application starts.');
+    }
   }
 }

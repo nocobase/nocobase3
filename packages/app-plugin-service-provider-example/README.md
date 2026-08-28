@@ -8,8 +8,9 @@ small `HeartbeatService`:
 - `server/provider.ts` registers the service through `this.app.container` and
   manages its lifecycle.
 - `server/routes/index.ts` resolves the service through `app.container`.
+- `server/plugin.ts` explicitly declares the Provider and API routes.
 
-After enabling the plugin, request `GET /service-provider-example/status` to
+After enabling the plugin, request `GET /api/service-provider-example/status` to
 inspect the service lifecycle state. A fully started application returns a
 response like this:
 

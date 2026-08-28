@@ -10,7 +10,7 @@ import {
   notificationServiceToken,
   type NotificationService,
 } from '@nocobase/app-plugin-notification';
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
@@ -37,13 +37,15 @@ describe('@nocobase/app-plugin-notification-in-app routes', () => {
       getSession: vi.fn(async () => null),
     } as unknown as Auth;
     container.instance(authenticationToken, auth);
-    const provider = new InAppNotificationProvider({ container });
+    const router = new Hono();
+    const provider = new InAppNotificationProvider(
+      createApp(router, container),
+    );
     provider.register();
     await provider.boot();
-    const router = new Hono();
-    registerInAppNotificationRoutes(createApp(router, container));
+    registerInAppNotificationRoutes(createApp(router, container), router);
 
-    const response = await router.request('/api/notifications/in-app');
+    const response = await router.request('/notifications/in-app');
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
       error: 'Authentication required.',
@@ -55,13 +57,14 @@ describe('@nocobase/app-plugin-notification-in-app routes', () => {
 function createApp(
   router: Hono,
   container: ServiceContainer,
-): AppPluginRoutesApplication {
+): AppPluginApplication {
   return {
     appName: 'test',
     publicBasePath: '',
     config: { app: { name: 'test', publicBasePath: '' } },
     paths: {} as never,
     router,
+    apiRouter: router,
     container,
   };
 }

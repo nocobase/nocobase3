@@ -1,37 +1,39 @@
-import type { Hono } from 'hono';
-
-import type { ServiceResolver } from '@nocobase/service-provider';
+import type { Application } from '@nocobase/app-server-kit/application';
 import {
-  createSessionMiddleware,
-  sessionManagerToken,
-} from '@nocobase/session';
+  defineRootRoutes,
+  type AppRootRoutes,
+} from '@nocobase/app-server-kit/router';
 
-import { createApiRoutes } from './api/index.js';
-import { createHelloPageHandler } from './hello.js';
+import type { AppConfig } from '../config/index.js';
+import { appExampleServiceToken } from '../providers/index.js';
 
-export interface AppRoutesApplication {
-  readonly appName: string;
-  readonly publicBasePath: string;
-  readonly router: Hono;
-  readonly container: ServiceResolver;
-}
+const exampleRootRoutes: AppRootRoutes<Application<AppConfig>> =
+  defineRootRoutes({
+    name: '@nocobase/app-template-default/root/example',
+    register(router, app): void {
+      router.get('/example', (context) => {
+        const exampleService = app.container.resolve(appExampleServiceToken);
 
-export function registerAppRoutes(app: AppRoutesApplication): void {
-  const { appName, publicBasePath, router, container } = app;
+        return context.html(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Application Route Example</title>
+  </head>
+  <body>
+    <main>
+      <h1>Application Route Example</h1>
+      <p>${exampleService.getMessage()}</p>
+    </main>
+  </body>
+</html>`);
+      });
+    },
+  });
 
-  router.use(
-    '*',
-    createSessionMiddleware(container.resolve(sessionManagerToken)),
-  );
+const rootRoutes: readonly AppRootRoutes<Application<AppConfig>>[] = [
+  exampleRootRoutes,
+];
 
-  router.get('/hello', createHelloPageHandler());
-
-  router.route(
-    '/api',
-    createApiRoutes({
-      appName,
-      publicBasePath,
-      container,
-    }),
-  );
-}
+export default rootRoutes;

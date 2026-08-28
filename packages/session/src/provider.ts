@@ -7,6 +7,12 @@ import {
 
 import { createNullSessionConfig, createSessionManager } from './manager.js';
 import type { AppSessionConfig, NocoBaseSessionManager } from './types.js';
+import { createSessionMiddleware } from './hono.js';
+import type { Hono } from 'hono';
+import {
+  defineHttpMiddleware,
+  type AppHttpMiddleware,
+} from '@nocobase/app-server-kit/router';
 
 export const sessionManagerToken: ServiceToken<NocoBaseSessionManager> =
   createServiceToken<NocoBaseSessionManager>('@nocobase/session/manager');
@@ -20,6 +26,10 @@ export interface SessionProviderApplication<
     SessionProviderApplicationConfig,
 > {
   readonly config: TConfig;
+  readonly container: ServiceContainer;
+}
+
+export interface SessionHttpMiddlewareApplication {
   readonly container: ServiceContainer;
 }
 
@@ -40,3 +50,14 @@ export class SessionProvider<
     await this.app.container.resolveIfCreated(sessionManagerToken)?.dispose();
   }
 }
+
+export const sessionHttpMiddleware: AppHttpMiddleware<SessionHttpMiddlewareApplication> =
+  defineHttpMiddleware({
+    name: '@nocobase/session/http',
+    register(router: Hono, app: SessionHttpMiddlewareApplication): void {
+      router.use(
+        '*',
+        createSessionMiddleware(app.container.resolve(sessionManagerToken)),
+      );
+    },
+  });

@@ -2,15 +2,16 @@ import { databaseManagerToken } from '@nocobase/app-database';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
 import { loggingToken } from '@nocobase/logging';
 import { queueManagerToken } from '@nocobase/queue';
-import {
-  ServiceProvider,
-  type ServiceContainer,
-} from '@nocobase/service-provider';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { ServiceProvider } from '@nocobase/service-provider';
 
 import { WorkflowService } from './runtime/runtime.js';
 import { workflowServiceToken } from './token.js';
 
 export interface WorkflowProviderConfig {
+  readonly app: {
+    readonly publicBasePath: string;
+  };
   readonly drive: AppDriveConfig;
   readonly workflow: {
     readonly sourceRoot: string;
@@ -21,11 +22,8 @@ export interface WorkflowProviderConfig {
   };
 }
 
-export interface WorkflowProviderApplication {
-  readonly appName: string;
-  readonly config: WorkflowProviderConfig;
-  readonly container: ServiceContainer;
-}
+export type WorkflowProviderApplication =
+  AppPluginApplication<WorkflowProviderConfig>;
 
 export default class WorkflowProvider<
   TApplication extends WorkflowProviderApplication =

@@ -27,16 +27,20 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       middleware: () => async (_context, next) => next(),
     } as unknown as AppAuthorization);
 
-    registerAuthorizationRoutes({
-      appName: 'main',
-      publicBasePath: '/main',
-      config: { app: { name: 'main', publicBasePath: '/main' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
+    registerAuthorizationRoutes(
+      {
+        appName: 'main',
+        publicBasePath: '/main',
+        config: { app: { name: 'main', publicBasePath: '/main' } },
+        paths: createConfigPaths({ rootDir: '/missing' }),
+        router,
+        apiRouter: router,
+        container,
+      },
       router,
-      container,
-    });
+    );
 
-    const response = await router.request('/api/authz/permissions');
+    const response = await router.request('/authz/permissions');
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({
@@ -74,16 +78,20 @@ describe('@nocobase/app-plugin-authorization routes', () => {
           set,
         },
       } as unknown as AppAuthorization);
-      registerAuthorizationRoutes({
-        appName: 'main',
-        publicBasePath: '/main',
-        config: { app: { name: 'main', publicBasePath: '/main' } },
-        paths: createConfigPaths({ rootDir: '/missing' }),
+      registerAuthorizationRoutes(
+        {
+          appName: 'main',
+          publicBasePath: '/main',
+          config: { app: { name: 'main', publicBasePath: '/main' } },
+          paths: createConfigPaths({ rootDir: '/missing' }),
+          router,
+          apiRouter: router,
+          container,
+        },
         router,
-        container,
-      });
+      );
 
-      const response = await router.request('/api/authz/default-access', {
+      const response = await router.request('/authz/default-access', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

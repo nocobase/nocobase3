@@ -416,7 +416,11 @@ describe('File Demo backend', () => {
       authz: deps.authz,
       logging: deps.logging,
     });
-    const provider = new FileProvider({ config: unavailableConfig, container });
+    const provider = new FileProvider({
+      config: unavailableConfig,
+      container,
+      router: new Hono(),
+    });
     provider.register();
     void provider.boot();
 
@@ -429,7 +433,7 @@ async function runBootstrap(
   deps: HostServices,
 ): Promise<void> {
   const container = createContainer(config, deps);
-  const provider = new FileProvider({ config, container });
+  const provider = new FileProvider({ config, container, router: new Hono() });
   provider.register();
   await provider.boot();
   await vi.waitFor(

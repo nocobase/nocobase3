@@ -6,14 +6,22 @@ import type { SnowflakeIdGeneratorConfig } from '@nocobase/id-generator';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 import type { AppAuthConfig } from './auth.js';
-import type { ResolvedAppPlugin } from '../plugins/index.js';
+import type { WorkflowRuntimeConfig } from '@nocobase/app-plugin-workflow/server/config';
+import type { ResolvedAppPlugin } from '@nocobase/app-server-kit/plugins';
+import type {
+  SpaHandler,
+  SpaRuntimeGlobals,
+} from '@nocobase/app-server-kit/spa';
+import type { AppRuntimeConfigContext } from '@nocobase/app-server-kit/runtime';
 
-export interface AppWorkflowConfig {
-  sourceRoot: string;
-  distRoot: string;
-  artifactDisk: string;
-  sourceResolverDiagnostic: boolean;
-  production: boolean;
+export type AppWorkflowConfig = WorkflowRuntimeConfig;
+
+export interface DefaultAppScopeConfig {
+  readonly publicOrigin?: string;
+  readonly apiClientStoragePrefix?: string;
+  readonly apiClientStorageType?: string;
+  readonly apiClientShareToken?: boolean;
+  readonly authSecret?: string;
 }
 
 export interface AppRoutingConfig {
@@ -21,9 +29,7 @@ export interface AppRoutingConfig {
   publicOrigin: string | undefined;
   publicBasePath: string;
   internalBasePath: string;
-  internalApiProxyPath: string;
   publicApiUrl: string;
-  nocoBaseApiUrl: string | undefined;
 }
 
 export interface AppServerConfig {
@@ -35,6 +41,8 @@ export interface AppServerConfig {
 
 export interface AppSpaConfig {
   indexPath: string;
+  handler?: SpaHandler;
+  runtimeGlobals?: SpaRuntimeGlobals;
   runtime: {
     storagePrefix: string;
     storageType: string;
@@ -57,3 +65,8 @@ export interface AppConfig {
   snowflake: SnowflakeIdGeneratorConfig;
   spa: AppSpaConfig;
 }
+
+export type DefaultAppConfigContext = AppRuntimeConfigContext<
+  AppConfig,
+  DefaultAppScopeConfig
+>;

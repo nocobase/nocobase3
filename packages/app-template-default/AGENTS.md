@@ -15,12 +15,10 @@ A plugin's client extensions are registered in `client/plugins.ts`. Being in
 that array is what enables them and the array order is the bootstrap order;
 there is no `enabled` flag on the client side.
 
-`nocobase.plugins` in `package.json` still exists and is still authoritative
-for everything else: server providers and routes, migration, seed, and job
-sources, dev watch paths, and which workspace packages the build filters on.
-This phase moved only the client side out of it, so a plugin that contributes
-on the server stays declared there. `devDependencies` still carries the
-dependency itself.
+`client/plugins.ts` and `server/plugins.ts` are the authoritative runtime
+registration surfaces. `nocobase.plugins` remains temporarily for CLI,
+skills, dev-watch, and workspace build tooling; server providers, routes,
+migrations, seeds, and jobs are no longer discovered from it.
 
 Both places are written by the repository commands; do not edit either by hand:
 

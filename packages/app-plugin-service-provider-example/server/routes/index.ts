@@ -1,12 +1,16 @@
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
+import type { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 
 import { heartbeatServiceToken } from '../token.js';
 
-export default function registerServiceProviderExampleRoutes({
-  router,
-  container,
-}: AppPluginRoutesApplication): void {
+export interface ServiceProviderExampleRoutesApplication {
+  readonly container: ServiceContainer;
+}
+
+export default function registerServiceProviderExampleRoutes(
+  { container }: ServiceProviderExampleRoutesApplication,
+  router: Hono,
+): void {
   const routes = new Hono();
 
   routes.get('/status', (context) => {

@@ -27,14 +27,6 @@ import {
   type DatabaseManager,
 } from '@nocobase/app-database';
 import type { AppConfig } from '../../server/config/index.ts';
-import {
-  AppSettingsProvider,
-  appSettingsRepositoryToken,
-  publicFilesRepositoryToken,
-  PublicFilesProvider,
-} from '../../server/providers/index.ts';
-import { DatabaseAppSettingsRepository } from '../../server/repositories/app-settings.ts';
-import { DrivePublicFilesRepository } from '../../server/repositories/public-files.ts';
 
 describe('app service providers', () => {
   it('registers core services and shuts them down in reverse order', async () => {
@@ -125,87 +117,6 @@ describe('app service providers', () => {
 
     expect(services.has(driveManagerToken)).toBe(true);
     expect(services.resolve(driveManagerToken)).toBeDefined();
-  });
-
-  it('resolves application repositories from database and drive providers', () => {
-    const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry();
-    const database = {} as DatabaseManager;
-    const app = createProviderApplication(
-      {
-        database: createDatabaseConfig(),
-        drive: {
-          default: 'public',
-          disks: {
-            public: {
-              driver: 'fs',
-              location: process.cwd(),
-              visibility: 'public',
-            },
-          },
-          links: {},
-        },
-      } as AppConfig,
-      services,
-    );
-    services.instance(databaseManagerToken, database);
-    registry.add(new AppSettingsProvider(app));
-    registry.add(new DriveProvider(app));
-    registry.add(new PublicFilesProvider(app));
-
-    registry.registerAll();
-
-    const appSettings = services.resolve(appSettingsRepositoryToken);
-    const publicFiles = services.resolve(publicFilesRepositoryToken);
-
-    expect(appSettings).toBeInstanceOf(DatabaseAppSettingsRepository);
-    expect(publicFiles).toBeInstanceOf(DrivePublicFilesRepository);
-  });
-
-  it('preserves unavailable application repositories without infrastructure', async () => {
-    const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry();
-    const app = createProviderApplication({} as AppConfig, services);
-    registry.add(new AppSettingsProvider(app));
-    registry.add(new PublicFilesProvider(app));
-
-    registry.registerAll();
-
-    await expect(
-      services.resolve(appSettingsRepositoryToken).all(),
-    ).rejects.toThrow('Database is not configured.');
-    await expect(
-      services.resolve(publicFilesRepositoryToken).upload(undefined),
-    ).rejects.toThrow('File drive is not configured.');
-  });
-
-  it('reports a missing public upload disk', async () => {
-    const services = new ServiceContainer();
-    const registry = new ServiceProviderRegistry();
-    const app = createProviderApplication(
-      {
-        drive: {
-          default: 'private',
-          disks: {
-            private: {
-              driver: 'fs',
-              location: process.cwd(),
-              visibility: 'private',
-            },
-          },
-          links: {},
-        },
-      } as AppConfig,
-      services,
-    );
-    registry.add(new DriveProvider(app));
-    registry.add(new PublicFilesProvider(app));
-
-    registry.registerAll();
-
-    await expect(
-      services.resolve(publicFilesRepositoryToken).upload(undefined),
-    ).rejects.toThrow('Upload drive disk "public" is not configured.');
   });
 
   it('resolves authentication, authorization, and queue provider dependencies', async () => {

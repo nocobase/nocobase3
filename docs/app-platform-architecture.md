@@ -180,7 +180,7 @@ Server Routes 按顺序匹配，`/*` 作为最后的 SPA fallback。首次直接
 `/<custom-page>` 时，Server 先返回 `index.html` 并注入
 `window.nb_config`；Client 启动后，再由 Refine App 中的前端路由渲染页面。
 
-### Server 组装（createApplication）
+### Server 组装（createApp）
 
 ```text
 appScope
@@ -189,25 +189,29 @@ appScope
 createServer(appScope)                 App Host 适配
     │
     ▼
-loadAppConfig() → AppServerConfig      加载并规范化配置
+resolveAppRuntime(appRuntime, appScope)
+    │                                  统一解析 Scope、Paths、Plugins 与 Config
+    ├── appRuntime.defaults
+    ├── appRuntime.config
+    └── appRuntime.plugins
     │
     ▼
-createApplication(runtime, options)    NocoBase Application 组装
+createApp(runtime)                     NocoBase Application 组装
     │
-    ├── AppRuntime
+    ├── 已解析的 config 与 paths
+    ├── 已解析的 Plugin Definitions 与 Metadata
     ├── ServiceContainer
     │   └── Router（Hono）
     ├── Core + Plugin ServiceProviders
-    └── Routes + WebSocket + SPA
+    └── Provider-owned Routes + WebSocket + SPA
     │
     ▼
 Application
     │
     ├── appName
     ├── publicBasePath
-    ├── config → AppRuntime.config
-    ├── paths → AppRuntime.paths
-    ├── runtime
+    ├── config
+    ├── paths
     ├── container
     ├── fetch(request) ──────→ Router（Hono）
     └── websocket(request)?
@@ -218,9 +222,20 @@ AppServer Host Port（fetch + websocket）
 
 `Application` 才表示完整的 NocoBase 服务端 App。Hono 只是通过
 `routerToken` 注册到 `ServiceContainer` 的 HTTP Router Service，不再作为 App
-本身。`AppRuntime` 只保存已经解析好的配置与路径，不创建或持有 Database、Migrator、
-Seeder 等服务。Services 提供可复用能力，Plugin
-Provider 负责注册和管理服务端扩展的生命周期，Routes 将请求连接到这些能力。
+本身。`Application` 直接持有已经解析好的配置与路径，并拥有
+`ServiceContainer` 和完整的 Provider 生命周期。Services 提供可复用能力，Plugin
+Provider 负责注册和管理服务端扩展的生命周期，并在 `boot()` 中注册 Routes，将请求连接到这些能力。
+
+`app-template-default/server/runtime.ts` 只声明应用自身的 Runtime Definition：
+包名、默认 `appName`/`basePath`、配置工厂和显式插件列表。Scope 规范化、
+ConfigPaths 创建、插件解析和 Config Factory 执行由
+`@nocobase/app-server-kit/runtime` 统一完成。Standalone 模式额外需要文件系统、
+`.env` 和目录约定，因此对应工厂位于 `@nocobase/app-server-kit/node`；Embedded
+模式则直接使用 Host 提供的 `AppScope`。模板不再维护 `config/scope.ts`、
+`config/load.ts` 或兼容转发层。
+
+迁移、Seed 等数据库任务通过 `resolveAppRuntimeConfigSection(..., 'database')`
+只解析所需配置段，避免为了数据库任务初始化 Auth、SPA 等无关配置。
 
 ### Client 组装（createAppClient）
 
@@ -259,7 +274,7 @@ Server 的核心就是 Services，Config 为 Service 的配置，Database，Rout
 
 ```bash
 Application
-  ├── AppRuntime
+  ├── config + paths
   ├── ServiceContainer
   │   ├── Router（Hono）
   │   ├── Database
@@ -277,7 +292,7 @@ Application
 
 Service Provider 的基础设施由独立的 `@nocobase/service-provider` 包提供，包含
 `ServiceContainer`、`ServiceToken`、`ServiceProvider` 和
-`ServiceProviderRegistry`。该包不依赖 `AppRuntime` 或具体 Server 框架；
+`ServiceProviderRegistry`。该包不依赖 NocoBase `Application` 或具体 Server 框架；
 `ServiceProvider` 的 Application 类型由使用方通过泛型传入。
 
 概念说明、生命周期约定和插件完整示例参见
@@ -297,14 +312,13 @@ ServiceProvider
 各阶段的运行边界：
 
 ```text
-createApplication（同步组装）
-  ├── register：注册全部服务
-  ├── RouterProvider：注册 Hono Router Service
-  ├── 注册 Core 和 Plugin Providers
-  └── 注册 Routes、WebSocket 和 SPA
+createApp（同步组装）
+  ├── 添加 RouterProvider（Hono Router Service）
+  └── 添加 Core 和 Plugin Providers
 
 Application.start（异步启动）
-  ├── boot：全部 Provider 注册和应用组装完成
+  ├── register：按添加顺序注册全部服务
+  ├── boot：全部服务注册完成；Provider 注册 Routes 等应用边界
   ├── start：启动应用服务
   └── ready：应用内部服务已可用
 
@@ -321,7 +335,7 @@ ServiceProvider
       ├── paths
       └── container
 
-AppPluginRoutesApplication
+AppPluginApplication
   ├── appName
   ├── publicBasePath
   ├── config
@@ -330,12 +344,11 @@ AppPluginRoutesApplication
   └── container
 ```
 
-Application 通过只读 getter 暴露 `config` 和 `paths`，但两者仍然委托给
-`AppRuntime`，不创建第二份状态。Provider 接收同一个真实的 `Application`，通过
+Application 直接持有只读的 `config` 和 `paths`。Provider 接收同一个真实的 `Application`，通过
 `this.app.config`、`this.app.paths` 读取运行时信息，通过
 `this.app.container` 注册和解析服务。`Application` 通过 getter 统一提供规范化的
 `appName` 和 `publicBasePath`；Core Routes 和 Plugin Routes 直接接收同一个真实的
-`Application`，但插件在类型层面只看到 `AppPluginRoutesApplication` 定义的窄接口。
+`Application`。插件 Provider 可在类型层面使用 `AppPluginApplication`，内部 Route 模块也可以声明更窄的结构接口；应用不会单独发现或加载 Route 入口。
 
 `Application.addProvider` 接收 Provider class，并在内部把自身作为 `app` 注入。应用组合根
 只声明启用了哪些 Provider，以及真正属于 Provider 实例的额外参数：
@@ -354,20 +367,17 @@ Queue、Session 等 Provider 直接从 `this.app.config` 读取自己拥有的�
 运行生命周期；Provider 的实例化属于 `Application`。
 
 数据库由 `DatabaseProvider` 完整拥有：`register` 根据
-`runtime.config.database` 注册惰性的 `databaseManagerToken`，`boot` 准备数据库存储并按配置
+`this.app.config.database` 注册惰性的 `databaseManagerToken`，`boot` 准备数据库存储并按配置
 依次执行自动 Migration 和 Seed，`shutdown` 销毁已经创建的 DatabaseManager。Drive 的存储
 准备同样位于 `DriveProvider.boot`。因此 standalone 和 embedded 都直接启动
 `Application`，不再维护独立的 Runtime prepare/dispose 阶段。手动 migrate/seed 命令使用
 短生命周期的数据库任务函数，并在任务结束或失败时独立销毁连接，不需要创建 HTTP
 Application。
 
-Repository 与 Service 都以明确的 Token 注册，并保持各自的职责：
+Service 以明确的 Token 注册，并保持各自的职责：
 
 ```text
-AppSettingsProvider → appSettingsRepositoryToken
 DatabaseProvider → databaseManagerToken
-PublicFilesProvider → publicFilesRepositoryToken
-
 Authentication plugin/provider → authenticationToken
 Authorization plugin/provider  → authorizationToken
 QueueProvider          → queueManagerToken
@@ -380,9 +390,10 @@ AppServerKit RealtimeProvider → realtimeServiceToken
 ```
 
 Routes 和 Plugins 直接从 `ServiceContainer` 解析需要的 Token，不再创建 `AppDeps`
-或 `AppRepositories` 聚合门面。跨包服务的 Token 由能力拥有者公开，例如
+或 `AppRepositories` 聚合门面。模板不再内置示例 Repository；领域 Repository 应由所属插件
+定义和注册。跨包服务的 Token 由能力拥有者公开，例如
 Database、Authentication、Authorization、Queue、Caching、ID Generator、Drive、Logging 和
-Session；应用私有 Repository 的 Token 则由应用自己的 Provider 定义。Caching、ID Generator、
+Session；确有需要的应用私有 Repository Token 则由应用自己的 Provider 定义。Caching、ID Generator、
 Drive、Logging、Queue 和 Session 的 Provider 都位于各自能力包中，默认应用只负责声明启用
 哪些 Provider。Authentication 直接解析
 `cachingToken` 和 `idGeneratorToken`，不再通过应用侧依赖桥转发。Realtime 由 Plugin

@@ -1,15 +1,11 @@
 import { databaseManagerToken } from '@nocobase/app-database';
-import {
-  ServiceProvider,
-  type ServiceContainer,
-} from '@nocobase/service-provider';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { ServiceProvider } from '@nocobase/service-provider';
 
 import { createAppAuthorization } from './authorization.js';
 import { authorizationToken } from './token.js';
 
-export interface AuthorizationProviderApplication {
-  readonly container: ServiceContainer;
-}
+export type AuthorizationProviderApplication = AppPluginApplication;
 
 export default class AuthorizationProvider<
   TApplication extends AuthorizationProviderApplication =

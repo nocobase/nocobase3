@@ -4,6 +4,11 @@ export type {
   WorkflowProviderConfig,
 } from './provider.js';
 export { workflowServiceToken } from './token.js';
+export {
+  resolveWorkflowRuntimeConfig,
+  type ResolveWorkflowRuntimeConfigOptions,
+  type WorkflowRuntimeConfig,
+} from './config.js';
 export { createWorkflowRoutes } from './routes/routes.js';
 export { default as registerWorkflowRoutes } from './routes/routes.js';
 export type { WorkflowPluginRoutesApplication } from './routes/routes.js';

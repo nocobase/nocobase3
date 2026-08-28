@@ -1,12 +1,19 @@
-import { runAppSeeds } from '@nocobase/app-server-kit/database';
+import path from 'node:path';
 
-import { loadStandaloneDatabaseTaskConfig } from '../server/runtime/config.js';
+import { runAppSeeds } from '@nocobase/app-server-kit/database';
+import { resolveStandaloneAppRuntimeConfigSection } from '@nocobase/app-server-kit/node';
+
+import appRuntime from '../server/runtime.js';
 
 await seed();
 
 async function seed(): Promise<void> {
-  const config = loadStandaloneDatabaseTaskConfig();
-  const result = await runAppSeeds(config.database);
+  const { config: database } = resolveStandaloneAppRuntimeConfigSection(
+    appRuntime,
+    { rootDir: path.resolve(import.meta.dirname, '..') },
+    'database',
+  );
+  const result = await runAppSeeds(database);
 
   if (!result) {
     console.log('No database seeder is configured.');

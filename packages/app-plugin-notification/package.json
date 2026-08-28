@@ -20,18 +20,16 @@
       "types": "./server/index.ts",
       "import": "./server/index.ts"
     },
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./package.json": "./package.json"
   },
   "nocobase": {
     "registry": {
       "items": {
         "logs-ui": "./registry/logs-ui"
-      }
-    },
-    "plugin": {
-      "server": "./server/provider",
-      "database": {
-        "migrations": "./database/migrations"
       }
     }
   },
@@ -45,6 +43,10 @@
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
+      },
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
       },
       "./package.json": "./package.json"
     }

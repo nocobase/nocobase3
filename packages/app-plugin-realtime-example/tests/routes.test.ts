@@ -1,5 +1,3 @@
-import { createConfigPaths } from '@nocobase/app-server-kit/config';
-import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
@@ -10,14 +8,7 @@ describe('realtime example plugin routes', () => {
   it('registers the realtime page', async () => {
     const router = new Hono();
 
-    registerRoutes({
-      appName: 'main',
-      publicBasePath: '/main',
-      config: { app: { name: 'main', publicBasePath: '/main' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
-      router,
-      container: new ServiceContainer(),
-    });
+    registerRoutes(router);
 
     const response = await router.request('http://localhost/realtime');
     const html = await response.text();

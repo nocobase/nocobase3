@@ -1,10 +1,10 @@
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
 import {
   databaseManagerToken,
   type DatabaseManager,
 } from '@nocobase/app-database';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import { Hono } from 'hono';
+import type { ServiceContainer } from '@nocobase/service-provider';
 
 import type { WorkflowService } from '../runtime/runtime.js';
 import { AppServiceError } from '../errors.js';
@@ -15,7 +15,9 @@ import { createNodeRunRoutes } from './node-runs.js';
 import { createWorkflowRunRoutes } from './workflow-runs.js';
 import { createWorkflowDefinitionRoutes } from './workflows.js';
 
-export type WorkflowPluginRoutesApplication = AppPluginRoutesApplication;
+export interface WorkflowPluginRoutesApplication {
+  readonly container: ServiceContainer;
+}
 
 export function createWorkflowRoutes(
   database: DatabaseManager,
@@ -30,10 +32,10 @@ export function createWorkflowRoutes(
   return routes;
 }
 
-export default function registerWorkflowRoutes({
-  router,
-  container,
-}: WorkflowPluginRoutesApplication): void {
+export default function registerWorkflowRoutes(
+  { container }: WorkflowPluginRoutesApplication,
+  router: Hono,
+): void {
   const protectedRoutes = new Hono();
   protectedRoutes.onError((error, context) => {
     if (error instanceof AppServiceError) {
@@ -58,5 +60,5 @@ export default function registerWorkflowRoutes({
       context.json({ error: 'Workflow service is not configured.' }, 503),
     );
   }
-  router.route('/api', protectedRoutes);
+  router.route('/', protectedRoutes);
 }

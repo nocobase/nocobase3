@@ -10,6 +10,10 @@
     "node": ">=24.0.0"
   },
   "exports": {
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./client/routes": {
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
@@ -31,6 +35,10 @@
   "publishConfig": {
     "access": "public",
     "exports": {
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
@@ -69,6 +77,7 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "catalog:",
@@ -84,7 +93,6 @@
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-sdk": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
-    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",

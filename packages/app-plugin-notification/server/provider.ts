@@ -1,23 +1,22 @@
 import { databaseManagerToken } from '@nocobase/app-database';
 import { loggingToken } from '@nocobase/logging';
 import { queueManagerToken } from '@nocobase/queue';
-import {
-  ServiceProvider,
-  type ServiceContainer,
-} from '@nocobase/service-provider';
+import { ServiceProvider } from '@nocobase/service-provider';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 
 import { createNotificationManager } from './manager.js';
 import { notificationServiceToken } from './token.js';
 import type { NotificationChannelMap, NotificationConfig } from './types.js';
 
 export interface NotificationProviderApplicationConfig {
+  readonly app: {
+    readonly publicBasePath: string;
+  };
   readonly notification?: NotificationConfig;
 }
 
-export interface NotificationProviderApplication {
-  readonly config: NotificationProviderApplicationConfig;
-  readonly container: ServiceContainer;
-}
+export type NotificationProviderApplication =
+  AppPluginApplication<NotificationProviderApplicationConfig>;
 
 export default class NotificationProvider<
   TApplication extends NotificationProviderApplication =

@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createApp, joinBasePath, normalizeBasePath } from './app.js';
+import { createApp, normalizeBasePath } from './app.js';
 import {
   type EnvMap,
   getEnvBoolean,
@@ -28,21 +28,16 @@ export function createStandaloneServer(
   const browserBasePath = normalizeBasePath(
     getEnvString(env, 'APP_BROWSER_BASE_PATH') ?? basePath,
   );
-  const apiProxyPath = resolveApiProxyPathFromEnv(env, basePath);
-
   return createApp({
     appName,
     basePath,
     browserBasePath,
-    apiProxyPath,
-    browserApiUrl: apiProxyPath,
     clientHandler: viteDevUrl
       ? (request) => proxyToViteDevServer(request, viteDevUrl)
       : undefined,
     clientIndexPath:
       getEnvString(env, 'APP_CLIENT_INDEX') ??
       path.join(packageRoot, 'dist/client/index.html'),
-    nocoBaseApiUrl: getEnvString(env, 'NOCOBASE_API_PROXY_TARGET'),
     apiClientStoragePrefix: getEnvString(env, 'API_CLIENT_STORAGE_PREFIX'),
     apiClientStorageType: getEnvString(env, 'API_CLIENT_STORAGE_TYPE'),
     apiClientShareToken: getEnvBoolean(env, 'API_CLIENT_SHARE_TOKEN'),
@@ -221,22 +216,6 @@ function numberFromEnv(env: EnvMap, name: string): number | undefined {
 
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function resolveApiProxyPathFromEnv(env: EnvMap, basePath: string): string {
-  const raw =
-    getEnvString(env, 'NOCOBASE_API_URL') ??
-    getEnvString(env, 'NOCOBASE_API_PROXY_PATH');
-  if (!raw) {
-    return joinBasePath(basePath, '/v2/api');
-  }
-
-  try {
-    const url = new URL(raw);
-    return normalizeBasePath(url.pathname);
-  } catch {
-    return normalizeBasePath(raw);
-  }
 }
 
 if (isEntrypoint()) {

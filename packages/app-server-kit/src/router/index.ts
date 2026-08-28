@@ -7,6 +7,9 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
+export * from './health.js';
+export * from './routes.js';
+
 /**
  * The HTTP router owned by an application.
  *
@@ -16,6 +19,10 @@ import {
  */
 export const routerToken: ServiceToken<Hono> = createServiceToken<Hono>(
   '@nocobase/app/router',
+);
+
+export const apiRouterToken: ServiceToken<Hono> = createServiceToken<Hono>(
+  '@nocobase/app/api-router',
 );
 
 export interface RouterProviderApplication {
@@ -29,5 +36,6 @@ export class RouterProvider<
 
   public override register(): void {
     this.app.container.instance(routerToken, new Hono());
+    this.app.container.instance(apiRouterToken, new Hono());
   }
 }

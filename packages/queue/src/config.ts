@@ -28,3 +28,16 @@ export function assertDefaultConnection(config: AppQueueConfig): void {
     );
   }
 }
+
+export function withQueueJobLocations(
+  config: AppQueueConfig,
+  locations: readonly string[],
+): AppQueueConfig {
+  return {
+    ...config,
+    jobs: {
+      ...config.jobs,
+      locations: [...(config.jobs?.locations ?? []), ...locations],
+    },
+  };
+}

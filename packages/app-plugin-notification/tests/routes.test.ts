@@ -2,7 +2,7 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
@@ -24,10 +24,10 @@ describe('@nocobase/app-plugin-notification routes', () => {
       router: notificationRouter,
     } as unknown as NotificationService);
 
-    registerNotificationRoutes(createApp(router, container));
+    registerNotificationRoutes(createApp(router, container), router);
     router.get('/outside', (context) => context.text('outside'));
 
-    const response = await router.request('/api/notifications/logs');
+    const response = await router.request('/notifications/logs');
     const outside = await router.request('/outside');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ data: [] });
@@ -46,12 +46,10 @@ describe('@nocobase/app-plugin-notification routes', () => {
       router: new Hono(),
     } as unknown as NotificationService);
 
-    registerNotificationRoutes(createApp(router, container));
-    router.get('/api/notifications/in-app', (context) =>
-      context.text('in-app'),
-    );
+    registerNotificationRoutes(createApp(router, container), router);
+    router.get('/notifications/in-app', (context) => context.text('in-app'));
 
-    const response = await router.request('/api/notifications/in-app');
+    const response = await router.request('/notifications/in-app');
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('in-app');
@@ -62,13 +60,14 @@ describe('@nocobase/app-plugin-notification routes', () => {
 function createApp(
   router: Hono,
   container: ServiceContainer,
-): AppPluginRoutesApplication {
+): AppPluginApplication {
   return {
     appName: 'test',
     publicBasePath: '',
     config: { app: { name: 'test', publicBasePath: '' } },
     paths: {} as never,
     router,
+    apiRouter: router,
     container,
   };
 }

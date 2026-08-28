@@ -1,11 +1,9 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { serve } from '@hono/node-server';
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -15,22 +13,20 @@ import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { gzipSync } from 'node:zlib';
-import { Hono } from 'hono';
-import {
-  createDefaultCachingConfig,
-  type CachingConfig,
-} from '@nocobase/caching';
+import { CachingProvider, createDefaultCachingConfig } from '@nocobase/caching';
 import {
   createConfigPaths,
   readEnvFiles,
 } from '@nocobase/app-server-kit/config';
+import { startNodeAppServer } from '@nocobase/app-server-kit/node';
 import {
   createRealtimeService,
   realtimeServiceToken,
   type RealtimeServerMessage,
 } from '@nocobase/app-server-kit/realtime';
+import { healthCheckApiRoutes } from '@nocobase/app-server-kit/router';
 import {
+  createServiceToken,
   ServiceContainer,
   ServiceProvider,
   ServiceProviderRegistry,
@@ -44,37 +40,59 @@ import {
   type DatabaseManager,
   type QueryAdapter,
 } from '@nocobase/app-database';
-import type { AppDriveConfig } from '@nocobase/drive';
-import { createSilentLoggingConfig } from '@nocobase/logging';
-import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
+import { DriveProvider } from '@nocobase/drive';
+import { IdGeneratorProvider } from '@nocobase/id-generator';
+import {
+  createSilentLoggingConfig,
+  LoggingProvider,
+  requestLoggingMiddleware,
+} from '@nocobase/logging';
+import {
+  createSyncQueueConfig,
+  QueueProvider,
+  type AppQueueConfig,
+} from '@nocobase/queue';
+import {
+  createNocoBaseSpaRuntimeGlobals,
+  spaRootRoutes,
+} from '@nocobase/app-server-kit/spa';
 import {
   createNullSessionConfig,
-  type AppSessionConfig,
+  sessionHttpMiddleware,
+  SessionProvider,
 } from '@nocobase/session';
 import {
   joinBasePath,
   normalizeBasePath,
   resolveAppNameFromBasePath,
 } from '@nocobase/app-server-kit/support';
-import { AuthenticationProvider } from '@nocobase/app-plugin-authentication';
-import { AuthorizationProvider } from '@nocobase/app-plugin-authorization';
-
 import {
-  Application,
-  createApp,
-  type CreateAppOptions,
+  createAppDisposerRegistry,
+  createPublicBasePathAdapter,
+  resolveAppRuntime,
   type AppDisposer,
   type AppScope,
-  createServer as createEmbeddedServer,
-  createStandaloneScope,
+} from '@nocobase/app-server-kit/runtime';
+import { Application } from '@nocobase/app-server-kit/application';
+import {
+  defineServerPlugin,
+  defineServerPlugins,
+  type AppServerPlugin,
+  type ResolvedAppServerPlugins,
+} from '@nocobase/app-server-kit/plugins';
+import authenticationServerPlugin from '@nocobase/app-plugin-authentication/server/plugin';
+import authorizationServerPlugin from '@nocobase/app-plugin-authorization/server/plugin';
+
+import { createApp } from '../../server/app.ts';
+import { createServer as createEmbeddedServer } from '../../server/embedded.ts';
+import { createStandaloneRuntimeScope } from '@nocobase/app-server-kit/node';
+import appRuntime from '../../server/runtime.ts';
+import {
   createStandaloneServer,
   type StandaloneServer,
   type StandaloneServerOptions,
-} from '../../server/index.ts';
-import { registerStandaloneWebSocketUpgradeHandler } from '../../server/standalone.ts';
+} from '../../server/standalone.ts';
 import type { AppConfig } from '../../server/config/index.ts';
-import { createAppDisposerRegistry } from '../../server/runtime/index.ts';
-import { createPublicBasePathAdapter } from '../../server/runtime/app.ts';
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
 
@@ -86,7 +104,7 @@ interface FetchableResource {
   readonly fetch: (request: Request) => Response | Promise<Response>;
 }
 
-type TestApp = ReturnType<typeof createApp> & CloseableResource;
+type TestApp = Application<AppConfig> & CloseableResource;
 
 interface RegisteredTestDisposer {
   name: string;
@@ -138,7 +156,6 @@ describe('app server', () => {
   it('represents the NocoBase application separately from its Hono router', () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
     });
 
     expect(app).toBeInstanceOf(Application);
@@ -160,11 +177,11 @@ describe('app server', () => {
     }
 
     const app = createTestApp({
-      pluginProviders: [
-        {
+      plugins: [
+        defineServerPlugin<AppConfig>({
           packageName: '@nocobase/app-plugin-test',
-          Provider: TestPluginProvider,
-        },
+          providers: [TestPluginProvider],
+        }),
       ],
     });
 
@@ -173,29 +190,31 @@ describe('app server', () => {
     expect(app.container.resolve(realtimeServiceToken)).toBeDefined();
   });
 
-  it('passes the application surface to plugin routes', () => {
-    let routesContext: unknown;
+  it('registers plugin API routes through the dedicated API router', async () => {
     const app = createTestApp({
-      pluginRoutes: [
-        {
+      plugins: [
+        defineServerPlugin<AppConfig>({
           packageName: '@nocobase/app-plugin-test',
-          registerRoutes(context): void {
-            routesContext = context;
-          },
-        },
+          apiRoutes: [
+            {
+              scope: 'api',
+              name: '@nocobase/app-plugin-test/api',
+              register(router, application): void {
+                router.get('/plugin-test', (context) =>
+                  context.json({ appName: application.appName }),
+                );
+              },
+            },
+          ],
+        }),
       ],
     });
 
-    expect(routesContext).toBe(app);
-    const routeApp = routesContext as typeof app;
-    expect(routeApp.appName).toBe(app.appName);
-    expect(routeApp.publicBasePath).toBe(app.publicBasePath);
-    expect(routeApp.router).toBe(app.router);
-    expect(routeApp.container).toBe(app.container);
-    expect(routeApp.config).toBe(app.config);
-    expect(routeApp.paths).toBe(app.paths);
-    expect(routesContext).not.toHaveProperty('deps');
-    expect(routesContext).not.toHaveProperty('repositories');
+    await app.start();
+
+    const response = await requestApp(app, 'http://localhost/api/plugin-test');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ appName: app.appName });
   });
 
   it('starts service providers only through the asynchronous runtime path', async () => {
@@ -206,7 +225,6 @@ describe('app server', () => {
     try {
       createTestApp({
         publicBasePath: '/low-level-app',
-        nocoBaseApiUrl: false,
       });
 
       expect(boot).not.toHaveBeenCalled();
@@ -270,32 +288,93 @@ describe('app server', () => {
     });
   });
 
-  it('serves an app-local HTML route outside the API namespace', async () => {
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-    });
-
-    const response = await requestApp(app, 'http://localhost/hello');
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('text/html');
-    expect(html).toContain('<h1>Hello from NocoBase</h1>');
-    expect(html).toContain(
-      'This page is rendered by an app-local server route.',
+  it('registers application-owned providers and routes from the runtime', async () => {
+    const pluginServiceToken = createServiceToken<string>(
+      '@nocobase/app-template-default/tests/plugin-service',
     );
+    const providerCalls: string[] = [];
+    class TestRuntimePluginProvider extends ServiceProvider<
+      Application<AppConfig>
+    > {
+      public readonly name: string = '@nocobase/app-plugin-runtime-test';
+
+      public override register(): void {
+        providerCalls.push('plugin');
+        this.app.container.instance(pluginServiceToken, 'plugin service');
+      }
+    }
+    class TestRuntimeApplicationProvider extends ServiceProvider<
+      Application<AppConfig>
+    > {
+      public readonly name: string =
+        '@nocobase/app-template-default/runtime-test';
+
+      public override register(): void {
+        providerCalls.push(this.app.container.resolve(pluginServiceToken));
+      }
+    }
+    const scope = createEmbeddedTestScope({
+      id: 'app-template-default',
+      basePath: '/embedded-app-template-default',
+    });
+    const resolvedRuntime = resolveAppRuntime(
+      {
+        ...appRuntime,
+        plugins: defineServerPlugins<AppConfig>([]),
+        providers: [...appRuntime.providers, TestRuntimeApplicationProvider],
+      },
+      scope,
+    );
+    const runtime = {
+      ...resolvedRuntime,
+      plugins: createResolvedTestServerPlugins([
+        defineServerPlugin<AppConfig>({
+          packageName: '@nocobase/app-plugin-runtime-test',
+          providers: [TestRuntimePluginProvider],
+        }),
+      ]),
+    };
+    const application = createApp(runtime);
+    const app = trackCloseable(
+      Object.assign(application, {
+        close(): Promise<void> {
+          return application.shutdown();
+        },
+      }),
+    );
+    await app.start();
+
+    expect(providerCalls).toEqual(['plugin', 'plugin service']);
+    const apiResponse = await requestApp(app, 'http://localhost/api/example');
+    const rootResponse = await requestApp(app, 'http://localhost/example');
+
+    expect(apiResponse.status).toBe(200);
+    await expect(apiResponse.json()).resolves.toEqual({
+      scope: 'api',
+      message: 'Hello from the application provider',
+    });
+    expect(rootResponse.status).toBe(200);
+    expect(rootResponse.headers.get('content-type')).toContain('text/html');
+    const rootHtml = await rootResponse.text();
+    expect(rootHtml).toContain('<h1>Application Route Example</h1>');
+    expect(rootHtml).toContain('Hello from the application provider');
   });
 
-  it('adds the public base path to app-local redirects', async () => {
-    const router = new Hono();
-    router.get('/login', (context) => context.redirect('/install'));
+  it('registers plugin API routes before application-owned API routes', async () => {
+    const app = await createEmbeddedServer(
+      createEmbeddedTestScope({
+        id: 'app-template-default',
+        basePath: '/embedded-app-template-default',
+      }),
+    );
 
-    const mounted = createPublicBasePathAdapter(router, '/main');
-    const response = await requestApp(mounted, 'http://localhost/main/login');
+    const apiResponse = await requestApp(app, 'http://localhost/api/example');
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe('/main/install');
+    expect(apiResponse.status).toBe(401);
+    await expect(apiResponse.json()).resolves.toEqual({
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required',
+    });
   });
 
   it('routes authentication requests through the configured public auth URL', async () => {
@@ -328,7 +407,6 @@ describe('app server', () => {
   it('exposes an app-local WebSocket handler outside the API namespace', async () => {
     const app = createTestApp({
       publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
     });
 
     const response = await requestApp(app, 'http://localhost/ws');
@@ -453,20 +531,11 @@ describe('app server', () => {
       'window.NOCOBASE_PORTAL_BASE = "/app-template-default/";',
     );
     expect(html).toContain(
-      'window.NOCOBASE_API_URL = "/app-template-default/v2/api";',
+      'window.NOCOBASE_API_URL = "/app-template-default/api";',
     );
   });
 
   it('reads embedded runtime config from the application root without using process.env', async () => {
-    const nocoBaseApiUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'application/json; charset=utf-8');
-      response.end(
-        JSON.stringify({
-          url: _request.url,
-          forwardedPrefix: _request.headers['x-forwarded-prefix'],
-        }),
-      );
-    });
     const appRoot = mkdtempSync(
       path.join(tmpdir(), 'nocobase-app-template-default-embedded-root-'),
     );
@@ -477,7 +546,6 @@ describe('app server', () => {
     writeFileSync(
       path.join(appRoot, '.env'),
       [
-        `NOCOBASE_API_PROXY_TARGET=${nocoBaseApiUrl}/nocobase/api/`,
         'API_CLIENT_STORAGE_PREFIX=EMBEDDED_',
         'API_CLIENT_STORAGE_TYPE=sessionStorage',
         'API_CLIENT_SHARE_TOKEN=true',
@@ -498,15 +566,6 @@ describe('app server', () => {
       }),
     );
 
-    const api = await requestApp(
-      app,
-      'http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F',
-    );
-    await expect(api.json()).resolves.toEqual({
-      url: '/nocobase/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F',
-      forwardedPrefix: '/v2/api',
-    });
-
     const page = await requestApp(app, 'http://localhost/');
     const html = await page.text();
     expect(html).toContain(
@@ -520,422 +579,11 @@ describe('app server', () => {
     );
   });
 
-  it('proxies app-local /v2/api requests to the configured NocoBase API URL', async () => {
-    const nocoBaseApiUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'application/json; charset=utf-8');
-      response.end(
-        JSON.stringify({
-          method: _request.method,
-          url: _request.url,
-          host: _request.headers.host,
-          origin: _request.headers.origin,
-          referer: _request.headers.referer,
-          forwardedHost: _request.headers['x-forwarded-host'],
-          forwardedPrefix: _request.headers['x-forwarded-prefix'],
-          forwardedProto: _request.headers['x-forwarded-proto'],
-        }),
-      );
-    });
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
-    });
-
-    const response = await requestApp(
-      app,
-      'http://localhost/v2/api/systemSettings:get?locale=zh-CN',
-      {
-        headers: {
-          host: '127.0.0.1:13000',
-          origin: 'http://127.0.0.1:13000',
-          referer: 'http://127.0.0.1:13000/app-template-default/login',
-        },
-      },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      method: 'GET',
-      url: '/nocobase/api/systemSettings:get?locale=zh-CN',
-      host: new URL(nocoBaseApiUrl).host,
-      // The browser's own origin and referer are relayed untouched. Rewriting them to the upstream
-      // address is what makes `auth:signIn` answer 403 Invalid sign-in origin.
-      origin: 'http://127.0.0.1:13000',
-      referer: 'http://127.0.0.1:13000/app-template-default/login',
-      forwardedHost: '127.0.0.1:13000',
-      forwardedPrefix: '/v2/api',
-      forwardedProto: 'http',
-    });
-  });
-
-  /**
-   * Pins the header contract that `auth:signIn` validates against.
-   *
-   * The upstream derives requestOrigin as `x-forwarded-proto || protocol` + `://` +
-   * `x-forwarded-host || host`, then demands that `origin` equal it verbatim. A mismatch is answered
-   * with 403 Invalid sign-in origin -- which surfaces to users as "I cannot log in", several layers
-   * away from the cause.
-   *
-   * This case is worth its own test because it cannot be caught by hand: when the proxy target is the
-   * public site, the request crosses that site's reverse proxy on the way out and any bad
-   * `x-forwarded-*` gets corrected there, while a rewritten origin coincidentally matches the site.
-   * Both faults cancel. Only a deployment that proxies straight to the upstream reveals them.
-   */
-  it('relays the browser origin and protocol so the upstream sign-in origin check passes', async () => {
-    const nocoBaseApiUrl = await startHttpStub((_request, response) => {
-      response.setHeader('content-type', 'application/json; charset=utf-8');
-      response.end(
-        JSON.stringify({
-          origin: _request.headers.origin,
-          referer: _request.headers.referer,
-          forwardedHost: _request.headers['x-forwarded-host'],
-          forwardedProto: _request.headers['x-forwarded-proto'],
-        }),
-      );
-    });
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
-    });
-
-    // A TLS-terminating proxy in front of this process: the site is https, but this hop is cleartext
-    // and its x-forwarded-* headers carry the browser's real context.
-    const response = await requestApp(
-      app,
-      'http://localhost/v2/api/auth:signIn',
-      {
-        method: 'POST',
-        headers: {
-          host: 'apps.example.com',
-          origin: 'https://apps.example.com',
-          referer: 'https://apps.example.com/app-template-default/login',
-          'x-forwarded-host': 'apps.example.com',
-          'x-forwarded-proto': 'https',
-        },
-      },
-    );
-
-    expect(response.status).toBe(200);
-    const forwarded = (await response.json()) as Record<string, string>;
-
-    // Existing x-forwarded-* must survive. Overwriting them with this connection's details would
-    // report the https site as http, and the origin comparison below would fail on the scheme alone.
-    expect(forwarded.forwardedProto).toBe('https');
-    expect(forwarded.forwardedHost).toBe('apps.example.com');
-    expect(forwarded.origin).toBe('https://apps.example.com');
-    expect(forwarded.referer).toBe(
-      'https://apps.example.com/app-template-default/login',
-    );
-
-    // The check the upstream actually performs.
-    const requestOrigin = `${forwarded.forwardedProto}://${forwarded.forwardedHost}`;
-    expect(forwarded.origin).toBe(requestOrigin);
-  });
-
-  it('returns a JSON error when the API proxy target is not configured', async () => {
-    const root = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-app-template-default-client-'),
-    );
-    tempDirs.push(root);
-    writeFileSync(
-      path.join(root, 'index.html'),
-      '<main>app-template-default app</main>',
-    );
-
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      spa: {
-        indexPath: path.join(root, 'index.html'),
-      },
-    });
-
-    const response = await requestApp(
-      app,
-      'http://localhost/v2/api/oidc:checkRedirect?redirect=%2Fapp-template-default%2F',
-    );
-
-    expect(response.status).toBe(503);
-    expect(response.headers.get('content-type')).toContain('application/json');
-    await expect(response.json()).resolves.toEqual({
-      error: 'NocoBase API proxy target is not configured.',
-    });
-  });
-
-  it('requires a database for authentication', () => {
-    expect(() => createTestApp({ database: false })).toThrow(
-      'Authentication requires a database connection.',
-    );
-  });
-
-  it('reads app settings from the configured database', async () => {
-    const rows = [
-      {
-        key: 'site.title',
-        value: 'NocoBase',
-        createdAt: '2026-08-18T00:00:00.000Z',
-        updatedAt: '2026-08-18T00:00:00.000Z',
-      },
-    ];
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      database: createMockDatabase(rows),
-    });
-
-    const response = await requestApp(app, 'http://localhost/api/app-settings');
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      settings: rows,
-    });
-  });
-
-  it('serves a cache API example with cacheable getOrSet', async () => {
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      caching: createTestCaching(),
-    });
-
-    const firstResponse = await requestApp(
-      app,
-      'http://localhost/api/cache/demo',
-    );
-    const firstPayload = await firstResponse.json();
-    const secondResponse = await requestApp(
-      app,
-      'http://localhost/api/cache/demo',
-    );
-    const secondPayload = await secondResponse.json();
-
-    expect(firstResponse.status).toBe(200);
-    expect(firstPayload).toMatchObject({
-      key: 'demo',
-      ttl: 30_000,
-      cached: false,
-      value: {
-        generatedAt: expect.any(String),
-        id: expect.any(String),
-      },
-    });
-    expect(secondResponse.status).toBe(200);
-    expect(secondPayload).toEqual({
-      ...firstPayload,
-      cached: true,
-    });
-
-    const deleteResponse = await requestApp(
-      app,
-      'http://localhost/api/cache/demo',
-      {
-        method: 'DELETE',
-      },
-    );
-
-    expect(deleteResponse.status).toBe(200);
-    await expect(deleteResponse.json()).resolves.toEqual({
-      key: 'demo',
-      deleted: true,
-    });
-
-    const thirdResponse = await requestApp(
-      app,
-      'http://localhost/api/cache/demo',
-    );
-    const thirdPayload = await thirdResponse.json();
-
-    expect(thirdResponse.status).toBe(200);
-    expect(thirdPayload.cached).toBe(false);
-    expect(thirdPayload.value.id).not.toBe(firstPayload.value.id);
-  });
-
-  it('serves a session API example with cookie-backed persistence', async () => {
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      session: createTestSession(),
-    });
-
-    const emptyResponse = await requestApp(app, 'http://localhost/api/session');
-    await expect(emptyResponse.json()).resolves.toEqual({
-      enabled: true,
-      id: null,
-      data: null,
-    });
-
-    const touchResponse = await requestApp(
-      app,
-      'http://localhost/api/session/touch',
-      {
-        method: 'POST',
-      },
-    );
-    const cookie = firstCookie(touchResponse);
-    const touchPayload = await touchResponse.json();
-
-    expect(touchResponse.status).toBe(200);
-    expect(cookie).toContain('nocobase_session=');
-    expect(touchPayload).toMatchObject({
-      enabled: true,
-      id: expect.any(String),
-      data: {
-        visits: 1,
-        touchedAt: expect.any(String),
-      },
-    });
-
-    const secondTouchResponse = await requestApp(
-      app,
-      'http://localhost/api/session/touch',
-      {
-        method: 'POST',
-        headers: {
-          cookie,
-        },
-      },
-    );
-    const updatedCookie = firstCookie(secondTouchResponse);
-    const infoResponse = await requestApp(app, 'http://localhost/api/session', {
-      headers: {
-        cookie: updatedCookie,
-      },
-    });
-
-    await expect(infoResponse.json()).resolves.toMatchObject({
-      enabled: true,
-      id: touchPayload.id,
-      data: {
-        visits: 2,
-        touchedAt: expect.any(String),
-      },
-    });
-
-    const deleteResponse = await requestApp(
-      app,
-      'http://localhost/api/session',
-      {
-        method: 'DELETE',
-        headers: {
-          cookie: updatedCookie,
-        },
-      },
-    );
-
-    expect(deleteResponse.status).toBe(200);
-    expect(deleteResponse.headers.get('set-cookie')).toContain('Max-Age=0');
-    await expect(deleteResponse.json()).resolves.toEqual({
-      destroyed: true,
-    });
-  });
-
-  it('returns a JSON error when upload is requested without file drive', async () => {
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-    });
-    const body = new FormData();
-    body.set(
-      'file',
-      new File(['Hello world'], 'hello.txt', { type: 'text/plain' }),
-    );
-
-    const response = await requestApp(app, 'http://localhost/api/upload', {
-      method: 'POST',
-      body,
-    });
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      error: 'File drive is not configured.',
-    });
-  });
-
-  it('requires a file for uploads', async () => {
-    const root = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-app-template-default-upload-'),
-    );
-    tempDirs.push(root);
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      drive: createTestDrive(root),
-    });
-    const body = new FormData();
-    body.set('file', 'not-a-file');
-
-    const response = await requestApp(app, 'http://localhost/api/upload', {
-      method: 'POST',
-      body,
-    });
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: 'File is required',
-    });
-  });
-
-  it('uploads files with the configured file drive', async () => {
-    const root = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-app-template-default-upload-'),
-    );
-    tempDirs.push(root);
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
-      drive: createTestDrive(root),
-    });
-    const body = new FormData();
-    body.set(
-      'file',
-      new File(['Hello world'], 'hello world.txt', { type: 'text/plain' }),
-    );
-
-    const response = await requestApp(app, 'http://localhost/api/upload', {
-      method: 'POST',
-      body,
-    });
-    const payload = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(payload).toMatchObject({
-      name: 'hello world.txt',
-      size: 11,
-      type: 'text/plain',
-    });
-    expect(payload.key).toMatch(/^uploads\/[0-9a-f-]+-hello-world\.txt$/);
-    expect(payload.url).toBe(`/storage/${payload.key}`);
-    expect(
-      readFileSync(path.join(root, 'storage/app/public', payload.key), 'utf8'),
-    ).toBe('Hello world');
-  });
-
-  it('strips compressed upstream response headers before returning proxied API responses', async () => {
-    const payload = JSON.stringify({ ok: true });
-    const compressedPayload = gzipSync(payload);
-    const nocoBaseApiUrl = await startHttpStub((_request, response) => {
-      response.statusCode = 200;
-      response.setHeader('content-type', 'application/json; charset=utf-8');
-      response.setHeader('content-encoding', 'gzip');
-      response.setHeader(
-        'content-length',
-        String(compressedPayload.byteLength),
-      );
-      response.end(compressedPayload);
-    });
-    const app = createTestApp({
-      publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: `${nocoBaseApiUrl}/nocobase/api/`,
-    });
-
-    const response = await requestApp(
-      app,
-      'http://localhost/v2/api/systemSettings:get',
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-encoding')).toBeNull();
-    expect(response.headers.get('content-length')).toBeNull();
-    await expect(response.text()).resolves.toBe(payload);
+  it('requires a database for authentication', async () => {
+    const app = createTestApp({ database: false });
+    await expect(
+      requestApp(app, 'http://localhost/api/auth/session'),
+    ).rejects.toThrow('Authentication requires a database connection.');
   });
 
   it('keeps app-local API routes on the standalone server when Vite dev proxy is enabled', async () => {
@@ -964,7 +612,7 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('protects API routes loaded from enabled app plugins', async () => {
+  it('loads API routes from enabled app plugin providers', async () => {
     const app = trackCloseable(
       await createIsolatedStandaloneServer({ viteDevUrl: false }),
     );
@@ -973,9 +621,9 @@ describe('app server', () => {
       `http://localhost${app.application.publicBasePath}/api/routes-example`,
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      message: expect.any(String),
+      plugin: '@nocobase/app-plugin-routes-example',
     });
   });
 
@@ -1017,7 +665,7 @@ describe('app server', () => {
     );
     const response = await requestApp(
       app,
-      `http://localhost${app.application.publicBasePath}/queue-example`,
+      `http://localhost${app.application.publicBasePath}/api/queue-example`,
     );
 
     expect(response.status).toBe(200);
@@ -1035,7 +683,7 @@ describe('app server', () => {
     );
     const response = await requestApp(
       app,
-      `http://localhost${app.application.publicBasePath}/service-provider-example/status`,
+      `http://localhost${app.application.publicBasePath}/api/service-provider-example/status`,
     );
 
     expect(response.status).toBe(200);
@@ -1157,7 +805,10 @@ describe('app server', () => {
   });
 
   it('owns standalone cancellation and disposal through its scope', async () => {
-    const scope = createStandaloneScope({ viteDevUrl: false });
+    const scope = createStandaloneRuntimeScope({
+      rootDir: path.resolve(import.meta.dirname, '../..'),
+      env: { APP_VITE_DEV_URL: 'false' },
+    });
     const events: string[] = [];
     scope.onBeforeDestroy(() => {
       events.push('before-destroy');
@@ -1233,7 +884,6 @@ describe('app server', () => {
 
     const app = createTestApp({
       publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
       spa: {
         indexPath,
       },
@@ -1247,7 +897,7 @@ describe('app server', () => {
       'window.NOCOBASE_PORTAL_BASE = "/app-template-default/";',
     );
     expect(html).toContain(
-      'window.NOCOBASE_API_URL = "/app-template-default/v2/api";',
+      'window.NOCOBASE_API_URL = "/app-template-default/api";',
     );
     expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
       html.indexOf('<script type="module"'),
@@ -1271,7 +921,6 @@ describe('app server', () => {
 
     const app = createTestApp({
       publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
       spa: {
         indexPath: path.join(root, 'index.html'),
       },
@@ -1304,7 +953,6 @@ describe('app server', () => {
 
     const app = createTestApp({
       publicBasePath: '/app-template-default',
-      nocoBaseApiUrl: false,
       spa: {
         indexPath: path.join(root, 'index.html'),
       },
@@ -1323,23 +971,25 @@ describe('app server', () => {
   });
 });
 
-function startStandaloneTestServer(app: StandaloneServer): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const server = serve(
-      {
-        fetch: app.fetch,
-        hostname: '127.0.0.1',
-        port: 0,
-      },
-      (info) => {
-        resolve(`ws://${normalizeListenAddress(info)}:${info.port}`);
-      },
-    ) as Server;
+async function startStandaloneTestServer(
+  app: StandaloneServer,
+): Promise<string> {
+  let listenInfo: AddressInfo | undefined;
+  const server = (await startNodeAppServer(app, {
+    hostname: '127.0.0.1',
+    port: 0,
+    registerProcessSignals: false,
+    onListen: (info) => {
+      listenInfo = info;
+    },
+  })) as Server;
+  servers.push(server);
 
-    server.once('error', reject);
-    registerStandaloneWebSocketUpgradeHandler(app, server);
-    servers.push(server);
-  });
+  if (!listenInfo) {
+    throw new Error('Node app server started without listen information.');
+  }
+
+  return `ws://${normalizeListenAddress(listenInfo)}:${listenInfo.port}`;
 }
 
 function normalizeListenAddress(info: AddressInfo): string {
@@ -1455,74 +1105,12 @@ function startHttpStub(
   });
 }
 
-function createTestDrive(root: string): AppDriveConfig {
-  return {
-    default: 'public',
-    disks: {
-      public: {
-        driver: 'fs',
-        location: path.join(root, 'storage/app/public'),
-        visibility: 'public',
-        url: '/storage',
-      },
-    },
-    links: {
-      [path.join(root, 'public/storage')]: path.join(
-        root,
-        'storage/app/public',
-      ),
-    },
-  };
-}
-
-function createTestCaching(): CachingConfig {
-  return {
-    default: 'memory',
-    providers: {
-      memory: {
-        driver: 'memory',
-        defaultTtl: '1m',
-      },
-    },
-  };
-}
-
-function createTestSession(): AppSessionConfig {
-  return {
-    enabled: true,
-    default: 'memory',
-    stores: {
-      memory: {
-        driver: 'memory',
-        base: 'tests:app-session:',
-      },
-    },
-    cookie: {
-      name: 'nocobase_session',
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-    },
-    lifetime: {
-      absolute: '2h',
-      rolling: true,
-    },
-    secret: 'test-app-session-secret',
-    gcLottery: [0, 100],
-  };
-}
-
 interface CreateTestAppOptions {
   publicOrigin?: string;
   publicBasePath?: string;
-  nocoBaseApiUrl?: string | false;
   database?: DatabaseManager | false;
-  caching?: CachingConfig;
-  drive?: AppDriveConfig;
   queue?: AppQueueConfig;
-  session?: AppSessionConfig;
-  pluginProviders?: CreateAppOptions['pluginProviders'];
-  pluginRoutes?: CreateAppOptions['pluginRoutes'];
+  plugins?: readonly AppServerPlugin<AppConfig>[];
   spa?: {
     indexPath?: string;
     runtime?: AppConfig['spa']['runtime'];
@@ -1533,17 +1121,13 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   const publicBasePath = normalizeBasePath(
     options.publicBasePath ?? '/app-template-default',
   );
-  const internalApiProxyPath = '/v2/api';
   const config = {
     app: {
       name: resolveAppNameFromBasePath(publicBasePath, 'app-template-default'),
       publicOrigin: options.publicOrigin,
       publicBasePath,
       internalBasePath: '',
-      internalApiProxyPath,
-      publicApiUrl: joinBasePath(publicBasePath, internalApiProxyPath),
-      nocoBaseApiUrl:
-        options.nocoBaseApiUrl === false ? undefined : options.nocoBaseApiUrl,
+      publicApiUrl: joinBasePath(publicBasePath, '/api'),
     },
     auth: {
       secret: 'test-auth-secret-at-least-32-characters',
@@ -1551,7 +1135,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         enabled: true,
       },
     },
-    caching: options.caching ?? createDefaultCachingConfig(),
+    caching: createDefaultCachingConfig(),
     database: {
       default: 'none',
       connections: {},
@@ -1564,10 +1148,10 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         autoRun: false,
       },
     },
-    drive: options.drive,
+    drive: undefined,
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
-    session: options.session ?? createNullSessionConfig(),
+    session: createNullSessionConfig(),
     workflow: {
       sourceRoot: path.resolve(process.cwd(), 'server/workflows'),
       distRoot: path.resolve(process.cwd(), 'dist/server/workflows'),
@@ -1592,6 +1176,13 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
         storageType: 'localStorage',
         shareToken: false,
       },
+      runtimeGlobals: createNocoBaseSpaRuntimeGlobals({
+        appBasePath: publicBasePath,
+        apiUrl: joinBasePath(publicBasePath, '/api'),
+        storagePrefix: options.spa?.runtime?.storagePrefix ?? 'NOCOBASE_',
+        storageType: options.spa?.runtime?.storageType ?? 'localStorage',
+        shareToken: options.spa?.runtime?.shareToken ?? false,
+      }),
     },
   } as AppConfig;
   const paths = createConfigPaths({ rootDir: '/test/app-template-default' });
@@ -1612,34 +1203,53 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       await database?.destroy();
     }
   }
-  const app = createApp(config, paths, {
-    pluginProviders: [
-      ...(database
-        ? [
-            {
-              packageName: '@nocobase/app-plugin-test-database',
-              Provider: TestDatabaseProvider,
-            },
-          ]
-        : []),
-      {
-        packageName: '@nocobase/app-plugin-authentication',
-        Provider: AuthenticationProvider,
-      },
-      {
-        packageName: '@nocobase/app-plugin-authorization',
-        Provider: AuthorizationProvider,
-      },
-      ...(options.pluginProviders ?? []),
-    ],
-    pluginRoutes: options.pluginRoutes,
-  });
+  const app = new Application({ config, paths });
+  if (database) {
+    app.addProvider(TestDatabaseProvider);
+  }
+  app.addProvider(LoggingProvider);
+  app.addProvider(CachingProvider);
+  app.addProvider(IdGeneratorProvider);
+  app.addProvider(SessionProvider);
+  app.addProvider(DriveProvider);
+  app.addProvider(QueueProvider);
+  app.addHttpMiddleware(requestLoggingMiddleware);
+  app.addHttpMiddleware(sessionHttpMiddleware);
+  app.addApiRoutes(healthCheckApiRoutes);
+  app.addServerPlugins(
+    createResolvedTestServerPlugins([
+      authenticationServerPlugin,
+      authorizationServerPlugin,
+      ...(options.plugins ?? []),
+    ]),
+  );
+  app.addRootRoutes(spaRootRoutes);
+  app.registerProviders();
 
   return trackCloseable(
     Object.assign(app, {
       close: (): Promise<void> => app.shutdown(),
     }),
   );
+}
+
+function createResolvedTestServerPlugins(
+  plugins: readonly AppServerPlugin<AppConfig>[],
+): ResolvedAppServerPlugins<AppConfig> {
+  const definitions = defineServerPlugins<AppConfig>(plugins);
+
+  return {
+    appPackageName: '@nocobase/app-template-default',
+    plugins: definitions.plugins.map((definition) => ({
+      definition,
+      metadata: {
+        packageName: definition.packageName,
+        version: 'test',
+        rootDir: `/test/plugins/${definition.packageName}`,
+        jobLocations: [],
+      },
+    })),
+  };
 }
 
 function createEmbeddedTestScope(
@@ -1748,12 +1358,6 @@ function createEmbeddedPluginFixture(rootDir: string): void {
 function trackCloseable<T extends CloseableResource>(resource: T): T {
   apps.push(resource);
   return resource;
-}
-
-function firstCookie(response: Response): string {
-  const setCookie = response.headers.get('set-cookie');
-  expect(setCookie).toBeTruthy();
-  return setCookie?.split(';')[0] ?? '';
 }
 
 function createMockDatabase(

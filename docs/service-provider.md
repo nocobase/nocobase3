@@ -11,11 +11,12 @@ Service Provider 是 NocoBase V3 Server 注册服务、组织依赖和管理生�
 
 ```text
 Application
-  ├── addProvider(PluginProvider)
+  ├── addServerPlugins(serverPlugins)
   ├── container: ServiceContainer
   └── Provider lifecycle
       ├── register  注册 ServiceToken 与服务工厂
       ├── boot      完成异步初始化
+      ├── routes    注册 API 与 Root 路由
       ├── start     启动服务
       ├── ready     确认服务已经可用
       └── shutdown  逆序停止并释放服务
@@ -146,18 +147,18 @@ Provider 使用 `this.app.container`，不使用 `this.context.serviceContainer`
 
 旧插件如果使用 `server/bootstrap.ts`、`deps` 和可变的 `services` 对象，迁移时按职责拆分：
 
-- `server/bootstrap.ts` 改为默认导出 Provider class 的 `server/provider.ts`；
+- `server/bootstrap.ts` 改为显式导出插件定义的 `server/plugin.ts`；
 - `deps.database` 等宿主能力改为通过所属包导出的 Token 从 `this.app.container` 解析；
 - `services.notification = value` 等赋值改为在 `register()` 中注册插件自己的 `ServiceToken`；
 - 异步初始化、启动和释放分别放入 `boot()`、`start()` 和 `shutdown()`；
-- `server/routes/index.ts` 只接收 Application，通过只读 `app.container` 解析服务，并挂载到 `app.router`；
+- Provider 不再注册路由；使用 `apiRoutes` 或 `rootRoutes` 声明 HTTP 边界，通过 `app.container` 解析服务；
 - 删除旧的 bootstrap context、`AppDeps`、`AppServices` 和 WeakMap 服务传递层，不为旧协议增加兼容 Token。
 
 迁移后，配置仍由 Provider 从 `this.app.config` 读取；它不是一个额外的 `config` 构造参数对象。
 
 ## 生命周期
 
-Application 按 Provider 添加顺序执行 `register`、`boot`、`start` 和 `ready`，关闭时按相反顺序执行 `shutdown`：
+Application 按 Provider 添加顺序执行 `register`、`boot`、路由注册、`start` 和 `ready`，关闭时按相反顺序执行 `shutdown`：
 
 ```text
 Provider A: register ─ boot ─ start ─ ready ───────── shutdown
@@ -218,12 +219,13 @@ app.addProvider(CustomProvider, instanceSpecificArgument);
 
 ## 插件的 Service Provider
 
-插件约定使用一个 `server/provider.ts` 作为服务端 Provider 入口。一个 Provider 可以注册多个 Token 和服务，通常不需要为了每个服务创建一个可加载 Provider 文件：
+插件约定使用一个 `server/plugin.ts` 作为服务端注册入口。一个插件定义可以声明多个 Provider、API Route、Root Route，以及可选的 database 与 queue 贡献：
 
 ```text
 packages/app-plugin-audit-log/
 ├── server/
 │   ├── provider.ts       插件唯一的 Provider 入口
+│   ├── plugin.ts         插件唯一的服务端注册入口
 │   ├── service.ts        服务实现
 │   ├── token.ts          稳定公开的服务标识
 │   └── routes/index.ts   HTTP 边界，只解析服务
@@ -299,12 +301,15 @@ import {
   ServiceProvider,
   type ServiceContainer,
 } from '@nocobase/service-provider';
+import type { Hono } from 'hono';
 
 import { HeartbeatService } from './service.js';
+import registerRoutes from './routes/index.js';
 import { heartbeatServiceToken } from './token.js';
 
 export interface ServiceProviderExampleApplication {
   readonly container: ServiceContainer;
+  readonly router: Hono;
 }
 
 export default class ServiceProviderExampleProvider extends ServiceProvider<ServiceProviderExampleApplication> {
@@ -316,6 +321,11 @@ export default class ServiceProviderExampleProvider extends ServiceProvider<Serv
       heartbeatServiceToken,
       () => new HeartbeatService(),
     );
+  }
+
+  public override boot(): Promise<void> {
+    registerRoutes(this.app);
+    return Promise.resolve();
   }
 
   public override start(): Promise<void> {
@@ -335,22 +345,23 @@ export default class ServiceProviderExampleProvider extends ServiceProvider<Serv
 }
 ```
 
-未使用的生命周期方法可以省略，基类提供空实现。
+未使用的生命周期方法可以省略，基类提供空实现。Route 由 Application 在所有
+Provider 完成 `boot()` 后统一注册，因此可以安全依赖已经准备好的 Token。
 
 ### 4. 在 Route 中消费服务
 
-Route 接收 `AppPluginRoutesApplication`。其中的 `container` 类型是只读的 `ServiceResolver`，允许查询和解析，不允许注册或替换服务：
+Route 是独立的 HTTP 贡献，通过注册函数接收目标 Router 和 Application：
 
 ```ts
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { Hono } from 'hono';
 
 import { heartbeatServiceToken } from '../token.js';
 
-export default function registerServiceProviderExampleRoutes({
-  router,
-  container,
-}: AppPluginRoutesApplication): void {
+export default function registerServiceProviderExampleRoutes(
+  { container }: AppPluginApplication,
+  router: Hono,
+): void {
   const routes = new Hono();
 
   routes.get('/status', (context) => {
@@ -382,17 +393,22 @@ export default function registerServiceProviderExampleRoutes({
 }
 ```
 
-源码插件按约定发现 `server/provider.ts` 和 `server/routes/index.ts`；发布后的插件按相同结构发现 `dist/server/provider.js` 和 `dist/server/routes/index.js`。如果需要显式声明 Provider 入口，也可以在插件 `package.json` 中设置：
+插件通过稳定的 `./server/plugin` export 暴露静态定义：
 
 ```json
 {
-  "nocobase": {
-    "plugin": {
-      "server": "./server/provider"
+  "exports": {
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
     }
   }
 }
 ```
+
+`server/plugin.ts` 使用 `defineServerPlugin()` 分别声明 `providers`、
+`apiRoutes` 和 `rootRoutes`。目标 App 在自己的 `server/plugins.ts` 中显式
+import，并通过 `defineServerPlugins([...])` 选择和排序插件。
 
 在目标 App 中注册并启用插件：
 
@@ -400,7 +416,7 @@ export default function registerServiceProviderExampleRoutes({
 pnpm plugin:register service-provider-example --app app-template-default
 ```
 
-Application 加载插件时，会把默认导出的 Provider class 传给 `app.addProvider(plugin.Provider)`。插件代码不需要自行创建 Application 或 Provider 实例。
+Application 根据插件定义实例化 Provider，并在独立阶段注册 Routes。插件代码不需要自行创建 Application、Provider 或 Router 实例。
 
 ## 测试 Provider
 
@@ -408,6 +424,7 @@ Provider 测试应直接验证 Token 注册和生命周期结果：
 
 ```ts
 import { ServiceContainer } from '@nocobase/service-provider';
+import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import ServiceProviderExampleProvider from '../server/provider.js';
@@ -415,7 +432,10 @@ import { heartbeatServiceToken } from '../server/token.js';
 
 it('registers and starts the heartbeat service', async () => {
   const container = new ServiceContainer();
-  const provider = new ServiceProviderExampleProvider({ container });
+  const provider = new ServiceProviderExampleProvider({
+    container,
+    router: new Hono(),
+  });
 
   provider.register();
   await provider.start();
@@ -442,7 +462,7 @@ pnpm --filter @nocobase/app-template-default build
 
 ## 设计约定
 
-- 一个插件默认使用一个 `server/provider.ts` 入口；它可以注册多个相关服务。
+- 一个插件默认使用一个 `server/plugin.ts` 注册入口；它可以声明多个 Provider 和 Route。
 - Provider `name` 使用插件包名或能力包名，并在 Application 内保持唯一。
 - 服务注册集中在 `register()`；资源准备、运行和释放分别放到对应生命周期。
 - 配置由 Provider 从 `this.app.config` 读取，不在 `app.ts` 重复拆分和转发。

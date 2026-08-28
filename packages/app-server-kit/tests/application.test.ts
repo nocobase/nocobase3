@@ -6,8 +6,12 @@ import {
   type ApplicationConfig,
 } from '../src/application/index.js';
 import { createConfigPaths } from '../src/config/index.js';
-import { RouterProvider, routerToken } from '../src/router/index.js';
-import { RealtimeProvider } from '../src/realtime/index.js';
+import {
+  defineApiRoutes,
+  defineRootRoutes,
+  routerToken,
+} from '../src/router/index.js';
+import { defineServerPlugin } from '../src/plugins/index.js';
 import {
   createServiceToken,
   ServiceProvider,
@@ -16,8 +20,7 @@ import {
 describe('application', () => {
   it('owns its router service and delegates fetch requests to it', async () => {
     const app = new Application(createTestApplicationOptions());
-    app.addProvider(RouterProvider);
-    app.registerProviders();
+    await app.start();
 
     const router = app.container.resolve(routerToken);
     router.get('/healthz', (context) => context.json({ ok: true }));
@@ -27,7 +30,6 @@ describe('application', () => {
     expect(app.appName).toBe('main');
     expect(app.publicBasePath).toBe('/main');
 
-    await app.start();
     await app.start();
 
     const response = await app.fetch(new Request('http://localhost/healthz'));
@@ -46,14 +48,242 @@ describe('application', () => {
     expect(app).not.toHaveProperty('runtime');
   });
 
+  it('starts providers before dispatching the first HTTP request', async () => {
+    const calls: string[] = [];
+    const app = new Application(createTestApplicationOptions());
+    app.addProvider(TestProvider, 'lazy', calls);
+    app.addApiRoutes(
+      defineApiRoutes({
+        name: 'lazy-route',
+        register(router): void {
+          router.get('/lazy', (context) => context.json({ ok: true }));
+        },
+      }),
+    );
+
+    const response = await app.fetch(new Request('http://localhost/api/lazy'));
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      'lazy:register',
+      'lazy:boot',
+      'lazy:start',
+      'lazy:ready',
+    ]);
+  });
+
+  it('registers API and root routes between provider boot and start', async () => {
+    const calls: string[] = [];
+    const app = new Application(createTestApplicationOptions());
+    app.addProvider(TestProvider, 'provider', calls);
+    app.addApiRoutes(
+      defineApiRoutes({
+        name: 'api',
+        register(router): void {
+          calls.push('api:register');
+          router.get('/example', (context) => context.text('api'));
+        },
+      }),
+    );
+    app.addRootRoutes(
+      defineRootRoutes({
+        name: 'root',
+        register(router): void {
+          calls.push('root:register');
+          router.get('/example', (context) => context.text('root'));
+        },
+      }),
+    );
+
+    await app.start();
+
+    expect(calls).toEqual([
+      'provider:register',
+      'provider:boot',
+      'api:register',
+      'root:register',
+      'provider:start',
+      'provider:ready',
+    ]);
+    const apiResponse = await app.fetch(
+      new Request('http://localhost/api/example'),
+    );
+    const rootResponse = await app.fetch(
+      new Request('http://localhost/example'),
+    );
+    await expect(apiResponse.text()).resolves.toBe('api');
+    await expect(rootResponse.text()).resolves.toBe('root');
+  });
+
+  it('registers providers and routes from resolved runtime plugins', async () => {
+    const calls: string[] = [];
+    const app = new Application(createTestApplicationOptions());
+    const plugin = defineServerPlugin<TestApplicationConfig>({
+      packageName: '@nocobase/app-plugin-test',
+      providers: [RuntimePluginProvider],
+      apiRoutes: [
+        defineApiRoutes({
+          name: 'runtime-plugin-api',
+          register(router): void {
+            router.get('/runtime-plugin', (context) => context.text('api'));
+          },
+        }),
+      ],
+      rootRoutes: [
+        defineRootRoutes({
+          name: 'runtime-plugin-root',
+          register(router): void {
+            router.get('/runtime-plugin', (context) => context.text('root'));
+          },
+        }),
+      ],
+    });
+
+    RuntimePluginProvider.calls = calls;
+    app.addServerPlugins({
+      appPackageName: '@nocobase/app-test',
+      plugins: [
+        {
+          definition: plugin,
+          metadata: {
+            packageName: plugin.packageName,
+            version: 'test',
+            rootDir: '/test/plugins/runtime-plugin',
+            jobLocations: [],
+          },
+        },
+      ],
+    });
+    await app.start();
+
+    expect(calls).toEqual(['register']);
+    await expect(
+      app
+        .fetch(new Request('http://localhost/api/runtime-plugin'))
+        .then((response) => response.text()),
+    ).resolves.toBe('api');
+    await expect(
+      app
+        .fetch(new Request('http://localhost/runtime-plugin'))
+        .then((response) => response.text()),
+    ).resolves.toBe('root');
+  });
+
+  it('registers plugin contributions before application contributions', async () => {
+    const calls: string[] = [];
+    const pluginServiceToken = createServiceToken<string>(
+      'runtime-plugin-service',
+    );
+    class PluginProvider extends ServiceProvider<
+      Application<TestApplicationConfig>
+    > {
+      public readonly name: string = 'runtime-plugin-provider';
+
+      public override register(): void {
+        calls.push('plugin:register');
+        this.app.container.instance(pluginServiceToken, 'plugin-service');
+      }
+    }
+    class ApplicationProvider extends ServiceProvider<
+      Application<TestApplicationConfig>
+    > {
+      public readonly name: string = 'runtime-application-provider';
+
+      public override register(): void {
+        calls.push(this.app.container.resolve(pluginServiceToken));
+      }
+    }
+    const plugin = defineServerPlugin<TestApplicationConfig>({
+      packageName: '@nocobase/app-plugin-runtime-order-test',
+      providers: [PluginProvider],
+      apiRoutes: [
+        defineApiRoutes({
+          name: 'runtime-plugin-api-order',
+          register(router): void {
+            calls.push('plugin:api');
+            router.get('/runtime-order', (context) => context.text('plugin'));
+          },
+        }),
+      ],
+      rootRoutes: [
+        defineRootRoutes({
+          name: 'runtime-plugin-root-order',
+          register(router): void {
+            calls.push('plugin:root');
+            router.get('/runtime-order', (context) => context.text('plugin'));
+          },
+        }),
+      ],
+    });
+    const app = new Application(createTestApplicationOptions());
+
+    app.addRuntimeContributions({
+      plugins: {
+        appPackageName: '@nocobase/app-test',
+        plugins: [
+          {
+            definition: plugin,
+            metadata: {
+              packageName: plugin.packageName,
+              version: 'test',
+              rootDir: '/test/plugins/runtime-order',
+              jobLocations: [],
+            },
+          },
+        ],
+      },
+      providers: [ApplicationProvider],
+      apiRoutes: [
+        defineApiRoutes({
+          name: 'runtime-application-api-order',
+          register(router): void {
+            calls.push('application:api');
+            router.get('/runtime-order', (context) =>
+              context.text('application'),
+            );
+          },
+        }),
+      ],
+      rootRoutes: [
+        defineRootRoutes({
+          name: 'runtime-application-root-order',
+          register(router): void {
+            calls.push('application:root');
+            router.get('/runtime-order', (context) =>
+              context.text('application'),
+            );
+          },
+        }),
+      ],
+    });
+    await app.start();
+
+    expect(calls).toEqual([
+      'plugin:register',
+      'plugin-service',
+      'plugin:api',
+      'application:api',
+      'plugin:root',
+      'application:root',
+    ]);
+    await expect(
+      app
+        .fetch(new Request('http://localhost/api/runtime-order'))
+        .then((response) => response.text()),
+    ).resolves.toBe('plugin');
+    await expect(
+      app
+        .fetch(new Request('http://localhost/runtime-order'))
+        .then((response) => response.text()),
+    ).resolves.toBe('plugin');
+  });
+
   it('runs provider lifecycle phases once and shuts providers down in reverse order', async () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
 
     app.addProvider(TestProvider, 'first', calls);
     app.addProvider(TestProvider, 'second', calls);
-    app.registerProviders();
-
     const firstStart = app.start();
     const secondStart = app.start();
     expect(secondStart).toBe(firstStart);
@@ -104,9 +334,7 @@ describe('application', () => {
 
   it('provides the realtime WebSocket endpoint by default', async () => {
     const app = new Application(createTestApplicationOptions());
-    app.addProvider(RouterProvider);
-    app.addProvider(RealtimeProvider);
-    app.registerProviders();
+    await app.start();
 
     const response = await app.fetch(new Request('http://localhost/ws'));
     const events = await app.websocket(new Request('http://localhost/ws'));
@@ -163,6 +391,17 @@ class TestProvider extends ServiceProvider<Application<TestApplicationConfig>> {
 
   public override async shutdown(): Promise<void> {
     this.calls.push(`${this.name}:shutdown`);
+  }
+}
+
+class RuntimePluginProvider extends ServiceProvider<
+  Application<TestApplicationConfig>
+> {
+  public readonly name: string = '@nocobase/app-plugin-test';
+  public static calls: string[] = [];
+
+  public override register(): void {
+    RuntimePluginProvider.calls.push('register');
   }
 }
 

@@ -1,11 +1,16 @@
 import { Hono } from 'hono';
 
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
+import type { ServiceContainer } from '@nocobase/service-provider';
 import { notificationServiceToken } from '../token.js';
 
+export interface NotificationRoutesApplication {
+  readonly container: ServiceContainer;
+}
+
 export default function registerNotificationRoutes(
-  app: AppPluginRoutesApplication,
+  app: NotificationRoutesApplication,
+  router: Hono,
 ): void {
   if (!app.container.has(notificationServiceToken)) return;
   const notification = app.container.resolve(notificationServiceToken);
@@ -15,5 +20,5 @@ export default function registerNotificationRoutes(
   const authRequired = auth.required();
   routes.use('/logs/:id?', authRequired);
   routes.route('/', notification.router);
-  app.router.route('/api/notifications', routes);
+  router.route('/notifications', routes);
 }

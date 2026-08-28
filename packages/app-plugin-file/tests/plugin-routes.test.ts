@@ -109,7 +109,11 @@ describe('file plugin route factory and registrar', () => {
     ensureFileObjectMock.mockRejectedValueOnce(failure);
 
     const container = createContainer(config, deps, false);
-    const provider = new FileProvider({ config, container });
+    const provider = new FileProvider({
+      config,
+      container,
+      router: new Hono(),
+    });
     provider.register();
     await provider.boot();
 
@@ -352,16 +356,20 @@ describe('file plugin route factory and registrar', () => {
   it('mounts the Demo Router at the plugin convention path', async () => {
     const app = new Hono();
     const container = createContainer(config, deps);
-    registerRoutes({
-      appName: 'test',
-      publicBasePath: config.app.publicBasePath,
-      router: app,
-      config,
-      container,
-      paths: {} as never,
-    });
+    registerRoutes(
+      {
+        appName: 'test',
+        publicBasePath: config.app.publicBasePath,
+        router: app,
+        apiRouter: app,
+        config,
+        container,
+        paths: {} as never,
+      },
+      app,
+    );
 
-    const response = await app.request('/api/attachments/examples', {
+    const response = await app.request('/attachments/examples', {
       headers: { 'x-demo-auth': 'allowed' },
     });
     expect(response.status).toBe(200);

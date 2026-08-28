@@ -7,6 +7,12 @@ import {
 
 import { createLogging, type Logging } from './logging.js';
 import type { LoggingConfig } from './types.js';
+import { requestLogger } from './request-logger.js';
+import type { Hono } from 'hono';
+import {
+  defineHttpMiddleware,
+  type AppHttpMiddleware,
+} from '@nocobase/app-server-kit/router';
 
 export const loggingToken: ServiceToken<Logging> =
   createServiceToken<Logging>('@nocobase/logging');
@@ -20,6 +26,11 @@ export interface LoggingProviderApplication<
     LoggingProviderApplicationConfig,
 > {
   readonly config: TConfig;
+  readonly container: ServiceContainer;
+}
+
+export interface RequestLoggingMiddlewareApplication {
+  readonly appName: string;
   readonly container: ServiceContainer;
 }
 
@@ -38,3 +49,19 @@ export class LoggingProvider<
     await this.app.container.resolveIfCreated(loggingToken)?.flush();
   }
 }
+
+export const requestLoggingMiddleware: AppHttpMiddleware<RequestLoggingMiddlewareApplication> =
+  defineHttpMiddleware({
+    name: '@nocobase/logging/request',
+    register(router: Hono, app: RequestLoggingMiddlewareApplication): void {
+      const logging = app.container.resolve(loggingToken);
+      router.use(
+        '*',
+        requestLogger({
+          logger: logging.getLogger('request'),
+          app: app.appName,
+          skip: (context) => context.req.path.endsWith('/api/healthz'),
+        }),
+      );
+    },
+  });

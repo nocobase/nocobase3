@@ -33,14 +33,18 @@ describe('queue example plugin routes', () => {
     const container = new ServiceContainer();
     container.instance(queueManagerToken, queueManager);
 
-    registerRoutes({
-      appName: 'main',
-      publicBasePath: '/main',
-      config: { app: { name: 'main', publicBasePath: '/main' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
+    registerRoutes(
+      {
+        appName: 'main',
+        publicBasePath: '/main',
+        config: { app: { name: 'main', publicBasePath: '/main' } },
+        paths: createConfigPaths({ rootDir: '/missing' }),
+        router,
+        apiRouter: router,
+        container,
+      },
       router,
-      container,
-    });
+    );
 
     const response = await router.request('/queue-example');
 

@@ -1,4 +1,3 @@
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
 import {
   AuthorizationDeniedError,
   type AuthorizationEnv,
@@ -11,12 +10,14 @@ import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { AppAuthorization } from '../authorization.js';
 import { authorizationToken } from '../token.js';
 
-export type AuthorizationPluginRoutesApplication = AppPluginRoutesApplication;
+export interface AuthorizationPluginRoutesApplication {
+  readonly container: import('@nocobase/service-provider').ServiceContainer;
+}
 
-export default function registerAuthorizationRoutes({
-  router,
-  container,
-}: AuthorizationPluginRoutesApplication): void {
+export default function registerAuthorizationRoutes(
+  { container }: AuthorizationPluginRoutesApplication,
+  router: Hono,
+): void {
   const auth = container.resolve(authenticationToken);
   const authorization = container.resolve(authorizationToken);
   const routes = new Hono<AuthorizationEnv>();
@@ -211,7 +212,7 @@ export default function registerAuthorizationRoutes({
       ),
     });
   });
-  router.route('/api/authz', routes);
+  router.route('/authz', routes);
 }
 
 function protectedSystemAdministrator(context: {

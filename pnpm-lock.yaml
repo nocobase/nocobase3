@@ -544,6 +544,9 @@ importers:
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -675,6 +678,9 @@ importers:
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../service-provider
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -700,9 +706,6 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../dev-config
-      '@nocobase/service-provider':
-        specifier: workspace:*
-        version: link:../service-provider
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -932,6 +935,9 @@ importers:
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../queue
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../service-provider
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -939,9 +945,6 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../dev-config
-      '@nocobase/service-provider':
-        specifier: workspace:*
-        version: link:../service-provider
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -1061,6 +1064,9 @@ importers:
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../service-provider
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1083,9 +1089,6 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../dev-config
-      '@nocobase/service-provider':
-        specifier: workspace:*
-        version: link:../service-provider
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -1314,6 +1317,9 @@ importers:
 
   packages/app-server-kit:
     dependencies:
+      '@hono/node-server':
+        specifier: 'catalog:'
+        version: 2.1.1(hono@4.13.2)
       '@nocobase/app-database':
         specifier: workspace:^
         version: link:../app-database
@@ -1360,9 +1366,6 @@ importers:
       '@gchust/agent-annotations':
         specifier: 0.1.5
         version: 0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
-      '@hono/node-server':
-        specifier: 'catalog:'
-        version: 2.1.1(hono@4.13.2)
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.8.0(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)
@@ -2165,6 +2168,9 @@ importers:
 
   packages/logging:
     dependencies:
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../service-provider
@@ -2263,6 +2269,9 @@ importers:
 
   packages/session:
     dependencies:
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../service-provider

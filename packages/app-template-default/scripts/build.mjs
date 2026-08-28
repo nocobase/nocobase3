@@ -30,7 +30,6 @@ const serverEnvKeys = new Set([
   'APP_SERVER_HOST',
   'APP_SERVER_PORT',
   'APP_SERVER_START_LOG',
-  'NOCOBASE_API_PROXY_TARGET',
   'API_CLIENT_STORAGE_PREFIX',
   'API_CLIENT_STORAGE_TYPE',
   'API_CLIENT_SHARE_TOKEN',
@@ -223,24 +222,12 @@ run('Rewrite server path aliases', 'pnpm', [
   '-p',
   'tsconfig.server.json',
 ]);
-run('Build database tasks', 'pnpm', [
-  'exec',
-  'tsc',
-  '-p',
-  'tsconfig.migrations.json',
-]);
 run('Build workflow artifacts', 'pnpm', [
   'exec',
   'tsx',
   '--tsconfig',
   'tsconfig.node.json',
   './scripts/build-workflows.ts',
-]);
-run('Rewrite database task path aliases', 'pnpm', [
-  'exec',
-  'tsc-alias',
-  '-p',
-  'tsconfig.migrations.json',
 ]);
 writeDistEnv();
 run('Generate server package', 'node', [

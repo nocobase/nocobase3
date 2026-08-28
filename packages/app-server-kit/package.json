@@ -26,6 +26,10 @@
       "types": "./src/database/index.ts",
       "import": "./src/database/index.ts"
     },
+    "./node": {
+      "types": "./src/node/index.ts",
+      "import": "./src/node/index.ts"
+    },
     "./plugins": {
       "types": "./src/plugins/index.ts",
       "import": "./src/plugins/index.ts"
@@ -37,6 +41,10 @@
     "./router": {
       "types": "./src/router/index.ts",
       "import": "./src/router/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/index.ts",
+      "import": "./src/runtime/index.ts"
     },
     "./proxy": {
       "types": "./src/proxy/index.ts",
@@ -76,6 +84,10 @@
         "types": "./dist/database/index.d.ts",
         "import": "./dist/database/index.js"
       },
+      "./node": {
+        "types": "./dist/node/index.d.ts",
+        "import": "./dist/node/index.js"
+      },
       "./plugins": {
         "types": "./dist/plugins/index.d.ts",
         "import": "./dist/plugins/index.js"
@@ -87,6 +99,10 @@
       "./router": {
         "types": "./dist/router/index.d.ts",
         "import": "./dist/router/index.js"
+      },
+      "./runtime": {
+        "types": "./dist/runtime/index.d.ts",
+        "import": "./dist/runtime/index.js"
       },
       "./proxy": {
         "types": "./dist/proxy/index.d.ts",
@@ -120,6 +136,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@hono/node-server": "catalog:",
     "@nocobase/app-database": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:"

@@ -2,9 +2,9 @@ import {
   joinBasePath,
   normalizeBasePath,
 } from '@nocobase/app-server-kit/support';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import {
   ServiceProvider,
-  type ServiceContainer,
   type ServiceResolver,
 } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/app-database';
@@ -35,12 +35,9 @@ export interface AuthenticationProviderConfig {
   >;
 }
 
-export interface AuthenticationProviderApplication<
+export type AuthenticationProviderApplication<
   TConfig extends AuthenticationProviderConfig = AuthenticationProviderConfig,
-> {
-  readonly config: TConfig;
-  readonly container: ServiceContainer;
-}
+> = AppPluginApplication<TConfig>;
 
 export default class AuthenticationProvider<
   TConfig extends AuthenticationProviderConfig = AuthenticationProviderConfig,

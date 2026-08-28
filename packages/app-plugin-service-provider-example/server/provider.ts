@@ -1,14 +1,10 @@
-import {
-  ServiceProvider,
-  type ServiceContainer,
-} from '@nocobase/service-provider';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import { ServiceProvider } from '@nocobase/service-provider';
 
 import { HeartbeatService } from './service.js';
 import { heartbeatServiceToken } from './token.js';
 
-export interface ServiceProviderExampleApplication {
-  readonly container: ServiceContainer;
-}
+export type ServiceProviderExampleApplication = AppPluginApplication;
 
 export default class ServiceProviderExampleProvider extends ServiceProvider<ServiceProviderExampleApplication> {
   public readonly name: string =

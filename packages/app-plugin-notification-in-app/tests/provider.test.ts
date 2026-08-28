@@ -7,6 +7,11 @@ import {
   type NotificationService,
 } from '@nocobase/app-plugin-notification';
 import { ServiceContainer } from '@nocobase/service-provider';
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import InAppNotificationProvider from '../server/provider.js';
@@ -21,7 +26,11 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
     container.instance(notificationServiceToken, {
       registry: { registerChannel },
     } as unknown as NotificationService);
-    const provider = new InAppNotificationProvider({ container });
+    container.instance(authenticationToken, {} as Auth);
+    const provider = new InAppNotificationProvider({
+      container,
+      router: new Hono(),
+    });
 
     provider.register();
     await provider.boot();
@@ -39,6 +48,7 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
   it('does nothing when the core notification service is unavailable', async () => {
     const provider = new InAppNotificationProvider({
       container: new ServiceContainer(),
+      router: new Hono(),
     });
     provider.register();
     await expect(provider.boot()).resolves.toBeUndefined();
@@ -47,7 +57,10 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
   it('rejects a missing database when the core service exists', async () => {
     const container = new ServiceContainer();
     container.instance(notificationServiceToken, {} as NotificationService);
-    const provider = new InAppNotificationProvider({ container });
+    const provider = new InAppNotificationProvider({
+      container,
+      router: new Hono(),
+    });
     provider.register();
     await expect(provider.boot()).rejects.toThrow(
       'In-app notifications require the application database dependency.',

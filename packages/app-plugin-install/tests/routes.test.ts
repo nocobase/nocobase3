@@ -22,14 +22,18 @@ afterEach(() => {
 describe('@nocobase/app-plugin-install routes', () => {
   it('only registers the status route after installation', async () => {
     const router = new Hono();
-    registerInstallRoutes({
-      appName: 'main',
-      publicBasePath: '/main',
-      config: createPluginConfig('configured-secret'),
-      paths: createConfigPaths({ rootDir: '/missing' }),
+    registerInstallRoutes(
+      {
+        appName: 'main',
+        publicBasePath: '/main',
+        config: createPluginConfig('configured-secret'),
+        paths: createConfigPaths({ rootDir: '/missing' }),
+        router,
+        apiRouter: new Hono(),
+        container: new ServiceContainer(),
+      },
       router,
-      container: new ServiceContainer(),
-    });
+    );
     router.get('*', (context) => context.text('application'));
 
     const loginResponse = await router.request('/login', {
@@ -51,16 +55,20 @@ describe('@nocobase/app-plugin-install routes', () => {
 
   it('registers the redirect middleware and install routes in install mode', async () => {
     const router = new Hono();
-    registerInstallRoutes({
-      appName: 'main',
-      publicBasePath: '/main',
-      config: createPluginConfig(
-        `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
-      ),
-      paths: createConfigPaths({ rootDir: '/missing' }),
+    registerInstallRoutes(
+      {
+        appName: 'main',
+        publicBasePath: '/main',
+        config: createPluginConfig(
+          `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
+        ),
+        paths: createConfigPaths({ rootDir: '/missing' }),
+        router,
+        apiRouter: new Hono(),
+        container: new ServiceContainer(),
+      },
       router,
-      container: new ServiceContainer(),
-    });
+    );
     router.get('*', (context) => context.text('application'));
 
     const pageResponse = await router.request('/login', {

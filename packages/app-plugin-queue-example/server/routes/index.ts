@@ -1,4 +1,4 @@
-import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import { queueManagerToken } from '@nocobase/queue';
 import { Hono } from 'hono';
 
@@ -6,12 +6,12 @@ import QueueExampleJob, {
   queueExampleExecutions,
 } from '../jobs/queue-example.js';
 
-export type QueueExamplePluginRoutesApplication = AppPluginRoutesApplication;
+export type QueueExamplePluginRoutesApplication = AppPluginApplication;
 
-export default ({
-  router,
-  container,
-}: QueueExamplePluginRoutesApplication): void => {
+export default (
+  { container }: QueueExamplePluginRoutesApplication,
+  router: Hono,
+): void => {
   const queueManager = container.resolve(queueManagerToken);
   const routes = new Hono();
 
