@@ -37,6 +37,11 @@ const optionalDefineEnv = (
   }
 };
 
+const numberFromEnv = (value: string | undefined): number | undefined => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
 // https://vite.dev/config/
 export default createPortalViteConfig(
   portalSdkCompatibilityPlugin,
@@ -53,6 +58,8 @@ export default createPortalViteConfig(
           ? env.NOCOBASE_E2E_API_URL.trim().replace(/\/$/, '')
           : joinBase(appBase, '/v2/api')
         : undefined;
+    const viteHmrHost = env.APP_VITE_HMR_HOST;
+    const viteDevPort = numberFromEnv(env.APP_VITE_DEV_PORT) ?? 5173;
     const defineEnv: Record<string, string> = {
       __PORTAL_DEV_SOURCE_ROOT__: JSON.stringify(
         command === 'serve' ? path.resolve(__dirname) : '',
@@ -94,6 +101,14 @@ export default createPortalViteConfig(
       ],
       server: {
         watch: { ignored: ['**/.agent-annotations/**'] },
+        ...(command === 'serve'
+          ? {
+              hmr: {
+                ...(viteHmrHost ? { host: viteHmrHost } : {}),
+                clientPort: viteDevPort,
+              },
+            }
+          : {}),
       },
       resolve: {
         dedupe: ['react', 'react-dom', 'react-router'],

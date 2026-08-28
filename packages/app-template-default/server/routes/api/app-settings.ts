@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 
-import type { AppSettings } from '@/services/index.js';
+import type { AppSettings } from '../../services/index.js';
 
 export interface AppSettingsRoutesOptions {
   appSettingsStore: AppSettings;

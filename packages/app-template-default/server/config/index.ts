@@ -8,6 +8,7 @@ import queue from './queue.js';
 import session from './session.js';
 import server from './server.js';
 import spa from './spa.js';
+import workflow from './workflow.js';
 import type { AppConfig } from './types.js';
 
 const config: {
@@ -19,6 +20,7 @@ const config: {
   logging: typeof logging;
   queue: typeof queue;
   session: typeof session;
+  workflow: typeof workflow;
   server: typeof server;
   spa: typeof spa;
 } = {
@@ -30,6 +32,7 @@ const config: {
   logging: logging,
   queue: queue,
   session: session,
+  workflow: workflow,
   server: server,
   spa: spa,
 };
