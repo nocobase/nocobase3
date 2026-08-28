@@ -17,6 +17,10 @@
       "types": "./client/providers.ts",
       "import": "./client/providers.ts"
     },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -30,6 +34,10 @@
         "types": "./dist/client/providers.d.ts",
         "import": "./dist/client/providers.js"
       },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -37,14 +45,6 @@
     "dist",
     "README.md"
   ],
-  "nocobase": {
-    "plugin": {
-      "client": {
-        "routes": "./client/routes",
-        "providers": "./client/providers"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json",

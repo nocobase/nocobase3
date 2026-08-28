@@ -21,6 +21,10 @@
       "types": "./client/index.ts",
       "import": "./client/index.ts"
     },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
     "./client/types": {
       "types": "./client/types.ts",
       "import": "./client/types.ts"
@@ -57,6 +61,10 @@
       "./client": {
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
       },
       "./client/types": {
         "types": "./dist/client/types.d.ts",
