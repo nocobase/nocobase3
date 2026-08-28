@@ -22,6 +22,7 @@ import configFactories from '../../server/config/index.ts';
 import database from '../../server/config/database.ts';
 import drive from '../../server/config/drive.ts';
 import logging from '../../server/config/logging.ts';
+import notification from '../../server/config/notification.ts';
 import queue from '../../server/config/queue.ts';
 import server from '../../server/config/server.ts';
 import spa from '../../server/config/spa.ts';
@@ -80,11 +81,147 @@ describe('config registry', () => {
     expect(config.database.default).toBe('main');
     expect(config.drive.default).toBe('local');
     expect(config.logging.default).toBe('system');
+    expect(config.notification.channels).toEqual([]);
+    expect(config.notification.test).toEqual({
+      enabled: true,
+      emailRecipient: undefined,
+    });
     expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
     expect(config.spa.indexPath).toBe(
       '/tmp/app-template-default/dist/client/index.html',
     );
+  });
+});
+
+describe('notification config', () => {
+  it('keeps external notifications disabled without a Provider selector', () => {
+    const config = notification({
+      env: createConfigEnv({
+        SMTP_HOST: 'smtp.example.com',
+        SMTP_FROM: 'notifications@example.com',
+      }),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config.channels).toEqual([]);
+  });
+
+  it('disables the Provider test page by default in production', () => {
+    const config = notification({
+      env: createConfigEnv({ NODE_ENV: 'production' }),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config.test).toEqual({
+      enabled: false,
+      emailRecipient: undefined,
+    });
+  });
+
+  it('allows an explicit test-page override and fixed email recipient', () => {
+    const config = notification({
+      env: createConfigEnv({
+        NODE_ENV: 'production',
+        NOTIFICATION_PROVIDER_TEST_ENABLED: 'true',
+        TEST_EMAIL_RECIPIENT: 'recipient@example.com',
+      }),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config.test).toEqual({
+      enabled: true,
+      emailRecipient: 'recipient@example.com',
+    });
+  });
+
+  it('configures SMTP with optional authentication', () => {
+    const config = notification({
+      env: createConfigEnv({
+        NOTIFICATION_EMAIL_PROVIDER: 'smtp',
+        SMTP_HOST: 'smtp.example.com',
+        SMTP_PORT: '465',
+        SMTP_SECURE: 'true',
+        SMTP_USER: 'mailer@example.com',
+        SMTP_PASSWORD: 'app-password',
+        SMTP_FROM: 'NocoBase <mailer@example.com>',
+      }),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config.channels).toEqual([
+      {
+        type: 'email',
+        enabled: true,
+        providers: [
+          {
+            type: 'smtp',
+            name: 'smtp',
+            host: 'smtp.example.com',
+            port: 465,
+            secure: true,
+            auth: {
+              user: 'mailer@example.com',
+              pass: 'app-password',
+            },
+            from: 'NocoBase <mailer@example.com>',
+            replyTo: undefined,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('configures Resend and Feishu independently', () => {
+    const config = notification({
+      env: createConfigEnv({
+        NOTIFICATION_EMAIL_PROVIDER: 'resend',
+        RESEND_API_KEY: 're_test',
+        RESEND_FROM: 'NocoBase <notifications@example.com>',
+        NOTIFICATION_IM_PROVIDER: 'feishu',
+        FEISHU_WEBHOOK_URL:
+          'https://open.feishu.cn/open-apis/bot/v2/hook/example',
+        FEISHU_WEBHOOK_SECRET: 'secret',
+      }),
+      paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+    });
+
+    expect(config.channels).toEqual([
+      {
+        type: 'email',
+        enabled: true,
+        providers: [
+          {
+            type: 'resend',
+            name: 'resend',
+            apiKey: 're_test',
+            from: 'NocoBase <notifications@example.com>',
+            replyTo: undefined,
+          },
+        ],
+      },
+      {
+        type: 'im',
+        enabled: true,
+        providers: [
+          {
+            type: 'feishu-webhook',
+            name: 'feishu',
+            webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/example',
+            secret: 'secret',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('rejects incomplete selected Provider configuration', () => {
+    expect(() =>
+      notification({
+        env: createConfigEnv({ NOTIFICATION_EMAIL_PROVIDER: 'smtp' }),
+        paths: createConfigPaths({ rootDir: '/tmp/app-template-default' }),
+      }),
+    ).toThrow('SMTP_HOST is required');
   });
 });
 
@@ -826,6 +963,13 @@ describe('app plugins', () => {
       (item) =>
         item.packageName === '@nocobase/app-plugin-notification-provider',
     );
+    const notificationPlugin = runtime.config.plugins.find(
+      (item) => item.packageName === '@nocobase/app-plugin-notification',
+    );
+    const notificationProvidersPlugin = runtime.config.plugins.find(
+      (item) =>
+        item.packageName === '@nocobase/app-plugin-notification-providers',
+    );
     const installPlugin = runtime.config.plugins.find(
       (item) => item.packageName === '@nocobase/app-plugin-install',
     );
@@ -894,6 +1038,32 @@ describe('app plugins', () => {
     );
     expect(notificationProviderPlugin?.migrationsDirectory).toBeUndefined();
     expect(notificationProviderPlugin?.seedsDirectory).toBeUndefined();
+    expect(notificationPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-notification',
+      version: declaredVersion('@nocobase/app-plugin-notification'),
+      enabled: true,
+    });
+    expect(notificationPlugin?.migrationsDirectory).toMatch(
+      /app-plugin-notification\/database\/migrations$/,
+    );
+    expect(notificationPlugin?.bootstrapEntry).toMatch(
+      /app-plugin-notification\/server\/bootstrap\.ts$/,
+    );
+    expect(notificationPlugin?.routesEntry).toMatch(
+      /app-plugin-notification\/server\/routes\/index\.ts$/,
+    );
+    expect(notificationProvidersPlugin).toMatchObject({
+      packageName: '@nocobase/app-plugin-notification-providers',
+      version: declaredVersion('@nocobase/app-plugin-notification-providers'),
+      enabled: true,
+    });
+    expect(notificationProvidersPlugin?.bootstrapEntry).toMatch(
+      /app-plugin-notification-providers\/server\/bootstrap\.ts$/,
+    );
+    expect(notificationProvidersPlugin?.routesEntry).toMatch(
+      /app-plugin-notification-providers\/server\/routes\/index\.ts$/,
+    );
+    expect(notificationProvidersPlugin?.migrationsDirectory).toBeUndefined();
     expect(installPlugin).toMatchObject({
       packageName: '@nocobase/app-plugin-install',
       version: declaredVersion('@nocobase/app-plugin-install'),

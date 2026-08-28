@@ -1,7 +1,7 @@
 ---
 title: '发送通知'
-description: '使用 NocoBase NotificationManager 发送站内信和邮件，并读取发送结果。'
-keywords: 'NocoBase,NotificationManager,发送通知,站内信,邮件'
+description: '使用 NocoBase NotificationManager 发送站内信、邮件和 IM Webhook 消息，并读取发送结果。'
+keywords: 'NocoBase,NotificationManager,发送通知,站内信,邮件,飞书,钉钉'
 ---
 
 # 发送通知
@@ -88,6 +88,24 @@ await notification.send({
 
 Provider 由 Channel 配置统一选择；普通业务代码不需要维护 Provider 名称或底层 Delivery 字段。
 
+## 发送飞书或钉钉消息
+
+IM Channel 使用 `external` 接收人。`id` 需要与 Provider 的 `name` 一致。默认模板中的飞书 Provider 名为 `feishu`，钉钉 Provider 名为 `dingtalk`：
+
+```ts
+await notification.send({
+  to: { type: 'external', namespace: 'im', id: 'feishu' },
+  channels: ['im'],
+  content: {
+    title: '部署完成',
+    body: '生产环境已经完成部署。',
+    actionUrl: 'https://example.com/deployments/42',
+  },
+});
+```
+
+切换到钉钉时，把 `id` 改为 `dingtalk`。如果你通过 `createImChannelDefinition()` 提供了用户 ID 到 IM 目标的 resolver，也可以传 `{ type: 'user', id: 'user-1' }`。
+
 ## 读取返回结果
 
 `send()` 返回 Notification ID 和每条 Delivery 的 ID：
@@ -122,6 +140,6 @@ Channel 不支持某种接收人时，对应组合会创建一条失败的 Deliv
 ## 相关链接
 
 - [通知概览](./overview.md)——了解一次发送如何拆分为 Delivery
-- [配置通知](./configuration.md)——启用站内信和 SMTP 邮件
+- [配置通知](./configuration.md)——启用站内信、Email 和 IM Provider
 - [手动接入通知](./integration.md)——创建 manager 并注册 Channel / Provider
 - [通知日志](./logs.md)——查询最终投递结果

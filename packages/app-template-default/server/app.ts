@@ -79,6 +79,7 @@ export function createApp(
       },
     });
   }
+  services.notification?.activate();
 
   registerAppRoutes(app, {
     appName,

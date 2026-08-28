@@ -756,6 +756,12 @@ importers:
       '@nocobase/app-plugin-notification':
         specifier: workspace:^
         version: link:../app-plugin-notification
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
       nodemailer:
         specifier: ^9.0.5
         version: 9.0.5
@@ -1129,9 +1135,15 @@ importers:
       '@nocobase/app-plugin-install':
         specifier: workspace:^
         version: link:../app-plugin-install
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:^
+        version: link:../app-plugin-notification
       '@nocobase/app-plugin-notification-provider':
         specifier: workspace:^
         version: link:../app-plugin-notification-provider
+      '@nocobase/app-plugin-notification-providers':
+        specifier: workspace:^
+        version: link:../app-plugin-notification-providers
       '@nocobase/app-plugin-queue-example':
         specifier: workspace:^
         version: link:../app-plugin-queue-example

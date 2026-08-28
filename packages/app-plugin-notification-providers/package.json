@@ -69,6 +69,8 @@
   },
   "dependencies": {
     "@nocobase/app-plugin-notification": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
+    "hono": "catalog:",
     "nodemailer": "^9.0.5",
     "resend": "^6.22.1"
   },
