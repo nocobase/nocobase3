@@ -11,6 +11,7 @@ export function createApp(runtime: AppClientRuntime): AppClientConfig {
     refine: runtime.refine,
     routes: createElement(AppRouter, {
       clientRoutes: runtime.routes,
+      clientSettings: runtime.settings,
     }),
   });
 }

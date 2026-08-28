@@ -1,6 +1,6 @@
-import { resolveNocoBaseSettingsUrl } from '@nocobase/app-portal-sdk/runtime';
 import { PanelLeft, Settings } from 'lucide-react';
 import type { ReactElement } from 'react';
+import { Link } from 'react-router';
 
 import { Button } from '@/components/ui/button';
 
@@ -54,16 +54,14 @@ export function AppHeader({
         </p>
       </div>
       <div className='flex shrink-0 items-center gap-2'>
-        <a
+        <Link
           aria-label='Settings'
           className='inline-flex size-10 items-center justify-center rounded-xl border border-border/70 bg-background/60 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
-          href={resolveNocoBaseSettingsUrl()}
-          rel='noopener noreferrer'
-          target='_blank'
           title='Settings'
+          to='/settings'
         >
           <Settings className='size-5' />
-        </a>
+        </Link>
         <ThemeSettings />
         <UserMenu />
       </div>

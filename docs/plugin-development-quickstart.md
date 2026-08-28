@@ -164,11 +164,12 @@ GET /audit-log
 
 ### Client
 
-客户端分成注册面和实现两层。`client/plugin.ts` 是注册面，`client/index.ts` 把它作为 default 导出，App 从 `<包名>/client` import 插件；另外三个入口是实现：
+客户端分成注册面和实现两层。`client/plugin.ts` 是注册面，`client/index.ts` 把它作为 default 导出，App 从 `<包名>/client` import 插件；另外四个入口是实现：
 
-- `client/plugin.ts`：声明包名、三个入口的 loader，以及插件接受哪些配置项；`client/index.ts` 把它作为 default 导出；
+- `client/plugin.ts`：声明包名、四个入口的 loader，以及插件接受哪些配置项；`client/index.ts` 把它作为 default 导出；
 - `client/bootstrap.ts`：注册 Refine 等命令式客户端能力；
 - `client/routes.ts`：声明按需加载的页面路由；
+- `client/settings.ts`：声明注册到设置中心的页面；
 - `client/providers.ts`：声明同步 React Provider。
 
 脚手架生成的 `client/plugin.ts` 长这样：
@@ -188,13 +189,14 @@ const auditLog: AppClientPluginFactory<AuditLogClientOptions> =
     packageName: '@nocobase/app-plugin-audit-log',
     bootstrap: () => import('./bootstrap.js'),
     routes: () => import('./routes.js'),
+    settings: () => import('./settings.js'),
     providers: () => import('./providers.js'),
   });
 
 export default auditLog;
 ```
 
-三个入口都是可选的，插件没有的能力删掉对应字段即可，不必留空数组。`AuditLogClientOptions` 是配置项的落点，默认的 `placeholder?: never` 表示暂时不接受配置，实际要用时替换成自己的字段。
+四个入口都是可选的，插件没有的能力删掉对应字段即可，不必留空数组。`AuditLogClientOptions` 是配置项的落点，默认的 `placeholder?: never` 表示暂时不接受配置，实际要用时替换成自己的字段。
 
 配置项有两条通路。命令式的配置走 bootstrap：App 传进来的值会出现在 bootstrap context 的 `options` 上，把 bootstrap 的类型参数指定为自己的 options 接口就能读到。notification-provider 插件用这条通路让 App 定制撤销按钮的文案：
 
@@ -236,13 +238,42 @@ const authentication: AppClientPluginFactory<AuthenticationClientOptions> =
 
 这类选项的类型声明成 `AppClientRouteComponentLoader`（也就是 `() => import('...')`）而不是组件值，页面才不会被拖进首屏 chunk。App 侧对应写成 `authentication({ loginPage: () => import('./pages/branded-login') })`。同一条路由只能被覆盖一次，插件 option、`route-overrides.ts` 和 source extension 三者选其一，重复覆盖会带着 route ID 报错。
 
-`client/routes.ts` 和 `client/providers.ts` 的 default export 除了数组，也可以是一个接受 options 的函数，运行时会带着 App 传的配置调用它，用来按配置增减路由或给 Provider 传参。不需要配置时保持数组写法，什么都不用改。
+`client/routes.ts`、`client/settings.ts` 和 `client/providers.ts` 的 default export 除了数组，也可以是一个接受 options 的函数，运行时会带着 App 传的配置调用它，用来按配置增减页面或给 Provider 传参。不需要配置时保持数组写法，什么都不用改。
+
+#### 设置中心
+
+`client/settings.ts` 里的每一项会成为 App 设置中心（右上角齿轮，`/settings`）里的一个页面，插件不需要自己管布局和左侧导航：
+
+```ts
+import {
+  defineClientSettings,
+  type AppClientSettingDefinition,
+} from '@nocobase/app-client/plugins';
+
+const settings: readonly AppClientSettingDefinition[] = defineClientSettings([
+  {
+    id: 'audit-log/general',
+    title: 'General',
+    group: 'Audit Log',
+    access: { resource: 'audit-log.settings.general', action: 'read' },
+    pageLoader: () => import('./pages/general-page.js'),
+  },
+]);
+
+export default settings;
+```
+
+`id` 既是唯一标识也是 URL 段，页面挂在 `/settings/<id>`，上面这条就是 `/settings/audit-log/general`。id 允许用斜杠分段，建议以插件名起头做命名空间，既避免和别的插件撞 id，也让 URL 能看出归属。`group` 是左侧导航的分组标题，同一个 group 的页面会归到一起，分组之间和分组内部都按注册顺序排列。
+
+`access` 可选，填了就在加载页面前做一次权限检查，没通过的页面既不出现在导航里，直接访问 URL 也会被挡掉；不填表示只要能进设置中心就能看。
+
+设置和路由共用同一个路径空间：一个插件注册 `id: 'general'`，另一个插件又声明 `path: '/settings/general'` 的路由，启动时会直接报冲突，而不是让两个页面抢同一个地址。
 
 `client/plugin.ts` 会经由 `client/index.ts` 被 App 的 `client/plugins.ts` 静态 import，所以它静态 import 的东西都会进入应用的入口 chunk。建议这个文件只 import `defineClientPlugin`、路由 ID 常量这类轻量内容，组件、Provider 工厂、服务类都留在三个实现入口里由 `() => import()` 引用。这是建议而非强制校验。
 
 barrel 里的其他导出（类型、工具函数、组件）不会因此进入入口 chunk：脚手架给每个插件声明了 `sideEffects: false`，打包器据此把 App 没用到的导出摇掉。实测 8 个插件走 `<包名>/client` 与走 `<包名>/client/plugin` 的入口体积逐字节相同。反过来说，如果插件里真的存在模块级副作用（例如 `import './x.css'`），就不能保留这条声明。
 
-脚手架已经在 `package.json` 的 `exports` 和 `publishConfig.exports` 里各开了 `./client` 和 `./client/plugin` 两条，以及另外三个入口。完整协议参见 [app-client README](../packages/app-client/README.md)，可运行的前后端示例参见 [routes example](../packages/app-plugin-routes-example/README.md)。
+脚手架已经在 `package.json` 的 `exports` 和 `publishConfig.exports` 里各开了 `./client` 和 `./client/plugin` 两条，以及另外四个入口。完整协议参见 [app-client README](../packages/app-client/README.md)，可运行的前后端示例参见 [routes example](../packages/app-plugin-routes-example/README.md)。
 
 ## 4. 检查和启动
 
@@ -252,7 +283,7 @@ barrel 里的其他导出（类型、工具函数、组件）不会因此进入�
 pnpm --filter @nocobase/app-plugin-audit-log check
 ```
 
-它会依次执行 lint、格式检查、类型检查、测试和构建。插件涉及客户端时，还可以检查 App 最终加载的 bootstrap、routes 和 providers：
+它会依次执行 lint、格式检查、类型检查、测试和构建。插件涉及客户端时，还可以检查 App 最终加载的 bootstrap、routes、settings 和 providers：
 
 ```bash
 pnpm --filter @nocobase/app-template-default client:inspect

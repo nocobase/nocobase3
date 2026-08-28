@@ -4,6 +4,10 @@ import type { ComponentType } from 'react';
 import type { AppClientProvider, AppClientRefineConfig } from './config.js';
 
 const CONTRIBUTION_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
+// A setting id doubles as its URL, so it allows the same characters a route segment does plus `/` to namespace a
+// plugin's pages. It may not start or end with a slash, and no segment may be empty.
+const SETTING_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/i;
+const SETTINGS_PATH_PREFIX = '/settings';
 const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
   '/login',
   '/register',
@@ -39,6 +43,30 @@ export interface AppClientRouteDefinition {
 export interface AppClientRegisteredRoute extends AppClientRouteDefinition {
   readonly auth: AppClientRouteAuth;
   readonly id: string;
+  readonly packageName: string;
+  readonly source: AppClientContributionSource;
+}
+
+/**
+ * A page a plugin contributes to the application's settings centre. `id` is both the identity and the URL segment, so
+ * a setting lands at `/settings/<id>`; a slash inside it namespaces the page under its plugin and keeps ids from
+ * colliding across plugins.
+ */
+export interface AppClientSettingDefinition {
+  readonly id: string;
+  readonly title: string;
+  readonly group: string;
+  /** Authorization checked before the page is loaded. */
+  readonly access?: {
+    readonly resource: string;
+    readonly action: string;
+  };
+  readonly pageLoader: AppClientRouteComponentLoader;
+}
+
+export interface AppClientRegisteredSetting extends AppClientSettingDefinition {
+  /** The application path this setting is reachable at: `/settings/<id>`. */
+  readonly path: string;
   readonly packageName: string;
   readonly source: AppClientContributionSource;
 }
@@ -121,12 +149,20 @@ export type AppClientRoutesModuleDefault =
   | readonly AppClientRouteDefinition[]
   | ((options: never) => readonly AppClientRouteDefinition[]);
 
+export type AppClientSettingsModuleDefault =
+  | readonly AppClientSettingDefinition[]
+  | ((options: never) => readonly AppClientSettingDefinition[]);
+
 export type AppClientProvidersModuleDefault =
   | readonly AppClientProviderDefinition[]
   | ((options: never) => readonly AppClientProviderDefinition[]);
 
 export interface AppClientRoutesModule {
   default: AppClientRoutesModuleDefault;
+}
+
+export interface AppClientSettingsModule {
+  default: AppClientSettingsModuleDefault;
 }
 
 export interface AppClientProvidersModule {
@@ -139,12 +175,15 @@ export type AppClientPluginBootstrapLoader = AppClientBootstrapLoader;
 
 export type AppClientRoutesLoader = () => Promise<AppClientRoutesModule>;
 
+export type AppClientSettingsLoader = () => Promise<AppClientSettingsModule>;
+
 export type AppClientProvidersLoader = () => Promise<AppClientProvidersModule>;
 
 export interface AppClientContributionLoader {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
+  readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
   /** Options forwarded to the bootstrap context and contribution factories. */
   readonly options?: unknown;
@@ -162,6 +201,7 @@ export interface AppClientContributions {
   readonly packageName: string;
   readonly source?: AppClientContributionSource;
   readonly routes?: readonly AppClientRouteDefinition[];
+  readonly settings?: readonly AppClientSettingDefinition[];
   readonly providers?: readonly AppClientProviderDefinition[];
 }
 
@@ -169,6 +209,7 @@ export type AppClientPluginContributions = AppClientContributions;
 
 export interface ResolvedAppClientContributions {
   readonly routes: readonly AppClientRegisteredRoute[];
+  readonly settings: readonly AppClientRegisteredSetting[];
   readonly providers: readonly AppClientRegisteredProvider[];
 }
 
@@ -176,6 +217,7 @@ export interface AppClientPluginDefinition<TOptions> {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
+  readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
   /** Maps options to route component overrides. Return an empty array for none. */
   readonly routeComponentOverrides?: (
@@ -187,6 +229,7 @@ export interface AppClientPluginRegistration {
   readonly packageName: string;
   readonly bootstrap?: AppClientBootstrapLoader;
   readonly routes?: AppClientRoutesLoader;
+  readonly settings?: AppClientSettingsLoader;
   readonly providers?: AppClientProvidersLoader;
   readonly routeComponentOverrides: readonly AppClientRouteComponentOverrideDefinition[];
   readonly options: unknown;
@@ -223,6 +266,7 @@ export function defineClientPlugin<TOptions = void>(
       packageName,
       bootstrap: definition.bootstrap,
       routes: definition.routes,
+      settings: definition.settings,
       providers: definition.providers,
       routeComponentOverrides: defineClientRouteComponentOverrides(overrides),
       options: resolvedOptions,
@@ -255,6 +299,7 @@ export function defineClientPlugins(
         packageName: plugin.packageName,
         bootstrap: plugin.bootstrap,
         routes: plugin.routes,
+        settings: plugin.settings,
         providers: plugin.providers,
         options: plugin.options,
         source: 'plugin',
@@ -279,6 +324,14 @@ export function defineClientRoutes(
   routes: readonly AppClientRouteDefinition[],
 ): readonly AppClientRouteDefinition[] {
   return Object.freeze(routes.map((route) => Object.freeze({ ...route })));
+}
+
+export function defineClientSettings(
+  settings: readonly AppClientSettingDefinition[],
+): readonly AppClientSettingDefinition[] {
+  return Object.freeze(
+    settings.map((setting) => Object.freeze({ ...setting })),
+  );
 }
 
 export function defineClientRouteComponentOverrides(
@@ -343,7 +396,11 @@ export function resolveAppClientContributions(
 ): ResolvedAppClientContributions {
   const routes: AppClientRegisteredRoute[] = [];
   const routeIds = new Set<string>();
-  const routePaths = new Map<string, AppClientRegisteredRoute>();
+  // Routes and settings share one path space: a setting is mounted at `/settings/<id>`, which a route is free to
+  // declare too. Both register here so the collision is reported whichever one the resolver reaches first.
+  const claimedPaths = new Map<string, ClaimedPath>();
+  const settings: AppClientRegisteredSetting[] = [];
+  const settingIds = new Map<string, AppClientRegisteredSetting>();
   const providers: AppClientRegisteredProvider[] = [];
   const providerIds = new Set<string>();
 
@@ -360,16 +417,50 @@ export function resolveAppClientContributions(
       }
 
       const pathSignature = createRoutePathSignature(registeredRoute.path);
-      const existingRoute = routePaths.get(pathSignature);
-      if (existingRoute) {
+      const claimed = claimedPaths.get(pathSignature);
+      if (claimed) {
         throw new Error(
-          `Client route path "${registeredRoute.path}" from plugin "${packageName}" conflicts with route "${existingRoute.id}" at "${existingRoute.path}".`,
+          `Client route path "${registeredRoute.path}" from plugin "${packageName}" conflicts with ${claimed.kind} "${claimed.id}" at "${claimed.path}".`,
         );
       }
 
       routeIds.add(registeredRoute.id);
-      routePaths.set(pathSignature, registeredRoute);
+      claimedPaths.set(pathSignature, {
+        kind: 'route',
+        id: registeredRoute.id,
+        path: registeredRoute.path,
+      });
       routes.push(registeredRoute);
+    }
+
+    for (const setting of contribution.settings ?? []) {
+      const registeredSetting = createRegisteredSetting(
+        packageName,
+        source,
+        setting,
+      );
+      const duplicate = settingIds.get(registeredSetting.id);
+      if (duplicate) {
+        throw new Error(
+          `Client setting id "${registeredSetting.id}" from plugin "${packageName}" is already registered by "${duplicate.packageName}".`,
+        );
+      }
+
+      const pathSignature = createRoutePathSignature(registeredSetting.path);
+      const claimed = claimedPaths.get(pathSignature);
+      if (claimed) {
+        throw new Error(
+          `Client setting "${registeredSetting.id}" from plugin "${packageName}" conflicts with ${claimed.kind} "${claimed.id}" at "${claimed.path}".`,
+        );
+      }
+
+      settingIds.set(registeredSetting.id, registeredSetting);
+      claimedPaths.set(pathSignature, {
+        kind: 'setting',
+        id: registeredSetting.id,
+        path: registeredSetting.path,
+      });
+      settings.push(registeredSetting);
     }
 
     for (const provider of contribution.providers ?? []) {
@@ -391,6 +482,7 @@ export function resolveAppClientContributions(
 
   return Object.freeze({
     routes: Object.freeze(routes),
+    settings: Object.freeze(settings),
     providers: sortProviders(providers),
   });
 }
@@ -477,6 +569,64 @@ function normalizeContributionSource(
   source: AppClientContributionSource | undefined,
 ): AppClientContributionSource {
   return source ?? 'plugin';
+}
+
+interface ClaimedPath {
+  readonly kind: 'route' | 'setting';
+  readonly id: string;
+  readonly path: string;
+}
+
+/** Builds the `/settings/<id>` path a setting is served at. */
+export function clientSettingPath(id: string): string {
+  return `${SETTINGS_PATH_PREFIX}/${id}`;
+}
+
+function createRegisteredSetting(
+  packageName: string,
+  source: AppClientContributionSource,
+  setting: AppClientSettingDefinition,
+): AppClientRegisteredSetting {
+  const id = setting.id.trim();
+  if (!id) {
+    throw new Error(
+      `Client setting from plugin "${packageName}" must define a non-empty id.`,
+    );
+  }
+  if (!SETTING_ID_PATTERN.test(id)) {
+    throw new Error(
+      `Client setting id "${setting.id}" from plugin "${packageName}" must be slash-separated segments of letters, digits, dot, underscore, or dash.`,
+    );
+  }
+  const title = setting.title.trim();
+  if (!title) {
+    throw new Error(
+      `Client setting "${id}" from plugin "${packageName}" must define a non-empty title.`,
+    );
+  }
+  const group = setting.group.trim();
+  if (!group) {
+    throw new Error(
+      `Client setting "${id}" from plugin "${packageName}" must define a non-empty group.`,
+    );
+  }
+  if (typeof setting.pageLoader !== 'function') {
+    throw new Error(
+      `Client setting "${id}" from plugin "${packageName}" must define a pageLoader function.`,
+    );
+  }
+
+  const path = clientSettingPath(id);
+  return Object.freeze({
+    ...(setting.access === undefined ? {} : { access: setting.access }),
+    group,
+    id,
+    packageName,
+    pageLoader: wrapRouteComponentLoader(setting.pageLoader, id, 'setting'),
+    path,
+    source,
+    title,
+  });
 }
 
 function createRegisteredRoute(
@@ -678,19 +828,20 @@ function createRoutePathSignature(routePath: string): string {
 
 function wrapRouteComponentLoader(
   componentLoader: AppClientRouteComponentLoader,
-  routeId: string,
+  id: string,
+  kind: 'route' | 'setting' = 'route',
 ): AppClientRouteComponentLoader {
   return async () => {
     try {
       const module = await componentLoader();
       if (typeof module.default !== 'function') {
         throw new Error(
-          'The route component module must default-export a React component.',
+          `The ${kind} component module must default-export a React component.`,
         );
       }
       return module;
     } catch (error) {
-      throw new Error(`Failed to load client route "${routeId}".`, {
+      throw new Error(`Failed to load client ${kind} "${id}".`, {
         cause: error,
       });
     }

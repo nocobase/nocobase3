@@ -1,17 +1,32 @@
 import { Authenticated } from '@refinedev/core';
-import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { useMemo, type ReactElement } from 'react';
+import type {
+  AppClientRegisteredRoute,
+  AppClientRegisteredSetting,
+} from '@nocobase/app-client/plugins';
+import { lazy, Suspense, useMemo, type ReactElement } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
+
+import { Loading } from '@/components/loading';
 
 import { AppShell } from '../shell/index.js';
 import { ClientRoute } from './client-route.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
 
+// The settings centre brings its own chrome and navigation, none of which the application needs until someone opens
+// it. Loading it lazily keeps it out of the entry chunk, the same way every page it hosts stays out.
+const SettingsLayout = lazy(async () => ({
+  default: (await import('../settings/index.js')).SettingsLayout,
+}));
+
 export interface AppRouterProps {
   readonly clientRoutes: readonly AppClientRegisteredRoute[];
+  readonly clientSettings: readonly AppClientRegisteredSetting[];
 }
 
-export function AppRouter({ clientRoutes }: AppRouterProps): ReactElement {
+export function AppRouter({
+  clientRoutes,
+  clientSettings,
+}: AppRouterProps): ReactElement {
   const routeGroups = useMemo(
     () => ({
       guest: clientRoutes.filter((route) => route.auth === 'guest'),
@@ -42,6 +57,18 @@ export function AppRouter({ clientRoutes }: AppRouterProps): ReactElement {
             />
           ))}
         </Route>
+        <Route
+          path='/settings/*'
+          element={
+            <Suspense
+              fallback={
+                <Loading className='min-h-svh' label='Loading settings' />
+              }
+            >
+              <SettingsLayout settings={clientSettings} />
+            </Suspense>
+          }
+        />
       </Route>
 
       <Route

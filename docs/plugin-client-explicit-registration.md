@@ -1048,3 +1048,50 @@ import authentication from '@nocobase/app-plugin-authentication/client';
 **读取侧兼容两种写法。** `listClientPlugins` 同时识别 `/client` 和 `/client/plugin` 结尾的 specifier，否则按旧写法接线的 App 会被判定成未注册，`register` 会给它再加一条重复的 import。
 
 **`workflow` 的 `./client` 从 `dist` 改指源码。** 它原先是 8 个插件里唯一指向 `./dist/client/index.js` 的，换成 barrel 之后会读到过期产物并直接构建失败。现在与其他插件一致指向 `./client/index.ts`。
+
+## 14. 后续修订：新增 `settings` 贡献类型与设置中心
+
+第二次调整。正文写的是 bootstrap / routes / providers 三类贡献，现在是四类，多出来的 `settings` 与 routes 完全同构。
+
+**插件侧。** `defineClientPlugin` 多一个和 `routes` 平级的 `settings` 属性，指向一个 default 导出数组、或导出 `(options) => 数组` 的模块：
+
+```ts
+defineClientPlugin({
+  packageName: '@nocobase/app-plugin-audit-log',
+  routes: () => import('./routes.js'),
+  settings: () => import('./settings.js'),
+});
+```
+
+```ts
+// client/settings.ts
+export default defineClientSettings([
+  {
+    id: 'audit-log/general',
+    title: 'General',
+    group: 'Audit Log',
+    access: { resource: 'audit-log.settings.general', action: 'read' },
+    pageLoader: () => import('./pages/general-page.js'),
+  },
+]);
+```
+
+`id` 既是标识也是 URL 段，页面挂在 `/settings/<id>`。id 允许斜杠分段做插件命名空间；不允许首尾斜杠和空段。`group` 是设置中心左侧导航的分组标题，分组之间和分组内部都按注册顺序排列。`access` 可选，不填表示能进设置中心就能看。
+
+**为什么 id 允许斜杠。** 权限设置的四个页面在本次改动前就已经是 `/settings/authorization/*`。id 若限制成单段，这四条 URL 全部失效；允许斜杠则原地保留，同时天然带上插件命名空间，跨插件撞 id 的概率降到很低。
+
+**App 侧。** 设置中心的布局和左侧导航属于应用而不是库，和 `AppShell` 同级放在 `client/settings/`；`app-client` 只负责类型、加载、解析和冲突检测，不含任何 UI。理由与 `AppShell` 一致：template 是用户拿到手会直接改的源码，设置中心长什么样应该由应用自己决定。
+
+`/settings/*` 挂在与 required 路由相同的鉴权外壳内，但在 `AppShell` 之外——设置中心自带 chrome，是一个进入和离开的地方，而不是产品导航的又一个分支。`/settings` 本身、未知路径、以及无权访问的路径，都会重定向到第一个当前用户可打开的设置项，因此右侧永远不会空着；一个都没有时显示说明页。
+
+**路径空间是共用的。** 一个插件注册 `id: 'general'`，另一个插件声明 `path: '/settings/general'` 的路由，二者构成冲突，解析阶段直接报错并同时给出两个标识，而不是让两个页面抢同一个地址。两种顺序都会被捕获。
+
+**权限检查在导航和页面两处生效。** 被拒绝的设置项既不出现在左侧导航，直接访问 URL 也会被挡掉——只做前者会让 URL 成为绕过手段。access provider 抛异常按拒绝处理，不按放行。
+
+**权限数据不受影响。** 资源 id 形如 `authorization.settings.permission-sets`，与 URL 无关，seed 和 migration 都按资源 id 存储，本次改动没有触及。
+
+**齿轮入口改为应用内路由。** `client/shell/app-header.tsx` 原先用 `resolveNocoBaseSettingsUrl()` 在新标签页打开 v2 服务端的 `/main/v2/settings`，现在是指向 `/settings` 的应用内 `Link`。
+
+**authorization 的四个页面已迁移。** 它们从 `client/routes.ts` 移到 `client/settings.ts`，URL 逐条不变；`client/bootstrap.ts` 里对应的 `addResources` 一并删除，否则主侧边栏会留下一份重复入口。该文件的 `accessControlProvider` 保留——它是整个应用（包括设置中心自身）权限检查的来源。
+
+**`client:inspect` 增加 `--type settings`。** 输出 id、title、group、source、entry 和 access，与 routes、providers 一致。
