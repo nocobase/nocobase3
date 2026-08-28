@@ -1,0 +1,83 @@
+import { databaseManagerToken } from '@nocobase/app-database';
+import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
+import { loggingToken } from '@nocobase/logging';
+import { queueManagerToken } from '@nocobase/queue';
+import {
+  ServiceProvider,
+  type ServiceContainer,
+} from '@nocobase/service-provider';
+
+import { WorkflowService } from './runtime/runtime.js';
+import { workflowServiceToken } from './token.js';
+
+export interface WorkflowProviderConfig {
+  readonly drive: AppDriveConfig;
+  readonly workflow: {
+    readonly sourceRoot: string;
+    readonly distRoot: string;
+    readonly artifactDisk: string;
+    readonly sourceResolverDiagnostic: boolean;
+    readonly production: boolean;
+  };
+}
+
+export interface WorkflowProviderApplication {
+  readonly appName: string;
+  readonly config: WorkflowProviderConfig;
+  readonly container: ServiceContainer;
+}
+
+export default class WorkflowProvider<
+  TApplication extends WorkflowProviderApplication =
+    WorkflowProviderApplication,
+> extends ServiceProvider<TApplication> {
+  public readonly name: string = '@nocobase/app-plugin-workflow';
+
+  public override register(): void {
+    if (!this.app.container.has(databaseManagerToken)) return;
+
+    this.app.container.singleton(
+      workflowServiceToken,
+      (container) =>
+        new WorkflowService({
+          database: container.resolve(databaseManagerToken),
+          queue: container.resolve(queueManagerToken),
+          queueName: `workflow:${this.app.appName}`,
+          app: this.app,
+          sourceRoot: this.app.config.workflow.sourceRoot,
+          distRoot: this.app.config.workflow.distRoot,
+          artifactDisk: resolveWorkflowArtifactDisk(this.app.config),
+          production: this.app.config.workflow.production,
+          sourceResolverDiagnostic:
+            this.app.config.workflow.sourceResolverDiagnostic,
+          warn: (message: string): void =>
+            container.resolve(loggingToken).getLogger().warn(message),
+        }),
+    );
+  }
+
+  public override async shutdown(): Promise<void> {
+    await this.app.container.resolveIfCreated(workflowServiceToken)?.dispose();
+  }
+}
+
+function resolveWorkflowArtifactDisk(
+  config: WorkflowProviderConfig,
+): FsDriveDiskConfig {
+  const name = config.workflow.artifactDisk ?? config.drive.default;
+  const disk = config.drive.disks[name];
+  if (!disk) {
+    throw new Error(`Workflow Artifact disk "${name}" is not configured`);
+  }
+  if (disk.driver !== 'fs') {
+    throw new Error(
+      `Workflow Artifact disk "${name}" must use the fs/local driver`,
+    );
+  }
+  if (disk.visibility !== 'private') {
+    throw new Error(
+      `Workflow Artifact disk "${name}" must have private visibility`,
+    );
+  }
+  return disk;
+}

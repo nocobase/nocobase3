@@ -233,6 +233,14 @@ describe('app server', () => {
     }
   });
 
+  it('starts without optional plugins or workflow routes', async () => {
+    const app = createTestApp();
+
+    expect(
+      app.router.routes.some((route) => route.path.includes('/workflows')),
+    ).toBe(false);
+  });
+
   it('creates embedded apps from a scope', async () => {
     const app = await createEmbeddedServer(
       createEmbeddedTestScope({
@@ -969,6 +977,7 @@ describe('app server', () => {
   });
 
   it('redirects HTML navigation to installation in install mode', async () => {
+    vi.stubEnv('APP_BASE_PATH', '/main');
     vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
     const viteDevUrl = await startHttpStub((_request, response) => {
       response.setHeader('content-type', 'text/html; charset=utf-8');
@@ -1539,6 +1548,13 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: options.session ?? createNullSessionConfig(),
+    workflow: {
+      sourceRoot: path.resolve(process.cwd(), 'server/workflows'),
+      distRoot: path.resolve(process.cwd(), 'dist/server/workflows'),
+      artifactDisk: 'local',
+      sourceResolverDiagnostic: false,
+      production: false,
+    },
     snowflake: {
       workerId: 0,
     },

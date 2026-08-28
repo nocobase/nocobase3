@@ -9,6 +9,7 @@ import session from './session.js';
 import server from './server.js';
 import snowflake from './snowflake.js';
 import spa from './spa.js';
+import workflow from './workflow.js';
 import type { AppConfig } from './types.js';
 
 const config: {
@@ -20,6 +21,7 @@ const config: {
   logging: typeof logging;
   queue: typeof queue;
   session: typeof session;
+  workflow: typeof workflow;
   server: typeof server;
   snowflake: typeof snowflake;
   spa: typeof spa;
@@ -32,6 +34,7 @@ const config: {
   logging: logging,
   queue: queue,
   session: session,
+  workflow: workflow,
   server: server,
   snowflake: snowflake,
   spa: spa,

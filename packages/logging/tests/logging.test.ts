@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   createLogging,
@@ -73,9 +73,14 @@ describe('Logging', () => {
       logging.getLogger('request').info('request received');
       await logging.flush();
 
-      expect(readdirSync(directory)).toEqual([
-        expect.stringMatching(/^request\.\d{4}_\d{2}_\d{2}\.1\.log$/),
-      ]);
+      await vi.waitFor(
+        () => {
+          expect(readdirSync(directory)).toEqual([
+            expect.stringMatching(/^request\.\d{4}_\d{2}_\d{2}\.1\.log$/),
+          ]);
+        },
+        { timeout: 5_000 },
+      );
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -1,6 +1,8 @@
 export {
   createApp,
   createApplication,
+  joinBasePath,
+  normalizeBasePath,
   type AppLifecycle,
   type AppServer,
   type CreateAppOptions,
@@ -23,10 +25,21 @@ export {
   createStandaloneRuntime,
   createStandaloneServer,
   startServer,
+  startServerIfEntrypoint,
   type StandaloneServer,
   type StandaloneServerListenOptions,
   type StandaloneServerOptions,
 } from './standalone.js';
+export {
+  createAppFromRuntime,
+  createPublicBasePathAdapter,
+  stripPublicBasePathFromRequest,
+} from './runtime/app.js';
+export {
+  loadAppConfig,
+  loadEmbeddedAppConfig,
+  loadStandaloneAppConfig,
+} from './runtime/config.js';
 export {
   createStandaloneDatabaseTaskRuntime,
   type DatabaseTaskRuntime,

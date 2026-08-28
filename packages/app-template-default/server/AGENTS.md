@@ -70,6 +70,34 @@ debugging path, proxy, database, or SPA index issues.
    behavior, and add `tests/logic/config.test.ts` when config or
    migrations changed.
 
+## Workflow Or Backend Code
+
+Put persistence boundaries in `server/repositories/<feature>.ts` and expose
+them through `server/routes/*`. Register long-lived runtime capabilities with
+a focused ServiceProvider and typed token. Routes own HTTP request and response
+shapes; feature modules own calculations, validation, and integration calls.
+
+Use a Workflow when at least one of these is true:
+
+- execution must wait for a person, an external event, or a scheduled time;
+- execution must persist intermediate state and continue after a process restart;
+- a business user or auditor must inspect the current step, chosen branch, or
+  reason for the execution path;
+- the operation has several durable steps whose progress, retry, or recovery
+  must be managed independently.
+
+Use a Service + Route when all work completes in one call and no durable
+intermediate state is required. Typical examples are pure calculations, data
+conversion, field validation, one database transaction, and one outbound API
+call. Business logic may raise a custom Workflow event through
+`workflowService.trigger(workflowKey, context)` when it needs to start a longer
+asynchronous process. Manual execution is a separate operational capability
+available to every Workflow; it is not a trigger type.
+
+If the deciding question is “where is this operation now, why did it take this
+branch, and what must happen next?”, choose Workflow. If the answer is simply
+the function's return value, choose Service + Route.
+
 ## Adding Server Config
 
 - Add app-facing values to `server/config/app.ts`.

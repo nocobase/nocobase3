@@ -8,6 +8,14 @@ import type { AppSessionConfig } from '@nocobase/session';
 import type { AppAuthConfig } from './auth.js';
 import type { ResolvedAppPlugin } from '../plugins/index.js';
 
+export interface AppWorkflowConfig {
+  sourceRoot: string;
+  distRoot: string;
+  artifactDisk: string;
+  sourceResolverDiagnostic: boolean;
+  production: boolean;
+}
+
 export interface AppRoutingConfig {
   name: string;
   publicOrigin: string | undefined;
@@ -44,6 +52,7 @@ export interface AppConfig {
   logging: LoggingConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
+  workflow: AppWorkflowConfig;
   server: AppServerConfig;
   snowflake: SnowflakeIdGeneratorConfig;
   spa: AppSpaConfig;

@@ -37,6 +37,7 @@ export default createReactVitestConfig({
       'tests/logic/e2e-support.test.ts',
       'tests/logic/lifecycle.test.ts',
       'tests/logic/plugins.test.ts',
+      'tests/logic/workflow-management.test.ts',
     ],
     coverage: {
       provider: 'v8',
