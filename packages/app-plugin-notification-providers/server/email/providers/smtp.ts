@@ -73,6 +73,11 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
 }
 
 function smtpDisposition(error: unknown): 'never' | 'same_provider' {
+  const responseCode = smtpResponseCode(error);
+  if (responseCode !== undefined) {
+    if (responseCode >= 400 && responseCode < 500) return 'same_provider';
+    if (responseCode >= 500 && responseCode < 600) return 'never';
+  }
   const code = smtpErrorCode(error);
   if (code === 'EAUTH' || code === 'EENVELOPE' || code === 'EMESSAGE')
     return 'never';
@@ -106,6 +111,14 @@ function smtpErrorCategory(
 function smtpErrorCode(error: unknown): string | undefined {
   return error && typeof error === 'object' && 'code' in error
     ? String(error.code)
+    : undefined;
+}
+
+function smtpResponseCode(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object' || !('responseCode' in error))
+    return undefined;
+  return typeof error.responseCode === 'number'
+    ? error.responseCode
     : undefined;
 }
 

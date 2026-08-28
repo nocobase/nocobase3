@@ -192,6 +192,81 @@ describe('NotificationManager registration', () => {
     await database.destroy();
   });
 
+  it('selects a non-primary Provider named by an external recipient', async () => {
+    const queue = createQueueManager(createSyncQueueConfig());
+    const database = await createNotificationTestDatabase();
+    const store = new FakeNotificationStore();
+    const manager = createNotificationManager({
+      database,
+      queue,
+      logger: createLogger({ level: 'silent' }),
+      config: {
+        channels: [
+          {
+            type: 'im',
+            enabled: true,
+            providers: [
+              { type: 'fake', name: 'primary' },
+              { type: 'fake', name: 'secondary' },
+            ],
+          },
+        ],
+      },
+      store,
+    });
+    manager.registry
+      .registerChannel({
+        type: 'im',
+        async createChannel() {
+          return {
+            type: 'im',
+            resolveRecipient({ recipient, provider }): object | undefined {
+              return recipient.type === 'external' &&
+                recipient.namespace === 'im' &&
+                recipient.id === provider.name
+                ? { providerName: provider.name }
+                : undefined;
+            },
+            render({ content }): object {
+              return { text: content.body };
+            },
+            async prepare(input): Promise<object> {
+              return input.message;
+            },
+          };
+        },
+      })
+      .registerProvider('im', {
+        type: 'fake',
+        async createProvider(_context, config) {
+          return {
+            name: config.name,
+            type: config.type,
+            async send() {
+              return { status: 'accepted' } as const;
+            },
+          };
+        },
+      });
+
+    const result = await manager.send({
+      to: { type: 'external', namespace: 'im', id: 'secondary' },
+      channels: ['im'],
+      content: { body: 'Review it.' },
+    });
+    await expect(store.listDeliveries(result.notificationId)).resolves.toEqual([
+      expect.objectContaining({
+        providerName: 'secondary',
+        status: 'accepted',
+        recipientSnapshot: { providerName: 'secondary' },
+      }),
+    ]);
+
+    await manager.close();
+    await queue.close();
+    await database.destroy();
+  });
+
   it('expands shared content across recipients and Channels', async () => {
     const queue = createQueueManager(createSyncQueueConfig());
     const database = await createNotificationTestDatabase();

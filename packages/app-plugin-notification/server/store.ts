@@ -1,5 +1,8 @@
 import type { DatabaseManager, Row } from '@nocobase/app-database';
-import type { NotificationProviderErrorCategory } from './types.js';
+import {
+  isNotificationProviderErrorCategory,
+  type NotificationProviderErrorCategory,
+} from './types.js';
 
 export type NotificationLogStatus =
   'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';
@@ -687,24 +690,6 @@ function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
 function normalizeStoredErrorCategory(
   value: unknown,
 ): NotificationProviderErrorCategory | undefined {
-  switch (value) {
-    case 'authentication':
-    case 'channel':
-    case 'configuration':
-    case 'content':
-    case 'network':
-    case 'provider':
-    case 'rate_limit':
-    case 'recipient':
-    case 'storage':
-    case 'timeout':
-    case 'unknown':
-      return value;
-    case undefined:
-    case null:
-    case '':
-      return undefined;
-    default:
-      return 'unknown';
-  }
+  if (value === undefined || value === null || value === '') return undefined;
+  return isNotificationProviderErrorCategory(value) ? value : 'unknown';
 }

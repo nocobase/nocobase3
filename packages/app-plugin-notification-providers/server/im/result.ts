@@ -3,15 +3,15 @@ import type { ProviderSendResult } from '@nocobase/app-plugin-notification';
 export async function evaluateJsonResult(
   response: Response,
   fields: {
-    readonly code: readonly string[];
-    readonly message: readonly string[];
+    readonly code: readonly (readonly string[])[];
+    readonly message: readonly (readonly string[])[];
     readonly success: (code: unknown) => boolean;
   },
 ): Promise<ProviderSendResult> {
   const body: unknown = await response.json();
-  const code = nestedValue(body, fields.code);
+  const code = firstNestedValue(body, fields.code);
   if (fields.success(code)) return { status: 'accepted' };
-  const message = nestedValue(body, fields.message);
+  const message = firstNestedValue(body, fields.message);
   const messageText = typeof message === 'string' ? message : undefined;
   const category = providerCategory(code, messageText);
   return {
@@ -30,6 +30,17 @@ export async function evaluateJsonResult(
           : 'IM Provider rejected the message.',
     },
   };
+}
+
+function firstNestedValue(
+  value: unknown,
+  paths: readonly (readonly string[])[],
+): unknown {
+  for (const path of paths) {
+    const nested = nestedValue(value, path);
+    if (nested !== undefined) return nested;
+  }
+  return undefined;
 }
 
 function nestedValue(value: unknown, path: readonly string[]): unknown {

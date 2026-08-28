@@ -91,18 +91,42 @@ export interface NotificationProviderSendError {
   readonly category?: NotificationProviderErrorCategory;
 }
 
+export const NOTIFICATION_PROVIDER_ERROR_CATEGORIES: readonly [
+  'authentication',
+  'channel',
+  'configuration',
+  'content',
+  'network',
+  'provider',
+  'rate_limit',
+  'recipient',
+  'storage',
+  'timeout',
+  'unknown',
+] = [
+  'authentication',
+  'channel',
+  'configuration',
+  'content',
+  'network',
+  'provider',
+  'rate_limit',
+  'recipient',
+  'storage',
+  'timeout',
+  'unknown',
+];
+
 export type NotificationProviderErrorCategory =
-  | 'authentication'
-  | 'channel'
-  | 'configuration'
-  | 'content'
-  | 'network'
-  | 'provider'
-  | 'rate_limit'
-  | 'recipient'
-  | 'storage'
-  | 'timeout'
-  | 'unknown';
+  (typeof NOTIFICATION_PROVIDER_ERROR_CATEGORIES)[number];
+
+export function isNotificationProviderErrorCategory(
+  value: unknown,
+): value is NotificationProviderErrorCategory {
+  return NOTIFICATION_PROVIDER_ERROR_CATEGORIES.some(
+    (category) => category === value,
+  );
+}
 
 export type NotificationRetryDisposition = 'never' | 'same_provider';
 

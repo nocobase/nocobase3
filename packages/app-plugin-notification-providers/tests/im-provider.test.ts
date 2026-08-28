@@ -72,6 +72,32 @@ describe('IM webhook Providers', () => {
     });
   });
 
+  it('accepts the Feishu v2 success response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          Extra: null,
+          StatusCode: 0,
+          StatusMessage: 'success',
+        }),
+      ),
+    );
+    const provider =
+      await createFeishuWebhookProviderDefinition().createProvider(
+        providerContext(),
+        defineFeishuWebhookProviderConfig({
+          name: 'primary',
+          webhookUrl:
+            'https://open.feishu.cn/open-apis/bot/v2/hook/example-token',
+        }),
+      );
+
+    await expect(provider.send(sendInput())).resolves.toEqual({
+      status: 'accepted',
+    });
+  });
+
   it('retries provider rate limits returned with HTTP 200', async () => {
     vi.stubGlobal(
       'fetch',
@@ -97,6 +123,70 @@ describe('IM webhook Providers', () => {
       },
     });
   });
+
+  it('retries webhook failures that happen before submission', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw Object.assign(new TypeError('fetch failed'), {
+          cause: Object.assign(new Error('getaddrinfo ENOTFOUND'), {
+            code: 'ENOTFOUND',
+          }),
+        });
+      }),
+    );
+    const provider =
+      await createFeishuWebhookProviderDefinition().createProvider(
+        providerContext(),
+        defineFeishuWebhookProviderConfig({
+          name: 'primary',
+          webhookUrl:
+            'https://open.feishu.cn/open-apis/bot/v2/hook/example-token',
+        }),
+      );
+
+    await expect(provider.send(sendInput())).resolves.toEqual({
+      status: 'failed',
+      disposition: 'same_provider',
+      error: {
+        code: 'ENOTFOUND',
+        category: 'network',
+        message: 'fetch failed',
+      },
+    });
+  });
+
+  it.each([
+    [404, 'configuration'],
+    [422, 'content'],
+  ] as const)(
+    'maps HTTP %i webhook responses to the %s category',
+    async (status, category) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('rejected', { status })),
+      );
+      const provider =
+        await createDingTalkWebhookProviderDefinition().createProvider(
+          providerContext(),
+          defineDingTalkWebhookProviderConfig({
+            name: 'primary',
+            webhookUrl:
+              'https://oapi.dingtalk.com/robot/send?access_token=example-token',
+          }),
+        );
+
+      await expect(provider.send(sendInput())).resolves.toEqual({
+        status: 'failed',
+        disposition: 'never',
+        error: {
+          code: String(status),
+          category,
+          message: 'rejected',
+        },
+      });
+    },
+  );
 });
 
 function providerContext(): NotificationProviderContext {

@@ -53,9 +53,16 @@ export async function postJson(
         status: 'submission_unknown',
         error: { code: 'HTTP_ABORTED', category: 'timeout', message },
       };
+    const code = errorCode(error);
+    if (isPreSubmissionNetworkError(code))
+      return {
+        status: 'failed',
+        disposition: 'same_provider',
+        error: { code, category: 'network', message },
+      };
     return {
       status: 'submission_unknown',
-      error: { code: errorCode(error), category: 'network', message },
+      error: { code, category: 'network', message },
     };
   }
 }
@@ -83,7 +90,7 @@ export function validateHttpUrl(
 
 function httpCategory(status: number): NotificationProviderErrorCategory {
   if (status === 401 || status === 403) return 'authentication';
-  if (status === 404 || status === 422) return 'recipient';
+  if (status === 404) return 'configuration';
   if (status === 429) return 'rate_limit';
   if (status >= 500) return 'provider';
   return 'content';
@@ -98,7 +105,39 @@ function parseRetryAfter(value: string | null): number | undefined {
 }
 
 function errorCode(error: unknown): string | undefined {
-  return error && typeof error === 'object' && 'code' in error
-    ? String(error.code)
-    : undefined;
+  let current = error;
+  const seen = new Set<object>();
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    if (
+      'code' in current &&
+      (typeof current.code === 'string' || typeof current.code === 'number')
+    )
+      return String(current.code);
+    current = 'cause' in current ? current.cause : undefined;
+  }
+  return undefined;
+}
+
+const PRE_SUBMISSION_NETWORK_ERROR_CODES = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'CERT_HAS_EXPIRED',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+]);
+
+function isPreSubmissionNetworkError(code: string | undefined): boolean {
+  return Boolean(
+    code &&
+    (PRE_SUBMISSION_NETWORK_ERROR_CODES.has(code) ||
+      code.startsWith('ERR_TLS_') ||
+      code.startsWith('ERR_SSL_')),
+  );
 }

@@ -62,6 +62,32 @@ describe('SMTP Provider', () => {
       },
     });
   });
+
+  it.each([
+    [450, 'same_provider'],
+    [550, 'never'],
+  ] as const)(
+    'maps SMTP %i envelope responses to the %s disposition',
+    async (responseCode, disposition) => {
+      smtpMock.sendMail.mockRejectedValue(
+        Object.assign(new Error(`SMTP ${responseCode}`), {
+          code: 'EENVELOPE',
+          responseCode,
+        }),
+      );
+      const provider = await createProvider();
+
+      await expect(provider.send(sendInput())).resolves.toEqual({
+        status: 'failed',
+        disposition,
+        error: {
+          code: 'EENVELOPE',
+          category: 'recipient',
+          message: `SMTP ${responseCode}`,
+        },
+      });
+    },
+  );
 });
 
 async function createProvider(): Promise<

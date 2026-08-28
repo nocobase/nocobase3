@@ -78,8 +78,8 @@ export function createFeishuWebhookProviderDefinition(): NotificationProviderDef
               headers: { 'x-nocobase-delivery-id': deliveryId },
               evaluateSuccess: (response) =>
                 evaluateJsonResult(response, {
-                  code: ['code'],
-                  message: ['msg'],
+                  code: [['StatusCode'], ['code']],
+                  message: [['StatusMessage'], ['msg']],
                   success: (code) => code === 0,
                 }),
             },
@@ -130,8 +130,8 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
               headers: { 'x-nocobase-delivery-id': deliveryId },
               evaluateSuccess: (response) =>
                 evaluateJsonResult(response, {
-                  code: ['errcode'],
-                  message: ['errmsg'],
+                  code: [['errcode']],
+                  message: [['errmsg']],
                   success: (code) => code === 0,
                 }),
             },

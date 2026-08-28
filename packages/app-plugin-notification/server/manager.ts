@@ -26,6 +26,17 @@ import type {
   NotificationSendResult,
 } from './types.js';
 
+interface ExpandedRecipientTarget {
+  readonly channel: string;
+  readonly provider: NotificationProviderIdentity;
+  readonly recipient: object;
+  readonly error?: NotificationErrorRecord;
+}
+
+interface ExpandedRecipient {
+  readonly channels: readonly ExpandedRecipientTarget[];
+}
+
 export class NotificationManager<
   TChannels extends {
     readonly [
@@ -176,48 +187,40 @@ export class NotificationManager<
       );
     }
 
-    const expandedRecipients: {
-      readonly channels: readonly {
-        readonly channel: string;
-        readonly provider: NotificationProviderIdentity;
-        readonly recipient: object;
-        readonly error?: NotificationErrorRecord;
-      }[];
-    }[] = [];
+    const expandedRecipients: ExpandedRecipient[] = [];
     for (const recipient of recipients) {
-      const targets: {
-        readonly channel: string;
-        readonly provider: NotificationProviderIdentity;
-        readonly recipient: object;
-        readonly error?: NotificationErrorRecord;
-      }[] = [];
+      const targets: ExpandedRecipientTarget[] = [];
       for (const channel of channels) {
-        const providers = this.channelManager.providerIdentities(channel);
-        if (providers.length === 0)
+        const providers = this.providerCandidates(channel);
+        const [fallbackProvider] = providers;
+        if (!fallbackProvider)
           throw new Error(
             `Notification Channel "${channel}" has no matching enabled Provider.`,
           );
+        let resolvedTarget: ExpandedRecipientTarget | undefined;
         for (const provider of providers) {
           const resolved = await this.channelManager.resolveRecipient(
             channel,
             recipient,
             provider,
           );
-          targets.push(
-            resolved
-              ? { channel, provider, recipient: resolved }
-              : {
-                  channel,
-                  provider,
-                  recipient,
-                  error: {
-                    code: 'RECIPIENT_UNSUPPORTED',
-                    category: 'recipient',
-                    message: `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
-                  },
-                },
-          );
+          if (resolved) {
+            resolvedTarget = { channel, provider, recipient: resolved };
+            break;
+          }
         }
+        targets.push(
+          resolvedTarget ?? {
+            channel,
+            provider: fallbackProvider,
+            recipient,
+            error: {
+              code: 'RECIPIENT_UNSUPPORTED',
+              category: 'recipient',
+              message: `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
+            },
+          },
+        );
       }
       expandedRecipients.push({ channels: targets });
     }
@@ -234,14 +237,7 @@ export class NotificationManager<
       readonly type: string;
       readonly referenceId?: string;
     };
-    readonly recipients: readonly {
-      readonly channels: readonly {
-        readonly channel: string;
-        readonly provider: NotificationProviderIdentity;
-        readonly recipient: object;
-        readonly error?: NotificationErrorRecord;
-      }[];
-    }[];
+    readonly recipients: readonly ExpandedRecipient[];
     readonly message: Readonly<Record<string, object | undefined>>;
   }): Promise<NotificationSendResult> {
     if (input.recipients.length === 0)
@@ -395,6 +391,24 @@ export class NotificationManager<
       }
     });
     return operation;
+  }
+
+  private providerCandidates(
+    channel: string,
+  ): readonly NotificationProviderIdentity[] {
+    const preferred = this.channelManager.providerIdentities(channel);
+    const all = this.channelManager.providerIdentities(channel, {
+      providerMode: 'broadcast',
+    });
+    if (preferred.length === 0) return all;
+    const [first] = preferred;
+    return [
+      first,
+      ...all.filter(
+        (provider) =>
+          provider.name !== first.name || provider.type !== first.type,
+      ),
+    ];
   }
 
   private async createRuntime(type: string): Promise<void> {
