@@ -26,6 +26,7 @@ import {
 export interface ReleaseManagementConfig {
   appHostUrl: string;
   appHostControlToken?: string;
+  appHostUploadTimeoutMs?: number;
   nativeAuth?: ReleaseNativeSessionReader;
   database?: Pick<DatabaseManager, 'query'>;
   adminEmails?: string[];
@@ -56,6 +57,7 @@ export function createReleaseManagement(
   const appHost = new AppHostClient({
     baseUrl: config.appHostUrl,
     controlToken: config.appHostControlToken,
+    uploadTimeoutMs: config.appHostUploadTimeoutMs,
   });
   const store = createDeploymentStore(config);
   const appStore = new JsonManagedAppStore(

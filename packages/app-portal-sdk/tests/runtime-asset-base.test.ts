@@ -27,6 +27,7 @@ it('resolves lazy chunk dependencies from the runtime Portal base', async () => 
   fs.writeFileSync(
     path.join(root, 'src/main.js'),
     [
+      'import "./style.css";',
       'window.loadFirst = () => import("./first.js");',
       'window.loadSecond = () => import("./second.js");',
     ].join('\n'),
@@ -43,12 +44,13 @@ it('resolves lazy chunk dependencies from the runtime Portal base', async () => 
     path.join(root, 'src/shared.js'),
     'export const shared = "shared";',
   );
+  fs.writeFileSync(path.join(root, 'src/style.css'), 'body { color: black; }');
 
   await build({
     root,
-    base: '/',
+    base: '/main/',
     logLevel: 'silent',
-    plugins: [portalRawIndexHtmlPlugin({ root, base: '/' })],
+    plugins: [portalRawIndexHtmlPlugin({ root, base: '/main/' })],
   });
 
   const assetsDir = path.join(root, 'dist/assets');
@@ -61,4 +63,12 @@ it('resolves lazy chunk dependencies from the runtime Portal base', async () => 
   expect(scripts).toContain('window.NOCOBASE_PORTAL_BASE');
   expect(scripts).toContain('window.location.origin');
   expect(scripts).not.toMatch(/["']\/assets\//);
+
+  const rawIndex = fs.readFileSync(
+    path.join(root, 'dist/index.raw.html'),
+    'utf8',
+  );
+  expect(rawIndex).toContain('src="/assets/');
+  expect(rawIndex).toContain('href="/assets/');
+  expect(rawIndex).not.toContain('/main/assets/');
 });

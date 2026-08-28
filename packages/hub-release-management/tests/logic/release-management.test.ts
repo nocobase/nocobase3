@@ -57,6 +57,66 @@ describe('release management', () => {
     );
   });
 
+  it('uses a longer timeout for release uploads than control requests', async () => {
+    const client = new AppHostClient({
+      baseUrl: 'http://app-host.internal:3000',
+      timeoutMs: 5,
+      uploadTimeoutMs: 100,
+      fetch: ((input, init) =>
+        new Promise<Response>((resolve, reject) => {
+          const requestPath = new URL(String(input)).pathname;
+          const timer = setTimeout(() => {
+            if (requestPath.endsWith('/releases')) {
+              resolve(
+                Response.json({
+                  release: {
+                    status: 'created',
+                    appId: 'orders',
+                    releaseId: 'release-v2',
+                    version: '2.0.0',
+                    artifactSha256: 'sha256',
+                    archiveBytes: 7,
+                  },
+                }),
+              );
+              return;
+            }
+            resolve(
+              Response.json({ active: [], definitions: [], releases: [] }),
+            );
+          }, 25);
+          init?.signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(init.signal?.reason);
+            },
+            { once: true },
+          );
+        })) as typeof fetch,
+    });
+
+    await expect(client.overview()).rejects.toMatchObject({
+      code: 'APP_HOST_UNAVAILABLE',
+    });
+    await expect(
+      client.uploadRelease(
+        'orders',
+        'release-v2',
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('archive'));
+            controller.close();
+          },
+        }),
+        7,
+      ),
+    ).resolves.toMatchObject({
+      status: 'created',
+      releaseId: 'release-v2',
+    });
+  });
+
   it('refreshes the registered database resource from the live App health endpoint', async () => {
     const requests: Request[] = [];
     const client = new AppHostClient({

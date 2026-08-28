@@ -22,7 +22,8 @@ export default class AppDeploy extends Command {
       description: 'App directory. Defaults to the current directory.',
     }),
     hub: Flags.string({
-      description: 'Target hub URL. Defaults to the hub recorded in .nb3/.',
+      description:
+        'Target Hub or App URL. Defaults to the deployment target recorded in .nb3/.',
     }),
     token: Flags.string({
       description:

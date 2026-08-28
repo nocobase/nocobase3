@@ -15,6 +15,7 @@ export interface AppHostClientOptions {
   baseUrl: string | URL;
   controlToken?: string;
   timeoutMs?: number;
+  uploadTimeoutMs?: number;
   fetch?: typeof fetch;
 }
 
@@ -22,12 +23,14 @@ export class AppHostClient {
   private readonly baseUrl: URL;
   private readonly controlToken?: string;
   private readonly timeoutMs: number;
+  private readonly uploadTimeoutMs: number;
   private readonly request: typeof fetch;
 
   constructor(options: AppHostClientOptions) {
     this.baseUrl = new URL(options.baseUrl);
     this.controlToken = options.controlToken;
     this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.uploadTimeoutMs = options.uploadTimeoutMs ?? 5 * 60_000;
     this.request = options.fetch ?? fetch;
   }
 
@@ -85,6 +88,7 @@ export class AppHostClient {
         // yet part of the DOM RequestInit type.
         duplex: 'half',
       } as RequestInit & { duplex: 'half' },
+      this.uploadTimeoutMs,
     );
     return payload.release;
   }
@@ -100,9 +104,13 @@ export class AppHostClient {
     return payload.lifecycle;
   }
 
-  private async send<T>(pathname: string, init: RequestInit = {}): Promise<T> {
+  private async send<T>(
+    pathname: string,
+    init: RequestInit = {},
+    timeoutMs: number = this.timeoutMs,
+  ): Promise<T> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     timeout.unref?.();
     const headers = new Headers(init.headers);
     headers.set('accept', 'application/json');

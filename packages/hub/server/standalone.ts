@@ -72,6 +72,10 @@ export function createStandaloneServer(
   const releaseManagement = createReleaseManagement({
     appHostUrl,
     appHostControlToken: getEnvString(env, 'APP_HOST_CONTROL_TOKEN'),
+    appHostUploadTimeoutMs: numberFromEnv(
+      env,
+      'HUB_APP_HOST_UPLOAD_TIMEOUT_MS',
+    ),
     nativeAuth,
     database: nativeAuth.database,
     adminEmails,

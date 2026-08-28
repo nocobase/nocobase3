@@ -59,6 +59,10 @@ export async function createServer(scope: AppScope): Promise<Hono> {
   const releaseManagement = createReleaseManagement({
     appHostUrl: resolveAppHostUrl(releaseEnv),
     appHostControlToken: getEnvString(releaseEnv, 'APP_HOST_CONTROL_TOKEN'),
+    appHostUploadTimeoutMs: positiveIntegerFromEnv(
+      releaseEnv,
+      'HUB_APP_HOST_UPLOAD_TIMEOUT_MS',
+    ),
     nativeAuth,
     database: nativeAuth.database,
     adminEmails,
@@ -180,6 +184,19 @@ function parseList(value: string | undefined): string[] | undefined {
     .map((item) => item.trim())
     .filter(Boolean);
   return items?.length ? items : undefined;
+}
+
+function positiveIntegerFromEnv(
+  env: Record<string, string | undefined>,
+  name: string,
+): number | undefined {
+  const value = getEnvString(env, name);
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function resolveEmbeddedAuthSecret(

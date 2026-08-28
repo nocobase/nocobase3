@@ -7,9 +7,11 @@ import {
   PackageCheck,
   RefreshCw,
   ServerCog,
+  Terminal,
+  Upload,
 } from 'lucide-react';
 import { useLink } from '@refinedev/core';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +25,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useReleaseManagement } from '@nocobase/hub-release-management/client';
 import { cn } from '@/lib/utils';
 import {
@@ -33,11 +42,13 @@ import {
   latestDeployment,
 } from './presentation';
 import { AppAccessActions } from './app-access-actions';
+import { AppDeploymentGuide } from './app-deployment-guide';
 import { presentReleaseControlError } from './release-control-error';
 import { AppLifecycleActions } from './app-lifecycle-actions';
 
 export default function AppsHome() {
   const Link = useLink();
+  const [deploymentGuideOpen, setDeploymentGuideOpen] = useState(false);
   const {
     overview,
     busy,
@@ -83,6 +94,14 @@ export default function AppsHome() {
           </div>
           <div className='flex flex-wrap gap-2'>
             <Button
+              size='lg'
+              className='w-fit'
+              onClick={() => setDeploymentGuideOpen(true)}
+            >
+              <Upload />
+              部署 App
+            </Button>
+            <Button
               variant='outline'
               size='lg'
               className='w-fit bg-background/75'
@@ -95,6 +114,21 @@ export default function AppsHome() {
           </div>
         </div>
       </section>
+
+      <Dialog open={deploymentGuideOpen} onOpenChange={setDeploymentGuideOpen}>
+        <DialogContent className='sm:max-w-2xl'>
+          <DialogHeader className='pr-8'>
+            <div className='mb-1 grid size-10 place-items-center rounded-xl bg-muted text-muted-foreground'>
+              <Terminal className='size-5' />
+            </div>
+            <DialogTitle className='text-lg'>部署 App 到 Hub</DialogTitle>
+            <DialogDescription>
+              App 在本地开发，Hub 只接收构建产物。选择你当前的情况继续。
+            </DialogDescription>
+          </DialogHeader>
+          <AppDeploymentGuide embedded />
+        </DialogContent>
+      </Dialog>
 
       {controlError ? (
         <Alert variant='destructive'>
@@ -161,23 +195,7 @@ export default function AppsHome() {
             </CardContent>
           </Card>
         ) : overview.apps.length === 0 ? (
-          <Card className='border-dashed py-12'>
-            <CardContent className='mx-auto max-w-lg text-center'>
-              <div className='mx-auto grid size-12 place-items-center rounded-2xl bg-muted text-muted-foreground'>
-                <ServerCog />
-              </div>
-              <h3 className='mt-4 font-heading text-lg font-semibold'>
-                暂无应用
-              </h3>
-              <p className='mt-2 text-sm leading-6 text-muted-foreground'>
-                在本地完成 App 开发并构建为 dist，然后上传到当前 Hub。
-                首次上传并通过产物校验后，应用会自动出现在这里。
-              </p>
-              <code className='mt-4 inline-block rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground'>
-                nb3 app deploy --hub &lt;HUB_URL&gt;
-              </code>
-            </CardContent>
-          </Card>
+          <AppDeploymentGuide />
         ) : (
           <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
             {overview.apps.map((app) => {

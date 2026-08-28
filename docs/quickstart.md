@@ -10,12 +10,16 @@ V3 的基本思路：
 ## 1. 创建本地 App
 
 ```bash
-npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app@latest crm --db-dialect=sqlite
+pnpm --config.registry=https://npm.nocobase.ai create @nocobase/app@latest crm
 cd crm
 ```
 
-这条快速体验命令固定使用 SQLite，不需要额外配置。脚手架会从 `latest`
-渠道获取最新模板，生成 `.env.local`，安装依赖，并验证 SQLite 原生驱动可以加载。
+脚手架会提示选择数据库；快速体验选择 SQLite 即可，不需要额外配置。它会从
+`latest` 渠道获取最新模板，生成 `.env.local`，安装依赖，并验证 SQLite
+原生驱动可以加载。
+生成的项目会在 `.npmrc` 中保留仅作用于 `@nocobase` scope 的 Registry
+配置，后续安装依赖和构建 dist 不需要重复添加 Registry 参数。当前 v3
+脚手架尚未发布到公共 npm，因此创建命令本身需要显式指定 NocoBase Registry。
 如需使用 PostgreSQL 或 MySQL，将 `--db-dialect` 改为 `postgres` 或 `mysql`，
 并在启动前填写 `.env.local` 中的实际数据库连接。
 
@@ -63,7 +67,8 @@ pnpm start
 cd ../crm
 ```
 
-`nb3 app deploy` 会在本地完成构建，并将构建产物交给 Hub，不会上传源码。
+生成的 App 自带 `deploy` 脚本。它会调用 `nb3 app deploy`，在本地完成构建，
+并将构建产物交给 Hub，不会上传源码。
 不需要先在 Hub 登记应用；第一个合法产物上传并完成校验后，Hub 会自动将 App
 加入应用清单。
 Hub 管理员需要先配置 `HUB_DEPLOY_TOKEN`；CLI 通过
@@ -74,21 +79,25 @@ Hub 管理员需要先配置 `HUB_DEPLOY_TOKEN`；CLI 通过
 
 ```bash
 export NOCOBASE_HUB_TOKEN=YOUR_HUB_DEPLOY_TOKEN
-nb3 app deploy --hub http://127.0.0.1:13001/hub
+pnpm run deploy --hub http://localhost:3000/crm
 ```
 
 部署到远端 Hub：
 
 ```bash
 export NOCOBASE_HUB_TOKEN=YOUR_HUB_DEPLOY_TOKEN
-nb3 app deploy --hub https://apps.example.com/hub
+pnpm run deploy --hub https://apps.example.com/crm
 ```
 
 后续如果 App 已经记录了 Hub 地址，可以直接执行：
 
 ```bash
-nb3 app deploy
+pnpm run deploy
 ```
+
+这里需要写 `pnpm run deploy`。pnpm 11 自己也有一个同名的内置
+`pnpm deploy` 命令，直接省略 `run` 会进入 pnpm 的工作区部署命令，而不是部署
+NocoBase App。
 
 ## 常见问题
 

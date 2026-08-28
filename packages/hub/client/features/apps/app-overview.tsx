@@ -33,6 +33,7 @@ import {
   latestDeployment,
 } from './presentation';
 import { AppAccessActions } from './app-access-actions';
+import { AppDeploymentGuide } from './app-deployment-guide';
 import { AppLifecycleActions } from './app-lifecycle-actions';
 import { AppUnregisterAction } from './app-unregister-action';
 
@@ -161,6 +162,8 @@ export default function AppOverview() {
           </AlertDescription>
         </Alert>
       ) : null}
+
+      {app && !deployed ? <AppDeploymentGuide appId={app.id} /> : null}
 
       <section className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
         <StatusCard

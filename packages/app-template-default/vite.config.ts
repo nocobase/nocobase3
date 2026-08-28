@@ -1,6 +1,9 @@
 import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
-import { portalSdkCompatibilityPlugin } from '@nocobase/app-portal-sdk/vite';
+import {
+  portalRawIndexHtmlPlugin,
+  portalSdkCompatibilityPlugin,
+} from '@nocobase/app-portal-sdk/vite';
 import { appClientPluginsPlugin } from '@nocobase/app-server-kit/plugins';
 import fs from 'node:fs';
 import path from 'path';
@@ -80,6 +83,7 @@ export default createPortalViteConfig(
       define: defineEnv,
       envPrefix: ['VITE_'],
       plugins: [
+        portalRawIndexHtmlPlugin({ root: __dirname, base: viteBase }),
         ...(annotationsEnabled
           ? [
               agentAnnotations({

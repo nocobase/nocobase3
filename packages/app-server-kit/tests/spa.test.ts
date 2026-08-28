@@ -120,6 +120,38 @@ describe('SPA routes', () => {
     );
   });
 
+  it('prefers the raw build index and mounts its assets at the runtime base', async () => {
+    const root = createSpaFixture();
+    writeFileSync(
+      rootPath(root, 'index.raw.html'),
+      [
+        '<link rel="icon" href="/assets/favicon.ico">',
+        '<meta property="og:image" content="/assets/social.png">',
+        '<script type="module" src="/assets/runtime.js"></script>',
+      ].join(''),
+    );
+    const app = new Hono();
+    registerSpaRoutes(app, {
+      basePath: '/main/test',
+      indexPath: path.join(root, 'index.html'),
+      runtimeGlobals: {
+        NOCOBASE_PORTAL_BASE: '/main/test/',
+      },
+    });
+
+    const response = await app.request('http://localhost/main/test/settings');
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('href="/main/test/assets/favicon.ico"');
+    expect(html).toContain('content="/main/test/assets/social.png"');
+    expect(html).toContain('src="/main/test/assets/runtime.js"');
+    expect(html).not.toContain('src="/main/test/assets/index.js"');
+    expect(html.indexOf('window.NOCOBASE_PORTAL_BASE')).toBeLessThan(
+      html.indexOf('<script type="module"'),
+    );
+  });
+
   it('does not return the SPA index for missing assets', async () => {
     const root = createSpaFixture();
     const app = new Hono();

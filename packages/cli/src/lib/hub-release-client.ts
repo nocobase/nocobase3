@@ -106,7 +106,7 @@ export async function uploadReleaseArchive(options: {
 export function resolveHubReleaseUploadUrl(hub: string, appId: string): URL {
   const url = normalizeHubUrl(hub);
   let base = url.pathname.replace(/\/+$/, '');
-  if (!base) base = '/hub';
+  if (!base || base === `/${encodeURIComponent(appId)}`) base = '/hub';
   if (base.endsWith('/api/release-management')) {
     // The complete API base was provided.
   } else if (base.endsWith('/api')) {

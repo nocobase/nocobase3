@@ -101,6 +101,11 @@ describe('Hub artifact upload client', () => {
     ).toBe(
       'https://apps.example.com/hub/api/release-management/apps/sales%20portal/releases',
     );
+    expect(
+      resolveHubReleaseUploadUrl('http://localhost:3000/crm', 'crm').href,
+    ).toBe(
+      'http://localhost:3000/hub/api/release-management/apps/crm/releases',
+    );
     expect(() => normalizeHubUrl('ftp://apps.example.com')).toThrow(
       'Hub URL must use HTTP(S)',
     );

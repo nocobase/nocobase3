@@ -18,6 +18,16 @@ pnpm app:dev
 The example environment mounts the application at `/main`. Use the URL printed
 by the development command as the source of truth for host and port.
 
+Deploy a generated App's locally built artifact to Hub with:
+
+```bash
+export NOCOBASE_HUB_TOKEN=YOUR_HUB_DEPLOY_TOKEN
+pnpm run deploy --hub http://localhost:3000/your-app-id
+```
+
+Use `pnpm run deploy`, because pnpm 11 reserves `pnpm deploy` for its own
+workspace deployment command.
+
 The key settings are:
 
 ```env

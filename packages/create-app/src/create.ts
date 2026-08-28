@@ -17,6 +17,7 @@ import { buildEnvFile } from './lib/env-file.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
 import { installDependencies, verifyDriver } from './lib/install.ts';
 import { addDriverDependency } from './lib/manifest.ts';
+import { ensureScopedNocoBaseRegistry } from './lib/npmrc.ts';
 import { ensureAllowBuilds } from './lib/pnpm-workspace.ts';
 import {
   cancel,
@@ -148,6 +149,7 @@ async function run(input: ParsedInput): Promise<void> {
     await removeDirectory(template.directory);
   }
 
+  await ensureScopedNocoBaseRegistry(targetDirectory, registry);
   await addDriverDependency(targetDirectory, driver);
   await ensureAllowBuilds(targetDirectory);
 

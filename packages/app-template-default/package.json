@@ -70,6 +70,7 @@
     "@nocobase/drive": "workspace:^",
     "@nocobase/id-generator": "workspace:^",
     "@nocobase/logging": "workspace:^",
+    "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
@@ -179,6 +180,7 @@
   },
   "scripts": {
     "dev": "node ./scripts/dev.mjs",
+    "deploy": "nb3 app deploy",
     "server:config": "tsx --tsconfig tsconfig.node.json ./scripts/server-config.ts",
     "build": "node ./scripts/build.mjs",
     "lint": "eslint . --max-warnings 0",
