@@ -101,6 +101,20 @@ export class ChannelManager {
     return provider ? [{ name: provider.name, type: provider.type }] : [];
   }
 
+  providerCandidates(type: string): readonly NotificationProviderIdentity[] {
+    const preferred = this.providerIdentities(type);
+    const all = this.providerIdentities(type, { providerMode: 'broadcast' });
+    if (preferred.length === 0) return all;
+    const [first] = preferred;
+    return [
+      first,
+      ...all.filter(
+        (provider) =>
+          provider.name !== first.name || provider.type !== first.type,
+      ),
+    ];
+  }
+
   async send(
     deliveryId: string,
   ): Promise<NotificationDeliveryRecord | undefined> {

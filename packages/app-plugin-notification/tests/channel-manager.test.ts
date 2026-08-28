@@ -51,6 +51,10 @@ describe('ChannelManager', () => {
       { name: 'secondary', type: 'fake' },
       { name: 'primary', type: 'fake' },
     ]);
+    expect(manager.providerCandidates('email')).toEqual([
+      { name: 'primary', type: 'fake' },
+      { name: 'secondary', type: 'fake' },
+    ]);
     await expect(
       manager.resolveRecipient(
         'email',

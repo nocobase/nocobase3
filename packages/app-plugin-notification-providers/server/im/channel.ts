@@ -6,8 +6,7 @@ import type {
 } from '@nocobase/app-plugin-notification';
 
 export interface ImRecipient {
-  readonly namespace: string;
-  readonly providerName: string;
+  readonly provider: NotificationProviderIdentity;
 }
 
 export interface ImMessage {
@@ -73,20 +72,15 @@ export function createImChannelDefinition(
               input.recipient.id,
               input.provider,
             );
-            return resolved?.providerName === input.provider.name
+            return sameProvider(resolved?.provider, input.provider)
               ? resolved
               : undefined;
           }
           if (
-            input.recipient.type === 'external' &&
-            (input.recipient.namespace === input.provider.type ||
-              input.recipient.namespace === 'im') &&
-            input.recipient.id === input.provider.name
+            input.recipient.type === 'provider' &&
+            sameProvider(input.recipient.provider, input.provider)
           )
-            return {
-              namespace: input.recipient.namespace,
-              providerName: input.recipient.id,
-            };
+            return { provider: input.recipient.provider };
           return undefined;
         },
         render(input: {
@@ -105,7 +99,7 @@ export function createImChannelDefinition(
           readonly message: ImMessage;
           readonly provider: NotificationProviderIdentity;
         }): Promise<PreparedImMessage> {
-          if (input.recipient.providerName !== input.provider.name)
+          if (!sameProvider(input.recipient.provider, input.provider))
             throw new Error(
               `IM webhook recipient must select Provider "${input.provider.name}".`,
             );
@@ -122,4 +116,11 @@ export function formatImText(message: ImMessage): string {
   return [message.title, message.text, message.actionUrl]
     .filter((value): value is string => Boolean(value))
     .join('\n');
+}
+
+function sameProvider(
+  left: NotificationProviderIdentity | undefined,
+  right: NotificationProviderIdentity,
+): boolean {
+  return left?.name === right.name && left.type === right.type;
 }

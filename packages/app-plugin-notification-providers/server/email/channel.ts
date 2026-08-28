@@ -13,7 +13,10 @@ import type {
 } from './types.js';
 
 export interface EmailChannelDefinitionOptions {
-  readonly resolveUserEmail?: (userId: string) => Promise<string | undefined>;
+  readonly resolveUserEmail?: (
+    userId: string,
+    provider: NotificationProviderIdentity,
+  ) => Promise<string | undefined>;
 }
 
 export function defineEmailChannelConfig(
@@ -35,12 +38,18 @@ export function createEmailChannelDefinition(
     async createChannel() {
       return {
         type: 'email',
-        resolveRecipient(input: {
+        async resolveRecipient(input: {
           readonly recipient: NotificationRecipient;
           readonly provider: NotificationProviderIdentity;
-        }): EmailRecipient | undefined {
+        }): Promise<EmailRecipient | undefined> {
           const { recipient } = input;
-          if (recipient.type === 'user') return { userId: recipient.id };
+          if (recipient.type === 'user') {
+            const address = await options.resolveUserEmail?.(
+              recipient.id,
+              input.provider,
+            );
+            return address ? { address } : undefined;
+          }
           if (recipient.type === 'email') return { address: recipient.address };
           return undefined;
         },
@@ -61,16 +70,9 @@ export function createEmailChannelDefinition(
           readonly message: EmailMessage;
           readonly signal: AbortSignal;
         }): Promise<PreparedEmailMessage> {
-          const address =
-            input.recipient.address ??
-            (input.recipient.userId
-              ? await options.resolveUserEmail?.(input.recipient.userId)
-              : undefined);
-          if (!address)
-            throw new Error('Email recipient address cannot be resolved.');
           if (!input.message.subject || !input.message.text)
             throw new Error('Email subject and text are required.');
-          return { to: address, content: input.message };
+          return { to: input.recipient.address, content: input.message };
         },
       };
     },

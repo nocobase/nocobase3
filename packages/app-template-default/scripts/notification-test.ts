@@ -131,14 +131,14 @@ async function sendTestMessage(
     return sendWithDefinition(
       createFeishuWebhookProviderDefinition(),
       config,
-      createImMessage(config.name),
+      createImMessage(config),
       logger,
     );
   }
   return sendWithDefinition(
     createDingTalkWebhookProviderDefinition(),
     config,
-    createImMessage(config.name),
+    createImMessage(config),
     logger,
   );
 }
@@ -190,9 +190,12 @@ function createEmailMessage(address: string): PreparedEmailMessage {
   };
 }
 
-function createImMessage(providerName: string): PreparedImMessage {
+function createImMessage(provider: {
+  readonly name: string;
+  readonly type: string;
+}): PreparedImMessage {
   return {
-    recipient: { namespace: 'im', providerName },
+    recipient: { provider },
     content: {
       title: 'NocoBase notification Provider test',
       text: `Provider smoke test sent at ${new Date().toISOString()}.`,

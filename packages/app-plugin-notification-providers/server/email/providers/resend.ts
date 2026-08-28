@@ -5,6 +5,7 @@ import type {
 } from '@nocobase/app-plugin-notification';
 import type { ErrorResponse } from 'resend';
 
+import { providerErrorCode } from '../../error.js';
 import type { PreparedEmailMessage, ResendProviderConfig } from '../types.js';
 
 export function defineResendProviderConfig(
@@ -120,7 +121,7 @@ function resendDisposition(error: ErrorResponse): 'never' | 'same_provider' {
 
 function thrownFailure(error: unknown): ProviderSendResult {
   const message = error instanceof Error ? error.message : String(error);
-  const code = errorCode(error);
+  const code = providerErrorCode(error);
   if (code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'EPIPE') {
     return {
       status: 'submission_unknown',
@@ -132,10 +133,4 @@ function thrownFailure(error: unknown): ProviderSendResult {
     disposition: 'same_provider',
     error: { code, category: 'network', message },
   };
-}
-
-function errorCode(error: unknown): string | undefined {
-  return error && typeof error === 'object' && 'code' in error
-    ? String(error.code)
-    : undefined;
 }

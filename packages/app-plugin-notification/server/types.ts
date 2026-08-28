@@ -20,20 +20,19 @@ export interface NotificationContent {
   readonly actionUrl?: string;
 }
 
+export interface NotificationProviderIdentity {
+  readonly name: string;
+  readonly type: string;
+}
+
 export type NotificationRecipient =
   | { readonly type: 'user'; readonly id: string }
   | { readonly type: 'email'; readonly address: string }
   | { readonly type: 'phone'; readonly number: string }
   | {
-      readonly type: 'external';
-      readonly namespace: string;
-      readonly id: string;
+      readonly type: 'provider';
+      readonly provider: NotificationProviderIdentity;
     };
-
-export interface NotificationProviderIdentity {
-  readonly name: string;
-  readonly type: string;
-}
 
 export interface NotificationSendInput<
   TChannels extends NotificationChannelMap,

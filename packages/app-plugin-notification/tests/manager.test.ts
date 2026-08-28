@@ -192,7 +192,7 @@ describe('NotificationManager registration', () => {
     await database.destroy();
   });
 
-  it('selects a non-primary Provider named by an external recipient', async () => {
+  it('selects a non-primary Provider named by a Provider recipient', async () => {
     const queue = createQueueManager(createSyncQueueConfig());
     const database = await createNotificationTestDatabase();
     const store = new FakeNotificationStore();
@@ -221,9 +221,9 @@ describe('NotificationManager registration', () => {
           return {
             type: 'im',
             resolveRecipient({ recipient, provider }): object | undefined {
-              return recipient.type === 'external' &&
-                recipient.namespace === 'im' &&
-                recipient.id === provider.name
+              return recipient.type === 'provider' &&
+                recipient.provider.name === provider.name &&
+                recipient.provider.type === provider.type
                 ? { providerName: provider.name }
                 : undefined;
             },
@@ -250,7 +250,10 @@ describe('NotificationManager registration', () => {
       });
 
     const result = await manager.send({
-      to: { type: 'external', namespace: 'im', id: 'secondary' },
+      to: {
+        type: 'provider',
+        provider: { name: 'secondary', type: 'fake' },
+      },
       channels: ['im'],
       content: { body: 'Review it.' },
     });

@@ -1,6 +1,5 @@
 export interface EmailRecipient {
-  readonly address?: string;
-  readonly userId?: string;
+  readonly address: string;
 }
 
 export interface EmailMessage {

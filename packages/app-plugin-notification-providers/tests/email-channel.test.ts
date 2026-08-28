@@ -1,11 +1,15 @@
 import type { NotificationChannelContext } from '@nocobase/app-plugin-notification';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createEmailChannelDefinition } from '../server/email/channel.js';
 
 describe('Email Channel common input', () => {
   it('resolves recipients and renders content with overrides', async () => {
-    const definition = createEmailChannelDefinition();
+    const resolveUserEmail = vi.fn(
+      async (userId: string, provider: { readonly name: string }) =>
+        provider.name === 'primary' ? `${userId}@example.com` : undefined,
+    );
+    const definition = createEmailChannelDefinition({ resolveUserEmail });
     const channel = await definition.createChannel(
       {} as NotificationChannelContext,
       { type: 'email', enabled: true, providers: [] },
@@ -17,7 +21,8 @@ describe('Email Channel common input', () => {
         recipient: { type: 'user', id: 'user-1' },
         provider,
       }),
-    ).toEqual({ userId: 'user-1' });
+    ).toEqual({ address: 'user-1@example.com' });
+    expect(resolveUserEmail).toHaveBeenCalledWith('user-1', provider);
     expect(
       await channel.resolveRecipient?.({
         recipient: {

@@ -3,6 +3,7 @@ import type {
   ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
 
+import { providerErrorCode } from '../../error.js';
 import type { PreparedEmailMessage, SmtpProviderConfig } from '../types.js';
 
 export function defineSmtpProviderConfig(
@@ -48,7 +49,7 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
                 status: 'submission_unknown',
                 error: {
                   category: 'timeout',
-                  code: smtpErrorCode(error),
+                  code: providerErrorCode(error),
                   message: error.message,
                 },
               };
@@ -57,7 +58,7 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
               status: 'failed',
               error: {
                 category: smtpErrorCategory(error),
-                code: smtpErrorCode(error),
+                code: providerErrorCode(error),
                 message: error instanceof Error ? error.message : String(error),
               },
               disposition: smtpDisposition(error),
@@ -78,10 +79,13 @@ function smtpDisposition(error: unknown): 'never' | 'same_provider' {
     if (responseCode >= 400 && responseCode < 500) return 'same_provider';
     if (responseCode >= 500 && responseCode < 600) return 'never';
   }
-  const code = smtpErrorCode(error);
+  const code = providerErrorCode(error);
   if (code === 'EAUTH' || code === 'EENVELOPE' || code === 'EMESSAGE')
     return 'never';
   if (
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNRESET' ||
+    code === 'EPIPE' ||
     code === 'ECONNREFUSED' ||
     code === 'ENOTFOUND' ||
     code === 'EAI_AGAIN' ||
@@ -94,11 +98,14 @@ function smtpDisposition(error: unknown): 'never' | 'same_provider' {
 function smtpErrorCategory(
   error: unknown,
 ): 'authentication' | 'content' | 'network' | 'provider' | 'recipient' {
-  const code = smtpErrorCode(error);
+  const code = providerErrorCode(error);
   if (code === 'EAUTH') return 'authentication';
   if (code === 'EENVELOPE') return 'recipient';
   if (code === 'EMESSAGE') return 'content';
   if (
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNRESET' ||
+    code === 'EPIPE' ||
     code === 'ECONNREFUSED' ||
     code === 'ENOTFOUND' ||
     code === 'EAI_AGAIN' ||
@@ -106,12 +113,6 @@ function smtpErrorCategory(
   )
     return 'network';
   return 'provider';
-}
-
-function smtpErrorCode(error: unknown): string | undefined {
-  return error && typeof error === 'object' && 'code' in error
-    ? String(error.code)
-    : undefined;
 }
 
 function smtpResponseCode(error: unknown): number | undefined {
@@ -126,5 +127,11 @@ function isUnknownSubmission(error: unknown): error is Error {
   if (!(error instanceof Error)) return false;
   const code =
     'code' in error && typeof error.code === 'string' ? error.code : undefined;
-  return code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'EPIPE';
+  if (code !== 'ETIMEDOUT' && code !== 'ECONNRESET' && code !== 'EPIPE')
+    return false;
+  const command =
+    'command' in error && typeof error.command === 'string'
+      ? error.command
+      : undefined;
+  return command !== 'CONN';
 }

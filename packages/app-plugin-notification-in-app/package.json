@@ -60,7 +60,7 @@
     "test": "vitest run",
     "registry:build": "node ../../scripts/registry.mjs build --package .",
     "registry:materialize": "node ../../scripts/registry.mjs materialize --package .",
-    "prepack": "pnpm registry:build",
+    "prepack": "pnpm registry:build && pnpm build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",

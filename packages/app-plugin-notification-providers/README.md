@@ -179,12 +179,14 @@ await notification.send({
 });
 ```
 
-IM accepts an external recipient whose ID matches the configured Provider
-name:
+IM accepts an explicit Provider recipient:
 
 ```ts
 await notification.send({
-  to: { type: 'external', namespace: 'im', id: 'feishu' },
+  to: {
+    type: 'provider',
+    provider: { name: 'feishu', type: 'feishu-webhook' },
+  },
   channels: ['im'],
   content: { title: 'Deployment complete', body: 'Production is ready.' },
 });

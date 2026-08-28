@@ -20,8 +20,8 @@ import {
 } from './store.js';
 import type {
   NotificationManagerOptions,
-  NotificationRecipient,
   NotificationProviderIdentity,
+  NotificationRecipient,
   NotificationSendInput,
   NotificationSendResult,
 } from './types.js';
@@ -191,7 +191,7 @@ export class NotificationManager<
     for (const recipient of recipients) {
       const targets: ExpandedRecipientTarget[] = [];
       for (const channel of channels) {
-        const providers = this.providerCandidates(channel);
+        const providers = this.channelManager.providerCandidates(channel);
         const [fallbackProvider] = providers;
         if (!fallbackProvider)
           throw new Error(
@@ -391,24 +391,6 @@ export class NotificationManager<
       }
     });
     return operation;
-  }
-
-  private providerCandidates(
-    channel: string,
-  ): readonly NotificationProviderIdentity[] {
-    const preferred = this.channelManager.providerIdentities(channel);
-    const all = this.channelManager.providerIdentities(channel, {
-      providerMode: 'broadcast',
-    });
-    if (preferred.length === 0) return all;
-    const [first] = preferred;
-    return [
-      first,
-      ...all.filter(
-        (provider) =>
-          provider.name !== first.name || provider.type !== first.type,
-      ),
-    ];
   }
 
   private async createRuntime(type: string): Promise<void> {

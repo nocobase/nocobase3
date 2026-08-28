@@ -156,6 +156,32 @@ describe('IM webhook Providers', () => {
     });
   });
 
+  it('classifies a malformed successful response as a Provider failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('not json', { status: 200 })),
+    );
+    const provider =
+      await createFeishuWebhookProviderDefinition().createProvider(
+        providerContext(),
+        defineFeishuWebhookProviderConfig({
+          name: 'primary',
+          webhookUrl:
+            'https://open.feishu.cn/open-apis/bot/v2/hook/example-token',
+        }),
+      );
+
+    await expect(provider.send(sendInput())).resolves.toEqual({
+      status: 'failed',
+      disposition: 'never',
+      error: {
+        code: 'INVALID_PROVIDER_RESPONSE',
+        category: 'provider',
+        message: expect.any(String),
+      },
+    });
+  });
+
   it.each([
     [404, 'configuration'],
     [422, 'content'],
@@ -206,7 +232,9 @@ function sendInput(): NotificationProviderSendInput<PreparedImMessage> {
     deadline: '2026-08-27T00:01:00.000Z',
     signal: new AbortController().signal,
     message: {
-      recipient: { namespace: 'im', providerName: 'primary' },
+      recipient: {
+        provider: { name: 'primary', type: 'feishu-webhook' },
+      },
       content: {
         title: 'Approval',
         text: 'Review it',

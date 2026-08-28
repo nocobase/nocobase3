@@ -8,10 +8,9 @@ const context = {
 };
 
 describe('first-batch Channel contracts', () => {
-  it('resolves provider-scoped external identities for the IM Channel', async () => {
+  it('resolves explicit Provider targets for the IM Channel', async () => {
     const resolveUserTarget = vi.fn(async () => ({
-      namespace: 'feishu-webhook',
-      providerName: 'primary',
+      provider: { name: 'primary', type: 'feishu-webhook' },
     }));
     const channel = await createImChannelDefinition({
       resolveUserTarget,
@@ -21,15 +20,13 @@ describe('first-batch Channel contracts', () => {
     await expect(
       channel.resolveRecipient?.({
         recipient: {
-          type: 'external',
-          namespace: 'feishu-webhook',
-          id: 'primary',
+          type: 'provider',
+          provider,
         },
         provider,
       }),
     ).resolves.toEqual({
-      namespace: 'feishu-webhook',
-      providerName: 'primary',
+      provider,
     });
     await expect(
       channel.resolveRecipient?.({
@@ -37,8 +34,7 @@ describe('first-batch Channel contracts', () => {
         provider,
       }),
     ).resolves.toEqual({
-      namespace: 'feishu-webhook',
-      providerName: 'primary',
+      provider,
     });
     expect(resolveUserTarget).toHaveBeenCalledWith('user-1', provider);
   });

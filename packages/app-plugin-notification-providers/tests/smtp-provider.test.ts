@@ -88,6 +88,45 @@ describe('SMTP Provider', () => {
       });
     },
   );
+
+  it('retries a connection timeout before SMTP submission', async () => {
+    smtpMock.sendMail.mockRejectedValue(
+      Object.assign(new Error('Connection timeout'), {
+        code: 'ETIMEDOUT',
+        command: 'CONN',
+      }),
+    );
+    const provider = await createProvider();
+
+    await expect(provider.send(sendInput())).resolves.toEqual({
+      status: 'failed',
+      disposition: 'same_provider',
+      error: {
+        code: 'ETIMEDOUT',
+        category: 'network',
+        message: 'Connection timeout',
+      },
+    });
+  });
+
+  it('keeps a timeout after SMTP submission as unknown', async () => {
+    smtpMock.sendMail.mockRejectedValue(
+      Object.assign(new Error('Response timeout'), {
+        code: 'ETIMEDOUT',
+        command: 'DATA',
+      }),
+    );
+    const provider = await createProvider();
+
+    await expect(provider.send(sendInput())).resolves.toEqual({
+      status: 'submission_unknown',
+      error: {
+        code: 'ETIMEDOUT',
+        category: 'timeout',
+        message: 'Response timeout',
+      },
+    });
+  });
 });
 
 async function createProvider(): Promise<

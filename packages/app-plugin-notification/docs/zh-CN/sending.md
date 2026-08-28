@@ -90,11 +90,14 @@ Provider 由 Channel 配置统一选择；普通业务代码不需要维护 Prov
 
 ## 发送飞书或钉钉消息
 
-IM Channel 使用 `external` 接收人。`id` 需要与 Provider 的 `name` 一致。默认模板中的飞书 Provider 名为 `feishu`，钉钉 Provider 名为 `dingtalk`：
+IM Channel 使用显式的 Provider 接收人。`provider.name` 和 `provider.type` 必须与配置中的 Provider 一致：
 
 ```ts
 await notification.send({
-  to: { type: 'external', namespace: 'im', id: 'feishu' },
+  to: {
+    type: 'provider',
+    provider: { name: 'feishu', type: 'feishu-webhook' },
+  },
   channels: ['im'],
   content: {
     title: '部署完成',
@@ -104,7 +107,7 @@ await notification.send({
 });
 ```
 
-切换到钉钉时，把 `id` 改为 `dingtalk`。如果你通过 `createImChannelDefinition()` 提供了用户 ID 到 IM 目标的 resolver，也可以传 `{ type: 'user', id: 'user-1' }`。
+切换到钉钉时，把 Provider 改为 `{ name: 'dingtalk', type: 'dingtalk-webhook' }`。如果你通过 `createImChannelDefinition()` 提供了用户 ID 到 IM 目标的 resolver，也可以传 `{ type: 'user', id: 'user-1' }`。
 
 ## 读取返回结果
 

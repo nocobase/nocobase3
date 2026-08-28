@@ -4,6 +4,8 @@ import type {
   ProviderSendResult,
 } from '@nocobase/app-plugin-notification';
 
+import { providerErrorCode } from './error.js';
+
 export async function postJson(
   url: string,
   body: object,
@@ -23,10 +25,22 @@ export async function postJson(
       signal: input.signal,
       redirect: 'manual',
     });
-    if (response.ok)
-      return options.evaluateSuccess
-        ? options.evaluateSuccess(response)
-        : { status: 'accepted' };
+    if (response.ok) {
+      if (!options.evaluateSuccess) return { status: 'accepted' };
+      try {
+        return await options.evaluateSuccess(response);
+      } catch (error) {
+        return {
+          status: 'failed',
+          disposition: 'never',
+          error: {
+            code: 'INVALID_PROVIDER_RESPONSE',
+            category: 'provider',
+            message: error instanceof Error ? error.message : String(error),
+          },
+        };
+      }
+    }
     const text = await response.text();
     const error: NotificationProviderSendError = {
       code: String(response.status),
@@ -53,7 +67,7 @@ export async function postJson(
         status: 'submission_unknown',
         error: { code: 'HTTP_ABORTED', category: 'timeout', message },
       };
-    const code = errorCode(error);
+    const code = providerErrorCode(error);
     if (isPreSubmissionNetworkError(code))
       return {
         status: 'failed',
@@ -102,21 +116,6 @@ function parseRetryAfter(value: string | null): number | undefined {
   if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
   const date = Date.parse(value);
   return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
-}
-
-function errorCode(error: unknown): string | undefined {
-  let current = error;
-  const seen = new Set<object>();
-  while (current && typeof current === 'object' && !seen.has(current)) {
-    seen.add(current);
-    if (
-      'code' in current &&
-      (typeof current.code === 'string' || typeof current.code === 'number')
-    )
-      return String(current.code);
-    current = 'cause' in current ? current.cause : undefined;
-  }
-  return undefined;
 }
 
 const PRE_SUBMISSION_NETWORK_ERROR_CODES = new Set([
