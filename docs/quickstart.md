@@ -41,7 +41,6 @@ Hub 是用于部署和管理 APP 的应用中心。如果已经有线上或测�
 ```bash
 pnpm create @nocobase/hub my-hub
 cd my-hub
-pnpm build
 pnpm start
 ```
 
