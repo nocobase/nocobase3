@@ -2,13 +2,18 @@
   "name": "@nocobase/app-plugin-install",
   "displayName": "Install App Plugin",
   "description": "Redirects unconfigured applications to the installation page.",
-  "version": "0.0.1-beta.0",
+  "version": "0.1.0-beta.1",
   "type": "module",
+  "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
     "node": ">=24.0.0"
   },
   "exports": {
+    "./server/plugin": {
+      "types": "./server/plugin.ts",
+      "import": "./server/plugin.ts"
+    },
     "./client/routes": {
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
@@ -17,11 +22,23 @@
       "types": "./client/providers.ts",
       "import": "./client/providers.ts"
     },
+    "./client": {
+      "types": "./client/index.ts",
+      "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
     "exports": {
+      "./server/plugin": {
+        "types": "./dist/server/plugin.d.ts",
+        "import": "./dist/server/plugin.js"
+      },
       "./client/routes": {
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
@@ -30,6 +47,14 @@
         "types": "./dist/client/providers.d.ts",
         "import": "./dist/client/providers.js"
       },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -37,14 +62,6 @@
     "dist",
     "README.md"
   ],
-  "nocobase": {
-    "plugin": {
-      "client": {
-        "routes": "./client/routes",
-        "providers": "./client/providers"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json",
@@ -60,6 +77,7 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@nocobase/app-server-kit": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "catalog:",

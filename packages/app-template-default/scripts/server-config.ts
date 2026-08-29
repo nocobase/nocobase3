@@ -1,23 +1,17 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-import { loadStandaloneAppConfig } from '../server/runtime/config.ts';
+import { resolveStandaloneAppRuntime } from '@nocobase/app-server-kit/node';
+import appRuntime from '../server/runtime.ts';
 
 type JsonValue =
   string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 type ObjectValue = Record<string, unknown>;
 
-const rootDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const rootDir = path.resolve(import.meta.dirname, '..');
 const envFiles = [path.join(rootDir, '.env'), path.join(rootDir, '.env.local')];
-const standaloneModuleUrl = new URL('../server/standalone.ts', import.meta.url)
-  .href;
-
-const config = loadStandaloneAppConfig(standaloneModuleUrl);
+const config = resolveStandaloneAppRuntime(appRuntime, { rootDir }).config;
 
 const activeLoggerName = config.logging.default;
 const configuredLogger = activeLoggerName
@@ -63,9 +57,7 @@ const report = {
     publicOrigin: config.app.publicOrigin ?? '(request-derived)',
     publicBasePath: config.app.publicBasePath || '/',
     internalBasePath: config.app.internalBasePath,
-    internalApiProxyPath: config.app.internalApiProxyPath || '(disabled)',
     publicApiUrl: config.app.publicApiUrl,
-    nocoBaseApiUrl: formatOptionalUrl(config.app.nocoBaseApiUrl),
   },
   server: {
     host: config.server.host,
@@ -85,6 +77,10 @@ const report = {
   caching: {
     default: activeCachingProviderName || '(none)',
     active: summarizeCachingProvider(activeCachingProvider),
+  },
+  snowflake: {
+    workerId: config.snowflake.workerId,
+    epoch: config.snowflake.epoch,
   },
   database: {
     default: activeDatabaseName || '(none)',
@@ -109,10 +105,8 @@ const report = {
   plugins: config.plugins.map((plugin) => ({
     packageName: plugin.packageName,
     version: plugin.version,
-    enabled: plugin.enabled,
     migrationsDirectory: plugin.migrationsDirectory ?? '(none)',
     seedsDirectory: plugin.seedsDirectory ?? '(none)',
-    routesEntry: plugin.routesEntry ?? '(none)',
   })),
   drive: {
     default: activeDriveName || '(none)',
@@ -136,6 +130,9 @@ const report = {
       autoLoad: config.queue.jobs?.autoLoad ?? true,
       hotReload: config.queue.jobs?.hotReload ?? false,
     },
+  },
+  workflow: {
+    queueName: `workflow:${config.app.name}`,
   },
   session: {
     enabled: config.session.enabled ?? true,
@@ -424,9 +421,7 @@ function printReport(value: typeof report): void {
     'Internal base path',
     value.app.internalBasePath || '(app-local root)',
   );
-  printPair('Internal API proxy', value.app.internalApiProxyPath);
   printPair('Public API URL', value.app.publicApiUrl);
-  printPair('Upstream NocoBase API', value.app.nocoBaseApiUrl);
 
   printSection('HTTP server');
   printPair('Host', value.server.host);
@@ -450,6 +445,10 @@ function printReport(value: typeof report): void {
   printSection('Caching');
   printPair('Default provider', value.caching.default);
   printJson('Active provider', value.caching.active);
+
+  printSection('Snowflake ID generator');
+  printPair('Worker ID', String(value.snowflake.workerId));
+  printPair('Epoch', String(value.snowflake.epoch));
 
   printSection('Database');
   printPair('Default connection', value.database.default);
@@ -488,6 +487,9 @@ function printReport(value: typeof report): void {
   printJson('Job locations', value.queue.jobs.locations);
   printPair('Auto-load jobs', String(value.queue.jobs.autoLoad));
   printPair('Hot reload jobs', String(value.queue.jobs.hotReload));
+
+  printSection('Workflow');
+  printPair('Queue name', value.workflow.queueName);
 
   printSection('Session');
   printPair('Enabled', String(value.session.enabled));

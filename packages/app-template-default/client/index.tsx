@@ -1,10 +1,10 @@
-import { appClientPluginLoaders } from 'virtual:nocobase-app-client-plugins';
 import { AppClientRoot } from '@nocobase/app-client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import application from './application';
 import { createApp } from './app';
+import clientPlugins from './plugins';
 import routeComponentOverrides from './route-overrides';
 import { createAppRuntime } from './runtime';
 import sourceExtensions from './source-extensions';
@@ -23,8 +23,11 @@ async function start(): Promise<void> {
   try {
     const runtime = await createAppRuntime({
       application,
-      plugins: appClientPluginLoaders,
-      routeComponentOverrides,
+      plugins: clientPlugins.plugins,
+      routeComponentOverrides: [
+        ...clientPlugins.routeComponentOverrides,
+        ...routeComponentOverrides,
+      ],
       sourceExtensions,
     });
     const app = createApp(runtime);

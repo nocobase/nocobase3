@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/nb3-cli",
-  "version": "0.0.1-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "NocoBase 3 command line tool.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -33,6 +33,12 @@
     "topics": {
       "app": {
         "description": "Create, develop, and deploy business apps."
+      },
+      "app:plugin": {
+        "description": "Manage the plugins an app uses."
+      },
+      "app:plugin:skills": {
+        "description": "Synchronize the agent skills plugins ship."
       },
       "hub": {
         "description": "Manage a local hub that hosts deployed apps."

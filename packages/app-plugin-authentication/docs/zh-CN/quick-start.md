@@ -51,9 +51,9 @@ const auth = createAuthentication({
 ```ts
 import { Hono } from 'hono';
 
-const app = new Hono();
+const router = new Hono();
 
-app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+router.on(['GET', 'POST'], '/api/auth/*', (context) =>
   auth.handler(context.req.raw),
 );
 ```

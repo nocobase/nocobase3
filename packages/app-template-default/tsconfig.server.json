@@ -5,11 +5,8 @@
     "outDir": "dist",
     "paths": {
       "@/jobs/*.js": ["./server/jobs/*.ts"],
-      "@/jobs/*": ["./server/jobs/*"],
-      "@/services/*.js": ["./server/services/*.ts"],
-      "@/services/*": ["./server/services/*"]
+      "@/jobs/*": ["./server/jobs/*"]
     }
   },
-  "include": ["server/**/*.ts", "scripts/migrate.ts", "scripts/seed.ts"],
-  "exclude": ["database/migrations/**/*.ts", "database/seeds/**/*.ts"]
+  "include": ["server/**/*.ts", "scripts/migrate.ts", "scripts/seed.ts"]
 }

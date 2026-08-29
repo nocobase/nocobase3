@@ -2,7 +2,7 @@ import type { Hono } from 'hono';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createApp, joinBasePath, normalizeBasePath } from './app.js';
+import { createApp, normalizeBasePath } from './app.js';
 import { getEnvBoolean, getEnvString, readEnvFiles } from './env.js';
 
 export type AppDisposer = () => void | Promise<void>;
@@ -21,7 +21,6 @@ export interface AppScope {
 }
 
 export async function createServer(scope: AppScope): Promise<Hono> {
-  const apiProxyPath = '/v2/api';
   const distRoot = resolveDistRoot(scope);
   const env = readEnvFiles([path.join(distRoot, '.env')]);
   const browserBasePath = normalizeBasePath(scope.basePath);
@@ -30,14 +29,9 @@ export async function createServer(scope: AppScope): Promise<Hono> {
     appName: scope.appName ?? scope.id,
     basePath: '',
     browserBasePath,
-    browserApiUrl: joinBasePath(browserBasePath, apiProxyPath),
-    apiProxyPath,
     clientIndexPath: scope.clientDir
       ? path.join(scope.clientDir, 'index.html')
       : undefined,
-    nocoBaseApiUrl:
-      getScopeConfigString(scope.config, 'nocoBaseApiUrl') ??
-      getEnvString(env, 'NOCOBASE_API_PROXY_TARGET'),
     apiClientStoragePrefix:
       getScopeConfigString(scope.config, 'apiClientStoragePrefix') ??
       getEnvString(env, 'API_CLIENT_STORAGE_PREFIX'),

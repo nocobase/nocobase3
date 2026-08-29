@@ -2,19 +2,34 @@ import type { CachingConfig } from '@nocobase/caching';
 import type { AppDatabaseConfig } from '@nocobase/app-server-kit/database';
 import type { AppDriveConfig } from '@nocobase/drive';
 import type { LoggingConfig } from '@nocobase/logging';
+import type { SnowflakeIdGeneratorConfig } from '@nocobase/id-generator';
 import type { AppQueueConfig } from '@nocobase/queue';
 import type { AppSessionConfig } from '@nocobase/session';
 import type { AppAuthConfig } from './auth.js';
-import type { ResolvedAppPlugin } from '../plugins/index.js';
+import type { WorkflowRuntimeConfig } from '@nocobase/app-plugin-workflow/server/config';
+import type { ResolvedAppPlugin } from '@nocobase/app-server-kit/plugins';
+import type {
+  SpaHandler,
+  SpaRuntimeGlobals,
+} from '@nocobase/app-server-kit/spa';
+import type { AppRuntimeConfigContext } from '@nocobase/app-server-kit/runtime';
+
+export type AppWorkflowConfig = WorkflowRuntimeConfig;
+
+export interface DefaultAppScopeConfig {
+  readonly publicOrigin?: string;
+  readonly apiClientStoragePrefix?: string;
+  readonly apiClientStorageType?: string;
+  readonly apiClientShareToken?: boolean;
+  readonly authSecret?: string;
+}
 
 export interface AppRoutingConfig {
   name: string;
   publicOrigin: string | undefined;
   publicBasePath: string;
   internalBasePath: string;
-  internalApiProxyPath: string;
   publicApiUrl: string;
-  nocoBaseApiUrl: string | undefined;
 }
 
 export interface AppServerConfig {
@@ -26,6 +41,8 @@ export interface AppServerConfig {
 
 export interface AppSpaConfig {
   indexPath: string;
+  handler?: SpaHandler;
+  runtimeGlobals?: SpaRuntimeGlobals;
   runtime: {
     storagePrefix: string;
     storageType: string;
@@ -43,6 +60,13 @@ export interface AppConfig {
   logging: LoggingConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;
+  workflow: AppWorkflowConfig;
   server: AppServerConfig;
+  snowflake: SnowflakeIdGeneratorConfig;
   spa: AppSpaConfig;
 }
+
+export type DefaultAppConfigContext = AppRuntimeConfigContext<
+  AppConfig,
+  DefaultAppScopeConfig
+>;

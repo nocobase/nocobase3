@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-data-provider",
   "displayName": "Data Provider App Plugin",
   "description": "Registers the NocoBase Refine data provider with the application client runtime.",
-  "version": "0.0.1-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -14,6 +14,10 @@
     "./client": {
       "types": "./client/index.ts",
       "import": "./client/index.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
     },
     "./client/bootstrap": {
       "types": "./client/bootstrap.ts",
@@ -31,6 +35,10 @@
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
       },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./client/bootstrap": {
         "types": "./dist/client/bootstrap.d.ts",
         "import": "./dist/client/bootstrap.js"
@@ -43,13 +51,6 @@
     "dist",
     "README.md"
   ],
-  "nocobase": {
-    "plugin": {
-      "client": {
-        "bootstrap": "./client/bootstrap"
-      }
-    }
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

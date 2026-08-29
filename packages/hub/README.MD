@@ -23,17 +23,12 @@ The minimum local configuration is:
 ```env
 APP_NAME=hub
 APP_BASE_PATH=/hub
-NOCOBASE_API_URL=/v2/api
-NOCOBASE_API_PROXY_TARGET=http://127.0.0.1:13000/api
 ```
 
 - `APP_NAME` is the runtime app name. Hub uses `hub`.
 - `APP_BASE_PATH` is the public mount path for the app server. Hub uses `/hub`.
-- `NOCOBASE_API_URL` is the browser-facing NocoBase REST API root. The app server
-  uses `/v2/api` by default and proxies that path.
-- `NOCOBASE_API_PROXY_TARGET` is the upstream NocoBase REST API root and must
-  include `/api`. This value is read by the app server and is not exposed through
-  Vite.
+- The browser API base URL is derived as `<APP_BASE_PATH>/api` and is served by
+  the Hub server's local API router.
 - `NOCOBASE_API_TOKEN` can provide a temporary development token. Never commit
   real tokens.
 

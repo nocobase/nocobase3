@@ -7,17 +7,17 @@ import { createLogger, requestLogger } from '../src/index.js';
 describe('requestLogger', () => {
   it('logs request input and successful response output', async () => {
     const output = createMemoryDestination();
-    const app = new Hono();
-    app.use(
+    const router = new Hono();
+    router.use(
       '*',
       requestLogger({
         app: 'main',
         logger: createLogger({}, output),
       }),
     );
-    app.get('/users/:id', (context) => context.json({ ok: true }));
+    router.get('/users/:id', (context) => context.json({ ok: true }));
 
-    await app.request('/users/42?active=true', {
+    await router.request('/users/42?active=true', {
       headers: {
         authorization: 'secret',
         'user-agent': 'vitest',
@@ -58,18 +58,20 @@ describe('requestLogger', () => {
 
   it('uses warning and error levels for unsuccessful responses', async () => {
     const output = createMemoryDestination();
-    const app = new Hono();
-    app.onError((error, context) =>
+    const router = new Hono();
+    router.onError((error, context) =>
       context.json({ error: error.message }, 500),
     );
-    app.use('*', requestLogger({ logger: createLogger({}, output) }));
-    app.get('/missing', (context) => context.json({ error: 'missing' }, 404));
-    app.get('/error', () => {
+    router.use('*', requestLogger({ logger: createLogger({}, output) }));
+    router.get('/missing', (context) =>
+      context.json({ error: 'missing' }, 404),
+    );
+    router.get('/error', () => {
       throw new Error('failed');
     });
 
-    await app.request('/missing');
-    await app.request('/error');
+    await router.request('/missing');
+    await router.request('/error');
 
     const completed = output
       .records()
@@ -91,17 +93,17 @@ describe('requestLogger', () => {
 
   it('supports route-level skipping without adding request state', async () => {
     const output = createMemoryDestination();
-    const app = new Hono();
-    app.use(
+    const router = new Hono();
+    router.use(
       '*',
       requestLogger({
         logger: createLogger({}, output),
         skip: (context) => context.req.path === '/healthz',
       }),
     );
-    app.get('/healthz', (context) => context.json({ ok: true }));
+    router.get('/healthz', (context) => context.json({ ok: true }));
 
-    await app.request('/healthz');
+    await router.request('/healthz');
 
     expect(output.records()).toEqual([]);
   });

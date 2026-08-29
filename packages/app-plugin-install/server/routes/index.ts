@@ -1,4 +1,4 @@
-import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
 import type { ConfigPaths } from '@nocobase/app-server-kit/config';
 import { Hono } from 'hono';
 
@@ -9,16 +9,17 @@ import {
 import { isInstallModeAuthSecret } from '../install-mode.js';
 
 export interface InstallPluginConfig {
+  readonly app: {
+    readonly name: string | undefined;
+    readonly publicBasePath: string;
+  };
   readonly auth: {
-    readonly secret: string | undefined;
+    readonly secret?: string;
   };
 }
 
-export type InstallPluginRoutesContext = AppPluginRoutesContext<
-  unknown,
-  unknown,
-  InstallPluginConfig
->;
+export type InstallPluginRoutesApplication =
+  AppPluginApplication<InstallPluginConfig>;
 
 export interface CreateInstallRoutesOptions {
   readonly paths: ConfigPaths;
@@ -56,14 +57,13 @@ export function createInstallRoutes(options: CreateInstallRoutesOptions): Hono {
   return routes;
 }
 
-export default function registerInstallRoutes({
-  app,
-  config,
-  paths,
-}: InstallPluginRoutesContext): void {
+export default function registerInstallRoutes(
+  { config, paths }: InstallPluginRoutesApplication,
+  router: Hono,
+): void {
   const installMode = isInstallModeAuthSecret(config.auth.secret);
 
-  app.get('/install/status', (context) => {
+  router.get('/install/status', (context) => {
     context.header('Cache-Control', 'no-store');
     return context.json<InstallStatusResponse>({ installed: !installMode });
   });
@@ -72,7 +72,7 @@ export default function registerInstallRoutes({
     return;
   }
 
-  app.use('*', async (context, next) => {
+  router.use('*', async (context, next) => {
     const isInstallRequest =
       context.req.path === '/install' ||
       context.req.path.startsWith('/install/');
@@ -86,5 +86,5 @@ export default function registerInstallRoutes({
 
     return context.redirect('/install');
   });
-  app.route('/install', createInstallRoutes({ paths }));
+  router.route('/install', createInstallRoutes({ paths }));
 }

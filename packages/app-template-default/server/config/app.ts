@@ -1,29 +1,35 @@
-import {
-  defineConfig,
-  type ConfigFactory,
-} from '@nocobase/app-server-kit/config';
+import { defineConfig } from '@nocobase/app-server-kit/config';
 import {
   joinBasePath,
   normalizeBasePath,
   resolveAppNameFromBasePath,
 } from '@nocobase/app-server-kit/support';
-import type { AppRoutingConfig } from './types.js';
+import type { AppRuntimeConfigFactory } from '@nocobase/app-server-kit/runtime';
+import type {
+  AppConfig,
+  AppRoutingConfig,
+  DefaultAppConfigContext,
+  DefaultAppScopeConfig,
+} from './types.js';
 
-const appConfig: ConfigFactory<AppRoutingConfig> = defineConfig(
-  ({ env }): AppRoutingConfig => {
+const appConfig: AppRuntimeConfigFactory<
+  AppRoutingConfig,
+  AppConfig,
+  DefaultAppScopeConfig
+> = defineConfig<AppRoutingConfig, DefaultAppConfigContext>(
+  ({ env, routing, scopeConfig }): AppRoutingConfig => {
     const publicBasePath = normalizeBasePath(
-      env.string('APP_BASE_PATH', '/main'),
+      routing?.publicBasePath ?? env.string('APP_BASE_PATH', '/main'),
     );
-    const internalApiProxyPath = '/v2/api';
 
     return {
-      name: resolveAppNameFromBasePath(publicBasePath, 'main'),
-      publicOrigin: resolvePublicOrigin(env.string('APP_PUBLIC_ORIGIN')),
+      name: routing?.name ?? resolveAppNameFromBasePath(publicBasePath, 'main'),
+      publicOrigin:
+        scopeConfig?.publicOrigin ??
+        resolvePublicOrigin(env.string('APP_PUBLIC_ORIGIN')),
       publicBasePath,
-      internalBasePath: '',
-      internalApiProxyPath,
-      publicApiUrl: joinBasePath(publicBasePath, internalApiProxyPath),
-      nocoBaseApiUrl: env.string('NOCOBASE_API_PROXY_TARGET'),
+      internalBasePath: routing?.internalBasePath ?? '',
+      publicApiUrl: joinBasePath(publicBasePath, '/api'),
     };
   },
 );

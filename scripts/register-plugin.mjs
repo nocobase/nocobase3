@@ -12,6 +12,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { normalizePluginName } from './create-plugin.mjs';
+import {
+  addClientPlugin,
+  clientPluginsPath,
+  formatClientPlugins,
+  readClientPlugins,
+  writeClientPlugins,
+} from './lib/client-plugins.mjs';
+import { hasClientPluginEntry } from '../packages/cli/src/lib/plugin-registration.ts';
+import { trySyncSkills } from './lib/skills-sync.mjs';
 
 const packagePrefix = '@nocobase/app-plugin-';
 const directoryPrefix = 'app-plugin-';
@@ -41,6 +50,7 @@ Options:
                     (default: app-template-default)
   --disabled        Register the plugin with enabled set to false
   --no-install      Do not synchronize pnpm-lock.yaml
+  --no-skills       Do not synchronize the plugin's skills into the application
   --dry-run         Validate and print the change without writing
   -h, --help        Show this help
 
@@ -58,6 +68,7 @@ export function parseRegisterPluginArgs(args) {
     help: false,
     install: true,
     name: undefined,
+    skills: true,
   };
   const positionals = [];
 
@@ -78,6 +89,10 @@ export function parseRegisterPluginArgs(args) {
     }
     if (argument === '--no-install') {
       options.install = false;
+      continue;
+    }
+    if (argument === '--no-skills') {
+      options.skills = false;
       continue;
     }
     if (argument === '--app') {
@@ -113,6 +128,7 @@ export async function registerPlugin({
   enabled = true,
   install = true,
   name,
+  skills = true,
   repoRoot = defaultRepoRoot,
   synchronize = synchronizeWorkspace,
 }) {
@@ -141,17 +157,34 @@ export async function registerPlugin({
     enabled,
     application.packageJsonPath,
   );
+  const appRoot = path.dirname(application.packageJsonPath);
+  // A disabled registration installs the dependency without wiring the client entry, and a server-only plugin has no
+  // client entry to wire; writing an import for one produces an application that fails to resolve at build time. Both
+  // cases leave client/plugins.ts untouched.
+  const shipsClientEntry = await hasClientPluginEntry(pluginDirectory);
+  const skippedClientEntry = !enabled
+    ? 'disabled'
+    : shipsClientEntry
+      ? undefined
+      : 'no-client-entry';
+  const clientPlugins =
+    skippedClientEntry === undefined
+      ? await prepareClientPluginEntry(appRoot, packageName)
+      : undefined;
   const result = {
     appPackageName: application.packageName,
     appPackagePath: application.packageJsonPath,
-    changed,
+    changed: changed || Boolean(clientPlugins?.changed),
+    clientPluginsChanged: Boolean(clientPlugins?.changed),
+    clientPluginsPath: clientPlugins?.filePath,
     enabled,
     packageName,
     pluginDirectory,
     shortName,
+    skippedClientEntry,
   };
 
-  if (dryRun || !changed) {
+  if (dryRun || !result.changed) {
     return result;
   }
 
@@ -159,10 +192,18 @@ export async function registerPlugin({
   const lockfileSnapshot = install
     ? await readOptionalFile(lockfilePath)
     : undefined;
-  await writeFile(
-    application.packageJsonPath,
-    `${JSON.stringify(applicationPackage, null, 2)}\n`,
-  );
+  const clientPluginsSnapshot = clientPlugins?.changed
+    ? await readOptionalFile(clientPlugins.filePath)
+    : undefined;
+  if (changed) {
+    await writeFile(
+      application.packageJsonPath,
+      `${JSON.stringify(applicationPackage, null, 2)}\n`,
+    );
+  }
+  if (clientPlugins?.changed) {
+    await writeClientPlugins(appRoot, clientPlugins.sourceText);
+  }
 
   if (!install) {
     return result;
@@ -182,6 +223,16 @@ export async function registerPlugin({
     } catch (recoveryError) {
       recoveryErrors.push(recoveryError);
     }
+    if (clientPlugins?.changed) {
+      try {
+        await restoreOptionalFile(
+          clientPlugins.filePath,
+          clientPluginsSnapshot,
+        );
+      } catch (recoveryError) {
+        recoveryErrors.push(recoveryError);
+      }
+    }
 
     if (recoveryErrors.length > 0) {
       throw new AggregateError(
@@ -198,7 +249,36 @@ export async function registerPlugin({
     );
   }
 
+  // Skills are documentation: a failure here is reported but never fails the
+  // registration that already succeeded.
+  if (skills) {
+    const synced = await trySyncSkills({
+      app,
+      plugin: shortName,
+      repoRoot: resolvedRepoRoot,
+    });
+    result.skillsSynced = synced.succeeded;
+  }
+
   return result;
+}
+
+/**
+ * Produces the updated client/plugins.ts text without writing it, so the caller
+ * can honour --dry-run and snapshot the file before it changes.
+ */
+async function prepareClientPluginEntry(appRoot, packageName) {
+  const { sourceText } = await readClientPlugins(appRoot);
+  const added = addClientPlugin(sourceText, packageName);
+  const filePath = clientPluginsPath(appRoot);
+  if (!added.changed) {
+    return { changed: false, filePath };
+  }
+  return {
+    changed: true,
+    filePath,
+    sourceText: await formatClientPlugins(added.sourceText, filePath),
+  };
 }
 
 async function validatePluginPackage(pluginDirectory, packageName) {
@@ -495,6 +575,11 @@ async function main() {
     console.log(
       `Registered ${result.packageName} in ${result.appPackageName} as ${state}`,
     );
+    if (result.skippedClientEntry === 'no-client-entry') {
+      console.log(
+        'Skipped client/plugins.ts: this plugin ships no ./client/plugin export.',
+      );
+    }
     if (!options.install) {
       console.log(
         'Skipped dependency installation. Run CI=true pnpm install --no-frozen-lockfile before committing.',

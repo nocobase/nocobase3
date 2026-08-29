@@ -1,0 +1,41 @@
+import { Hono } from 'hono';
+
+import {
+  ServiceProvider,
+  type ServiceContainer,
+  createServiceToken,
+  type ServiceToken,
+} from '@nocobase/service-provider';
+
+export * from './health.js';
+export * from './routes.js';
+
+/**
+ * The HTTP router owned by an application.
+ *
+ * The router is deliberately exposed as a service rather than being treated
+ * as the application itself. This keeps the application lifecycle and
+ * framework-specific HTTP implementation separate.
+ */
+export const routerToken: ServiceToken<Hono> = createServiceToken<Hono>(
+  '@nocobase/app/router',
+);
+
+export const apiRouterToken: ServiceToken<Hono> = createServiceToken<Hono>(
+  '@nocobase/app/api-router',
+);
+
+export interface RouterProviderApplication {
+  readonly container: ServiceContainer;
+}
+
+export class RouterProvider<
+  TApplication extends RouterProviderApplication = RouterProviderApplication,
+> extends ServiceProvider<TApplication> {
+  public readonly name: string = 'router';
+
+  public override register(): void {
+    this.app.container.instance(routerToken, new Hono());
+    this.app.container.instance(apiRouterToken, new Hono());
+  }
+}

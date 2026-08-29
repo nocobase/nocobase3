@@ -220,6 +220,11 @@ function toPascalCase(value) {
     .join('');
 }
 
+function toCamelCase(value) {
+  const pascalCase = toPascalCase(value);
+  return pascalCase[0].toLowerCase() + pascalCase.slice(1);
+}
+
 function formatDatePrefix(value) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     throw new Error('The scaffold date must be a valid Date.');
@@ -238,6 +243,7 @@ function createScaffoldFiles({
   datePrefix,
 }) {
   const symbolName = toPascalCase(shortName);
+  const moduleName = toCamelCase(shortName);
   const collectionName = `appPlugin${symbolName}Records`;
   const migrationName = `${datePrefix}0001_${shortName.replaceAll('-', '_')}_create_records`;
   const seedName = `${datePrefix}0002_${shortName.replaceAll('-', '_')}_create_welcome_record`;
@@ -245,13 +251,22 @@ function createScaffoldFiles({
     name: packageName,
     displayName,
     description,
-    version: '0.1.0',
+    version: '0.0.1',
     type: 'module',
     prettier: '@nocobase/dev-config/prettier',
     engines: {
       node: '>=24.0.0',
     },
+    sideEffects: false,
     exports: {
+      './client': {
+        types: './client/index.ts',
+        import: './client/index.ts',
+      },
+      './client/plugin': {
+        types: './client/plugin.ts',
+        import: './client/plugin.ts',
+      },
       './client/bootstrap': {
         types: './client/bootstrap.ts',
         import: './client/bootstrap.ts',
@@ -260,15 +275,28 @@ function createScaffoldFiles({
         types: './client/routes.ts',
         import: './client/routes.ts',
       },
+      './client/settings': {
+        types: './client/settings.ts',
+        import: './client/settings.ts',
+      },
       './client/providers': {
         types: './client/providers.ts',
         import: './client/providers.ts',
       },
       './package.json': './package.json',
     },
+    files: ['dist', '.agents'],
     publishConfig: {
       access: 'public',
       exports: {
+        './client': {
+          types: './dist/client/index.d.ts',
+          import: './dist/client/index.js',
+        },
+        './client/plugin': {
+          types: './dist/client/plugin.d.ts',
+          import: './dist/client/plugin.js',
+        },
         './client/bootstrap': {
           types: './dist/client/bootstrap.d.ts',
           import: './dist/client/bootstrap.js',
@@ -276,6 +304,10 @@ function createScaffoldFiles({
         './client/routes': {
           types: './dist/client/routes.d.ts',
           import: './dist/client/routes.js',
+        },
+        './client/settings': {
+          types: './dist/client/settings.d.ts',
+          import: './dist/client/settings.js',
         },
         './client/providers': {
           types: './dist/client/providers.d.ts',
@@ -286,11 +318,6 @@ function createScaffoldFiles({
     },
     nocobase: {
       plugin: {
-        client: {
-          bootstrap: './client/bootstrap',
-          routes: './client/routes',
-          providers: './client/providers',
-        },
         database: {
           migrations: './database/migrations',
           seeds: './database/seeds',
@@ -312,6 +339,7 @@ function createScaffoldFiles({
     dependencies: {
       '@nocobase/app-server-kit': 'workspace:^',
       '@nocobase/app-database': 'workspace:^',
+      '@nocobase/service-provider': 'workspace:^',
       hono: 'catalog:',
     },
     peerDependencies: {
@@ -335,7 +363,7 @@ function createScaffoldFiles({
     ['.prettierignore', 'dist/\n'],
     [
       'README.md',
-      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server bootstrap, an HTTP route at \`/${shortName}\`, and empty client bootstrap, routes, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
+      `# ${packageName}\n\n${description}\n\nThis scaffold includes disabled database migration and seed examples, a convention-based server ServiceProvider, an HTTP route at \`/${shortName}\`, a \`client/plugin.ts\` registration entry re-exported as the default from \`client/index.ts\`, and empty client bootstrap, routes, settings, and providers entries. See [database/README.md](database/README.md) to enable the database examples.\n`,
     ],
     [
       'database/README.md',
@@ -355,6 +383,14 @@ function createScaffoldFiles({
     ],
     ['package.json', `${JSON.stringify(packageJson, null, 2)}\n`],
     [
+      'client/index.ts',
+      `// The plugin's public client surface. The default export is the registration factory an application lists in\n// its client/plugins.ts; it keeps every implementation entry behind a dynamic import, so importing this module\n// costs the application only the descriptor.\nexport { default } from './plugin.js';\n`,
+    ],
+    [
+      'client/plugin.ts',
+      `import {\n  defineClientPlugin,\n  type AppClientPluginFactory,\n} from '@nocobase/app-client/plugins';\n\nexport interface ${symbolName}ClientOptions {\n  readonly placeholder?: never;\n}\n\nconst ${moduleName}: AppClientPluginFactory<${symbolName}ClientOptions> =\n  defineClientPlugin({\n    packageName: '${packageName}',\n    bootstrap: () => import('./bootstrap.js'),\n    routes: () => import('./routes.js'),\n    settings: () => import('./settings.js'),\n    providers: () => import('./providers.js'),\n  });\n\nexport default ${moduleName};\n`,
+    ],
+    [
       'client/bootstrap.ts',
       `import type { AppClientPluginBootstrap } from '@nocobase/app-client/plugins';\n\nconst bootstrap: AppClientPluginBootstrap = () => {\n  // Register imperative client capabilities here.\n};\n\nexport default bootstrap;\n`,
     ],
@@ -363,20 +399,24 @@ function createScaffoldFiles({
       `import {\n  defineClientRoutes,\n  type AppClientRouteDefinition,\n} from '@nocobase/app-client/plugins';\n\nconst routes: readonly AppClientRouteDefinition[] = defineClientRoutes([]);\n\nexport default routes;\n`,
     ],
     [
+      'client/settings.ts',
+      `import {\n  defineClientSettings,\n  type AppClientSettingDefinition,\n} from '@nocobase/app-client/plugins';\n\n// An entry is either a page, reached at \`/settings/<id>\`, or a group of pages reached at\n// \`/settings/<group id>/<id>\`. A group carries the icon and title for the whole section.\nconst settings: readonly AppClientSettingDefinition[] = defineClientSettings(\n  [],\n);\n\nexport default settings;\n`,
+    ],
+    [
       'client/providers.ts',
       `import {\n  defineClientProviders,\n  type AppClientProviderDefinition,\n} from '@nocobase/app-client/plugins';\n\nconst providers: readonly AppClientProviderDefinition[] = defineClientProviders(\n  [],\n);\n\nexport default providers;\n`,
     ],
     [
-      'server/bootstrap.ts',
-      `import type { AppPluginServerContext } from '@nocobase/app-server-kit/plugins';\n\nexport type ${symbolName}PluginServerContext = AppPluginServerContext;\n\nexport default function bootstrap${symbolName}Plugin(\n  _context: ${symbolName}PluginServerContext,\n): void {\n  // Register plugin resources and lifecycle disposers here.\n}\n`,
+      'server/provider.ts',
+      `import {\n  ServiceProvider,\n  type ServiceContainer,\n} from '@nocobase/service-provider';\n\nexport interface ${symbolName}ProviderApplication {\n  readonly container: ServiceContainer;\n}\n\nexport default class ${symbolName}Provider extends ServiceProvider<${symbolName}ProviderApplication> {\n  public readonly name: string = '${packageName}';\n}\n`,
     ],
     [
       'server/routes/index.ts',
-      `import type { AppPluginRoutesContext } from '@nocobase/app-server-kit/plugins';\nimport { Hono } from 'hono';\n\nexport default function register${symbolName}Routes({\n  app,\n}: AppPluginRoutesContext): void {\n  const routes = new Hono();\n\n  routes.get('/', (context) =>\n    context.json({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    }),\n  );\n\n  app.route('/${shortName}', routes);\n}\n`,
+      `import type { AppPluginRoutesApplication } from '@nocobase/app-server-kit/plugins';\nimport { Hono } from 'hono';\n\nexport default function register${symbolName}Routes({\n  router,\n}: AppPluginRoutesApplication): void {\n  const routes = new Hono();\n\n  routes.get('/', (context) =>\n    context.json({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    }),\n  );\n\n  router.route('/${shortName}', routes);\n}\n`,
     ],
     [
-      'tests/bootstrap.test.ts',
-      `import { describe, expect, it } from 'vitest';\n\nimport bootstrap${symbolName}Plugin from '../server/bootstrap.js';\n\ndescribe('${packageName}', () => {\n  it('runs its bootstrap entry', () => {\n    expect(() =>\n      bootstrap${symbolName}Plugin({\n        deps: undefined,\n        services: undefined,\n        lifecycle: {\n          registerDisposer() {},\n        },\n      }),\n    ).not.toThrow();\n  });\n});\n`,
+      'tests/provider.test.ts',
+      `import { ServiceContainer } from '@nocobase/service-provider';\nimport { describe, expect, it } from 'vitest';\n\nimport ${symbolName}Provider from '../server/provider.js';\n\ndescribe('${packageName} provider', () => {\n  it('uses the plugin package name', () => {\n    const provider = new ${symbolName}Provider({\n      container: new ServiceContainer(),\n    });\n\n    expect(provider.name).toBe('${packageName}');\n  });\n});\n`,
     ],
     [
       'tests/database.test.ts',
@@ -384,11 +424,11 @@ function createScaffoldFiles({
     ],
     [
       'tests/client.test.ts',
-      `import { describe, expect, it } from 'vitest';\n\nimport bootstrap from '../client/bootstrap.js';\nimport providers from '../client/providers.js';\nimport routes from '../client/routes.js';\n\ndescribe('${packageName} client', () => {\n  it('starts with empty client contributions', () => {\n    expect(bootstrap).toBeTypeOf('function');\n    expect(routes).toEqual([]);\n    expect(providers).toEqual([]);\n  });\n});\n`,
+      `import { describe, expect, it } from 'vitest';\n\nimport bootstrap from '../client/bootstrap.js';\nimport providers from '../client/providers.js';\nimport routes from '../client/routes.js';\nimport settings from '../client/settings.js';\n\ndescribe('${packageName} client', () => {\n  it('starts with empty client contributions', () => {\n    expect(bootstrap).toBeTypeOf('function');\n    expect(routes).toEqual([]);\n    expect(settings).toEqual([]);\n    expect(providers).toEqual([]);\n  });\n});\n`,
     ],
     [
       'tests/routes.test.ts',
-      `import { Hono } from 'hono';\nimport { describe, expect, it } from 'vitest';\n\nimport register${symbolName}Routes from '../server/routes/index.js';\n\ndescribe('${packageName} routes', () => {\n  it('registers its HTTP route', async () => {\n    const app = new Hono();\n\n    register${symbolName}Routes({\n      app,\n      deps: undefined,\n      services: undefined,\n    });\n\n    const response = await app.request('/${shortName}');\n\n    expect(response.status).toBe(200);\n    await expect(response.json()).resolves.toEqual({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    });\n  });\n});\n`,
+      `import { createConfigPaths } from '@nocobase/app-server-kit/config';\nimport { ServiceContainer } from '@nocobase/service-provider';\nimport { Hono } from 'hono';\nimport { describe, expect, it } from 'vitest';\n\nimport register${symbolName}Routes from '../server/routes/index.js';\n\ndescribe('${packageName} routes', () => {\n  it('registers its HTTP route', async () => {\n    const router = new Hono();\n\n    register${symbolName}Routes({\n      appName: 'main',\n      publicBasePath: '',\n      config: { app: { name: 'main', publicBasePath: '' } },\n      paths: createConfigPaths({ rootDir: '/missing' }),\n      router,\n      container: new ServiceContainer(),\n    });\n\n    const response = await router.request('/${shortName}');\n\n    expect(response.status).toBe(200);\n    await expect(response.json()).resolves.toEqual({\n      plugin: '${packageName}',\n      message: 'Hello from ${displayName}',\n    });\n  });\n});\n`,
     ],
     [
       'tsconfig.json',

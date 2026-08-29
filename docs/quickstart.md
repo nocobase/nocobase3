@@ -7,12 +7,17 @@ V3 的基本思路：
 需要部署时，再准备 Hub。
 ```
 
+## 0. 配置源
+
+```bash
+pnpm config set @nocobase:registry https://npm.nocobase.ai/
+```
+
 ## 1. 创建本地 App
 
 ```bash
 pnpm create @nocobase/app crm
 cd crm
-pnpm install
 ```
 
 这个目录就是 App 源码目录，可以放在任意位置。
@@ -91,6 +96,7 @@ pnpm deploy
 ## 架构介绍
 
 - [应用服务分层架构](./architecture.md)
+- [Service Provider 与服务容器](./service-provider.md)
 
 ## 插件开发
 

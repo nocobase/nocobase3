@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification-provider",
   "displayName": "Notification Provider App Plugin",
   "description": "Registers a Sonner-backed Refine notification provider with the application client runtime.",
-  "version": "0.0.1-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -18,6 +18,10 @@
     "./client/bootstrap": {
       "types": "./client/bootstrap.ts",
       "import": "./client/bootstrap.ts"
+    },
+    "./client/plugin": {
+      "types": "./client/plugin.ts",
+      "import": "./client/plugin.ts"
     },
     "./client/providers": {
       "types": "./client/providers.ts",
@@ -43,6 +47,10 @@
         "types": "./dist/client/bootstrap.d.ts",
         "import": "./dist/client/bootstrap.js"
       },
+      "./client/plugin": {
+        "types": "./dist/client/plugin.d.ts",
+        "import": "./dist/client/plugin.js"
+      },
       "./client/providers": {
         "types": "./dist/client/providers.d.ts",
         "import": "./dist/client/providers.js"
@@ -59,18 +67,10 @@
     "dist",
     "README.md"
   ],
-  "nocobase": {
-    "plugin": {
-      "client": {
-        "bootstrap": "./client/bootstrap",
-        "providers": "./client/providers",
-        "routes": "./client/routes"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json",
+    "prepack": "pnpm build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",

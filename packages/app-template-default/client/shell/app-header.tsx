@@ -1,12 +1,10 @@
-import { resolveNocoBaseSettingsUrl } from '@nocobase/app-portal-sdk/runtime';
-import { PanelLeft, Settings } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import { Button } from '@/components/ui/button';
 
-import { ThemeSettings } from '../theme/index.js';
 import { AppBrand } from './app-brand.js';
-import { UserMenu } from './user-menu.js';
+import { HeaderActions } from './header-actions.js';
 
 export interface AppHeaderProps {
   readonly desktopSidebarCollapsed: boolean;
@@ -53,20 +51,7 @@ export function AppHeader({
           AI application workspace
         </p>
       </div>
-      <div className='flex shrink-0 items-center gap-2'>
-        <a
-          aria-label='Settings'
-          className='inline-flex size-10 items-center justify-center rounded-xl border border-border/70 bg-background/60 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
-          href={resolveNocoBaseSettingsUrl()}
-          rel='noopener noreferrer'
-          target='_blank'
-          title='Settings'
-        >
-          <Settings className='size-5' />
-        </a>
-        <ThemeSettings />
-        <UserMenu />
-      </div>
+      <HeaderActions />
     </header>
   );
 }

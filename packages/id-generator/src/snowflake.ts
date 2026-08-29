@@ -9,11 +9,18 @@ export interface IdGenerator<T> {
   generate(): T;
 }
 
-export interface SnowflakeIdGeneratorOptions {
+export interface IdGeneratorService extends IdGenerator<number> {
+  generateString(): string;
+}
+
+export interface SnowflakeIdGeneratorConfig {
   /** A unique worker ID in the range 0..31. */
   workerId: number;
   /** Epoch in seconds or milliseconds. Defaults to NocoBase's original epoch. */
   epoch?: number;
+}
+
+export interface SnowflakeIdGeneratorOptions extends SnowflakeIdGeneratorConfig {
   /** Clock returning Unix time in milliseconds. */
   clock?: () => number;
 }
@@ -30,7 +37,7 @@ export interface SnowflakeIdParts {
  * Generates JavaScript-safe, time-ordered numeric IDs using NocoBase's
  * original 53-bit Snowflake layout: seconds + 5 worker bits + 16 sequence bits.
  */
-export class SnowflakeIdGenerator implements IdGenerator<number> {
+export class SnowflakeIdGenerator implements IdGeneratorService {
   readonly workerId: number;
   readonly epoch: number;
 
