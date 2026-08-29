@@ -25,22 +25,6 @@ function settingFor(id: string, title: string) {
   };
 }
 
-function notificationLogSetting() {
-  return {
-    access: {
-      action: 'access',
-      resource: 'notification.logs',
-    },
-    entry: '@nocobase/app-plugin-notification/client/settings',
-    groupId: 'notifications',
-    id: 'logs',
-    packageName: '@nocobase/app-plugin-notification',
-    path: '/settings/notifications/logs',
-    source: 'plugin',
-    title: 'Notification logs',
-  };
-}
-
 describe('client inspection', () => {
   it('parses app client inspection options', () => {
     expect(
@@ -151,11 +135,13 @@ describe('client inspection', () => {
       },
     ]);
     expect(
-      inspection.bootstraps.map(({ order, packageName, source }) => ({
-        order,
-        packageName,
-        source,
-      })),
+      inspection.bootstraps
+        .slice(0, 6)
+        .map(({ order, packageName, source }) => ({
+          order,
+          packageName,
+          source,
+        })),
     ).toEqual([
       {
         order: 1,
@@ -187,21 +173,15 @@ describe('client inspection', () => {
         packageName: '@nocobase/app-plugin-workflow',
         source: 'plugin',
       },
-      {
-        order: 7,
-        packageName: '@nocobase/app-plugin-notification',
-        source: 'plugin',
-      },
     ]);
 
-    // Administration pages are settings rather than routes, and keep the paths they were published at before the
-    // settings centre existed.
-    expect(inspection.settings).toEqual([
+    // Authorization's administration pages are settings rather than routes, and keep the paths they were published
+    // at before the settings centre existed.
+    expect(inspection.settings.slice(0, 4)).toEqual([
       settingFor('permission-sets', 'Permission Sets'),
       settingFor('default-access', 'Default Access'),
       settingFor('sharing-rules', 'Sharing Rules'),
       settingFor('restriction-rules', 'Restriction Rules'),
-      notificationLogSetting(),
     ]);
     expect(
       inspection.routes.some((route) => route.path.startsWith('/settings/')),

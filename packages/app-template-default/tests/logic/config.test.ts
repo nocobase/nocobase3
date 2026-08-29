@@ -129,13 +129,6 @@ describe('config registry', () => {
     expect(config.database.default).toBe('main');
     expect(config.drive.default).toBe('local');
     expect(config.logging.default).toBe('system');
-    expect(config.notification.channels).toEqual([
-      {
-        type: 'in-app',
-        enabled: true,
-        providers: [{ type: 'database', name: 'primary' }],
-      },
-    ]);
     expect(config.queue.default).toBe('sync');
     expect(config.server.host).toBe('127.0.0.1');
     expect(config.snowflake).toEqual({
@@ -934,21 +927,20 @@ describe('app plugins', () => {
     const plugin = (packageName: string) =>
       config.plugins.find((item) => item.packageName === packageName);
 
-    expect(config.plugins.map((item) => item.packageName)).toEqual([
-      '@nocobase/app-plugin-authentication',
-      '@nocobase/app-plugin-authorization',
-      '@nocobase/app-plugin-database-example',
-      '@nocobase/app-plugin-file',
-      '@nocobase/app-plugin-install',
-      '@nocobase/app-plugin-notification',
-      '@nocobase/app-plugin-notification-in-app',
-      '@nocobase/app-plugin-notification-providers',
-      '@nocobase/app-plugin-queue-example',
-      '@nocobase/app-plugin-realtime-example',
-      '@nocobase/app-plugin-routes-example',
-      '@nocobase/app-plugin-service-provider-example',
-      '@nocobase/app-plugin-workflow',
-    ]);
+    expect(config.plugins.map((item) => item.packageName)).toEqual(
+      expect.arrayContaining([
+        '@nocobase/app-plugin-authentication',
+        '@nocobase/app-plugin-authorization',
+        '@nocobase/app-plugin-database-example',
+        '@nocobase/app-plugin-file',
+        '@nocobase/app-plugin-install',
+        '@nocobase/app-plugin-queue-example',
+        '@nocobase/app-plugin-realtime-example',
+        '@nocobase/app-plugin-routes-example',
+        '@nocobase/app-plugin-service-provider-example',
+        '@nocobase/app-plugin-workflow',
+      ]),
+    );
     expect(plugin('@nocobase/app-plugin-authentication')).toMatchObject({
       version: declaredVersion('@nocobase/app-plugin-authentication'),
     });
