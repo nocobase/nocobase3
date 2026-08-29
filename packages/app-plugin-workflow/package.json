@@ -23,22 +23,6 @@
       "types": "./client/index.ts",
       "import": "./client/index.ts"
     },
-    "./client/plugin": {
-      "types": "./client/plugin.ts",
-      "import": "./client/plugin.ts"
-    },
-    "./client/routes": {
-      "types": "./client/routes.ts",
-      "import": "./client/routes.ts"
-    },
-    "./client/bootstrap": {
-      "types": "./client/bootstrap.ts",
-      "import": "./client/bootstrap.ts"
-    },
-    "./client/route-contracts": {
-      "types": "./client/route-contracts.ts",
-      "import": "./client/route-contracts.ts"
-    },
     "./build": {
       "types": "./build/index.ts",
       "import": "./build/index.ts"
@@ -68,22 +52,6 @@
       "./client": {
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
-      },
-      "./client/plugin": {
-        "types": "./dist/client/plugin.d.ts",
-        "import": "./dist/client/plugin.js"
-      },
-      "./client/routes": {
-        "types": "./dist/client/routes.d.ts",
-        "import": "./dist/client/routes.js"
-      },
-      "./client/bootstrap": {
-        "types": "./dist/client/bootstrap.d.ts",
-        "import": "./dist/client/bootstrap.js"
-      },
-      "./client/route-contracts": {
-        "types": "./dist/client/route-contracts.d.ts",
-        "import": "./dist/client/route-contracts.js"
       },
       "./build": {
         "types": "./dist/build/index.d.ts",

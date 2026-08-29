@@ -4,18 +4,26 @@ import type { AppClient } from '@nocobase/app-sdk';
 
 import packageJson from '../package.json' with { type: 'json' };
 import bootstrap from '../client/bootstrap.js';
-import { WORKFLOW_ROUTE_IDS } from '../client/route-contracts.js';
+import { WORKFLOW_ROUTE_IDS } from '../client/index.js';
 import routes from '../client/routes.js';
 
 const NS = '@nocobase/app-plugin-workflow';
 
 describe('workflow client contributions', () => {
   it('uses the explicit client plugin registration surface', () => {
-    expect(packageJson.nocobase.plugin).not.toHaveProperty('client');
+    expect(packageJson.nocobase).not.toHaveProperty('plugin');
     expect(packageJson.exports).toHaveProperty('./client');
-    expect(packageJson.exports).toHaveProperty('./client/plugin');
     expect(packageJson.publishConfig.exports).toHaveProperty('./client');
-    expect(packageJson.publishConfig.exports).toHaveProperty('./client/plugin');
+    expect(
+      Object.keys(packageJson.exports).filter((entry) =>
+        entry.startsWith('./client'),
+      ),
+    ).toEqual(['./client']);
+    expect(
+      Object.keys(packageJson.publishConfig.exports).filter((entry) =>
+        entry.startsWith('./client'),
+      ),
+    ).toEqual(['./client']);
   });
 
   it('keeps collection definitions internal to the plugin', () => {

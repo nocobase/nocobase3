@@ -3,7 +3,7 @@ import {
   defineClientSourceExtension,
   type AppClientSourceExtension,
 } from '@nocobase/app-client/plugins';
-import { WORKFLOW_ROUTE_IDS } from '@nocobase/app-plugin-workflow/client/route-contracts';
+import { WORKFLOW_ROUTE_IDS } from '@nocobase/app-plugin-workflow/client';
 
 const workflowManagementExtension: AppClientSourceExtension =
   defineClientSourceExtension({
