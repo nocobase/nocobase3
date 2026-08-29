@@ -105,6 +105,7 @@ async function run(input: ParsedInput): Promise<void> {
   // this code ran, while the template is fetched here and defaults to the self-hosted registry carrying v3.
   const registry =
     input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
+
   const templateSource = resolveTemplateSource(input.flags.template, {
     tag: input.flags['template-tag'],
   });
@@ -159,17 +160,23 @@ async function run(input: ParsedInput): Promise<void> {
     return;
   }
 
-  if (driverNeedsBuild(driver)) {
-    const verification = await verifyDriver(targetDirectory, driver);
-
-    if (verification.rebuilt) {
-      log.info(`Compiled the native addon for ${driver}.`);
-    } else if (!verification.ok && verification.reason) {
-      log.warn(verification.reason);
-    }
-  }
+  await reportDriverVerification(targetDirectory, driver);
 
   finish(name, { installed: true, dialect });
+}
+
+async function reportDriverVerification(
+  targetDirectory: string,
+  driver: string,
+): Promise<void> {
+  if (!driverNeedsBuild(driver)) return;
+
+  const verification = await verifyDriver(targetDirectory, driver);
+  if (verification.rebuilt) {
+    log.info(`Compiled the native addon for ${driver}.`);
+  } else if (!verification.ok && verification.reason) {
+    log.warn(verification.reason);
+  }
 }
 
 /**

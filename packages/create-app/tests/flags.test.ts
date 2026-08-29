@@ -44,6 +44,15 @@ describe('parseInput', () => {
     expect(input.flags.registry).toBe('https://registry.npmjs.org');
   });
 
+  it('rejects Hub source flags because creation only scaffolds templates', async () => {
+    await expect(
+      parseInput(['crm', '--hub=https://hub.example.com/hub']),
+    ).rejects.toThrow(/Nonexistent flag: --hub/u);
+    await expect(parseInput(['crm', '--app=sales'])).rejects.toThrow(
+      /Nonexistent flag: --app/u,
+    );
+  });
+
   /** The default is a name, so the package it points at stays an implementation detail. */
   it('defaults the template to the default name', async () => {
     expect((await parseInput(['crm'])).flags.template).toBe('default');
@@ -84,9 +93,13 @@ describe('formatHelp', () => {
 
     expect(help).toContain('--db-dialect');
     expect(help).toContain('--template-tag');
+    expect(help).not.toContain('--hub');
+    expect(help).not.toContain('--app');
     expect(help).toContain('default');
     expect(help).toContain('--[no-]install');
     expect(help).toContain('https://npm.nocobase.ai');
+    expect(help).toContain('Prompted for when omitted');
     expect(help).toContain('create-app crm');
+    expect(help).not.toContain('Hub');
   });
 });
