@@ -26,6 +26,15 @@
       "@nocobase/app-plugin-install": {
         "enabled": true
       },
+      "@nocobase/app-plugin-notification": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-notification-in-app": {
+        "enabled": true
+      },
+      "@nocobase/app-plugin-notification-providers": {
+        "enabled": true
+      },
       "@nocobase/app-plugin-notification-provider": {
         "enabled": true
       },
@@ -54,7 +63,7 @@
     "@base-ui/react": "^1.6.0",
     "@dicebear/core": "^9.4.3",
     "@fontsource-variable/geist": "^5.3.0",
-    "@gchust/agent-annotations": "0.1.5",
+    "@gchust/agent-annotations": "0.1.7",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
@@ -65,7 +74,10 @@
     "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-file": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^",
+    "@nocobase/app-plugin-notification-in-app": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
+    "@nocobase/app-plugin-notification-providers": "workspace:^",
     "@nocobase/app-plugin-queue-example": "workspace:^",
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",

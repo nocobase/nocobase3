@@ -34,6 +34,16 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([]);
 export default clientPlugins;
 `;
 
+const SERVER_SOURCE = `import {
+  defineServerPlugins,
+  type AppServerPlugins,
+} from '@nocobase/app-server-kit/plugins';
+
+const serverPlugins: AppServerPlugins = defineServerPlugins([]);
+
+export default serverPlugins;
+`;
+
 /** An application with a plugin installed and deliberately no TypeScript of its own. */
 async function createApp(): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'nb3-no-ts-'));
@@ -43,7 +53,9 @@ async function createApp(): Promise<string> {
     `${JSON.stringify({ name: 'demo-app', nocobase: { plugins: {} } }, null, 2)}\n`,
   );
   await mkdir(path.join(appRoot, 'client'), { recursive: true });
+  await mkdir(path.join(appRoot, 'server'), { recursive: true });
   await writeFile(path.join(appRoot, 'client', 'plugins.ts'), CLIENT_SOURCE);
+  await writeFile(path.join(appRoot, 'server', 'plugins.ts'), SERVER_SOURCE);
 
   const pluginDirectory = path.join(
     appRoot,
@@ -55,7 +67,10 @@ async function createApp(): Promise<string> {
   await writeFile(
     path.join(pluginDirectory, 'package.json'),
     JSON.stringify({
-      exports: { './client': './client/index.js' },
+      exports: {
+        './client': './client/index.js',
+        './server/plugin': './server/plugin.js',
+      },
       name: '@nocobase/app-plugin-audit-log',
       version: '1.0.0',
     }),
@@ -94,6 +109,8 @@ describe('registering without TypeScript', () => {
     expect(plan.manifestChanged).toBe(true);
     expect(plan.clientPluginsChanged).toBe(false);
     expect(plan.skippedClientEntry).toBe('no-typescript');
+    expect(plan.serverPluginsChanged).toBe(false);
+    expect(plan.skippedServerEntry).toBe('no-typescript');
   });
 
   it('reports the exact lines left for a person or agent to add', async () => {
@@ -106,6 +123,13 @@ describe('registering without TypeScript', () => {
       filePath: path.join(appRoot, 'client', 'plugins.ts'),
       importStatement:
         "import auditLog from '@nocobase/app-plugin-audit-log/client';",
+      localName: 'auditLog',
+    });
+    expect(plan.manualServerEdit).toEqual({
+      entry: 'auditLog,',
+      filePath: path.join(appRoot, 'server', 'plugins.ts'),
+      importStatement:
+        "import auditLog from '@nocobase/app-plugin-audit-log/server/plugin';",
       localName: 'auditLog',
     });
   });
@@ -125,10 +149,14 @@ describe('registering without TypeScript', () => {
     expect(manifest.nocobase.plugins['@nocobase/app-plugin-audit-log']).toEqual(
       { enabled: true },
     );
-    // The plan carries no new client source, so applying it cannot touch that file.
+    // The plan carries no new source, so applying it cannot touch either composition root.
     expect(plan.clientPluginsText).toBeUndefined();
+    expect(plan.serverPluginsText).toBeUndefined();
     expect(
       await readFile(path.join(appRoot, 'client', 'plugins.ts'), 'utf8'),
     ).toBe(CLIENT_SOURCE);
+    expect(
+      await readFile(path.join(appRoot, 'server', 'plugins.ts'), 'utf8'),
+    ).toBe(SERVER_SOURCE);
   });
 });

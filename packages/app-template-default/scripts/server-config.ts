@@ -159,6 +159,23 @@ const report = {
     previousSecrets: config.session.previousSecrets?.length ?? 0,
     gcLottery: config.session.gcLottery ?? [2, 100],
   },
+  notification: {
+    test: {
+      enabled: config.notification.test.enabled,
+      emailRecipient: config.notification.test.emailRecipient
+        ? '<configured>'
+        : '(missing)',
+    },
+    channels: config.notification.channels.map((channel) => ({
+      type: channel.type,
+      enabled: channel.enabled,
+      providers: channel.providers.map((provider) => ({
+        name: provider.name,
+        type: provider.type,
+        enabled: provider.enabled ?? true,
+      })),
+    })),
+  },
 };
 
 if (process.argv.includes('--json')) {

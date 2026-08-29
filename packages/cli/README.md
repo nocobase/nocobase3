@@ -60,9 +60,9 @@ Generated apps also expose project-local scripts for plugin registration and ski
 | `pnpm plugin:skills:sync` | `nb3 app plugin skills sync` | Synchronize Agent skills without upgrading plugin packages     |
 | `pnpm client:inspect`     | App-local inspector          | Inspect the final client plugin, route, and settings ownership |
 
-Plugin registration updates the package dependency, `nocobase.plugins`, and, for plugins with a client export,
-`client/plugins.ts`. The same implementation is shared with the repository-level plugin scripts. Full usage and flags
-are documented in [docs/cli](../../docs/cli/README.md).
+Plugin registration updates the package dependency, `nocobase.plugins`, and the explicit Client and Server composition
+roots for the exports a plugin provides. The same implementation is shared with repository-level plugin scripts through
+workspace mode. Full usage and flags are documented in [docs/cli](../../docs/cli/README.md).
 
 ## `nb3` command surface
 

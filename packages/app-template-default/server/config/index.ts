@@ -4,6 +4,7 @@ import caching from './caching.js';
 import database from './database.js';
 import drive from './drive.js';
 import logging from './logging.js';
+import notification from './notification.js';
 import queue from './queue.js';
 import session from './session.js';
 import server from './server.js';
@@ -21,6 +22,7 @@ const config: AppRuntimeConfigFactories<AppConfig, DefaultAppScopeConfig> = {
   database: database,
   drive: drive,
   logging: logging,
+  notification: notification,
   queue: queue,
   session: session,
   workflow: workflow,

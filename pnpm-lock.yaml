@@ -206,6 +206,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:packages/dev-config
+      '@nocobase/nb3-cli':
+        specifier: workspace:*
+        version: link:packages/cli
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)(supports-color@8.1.1)
@@ -757,6 +760,9 @@ importers:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^
         version: link:../app-plugin-authentication
+      '@nocobase/app-plugin-authorization':
+        specifier: workspace:^
+        version: link:../app-plugin-authorization
       '@nocobase/app-server-kit':
         specifier: workspace:^
         version: link:../app-server-kit
@@ -772,19 +778,46 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.1.0)
     devDependencies:
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../app-client
+      '@nocobase/app-sdk':
+        specifier: workspace:*
+        version: link:../app-sdk
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../dev-config
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.4(@types/react@19.2.18)
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.1.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.1.0(react@19.1.0)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -910,12 +943,30 @@ importers:
 
   packages/app-plugin-notification-providers:
     dependencies:
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:^
+        version: link:../app-plugin-authentication
+      '@nocobase/app-plugin-authorization':
+        specifier: workspace:^
+        version: link:../app-plugin-authorization
       '@nocobase/app-plugin-notification':
         specifier: workspace:^
         version: link:../app-plugin-notification
+      '@nocobase/app-server-kit':
+        specifier: workspace:^
+        version: link:../app-server-kit
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../service-provider
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
       nodemailer:
         specifier: ^9.0.5
         version: 9.0.5
+      resend:
+        specifier: ^6.22.1
+        version: 6.24.0
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -1376,8 +1427,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@gchust/agent-annotations':
-        specifier: 0.1.5
-        version: 0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+        specifier: 0.1.7
+        version: 0.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.8.0(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.1.0))(zod@3.25.76)
@@ -1408,9 +1459,18 @@ importers:
       '@nocobase/app-plugin-install':
         specifier: workspace:^
         version: link:../app-plugin-install
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:^
+        version: link:../app-plugin-notification
+      '@nocobase/app-plugin-notification-in-app':
+        specifier: workspace:^
+        version: link:../app-plugin-notification-in-app
       '@nocobase/app-plugin-notification-provider':
         specifier: workspace:^
         version: link:../app-plugin-notification-provider
+      '@nocobase/app-plugin-notification-providers':
+        specifier: workspace:^
+        version: link:../app-plugin-notification-providers
       '@nocobase/app-plugin-queue-example':
         specifier: workspace:^
         version: link:../app-plugin-queue-example
@@ -1837,6 +1897,31 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/create-plugin:
+    dependencies:
+      '@nocobase/dev-config':
+        specifier: workspace:^
+        version: link:../dev-config
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      publint:
+        specifier: 'catalog:'
+        version: 0.3.24
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/dev-config:
     dependencies:
       '@eslint-react/eslint-plugin':
@@ -1960,7 +2045,7 @@ importers:
         version: 5.3.0
       '@gchust/agent-annotations':
         specifier: 0.1.x
-        version: 0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
+        version: 0.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.1(hono@4.13.2)
@@ -3411,8 +3496,8 @@ packages:
   '@fontsource-variable/geist@5.3.0':
     resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
 
-  '@gchust/agent-annotations@0.1.5':
-    resolution: {integrity: sha512-5eNMyczCPEPsWl0d1z5vJnKJBu8w9TVtuWhHCX7g3AEYpFHn7CkbHMg6uYsCivTD2WFJxpedHYFVVC4tkyUs/g==}
+  '@gchust/agent-annotations@0.1.7':
+    resolution: {integrity: sha512-OY6ZWptMUiIZMkheN9Q9AUJKCn+tDFBRezPuSPeWUamZ0IE078fubmxc8GCW6dG1bCjJH5wdc0uq6DjT/TALFg==}
     engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
@@ -4158,6 +4243,9 @@ packages:
   '@smithy/types@4.17.2':
     resolution: {integrity: sha512-FOKpVZob9MPTn2znRzGrnsMHv7BOsKVw3XiP/cOyYLDVZ9qKp4nifIiSCuUU/fIj5Vu0UOAxCFr+qRAtG0NUkA==}
     engines: {node: '>=18.0.0'}
+
+  '@stablelib/base64@1.0.1':
+    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -5966,6 +6054,9 @@ packages:
   fast-safe-stringify@2.1.1:
     resolution: {integrity: sha512-W+KJc2dmILlPplD/H4K9l9LcAHAfPtP6BY84uVLXQ6Evcz9Lcg33Y2z1IVblT6xdY54PXYVHEv+0Wpq8Io6zkA==}
 
+  fast-sha256@1.3.0:
+    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
+
   fast-string-truncated-width@3.0.3:
     resolution: {integrity: sha512-0jjjIEL6+0jag3l2XWWizO64/aZVtpiGE3t0Zgqxv0DPuxiMjvB3M24fCyhZUO4KomJQPj3LTSUnDP3GpdwC0g==}
 
@@ -7639,6 +7730,9 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
+  postal-mime@2.7.5:
+    resolution: {integrity: sha512-GNEXKvWFQnbgO5NlrGzVa0FmWzBZ24PersAWErttSg1Hjpf0ATxTwS5DOMGaOpTG6bUh5cTr7xi0jAD942wCJA==}
+
   postcss-selector-parser@7.1.5:
     resolution: {integrity: sha512-KvvtD7SrlBP7dlgkBghEE3r84CABm5SmV2aNcG4oCA+qDnJ/tvKonFVvwWAyyWUEwxuNawdfEAZKP9zM3oZ2Uw==}
     engines: {node: '>=4'}
@@ -8051,6 +8145,15 @@ packages:
   reselect@5.2.0:
     resolution: {integrity: sha512-AgZ3UOZm3YndfrJ4OYjgrT7bmCm/1iqkjvEfH/oYjzh6PD2qw4QuT3jjnXIrpdt4MTpMXclMT3lXbmRY+XRakw==}
 
+  resend@6.24.0:
+    resolution: {integrity: sha512-ZG+tRzTtg3usrzMMVK1THPILCDbxE0uefG3XEQro/+jb9hcRb8JiQeyzIo2BphMJk2OomBeciZU3rCgX3XWx5w==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@react-email/render': '*'
+    peerDependenciesMeta:
+      '@react-email/render':
+        optional: true
+
   resolve-from@4.0.0:
     resolution: {integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==}
     engines: {node: '>=4'}
@@ -8343,6 +8446,9 @@ packages:
 
   standard-as-callback@2.1.0:
     resolution: {integrity: sha512-qoRRSyROncaz1z0mvYqIE4lCd9p2R90i6GxW3uZv5ucSu8tU7B5HXUP1gG8pVZsYNVaXjk8ClXHPttLyxAL48A==}
+
+  standardwebhooks@1.0.0:
+    resolution: {integrity: sha512-BbHGOQK9olHPMvQNHWul6MYlrRTAOKn03rOe4A8O3CLWhNf4YHBqq2HJKKC+sfqpxiBY52pNeesD6jIiLDz8jg==}
 
   statuses@1.5.0:
     resolution: {integrity: sha512-OpZ3zP+jT1PI7I8nemJX4AKmAX070ZkYPVWV/AaKTJl+tXCTGyVdC1a4SL8RUQYEwk/f34ZX8UTykN68FwrqAA==}
@@ -10211,7 +10317,7 @@ snapshots:
 
   '@fontsource-variable/geist@5.3.0': {}
 
-  '@gchust/agent-annotations@0.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))':
+  '@gchust/agent-annotations@0.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0))':
     dependencies:
       magic-string: 0.30.21
       react: 19.1.0
@@ -10915,6 +11021,8 @@ snapshots:
   '@smithy/types@4.17.2':
     dependencies:
       tslib: 2.8.1
+
+  '@stablelib/base64@1.0.1': {}
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -12893,6 +13001,8 @@ snapshots:
 
   fast-safe-stringify@2.1.1: {}
 
+  fast-sha256@1.3.0: {}
+
   fast-string-truncated-width@3.0.3: {}
 
   fast-string-width@3.0.2:
@@ -14742,6 +14852,8 @@ snapshots:
 
   pluralize@8.0.0: {}
 
+  postal-mime@2.7.5: {}
+
   postcss-selector-parser@7.1.5:
     dependencies:
       cssesc: 3.0.0
@@ -15199,6 +15311,11 @@ snapshots:
 
   reselect@5.2.0: {}
 
+  resend@6.24.0:
+    dependencies:
+      postal-mime: 2.7.5
+      standardwebhooks: 1.0.0
+
   resolve-from@4.0.0: {}
 
   resolve-from@5.0.0: {}
@@ -15562,6 +15679,11 @@ snapshots:
   stackframe@1.3.4: {}
 
   standard-as-callback@2.1.0: {}
+
+  standardwebhooks@1.0.0:
+    dependencies:
+      '@stablelib/base64': 1.0.1
+      fast-sha256: 1.3.0
 
   statuses@1.5.0: {}
 

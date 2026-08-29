@@ -1,24 +1,49 @@
 import { Hono } from 'hono';
 
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
-import type { ServiceContainer } from '@nocobase/service-provider';
-import { notificationServiceToken } from '../token.js';
+import {
+  authorizationToken,
+  type AuthorizationEnv,
+} from '@nocobase/app-plugin-authorization';
+import type { AppPluginApplication } from '@nocobase/app-server-kit/plugins';
+import {
+  defineApiRoutes,
+  type AppApiRouteContribution,
+} from '@nocobase/app-server-kit/router';
+import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
+import { notificationServiceToken } from '../tokens.js';
 
-export interface NotificationRoutesApplication {
-  readonly container: ServiceContainer;
-}
+export const apiRoutes: AppApiRouteContribution<
+  AppPluginApplication<NotificationProviderApplicationConfig>
+> = defineApiRoutes(({ container }) => {
+  const router = new Hono();
+  if (!container.has(notificationServiceToken)) return router;
+  const notification = container.resolve(notificationServiceToken);
+  const auth = container.resolve(authenticationToken);
+  const authorization = container.resolve(authorizationToken);
 
-export default function registerNotificationRoutes(
-  app: NotificationRoutesApplication,
-  router: Hono,
-): void {
-  if (!app.container.has(notificationServiceToken)) return;
-  const notification = app.container.resolve(notificationServiceToken);
-  const auth = app.container.resolve(authenticationToken);
-
-  const routes = new Hono();
-  const authRequired = auth.required();
-  routes.use('/logs/:id?', authRequired);
+  const routes = new Hono<AuthorizationEnv>();
+  routes.use('/logs/:id?', auth.required(), authorization.middleware());
+  routes.use('/logs/:id?', async (context, next) => {
+    const allowed = await context.get('authz').can({
+      resource: { type: 'page', id: 'notification.logs' },
+      action: 'access',
+    });
+    if (!allowed) {
+      return context.json(
+        { error: 'Notification logs access is required.' },
+        403,
+      );
+    }
+    await next();
+  });
   routes.route('/', notification.router);
   router.route('/notifications', routes);
-}
+  return router;
+});
+
+const routes: readonly AppApiRouteContribution<
+  AppPluginApplication<NotificationProviderApplicationConfig>
+>[] = [apiRoutes];
+
+export default routes;

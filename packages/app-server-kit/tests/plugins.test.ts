@@ -3,6 +3,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -21,8 +22,7 @@ describe('server plugin definitions', () => {
     expect(plugin).toEqual({
       packageName: '@nocobase/app-plugin-example',
       providers: [],
-      apiRoutes: [],
-      rootRoutes: [],
+      routes: [],
       database: undefined,
       queue: undefined,
     });
@@ -47,17 +47,17 @@ describe('server plugin definitions', () => {
   });
 
   it('keeps API and root route definitions distinct', () => {
-    const apiRoutes = defineApiRoutes({
-      name: 'example-api',
-      register(): void {},
+    const apiRoutes = defineApiRoutes(() => {
+      return new Hono();
     });
-    const rootRoutes = defineRootRoutes({
-      name: 'example-root',
-      register(): void {},
+    const rootRoutes = defineRootRoutes(() => {
+      return new Hono();
     });
 
     expect(apiRoutes.scope).toBe('api');
     expect(rootRoutes.scope).toBe('root');
+    expect(apiRoutes.createRouter).toBeTypeOf('function');
+    expect(rootRoutes.createRouter).toBeTypeOf('function');
     expect(Object.isFrozen(apiRoutes)).toBe(true);
     expect(Object.isFrozen(rootRoutes)).toBe(true);
   });
@@ -84,5 +84,59 @@ describe('server plugin definitions', () => {
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }
+  });
+
+  it('copies and freezes the unified routes array', () => {
+    const route = defineApiRoutes(() => new Hono());
+    const routes = [route];
+    const plugin = defineServerPlugin({
+      packageName: '@nocobase/app-plugin-example',
+      routes,
+    });
+
+    routes.length = 0;
+
+    expect(plugin.routes).toEqual([route]);
+    expect(Object.isFrozen(plugin.routes)).toBe(true);
+  });
+
+  it('ignores configured contribution paths that do not exist', () => {
+    const plugin = defineServerPlugin({
+      packageName: '@nocobase/app-plugin-service-provider-example',
+      database: {
+        migrations: './missing/migrations',
+        seeds: './missing/seeds',
+      },
+      queue: {
+        jobs: ['./missing/jobs'],
+      },
+    });
+
+    const resolved = resolveAppServerPlugins(
+      path.resolve(process.cwd(), '../app-template-default'),
+      defineServerPlugins([plugin]),
+    ).plugins[0]?.metadata;
+
+    expect(resolved?.migrationsDirectory).toBeUndefined();
+    expect(resolved?.seedsDirectory).toBeUndefined();
+    expect(resolved?.jobLocations).toEqual([]);
+  });
+
+  it('still rejects unsafe optional contribution paths', () => {
+    const plugin = defineServerPlugin({
+      packageName: '@nocobase/app-plugin-service-provider-example',
+      database: {
+        migrations: '../outside',
+      },
+    });
+
+    expect(() =>
+      resolveAppServerPlugins(
+        path.resolve(process.cwd(), '../app-template-default'),
+        defineServerPlugins([plugin]),
+      ),
+    ).toThrow(
+      'Server plugin path "../outside" must be a safe package-relative path beginning with "./".',
+    );
   });
 });

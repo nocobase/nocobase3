@@ -50,16 +50,14 @@ vi.mock('../server/file-storage.js', () => ({
   removeFileObject: removeFileObjectMock,
 }));
 
-import FileProvider from '../server/provider.js';
+import { FileProvider } from '../server/providers/file.js';
 import {
   isFilePluginRuntimeUnavailable,
   resolveFilePluginRuntime,
   type FilePluginConfig,
 } from '../server/plugin-runtime.js';
 import { filePluginRuntimeToken } from '../server/runtime-token.js';
-import registerRoutes, {
-  createFileDemoRoutes,
-} from '../server/routes/index.js';
+import { apiRoutes, createFileDemoRoutes } from '../server/routes/index.js';
 
 describe('file plugin route factory and registrar', () => {
   let database: DatabaseManager;
@@ -345,7 +343,7 @@ describe('file plugin route factory and registrar', () => {
     const sources = await Promise.all(
       [
         '../server/plugin-runtime.ts',
-        '../server/provider.ts',
+        '../server/providers/file.ts',
         '../server/routes/index.ts',
       ].map(async (path) => readFile(new URL(path, import.meta.url), 'utf8')),
     );
@@ -359,20 +357,16 @@ describe('file plugin route factory and registrar', () => {
   it('mounts the Demo Router at the plugin convention path', async () => {
     const app = new Hono();
     const container = createContainer(config, deps);
-    registerRoutes(
-      {
-        appName: 'test',
-        publicBasePath: config.app.publicBasePath,
-        router: app,
-        apiRouter: app,
-        config,
-        container,
-        paths: {} as never,
-      },
-      app,
-    );
+    const router = await apiRoutes.createRouter({
+      appName: 'test',
+      publicBasePath: config.app.publicBasePath,
+      router: app,
+      config,
+      container,
+      paths: {} as never,
+    });
 
-    const response = await app.request('/attachments/examples', {
+    const response = await router.request('/attachments/examples', {
       headers: { 'x-demo-auth': 'allowed' },
     });
     expect(response.status).toBe(200);

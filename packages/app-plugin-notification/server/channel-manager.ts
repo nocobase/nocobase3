@@ -11,6 +11,8 @@ import type {
   NotificationChannel,
   NotificationContent,
   NotificationProvider,
+  NotificationProviderErrorCategory,
+  NotificationProviderIdentity,
   NotificationProviderSendError,
   NotificationRecipient,
   ProviderSendResult,
@@ -19,11 +21,6 @@ import type {
 export interface ChannelRuntime {
   readonly channel: NotificationChannel;
   readonly providers: readonly NotificationProvider[];
-}
-
-export interface NotificationProviderIdentity {
-  readonly name: string;
-  readonly type: string;
 }
 
 export interface ChannelManagerOptions {
@@ -58,14 +55,15 @@ export class ChannelManager {
     return this.runtimes.has(type);
   }
 
-  resolveRecipient(
+  async resolveRecipient(
     type: string,
     recipient: NotificationRecipient,
-  ): object | undefined {
+    provider: NotificationProviderIdentity,
+  ): Promise<object | undefined> {
     const channel = this.runtimes.get(type)?.channel;
     if (!channel)
       throw new Error(`Notification Channel "${type}" is not enabled.`);
-    return channel.resolveRecipient?.(recipient);
+    return channel.resolveRecipient?.({ recipient, provider });
   }
 
   render(
@@ -87,20 +85,33 @@ export class ChannelManager {
     type: string,
     options: {
       readonly providerName?: string;
-      readonly providerMode?: 'single' | 'broadcast';
+      readonly all?: boolean;
     } = {},
   ): readonly NotificationProviderIdentity[] {
     const providers = this.runtimes.get(type)?.providers ?? [];
-    if (options.providerMode === 'broadcast')
+    if (options.all)
       return providers.map(({ name, type: providerType }) => ({
         name,
         type: providerType,
       }));
     const provider = options.providerName
       ? providers.find((candidate) => candidate.name === options.providerName)
-      : (providers.find((candidate) => candidate.name === 'primary') ??
-        providers[0]);
+      : providers[0];
     return provider ? [{ name: provider.name, type: provider.type }] : [];
+  }
+
+  providerCandidates(type: string): readonly NotificationProviderIdentity[] {
+    const preferred = this.providerIdentities(type);
+    const all = this.providerIdentities(type, { all: true });
+    if (preferred.length === 0) return all;
+    const [first] = preferred;
+    return [
+      first,
+      ...all.filter(
+        (provider) =>
+          provider.name !== first.name || provider.type !== first.type,
+      ),
+    ];
   }
 
   async send(
@@ -178,6 +189,10 @@ export class ChannelManager {
           notificationId: delivery.notificationId,
           recipient: delivery.recipientSnapshot,
           message: delivery.messageSnapshot,
+          provider: {
+            name: delivery.providerName,
+            type: delivery.providerType,
+          },
           signal: controller.signal,
         }),
         new Promise<never>((_, reject) => {
@@ -430,7 +445,7 @@ function isRunnable(
 
 function normalizeError(
   error: unknown,
-  category: string,
+  category: NotificationProviderErrorCategory,
 ): NotificationProviderSendError {
   return {
     category,

@@ -10,7 +10,7 @@
 
 | 脚本                      | 实际执行                     | 作用                        |
 | ------------------------- | ---------------------------- | --------------------------- |
-| `pnpm plugin:register`    | `nb3 app plugin register`    | 安装插件包，并写入三处注册  |
+| `pnpm plugin:register`    | `nb3 app plugin register`    | 安装插件包，并写入显式注册  |
 | `pnpm plugin:unregister`  | `nb3 app plugin unregister`  | 上述的逆操作，并卸载插件包  |
 | `pnpm plugin:update`      | `nb3 app plugin update`      | 升级插件包，并同步其 skills |
 | `pnpm plugin:skills:sync` | `nb3 app plugin skills sync` | 只同步 skills，不升级       |
@@ -25,17 +25,19 @@ pnpm plugin:register audit-log --no-install     # 包已经装好了，只写注
 pnpm plugin:register audit-log --dry-run
 ```
 
-一条命令做五件事：装包、写 `package.json` 的依赖、写 `nocobase.plugins`、往 `client/plugins.ts` 里加 import 和注册项，最后把插件带的 skills 复制进 `.agents/skills/`。
+一条命令完成安装和显式接线：装包，写 `package.json` 的依赖与 `nocobase.plugins`，根据包导出分别更新 `client/plugins.ts` 和 `server/plugins.ts`，最后把插件带的 skills 复制进 `.agents/skills/`。
 
 **只有前端插件才会写 `client/plugins.ts`。** 判据是插件的 `package.json` 有没有 `exports["./client"]`——纯服务端插件没有，给它写一行 import 会让 App 构建时报模块找不到。命令会跳过并明确告诉你跳过了。
 
 判据看的是 `./client` 而不是 `./client/plugin`，因为写进去的 import 就是 `<包名>/client`。只有 `./client/plugin` 的插件（barrel 加 default 导出之前发布的版本）同样会被跳过，否则写进去的那行在 App 里解析不到。
 
-`client/plugins.ts` 是用 TypeScript 解析定位、再做文本拼接改的，不是整份 AST 重新打印，所以你写的注释、顺序、格式都会原样保留，diff 里只会多出一行 import 和一行注册项。
+**只有服务端插件才会写 `server/plugins.ts`。** 判据是 `exports["./server/plugin"]`，注册项直接写 `auditLog`，不是 Client factory 形式的 `auditLog()`。纯客户端插件会跳过这一项。`--disabled` 会保留安装和 manifest 登记，但 Client 和 Server 两个运行时入口都不接线。
+
+两个 `plugins.ts` 都是用 TypeScript 解析定位、再做文本拼接改的，不是整份 AST 重新打印，所以你写的注释、顺序、泛型和格式都会原样保留，diff 里只会多出 import 和注册项。
 
 改完用 App 自己的 Prettier 和配置格式化。模板通过 `package.json` 的 `"prettier": "@nocobase/dev-config/prettier"` 继承配置；如果 App 把这个字段删了又没有别的 Prettier 配置，Prettier 会按自己的默认值（双引号）重排整个文件——这是 Prettier 的行为，不是命令改坏了。App 完全没装 Prettier 时不格式化，注册照常完成。
 
-App 没装 TypeScript 时不会整条命令失败——装包、写 `package.json`、复制 skills 都不需要编译器，照常完成；只有 `client/plugins.ts` 这一步降级，把该加的两行原样打出来：
+App 没装 TypeScript 时不会整条命令失败——装包、写 `package.json`、复制 skills 都不需要编译器，照常完成；Client 或 Server 入口需要接线时会分别降级，把对应的两行原样打出来。
 
 ```
   client/plugins.ts: not edited, TypeScript is not installed in this app
@@ -58,16 +60,16 @@ pnpm plugin:unregister audit-log --no-install   # 只解除注册，不卸包
 pnpm plugin:unregister audit-log --dry-run
 ```
 
-`register` 的逆操作，做四件事，顺序是固定的：
+`register` 的逆操作，顺序是固定的：
 
 1. 删掉这个插件装进来的 skills 目录（要在卸包之前，skills 是从装好的包里复制出来的）
 2. `pnpm remove` 卸包（要在改 `package.json` 之前——依赖先被删掉的话 pnpm 会找不到要卸的包而直接报错）
 3. 从 `package.json` 移除依赖和 `nocobase.plugins` 登记
-4. 从 `client/plugins.ts` 删掉 import 和数组项
+4. 从 `client/plugins.ts` 和 `server/plugins.ts` 删掉相应 import 和数组项
 
 `skills sync` 只会写已注册插件的前缀，不会替你清理已经卸掉的插件，所以第 1 步必须由这条命令做。
 
-同样地，App 没装 TypeScript 时前三步照常完成，只有第 4 步降级成打印要删的两行。
+同样地，App 没装 TypeScript 时前三步照常完成，只有第 4 步按实际导出降级成打印要删的 Client/Server 行。
 
 ### 升级插件
 
@@ -104,6 +106,13 @@ pnpm plugin:skills:sync --dry-run
 | `--no-install`    | `register`、`unregister` | 不调包管理器，只改注册         |
 | `--json`          | 仅 `skills sync`         | 机器可读输出                   |
 
+仓库维护模式还提供以下两个参数，根 `package.json` 已经自动传入前者：
+
+| 参数                      | 说明                                                              |
+| ------------------------- | ----------------------------------------------------------------- |
+| `--workspace-root <path>` | 从 monorepo 选择 App，并让 register 默认使用 `workspace:^`        |
+| `--app <name>`            | workspace App 的目录名或完整包名；省略时为 `app-template-default` |
+
 `register` 和 `unregister` 的插件名是位置参数，不是 `--plugin`。`--plugin` 在 `plugin update` 上可以重复，在 `plugin skills sync` 上只接受一个。
 
 插件名到处都能用短名（`audit-log`）或完整包名（`@nocobase/app-plugin-audit-log`）。
@@ -114,36 +123,37 @@ pnpm plugin:skills:sync --dry-run
 
 ## 仓库内开发命令
 
-在本仓库根目录开发插件时用这些，它们是根 `package.json` 的 scripts，不走 `nb3`：
+在本仓库根目录开发插件时仍使用这些 `pnpm` scripts。除创建和删除源码外，注册、卸载和 skills 同步都直接调用同一个 `nb3 app plugin *` 实现：
 
-| 命令                            | 作用                                                             |
-| ------------------------------- | ---------------------------------------------------------------- |
-| `pnpm plugin:create <name>`     | 生成 `packages/app-plugin-<name>/` 脚手架                        |
-| `pnpm plugin:register <name>`   | 写入依赖、`nocobase.plugins`、`client/plugins.ts`，并复制 skills |
-| `pnpm plugin:unregister <name>` | 上述四项的逆操作                                                 |
-| `pnpm plugin:remove <name>`     | 删除插件源码；仍被引用时会拒绝并提示先 unregister                |
-| `pnpm plugin:skills:sync`       | 只同步 skills（从 `packages/` 解析插件）                         |
+| 命令                            | 作用                                                    |
+| ------------------------------- | ------------------------------------------------------- |
+| `pnpm plugin:create <name>`     | 生成 `packages/app-plugin-<name>/` 脚手架               |
+| `pnpm plugin:register <name>`   | 写依赖、manifest、Client/Server 显式入口，并复制 skills |
+| `pnpm plugin:unregister <name>` | 上述四项的逆操作                                        |
+| `pnpm plugin:remove <name>`     | 删除插件源码；仍被引用时会拒绝并提示先 unregister       |
+| `pnpm plugin:skills:sync`       | 只同步 skills（从 `packages/` 解析插件）                |
 
 完整参数用 `--help` 查看。插件开发流程见 [plugin-development-quickstart.md](../plugin-development-quickstart.md)。
 
-### 仓库脚本和 App 命令的关系
+### 仓库命令和 App 命令的关系
 
 两边做的事几乎一样，所以实现只有一份，都在 `@nocobase/nb3-cli` 里：
 
 | 逻辑                         | 位置                             |
 | ---------------------------- | -------------------------------- |
 | 改 `client/plugins.ts`       | `src/lib/client-plugins.ts`      |
+| 改 `server/plugins.ts`       | `src/lib/server-plugins.ts`      |
 | 改 `nocobase.plugins` 和依赖 | `src/lib/plugin-registration.ts` |
 | 复制 skills                  | `src/lib/skills-sync.ts`         |
 
-真正的差别只有两处，所以它们是参数而不是分支：
+根脚本给 `nb3` 传入 `--workspace-root .`。这个模式支持 `--app <目录名或完整包名>`，省略时选择 `app-template-default`，并把注册依赖范围默认设为 `workspace:^`。独立 App 不传这个参数，仍以当前目录为 App 并从 registry 安装。
+
+真正的差别只有两处，所以它们是同一条命令的运行参数：
 
 - **插件从哪里找。** 仓库内是 `packages/` 下的工作区目录，App 内是 `node_modules` 里装好的依赖。
 - **依赖记什么版本。** 仓库内是 `workspace:^`，App 内是从 registry 装到的实际版本（`^1.2.0`）。
 
-`scripts/` 下那几个 `.mjs` 因此只剩下仓库特有的部分：解析 `--app`、跑 `pnpm install`、失败时回滚 `pnpm-lock.yaml`。
-
-改动注册逻辑时改 CLI 里的那一份，两边一起生效；只改 `scripts/` 不会影响 App。
+仓库根目录不再保留 `create-plugin.mjs`、`register-plugin.mjs`、`unregister-plugin.mjs` 或 `sync-skills.mjs`。改动注册逻辑时只改对应包内实现：创建逻辑位于 `@nocobase/create-plugin`，注册与 skills 逻辑位于 `@nocobase/nb3-cli`。只有删除 workspace 插件源码的 `plugin:remove` 仍是仓库专属命令，继续留在 `scripts/`。
 
 ## APP 发布与 Hub 连接
 
