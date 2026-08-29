@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  getLocaleDirection,
+  parseAcceptLanguage,
+  resolveSupportedLocale,
+} from '../src/core/locales.js';
+
+describe('getLocaleDirection', () => {
+  it('reports right-to-left languages', () => {
+    expect(getLocaleDirection('ar-EG')).toBe('rtl');
+    expect(getLocaleDirection('he')).toBe('rtl');
+  });
+
+  it('reports everything else as left-to-right', () => {
+    expect(getLocaleDirection('en-US')).toBe('ltr');
+    expect(getLocaleDirection('zh-CN')).toBe('ltr');
+  });
+
+  it('does not mistake a language that merely starts with those letters', () => {
+    // 'her' and 'urd' are not the RTL codes 'he' and 'ur'.
+    expect(getLocaleDirection('her')).toBe('ltr');
+    expect(getLocaleDirection('urd-Latn')).toBe('ltr');
+  });
+});
+
+describe('resolveSupportedLocale', () => {
+  const supported = ['en-US', 'zh-CN'];
+
+  it('matches exactly, ignoring case', () => {
+    expect(resolveSupportedLocale('zh-cn', supported)).toBe('zh-CN');
+  });
+
+  it('matches on the language subtag alone', () => {
+    expect(resolveSupportedLocale('zh', supported)).toBe('zh-CN');
+    expect(resolveSupportedLocale('zh-Hans-CN', supported)).toBe('zh-CN');
+  });
+
+  it('returns undefined when nothing matches', () => {
+    expect(resolveSupportedLocale('fr-FR', supported)).toBeUndefined();
+    expect(resolveSupportedLocale(undefined, supported)).toBeUndefined();
+  });
+});
+
+describe('parseAcceptLanguage', () => {
+  it('orders entries by quality, most preferred first', () => {
+    expect(parseAcceptLanguage('en-US;q=0.8,zh-CN;q=0.9,fr;q=0.1')).toEqual([
+      'zh-CN',
+      'en-US',
+      'fr',
+    ]);
+  });
+
+  it('treats an entry without a quality as most preferred', () => {
+    expect(parseAcceptLanguage('zh-CN,en-US;q=0.9')).toEqual([
+      'zh-CN',
+      'en-US',
+    ]);
+  });
+
+  it('drops entries the client explicitly refuses', () => {
+    expect(parseAcceptLanguage('zh-CN,en-US;q=0')).toEqual(['zh-CN']);
+  });
+
+  it('drops the wildcard', () => {
+    expect(parseAcceptLanguage('zh-CN,*')).toEqual(['zh-CN']);
+  });
+
+  it('returns nothing for a missing or empty header', () => {
+    expect(parseAcceptLanguage(undefined)).toEqual([]);
+    expect(parseAcceptLanguage('')).toEqual([]);
+  });
+});
