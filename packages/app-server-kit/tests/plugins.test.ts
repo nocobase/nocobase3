@@ -1,7 +1,9 @@
 // @vitest-environment node
 
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-
+import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -10,7 +12,6 @@ import {
   resolveAppServerPlugins,
 } from '../src/plugins/index.js';
 import { defineApiRoutes, defineRootRoutes } from '../src/router/index.js';
-import { Hono } from 'hono';
 
 describe('server plugin definitions', () => {
   it('normalizes optional contributions and freezes the result', () => {
@@ -59,6 +60,30 @@ describe('server plugin definitions', () => {
     expect(rootRoutes.createRouter).toBeTypeOf('function');
     expect(Object.isFrozen(apiRoutes)).toBe(true);
     expect(Object.isFrozen(rootRoutes)).toBe(true);
+  });
+
+  it('reads the application package from a packaged dist root', () => {
+    const rootDir = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-app-server-kit-plugins-'),
+    );
+
+    try {
+      const distDir = path.join(rootDir, 'dist');
+      mkdirSync(distDir, { recursive: true });
+      writeFileSync(
+        path.join(distDir, 'package.json'),
+        JSON.stringify({ name: '@example/packaged-app' }),
+      );
+
+      const resolved = resolveAppServerPlugins(
+        rootDir,
+        defineServerPlugins([]),
+      );
+
+      expect(resolved.appPackageName).toBe('@example/packaged-app');
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
   });
 
   it('copies and freezes the unified routes array', () => {

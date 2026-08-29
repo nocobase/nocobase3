@@ -31,7 +31,10 @@ export function resolveAppServerPlugins<
   serverPlugins: AppServerPlugins<TConfig>,
   options: ResolveAppServerPluginsOptions = {},
 ): ResolvedAppServerPlugins<TConfig> {
-  const appPackagePath = path.join(rootDir, 'package.json');
+  const rootPackagePath = path.join(rootDir, 'package.json');
+  const appPackagePath = existsSync(rootPackagePath)
+    ? rootPackagePath
+    : path.join(rootDir, 'dist', 'package.json');
   const appPackage = existsSync(appPackagePath) ? readJson(appPackagePath) : {};
 
   return {
