@@ -11,6 +11,7 @@ const workflow: AppClientPluginFactory<WorkflowClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-workflow',
     bootstrap: () => import('./bootstrap.js'),
+    locales: () => import('./locales/index.js'),
     routes: () => import('./routes.js'),
   });
 

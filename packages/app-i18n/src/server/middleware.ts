@@ -8,16 +8,14 @@ import {
   type Namespace,
   type Translator,
 } from '../core/index.js';
+import { getContextSession } from './session.js';
 
 /** Context keys the middleware sets, so a handler can read them off `c.get()`. */
 export const LOCALE_CONTEXT_KEY = 'locale';
 export const TRANSLATOR_CONTEXT_KEY = 't';
 
-/** The session shape the middleware reads, kept structural so this package does not depend on the session package. */
-interface SessionLike {
-  readonly get?: (key: string) => unknown;
-  readonly data?: Record<string, unknown>;
-}
+/** Session key the chosen locale is stored under. */
+export const LOCALE_SESSION_KEY = 'locale';
 
 export interface I18nMiddlewareOptions {
   /** Namespace the request translator binds to. Defaults to the application's. */
@@ -26,37 +24,36 @@ export interface I18nMiddlewareOptions {
   readonly sessionKey?: string;
 }
 
-function readSessionLocale(
+async function readSessionLocale(
   context: Context,
   sessionKey: string,
-): Locale | undefined {
-  let session: SessionLike | undefined;
-  try {
-    session = context.get(SESSION_CONTEXT_KEY) as SessionLike | undefined;
-  } catch {
-    // No session middleware is mounted, which is a valid configuration.
-    return undefined;
-  }
+): Promise<Locale | undefined> {
+  // An application may mount no session middleware at all, which is a valid configuration rather than an error.
+  const session = getContextSession(context);
   if (!session) return undefined;
 
-  const value =
-    typeof session.get === 'function'
-      ? session.get(sessionKey)
-      : session.data?.[sessionKey];
-  return typeof value === 'string' ? value : undefined;
+  try {
+    const data = await session.get();
+    const value = data?.[sessionKey];
+    return typeof value === 'string' ? value : undefined;
+  } catch {
+    // An unreadable session should degrade to header negotiation, not fail the request.
+    return undefined;
+  }
 }
-
-const SESSION_CONTEXT_KEY = 'session';
 
 /**
  * Resolves the locale for a request: the session's stored choice, then `Accept-Language`, then the default.
  */
-export function resolveRequestLocale(
+export async function resolveRequestLocale(
   runtime: I18nRuntime,
   context: Context,
   options: I18nMiddlewareOptions = {},
-): Locale {
-  const stored = readSessionLocale(context, options.sessionKey ?? 'locale');
+): Promise<Locale> {
+  const stored = await readSessionLocale(
+    context,
+    options.sessionKey ?? LOCALE_SESSION_KEY,
+  );
   if (stored) return runtime.resolveLocale(stored);
 
   const accepted = parseAcceptLanguage(
@@ -76,7 +73,7 @@ export function createI18nMiddleware(
   options: I18nMiddlewareOptions = {},
 ): MiddlewareHandler {
   return async (context: Context, next: Next): Promise<void> => {
-    const locale = resolveRequestLocale(runtime, context, options);
+    const locale = await resolveRequestLocale(runtime, context, options);
     await runtime.ensureLocaleLoaded(locale);
 
     context.set(LOCALE_CONTEXT_KEY, locale);

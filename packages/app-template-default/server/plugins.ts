@@ -2,6 +2,7 @@ import authentication from '@nocobase/app-plugin-authentication/server/plugin';
 import authorization from '@nocobase/app-plugin-authorization/server/plugin';
 import databaseExample from '@nocobase/app-plugin-database-example/server/plugin';
 import file from '@nocobase/app-plugin-file/server/plugin';
+import i18n from '@nocobase/app-plugin-i18n/server/plugin';
 import install from '@nocobase/app-plugin-install/server/plugin';
 import queueExample from '@nocobase/app-plugin-queue-example/server/plugin';
 import realtimeExample from '@nocobase/app-plugin-realtime-example/server/plugin';
@@ -21,6 +22,7 @@ const serverPlugins: AppServerPlugins<AppConfig> =
     authorization,
     databaseExample,
     file,
+    i18n,
     install,
     queueExample,
     realtimeExample,

@@ -1,6 +1,7 @@
 import type { CachingConfig } from '@nocobase/caching';
 import type { AppDatabaseConfig } from '@nocobase/app-server-kit/database';
 import type { AppDriveConfig } from '@nocobase/drive';
+import type { AppI18nConfig } from '@nocobase/app-server-kit/i18n';
 import type { LoggingConfig } from '@nocobase/logging';
 import type { SnowflakeIdGeneratorConfig } from '@nocobase/id-generator';
 import type { AppQueueConfig } from '@nocobase/queue';
@@ -57,6 +58,7 @@ export interface AppConfig {
   caching: CachingConfig;
   database: AppDatabaseConfig;
   drive: AppDriveConfig;
+  i18n: AppI18nConfig;
   logging: LoggingConfig;
   queue: AppQueueConfig;
   session: AppSessionConfig;

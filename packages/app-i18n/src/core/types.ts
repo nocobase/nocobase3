@@ -46,9 +46,13 @@ export type LocaleModule = TranslationResource & {
 /**
  * What a `locales/<locale>.ts` file resolves to. The default export carries the resource; a module that exports the
  * resource directly is accepted too, which is what a hand-written test fixture usually does.
+ *
+ * The resource is accepted as any object rather than as `TranslationResource`, because a locale file typed with its
+ * own interface — the way a package gets key completion — has no index signature and would not satisfy it. What the
+ * loader returns is validated in shape by the runtime, not by this type.
  */
 export type LocaleModuleExport =
-  { readonly default: LocaleModule } | LocaleModule;
+  { readonly default: object } | LocaleModule | object;
 
 export type LocaleLoader = () => Promise<LocaleModuleExport>;
 

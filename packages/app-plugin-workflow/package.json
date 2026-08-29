@@ -150,9 +150,10 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/app-server-kit": "workspace:^",
-    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-database": "workspace:^",
+    "@nocobase/app-i18n": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-server-kit": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",

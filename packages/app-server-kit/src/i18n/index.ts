@@ -3,12 +3,19 @@ import {
   type Locale,
   type LocalesModule,
 } from '@nocobase/app-i18n';
+import { createI18nMiddleware } from '@nocobase/app-i18n/server';
+import type { Hono } from 'hono';
 import {
   ServiceProvider,
   createServiceToken,
   type ServiceContainer,
   type ServiceToken,
 } from '@nocobase/service-provider';
+
+import {
+  defineHttpMiddleware,
+  type AppHttpMiddleware,
+} from '../router/index.js';
 
 export const i18nToken: ServiceToken<I18nRuntime> =
   createServiceToken<I18nRuntime>('@nocobase/app/i18n');
@@ -74,3 +81,16 @@ export async function registerAppLocales(
 
   await runtime.init();
 }
+
+/**
+ * Resolves the request's language and puts a translator on the context.
+ *
+ * Mount it after the session middleware: a visitor's stored choice lives there, and it outranks `Accept-Language`.
+ */
+export const i18nHttpMiddleware: AppHttpMiddleware<I18nProviderApplication> =
+  defineHttpMiddleware({
+    name: '@nocobase/app/i18n',
+    register(router: Hono, app: I18nProviderApplication): void {
+      router.use('*', createI18nMiddleware(app.container.resolve(i18nToken)));
+    },
+  });

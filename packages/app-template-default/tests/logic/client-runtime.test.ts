@@ -74,6 +74,8 @@ describe('app client runtime', () => {
     expect(runtime.refine.authProvider).toBe(authProvider);
     expect(runtime.refine.dataProvider).toBeDefined();
     expect(createApp(runtime).refine).toBe(runtime.refine);
+    // The runtime supplies a default i18nProvider that a plugin may still replace.
+    expect(runtime.refine.i18nProvider).toBeDefined();
     expect(runtime.routes).toMatchObject([
       {
         auth: 'required',
@@ -362,7 +364,8 @@ describe('app client runtime', () => {
       '@nocobase/app-plugin-foundation:outer',
       '@nocobase/app-plugin-feature:inner',
     ]);
-    expect(createApp(runtime).providers).toEqual([
+    // i18n wraps everything else, so it is prepended rather than ordered among the contributed providers.
+    expect(createApp(runtime).providers?.slice(1)).toEqual([
       AppThemeProvider,
       OuterProvider,
       InnerProvider,

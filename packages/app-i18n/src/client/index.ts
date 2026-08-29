@@ -2,6 +2,7 @@ export {
   I18nProvider,
   NamespaceScope,
   useI18nRuntime,
+  useOptionalI18nRuntime,
   useNamespace,
   useTranslation,
   withNamespace,

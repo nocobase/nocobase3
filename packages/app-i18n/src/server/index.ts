@@ -11,9 +11,15 @@ export {
   getRequestTranslator,
   resolveRequestLocale,
   LOCALE_CONTEXT_KEY,
+  LOCALE_SESSION_KEY,
   TRANSLATOR_CONTEXT_KEY,
   type I18nMiddlewareOptions,
 } from './middleware.js';
+export {
+  getContextSession,
+  isI18nSession,
+  type I18nSession,
+} from './session.js';
 export { APP_NS, BASE_NAMESPACE, I18nRuntime } from '../core/index.js';
 export type {
   Locale,

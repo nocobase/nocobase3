@@ -1,4 +1,5 @@
 import {
+  Fragment,
   createContext,
   createElement,
   useContext,
@@ -34,13 +35,23 @@ export function I18nProvider({
 }
 
 export function useI18nRuntime(): I18nRuntime {
-  const runtime = useContext(RuntimeContext);
+  const runtime = useOptionalI18nRuntime();
   if (!runtime) {
     throw new Error(
       'No i18n runtime in context. Render the tree inside <I18nProvider>.',
     );
   }
   return runtime;
+}
+
+/**
+ * The runtime if one is mounted, `undefined` otherwise.
+ *
+ * A component that merely offers translation — a language switcher, say — should render nothing rather than break a
+ * tree that has no i18n at all, which is what a focused test usually renders.
+ */
+export function useOptionalI18nRuntime(): I18nRuntime | undefined {
+  return useContext(RuntimeContext);
 }
 
 export interface NamespaceScopeProps {
@@ -60,17 +71,24 @@ export function NamespaceScope({
   ns,
   children,
 }: PropsWithChildren<NamespaceScopeProps>): ReactElement {
-  const runtime = useI18nRuntime();
+  // Scoping is an enhancement, not a requirement: a tree rendered without i18n — a focused test, or a host that has
+  // not mounted it — still renders its children rather than failing.
+  const runtime = useOptionalI18nRuntime();
   const resolved = useMemo(
-    () => runtime.registry.resolveNamespace(ns),
+    () => runtime?.registry.resolveNamespace(ns) ?? ns,
     [runtime, ns],
   );
   // The whole chain goes into `defaultNS`, not just the namespace itself: i18next reads `fallbackNS` from instance
   // options only, and one instance serves every namespace here, so the ordered list is what carries the fallback.
   const chain = useMemo(
-    () => [resolved, ...runtime.registry.getFallbackNamespaces(resolved)],
+    () =>
+      runtime
+        ? [resolved, ...runtime.registry.getFallbackNamespaces(resolved)]
+        : [resolved],
     [runtime, resolved],
   );
+
+  if (!runtime) return createElement(Fragment, null, children);
 
   return createElement(
     NamespaceContext.Provider,

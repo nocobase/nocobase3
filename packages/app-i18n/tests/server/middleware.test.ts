@@ -40,7 +40,10 @@ function createApp(runtime: I18nRuntime, session?: Record<string, unknown>) {
   const app = new Hono();
   if (session) {
     app.use('*', async (context, next) => {
-      context.set('session', { data: session });
+      context.set('session', {
+        get: () => Promise.resolve(session),
+        set: () => Promise.resolve(),
+      });
       await next();
     });
   }

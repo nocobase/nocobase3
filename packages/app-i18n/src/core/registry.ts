@@ -59,7 +59,11 @@ function hasDefaultExport<TValue>(
 }
 
 function unwrapLocaleModule(module: LocaleModuleExport): LocaleModule {
-  return hasDefaultExport<LocaleModule>(module) ? module.default : module;
+  // A locale file typed with its own interface has no index signature, so the resource is re-read as the open record
+  // the runtime treats it as. The nesting is what the type describes; the exact keys are the package's own business.
+  return (
+    hasDefaultExport<LocaleModule>(module) ? module.default : module
+  ) as LocaleModule;
 }
 
 function unwrapLocalesModule(module: LocalesModule): LocaleLoaders {

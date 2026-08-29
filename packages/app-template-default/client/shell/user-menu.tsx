@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from '@nocobase/app-plugin-i18n/client';
 import { useGetIdentity, useLogout } from '@refinedev/core';
 import { LogOut, UserRound } from 'lucide-react';
 import type { ReactElement } from 'react';
@@ -43,6 +44,9 @@ export function UserMenu(): ReactElement {
               {identity.email}
             </p>
           ) : null}
+        </div>
+        <div className='mt-2 px-2'>
+          <LanguageSwitcher className='w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm' />
         </div>
         <button
           type='button'
